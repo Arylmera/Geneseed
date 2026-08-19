@@ -29,8 +29,8 @@ import {
   writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
 } from '../../js/opencode.mjs';
 import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/settings.mjs';
-import { themeFiles } from '../../js/installs.mjs';
-import { ROOT, makeCfg, discoverNames } from '../../js/checkout.mjs';
+import { doctrinesOfDir, themeFiles } from '../../js/installs.mjs';
+import { ROOT, makeCfg, discoverNames, PACK_ORDER } from '../../js/checkout.mjs';
 import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
@@ -1134,6 +1134,76 @@ test('the primary agent and the command layer are opt-in', () => {
   });
 });
 
+test('an EXISTING opencode.json has its git gate re-wired when the pack comes back', () => {
+  // ⚠ THE HOLE THIS PINS WAS FAIL-OPEN AND IT WAS NEW WITH THE PACK TOGGLE. `mergeOpencodeJson`
+  // wrote the permission block only when the key was ABSENT, so on any file that already had
+  // one the gate was frozen at whatever the FIRST emit wrote — and turning the process pack
+  // back ON left the gate ABSENT FOREVER while AGENT.md stated the rule (unsafe, and silent).
+  // Before the toggle existed the first write always contained the gate, so it could not
+  // happen. Claude's side never had it — `mergeClaudeSettings` prunes and re-adds every emit.
+  //
+  // ONE DIRECTION, NOT TWO, AND THE ASYMMETRY IS THE POINT. Adding is Geneseed's to do;
+  // removing is not (see the next cell) — `opencode.json` is user co-owned and nothing on disk
+  // says who wrote a given entry, so a gate that outlives its pack is left alone and reported.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    const bashOf = () => JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
+
+    // A file that already has a `permission` block, wired with the process pack OFF: the two
+    // process keys are absent and the three Law IV keys are not.
+    mergeOpencodeJson(p, 'AGENT.md', ['craft']);
+    for (const k of ['git commit*', 'git push*']) {
+      assert.ok(!(k in bashOf()), `${k} was wired into a build whose process pack is off`);
+    }
+    for (const k of ['rm -rf *', 'git push --force*', 'git push -f*']) {
+      assert.equal(bashOf()[k], 'ask', `${k} is Law IV's and rides no pack toggle`);
+    }
+
+    // Off -> on: the direction that was fail-OPEN. The file already has a `permission` key, so
+    // the old `!has(config,'permission')` guard never looked at it again.
+    mergeOpencodeJson(p, 'AGENT.md', [...PACK_ORDER]);
+    for (const k of ['git commit*', 'git push*']) {
+      assert.equal(bashOf()[k], 'ask',
+        `${k} was never re-wired: AGENT.md states process 5 with no boundary behind it`);
+    }
+    // ...and an unknown selection (a pre-marker caller) is not a narrow one: it wires the gate
+    // into a file that lacked it, exactly as an explicit all-four selection does.
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: { 'rm -rf *': 'ask' } } }));
+    mergeOpencodeJson(p, 'AGENT.md');
+    assert.equal(bashOf()['git commit*'], 'ask', 'unknown must fail CLOSED, as everywhere else');
+  });
+});
+
+test('a pack toggle never removes a permission entry the user may own', () => {
+  // ⚠ THE REGRESSION THIS PINS SHIPPED IN THE FIX FOR THE CELL ABOVE. The first reconcile
+  // dropped any unwanted owned key that still held `'ask'` — using the VALUE as the ownership
+  // record. But `'ask'` is exactly what a user writes too, and `git commit*: ask` is an
+  // ordinary thing to want, so a pack-off build DELETED a gate its owner had typed by hand.
+  //
+  // REMOVAL IS GUARDED BY OWNERSHIP, AND NOTHING ON DISK RECORDS OWNERSHIP — so nothing on an
+  // existing block is removed at all. The residue is fail-CLOSED (a gate with no rule compelling
+  // it, which only ever asks too much); the reverse would be a rule with no gate.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      permission: {
+        edit: 'allow',
+        bash: { 'curl *': 'ask', 'git commit*': 'ask', 'git push*': 'allow' },
+      },
+    }));
+    mergeOpencodeJson(p, 'AGENT.md', ['craft']);          // process OFF: ours would be dropped
+    const perm = JSON.parse(fs.readFileSync(p, 'utf8')).permission;
+    assert.equal(perm.edit, 'allow', 'a sibling section of `permission` was rewritten');
+    assert.equal(perm.bash['curl *'], 'ask', "the user's own bash entry was dropped");
+    assert.equal(perm.bash['git commit*'], 'ask',
+      "a user's own `git commit*: ask` was deleted by a build that toggled a pack off");
+    assert.equal(perm.bash['git push*'], 'allow',
+      'a user who deliberately re-scoped one of our keys had their edit reverted');
+    // The invariant half is still WIRED into a file that never had it.
+    assert.equal(perm.bash['git push --force*'], 'ask');
+  });
+});
+
 test('the default permission policy is added only when absent', () => {
   withDir((d) => {
     const p = path.join(d, 'opencode.json');
@@ -1141,7 +1211,7 @@ test('the default permission policy is added only when absent', () => {
     let data = JSON.parse(fs.readFileSync(p, 'utf8'));
     assert.ok('permission' in data);
     assert.equal(data.permission.bash['rm -rf *'], 'ask');
-    // The Law XX backstop: every commit AND push is gated, not only a force-push.
+    // The Doctrine process 5 backstop: every commit AND push is gated, not only a force-push.
     assert.equal(data.permission.bash['git commit*'], 'ask');
     assert.equal(data.permission.bash['git push*'], 'ask');
 
@@ -1472,6 +1542,39 @@ test('narrowing the packs removes their rules from AGENT.md but not from the bun
   });
 });
 
+test('with process off, every surviving `process 5` citation resolves and the ask survives', () => {
+  // ⚠ THIS PINS A DECISION, NOT A MECHANISM, because the comment that used to stand in for it
+  // was FALSE: `claudeHookGroups` justified dropping the git-gate on the grounds that "with the
+  // process pack off, that rule is not in the emitted AGENT.md". Measured, 18 files in a
+  // `--doctrines craft` bundle still say `process 5`, AGENT.md among them — craft's own body
+  // cites it, and so does the dispatch paragraph. What is actually gone is the pack's RULE
+  // BODY; what remains is citation, which owner decision D5 licenses precisely because the
+  // whole catalogue ships. Two properties hold this together, and a "cleanup" that removed
+  // either while leaving the other is the failure this test exists to catch.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out, { doctrines: ['craft'] });
+
+    // 1. Every citation RESOLVES: the numbered rule the survivors point at is still on disk,
+    //    with its heading, in the catalogue copy — a dangling reference is the unsafe half of
+    //    shipping prose about a pack you did not build.
+    const cited = fs.readFileSync(path.join(out, 'doctrines', 'process.md'), 'utf8');
+    assert.ok(cited.includes('### Doctrine process 5 —'),
+      'files still cite `process 5` and the rule it names is no longer anywhere in the bundle');
+    assert.ok(!agentText(out).includes(PACK_MARK.process),
+      "the pack's rule BODY is what narrowing removes, and it did not");
+
+    // 2. The commit skill keeps its operative consent step, deliberately. The BOUNDARY follows
+    //    the pack (see `claudeHookGroups`); the ASKING does not have to, because a skill that
+    //    asks before committing when nothing compelled it is never unsafe, while the reverse —
+    //    a skill that stops asking — is. Asymmetric risk, asymmetric answer.
+    const commit = fs.readFileSync(path.join(out, 'skills', 'commit.md'), 'utf8');
+    assert.ok(/Get explicit consent before committing/.test(commit),
+      'the commit skill stopped asking for consent when the pack went off — never do this by '
+      + 'accident: it is the only consent step left once the hook is unwired');
+  });
+});
+
 test('an empty pack set renders the section with no rules and marks it none', () => {
   withDir((d) => {
     const out = path.join(d, 'bundle');
@@ -1510,5 +1613,105 @@ test('a pack file on disk that PACK_ORDER does not name refuses the build', () =
     assert.throws(
       () => captured(() => build({ ...makeCfg(), src }, 'neutral', path.join(d, 'bundle'))),
       /doctrine pack file\(s\) extra .*missing from PACK_ORDER/s);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Reading the axis back OFF a deployment — `doctrinesOfDir`, and the permission gate it drives
+//
+// The marker is only worth writing if something reads it. `upgrade`/`rebuild-all` and the web
+// console's rebuild all ask this question per install root, and a wrong answer re-emits somebody
+// else's constitution over theirs. Driven over a REAL bundle rather than a hand-written carrier:
+// the label `Active packs:` is not token-substituted, and the only way to prove the writer and
+// the reader still agree is to let the writer produce the input.
+
+test('doctrinesOfDir round-trips the marker a real build wrote', () => {
+  withDir((d) => {
+    const all = path.join(d, 'all');
+    buildInto(all);
+    assert.deepEqual(doctrinesOfDir(all), ['craft', 'rigor', 'ops', 'process']);
+
+    // Handed in out of order and still read back in PACK_ORDER: the marker is compared against
+    // itself across builds, so the reader must not preserve whatever order the writer was given.
+    const some = path.join(d, 'some');
+    buildInto(some, { doctrines: ['process', 'craft'] });
+    assert.deepEqual(doctrinesOfDir(some), ['craft', 'process']);
+
+    const none = path.join(d, 'none');
+    buildInto(none, { doctrines: [] });
+    assert.deepEqual(doctrinesOfDir(none), [], '`none` must read as [], not as null');
+  });
+});
+
+test('a carrier with no marker, and a marker naming nothing known, both read as null', () => {
+  // ⚠ THE FAIL-CLOSED HALF (correction B6). Both are "I do not know what this install chose",
+  // and every consumer turns that into "assume the process pack is on" — which is why they must
+  // not answer `[]`. `writeText` is used for the carrier so the reader is exercised through the
+  // same newline translation an emitted one gets.
+  withDir((d) => {
+    const bare = path.join(d, 'bare');
+    fs.mkdirSync(bare);
+    assert.equal(doctrinesOfDir(bare), null, 'a directory with no carrier at all');
+
+    writeText(path.join(bare, 'AGENT.md'), '# Geneseed\n\nnothing to see\n');
+    assert.equal(doctrinesOfDir(bare), null, 'a carrier with no Active packs: line');
+
+    writeText(path.join(bare, 'AGENT.md'), '# Geneseed\n\nActive packs: nonesuch, madeup\n');
+    assert.equal(doctrinesOfDir(bare), null,
+      'a marker naming only unknown packs is a corrupt line, and corrupt is unknown');
+  });
+});
+
+test('a marker this checkout cannot read WHOLE reads as null, not as the part that parsed', () => {
+  // ⚠ THE FAIL-OPEN COUSIN OF THE CELL ABOVE, and it took a partial line to see it. The marker
+  // regex is single-line; a carrier whose `Active packs:` line had been FOLDED by a wrapper
+  // matched only its first half, every name in that half was known, and the reader answered the
+  // NARROWED set with no complaint. That is the process pack silently disappearing from an
+  // install that has it — and the consent gate going with it on the next rebuild — the exact
+  // opposite of what this function's docblock promises. Any field that is not a pack this
+  // checkout ships (an empty one, as a fold's trailing comma leaves behind, included) condemns
+  // the whole line to `null`, which every consumer reads as "assume process is on".
+  withDir((d) => {
+    const bare = path.join(d, 'folded');
+    fs.mkdirSync(bare);
+    const write = (line) => writeText(path.join(bare, 'AGENT.md'), `# Geneseed\n\n${line}\n`);
+
+    write('Active packs: craft, rigor,\nops, process');
+    assert.equal(doctrinesOfDir(bare), null,
+      'a folded marker answered with its first half — the tail packs were dropped in silence');
+
+    write('Active packs: craft, nonesuch');
+    assert.equal(doctrinesOfDir(bare), null,
+      'one unknown name among known ones is still a line this checkout cannot read');
+
+    // ...and the well-formed lines are unaffected, so this cannot go green by refusing all.
+    write('Active packs: craft, rigor, ops, process');
+    assert.deepEqual(doctrinesOfDir(bare), ['craft', 'rigor', 'ops', 'process']);
+    write('Active packs: process');
+    assert.deepEqual(doctrinesOfDir(bare), ['process']);
+  });
+});
+
+test('the opencode permission gate follows the process pack, and Law IV never does', () => {
+  withDir((d) => {
+    const on = path.join(d, 'on.json');
+    mergeOpencodeJson(on, 'AGENT.md', ['craft', 'process']);
+    const off = path.join(d, 'off.json');
+    mergeOpencodeJson(off, 'AGENT.md', ['craft']);
+
+    const bashOf = (p) => JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
+    for (const k of ['git commit*', 'git push*']) {
+      assert.equal(bashOf(on)[k], 'ask', `${k} is missing with the process pack ON`);
+      assert.ok(!(k in bashOf(off)),
+        `${k} survived --doctrines craft — the boundary now asks for a rule the prompt lost`);
+    }
+    // Law IV is an always-on invariant and its entries are NOT the process pack's to remove.
+    // Without this the toggle would quietly disarm force-push and `rm -rf` on every narrow build.
+    for (const k of ['rm -rf *', 'git push --force*', 'git push -f*']) {
+      assert.equal(bashOf(off)[k], 'ask', `${k} went with the process pack`);
+    }
+    // An unknown selection is not a narrow one: the pre-migration caller passes nothing.
+    mergeOpencodeJson(path.join(d, 'unknown.json'), 'AGENT.md');
+    assert.equal(bashOf(path.join(d, 'unknown.json'))['git commit*'], 'ask');
   });
 });

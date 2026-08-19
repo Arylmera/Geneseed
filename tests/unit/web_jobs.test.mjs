@@ -46,7 +46,7 @@ const rel = (p) => path.relative(ROOT, p).split(path.sep).join('/');
 // `imperial`/`claude-global`/`lean`/`mentor`/`foreman` are all off the generator's own defaults,
 // which is what makes the asymmetric elision rules observable through the `build` row.
 const OPTS = { theme: 'imperial', emit: 'claude-global', footprint: 'lean',
-  posture: 'mentor', mode: 'foreman' };
+  posture: 'mentor', mode: 'foreman', doctrines: ['craft'] };
 
 /**
  * The eight rows, their entry point, and the TAIL each produces under `OPTS` — every value
@@ -62,7 +62,7 @@ const OPTS = { theme: 'imperial', emit: 'claude-global', footprint: 'lean',
 const ARGVS = {
   build: { entry: 'bin/geneseed.mjs',
     tail: ['--theme', 'imperial', '--emit', 'claude-global', '--footprint', 'lean',
-      '--posture', 'mentor', '--mode', 'foreman'] },
+      '--posture', 'mentor', '--mode', 'foreman', '--doctrines', 'craft'] },
   'build-all': { entry: 'bin/geneseed-cli.mjs', tail: ['rebuild-all'] },
   doctor: { entry: 'bin/geneseed-cli.mjs', tail: ['doctor'] },
   export: { entry: 'bin/geneseed-cli.mjs', tail: ['diff', '--out'] },
@@ -167,11 +167,24 @@ test('the build row threads every axis it is given', () => {
   // threading five values through would be recorded as correct.
   const tail = actionCommands('build', OPTS)[0].slice(2);
   for (const [flag, value] of [['--theme', 'imperial'], ['--emit', 'claude-global'],
-    ['--footprint', 'lean'], ['--posture', 'mentor'], ['--mode', 'foreman']]) {
+    ['--footprint', 'lean'], ['--posture', 'mentor'], ['--mode', 'foreman'],
+    ['--doctrines', 'craft']]) {
     const at = tail.indexOf(flag);
     assert.ok(at >= 0, `the build argv drops ${flag}`);
     assert.equal(tail[at + 1], value, `${flag} does not carry the value it was given`);
   }
+});
+
+test('a build row given no pack selection states ALL packs, not the config default', () => {
+  // ⚠ THE ONE AXIS WHOSE OMISSION IS NOT COSMETIC. The other five default to a frozen literal
+  // that costs nothing when it is wrong. A missing `--doctrines` is not a default at all: the
+  // generator falls through to `harness.config.json`, so `{"doctrines":["craft"]}` there turns a
+  // console Build of an install carrying all four packs into a build carrying one — and the
+  // commit/push consent gate goes with the process pack. Unknown resolves to the FULL set.
+  const tail = actionCommands('build', { ...OPTS, doctrines: undefined })[0].slice(2);
+  const at = tail.indexOf('--doctrines');
+  assert.ok(at >= 0, 'a build row with no pack selection left the axis to harness.config.json');
+  assert.equal(tail[at + 1], 'craft,rigor,ops,process');
 });
 
 test('the deploy argv resolves the body it is handed', () => {
@@ -201,9 +214,15 @@ test('the deploy argv resolves the body it is handed', () => {
     // Frozen from the reference, with the only machine-dependent value substituted. `--out` and
     // `--root` are BOTH the target: a deploy renders the bundle at the repo it is deploying to,
     // so the two being the same string is the claim, not an accident of the fixture.
+    // The body carries no pack selection, which the console's Deploy form never sends. That is
+    // resolved through `doctrinesForBuild(root)` rather than left to `harness.config.json`, so
+    // the flag is spelled out here: an empty target is an unknown, and unknown means ALL packs.
+    // Left off, a deploy onto a directory that already held an install took the configured
+    // default and its commit/push consent gate with it.
     assert.deepEqual(plan.cmd.slice(2).map(String).map((s) => s.split(td).join('<TARGET>')),
       ['--theme', 'imperial', '--emit', 'opencode', '--out', '<TARGET>', '--root', '<TARGET>',
-        '--footprint', 'lean', '--posture', 'mentor', '--mode', 'foreman']);
+        '--footprint', 'lean', '--posture', 'mentor', '--mode', 'foreman',
+        '--doctrines', 'craft,rigor,ops,process']);
   } finally {
     sb.cleanup();
   }

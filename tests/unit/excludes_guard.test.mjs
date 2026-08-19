@@ -190,7 +190,7 @@ test('git-gate DOES ask in the same tree when it is not excluded', () => {
     const r = hookRun('git-gate', { cwd: repo, root: cfg,
       stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git commit -m x' } }) });
     assert.equal(r.rc, 0);
-    assert.match(r.out, /Law XX/,
+    assert.match(r.out, /Doctrine process 5/,
       'the gate stayed silent with an empty excludes list — the silence test above proves '
       + 'nothing about the guard');
   } finally { sb.cleanup(); }

@@ -29,7 +29,7 @@ import { parseJson, readText } from './lib/fs.mjs';
 
 /**
  * `_harness_tui.LAW_HEADING_RE` — a heading in the RENDERED laws file, e.g.
- * `### Rule XVIII — Load the Project Context`.
+ * `### Rule IV — Deletion Is Deliberate`.
  *
  * Not `js/doctor.mjs`'s `LAW_HEADING_RE`, which matches the `{{LAW}}` token in the
  * unrendered source. Two patterns, two inputs, two names in Python as well.

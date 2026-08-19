@@ -4,7 +4,7 @@
 // "enforce by injection, don't just instruct" stance as the context plugin:
 //   - Law I  (Sealed Secrets):  block writes to private-key / credential files.
 //   - Law IV (Deletion Is Deliberate):  block catastrophic shell commands.
-//   - Law VI (rule vs memory):  speed-bump the first write to user-rules.md or a
+//   - Doctrine process 1 (rule vs memory):  speed-bump the first write to user-rules.md
 //     memory file — that choice belongs to the user, via the rule skill.
 //   - Wiki (AGENT.md §7):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in wiki.jsonc.
@@ -207,7 +207,7 @@ async function protectedPrefixes() {
   return prefixes
 }
 
-// ---- the rule / memory stores (Law VI) -----------------------------------------
+// ---- the rule / memory stores (Doctrine process 1) -----------------------------
 // Whether something the user wants kept is a standing rule or a durable fact is THEIR
 // call, settled through the rule skill. `tool.execute.before` can only allow or throw —
 // it has no "ask the user" tier like the Claude/Bob rule-gate hook —
@@ -257,7 +257,7 @@ export const GeneseedGuard = async () => {
           if (store && !RULE_STORE_BUMPED.has(p)) {
             RULE_STORE_BUMPED.add(p)
             deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
-                 `choice is the user's (Law VI). Settle it through the rule skill, ` +
+                 `choice is the user's (Doctrine process 1). Settle it through the rule skill, ` +
                  `then re-issue this write`)
             return
           }

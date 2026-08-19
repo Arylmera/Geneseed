@@ -43,12 +43,12 @@ page is mostly about *what it does not automate* and why the harness still holds
 Copilot has **no `settings.json` and no lifecycle-hook mechanism**, so the whole
 settings/hooks/excludes stage is skipped. Concretely, Copilot does **not** get:
 
-- **automated context injection** — Rule XVIII's project-context load falls back
+- **automated context injection** — the project-context load falls back
   to the preamble instructing the agent to read the docs itself;
 - **automated memory / learn write-back** — no `Stop`/`SubagentStop` hook; the
   memory convention rides the preamble's instructions (the agent writes its own
   memories) rather than a session-end distiller;
-- **the git-gate consent backstop** — Rule XX (*consent before every commit and
+- **the git-gate consent backstop** — Doctrine process 5 (*consent before every commit and
   push*) is enforced by the **preamble prose only**, not at the tool boundary.
   There is no hook to force the prompt;
 - **sovereign-repo excludes** — Copilot documents no exclude/shadow mechanism

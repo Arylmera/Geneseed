@@ -980,7 +980,7 @@
     {
       "expect": [
         "permissionDecision",
-        "Law XX"
+        "Doctrine process 5"
       ],
       "id": "git-gate/commit",
       "steps": [
@@ -1256,7 +1256,7 @@
       "expect": [
         "permissionDecision",
         "user-rules.md",
-        "Law VI"
+        "Doctrine process 1"
       ],
       "id": "rule-gate/user-rules",
       "steps": [

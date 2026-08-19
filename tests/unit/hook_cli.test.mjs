@@ -882,16 +882,18 @@ function decision(argv, payload) {
   return JSON.parse(r.stdout);
 }
 
-for (const [verb, payload, law] of [
-  ['git-gate', { tool_name: 'Bash', tool_input: { command: 'git commit -m x' } }, 'Law XX'],
-  ['rule-gate', { tool_name: 'Write', tool_input: { file_path: '/x/user-rules.md' } }, 'Law VI'],
+for (const [verb, payload, cite] of [
+  ['git-gate', { tool_name: 'Bash', tool_input: { command: 'git commit -m x' } },
+    'Doctrine process 5'],
+  ['rule-gate', { tool_name: 'Write', tool_input: { file_path: '/x/user-rules.md' } },
+    'Doctrine process 1'],
 ]) {
   test(`${verb} emits the document the host reads`, () => {
     const got = decision([verb], payload);
     const { permissionDecisionReason, ...rest } = got.hookSpecificOutput;
     assert.deepEqual({ hookSpecificOutput: rest }, GATE_DOCUMENT);
-    assert.ok(permissionDecisionReason.includes(law),
-      `the reason does not cite ${law}: ${permissionDecisionReason}`);
+    assert.ok(permissionDecisionReason.includes(cite),
+      `the reason does not cite ${cite}: ${permissionDecisionReason}`);
   });
 }
 

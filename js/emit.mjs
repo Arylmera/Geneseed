@@ -845,7 +845,8 @@ export function emitOpencodeRender(cfg, job) {
   // (`_rel_under` is the Python side by design), and only the BASENAME is consumed
   // downstream: `opencode.json`, or the `.jsonc` sibling when that is what is on disk.
   phaseLog('WIRE');
-  const cfgName = path.basename(mergeOpencodeJson(path.join(root, 'opencode.json'), agentPath));
+  const cfgName = path.basename(mergeOpencodeJson(path.join(root, 'opencode.json'), agentPath,
+    cfg.doctrines));
 
   return {
     owned,
@@ -1079,7 +1080,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // that split is what `tests/test_emit_phase_order.py` walks, and it walks the Python.
   phaseLog('WIRE');
   const cfgName = path.basename(mergeOpencodeJson(path.join(cfgDir, 'opencode.json'),
-    agentPath));
+    agentPath, cfg.doctrines));
 
   return {
     owned,
@@ -1215,7 +1216,7 @@ export function emitClaudeRender(cfg, job) {
 
   // WIRE — see `claudeWire` below. One child per emit, so the two halves are two
   // functions rather than two spawns; the seam between them is a call, not a process.
-  const managed = claudeWire(job, claudeMdText, agentText !== null);
+  const managed = claudeWire(job, claudeMdText, agentText !== null, cfg.doctrines);
 
   return {
     owned,
@@ -1250,7 +1251,7 @@ export function emitClaudeRender(cfg, job) {
  * not needed for it: Python tests `os.environ.get(...)` for truthiness and an env var is
  * always a string, so `''` is the only falsy value either language sees.
  */
-function claudeWire(job, claudeMdText, hasAgentText) {
+function claudeWire(job, claudeMdText, hasAgentText, doctrines = null) {
   phaseLog('WIRE');
   const { cfgDir, claudeMd, scope, host, oldManaged, preambleExclude, hookOpts } = job;
   const old = oldManaged && typeof oldManaged === 'object' && !Array.isArray(oldManaged)
@@ -1306,8 +1307,12 @@ function claudeWire(job, claudeMdText, hasAgentText) {
     // The merge prunes recorded groups that are no longer canonical and returns the
     // COMPLETE current claim set — store it as-is; unioning with prior would resurrect the
     // stale claims.
+    // `doctrines` decides whether the git-gate group is part of the canonical claim set. It
+    // travels from `cfg` rather than being re-read off the deployment: this is the emit that
+    // DECIDES the install's packs, so the marker on disk is still the previous build's.
     const [, managedHooks] = mergeClaudeSettings(
       settingsPath, scope, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
+      doctrines,
     );
     managed.settings_hooks = managedHooks;
 

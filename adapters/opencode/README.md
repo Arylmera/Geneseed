@@ -181,7 +181,7 @@ docs with an `eager`/`lazy` split. The
 On `session.created` it **auto-discovers the current repo's docs by convention**
 and injects the `eager` ones into the session via a no-reply prompt
 (`session.prompt({ noReply: true })`) — so they're in context before your first
-turn, enforcing **Law XVIII** by injection, not agent discipline. This is what lets
+turn, enforcing the project-context load by injection, not agent discipline. This is what lets
 the harness live entirely in the global config dir with zero per-repo files.
 
 - **Eager** (injected in full, budget-capped): root `AGENTS.md`/`AGENT.md`/
@@ -200,7 +200,7 @@ the harness live entirely in the global config dir with zero per-repo files.
   hard guarantee is still a single install: OpenCode dedups plugins by npm
   name+version only, so two local copies both load.)
 - **Survives compaction:** on the experimental `session.compacting` hook it re-pushes
-  the eager docs into the compaction context, so the project context (Law XVIII)
+  the eager docs into the compaction context, so the project context
   persists when a long session is summarised. The `AGENT.md` rules already survive —
   they load via `instructions`, not the conversation — so only the injected project
   context needs re-pushing.

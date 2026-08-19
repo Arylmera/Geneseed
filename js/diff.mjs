@@ -41,8 +41,8 @@ import path from 'node:path';
 import { emitGlobalInto } from '../bin/geneseed.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir } from './hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, defaultTheme, footprintOfDir, modeOfDir, postureOfDir, readJsonMaybe,
-  readMaybe, themeOfDir,
+  EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, footprintOfDir, modeOfDir, postureOfDir,
+  readJsonMaybe, readMaybe, themeOfDir,
 } from './installs.mjs';
 import { unifiedDiff, pySplitLines } from './lib/udiff.mjs';
 import { pyPathStr, pyPrint, pyPrintErr, readText, writeText } from './lib/fs.mjs';
@@ -166,7 +166,12 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
     const expected = path.join(tmp, 'expected');
     withStdoutSwallowed(() => emitGlobalInto(host, {
       theme: themeName, out: path.join(tmp, 'bundle'), cfgDir: expected, footprint: fp,
-      posture: postureOfDir(dir), mode: modeOfDir(dir),
+      // The third register read off the deployment, for the same reason as the other two: an
+      // install built with `--doctrines craft` compared against an `expected` rendered at all
+      // four reports its entire doctrines section — and its `Active packs:` line — as drift.
+      // `null` (no marker) means unknown and renders at all four, which `doctrinesForBuild`
+      // makes explicit rather than leaving to `makeCfg`'s parameter default two layers down.
+      posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
     }));
     const rels = [...new Set([...ownedSet(dir), ...ownedSet(expected)])].sort();
     for (const rel of rels) {

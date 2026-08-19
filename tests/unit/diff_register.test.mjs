@@ -24,7 +24,7 @@ import { spawnSync } from 'node:child_process';
 
 import { diffCollect } from '../../js/diff.mjs';
 import { ROOT } from '../../js/checkout.mjs';
-import { postureOfDir, modeOfDir } from '../../js/installs.mjs';
+import { postureOfDir, modeOfDir, doctrinesOfDir } from '../../js/installs.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';
@@ -41,12 +41,13 @@ test.after(() => { restoreProcessHome(); });
  * exercises the flags the user actually reaches — `driverMain` in-process would share this
  * process's module state with the `diffCollect` call under test.
  */
-function install(d, { posture, mode }) {
+function install(d, { posture, mode, doctrines }) {
   const gcfg = path.join(d, 'gcfg');
   fs.mkdirSync(gcfg, { recursive: true });
   const argv = ['--emit', 'opencode-global', '--theme', 'neutral'];
   if (posture) argv.push('--posture', posture);
   if (mode) argv.push('--mode', mode);
+  if (doctrines) argv.push('--doctrines', doctrines);
   const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv], {
     cwd: ROOT,
     encoding: 'utf8',
@@ -110,6 +111,27 @@ test('both axes off the default at once report no drift', () => {
     assert.equal(modeOfDir(gcfg), 'foreman');
     const { files } = diffCollect({ target: gcfg });
     assert.deepEqual(rels(files), [], 'the chosen register was reported as a local edit');
+  });
+});
+
+test('a freshly-built install with the packs NARROWED reports no drift', () => {
+  // The third register, and it arrived a phase after the other two — so `diffCollect` rendered
+  // `expected` with all four packs and reported an install built at `--doctrines craft` as
+  // having locally edited its entire doctrines section, `Active packs:` marker and all. Same
+  // scar as the posture/mode one above, one axis over; same fix, one more value read off the
+  // deployment. `[]` is deliberately covered too — the empty selection is a real configuration
+  // and `null`-vs-`[]` is exactly the distinction a `|| default` would collapse.
+  withDir((d) => {
+    const gcfg = install(d, { doctrines: 'craft' });
+    assert.deepEqual(doctrinesOfDir(gcfg), ['craft'], 'the emit did not narrow the packs');
+    assert.deepEqual(rels(diffCollect({ target: gcfg }).files), [],
+      'the chosen pack selection was reported as a local edit');
+  });
+  withDir((d) => {
+    const gcfg = install(d, { doctrines: 'none' });
+    assert.deepEqual(doctrinesOfDir(gcfg), [], 'the emit did not deploy an empty selection');
+    assert.deepEqual(rels(diffCollect({ target: gcfg }).files), [],
+      '`--doctrines none` was reported as a local edit');
   });
 });
 

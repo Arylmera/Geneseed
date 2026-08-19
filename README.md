@@ -214,10 +214,10 @@ is **identical on every host**. What differs is how much of it the host can
 | **Agents** (capability specialists) | ✅ native | ✅ | ✅ | ✅ `.agent.md` |
 | **Skills** (byte-identical) | ✅ | ✅ | ✅ | ✅ |
 | **Memory & Notebook** | ✅ | ✅ | ✅ | ✅ |
-| **Context injection** (Rule XVIII) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Context injection** | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
 | **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
-| **Git-gate consent** (Rule XX) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
-| **Rule-gate consent** (Rule VI) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Git-gate consent** (process 5) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Rule-gate consent** (process 1) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ | 📄 preamble |
 | **Sovereign-repo excludes** | ⚙️ plugin | ✅ `claudeMdExcludes` | ✅ rules-shadow | ➖ none |
 | **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcpServers` | ✅ `mcp-config.json` |
 | **Colour themes** | ✅ full palette | ➖ | ➖ | ➖ |

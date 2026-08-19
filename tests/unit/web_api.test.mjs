@@ -1247,19 +1247,25 @@ test('a picked pack list reaches the install command, normalised into PACK_ORDER
   });
 });
 
-test('the install command elides --doctrines when the body says nothing usable', () => {
+test('a body that says nothing usable falls back to the INSTALL, never to the config', () => {
   withThreeInstalls(({ st, cl }) => {
-    // No key at all: the build falls back to `harness.config.json`, which is what a rebuild has
-    // always done. Not the same as an empty selection, and must not become one.
-    assert.ok(!apiInstallCmd(st, { host: 'claude', path: cl }).cmd.map(String)
-      .includes('--doctrines'));
+    // ⚠ THIS CELL USED TO ASSERT THE OPPOSITE — that the flag was elided so the generator could
+    // read `harness.config.json`. That is the fail-OPEN hole: the fixture's install carries no
+    // `Active packs:` marker, exactly like every pre-2.3 install, and with
+    // `{"doctrines":["craft"]}` in that file the rebuild dropped its commit/push consent gate.
+    // Unknown resolves to ALL PACKS here, as it does at every other build-side consumer.
+    const all = 'craft,rigor,ops,process';
+    const cmd0 = apiInstallCmd(st, { host: 'claude', path: cl }).cmd.map(String);
+    assert.equal(cmd0[cmd0.indexOf('--doctrines') + 1], all,
+      'a markerless install was left to a machine-wide config file to describe');
     // A bogus member poisons the WHOLE list rather than being filtered out of it: a request
     // asking for craft and something that does not exist is a request this endpoint does not
-    // understand, and silently building three-quarters of it is the wrong repair.
+    // understand, and silently building three-quarters of it is the wrong repair. It then falls
+    // back the same way a missing key does — to the install, not to the config.
     for (const bad of [['craft', '../evil'], ['nope'], [7], 'craft,nope', 42, {}]) {
       const cmd = apiInstallCmd(st, { host: 'claude', path: cl, doctrines: bad }).cmd.map(String);
-      assert.ok(!cmd.includes('--doctrines'), `a bogus doctrines value reached the argv: ${
-        JSON.stringify(bad)}`);
+      assert.equal(cmd[cmd.indexOf('--doctrines') + 1], all,
+        `a bogus doctrines value reached the argv: ${JSON.stringify(bad)}`);
       assert.ok(!cmd.some((a) => a.includes('evil')), 'a path-shaped pack name reached the argv');
     }
   });
@@ -1275,11 +1281,16 @@ test('an empty pack list is a real answer and is spelled none', () => {
   });
 });
 
-test('a full pack list elides, so a rebuild does not pin the install to today\'s pack set', () => {
+test('a full pack list is SPELLED OUT, so the config cannot reinterpret the console\'s answer', () => {
+  // This asserted the opposite until the elision came out, and the reason it flipped is the
+  // point: a `--doctrines`-less command line falls through to `harness.config.json`, so a
+  // console user who ticked all four packs on a machine configured `{"doctrines":["craft"]}`
+  // got an install with one — and no commit/push consent gate. The console knows the answer;
+  // the command line has to carry it.
   withThreeInstalls(({ st, cl }) => {
     const cmd = apiInstallCmd(st,
       { host: 'claude', path: cl, doctrines: ['craft', 'rigor', 'ops', 'process'] }).cmd.map(String);
-    assert.ok(!cmd.includes('--doctrines'));
+    assert.equal(cmd[cmd.indexOf('--doctrines') + 1], 'craft,rigor,ops,process');
   });
 });
 
@@ -2013,11 +2024,20 @@ test('the deploy command validates its pack list the same way the install comman
       .cmd.map(String);
     assert.equal(after$(at({ doctrines: ['ops', 'craft'] }), '--doctrines'), 'craft,ops');
     assert.equal(after$(at({ doctrines: [] }), '--doctrines'), 'none');
-    // A fresh deploy has no deployment to read a default off, so an unspecified or unusable
-    // value leaves the flag off and the generator takes the configured default.
-    assert.ok(!at({}).includes('--doctrines'));
-    assert.ok(!at({ doctrines: ['craft', '../evil'] }).includes('--doctrines'));
-    assert.ok(!at({ doctrines: ['craft', 'rigor', 'ops', 'process'] }).includes('--doctrines'));
+    // An unspecified or unusable value resolves through `doctrinesForBuild(root)`, NOT through
+    // `harness.config.json`. The console's Deploy form sends host/path/theme/footprint/posture/
+    // mode and no pack selection, and nothing stops it landing on a directory that already holds
+    // an install — so "unspecified" reached the generator's config fallback and, measured on a
+    // real all-four Claude project install, took its 6 hook groups to 5 and dropped
+    // `PreToolUse::Bash` with them. Unknown resolves to ALL packs; this sandbox holds no install,
+    // so that is the full set.
+    assert.equal(after$(at({}), '--doctrines'), 'craft,rigor,ops,process');
+    assert.equal(after$(at({ doctrines: ['craft', '../evil'] }), '--doctrines'),
+      'craft,rigor,ops,process');
+    // A USABLE full list is not "unspecified": it is the console's answer and it is spelled out,
+    // because the configured default it would otherwise fall through to can be a narrower set.
+    assert.equal(after$(at({ doctrines: ['craft', 'rigor', 'ops', 'process'] }), '--doctrines'),
+      'craft,rigor,ops,process');
   } finally { sb.cleanup(); }
 });
 

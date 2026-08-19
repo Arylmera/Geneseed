@@ -952,9 +952,14 @@ const PROJECT_EMITS = {
   opencode: emitOpencode,
 };
 
-export function emitProjectInto(host, { theme, out, root, footprint = 'full' }) {
+export function emitProjectInto(host, { theme, out, root, footprint = 'full', doctrines = null }) {
   const emit = PROJECT_EMITS[host];
-  return withPyNewlines(() => emit(makeCfg(), { theme, footprint, root }, out));
+  // `doctrines` rides the same rail posture and mode ride into `emitGlobalInto`, and for the
+  // same reason: a drift reader that renders `expected` at the DEFAULT pack set reports the
+  // whole doctrines section as edited on every narrowed install. `null` means "no opinion" and
+  // `makeCfg` renders all four, which is what every validation caller wants.
+  return withPyNewlines(() => emit(makeCfg(doctrines ? { doctrines } : {}),
+    { theme, footprint, root }, out));
 }
 
 /**
@@ -972,7 +977,7 @@ export function buildInto({ theme, out, footprint = 'lean' }) {
 }
 
 export function emitGlobalInto(host, {
-  theme, out, cfgDir, footprint, posture = null, mode = null,
+  theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null,
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -990,7 +995,13 @@ export function emitGlobalInto(host, {
   // that chose a register — the same scar the footprint left in `diffCollect`, one axis over.
   return withPyNewlines(
     () => emit(
-      makeCfg({ posture: posture || 'peer', mode: mode || 'direct' }),
+      // THE PACK SELECTION RIDES THE SAME RAIL, with one difference: `doctrinesOfDir` answers
+      // `null` for "no marker / undetectable", and that must render at ALL packs rather than
+      // at `[]`, so the key is OMITTED instead of passed through — `makeCfg`'s own default is
+      // the fail-closed answer and an explicit `doctrines: null` would not reach it.
+      makeCfg({
+        posture: posture || 'peer', mode: mode || 'direct', ...(doctrines ? { doctrines } : {}),
+      }),
       { theme, footprint, root: null, cfgDir }, out,
     ),
   );

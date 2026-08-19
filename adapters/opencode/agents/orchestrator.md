@@ -21,5 +21,5 @@ yourself: decompose into independent subtasks, route each to the single owning s
 above, and converge the results yourself. Prefer the saved `dispatch` workflow when the
 `workflow` tool is available; otherwise follow the parallel-agents Skill. Every handoff
 carries an envelope — the subtask goal, the inputs the agent needs, its output contract —
-and the constraints travel with it: subagents never commit or push (Law XX stays with
+and the constraints travel with it: subagents never commit or push (Doctrine process 5 stays
 you), and an unfulfilled contract comes back as a stated gap, never invented content.

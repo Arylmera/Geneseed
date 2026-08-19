@@ -24,8 +24,9 @@ import { setupBuildArgs } from '../../js/generate.mjs';
 import { doctrineOptions, javaMajorOk, lspPrereqs, setupSummaryLines } from '../../js/setup.mjs';
 import { themeFlair, tuiEntries, detailLines } from '../../js/tui.mjs';
 import { tuiInventory } from '../../js/inventory.mjs';
-import { themeFiles } from '../../js/installs.mjs';
-import { SRC, PACK_ORDER, discoverNames } from '../../js/checkout.mjs';
+import { doctrinesForBuild, doctrinesOfDir, themeFiles } from '../../js/installs.mjs';
+import { ROOT, SRC, PACK_ORDER, discoverNames } from '../../js/checkout.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const themeNames = () => themeFiles().map((p) => path.basename(p, '.json'));
 
@@ -59,41 +60,183 @@ test('an explicit full survives the lean default', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// The doctrines elision, which is the only one of the four that compares a SET against a default
-// that is itself a list. Three states, and the middle one is the one a `!== 'peer'` copy loses:
+// The doctrines flag, which is the only one of the four that carries a SET — and the only one
+// whose absence lands on a CONFIG-DRIVEN default rather than a frozen literal. Two states:
 // `null` (no opinion, no flag) is NOT the same as `[]` (a deliberate empty selection).
 
 const ARGS = (doctrines, allPacks = PACK_ORDER) => setupBuildArgs('neutral', 'opencode-global',
   null, null, 'lean', 'peer', 'direct', doctrines, allPacks);
 
-test('a full pack selection elides --doctrines and no selection at all elides it too', () => {
-  // Both take the flag off the command line, and they mean different things: an unasked build
-  // falls back to `harness.config.json`, while an "all four" answer happens to agree with it.
-  // They are the same ARGV on purpose — a flag that restated the default would couple the
-  // answer to it, which is the exact bug `--footprint`'s docblock exists to describe.
+test('a KNOWN pack selection is always passed — never elided against any default', () => {
+  // ⚠ THE REGRESSION THIS PINS IS THE ONE THAT SHIPPED. `--doctrines` used to elide when the
+  // selection equalled the full pack list, by analogy with `--posture`/`--mode`. Those two
+  // compare against a FROZEN LITERAL; a missing `--doctrines` lands on `configDefaults()`,
+  // which reads `harness.config.json`. So with `{"doctrines":["craft"]}` in that file, an
+  // install carrying all four packs was re-emitted by `upgrade` carrying ONE — and losing the
+  // process pack takes the commit/push consent gate off an install whose owner never asked.
+  //
+  // The property is therefore not "the full set is spelled out": it is that the argv NAMES the
+  // selection for every selection a caller actually knows, so no reader of it has to consult a
+  // file that may have moved underneath. Restoring any elision fails all four of these.
+  for (const sel of [[...PACK_ORDER], [...PACK_ORDER].reverse(), ['craft'], []]) {
+    assert.ok(ARGS(sel).includes('--doctrines'),
+      `a known selection went unspoken and will be re-read from harness.config.json: ${sel}`);
+  }
+  // The one legitimate elision, and the only one: nothing was read back off an install, so the
+  // caller has no opinion to state and the generator's own config default is the right answer.
   assert.ok(!ARGS(null).includes('--doctrines'));
-  assert.ok(!ARGS([...PACK_ORDER]).includes('--doctrines'));
-  // ...and order is not what makes them equal: the set is.
-  assert.ok(!ARGS([...PACK_ORDER].reverse()).includes('--doctrines'));
 });
 
-test('a narrowed selection is passed, in PACK_ORDER, and an empty one is spelled none', () => {
+test('a selection is passed in PACK_ORDER, and an empty one is spelled none', () => {
   assert.deepEqual(ARGS(['rigor', 'craft']).slice(-2), ['--doctrines', 'craft,rigor']);
   assert.deepEqual(ARGS(['process']).slice(-2), ['--doctrines', 'process']);
+  assert.deepEqual(ARGS([...PACK_ORDER]).slice(-2),
+    ['--doctrines', 'craft,rigor,ops,process']);
+  // Order is not what the canonicalisation preserves: the SET is, re-ordered through the pack
+  // order, because the `Active packs:` marker the build writes is compared against itself.
+  assert.deepEqual(ARGS([...PACK_ORDER].reverse()).slice(-2),
+    ['--doctrines', 'craft,rigor,ops,process']);
   // The empty list cannot be `--doctrines ` — the driver's parser rejects that as a usage
   // error — so it has to become the literal `none` it also accepts.
   assert.deepEqual(ARGS([]).slice(-2), ['--doctrines', 'none']);
 });
 
-test('the elision default is the one passed in, not one this function reached for', () => {
-  // `setupBuildArgs` is pure and has no discovery. Hand it a checkout with three packs and
-  // "all three" must still elide — a function that compared against its own frozen `PACK_ORDER`
-  // would emit `--doctrines craft,rigor,ops` here and pin an install to a list that stops being
-  // "all of them" the moment a fourth pack file lands.
-  const three = ['craft', 'rigor', 'ops'];
-  assert.ok(!ARGS([...three], three).includes('--doctrines'));
-  // ...and the same selection against the real four-pack default is a genuine narrowing.
-  assert.deepEqual(ARGS([...three]).slice(-2), ['--doctrines', 'craft,rigor,ops']);
+test('every RE-EMIT of an existing install states its pack selection', () => {
+  // The flag being un-elidable (above) only helps a caller that PASSES it. `migrate`'s re-emit
+  // loop called `setupBuildArgs` with seven arguments and no selection — so a migration read
+  // theme, emit, footprint, posture and mode back off each install and then handed the sixth
+  // register to `harness.config.json`, silently WIDENING a constitution its owner had cut down.
+  // Its own comment ("same reads as `cmdRebuildAll`") had gone false without anything failing.
+  //
+  // A source gate rather than a fixture, because both loops walk the machine's real install
+  // registry: what is actually being asserted is that neither call site can quietly lose the
+  // argument again, and that is a property of the call, not of a run.
+  for (const rel of JS_SOURCES.filter((r) => /setupBuildArgs\(/.test(readSrc(r)))) {
+    const src = readSrc(rel);
+    const calls = [...src.matchAll(/setupBuildArgs\(([\s\S]*?)\);/g)].map((m) => m[1]);
+    for (const args of calls) {
+      if (/^\s*$/.test(args)) continue;                    // the declaration, not a call
+      assert.ok(/doctrines/.test(args),
+        `${rel} re-emits an install without naming its packs: setupBuildArgs(${args})`);
+    }
+    // ...and NAMING them is not the same as RESOLVING them. `apiDeployCmd` satisfied the check
+    // above with `const doctrines = bodyDoctrines(body);` — a local whose value is `null` for
+    // every Deploy the console actually sends, because that form posts host/path/theme/
+    // footprint/posture/mode and no pack selection. The flag was then elided and the generator
+    // fell back to `harness.config.json`; deploying onto an existing all-four Claude install
+    // took it to one pack and its `PreToolUse::Bash` hook with it. The gate certified the bug.
+    // So the binding on the way IN is asserted too: whatever is handed to `setupBuildArgs` must
+    // trace to the fail-closed resolver or to a literal — never to a bare reader that can answer
+    // `null`.
+    // `askDoctrines()` is exempt, and the exemption is tied to the property that earns it: the
+    // wizard's answer is a STATED selection, not an unknown, so there is no install to fail
+    // closed about. The cell below proves it cannot answer null; if it ever can, this exemption
+    // fails there rather than silently widening the hole here.
+    for (const [, name, rhs] of src.matchAll(/(?:const|let)\s+(\w*[Dd]octrines\w*)\s*=\s*([^;]+);/g)) {
+      if (!new RegExp(`setupBuildArgs\\([^;]*\\b${name}\\b`).test(src)) continue;
+      assert.ok(/doctrinesForBuild|PACK_ORDER|askDoctrines|\[/.test(rhs),
+        `${rel}: \`${name}\` reaches setupBuildArgs without the fail-closed resolver — `
+        + `\`${rhs.trim()}\` can answer null, which elides the flag and hands the pack set to `
+        + 'harness.config.json. Use `doctrinesForBuild(root)` as the fallback.');
+    }
+  }
+  // The one exemption above, kept honest: every return in `askDoctrines` is an array.
+  const ask = readSrc('js/setup.mjs').match(/function askDoctrines\(\)\s*\{[\s\S]*?\n\}/)?.[0];
+  assert.ok(ask, 'askDoctrines has moved — re-site the exemption in the gate above');
+  assert.ok(!/return\s+(null|undefined)/.test(ask),
+    'askDoctrines can now answer null, so it is no longer a stated selection — it must go '
+    + 'through doctrinesForBuild like every other consumer, and lose its exemption above');
+  // The set it walks must not be able to go empty — a rename would pass this gate vacuously.
+  assert.ok(JS_SOURCES.some((r) => /setupBuildArgs\(/.test(readSrc(r))),
+    'nothing calls setupBuildArgs any more — move this gate');
+});
+
+// ---------------------------------------------------------------------------------------------
+// ⚠ INVARIANT 1 — "unknown" resolves to ALL PACKS, never to a config value.
+//
+// `doctrinesOfDir` answers `null` for "this install does not say", and its docblock puts the
+// obligation on the reader: read it as the process pack being ACTIVE. Every consumer instead
+// wrote `?? defaultDoctrines()`, which reads `harness.config.json` — so with
+// `{"doctrines":["craft"]}` in that file, `upgrade`/`rebuild-all`/`migrate`/the web console
+// re-emitted EVERY pre-2.3 install at one pack and took its commit/push consent gate off. The
+// reader had been made fail-closed into consumers that were not, and hardening it (a folded
+// marker now answers `null` too) widened the hole rather than narrowing it.
+//
+// The two cells below are written to catch a consumer added LATER, not only the five that had
+// it: one bans the config-backed fallback from the source outright, the other measures the
+// resolver against a real config file that says something narrower.
+
+const readSrc = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+
+/** A throwaway directory, removed even when the body throws. `makeSandbox` resolves the
+ *  8.3/symlink split that a bare `mkdtemp` under the system temp root reintroduces. */
+function withDir(fn) {
+  const sb = makeSandbox('geneseed-packs-');
+  try { return fn(sb.path); } finally { sb.cleanup(); }
+}
+
+/** Every shipped `.mjs` under `js/` and `bin/` — the whole build side, not a hand-kept list. */
+const JS_SOURCES = (function walk(dir, acc = []) {
+  for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = `${dir}/${e.name}`;
+    if (e.isDirectory()) walk(rel, acc);
+    else if (e.name.endsWith('.mjs')) acc.push(rel);
+  }
+  return acc;
+}('js', (function walkBin(acc) {
+  for (const e of fs.readdirSync(path.join(ROOT, 'bin'), { withFileTypes: true })) {
+    if (e.name.endsWith('.mjs')) acc.push(`bin/${e.name}`);
+  }
+  return acc;
+}([]))));
+
+test('no build-side consumer can resolve an unknown pack set out of harness.config.json', () => {
+  // THE GATE IS ON THE SOURCE BECAUSE THE DEFECT IS A HABIT. Any consumer may read the config
+  // for theme, posture or mode — the worst a wrong answer does there is cosmetic. The pack
+  // selection decides whether a boundary is installed, so the config key has exactly ONE
+  // legitimate reader: `configDefaults()` in `bin/geneseed.mjs`, which answers `geneseed build`
+  // — the case where there is no install to ask. Anything else holding a directory calls
+  // `doctrinesForBuild`, whose `null` arm is `[...PACK_ORDER]`.
+  assert.ok(JS_SOURCES.length > 20, `the source walk found ${JS_SOURCES.length} files`);
+  assert.ok(JS_SOURCES.includes('js/installs.mjs') && JS_SOURCES.includes('bin/geneseed.mjs'));
+  for (const rel of JS_SOURCES) {
+    const src = readSrc(rel).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    assert.ok(!/defaultDoctrines/.test(src),
+      `${rel} resolves an install's packs out of harness.config.json — unknown must resolve `
+      + 'to the FULL pack set (js/installs.mjs `doctrinesForBuild`), never to a config value');
+    if (rel === 'bin/geneseed.mjs') continue;      // configDefaults: the no-install-to-ask case
+    assert.ok(!/configuredDefault\(\s*'doctrines'/.test(src),
+      `${rel} reads the doctrines config key directly — see above`);
+  }
+});
+
+test('an unknown pack set resolves to ALL packs even when the config names fewer', () => {
+  // THE VERDICT'S OWN SCENARIO, measured rather than argued: a markerless install (every
+  // pre-2.3 one) and a `harness.config.json` that names one pack. The resolver must answer all
+  // four, so the re-emit keeps the gate; the config value must reach it by no route at all.
+  withDir((d) => {
+    assert.equal(doctrinesOfDir(d), null, 'the fixture is not markerless');
+    assert.deepEqual(doctrinesForBuild(d), [...PACK_ORDER]);
+    // A folded/corrupt marker is the input the hardened reader added, and it lands here too.
+    fs.writeFileSync(path.join(d, 'AGENT.md'), 'Active packs: craft, rigor,\nops, process\n');
+    assert.equal(doctrinesOfDir(d), null, 'the fixture is not a corrupt marker');
+    assert.deepEqual(doctrinesForBuild(d), [...PACK_ORDER]);
+    // A marker that DOES read is an answer and passes through untouched — including `none`,
+    // which is a deliberate empty selection and not a silence.
+    fs.writeFileSync(path.join(d, 'AGENT.md'), 'Active packs: craft\n');
+    assert.deepEqual(doctrinesForBuild(d), ['craft']);
+    fs.writeFileSync(path.join(d, 'AGENT.md'), 'Active packs: none\n');
+    assert.deepEqual(doctrinesForBuild(d), []);
+  });
+});
+
+test('the canonical order is the one passed in, not one this function reached for', () => {
+  // `setupBuildArgs` is pure and has no discovery, which is why `allPacks` survived the
+  // elision's removal: it is what orders the flag. Hand it a checkout with three packs and the
+  // value is spelled in THAT order, not in this module's frozen `PACK_ORDER`.
+  const three = ['ops', 'craft', 'rigor'];
+  assert.deepEqual(ARGS(['craft', 'ops'], three).slice(-2), ['--doctrines', 'ops,craft']);
+  assert.deepEqual(ARGS([...three], three).slice(-2), ['--doctrines', 'ops,craft,rigor']);
 });
 
 test('the wizard menu lists every shipped pack, in narrative order, each with a blurb', () => {

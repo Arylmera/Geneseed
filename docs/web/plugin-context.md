@@ -4,7 +4,7 @@ order: 1
 title: "geneseed-context"
 kind: "concept"
 ---
-Enforces **Law XVIII** (*Load the Project Context*) by injection, not instruction: on `session.created` it auto-discovers the repo's docs by convention and injects the `eager` ones before your first turn, so the harness needs **zero per-repo files**.
+Enforces the project-context load by injection, not instruction: on `session.created` it auto-discovers the repo's docs by convention and injects the `eager` ones before your first turn, so the harness needs **zero per-repo files**.
 
 - **Eager** (injected in full, budget-capped): root `AGENTS.md` / `AGENT.md` / `CLAUDE.md` / `.cursorrules`, `README.md`, `CONTRIBUTING.md`.
 - **Lazy** (path + first heading, read on demand): `docs/`, `doc/`, `architecture/`, `adr/`, monorepo `packages/*/README.md`, other root `*.md`. `node_modules`, `.git`, `dist`, `build` are never scanned.

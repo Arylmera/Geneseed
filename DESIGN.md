@@ -85,8 +85,8 @@ vault or a specific tool's hooks.
    host-specific infrastructure, or single-domain belongs in an agent, a skill, or
    `context.json`, not in the universal Laws; a rule that overlaps an existing Law is
    folded in as a clause, not minted as a new number. This is the authoring-time
-   counterpart to Law XV's runtime context economy: keep the instruction surface
-   high-signal and pruned so it stays read and heeded.
+   counterpart to Doctrine `process 3`'s runtime context economy: keep the
+   instruction surface high-signal and pruned so it stays read and heeded.
 
    A Law that clears that bar is not one edit but six, because its *satellites* —
    themed title, class, display copy, counts — live outside `universal.md`:

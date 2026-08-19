@@ -114,8 +114,8 @@ import {
   pyResolve,
 } from '../hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
-  readMaybe,
+  EMIT_HOST_SCOPE, doctrinesForBuild, footprintOfDir, installState, installTargets, modeOfDir,
+  postureOfDir, readMaybe,
 } from '../installs.mjs';
 import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
@@ -732,6 +732,13 @@ export function apiRestore(state, files) {
       footprint: state.footprint,
       posture: state.posture,
       mode: state.mode,
+      // THE PACK SELECTION IS THE FIFTH, and it is the one that makes this verb a BOUNDARY
+      // question rather than a cosmetic one. `expected` rendered at all four packs, and this
+      // verb COPIES OUT OF IT: restoring AGENT.md onto an install built `--doctrines craft`
+      // wrote a carrier stating doctrine process 5 while `claudeHookGroups` had wired no gate
+      // behind it — prompt and boundary disagreeing by a WRITE, the write-side twin of the
+      // read-side hole `diffCollect` had (and the reason the panel offered the file at all).
+      doctrines: doctrinesForBuild(target),
     }));
     for (const raw of (pyTruthy(files) ? files : [])) {
       const rel = pyStripSpace(pyStr(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
@@ -811,10 +818,13 @@ export function apiInstallCmd(state, body) {
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode)
     ? bmode : (modeOfDir(root) || 'direct');
-  // Unspecified stays unspecified: no flag means the generator falls back to
-  // `harness.config.json`, which is the answer a rebuild has always given. It cannot yet be
-  // read back off the deployment — that needs the `Active packs:` marker reader.
-  const doctrines = bodyDoctrines(body);
+  // Unspecified means "keep what this install already has", exactly as theme, footprint,
+  // posture and mode above do — a rebuild through the console is not a place to silently
+  // re-decide the constitution. ⚠ AND A CARRIER WITH NO `Active packs:` MARKER (a pre-2.3
+  // install) MUST NOT LAND ON `harness.config.json`: `doctrinesOfDir` answers `null` there,
+  // `null` elided the flag, and the generator's config fallback then narrowed the install and
+  // took its consent gate with it. `doctrinesForBuild` resolves unknown to ALL packs.
+  const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
@@ -912,7 +922,13 @@ export function apiDeployCmd(state, body) {
   const pos = discoverNames('postures', 'peer').includes(bpos) ? bpos : 'peer';
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode) ? bmode : 'direct';
-  const doctrines = bodyDoctrines(body);
+  // Same resolution as `apiInstallCmd` above, and for the same reason: the console's Deploy
+  // form sends host/path/theme/footprint/posture/mode and NO pack selection, and nothing stops
+  // it landing on a directory that already holds an install. Taking `bodyDoctrines` alone left
+  // the flag off, the generator fell back to `harness.config.json`, and deploying onto an
+  // existing all-four Claude install dropped it to one pack — measured: 6 hook groups became 5
+  // and `PreToolUse::Bash` went with them. `doctrinesForBuild` resolves unknown to ALL packs.
+  const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
   // project-scope emit name == host name (opencode / claude / bob / copilot)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };

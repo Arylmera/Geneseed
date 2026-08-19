@@ -13,7 +13,7 @@ The harness itself — Rules, Agents, Skills, Memory, and the preamble voice —
 | Agents · Skills · Memory | ✅ | ✅ | ✅ | ✅ |
 | Context injection | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
 | Memory write-back (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
-| Git-gate consent (Rule XX) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| Git-gate consent (Doctrine process 5) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
 | Sovereign-repo excludes | ⚙️ plugin | ✅ | ✅ | ➖ |
 | MCP server wiring | ✅ | ✅ | ✅ | ✅ |
 | Colour themes | ✅ | ➖ | ➖ | ➖ |

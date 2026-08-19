@@ -165,9 +165,11 @@ your repo's `.claude/settings.json` (paths assume the bundle is at the repo root
 It wires:
 
 - **PreToolUse** (matcher `Bash`) — runs `harness git-gate`, a tool-boundary backstop
-  for Law XX. The hook inspects the command and forces an `ask` on every `git commit`
-  or `git push` (even chained or `-C`-flagged), un-suppressible by a one-time "don't
-  ask again". Every other Bash command is deferred to the normal permission flow.
+  for Doctrine `process 5`. The hook inspects the command and forces an `ask` on every
+  `git commit` or `git push` (even chained or `-C`-flagged), un-suppressible by a
+  one-time "don't ask again". Every other Bash command is deferred to the normal
+  permission flow. It is wired only when the **process** pack is active — build with
+  `--doctrines` leaving `process` out and this hook is not installed at all.
 - **SessionStart** (`startup`/`clear`) — prints `AGENT.md` and injects the project
   context (`harness context`, which auto-discovers the repo's docs);
 - **SessionStart** (`resume`) — refreshes the project context only, without re-printing
@@ -963,7 +965,8 @@ capability agent. Notes:
 
 - **Permissions still gate.** The consent-before-commit/push / `rm -rf` `ask` rules
   will *block* in a non-interactive run (nothing to answer the prompt). Both
-  `git commit` and `git push` are gated now (Law XX, every branch), so a CI job that
+  `git commit` and `git push` are gated on every branch whenever the **process** pack
+  is active (Doctrine `process 5`; a build without it wires neither), so a CI job that
   commits must opt those commands back to `"allow"` in its own `permission.bash` map,
   or scope the run to read-only work — don't blanket-disable the guards.
 - **`--pure`** runs OpenCode ignoring local/global config — handy to reproduce a bug

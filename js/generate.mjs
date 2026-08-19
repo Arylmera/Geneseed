@@ -36,8 +36,8 @@ import { main as driverMain } from '../bin/geneseed.mjs';
 import { makeCfg, PACK_ORDER } from './checkout.mjs';
 import { opencodeConfigDir, pyResolve } from './hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, footprintOfDir, installState,
-  installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
+  EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
+  footprintOfDir, installState, installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
 } from './installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from './opencode.mjs';
 import { renderAll } from './render.mjs';
@@ -102,15 +102,22 @@ export function cmdBuild(args) {
  * whatever that default happened to be — the moment the default moved, picking the old one
  * produced the new one. `posture` and `mode` still elide at theirs, and neither has moved.
  *
- * `doctrines` elides too, but it is NOT the `!== 'peer'` shape it looks like from a distance.
- * Posture and mode are scalars compared against a frozen literal; a pack selection is a SET
- * compared against a default that is itself a list which grows when a pack file is added. The
- * full list therefore comes in as `allPacks` rather than being reached for here — this
- * function is pure and has no discovery, and a caller that already knows the checkout's packs
- * (the wizard, the web console) should not have that knowledge re-derived behind its back.
+ * ⚠ `doctrines` DOES NOT ELIDE, AND THAT IS THE SAFETY DECISION, NOT A STYLE ONE. It used to
+ * elide on the full set, by analogy with posture and mode — but those two compare against a
+ * FROZEN LITERAL (`'peer'`, `'direct'`), while the default a missing `--doctrines` actually
+ * lands on is `configDefaults()`, which reads `harness.config.json`. With `{"doctrines":
+ * ["craft"]}` in that file, an install carrying all four packs re-emitted by `upgrade` was
+ * silently narrowed to one — and the narrowing takes the commit/push consent gate off an
+ * install whose owner never asked for that. Same trap as `footprint`, one axis over, with a
+ * boundary behind it. A caller that knows the selection now always says so.
  *
- * Three states, not two: `null` means "the caller expressed no opinion" and emits no flag at
- * all, so the generator falls back to `harness.config.json`; `[]` is a deliberate empty
+ * `allPacks` survives the elision's removal because it is still what CANONICALISES the value:
+ * the flag is emitted in the checkout's pack order, not the order handed in, and this function
+ * is pure and has no discovery of its own.
+ *
+ * Two states: `null` means "the caller expressed no opinion" and emits no flag at all, so the
+ * generator falls back to `harness.config.json` — the only route left to that fallback, and it
+ * is reached only where nothing was read back off an install; `[]` is a deliberate empty
  * selection and emits `--doctrines none`, which is the spelling the driver's `parseDoctrines`
  * accepts (an empty `--doctrines ` is a usage error there, so it can never be produced here).
  */
@@ -124,12 +131,10 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   if (footprint) argv.push('--footprint', footprint);
   if (posture && posture !== 'peer') argv.push('--posture', posture);
   if (mode && mode !== 'direct') argv.push('--mode', mode);
-  if (Array.isArray(doctrines) && !(doctrines.length === allPacks.length
-    && allPacks.every((p) => doctrines.includes(p)))) {
-    // Emitted in `allPacks` order, not the order handed in. The elision above is a SET
-    // comparison, so a caller may legitimately pass an unsorted list and still be eliding;
-    // the flag it produces when it is not eliding has to be canonical for the same reason the
-    // driver re-normalises on parse — the `Active packs:` marker is compared against itself.
+  if (Array.isArray(doctrines)) {
+    // Emitted in `allPacks` order, not the order handed in: a caller may legitimately pass an
+    // unsorted list, and the flag has to be canonical for the same reason the driver
+    // re-normalises on parse — the `Active packs:` marker is compared against itself.
     const picked = allPacks.filter((p) => doctrines.includes(p));
     argv.push('--doctrines', picked.length ? picked.join(',') : 'none');
   }
@@ -188,12 +193,15 @@ export function cmdRebuildAll() {
     const posture = postureOfDir(root) || defaultPosture();
     const mode = modeOfDir(root) || defaultMode();
     const out = scope === 'global' ? null : root;
-    // The sixth value, `doctrines`, is deliberately NOT read back yet: detecting a deployed
-    // install's active packs needs `doctrinesOfDir` (the `Active packs:` marker reader), which
-    // does not exist here yet. Passing nothing elides the flag, so a rebuild takes the
-    // configured default — the same answer this loop gave before packs existed. The moment
-    // `doctrinesOfDir` lands it belongs here, beside the other four read-back values.
-    const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode);
+    // SIX values now, not five. A rebuild that defaulted the pack selection would re-emit an
+    // install into a constitution its owner did not choose — and in one direction that is not
+    // merely surprising: dropping the process pack takes the commit/push consent RULES out of
+    // AGENT.md while `claudeHookGroups` keeps the gate wired, or the reverse. ⚠ AND THE
+    // FALLBACK IS NOT `harness.config.json`: a pre-migration carrier has no marker, and
+    // resolving that silence out of a machine-wide config narrows every such install on its
+    // first upgrade. `doctrinesForBuild` resolves unknown to ALL packs — see its docblock.
+    const doctrines = doctrinesForBuild(root);
+    const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines);
     const label = `${host}:${scope} (${root})`;
     pyPrint(`[rebuild-all] ${label}: theme=${theme} emit=${emit} footprint=${footprint} `
       + `posture=${posture} mode=${mode}\n`);
