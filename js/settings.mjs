@@ -33,7 +33,8 @@
  * much larger change than the defect.
  */
 import {
-  chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -294,6 +295,19 @@ export const SHIM_MARK = 'geneseed-hook';
  */
 export const SHIM_ARGV = new Set(['$@', '%*']);
 
+/**
+ * Every quoted token in a shim body that names a path which is not there — empty is healthy.
+ *
+ * ONE OWNER, because the rule has two consumers now and a second copy is a second place for the
+ * `"$@"` defect above to come back: `js/doctor.mjs` turns this into the `[shim] … does not
+ * exist` report, and `hookPrefix` reads it to decide whether the shim already on disk is worth
+ * protecting from a checkout that will not outlive the emit.
+ */
+export function shimDeadPaths(body) {
+  return [...body.matchAll(/"([^"]+)"/g)].map((m) => m[1])
+    .filter((q) => !SHIM_ARGV.has(q) && !existsSync(q));
+}
+
 /** `_SHIM_REL`, with the platform as an argument.
  *
  * Python computes it at IMPORT time from `sys.platform`, which is what makes the other
@@ -401,6 +415,50 @@ export function writeHookShim(p, body, platform = process.platform) {
   }
 }
 
+/** The OS temp root, resolved once. `.native` because a Windows `TEMP` can be an 8.3 alias —
+ * the same trap `tests/helpers/sandbox.mjs` documents, reached from the other side. */
+const TMP_REAL = (() => {
+  try { return realpathSync.native(os.tmpdir()); } catch { return os.tmpdir(); }
+})();
+
+/** Is `child` inside `parent`? `path.relative` compares case-insensitively on win32. */
+function isUnder(child, parent) {
+  const rel = path.relative(parent, child);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/**
+ * Will the checkout holding `entry` outlive the emit that is baking it into the shim?
+ *
+ * TWO SHAPES, and both are in `docs/extending.md` §5.3 because both have really happened on this
+ * repo: a copied checkout under the OS temp root — the `copyCheckout` fixture, which builds its
+ * copy from `git ls-files` and therefore carries no `.git` at all, so only the temp root
+ * identifies it — and a git WORKTREE, whose `.git` is a FILE pointing at the main checkout
+ * rather than a directory. A plain checkout and an npm install are neither, and keep the
+ * ownership they have always had.
+ *
+ * `tmpRoot` IS A PARAMETER for the reason `shimRel`'s `platform` is: with the real temp root
+ * baked in, the second rule is unreachable in a test — anything a test can build under `mkdtemp`
+ * has already answered true on the first — so the worktree arm could only ever be exercised by
+ * whichever kind of checkout the run happened to sit in.
+ */
+export function ephemeralCheckout(entry, tmpRoot = TMP_REAL) {
+  let real = entry;
+  try { real = realpathSync.native(entry); } catch { /* not there yet — test the literal */ }
+  if (isUnder(real, tmpRoot)) return true;
+  // `<checkout>/bin/geneseed-hook.mjs` — the one shape `hookRunnerEntry` produces.
+  try { return statSync(path.join(path.dirname(path.dirname(real)), '.git')).isFile(); } catch {
+    return false;
+  }
+}
+
+/** Does the shim already on disk still name paths that all exist? */
+function shimIsLive(p) {
+  try { return statSync(p).isFile() && shimDeadPaths(readText(p)).length === 0; } catch {
+    return false;
+  }
+}
+
 /**
  * `_build_settings._hook_prefix` — the `<runner> <entrypoint>` every emitted hook starts
  * with, falling back to the pre-shim direct form when the shim cannot be written.
@@ -422,6 +480,26 @@ export function hookPrefix({ runner, entry, platform = process.platform } = {}) 
       + 'bakes them, and there is no correct value to guess from inside Node');
   }
   const p = hookShimPath(platform);
+  // ⚠ A DISPOSABLE CHECKOUT DOES NOT GET TO CLAIM THE MACHINE-WIDE SHIM. The shim has no
+  // per-install component, so the last checkout to emit owns EVERY install's hooks — and when
+  // that checkout is a test sandbox or a git worktree, deleting it kills hooks machine-wide with
+  // nothing to report it: hooks signal through stdout and return 0 on every path, and this file
+  // is excluded from the byte corpora by name. Measured twice in one session, from
+  // `tests/unit/harness.test.mjs`'s copied-checkout fixture; `docs/extending.md` §5.3 carries
+  // the worktree half.
+  //
+  // KEEP, NOT REFUSE, and that distinction is what makes this safe to add here rather than at
+  // each call site. Returning the existing shim path leaves the emitted hook command
+  // byte-identical to what a normal emit writes; taking the fallback below instead would move a
+  // hook command in every recorded bundle. The install being emitted then runs the DURABLE
+  // checkout's entry — which is exactly what last-writer-wins already handed every other install
+  // on the machine, so nothing is lost by it.
+  //
+  // ONLY A SHIM THAT STILL RESOLVES IS PROTECTED. An absent or already-dead one is no worse for
+  // being rewritten from here, and a sandboxed `GENESEED_HOME` (every emit test, every cell) has
+  // none — so the suite's own emits are unaffected and this cannot go green by silently
+  // skipping the write.
+  if (ephemeralCheckout(entry) && shimIsLive(p)) return `"${p}"`;
   const shim = writeHookShim(p, hookShimBody(runner, entry, platform), platform);
   if (shim !== null) return `"${shim}"`;
   process.stderr.write(`[geneseed] WARN: could not write the hook shim at ${p} — emitting `

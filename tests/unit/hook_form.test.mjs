@@ -25,15 +25,15 @@
  * is precisely the bug this test exists for.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { hookRunnerEntry } from '../../bin/geneseed.mjs';
 import { shimProblems } from '../../js/doctor.mjs';
 import {
-  GENESEED_HOOK_SNIFF, SHIM_ARGV, claudeHookGroups, hookPrefix, hookShimBody, hookShimPath,
-  writeHookShim,
+  GENESEED_HOOK_SNIFF, SHIM_ARGV, claudeHookGroups, ephemeralCheckout, hookPrefix, hookShimBody,
+  hookShimPath, writeHookShim,
 } from '../../js/settings.mjs';
 import { ROOT } from '../../js/checkout.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -313,5 +313,101 @@ test('the sniff recognises both the legacy and the shim shape', () => {
     }
     assert.ok(!GENESEED_HOOK_SNIFF.some((m) => 'echo hi'.includes(m)),
       'a plain user hook is mistaken for Geneseed\'s');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// ⚠ WHO IS ALLOWED TO CLAIM THE MACHINE-WIDE SHIM.
+//
+// The shim has no per-install component, so the last checkout to emit owns EVERY install's
+// hooks. That is fine between two durable checkouts — it is the documented last-writer-wins —
+// and catastrophic from one that is about to be deleted: `docs/extending.md` §5.3, and twice in
+// one session from `tests/unit/harness.test.mjs`'s copied-checkout fixture, which left
+// `~/.geneseed/bin/geneseed-hook.cmd` naming a `Temp/gs-fix-*` directory and every hook in every
+// install on the machine dead.
+//
+// NOTHING ELSE WOULD REPORT IT, which is why the claim is gated here rather than left to review:
+// hooks return 0 on every path and signal through stdout, and the shim is excluded from the byte
+// corpora by name. `tests/shim_intact.mjs` is the other half — this pins the rule, that one pins
+// what the suite actually left behind.
+
+test('a checkout under the temp root, or a git worktree, is not a durable owner', () => {
+  const sb = makeSandbox('hookform-eph-');
+  try {
+    // RULE ONE — under the OS temp root. The sandbox IS under it, so this is the live spelling
+    // and the default argument is what answers.
+    assert.equal(ephemeralCheckout(path.join(sb.path, 'bin', 'geneseed-hook.mjs')), true);
+
+    // RULE TWO, reachable only because `tmpRoot` is a parameter: point it somewhere else so the
+    // first rule cannot answer, and let the `.git` FILE a linked worktree carries decide.
+    const elsewhere = path.join(sb.path, 'not-the-temp-root');
+    const wt = path.join(sb.path, 'worktree');
+    mkdirSync(path.join(wt, 'bin'), { recursive: true });
+    const entry = path.join(wt, 'bin', 'geneseed-hook.mjs');
+    writeFileSync(entry, '', 'utf8');
+
+    // A checkout with no `.git` at all — an npm install, or the `copyCheckout` fixture, which
+    // builds from `git ls-files` and carries none. Durable as far as this rule can tell.
+    assert.equal(ephemeralCheckout(entry, elsewhere), false);
+
+    // A real checkout: `.git` is a DIRECTORY.
+    mkdirSync(path.join(wt, '.git'));
+    assert.equal(ephemeralCheckout(entry, elsewhere), false);
+
+    // A linked worktree: `.git` is a FILE naming the main checkout's gitdir.
+    rmSync(path.join(wt, '.git'), { recursive: true });
+    writeFileSync(path.join(wt, '.git'), 'gitdir: /elsewhere/.git/worktrees/wt\n', 'utf8');
+    assert.equal(ephemeralCheckout(entry, elsewhere), true);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('an emit from a disposable checkout leaves a live shim alone', () => {
+  withHome(() => {
+    const { runner, entry } = hookRunnerEntry();
+    const p = hookShimPath();
+    writeHookShim(p, hookShimBody(runner, entry));
+    const before = readFileSync(p, 'utf8');
+
+    // The emitting checkout is a temp copy; the shim on disk names a durable one that resolves.
+    const sb = makeSandbox('hookform-copy-');
+    try {
+      const prefix = hookPrefix({ runner, entry: path.join(sb.path, 'bin', 'geneseed-hook.mjs') });
+      // BYTE-IDENTICAL TO A NORMAL EMIT, and that is the half worth pinning: the fallback branch
+      // would have wired `"<runner>" "<entry>"` into every hook of every recorded bundle. What
+      // the copy gets is the shim it was always going to get, still pointing at the checkout
+      // that will still be there tomorrow.
+      assert.equal(prefix, `"${p}"`);
+      assert.equal(readFileSync(p, 'utf8'), before, 'the disposable copy repointed the shim');
+      assert.deepEqual(shimProblems(), []);
+    } finally {
+      sb.cleanup();
+    }
+  });
+});
+
+test('a disposable checkout still writes a shim nobody else owns', () => {
+  // THE OTHER SIDE OF THE RULE, and it is what keeps the guard from going green by doing
+  // nothing. Every emit test in this suite runs against a fresh `GENESEED_HOME` with no shim in
+  // it; if "disposable" meant "never writes", those emits would silently take the fallback and
+  // this file's other assertions would be gating a branch the product never reaches. An absent
+  // shim — and equally a dead one — is no worse for being written from a temp copy.
+  withHome(() => {
+    const p = hookShimPath();
+    assert.ok(!existsSync(p));
+    const sb = makeSandbox('hookform-first-');
+    try {
+      const entry = path.join(sb.path, 'bin', 'geneseed-hook.mjs');
+      assert.equal(hookPrefix({ runner: process.execPath, entry }), `"${p}"`);
+      assert.ok(readFileSync(p, 'utf8').includes(entry), 'the first emit wrote no shim');
+
+      // Dead, not absent: the same answer, for the same reason.
+      writeFileSync(p, '#!/bin/sh\nexec "/gone/node" "/gone/entry.mjs" "$@"\n', 'utf8');
+      assert.equal(hookPrefix({ runner: process.execPath, entry }), `"${p}"`);
+      assert.ok(readFileSync(p, 'utf8').includes(entry), 'a dead shim was left dead');
+    } finally {
+      sb.cleanup();
+    }
   });
 });
