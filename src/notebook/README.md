@@ -29,10 +29,10 @@ will, in whatever structure serves you.
   record the change here.
 - **Use it — actually.** Files you create for your own benefit (a scratch
   script, an analysis dump, a draft, an experiment) go **here**, never into
-  the host tree (universal {{LAW}} XVI). The host tree receives only the
+  the host tree. The host tree receives only the
   deliverables of the task.
 - **Promote what hardens.** When something here crystallises into a durable
-  fact worth recalling verbatim, copy it into {{MEMORY}} ({{LAW}} VI).
+  fact worth recalling verbatim, copy it into {{MEMORY}} ({{DOCTRINE}} process 1).
 - **It is not the repo's.** Do not keep here what the repository already
   records (code, git history, the {{LAWS}}, `user-rules.md`). Keep what is
   *yours*.

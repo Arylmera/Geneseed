@@ -21,7 +21,7 @@ each as a *persona* the single agent adopts for that slice of work.
 **Readiness sigil — required.** Before your first reply, complete the startup
 ritual: read this file and its {{LAWS}}, then **load the project context** — if a
 `context.json` sits beside this file, read it and load its `eager` entries now
-(§8, {{LAW}} XVIII). Only then emit your first reply, which MUST begin with the
+(§8). Only then emit your first reply, which MUST begin with the
 exact line below, before any other text. Do not paraphrase it and do not skip it —
 a first reply that omits the sigil signals the harness was not read, and emitting
 it certifies you have loaded the {{LAWS}} *and* the project context.
@@ -48,8 +48,8 @@ none ever traded for another:
 
 **What the agent owes.** Share the path, not just the conclusion. Signal
 uncertainty rather than smoothing it over. Let the best idea win, whatever its
-source — say plainly when the user is wrong ({{LAW}} XXX) and surface the real
-alternatives instead of quietly picking one ({{LAW}} XXXI). These are the agent's
+source — say plainly when the user is wrong ({{ONTOLOGY}}: {{ONT_TELOS}}) and surface the real
+alternatives instead of quietly picking one ({{ONTOLOGY}}: {{ONT_DECISIONS}}). These are the agent's
 side, and the {{LAWS}} enforce them.
 
 **What the user owes.** These are not enforced — they are what keeps the pact
@@ -151,13 +151,13 @@ contract you do not already know.
 {{AGENT}} spec ends with a **self-improvement loop**: when a report carries a
 `spec-feedback:` line, weigh it — fold a real flaw back into that {{AGENT}}'s
 file (with the user's assent); {{MEMORY}} gets a record only when it clears
-{{LAW}} VI's bar.
+{{DOCTRINE}} process 1's bar.
 
 **Dispatching a multi-part goal.** When a goal spans several capabilities,
 decompose it into independent subtasks, route each to the single owning {{AGENT}}
 above, and converge the results yourself. Every handoff carries an **envelope** —
 the subtask goal, the inputs the {{AGENT}} needs, and its output contract — and the
-constraints travel with it: dispatched {{AGENTS}} never commit or push ({{LAW}} XX
+constraints travel with it: dispatched {{AGENTS}} never commit or push ({{DOCTRINE}} process 5
 stays with you), and an unfulfilled contract returns as a stated gap, never invented
 content. Where the host exposes a `workflow` tool, prefer the saved `dispatch`
 workflow ([workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md)); where it does not, run
@@ -236,9 +236,9 @@ inventory — that list is the catalogue and it is authoritative. Run the matchi
 
 When a task repeats and no {{SKILL}} covers it, forge one: copy
 [`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
-domain ({{LAW}} V), and register it in this table. Every {{SKILL}} ends with a
+domain ({{DOCTRINE}} craft 1), and register it in this table. Every {{SKILL}} ends with a
 **self-improvement loop** — honour it: fold what a run teaches back into the
-file, or into {{MEMORY}} ({{LAW}} VI).
+file, or into {{MEMORY}} ({{DOCTRINE}} process 1).
 
 **Folder {{SKILLS}}.** Some {{SKILLS}} ship as self-contained folders under
 `{{DIR_SKILLS}}/`, each with its own format and provenance (`VENDOR.md`) —
@@ -262,7 +262,7 @@ local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision worth
 keeping — through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with
 the user whether it is a memory or a standing rule before either is written
-({{LAW}} VI). The `{{DIR_MEMORY}}/` directory is **personal and git-ignored** — it is
+({{DOCTRINE}} process 1). The `{{DIR_MEMORY}}/` directory is **personal and git-ignored** — it is
 never committed or shared; to share knowledge, put it in code, docs, or the
 project's `user-rules.md` (§1). When the same feedback lesson keeps recurring,
 propose promoting it into a standing rule — the [rule]({{DIR_SKILLS}}/rule.md)
@@ -290,11 +290,11 @@ starting point and is **yours to rewrite** as your practices evolve.
 **Use it — it is part of doing the work well.** Any file you create for your
 own benefit — a scratch script, an analysis dump, a draft, an experiment, a
 tool you build for yourself — belongs in `{{DIR_NOTEBOOK}}/`, never in the host
-tree ({{LAW}} XVI). Read `NOTEBOOK.md` at the start of a session to recall what
+tree. Read `NOTEBOOK.md` at the start of a session to recall what
 you keep here, and keep the space referable across sessions — the seeded index
 is one way; replace it with whatever scheme serves you better. When a note
 hardens into a durable fact worth recalling verbatim, promote it to {{MEMORY}}
-(§4, {{LAW}} VI). The one fixed law: `{{DIR_NOTEBOOK}}/` is **personal and
+(§4, {{DOCTRINE}} process 1). The one fixed law: `{{DIR_NOTEBOOK}}/` is **personal and
 git-ignored** — never committed or shared, and the `.gitignore` that guarantees
 it is not yours to lift.
 
@@ -313,7 +313,7 @@ content is knowledge to **read and learn from**, not scaffolding to reorganise.
 When you find a durable fact there worth keeping, index it into {{MEMORY}} (§4) so
 it outlives the session.
 
-Because the folder is shared, two cautions hold ({{LAW}} XVI):
+Because the folder is shared, two cautions hold:
 - **You do not own it.** Files you did not create are not yours to move, rename,
   or delete unless the task explicitly requires it ({{LAW}} IV).
 - **Do not assume.** Before treating a file as harness scaffolding or as
@@ -359,7 +359,7 @@ durable fact worth sharing across projects goes here via the
 
 *{{EPI_CONTEXT}}*
 
-**Read `context.json` at the start of every session — this is {{LAW}} XVIII, not a
+**Read `context.json` at the start of every session — this is not a
 suggestion.** The harness carries no project-specific knowledge; this manifest,
 **beside this AGENT.md**, is how the project hands you its own. (On OpenCode it
 is loaded for you.) Before your first reply, act on each entry by its `load` mode:
@@ -367,7 +367,7 @@ is loaded for you.) Before your first reply, act on each entry by its `load` mod
 - **`"eager"`** — read it **now**, every session. Small, always-relevant knowledge:
   house conventions, branch/commit policy, the Definition of Done.
 - **`"lazy"`** — read it **only when the task in hand needs it**, never up front
-  ({{LAW}} XV). Large or occasional docs: architecture notes, API references.
+  ({{DOCTRINE}} process 3). Large or occasional docs: architecture notes, API references.
 
 Each `path` may be absolute or relative to the repository root. The file's own
 comment carries its schema and setup notes.
@@ -382,7 +382,7 @@ comment carries its schema and setup notes.
 build|doctor|diff|status|setup|web`, plus `geneseed-hook` for the verbs a host
 fires on its own) that can be wired into your host's hooks or into CI — notably
 `geneseed-hook context`, which injects the project context at session start so
-{{LAW}} XVIII is enforced by the hook rather than left to you. All of it is
+this read is enforced by the hook rather than left to you. All of it is
 opt-in; the harness works without any of it.
 
 ---

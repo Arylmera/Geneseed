@@ -13,7 +13,7 @@ crews for what's substantial, and keeps answering the user without blocking.
 - **Merge on proof.** A pipeline attaches raw test + lint output to its branch;
   the parent checks the proof exists and is green, then merges — no
   re-verification of the work itself. Commit/push/merge stays the parent's alone
-  ({{LAW}} XX); sub-agents inherit every law through the handoff envelope, which
+  ({{DOCTRINE}} process 5); sub-agents inherit every law through the handoff envelope, which
   is what justifies merging on proof rather than re-checking the work.
 - **Report.** Surface pipeline completions, failures, and merges to the user as
   they happen.

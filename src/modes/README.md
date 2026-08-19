@@ -18,8 +18,8 @@ any posture and any mode.
 | [direct](direct.md) *(default)* | The agent works the task itself, turn by turn. |
 | [foreman](foreman.md) | The session triages incoming tasks, spawning isolated pipelines for substantial work while staying responsive to the user. |
 
-Every mode still obeys the laws and the Pact — a mode changes *how* work proceeds,
-never the principles.
+Every mode still obeys the ontology and the invariants — a mode changes *how* work
+proceeds, never the principles.
 
 To add a mode, drop a `<name>.md` here (body only, no top-level heading — it is
 inlined under `AGENT.md`'s own `## Mode` heading) and add a row above. The build

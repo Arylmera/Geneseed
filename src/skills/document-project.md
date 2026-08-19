@@ -13,7 +13,7 @@ into line with the implementation.
    that exists — never create a second. If none exists, create `docs/` at the root.
 2. **Survey the code, not the intent.** Map entry points, the public API / modules,
    commands, config, and key directories — read the actual behaviour (universal {{LAW}} III,
-   {{LAW}} XVII). If there is no `ARCHITECTURE.md`, run [repo-map {{SKILL}}](repo-map.md)
+   {{DOCTRINE}} process 4). If there is no `ARCHITECTURE.md`, run [repo-map {{SKILL}}](repo-map.md)
    first so you have the orientation map to build on.
 3. **Reconcile the markdown (whole tree).** Check every existing page against the current
    implementation — renamed or removed APIs, changed flags, dead examples — and fix the
@@ -28,7 +28,7 @@ into line with the implementation.
    - **Fenced generated regions.** Wrap the auto-generated body between
      `<!-- geneseed:doc:start -->` and `<!-- geneseed:doc:end -->` markers, and on re-runs
      rewrite *only* inside them — hand-authored prose outside the markers is never touched
-     ({{LAW}} XV: edit the layer you own, never the reader's additions).
+     ({{DOCTRINE}} process 3: edit the layer you own, never the reader's additions).
    - **Diagrams as Mermaid, keyed by purpose.** In the markdown, render diagrams as fenced
      `mermaid` code blocks — they render natively on GitHub, Obsidian, and VS Code with no
      dependency. Pick the kind by what you are showing: sequence for runtime/request flows,
@@ -56,7 +56,7 @@ into line with the implementation.
    - **Stay project-facing** — clean and professional styling, never the harness voice; and
      footer it with `mirrors commit <sha> · generated <date>` so the sync is auditable.
 6. **Do not auto-publish.** Leave the changes for the user to review; stage and commit only
-   on consent, via the [commit {{SKILL}}](commit.md) (universal {{LAW}} XX).
+   on consent, via the [commit {{SKILL}}](commit.md) ({{DOCTRINE}} process 5).
 
 ## Done when
 - The doc home mirrors the current implementation: every markdown page carries typed
@@ -72,7 +72,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

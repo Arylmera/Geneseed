@@ -190,7 +190,7 @@ enforcement paths read the same. Adds a machine marker (first line) for §4.
 
 ```
 <!-- geneseed-context:v2 -->
-=== PROJECT CONTEXT — binding for this repo per Law XVIII ===
+=== PROJECT CONTEXT — binding for this repo ===
 
 ----- <path> — <description> -----
 <full file contents, trailing newlines stripped>
@@ -204,7 +204,7 @@ enforcement paths read the same. Adds a machine marker (first line) for §4.
   - [demoted: README.md exceeded 16 KB — read on demand]
 ```
 
-- Header keeps the exact `=== PROJECT CONTEXT … Law XVIII ===` wording.
+- Header keeps the exact `=== PROJECT CONTEXT — binding for this repo ===` wording.
 - A `MISSING` eager file emits `[context] MISSING eager file: <err>` inline (as today).
 - The `<!-- geneseed-context:v2 -->` marker is the idempotency sentinel.
 

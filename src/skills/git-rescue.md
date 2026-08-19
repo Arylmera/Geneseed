@@ -41,13 +41,13 @@ finding *when/why* something changed without altering history, use git-archaeolo
    dedicated branch, never a shared one, and keep it the only change in flight
    (universal {{LAW}} II). A rewrite *creates commits* — amend, squash, `--continue`
    all do — so present what will change and get the user's acceptance before running
-   it, exactly as for any commit (universal {{LAW}} XX).
+   it, exactly as for any commit ({{DOCTRINE}} process 5).
 6. Verify the result before declaring success: inspect `git log --oneline`,
    `git status`, and the diff against the intended state — read the actual output, do
    not assume the rewrite landed as planned (universal {{LAW}} III).
 7. Push only with the user's explicit, per-push consent — and a history rewrite needs a
    **force**-push (`--force-with-lease`), which is doubly outward-facing: present what
-   changed and wait for acceptance before pushing (universal {{LAW}} XX / {{LAW}} IV).
+   changed and wait for acceptance before pushing ({{DOCTRINE}} process 5 / {{LAW}} IV).
    Never force-push a shared branch without confirming it is safe to do so.
 
 ## Done when
@@ -61,7 +61,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

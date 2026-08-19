@@ -1,6 +1,6 @@
 // Geneseed — OpenCode project-context plugin (v2, convention-glob).
 //
-// Enforces Law XVIII ("Load the Project Context") by INJECTION, not instruction:
+// Enforces the project-context rule ("Load the Project Context") by INJECTION, not instruction:
 // on `session.created` it puts the repo's documentation in context before your
 // first turn, rather than trusting the agent to read it. v2 removes the need for a
 // committed `context.json` — it AUTO-DISCOVERS the current repo's docs by
@@ -675,7 +675,7 @@ async function buildBlock(sets, wikis = [], commands = []) {
 
   if (!proj.length && !wik.length) return null
   const out = [MARKER]
-  if (proj.length) out.push("=== PROJECT CONTEXT — binding for this repo per Law XVIII ===", "", ...proj)
+  if (proj.length) out.push("=== PROJECT CONTEXT — binding for this repo ===", "", ...proj)
   if (wik.length) out.push("=== MACHINE WIKI — the user's knowledge base, binding per AGENT.md §7 ===", "", ...wik)
   return { text: out.join("\n"), injected: state.injected, lazy: state.lazy, kb: kb(state.spent) }
 }
@@ -821,7 +821,7 @@ export const GeneseedContext = async (ctx) => {
     // OpenCode summarises it away when a long session compacts (the AGENT.md rules
     // persist — they load via opencode.json `instructions`, not the conversation).
     // Re-push the eager docs into the compaction context so the project context —
-    // Law XVIII — outlives the summary. Only needed when delivery is visible
+    // The project context — outlives the summary. Only needed when delivery is visible
     // (forced or fallback); the transform re-sends per request. Experimental
     // OpenCode hook; if it is absent in a build this key is simply never called.
     "experimental.session.compacting": async (_input, output) => {

@@ -14,7 +14,7 @@ request or merge the branch.
 2. Confirm the branch carries only this change's commits and is rebased/updated on
    the base branch; resolve any divergence before opening.
 3. Push the branch only with the user's explicit, per-push acceptance — on every
-   branch, feature branches included ({{LAW}} XX); present the change summary + commit
+   branch, feature branches included ({{DOCTRINE}} process 5); present the change summary + commit
    message and wait, and never treat an earlier approval as consent for this push.
    Opening a PR or merging is **outward-facing** — get explicit confirmation first too,
    unless already authorized (universal {{LAW}} IV).
@@ -28,7 +28,7 @@ request or merge the branch.
    be a way back (universal {{LAW}} IV); dispatch the
    [operator {{AGENT}}](../{{DIR_AGENTS}}/operator.md) when the runtime surface is
    non-trivial.
-6. Make sure documentation shipped with the code (universal {{LAW}} XI) — a change
+6. Make sure documentation shipped with the code ({{DOCTRINE}} craft 3) — a change
    that alters behaviour without its docs is incomplete, not ready to ship.
 
 ## Done when
@@ -42,7 +42,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

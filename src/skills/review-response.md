@@ -10,11 +10,11 @@ are about to act on it.
 2. Classify each comment: correct, partially correct, wrong, or unclear.
 3. For anything you judge wrong or unclear, verify it against the code or a test before
    responding — do not comply blindly and do not dismiss blindly ({{LAW}} III,
-   {{LAW}} VIII).
+   {{ONTOLOGY}}: {{ONT_CONDUCT}}).
 4. Respond to each comment: the change you will make and why, or a reasoned decline
    with evidence.
 5. Apply the accepted changes — one intent per commit ({{LAW}} II), each through the
-   [commit {{SKILL}}](commit.md) so {{LAW}} XX's per-commit consent holds — then
+   [commit {{SKILL}}](commit.md) so {{DOCTRINE}} process 5's per-commit consent holds — then
    re-run the checks ({{LAW}} III).
 6. Surface anything the review missed that you noticed while addressing it.
 
@@ -29,7 +29,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

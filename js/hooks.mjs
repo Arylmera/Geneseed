@@ -494,7 +494,7 @@ export function cmdContext(args) {
   }
 
   const lines = [
-    `=== PROJECT CONTEXT \u2014 binding for this repo per Rule XVIII (via ${source}) ===`,
+    `=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`,
     '',
   ];
   for (const entry of eager) {

@@ -11,22 +11,22 @@
 3. Confirm no secret is being committed (universal {{LAW}} I), and no leftover
    debug scaffolding rides along — `console.log`, `debugger`, `print`,
    commented-out code, or hardcoded test values left over from diagnosis
-   ({{LAW}} XXIV).
+   ({{LAW}} VIII).
 4. Write a message: imperative subject ≤50 chars; a body only when the *why*
    isn't obvious from the diff. **Match the repository's existing commit convention**
-   (universal {{LAW}} XIII) — detect it from commit tooling (`commitlint`,
+   ({{DOCTRINE}} craft 5) — detect it from commit tooling (`commitlint`,
    `semantic-release`, `release-please`, husky hooks) and recent `git log`. When the
    repo has no discernible convention, default to **Conventional Commits**:
    `type(scope): subject` (`feat`, `fix`, `docs`, `refactor`, `test`, `chore`…),
    with a `!` before the colon or a `BREAKING CHANGE:` footer for a breaking change.
-5. **Get explicit consent before committing (universal {{LAW}} XX).** On *every*
+5. **Get explicit consent before committing ({{DOCTRINE}} process 5).** On *every*
    branch — feature branches included — first show the user a plain-language summary of
    the change *and* the exact commit message, then wait for explicit acceptance before
    committing. A previous approval is not standing consent; ask again each commit. On a
    *shared branch* (`main`, `master`, `develop`/`development`, a release/hotfix branch,
    or any branch that is not a dedicated feature branch) apply the same gate with extra
    care.
-6. Push only when the user has explicitly approved *that push* ({{LAW}} XX / {{LAW}} IV)
+6. Push only when the user has explicitly approved *that push* ({{DOCTRINE}} process 5 / {{LAW}} IV)
    — never push on your own initiative, on any branch, and never treat one approval as
    consent for the next.
 
@@ -41,7 +41,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

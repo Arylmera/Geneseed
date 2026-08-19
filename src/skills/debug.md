@@ -18,7 +18,7 @@ faster than thrashing; do not trade it away under pressure.
 5. Verify: run the project's checks and read the actual output (universal {{LAW}} III) — the original reproduction now passes and nothing nearby broke. Where a test can pin the bug, add a regression test that fails before the fix and passes after, so it can never silently return. Dispatch the [tester {{AGENT}}](../{{DIR_AGENTS}}/tester.md) for a focused regression check when the blast radius is unclear.
 6. If a fix doesn't work, return to step 1 with what you learned — don't stack a second fix on top. **After three failed fixes, stop fixing:** when each attempt only shifts the symptom elsewhere, the architecture, not the line, is likely wrong. Surface that to the user and decide the approach together before trying again ({{LAW}} II).
 
-**Diagnostic logging is scaffolding.** When you add logging to isolate a bug, use the project's real logger at a DEBUG level rather than scattered `print`/`console.log`, prefer correlation IDs over loose object dumps, and **never log secrets, tokens, or PII** ({{LAW}} I). Treat every temporary log as disposable: remove or downgrade each `print`/`console.log`/`debugger` before the change ships ({{LAW}} XXIV) — leftover debug noise in a diff is a defect, not a free comment.
+**Diagnostic logging is scaffolding.** When you add logging to isolate a bug, use the project's real logger at a DEBUG level rather than scattered `print`/`console.log`, prefer correlation IDs over loose object dumps, and **never log secrets, tokens, or PII** ({{LAW}} I). Treat every temporary log as disposable: remove or downgrade each `print`/`console.log`/`debugger` before the change ships ({{LAW}} VIII) — leftover debug noise in a diff is a defect, not a free comment.
 
 ## Done when
 - The failure is reproduced, root-caused, fixed at the cause, and the reproduction passes with no new breakage.
@@ -30,7 +30,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most
