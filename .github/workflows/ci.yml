@@ -62,6 +62,20 @@ jobs:
             exit 1
           fi
 
+      # ⚠ WHAT THE SUITE LEFT BEHIND, OUTSIDE ITS OWN SANDBOXES. An emit writes the machine-wide
+      # hook shim at a path taken from the ENVIRONMENT rather than from `--out`, so a test that
+      # emits from a copied checkout repoints `~/.geneseed/bin/geneseed-hook[.cmd]` at a directory
+      # deleted seconds later and kills every hook in every install on the machine. It reports
+      # nothing from three directions at once: hooks return 0 on every path and signal through
+      # stdout, the shim is excluded from the byte corpora by name, and the damage lands outside
+      # every sandbox the suite watches. It happened twice in one session on a developer machine.
+      #
+      # AFTER the suite and not inside it: `node --test` runs each file in its own process with no
+      # ordering, so an `after()` hook can only ever speak for its own file — and the file that
+      # causes this is not the file that would notice.
+      - name: the suite left the machine-wide hook shim intact
+        run: node tests/shim_intact.mjs
+
       # THE MUTATION MATRIX'S ANCHORS, AND ONLY ITS ANCHORS. `tests/mutate.mjs` is not run here
       # and should not be — it applies 31 one-string edits to the product tree and runs a gate per
       # edit, which is minutes of wall clock and, if interrupted, leaves the tree mutated. But its

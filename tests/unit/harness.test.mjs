@@ -164,6 +164,8 @@ test('the shipped themes are in parity', () => {
 // arrangement a real drift arrives in.
 
 let FIXTURE = null;
+/** One redirected home for every `gate()` child — see that function's ⚠. */
+let GATE_HOME = null;
 
 /** One copy of the checkout for this file, built on first use. */
 function fixture() {
@@ -175,7 +177,7 @@ function fixture() {
   return FIXTURE.path;
 }
 
-after(() => { FIXTURE?.cleanup(); });
+after(() => { FIXTURE?.cleanup(); GATE_HOME?.cleanup(); });
 
 /**
  * Plant `faults` in the fixture, run `fn`, and put the tree back.
@@ -212,13 +214,29 @@ function withFault(faults, fn) {
  * importing it here would load a second copy of the module graph into this process — with a
  * `ROOT` pointing at the fixture — and every later in-process test in this file would then be
  * reading whichever one the import cache handed back.
+ *
+ * ⚠ WITH HOME REDIRECTED, which is not decoration and was the one spawn in this file missing it.
+ * `claudeBobEmitProblems` EMITS, three times, and an emit writes the machine-wide hook shim at a
+ * path taken from the environment rather than from `--out` — so this gate baked
+ * `<fixture>/bin/geneseed-hook.mjs` into the developer's real `~/.geneseed/bin/geneseed-hook`,
+ * and killed every hook in every install on the machine the moment the fixture was cleaned up.
+ * Reproduced twice in one session. `js/settings.mjs`'s `ephemeralCheckout` now refuses the
+ * hijack from the other end as well; this is the near half, and it is the one that keeps a
+ * FIRST-ever emit on a machine (no shim yet, nothing to protect) from writing a temp path.
  */
 function gate(root, expr) {
+  GATE_HOME ??= makeSandbox('gs-gatehome-');
   const url = pathToFileURL(path.join(root, 'js', 'doctor.mjs')).href;
   const r = spawnSync(process.execPath, ['--input-type=module', '-e',
     `const m = await import(${JSON.stringify(url)});`
     + `process.stdout.write(JSON.stringify(${expr}));`],
-  { cwd: root, encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true });
+  {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, ...homeOverrides(GATE_HOME.path) },
+    maxBuffer: 1 << 26,
+    windowsHide: true,
+  });
   if (r.status !== 0) {
     throw new Error(`the gate could not be run from the copy (${r.status}): `
       + `${(r.stderr || '').slice(-1500)}`);

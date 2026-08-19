@@ -128,6 +128,20 @@ jobs:
             exit 1
           fi
 
+      # The same post-suite check the CI workflow runs, and for the same reason — see the comment
+      # there. (Named in prose, not by filename: `the publish workflow references its own
+      # filename` reads every `*.yml` token in this file and requires the set to be exactly this
+      # one, because npm's trusted publisher is keyed on it.) An emit writes the machine-wide hook
+      # shim at a path taken from the environment rather than from `--out`, so a test that emits
+      # from a copied checkout can leave every install's hooks pointing at a deleted temp
+      # directory — silently, since hooks return 0 on every path and the shim is excluded from the
+      # byte corpora by name. AFTER the suite because `node --test` gives its files no ordering.
+      #
+      # Specific to a release as well: a run that left the shim naming a temp directory is a run
+      # whose emits went somewhere nobody looked.
+      - name: the suite left the machine-wide hook shim intact
+        run: node tests/shim_intact.mjs
+
       # ⚠ ONE `run:` LINE WHOSE ARGUMENTS VARY — deliberately NOT a second, dry-run step.
       # `tests/unit/docs.test.mjs` ("the publish workflow publishes once") asserts that EXACTLY
       # one line in this file matches `run:.*npm publish`, so that a second publish path cannot

@@ -46,7 +46,7 @@ its own doctor arm (`js/doctor.mjs:676`, `:739`, `:822-829`).
 ## 1 — The baseline, and the five commands that reproduce CI
 
 Verified on this checkout: `doctor --all` green on 14 themes; the Node suite reports
-**1035 tests, 1031 pass, 4 skipped, 0 fail**.
+**1033 tests, 1029 pass, 4 skipped, 0 fail**.
 
 CI is **four jobs expanding to six runs** (`.github/workflows/ci.yml`): `validate` and
 `node-cells` on Linux *and* Windows, plus `package-no-python` and `web` on Linux. From the repo
@@ -321,20 +321,35 @@ This was proven, not inferred: prefixing `marvin.json`'s `TAGLINE` turned
 ### 5.3 ⚠ The hook shim is machine-wide and last-writer-wins
 
 `~/.geneseed/bin/geneseed-hook[.cmd]` has no per-install component. The last checkout to emit
-anything owns **every** install's hooks. Emitting from a git worktree or a temp copy repoints the
-shim at that disposable path; removing the worktree then kills hooks for every install on the
-machine. Run emits from the real checkout, and grep the shim body after any emit from elsewhere.
+anything owns **every** install's hooks. Emitting from a git worktree or a temp copy used to
+repoint the shim at that disposable path; removing the worktree then killed hooks for every
+install on the machine.
+
+**`hookPrefix` now refuses the claim** (`js/settings.mjs`, `ephemeralCheckout`): an emit whose
+checkout is under the OS temp root, or is a linked git worktree (`.git` is a *file*), leaves a
+shim that still resolves exactly as it is and wires the emitted hooks to it anyway. The bundle it
+writes is byte-identical to a normal emit — the install simply keeps running the durable
+checkout's entry, which is what last-writer-wins already handed every other install. A shim that
+is **absent or already dead** is still written from anywhere, so a first emit on a fresh machine
+works and the suite's own sandboxed emits are unchanged.
+
+Two gates hold it: `tests/unit/hook_form.test.mjs` pins the rule (including the worktree arm,
+reachable because `ephemeralCheckout` takes the temp root as a parameter), and
+`tests/shim_intact.mjs` — a step in `ci.yml` and `publish.yml`, *after* `node --test`, because
+each test file runs in its own process and the file that causes this is not the file that would
+notice — fails if the suite left the shim naming anything that is not there.
 
 This is not hypothetical — it happened while this file was being written. Several agents were
 verifying gates out of copied checkouts (the `copyCheckout` fixture pattern
-`tests/unit/harness.test.mjs:171` uses), one of them emitted, and the shim ended up pointing at
+`tests/unit/harness.test.mjs:173` uses), one of them emitted, and the shim ended up pointing at
 `…/Temp/gs-fix-8DYuJP/bin/geneseed-hook.mjs` — a directory that no longer existed. Every hook in
 every install on the machine was dead and nothing said so.
 
 The recovery is free, which is the part worth remembering: **`doctor` detects it and the run's own
-emit repairs it**, reporting *"the checkout most likely moved … no further action needed"*. So the
-rule is simply: after any session that emitted from somewhere other than the real checkout, run
-`doctor --all` before trusting a hook.
+emit repairs it**, reporting *"the checkout most likely moved … no further action needed"*. That
+is still the answer for the case the guard cannot cover — a real checkout that genuinely moved —
+so after any session that emitted from somewhere unusual, `doctor --all` from the real checkout
+remains the cheapest thing to run.
 
 Related: a stray `console.log` on a hook path silently disables a gate. Hooks signal through
 stdout JSON and return 0 on every path — a printed byte is not a warning, it is a disabled gate.
