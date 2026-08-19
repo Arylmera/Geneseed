@@ -167,7 +167,11 @@ export function tuiInventory(themeName) {
         skills.push(entry);
       }
     }
-    if (parts[parts.length - 1] === 'universal.md') laws = parseLaws(text);
+    // Scoped to the laws dir, not matched on the basename: `src/ontology/universal.md`
+    // shares the name, sorts after `laws/`, and would clobber the parse with `[]` —
+    // `LAW_HEADING_RE` wants `###` and the ontology uses `####`. Same spelling as the
+    // already-scoped sites at `js/render.mjs`'s `rel === 'laws/universal.md'`.
+    if (parts.join('/') === 'laws/universal.md') laws = parseLaws(text);
   }
   const byName = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
   agents.sort(byName);

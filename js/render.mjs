@@ -35,7 +35,12 @@ export const STRUCTURE = {
   HARNESS: 'Geneseed', CHARTER: 'Charter', CONTEXT: 'Context',
   SCRIPT: 'Script', SCRIPTS: 'Scripts',
   DIR_LAWS: 'laws', DIR_AGENTS: 'agents', DIR_SKILLS: 'skills', DIR_MEMORY: 'memory',
-  DIR_NOTEBOOK: 'notebook',
+  DIR_NOTEBOOK: 'notebook', DIR_ONTOLOGY: 'ontology', DIR_DOCTRINES: 'doctrines',
+  // Ontology section names. Theme-INDEPENDENT on purpose: a citation reads
+  // `({{ONTOLOGY}}: {{ONT_TELOS}})` — token on both sides, so the heading and every
+  // reference to it move together and a rename can never desync them.
+  ONT_TELOS: 'Telos', ONT_EVIDENCE: 'Evidence', ONT_DECISIONS: 'Decisions',
+  ONT_CONDUCT: 'Conduct',
 };
 
 /**
@@ -46,6 +51,7 @@ export const STRUCTURE = {
 export const SRC_DIR_TOKENS = {
   laws: 'DIR_LAWS', agents: 'DIR_AGENTS', skills: 'DIR_SKILLS',
   memory: 'DIR_MEMORY', notebook: 'DIR_NOTEBOOK',
+  ontology: 'DIR_ONTOLOGY', doctrines: 'DIR_DOCTRINES',
 };
 
 const TEXT_SUFFIXES = new Set(['.md', '.tmpl', '.json', '.txt', '.yml', '.yaml']);
