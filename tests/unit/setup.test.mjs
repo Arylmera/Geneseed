@@ -136,7 +136,11 @@ test('the inventory counts match the source tree and every entry has a body', ()
   const laws = [...fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8')
     .matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+)\b/gm)].length;
   assert.equal(inv.laws.length, laws);
-  assert.ok(laws > 30, `only ${laws} laws parsed — the heading regex has stopped matching`);
+  // THE FLOOR IS NOW AN EQUALITY, because the corpus stopped growing. `> 30` was a guard
+  // against the regex silently matching nothing while the derived equality above stayed
+  // vacuously true. The three-tier split fixed the corpus at NINE invariants — the doctrine
+  // packs carry the rest — so the same guard is stated exactly rather than as a floor.
+  assert.equal(laws, 9, `${laws} laws parsed — expected the nine invariants`);
 
   assert.ok(inv.agents.every((e) => e.desc && e.body), 'an agent entry has no desc or body');
   assert.ok(inv.skills.every((e) => e.desc && e.body), 'a skill entry has no desc or body');

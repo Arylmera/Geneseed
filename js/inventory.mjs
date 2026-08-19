@@ -38,21 +38,22 @@ export const LAW_HEADING_RE = /^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$/;
 
 /** `_harness_tui.LAW_CLASS` — each rule's class, keyed by Roman numeral. */
 export const LAW_CLASS = {
-  I: 'security', II: 'process', III: 'verify', IV: 'security', V: 'craft',
-  VI: 'context', VII: 'verify', VIII: 'comms', IX: 'comms', X: 'comms',
-  XI: 'craft', XII: 'craft', XIII: 'craft', XIV: 'process', XV: 'process',
-  XVI: 'context', XVII: 'context', XVIII: 'context', XIX: 'context', XX: 'security',
-  XXI: 'process', XXII: 'security', XXIII: 'security', XXIV: 'craft', XXV: 'craft',
-  XXVI: 'craft', XXVII: 'verify', XXVIII: 'process', XXIX: 'comms', XXX: 'comms',
-  XXXI: 'comms', XXXII: 'craft', XXXIII: 'craft', XXXIV: 'verify', XXXV: 'verify',
-  XXXVI: 'security', XXXVII: 'process', XXXVIII: 'verify', XXXIX: 'comms',
-  XL: 'comms',
+  I: 'security', II: 'process', III: 'verify', IV: 'security', V: 'verify',
+  VI: 'security', VII: 'security', VIII: 'craft', IX: 'security',
 };
 
 /** `_harness_tui.ENTITY_STATUSES` — the lifecycle statuses `registry.json` may carry. */
 export const ENTITY_STATUSES = ['experimental', 'approved', 'deprecated'];
 
-/** `_harness_tui.LAW_CLASSES` — the six governance classes a law may carry. */
+/**
+ * `_harness_tui.LAW_CLASSES` — the six governance classes a law may carry.
+ *
+ * ⚠ SIX, THOUGH ONLY FOUR ARE IN USE. When the corpus became nine invariants, `context` and
+ * `comms` stopped having a member — that material moved to the ontology and the doctrine packs,
+ * neither of which is classed here. The list stays six because it is the VOCABULARY, not a
+ * census: `doctor` quotes it verbatim in the message a bad class earns, and two recorded cells
+ * in `tests/helpers/matrix/cli.*.json` hold that message byte for byte.
+ */
 export const LAW_CLASSES = ['security', 'process', 'verify', 'craft', 'context', 'comms'];
 
 /** `_harness_tui.SKILL_CLASS` — each skill's category, keyed by file stem. */
