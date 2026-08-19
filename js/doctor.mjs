@@ -61,7 +61,10 @@ import {
 // --------------------------------------------------------------------------------------
 
 /** `_harness_core.TOKEN_RE` / `LINK_RE` / `ABS_LINK_RE`. `g` where `findall` is used. */
-const TOKEN_RE = /\{\{[A-Z_]+\}\}/g;
+// Must stay in step with `js/render.mjs`'s TOKEN_RE: a token the renderer substitutes but this
+// scan cannot see is an unresolved-token gate that silently stops gating. Digits are legal after
+// the first character for `DOC_<PACK>_<n>`; a leading digit is still not a token.
+const TOKEN_RE = /\{\{[A-Z_][A-Z0-9_]*\}\}/g;
 const LINK_RE = /\]\((?!https?:\/\/|#)([^)]+)\)/g;
 const ABS_LINK_RE = /^([A-Za-z]:[\\/]|\/|~)/;
 const FENCE_RE = /```[\s\S]*?```/g;

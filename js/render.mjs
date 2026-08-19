@@ -56,7 +56,10 @@ export const SRC_DIR_TOKENS = {
 
 const TEXT_SUFFIXES = new Set(['.md', '.tmpl', '.json', '.txt', '.yml', '.yaml']);
 
-const TOKEN_RE = /\{\{([A-Z_]+)\}\}/g;
+// Digits are legal after the first character: `DOC_<PACK>_<n>` (the doctrine rule titles) are
+// the first token names in the project to carry one, and without `0-9` here `{{DOC_CRAFT_1}}`
+// silently never substitutes. A leading digit stays illegal, so `{{1}}` is still not a token.
+const TOKEN_RE = /\{\{([A-Z_][A-Z0-9_]*)\}\}/g;
 const INCLUDE_RE = /^[ \t]*<!--[ \t]*INCLUDE:[ \t]*(?<path>[^ \t]+)[ \t]*-->[ \t]*$/gm;
 const CATALOG_BLOCK_RE =
   /[ \t]*<!-- CATALOG:begin -->\n(?<table>[\s\S]*?)[ \t]*<!-- CATALOG:else -->\n(?<pointer>[\s\S]*?)[ \t]*<!-- CATALOG:end -->\n/g;
