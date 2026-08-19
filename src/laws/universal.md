@@ -32,7 +32,11 @@ get explicit agreement before building on it; when the request is ambiguous **an
 touches authentication, security, production, or user data, stop and ask rather
 than guess. A specific identifier you emit — a file path, a package name, an API
 symbol — is not true because it reads as real; resolve it against the real
-inventory before citing it.
+inventory before citing it. Absence and truncation carry a duty, not merely a
+doubt: suspect the hidden layer — an override, a scope filter, a missed event —
+before trusting an empty answer, and where a limit, a page, or a quota cut the
+result short, bind the limit to each entity, not to the whole, and surface it
+where it happens, so no caller mistakes a fragment for the sum.
 Trivial or fully-specified requests need no such check.
 
 ### {{LAW}} IV — {{LEX_IV}}

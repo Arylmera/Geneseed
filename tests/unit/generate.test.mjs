@@ -1206,6 +1206,61 @@ test('renaming DIR_AGENTS and DIR_SKILLS together prunes both old dirs', () => {
   });
 });
 
+// THE GATE ON `OWNED_SRC_DIRS`' TWO NEW ENTRIES — `ontology` and `doctrines`.
+//
+// Both tiers are GENERATED, so an established bundle must not keep a copy the source no longer
+// produces. The axis tests above prove the toggle (what AGENT.md carries, what ships) and every
+// one of them passes with `'ontology','doctrines'` deleted from the constant — measured — because
+// none of them ever asks whether the emit OWNS the directory. Ownership is only observable across
+// TWO builds into the same `out`, and only through something the second build does not re-emit.
+//
+// Two directions, because the constant is spent on two different things in `build()`: the
+// pre-emit wipe of the managed dir, and the `resolvedSrcDirs` entry that reaches the
+// `.geneseed-srcdirs.json` marker and licenses the next build's rename prune. Deleting an entry
+// breaks both; asserting both is what stops a half-fix from reading as green.
+
+test('the ontology and doctrines dirs are owned — a stale file in either is wiped on rebuild', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);                       // establishes the bundle (.geneseed-theme + version)
+
+    // A file the source does not produce, in each of the two new dirs. Standing in for a pack
+    // renamed or dropped upstream: nothing re-emits it, so only the wipe can remove it.
+    const strays = ['ontology', 'doctrines'].map((dir) => path.join(out, dir, 'gone.md'));
+    for (const p of strays) fs.writeFileSync(p, 'left over from an older source tree');
+
+    buildInto(out);
+    for (const p of strays) {
+      assert.ok(!fs.existsSync(p),
+        `${path.basename(path.dirname(p))}/ is not in OWNED_SRC_DIRS — a file the source no `
+        + 'longer produces survived a rebuild and would sit in the install forever');
+    }
+    // The control: the wipe is a wipe-and-regenerate, not a wipe. Without this an emit that
+    // deleted the two dirs and never rewrote them would pass the loop above.
+    assert.ok(isFile(out, 'ontology', 'universal.md'));
+    for (const pack of ['craft', 'rigor', 'ops', 'process']) {
+      assert.ok(isFile(out, 'doctrines', `${pack}.md`));
+    }
+  });
+});
+
+test('a DIR_ONTOLOGY / DIR_DOCTRINES rename prunes the old dirs instead of orphaning them', () => {
+  // The marker half. A dir absent from `OWNED_SRC_DIRS` never reaches `resolvedSrcDirs`, so the
+  // marker has no prior name for it and the NEXT build cannot prune — the rename silently leaves
+  // a themed dir beside a plain one, both full of constitution text the agent may read.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    buildInto(out, renamed({ DIR_ONTOLOGY: 'metaphysics', DIR_DOCTRINES: 'praxis' }));
+    assert.ok(!fs.existsSync(path.join(out, 'ontology')),
+      'the old DIR_ONTOLOGY dir was orphaned, not pruned');
+    assert.ok(!fs.existsSync(path.join(out, 'doctrines')),
+      'the old DIR_DOCTRINES dir was orphaned, not pruned');
+    assert.ok(isFile(out, 'metaphysics', 'universal.md'));
+    assert.ok(isFile(out, 'praxis', 'craft.md'));
+  });
+});
+
 test('a rename round-trips back without leftovers', () => {
   // Renaming out and back must leave exactly the original dir: no trace of the intermediate
   // name survives the second flip. The marker has to be rewritten on every build for this to

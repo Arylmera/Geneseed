@@ -820,8 +820,8 @@ export const GeneseedContext = async (ctx) => {
     // Survive compaction. The visible injection above is a conversation message, so
     // OpenCode summarises it away when a long session compacts (the AGENT.md rules
     // persist — they load via opencode.json `instructions`, not the conversation).
-    // Re-push the eager docs into the compaction context so the project context —
-    // The project context — outlives the summary. Only needed when delivery is visible
+    // Re-push the eager docs into the compaction context so the project context
+    // outlives the summary. Only needed when delivery is visible
     // (forced or fallback); the transform re-sends per request. Experimental
     // OpenCode hook; if it is absent in a build this key is simply never called.
     "experimental.session.compacting": async (_input, output) => {
