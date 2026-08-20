@@ -50,7 +50,8 @@ import path from 'node:path';
 import { hookRunnerEntry } from '../bin/geneseed.mjs';
 import { confirm } from './setup.mjs';
 import {
-  claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, installKind, installState,
+  claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, excludedRulesOfDir, installKind,
+  installState,
   registeredTargets, readMaybe, DISABLED_STASH,
 } from './installs.mjs';
 import {
@@ -1032,8 +1033,12 @@ function remergeClaudeHooks(cfg, root = cfg) {
   // config dir (`.github/copilot-instructions.md`), and on a global install the two are the
   // same directory anyway. Both silent ⇒ `null` ⇒ the gate stays.
   const doctrines = doctrinesOfDir(root) ?? doctrinesOfDir(cfg);
+  // Same two-carrier read for the second axis, and its own default: an absent line means
+  // NOTHING excluded, so a reactivate can only ever restore a gate, never remove one.
+  const excluded = excludedRulesOfDir(root).length ? excludedRulesOfDir(root)
+    : excludedRulesOfDir(cfg);
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed), 'global',
-    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines);
+    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded);
   // `and data` — a manifest that did not parse is not one to write back.
   if (!pyEq(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
     managed.settings_hooks = claims;

@@ -1423,6 +1423,51 @@ test('a full pack list is SPELLED OUT, so the config cannot reinterpret the cons
   });
 });
 
+// The SECOND doctrine axis across the same boundary. Same shape as the four cells above and
+// closed the same way — member by member against what this checkout actually ships — but its
+// unknown resolves to the OTHER end: absence of an `Excluded rules:` line is a statement
+// ("nothing"), not a silence, so an unreadable body falls back to `[]` rather than to a
+// fail-closed full set.
+
+test('a picked rule list reaches the install command, in render order', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const cmd = apiInstallCmd(st,
+      { host: 'claude', path: cl, excludeRules: ['process.7', 'craft.2'] }).cmd.map(String);
+    assert.equal(cmd[cmd.indexOf('--exclude-rules') + 1], 'craft.2,process.7',
+      'the rules arrived in request-body order — the `Excluded rules:` marker a later reader '
+      + 'parses back must not depend on the order a client happened to send');
+    // The SPACED spelling is the same request written the way the marker and every citation
+    // write an address, and it must answer identically — a value copied off a carrier cannot
+    // be rejected by the flag that wrote it.
+    const spaced = apiInstallCmd(st,
+      { host: 'claude', path: cl, excludeRules: 'process 7, craft 2' }).cmd.map(String);
+    assert.deepEqual(spaced, cmd);
+    // ...and the PACK axis is untouched by it. Two axes that moved together would make
+    // "exclude one rule" and "drop its pack" the same request, which is the control this whole
+    // feature exists to remove.
+    assert.equal(cmd[cmd.indexOf('--doctrines') + 1], 'craft,rigor,ops,process');
+  });
+});
+
+test('a bogus rule list poisons the whole value and falls back to the install', () => {
+  withThreeInstalls(({ st, cl }) => {
+    // One address that does not exist is a request this endpoint does not understand, and
+    // building three-quarters of it is the wrong repair — the same rule the pack list follows.
+    for (const bad of [['craft.2', '../evil'], ['process.99'], ['nope.1'], [7], 'craft.2,nope.1',
+      42, {}]) {
+      const cmd = apiInstallCmd(st, { host: 'claude', path: cl, excludeRules: bad }).cmd.map(String);
+      assert.equal(cmd[cmd.indexOf('--exclude-rules') + 1], 'none',
+        `a bogus excludeRules value reached the argv: ${JSON.stringify(bad)}`);
+      assert.ok(!cmd.some((a) => a.includes('evil')), 'a path-shaped address reached the argv');
+    }
+    // A body that says nothing at all falls back to the INSTALL's own line, which this
+    // markerless fixture leaves empty — and the flag is SPELLED, never elided, or
+    // `harness.config.json` would get to describe an install it knows nothing about.
+    const cmd0 = apiInstallCmd(st, { host: 'claude', path: cl }).cmd.map(String);
+    assert.equal(cmd0[cmd0.indexOf('--exclude-rules') + 1], 'none');
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // The harness selector: `apiSelectView` re-points the whole console at a detected install
 // (target, theme, emit) and `apiInstalls` marks the current one selected.
@@ -2167,6 +2212,20 @@ test('the deploy command validates its pack list the same way the install comman
     // because the configured default it would otherwise fall through to can be a narrower set.
     assert.equal(after$(at({ doctrines: ['craft', 'rigor', 'ops', 'process'] }), '--doctrines'),
       'craft,rigor,ops,process');
+    // The rule axis rides the same boundary with the same rules, and resolves through
+    // `excludedRulesOfDir(root)` — which for this empty sandbox is the empty list. Spelled
+    // `none` rather than elided, for the reason one flag over.
+    assert.equal(after$(at({ excludeRules: ['process.7', 'craft.2'] }), '--exclude-rules'),
+      'craft.2,process.7');
+    assert.equal(after$(at({ excludeRules: 'process 7' }), '--exclude-rules'), 'process.7');
+    assert.equal(after$(at({}), '--exclude-rules'), 'none');
+    assert.equal(after$(at({ excludeRules: ['craft.2', '../evil'] }), '--exclude-rules'), 'none');
+    assert.equal(after$(at({ excludeRules: [] }), '--exclude-rules'), 'none');
+    // The two are independent: narrowing rules must not narrow packs, or one control would
+    // silently perform the other's job.
+    const both = at({ doctrines: ['craft', 'process'], excludeRules: ['process.7'] });
+    assert.equal(after$(both, '--doctrines'), 'craft,process');
+    assert.equal(after$(both, '--exclude-rules'), 'process.7');
   } finally { sb.cleanup(); }
 });
 

@@ -451,13 +451,19 @@ export const INLINE_ACTIONS = ['restore', 'install', 'deploy'];
  * `harness.config.json`, and a `{"doctrines":["craft"]}` there re-emits the deployed install
  * without its commit/push consent gate. So a caller that forgets the axis gets ALL packs —
  * unknown resolves to the full set, never to a config value (`doctrinesForBuild`).
+ *
+ * `excludeRules` is the same argument one tier down and it defaults the same way — to the
+ * SAFE end, which here is the empty list. An omitted flag would fall through to
+ * `harness.config.json` exactly as the pack list does, so `{"excludeRules":["process.5"]}`
+ * there would take the consent gate out of a console Build that never asked for it. `[]` is
+ * spelled `--exclude-rules none` and says "exclude nothing" out loud.
  */
 function actionTable({
   theme = 'neutral', emit = 'opencode-global', footprint = 'full',
-  posture = 'peer', mode = 'direct', doctrines = [...PACK_ORDER],
+  posture = 'peer', mode = 'direct', doctrines = [...PACK_ORDER], excludeRules = [],
 } = {}) {
   const buildArgv = setupBuildArgs(theme, emit, null, null, footprint, posture, mode,
-    doctrines);
+    doctrines, PACK_ORDER, excludeRules);
   return {
     doctor: [[NODE(), CLI(), 'doctor']],
     build: [[NODE(), GEN(), ...buildArgv]],

@@ -37,7 +37,8 @@ import { makeCfg, PACK_ORDER } from './checkout.mjs';
 import { opencodeConfigDir, pyResolve } from './hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  footprintOfDir, installState, installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
+  excludedRulesOfDir, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
+  readMaybe, themeOfDir,
 } from './installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from './opencode.mjs';
 import { renderAll } from './render.mjs';
@@ -122,7 +123,8 @@ export function cmdBuild(args) {
  * accepts (an empty `--doctrines ` is a usage error there, so it can never be produced here).
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
-  posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER) {
+  posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
+  excludeRules = null) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!['opencode-global', 'claude-global', 'bob-global', 'copilot-global'].includes(emit)) {
     if (out) argv.push('--out', out);
@@ -137,6 +139,13 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
     // re-normalises on parse — the `Active packs:` marker is compared against itself.
     const picked = allPacks.filter((p) => doctrines.includes(p));
     argv.push('--doctrines', picked.length ? picked.join(',') : 'none');
+  }
+  // The second axis, emitted the same way and for the same reason — but ALWAYS when the
+  // caller passed a list, empty included. An omitted flag reads as "no opinion" and the
+  // driver's config fallback fills it in; `none` is the caller saying "exclude nothing",
+  // which is exactly what a rebuild that just re-enabled the last rule has to say.
+  if (Array.isArray(excludeRules)) {
+    argv.push('--exclude-rules', excludeRules.length ? excludeRules.join(',') : 'none');
   }
   return argv;
 }
@@ -201,7 +210,13 @@ export function cmdRebuildAll() {
     // resolving that silence out of a machine-wide config narrows every such install on its
     // first upgrade. `doctrinesForBuild` resolves unknown to ALL packs — see its docblock.
     const doctrines = doctrinesForBuild(root);
-    const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines);
+    // SEVEN. The per-rule axis is preserved for the same reason and with sharper teeth: an
+    // upgrade that dropped it would quietly hand back every rule its owner switched off, and
+    // `process 5` is one of them — the consent gate would return to a harness that had been
+    // built without it. No `doctrinesForBuild` rescue is needed here; see `apiInstallCmd`.
+    const excludeRules = excludedRulesOfDir(root);
+    const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
+      PACK_ORDER, excludeRules);
     const label = `${host}:${scope} (${root})`;
     pyPrint(`[rebuild-all] ${label}: theme=${theme} emit=${emit} footprint=${footprint} `
       + `posture=${posture} mode=${mode}\n`);

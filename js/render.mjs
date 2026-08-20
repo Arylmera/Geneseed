@@ -279,7 +279,20 @@ function activeDoctrines(cfg) {
       throw e;
     }
   }
-  return PACK_ORDER.filter((p) => wanted.includes(p));
+  // ⚠ A PACK WHOSE EVERY RULE IS EXCLUDED IS NOT A PACK, it is a heading over nothing. The
+  // console only ever offers per-RULE switches, so "turn this whole pack off" arrives here as
+  // seven exclusions rather than as a missing pack name — and rendering `**Observance** — how
+  // a task is run.` with no rules under it would be the one shape the reader cannot
+  // interpret. Dropped here rather than in `doctrinesBody` so `DOCTRINES_LIST` — the
+  // `Active packs:` marker a later reader parses back — agrees with what was rendered.
+  const excluded = new Set(cfg.excludeRules ?? []);
+  const survives = (pack) => {
+    const ids = [...readText(path.join(dir, `${pack}.md`))
+      .matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)]
+      .map((m) => `${m[1]}.${Number(m[2])}`);
+    return ids.some((id) => !excluded.has(id));
+  };
+  return PACK_ORDER.filter((p) => wanted.includes(p)).filter(survives);
 }
 
 /**
@@ -292,10 +305,40 @@ function activeDoctrines(cfg) {
  * pack — closes with one pointer at the full catalogue, which ships in every bundle whether
  * or not a pack is active.
  */
+/** `### {{DOCTRINE}} <pack> <n> —` in the UNRENDERED source, which is where the address is. */
+const SRC_RULE_HEADING_RE = /^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/;
+
+/**
+ * Drop the individual rules an install excluded, leaving the pack's lead line and the rest.
+ *
+ * ⚠ FILTERED BEFORE SUBSTITUTION, ON THE SOURCE. The rendered heading spells the tier noun in
+ * the theme's own voice — `Doctrina process 7` on imperial, `Custom process 7` on pirate — so
+ * matching after substitution means matching fourteen spellings, and a theme whose noun
+ * happened not to match would silently exclude nothing at all. The source spelling is one
+ * literal and is the same in every voice.
+ *
+ * The pack's lead line (`**{{PACK_CRAFT}}** — how code is written.`) sits before the first
+ * heading and always survives: `splitAtLawHeadings` returns it as the leading chunk, and a
+ * pack whose every rule is excluded is not rendered at all — `activeDoctrines` drops it from
+ * the selection, so a header with nothing under it cannot occur.
+ */
+function dropExcludedRules(text, pack, excluded) {
+  if (!excluded.size) return text;
+  return splitAtLawHeadings(text)
+    .filter((block) => {
+      const m = SRC_RULE_HEADING_RE.exec(block);
+      return !m || !excluded.has(`${m[1]}.${Number(m[2])}`);
+    })
+    .join('');
+}
+
 function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
   if (!active.length) return '';
+  const excluded = new Set(cfg.excludeRules ?? []);
   const parts = active.map((name) => {
-    const body = substitute(readText(path.join(cfg.src, 'doctrines', `${name}.md`)), theme).trim();
+    const raw = dropExcludedRules(readText(path.join(cfg.src, 'doctrines', `${name}.md`)),
+      name, excluded);
+    const body = substitute(raw, theme).trim();
     return footprint === 'lean' ? terseBlocks(body) : body;
   });
   if (footprint === 'lean') {
@@ -330,6 +373,20 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   const active = activeDoctrines(cfg);
   theme.DOCTRINES_BODY = doctrinesBody(cfg, theme, active, footprint, lawsPrefix);
   theme.DOCTRINES_LIST = active.length ? active.join(', ') : 'none';
+  // ⚠ EMITTED ONLY WHEN SOMETHING IS EXCLUDED, and that is not cosmetic. An unconditional
+  // second marker line would put a new line into EVERY carrier — 261 golden cells, both
+  // footprints, nine emit modes — to say "nothing was excluded", which is what the line's
+  // absence already says. Keeping the default build byte-identical is what lets this ship
+  // without re-blessing anything, and it is why `excludedRulesOfDir` reads a MISSING line as
+  // `[]` rather than as unknown: absence is a real answer here, unlike the pack list.
+  //
+  // Rendered `process 7`, not `process.7`: the dotted form is the console's address, the
+  // spaced form is how every citation in the corpus already spells a rule, and this line is
+  // read by people first and by `excludedRulesOfDir` second.
+  const dropped = [...(cfg.excludeRules ?? [])].sort();
+  theme.EXCLUDED_RULES_LINE = dropped.length
+    ? `\nExcluded rules: ${dropped.map((id) => id.replace('.', ' ')).join(', ')}`
+    : '';
   return theme;
 }
 

@@ -846,7 +846,7 @@ export function emitOpencodeRender(cfg, job) {
   // downstream: `opencode.json`, or the `.jsonc` sibling when that is what is on disk.
   phaseLog('WIRE');
   const cfgName = path.basename(mergeOpencodeJson(path.join(root, 'opencode.json'), agentPath,
-    cfg.doctrines));
+    cfg.doctrines, cfg.excludeRules));
 
   return {
     owned,
@@ -1080,7 +1080,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // that split is what `tests/test_emit_phase_order.py` walks, and it walks the Python.
   phaseLog('WIRE');
   const cfgName = path.basename(mergeOpencodeJson(path.join(cfgDir, 'opencode.json'),
-    agentPath, cfg.doctrines));
+    agentPath, cfg.doctrines, cfg.excludeRules));
 
   return {
     owned,
@@ -1216,7 +1216,8 @@ export function emitClaudeRender(cfg, job) {
 
   // WIRE — see `claudeWire` below. One child per emit, so the two halves are two
   // functions rather than two spawns; the seam between them is a call, not a process.
-  const managed = claudeWire(job, claudeMdText, agentText !== null, cfg.doctrines);
+  const managed = claudeWire(job, claudeMdText, agentText !== null, cfg.doctrines,
+    cfg.excludeRules);
 
   return {
     owned,
@@ -1251,7 +1252,7 @@ export function emitClaudeRender(cfg, job) {
  * not needed for it: Python tests `os.environ.get(...)` for truthiness and an env var is
  * always a string, so `''` is the only falsy value either language sees.
  */
-function claudeWire(job, claudeMdText, hasAgentText, doctrines = null) {
+function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRules = []) {
   phaseLog('WIRE');
   const { cfgDir, claudeMd, scope, host, oldManaged, preambleExclude, hookOpts } = job;
   const old = oldManaged && typeof oldManaged === 'object' && !Array.isArray(oldManaged)
@@ -1312,7 +1313,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null) {
     // DECIDES the install's packs, so the marker on disk is still the previous build's.
     const [, managedHooks] = mergeClaudeSettings(
       settingsPath, scope, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
-      doctrines,
+      doctrines, excludeRules,
     );
     managed.settings_hooks = managedHooks;
 

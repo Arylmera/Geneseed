@@ -34,7 +34,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-  CONFIG, PACK_ORDER, PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC, makeCfg,
+  CONFIG, PACK_ORDER, PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC, knownRuleIds, makeCfg,
 } from './checkout.mjs';
 import {
   buildInto, main as driverMain, emitGlobalInto, emitProjectInto,
@@ -899,6 +899,44 @@ export function constitutionProblems() {
   // the SOURCE and a rule added to a pack file is caught the same day, not when someone
   // notices a blank description in the browser.
   problems.push(...doctrineMetaProblems([...rules.keys()]));
+
+  // ---- `--exclude-rules` closes against the SAME rules this walk just found.
+  //
+  // `knownRuleIds` is what the CLI flag, the console's trust boundary and every wizard prompt
+  // validate an address against; the walk above is what the constitution actually renders.
+  // Two readers of one directory is the shape that lets a rule be authored, rendered, cited —
+  // and rejected by the only flag that can switch it off, with `invalid choice` naming a set
+  // that visibly contains it. An equality, not containment: a stale id in the enumerator is a
+  // rule the console offers a switch for and the build cannot drop.
+  const enumerated = knownRuleIds();
+  const walked = [...rules.keys()];
+  for (const id of enumerated.filter((i) => !walked.includes(i))) {
+    problems.push(`[authoring] knownRuleIds() offers '${id.replace('.', ' ')}', which no pack `
+      + 'file defines — --exclude-rules accepts an address the build cannot drop');
+  }
+  for (const id of walked.filter((i) => !enumerated.includes(i))) {
+    problems.push(`[authoring] doctrine ${id.replace('.', ' ')} is defined but knownRuleIds() `
+      + 'does not offer it — --exclude-rules refuses a rule that exists, and the console has '
+      + 'no switch for it');
+  }
+
+  // ---- the consent gate's address still names the consent rule.
+  //
+  // ⚠ THE ONE HARDCODED ADDRESS IN THE CODEBASE, and the one whose drift is silent AND unsafe.
+  // `js/settings.mjs` keys the git-gate hooks on `process.5` by literal; a renumber of the
+  // process pack moves that rule's neighbours under it, and the boundary would then follow
+  // whatever rule inherited the number while the prompt still said `process 5`. Checked
+  // against the pack file's own title token rather than against prose, so a reworded rule is
+  // not a false alarm and a MOVED one is not a silent pass.
+  const consentTitle = 'DOC_PROCESS_5';
+  let processText = '';
+  try { processText = readText(path.join(dir, 'process.md')); } catch { /* reported above */ }
+  if (processText && !new RegExp(`^### \\{\\{DOCTRINE\\}\\} process 5 — \\{\\{${consentTitle}\\}\\}`,
+    'm').test(processText)) {
+    problems.push('[authoring] js/settings.mjs gates git commit/push on doctrine \'process 5\', '
+      + `but doctrines/process.md does not number {${consentTitle}} 5 — the tool boundary and `
+      + 'the prompt now name different rules');
+  }
 
   // ---- every `{{DOCTRINE}} <pack> <n>` anywhere in src/ resolves to a rule that exists.
   //

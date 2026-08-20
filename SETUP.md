@@ -168,8 +168,10 @@ It wires:
   for Doctrine `process 5`. The hook inspects the command and forces an `ask` on every
   `git commit` or `git push` (even chained or `-C`-flagged), un-suppressible by a
   one-time "don't ask again". Every other Bash command is deferred to the normal
-  permission flow. It is wired only when the **process** pack is active — build with
-  `--doctrines` leaving `process` out and this hook is not installed at all.
+  permission flow. It is wired only when **Doctrine process 5 itself** is active — build
+  with `--doctrines` leaving `process` out, or with `--exclude-rules "process 5"`, and this
+  hook is not installed at all. The prompt and the boundary move together by construction:
+  the gate is keyed on the rule, not on its pack.
 - **SessionStart** (`startup`/`clear`) — prints `AGENT.md` and injects the project
   context (`harness context`, which auto-discovers the repo's docs);
 - **SessionStart** (`resume`) — refreshes the project context only, without re-printing
@@ -312,6 +314,31 @@ the default is all four:
 `harness.config.json`'s `doctrines` array sets this checkout's own default, and `doctor`
 refuses one that names a pack the checkout does not ship. Order is fixed by the harness
 (craft → rigor → ops → process) regardless of the order you type.
+
+### One rule at a time
+
+A pack is coarse: `--doctrines` can only keep all of **process** or none of it.
+`--exclude-rules` is the finer axis, and it takes rule addresses:
+
+    geneseed-build --exclude-rules "process 7"            # keep the pack, drop one rule
+    geneseed-build --exclude-rules "process 5,craft 2"    # several
+    geneseed-build --exclude-rules none                   # exclude nothing (the default)
+
+Both spellings of an address work — `process 7` as the constitution writes it, or `process.7`
+as the console addresses it. The two axes compose: a pack whose every rule is excluded drops
+out of `Active packs:` entirely, so you never get a pack header with nothing under it.
+
+An install records what it excluded in a second marker line, `Excluded rules: process 7`,
+written **only when something is excluded** — so a build with the default keeps every byte it
+had before this axis existed. `upgrade`, `rebuild-all` and the web console all read that line
+back and preserve it, exactly as they preserve the pack list.
+
+⚠ **`process 5` is special**: excluding it also unwires the commit/push consent hook, because
+the tool boundary is keyed on that rule. That is by design — the prompt and the boundary must
+never disagree — and both the console and the wizard say so before applying it.
+
+The web console has the switches: **Constitution → Doctrines**, one per rule, staged locally
+with a single **Apply** that rebuilds the install once.
 
 The setup wizard asks too — one *all* / *choose* gate, then a yes/no per pack with its
 one-line description — and it **pre-selects what the install already carries**, read off the

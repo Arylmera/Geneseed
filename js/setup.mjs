@@ -383,11 +383,21 @@ export function collectSetupLines() {
   // own: the menu the user just answered was built from `doctrineOptions()`, so "they picked
   // everything" must be judged against that same list, not against a second one.
   const allPacks = doctrineOptions().map(([n]) => n);
+  // ⚠ PRESERVED, NOT ASKED. The wizard has no per-rule question — five registers is already
+  // the ceiling for a prompt sequence somebody answers by holding Enter, and a rule list is a
+  // console control, not a terminal one. But it must not be DROPPED either: re-running the
+  // wizard on an install that excluded `process 5` would otherwise hand the consent gate back
+  // without a word, which is the same silent widening the pack question was fixed for.
+  //
+  // `null` when there is nothing to preserve rather than `[]`: an empty list makes
+  // `setupBuildArgs` spell `--exclude-rules none`, and that string would land in the
+  // "About to run:" line every recorded wizard probe compares byte for byte.
+  const excludeRules = inst.excludeRules?.length ? inst.excludeRules : null;
   pyPrint(`\nAbout to run:  geneseed build ${
-    setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks)
-      .join(' ')}\n`);
+    setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
+      excludeRules).join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
-  return { theme, posture, mode, doctrines, emit, out, root, footprint };
+  return { theme, posture, mode, doctrines, excludeRules, emit, out, root, footprint };
 }
 
 // --------------------------------------------------------------------------------------
@@ -526,7 +536,7 @@ export function setupLines() {
   }
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
-    doctrines = null,
+    doctrines = null, excludeRules = null,
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, and the self-improvement loops
@@ -545,7 +555,7 @@ export function setupLines() {
   // runs must carry the pack selection the plan line just previewed, or the wizard would print
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
-    doctrineOptions().map(([n]) => n));
+    doctrineOptions().map(([n]) => n), excludeRules);
   pyPrint(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {

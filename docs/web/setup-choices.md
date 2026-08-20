@@ -36,9 +36,21 @@ Which practice rules this install adopts, fixed at build time. Unlike the dials 
 - **ops** — how the machine is driven: tool discovery, commands that return, complete teardowns.
 - **process** — how a session runs: planning, context economy, docs first, and the **consent gate on every commit and push**.
 
-Turning **process** off takes that consent gate with it, at the tool boundary as well as in the prose: the OpenCode permission block and the Claude/Bob `PreToolUse` hook that ask before a commit or a push are wired only when the pack is built in, because a boundary that keeps asking for a rule the install never adopted is a gate arguing with its own harness. The invariant-territory refusals — `rm -rf`, a force-push — stay in every build; they are the Rules' territory, not the pack's.
+Turning **process 5** off takes that consent gate with it, at the tool boundary as well as in the prose: the OpenCode permission block and the Claude/Bob `PreToolUse` hook that ask before a commit or a push are wired only when that rule is built in, because a boundary that keeps asking for a rule the install never adopted is a gate arguing with its own harness. The invariant-territory refusals — `rm -rf`, a force-push — stay in every build; they are the Rules' territory, not the pack's.
 
 A pack you leave out still ships in the bundle under `doctrines/`, so you can read it before turning it on, and a rule that cites it still resolves. Change the set with `geneseed-build --doctrines craft,rigor` (or `--doctrines none`), or in `harness.config.json`.
+
+### One rule at a time
+
+The pack is the coarse axis. `--exclude-rules` is the fine one, and it takes rule addresses — so *keep all of process, drop just `process 7`* is expressible:
+
+    geneseed-build --exclude-rules "process 7"
+    geneseed-build --exclude-rules "process 5,craft 2"
+    geneseed-build --exclude-rules none
+
+Either spelling of an address works, `process 7` or `process.7`. The two axes compose: a pack whose every rule is excluded leaves `Active packs:` entirely, so no pack header is ever rendered with nothing under it. An install records its exclusions in a second marker line — `Excluded rules: process 7` — written only when something *is* excluded, and every rebuild path reads it back and preserves it.
+
+The switches are on the **Constitution** page, one per rule, staged locally and applied in a single rebuild.
 
 ### Footprint — how much of the constitution loads inline
 

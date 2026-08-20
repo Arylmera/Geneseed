@@ -21,6 +21,8 @@ Practices rather than principles: **craft** (how code is written), **rigor** (ho
 
 A pack you leave out **still ships in the bundle**: every pack file lands under `doctrines/` beside `AGENT.md` whether or not it was built in. So a rule that cites one in an inactive pack still resolves on disk, and you can read the alternatives before turning one on. What an inactive pack loses is bindingness, not availability.
 
+Rules toggle **individually** too — `geneseed-build --exclude-rules "process 7"`, or the switches on this page — so *keep all of process except one rule* is a state you can build. A pack whose every rule is excluded drops out of the active set on its own. What an install excluded is recorded beside the pack list, as `Excluded rules: process 7`, and every rebuild preserves it.
+
 ### Which outranks which
 
 Ontology and Invariants first, then your own `user-rules.md`, then the active Doctrines, then `PROFILE.md`. A rule you write in `user-rules.md` **outranks a doctrine rule** — a practice pack chosen at build time never overrides an instruction you wrote for your own repo — and nothing outranks an invariant: a user rule or a doctrine rule may tighten one, never repeal it.

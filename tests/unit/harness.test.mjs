@@ -438,6 +438,59 @@ test('the gate flags an unknown pack in the build default, and NOTES a narrowed 
     'the note predicate now swallows real problems');
 });
 
+test('the gate holds knownRuleIds to the rules the pack files actually define', () => {
+  // ⚠ TWO READERS OF ONE DIRECTORY. `constitutionProblems` walks the pack files to validate
+  // citations; `knownRuleIds` walks them to decide what `--exclude-rules` accepts. Nothing but
+  // this equality stops them drifting, and the drift is not cosmetic in either direction: an
+  // enumerator that offers a rule the build cannot drop puts a dead switch in the console, and
+  // one that omits a live rule makes that rule unswitchable while the flag's own error message
+  // lists a set the user can see it is missing from.
+  //
+  // Planted in the ENUMERATOR rather than in the source, because a fault in a pack file moves
+  // both readers together and proves nothing about their agreement.
+  const checkout = fs.readFileSync(path.join(ROOT, 'js', 'checkout.mjs'), 'utf8');
+  const anchor = "      if (m[1] === pack) out.push(`${pack}.${Number(m[2])}`);";
+  assert.ok(checkout.includes(anchor),
+    'the knownRuleIds body moved — re-aim this fault before trusting the result');
+
+  // Offers less than the source defines: skip every rule numbered 1.
+  const short = withFault(
+    { 'js/checkout.mjs': checkout.replace(anchor,
+      "      if (m[1] === pack && m[2] !== '1') out.push(`${pack}.${Number(m[2])}`);") },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(short.some((p) => p.includes('craft 1') && p.includes('knownRuleIds')),
+    `a rule the enumerator dropped went unflagged: ${JSON.stringify(short)}`);
+
+  // ...and the other direction, which a containment check in one direction would miss.
+  const long = withFault(
+    { 'js/checkout.mjs': checkout.replace(anchor,
+      `${anchor}\n      if (m[2] === '1') out.push(\`\${pack}.99\`);`) },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(long.some((p) => p.includes('craft 99') && p.includes('no pack file defines')),
+    `a rule the enumerator invented went unflagged: ${JSON.stringify(long)}`);
+});
+
+test('the gate flags the consent gate and the process pack naming different rules', () => {
+  // ⚠ THE ONE HARDCODED RULE ADDRESS IN THE CODEBASE. `js/settings.mjs` keys the git-gate hooks
+  // on the literal `process.5`, so a renumber of that pack silently re-points the TOOL BOUNDARY
+  // at whichever rule inherited the number while the PROMPT still says `process 5` — and the
+  // per-rule axis made that worse, because `process 5` can now be excluded on its own.
+  //
+  // The fault swaps two rules' titles without breaking contiguity, which is exactly what a
+  // reorder looks like: every other arm of the gate stays silent, so a red here is this arm.
+  const proc = fs.readFileSync(path.join(SRC, 'doctrines', 'process.md'), 'utf8');
+  const swapped = proc
+    .replace('### {{DOCTRINE}} process 5 — {{DOC_PROCESS_5}}', '### {{DOCTRINE}} process 5 — @@')
+    .replace('### {{DOCTRINE}} process 6 — {{DOC_PROCESS_6}}',
+      '### {{DOCTRINE}} process 6 — {{DOC_PROCESS_5}}')
+    .replace('### {{DOCTRINE}} process 5 — @@', '### {{DOCTRINE}} process 5 — {{DOC_PROCESS_6}}');
+  assert.ok(swapped.includes('process 6 — {{DOC_PROCESS_5}}'), 'the fault did not apply');
+  const problems = withFault({ 'src/doctrines/process.md': swapped },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(problems.some((p) => p.includes('settings.mjs') && p.includes('process 5')),
+    `the consent rule moved out from under its gate unflagged: ${JSON.stringify(problems)}`);
+});
+
 test('a theme missing a key is flagged', () => {
   const good = JSON.parse(fs.readFileSync(path.join(SRC, '..', 'themes', 'neutral.json'), 'utf8'));
   const broken = { ...good };

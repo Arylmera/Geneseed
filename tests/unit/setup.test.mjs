@@ -235,6 +235,29 @@ test('an unknown pack set resolves to ALL packs even when the config names fewer
   });
 });
 
+test('the per-rule axis is spelled only when there is something to say', () => {
+  // ⚠ THE ASYMMETRY THAT KEEPS EVERY RECORDED WIZARD PROBE VALID. `setupBuildArgs` writes
+  // `--exclude-rules none` for an EMPTY list, because an omitted flag falls through to
+  // `harness.config.json` and a rebuild must not re-decide the constitution. But the wizard
+  // prints its argv into a line the frozen `setup_probes` recordings compare byte for byte, so
+  // it passes `null` — not `[]` — when the install excludes nothing, and the flag disappears.
+  const A = (excl) => setupBuildArgs('neutral', 'opencode-global', null, null, 'lean', 'peer',
+    'direct', null, PACK_ORDER, excl);
+  assert.ok(!A(null).includes('--exclude-rules'), 'null must elide the flag entirely');
+  assert.ok(!A(undefined).includes('--exclude-rules'), 'a caller unaware of the axis elides it');
+  assert.deepEqual(A([]).slice(-2), ['--exclude-rules', 'none'],
+    'an empty list is a deliberate "exclude nothing" and must be said out loud');
+  assert.deepEqual(A(['process.7']).slice(-2), ['--exclude-rules', 'process.7']);
+  assert.deepEqual(A(['craft.2', 'process.7']).slice(-2),
+    ['--exclude-rules', 'craft.2,process.7']);
+  // The two axes are independent — narrowing rules must not narrow packs, or the flag pair
+  // would say something neither caller asked for.
+  const both = setupBuildArgs('neutral', 'opencode-global', null, null, 'lean', 'peer', 'direct',
+    ['craft', 'process'], PACK_ORDER, ['process.7']);
+  assert.deepEqual(both.slice(-4),
+    ['--doctrines', 'craft,process', '--exclude-rules', 'process.7']);
+});
+
 test('the canonical order is the one passed in, not one this function reached for', () => {
   // `setupBuildArgs` is pure and has no discovery, which is why `allPacks` survived the
   // elision's removal: it is what orders the flag. Hand it a checkout with three packs and the

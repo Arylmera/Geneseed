@@ -393,9 +393,9 @@ export const MUTATIONS = [
     name: 'make the deploy resolver ignore the requested host',
     file: 'js/web/actions.mjs',
     find: "  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, "
-      + 'doctrines);',
+      + 'doctrines,',
     replace: "  const argv = setupBuildArgs(theme || 'neutral', 'files', root, root, fp, pos, "
-      + 'mode, doctrines);',
+      + 'mode, doctrines,',
     gate: UNIT,
     why: "`apiDeployCmd`'s `{cmd: [...]}` is handed straight to the job runner and never reaches "
       + 'the wire, so a resolver that deployed the host-agnostic bundle to every host would '
@@ -541,9 +541,10 @@ export const MUTATIONS = [
     id: 'M30',
     name: 'fold the Claude wire stage away',
     file: 'js/emit.mjs',
-    find: "function claudeWire(job, claudeMdText, hasAgentText, doctrines = null) {\n"
-      + "  phaseLog('WIRE');\n",
-    replace: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null) {\n',
+    find: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, '
+      + "excludeRules = []) {\n  phaseLog('WIRE');\n",
+    replace: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, '
+      + 'excludeRules = []) {\n',
     gate: UNIT,
     why: "THE EXACT SHAPE THE REFERENCE'S OWN VACUITY GUARD WAS BUILT FOR. An emit whose wire "
       + 'was folded into its render sibling still renders, still prunes, still manifests and is '
@@ -563,6 +564,39 @@ export const MUTATIONS = [
       + 'into a silently permissive one that still reports success. The emit corpus could not see '
       + 'this either way, because it never set the variable; what catches it is that the phase '
       + 'gate reads the stream the marker is SUPPOSED to be on.',
+  },
+  // ------------------------------------------------------------------------------------------
+  // The per-rule doctrine axis. Both rows sit on the seam where a NARROWING option can make a
+  // gate pass by doing less — the shape `--repeat` taught this repo — and both are invisible to
+  // every recorded carrier, because the default build excludes nothing and is byte-identical to
+  // one from before the axis existed.
+  {
+    id: 'M32',
+    name: 'key the consent gate on the pack instead of the rule',
+    file: 'js/settings.mjs',
+    find: '  processPackOn(d) && !(Array.isArray(excluded) && excluded.includes(CONSENT_RULE));',
+    replace: '  processPackOn(d);',
+    gate: UNIT,
+    why: 'THE PROMPT AND THE BOUNDARY SAYING DIFFERENT THINGS, which is the one failure this '
+      + 'axis can newly cause. `process 5` carries commit/push consent and can now be excluded '
+      + 'ON ITS OWN; a gate still keyed on the PACK keeps `git commit*`/`git push*` wired to a '
+      + 'rule the emitted AGENT.md no longer contains, and every install that excludes nothing '
+      + '— every recorded cell, every default build — is byte-identical either way. Nothing but '
+      + 'a cell that excludes exactly that one rule can see it.',
+  },
+  {
+    id: 'M33',
+    name: 'let an emptied pack keep its place in the active set',
+    file: 'js/render.mjs',
+    find: '.filter(survives)',
+    replace: '',
+    gate: UNIT,
+    why: 'THE TWO AXES ARE NOT INDEPENDENT, and this is the direction that composes wrongly. A '
+      + 'pack whose every rule is excluded must LEAVE `--doctrines`, or the render puts a pack '
+      + 'header into AGENT.md with nothing under it and the `Active packs:` marker attests to a '
+      + 'pack the file no longer states — the same lie the build refuses when a selected pack '
+      + 'has no FILE. Survivable in every other configuration, so only an all-of-one-pack '
+      + 'exclusion reaches it.',
   },
 ];
 

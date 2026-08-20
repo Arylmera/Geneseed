@@ -290,6 +290,47 @@ export function doctrinesForBuild(d) {
   return doctrinesOfDir(d) ?? [...PACK_ORDER];
 }
 
+/** `Excluded rules: process 7, craft 3` — the marker's optional second line. */
+const EXCLUDED_RULES_RE = /^Excluded rules:[ \t]*(.+?)[ \t]*$/m;
+
+/**
+ * The individual doctrine rules a DEPLOYED install left out — the second axis, read back.
+ *
+ * ⚠ ITS NULL SEMANTICS ARE THE OPPOSITE OF `doctrinesOfDir`'S, AND THAT IS THE POINT. A
+ * missing `Active packs:` line means "this install does not say", which has to resolve to
+ * ALL packs or a pre-migration install loses its consent gate on the next upgrade. A missing
+ * `Excluded rules:` line means "nothing was excluded" — because the line is only ever written
+ * when something is, so its absence is a STATEMENT rather than a silence. Both answers fail
+ * closed: unknown packs bind the most, unknown exclusions take away the least. They only look
+ * inconsistent until you ask which direction is safe for each.
+ *
+ * That is also what makes this backward compatible by construction: every install that exists
+ * today has no such line, reads as `[]`, and behaves exactly as it does now.
+ *
+ * A malformed entry condemns the whole line to `[]` rather than to the part that parsed —
+ * same rule as the pack list, same reason, opposite default. Half an exclusion list would
+ * take away rules nobody named.
+ */
+export function excludedRulesOfDir(d) {
+  for (const carrier of CARRIERS) {
+    const text = readMaybe(path.join(d, carrier));
+    if (text === null) continue;
+    const m = EXCLUDED_RULES_RE.exec(text);
+    if (!m) continue;
+    if (m[1] === 'none') return [];
+    const named = m[1].split(',').map((s) => s.trim());
+    // `<pack> <n>` on the page, `<pack>.<n>` in the code — the same asymmetry the rendered
+    // line documents. A name this checkout does not ship is a corrupt line, not a hint.
+    const ids = named.map((s) => {
+      const parts = s.split(/[ \t]+/);
+      return parts.length === 2 && PACK_ORDER.includes(parts[0]) && /^\d+$/.test(parts[1])
+        ? `${parts[0]}.${Number(parts[1])}` : null;
+    });
+    return ids.every(Boolean) ? [...new Set(ids)].sort() : [];
+  }
+  return [];
+}
+
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
 
 /** `_harness_mcp._claude_read_manifest`. */
@@ -437,6 +478,7 @@ export function installTargets() {
 export function installedDefaults() {
   const found = {
     theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
+    excludeRules: null,
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
@@ -470,6 +512,14 @@ export function installedDefaults() {
     // for a carrier with no marker, which would end this walk at the FIRST candidate and hide
     // a later carrier that does say. The null has to survive to the caller here.
     if (found.doctrines === null) found.doctrines = doctrinesOfDir(base);
+    // ⚠ THE PER-RULE AXIS HAS ONLY TWO STATES, so the walk cannot use `=== null` to mean
+    // "keep looking" the way the line above does — `excludedRulesOfDir` answers `[]` for a
+    // carrier that excludes nothing AND for one with no marker at all, and the empty list is a
+    // real answer. An EMPTY answer therefore keeps the walk going and a non-empty one stops it:
+    // the first carrier on this machine that actually names an exclusion is the one that
+    // pre-selects. The cost of that choice is that "excludes nothing" and "no carrier" are
+    // indistinguishable here, which is exactly what the marker itself already says.
+    if (!found.excludeRules?.length) found.excludeRules = excludedRulesOfDir(base);
   }
   return found;
 }

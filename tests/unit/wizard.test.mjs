@@ -79,6 +79,26 @@ const NARROWED_INSTALL = {
     + '**Foreman** — the mode lead\n\nActive packs: rigor, process\n',
 };
 
+/**
+ * All four packs, with two RULES excluded — the axis the wizard does not ask about.
+ *
+ * ⚠ AND THAT IS WHY IT NEEDS A FIXTURE. Five questions is the ceiling for a prompt sequence
+ * somebody answers by holding Enter, so there is no per-rule question and none is planned; a
+ * rule list is a console control. But an axis that is not asked about is an axis that is easy
+ * to DROP, and dropping this one has a name: an installer who excluded `process 5` to work
+ * without the commit/push ask, re-running the wizard, would have the consent gate wired back
+ * on with nothing printed to say so — the exact failure the pack question was fixed for, one
+ * tier down. This tree is the input that tells a wizard preserving the line from one ignoring
+ * it, and it deliberately keeps all four packs so the PACK axis cannot be what carries the
+ * claim.
+ */
+const EXCLUDED_INSTALL = {
+  ...WIZARD_INSTALL,
+  '.config/opencode/AGENT.md': '# deployed\n\n**Artisan** — the posture lead\n\n'
+    + '**Foreman** — the mode lead\n\nActive packs: craft, rigor, ops, process\n'
+    + 'Excluded rules: craft 2, process 5\n',
+};
+
 const OPTS = [['alpha', 'the first'], ['beta', ''], ['gamma', 'the third']];
 const NUMERIC_OPTS = [['2', 'the key two'], ['1', 'the key one']];
 
@@ -160,6 +180,12 @@ function wizardJobs() {
     // all-four install, all four packs back) it is a matched pair, so an implementation that
     // ignores the marker and always answers `all` fails exactly one of the two.
     ['wizard-eof-narrowed', [['collect_setup_lines', []]], '', NARROW_HOME],
+    // The THIRD member of that pair, one tier down: same empty stdin, all four packs, two rules
+    // excluded. The wizard never asks about rules, so this cell is entirely about what it
+    // PRESERVES — and it is matched against `wizard-eof` (same input, nothing excluded, no flag
+    // at all), so a wizard that always emits the flag and one that never does each fail exactly
+    // one of the two.
+    ['wizard-eof-excluded', [['collect_setup_lines', []]], '', EXCLUDED_HOME],
   ].map(([name, cases, stdin, home]) => [name, cases.map(([fn, args]) => ({ fn, args })),
     stdin, home]);
 }
@@ -204,6 +230,7 @@ function seed(name, tree) {
 
 const HOME = seed('home', WIZARD_INSTALL);
 const NARROW_HOME = seed('home-narrow', NARROWED_INSTALL);
+const EXCLUDED_HOME = seed('home-excluded', EXCLUDED_INSTALL);
 
 /** One probe process, stdin from a seeded FILE, WHOLE stdout back as BYTES. */
 function runSeeded(cases, stdin, home = HOME) {
@@ -330,7 +357,7 @@ test('the wizard job really walks the wizard', () => {
     'About to run:  geneseed build --theme pirate --emit claude-global --footprint full '
       + '--posture artisan --mode foreman',
     '{"theme":"pirate","posture":"artisan","mode":"foreman","doctrines":["craft","rigor","ops",'
-      + '"process"],"emit":"claude-global"',
+      + '"process"],"excludeRules":null,"emit":"claude-global"',
   ]) assert.ok(out.includes(line), `the wizard did not print:\n  ${line}`);
   // The gate is a GATE: taking `all` must not print the four per-pack questions.
   assert.ok(!out.includes('Include craft'),
@@ -350,7 +377,7 @@ test('holding Enter through a re-run keeps a narrowed pack selection instead of 
   const narrowed = runs()['wizard-eof-narrowed'];
   assert.deepEqual(narrowed.results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman', doctrines: ['rigor', 'process'],
-    emit: 'claude-global', out: null, root: null, footprint: 'full',
+    excludeRules: null, emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over a two-pack install did not come back with two packs');
   assert.deepEqual(runs()['wizard-eof'].results[0].doctrines, ['craft', 'rigor', 'ops', 'process'],
     'the all-four half of the pair moved, so the narrowed half proves nothing');
@@ -372,6 +399,34 @@ test('holding Enter through a re-run keeps a narrowed pack selection instead of 
   // that never reaches `setupBuildArgs` is a cosmetic default.
   assert.ok(narrowed.text.includes('--doctrines rigor,process'),
     'the pre-selected pack set never reached the build command');
+});
+
+test('a re-run keeps the RULES an install excluded, without asking about them', () => {
+  // ⚠ AN AXIS THE WIZARD DOES NOT ASK ABOUT IS AN AXIS IT CAN SILENTLY DROP. Five registers is
+  // the ceiling for a prompt sequence answered by holding Enter, so there is no per-rule
+  // question — but re-running the wizard over an install that excluded `process 5` must not
+  // hand back the commit/push consent gate with nothing said. Same failure the pack question
+  // was fixed for, one tier down.
+  const excl = runs()['wizard-eof-excluded'];
+  assert.deepEqual(excl.results, [{
+    theme: 'pirate', posture: 'artisan', mode: 'foreman',
+    doctrines: ['craft', 'rigor', 'ops', 'process'], excludeRules: ['craft.2', 'process.5'],
+    emit: 'claude-global', out: null, root: null, footprint: 'full',
+  }], 'a re-run over an install with excluded rules did not carry them back');
+  // ...and it reaches the argv, in the dotted form the flag parses. A selection that came back
+  // right and was then dropped before the build is the same bug arriving one step later.
+  assert.ok(excl.text.includes('--exclude-rules craft.2,process.5'),
+    `the plan line dropped the exclusions:\n${excl.text}`);
+  // THE MATCHED HALF: the all-four, nothing-excluded install must emit NO flag at all, or this
+  // cell is satisfied by a wizard that always spells one — and `--exclude-rules none` in the
+  // plan line would move every frozen probe that compares it.
+  const plain = runs()['wizard-eof'];
+  assert.equal(plain.results[0].excludeRules, null);
+  assert.ok(!plain.text.includes('--exclude-rules'),
+    `an install excluding nothing spelled the flag anyway:\n${plain.text}`);
+  // The question count is unchanged — the axis is preserved, not asked about.
+  assert.ok(!/exclude/i.test(excl.text.split('About to run:')[0]),
+    'the wizard grew a per-rule question; that is a decision, not a side effect');
 });
 
 test('the packs gate offers every pack, in narrative order, with what dropping one costs', () => {
@@ -396,7 +451,7 @@ test('the declined wizard returns null and the confirmed one does not', () => {
   assert.deepEqual(runs()['wizard-declined'].results, [null]);
   assert.deepEqual(runs()['wizard-defaults'].results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman',
-    doctrines: ['craft', 'rigor', 'ops', 'process'],
+    doctrines: ['craft', 'rigor', 'ops', 'process'], excludeRules: null,
     emit: 'claude-global', out: null, root: null, footprint: 'full',
   }]);
 });
@@ -408,12 +463,12 @@ test('the project arm asks a sixth question and the files arm does not', () => {
   // the second half: the project job never names a footprint and takes the default.
   assert.deepEqual(runs()['wizard-project'].results, [{
     theme: 'neutral', posture: 'peer', mode: 'direct',
-    doctrines: ['craft', 'rigor', 'ops', 'process'],
+    doctrines: ['craft', 'rigor', 'ops', 'process'], excludeRules: null,
     emit: 'opencode', out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
   }]);
   assert.deepEqual(runs()['wizard-files'].results, [{
     theme: 'neutral', posture: 'expert', mode: 'foreman', doctrines: ['rigor', 'process'],
-    emit: 'files', out: 'Harness', root: null, footprint: 'full',
+    excludeRules: null, emit: 'files', out: 'Harness', root: null, footprint: 'full',
   }]);
 });
 
@@ -444,11 +499,14 @@ test('the summary job produces rows and not an empty list', () => {
     'the opencode PROJECT emit did not reach the LSP rows');
   assert.ok(!results[3].some(([, t]) => t.includes('Java 21+ (jdtls)')),
     'a claude emit reached the LSP rows, which are opencode-only');
-  // Six keys, and `doctrines` is the only one that can be a LIST or a null. Its presence here is
-  // what stops the wizard's pack question falling through the walk to `cwd/Harness`.
+  // Seven keys, and the two doctrine ones are the only lists. `doctrines` distinguishes three
+  // states (null = no carrier said, [] = a carrier said `none`, a list = it named packs);
+  // `excludeRules` has only two, because its marker is written only when something IS excluded
+  // and its absence is therefore an answer. Both are present here for the same reason: the
+  // wizard's pack question must not fall through this walk to `cwd/Harness`.
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
-    doctrines: ['craft', 'rigor', 'ops', 'process'],
+    doctrines: ['craft', 'rigor', 'ops', 'process'], excludeRules: [],
   });
 });
 
@@ -463,7 +521,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 14, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 15, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {

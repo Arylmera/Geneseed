@@ -76,6 +76,11 @@ const VALUED_FLAGS = [
   // and binds the parsed pack array, so the row carries both forms. A two-pack value, not one:
   // a single name would parse to a one-element array and leave the comma split untested.
   ['--doctrines', 'doctrines', 'craft,rigor', ['craft', 'rigor']],
+  // The second doctrine axis, and the second row whose parsed form differs from what was
+  // typed. `process 7` — the SPACED spelling, which is how the marker and the CLI's own error
+  // message write an address — must bind the dotted one, or a value copied off a carrier is
+  // rejected by the flag that wrote it.
+  ['--exclude-rules', 'excludeRules', 'process 7,craft 2', ['craft.2', 'process.7']],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],
