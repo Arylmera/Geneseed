@@ -130,8 +130,15 @@ export function docGroups() {
  * the one-line description. A key of `null` marks a term no theme renames.
  */
 const GLOSSARY_KEYS = [
-  ['Rule (Law)', 'LAW', 'the governance rules the agent obeys'],
-  ['Rules (Laws)', 'LAWS', 'the body of governance rules'],
+  // The three tiers, in constitutional order and before the entities — a reader who does not
+  // know what an Ontology is here cannot read the rest of the glossary's first rows.
+  ['Ontology', 'ONTOLOGY', 'the always-on worldview under the rules — telos, evidence, '
+    + 'decisions, conduct; it holds the Pact'],
+  ['Rule (Law)', 'LAW', 'one of the nine always-on invariants: what is never done'],
+  ['Rules (Laws)', 'LAWS', 'the body of always-on invariants'],
+  ['Doctrine', 'DOCTRINE', 'one practice rule, cited `<pack> <n>` — how work is done here'],
+  ['Doctrines', 'DOCTRINES', 'the practice packs, chosen at build time; inactive packs still '
+    + 'ship in the bundle'],
   ['Agent', 'AGENT', 'a capability specialist'],
   ['Agents', 'AGENTS', 'the roster of specialists'],
   ['Skill', 'SKILL', 'a repeatable workflow'],
@@ -139,7 +146,10 @@ const GLOSSARY_KEYS = [
   ['Memory', 'MEMORY', 'durable, one-fact-per-file knowledge'],
   ['Notebook', 'NOTEBOOK', "the agent's sovereign space"],
   ['Wiki', 'WIKI', 'the machine-wide knowledge base'],
-  ['Pact', 'PACT', 'the two-way collaboration contract'],
+  // Still a token, still themed, but it names a CONCEPT INSIDE the ontology's Telos now
+  // rather than a peer of the Rules — `src/postures/peer.md` cites it and the section that
+  // used to carry it is the Ontology.
+  ['Pact', 'PACT', "the two-way collaboration contract, stated in the Ontology's Telos"],
   ['Posture', null, 'the relationship register the agent works in '
     + '(peer, mentor, expert, assistant, artisan)'],
   ['Mode', null, 'how work gets executed — direct (the agent works every '
@@ -156,8 +166,14 @@ const GLOSSARY_KEYS = [
 
 // ---- counts substituted into concept bodies -------------------------------------------
 
-/** `_web_docs._doc_counts`. */
-function docCounts(state) {
+/**
+ * `_web_docs._doc_counts`.
+ *
+ * Exported so the tier tokens can be gated on the day they are ADDED rather than on the day a
+ * page first spends one. Only one page carries `{N_LAWS}` today; a test that could only reach
+ * these through a rendered body would leave four of the seven untested until Task 6.2.
+ */
+export function docCounts(state) {
   const inv = state.inventory;
   const plugins = path.join(ROOT, 'adapters', 'opencode', 'plugins');
   let n = 0;
@@ -165,11 +181,23 @@ function docCounts(state) {
     n = readdirSync(plugins).filter((f) => f.startsWith('geneseed-') && f.endsWith('.js'))
       .length;
   } catch { n = 0; }
+  // `{N_LAWS}` IS THE INVARIANT COUNT AND NOTHING ELSE. The doctor's frozen
+  // `proseMirrorProblems` holds README and SHIPPED.md prose to the same number, so a token
+  // that quietly meant "the whole constitution" would put the docs and the gate at odds with
+  // no way to re-bless either. The other three tiers get their own tokens.
+  const packs = inv.doctrines ?? [];
+  const on = packs.filter((p) => p.active);
   return {
     '{N_LAWS}': (inv.laws || []).length,
     '{N_AGENTS}': (inv.agents || []).length,
     '{N_SKILLS}': (inv.skills || []).length,
     '{N_PLUGINS}': n,
+    '{N_ONTOLOGY}': (inv.ontology ?? []).length,
+    '{N_PACKS}': packs.length,
+    '{N_PACKS_ACTIVE}': on.length,
+    // Rules in the packs this install BUILT IN — the number a reader of these pages is
+    // actually bound by. The catalogue always ships whole, so it is never the smaller claim.
+    '{N_DOCTRINE_RULES}': on.reduce((t, p) => t + p.rules.length, 0),
   };
 }
 

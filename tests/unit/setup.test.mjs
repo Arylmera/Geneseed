@@ -23,6 +23,7 @@ import path from 'node:path';
 import { setupBuildArgs } from '../../js/generate.mjs';
 import { doctrineOptions, javaMajorOk, lspPrereqs, setupSummaryLines } from '../../js/setup.mjs';
 import { themeFlair, tuiEntries, detailLines } from '../../js/tui.mjs';
+import { catalogLines } from '../../js/catalog.mjs';
 import { tuiInventory } from '../../js/inventory.mjs';
 import { doctrinesForBuild, doctrinesOfDir, themeFiles } from '../../js/installs.mjs';
 import { ROOT, SRC, PACK_ORDER, discoverNames } from '../../js/checkout.mjs';
@@ -440,14 +441,50 @@ test('a pack is listed whether or not it is built in, and only `active` moves', 
 test('the entry rows carry every kind, and a selection yields real detail', () => {
   const inv = tuiInventory('neutral');
   const rows = tuiEntries(inv);
-  assert.deepEqual(new Set(rows.map(([k]) => k)), new Set(['head', 'agent', 'skill', 'law']));
+  assert.deepEqual(new Set(rows.map(([k]) => k)),
+    new Set(['head', 'agent', 'skill', 'ontology', 'law', 'doctrine']));
   const heads = rows.filter(([k]) => k === 'head').map(([, l]) => l);
   assert.ok(heads.some((h) => h.startsWith('AGENTS')), JSON.stringify(heads));
-  // Selecting a law yields multi-line detail: the title AND the body, not just the label.
-  const lawRow = rows.find(([k]) => k === 'law');
-  assert.ok(detailLines(...lawRow).length > 2, 'a law rendered as one line');
+  // The constitution reads in ITS order, not alphabetically and not in walk order: ontology,
+  // then invariants, then doctrines — the order AGENT.md renders them and the order the
+  // console's three bands appear in.
+  const at = (p) => heads.findIndex((h) => h.startsWith(p));
+  assert.ok(at('ONTOLOGY') > 0 && at('ONTOLOGY') < at('LAWS') && at('LAWS') < at('DOCTRINES'),
+    `the tiers are out of constitutional order: ${JSON.stringify(heads)}`);
+  // The doctrines head names the FRACTION, because an inactive pack is still listed — greyed
+  // rather than gone — and a bare total over a narrowed install would be the one lying number.
+  assert.match(heads.find((h) => h.startsWith('DOCTRINES')), /\(\d+ in \d+\/\d+ packs\)/);
+  // Every constitutional kind yields multi-line detail: the title AND the body, not the label.
+  for (const kind of ['law', 'doctrine', 'ontology']) {
+    const row = rows.find(([k]) => k === kind);
+    assert.ok(row, `no ${kind} row at all`);
+    assert.ok(detailLines(...row).length > 2, `a ${kind} rendered as one line`);
+  }
   // An agent's detail is its full rendered spec.
   const agentRow = rows.find(([k]) => k === 'agent');
   assert.ok(detailLines(...agentRow).some((ln) => ln.includes('##') || ln.includes('When')),
     'an agent detail does not look like a rendered spec');
+});
+
+test('a pack that is not built in is listed and MARKED, never quietly dropped', () => {
+  // ⚠ THE ONE THING THE CATALOGUE MUST NOT DO IS HIDE AN INACTIVE PACK. Hiding it makes "off"
+  // indistinguishable from "never existed", and the reader cannot then tell a constitution
+  // they narrowed from one that shipped smaller. So every rule is always listed, the head
+  // carries the fraction, and the badge says `(off)` — which is the only part of the row a
+  // reader cannot infer from the text.
+  const rows = tuiEntries(tuiInventory('neutral', ['craft']));
+  const doctrine = rows.filter(([k]) => k === 'doctrine');
+  assert.equal(doctrine.length, 23, 'a narrowed install lost rows instead of marking them');
+  const off = doctrine.filter(([, , d]) => d.active === false);
+  assert.equal(off.length, 17, 'the inactive packs are not marked inactive');
+  assert.ok(doctrine.every(([, , d]) => (d.pack === 'craft') === (d.active === true)),
+    'the active flag does not follow the selection');
+  const head = rows.filter(([k]) => k === 'head').find((h) => h[1].startsWith('DOCTRINES'));
+  assert.equal(head[1], 'DOCTRINES (6 in 1/4 packs)', head[1]);
+  // ...and the badge column says so, which is what a reader of `geneseed catalog` sees.
+  const lines = catalogLines(tuiInventory('neutral', ['craft']), 'doctrines', 200);
+  assert.ok(lines.some((l) => l.includes('(off)')), 'no row is marked off in the listing');
+  assert.ok(lines.some((l) => /rigor \(off\)/.test(l)), lines.slice(0, 4).join('\n'));
+  assert.ok(!catalogLines(tuiInventory('neutral'), 'doctrines', 200).some((l) => l.includes('(off)')),
+    'an all-packs install marked something off');
 });

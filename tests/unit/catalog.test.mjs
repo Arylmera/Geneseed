@@ -120,9 +120,16 @@ test('the name column is measured in display columns, not in code units', () => 
 
 test('the section names are the endpoint\'s, and the entry dispatches at this module', () => {
   // THE WIRING, plus the one claim that keeps the CLI and the console talking about the same
-  // three things: a `catalog` verb whose sections drifted from the endpoint's would be a second
+  // things: a `catalog` verb whose sections drifted from the endpoint's would be a second
   // vocabulary for one roster.
-  assert.deepEqual(Object.keys(CATALOG_KINDS), ['agents', 'skills', 'laws']);
+  //
+  // FIVE SINCE THE CONSTITUTION BECAME THREE TIERS, and the order is constitutional rather
+  // than alphabetical — ontology, invariants, doctrines read as one block between and after
+  // the two entity sections. Held as a LITERAL and not derived: this list is a published
+  // vocabulary, and a section silently appearing or vanishing is exactly what it exists to
+  // catch.
+  assert.deepEqual(Object.keys(CATALOG_KINDS),
+    ['agents', 'skills', 'ontology', 'laws', 'doctrines']);
   const table = JSON.parse(readFileSync(path.join(ROOT, 'js', 'cli-table.json'), 'utf8'));
   const cmd = table.commands.find((c) => c.name === 'catalog');
   assert.ok(cmd, 'js/cli-table.json no longer declares `catalog`');

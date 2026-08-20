@@ -29,15 +29,36 @@ import { defaultTheme, installedDefaults } from './installs.mjs';
 import { pyPrint } from './lib/fs.mjs';
 import { dwidth, fit, icon, truncd, tuiEntries } from './tui.mjs';
 
-/** The listing's section names, and the row kind each one selects. */
-export const CATALOG_KINDS = { agents: 'agent', skills: 'skill', laws: 'law' };
+/**
+ * The listing's section names, and the row kind each one selects.
+ *
+ * FIVE SINCE THE CONSTITUTION BECAME THREE TIERS, in constitutional order between the two
+ * entity sections and after them — `ontology`, `laws`, `doctrines` read as one block. The
+ * order here is only the no-section filter's; the printed order is `tuiEntries`'.
+ *
+ * ⚠ THE SET IS DECLARED IN TWO FILES AND `tests/unit/catalog.test.mjs` TIES THEM. The verb's
+ * `section` positional takes its `choices` from `js/cli-table.json`, so a kind added here and
+ * not there is a section the endpoint serves and the front door refuses. `catalog` has no
+ * recorded help text and no golden cell, which is what makes the pair editable at all.
+ */
+export const CATALOG_KINDS = {
+  agents: 'agent', skills: 'skill', ontology: 'ontology', laws: 'law', doctrines: 'doctrine',
+};
 
 /**
  * The badge column: what the catalog endpoint carries beside the name that is not the
  * purpose. An agent has a lifecycle status, a skill has that and a category, a law has a
  * governance class and no status at all — which is the endpoint's shape, not a shortcut.
+ *
+ * A doctrine rule's badge is its PACK plus whether this install built it in. The pack is
+ * already the rule's class (there is no second taxonomy over a doctrine), and `off` is the
+ * one thing a reader cannot infer from the row: an inactive pack is listed, not hidden, so
+ * without the marker its rules read as binding. An ontology section has neither — it is a
+ * worldview, not a rule list — and an empty badge collapses its column.
  */
 function badgeFor(kind, data) {
+  if (kind === 'ontology') return '';
+  if (kind === 'doctrine') return `${data.klass ?? 'craft'}${data.active === false ? ' (off)' : ''}`;
   if (kind === 'law') return data.klass ?? 'craft';
   if (kind === 'skill') return `${data.klass ?? 'build'}/${data.status ?? 'unknown'}`;
   return data.status ?? 'unknown';
@@ -98,11 +119,15 @@ export function catalogLines(inv, section, width, showSource = false) {
  * validator here, and the entry point's `exitCode` arm carries the refusal out.
  */
 export function cmdCatalog(args) {
-  const theme = args.theme || installedDefaults().theme || defaultTheme();
+  const inst = installedDefaults();
+  const theme = args.theme || inst.theme || defaultTheme();
+  // The install's own pack selection, so an inactive pack's rules are listed and MARKED
+  // rather than listed as though they bind. `null` — no carrier said — reads as every pack.
   // `helpWidth()` is `COLUMNS`, else the terminal, else 80 — minus the two columns argparse
   // subtracts for its own layout. This listing wants the whole terminal, so it adds them
   // back rather than owning a second copy of that precedence chain.
-  const lines = catalogLines(tuiInventory(theme), args.section, helpWidth() + 2, args.source);
+  const lines = catalogLines(tuiInventory(theme, inst.doctrines), args.section,
+    helpWidth() + 2, args.source);
   if (!lines.length) {
     pyPrint(`[catalog] nothing to list${args.section ? ` under ${args.section}` : ''}.\n`);
     return 1;

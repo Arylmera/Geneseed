@@ -78,18 +78,20 @@
     },
     {
       "name": "catalog",
-      "help": "list what this harness ships: every agent, skill and law, with its one-line purpose and lifecycle status",
+      "help": "list what this harness ships: every agent, skill and constitutional rule, with its one-line purpose and lifecycle status",
       "description": "",
       "positionals": [
         {
           "names": [],
           "dest": "section",
           "metavar": null,
-          "help": "limit the listing to one section (default: all three)",
+          "help": "limit the listing to one section (default: all five)",
           "choices": [
             "agents",
             "skills",
-            "laws"
+            "ontology",
+            "laws",
+            "doctrines"
           ],
           "default": null,
           "required": false,

@@ -28,6 +28,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   glyphs, GLYPH, dwidth, truncd, fit, icon, mark, spin, logoLines, clamp, progressBar,
 } from '../../js/tui.mjs';
+import { CATALOG_KINDS } from '../../js/catalog.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const TUI_URL = pathToFileURL(path.join(ROOT, 'js', 'tui.mjs')).href;
@@ -127,19 +128,41 @@ test('the logo is a rectangular block', () => {
 // ---------------------------------------------------------------------------------------------
 // The tiers, each in its own process.
 
+/**
+ * Every icon key the catalogue can print, DERIVED rather than transcribed.
+ *
+ * ⚠ THE HAND-WRITTEN LIST WAS `["badge","agent","skill","law"]` AND IT DID NOT GROW WITH THE
+ * TABLE. `icon()` falls back to a bullet for an unknown key, so a kind added to `CATALOG_KINDS`
+ * without an `ICONS` entry ships a glyph nothing here ever measured — in the emoji tier that is
+ * a single-width character where the column maths assumes two, and every row it appears in
+ * shifts. Taking the keys from the vocabulary itself means the next kind is covered on the day
+ * it is added. `badge` is not a row kind and is appended by hand.
+ */
+const CATALOG_ICONS = [...Object.values(CATALOG_KINDS), 'badge'];
+
 test('every icon is one double-width codepoint in the emoji tier', () => {
   // `_fit`'s math is exact only if each icon really occupies two columns; an icon that
   // measured 1 or 3 would shift every row it appears in.
   const widths = inTier(EMOJI,
-    'Object.fromEntries(["badge","agent","skill","law"].map(k => [k, m.dwidth(m.icon(k))]))');
+    `Object.fromEntries(${JSON.stringify(CATALOG_ICONS)}`
+    + '.map(k => [k, m.dwidth(m.icon(k))]))');
+  assert.equal(Object.keys(widths).length, CATALOG_ICONS.length);
   for (const [k, w] of Object.entries(widths)) {
     assert.equal(w, 2, `icon ${k} measured ${w} columns`);
   }
+  // ...and the keys must really BE in the table. `icon()` answers a bullet for anything it does
+  // not know, and a bullet is two columns wide in the emoji tier, so the loop above passes for
+  // a key that was never added. Distinctness is what tells a real entry from the fallback.
+  assert.equal(new Set(Object.values(inTier(EMOJI,
+    `Object.fromEntries(${JSON.stringify(CATALOG_ICONS)}.map(k => [k, m.icon(k)]))`)))
+    .size, CATALOG_ICONS.length,
+  'two catalogue icons are the same glyph — at least one key is missing from ICONS and is '
+    + 'falling back to the bullet');
 });
 
 test('the ascii tier is pure ascii for icons, marks and the spinner', () => {
   const out = inTier(ASCII,
-    '({icons: ["badge","agent","skill","law"].map(m.icon),'
+    `({icons: ${JSON.stringify(CATALOG_ICONS)}.map(m.icon),`
     + ' marks: ["pending","edited","added","missing","mcp_on","mcp_off","mcp_absent"]'
     + '.map(m.mark), spin: m.spin(3), bar: m.progressBar(0.5, 10)})');
   for (const s of [...out.icons, ...out.marks, out.spin, out.bar]) {

@@ -125,9 +125,24 @@ export function cmdVersion(args) {
  * it, and the eleven `status` cells and the catalog cells now gate the same classifier
  * from opposite ends.
  */
-export function inventoryCounts(themeName) {
-  const inv = tuiInventory(themeName);
-  return { agents: inv.agents.length, skills: inv.skills.length, laws: inv.laws.length };
+export function inventoryCounts(themeName, doctrines = null) {
+  const inv = tuiInventory(themeName, doctrines);
+  const on = inv.doctrines.filter((p) => p.active);
+  return {
+    agents: inv.agents.length,
+    skills: inv.skills.length,
+    laws: inv.laws.length,
+    ontology: inv.ontology.length,
+    // ⚠ THREE NUMBERS AND NOT ONE, because a pack-off install is a real configuration and
+    // "23 rules" would be a lie in it. `packs`/`packsTotal` is the fraction the console and
+    // the panel both print; `doctrineRules` counts only the ACTIVE packs' rules — what this
+    // install is actually bound by, not what its bundle happens to carry. The catalogue is
+    // always whole (every pack file ships), so the total is recoverable from `tuiInventory`
+    // by anything that needs it and is not duplicated here.
+    packs: on.length,
+    packsTotal: inv.doctrines.length,
+    doctrineRules: on.reduce((n, p) => n + p.rules.length, 0),
+  };
 }
 
 /**
@@ -163,7 +178,10 @@ export function statusData() {
   const inst = installedDefaults();
   const theme = inst.theme || defaultTheme();
   const mdir = resolveMemoryDir(null);
-  const inv = inventoryCounts(theme);
+  // `inst.doctrines` is what the machine's carriers say — `null` when none of them does, which
+  // `tuiInventory` reads as every pack, the same resolution `doctrinesForBuild` gives unknown.
+  // This is a DISPLAY read: nothing here decides what a build emits.
+  const inv = inventoryCounts(theme, inst.doctrines);
   let cfgDir = null;
   try { cfgDir = opencodeConfigDir(); } catch { cfgDir = null; }
   const sourceFp = sourceFingerprint(makeCfg());
@@ -189,6 +207,15 @@ export function statusData() {
     agents: inv.agents,
     skills: inv.skills,
     laws: inv.laws,
+    // ⚠ NAMED ONE BY ONE, AND THAT IS THE TRAP THIS FUNCTION SETS TWICE. `inv` is already
+    // `inventoryCounts`' reduction, and this literal names its keys again — so a count added
+    // to the inventory and not to BOTH places is dropped here in silence, with nothing to
+    // fail. There is deliberately no spread: the panel's payload is a stated contract, and
+    // `js/web/api.mjs` spreads THIS, so anything reaching that endpoint passes through here.
+    ontology: inv.ontology,
+    packs: inv.packs,
+    packs_total: inv.packsTotal,
+    doctrine_rules: inv.doctrineRules,
     memory_dir: mdir ? String(mdir) : null,
     facts: mdir ? memoryFactCount(mdir) : 0,
     source_fp: sourceFp,
@@ -248,6 +275,20 @@ export function statusLines(d, color = false) {
       + `(${d.facts} fact${d.facts === 1 ? '' : 's'})`],
     ['version', `${d.installed_fp || '(none)'}  ${DOT}  source ${d.source_fp}`],
   ];
+  // ⚠ A ROW, NOT A WIDER `components` LINE, AND THE REASON IS THAT THE CORPUS CANNOT BE
+  // RE-BLESSED. `statusLines` has 30 recorded cases per platform in
+  // `tests/__snapshots__/primitives/`, every one of them holding the box's exact bytes —
+  // including `17 agents · 47 skills · 37 laws` — and the recorder was Python and is gone.
+  // Touching `components` moves all 30; adding a row would too, since the box width is
+  // measured over `rows`. So the row is CONDITIONAL on a key the recorded arguments do not
+  // carry, exactly as `agent_md` below already is, and the recording renders unchanged.
+  //
+  // It carries the two tiers `components` cannot: `components` counts the invariants as
+  // `laws`, which is still true, and says nothing about the ontology or the packs.
+  if (d.packs_total !== undefined) {
+    rows.push(['constitution', `${d.ontology} ontology sections ${DOT} ${d.doctrine_rules} `
+      + `doctrine rules in ${d.packs}/${d.packs_total} packs`]);
+  }
   if (d.agent_md) {
     rows.push(['AGENT.md',
       `${d.agent_md}  (${d.agent_md_present ? 'present' : 'MISSING'})`]);

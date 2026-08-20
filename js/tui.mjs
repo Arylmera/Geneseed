@@ -246,6 +246,11 @@ const ICONS = {
   agent: ['🤖', '◆', '@'],
   skill: ['✨', '✦', '*'],
   law: ['📜', '§', '#'],
+  // The other two tiers. Safe to add: `icon` has 32 recorded cases and none of them names a
+  // key that did not exist, so a new entry changes no recorded answer — unlike `glyphs`,
+  // whose recorded results are the whole object and which is therefore left alone.
+  ontology: ['🧭', '◉', 'O'],
+  doctrine: ['📐', '⌘', 'D'],
   library: ['📚', '❒', 'L'],
   notebook: ['📓', '✎', 'N'],
   wiki: ['📘', '▥', 'W'],
@@ -387,14 +392,47 @@ export function themeFlair(theme) {
 /**
  * `_tui_entries` — the ordered (kind, label, data) rows for the left list. `head` is a
  * section divider and is not selectable.
+ *
+ * ⚠ THE TWO NEW TIERS ARE GUARDED, AND THE GUARD IS NOT DEFENSIVENESS. This function has two
+ * recorded cases per platform in `tests/__snapshots__/primitives/`, replayed under
+ * `deepStrictEqual`, and their argument is a synthetic inventory carrying exactly
+ * `{agents, skills, laws, theme}` — no recorder survives to re-bless them. Reading
+ * `inv.doctrines.length` there THROWS; emitting a head unconditionally changes the recorded
+ * result array. Keyed on presence, the recording renders byte-identical and a real inventory
+ * gets all three tiers.
+ *
+ * The order is CONSTITUTIONAL and not alphabetical: ontology, then invariants, then doctrines
+ * — the order they are read in, the order AGENT.md renders them, and the order the console's
+ * three bands appear in. `Rule` and `Doctrine` are hardcoded English here, as `Rule` already
+ * was: this function receives an inventory, not a theme's nouns.
  */
 export function tuiEntries(inv) {
   const rows = [['head', `AGENTS (${inv.agents.length})`, null]];
   for (const e of inv.agents) rows.push(['agent', e.name, e]);
   rows.push(['head', `SKILLS (${inv.skills.length})`, null]);
   for (const e of inv.skills) rows.push(['skill', e.name, e]);
+  if (inv.ontology?.length) {
+    rows.push(['head', `ONTOLOGY (${inv.ontology.length})`, null]);
+    for (const e of inv.ontology) rows.push(['ontology', e.title, e]);
+  }
   rows.push(['head', `LAWS (${inv.laws.length})`, null]);
   for (const e of inv.laws) rows.push(['law', `Rule ${e.num} — ${e.title}`, e]);
+  if (inv.doctrines?.length) {
+    // The head counts the ACTIVE packs' rules and names the fraction, because a pack that is
+    // not built in is still listed — greyed rather than absent, so "off" never looks like
+    // "gone" — and a head reading `DOCTRINES (23)` over an install bound by six would be the
+    // one number in this panel that lies.
+    const on = inv.doctrines.filter((p) => p.active);
+    const n = on.reduce((a, p) => a + p.rules.length, 0);
+    rows.push(['head',
+      `DOCTRINES (${n} in ${on.length}/${inv.doctrines.length} packs)`, null]);
+    for (const p of inv.doctrines) {
+      for (const r of p.rules) {
+        rows.push(['doctrine', `Doctrine ${r.pack} ${r.n} — ${r.title}`,
+          { ...r, active: p.active, source: p.source }]);
+      }
+    }
+  }
   return rows;
 }
 
@@ -420,7 +458,12 @@ export function tuiEntries(inv) {
  * the fix is one `or []` at the call site, and it belongs in the same change as the port.
  */
 export function detailLines(kind, label, data) {
-  if (kind === 'law') return [label, ''].concat(data ? pySplitLines(data.body) : []);
+  // The three constitutional tiers share one treatment — the label, a blank, then the body —
+  // because all three are a titled rule rather than a rendered spec. New kinds only: the nine
+  // recorded cases name kinds that already existed, so no recorded answer moves.
+  if (kind === 'law' || kind === 'doctrine' || kind === 'ontology') {
+    return [label, ''].concat(data ? pySplitLines(data.body) : []);
+  }
   if ((kind === 'agent' || kind === 'skill') && data) return pySplitLines(data.body);
   return null;
 }

@@ -25,11 +25,12 @@ import {
   apiThemes, apiDoctor, apiInstalls, apiExcludes, apiSetup, viewCfg,
 } from '../../js/web/api.mjs';
 import { apiGraph } from '../../js/web/graph.mjs';
+import { tuiInventory } from '../../js/inventory.mjs';
 import {
   apiActivity, apiActivityDetail, apiActivityToggle,
 } from '../../js/web/activity.mjs';
 import {
-  apiDocs, apiDocsPage, docGroups, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
+  apiDocs, apiDocsPage, docCounts, docGroups, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
 } from '../../js/web/docs.mjs';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
@@ -145,6 +146,133 @@ test('a catalog section answers with named, titled, described items', () => {
 
 test('an unknown catalog section raises NotFound', () => {
   assert.throws(() => apiCatalog(neutral(), 'bogus'), NotFound);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The constitution: ONE section carrying three tiers, and one item arm resolving three address
+// shapes off the very same list.
+
+test('the laws section carries all three tiers, in constitutional order', () => {
+  const items = apiCatalog(neutral(), 'laws').items;
+  const tiers = [...new Set(items.map((i) => i.tier))];
+  assert.deepEqual(tiers, ['ontology', 'invariant', 'doctrine'],
+    `the tiers are missing or out of order: ${JSON.stringify(tiers)}`);
+  const by = (t) => items.filter((i) => i.tier === t);
+  assert.equal(by('ontology').length, 4);
+  assert.equal(by('invariant').length, 9);
+  assert.equal(by('doctrine').length, 23);
+  // ⚠ THE THREE ADDRESS SHAPES MUST NOT COLLIDE — they share one `type=law` route, so a
+  // duplicate name makes one item unreachable.
+  assert.equal(new Set(items.map((i) => i.name)).size, items.length, 'two items share a name');
+  assert.deepEqual(by('ontology').map((i) => i.name),
+    ['ont:telos', 'ont:evidence', 'ont:decisions', 'ont:conduct']);
+  assert.deepEqual(by('invariant').map((i) => i.name),
+    ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX']);
+  assert.ok(by('doctrine').every((i) => /^[a-z]+\.\d+$/.test(i.name)),
+    'a doctrine address is not `<pack>.<n>`');
+  // A doctrine row carries its pack's header material, so the page groups without a second
+  // fetch — and its class IS the pack, not one of the six invariant classes.
+  const one = by('doctrine')[0];
+  for (const k of ['pack', 'packTitle', 'packDesc', 'active', 'klass']) {
+    assert.ok(k in one, `no ${k} on a doctrine row`);
+  }
+  assert.equal(one.klass, one.pack);
+});
+
+test('every catalog address opens, and only those', () => {
+  // THE PAIRING IS THE CLAIM. `apiItem` builds the list `apiCatalog` publishes, so a name in
+  // the listing always opens and a name outside it always 404s. Two lists would let a row
+  // render and then dead-end on click, which is the failure a deep link makes permanent.
+  const st = neutral();
+  for (const item of apiCatalog(st, 'laws').items) {
+    const got = apiItem(st, 'law', item.name);
+    assert.equal(got.name, item.name);
+    assert.equal(got.tier, item.tier);
+    assert.ok(got.body && got.body.length > 20, `${item.name} opened with no body`);
+    assert.deepEqual(got.links, [], 'a constitution body was link-resolved');
+  }
+  for (const bogus of ['ont:nosuch', 'XLII', 'craft.99', 'nosuch.1', '']) {
+    assert.throws(() => apiItem(st, 'law', bogus), NotFound, `${bogus} resolved`);
+  }
+});
+
+test('an inactive pack stays in the payload and says so', () => {
+  // A pack that is off must be LISTED and MARKED. Dropping it makes "not built in"
+  // indistinguishable from "does not exist", and the console could not then show the command
+  // that turns it back on.
+  // `state.inventory` is a lazy GETTER, so the override is a spread — which evaluates every
+  // other getter into a plain value and leaves the rest of the state intact.
+  const st = { ...neutral(), inventory: tuiInventory('neutral', ['craft']) };
+  const doctrine = apiCatalog(st, 'laws').items.filter((i) => i.tier === 'doctrine');
+  assert.equal(doctrine.length, 23, 'a narrowed install lost rows instead of marking them');
+  assert.equal(doctrine.filter((i) => i.active).length, 6);
+  assert.ok(doctrine.every((i) => (i.pack === 'craft') === i.active),
+    'the active flag does not follow the selection');
+  assert.ok(apiItem(st, 'law', 'process.5').body.length > 20,
+    'a rule from an inactive pack no longer opens — its text still ships, so it must');
+});
+
+test('the doc tokens count each tier separately, and a pack toggle moves only two', () => {
+  const st = neutral();
+  // ⚠ `{N_LAWS}` MUST STAY THE INVARIANT COUNT — the doctor's FROZEN `proseMirrorProblems`
+  // holds README and SHIPPED.md prose to the same number, and it cannot be re-blessed. So the
+  // other tiers get their own tokens rather than widening this one.
+  assert.deepEqual(docCounts(st), {
+    '{N_LAWS}': 9,
+    '{N_AGENTS}': st.inventory.agents.length,
+    '{N_SKILLS}': st.inventory.skills.length,
+    '{N_PLUGINS}': docCounts(st)['{N_PLUGINS}'],
+    '{N_ONTOLOGY}': 4,
+    '{N_PACKS}': 4,
+    '{N_PACKS_ACTIVE}': 4,
+    '{N_DOCTRINE_RULES}': 23,
+  });
+  // A narrowed install moves the two tokens that describe THIS install and none of the three
+  // that describe the catalogue. `{N_PACKS}` is what ships; `{N_PACKS_ACTIVE}` is what binds.
+  const narrowed = docCounts({ ...st, inventory: tuiInventory('neutral', ['craft']) });
+  assert.equal(narrowed['{N_PACKS_ACTIVE}'], 1);
+  assert.equal(narrowed['{N_DOCTRINE_RULES}'], 6);
+  assert.equal(narrowed['{N_PACKS}'], 4, 'a pack that is off left the catalogue count');
+  assert.equal(narrowed['{N_LAWS}'], 9, 'a pack toggle moved the invariant count');
+  assert.equal(narrowed['{N_ONTOLOGY}'], 4);
+  // ...and a page that spends one really is substituted. `concept` is the only kind
+  // `subCounts` runs over, and `rules.md` is the page carrying `{N_LAWS}` today.
+  assert.ok(!/\{N_[A-Z_]*\}/.test(apiDocsPage(st, 'rules').body ?? ''),
+    'a count token survived substitution on the one page that spends one');
+});
+
+test('the glossary names all three tiers, and the Pact says where it now lives', () => {
+  // The glossary is the reader's only map of the vocabulary. A constitution split into three
+  // tiers whose glossary defines one of them leaves the other two as unexplained nouns in
+  // every citation the agent prints.
+  const rows = apiDocsPage(neutral(), 'glossary').rows;
+  const labels = rows.map((r) => r.label);
+  for (const label of ['Ontology', 'Rule (Law)', 'Doctrine', 'Doctrines', 'Pact']) {
+    assert.ok(labels.includes(label), `the glossary has no ${label} row: ${labels.join(', ')}`);
+  }
+  // The three tier nouns are THEMED, so each must resolve to its voice rather than print the
+  // token — that is what the `neutral`/`themed` columns are for.
+  for (const label of ['Ontology', 'Doctrine', 'Doctrines']) {
+    const row = rows.find((r) => r.label === label);
+    assert.ok(row.themed && !row.themed.includes('{'), `${label} did not resolve: ${row.themed}`);
+  }
+  assert.match(rows.find((r) => r.label === 'Pact').desc, /Telos/,
+    'the Pact still reads as a peer of the Rules — it is a concept inside the Ontology now');
+});
+
+test('the overview counts the tiers without moving the laws badge', () => {
+  const o = apiOverview(neutral());
+  // ⚠ `counts.laws` STAYS THE INVARIANT COUNT. The rail badge reads it, `{N_LAWS}` mirrors it,
+  // and the doctor's FROZEN `proseMirrorProblems` holds README and SHIPPED.md prose to the
+  // same number — widening it to the whole constitution moves all four at once, and one of
+  // the four cannot be re-blessed.
+  assert.equal(o.counts.laws, 9);
+  assert.equal(o.counts.ontology, 4);
+  assert.deepEqual(o.counts.doctrines, { active: 4, total: 4, rules: 23 });
+  const narrowed = apiOverview({ ...neutral(), inventory: tuiInventory('neutral', ['craft', 'rigor']) });
+  assert.equal(narrowed.counts.laws, 9, 'a pack toggle moved the invariant count');
+  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 4, rules: 10 },
+    'the summary counts rules this install did not build in');
 });
 
 // A skill the lifecycle registry never heard of — dropped into the install by hand — must be
