@@ -305,8 +305,12 @@ describe('Constitution page — doctrine toggles', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
     await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
-    for (const name of ['Automate Repetition', 'English Configuration', 'Consent Before Push',
-      'Codes That Persist']) {
+    for (const name of [
+      'Automate Repetition',
+      'English Configuration',
+      'Consent Before Push',
+      'Codes That Persist',
+    ]) {
       fireEvent.click(sw(container, name))
     }
     fireEvent.click(applyBtn())

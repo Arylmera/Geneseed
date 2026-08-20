@@ -513,8 +513,7 @@ export default function Laws({ selected, overview, onAction }) {
                 .filter((q) => q.active || q.pack === p.pack)
                 .map((q) => q.pack)
                 .join(',')}
-              {deployedExcluded.length > 0 &&
-                ` --exclude-rules ${deployedExcluded.join(',')}`}
+              {deployedExcluded.length > 0 && ` --exclude-rules ${deployedExcluded.join(',')}`}
             </div>
           )}
           <div className="law-rowhead">
