@@ -854,19 +854,13 @@ export function apiOverview(state) {
     accent: accentFor(state.theme),
     emit: state.emit,
     footprint: install ? install.footprint : state.footprint,
-    // The pack roster, beside `footprint` because it is the same KIND of register: a
-    // build-time choice that re-emits the install rather than a live console preference.
-    // ⚠ NAMES, not just the counts under `counts.doctrines`. A toggle has to render one row
-    // per pack with its own state and send back an explicit list, and a fraction cannot say
-    // WHICH of the four is off. Every pack is listed whether or not it is built in — the same
-    // rule the catalogue and the console's Constitution page follow.
-    doctrines: (inv.doctrines ?? []).map((p) => ({
-      pack: p.pack,
-      title: p.title,
-      desc: p.desc,
-      active: p.active,
-      rules: p.rules.length,
-    })),
+    // ⚠ NO PACK ROSTER HERE, DELIBERATELY. One was added when the toggle lived in Settings,
+    // which has no other source for the pack names. The control moved to the Constitution
+    // page, which already holds the whole catalogue — `/api/catalog/laws` carries `pack`,
+    // `packTitle`, `packDesc` and `active` on every doctrine row — so a second copy of the
+    // roster on this endpoint would be API surface with no reader, and two places for the
+    // same fact to disagree. The SUMMARY stays, under `counts.doctrines`: the dashboard
+    // tiles need the fraction and must not fetch a catalogue to draw it.
     install,
     target: state.target,
     deployed: deployed(state),

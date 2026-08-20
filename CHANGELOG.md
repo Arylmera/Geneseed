@@ -10,44 +10,48 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Added
 
-- **Doctrine packs are toggleable from the console.** Settings gains one switch per pack —
-  name, blurb and live rule count — staged locally and committed by a single **Apply** at the
-  bottom of the card, with **Revert** beside it. Until now the console could *show* pack state
-  and not change it: dropping a pack meant `geneseed-build --doctrines`, the setup wizard, or
-  editing `harness.config.json` by hand.
+- **Doctrine packs are toggleable from the console.** The Constitution page gains a switch on
+  each pack header — beside its name, blurb and rule count — staged locally and committed by a
+  single **Apply** below the last pack, with **Revert** beside it. Until now the console could
+  *show* pack state and not change it: dropping a pack meant `geneseed-build --doctrines`, the
+  setup wizard, or editing `harness.config.json` by hand.
 
-  **Staged rather than per-click, and that is the design.** Every other control on that page is
-  either live (console direction) or a single choice (footprint), so each can act on click. A
-  pack selection is a SET: acting per toggle would re-emit the install once per switch — four
-  rebuilds to get from all four packs to one, three of them describing a state nobody asked
-  for, each writing a different `Active packs:` marker for the next reader to parse.
+  **On the Constitution page and not in Settings**, because that is where a reader is already
+  looking at what each pack contains — dropping `ops` is a decision about the six rules listed
+  directly under its header, and a switch three screens away makes it a decision taken blind. A
+  staged pack reads `staged on` / `staged off` and greys immediately, so the page never claims a
+  change has been applied when it has not.
+
+  **Staged rather than per-click, and that is the design.** A pack selection is a SET: acting per
+  toggle would re-emit the install once per switch — four rebuilds to get from all four packs to
+  one, three of them describing a state nobody asked for, each writing a different
+  `Active packs:` marker for the next reader to parse.
 
   It acts on whichever install the Topbar harness selector points at, so it is already
   per-harness. Pushing one selection to several installs at once is not here.
 
-  ⚠ **`process` toggles like any other pack, and the consequence is named rather than
-  refused.** That pack carries commit/push consent, so dropping it also drops the `git-gate`
-  hook and the `git commit*` / `git push*` permission — prompt and boundary are never allowed
-  to disagree. An inline warning says so while the change is staged, and the confirm repeats
-  it. `rm -rf` and force-push refusals are Rule IV's territory, ride no pack, and stay in every
-  build.
-
-- **`/api/overview` carries the pack roster.** `doctrines: [{pack, title, desc, active,
-  rules}]`, beside `footprint` because it is the same kind of register — a build-time choice
-  that re-emits the install. NAMES, not just the `counts.doctrines` fraction: `3/4` cannot say
-  *which* pack is off, so a control built on the counts would render four switches it could not
-  set. Every pack is listed whether or not it is built in, or a switch could never be turned
-  back on.
+  ⚠ **`process` toggles like any other pack, and the consequence is named rather than refused.**
+  That pack carries commit/push consent, so dropping it also drops the `git-gate` hook and the
+  `git commit*` / `git push*` permission — prompt and boundary are never allowed to disagree. An
+  inline warning says so while the change is staged, and the confirm repeats it. `rm -rf` and
+  force-push refusals are Rule IV's territory, ride no pack, and stay in every build.
 
 ### Fixed
+
+- **The Constitution page printed a command that errors.** An inactive pack's enable hint read
+  `geneseed build --doctrines …`; the CLI's `build` verb forwards `--theme` and nothing else, so
+  that spelling answers `unrecognized arguments`. It is `geneseed-build` — the same trap
+  `DESIGN.md` already documents for `--sync-themes`. Shipped in 3.0.0. With an install to
+  rebuild the switches replace the hint entirely; it survives only where there is nothing to act
+  on.
 
 - **A page reachable from three routes remounted on every row expand.** `Laws`, `Skills` and
   `Library` are each reachable from the flat view, `#/section/<name>` and
   `#/item/<type>/<name>`, and each was rendered from three different positions in `App`'s tree.
   Crossing between them is not a prop change to React — it is an unmount and a remount, so the
   page threw away its state, refetched its catalogue and re-entered Suspense. Expanding a row
-  does exactly that, because the row IS the route (`#/laws` → `#/item/law/craft.1`). Measured
-  in the browser: one refetch of `/api/catalog/laws` per expand *and* per collapse, now zero.
+  does exactly that, because the row IS the route (`#/laws` → `#/item/law/craft.1`). Measured in
+  the browser: one refetch of `/api/catalog/laws` per expand *and* per collapse, now zero.
 
 ## [3.0.0] — 2026-08-20
 

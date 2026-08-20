@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
@@ -209,16 +209,37 @@ function OntologyCard({ sec, isOpen, onToggle }) {
 // `selected` is the address from a #/item/law/<address> deep-link (Spotlight, the old Library
 // route). The open row is driven straight off the URL so those links pre-open the rule and any
 // opened rule is itself shareable.
-export default function Laws({ selected }) {
+export default function Laws({ selected, overview, onAction }) {
   const { data, error } = useAsync(() => api.catalog('laws'), [])
   const [sel, setSel] = useState('all')
   const open = selected || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)
 
+  // ⚠ EVERY HOOK BEFORE THE EARLY RETURNS BELOW. The staged pack selection is derived from
+  // `data`, which is null on the first render — so the obvious placement, beside the packs it
+  // describes, puts a `useState` and a `useEffect` AFTER `if (!data) return <Loading />`. React
+  // then sees a different number of hooks between the loading render and the loaded one and
+  // throws, taking the whole page down rather than just the control. Hence the defensive
+  // `data?.items` here and the plain (non-hook) helpers further down.
+  const allItems = data?.items || []
+  // Insertion order is PACK_ORDER — the server sends the roster in it — and the Set keeps it.
+  const deployedPacks = [
+    ...new Set(
+      allItems.filter((i) => i.tier === 'doctrine' && i.active !== false).map((i) => i.pack),
+    ),
+  ]
+  const deployedKey = deployedPacks.join(',')
+  const [picked, setPicked] = useState([])
+  // Re-sync on the VALUE, never on the payload's identity: `data` is a fresh object on every
+  // refetch, so an identity dependency would discard a half-made selection.
+  useEffect(() => {
+    setPicked(deployedKey ? deployedKey.split(',') : [])
+  }, [deployedKey])
+
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
 
-  const items = data.items || []
+  const items = allItems
 
   const ontology = items
     .filter((it) => it.tier === 'ontology')
@@ -280,6 +301,46 @@ export default function Laws({ selected }) {
   }
   const activePacks = packs.filter((p) => p.active)
   const ruleCount = activePacks.reduce((n, p) => n + p.rules.length, 0)
+
+  // ---- the pack selection: STAGED here, applied once -------------------------------------
+  //
+  // The control lives on THIS page and not in Settings, because this is where a reader is
+  // already looking at what each pack contains — deciding to drop `ops` is a decision about
+  // the six rules listed right under its header, and a switch three screens away in Settings
+  // makes that a decision taken blind.
+  //
+  // ⚠ ONE REBUILD, NOT ONE PER TOGGLE. A pack selection is a SET: acting on each click would
+  // re-emit the install once per switch — four rebuilds to get from all-four to one, three of
+  // them describing a state nobody asked for, each writing a different `Active packs:` marker
+  // for the next reader to parse. So the switches edit local state and `Apply` sends the whole
+  // selection. The state itself lives above the early returns — see the ⚠ there.
+  const isOn = (name) => picked.includes(name)
+  const togglePack = (name) =>
+    setPicked((cur) => (cur.includes(name) ? cur.filter((p) => p !== name) : [...cur, name]))
+  const pickedPacks = packs.filter((p) => isOn(p.pack)).map((p) => p.pack)
+  const dirty = pickedPacks.join(',') !== deployedKey
+  const losingConsent = deployedPacks.includes('process') && !picked.includes('process')
+  // Nothing to rebuild means nothing to toggle — a source render with no deployed install
+  // still READS, it just cannot be changed from here.
+  const install = overview?.install
+  const canApply = Boolean(install && onAction)
+
+  const applyPacks = () => {
+    if (!canApply || !dirty) return
+    const warn = losingConsent
+      ? '\n\n⚠ The process pack carries commit/push consent. Dropping it also removes the ' +
+        'git-gate hook, so commits and pushes stop being confirmed at the tool boundary. ' +
+        '(rm -rf and force-push stay gated — those are Rule IV’s, not the pack’s.)'
+      : ''
+    if (
+      window.confirm(
+        `Rebuild ${install.host} · ${install.scope} with ${
+          pickedPacks.length ? pickedPacks.join(', ') : 'no doctrine packs'
+        }? It rebuilds in place, non-destructive.${warn}`,
+      )
+    )
+      onAction('install', { ...install, doctrines: pickedPacks })
+  }
 
   const counts = {}
   laws.forEach((l) => {
@@ -381,23 +442,50 @@ export default function Laws({ selected }) {
         </span>
       </div>
       {packs.map((p) => (
-        <div className={`card law-wrap mb-16 pack-wrap ${p.active ? '' : 'pack-off'}`} key={p.pack}>
+        <div
+          className={`card law-wrap mb-16 pack-wrap ${isOn(p.pack) ? '' : 'pack-off'}`}
+          key={p.pack}
+        >
           <div className="pack-head">
+            {canApply && (
+              <span
+                className={`sw-toggle${isOn(p.pack) ? ' on' : ''}`}
+                role="switch"
+                aria-checked={isOn(p.pack)}
+                aria-label={`${p.title} pack`}
+                tabIndex={0}
+                onClick={() => togglePack(p.pack)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    if (e.key === ' ') e.preventDefault()
+                    togglePack(p.pack)
+                  }
+                }}
+              />
+            )}
             <span className="pack-name" style={{ '--cc': PACK_CATS[p.pack] }}>
               <span className="cdot" />
               {p.title}
             </span>
             <span className="pack-desc">{p.desc}</span>
             <span className="pack-state">
-              {p.rules.length} rules · {p.active ? 'active' : 'not built in'}
+              {p.rules.length} rules ·{' '}
+              {isOn(p.pack) === p.active
+                ? p.active
+                  ? 'active'
+                  : 'not built in'
+                : isOn(p.pack)
+                  ? 'staged on'
+                  : 'staged off'}
             </span>
           </div>
-          {!p.active && (
-            // ⚠ THE COMMAND IS THE POINT. An inactive pack is shown rather than hidden so "off"
-            // never reads as "does not exist" — and a reader who wants it back needs the exact
-            // selection, because `--doctrines` REPLACES the set rather than adding to it.
+          {!p.active && !canApply && (
+            // The fallback for a console with no install to rebuild — a reader still needs the
+            // exact selection, because `--doctrines` REPLACES the set rather than adding to it.
+            // ⚠ `geneseed-build`, not `geneseed build`: the CLI's `build` verb forwards
+            // `--theme` and nothing else, so the shorter spelling errors.
             <div className="pack-enable">
-              $ geneseed build --doctrines {[...activePacks.map((a) => a.pack), p.pack].join(',')}
+              $ geneseed-build --doctrines {[...deployedPacks, p.pack].join(',')}
             </div>
           )}
           <div className="law-rowhead">
@@ -411,6 +499,35 @@ export default function Laws({ selected }) {
           ))}
         </div>
       ))}
+      {canApply && packs.length > 0 && (
+        <div className="card pad-lg mb-16">
+          {losingConsent && (
+            <p className="pack-warn" role="status" aria-live="polite">
+              ⚠ Dropping <b>process</b> also removes the commit/push consent gate —{' '}
+              <code>git commit</code> and <code>git push</code> stop being confirmed at the tool
+              boundary. <code>rm -rf</code> and force-push stay gated.
+            </p>
+          )}
+          <div className="pack-apply">
+            <button className="btn soft" onClick={applyPacks} disabled={!dirty}>
+              Apply{dirty ? ` (${pickedPacks.length}/${packs.length} packs)` : ''}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => setPicked(deployedKey ? deployedKey.split(',') : [])}
+              disabled={!dirty}
+            >
+              Revert
+            </button>
+            <span className="sub" role="status" aria-live="polite">
+              {dirty
+                ? `Not applied yet — Apply rebuilds ${install.host} · ${install.scope} once, ` +
+                  'with every change together.'
+                : 'Matches the deployed install.'}
+            </span>
+          </div>
+        </div>
+      )}
       {packs.length === 0 && (
         <div className="card law-wrap">
           <div className="empty" style={{ padding: 32 }}>
