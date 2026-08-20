@@ -8,21 +8,45 @@ name: publish
 # part of that exchange, so there is no `--provenance` flag here on purpose.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────
-# ⛔ THE ONE STEP THAT CANNOT BE REHEARSED LOCALLY — AND IT IS MANUAL, AND IT IS ONCE
+# ⛔ THE ONE STEP THAT COULD NOT BE REHEARSED LOCALLY — DONE ON 2026-08-19, KEPT HERE
 # ─────────────────────────────────────────────────────────────────────────────────────
 # npm has to be told that THIS repository and THIS workflow file are allowed to publish
 # the package. Nothing in this repository can do it, and no local run can prove it was
-# done: the first `npm publish` here either finds a configured trusted publisher or
-# fails with an authentication error. Every other step in this file was exercised by a
-# local `npm pack` + `npm install` (`tests/unit/package_manifest.test.mjs`); this one was
-# not, and cannot be.
+# done: an `npm publish` here either finds a configured trusted publisher or fails with
+# an authentication error. Every other step in this file was exercised by a local
+# `npm pack` + `npm install` (`tests/unit/package_manifest.test.mjs`); this one was not,
+# and cannot be. It is recorded rather than deleted because it has to be redone whenever
+# the package, the repository or this file's NAME changes — see the renaming note below.
 #
 # ⚠ AND A DRY RUN DOES NOT REHEARSE IT EITHER. `npm publish --dry-run` packs the tarball and
 # prints what it would upload; it never asks the registry for the publish grant, so it is green
 # whether or not a trusted publisher exists. A green dry run proves the TARBALL — the file list,
-# the version, the gates below — and says nothing at all about this paragraph.
+# the version, the gates below — and says nothing at all about this paragraph. Measured, at the
+# cost of a failed release: on 2026-08-19 a dry run passed, and the real run with the identical
+# tarball was refused at the upload because no trusted publisher existed yet.
 #
-# Do it once, signed in to npmjs.com as the account that owns `geneseed`:
+# ⚠ AND THE REFUSAL DOES NOT SAY SO. A publish with no trusted publisher behind it is an
+# unauthenticated request, and the registry answers an unauthenticated write the way it answers
+# a read of something private — `npm error code E404`, `404 Not Found - PUT
+# https://registry.npmjs.org/geneseed`, "could not be found or you do not have permission". The
+# package plainly exists and the 404 still says it does not. Read a 404 on the PUT as "this
+# workflow is not trusted", never as "the package or version is missing".
+#
+# Configured once, from a terminal logged in with `npm login`, as the account that owns the
+# package (the command needs npm >= 11 — `npm trust` does not exist in 10, which reports it as
+# an unknown command, and npm 12 requires a Node newer than this file's floor; `npm i -g npm@11`
+# is the version to reach for):
+#
+#   npm trust github geneseed --file publish.yml --repo Arylmera/Geneseed --allow-publish
+#
+# `--allow-publish` is the flag that grants THIS configuration the right to run `npm publish`;
+# without it the trust exists and the upload is still refused. There is a separate
+# `--allow-stage-publish` for staged releases, which this workflow does not use. `--env` is
+# deliberately absent: this job declares no environment, and a configuration naming one would
+# not match the token it mints. The command asks for 2FA and prints the settings back before
+# it writes anything.
+#
+# The same thing, signed in to npmjs.com, for a machine with no usable npm:
 #
 #   npmjs.com → the package → Settings → Trusted publisher → GitHub Actions
 #     Organization or user   Arylmera
@@ -30,16 +54,12 @@ name: publish
 #     Workflow filename      publish.yml      ← must equal THIS file's own name
 #     Environment            (leave empty — this job declares no environment)
 #
-# or, from a terminal logged in with `npm login`:
-#
-#   npm trust github geneseed --file publish.yml --repo Arylmera/Geneseed
-#
-# ⚠ THE PACKAGE HAS NEVER BEEN PUBLISHED. A trusted publisher is configured on a
-# package, and npm's UI reaches that screen through a package that exists. If the
-# account's own "Trusted publishers" screen will not accept an unpublished name, the
-# FIRST publish has to be done by hand from a logged-in terminal (`npm publish` at the
-# repository root) and the trusted publisher configured immediately afterwards, from
-# the package's Settings tab. Every publish after that runs from here.
+# ⚠ THE FIRST PUBLISH COULD NOT COME FROM HERE, and that is why 2.0.0 did not. A trusted
+# publisher is configured ON a package, and npm's UI reaches that screen through a package that
+# exists — so `geneseed@2.0.0` was published by hand from a logged-in terminal (`npm publish` at
+# the repository root, tree `d8f3a26`, 2026-08-17), the trusted publisher was configured
+# afterwards, and `geneseed@2.1.0` (`daa87b9`, 2026-08-19) was the first release to leave from
+# this workflow. Every publish after that one runs from here.
 #
 # ⚠ RENAMING THIS FILE BREAKS PUBLISHING, SILENTLY. The trusted publisher is keyed on
 # the workflow FILENAME. A renamed workflow still runs and still mints a token; npm just
