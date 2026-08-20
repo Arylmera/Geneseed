@@ -80,6 +80,23 @@ function isDict(v) {
 const processPackOn = (d) => !Array.isArray(d) || d.includes('process');
 
 /**
+ * The address of the rule the git gate IS. Not a pack any more — a rule.
+ *
+ * ⚠ THE GATE MOVED FROM THE PACK TO THE RULE, and the reason is that the pack stopped being
+ * the unit a user toggles. With per-rule exclusion an install can keep every other `process`
+ * rule and drop this one; keying the boundary on `d.includes('process')` would then leave the
+ * hook wired for a rule the carrier no longer states — prompt and boundary disagreeing, which
+ * is the single thing this design forbids in either direction.
+ *
+ * `excluded` defaults to `[]` for the same fail-closed reason `excludedRulesOfDir` does: a
+ * caller that has not learned about the second axis excludes nothing, so the gate stays. Every
+ * pre-existing call site keeps its exact behaviour without being touched.
+ */
+const CONSENT_RULE = 'process.5';
+const consentRuleOn = (d, excluded = []) =>
+  processPackOn(d) && !(Array.isArray(excluded) && excluded.includes(CONSENT_RULE));
+
+/**
  * `_build_settings._default_permission`.
  *
  * WHAT THE PACK TOGGLE REACHES AND WHAT IT MUST NOT. `git commit*` and `git push*` are the
@@ -92,9 +109,9 @@ const processPackOn = (d) => !Array.isArray(d) || d.includes('process');
  * Law IV's territory — an always-on invariant — not the process pack's, and the guard
  * plugin's own force-push arm is unconditional for the same reason.
  */
-export function defaultPermission(doctrines = null) {
+export function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
-  if (processPackOn(doctrines)) {
+  if (consentRuleOn(doctrines, excluded)) {
     bash['git commit*'] = 'ask';
     bash['git push*'] = 'ask';
   }
@@ -146,7 +163,7 @@ const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', 'git push --force*',
  * FAIL-CLOSED direction — the boundary asks for a confirmation the constitution no longer
  * compels, exactly as the commit skill's own consent step does with the pack off. The unsafe
  * direction, a rule with no gate behind it, cannot occur here. A FRESH file is unaffected:
- * `mergeOpencodeJson` writes `defaultPermission(doctrines)` whole, so a new pack-off install
+ * `mergeOpencodeJson` writes `defaultPermission(doctrines, excluded)` whole, so a new pack-off install
  * has no git gate at all.
  *
  * ⚠ KEY ORDER IS NOT RECONCILED, DELIBERATELY. `defaultPermission` emits its keys in a fixed
@@ -284,7 +301,7 @@ export function readJsonc(text) {
  * `'add'`, which is what the boolean callers this replaced meant.
  */
 export function warnCommentedJsonc(target, agentPath, permission,
-  includeLsp = false, prefix = 'geneseed', doctrines = null) {
+  includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = []) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
   process.stdout.write(`[${prefix}]     ${jsonDumps(agentPath)}\n`);
@@ -293,7 +310,7 @@ export function warnCommentedJsonc(target, agentPath, permission,
       ? `[${prefix}] and its "permission".bash is missing gates this build wires — `
         + 'reconcile it by hand against:\n'
       : `[${prefix}] and, for Geneseed's default ask-gates, a "permission" key:\n`);
-    for (const line of jsonDumpsIndent(defaultPermission(doctrines)).split('\n')) {
+    for (const line of jsonDumpsIndent(defaultPermission(doctrines, excluded)).split('\n')) {
       process.stdout.write(`[${prefix}]     ${line}\n`);
     }
   }
@@ -322,7 +339,7 @@ export function atomicWriteJson(p, config) {
  * re-implements the inverse itself rather than inherit this one's permission/lsp side
  * effects, so the only crossings are the two emit-tree ones (`_build_emit.emit_opencode`,
  * `_build_global.emit_opencode_global`). */
-export function mergeOpencodeJson(p, agentPath, doctrines = null) {
+export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = []) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
   let hadComments = false;
@@ -361,10 +378,10 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null) {
   let permChanged = addPerm;
   let stranded = [];
   let opaque = null;
-  if (addPerm) config.permission = defaultPermission(doctrines);
+  if (addPerm) config.permission = defaultPermission(doctrines, excluded);
   else {
     [permChanged, stranded, opaque] = reconcileOpencodePermission(get(config, 'permission'),
-      defaultPermission(doctrines));
+      defaultPermission(doctrines, excluded));
   }
   // The shape said no. This is the direction the residue warning above is NOT — a rule stated
   // in AGENT.md with nothing behind it — and it used to pass in silence, because a blanket
@@ -374,7 +391,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null) {
   if (opaque) {
     process.stderr.write(`[geneseed] WARN: "permission" in ${path.basename(target)} `
       + `${opaque}, so Geneseed cannot wire its own gates into it — including `
-      + `${OWNED_BASH.filter((k) => has(defaultPermission(doctrines).bash, k))
+      + `${OWNED_BASH.filter((k) => has(defaultPermission(doctrines, excluded).bash, k))
         .map((k) => jsonDumps(k)).join(', ')}. Your policy is left exactly as written; the `
       + 'harness states those rules but nothing enforces them at this boundary.\n');
   }
@@ -404,7 +421,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null) {
     // block to paste, split by which of the two situations the reader is actually in. It is
     // stdout, not stderr, because on this path the paste-in IS the output.
     warnCommentedJsonc(target, agentPath, addPerm ? 'add' : (permChanged && 'reconcile'),
-      addLsp, 'geneseed', doctrines);
+      addLsp, 'geneseed', doctrines, excluded);
     return target;
   }
   try {
@@ -698,7 +715,7 @@ export function hookPrefix({ runner, entry, platform = process.platform } = {}) 
  * belongs in — the user's call — not how work is run, so it is not the process pack's to
  * remove. `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
  */
-export function claudeHookGroups(cfg, hookOpts, doctrines = null) {
+export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = []) {
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a project
@@ -709,7 +726,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null) {
   const learn = `${run} learn ${mem} || exit 0`;
   return {
     PreToolUse: [
-      ...(processPackOn(doctrines)
+      ...(consentRuleOn(doctrines, excluded)
         ? [{ matcher: 'Bash', hooks: [{ type: 'command', command: gate }] }] : []),
       {
         matcher: 'Write|Edit|MultiEdit|NotebookEdit',
@@ -741,7 +758,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null) {
  * `scope` is accepted and unused, exactly as in the Python.
  */
 export function mergeClaudeSettings(p, scope = 'global', priorHooks = null, hookOpts = {},
-  doctrines = null) {
+  doctrines = null, excluded = []) {
   const prior = (priorHooks || []).filter(isDict);
   let config = {};
   let hadComments = false;
@@ -761,7 +778,7 @@ export function mergeClaudeSettings(p, scope = 'global', priorHooks = null, hook
   }
   let hooks = get(config, 'hooks');
   if (!isDict(hooks)) hooks = {};
-  const canonical = claudeHookGroups(path.dirname(p), hookOpts, doctrines);
+  const canonical = claudeHookGroups(path.dirname(p), hookOpts, doctrines, excluded);
   const canonFlat = [];
   for (const [event, groups] of Object.entries(canonical)) {
     for (const g of groups) canonFlat.push({ event, group: g });

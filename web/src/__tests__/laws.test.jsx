@@ -34,7 +34,17 @@ const INV = [
   tier: 'invariant',
 }))
 
-/** Two packs, one built in and one not — the pair the page's whole doctrine band is about. */
+/**
+ * Three packs covering the three states the doctrine band exists to tell apart:
+ *
+ *   craft   — built in, with ONE of its three rules excluded (the per-rule axis)
+ *   process — built in whole, and it carries the consent gate (`process 5`)
+ *   ops     — not built in at all (the greyed pack)
+ *
+ * ⚠ TWO FLAGS PER ROW, not one. `active` is the RULE's own and `packActive` is its pack's;
+ * craft.3 is the pair that can disagree, and reading a pack's state off its first rule (or a
+ * rule's off its pack) is exactly the bug that pair is here to catch.
+ */
 const DOC = [
   [
     'craft',
@@ -42,13 +52,33 @@ const DOC = [
     'how code is written',
     true,
     [
-      [1, 'Automate Repetition'],
-      [2, 'English Configuration'],
+      [1, 'Automate Repetition', true],
+      [2, 'English Configuration', true],
+      [3, 'Documentation in Step', false],
     ],
   ],
-  ['process', 'Process', 'how a task is run', false, [[5, 'Consent Before Push']]],
-].flatMap(([pack, packTitle, packDesc, active, rules]) =>
-  rules.map(([n, title]) => ({
+  [
+    'process',
+    'Process',
+    'how a task is run',
+    true,
+    [
+      [5, 'Consent Before Push', true],
+      [7, 'Codes That Persist', true],
+    ],
+  ],
+  [
+    'ops',
+    'Ops',
+    'how the machine is operated',
+    false,
+    [
+      [1, 'Tool Discovery', false],
+      [2, 'Commands Must Return', false],
+    ],
+  ],
+].flatMap(([pack, packTitle, packDesc, packActive, rules]) =>
+  rules.map(([n, title, active]) => ({
     name: `${pack}.${n}`,
     title: `Doctrine ${pack} ${n} — ${title}`,
     desc: '',
@@ -58,6 +88,7 @@ const DOC = [
     packTitle,
     packDesc,
     active,
+    packActive,
   })),
 )
 
@@ -104,11 +135,15 @@ describe('Constitution page', () => {
     // shipped that wrong command in 3.0.0, the same trap DESIGN.md documents for
     // `--sync-themes`.
     const cmd = screen.getByText(/geneseed-build --doctrines/)
-    expect(cmd.textContent).toContain('craft,process')
+    expect(cmd.textContent).toContain('craft,process,ops')
+    // ...and it carries the SECOND axis too, or running it would hand back the one rule this
+    // install excludes. `--doctrines` replaces the pack set; `--exclude-rules` replaces the
+    // rule set, and a command that named only the first silently re-enables craft 3.
+    expect(cmd.textContent).toContain('--exclude-rules craft.3')
     // Its rules are still listed and still readable — the text ships either way.
-    expect(screen.getByText('Consent Before Push')).toBeTruthy()
-    // The active pack is NOT marked off, or the marker means nothing.
-    expect(container.querySelectorAll('.pack-wrap').length).toBe(2)
+    expect(screen.getByText('Tool Discovery')).toBeTruthy()
+    // The active packs are NOT marked off, or the marker means nothing.
+    expect(container.querySelectorAll('.pack-wrap').length).toBe(3)
     expect(container.querySelectorAll('.pack-wrap.pack-off').length).toBe(1)
   })
 
@@ -179,57 +214,104 @@ describe('Constitution page', () => {
 })
 
 // ---------------------------------------------------------------------------------------------
-// The pack toggles. They live on THIS page and not in Settings because this is where a reader is
-// already looking at what each pack contains — dropping `ops` is a decision about the six rules
-// listed directly under its header, and a switch three screens away makes it a decision taken
+// The doctrine toggles. They live on THIS page and not in Settings because this is where a reader
+// is already looking at what each rule says — dropping `process 5` is a decision about the line of
+// text directly beside the switch, and a control three screens away makes it a decision taken
 // blind.
+//
+// ⚠ THE UNIT IS THE RULE, NOT THE PACK. There is no pack switch anywhere on this page: the pack
+// axis is DERIVED at Apply time from which rules survive, so "keep all of Observance but drop
+// Codes That Persist" is expressible — which the pack-level control it replaced could not say.
 
 const INSTALL = { host: 'opencode', scope: 'global' }
-const sw = (c, name) => c.querySelector(`[aria-label="${name} pack"]`)
+const sw = (c, name) => c.querySelector(`[aria-label="${name} rule"]`)
 const applyBtn = () => screen.getByText(/^Apply/).closest('button')
 const withInstall = (onAction = () => {}) => (
   <Laws overview={{ install: INSTALL }} onAction={onAction} />
 )
 
-describe('Constitution page — pack toggles', () => {
-  it('renders a switch per pack, reflecting what is deployed', async () => {
+describe('Constitution page — doctrine toggles', () => {
+  it('renders a switch per RULE, reflecting what is deployed', async () => {
     const { container } = render(withInstall())
-    await waitFor(() => expect(sw(container, 'Craft')).toBeTruthy())
-    expect(sw(container, 'Craft').getAttribute('aria-checked')).toBe('true')
-    expect(sw(container, 'Process').getAttribute('aria-checked')).toBe('false')
+    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    // One live pack, one rule excluded from it, one pack off entirely — three states, and the
+    // switch reads the RULE every time.
+    expect(sw(container, 'Automate Repetition').getAttribute('aria-checked')).toBe('true')
+    expect(sw(container, 'Documentation in Step').getAttribute('aria-checked')).toBe('false')
+    expect(sw(container, 'Tool Discovery').getAttribute('aria-checked')).toBe('false')
+    // ...and no pack-level switch survives, or the two controls could contradict each other.
+    expect(container.querySelector('[aria-label="Craft pack"]')).toBeNull()
+    expect(container.querySelector('.pack-state').textContent).toBe('2 of 3 active')
     expect(applyBtn().disabled).toBe(true)
   })
 
   it('stages every toggle and rebuilds ONCE on Apply', async () => {
-    // ⚠ THE WHOLE POINT. Acting per click would re-emit the install once per switch — three of
-    // those rebuilds describing a state nobody asked for, each writing a different
-    // `Active packs:` marker.
+    // ⚠ THE WHOLE POINT. Acting per click would re-emit the install once per switch — each
+    // rebuild describing a state nobody asked for, each writing a different marker pair.
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
-    await waitFor(() => expect(sw(container, 'Craft')).toBeTruthy())
-    fireEvent.click(sw(container, 'Process')) // off -> on
-    fireEvent.click(sw(container, 'Craft')) // on  -> off
+    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    fireEvent.click(sw(container, 'Documentation in Step')) // off -> on
+    fireEvent.click(sw(container, 'English Configuration')) // on  -> off
     expect(onAction).not.toHaveBeenCalled() // still nothing — this is the claim
     fireEvent.click(applyBtn())
     expect(onAction).toHaveBeenCalledTimes(1)
     const [action, body] = onAction.mock.calls[0]
     expect(action).toBe('install')
-    expect(body.doctrines).toEqual(['process'])
+    expect(body.doctrines).toEqual(['craft', 'process'])
+    expect(body.excludeRules).toEqual(['craft.2'])
     expect(body.host).toBe('opencode')
     vi.restoreAllMocks()
   })
 
-  it('turning every pack off is a real selection, not a no-op', async () => {
+  it('keeps a pack while excluding one of its rules', async () => {
+    // ⚠ THE CASE THE PACK-LEVEL CONTROL COULD NOT EXPRESS: everything in Process except one
+    // rule. `doctrines` must still carry `process` — dropping the pack would take the other
+    // six rules with it.
+    const onAction = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { container } = render(withInstall(onAction))
+    await waitFor(() => expect(sw(container, 'Codes That Persist')).toBeTruthy())
+    fireEvent.click(sw(container, 'Codes That Persist'))
+    fireEvent.click(applyBtn())
+    const body = onAction.mock.calls[0][1]
+    expect(body.doctrines).toContain('process')
+    expect(body.excludeRules).toEqual(['craft.3', 'process.7'])
+    vi.restoreAllMocks()
+  })
+
+  it('a pack whose every rule is off drops out of the selection entirely', async () => {
+    // The two axes are not independent: an empty pack must leave `--doctrines`, or AGENT.md
+    // renders a pack header with nothing under it. And its rules must NOT then be listed as
+    // exclusions — the pack's absence already says it, and naming both is what the CLI rejects.
+    const onAction = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { container } = render(withInstall(onAction))
+    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    fireEvent.click(sw(container, 'Automate Repetition'))
+    fireEvent.click(sw(container, 'English Configuration')) // craft.3 is already off
+    fireEvent.click(applyBtn())
+    const body = onAction.mock.calls[0][1]
+    expect(body.doctrines).toEqual(['process'])
+    expect(body.excludeRules).toEqual([])
+    vi.restoreAllMocks()
+  })
+
+  it('turning every rule off is a real selection, not a no-op', async () => {
     // The server reads `[]` as a deliberate `--doctrines none` and anything falsier as
     // "unspecified", which resolves to ALL packs — so an empty list must arrive as an empty list.
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
-    await waitFor(() => expect(sw(container, 'Craft')).toBeTruthy())
-    fireEvent.click(sw(container, 'Craft')) // the only one that starts on
+    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    for (const name of ['Automate Repetition', 'English Configuration', 'Consent Before Push',
+      'Codes That Persist']) {
+      fireEvent.click(sw(container, name))
+    }
     fireEvent.click(applyBtn())
     expect(onAction.mock.calls[0][1].doctrines).toEqual([])
+    expect(onAction.mock.calls[0][1].excludeRules).toEqual([])
     vi.restoreAllMocks()
   })
 
@@ -237,29 +319,28 @@ describe('Constitution page — pack toggles', () => {
     // The header must not claim `active` for something that has not been applied — that is the
     // one lie a staged control can tell.
     const { container } = render(withInstall())
-    await waitFor(() => expect(sw(container, 'Process')).toBeTruthy())
+    await waitFor(() => expect(sw(container, 'Tool Discovery')).toBeTruthy())
     expect(screen.getByText(/not built in/)).toBeTruthy()
-    fireEvent.click(sw(container, 'Process'))
+    fireEvent.click(sw(container, 'Tool Discovery'))
     expect(screen.getByText(/staged on/)).toBeTruthy()
     expect(screen.queryByText(/not built in/)).toBeNull()
   })
 
-  it('warns before dropping the pack that carries the consent gate', async () => {
-    // Supported, so it is NAMED rather than refused.
+  it('warns before dropping the RULE that carries the consent gate', async () => {
+    // Supported, so it is NAMED rather than refused — and named at rule granularity now, since
+    // dropping `process 7` beside it costs nothing at the tool boundary.
     const onAction = vi.fn()
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const { container } = render(
-      <Laws
-        overview={{ install: INSTALL }}
-        onAction={onAction}
-        // craft + process both deployed, so dropping process is a real loss
-      />,
-    )
-    await waitFor(() => expect(sw(container, 'Process')).toBeTruthy())
-    fireEvent.click(sw(container, 'Process')) // stage it ON first
+    const { container } = render(withInstall(onAction))
+    await waitFor(() => expect(sw(container, 'Codes That Persist')).toBeTruthy())
+    fireEvent.click(sw(container, 'Codes That Persist'))
     fireEvent.click(applyBtn())
-    expect(confirm.mock.calls[0][0]).not.toMatch(/consent/) // gaining it warns about nothing
-    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(confirm.mock.calls[0][0]).not.toMatch(/consent/) // a sibling rule costs no gate
+    fireEvent.click(sw(container, 'Consent Before Push'))
+    fireEvent.click(applyBtn())
+    expect(confirm.mock.calls[1][0]).toMatch(/process 5/)
+    expect(confirm.mock.calls[1][0]).toMatch(/consent/)
+    expect(onAction).toHaveBeenCalledTimes(2)
     vi.restoreAllMocks()
   })
 
@@ -269,10 +350,10 @@ describe('Constitution page — pack toggles', () => {
     // and nothing else and the shorter spelling errors.
     const { container } = render(<Laws />)
     await waitFor(() => expect(screen.getByText('Automate Repetition')).toBeTruthy())
-    expect(sw(container, 'Craft')).toBeNull()
+    expect(sw(container, 'Automate Repetition')).toBeNull()
     expect(screen.queryByText(/^Apply/)).toBeNull()
     const cmd = screen.getByText(/geneseed-build --doctrines/)
-    expect(cmd.textContent).toContain('craft,process')
+    expect(cmd.textContent).toContain('craft,process,ops')
     expect(screen.queryByText(/\$ geneseed build --doctrines/)).toBeNull()
   })
 })

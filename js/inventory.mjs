@@ -250,7 +250,7 @@ export function entityStatus(registry, key) {
  * `status`, `catalog`, `tui`, the web API, its `SECTIONS` id, three test fixtures and two
  * recorded corpora to say the same thing in a different word.
  */
-export function tuiInventory(themeName, doctrines = null) {
+export function tuiInventory(themeName, doctrines = null, excluded = []) {
   const { items } = renderAll(makeCfg(), themeName);
   const registry = loadRegistry();
   const agents = [];
@@ -299,7 +299,18 @@ export function tuiInventory(themeName, doctrines = null) {
   // second: the narrative order is the reading order, and it is what the marker line, the
   // wizard and the rendered section all use.
   const on = Array.isArray(doctrines) ? doctrines : PACK_ORDER;
-  const built = PACK_ORDER.filter((p) => packs.has(p))
-    .map((p) => ({ ...packs.get(p), active: on.includes(p) }));
+  // ⚠ `active` NOW LIVES ON THE RULE, and the pack's is derived from it rather than the other
+  // way round. The unit a user toggles is the rule: a pack is "active" exactly when at least
+  // one of its rules is, which is also the condition under which it renders at all. Keeping a
+  // pack-level flag as the source would let the two disagree — a pack marked active whose
+  // every rule is excluded is a header the render refuses to emit.
+  const off = new Set(Array.isArray(excluded) ? excluded : []);
+  const built = PACK_ORDER.filter((p) => packs.has(p)).map((p) => {
+    const pack = packs.get(p);
+    const rules = pack.rules.map((r) => ({
+      ...r, active: on.includes(p) && !off.has(`${r.pack}.${r.n}`),
+    }));
+    return { ...pack, rules, active: rules.some((r) => r.active) };
+  });
   return { agents, skills, laws, ontology, doctrines: built, theme: themeName };
 }

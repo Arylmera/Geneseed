@@ -126,13 +126,13 @@ function ruleName(rawTitle, romanNum, arabicNum) {
 // One expandable row, shared by the invariant and doctrine bands: lazy-loads its full body via
 // /api/item/law/<address> the first time it opens, cached on subsequent toggles. The address is
 // the catalog's `name` — a Roman numeral or `<pack>.<n>` — never the display number.
-function LawRow({ law, isOpen, onToggle }) {
+function LawRow({ law, isOpen, onToggle, sw = null }) {
   const { data: detail } = useAsync(
     () => (isOpen ? api.item('law', law.addr) : Promise.resolve(null)),
     [isOpen, law.addr],
   )
   const body = detail?.body || law.ess
-  return (
+  const row = (
     <>
       <button
         className={`law-row ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
@@ -166,6 +166,16 @@ function LawRow({ law, isOpen, onToggle }) {
         </div>
       )}
     </>
+  )
+  // No switch (an invariant, or a console with no install) means no wrapper at all — the row
+  // keeps the exact grid it has on every other tier.
+  return sw ? (
+    <div className="rule-line">
+      {sw}
+      <div className="rule-line-row">{row}</div>
+    </div>
+  ) : (
+    row
   )
 }
 
@@ -222,13 +232,14 @@ export default function Laws({ selected, overview, onAction }) {
   // throws, taking the whole page down rather than just the control. Hence the defensive
   // `data?.items` here and the plain (non-hook) helpers further down.
   const allItems = data?.items || []
-  // Insertion order is PACK_ORDER — the server sends the roster in it — and the Set keeps it.
-  const deployedPacks = [
-    ...new Set(
-      allItems.filter((i) => i.tier === 'doctrine' && i.active !== false).map((i) => i.pack),
-    ),
-  ]
-  const deployedKey = deployedPacks.join(',')
+  // ⚠ THE UNIT IS THE RULE, not the pack. The selection below is a list of rule ADDRESSES
+  // (`process.7`), and the pack axis is DERIVED from it when Apply builds the request — a
+  // pack with every rule off drops out of `--doctrines` entirely, so the rendered AGENT.md
+  // never carries a pack header with nothing under it.
+  const deployedRules = allItems
+    .filter((i) => i.tier === 'doctrine' && i.active !== false)
+    .map((i) => i.name)
+  const deployedKey = deployedRules.join(',')
   const [picked, setPicked] = useState([])
   // Re-sync on the VALUE, never on the payload's identity: `data` is a fresh object on every
   // refetch, so an identity dependency would discard a half-made selection.
@@ -282,7 +293,10 @@ export default function Laws({ selected, overview, onAction }) {
         pack: it.pack,
         title: it.packTitle || it.pack,
         desc: it.packDesc || '',
-        active: it.active !== false,
+        // ⚠ `packActive`, NOT the first rule's `active`. A pack is on when the install built
+        // it in AT ALL; with the per-rule axis its first rule can be the excluded one, and
+        // reading the pack's state off it would report a live pack as dropped.
+        active: it.packActive !== false,
         rules: [],
       }
       packs.push(pack)
@@ -300,7 +314,9 @@ export default function Laws({ selected, overview, onAction }) {
     })
   }
   const activePacks = packs.filter((p) => p.active)
-  const ruleCount = activePacks.reduce((n, p) => n + p.rules.length, 0)
+  // Rule by rule, not pack by pack: an active pack can carry an excluded rule, and this
+  // readout claims to say how many rules bind the install.
+  const ruleCount = packs.reduce((n, p) => n + p.rules.filter((r) => !r.off).length, 0)
 
   // ---- the pack selection: STAGED here, applied once -------------------------------------
   //
@@ -314,32 +330,62 @@ export default function Laws({ selected, overview, onAction }) {
   // them describing a state nobody asked for, each writing a different `Active packs:` marker
   // for the next reader to parse. So the switches edit local state and `Apply` sends the whole
   // selection. The state itself lives above the early returns — see the ⚠ there.
-  const isOn = (name) => picked.includes(name)
-  const togglePack = (name) =>
-    setPicked((cur) => (cur.includes(name) ? cur.filter((p) => p !== name) : [...cur, name]))
-  const pickedPacks = packs.filter((p) => isOn(p.pack)).map((p) => p.pack)
-  const dirty = pickedPacks.join(',') !== deployedKey
-  const losingConsent = deployedPacks.includes('process') && !picked.includes('process')
+  const isOn = (addr) => picked.includes(addr)
+  const toggleRule = (addr) =>
+    setPicked((cur) => (cur.includes(addr) ? cur.filter((a) => a !== addr) : [...cur, addr]))
+  // A pack is never picked directly — it is on when any of its rules is. One source, so the
+  // header and the switches under it cannot disagree.
+  const packOn = (p) => p.rules.some((r) => isOn(r.addr))
+  // ⚠ A STAGED PACK MUST NOT READ AS A DEPLOYED ONE. `p.active` is what the install built;
+  // `packOn(p)` is what the switches currently say. Where they differ the header says so —
+  // reporting the staged state as fact is the one lie a control like this can tell.
+  const packState = (p) => {
+    const on = p.rules.filter((r) => isOn(r.addr)).length
+    if (!on) return p.active ? 'staged off' : 'not built in'
+    if (!p.active) return `staged on · ${on} of ${p.rules.length}`
+    return `${on} of ${p.rules.length} active`
+  }
+  // What the install excludes today: a rule that is off inside a pack it still builds in.
+  // A rule whose whole pack is absent is not an exclusion — the pack's absence says it, and
+  // naming it beside a `--doctrines` that omits the pack would be noise the CLI rejects.
+  const deployedExcluded = packs
+    .filter((p) => p.active)
+    .flatMap((p) => p.rules.filter((r) => r.off).map((r) => r.addr))
+  const allRules = packs.flatMap((p) => p.rules.map((r) => r.addr))
+  const pickedRules = allRules.filter(isOn)
+  const dirty = pickedRules.join(',') !== deployedKey
+  const CONSENT = 'process.5'
+  const losingConsent = deployedRules.includes(CONSENT) && !picked.includes(CONSENT)
   // Nothing to rebuild means nothing to toggle — a source render with no deployed install
   // still READS, it just cannot be changed from here.
   const install = overview?.install
   const canApply = Boolean(install && onAction)
 
+  // ⚠ TWO AXES OUT OF ONE SELECTION. The user only ever touches rules; the request carries
+  // both `doctrines` (the packs with at least one rule left) and `excludeRules` (the rules
+  // dropped from the packs that survive). An exclusion naming a pack that is already absent
+  // would be noise, so it is not sent — the pack's absence already says it.
   const applyPacks = () => {
     if (!canApply || !dirty) return
+    const keptPacks = packs.filter((p) => p.rules.some((r) => isOn(r.addr))).map((p) => p.pack)
+    const excludeRules = packs
+      .filter((p) => keptPacks.includes(p.pack))
+      .flatMap((p) => p.rules.filter((r) => !isOn(r.addr)).map((r) => r.addr))
     const warn = losingConsent
-      ? '\n\n⚠ The process pack carries commit/push consent. Dropping it also removes the ' +
-        'git-gate hook, so commits and pushes stop being confirmed at the tool boundary. ' +
+      ? '\n\n⚠ process 5 carries commit/push consent. Dropping it also removes the git-gate ' +
+        'hook, so commits and pushes stop being confirmed at the tool boundary. ' +
         '(rm -rf and force-push stay gated — those are Rule IV’s, not the pack’s.)'
       : ''
+    const what = pickedRules.length
+      ? `${pickedRules.length} of ${allRules.length} doctrine rules`
+      : 'no doctrine rules'
     if (
       window.confirm(
-        `Rebuild ${install.host} · ${install.scope} with ${
-          pickedPacks.length ? pickedPacks.join(', ') : 'no doctrine packs'
-        }? It rebuilds in place, non-destructive.${warn}`,
+        `Rebuild ${install.host} · ${install.scope} with ${what}? ` +
+          `It rebuilds in place, non-destructive.${warn}`,
       )
     )
-      onAction('install', { ...install, doctrines: pickedPacks })
+      onAction('install', { ...install, doctrines: keptPacks, excludeRules })
   }
 
   const counts = {}
@@ -443,41 +489,18 @@ export default function Laws({ selected, overview, onAction }) {
       </div>
       {packs.map((p) => (
         <div
-          className={`card law-wrap mb-16 pack-wrap ${isOn(p.pack) ? '' : 'pack-off'}`}
+          className={`card law-wrap mb-16 pack-wrap ${packOn(p) ? '' : 'pack-off'}`}
           key={p.pack}
         >
           <div className="pack-head">
-            {canApply && (
-              <span
-                className={`sw-toggle${isOn(p.pack) ? ' on' : ''}`}
-                role="switch"
-                aria-checked={isOn(p.pack)}
-                aria-label={`${p.title} pack`}
-                tabIndex={0}
-                onClick={() => togglePack(p.pack)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    if (e.key === ' ') e.preventDefault()
-                    togglePack(p.pack)
-                  }
-                }}
-              />
-            )}
             <span className="pack-name" style={{ '--cc': PACK_CATS[p.pack] }}>
               <span className="cdot" />
               {p.title}
             </span>
             <span className="pack-desc">{p.desc}</span>
-            <span className="pack-state">
-              {p.rules.length} rules ·{' '}
-              {isOn(p.pack) === p.active
-                ? p.active
-                  ? 'active'
-                  : 'not built in'
-                : isOn(p.pack)
-                  ? 'staged on'
-                  : 'staged off'}
-            </span>
+            {/* Derived from the rules, never held separately — a pack IS however many of its
+                rules are on, and a second source could disagree with the switches above it. */}
+            <span className="pack-state">{packState(p)}</span>
           </div>
           {!p.active && !canApply && (
             // The fallback for a console with no install to rebuild — a reader still needs the
@@ -485,7 +508,13 @@ export default function Laws({ selected, overview, onAction }) {
             // ⚠ `geneseed-build`, not `geneseed build`: the CLI's `build` verb forwards
             // `--theme` and nothing else, so the shorter spelling errors.
             <div className="pack-enable">
-              $ geneseed-build --doctrines {[...deployedPacks, p.pack].join(',')}
+              $ geneseed-build --doctrines{' '}
+              {packs
+                .filter((q) => q.active || q.pack === p.pack)
+                .map((q) => q.pack)
+                .join(',')}
+              {deployedExcluded.length > 0 &&
+                ` --exclude-rules ${deployedExcluded.join(',')}`}
             </div>
           )}
           <div className="law-rowhead">
@@ -495,7 +524,37 @@ export default function Laws({ selected, overview, onAction }) {
             <span>Pack</span>
           </div>
           {p.rules.map((r) => (
-            <LawRow key={r.addr} law={r} isOpen={open === r.addr} onToggle={() => toggle(r.addr)} />
+            <LawRow
+              key={r.addr}
+              law={{ ...r, off: !isOn(r.addr) }}
+              isOpen={open === r.addr}
+              onToggle={() => toggle(r.addr)}
+              // The switch sits OUTSIDE the row button — a `<button>` inside a `<button>` is
+              // invalid HTML and the inner click never arrives — and stops the click from
+              // also expanding the row it lives on.
+              sw={
+                canApply && (
+                  <span
+                    className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
+                    role="switch"
+                    aria-checked={isOn(r.addr)}
+                    aria-label={`${r.name} rule`}
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleRule(r.addr)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        if (e.key === ' ') e.preventDefault()
+                        e.stopPropagation()
+                        toggleRule(r.addr)
+                      }
+                    }}
+                  />
+                )
+              }
+            />
           ))}
         </div>
       ))}
@@ -503,14 +562,14 @@ export default function Laws({ selected, overview, onAction }) {
         <div className="card pad-lg mb-16">
           {losingConsent && (
             <p className="pack-warn" role="status" aria-live="polite">
-              ⚠ Dropping <b>process</b> also removes the commit/push consent gate —{' '}
+              ⚠ Dropping <b>process 5</b> also removes the commit/push consent gate —{' '}
               <code>git commit</code> and <code>git push</code> stop being confirmed at the tool
               boundary. <code>rm -rf</code> and force-push stay gated.
             </p>
           )}
           <div className="pack-apply">
             <button className="btn soft" onClick={applyPacks} disabled={!dirty}>
-              Apply{dirty ? ` (${pickedPacks.length}/${packs.length} packs)` : ''}
+              Apply{dirty ? ` (${pickedRules.length}/${allRules.length} rules)` : ''}
             </button>
             <button
               className="btn ghost"

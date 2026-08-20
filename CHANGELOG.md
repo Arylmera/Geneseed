@@ -6,6 +6,40 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
+## [Unreleased]
+
+### Added
+
+- **Doctrines toggle per RULE, not per pack.** A second build-time axis,
+  `geneseed-build --exclude-rules "process 7"`, drops individual rules from the packs that
+  survive `--doctrines`. Either spelling of an address is accepted — `process 7` as the
+  constitution writes it, `process.7` as the console addresses it — and `none` is the explicit
+  empty selection.
+
+  **This supersedes the pack-level switch 3.1.0 shipped one day earlier.** That control could
+  only say *all of Observance or none of it*; the case it could not express — *keep the pack,
+  drop one rule* — is the one people actually have. The console's switches are now one per rule,
+  still staged locally and still applied in a single rebuild, and there is no pack switch at all:
+  the pack axis is DERIVED at Apply time from whichever rules survive. A pack whose every rule is
+  off leaves `--doctrines` entirely, so `AGENT.md` never renders a pack header with nothing under
+  it.
+
+  An install records its exclusions in a second marker line, `Excluded rules: process 7`,
+  **written only when something is excluded**. That asymmetry is load-bearing rather than tidy: a
+  default build is byte-identical to one from before this axis existed — 261 golden cells, nine
+  emit modes, both footprints, all unmoved, nothing re-blessed — and the line's absence is a
+  complete answer, so `excludedRulesOfDir` reads a missing line as `[]` where `doctrinesOfDir`
+  must read one as `null`. Every rebuild path (`upgrade`, `rebuild-all`, the console's Build and
+  Deploy) reads the line back and preserves it, or an upgrade would silently hand back every rule
+  its owner switched off.
+
+  ⚠ **The consent gate is re-keyed from the pack to the rule.** `process 5` carries commit/push
+  consent, and the `git-gate` hook plus the `git commit*` / `git push*` permission are now wired
+  on that rule rather than on its pack — so excluding it alone unwires them, and excluding
+  `process 7` beside it does not. Prompt and boundary are never allowed to disagree; `doctor`
+  gained a gate that fails if `js/settings.mjs`'s hardcoded `process.5` ever stops naming the
+  consent rule. `rm -rf` and force-push refusals remain Rule IV's territory and ride no axis.
+
 ## [3.1.0] — 2026-08-20
 
 ### Added

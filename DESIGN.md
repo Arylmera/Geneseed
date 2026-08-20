@@ -106,11 +106,22 @@ vault or a specific tool's hooks.
      is narrative and deliberately not alphabetical.
 
    **The Ontology and the Invariants are never toggleable** — every build carries both,
-   whole. The Doctrine packs are the only tier a repository may narrow, chosen once at
-   build time (`--doctrines craft,rigor`, `--doctrines none`, or the setup wizard) and
-   defaulting to all four on. There is no runtime toggle. Every pack file ships on disk at
-   both footprints whether or not it was built in, which is what lets a citation into an
-   inactive pack still resolve.
+   whole. The Doctrine tier is the only one a repository may narrow, and it narrows on
+   **two axes**, both chosen once at build time and both defaulting to everything on:
+   `--doctrines craft,rigor` (or `none`, or the wizard) selects PACKS, and
+   `--exclude-rules "process 7"` drops individual RULES from the packs that survive. They
+   compose in one direction only — a pack whose every rule is excluded leaves the active
+   set, so no pack header is ever rendered empty. There is no runtime toggle for either.
+   Every pack file ships on disk at both footprints whether or not it was built in, which
+   is what lets a citation into an inactive pack still resolve.
+
+   Each axis leaves its own marker line in the carrier for later readers (`upgrade`,
+   `rebuild-all`, the console) to parse back: `Active packs:` always, and
+   `Excluded rules:` **only when something is excluded**. That asymmetry is deliberate and
+   load-bearing — the second line's absence is a complete answer ("nothing"), so a default
+   build is byte-identical to one from before the axis existed and no recording had to be
+   re-blessed; `excludedRulesOfDir` accordingly reads a missing line as `[]` where
+   `doctrinesOfDir` must read one as `null`.
 
    **Conflict order, exactly:** Ontology + Invariants → the user's own `user-rules.md` →
    the active Doctrines → `PROFILE.md`. A doctrine rule may *tighten* an invariant, never

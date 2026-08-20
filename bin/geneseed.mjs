@@ -52,7 +52,9 @@ import {
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg. golden.py's 259 cells all build one, which is what made the move safe.
-import { ROOT, CONFIG, THEMES, discoverNames, makeCfg, PACK_ORDER } from '../js/checkout.mjs';
+import {
+  ROOT, CONFIG, THEMES, discoverNames, makeCfg, PACK_ORDER, knownRuleIds,
+} from '../js/checkout.mjs';
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
 // registry to find every install it must re-emit, and a CLI verb may not reach into a driver
@@ -124,6 +126,7 @@ export function resolveOut(raw) {
 function configDefaults() {
   const d = {
     theme: 'neutral', posture: 'peer', mode: 'direct', doctrines: [...PACK_ORDER],
+    excludeRules: [],
   };
   if (!existsSync(CONFIG)) return d;
   try {
@@ -146,6 +149,19 @@ function configDefaults() {
             + 'list of known pack names — using all packs.\n');
         }
       }
+      // The second axis, read the same forgiving way and defaulting the OTHER direction: a
+      // bad value excludes NOTHING, because the safe answer for a list of things to take
+      // away is to take nothing away. Same reasoning as `doctrines` defaulting to all.
+      if (data.excludeRules !== undefined) {
+        if (Array.isArray(data.excludeRules)
+          && data.excludeRules.every((x) => typeof x === 'string')) {
+          d.excludeRules = [...new Set(data.excludeRules.map((x) => x.replace(/[ \t]+/, '.')))]
+            .sort();
+        } else {
+          process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" is `
+            + 'not a list of rule addresses — excluding nothing.\n');
+        }
+      }
     }
   } catch {
     process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} is unreadable — `
@@ -162,7 +178,7 @@ function configDefaults() {
  */
 const VALUED = {
   '--theme': 'theme', '--posture': 'posture', '--mode': 'mode',
-  '--doctrines': 'doctrines',
+  '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
   '--footprint': 'footprint', '--root': 'root',
 };
@@ -204,6 +220,37 @@ function choicesFor() {
  * packs the checkout actually has; a discovered pack missing from `PACK_ORDER` is a
  * different fault and `js/render.mjs` refuses the whole build for it.
  */
+/**
+ * `--exclude-rules "process 7,craft 3"` (or `process.7`) -> the cfg's exclusion array.
+ *
+ * BOTH SPELLINGS ACCEPTED ON THE WAY IN, ONE ON THE WAY OUT. The carrier's marker line and
+ * every citation in the corpus spell a rule `process 7`; the console's deep link and the
+ * catalogue spell it `process.7`. A flag that took only one of them would be wrong for
+ * whichever half of the documentation the reader had open, so it takes either and normalises
+ * to the dotted form the code compares.
+ *
+ * ⚠ VALIDATED AGAINST THE PACK FILES, NOT A RANGE. `process 9` and `craft 0` are both
+ * refusals, and so is a pack this checkout does not ship — an exclusion that names nothing is
+ * a typo that would otherwise take away nothing in silence, which is the failure this flag
+ * can least afford: the user asked for a rule to STOP binding and it would keep binding.
+ * Sorted, deduped, for the same marker-stability reason `--doctrines` is.
+ */
+function parseExcludeRules(value) {
+  const s = value.trim();
+  if (s === 'none' || s === '') return [];
+  const known = knownRuleIds();
+  const out = [];
+  for (const raw of s.split(',').map((x) => x.trim()).filter(Boolean)) {
+    const id = raw.replace(/[ \t]+/, '.');
+    if (!known.includes(id)) {
+      die(2, `argument --exclude-rules: invalid choice: '${raw}' (choose from `
+        + `${known.map((c) => `'${c.replace('.', ' ')}'`).join(', ')}, or 'none')`);
+    }
+    out.push(id);
+  }
+  return [...new Set(out)].sort();
+}
+
 function parseDoctrines(value) {
   const s = value.trim();
   const known = discoverNames('doctrines', PACK_ORDER[0]);
@@ -264,6 +311,7 @@ function parseArgs(argv, defaults) {
   const args = {
     theme: defaults.theme, posture: defaults.posture, mode: defaults.mode,
     doctrines: defaults.doctrines,
+    excludeRules: defaults.excludeRules,
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false,
   };
@@ -296,6 +344,7 @@ function parseArgs(argv, defaults) {
   // Only when the flag was actually PASSED is this a string; left at its default it is
   // already the array `configDefaults` built, and re-parsing an array would stringify it.
   if (typeof args.doctrines === 'string') args.doctrines = parseDoctrines(args.doctrines);
+  if (typeof args.excludeRules === 'string') args.excludeRules = parseExcludeRules(args.excludeRules);
   return args;
 }
 

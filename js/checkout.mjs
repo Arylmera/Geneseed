@@ -22,7 +22,7 @@
  * over 259 cells and compares the tree byte-for-byte, and every one of them builds a cfg
  * from these paths. A depth error or a renamed key fails 259 cells, not zero.
  */
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -84,6 +84,34 @@ export function discoverNames(dir, first) {
 export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process'];
 
 /**
+ * Every doctrine rule address this checkout ships — `pack.n`, in render order.
+ *
+ * The ONE enumerator, for the same arithmetic reason `PACK_ORDER` is one array: the CLI
+ * flag, the console's trust boundary and the doctor all have to close `--exclude-rules`
+ * against the SAME set, and a second copy is a set that drifts by one rule the day a pack
+ * grows. Read from the UNRENDERED source (`### {{DOCTRINE}} <pack> <n>`) rather than from a
+ * built tree, because an address is a property of the source and the rendered heading is
+ * themed — fourteen spellings of a thing that must compare equal to itself.
+ *
+ * Ordered by `PACK_ORDER`, then by the order the headings stand in the pack file — NOT sorted.
+ * The file is what renders, so mirroring it is what keeps this list and the rendered
+ * constitution in the same sequence; a sort would silently disagree with a file whose headings
+ * were ever out of order, and disagree in the direction that reads as correct.
+ */
+export function knownRuleIds() {
+  const out = [];
+  for (const pack of PACK_ORDER) {
+    const file = path.join(SRC, 'doctrines', `${pack}.md`);
+    let text = '';
+    try { text = readFileSync(file, 'utf8'); } catch { continue; }
+    for (const m of text.matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)) {
+      if (m[1] === pack) out.push(`${pack}.${Number(m[2])}`);
+    }
+  }
+  return out;
+}
+
+/**
  * `_build_core.js_cfg()`, originated rather than received.
  *
  * `posture` and `mode` are `_build_core`'s module defaults (`peer` / `direct`) unless a
@@ -95,7 +123,9 @@ export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process'];
  * out to renderers and a caller that sorted or spliced it in place would rewrite
  * `PACK_ORDER` for the whole process.
  */
-export function makeCfg({ posture = 'peer', mode = 'direct', doctrines = PACK_ORDER } = {}) {
+export function makeCfg({
+  posture = 'peer', mode = 'direct', doctrines = PACK_ORDER, excludeRules = [],
+} = {}) {
   return {
     root: ROOT,
     src: SRC,
@@ -107,5 +137,16 @@ export function makeCfg({ posture = 'peer', mode = 'direct', doctrines = PACK_OR
     posture,
     mode,
     doctrines: Array.isArray(doctrines) ? [...doctrines] : [...PACK_ORDER],
+    // ⚠ THE SECOND DOCTRINE AXIS, AND ITS DEFAULT IS THE OPPOSITE WAY ROUND. `doctrines`
+    // defaults to EVERYTHING because an unknown selection must bind the most; `excludeRules`
+    // defaults to NOTHING for exactly the same reason — an exclusion is a rule taken AWAY, so
+    // "unspecified" has to mean "nothing taken away". Both defaults fail closed; they only
+    // look inconsistent until you ask which direction is the safe one for each.
+    //
+    // Addresses are `<pack>.<n>`, the same spelling the console deep-links and the catalogue
+    // publishes. An exclusion whose pack is not in `doctrines` is harmless and stays: the pack
+    // is already absent, and dropping the exclusion would silently re-admit the rule the day
+    // the pack came back.
+    excludeRules: Array.isArray(excludeRules) ? [...excludeRules] : [],
   };
 }

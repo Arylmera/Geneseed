@@ -29,8 +29,10 @@ import {
   writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
 } from '../../js/opencode.mjs';
 import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/settings.mjs';
-import { doctrinesOfDir, themeFiles } from '../../js/installs.mjs';
-import { ROOT, makeCfg, discoverNames, PACK_ORDER } from '../../js/checkout.mjs';
+import { doctrinesOfDir, excludedRulesOfDir, themeFiles } from '../../js/installs.mjs';
+import {
+  ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER,
+} from '../../js/checkout.mjs';
 import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
@@ -1757,5 +1759,168 @@ test('the opencode permission gate follows the process pack, and Law IV never do
     // An unknown selection is not a narrow one: the pre-migration caller passes nothing.
     mergeOpencodeJson(path.join(d, 'unknown.json'), 'AGENT.md');
     assert.equal(bashOf(path.join(d, 'unknown.json'))['git commit*'], 'ask');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE SECOND DOCTRINE AXIS — `--exclude-rules`, one rule at a time
+//
+// The pack axis above can only say "all of Observance or none of it". This one says "all of it
+// except `process 7`", which is what the console's switches actually produce — they are per-RULE,
+// and the pack list is derived from whichever rules survive.
+//
+// Three properties hold the pair together, and each has a cell below:
+//   1. an excluded rule leaves AGENT.md and NOTHING else does
+//   2. its pack stays in the marker, unless every one of its rules went
+//   3. the default build writes no second marker line at all — which is what keeps 261 golden
+//      cells and both frozen help texts valid without re-blessing anything.
+
+/** `### Doctrine <pack> <n> —` as the neutral theme spells a rule heading. */
+const ruleHead = (pack, n) => `### Doctrine ${pack} ${n} —`;
+
+test('excluding a rule removes that rule and nothing else', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out, { excludeRules: ['process.7'] });
+    const agent = agentText(out);
+
+    assert.ok(!agent.includes(ruleHead('process', 7)),
+      'the excluded rule is still in AGENT.md');
+    // ⚠ ITS SIX SIBLINGS SURVIVE. This is the whole reason the axis exists: the pack-level
+    // control could not express "keep Observance, drop one rule", and a filter that took the
+    // pack with the rule would be indistinguishable from the control it replaced.
+    for (const n of [1, 2, 3, 4, 5, 6]) {
+      assert.ok(agent.includes(ruleHead('process', n)),
+        `process ${n} went with process 7 — the exclusion took its whole pack`);
+    }
+    // ...and the pack is still ACTIVE, or a reader would think the install dropped Observance.
+    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process'),
+      'excluding one rule dropped its pack from the marker');
+    // The second marker, in the SPACED spelling — read by people first, by
+    // `excludedRulesOfDir` second.
+    assert.ok(agent.split('\n').includes('Excluded rules: process 7'),
+      'the Excluded rules: marker line is missing or misspelled');
+    // THE CATALOGUE IS UNTOUCHED, exactly as an inactive pack's file is: a rule this install
+    // is not bound by is still a rule it can READ, and every cross-citation still resolves.
+    assert.ok(read(out, 'doctrines', 'process.md').includes(ruleHead('process', 7)),
+      'the excluded rule left the bundle too — citations of it now dangle');
+  });
+});
+
+test('a pack whose every rule is excluded leaves the marker', () => {
+  // The two axes are not independent. A pack kept in `--doctrines` with all six rules dropped
+  // would render a pack header with nothing under it, and the marker would attest to a pack
+  // the file no longer states — the same lie `a selected pack with no file` refuses.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out, { excludeRules: ['craft.1', 'craft.2', 'craft.3', 'craft.4', 'craft.5',
+      'craft.6'] });
+    const agent = agentText(out);
+
+    assert.ok(agent.split('\n').includes('Active packs: rigor, ops, process'),
+      'a pack with every rule excluded is still listed as active');
+    assert.ok(!agent.includes(PACK_MARK.craft), "the empty pack's rule text survived");
+    assert.ok(!agent.includes('**Craft** —'), 'the empty pack kept its header');
+    // The other three are untouched — this cannot go green by rendering no doctrines at all.
+    for (const pack of ['rigor', 'ops', 'process']) {
+      assert.ok(agent.includes(PACK_MARK[pack]), `${pack} went with craft`);
+    }
+  });
+});
+
+test('a default build writes no Excluded rules line at all', () => {
+  // ⚠ THE PROPERTY THAT LET THIS SHIP WITHOUT RE-BLESSING A SINGLE RECORDING. The line is
+  // emitted only when something is excluded, so every default carrier — 261 golden cells, nine
+  // emit modes, both footprints — is byte-identical to the build before the axis existed. An
+  // unconditional `Excluded rules: none` would have moved all of them to say what the line's
+  // absence already says.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    const agent = agentText(out);
+    assert.ok(!agent.includes('Excluded rules:'),
+      'the default build grew a second marker line — every recorded carrier just moved');
+    // And no unspent token where the line would have been.
+    assert.ok(!agent.includes('{{EXCLUDED_RULES_LINE}}'));
+    // The marker it sits under is unaffected either way.
+    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process'));
+  });
+});
+
+test('excludedRulesOfDir round-trips the marker a real build wrote', () => {
+  // Same reasoning as `doctrinesOfDir`'s round-trip above: the label is not token-substituted,
+  // so only letting the writer produce the reader's input proves the two still agree.
+  withDir((d) => {
+    const some = path.join(d, 'some');
+    // Handed in unsorted, and read back sorted — this marker is compared against itself across
+    // builds exactly as the pack line is.
+    buildInto(some, { excludeRules: ['process.7', 'craft.2'] });
+    assert.deepEqual(excludedRulesOfDir(some), ['craft.2', 'process.7']);
+    assert.deepEqual(doctrinesOfDir(some), ['craft', 'rigor', 'ops', 'process'],
+      'excluding rules narrowed the PACK axis as a side effect');
+
+    // ⚠ AND ABSENCE IS AN ANSWER HERE, unlike the pack line. The line is only written when
+    // something is excluded, so a carrier without one is stating "nothing" rather than staying
+    // silent — which is what makes every pre-3.2 install correct by construction instead of
+    // needing a migration.
+    const none = path.join(d, 'none');
+    buildInto(none);
+    assert.deepEqual(excludedRulesOfDir(none), [],
+      'a carrier with no Excluded rules: line must read as [], never as null');
+  });
+});
+
+test('the opencode permission gate follows the consent RULE, not merely its pack', () => {
+  // ⚠ THE PROMPT AND THE BOUNDARY MUST NOT DISAGREE, and the per-rule axis opens a new way for
+  // them to: with the pack axis, losing the gate required dropping all seven rules. Now
+  // `process 5` alone can go — and if the gate were still keyed on the PACK, the boundary would
+  // keep asking for a rule the emitted AGENT.md no longer contains.
+  withDir((d) => {
+    const bashOf = (p) => JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
+
+    const gone = path.join(d, 'gone.json');
+    mergeOpencodeJson(gone, 'AGENT.md', PACK_ORDER, ['process.5']);
+    for (const k of ['git commit*', 'git push*']) {
+      assert.ok(!(k in bashOf(gone)),
+        `${k} survived --exclude-rules "process 5" — the boundary asks for a rule the prompt lost`);
+    }
+    // A SIBLING RULE COSTS NO GATE. Without this the test would pass for a build that dropped
+    // the gate whenever anything at all was excluded.
+    const kept = path.join(d, 'kept.json');
+    mergeOpencodeJson(kept, 'AGENT.md', PACK_ORDER, ['process.7']);
+    assert.equal(bashOf(kept)['git commit*'], 'ask',
+      'excluding process 7 took the consent gate with it');
+    // Rule IV's entries are never the doctrine's to remove, whichever axis narrowed.
+    for (const k of ['rm -rf *', 'git push --force*']) {
+      assert.equal(bashOf(gone)[k], 'ask', `${k} went with the consent rule`);
+    }
+    // A caller that knows nothing of the axis is not a caller excluding everything.
+    const unaware = path.join(d, 'unaware.json');
+    mergeOpencodeJson(unaware, 'AGENT.md', PACK_ORDER);
+    assert.equal(bashOf(unaware)['git commit*'], 'ask');
+  });
+});
+
+test('knownRuleIds is every rule this checkout ships, in render order', () => {
+  // The ONE enumerator: the CLI flag's validation, the console's trust boundary and the doctor
+  // all close `--exclude-rules` against this list, so a second copy is a set that drifts by one
+  // rule the day a pack grows.
+  const ids = knownRuleIds();
+  assert.ok(ids.length >= 20, `only ${ids.length} rules enumerated`);
+  // PACK_ORDER order, never alphabetical — `craft` before `ops` is the reading order, and the
+  // rendered constitution is what this list has to agree with.
+  const packsSeen = [...new Set(ids.map((i) => i.split('.')[0]))];
+  assert.deepEqual(packsSeen, PACK_ORDER);
+  // ⚠ NO CLAIM ABOUT ORDER WITHIN A PACK. Every pack ships fewer than ten rules, so a string
+  // sort and a numeric one produce the same list and no cell here could tell them apart — an
+  // assertion that cannot fail is not a gate. The enumerator mirrors the file instead of
+  // sorting at all, which is the property the cell below actually exercises.
+  //
+  // Every id is one the render side can actually drop — the two read the same headings.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out, { excludeRules: ids });
+    assert.ok(agentText(out).split('\n').includes('Active packs: none'),
+      'excluding every enumerated rule left a pack standing — the two lists disagree');
   });
 });

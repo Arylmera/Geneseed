@@ -1251,6 +1251,15 @@ a.rail-item.active { color: var(--text); }
 }
 .pack-apply { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
+/* A doctrine rule with its own switch. The switch sits OUTSIDE the row button — a <button>
+   inside a <button> is invalid and the inner click never fires — so the pair is a grid and
+   the row keeps its own 4-column layout inside the second cell. */
+.rule-line { display: grid; grid-template-columns: 38px 1fr; align-items: start; }
+.rule-line > .sw-toggle { margin: 13px 0 0 18px; cursor: pointer; }
+.rule-line-row { min-width: 0; }
+.rule-line-row .law-row, .rule-line-row .law-expand { padding-left: 0; }
+.law-row.law-off .law-princ, .law-row.law-off .law-class { opacity: .55; }
+
 /* Skills ledger — same visual language as Laws, 3-col grid (no № column). The
    chips (.law-cat), expand panel (.law-expand) and class tag (.law-class) are
    reused verbatim; only the row layout differs. */

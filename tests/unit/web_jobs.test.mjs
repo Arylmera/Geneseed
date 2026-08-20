@@ -62,7 +62,10 @@ const OPTS = { theme: 'imperial', emit: 'claude-global', footprint: 'lean',
 const ARGVS = {
   build: { entry: 'bin/geneseed.mjs',
     tail: ['--theme', 'imperial', '--emit', 'claude-global', '--footprint', 'lean',
-      '--posture', 'mentor', '--mode', 'foreman', '--doctrines', 'craft'] },
+      '--posture', 'mentor', '--mode', 'foreman', '--doctrines', 'craft',
+      // `none` and not an elision: an omitted flag falls through to `harness.config.json`,
+      // where an `excludeRules` entry would narrow a console Build that never asked for one.
+      '--exclude-rules', 'none'] },
   'build-all': { entry: 'bin/geneseed-cli.mjs', tail: ['rebuild-all'] },
   doctor: { entry: 'bin/geneseed-cli.mjs', tail: ['doctor'] },
   export: { entry: 'bin/geneseed-cli.mjs', tail: ['diff', '--out'] },
@@ -185,6 +188,16 @@ test('a build row given no pack selection states ALL packs, not the config defau
   const at = tail.indexOf('--doctrines');
   assert.ok(at >= 0, 'a build row with no pack selection left the axis to harness.config.json');
   assert.equal(tail[at + 1], 'craft,rigor,ops,process');
+  // The same argument one tier down, and it defaults to the other end of the same safety: a
+  // row that named no exclusions must say `none` rather than leave the flag off, or an
+  // `excludeRules` in `harness.config.json` takes the consent gate out of a Build that never
+  // asked. Both directions are stated, so neither default can be flipped unnoticed.
+  const ex = tail.indexOf('--exclude-rules');
+  assert.ok(ex >= 0, 'a build row with no exclusions left the axis to harness.config.json');
+  assert.equal(tail[ex + 1], 'none');
+  const narrowed = actionCommands('build', { ...OPTS, excludeRules: ['process.5'] })[0].slice(2);
+  assert.equal(narrowed[narrowed.indexOf('--exclude-rules') + 1], 'process.5',
+    'the build row drops an exclusion it was given');
 });
 
 test('the deploy argv resolves the body it is handed', () => {
@@ -219,10 +232,14 @@ test('the deploy argv resolves the body it is handed', () => {
     // the flag is spelled out here: an empty target is an unknown, and unknown means ALL packs.
     // Left off, a deploy onto a directory that already held an install took the configured
     // default and its commit/push consent gate with it.
+    // `--exclude-rules none` for the same reason one flag over: the per-rule axis is resolved
+    // off the deployment (`excludedRulesOfDir`), and an OMITTED flag would fall through to
+    // `harness.config.json` — so an empty target has to say "exclude nothing" out loud rather
+    // than say nothing at all.
     assert.deepEqual(plan.cmd.slice(2).map(String).map((s) => s.split(td).join('<TARGET>')),
       ['--theme', 'imperial', '--emit', 'opencode', '--out', '<TARGET>', '--root', '<TARGET>',
         '--footprint', 'lean', '--posture', 'mentor', '--mode', 'foreman',
-        '--doctrines', 'craft,rigor,ops,process']);
+        '--doctrines', 'craft,rigor,ops,process', '--exclude-rules', 'none']);
   } finally {
     sb.cleanup();
   }

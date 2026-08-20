@@ -61,7 +61,8 @@ import { doctorCollect } from '../doctor.mjs';
 import { excludesSnapshot } from '../excludes.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, pyResolve } from '../hosts.mjs';
 import {
-  doctrinesForBuild, footprintOfDir, installState, installTargets, installedDefaults, modeOfDir,
+  doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState, installTargets,
+  installedDefaults, modeOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../installs.mjs';
 import { frontmatter } from '../hooks.mjs';
@@ -288,7 +289,8 @@ export function specEntries(root, nested) {
  * its own carrier via `doctrinesForBuild`, which resolves "no marker" to every pack.
  */
 export function deployedInventory(state) {
-  const render = tuiInventory(state.theme, doctrinesForBuild(state.target));
+  const render = tuiInventory(state.theme, doctrinesForBuild(state.target),
+    excludedRulesOfDir(state.target));
   const registry = loadRegistry();
   const skills = specEntries(path.join(state.target, 'skills'), true);
   for (const e of skills) {
@@ -642,10 +644,12 @@ function constitutionItems(inv) {
       pack: p.pack,
       packTitle: p.title,
       packDesc: p.desc,
-      // ⚠ EVERY RULE IS LISTED WHETHER OR NOT ITS PACK IS BUILT IN. An inactive pack that
-      // vanished from the payload would be indistinguishable from one that never shipped, and
-      // the console could not then offer the command that turns it back on.
-      active: p.active,
+      // ⚠ EVERY RULE IS LISTED WHETHER OR NOT IT IS BUILT IN, and `active` is the RULE's own
+      // — a pack can be on with one rule excluded. A row that vanished from the payload would
+      // be indistinguishable from one that never shipped, and the console could not then
+      // offer the switch that turns it back on.
+      active: r.active !== false,
+      packActive: p.active,
     }))),
   ];
 }
@@ -879,8 +883,12 @@ export function apiOverview(state) {
       doctrines: {
         active: (inv.doctrines ?? []).filter((p) => p.active).length,
         total: (inv.doctrines ?? []).length,
-        rules: (inv.doctrines ?? []).filter((p) => p.active)
-          .reduce((n, p) => n + p.rules.length, 0),
+        // Counted RULE BY RULE, not pack by pack: with the per-rule axis an active pack can
+        // carry an inactive rule, so `p.rules.length` over active packs over-counts by
+        // exactly what the user switched off — the one number on the dashboard that claims
+        // to say how many rules bind this install.
+        rules: (inv.doctrines ?? [])
+          .reduce((n, p) => n + p.rules.filter((r) => r.active !== false).length, 0),
       },
       memory: memoryItems(state).length,
       notebook: notebookItems(state).length,

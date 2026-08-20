@@ -104,7 +104,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { emitGlobalInto } from '../../bin/geneseed.mjs';
-import { ROOT, discoverNames, PACK_ORDER } from '../checkout.mjs';
+import {
+  ROOT, discoverNames, knownRuleIds, PACK_ORDER,
+} from '../checkout.mjs';
 import { withStdoutSwallowed } from '../diff.mjs';
 import { excludeAdd, excludeRemove } from '../excludes.mjs';
 import { setupBuildArgs } from '../generate.mjs';
@@ -114,8 +116,8 @@ import {
   pyResolve,
 } from '../hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, doctrinesForBuild, footprintOfDir, installState, installTargets, modeOfDir,
-  postureOfDir, readMaybe,
+  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState,
+  installTargets, modeOfDir, postureOfDir, readMaybe,
 } from '../installs.mjs';
 import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
@@ -168,6 +170,32 @@ function bodyDoctrines(body) {
   const known = discoverNames('doctrines', PACK_ORDER[0]);
   if (!names.every((n) => typeof n === 'string' && known.includes(n))) return null;
   return PACK_ORDER.filter((p) => names.includes(p));
+}
+
+/**
+ * The SECOND doctrine axis across the same trust boundary — which individual rules to drop.
+ *
+ * Same shape and same reasons as `bodyDoctrines` above: a list closed member by member
+ * against what this checkout actually ships (`knownRuleIds`, the one enumerator the CLI flag
+ * uses too), re-ordered canonically because the `Excluded rules:` line it produces is a
+ * marker a later reader parses back out, and `null` on any rejection so the caller decides
+ * what "unspecified" means.
+ *
+ * Accepts `process 7` or `process.7` — the console sends the dotted address, and a curl by
+ * hand naturally writes the spelling the marker shows. `none`/`[]` is the deliberate empty
+ * selection: "exclude nothing", which is a real answer and NOT the same as not saying.
+ */
+function bodyExcludeRules(body) {
+  const raw = bget(body, 'excludeRules');
+  if (Array.isArray(raw) && !raw.length) return [];
+  const names = Array.isArray(raw) ? raw
+    : (typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(Boolean) : null);
+  if (names === null || !names.length) return null;
+  if (names.length === 1 && names[0] === 'none') return [];
+  const known = knownRuleIds();
+  const ids = names.map((n) => (typeof n === 'string' ? n.trim().replace(/[ \t]+/, '.') : n));
+  if (!ids.every((n) => typeof n === 'string' && known.includes(n))) return null;
+  return known.filter((id) => ids.includes(id));
 }
 
 /** `str.split()` with no argument — runs of PYTHON whitespace, no empties. */
@@ -825,8 +853,14 @@ export function apiInstallCmd(state, body) {
   // `null` elided the flag, and the generator's config fallback then narrowed the install and
   // took its consent gate with it. `doctrinesForBuild` resolves unknown to ALL packs.
   const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
+  // The per-rule axis needs NO `doctrinesForBuild`-style rescue: the marker it reads is only
+  // written when something is excluded, so its absence is a statement ("nothing") rather than
+  // the silence a pre-2.3 carrier gives on packs. Unspecified therefore keeps the install's
+  // own answer, and a pre-marker install answers the empty list — which is what it has.
+  const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
   const out = scope === 'global' ? null : String(root);
-  const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines);
+  const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
+    PACK_ORDER, excludeRules);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
 }
 
@@ -929,7 +963,9 @@ export function apiDeployCmd(state, body) {
   // existing all-four Claude install dropped it to one pack — measured: 6 hook groups became 5
   // and `PreToolUse::Bash` went with them. `doctrinesForBuild` resolves unknown to ALL packs.
   const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
+  const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
   // project-scope emit name == host name (opencode / claude / bob / copilot)
-  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines);
+  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
+    PACK_ORDER, excludeRules);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
 }
