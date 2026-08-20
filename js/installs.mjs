@@ -415,7 +415,7 @@ export function installTargets() {
 // ---- what this machine installed (`_harness_setup._installed_defaults`) --------------------
 
 /**
- * `_harness_setup._installed_defaults` — all five keys, as of P5i.
+ * `_harness_setup._installed_defaults` — all six keys.
  *
  * It carried only `theme` and `emit` for four phases because those are the two `status`
  * prints and the two `doctor` reads, and the port's keep-vs-delete rule is "part of an
@@ -424,9 +424,20 @@ export function installTargets() {
  * `inst.posture` / `inst.mode` / `inst.footprint`, so a three-key answer would have silently
  * pre-selected the CONFIGURED default over the DEPLOYED one on three of its five questions.
  * Nothing in `status` or `doctor` moves: both read the keys they already read.
+ *
+ * `doctrines` joined last, for the same reason and one phase later: the wizard's pack question
+ * shipped before the marker reader existed, so it defaulted to `all` for everyone and re-asked
+ * an installer who had already narrowed their selection. ⚠ THIS KEY IS THE ONE WITH THREE
+ * STATES, and the `=== null` tests below preserve all three: `null` is "no carrier on this
+ * machine said", `[]` is a carrier that said `none`, a list is a carrier that named packs.
+ * Only a WIZARD may read it — it is a pre-selection shown to a human who then answers. No
+ * build-side consumer resolves a pack set from here; that is `doctrinesForBuild(dir)`, which
+ * asks one named install rather than whichever candidate this walk happens to reach first.
  */
 export function installedDefaults() {
-  const found = { theme: null, posture: null, mode: null, emit: null, footprint: null };
+  const found = {
+    theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
+  };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
     try { candidates.push([configDir(), `${host}-global`]); } catch { /* as the Python */ }
@@ -455,6 +466,10 @@ export function installedDefaults() {
     if (found.footprint === null && isFile(path.join(base, '.geneseed-footprint'))) {
       found.footprint = footprintOfDir(base);
     }
+    // `doctrinesOfDir` and not `doctrinesForBuild`: the resolved form answers `[...PACK_ORDER]`
+    // for a carrier with no marker, which would end this walk at the FIRST candidate and hide
+    // a later carrier that does say. The null has to survive to the caller here.
+    if (found.doctrines === null) found.doctrines = doctrinesOfDir(base);
   }
   return found;
 }

@@ -317,17 +317,30 @@ const FOOTPRINT_OPTIONS = [
  * Answering `no` to all four is legal and yields `[]`, which `setupBuildArgs` spells
  * `--doctrines none`. That is a real configuration (invariants and ontology only), not a
  * mistake to guard against, so it is not second-guessed here.
+ *
+ * `deployed` is what the machine's carriers already say (`installedDefaults().doctrines`), and
+ * it drives BOTH levels: a narrowed install opens on `choose` with its own packs pre-ticked,
+ * so holding Enter through the wizard KEEPS the selection instead of silently widening it back
+ * to all four. `null` — no carrier said — still opens on `all`, which is the same resolution
+ * `doctrinesForBuild` gives unknown, so the wizard and the build agree about silence.
+ *
+ * ⚠ It never returns `null`, at either level, and `tests/unit/setup.test.mjs` pins that: this
+ * is the one call site allowed to reach `setupBuildArgs` without a `doctrinesForBuild`
+ * fallback, and that exemption is only sound while the function is total.
  */
-function askDoctrines() {
+function askDoctrines(deployed = null) {
   const opts = doctrineOptions();
   const all = opts.map(([n]) => n);
+  const known = Array.isArray(deployed) ? all.filter((n) => deployed.includes(n)) : null;
+  const narrowed = known !== null && known.length !== all.length;
   const pick = askChoice('Doctrine packs', [
-    ['all', `${all.join(' + ')} (default)`],
-    ['choose', 'pick packs'],
-  ], 'all');
+    ['all', `${all.join(' + ')}${narrowed ? '' : ' (default)'}`],
+    ['choose', `pick packs${narrowed ? ` (installed: ${known.join(', ') || 'none'})` : ''}`],
+  ], narrowed ? 'choose' : 'all');
   if (pick !== 'choose') return all;
   return all.filter((name) => askChoice(`Include ${name} — ${DOCTRINE_BLURBS[name] ?? name}`,
-    [['yes', `build ${name} into AGENT.md`], ['no', `leave ${name} out`]], 'yes') === 'yes');
+    [['yes', `build ${name} into AGENT.md`], ['no', `leave ${name} out`]],
+    known === null || known.includes(name) ? 'yes' : 'no') === 'yes');
 }
 
 /**
@@ -338,10 +351,12 @@ function askDoctrines() {
  * P5i is the phase that had to give `installedDefaults` its posture, mode and footprint keys
  * back: three of the five questions read them.
  *
- * Doctrines is the one question with no deployed default to read: detecting a deployed
- * install's packs needs the `Active packs:` marker reader, which does not exist yet, so the
- * question defaults to `all` for everyone. That is the honest answer for a pre-migration
- * install (which really did carry every rule) and a re-ask for anyone who had narrowed it.
+ * Doctrines reads the same walk, and joined it last because the `Active packs:` marker reader
+ * did not exist when the question shipped. Until it did, every re-run of the wizard offered
+ * `all` to an installer who had deliberately narrowed their packs — the one register where
+ * holding Enter SILENTLY WIDENED a selection instead of keeping it. `inst.doctrines` is passed
+ * whole, `null` included, because `askDoctrines` distinguishes "no carrier said" from "a
+ * carrier said none" and the two open the question differently.
  */
 export function collectSetupLines() {
   pyPrint('Geneseed setup — answer a few questions; nothing is written until you confirm.\n');
@@ -349,7 +364,7 @@ export function collectSetupLines() {
   const theme = askChoice('Theme', themeOptions(), inst.theme || defaultTheme());
   const posture = askChoice('Posture', postureOptions(), inst.posture || defaultPosture());
   const mode = askChoice('Mode', modeOptions(), inst.mode || defaultMode());
-  const doctrines = askDoctrines();
+  const doctrines = askDoctrines(inst.doctrines);
   const emit = askChoice('Install mode', EMIT_OPTIONS, inst.emit || 'opencode-global');
   const footprint = askChoice('Footprint', FOOTPRINT_OPTIONS.map(([k, d]) => [k, d]),
     inst.footprint || 'lean');

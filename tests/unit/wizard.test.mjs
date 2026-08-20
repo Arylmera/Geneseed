@@ -47,6 +47,13 @@ const PROBE = path.join(ROOT, 'tests', 'fixtures', 'pure_probe.mjs');
  * are three identical shapes. The emit marker says `claude-global` while the install sits in the
  * OpenCode config dir, deliberately: a port that inferred the emit from the DIRECTORY answers
  * `opencode-global` and this is the only input that can tell.
+ *
+ * ⚠ THE `Active packs:` LINE IS LOAD-BEARING FOR DETERMINISM, not just for coverage. Every other
+ * register here is answered by this seeded tree, so `installedDefaults`' walk never leaves it —
+ * but its candidate list ends at `cwd/Harness`, and these jobs run with `cwd: ROOT`. Without a
+ * marker, `doctrines` would be the one key that falls through and reads the DEVELOPER'S OWN
+ * gitignored `Harness/`: a pack set that is absent on CI and whatever the last local build wrote
+ * here. Seeding it pins the answer to the fixture, which is what the fixture is for.
  */
 const WIZARD_INSTALL = {
   '.config/opencode/.geneseed-manifest.json': '{"owned": []}',
@@ -54,7 +61,22 @@ const WIZARD_INSTALL = {
   '.config/opencode/.geneseed-theme': 'pirate\n',
   '.config/opencode/.geneseed-footprint': 'full\n',
   '.config/opencode/AGENT.md': '# deployed\n\n**Artisan** — the posture lead\n\n'
-    + '**Foreman** — the mode lead\n',
+    + '**Foreman** — the mode lead\n\nActive packs: craft, rigor, ops, process\n',
+};
+
+/**
+ * The same install NARROWED — two packs instead of four, and nothing else changed.
+ *
+ * The wizard's pack question shipped before the marker reader existed, so it offered `all` to
+ * everyone: an installer who had deliberately cut their packs down and then held Enter through a
+ * re-run got them all back, silently. It is the one register where the default WIDENED a stated
+ * selection, and posture/mode/footprint never could because they are single values read off this
+ * same walk. This tree is the input that tells a wizard reading the marker from one that is not.
+ */
+const NARROWED_INSTALL = {
+  ...WIZARD_INSTALL,
+  '.config/opencode/AGENT.md': '# deployed\n\n**Artisan** — the posture lead\n\n'
+    + '**Foreman** — the mode lead\n\nActive packs: rigor, process\n',
 };
 
 const OPTS = [['alpha', 'the first'], ['beta', ''], ['gamma', 'the third']];
@@ -131,7 +153,15 @@ function wizardJobs() {
     // one — so this is the case that fails if `installedDefaults` stopped answering posture, mode
     // or footprint.
     ['wizard-eof', [['collect_setup_lines', []]], ''],
-  ].map(([name, cases, stdin]) => [name, cases.map(([fn, args]) => ({ fn, args })), stdin]);
+    // The SAME EOF run against an install that carries only two packs. Nothing is typed, so every
+    // answer is a pre-selection and the pack set that comes back is the one on disk — which is
+    // the whole claim: holding Enter through a re-run KEEPS a narrowed constitution instead of
+    // silently restoring the two packs its owner removed. Against `wizard-eof` above (same input,
+    // all-four install, all four packs back) it is a matched pair, so an implementation that
+    // ignores the marker and always answers `all` fails exactly one of the two.
+    ['wizard-eof-narrowed', [['collect_setup_lines', []]], '', NARROW_HOME],
+  ].map(([name, cases, stdin, home]) => [name, cases.map(([fn, args]) => ({ fn, args })),
+    stdin, home]);
 }
 
 /**
@@ -160,15 +190,23 @@ function summaryCases() {
 
 const sandbox = makeSandbox('wizard-');
 after(() => sandbox.cleanup());
-const HOME = path.join(sandbox.path, 'home');
-for (const [rel, text] of Object.entries(WIZARD_INSTALL)) {
-  const p = path.join(HOME, ...rel.split('/'));
-  mkdirSync(path.dirname(p), { recursive: true });
-  writeFileSync(p, text, 'utf8');
+
+/** Seed one install tree under its own HOME and return that HOME. */
+function seed(name, tree) {
+  const home = path.join(sandbox.path, name);
+  for (const [rel, text] of Object.entries(tree)) {
+    const p = path.join(home, ...rel.split('/'));
+    mkdirSync(path.dirname(p), { recursive: true });
+    writeFileSync(p, text, 'utf8');
+  }
+  return home;
 }
 
+const HOME = seed('home', WIZARD_INSTALL);
+const NARROW_HOME = seed('home-narrow', NARROWED_INSTALL);
+
 /** One probe process, stdin from a seeded FILE, WHOLE stdout back as BYTES. */
-function runSeeded(cases, stdin) {
+function runSeeded(cases, stdin, home = HOME) {
   const dir = path.join(sandbox.path, `job-${runSeeded.n = (runSeeded.n ?? 0) + 1}`);
   mkdirSync(dir, { recursive: true });
   const job = path.join(dir, 'job.json');
@@ -178,7 +216,7 @@ function runSeeded(cases, stdin) {
   const fd = openSync(answers, 'r');
   try {
     const p = spawnSync(process.execPath, [PROBE, job], {
-      cwd: ROOT, env: cellEnv(HOME), stdio: [fd, 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
+      cwd: ROOT, env: cellEnv(home), stdio: [fd, 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
     });
     assert.equal(p.status, 0,
       `pure_probe.mjs failed (${p.status}):\n${p.stderr?.toString('utf8') ?? ''}`);
@@ -193,9 +231,9 @@ let RUNS = null;
 function runs() {
   if (RUNS) return RUNS;
   RUNS = {};
-  for (const [name, cases, stdin] of [...wizardJobs(),
+  for (const [name, cases, stdin, home] of [...wizardJobs(),
     ['summary', summaryCases(), '']]) {
-    const bytes = runSeeded(cases, stdin);
+    const bytes = runSeeded(cases, stdin, home);
     const text = bytes.toString('utf8');
     const at = text.lastIndexOf('{"results"');
     assert.ok(at >= 0, `the ${name} job printed no results envelope:\n${text}`);
@@ -272,19 +310,21 @@ test('the wizard job really walks the wizard', () => {
   const out = runs()['wizard-eof'].text;
   assert.ok(out.includes('Geneseed setup — answer a few questions'), out.slice(0, 200));
   assert.ok(out.includes('1) neutral — plain professional voice'), out.slice(0, 400));
-  // The seeded install's five markers, each pre-selected. Theme and footprint come off marker
-  // FILES, posture and mode are content-detected out of the carrier, and the emit marker says
-  // `claude-global` while the install sits in the OpenCode config dir.
+  // The seeded install's six markers, each pre-selected. Theme and footprint come off marker
+  // FILES, posture and mode are content-detected out of the carrier, the emit marker says
+  // `claude-global` while the install sits in the OpenCode config dir, and the packs come off the
+  // carrier's `Active packs:` line.
   for (const line of [
     'pirate — high-seas crew   (default)',
     'artisan — peer with toolsmith reflexes — terminal-first   (default)',
     'foreman — triages tasks, spawns pipelines for substantial work   (default)',
     'claude-global — Claude Code global config dir',
     "full — Full — every law's complete text inlined",
-    // The packs gate. It has no pre-selected deployed value to carry — nothing reads a
-    // deployment's `Active packs:` line yet — so `all` is the default for everyone, and an
-    // installer who holds Enter through the wizard keeps every pack, exactly as before packs
-    // were a choice. `--doctrines` is therefore ABSENT from the plan line below.
+    // The packs gate against an install that carries all four: `all` is pre-selected, its option
+    // keeps the `(default)` suffix that names it as the out-of-the-box answer, and the plan line
+    // below therefore ELIDES `--doctrines`. `wizard-eof-narrowed` is the same input against a
+    // two-pack install and takes the other arm, which is what makes this one an assertion about
+    // the marker rather than about a constant.
     'all — craft + rigor + ops + process (default)   (default)',
     '2) choose — pick packs',
     'About to run:  geneseed build --theme pirate --emit claude-global --footprint full '
@@ -295,6 +335,43 @@ test('the wizard job really walks the wizard', () => {
   // The gate is a GATE: taking `all` must not print the four per-pack questions.
   assert.ok(!out.includes('Include craft'),
     'the packs gate asked the per-pack questions anyway, so `all` is not a shortcut');
+});
+
+test('holding Enter through a re-run keeps a narrowed pack selection instead of widening it', () => {
+  // ⚠ THE ONE REGISTER WHOSE DEFAULT COULD SILENTLY UNDO A DECISION. Theme, posture, mode,
+  // footprint and emit are single values, so a wizard that pre-selects the deployed one is
+  // obviously right and a wizard that does not is obviously wrong. Packs are a SET, and the
+  // wrong default is not a different answer — it is a WIDER one: an installer who removed
+  // `process` to work without the commit/push ask, running `geneseed setup` again and pressing
+  // Enter, had all four packs written back with no line printed to say so.
+  //
+  // Same empty stdin as `wizard-eof`, same fixture but for one marker line. The pair is the
+  // gate: an implementation that ignores the marker passes exactly one of the two cells.
+  const narrowed = runs()['wizard-eof-narrowed'];
+  assert.deepEqual(narrowed.results, [{
+    theme: 'pirate', posture: 'artisan', mode: 'foreman', doctrines: ['rigor', 'process'],
+    emit: 'claude-global', out: null, root: null, footprint: 'full',
+  }], 'a re-run over a two-pack install did not come back with two packs');
+  assert.deepEqual(runs()['wizard-eof'].results[0].doctrines, ['craft', 'rigor', 'ops', 'process'],
+    'the all-four half of the pair moved, so the narrowed half proves nothing');
+  // The narrowed install opens on `choose`, not on `all` — otherwise the per-pack defaults it
+  // carries are never reached, and the arm cannot be selected without a typed answer.
+  assert.ok(narrowed.text.includes('choose — pick packs (installed: rigor, process)'),
+    `the gate did not name the installed subset:\n${narrowed.text}`);
+  assert.ok(!/\ball — craft \+ rigor \+ ops \+ process \(default\)/.test(narrowed.text),
+    '`all` still advertises itself as THE default on an install that is not at all four');
+  // ...and the two packs that are off are pre-answered `no`, which is the half a
+  // `known.includes(name) ? 'yes' : 'no'` inversion would flip.
+  for (const [pack, want] of [['craft', 'no'], ['rigor', 'yes'], ['ops', 'no'],
+    ['process', 'yes']]) {
+    const q = narrowed.text.slice(narrowed.text.indexOf(`Include ${pack} —`));
+    assert.ok(new RegExp(`${want} — [^\\n]*\\(default\\)`).test(q.slice(0, 400)),
+      `the per-pack question for ${pack} did not pre-select \`${want}\``);
+  }
+  // The selection has to survive into the argv the wizard prints AND runs — a pre-selection
+  // that never reaches `setupBuildArgs` is a cosmetic default.
+  assert.ok(narrowed.text.includes('--doctrines rigor,process'),
+    'the pre-selected pack set never reached the build command');
 });
 
 test('the packs gate offers every pack, in narrative order, with what dropping one costs', () => {
@@ -367,8 +444,11 @@ test('the summary job produces rows and not an empty list', () => {
     'the opencode PROJECT emit did not reach the LSP rows');
   assert.ok(!results[3].some(([, t]) => t.includes('Java 21+ (jdtls)')),
     'a claude emit reached the LSP rows, which are opencode-only');
+  // Six keys, and `doctrines` is the only one that can be a LIST or a null. Its presence here is
+  // what stops the wizard's pack question falling through the walk to `cwd/Harness`.
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
+    doctrines: ['craft', 'rigor', 'ops', 'process'],
   });
 });
 
@@ -383,7 +463,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 13, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 14, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {

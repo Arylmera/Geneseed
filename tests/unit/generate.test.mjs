@@ -1224,6 +1224,50 @@ test('the default permission policy is added only when absent', () => {
   });
 });
 
+test('a permission block Geneseed cannot wire into is reported, not passed over in silence', () => {
+  // ⚠ THE ONE PATH WHERE THE BOUNDARY ENDS UP WITH NO GATE WHILE AGENT.md STATES THE RULE, and
+  // until this cell it was also the quiet one. OpenCode accepts a blanket `"bash": "allow"`, and
+  // the cell above pins that Geneseed leaves it alone — correctly, it is the user's answer. But
+  // "leave it alone" was spelled as a bare early return, so the reconcile was a no-op, the merge
+  // short-circuited before all three of its WARNs, and an install whose constitution compels a
+  // commit/push ask came up with nothing behind it and said nothing.
+  //
+  // The residue warning is the OPPOSITE direction — a gate outliving its pack, which only ever
+  // asks too much. This one is a rule outliving its gate. Both are reported; neither rewrites.
+  for (const [label, body, reason] of [
+    ['a blanket bash policy', '{"permission": {"bash": "allow"}}', 'has a "bash" that is not an object'],
+    ['a non-object permission', '{"permission": "allow"}', 'is not an object'],
+  ]) {
+    withDir((d) => {
+      const p = path.join(d, 'opencode.json');
+      fs.writeFileSync(p, body);
+      const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', [...PACK_ORDER]));
+      assert.match(err, /WARN/, `${label} was accepted in silence`);
+      assert.ok(err.includes(reason), `${label}: the warning did not name the shape:\n${err}`);
+      // It names the gates that did NOT get wired — the whole point of telling anyone.
+      for (const k of ['"git commit*"', '"git push*"', '"rm -rf *"']) {
+        assert.ok(err.includes(k), `${label}: the warning did not name ${k}:\n${err}`);
+      }
+      // ...and the file is still exactly the user's answer. Reporting is not a licence to fix.
+      assert.deepEqual(JSON.parse(fs.readFileSync(p, 'utf8')).permission,
+        JSON.parse(body).permission, `${label}: the user's own policy was rewritten`);
+    });
+  }
+  // With the process pack OFF the two git-consent keys are not wanted, so they must not appear
+  // in the list of what went unwired — otherwise the warning invents an obligation this build
+  // does not carry, and a reader would go add a gate for a rule that is not in their AGENT.md.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, '{"permission": {"bash": "allow"}}');
+    const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', ['craft']));
+    assert.ok(err.includes('"rm -rf *"'), `the invariant gates went unnamed:\n${err}`);
+    for (const k of ['"git commit*"', '"git push*"']) {
+      assert.ok(!err.includes(k),
+        `a pack-off build named ${k} as unwired, but this build never wanted it:\n${err}`);
+    }
+  });
+});
+
 test('a merge preserves an mcp block it does not own', () => {
   // The markitdown MCP server — and any server the user added — lives under `mcp`. A re-emit
   // merges `instructions` and must touch nothing else in the file.

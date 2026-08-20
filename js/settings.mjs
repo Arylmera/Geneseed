@@ -148,14 +148,28 @@ const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', 'git push --force*',
  * direction, a rule with no gate behind it, cannot occur here. A FRESH file is unaffected:
  * `mergeOpencodeJson` writes `defaultPermission(doctrines)` whole, so a new pack-off install
  * has no git gate at all.
+ *
+ * ⚠ KEY ORDER IS NOT RECONCILED, DELIBERATELY. `defaultPermission` emits its keys in a fixed
+ * order, so a FRESH write is tidy; an off→on reconcile appends the two process keys after the
+ * force-push pair and the block reads out of order from then on. Restoring the order means
+ * rewriting a map whose other entries belong to the user — sorting THEIR keys to tidy OURS is
+ * the value-over-ownership mistake in a second suit, and JSON object order carries no meaning
+ * to OpenCode. So the order is left as found and only membership is reconciled.
+ *
+ * Returns a third element, `opaque`: the shape reason wiring was impossible, or `null`. The
+ * caller warns on it. This is the one branch where the boundary can end up with NO Geneseed
+ * gate at all while the constitution states the rule — the unsafe direction — so it must not
+ * also be the silent one.
  */
 function reconcileOpencodePermission(perm, want) {
   // A `permission` that is not an object, or whose `bash` is not one — OpenCode also accepts a
   // bare `"bash": "allow"` — is a shape this function has no owned keys inside of. Leaving it
   // exactly as found is the whole point; rewriting it into a map would DELETE a blanket policy
   // the user wrote, which is a bigger change than the one being reconciled.
-  if (!isDict(perm)) return [false, []];
-  if (has(perm, 'bash') && !isDict(get(perm, 'bash'))) return [false, []];
+  if (!isDict(perm)) return [false, [], 'is not an object'];
+  if (has(perm, 'bash') && !isDict(get(perm, 'bash'))) {
+    return [false, [], 'has a "bash" that is not an object'];
+  }
   const fresh = !has(perm, 'bash');
   const bash = fresh ? {} : get(perm, 'bash');
   let changed = false;
@@ -166,7 +180,7 @@ function reconcileOpencodePermission(perm, want) {
     } else if (has(bash, k)) stranded.push(k);
   }
   if (changed && fresh) perm.bash = bash;
-  return [changed, stranded];
+  return [changed, stranded, null];
 }
 
 /**
@@ -346,10 +360,23 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null) {
   const addPerm = !has(config, 'permission');
   let permChanged = addPerm;
   let stranded = [];
+  let opaque = null;
   if (addPerm) config.permission = defaultPermission(doctrines);
   else {
-    [permChanged, stranded] = reconcileOpencodePermission(get(config, 'permission'),
+    [permChanged, stranded, opaque] = reconcileOpencodePermission(get(config, 'permission'),
       defaultPermission(doctrines));
+  }
+  // The shape said no. This is the direction the residue warning above is NOT — a rule stated
+  // in AGENT.md with nothing behind it — and it used to pass in silence, because a blanket
+  // `"permission": {"bash": "allow"}` makes every reconcile a no-op and the whole merge then
+  // short-circuits before any of the three WARNs below. Reported, never rewritten: the blanket
+  // policy is the user's answer and it wins (`generate.test.mjs` pins that it survives).
+  if (opaque) {
+    process.stderr.write(`[geneseed] WARN: "permission" in ${path.basename(target)} `
+      + `${opaque}, so Geneseed cannot wire its own gates into it — including `
+      + `${OWNED_BASH.filter((k) => has(defaultPermission(doctrines).bash, k))
+        .map((k) => jsonDumps(k)).join(', ')}. Your policy is left exactly as written; the `
+      + 'harness states those rules but nothing enforces them at this boundary.\n');
   }
   // Told, not silently left: these are gates for a rule this build does not make binding, kept
   // because Geneseed cannot prove it was the one that wrote them. stderr, like the other two
@@ -369,6 +396,13 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null) {
     // add one is how the first cut of this got it wrong. `add` = there is no block, here is the
     // whole one; `reconcile` = there is a block and it is missing gates this build wires, and
     // this branch cannot write them because rewriting would drop the user's comments.
+    //
+    // DECIDED, NOT DEFERRED: a commented `.jsonc` is never rewritten and never will be. A
+    // comment-preserving JSONC writer is a parser, an AST and a printer — a dependency-free
+    // one, since this package ships zero — to keep formatting nobody asked us to touch, in a
+    // file Geneseed co-owns rather than owns. The advice above is the whole remedy: the exact
+    // block to paste, split by which of the two situations the reader is actually in. It is
+    // stdout, not stderr, because on this path the paste-in IS the output.
     warnCommentedJsonc(target, agentPath, addPerm ? 'add' : (permChanged && 'reconcile'),
       addLsp, 'geneseed', doctrines);
     return target;

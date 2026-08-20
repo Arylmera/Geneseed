@@ -140,8 +140,12 @@ test('every RE-EMIT of an existing install states its pack selection', () => {
         + 'harness.config.json. Use `doctrinesForBuild(root)` as the fallback.');
     }
   }
-  // The one exemption above, kept honest: every return in `askDoctrines` is an array.
-  const ask = readSrc('js/setup.mjs').match(/function askDoctrines\(\)\s*\{[\s\S]*?\n\}/)?.[0];
+  // The one exemption above, kept honest: every return in `askDoctrines` is an array. The
+  // parameter list is `[^)]*` and not `\(\)` on purpose — the function grew a `deployed`
+  // argument (the wizard now pre-selects the installed packs) and an anchored-empty match
+  // would have made this gate VACUOUS rather than red, which is the failure mode a source
+  // gate has and a fixture does not.
+  const ask = readSrc('js/setup.mjs').match(/function askDoctrines\([^)]*\)\s*\{[\s\S]*?\n\}/)?.[0];
   assert.ok(ask, 'askDoctrines has moved — re-site the exemption in the gate above');
   assert.ok(!/return\s+(null|undefined)/.test(ask),
     'askDoctrines can now answer null, so it is no longer a stated selection — it must go '
