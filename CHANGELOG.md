@@ -6,6 +6,49 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
+## [3.1.0] — 2026-08-20
+
+### Added
+
+- **Doctrine packs are toggleable from the console.** Settings gains one switch per pack —
+  name, blurb and live rule count — staged locally and committed by a single **Apply** at the
+  bottom of the card, with **Revert** beside it. Until now the console could *show* pack state
+  and not change it: dropping a pack meant `geneseed-build --doctrines`, the setup wizard, or
+  editing `harness.config.json` by hand.
+
+  **Staged rather than per-click, and that is the design.** Every other control on that page is
+  either live (console direction) or a single choice (footprint), so each can act on click. A
+  pack selection is a SET: acting per toggle would re-emit the install once per switch — four
+  rebuilds to get from all four packs to one, three of them describing a state nobody asked
+  for, each writing a different `Active packs:` marker for the next reader to parse.
+
+  It acts on whichever install the Topbar harness selector points at, so it is already
+  per-harness. Pushing one selection to several installs at once is not here.
+
+  ⚠ **`process` toggles like any other pack, and the consequence is named rather than
+  refused.** That pack carries commit/push consent, so dropping it also drops the `git-gate`
+  hook and the `git commit*` / `git push*` permission — prompt and boundary are never allowed
+  to disagree. An inline warning says so while the change is staged, and the confirm repeats
+  it. `rm -rf` and force-push refusals are Rule IV's territory, ride no pack, and stay in every
+  build.
+
+- **`/api/overview` carries the pack roster.** `doctrines: [{pack, title, desc, active,
+  rules}]`, beside `footprint` because it is the same kind of register — a build-time choice
+  that re-emits the install. NAMES, not just the `counts.doctrines` fraction: `3/4` cannot say
+  *which* pack is off, so a control built on the counts would render four switches it could not
+  set. Every pack is listed whether or not it is built in, or a switch could never be turned
+  back on.
+
+### Fixed
+
+- **A page reachable from three routes remounted on every row expand.** `Laws`, `Skills` and
+  `Library` are each reachable from the flat view, `#/section/<name>` and
+  `#/item/<type>/<name>`, and each was rendered from three different positions in `App`'s tree.
+  Crossing between them is not a prop change to React — it is an unmount and a remount, so the
+  page threw away its state, refetched its catalogue and re-entered Suspense. Expanding a row
+  does exactly that, because the row IS the route (`#/laws` → `#/item/law/craft.1`). Measured
+  in the browser: one refetch of `/api/catalog/laws` per expand *and* per collapse, now zero.
+
 ## [3.0.0] — 2026-08-20
 
 ### Changed
