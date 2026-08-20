@@ -251,6 +251,162 @@ test('the fixture can actually reproduce a clean run', () => {
   // then a problem in a later test is the fault, not the fixture.
   assert.deepEqual(gate(fixture(), 'm.themeParityProblems()'), []);
   assert.deepEqual(gate(fixture(), 'm.countTableProblems()'), []);
+  assert.deepEqual(gate(fixture(), 'm.constitutionProblems()'), []);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The constitution gate — the doctrine twin of the LAW_CLASS family, plus the two purity rules
+// the tiering rests on. Every arm below is planted and watched to redden; the control above is
+// what stops any of them passing because the copy is broken.
+
+test('the gate flags a citation into a doctrine rule that does not exist', () => {
+  // The shape a 339-site citation sweep leaves behind: a rewire that lands on a plausible
+  // address nobody defines. `craft 99` is chosen over `craft 7` deliberately — a rule one past
+  // the end would also be caught, but a wildly wrong one proves the gate reads the CATALOGUE
+  // rather than a hardcoded ceiling.
+  const skill = fs.readFileSync(path.join(SRC, 'skills', 'commit.md'), 'utf8');
+  const problems = withFault(
+    { 'src/skills/commit.md': `${skill}\n\nSee {{DOCTRINE}} craft 99 for the rest.\n` },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(problems.some((p) => p.includes('craft 99') && p.includes('skills/commit.md')),
+    `no dangling-citation problem in ${JSON.stringify(problems)}`);
+});
+
+test('the gate refuses a doctrine citation inside an always-on tier', () => {
+  // ⚠ D2, AND IT IS A SAFETY RULE RATHER THAN A TIDINESS ONE. A `--doctrines craft` build
+  // renders the invariants and the ontology whole and renders no rigor/ops/process rules; an
+  // invariant that points at one is then an instruction to read text the install does not have.
+  // Both files are planted, because the two are separate arms of the same walk and a gate
+  // wired into one of them satisfies a test that only checks the other.
+  for (const [rel, body] of [
+    ['src/laws/universal.md', '\n\nas {{DOCTRINE}} ops 1 already requires.\n'],
+    ['src/ontology/universal.md', '\n\nweighed against {{DOCTRINE}} process 3.\n'],
+  ]) {
+    const before = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const problems = withFault({ [rel]: before + body },
+      (root) => gate(root, 'm.constitutionProblems()'));
+    const short = rel.slice('src/'.length);
+    assert.ok(problems.some((p) => p.includes(short) && p.includes('{{DOCTRINE}}')),
+      `${rel}: no always-on-tier problem in ${JSON.stringify(problems)}`);
+  }
+  // ...and the SECTION noun is not the rule noun. `{{DOCTRINES}}` names the tier as a whole and
+  // an invariant may point at it; a gate that matched the prefix would ban the pointer too.
+  const laws = fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8');
+  assert.deepEqual(withFault(
+    { 'src/laws/universal.md': `${laws}\n\nThe {{DOCTRINES}} sit under this.\n` },
+    (root) => gate(root, 'm.constitutionProblems()')), [],
+  '{{DOCTRINES}}, the section noun, was read as a rule citation');
+});
+
+test('the gate flags a pack whose rule ids skip, and one filed under the wrong pack', () => {
+  const craft = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
+  // A gap. Appending `craft 8` after six rules puts it at position 7 — the id and the position
+  // disagree, which is exactly what a deletion in the middle leaves behind.
+  const gap = withFault({ 'src/doctrines/craft.md': `${craft}\n### {{DOCTRINE}} craft 8 — x\nbody\n` },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(gap.some((p) => p.includes('rule 8') && p.includes('position 7')),
+    `no contiguity problem in ${JSON.stringify(gap)}`);
+  // A rule filed in the wrong file. `pack` is read from the HEADING, so this rule is reachable
+  // at `ops.7` — a name `ops.md` also numbers — and unreachable at any craft address.
+  const wrong = withFault({ 'src/doctrines/craft.md': `${craft}\n### {{DOCTRINE}} ops 7 — x\nbody\n` },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(wrong.some((p) => p.includes('craft.md') && p.includes('ops 7')),
+    `no wrong-pack problem in ${JSON.stringify(wrong)}`);
+});
+
+test('the gate flags a theme missing a doctrine title, and a dead one it still carries', () => {
+  // ⚠ THE ARM `themeParityProblems` CANNOT HAVE. Parity is presence-only and SYMMETRIC over the
+  // union of every theme's keys, so a key missing from ALL of them is in perfect parity — and
+  // that is precisely the state a new doctrine rule creates. This arm asks the SOURCE what the
+  // themes owe instead of asking the themes about each other.
+  const neutral = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'neutral.json'), 'utf8'));
+  const short = { ...neutral };
+  delete short.DOC_CRAFT_1;
+  const missing = withFault({ 'themes/neutral.json': JSON.stringify(short, null, 2) },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(missing.some((p) => p.includes('DOC_CRAFT_1') && p.includes('neutral.json')),
+    `no missing-title problem in ${JSON.stringify(missing)}`);
+  // The other direction: a title for a rule that does not exist. Its cost is not cosmetic —
+  // it is the residue a deleted rule leaves in fifteen files at once.
+  const dead = withFault(
+    { 'themes/neutral.json': JSON.stringify({ ...neutral, DOC_CRAFT_9: 'Ghost' }, null, 2) },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(dead.some((p) => p.includes('DOC_CRAFT_9') && p.includes('no doctrine file uses')),
+    `no dead-key problem in ${JSON.stringify(dead)}`);
+});
+
+test('the gate holds every theme to exactly LEX_I..LEX_IX', () => {
+  // ⚠ I1, AND IT IS AN EQUALITY BECAUSE A PRESENCE CHECK ALREADY MISSED IT ONCE. The renumber's
+  // deletion ranges skipped LEX_XXII, LEX_XXIII, LEX_XXIV and LEX_XXXVI; they survived in all
+  // fifteen files, and parity was silent because a key present everywhere is missing nowhere.
+  const neutral = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'neutral.json'), 'utf8'));
+  const stale = withFault(
+    { 'themes/neutral.json': JSON.stringify({ ...neutral, LEX_XXII: 'Ghost' }, null, 2) },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(stale.some((p) => p.includes('LEX_XXII')),
+    `a survivor of the renumber went unflagged: ${JSON.stringify(stale)}`);
+  const gone = { ...neutral };
+  delete gone.LEX_IX;
+  const short = withFault({ 'themes/neutral.json': JSON.stringify(gone, null, 2) },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(short.some((p) => p.includes('LEX_IX')),
+    `a missing invariant title went unflagged: ${JSON.stringify(short)}`);
+  // `_TEMPLATE.json` is HELD TO THIS TOO, unlike theme parity, which skips `_`-scaffolds. It is
+  // the file `--sync-themes` seeds a new voice from, so a stale key there propagates forward.
+  const tmpl = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', '_TEMPLATE.json'), 'utf8'));
+  const tstale = withFault(
+    { 'themes/_TEMPLATE.json': JSON.stringify({ ...tmpl, LEX_XL: '<x>' }, null, 2) },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(tstale.some((p) => p.includes('LEX_XL') && p.includes('_TEMPLATE')),
+    `the template is exempt from the equality: ${JSON.stringify(tstale)}`);
+});
+
+test('the gate refuses a two-word tier noun in any theme', () => {
+  // ⚠ M10. Both heading parsers match the tier noun with `\\S+`, so a value with a space does
+  // not error — the heading stops matching, the tier parses to NOTHING, and every count
+  // downstream reports a smaller constitution without a word said. `_TEMPLATE.json` is exempt
+  // by design: its values are descriptive placeholders and its DOCTRINE line is the warning.
+  const neutral = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'neutral.json'), 'utf8'));
+  for (const key of ['LAW', 'DOCTRINE']) {
+    const problems = withFault(
+      { 'themes/neutral.json': JSON.stringify({ ...neutral, [key]: 'House Rule' }, null, 2) },
+      (root) => gate(root, 'm.constitutionProblems()'));
+    assert.ok(problems.some((p) => p.includes(`{${key}}`) && p.includes('neutral.json')),
+      `${key}: a two-word tier noun was accepted — ${JSON.stringify(problems)}`);
+  }
+  // The template's own placeholder HAS spaces and must stay silent, or the gate is red on a
+  // clean tree — which is the control at the top of this section.
+  const tmpl = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', '_TEMPLATE.json'), 'utf8'));
+  assert.match(tmpl.DOCTRINE, /\s/, 'the template placeholder lost its spaces, so the exemption '
+    + 'above is no longer being exercised by anything');
+});
+
+test('the gate flags an unknown pack in the build default, and NOTES a narrowed one', () => {
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'harness.config.json'), 'utf8'));
+  const bogus = withFault(
+    { 'harness.config.json': JSON.stringify({ ...cfg, doctrines: ['craft', 'nosuch'] }, null, 2) },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(bogus.some((p) => p.includes('nosuch') && !p.startsWith('[note]')),
+    `an unknown pack in the build default is a failure, not a note: ${JSON.stringify(bogus)}`);
+
+  // ⚠ D5 — A NARROWED DEFAULT IS LEGAL AND MUST NOT FAIL THE DOCTOR. Its citations still
+  // resolve on disk: every pack file ships in every bundle. What changes is that the rendered
+  // AGENT.md will not carry those rules, and that is worth SAYING rather than failing over.
+  const narrow = withFault(
+    { 'harness.config.json': JSON.stringify({ ...cfg, doctrines: ['craft'] }, null, 2) },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  const notes = narrow.filter((p) => p.startsWith('[note]'));
+  assert.equal(narrow.length, notes.length,
+    `a legal pack-off default produced a real problem: ${JSON.stringify(narrow)}`);
+  assert.equal(notes.length, 1, `expected exactly one note, got ${JSON.stringify(notes)}`);
+  for (const pack of ['rigor', 'ops', 'process']) {
+    assert.ok(notes[0].includes(pack), `the note did not name ${pack}: ${notes[0]}`);
+  }
+  // The note channel exists so `cmdDoctor` can print without counting. If a note ever reached
+  // the problem list unflagged, doctor would exit 1 on a configuration its owner chose.
+  assert.ok(gate(fixture(), 'm.isDoctorNote("[note] x")'), 'the note predicate stopped matching');
+  assert.ok(!gate(fixture(), 'm.isDoctorNote("[authoring] x")'),
+    'the note predicate now swallows real problems');
 });
 
 test('a theme missing a key is flagged', () => {

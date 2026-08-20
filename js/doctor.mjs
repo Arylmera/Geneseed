@@ -33,7 +33,9 @@ import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 
-import { CONFIG, PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC, makeCfg } from './checkout.mjs';
+import {
+  CONFIG, PACK_ORDER, PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC, makeCfg,
+} from './checkout.mjs';
 import {
   buildInto, main as driverMain, emitGlobalInto, emitProjectInto,
 } from '../bin/geneseed.mjs';
@@ -763,6 +765,199 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
 const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
 const LAW_HEADING_RE = /^### \{\{LAW\}\} ([IVXLCDM]+)\b/gm;
 
+// The doctrine twins of `LAW_HEADING_RE`, over the UNRENDERED source — `js/inventory.mjs`'s
+// pair of the same names read the rendered form. A citation is the heading minus its `### `,
+// so one regex cannot serve both: a heading is an anchored line, a citation is anywhere.
+const DOCTRINE_HEADING_RE = /^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm;
+const DOCTRINE_CITE_RE = /\{\{DOCTRINE\}\}\s+([a-z]+)\s+(\d+)/g;
+// `\{\{DOCTRINE\}\}` and not `DOCTRINE`: `{{DOCTRINES}}` is the SECTION noun and is legal
+// everywhere, including in an invariant that points at the tier as a whole.
+const DOCTRINE_TOKEN_RE = /\{\{DOCTRINE\}\}/;
+const DOC_TOKEN_RE = /\{\{(DOC_[A-Z0-9_]+)\}\}/g;
+
+/**
+ * A line reported by the doctor that is NOT a failure — `[note] …` rather than `[authoring] …`.
+ *
+ * ⚠ ONE PRODUCER, AND IT IS THE ONLY THING THAT NEEDED A SECOND CHANNEL. A build with a
+ * doctrine pack off is LEGAL, and it leaves body prose citing rules that pack owns. That state
+ * has to be visible — a silent dangling citation is how prose and boundary drift apart — but
+ * reporting it as a problem would make `doctor` exit 1 over a configuration its owner chose.
+ * So `cmdDoctor` prints notes and does not count them.
+ */
+const NOTE = '[note] ';
+export const isDoctorNote = (p) => p.startsWith(NOTE);
+
+/**
+ * The three-tier constitution's own authoring gates — the doctrine twin of the `LAW_CLASS` /
+ * `LAW_META` family, plus the two purity rules the tiering rests on.
+ *
+ * IT LIVES BESIDE `countTableProblems` RATHER THAN INSIDE IT, and is called from
+ * `authoringProblems` beside `registry`/`secret`/`vendorPin`. `countTableProblems` opens by
+ * reading `AGENT.md.tmpl` and HARD-RETURNS if that read fails, so an arm placed inside it
+ * would go quiet on exactly the tree that is most broken. Nothing here needs the template's
+ * tables, and `proseMirrorProblems` — the frozen recording — is untouched either way.
+ *
+ * ⚠ THE VOCABULARY GATES ARE HERE BECAUSE `themeParityProblems` CANNOT SEE THEM. That check is
+ * presence-only and SYMMETRIC over the union of every theme's keys: a key missing from all
+ * fourteen is in parity, and a key whose VALUE breaks a parser is not its business at all. So
+ * `DOC_*` coverage, the `LEX_I..LEX_IX` equality and the single-word tier noun each need a gate
+ * that reads the SOURCE and asks what the source requires.
+ */
+export function constitutionProblems() {
+  const problems = [];
+  const dir = path.join(SRC, 'doctrines');
+
+  // ---- the packs themselves: present, contiguous from 1, and filed where they say they are.
+  const rules = new Map();                                    // 'craft.1' -> title-less marker
+  for (const pack of PACK_ORDER) {
+    const file = path.join(dir, `${pack}.md`);
+    let text;
+    try { text = readText(file); } catch (e) {
+      problems.push(`[authoring] doctrines/${pack}.md is named in PACK_ORDER but unreadable: `
+        + `${e.message} — the build ships the whole catalogue, so a missing pack file breaks `
+        + 'every citation into it, active or not');
+      continue;
+    }
+    const found = [...text.matchAll(DOCTRINE_HEADING_RE)];
+    if (!found.length) {
+      problems.push(`[authoring] doctrines/${pack}.md carries no '### {{DOCTRINE}} ${pack} <n>' `
+        + 'heading — the pack would render as an empty section');
+      continue;
+    }
+    found.forEach(([, named, n], i) => {
+      if (named !== pack) {
+        problems.push(`[authoring] doctrines/${pack}.md holds a rule addressed to '${named} `
+          + `${n}' — a rule's pack is read from its heading, so this one is unreachable at `
+          + `'${pack}.${n}' and shadows whatever ${named}.md numbers ${n}`);
+      }
+      if (Number(n) !== i + 1) {
+        problems.push(`[authoring] doctrines/${pack}.md rule ${n} is at position ${i + 1} — `
+          + 'pack ids must run contiguously from 1, or a citation addresses a gap');
+      }
+      rules.set(`${named}.${Number(n)}`, true);
+    });
+  }
+
+  // ---- every `{{DOCTRINE}} <pack> <n>` anywhere in src/ resolves to a rule that exists.
+  //
+  // The whole tree, not the template: a skill footer citing `process 9` is as broken as a
+  // template one, and it is the shape 339 rewired citations could have left behind.
+  const cited = new Map();                                    // 'process.5' -> [rel, …]
+  for (const p of rglob(SRC)) {
+    if (!isFile(p) || !(p.endsWith('.md') || p.endsWith('.tmpl'))) continue;
+    let text;
+    try { text = readText(p); } catch { continue; }
+    const rel = path.relative(SRC, p).split(path.sep).join('/');
+    // ⚠ AN ALWAYS-ON TIER MAY NEVER CITE A TOGGLEABLE ONE (D2). A `--doctrines craft` build
+    // ships invariants that point at rules its AGENT.md does not contain; the ontology is
+    // worse still, being the tier that states the order the others sit in. Doctrine->doctrine
+    // citations are fine and stay: the full catalogue ships in every bundle.
+    if ((rel.startsWith('ontology/') || rel.startsWith('laws/')) && DOCTRINE_TOKEN_RE.test(text)) {
+      problems.push(`[authoring] ${rel} cites {{DOCTRINE}} — an always-on tier may never `
+        + 'reference a toggleable one, or a pack-off build ships a rule pointing at text '
+        + 'that is not there. State the point directly instead');
+    }
+    for (const [, pack, n] of text.matchAll(DOCTRINE_CITE_RE)) {
+      const key = `${pack}.${Number(n)}`;
+      if (!cited.has(key)) cited.set(key, []);
+      cited.get(key).push(rel);
+    }
+  }
+  for (const [key, where] of [...cited].sort()) {
+    if (rules.has(key)) continue;
+    problems.push(`[authoring] ${where[0]} cites {{DOCTRINE}} ${key.replace('.', ' ')}, which `
+      + `no pack file defines${where.length > 1 ? ` (and ${where.length - 1} more)` : ''}`);
+  }
+
+  // ---- the vocabulary every theme owes the source.
+  const wanted = new Set();
+  for (const pack of PACK_ORDER) {
+    let text;
+    try { text = readText(path.join(dir, `${pack}.md`)); } catch { continue; }
+    for (const [, key] of text.matchAll(DOC_TOKEN_RE)) wanted.add(key);
+  }
+  const lexWant = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'].map((r) => `LEX_${r}`);
+  // `_TEMPLATE.json` is included — it is the file `--sync-themes` seeds a new theme from, so a
+  // stale key there propagates into every voice added afterwards. `themeFiles()` excludes it.
+  const files = [...themeFiles(), path.join(THEMES, '_TEMPLATE.json')];
+  for (const f of files) {
+    const name = path.basename(f);
+    let theme;
+    try { theme = parseJson(readText(f)); } catch (e) {
+      problems.push(`[authoring] ${name} unreadable: ${e.message}`);
+      continue;
+    }
+    if (!theme || typeof theme !== 'object' || Array.isArray(theme)) continue;
+    const keys = Object.keys(theme);
+    for (const key of [...wanted].sort()) {
+      if (!Object.hasOwn(theme, key)) {
+        problems.push(`[authoring] ${name} has no {${key}} — a doctrine file names it, and `
+          + 'theme parity cannot see a key that is missing from every theme at once');
+      }
+    }
+    for (const key of keys.filter((k) => k.startsWith('DOC_')).sort()) {
+      if (!wanted.has(key)) {
+        problems.push(`[authoring] ${name} defines {${key}}, which no doctrine file uses — a `
+          + 'dead voice key ships a title for a rule that does not exist');
+      }
+    }
+    // I1 — an EQUALITY, not a presence check. The renumber left `LEX_XXII`, `LEX_XXIII`,
+    // `LEX_XXIV` and `LEX_XXXVI` behind in all fifteen files, and parity was silent because
+    // they were absent from nowhere.
+    const lex = keys.filter((k) => k.startsWith('LEX_')).sort();
+    const stale = lex.filter((k) => !lexWant.includes(k));
+    const missing = lexWant.filter((k) => !lex.includes(k));
+    for (const k of stale) {
+      problems.push(`[authoring] ${name} still defines {${k}} — the invariants are I..IX and `
+        + 'nothing renders this key, so it is a title for a rule that no longer exists');
+    }
+    for (const k of missing) {
+      problems.push(`[authoring] ${name} has no {${k}} — one of the nine invariants would `
+        + 'render with an empty title');
+    }
+    // M10 — ⚠ BOTH HEADING PARSERS MATCH THE TIER NOUN WITH `\S+`. A two-word value does not
+    // error; the heading stops matching and the tier silently parses to nothing. `_TEMPLATE`'s
+    // values are descriptive placeholders, so only real voices are held to this.
+    if (name === '_TEMPLATE.json') continue;
+    for (const key of ['LAW', 'DOCTRINE']) {
+      const v = theme[key];
+      if (typeof v === 'string' && /\s/.test(v)) {
+        problems.push(`[authoring] ${name} spells {${key}} as ${pyRepr(v)} — the heading `
+          + 'parsers match the tier noun with \\S+, so a value with a space makes every '
+          + `${key === 'LAW' ? 'invariant' : 'doctrine rule'} parse to nothing, in silence`);
+      }
+    }
+  }
+
+  // ---- the build default names packs that exist.
+  let cfgDoctrines = null;
+  try {
+    const cfg = parseJson(readText(CONFIG));
+    if (cfg && typeof cfg === 'object' && Array.isArray(cfg.doctrines)) cfgDoctrines = cfg.doctrines;
+  } catch { /* no config, or unreadable — `configDefaults()` is forgiving here too */ }
+  if (cfgDoctrines) {
+    for (const pack of cfgDoctrines) {
+      if (!PACK_ORDER.includes(pack)) {
+        problems.push(`[authoring] harness.config.json names doctrine pack ${pyRepr(pack)}, `
+          + `which this checkout does not ship ${pyRepr([...PACK_ORDER])} — every build reading `
+          + 'that default would fail');
+      }
+    }
+  }
+
+  // ---- D5, a NOTE and not a problem: what a narrowed default leaves pointing at the shelf.
+  const on = cfgDoctrines ?? [...PACK_ORDER];
+  const dangling = [...cited].filter(([k]) => rules.has(k) && !on.includes(k.split('.')[0]));
+  if (dangling.length) {
+    const packs = [...new Set(dangling.map(([k]) => k.split('.')[0]))].sort();
+    problems.push(`${NOTE}harness.config.json builds ${pyRepr(on)}, and ${dangling.length} `
+      + `citation(s) in src/ point into ${packs.join(', ')}. Those rules still SHIP — every `
+      + 'pack file is in the bundle — so the reference resolves on disk; it is the rendered '
+      + 'AGENT.md that will not contain them. Legal, and recorded here so it is not silent');
+  }
+  return problems;
+}
+
 /**
  * `_harness_build._count_table_problems` — the hand-authored AGENT.md tables and the README
  * badges, against `src/`.
@@ -990,6 +1185,7 @@ export function authoringProblems() {
   problems.push(...registryProblems());
   problems.push(...secretProblems());
   problems.push(...vendorPinProblems());
+  problems.push(...constitutionProblems());
   problems.push(...countTableProblems());
   return problems;
 }
@@ -1191,17 +1387,26 @@ function captureBoth(fn) {
  * maintainer sweep. The cross-theme parity check runs in every mode.
  */
 export function cmdDoctor(args) {
-  const [themes, problems] = doctorCollect({
+  const [themes, collected] = doctorCollect({
     theme: args.theme, allThemes: Boolean(args.all), bundle: args.bundle,
     noBundle: Boolean(args.noBundle),
   });
   if (!themes.length) {
-    pyPrint(`${problems.length ? problems[0] : '[doctor] no themes found'}\n`);
+    pyPrint(`${collected.length ? collected[0] : '[doctor] no themes found'}\n`);
     return 1;
   }
+  // ⚠ NOTES ARE PRINTED AND NOT COUNTED. The only producer is the pack-off citation report in
+  // `constitutionProblems`, and the state it describes is one the install's owner chose: a
+  // build that leaves body prose citing a pack it did not render. Silence there is how prose
+  // and boundary drift apart, and a non-zero exit there is doctor failing a legal
+  // configuration. Nothing in the recorded CLI corpus produces one — the checkout's own
+  // `harness.config.json` names no packs — so the byte-compared output is unmoved.
+  const notes = collected.filter(isDoctorNote);
+  const problems = collected.filter((p) => !isDoctorNote(p));
   const scoped = !args.theme && !args.all && themes.length === 1;
   const note = scoped
     ? `  (scoped to installed theme '${themes[0]}'; run with --all to sweep every theme)` : '';
+  for (const n of notes) pyPrint(`${n}\n`);
   if (problems.length) {
     pyPrint(`[doctor] ${problems.length} problem(s) across ${themes.length} theme(s):\n`);
     for (const p of problems) pyPrint(`  - ${p}\n`);
