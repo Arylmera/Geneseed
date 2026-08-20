@@ -243,7 +243,9 @@ export default function App() {
                   FIRST expand — a second row is `item` -> `item`, same slot, no remount —
                   which is what made it look intermittent rather than broken. Deriving the
                   props and rendering from one slot each lets React reconcile instead. */}
-              {showLaws && <Laws selected={selectedItem} />}
+              {showLaws && (
+                <Laws selected={selectedItem} overview={overview} onAction={runAction} />
+              )}
               {showSkills && <Skills selected={selectedItem} />}
               {showLibrary && (
                 <Library

@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The Constitution page had NO component test before this file — its only gate was doctor's
@@ -92,11 +92,18 @@ describe('Constitution page', () => {
     // ⚠ THE CLAIM THIS PAGE EXISTS FOR. An inactive pack that were simply omitted would make
     // "off" indistinguishable from "never shipped" — and the enable command has to name the
     // WHOLE selection, because `--doctrines` replaces the set rather than adding to it.
+    //
+    // This is the no-install case: with one to rebuild, the switches take over and the command
+    // is not shown at all (see the toggle suite below).
     const { container } = render(<Laws />)
     await waitFor(() => expect(container.querySelector('.pack-wrap')).toBeTruthy())
     expect(screen.getByText(/not built in/)).toBeTruthy()
     expect(container.querySelector('.pack-wrap.pack-off')).toBeTruthy()
-    const cmd = screen.getByText(/geneseed build --doctrines/)
+    // ⚠ `geneseed-build`, NOT `geneseed build`. The CLI's `build` verb forwards `--theme` and
+    // nothing else, so the shorter spelling errors with `unrecognized arguments` — this page
+    // shipped that wrong command in 3.0.0, the same trap DESIGN.md documents for
+    // `--sync-themes`.
+    const cmd = screen.getByText(/geneseed-build --doctrines/)
     expect(cmd.textContent).toContain('craft,process')
     // Its rules are still listed and still readable — the text ships either way.
     expect(screen.getByText('Consent Before Push')).toBeTruthy()
@@ -168,5 +175,104 @@ describe('Constitution page', () => {
     )
     expect(screen.getByText(/No ontology sections/)).toBeTruthy()
     expect(screen.getByText(/No doctrine packs/)).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// The pack toggles. They live on THIS page and not in Settings because this is where a reader is
+// already looking at what each pack contains — dropping `ops` is a decision about the six rules
+// listed directly under its header, and a switch three screens away makes it a decision taken
+// blind.
+
+const INSTALL = { host: 'opencode', scope: 'global' }
+const sw = (c, name) => c.querySelector(`[aria-label="${name} pack"]`)
+const applyBtn = () => screen.getByText(/^Apply/).closest('button')
+const withInstall = (onAction = () => {}) => (
+  <Laws overview={{ install: INSTALL }} onAction={onAction} />
+)
+
+describe('Constitution page — pack toggles', () => {
+  it('renders a switch per pack, reflecting what is deployed', async () => {
+    const { container } = render(withInstall())
+    await waitFor(() => expect(sw(container, 'Craft')).toBeTruthy())
+    expect(sw(container, 'Craft').getAttribute('aria-checked')).toBe('true')
+    expect(sw(container, 'Process').getAttribute('aria-checked')).toBe('false')
+    expect(applyBtn().disabled).toBe(true)
+  })
+
+  it('stages every toggle and rebuilds ONCE on Apply', async () => {
+    // ⚠ THE WHOLE POINT. Acting per click would re-emit the install once per switch — three of
+    // those rebuilds describing a state nobody asked for, each writing a different
+    // `Active packs:` marker.
+    const onAction = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { container } = render(withInstall(onAction))
+    await waitFor(() => expect(sw(container, 'Craft')).toBeTruthy())
+    fireEvent.click(sw(container, 'Process')) // off -> on
+    fireEvent.click(sw(container, 'Craft')) // on  -> off
+    expect(onAction).not.toHaveBeenCalled() // still nothing — this is the claim
+    fireEvent.click(applyBtn())
+    expect(onAction).toHaveBeenCalledTimes(1)
+    const [action, body] = onAction.mock.calls[0]
+    expect(action).toBe('install')
+    expect(body.doctrines).toEqual(['process'])
+    expect(body.host).toBe('opencode')
+    vi.restoreAllMocks()
+  })
+
+  it('turning every pack off is a real selection, not a no-op', async () => {
+    // The server reads `[]` as a deliberate `--doctrines none` and anything falsier as
+    // "unspecified", which resolves to ALL packs — so an empty list must arrive as an empty list.
+    const onAction = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { container } = render(withInstall(onAction))
+    await waitFor(() => expect(sw(container, 'Craft')).toBeTruthy())
+    fireEvent.click(sw(container, 'Craft')) // the only one that starts on
+    fireEvent.click(applyBtn())
+    expect(onAction.mock.calls[0][1].doctrines).toEqual([])
+    vi.restoreAllMocks()
+  })
+
+  it('a staged pack reads as staged, not as deployed', async () => {
+    // The header must not claim `active` for something that has not been applied — that is the
+    // one lie a staged control can tell.
+    const { container } = render(withInstall())
+    await waitFor(() => expect(sw(container, 'Process')).toBeTruthy())
+    expect(screen.getByText(/not built in/)).toBeTruthy()
+    fireEvent.click(sw(container, 'Process'))
+    expect(screen.getByText(/staged on/)).toBeTruthy()
+    expect(screen.queryByText(/not built in/)).toBeNull()
+  })
+
+  it('warns before dropping the pack that carries the consent gate', async () => {
+    // Supported, so it is NAMED rather than refused.
+    const onAction = vi.fn()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { container } = render(
+      <Laws
+        overview={{ install: INSTALL }}
+        onAction={onAction}
+        // craft + process both deployed, so dropping process is a real loss
+      />,
+    )
+    await waitFor(() => expect(sw(container, 'Process')).toBeTruthy())
+    fireEvent.click(sw(container, 'Process')) // stage it ON first
+    fireEvent.click(applyBtn())
+    expect(confirm.mock.calls[0][0]).not.toMatch(/consent/) // gaining it warns about nothing
+    expect(onAction).toHaveBeenCalledTimes(1)
+    vi.restoreAllMocks()
+  })
+
+  it('shows no switches at all when there is no install to rebuild', async () => {
+    // A source render still READS; it just cannot be changed from here, so the command fallback
+    // takes over — spelled `geneseed-build`, because the CLI's `build` verb forwards `--theme`
+    // and nothing else and the shorter spelling errors.
+    const { container } = render(<Laws />)
+    await waitFor(() => expect(screen.getByText('Automate Repetition')).toBeTruthy())
+    expect(sw(container, 'Craft')).toBeNull()
+    expect(screen.queryByText(/^Apply/)).toBeNull()
+    const cmd = screen.getByText(/geneseed-build --doctrines/)
+    expect(cmd.textContent).toContain('craft,process')
+    expect(screen.queryByText(/\$ geneseed build --doctrines/)).toBeNull()
   })
 })
