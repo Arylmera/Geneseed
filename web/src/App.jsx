@@ -44,6 +44,32 @@ const About = lazy(() => import('./pages/About.jsx'))
 // composes them, the way the CLI entry point composes its submodules.
 export default function App() {
   const route = useRoute()
+  // Which page each route lands on, derived ONCE so each page has exactly one slot in the tree
+  // below — see the ⚠ beside them. A route only ever selects one of these three.
+  const isSection = route.view === 'section'
+  const isItem = route.view === 'item'
+  const showLaws =
+    route.view === 'laws' ||
+    (isSection && route.section === 'laws') ||
+    (isItem && route.type === 'law')
+  const showSkills =
+    route.view === 'skills' ||
+    (isSection && route.section === 'skills') ||
+    (isItem && route.type === 'skill')
+  const showLibrary =
+    route.view === 'library' ||
+    route.view === 'agents' ||
+    ((isSection || isItem) && !showLaws && !showSkills)
+  // `#/library` alone carries no section — Library reads that as "all of them".
+  const librarySection =
+    route.view === 'agents'
+      ? 'agents'
+      : isSection
+        ? route.section
+        : isItem
+          ? TYPE_TO_SECTION[route.type] || route.type
+          : undefined
+  const selectedItem = isItem ? route.name : undefined
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState(null)
   const [voiceOpen, setVoiceOpen] = useState(false)
@@ -207,35 +233,28 @@ export default function App() {
               {route.view === 'activity-detail' && (
                 <ActivityDetail key={route.sid} sid={route.sid} />
               )}
-              {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
-              {route.view === 'agents' && (
-                <Library overview={overview} section="agents" dataRev={dataRev} />
+              {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. `Laws`, `Skills` and `Library`
+                  are each reachable from three routes — the flat view, `#/section/<name>` and
+                  `#/item/<type>/<name>` — and rendering them from three different positions in
+                  this tree made React UNMOUNT and remount the whole page whenever the route
+                  crossed between them. Expanding a row does exactly that (`#/laws` ->
+                  `#/item/law/craft.1`), so the page threw away its state, refetched its
+                  catalogue, flashed the spinner and lost the scroll position. Only on the
+                  FIRST expand — a second row is `item` -> `item`, same slot, no remount —
+                  which is what made it look intermittent rather than broken. Deriving the
+                  props and rendering from one slot each lets React reconcile instead. */}
+              {showLaws && <Laws selected={selectedItem} />}
+              {showSkills && <Skills selected={selectedItem} />}
+              {showLibrary && (
+                <Library
+                  overview={overview}
+                  section={librarySection}
+                  selected={selectedItem}
+                  dataRev={dataRev}
+                />
               )}
-              {route.view === 'laws' && <Laws />}
               {route.view === 'rules' && <Rules />}
               {route.view === 'profile' && <Profile />}
-              {route.view === 'skills' && <Skills />}
-              {route.view === 'section' &&
-                (route.section === 'laws' ? (
-                  <Laws />
-                ) : route.section === 'skills' ? (
-                  <Skills />
-                ) : (
-                  <Library overview={overview} section={route.section} dataRev={dataRev} />
-                ))}
-              {route.view === 'item' &&
-                (route.type === 'law' ? (
-                  <Laws selected={route.name} />
-                ) : route.type === 'skill' ? (
-                  <Skills selected={route.name} />
-                ) : (
-                  <Library
-                    overview={overview}
-                    section={TYPE_TO_SECTION[route.type] || route.type}
-                    selected={route.name}
-                    dataRev={dataRev}
-                  />
-                ))}
               {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
               {route.view === 'doctor' && <Doctor />}
               {route.view === 'themes' && <Themes onAction={runAction} />}

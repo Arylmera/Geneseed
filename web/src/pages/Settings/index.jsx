@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { FLAVOURS } from '../../hooks/useFlavour.js'
 import { ACCENT_MODES } from '../../hooks/useAccentMode.js'
@@ -20,6 +20,60 @@ export default function Settings({
 }) {
   const install = overview?.install
   const footprint = overview?.footprint
+
+  // ---- doctrine packs: STAGED, then applied once ------------------------------------------
+  //
+  // ⚠ ONE REBUILD, NOT ONE PER TOGGLE. Every other control on this page is either live
+  // (console direction) or a single choice (footprint), so each can act on click. A pack
+  // selection is a SET, and acting per click would re-emit the install four times to get from
+  // all-four to one — four rebuilds, three of them describing a state nobody asked for, and
+  // the intermediate ones would each write a different `Active packs:` marker. So the switches
+  // edit local state and `Apply` sends the whole selection.
+  const packs = overview?.doctrines ?? []
+  const deployed = packs.filter((p) => p.active).map((p) => p.pack)
+  const [picked, setPicked] = useState(deployed)
+  // Re-sync when the overview refetches — after an Apply, and after anything else rebuilds the
+  // install. Keyed on the VALUE rather than on the array identity: `overview` is a fresh object
+  // on every poll, so an identity dependency would discard a half-made selection every few
+  // seconds. `deployed` is already in PACK_ORDER, so the join is a stable key.
+  const deployedKey = deployed.join(',')
+  useEffect(() => {
+    setPicked(deployedKey ? deployedKey.split(',') : [])
+  }, [deployedKey])
+
+  const isOn = (name) => picked.includes(name)
+  const togglePack = (name) =>
+    setPicked((cur) => (cur.includes(name) ? cur.filter((p) => p !== name) : [...cur, name]))
+  // Compared in PACK_ORDER — `packs` arrives in it — so a toggle off and back on is not "dirty".
+  const pickedKey = packs
+    .filter((p) => isOn(p.pack))
+    .map((p) => p.pack)
+    .join(',')
+  const dirty = pickedKey !== deployedKey
+  const losingConsent = deployed.includes('process') && !picked.includes('process')
+
+  const applyPacks = () => {
+    if (!install || !dirty) return
+    const chosen = packs.filter((p) => isOn(p.pack)).map((p) => p.pack)
+    // The consent gate is a real capability and turning it off is a supported choice — so this
+    // names the consequence rather than refusing it. `git commit`/`git push` stop being gated
+    // at the tool boundary because the rule behind that gate is no longer built in; the
+    // invariant-territory refusals (`rm -rf`, force-push) are unaffected either way.
+    const warn = losingConsent
+      ? '\n\n⚠ The process pack carries commit/push consent. Dropping it also removes the ' +
+        'git-gate hook, so commits and pushes stop being confirmed at the tool boundary. ' +
+        '(rm -rf and force-push stay gated — those are Rule IV’s, not the pack’s.)'
+      : ''
+    if (
+      window.confirm(
+        `Rebuild ${install.host} · ${install.scope} with ${
+          chosen.length ? chosen.join(', ') : 'no doctrine packs'
+        }? It rebuilds in place, non-destructive.${warn}`,
+      )
+    )
+      onAction?.('install', { ...install, doctrines: chosen })
+  }
+
   const setFootprint = (fp) => {
     if (!install || fp === footprint) return
     if (
@@ -178,6 +232,80 @@ export default function Settings({
               {footprint === 'lean'
                 ? 'Lean: terse rule lines + a pointer to the full law file (~40% smaller, lighter context per turn).'
                 : 'Full: every Rule’s complete text and rationale inlined (maximum guidance, largest context).'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Doctrine packs — which practice rules this install is bound by. Unlike the footprint
+          dial above, a pack that is off is genuinely NOT in AGENT.md: this changes what the
+          agent must do, not how much of it loads. Staged, applied once. */}
+      {install && packs.length > 0 && (
+        <div className="card pad-lg mb-16">
+          <div className="card-head">
+            <h3>Doctrine packs</h3>
+          </div>
+          <p className="sub mb-16">
+            Which practice rules bind this install (
+            <code>
+              {install.host} · {install.scope}
+            </code>
+            ). The Ontology and the nine Rules are always on and are not listed here — these are the
+            toggleable tier. A pack you switch off still ships in the bundle, so its text stays
+            readable and any rule citing it still resolves; it just stops being rendered into{' '}
+            <code>AGENT.md</code>. <a href="#/laws">Read them →</a>
+          </p>
+          <div className="pack-toggles">
+            {packs.map((p) => (
+              <label className="pack-toggle" key={p.pack}>
+                <span
+                  className={`sw-toggle${isOn(p.pack) ? ' on' : ''}`}
+                  role="switch"
+                  aria-checked={isOn(p.pack)}
+                  aria-label={`${p.title} pack`}
+                  tabIndex={0}
+                  onClick={() => togglePack(p.pack)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.key === ' ') e.preventDefault()
+                      togglePack(p.pack)
+                    }
+                  }}
+                />
+                <span className="pack-toggle-body">
+                  <span className="pack-toggle-name">
+                    {p.title}
+                    <span className="pack-toggle-n">
+                      {p.rules} rule{p.rules === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                  <span className="sub">{p.desc}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {losingConsent && (
+            <p className="pack-warn" role="status" aria-live="polite">
+              ⚠ Dropping <b>process</b> also removes the commit/push consent gate —{' '}
+              <code>git commit</code> and <code>git push</code> stop being confirmed at the tool
+              boundary. <code>rm -rf</code> and force-push stay gated.
+            </p>
+          )}
+          <div className="pack-apply">
+            <button className="btn soft" onClick={applyPacks} disabled={!dirty}>
+              Apply{dirty ? ` (${picked.length}/${packs.length} packs)` : ''}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => setPicked(deployedKey ? deployedKey.split(',') : [])}
+              disabled={!dirty}
+            >
+              Revert
+            </button>
+            <span className="sub" role="status" aria-live="polite">
+              {dirty
+                ? 'Not applied yet — Apply rebuilds the install once, with every change together.'
+                : 'Matches the deployed install.'}
             </span>
           </div>
         </div>
