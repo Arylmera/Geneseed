@@ -14,8 +14,10 @@ bin/geneseed-hook.mjs …` — so at user scope they would fire and fail in ever
 repo that doesn't vendor the harness. A generated global install wires
 absolute-path hooks instead — `geneseed setup` does that for you.) It:
 
-- on **PreToolUse** (matcher `Bash`), runs `harness git-gate` — a tool-boundary
-  backstop for Doctrine process 5 (*consent before every commit and push*). The hook inspects
+- on **PreToolUse** (matcher `Bash`), **on an install that built the `process` pack in**,
+  runs `harness git-gate` — the tool-boundary half of Doctrine process 5 (*consent before
+  every commit and push*). Drop that pack and this hook is not written at all; the
+  invariant-territory refusals (`rm -rf`, force-push) stay in every build. The hook inspects
   command and, when it runs a `git commit` or `git push` (bare, flagged, `-C <path>`,
   or chained like `git add . && git commit … && git push`), returns
   `permissionDecision: "ask"` so Claude Code **prompts on every such call**. Crucially

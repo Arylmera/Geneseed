@@ -78,8 +78,8 @@ nothing else — **M1, M2, M3, M4 and M8** (`EMIT`, `EMIT_IMPERIAL`, `EMIT_CLAUD
 `CLI_CONTEXT`). All five are killed by `tests/unit/` alone, the control included, and each row now
 **declares** the unit file that kills it rather than a replay that can no longer run — M1 and M3
 `maintainer_tools`, M2 `node_driver`, M4 `hook_form`, M8 `hook_cli`. A gate a matrix names and
-cannot run guards nothing, and is worse than none, because it is trusted (Rule V, Surface
-Failures). For every defect the mutation matrix knows how to plant, the corpus was
+cannot run guards nothing, and is worse than none, because it is trusted (Doctrine rigor 2,
+Honest Tests). For every defect the mutation matrix knows how to plant, the corpus was
 redundant. That is the whole argument, and it is the only one that licenses a deletion:
 a test goes because a living gate already proves the property, never because it is red.
 

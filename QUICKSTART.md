@@ -10,7 +10,7 @@ repo inherits it, nothing committed into your projects. The only prerequisite is
 
 Same command on macOS, Linux and Windows (cmd, PowerShell, or any POSIX shell).
 
-Pick a **theme**, pick **OpenCode global** when asked for the install mode, confirm.
+Pick a **theme**, then accept the defaults for posture, mode, doctrine packs and footprint (or pick deliberately — see [setup choices](docs/web/setup-choices.md)), pick **OpenCode global** when asked for the install mode, confirm.
 The wizard builds the harness and offers a health check.
 
 Want the command to stay? `npm install -g geneseed`, then plain `geneseed …` from

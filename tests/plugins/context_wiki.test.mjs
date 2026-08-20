@@ -1,4 +1,4 @@
-// Tests for the context plugin's MACHINE WIKI rendering (AGENT.md §7) — folder
+// Tests for the context plugin's MACHINE WIKI rendering (AGENT.md §8) — folder
 // entries, file-over-folder override, exclude pruning, dot-folder skipping, and
 // lazy-listing truncation. Driven through the compaction hook (same render path as
 // session.created), no live OpenCode. Run from the Geneseed root:

@@ -382,6 +382,34 @@ test('the gate refuses a two-word tier noun in any theme', () => {
     + 'above is no longer being exercised by anything');
 });
 
+test('the gate flags a §N pointing past the anatomy, and says what it cannot catch', () => {
+  // ⚠ THE DEFECT THIS IS NARROWED AGAINST ACTUALLY SHIPPED. Inserting `## 2. Doctrines` pushed
+  // every later section down one; the sweep that fixed the template's own cross-references
+  // stopped at the template, and four satellites under src/skills/ and src/agents/ kept
+  // pointing at the section that used to be there — rendering into every bundle, including a
+  // live deny message in the OpenCode guard.
+  //
+  // This gate would NOT have caught those, and the cell says so rather than implying coverage:
+  // §7 still existed, it had simply stopped being the Wiki. What it does catch is a pointer
+  // past the END, which is what REMOVING a section leaves behind.
+  const wiki = fs.readFileSync(path.join(SRC, 'skills', 'wiki.md'), 'utf8');
+  const past = withFault({ 'src/skills/wiki.md': wiki.replace('§8', '§99') },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(past.some((p) => p.includes('skills/wiki.md') && p.includes('§99')),
+    `a pointer past the anatomy went unflagged: ${JSON.stringify(past)}`);
+  // The stated limit, asserted so it stays a limit rather than becoming a surprise: a pointer
+  // moved to a DIFFERENT existing section is silent here, and only the manual sweep in
+  // docs/extending.md catches it.
+  assert.deepEqual(withFault({ 'src/skills/wiki.md': wiki.replace('§8', '§7') },
+    (root) => gate(root, 'm.constitutionProblems()')), [],
+  'the range gate has become an intent gate — if it can now tell §7 from §8, this cell and the '
+    + 'docblock that promises a manual sweep are both out of date');
+  // ...and the numbers it reads are the template's own, so a renumber moves the gate with it.
+  const tmpl = fs.readFileSync(path.join(SRC, 'AGENT.md.tmpl'), 'utf8');
+  assert.equal([...tmpl.matchAll(/^## (\d+)\.\s/gm)].length, 10,
+    'the anatomy changed size — re-read the §N sweep in docs/extending.md before trusting this');
+});
+
 test('the gate flags an unknown pack in the build default, and NOTES a narrowed one', () => {
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'harness.config.json'), 'utf8'));
   const bogus = withFault(

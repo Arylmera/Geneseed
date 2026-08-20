@@ -30,7 +30,7 @@ rules. It accepts:
 - globs (`"laws/*.md"`),
 - URLs.
 
-Geneseed points it at the bundle's **`AGENT.md`** (which inlines the laws). That is
+Geneseed points it at the bundle's **`AGENT.md`** (which inlines all three constitution tiers — the Ontology, the nine Rules and the active doctrine packs; at the default `lean` footprint the rules are heading-plus-first-line, with the complete text in `ontology/`, `laws/` and `doctrines/` beside it). That is
 all you need there — the rest of the harness is loaded by the plugins below.
 
 ## 3. Plugins — event-driven JS/TS

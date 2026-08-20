@@ -3,7 +3,7 @@
 > {{DESC_WIKI}}
 
 **Trigger:** a task needs knowledge the user keeps in their machine-wide
-knowledge base (declared in `wiki.jsonc`, AGENT.md §7), or the work has produced
+knowledge base (declared in `wiki.jsonc`, AGENT.md §8), or the work has produced
 a durable, cross-project fact worth writing back into it.
 
 ## Procedure

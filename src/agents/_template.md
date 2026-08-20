@@ -5,7 +5,7 @@
   2. Copy this file to agents/<name>.md and fill in every section. In an installed
      harness the purpose line is plain prose; in the Geneseed source repo it is the
      DESC_<NAME> token with the prose defined per theme.
-  3. Register the new {{AGENT}} in the table in AGENT.md §2 (the table is
+  3. Register the new {{AGENT}} in the table in AGENT.md §3 (the table is
      hand-authored; the agent files themselves auto-render). doctor fails if the
      table and the agent files disagree, so neither can silently drift.
   Geneseed source repo only (skip in an installed harness):

@@ -1,14 +1,19 @@
 # Extending — what it costs to change this tool
 
 `docs/limits.md` is the standing answer to *"what does this tool not prove about itself?"*.
-This file is its companion: **"what does it cost to add one thing?"** — one law, one skill, one
-plugin, one hook verb, one doc page, one theme, one screen.
+This file is its companion: **"what does it cost to add one thing?"** — one invariant, one
+doctrine rule, one skill, one plugin, one hook verb, one doc page, one theme, one screen.
 
 It exists because the answer is never one file. Every user-visible noun in Geneseed has
 *satellites* — a themed title in fourteen voices, a class in a hand-written map, a count in a
 badge, a row in a ledger, a page in the console — and the gates that keep them in step are spread
 across `doctor`, the Node suite and four CI jobs. A contributor who knows the satellites ships in
 one pass; one who does not discovers them one red gate at a time.
+
+The governance surface is three tiers and they cost very different amounts. **Adding a doctrine
+rule is the cheap, common case** (§2a); **amending an invariant** is next (§2b); **adding an
+invariant** is the most expensive single edit in the repo after the CLI surface (§2c); **adding a
+whole pack** is rare and mechanical (§2d).
 
 Written after the Python migration completed (2026-08-18), against `main`. Verified: every
 file:line below was opened, and the commands were run.
@@ -35,11 +40,22 @@ Two rules follow from the table and they cause most of the surprises:
 
 ### Counts are computed — never type one
 
-`{N_LAWS}` `{N_AGENTS}` `{N_SKILLS}` `{N_PLUGINS}` are substituted at request time from the live
-inventory (`js/web/docs.mjs:169-172`). Typing a literal number into a `docs/web` page is caught by
-`proseMirrorProblems` (`js/doctor.mjs:715-737`). The README badges and prose, and the
-`N laws, N agents, N skills` line in `SHIPPED.md`, are the hand-written exceptions — and each has
-its own doctor arm (`js/doctor.mjs:676`, `:739`, `:822-829`).
+Eight tokens are substituted at request time from the live inventory, by `docCounts` in
+`js/web/docs.mjs`: `{N_LAWS}` `{N_AGENTS}` `{N_SKILLS}` `{N_PLUGINS}`, plus the four the
+three-tier split added — `{N_ONTOLOGY}` (the ontology's sections), `{N_PACKS}` (packs that exist),
+`{N_PACKS_ACTIVE}` (packs this install built in) and `{N_DOCTRINE_RULES}` (rules inside the active
+packs). `{N_LAWS}` is the **invariant** count and nothing else; there is deliberately no token
+meaning "the whole constitution", because `proseMirrorProblems` holds README and `SHIPPED.md`
+prose to that same number and a token that quietly meant something wider would put the docs and
+the gate at odds with no way to re-bless either.
+
+⚠ **Only a `kind: "concept"` page is substituted.** A `markdown`-kind page renders `{N_PACKS}`
+literally, on the screen, as those nine characters.
+
+Typing a literal number into a `docs/web` page is caught by `proseMirrorProblems`. The README
+badges and prose, and the `N laws, N agents, N skills` line in `SHIPPED.md`, are the hand-written
+exceptions — and each has its own arm in `js/doctor.mjs` (`countTableProblems` walks the five
+badge keys `agents`/`skills`/`laws`/`themes`/`plugins`; `proseMirrorProblems` holds the prose).
 
 ---
 
@@ -128,18 +144,38 @@ Notes that matter:
 
 ---
 
-## 2 — Adding a LAW
+## 2 — Changing the constitution
 
-Ten files, of which five are pure satellites. Ground truth: `git show --stat 1b53701` (law XXXVIII)
-touched 21 files, 14 of them themes.
+Three tiers, four different costs. The addresses are `{{LAW}} <roman>` for an invariant and
+`{{DOCTRINE}} <pack> <n>` for a doctrine rule; the ontology is cited by section name and adding a
+section to it is not a checklist, it is a design change.
 
-1. `src/laws/universal.md` — **append** `### {{LAW}} <roman> — {{LEX_<roman>}}` plus the body.
-   Never insert: 397 `{{LAW}} <numeral>` cross-references live in `src/`, plus hardcoded citations
-   in `js/hooks.mjs` and two OpenCode plugins, and **nothing resolves a cross-reference against the
-   canon**. Renumbering silently rewires every one of them.
-2. `themes/_TEMPLATE.json` — add `LEX_<roman>` in template order. **Nothing gates this file**
-   (`themeFiles()` filters `_`-prefixed names, `js/installs.mjs:113`), so forgetting it is green
-   today and starves the *next* law's sync.
+To count the cross-references either tier already carries, from the repo root:
+
+```bash
+grep -rhoE "\{\{LAW\}\} [IVXL]+" src/ | wc -l
+grep -rhoE "\{\{DOCTRINE\}\} [a-z]+ [0-9]+" src/ | wc -l
+```
+
+On this checkout that reports 153 and 209. Both numbers move on every wave of editing, which is
+why the commands are here and the answers are not load-bearing.
+
+### 2a — Adding a DOCTRINE RULE (the common case)
+
+Five files, none of them a count. This is the slot most new material belongs in, and it is cheap
+on purpose so that the invariant slot stays scarce.
+
+1. `src/doctrines/<pack>.md` — **append** `### {{DOCTRINE}} <pack> <n> — {{DOC_<PACK>_<n>}}` plus
+   the body. Two gates in `constitutionProblems` (`js/doctor.mjs`) sit on this: the pack named in
+   the *heading* is what addresses the rule (not the filename, so a rule filed in the wrong file is
+   reported rather than silently renamed), and ids must run **contiguously from 1**, so appending
+   at the end is the only place `n` is free. Packs are numbered independently — nothing outside
+   this file renumbers.
+2. `themes/_TEMPLATE.json` — add `DOC_<PACK>_<n>`. ⚠ **This file *is* gated for this key family.**
+   `themeFiles()` filters `_`-prefixed names and theme parity never sees the template, but
+   `constitutionProblems` reads it alongside the fourteen voices for `DOC_*` and `LEX_*`
+   specifically — because it is what `--sync-themes` seeds the *next* voice from. Every other key
+   family in that file is still ungated.
 3. Seed the fourteen themes:
 
    ```bash
@@ -147,37 +183,110 @@ touched 21 files, 14 of them themes.
    ```
 
    ⚠ Four spellings of this command are in circulation and two of them fail — `doctor`'s own tip
-   is one of the two. See §7.2 before you copy a command from anywhere else.
-4. Restyle all fourteen by hand. `--sync-themes` writes the template's `<themed title for …>`
-   placeholder and only *prints* `RESTYLE these`; a shipped placeholder passes every gate.
-5. `js/inventory.mjs:40` — `LAW_CLASS`, one of the six in `LAW_CLASSES` (`:56`).
-6. `web/src/pages/Laws.jsx:28` — `LAW_META`: same class, plus the one-line Principle. **This copy
-   exists nowhere else**; a law absent here renders with a blank description. It is why that one
-   React file ships alone out of `web/src` in `package.json` — `doctor` regex-parses its literal.
-7. `README.md` — badge `badge/laws-N` and the `N universal laws` sentence.
-8. `SHIPPED.md` — the `N laws, N agents, N skills` triple.
-9. `tests/unit/harness.test.mjs:293` — the negative fixture hardcodes the *next* free numeral;
-   bump it or it stops being a fixture and starts being a duplicate.
-10. `CHANGELOG.md`, then rebuild and commit `web/dist` (step 6 touched `web/src`).
+   is one of the two. See §7.2 before you copy a command from anywhere else. Then restyle all
+   fourteen by hand: `--sync-themes` writes the template's placeholder and only *prints*
+   `RESTYLE these`; a shipped placeholder passes every gate.
+4. `web/src/pages/Laws.jsx` — a `DOCTRINE_META` row keyed `'<pack>.<n>'`. Its first field is the
+   **pack**, not one of `LAW_CLASSES`' six; `doctrineMetaProblems` requires an *equality* between
+   that field and the key's own pack, which catches the copy error a six-way vocabulary cannot — a
+   row pasted from the pack above it, keeping the wrong pack. Its second field is the one-line
+   Principle, and **that copy exists nowhere else**; a rule absent here renders with a blank
+   description.
+5. `CHANGELOG.md`, then rebuild and commit `web/dist` (step 4 touched `web/src`).
 
-**Amending** a law is steps 1, 10 and — if the principle moved — 6. Two extra cautions:
+**What a doctrine rule does *not* cost**, and each of these is a deliberate asymmetry:
+
+- **No class entry.** There is no `LAW_CLASS` analogue: a doctrine rule's class *is* its pack, and
+  there is no second taxonomy over it.
+- **No count, anywhere.** No badge, no `SHIPPED.md` triple, no prose mirror. The console spends
+  `{N_PACKS}` / `{N_PACKS_ACTIVE}` / `{N_DOCTRINE_RULES}`, all computed at request time.
+- **No test fixture to bump**, and no renumber risk.
+
+⚠ **Cite only downward.** An always-on tier may never reference a toggleable one:
+`constitutionProblems` refuses a `{{DOCTRINE}}` token anywhere under `src/ontology/` or
+`src/laws/`, because a `--doctrines craft` build would then ship an invariant pointing at text its
+`AGENT.md` does not contain. Doctrine→doctrine citations are fine and stay — every pack file ships
+on disk whether or not it was built in. If the build's own default is narrowed,
+`constitutionProblems` emits a `[note]` naming every citation that points at a shelved pack; notes
+are printed and **not** counted, because a narrowed build is a configuration its owner chose, not
+a defect.
+
+### 2b — Amending an INVARIANT
+
+Steps 1 and 9 of §2c, plus `LAW_META` if the Principle line moved. Two cautions:
 
 - `--footprint` defaults to **lean**, and lean keeps only the heading plus the first sentence
-  (`js/render.mjs:167`). A clause added to the second paragraph is invisible in the default build.
-  Amend the first sentence, or the amendment does not exist for most installs.
-- ⚠ **Law I is frozen.** `LEX_I` is one of seven theme keys recorded byte-for-byte in the
-  primitives corpus (§5). Retitling Law I in any theme reddens a snapshot that cannot be re-blessed.
+  (`terseBlocks` in `js/render.mjs`). A clause added to the second paragraph is invisible in the
+  default build. Amend the first sentence, or the amendment does not exist for most installs. The
+  same is true of a doctrine rule; it is **not** true of the ontology, which ships whole at both
+  footprints.
+- ⚠ **Rule I is frozen.** `LEX_I` is one of seven theme keys recorded byte-for-byte in the
+  primitives corpus (§5.2). Retitling Rule I in any theme reddens a snapshot that cannot be
+  re-blessed.
 
-The carrier itself is gated: `tests/unit/emit_smoke.test.mjs:211-265` checks every law reaches
-every one of nine emit modes in order and themed, under both footprints, with a ceiling **and** a
-floor on the rendered size. Headroom measured today: ~2 100 chars full, ~1 200 lean — about three
-average laws at full footprint, which is the binding one.
+### 2c — Adding an INVARIANT
+
+Nine steps, and only the first is the rule itself. This is the expensive one, and it should be:
+the bar is in `DESIGN.md` Decision 7, and most candidates belong in a doctrine pack instead.
+
+1. `src/laws/universal.md` — **append** `### {{LAW}} <roman> — {{LEX_<roman>}}` plus the body.
+   Never insert: the `{{LAW}}` cross-references counted above live all over `src/`, plus hardcoded
+   citations in `js/hooks.mjs` and two OpenCode plugins, and **nothing resolves a cross-reference
+   against the canon**. Renumbering silently rewires every one of them.
+2. `themes/_TEMPLATE.json` — add `LEX_<roman>` in template order. Gated, as in §2a step 2:
+   `constitutionProblems` holds `LEX_I..LEX_IX` as an **equality** across all fifteen files (the
+   fourteen voices and the template), so both a missing key *and* a leftover one are reported. That
+   arm exists because the renumber left `LEX_XXII`, `LEX_XXIII`, `LEX_XXIV` and `LEX_XXXVI` behind
+   in every file and parity was silent — they were absent from nowhere.
+3. `--sync-themes`, then restyle all fourteen by hand (§2a step 3).
+4. `LAW_CLASS` in `js/inventory.mjs` — one of the six in `LAW_CLASSES` beside it.
+5. `LAW_META` in `web/src/pages/Laws.jsx` — same class, plus the one-line Principle. Note the map
+   is keyed by **arabic** number where `universal.md` heads with a Roman numeral. **This copy
+   exists nowhere else**; a rule absent here renders with a blank description. It is why that one
+   React file ships alone out of `web/src` in `package.json` — `doctor` regex-parses its literal.
+6. `README.md` — badge `badge/laws-N` and the `N universal laws` sentence.
+7. `SHIPPED.md` — the `N laws, N agents, N skills` triple.
+8. `tests/unit/harness.test.mjs` — the negative fixture for the `LAW_CLASS` gate plants a rule at
+   the *first free numeral*, which is `X` now that the invariants are I..IX. Bump it, or it stops
+   being a fixture and starts being a duplicate.
+9. `CHANGELOG.md`, then rebuild and commit `web/dist` (step 5 touched `web/src`).
+
+⚠ While restyling, `{{LAW}}` must stay a **single word** in every theme (and so must
+`{{DOCTRINE}}`). Both heading parsers match the tier noun with `\S+`, so a two-word value does not
+error — the heading simply stops matching and the whole tier parses to nothing, in silence.
+`constitutionProblems` refuses one, which is the only reason it is visible at all.
+
+The carrier itself is gated: `tests/unit/emit_smoke.test.mjs` checks every rule reaches every one
+of nine emit modes in order and themed, under both footprints, with a `CEILING` **and** a floor
+(half the ceiling) on the rendered size. Its docblock carries the current measurement: headroom is
+1,522 characters (2.8%) at full and 1,794 (4.8%) at lean, against the largest carrier — the
+host-agnostic `files` bundle. Read that docblock before adding text to any tier; it is
+re-measured, never nudged, and the ceiling is measured **with all four packs active**, which is
+the only configuration it can speak for.
+
+### 2d — Adding a whole PACK
+
+Rare, and mechanical. On top of §2a for each rule the pack carries:
+
+1. `src/doctrines/<pack>.md`, opening with its lead line — `**{{PACK_<NAME>}}** — how … .` A pack
+   file `PACK_ORDER` names but cannot read, or one carrying no `### {{DOCTRINE}} <pack> <n>`
+   heading at all, is a refusal.
+2. `PACK_ORDER` in `js/checkout.mjs` — the registration, and the render order. It is **narrative,
+   not alphabetical** (craft → rigor → ops → process); discovery sorts alphabetically and the
+   renderer refuses a `.md` under `src/doctrines/` that `PACK_ORDER` does not name, rather than
+   skipping it.
+3. `PACK_<NAME>` in `themes/_TEMPLATE.json` and all fourteen voices. Unlike `DOC_*`, this family is
+   held only by `themeParityProblems` — presence, across the voices, template excluded.
+4. `DOCTRINE_BLURBS` in `js/setup.mjs` — the one-line description an installer sees in the wizard,
+   and the only place a pack is ever explained to them. Missing entries fall back to the bare name.
+5. `harness.config.json` if the pack should be on by default; `constitutionProblems` refuses a
+   `doctrines` array naming a pack this checkout does not ship.
 
 ---
 
 ## 3 — Adding a SKILL or an AGENT
 
-**Order matters at the first two steps.** `missingReferencedSpecs` (`js/emit.mjs:493`) *aborts the
+**Order matters at the first two steps.** `missingReferencedSpecs` (in `js/emit.mjs`) *aborts the
 build* when `AGENT.md.tmpl` names a spec with no file — so the file comes before the table row, or
 nothing builds at all. The refusal is clean: `tests/unit/emit_gates.test.mjs:265` proves a refused
 emit leaves the prior install intact.
@@ -185,14 +294,14 @@ emit leaves the prior install intact.
 1. `src/skills/<name>.md` or `src/agents/<name>.md`. The shape is load-bearing: `# {{SKILL}}: <name>`,
    a blank line, then a `>` blockquote holding `{{DESC_<NAME>}}` — title, blockquote, nothing
    between. `doctor` checks both the presence of the purpose line and that the blockquote is the
-   *first* block (`js/doctor.mjs:899-908`).
+   *first* block (`authoringProblems`, via `firstBlockquote` and `descBlockProblem`).
 2. One row in the hand-authored table in `src/AGENT.md.tmpl` (agents `125-141`, skills `183-229`).
    Gated both ways: a row with no file, and a file with no row.
 3. `DESC_<NAME>` in **all fourteen** themes. Theme parity catches a missing one; nothing catches
    an unstyled placeholder.
-4. **Skills only** — `SKILL_CLASS` in `js/inventory.mjs:59`. Gated both ways
-   (`js/doctor.mjs:785-791`), which matters because the runtime fallback is silent: an unclassified
-   skill renders as `build` (`js/inventory.mjs:166`).
+4. **Skills only** — `SKILL_CLASS` in `js/inventory.mjs`. Gated both ways, inside
+   `countTableProblems`, which matters because the runtime fallback is silent: an unclassified
+   skill renders as `build`.
 5. `registry.json` — a row keyed `skills/<name>` or `agents/<name>` with `status` ∈
    {`experimental`, `approved`, `deprecated`}, a semver `version`, a non-blank `owner`, an ISO
    `added`, and `last_verified: ""`. **This is the most forgettable step**: four hand-typed fields,
@@ -231,7 +340,7 @@ The `geneseed-` prefix and the `.js` suffix are mechanically load-bearing: the b
 
 1. `adapters/opencode/plugins/geneseed-<name>.js` — ESM, zero dependencies. The factory-export
    convention is real (OpenCode requires it) but **ungated**; the only generic gate on plugin
-   source is `node --check` (`js/doctor.mjs:924-941`).
+   source is `node --check` (the one spawn in `authoringProblems`).
 2. `docs/web/plugin-<name>.md` — `group: plugins`, `title: "geneseed-<name>"`, `kind: "concept"`.
 3. `docs/web/plugins.md` — a bullet. The count above it renders from `{N_PLUGINS}`.
 4. `docs/web/model.md` — a second `{N_PLUGINS}` sentence whose **enumeration of the capabilities
@@ -396,8 +505,9 @@ only, at best, on its presence.
 
 | What | Where | Gated on |
 |---|---|---|
+| `§N` cross-references into `AGENT.md`'s anatomy | `src/skills/*`, `src/agents/*`, `adapters/**` | **range only.** `constitutionProblems` refuses a `§N` the template declares no section for — which catches a pointer past the end, the shape *removing* a section leaves. It cannot catch one that still resolves and now means something else, which is the shape *inserting* a section leaves, and is what actually happened when `## 2. Doctrines` pushed every later section down one. **Renumbering the anatomy means `grep -rn '§' src/ adapters/` and reading every hit.** Four satellites and a live OpenCode deny message shipped stale because the sweep stopped at `AGENT.md.tmpl` |
 | Per-law Principle lines | `web/src/pages/Laws.jsx` | presence and class only, never accuracy |
-| 560 themed law titles (40 × 14) | `themes/*.json` | key presence only — a shipped placeholder is green |
+| 504 themed constitution titles (36 keys × 14 voices) — `LEX_I..LEX_IX` (9), `DOC_<PACK>_<n>` (23), `PACK_<NAME>` (4) | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
 | The README keyword enumerations | `README.md`, `docs/web/rules.md` | nothing |
 | The plugin capability enumeration | `docs/web/model.md` | nothing (the number substitutes; the list does not) |
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |
@@ -540,20 +650,19 @@ to kill every pid on the port, then `geneseed web start`.
 Ordered by what unblocks the most work per unit of effort. Each is small; none is urgent enough to
 stop a change today, and all of them cost a contributor a wrong turn until they are done.
 
-1. **Rewrite the authoring section of `DESIGN.md` (§7.1) and fix `doctor`'s tip (§7.2).** These are
-   the two documents a contributor reads *first* when adding a law, and both name programs that no
-   longer exist. Half an hour, and it removes the most likely first wrong turn.
-2. **Extend the fenced-command gate to `DESIGN.md` and `docs/**/*.md` (§7.3).** One array literal.
-   It would have caught item 1 the day it was written, and it keeps catching it.
-3. **Decide the hook-verb question (§5.1) before it is asked under pressure.** Either mirror the
+1. **Extend the fenced-command gate to `DESIGN.md` and `docs/**/*.md` (§7.3).** One array literal.
+   Today it covers four documents, and both of the pointer-to-nothing defects §7 records — the
+   `DESIGN.md` authoring section and `doctor`'s theme-parity tip, since fixed — sat outside its
+   reach. It keeps catching them.
+2. **Decide the hook-verb question (§5.1) before it is asked under pressure.** Either mirror the
    CLI side's exemption list onto the hook half, or write down that the hook verb set is closed.
    Either answer is fine; discovering the question mid-feature is not.
-4. **Write down the frozen-key list (§5.2) where a theme author will see it** — `themes/README.md`
+3. **Write down the frozen-key list (§5.2) where a theme author will see it** — `themes/README.md`
    is the natural home. Seven keys × fifteen files is a small enough surface to name explicitly,
    and today nothing warns you before the snapshot goes red.
-5. **Gate `AGENT_LESSON_PROMPT` like its sibling (§7.7), and either gate or delete
+4. **Gate `AGENT_LESSON_PROMPT` like its sibling (§7.7), and either gate or delete
    `adapters/claude-code/settings.json` (§7.10).** Two silent failure modes, both cheap to close.
-6. **Consider a `scripts` block in the root `package.json`.** There is currently no single command
+5. **Consider a `scripts` block in the root `package.json`.** There is currently no single command
    that runs what CI runs; every contributor reassembles the five by hand from this file. A
    `verify` script is three lines and makes §1 executable rather than descriptive.
 

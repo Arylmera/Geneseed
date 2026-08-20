@@ -2,7 +2,8 @@
 
 Each theme is a single JSON file of **voice tokens** — it controls only *how the
 agent speaks* and *how the prose in the docs reads*. It never moves a folder, a
-link, or a law number: structure is theme-independent (see [DESIGN.md](../DESIGN.md)).
+link, a Rule numeral, an Ontology section name, or a doctrine pack slug:
+structure is theme-independent (see [DESIGN.md](../DESIGN.md)).
 
 Fourteen themes ship. `neutral` is the canonical baseline (plain professional
 English); the others range from `imperial` (Warhammer 40k) to community voices.
@@ -52,10 +53,16 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
 ## What the token classes mean
 
 - **Voice** — `VOICE`, `ACCENT`, `BANNER`, `TAGLINE`, `LOADED_SIGIL`,
-  `BENEDICTION`, the epigraphs (`EPI_*`), section intros (`INTRO_*`), law titles
-  (`LEX_*`), capability descriptions (`DESC_*`), and `ROAST_PERSONA`.
-- **Themed nouns** — `LAW(S)`, `AGENT(S)`, `SKILL(S)`, `MEMORY`, `NOTEBOOK`,
-  `VAULT`, `WIKI`. These read in your voice but must stay nouns the prose can use.
+  `BENEDICTION`, the epigraphs (`EPI_*`, including `EPI_ONTOLOGY` and
+  `EPI_DOCTRINES`), section intros (`INTRO_*`), the nine Rule titles (`LEX_*`),
+  the twenty-three doctrine rule titles (`DOC_<PACK>_<N>`), the four pack names
+  (`PACK_CRAFT`, `PACK_RIGOR`, `PACK_OPS`, `PACK_PROCESS`), capability
+  descriptions (`DESC_*`), and `ROAST_PERSONA`.
+- **Themed nouns** — `ONTOLOGY`, `LAW(S)`, `DOCTRINE(S)`, `AGENT(S)`, `SKILL(S)`,
+  `MEMORY`, `NOTEBOOK`, `VAULT`, `WIKI`. These read in your voice but must stay
+  nouns the prose can use. ⚠ `LAW` and `DOCTRINE` must each be a **single word** —
+  both heading parsers match the tier noun with `\S+`, so a value with a space
+  makes that whole tier parse to nothing. `doctor` refuses it.
 - **Agent colours** — `AGENT_COLORS`, a flat `{agent_name: slot}` object (not a
   string) mapping each capability agent to an OpenCode *named theme slot*
   (`primary`/`secondary`/`accent`/`success`/`warning`/`error`/`info`), plus a
@@ -65,5 +72,8 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
   build time and falls back to `secondary`, with a warning, rather than ever
   reaching emitted frontmatter.
 
-Folder names, file paths, and law *numbers* are **never** themed — they live in
-the `STRUCTURE` map in the generator, laid over every render, so tooling never breaks.
+Folder names, file paths, Rule *numerals*, the four Ontology section names
+(Telos, Evidence, Decisions, Conduct) and the pack *slugs* used in citations
+(`craft`, `rigor`, `ops`, `process`) are **never** themed — they live in the
+`STRUCTURE` map in the generator, laid over every render, so tooling never breaks.
+`PACK_*` themes how a pack is *named* in prose, never how it is *addressed*.

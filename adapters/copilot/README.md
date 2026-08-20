@@ -58,8 +58,9 @@ settings/hooks/excludes stage is skipped. Concretely, Copilot does **not** get:
   installs already exist.
 
 None of this is a build gap — it is Copilot's ceiling. The harness still applies
-in full: every Rule, agent, and skill is present; only the *automation* of a few
-Rules degrades to instruction-only. This is behaviour-contract parity, the same
+in full: the Ontology, every Rule, every doctrine rule the install built in, and
+every agent and skill are present; only the *automation* of a few of them degrades
+to instruction-only. This is behaviour-contract parity, the same
 principle every non-OpenCode host follows.
 
 ## MCP

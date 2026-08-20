@@ -26,7 +26,7 @@
 //     $GENESEED_MODEL), so the agent reasons within its real limits. The model line
 //     is added per request, outside the cached block; unknown -> omitted.
 //
-// MACHINE WIKI (AGENT.md §7): the same block also carries the user's own knowledge
+// MACHINE WIKI (AGENT.md §8): the same block also carries the user's own knowledge
 // base(s) — typically an Obsidian vault — declared once per machine in `wiki.jsonc`
 // ($GENESEED_WIKI -> $GENESEED_HARNESS/wiki.jsonc -> beside this plugin's install).
 // Each wiki's eager entries inject in full and lazy entries list, drawing on the
@@ -484,7 +484,7 @@ async function resolveSource(root) {
 
 // ---- machine wiki (wiki.jsonc) --------------------------------------------------
 // The user's own knowledge base(s) — typically an Obsidian vault — declared once per
-// machine, not per repo (AGENT.md §7). Same injection mechanics as project context,
+// machine, not per repo (AGENT.md §8). Same injection mechanics as project context,
 // different scope. Resolution (first match wins, mirroring the learn plugin):
 //   1. $GENESEED_WIKI                      explicit manifest path
 //   2. $GENESEED_HARNESS/wiki.jsonc         pinned install dir
@@ -676,7 +676,7 @@ async function buildBlock(sets, wikis = [], commands = []) {
   if (!proj.length && !wik.length) return null
   const out = [MARKER]
   if (proj.length) out.push("=== PROJECT CONTEXT — binding for this repo ===", "", ...proj)
-  if (wik.length) out.push("=== MACHINE WIKI — the user's knowledge base, binding per AGENT.md §7 ===", "", ...wik)
+  if (wik.length) out.push("=== MACHINE WIKI — the user's knowledge base, binding per AGENT.md §8 ===", "", ...wik)
   return { text: out.join("\n"), injected: state.injected, lazy: state.lazy, kb: kb(state.spent) }
 }
 

@@ -30,10 +30,21 @@ every host the same way instead of one silently falling behind.
 
 ## Where the tokens go
 
-- **The root file is ~76% of the bill**, and its Rules section alone is ~6.3k
-  of the ~10.7k. The [footprint dial](#/docs/footprint) (`full` vs `lean`)
-  exists precisely because this is the only lever that matters — trimming
-  anything else is noise.
+- **The root file is ~76% of the bill**, and the constitution inside it is the
+  bulk of that — no longer one section but three: the Ontology, the nine Rules,
+  and the doctrine packs this install built in. **Two** levers move it, not one.
+  The [footprint dial](#/docs/footprint) (`lean`, the default, keeps each Rule
+  and each doctrine rule as its heading plus first line, and ships the Ontology
+  *whole*; `full` inlines every rationale). And the
+  [doctrine packs](#/docs/setup-choices) — `geneseed-build --doctrines craft,rigor`
+  drops whole blocks of §2 at build time, which removes far more than the
+  footprint dial trims. Anything else is noise.
+
+  The three-tier split grew the root file: measured on `neutral`, `AGENT.md`
+  went from 31,457 bytes to 36,882 at `lean` (+17.2%) and 53,378 to 54,810 at
+  `full` (+2.7%). The lean growth is the larger one *by design* — the Ontology
+  is prose, and truncating four flowing sections to four orphan sentences would
+  have shipped a worldview nobody could read.
 - **Skill bodies (~53k) and agent bodies (~10k) are lazy** on every host —
   loaded only when invoked. A typical skill costs ≤3k per invocation; the
   heaviest (`react-view-transitions`, ~17.5k with its reference files) loads

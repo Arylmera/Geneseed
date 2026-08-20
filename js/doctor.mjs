@@ -991,6 +991,39 @@ export function constitutionProblems() {
     }
   }
 
+  // ---- every `§N` in src/ addresses a section the template actually declares.
+  //
+  // ⚠ THIS GATE IS NARROW AND SAYS SO. Inserting `## 2. Doctrines` pushed every later section
+  // down one, and the sweep that fixed the template's own cross-references stopped at the
+  // template — four satellites under `src/skills/` and `src/agents/` kept pointing at the
+  // section that used to be there, and they RENDER INTO EVERY BUNDLE. A range check would not
+  // have caught those: §7 still existed, it had just stopped being the Wiki.
+  //
+  // What it does catch is the other half of a renumber — a pointer past the end, which is what
+  // REMOVING a section leaves behind — and it is nearly free. The half it cannot catch is a
+  // judgement about intent, and `docs/extending.md` carries the manual sweep for it. Naming
+  // that limit here is the point: a reader who assumes this gate is total will skip the sweep.
+  const declared = new Set();
+  // Read here rather than borrowing `countTableProblems`' copy: that function hard-returns when
+  // the template is unreadable, and this gate must not inherit a silence it did not choose.
+  let tmpl = '';
+  try { tmpl = readText(path.join(SRC, 'AGENT.md.tmpl')); } catch { tmpl = ''; }
+  for (const [, n] of tmpl.matchAll(/^## (\d+)\.\s/gm)) declared.add(Number(n));
+  if (declared.size) {
+    for (const p of rglob(SRC)) {
+      if (!isFile(p) || !(p.endsWith('.md') || p.endsWith('.tmpl'))) continue;
+      let text;
+      try { text = readText(p); } catch { continue; }
+      const rel = path.relative(SRC, p).split(path.sep).join('/');
+      for (const [, n] of text.matchAll(/§(\d+)/g)) {
+        if (declared.has(Number(n))) continue;
+        problems.push(`[authoring] ${rel} cites AGENT.md §${n}, and the template declares no `
+          + `such section ${pyRepr([...declared].sort((a, b) => a - b).map(String))} — a `
+          + 'renumber moved it, and this pointer renders into every bundle');
+      }
+    }
+  }
+
   // ---- the build default names packs that exist.
   let cfgDoctrines = null;
   try {

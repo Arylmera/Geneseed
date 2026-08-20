@@ -19,7 +19,7 @@ Installs with the other plugins in one step — see [Plugin setup](#/docs/plugin
 - `GENESEED_CONTEXT` — path to an explicit `context.json` manifest (or drop `.harness/context.json` in the repo) to take control: same schema, plus glob `path`s, `load: exclude`, and `"extend": true` to layer on top of discovery.
 - `GENESEED_EAGER_FILE_KB` (default 16) / `GENESEED_EAGER_TOTAL_KB` (default 48) — budget caps; an oversized eager file is demoted to a lazy listing, never silently truncated.
 - `GENESEED_CONTEXT_VISIBLE=1` — force the visible `PROJECT CONTEXT` block instead of the invisible per-request transform.
-- `GENESEED_CONTEXT_INJECT=off` — disable injection entirely (falls back to the soft AGENT.md Law).
+- `GENESEED_CONTEXT_INJECT=off` — disable injection entirely; the load falls back to prose the agent has to honour itself — AGENT.md's own **Context** section, and **Doctrine process 4** (read the project's documentation for a part of the system before changing it) where the process pack is built in.
 
 ### Verify
 

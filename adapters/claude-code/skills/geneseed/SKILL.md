@@ -1,11 +1,11 @@
 ---
 name: geneseed
-description: "Interact with a deployed Geneseed harness from any repo — locate the install, read its laws/agents/skills/memory/notebook by name, run status/doctor/diff, distill memory with learn, and manage the local web UI. Use when the user mentions Geneseed, AGENT.md, the harness, an agent operating system, or asks you to inspect, refresh, or read from the deployed bundle."
+description: "Interact with a deployed Geneseed harness from any repo — locate the install, read its ontology/rules/doctrines/agents/skills/memory/notebook by name, run status/doctor/diff, distill memory with learn, and manage the local web UI. Use when the user mentions Geneseed, AGENT.md, the harness, an agent operating system, or asks you to inspect, refresh, or read from the deployed bundle."
 ---
 
 # geneseed — agent skill
 
-Geneseed is a portable AI-agent harness deployed once and used everywhere. This skill lets you talk to whichever deployment is in scope from any repo: read the canonical files (laws, agents, skills, memory, notebook), probe state (status, version, doctor, diff), distill durable memory, and drive the local web UI. The harness is theme-independent in structure — directory and section names are always plain English — so the paths below are stable across themes.
+Geneseed is a portable AI-agent harness deployed once and used everywhere. This skill lets you talk to whichever deployment is in scope from any repo: read the canonical files (the three constitution tiers, agents, skills, memory, notebook), probe state (status, version, doctor, diff), distill durable memory, and drive the local web UI. The harness is theme-independent in structure — directory and section names are always plain English — so the paths below are stable across themes.
 
 ## Find the deployed harness before doing anything
 
@@ -19,7 +19,9 @@ Pick the first that resolves; remember the path for the rest of the session.
 
 If none resolve, the user does not have Geneseed deployed here — say so and stop. Do not run `setup`, `build`, or `upgrade` on your own to "fix" this; that is a user decision.
 
-A live harness root contains: `AGENT.md`, `agents/<name>.md`, `skills/<name>/SKILL.md`, `memory/MEMORY.md`, `notebook/NOTEBOOK.md`, `themes/`, and (on OpenCode) `plugins/`, `workflows/`, `opencode.jsonc`, `wiki.jsonc`. Laws live as numbered sections inside `AGENT.md`, not as separate files in the deployed bundle — read them from `AGENT.md` directly.
+A live harness root contains: `AGENT.md`, `ontology/universal.md`, `laws/universal.md`, `doctrines/<pack>.md`, `agents/<name>.md`, `skills/<name>/SKILL.md`, `memory/MEMORY.md`, `notebook/NOTEBOOK.md`, `themes/`, and (on OpenCode) `plugins/`, `workflows/`, `opencode.jsonc`, `wiki.jsonc`.
+
+The constitution is **three tiers**: an always-on **Ontology** (four prose sections — Telos, Evidence, Decisions, Conduct), nine always-on **Rules** numbered I–IX, and the **Doctrines** — practice packs (`craft`, `rigor`, `ops`, `process`) chosen per install at build time. `AGENT.md` carries all three inline (whole at the `full` footprint, heading-plus-first-line at `lean`), *and* the complete text ships as files beside it. All four pack files ship even when a pack was not built in, so a citation into an inactive pack still resolves on disk — which is why a question about a rule is answered from the tier file, never only from `AGENT.md`.
 
 ## Read-only verbs (safe, no confirmation needed)
 
@@ -32,11 +34,13 @@ A live harness root contains: `AGENT.md`, `agents/<name>.md`, `skills/<name>/SKI
 - **Read a specific piece** — read the file directly:
   - Agent by name: `<harness>/agents/<name>.md`
   - Skill by name: `<harness>/skills/<name>/SKILL.md`
-  - Law by number: section `## N. …` inside `<harness>/AGENT.md`
+  - Ontology section by name: `<harness>/ontology/universal.md` — `#### Telos` / `Evidence` / `Decisions` / `Conduct` (theme-independent names)
+  - Rule by numeral I–IX: `<harness>/laws/universal.md` — heading `### <Rule-noun> <ROMAN> — <title>`
+  - Doctrine rule by pack and number: `<harness>/doctrines/<pack>.md` — heading `### <Doctrine-noun> <pack> <n> — <title>`
   - Memory fact: `<harness>/memory/<file>.md`; index at `MEMORY.md`
   - Notebook entry: `<harness>/notebook/<file>.md`; index at `NOTEBOOK.md`
 
-When the user asks "what does the X skill say" or "what's law VI", read the file directly — do not summarise from memory.
+When the user asks "what does the X skill say", "what's Rule VI" or "what does Doctrine process 5 say", read the file directly — do not summarise from memory.
 
 ## Side-effecting verbs (confirm with the user first)
 
@@ -59,7 +63,7 @@ If the user asks for any of these, run them as requested. Do not run them as a s
 ## Common patterns
 
 - **"What harness do I have here?"** — `geneseed status` (if launcher on PATH); else resolve via the fallback list and report theme, install mode, path, and version.
-- **"What does the `<X>` skill / agent / law say?"** — read the file directly. For laws, grep `AGENT.md` for `## N\.` or `Law N`.
+- **"What does the `<X>` skill / agent / rule say?"** — read the file directly. A Rule is `### <Rule-noun> <ROMAN> —` in `laws/universal.md`; a doctrine rule is `### <Doctrine-noun> <pack> <n> —` in `doctrines/<pack>.md`; an ontology section is `#### <Name>` in `ontology/universal.md`. The tier noun is themed, the address never is.
 - **"Show me what's drifted in my install."** — `geneseed diff`. Offer to write the output to a file (`--out`) if it's long.
 - **"Distill what we did today into memory."** — confirm scope, then `geneseed learn`. Afterwards, `git status` inside the harness dir to show what landed.
 - **"Open the dashboard / web UI."** — `geneseed web start`. Tell the user the URL it printed and that it binds to localhost only.

@@ -38,7 +38,7 @@ The lineage is also why an **imperial** theme ships alongside the neutral one: i
 
 ### How it works
 
-One canonical source in `src/` renders, via a tiny zero-dependency generator (`geneseed-build`), into a ready-to-use bundle. **A theme controls only *voice*** — how the AI responds and how the prose inside the docs reads (tagline, greeting, descriptions). **Structure is theme-independent**: section names (Rules, Agents, Skills, Memory…) and folder names (`laws/`, `agents/`, `skills/`, `memory/`, `notebook/`) are always plain English, so the scaffolding stays tool-friendly while the flavour lives in the words.
+One canonical source in `src/` renders, via a tiny zero-dependency generator (`geneseed-build`), into a ready-to-use bundle. **A theme controls only *voice*** — how the AI responds and how the prose inside the docs reads (tagline, greeting, descriptions). **Structure is theme-independent**: section names (Rules, Agents, Skills, Memory…), folder names (`laws/`, `ontology/`, `doctrines/`, `agents/`, `skills/`, `memory/`, `notebook/`) and the four ontology section headings (Telos, Evidence, Decisions, Conduct) are always plain English, so the scaffolding stays tool-friendly while the flavour lives in the words.
 
 ```bash
 geneseed-build                   # default theme (neutral)
@@ -148,11 +148,13 @@ No browser? Every action the console offers is also a verb: `build`, `doctor`, `
 
 ## 📦 4 · What you get
 
-The harness ships as a small set of layers, mirrored one-for-one in the web console's **Library** rail (Laws · Agents · Skills · Memory · Notebook):
+The harness ships as a small set of layers, and the web console's rail is the same shape — Constitution, Skills and Agents each have their own entry; Memory, Notebook and the wiki sit under Library:
 
 | Layer | What it is |
 | --- | --- |
-| **🛡️ Rules** (`laws/`) | 9 universal laws the agent obeys — always in force, never toggleable: sealed-secrets, one-intent-one-act, verify-before-assert, deletion-is-deliberate, surface-failures, untrusted-content, least-privilege, root-cause, external-gate |
+| **🧭 Ontology** (`ontology/`) | the mind the rules govern, in four prose sections — **Telos** (the Pact: protect the user, the truth, the agent), **Evidence** (every claim graded by how it was obtained), **Decisions** (classify and tier by reversibility, show the real forks), **Conduct** (answer what was asked, once). Always in force, never toggleable |
+| **🛡️ Rules** (`laws/`) | 9 universal laws the agent obeys — always in force, never toggleable: sealed-secrets, one-intent-one-act, verify-before-assert, deletion-is-deliberate, surface-failures, data-not-orders, least-privilege, root-cause, external-gate |
+| **📐 Doctrines** (`doctrines/`) | practice packs, chosen per install at build time: **craft** (how code is written), **rigor** (how work is proven), **ops** (how the machine is operated), **process** (how a task is run). A doctrine rule may tighten a Rule, never repeal one, and the user's own `user-rules.md` outranks it. Pick with `geneseed-build --doctrines craft,rigor` (or `none`), or in the setup wizard; all four pack files ship on disk either way, so a citation into a pack you left out still resolves |
 | **🤖 Agents** (17) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer`, `developer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
 | **🛠 Skills** (47) | repeatable workflows: brainstorm · **clarify** · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · tdd · **develop** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · geneseed-code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **opencode-theme** · **herdr** · **pipeline** |
 | **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift; `geneseed-activity` streams what each session is doing to the web console's Activity view |
@@ -181,16 +183,20 @@ Pick with `--theme NAME` or via the setup wizard. The theme is remembered in a `
 
 ### 🪶 Footprint (lean vs full)
 
-A second per-install dial, **footprint**, sets how much of the Rules `AGENT.md` carries *inline* every turn — a token-cost knob, not a change to which Rules apply (every Rule is always in force).
+A second per-install dial, **footprint**, sets how much of the constitution `AGENT.md` carries *inline* every turn — a token-cost knob, not a change to which Rules apply (every Rule is always in force, and so is the whole of the Ontology).
 
-| Footprint | Section 1 of `AGENT.md` | Trade-off |
+| Footprint | The Ontology + Sections 1–2 of `AGENT.md` | Trade-off |
 | --- | --- | --- |
-| **lean** *(default)* | each Rule's heading + the rule line, then a pointer to the full law file | ~40% smaller; rationale is one on-demand read away |
-| **full** | every Rule's complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
+| **lean** *(default)* | the Ontology **whole**; each Rule and each active doctrine rule as its heading + the rule line, then a pointer to the full text | lighter every turn; rationale is one on-demand read away |
+| **full** | the Ontology, every Rule and every active doctrine rule at complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
 
-Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Lean is the default: the rationale is one read away and the context it frees is paid back on every turn. Switch to **full** when token cost is a non-issue or you run a smaller model, which leans harder on always-present rationale. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the setup wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
+**The Ontology is never truncated.** Lean keeps only the first sentence of each `### ` block, and the four ontology sections are flowing prose rather than numbered rules — truncating them would leave four orphan sentences, so they ship whole at both footprints. The invariants and the doctrine rules *are* truncated at lean, each to its heading plus its first sentence.
 
-Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates each Rule's *reasoning* to on-demand (and adds the standalone laws file to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer — which is why it stays the default.
+Both footprints put the full text on disk beside `AGENT.md`: `laws/`, `ontology/` and `doctrines/` all ship in the bundle, and **all four pack files ship whether or not the pack was built in** — which is what lets a citation into an inactive pack resolve. So lean is a context/token optimization, **not** a rules cut. Measured on `neutral`, adding the ontology and doctrine tiers moved the always-loaded `AGENT.md` from 31,457 to 36,882 bytes at lean (+17.2%) and from 53,378 to 54,810 at full (+2.7%) — the lean growth is the price of shipping the ontology whole, and it was taken deliberately.
+
+Lean is the default: the rationale is one read away and the context it frees is paid back on every turn. Switch to **full** when token cost is a non-issue or you run a smaller model, which leans harder on always-present rationale. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the setup wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
+
+Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates the *reasoning* to on-demand (and adds the standalone law, ontology and doctrine files to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer.
 
 Want to check a build before it touches anything real? `geneseed-build --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build-validate).
 
@@ -253,7 +259,11 @@ Geneseed/
 ├── harness.config.json   default theme + metadata (the one owner of the version)
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint, rendered to AGENT.md
-│   ├── laws/             governance rules
+│   ├── ontology/         how the agent thinks — Telos, Evidence, Decisions, Conduct
+│   ├── laws/             the universal invariants
+│   ├── doctrines/        the four practice packs (craft, rigor, ops, process)
+│   ├── postures/         the relationship register, inlined into AGENT.md
+│   ├── modes/            the operating register, inlined into AGENT.md
 │   ├── agents/           capability specialists
 │   ├── skills/           repeatable workflows
 │   ├── memory/           memory convention + index
