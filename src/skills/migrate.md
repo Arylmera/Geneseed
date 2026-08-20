@@ -6,10 +6,10 @@
 onto a new API.
 
 ## Procedure
-1. Read the upstream migration guide and changelog *first* (universal {{LAW}} XVII);
+1. Read the upstream migration guide and changelog *first* ({{DOCTRINE}} process 4);
    list the breaking changes that actually touch this codebase.
 2. Work on a dedicated branch, never directly on a shared one, so a failed
-   migration rolls back cleanly (universal {{LAW}} XX applies its shared-branch
+   migration rolls back cleanly ({{DOCTRINE}} process 5 applies its shared-branch
    care to anything that does land there).
 3. Migrate one dependency — or one breaking change — at a time. Never batch
    unrelated bumps into a single step (universal {{LAW}} II).
@@ -17,7 +17,7 @@ onto a new API.
    lets you bisect a later failure to the exact change that caused it
    (universal {{LAW}} III).
 5. Keep the version bump itself a separate commit from any code changes it forces,
-   each through the [commit {{SKILL}}](commit.md) (universal {{LAW}} XX), so each
+   each through the [commit {{SKILL}}](commit.md) ({{DOCTRINE}} process 5), so each
    diff is reviewable in isolation.
 
 **Schema migrations stay backward-compatible.** For a database or stored-format
@@ -29,7 +29,7 @@ change into the same deploy as the code that depends on it (universal {{LAW}} II
 ## Done when
 - The dependency or API is on the target version, every check passes, and the
   changelog / lockfile reflect the new state with its docs updated
-  (universal {{LAW}} XI).
+  ({{DOCTRINE}} craft 3).
 
 ## Self-improvement
 
@@ -38,7 +38,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

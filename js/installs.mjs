@@ -35,7 +35,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { CONFIG, THEMES, discoverNames } from './checkout.mjs';
+import { CONFIG, PACK_ORDER, THEMES, discoverNames } from './checkout.mjs';
 import { GLOBAL_MANIFEST, HOSTS, pyResolve } from './hosts.mjs';
 import { registryRoots } from './registry.mjs';
 import { comparePaths, pyPrintErr, pyRepr, readText } from './lib/fs.mjs';
@@ -90,6 +90,17 @@ function configuredDefault(key, fallback) {
 export const defaultTheme = () => configuredDefault('theme', 'neutral');
 export const defaultPosture = () => configuredDefault('posture', 'peer');
 export const defaultMode = () => configuredDefault('mode', 'direct');
+
+// There is deliberately no `defaultDoctrines()` beside the three above, and its absence is
+// the invariant. `theme`, `posture` and `mode` may fall back to `harness.config.json` when an
+// install does not say, because the worst a wrong answer does there is cosmetic. The pack
+// selection is not like them: it decides whether the commit/push consent gate is wired, so
+// resolving "this install does not say" out of a MACHINE-WIDE config file narrows every
+// pre-2.3 install on its first upgrade — `{"doctrines":["craft"]}` and the gate is gone from
+// carriers that never asked. Unknown resolves to ALL packs; see `doctrinesForBuild` below.
+// The config value keeps exactly one legitimate reader: `configDefaults()` in
+// `bin/geneseed.mjs`, which answers `geneseed build` — the case where there is no install to
+// ask in the first place.
 
 // ---- theme, footprint, posture, mode, read back off a deployed tree -----------------------
 
@@ -159,7 +170,8 @@ const FOOTPRINTS = ['lean', 'full'];
  *
  * `status` reads no footprint row at all; the WARN is why this function is ported there, and
  * `diff` and `rebuild-all` read the RETURN value as well. An unrecognised marker is reported
- * rather than swallowed (Rule VII), and a compared stderr is what makes that observable —
+ * rather than swallowed (Rule V, *Surface Failures* — VII before the three-tier renumber, and
+ * VII now names *Least Privilege*), and a compared stderr is what makes that observable —
  * `status/a-bogus-footprint-marker-warns-on-stderr` is the cell.
  */
 export function footprintOfDir(d) {
@@ -207,6 +219,76 @@ function leadOfDir(d, names) {
 
 export const postureOfDir = (d) => leadOfDir(d, discoverNames('postures', 'peer'));
 export const modeOfDir = (d) => leadOfDir(d, discoverNames('modes', 'direct'));
+
+/** The `Active packs:` marker line the template emits, in one of the five carriers. */
+const ACTIVE_PACKS_RE = /^Active packs:[ \t]*(.+?)[ \t]*$/m;
+
+/**
+ * The doctrine packs a DEPLOYED install carries — the third register read back off disk,
+ * beside `postureOfDir` and `modeOfDir`, and the first that is a SET.
+ *
+ * MARKERED IN PROSE, like posture and mode and unlike theme/footprint: `src/AGENT.md.tmpl`
+ * writes a literal `Active packs: <list>` line under the doctrines section, so no extra dotfile
+ * has to survive a copy. The label is NOT token-substituted, so a themed bundle still answers.
+ *
+ * ⚠ THREE RETURN STATES, AND THE NULL IS THE SAFETY ONE.
+ *   - `null` — no marker in any carrier. That is a pre-migration install, or a carrier that
+ *     never had one, and it means "unknown", NOT "no packs". Every consumer must read it as
+ *     the process pack being ACTIVE, so the commit/push consent gate stays installed. Write
+ *     `doctrinesOfDir(root)` into an explicit `=== null` / `??` test — never
+ *     `doctrinesOfDir(root)?.includes('process')`, which is falsy on `null` and would strip
+ *     the gate from every existing install on its next upgrade.
+ *   - `[]` — the marker is present and reads `none`. A deliberate empty selection (invariants
+ *     and ontology only) and a real configuration: the gate comes OFF.
+ *   - a list — the packs named, re-ordered through `PACK_ORDER`, because this value is
+ *     compared against a marker the build writes in that order.
+ *
+ * A marker line this checkout cannot read WHOLE falls back to `null` rather than to whatever
+ * part of it did parse, for the same reason: a corrupt line is unknown, and unknown fails
+ * closed. ⚠ "Whole" is the strict word and it is what the first cut of this got wrong. The
+ * regex is single-line, so a marker a wrapper had folded — `Active packs: craft, rigor,\nops,
+ * process` — matched its first half, every name in that half was known, and the function
+ * answered the NARROWED set `['craft','rigor']` with no complaint. That is fail-OPEN against
+ * this docblock's own promise: the process pack disappears from an install that has it, and
+ * the gate goes with it. So every comma-separated field must be non-empty AND a pack this
+ * checkout ships; one that is not condemns the whole line to `null`. A trailing comma is
+ * exactly the empty field a fold leaves behind, which is what makes this catch it.
+ */
+export function doctrinesOfDir(d) {
+  for (const carrier of CARRIERS) {
+    const text = readMaybe(path.join(d, carrier));
+    if (text === null) continue;
+    const m = ACTIVE_PACKS_RE.exec(text);
+    if (!m) continue;
+    if (m[1] === 'none') return [];
+    const named = m[1].split(',').map((s) => s.trim());
+    if (!named.every((n) => PACK_ORDER.includes(n))) return null;
+    return PACK_ORDER.filter((p) => named.includes(p));
+  }
+  return null;
+}
+
+/**
+ * `doctrinesOfDir` with the `null` RESOLVED — the one spelling every build-side consumer uses.
+ *
+ * ⚠ UNKNOWN RESOLVES TO ALL PACKS, NEVER TO A CONFIG VALUE. `doctrinesOfDir`'s docblock puts
+ * the rule on the reader; this function is what makes it true of the readers, because the
+ * previous shape (`doctrinesOfDir(root) ?? defaultDoctrines()`) left every consumer free to
+ * pick its own fallback and all five of them picked `harness.config.json`. With
+ * `{"doctrines":["craft"]}` in that file, an `upgrade`/`rebuild-all`/`migrate` re-emitted every
+ * pre-2.3 install at ONE pack and took the commit/push consent gate off installs whose owners
+ * had never been asked — the exact outcome the fail-closed reading exists to prevent, and it
+ * got WIDER when the reader was hardened, because more inputs now answer `null`.
+ *
+ * A config value is a legitimate default only where there is NO INSTALL TO ASK: a fresh
+ * `geneseed build`, which `configDefaults()` in `bin/geneseed.mjs` answers. Anything holding a
+ * directory has an install to ask, so it calls this and never the config.
+ *
+ * `[]` still passes through untouched — a marker that reads `none` is an answer, not a silence.
+ */
+export function doctrinesForBuild(d) {
+  return doctrinesOfDir(d) ?? [...PACK_ORDER];
+}
 
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
 
@@ -333,7 +415,7 @@ export function installTargets() {
 // ---- what this machine installed (`_harness_setup._installed_defaults`) --------------------
 
 /**
- * `_harness_setup._installed_defaults` — all five keys, as of P5i.
+ * `_harness_setup._installed_defaults` — all six keys.
  *
  * It carried only `theme` and `emit` for four phases because those are the two `status`
  * prints and the two `doctor` reads, and the port's keep-vs-delete rule is "part of an
@@ -342,9 +424,20 @@ export function installTargets() {
  * `inst.posture` / `inst.mode` / `inst.footprint`, so a three-key answer would have silently
  * pre-selected the CONFIGURED default over the DEPLOYED one on three of its five questions.
  * Nothing in `status` or `doctor` moves: both read the keys they already read.
+ *
+ * `doctrines` joined last, for the same reason and one phase later: the wizard's pack question
+ * shipped before the marker reader existed, so it defaulted to `all` for everyone and re-asked
+ * an installer who had already narrowed their selection. ⚠ THIS KEY IS THE ONE WITH THREE
+ * STATES, and the `=== null` tests below preserve all three: `null` is "no carrier on this
+ * machine said", `[]` is a carrier that said `none`, a list is a carrier that named packs.
+ * Only a WIZARD may read it — it is a pre-selection shown to a human who then answers. No
+ * build-side consumer resolves a pack set from here; that is `doctrinesForBuild(dir)`, which
+ * asks one named install rather than whichever candidate this walk happens to reach first.
  */
 export function installedDefaults() {
-  const found = { theme: null, posture: null, mode: null, emit: null, footprint: null };
+  const found = {
+    theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
+  };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
     try { candidates.push([configDir(), `${host}-global`]); } catch { /* as the Python */ }
@@ -373,6 +466,10 @@ export function installedDefaults() {
     if (found.footprint === null && isFile(path.join(base, '.geneseed-footprint'))) {
       found.footprint = footprintOfDir(base);
     }
+    // `doctrinesOfDir` and not `doctrinesForBuild`: the resolved form answers `[...PACK_ORDER]`
+    // for a carrier with no marker, which would end this walk at the FIRST candidate and hide
+    // a later carrier that does say. The null has to survive to the caller here.
+    if (found.doctrines === null) found.doctrines = doctrinesOfDir(base);
   }
   return found;
 }

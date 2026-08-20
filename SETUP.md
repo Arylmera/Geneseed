@@ -165,9 +165,11 @@ your repo's `.claude/settings.json` (paths assume the bundle is at the repo root
 It wires:
 
 - **PreToolUse** (matcher `Bash`) — runs `harness git-gate`, a tool-boundary backstop
-  for Law XX. The hook inspects the command and forces an `ask` on every `git commit`
-  or `git push` (even chained or `-C`-flagged), un-suppressible by a one-time "don't
-  ask again". Every other Bash command is deferred to the normal permission flow.
+  for Doctrine `process 5`. The hook inspects the command and forces an `ask` on every
+  `git commit` or `git push` (even chained or `-C`-flagged), un-suppressible by a
+  one-time "don't ask again". Every other Bash command is deferred to the normal
+  permission flow. It is wired only when the **process** pack is active — build with
+  `--doctrines` leaving `process` out and this hook is not installed at all.
 - **SessionStart** (`startup`/`clear`) — prints `AGENT.md` and injects the project
   context (`harness context`, which auto-discovers the repo's docs);
 - **SessionStart** (`resume`) — refreshes the project context only, without re-printing
@@ -286,17 +288,79 @@ doubles as a CI drift check: `1` when it had to change files, `0` when every the
 already in sync, and `2` when `_TEMPLATE.json` itself is missing or unreadable — the one
 case where a `0` would have meant "in sync" without having checked anything.
 
+### Doctrine packs
+
+The constitution is three tiers, and only one of them is a choice. The **Ontology** (how the
+agent thinks — Telos, Evidence, Decisions, Conduct) and the nine **Rules** (what it never
+trades away) are always on and cannot be switched off. The **Doctrines** are practices rather
+than principles, and they ship as four packs:
+
+| Pack | What it governs |
+| --- | --- |
+| **craft** | how code is written — reuse first, house conventions, docs in the same change, the smallest diff |
+| **rigor** | how work is proven — idempotence, honest tests, cover-and-verify, gates that can actually fail |
+| **ops** | how the machine is driven — tool discovery, commands that return, complete teardowns, restart is not reload |
+| **process** | how a session runs — planning, context economy, docs first, bounded loops, and the consent gate on every commit and push |
+
+They are picked **at build time**, once, on the generator — there is no runtime toggle — and
+the default is all four:
+
+    geneseed-build --doctrines craft,rigor   # two packs
+    geneseed-build --doctrines none          # ontology and the nine Rules only
+    geneseed-build                           # all four (the default)
+
+`harness.config.json`'s `doctrines` array sets this checkout's own default, and `doctor`
+refuses one that names a pack the checkout does not ship. Order is fixed by the harness
+(craft → rigor → ops → process) regardless of the order you type.
+
+The setup wizard asks too — one *all* / *choose* gate, then a yes/no per pack with its
+one-line description — and it **pre-selects what the install already carries**, read off the
+`Active packs:` marker line in the deployed `AGENT.md`. So re-running the wizard and holding
+Enter cannot silently widen a set you deliberately narrowed.
+
+**The whole catalogue always ships.** Every pack file lands under `doctrines/` beside
+`AGENT.md` at both footprints whether or not it was built in, so a rule that cites a pack you
+left out is still readable on disk — only the rendered `AGENT.md` is narrower. `doctor` reports
+such citations as a `[note]`, printed and not counted, because a narrowed build is a
+configuration you chose rather than a defect.
+
+⚠ **Turning `process` off also removes the commit/push consent gate.** Doctrine `process 5`
+(*Consent Before Push*) is enforced twice: as prose in `AGENT.md`, and at the tool boundary —
+the `git-gate` PreToolUse hook on Claude Code and Bob, and the `git commit*` / `git push*`
+permission entries on OpenCode. A build without the `process` pack wires neither, and
+rebuilding an install that had them takes the Claude hook back out of `settings.json`. That is
+deliberate and it is the rule the tiering rests on: **prompt and boundary must never
+disagree.** A gate that stops every command to ask consent for a rule the install did not adopt
+is a gate the agent cannot explain and you did not ask for. Two details worth knowing:
+
+- **What stays in every build regardless:** `rm -rf *`, `git push --force*` and `git push -f*`.
+  Those are Rule IV's territory — an always-on invariant — not the process pack's.
+- **On OpenCode, an existing `opencode.json` is not stripped.** That file is co-owned, nothing
+  on disk records who wrote a given permission entry, and Geneseed will not delete a line you
+  might have typed yourself. A pack-off rebuild leaves an already-written `git commit*` in
+  place and *reports* it instead. A fresh install has no git gate at all.
+
+`process` is the only pack whose removal changes what the machine does rather than only what
+the agent reads — which is why the wizard's blurb for it says so.
+
 ### Footprint (lean vs full)
 
-**Footprint** sets how much of the Rules `AGENT.md` carries *inline* on every turn — a
+**Footprint** sets how much of the constitution `AGENT.md` carries *inline* on every turn — a
 token-cost dial, not a change to which Rules apply. Both states keep all Rules in force:
 
-- **full** (default) — Section 1 inlines every Rule's complete text *and* rationale.
-  Maximum guidance density; the largest always-loaded block in the harness.
-- **lean** — Section 1 carries each Rule's heading + the rule line, then a pointer to the
-  full law file. ~40% smaller; the complete `laws/universal.md` still ships beside
-  `AGENT.md` and the agent reads it on demand (and is told to before acting on secrets,
-  deletion, git history, scope, or untrusted content).
+- **lean** (default) — Sections 1–2 carry the heading and rule line of each Rule and each
+  active doctrine rule, then a pointer to the full text. Lighter every turn; the complete
+  `laws/universal.md`, `ontology/` and `doctrines/` still ship beside `AGENT.md` and the agent
+  reads them on demand (and is told to before acting on secrets, deletion, git history, scope,
+  or untrusted content).
+- **full** — Sections 1–2 inline every Rule's and every active doctrine rule's complete text
+  *and* rationale. Maximum guidance density; the largest always-loaded block in the harness.
+
+**The Ontology is never truncated.** Lean keeps only the first sentence of each `### ` block,
+and the four ontology sections are flowing prose rather than numbered rules — cutting them
+would leave four orphan sentences, so they ship whole at both footprints. That is why adding
+the ontology tier grew the lean carrier proportionally more than the full one; it was taken as
+a deliberate cost.
 
 **Why:** context is scarce and metered. Lean reclaims that budget — and the tokens you
 pay for it — for the task, moving the *rationale* one read away while keeping the rules
@@ -310,10 +374,11 @@ you run a smaller model.
 can *do*: lean and full emit identical files (same agents, skills, plugins, commands, memory,
 notebook, hooks) and every Rule is present and binding. The only structural difference is
 that a lean install on a global / Claude / Bob / Copilot target also ships the standalone
-`laws/universal.md` (project bundles already carry it); the only behavioural difference is
-that each Rule's reasoning loads on demand instead of every turn. Lean is the default;
-full, with the rationale always in front of the model, applies a rule's nuance more
-reliably on subtle edge cases or with a weaker model, and is one flag away.
+`laws/universal.md` and `ontology/` (project bundles already carry them, and `doctrines/`
+ships at both footprints on every target); the only behavioural difference is that the
+reasoning loads on demand instead of every turn. Lean is the default; full, with the rationale
+always in front of the model, applies a rule's nuance more reliably on subtle edge cases or
+with a weaker model, and is one flag away.
 
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
 the web Settings, the per-harness dropdown in the Harnesses tab, or the setup wizard. It is
@@ -418,7 +483,7 @@ opt-in, now simply matches the default. To drop injection entirely, set
 If you keep a personal knowledge base on this machine — an Obsidian vault, or any
 folder of interlinked markdown — declare it once in **`wiki.jsonc`** and the agent
 becomes a citizen of it: entry notes load each session (eager) or on demand (lazy),
-and it reads *and writes* notes under your vault's own conventions (AGENT.md §7,
+and it reads *and writes* notes under your vault's own conventions (AGENT.md §8,
 the `wiki` skill). Unlike `context.json` this is **per machine, not per repo**.
 
 The build seeds `wiki.jsonc` beside `AGENT.md` (for a global install:
@@ -462,7 +527,7 @@ list keeps the feature off. The file may hold private paths — it is host-speci
 covered by the bundle `.gitignore`, and never committed.
 
 On tools without the plugins (plain `AGENT.md`, Claude Code), the same contract
-holds through prose: AGENT.md §7 instructs the agent to read `wiki.jsonc` at session
+holds through prose: AGENT.md §8 instructs the agent to read `wiki.jsonc` at session
 start and honour it.
 
 ### Memory
@@ -963,7 +1028,8 @@ capability agent. Notes:
 
 - **Permissions still gate.** The consent-before-commit/push / `rm -rf` `ask` rules
   will *block* in a non-interactive run (nothing to answer the prompt). Both
-  `git commit` and `git push` are gated now (Law XX, every branch), so a CI job that
+  `git commit` and `git push` are gated on every branch whenever the **process** pack
+  is active (Doctrine `process 5`; a build without it wires neither), so a CI job that
   commits must opt those commands back to `"allow"` in its own `permission.bash` map,
   or scope the run to read-only work — don't blanket-disable the guards.
 - **`--pure`** runs OpenCode ignoring local/global config — handy to reproduce a bug

@@ -3,7 +3,7 @@
 > {{DESC_WIKI}}
 
 **Trigger:** a task needs knowledge the user keeps in their machine-wide
-knowledge base (declared in `wiki.jsonc`, AGENT.md §7), or the work has produced
+knowledge base (declared in `wiki.jsonc`, AGENT.md §8), or the work has produced
 a durable, cross-project fact worth writing back into it.
 
 ## Procedure
@@ -15,7 +15,7 @@ machine. Each declared wiki gives you its root `path`, its `entries`, a
 
 **Consult** (reading):
 1. Start from the wiki's `entries` — the eager ones are already in context;
-   open lazy ones only when the task needs them (universal {{LAW}} XV).
+   open lazy ones only when the task needs them ({{DOCTRINE}} process 3).
 2. Navigate by the wiki's own structure: follow wikilinks (`[[Note Name]]`)
    and index notes outward from the entry points rather than globbing the
    whole vault. A targeted filename/heading search is fine; reading the tree
@@ -31,7 +31,7 @@ machine. Each declared wiki gives you its root `path`, its `entries`, a
 2. Quality bar: durable, reusable, cross-project knowledge — not session
    detail, not task state, and **never secrets** (universal {{LAW}} I).
    Knowledge that matters only to you belongs in {{MEMORY}}, not the wiki.
-3. Search before creating (universal {{LAW}} XII): if a note on the topic
+3. Search before creating ({{DOCTRINE}} craft 4): if a note on the topic
    exists, extend or correct it instead of writing a duplicate.
 4. Write the note as a citizen of the graph: wikilinks to the notes it
    relates to (an orphan note is a lost note), frontmatter where the house
@@ -61,7 +61,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

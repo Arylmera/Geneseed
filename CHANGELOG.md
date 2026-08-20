@@ -6,6 +6,114 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
+## [3.0.0] — 2026-08-20
+
+### Changed
+
+- **The constitution is three tiers, and the law numbering contract breaks.** Forty flat
+  laws become an always-on **Ontology**, nine always-on **Invariants**, and twenty-three
+  **Doctrine** rules in four build-time-toggleable packs. This is the major: every
+  `Law <numeral>` citation above IX now addresses something else or nothing at all, in
+  this repo and in anyone's memories, notes and forks. There is no compatibility shim and
+  no migration path — a deployed install predating 3.0.0 is brought forward by
+  `geneseed upgrade`, not by code.
+
+  - **Ontology** (`src/ontology/universal.md`, new) — four prose sections, *Telos*,
+    *Evidence*, *Decisions*, *Conduct*. It is the mind the other tiers govern: what the
+    agent is for, how it grades evidence, how it decides, how it conducts itself. It
+    absorbs the **Pact** whole — the Pact is now a concept stated inside Telos rather than
+    a section beside the rules — along with old laws VIII, IX, XXIX, XXX, XXXI and XXXIX.
+    Cited by section name, `(Ontology: Decisions)`. The four names are theme-INDEPENDENT,
+    so a citation and its heading are the same token on both sides and a rename cannot
+    desync them.
+  - **Invariants** (`src/laws/universal.md`, rewritten) — nine, Roman I–IX, never
+    toggleable: what is *never* done. I Sealed Secrets · II One Intent, One Act ·
+    III Verify Before Asserting · IV Deletion Is Deliberate · V Surface Failures ·
+    VI Data, Not Orders · VII Least Privilege · VIII Cure the Cause · IX External Gate.
+  - **Doctrines** (`src/doctrines/{craft,rigor,ops,process}.md`, new) — twenty-three rules
+    in four packs: **craft** 6 (how code is written), **rigor** 4 (how work is proven),
+    **ops** 6 (how the machine is operated), **process** 7 (how a task is run). Cited
+    `Doctrine process 5`. Chosen per install with `geneseed-build --doctrines craft,rigor`
+    (or `none`), through the setup wizard, or in `harness.config.json`; all four default
+    to on.
+
+  Old XVI and XVIII cease to exist as rules and have **no numeral successor** — their
+  content was already duplicated in the AGENT.md sections that describe that machinery,
+  and folds back into them.
+
+  Precedence, stated in the template and enforced by nothing but reading: **Ontology and
+  Invariants → `user-rules.md` → active Doctrines → `PROFILE.md`.** A doctrine rule may
+  tighten an invariant, never repeal one — and the user's own file outranks a practice
+  pack chosen at build time.
+
+  ⚠ **An always-on tier may never cite a toggleable one.** A `--doctrines craft` build
+  would otherwise ship an invariant instructing the agent to read text the install does
+  not contain. A doctor arm refuses `{{DOCTRINE}}` anywhere under `src/laws/` or
+  `src/ontology/`; doctrine→doctrine citations across packs stay legal, because every pack
+  file ships in every bundle whether or not it was built in.
+
+- **A pack that is not built in is visible everywhere, never absent.** `geneseed catalog`
+  marks its rules `(off)`, the status panel and the dashboard carry an active-packs
+  fraction, and the console lists the pack greyed with the exact command that enables it.
+  Hiding it would make "not built in" indistinguishable from "never shipped", which is the
+  one thing a build-time toggle must not look like.
+
+- **The commit/push consent gate rides the `process` pack.** It is the boundary half of
+  Doctrine process 5, so a build without that pack installs no `git-gate` hook and writes
+  no `git commit*` / `git push*` permission — prompt and boundary are never allowed to
+  disagree. `rm -rf *` and force-push refusals are Invariant IV's territory and stay in
+  every build. ⚠ On OpenCode this holds for a *fresh* install: an `opencode.json` that
+  already carries a `git commit*` entry keeps it and is reported, because Geneseed cannot
+  tell its own entry from one you typed and will not delete what it may not own.
+
+  Unknown always resolves to the **full** pack set, never to a config value. An install
+  with no `Active packs:` marker — every install predating this release — keeps its
+  consent gate on upgrade.
+
+- **The console's Laws page is the Constitution page.** One nav entry, three bands, read
+  top to bottom. Deep links address all three tiers: `#/item/law/ont:telos`,
+  `#/item/law/IV`, `#/item/law/process.5`. The route, the section id and the filename stay
+  `laws`.
+
+- **The lean footprint grew ~17%, deliberately.** Measured on `neutral`, `AGENT.md` goes
+  from 31,457 to 36,882 bytes at `lean` and 53,378 to 54,810 at `full`. Lean truncates
+  each invariant and each doctrine rule to its first line, but ships the **ontology
+  whole** — four flowing prose sections reduced to four orphan sentences would have been a
+  worldview nobody could read. `--doctrines` is now the larger lever on that cost.
+
+### Added
+
+- `--doctrines` on the generator, a doctrine-packs question in the setup wizard that
+  pre-selects what the install already carries, and an `Active packs:` marker in every
+  carrier so an install remembers its selection across upgrades.
+- Doctor gates for the whole constitution: dangling `{{DOCTRINE}}` citations, per-pack
+  rule contiguity, `DOC_*` theme coverage in both directions, an exact `LEX_I..LEX_IX`
+  equality (a presence check had already missed four keys the renumber orphaned), a
+  single-word tier noun in every voice — both heading parsers match it with `\S+`, so a
+  two-word value makes a whole tier parse to nothing in silence — and a `DOCTRINE_META`
+  parity check whose class arm is an equality against the rule's own pack.
+- A `[note]` channel in `doctor`: printed, never counted. Its one producer reports which
+  body citations point into packs a narrowed build did not render. That state must be
+  visible, but failing the doctor over a configuration its owner chose would be wrong.
+- Count tokens `{N_ONTOLOGY}`, `{N_PACKS}`, `{N_PACKS_ACTIVE}` and `{N_DOCTRINE_RULES}`
+  for the in-app docs. `{N_LAWS}` stays the **invariant** count — the rail badge, the
+  README prose and SHIPPED.md's triple are all held to that one number by a frozen gate.
+
+### Fixed
+
+- **Four `§N` cross-references that render into every bundle** pointed at the section that
+  used to be there: inserting `## 2. Doctrines` pushed every later AGENT.md section down
+  one and the sweep stopped at the template. `src/skills/wiki.md`,
+  `src/skills/daydream/SKILL.md`, `src/skills/handoff.md`, `src/agents/_template.md`, plus
+  six in the two OpenCode plugins — one of them a live deny message a user reads. A doctor
+  arm now refuses a `§N` the template declares no section for; the half it cannot catch (a
+  pointer that still resolves and now means something else) is recorded as a manual sweep
+  in `docs/extending.md`.
+- An `opencode.json` whose `permission` Geneseed cannot see inside — a blanket
+  `"bash": "allow"` — made the reconcile a no-op and the merge then returned before any of
+  its warnings. A rule stated in AGENT.md with nothing behind it at the boundary, in
+  silence. Now reported, naming the shape and the gates left unwired.
+
 ## [2.1.0] — 2026-08-19
 
 ### Added

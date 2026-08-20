@@ -17,8 +17,8 @@
 - **Read-only.** Search and read, to ground the reframe in the real need. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
-1. Read the motion and what prompted it, then restate the underlying need in one plain sentence (universal {{LAW}} XVII).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
+1. Read the motion and what prompted it, then restate the underlying need in one plain sentence ({{DOCTRINE}} process 4).
 2. Test whether the motion addresses that need or only a symptom of it; ask what problem it would leave unsolved.
 3. If the framing is off, offer the reframed problem — the question the council should actually be debating.
 
@@ -33,4 +33,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{LAW}} VI's bar — most reports carry no feedback at all.
+{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.

@@ -1,5 +1,5 @@
 /**
- * The OpenCode guard plugin's rule/memory speed bump (Law VI) — `tests/test_opencode_guard.py`.
+ * The OpenCode guard plugin's rule/memory speed bump (Doctrine process 1).
  *
  * A CHANGE OF RUNNER AND NOTHING ELSE. The subject is an emitted artefact,
  * `adapters/opencode/plugins/geneseed-guard.js`, and the reference already drove it by writing a

@@ -214,7 +214,7 @@ const out = pyPrint;
 const err = pyPrintErr;
 
 // ======================================================================================
-// context — project-context discovery (Rule XVIII)
+// context — project-context discovery
 // ======================================================================================
 
 // Kept in step with adapters/opencode/plugins/geneseed-context.js, same as the Python.
@@ -494,7 +494,7 @@ export function cmdContext(args) {
   }
 
   const lines = [
-    `=== PROJECT CONTEXT \u2014 binding for this repo per Rule XVIII (via ${source}) ===`,
+    `=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`,
     '',
   ];
   for (const entry of eager) {
@@ -525,7 +525,7 @@ export function cmdContext(args) {
 }
 
 // ======================================================================================
-// git-gate — Law XX's tool-boundary backstop
+// git-gate — Doctrine process 5's tool-boundary backstop
 // ======================================================================================
 
 // A `git` verb ANYWHERE in the command trips the gate, including the chained
@@ -555,12 +555,13 @@ export function cmdGitGate(args) {
     return 0;
   }
   if (typeof command !== 'string' || !GIT_GATE_RE.test(command)) return 0;
-  out(askDecision('Geneseed Law XX \u2014 every git commit/push needs explicit approval'));
+  out(askDecision('Geneseed Doctrine process 5 \u2014 every git commit/push needs explicit '
+    + 'approval'));
   return 0;
 }
 
 // ======================================================================================
-// rule-gate — Law VI's tool-boundary backstop
+// rule-gate — Doctrine process 1's tool-boundary backstop
 // ======================================================================================
 
 /**
@@ -604,8 +605,8 @@ export function cmdRuleGate(args) {
   if (typeof p !== 'string' || !p) return 0;
   const target = ruleGateTarget(p, args.root);
   if (!target) return 0;
-  out(askDecision(`Geneseed Law VI \u2014 writing to ${target}: a standing rule, or a fact to `
-    + "remember? That choice is the user's. Run the rule skill first."));
+  out(askDecision(`Geneseed Doctrine process 1 \u2014 writing to ${target}: a standing rule, or a `
+    + "fact to remember? That choice is the user's. Run the rule skill first."));
   return 0;
 }
 

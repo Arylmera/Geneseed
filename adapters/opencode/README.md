@@ -181,7 +181,7 @@ docs with an `eager`/`lazy` split. The
 On `session.created` it **auto-discovers the current repo's docs by convention**
 and injects the `eager` ones into the session via a no-reply prompt
 (`session.prompt({ noReply: true })`) — so they're in context before your first
-turn, enforcing **Law XVIII** by injection, not agent discipline. This is what lets
+turn, enforcing the project-context load by injection, not agent discipline. This is what lets
 the harness live entirely in the global config dir with zero per-repo files.
 
 - **Eager** (injected in full, budget-capped): root `AGENTS.md`/`AGENT.md`/
@@ -200,11 +200,11 @@ the harness live entirely in the global config dir with zero per-repo files.
   hard guarantee is still a single install: OpenCode dedups plugins by npm
   name+version only, so two local copies both load.)
 - **Survives compaction:** on the experimental `session.compacting` hook it re-pushes
-  the eager docs into the compaction context, so the project context (Law XVIII)
+  the eager docs into the compaction context, so the project context
   persists when a long session is summarised. The `AGENT.md` rules already survive —
   they load via `instructions`, not the conversation — so only the injected project
   context needs re-pushing.
-- **Machine wiki (AGENT.md §7):** the same block carries a `MACHINE WIKI` segment
+- **Machine wiki (AGENT.md §8):** the same block carries a `MACHINE WIKI` segment
   for the user's own knowledge base(s) — typically an Obsidian vault — declared in
   `wiki.jsonc` (`$GENESEED_WIKI` → `$GENESEED_HARNESS/wiki.jsonc` → beside the
   install). Per wiki: eager entries inject in full, lazy entries list, and the
@@ -381,7 +381,7 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
 - **Runtime guard plugin** (`geneseed-guard.js`, installed with the others). Enforces
   the safety Laws at the tool boundary: **blocks** writes to private-key/credential
   files (Law I), catastrophic shell like `rm -rf /` (Law IV), and any mutation under
-  a declared wiki's `protected` folders (AGENT.md §7, from `wiki.jsonc`); **warns** on
+  a declared wiki's `protected` folders (AGENT.md §8, from `wiki.jsonc`); **warns** on
   `.env` writes and force-push. `GENESEED_GUARD=off` disables it, `=warn` downgrades
   blocks to warnings.
 - **Invisible context injection** (the default). The context plugin delivers via
@@ -390,10 +390,15 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   auto-falls back to the visible `session.created` message. `GENESEED_CONTEXT_VISIBLE=1`
   forces the visible block (legacy `GENESEED_CONTEXT_TRANSFORM=0/off` does the same).
 - **Default permissions.** A fresh `opencode.json` gets a minimal policy that **asks**
-  before `rm -rf *` and **every `git commit` and `git push`** (the host-level backstop
-  for the consent-before-commit/push Rule — the agent never records or shares code
-  unprompted, on any branch; force-push is also called out explicitly). Added only when
-  you have no `permission` key — an existing policy is never touched. Routine local work
+  before `rm -rf *` and a force-push — those are **Rule IV**'s territory and are in every
+  build — and, **on an install that built the `process` pack in**, before every
+  `git commit` and `git push` (the host-level backstop for **Doctrine process 5**: the
+  agent never records or shares code unprompted, on any branch). Build with
+  `--doctrines` leaving `process` out and those two entries are simply not written.
+  The whole block is added only when you have no `permission` key; an existing policy is
+  reconciled key by key — Geneseed adds back what a returning pack wants and **never
+  removes** an entry, because it cannot tell its own from one you typed, so a pack-off
+  rebuild leaves a `git commit*` you already have in place and reports it instead. Routine local work
   (edits, builds, tests) is unaffected; to allow frictionless commits/pushes, set
   `"git commit*"` / `"git push*"` to `"allow"` in your own `permission.bash` map. (Note:
   OpenCode lets a user pick "always allow" for the session, which makes the gate
@@ -521,7 +526,8 @@ install `jsonc-parser` yourself — you lose OCX's dependency management and
 auto-updates, and you own the upgrade-by-re-copy. Prefer the OCX path.
 
 **Consent note.** `worktree_delete` auto-commits before removal. The harness's
-consent-before-commit Rule is enforced for *shell* `git commit` via `opencode.json`
+consent-before-commit rule (**Doctrine process 5**, when the `process` pack is built in)
+is enforced for *shell* `git commit` via `opencode.json`
 permissions, but this plugin commits through its own tool path — so review what it
 will commit before invoking delete, or keep the worktree and commit yourself.
 

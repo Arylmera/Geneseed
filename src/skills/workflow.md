@@ -19,7 +19,7 @@ Saved workflows live in the host's workflows directory — on OpenCode that is `
    - **dispatch** — decompose a multi-domain goal, route each subtask to its owning capability {{AGENT}}, converge the results (the live-orchestrator shape; model-driven fallback: [parallel-agents](parallel-agents.md)).
 3. Run it: `workflow({ name, args })`. Pass the task-specific inputs (target paths, the motion, the question) as `args` — the script reads them.
 4. Read the returned summary. The full structured result and a phase-by-phase trace are written to the run's progress file; point the user at it if they want the detail.
-5. Act on the result yourself — the workflow gathers and verifies, but committing, pushing, or merging stays with you ({{LAW}} XX).
+5. Act on the result yourself — the workflow gathers and verifies, but committing, pushing, or merging stays with you ({{DOCTRINE}} process 5).
 
 ## Done when
 - The right saved workflow ran to completion, its result was read, and you have carried its conclusion forward — or, where no `workflow` tool exists, the equivalent model-driven {{SKILL}} was used instead.
@@ -31,7 +31,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

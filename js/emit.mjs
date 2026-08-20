@@ -87,8 +87,29 @@ import {
 } from './lib/fs.mjs';
 /** `_build_render.SRC_DIRS_MARKER`. */
 const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
-/** `_build_render.OWNED_SRC_DIRS` — wiped and regenerated each run. */
-const OWNED_SRC_DIRS = ['laws', 'agents', 'skills'];
+/**
+ * `_build_render.OWNED_SRC_DIRS` — wiped and regenerated each run.
+ *
+ * `ontology` and `doctrines` are appended, not inserted: this array's iteration order is the
+ * key order of the `.geneseed-srcdirs.json` marker it fills, and appending keeps the three
+ * original keys where an existing install's marker already has them.
+ *
+ * They belong here for the same reason `laws` does — they are GENERATED, so an install must
+ * not keep a copy the source no longer produces. Without them a build writes the dirs on
+ * every run and never wipes them, which turns the doctrines toggle into a one-way switch:
+ * disable a pack, rebuild, and its rendered file sits in the install forever, contradicting
+ * the `Active packs:` line in the AGENT.md right beside it.
+ */
+const OWNED_SRC_DIRS = ['laws', 'agents', 'skills', 'ontology', 'doctrines'];
+
+/**
+ * The constitution dirs a LEAN emit re-ships in full text — see `shipLeanLaws`.
+ *
+ * Not all of `OWNED_SRC_DIRS`: `agents` and `skills` are already written as whole files by
+ * the native layer, and only the three constitution dirs are inlined into AGENT.md in a
+ * form (terse, or pack-filtered) that loses text the reader may still need.
+ */
+const LEAN_FULL_TEXT_DIRS = ['laws', 'ontology', 'doctrines'];
 
 /**
  * `_build_core.CAPABILITY_LINK_RE` — the DEFAULT only.
@@ -824,7 +845,8 @@ export function emitOpencodeRender(cfg, job) {
   // (`_rel_under` is the Python side by design), and only the BASENAME is consumed
   // downstream: `opencode.json`, or the `.jsonc` sibling when that is what is on disk.
   phaseLog('WIRE');
-  const cfgName = path.basename(mergeOpencodeJson(path.join(root, 'opencode.json'), agentPath));
+  const cfgName = path.basename(mergeOpencodeJson(path.join(root, 'opencode.json'), agentPath,
+    cfg.doctrines));
 
   return {
     owned,
@@ -929,16 +951,27 @@ function globalNotebook(cfgDir, items, legacy, srcRoot) {
  * output besides the files is what it APPENDS to `owned` — which travels back in the
  * payload for the manifest and the prune. It reads nothing any wiring stage writes, so
  * its new position is not merely legal, it has no dependency on the old one.
+ *
+ * NO LONGER LEAN-ONLY, and the name is kept because the lean case is still the whole reason
+ * it exists. `doctrines` ships at BOTH footprints, because the two footprints lose different
+ * things: lean loses text (every rule is truncated to its first sentence, so the full text has
+ * to be on disk), while FULL loses whole packs (only the active ones are inlined, so the
+ * inactive ones have to be on disk). AGENT.md tells the agent it may read a rule in a pack
+ * that is not active, and `src/doctrines/README.md` rests cross-pack citations on exactly
+ * that — a claim the emit has to make true, not merely the `files` bundle.
  */
-function shipLeanLaws(items, theme, cfgDir, owned) {
-  const lawsDir = theme.DIR_LAWS ?? 'laws';
+function shipLeanLaws(items, theme, cfgDir, owned, footprint) {
+  // Themed names, resolved through the same token table `build`'s wipe resolves, so the dir
+  // a lean emit re-ships and the dir it prunes can never be two different spellings.
+  const wanted = footprint === 'lean' ? LEAN_FULL_TEXT_DIRS : ['doctrines'];
+  const dirs = new Set(wanted.map((d) => theme[SRC_DIR_TOKENS[d]] ?? d));
   for (const { rel, text } of items) {
     const parts = rel.split('/');
     // `parts.length` mirrors Python's `parts and parts[0]`, where `Path("").parts` really
     // is empty. `String.split` never returns an empty array, so this half can never be
     // false here — kept for the mirror, and its mutation stays green because there is
     // nothing to detect, not because the gate cannot see it.
-    if (text !== null && parts.length && parts[0] === lawsDir) {
+    if (text !== null && parts.length && dirs.has(parts[0])) {
       const dest = path.join(cfgDir, ...parts);
       mkdirSync(path.dirname(dest), { recursive: true });
       writeText(dest, text);
@@ -1039,7 +1072,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   writeVersion(cfg, cfgDir);
   owned.push(VERSION_MARKER);
 
-  if (footprint === 'lean') shipLeanLaws(items, theme, cfgDir, owned);
+  shipLeanLaws(items, theme, cfgDir, owned, footprint);
 
   // WIRE — the one file of this emit the user co-owns, and the last render is now behind
   // us. Inlined the way `emitOpencodeRender`'s is (one call, the same merge, the same
@@ -1047,7 +1080,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // that split is what `tests/test_emit_phase_order.py` walks, and it walks the Python.
   phaseLog('WIRE');
   const cfgName = path.basename(mergeOpencodeJson(path.join(cfgDir, 'opencode.json'),
-    agentPath));
+    agentPath, cfg.doctrines));
 
   return {
     owned,
@@ -1170,7 +1203,7 @@ export function emitClaudeRender(cfg, job) {
   writeVersion(cfg, cfgDir);
   owned.push(VERSION_MARKER);
 
-  if (footprint === 'lean') shipLeanLaws(items, theme, cfgDir, owned);
+  shipLeanLaws(items, theme, cfgDir, owned, footprint);
 
   // The last render of the emit, and the only one whose product is not written here.
   // Bob at GLOBAL scope gets no managed block at all, so nothing is rendered for it —
@@ -1183,7 +1216,7 @@ export function emitClaudeRender(cfg, job) {
 
   // WIRE — see `claudeWire` below. One child per emit, so the two halves are two
   // functions rather than two spawns; the seam between them is a call, not a process.
-  const managed = claudeWire(job, claudeMdText, agentText !== null);
+  const managed = claudeWire(job, claudeMdText, agentText !== null, cfg.doctrines);
 
   return {
     owned,
@@ -1218,7 +1251,7 @@ export function emitClaudeRender(cfg, job) {
  * not needed for it: Python tests `os.environ.get(...)` for truthiness and an env var is
  * always a string, so `''` is the only falsy value either language sees.
  */
-function claudeWire(job, claudeMdText, hasAgentText) {
+function claudeWire(job, claudeMdText, hasAgentText, doctrines = null) {
   phaseLog('WIRE');
   const { cfgDir, claudeMd, scope, host, oldManaged, preambleExclude, hookOpts } = job;
   const old = oldManaged && typeof oldManaged === 'object' && !Array.isArray(oldManaged)
@@ -1274,8 +1307,12 @@ function claudeWire(job, claudeMdText, hasAgentText) {
     // The merge prunes recorded groups that are no longer canonical and returns the
     // COMPLETE current claim set — store it as-is; unioning with prior would resurrect the
     // stale claims.
+    // `doctrines` decides whether the git-gate group is part of the canonical claim set. It
+    // travels from `cfg` rather than being re-read off the deployment: this is the emit that
+    // DECIDES the install's packs, so the marker on disk is still the previous build's.
     const [, managedHooks] = mergeClaudeSettings(
       settingsPath, scope, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
+      doctrines,
     );
     managed.settings_hooks = managedHooks;
 

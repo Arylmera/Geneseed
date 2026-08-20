@@ -29,13 +29,20 @@
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { readText, parseJson, normcase, comparePaths } from './lib/fs.mjs';
+// `js/checkout.mjs` imports nothing but node builtins, so this direction cannot cycle.
+import { PACK_ORDER } from './checkout.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
 export const STRUCTURE = {
   HARNESS: 'Geneseed', CHARTER: 'Charter', CONTEXT: 'Context',
   SCRIPT: 'Script', SCRIPTS: 'Scripts',
   DIR_LAWS: 'laws', DIR_AGENTS: 'agents', DIR_SKILLS: 'skills', DIR_MEMORY: 'memory',
-  DIR_NOTEBOOK: 'notebook',
+  DIR_NOTEBOOK: 'notebook', DIR_ONTOLOGY: 'ontology', DIR_DOCTRINES: 'doctrines',
+  // Ontology section names. Theme-INDEPENDENT on purpose: a citation reads
+  // `({{ONTOLOGY}}: {{ONT_TELOS}})` — token on both sides, so the heading and every
+  // reference to it move together and a rename can never desync them.
+  ONT_TELOS: 'Telos', ONT_EVIDENCE: 'Evidence', ONT_DECISIONS: 'Decisions',
+  ONT_CONDUCT: 'Conduct',
 };
 
 /**
@@ -46,11 +53,15 @@ export const STRUCTURE = {
 export const SRC_DIR_TOKENS = {
   laws: 'DIR_LAWS', agents: 'DIR_AGENTS', skills: 'DIR_SKILLS',
   memory: 'DIR_MEMORY', notebook: 'DIR_NOTEBOOK',
+  ontology: 'DIR_ONTOLOGY', doctrines: 'DIR_DOCTRINES',
 };
 
 const TEXT_SUFFIXES = new Set(['.md', '.tmpl', '.json', '.txt', '.yml', '.yaml']);
 
-const TOKEN_RE = /\{\{([A-Z_]+)\}\}/g;
+// Digits are legal after the first character: `DOC_<PACK>_<n>` (the doctrine rule titles) are
+// the first token names in the project to carry one, and without `0-9` here `{{DOC_CRAFT_1}}`
+// silently never substitutes. A leading digit stays illegal, so `{{1}}` is still not a token.
+const TOKEN_RE = /\{\{([A-Z_][A-Z0-9_]*)\}\}/g;
 const INCLUDE_RE = /^[ \t]*<!--[ \t]*INCLUDE:[ \t]*(?<path>[^ \t]+)[ \t]*-->[ \t]*$/gm;
 const CATALOG_BLOCK_RE =
   /[ \t]*<!-- CATALOG:begin -->\n(?<table>[\s\S]*?)[ \t]*<!-- CATALOG:else -->\n(?<pointer>[\s\S]*?)[ \t]*<!-- CATALOG:end -->\n/g;
@@ -152,8 +163,18 @@ function splitAtLawHeadings(text) {
   return out;
 }
 
-/** `_build_render._terse_laws`. */
-export function terseLaws(text, theme, lawsPrefix = '') {
+/**
+ * `_terse_laws` minus its pointer paragraph — heading + first sentence, per `### ` block.
+ *
+ * Split out rather than parameterised. The pointer was baked into the function body, and
+ * the doctrines axis needs the same truncation under a DIFFERENT closing paragraph (one
+ * that names the pack catalogue, not `laws/universal.md`, and drops the
+ * secrets/deletion/git-history clause, which is the invariants' domain and not a pack's).
+ * An extraction leaves `terseLaws` byte-identical for the laws path — the recorded lean
+ * AGENT.md does not move — where a fourth parameter would have put a branch inside the one
+ * function every frozen lean render already goes through.
+ */
+function terseBlocks(text) {
   const blocks = splitAtLawHeadings(text);
   const out = [blocks[0].trimEnd()];
   for (const b of blocks.slice(1)) {
@@ -169,6 +190,11 @@ export function terseLaws(text, theme, lawsPrefix = '') {
     const m = /^([\s\S]+?[.!?])(?:\s|$)/.exec(body);
     out.push(`${heading}\n${m ? m[1].trim() : body}`);
   }
+  return out.join('\n\n');
+}
+
+/** `_build_render._terse_laws`. */
+export function terseLaws(text, theme, lawsPrefix = '') {
   const law = theme.LAW ?? 'Law';
   const lawsDir = theme.DIR_LAWS ?? 'laws';
   const pointer =
@@ -176,7 +202,7 @@ export function terseLaws(text, theme, lawsPrefix = '') {
     + `complete, binding text of every ${law} is in \`${lawsPrefix}${lawsDir}/universal.md\`; `
     + `read it whenever a ${law}'s application is unclear, and before any act touching `
     + `secrets, deletion, git history, scope, or untrusted content.`;
-  return out.join('\n\n') + '\n\n' + pointer;
+  return terseBlocks(text) + '\n\n' + pointer;
 }
 
 /** `_build_render.render_file`. */
@@ -214,6 +240,75 @@ function registerBody(cfg, theme, dir, selected, fallback) {
 }
 
 /**
+ * The doctrine packs this build actually renders, in `PACK_ORDER` — and the two gates
+ * that stand between `cfg.doctrines` and a silently wrong AGENT.md.
+ *
+ * GATE 1 (stray pack): a `.md` under `src/doctrines/` that `PACK_ORDER` does not name is a
+ * refusal, not a skip. Discovery sorts alphabetically and `PACK_ORDER` does not, so the two
+ * cannot be the same list; without this gate a fifth pack file would render into no install
+ * and no test would say so.
+ *
+ * GATE 2 (missing file): a pack named in `cfg.doctrines` with no file is a refusal too. The
+ * CLI validates `--doctrines` against discovery, but `makeCfg({doctrines})` is a public
+ * entry point and an emit that quietly dropped a pack the user asked for is exactly the
+ * failure the `Active packs:` marker would then attest to.
+ *
+ * Both throw with `exitCode`, the marker `bin/geneseed.mjs`'s `main` turns into a status.
+ */
+function activeDoctrines(cfg) {
+  const dir = path.join(cfg.src, 'doctrines');
+  const onDisk = existsSync(dir)
+    ? readdirSync(dir)
+      .filter((f) => f.endsWith('.md') && path.basename(f, '.md').toLowerCase() !== 'readme')
+      .map((f) => path.basename(f, '.md'))
+    : [];
+  const stray = onDisk.filter((n) => !PACK_ORDER.includes(n));
+  if (stray.length) {
+    const e = new Error(`doctrine pack file(s) ${stray.join(', ')} exist under src/doctrines/ `
+      + 'but are missing from PACK_ORDER (js/checkout.mjs) — add them there, or they render '
+      + 'into no install at all');
+    e.exitCode = 1;
+    throw e;
+  }
+  const wanted = cfg.doctrines ?? PACK_ORDER;
+  for (const name of wanted) {
+    if (!onDisk.includes(name)) {
+      const e = new Error(`doctrine pack '${name}' is selected but src/doctrines/${name}.md `
+        + `does not exist (packs on disk: ${onDisk.join(', ') || 'none'})`);
+      e.exitCode = 1;
+      throw e;
+    }
+  }
+  return PACK_ORDER.filter((p) => wanted.includes(p));
+}
+
+/**
+ * `{{DOCTRINES_BODY}}` — the active packs concatenated, the multi-select answer to
+ * `registerBody`'s single-select one.
+ *
+ * `registerBody` reads ONE file because a posture and a mode are scalars; a doctrine set is
+ * 0-4 files, so this loops instead of wrapping it. Under `lean` each pack gets the same
+ * heading + first-sentence treatment the invariants get, and the whole section — not each
+ * pack — closes with one pointer at the full catalogue, which ships in every bundle whether
+ * or not a pack is active.
+ */
+function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
+  if (!active.length) return '';
+  const parts = active.map((name) => {
+    const body = substitute(readText(path.join(cfg.src, 'doctrines', `${name}.md`)), theme).trim();
+    return footprint === 'lean' ? terseBlocks(body) : body;
+  });
+  if (footprint === 'lean') {
+    const doctrine = theme.DOCTRINE ?? 'Doctrine';
+    const dir = theme.DIR_DOCTRINES ?? 'doctrines';
+    parts.push(`> Each ${doctrine} above is given in brief — the rule, not its reasoning. `
+      + `The complete text of every pack, active or not, is in \`${lawsPrefix}${dir}/\`; read `
+      + `the pack file whenever a ${doctrine}'s application is unclear.`);
+  }
+  return parts.join('\n\n');
+}
+
+/**
  * `_build_render.effective_theme`.
  *
  * `cfg.structure` overrides the constant below when the driver supplies one, and it
@@ -223,10 +318,18 @@ function registerBody(cfg, theme, dir, selected, fallback) {
  * it reaches nothing at all unless it travels. The constant stays as the default for the
  * parity harnesses, which drive this module directly.
  */
-export function effectiveTheme(cfg, themeName) {
+export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix = '' } = {}) {
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
   theme.POSTURE_BODY = registerBody(cfg, theme, 'postures', cfg.posture ?? 'peer', 'peer');
   theme.MODE_BODY = registerBody(cfg, theme, 'modes', cfg.mode ?? 'direct', 'direct');
+  // The doctrines pair is threaded, not read off `cfg`: `footprint` is a per-RENDER value
+  // (`renderAll`'s option, and the same cfg renders both ways in one process), so parking it
+  // on cfg would make the terse/full choice sticky across calls. An options object rather
+  // than two positional params keeps the existing two-arg call sites — every test, and
+  // `renderAll` — compiling unchanged, and defaults to the full text if a caller forgets.
+  const active = activeDoctrines(cfg);
+  theme.DOCTRINES_BODY = doctrinesBody(cfg, theme, active, footprint, lawsPrefix);
+  theme.DOCTRINES_LIST = active.length ? active.join(', ') : 'none';
   return theme;
 }
 
@@ -271,7 +374,7 @@ export function destRel(rel) {
 export function renderAll(cfg, themeName, {
   footprint = 'full', lawsPrefix = '', nativeCatalog = false,
 } = {}) {
-  const theme = effectiveTheme(cfg, themeName);
+  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix });
   const items = [];
   for (const file of sortedSourceFiles(cfg.src)) {
     const rel = path.relative(cfg.src, file);

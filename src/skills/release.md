@@ -11,16 +11,16 @@
    **Never ship a breaking change under a non-major bump** — honest versions are a
    promise to downstream consumers, and a quiet break is a broken one.
 2. Update the version wherever it is declared (manifest, package metadata, a VERSION
-   constant) — find *every* occurrence so they cannot drift (universal {{LAW}} XII).
+   constant) — find *every* occurrence so they cannot drift ({{DOCTRINE}} craft 4).
 3. Update the changelog: a dated section for the new version summarising the
    user-visible changes, grouped (added / changed / fixed), derived from the commits
    since the last tag.
 4. Commit the version bump and changelog as one focused commit, through the
    [commit {{SKILL}}](commit.md) — summary and exact message presented for
-   acceptance (universal {{LAW}} II, {{LAW}} XX).
+   acceptance (universal {{LAW}} II, {{DOCTRINE}} process 5).
 5. Tag the release (annotated, matching the version). Tagging and publishing are
    **outward-facing** (universal {{LAW}} IV), and the push itself needs explicit
-   per-push acceptance — a release lands on a shared branch, where {{LAW}} XX
+   per-push acceptance — a release lands on a shared branch, where {{DOCTRINE}} process 5
    applies with extra care and grants no standing consent.
 6. With that acceptance, push the commit and the tag together; trigger or verify
    the publish/release pipeline.
@@ -36,7 +36,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

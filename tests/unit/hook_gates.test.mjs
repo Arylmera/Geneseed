@@ -1,5 +1,5 @@
-// `tests/test_harness.py`'s two PreToolUse gates — the git gate (Law XX backstop) and the rule
-// gate (Law VI backstop).
+// `tests/test_harness.py`'s two PreToolUse gates — the git gate (Doctrine process 5 backstop)
+// and the rule gate (Doctrine process 1 backstop).
 //
 // BOTH ARE SILENT BY DESIGN ON ALMOST EVERY PATH, which is the whole difficulty. A gate that
 // never fires satisfies every "defers" assertion in this file, and a gate that fires on
@@ -97,8 +97,8 @@ const writePayload = (p, key = 'file_path') =>
 function ruleAsks(p, { root = null, key = 'file_path' } = {}) {
   const dec = askDecision(hookRun('rule-gate', { root, stdin: writePayload(p, key) }), p);
   // THE MESSAGE IS THE FEATURE. An `ask` with no reason is a permission prompt the user
-  // cannot answer: it must name the law and route to the skill that resolves it.
-  assert.ok(dec.permissionDecisionReason.includes('Law VI'), dec.permissionDecisionReason);
+  // cannot answer: it must name the rule and route to the skill that resolves it.
+  assert.ok(dec.permissionDecisionReason.includes('Doctrine process 1'), dec.permissionDecisionReason);
   assert.ok(dec.permissionDecisionReason.includes('rule skill'), dec.permissionDecisionReason);
 }
 

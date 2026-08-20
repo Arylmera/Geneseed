@@ -18,8 +18,8 @@
 - **Read-only.** Search and read, to judge operability against the real system. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
-1. Read the motion and how it would run, so the concerns are this system's, not generic (universal {{LAW}} XVII).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
+1. Read the motion and how it would run, so the concerns are this system's, not generic ({{DOCTRINE}} process 4).
 2. Pre-mortem the 3am incident: how it fails under load, whether you can see it failing (metrics, logs), and how you roll it back. Treat a production deploy with no tested rollback or fix-forward path and no retained previous artifact as not ready to ship — there must be a way back before there is a way out.
 3. Weigh the standing cost — the on-call burden, the toil, the new ways to be paged — against the benefit.
 
@@ -34,4 +34,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{LAW}} VI's bar — most reports carry no feedback at all.
+{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.

@@ -9,7 +9,7 @@ server — exposing an external API or service to an agent as a set of tools.
 depends on it.
 
 ## Procedure
-1. Research first ({{LAW}} XVII): read the MCP specification
+1. Research first ({{DOCTRINE}} process 4): read the MCP specification
    (`modelcontextprotocol.io`) and the target service's API docs, then pick the
    SDK — Python (FastMCP) or TypeScript (MCP SDK) — and load its documentation.
 2. Plan the tool surface: list the service's key operations and design
@@ -18,7 +18,7 @@ depends on it.
    real task with it.
 3. Build the core: an authenticated API client, shared error-handling and
    pagination helpers, and response formatting that returns focused, relevant
-   data rather than raw dumps ({{LAW}} XV).
+   data rather than raw dumps ({{DOCTRINE}} process 3).
 4. Define each tool's input and output schema (Pydantic or Zod), set the
    annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
    `openWorldHint`), and write error messages that name the specific, actionable
@@ -41,7 +41,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

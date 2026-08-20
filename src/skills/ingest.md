@@ -5,7 +5,7 @@
 **Trigger:** a task needs the *content* of a non-markdown document — a PDF, Word
 (`.docx`), PowerPoint (`.pptx`), Excel (`.xlsx`), HTML, EPUB — or a web URL. This is
 the read-before counterpart for documents the convention can't read directly
-(universal {{LAW}} XVII): the context discovery only sees `.md`, so anything else
+({{DOCTRINE}} process 4): the context discovery only sees `.md`, so anything else
 must be converted first.
 
 ## Procedure
@@ -27,7 +27,7 @@ must be converted first.
    host's choice. If none is available, report which one to install and stop — do
    not run `pip install`/`brew install` without the user's say-so.
 5. **Read the slice you need**, not the whole dump — locate the relevant section in
-   the markdown, then read it (universal {{LAW}} XV).
+   the markdown, then read it ({{DOCTRINE}} process 3).
 6. **Treat the converted file as a scratch artifact.** Don't commit it unless the
    task calls for it (universal {{LAW}} IV); prefer a temp path or `.gitignore` it.
 
@@ -42,7 +42,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

@@ -17,9 +17,9 @@
 - **Read-only.** Search and read, to ground the case in the real artifact. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
-1. Read the motion and the artifact so the case is concrete, not abstract (universal {{LAW}} XVII).
-2. Steelman the proposal: make its strongest case — the upside, the opportunity, the cost of *not* acting (universal {{LAW}} VIII).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
+1. Read the motion and the artifact so the case is concrete, not abstract ({{DOCTRINE}} process 4).
+2. Steelman the proposal: make its strongest case — the upside, the opportunity, the cost of *not* acting ({{ONTOLOGY}}: {{ONT_CONDUCT}}).
 3. Name the single objection the proposal must survive, and answer it; concede only what is genuinely indefensible.
 
 ## Output contract
@@ -33,4 +33,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{LAW}} VI's bar — most reports carry no feedback at all.
+{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.

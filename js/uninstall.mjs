@@ -50,7 +50,7 @@ import path from 'node:path';
 import { hookRunnerEntry } from '../bin/geneseed.mjs';
 import { confirm } from './setup.mjs';
 import {
-  claudeCfg, claudeReadManifest, emitHostScopeOf, installKind, installState,
+  claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, installKind, installState,
   registeredTargets, readMaybe, DISABLED_STASH,
 } from './installs.mjs';
 import {
@@ -1013,15 +1013,27 @@ function cleanHostStash(cfg, host = 'claude') {
  * file and swallows its own OSError, exactly as the reference does — a failed bookkeeping
  * write must not fail the reactivate that has already moved every file back.
  */
-function remergeClaudeHooks(cfg) {
+function remergeClaudeHooks(cfg, root = cfg) {
   const data = claudeReadManifest(cfg);
   const managed = managedOf(data);
   // `hookOpts` is the one argument `mergeClaudeSettings` will not default, and it is right
   // not to: there is no computable fallback for the runner/entry the shim bakes. The
   // emitter's own originator is imported rather than restated — a reactivate that wired a
   // different shim path would point every re-added hook at a file the emitter never writes.
+  // The pack selection is read back off the reactivated carrier, not defaulted: a reactivate
+  // that re-wired the git-gate into an install whose owner had turned the process pack off
+  // would put the boundary back at odds with the prompt. `null` (no marker) keeps the gate.
+  //
+  // ⚠ THE CARRIER IS NOT ALWAYS UNDER `cfg`, WHICH IS WHY `root` IS A SECOND PARAMETER. On a
+  // PROJECT install `cfg` is `<repo>/.claude` and the carrier is `<repo>/CLAUDE.md`, so
+  // reading `cfg` alone answered `null` for every project reactivate and re-wired the gate
+  // unconditionally (fail-closed, so not a hole — but wrong, and it made the toggle one-way
+  // for project installs). `root` first, `cfg` second: copilot keeps its carrier INSIDE the
+  // config dir (`.github/copilot-instructions.md`), and on a global install the two are the
+  // same directory anyway. Both silent ⇒ `null` ⇒ the gate stays.
+  const doctrines = doctrinesOfDir(root) ?? doctrinesOfDir(cfg);
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed), 'global',
-    managed.settings_hooks ?? null, hookRunnerEntry());
+    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines);
   // `and data` — a manifest that did not parse is not one to write back.
   if (!pyEq(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
     managed.settings_hooks = claims;
@@ -1106,7 +1118,7 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
       && isFile(path.join(cfg, 'rules', 'geneseed.md'));
   }
   if (relive) {
-    remergeClaudeHooks(cfg);   // ensure the hooks are present (and the claims exact)
+    remergeClaudeHooks(cfg, root);   // ensure the hooks are present (and the claims exact)
     cleanHostStash(cfg, host);
     return { ok: true,
       note: 'install was re-created while disabled; discarded the stashed snapshot' };
@@ -1126,12 +1138,19 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
     moved += 1;
   }
   if (leftovers.length) return { ok: false, failed: leftovers, moved };
-  remergeClaudeHooks(cfg);
   const managed = claudeReadManifest(cfg).managed || {};
-  wireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
+  // ⚠ THE CARRIER IS RESTORED BEFORE THE HOOKS ARE RE-MERGED, AND THE ORDER IS LOAD-BEARING.
+  // `remergeClaudeHooks` reads the install's pack selection back off the carrier, and on a
+  // Claude-style host that selection lives inside the MANAGED BLOCK — which the deactivate
+  // stashed. Re-merging first therefore asked a CLAUDE.md with its block cut out, got `null`
+  // ("unknown"), and fail-closed straight back to the consent gate: every reactivate re-wired a
+  // git-gate the owner had turned off, in both scopes. The two writes touch different files
+  // (`CLAUDE.md` vs `settings*.json`), so nothing else depends on which goes first.
   if (existsSync(blockFile)) {
     managedBlockWrite(claudeMdPath(cfg, managed), readText(blockFile));
   }
+  remergeClaudeHooks(cfg, root);
+  wireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
   cleanHostStash(cfg, host);
   return { ok: true, kind: host, moved };
 }

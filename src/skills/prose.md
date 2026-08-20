@@ -14,7 +14,7 @@ person wrote it, not a model.
 3. Active voice, human subject. Don't let inanimate things perform human actions
    ("the test wants…", "the code believes…").
 4. Be concrete: swap vague abstractions and intensifiers for the specific fact,
-   number, or name. Drop adverbs propping up a weak verb ({{LAW}} XV — every word
+   number, or name. Drop adverbs propping up a weak verb ({{DOCTRINE}} process 3 — every word
    earns its place).
 5. Vary rhythm: don't run three same-length sentences back to back, and break the
    reflex "X, Y, and Z" triad when it shows up in every paragraph.
@@ -35,7 +35,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

@@ -32,4 +32,4 @@ A checkout needs **git** and the same **Node ≥ 22.3** as everything else — t
 
 ---
 
-**Next:** [Posture & footprint](#/docs/setup-choices) · [Verify it works](#/docs/verify) · [What you just installed](#/docs/model) · [Install by hand instead](#/docs/install-paths)
+**Next:** [Posture, doctrines & footprint](#/docs/setup-choices) · [Verify it works](#/docs/verify) · [What you just installed](#/docs/model) · [Install by hand instead](#/docs/install-paths)

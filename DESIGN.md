@@ -31,22 +31,32 @@ vault or a specific tool's hooks.
 3. **Theme is voice + vocabulary; the scaffolding is theme-independent.** A single
    neutral source renders to any theme via token substitution, split into two classes:
    - **Structure** (always plain English, every theme, every emit) — the section
-     *layout*, the harness name (`HARNESS`), the law *numbers*, a few rare technical
-     nouns (`Context`, `Scripts`, `Charter`), and the folder names (`laws/`, `agents/`,
-     `skills/`, `memory/` via `DIR_*`). These live in the `STRUCTURE` map in `js/render.mjs`
-     and are laid on top of every render, so a theme can never move a path, a link, or
-     a heading number. Tooling stays stable.
+     *layout*, the harness name (`HARNESS`), the law *numbers*, the four ontology section
+     names (`ONT_TELOS`, `ONT_EVIDENCE`, `ONT_DECISIONS`, `ONT_CONDUCT`), a few rare
+     technical nouns (`Context`, `Scripts`, `Charter`), and the folder names (`laws/`,
+     `ontology/`, `doctrines/`, `agents/`, `skills/`, `memory/`, `notebook/` via `DIR_*`).
+     These live in the `STRUCTURE` map in `js/render.mjs` and are laid on top of every
+     render, so a theme can never move a path, a link, or a heading number. No theme file
+     defines a `DIR_*` or an `ONT_*` key, and none may: an ontology citation spells the
+     section on both sides (`{{ONTOLOGY}}: {{ONT_TELOS}}`), so heading and reference move
+     together or not at all. Tooling stays stable.
    - **Voice + vocabulary** (themed) — how the AI *responds* (`VOICE`), a top `BANNER`,
-     and the prose words the docs use: the core nouns `LAW(S)`/`AGENT(S)`/`SKILL(S)`/
-     `MEMORY`/`NOTEBOOK`/`VAULT`/`WIKI`, plus `TAGLINE`, `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`,
-     `ROAST_PERSONA`, the law titles `LEX_*`, and the section intros `INTRO_*`. Each
-     theme defines its own nouns; **neutral keeps the plain words** (Rule, Agent, Skill,
-     Memory, Workspace), so neutral output is unchanged.
+     and the prose words the docs use: the core nouns `LAW(S)`/`DOCTRINE(S)`/`ONTOLOGY`/
+     `AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`VAULT`/`WIKI`, plus `TAGLINE`,
+     `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`, `ROAST_PERSONA`, the invariant
+     titles `LEX_I`..`LEX_IX`, the 23 doctrine-rule titles `DOC_<PACK>_<n>`, the four pack
+     names `PACK_CRAFT`/`PACK_RIGOR`/`PACK_OPS`/`PACK_PROCESS`, and the section intros
+     `INTRO_*`. Each theme defines its own nouns; **neutral keeps the plain words** (Rule,
+     Doctrine, Agent, Skill, Memory, Workspace), so neutral output is unchanged.
+     `{{LAW}}` and `{{DOCTRINE}}` must each be a **single word** — both heading parsers
+     match the tier noun with `\S+`, so a two-word value makes the whole tier parse to
+     nothing in silence. `constitutionProblems` refuses one.
 
    So `imperial` flavours the agent's tone *and* the page — the banner, the readiness
-   sigil, the epigraphs, and the words themselves (the laws read as *Dictates*, agents
-   as *Adepts*, skills as *Rites*) — while every folder is still `agents/`/`skills/`,
-   law numbers stay `XVIII`, and links resolve identically across themes. The source
+   sigil, the epigraphs, and the words themselves (the invariants read as *Dictates*,
+   doctrine rules as *Doctrinae*, agents as *Adepts*) — while every folder is still
+   `agents/`/`skills/`, an invariant is still numbered `IV` and a doctrine rule is still
+   addressed `process 5`, and links resolve identically across themes. The source
    tree under `src/` stays neutral for sane authoring. Toggle = one flag.
 
    The OpenCode emits add only: native skills at `skills/<name>/SKILL.md` (not slash
@@ -76,61 +86,102 @@ vault or a specific tool's hooks.
    documentation* maintained elsewhere. It also subsumes what a baked-in project
    rules file used to do: point at the project's own conventions instead.
 
-7. **Lean governance — every line must change behaviour.** The Laws, agent specs,
-   and skills are the product, and a bloated instruction surface is ignored at
-   runtime, not obeyed: an over-long rule set dilutes the rules that matter. So the
-   bar for a new Law is high — it must be universal (it binds *every* task, in
-   *every* repository), agent-behavioural (something the model does, not infra it
+7. **Lean governance — three tiers, and every line must change behaviour.** The
+   constitution, the agent specs, and the skills are the product, and a bloated
+   instruction surface is ignored at runtime, not obeyed: an over-long rule set dilutes
+   the rules that matter. The governance surface is split into three tiers, each answering
+   a different question:
+
+   - **Ontology** (`src/ontology/universal.md`) — *who is deciding*. Four sections of
+     flowing prose: **Telos** (what the agent is for, and the Pact it works under),
+     **Evidence** (how a claim is graded by how it was obtained), **Decisions** (classify
+     and tier by reversibility; show the real forks), **Conduct** (answer what was asked,
+     once). It absorbed the Pact, which is now stated *inside* Telos rather than standing
+     as a peer of the rules.
+   - **Invariants** (`src/laws/universal.md`) — *what is never traded*. Nine numbered
+     Rules, `I`..`IX`, headed `### {{LAW}} <roman> — {{LEX_<roman>}}`.
+   - **Doctrines** (`src/doctrines/{craft,rigor,ops,process}.md`) — *how work is done
+     here*. Practice rules addressed by pack and number, cited as `Doctrine process 5`.
+     `PACK_ORDER` (`js/checkout.mjs`) fixes the order craft → rigor → ops → process, which
+     is narrative and deliberately not alphabetical.
+
+   **The Ontology and the Invariants are never toggleable** — every build carries both,
+   whole. The Doctrine packs are the only tier a repository may narrow, chosen once at
+   build time (`--doctrines craft,rigor`, `--doctrines none`, or the setup wizard) and
+   defaulting to all four on. There is no runtime toggle. Every pack file ships on disk at
+   both footprints whether or not it was built in, which is what lets a citation into an
+   inactive pack still resolve.
+
+   **Conflict order, exactly:** Ontology + Invariants → the user's own `user-rules.md` →
+   the active Doctrines → `PROFILE.md`. A doctrine rule may *tighten* an invariant, never
+   repeal one; a user rule outranks a doctrine rule outright; nothing outranks an
+   invariant. And an always-on tier may never cite a toggleable one — a `--doctrines craft`
+   build would otherwise ship an invariant pointing at text its `AGENT.md` does not
+   contain — so `constitutionProblems` (`js/doctor.mjs`) refuses a `{{DOCTRINE}}` token
+   anywhere under `src/ontology/` or `src/laws/`.
+
+   The bar for a **new invariant** is the highest in the tree: universal (it binds *every*
+   task, in *every* repository), agent-behavioural (something the model does, not infra it
    cannot instantiate), and not already covered. A principle that is app-code craft,
-   host-specific infrastructure, or single-domain belongs in an agent, a skill, or
-   `context.json`, not in the universal Laws; a rule that overlaps an existing Law is
-   folded in as a clause, not minted as a new number. This is the authoring-time
-   counterpart to Law XV's runtime context economy: keep the instruction surface
-   high-signal and pruned so it stays read and heeded.
+   host-specific infrastructure, or single-domain now has a home one tier down — a doctrine
+   pack — or in an agent, a skill, or `context.json`. A rule that overlaps an existing
+   invariant is folded in as a clause, not minted as a new number. This is the
+   authoring-time counterpart to Doctrine `process 3`'s runtime context economy.
 
-   A Law that clears that bar is not one edit but six, because its *satellites* —
-   themed title, class, display copy, counts — live outside `universal.md`:
+   **The satellites differ per tier, and that difference is the design** — a doctrine rule
+   is cheap on purpose, so the expensive slot stays scarce:
 
-   1. the rule body in `src/laws/universal.md`, headed `### {{LAW}} <roman> — {{LEX_<roman>}}`;
-   2. `LEX_<roman>` in `themes/_TEMPLATE.json`, then `geneseed-build --sync-themes`
-      to seed every theme, then restyle each one in its own voice. The flag is the
-      *generator's*, not the CLI's: `geneseed build` forwards `--theme` and nothing else,
-      so `geneseed build --sync-themes` is an error, not a synonym;
-   3. `LAW_CLASS` in `js/inventory.mjs` — the governance class, one of the six
-      in `LAW_CLASSES`;
-   4. `LAW_META` in `web/src/pages/Laws.jsx` — the class fallback *and* the one-line
-      Principle shown in the web ledger. This copy exists nowhere else; a law absent
-      here renders with a blank description;
-   5. the counts — README badge and prose, `SHIPPED.md`, the web onboarding copy;
-   6. `CHANGELOG.md`.
+   | Satellite | A new invariant | A new doctrine rule | A whole new pack |
+   |---|---|---|---|
+   | body | append to `src/laws/universal.md` — never insert; nothing resolves a cross-reference against the canon | append to `src/doctrines/<pack>.md`, `### {{DOCTRINE}} <pack> <n> — {{DOC_<PACK>_<n>}}`; ids must run contiguously from 1 | a new `src/doctrines/<pack>.md` with its `**Name** — lead line` |
+   | themed title | `LEX_<roman>` in all 15 theme files | `DOC_<PACK>_<n>` in all 15 theme files | `PACK_<NAME>` in all 15, plus each rule's `DOC_*` |
+   | class | `LAW_CLASS` in `js/inventory.mjs`, one of the six in `LAW_CLASSES` | **none** — a doctrine rule's class *is* its pack, and there is no second taxonomy over it | — |
+   | console copy | a `LAW_META` row in `web/src/pages/Laws.jsx` (keyed by arabic number) | a `DOCTRINE_META` row in the same file (keyed `<pack>.<n>`) | one `DOCTRINE_META` row per rule |
+   | registration | the numeral is the registration | the number is the registration | the pack name in `PACK_ORDER`, `js/checkout.mjs` |
+   | renumber risk | high — appending is the only safe move | none — packs are numbered independently | none |
+   | counts | README badge + the `N universal laws` prose, `SHIPPED.md`'s triple, the web onboarding copy | **none** — the console spends the `N_PACKS` / `N_PACKS_ACTIVE` / `N_DOCTRINE_RULES` count tokens, all computed at request time | none, same reason |
+   | changelog | `CHANGELOG.md` | `CHANGELOG.md` | `CHANGELOG.md` |
 
-   Five of the six are gated by `doctor`, in three different checks — theme-key parity
-   for step 2, the authoring sweep for step 3, and the count and prose mirrors for step 5
-   (`themeParityProblems`, `authoringProblems`, `countTableProblems` / `proseMirrorProblems`,
-   all in `js/doctor.mjs`) — so `geneseed doctor --all` is the check, not the checklist
-   above; the list just says what it will ask for. Step 6 has no gate and never has. Steps 3
-   and 4 both earned their gate the same way: a law shipped without them, and the
-   only symptom was a wrong chip or an empty cell in a UI nobody re-read.
+   "All 15 theme files" is the 14 voices **and** `themes/_TEMPLATE.json`: theme parity
+   skips underscore-prefixed names, but `constitutionProblems` reads the template too,
+   because it is what `geneseed-build --sync-themes` seeds a new voice from. That flag is
+   the *generator's*, not the CLI's — `geneseed build --sync-themes` is an error, not a
+   synonym. `--sync-themes` writes the template's placeholder and only *prints* which keys
+   to restyle; a shipped placeholder passes every gate.
 
-   Two things the checklist cannot tell you, and `docs/extending.md` can: the default
-   footprint is **lean**, which keeps a law's heading and its *first sentence* only — so an
-   amendment written into the second paragraph does not exist for most installs — and
-   `LEX_I` is one of seven theme keys frozen byte-for-byte in a recording nothing can
-   re-make, so Law I's themed titles are the one part of this list that cannot be edited.
+   Almost all of it is gated, across six named checks in `js/doctor.mjs` —
+   `themeParityProblems` (key parity across the voices), `lawMetaProblems` and
+   `doctrineMetaProblems` (the console's Principle column, in both directions),
+   `constitutionProblems` (pack numbering and filing, `LEX_I..LEX_IX` as an *equality*, the
+   `DOC_*` vocabulary, and every `{{DOCTRINE}}` citation in `src/`), and
+   `countTableProblems` / `proseMirrorProblems` (badges and prose). So `geneseed doctor
+   --all` is the check; the table above only says what it will ask for. `CHANGELOG.md` has
+   no gate and never has.
+
+   Two things the table cannot tell you, and `docs/extending.md` can: the default footprint
+   is **lean**, which keeps an invariant's or a doctrine rule's heading and its *first
+   sentence* only — so an amendment written into the second paragraph does not exist for
+   most installs — and `LEX_I` is one of seven theme keys frozen byte-for-byte in a
+   recording nothing can re-make, so Rule I's themed titles are the one part of this list
+   that cannot be edited. The Ontology is exempt from the truncation: it ships whole at
+   both footprints, because four flowing sections cut to their first sentences would read
+   as four orphan sentences.
 
 ## 🧩 Components
 
-The `Harness/` output column shows the **neutral** folder name; the imperial theme
-renders it as the name in parentheses.
+Every folder name in the `Harness/` output column is theme-independent (Decision 3): no
+theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 
 | Component | Source | `Harness/` output | Purpose |
 | --- | --- | --- | --- |
-| Entrypoint | `src/AGENT.md.tmpl` | `AGENT.md` | what the tool reads; inlines the rules, links the rest |
-| Governance | `src/laws/` | `laws/` (`leges/`) | universal rules |
-| Delegation | `src/agents/` | `agents/` (`legati/`) | capability specialists with output contracts |
-| Workflows | `src/skills/` | `skills/` (`rites/`) | repeatable procedures |
-| Memory | `src/memory/` | `memory/` (`anamnesis/`) | one-fact-per-file convention + index |
-| Notebook | `src/notebook/` | `notebook/` (`scriptorium/`) | the agent's sovereign space — any medium, seed-once charter the agent may rewrite; only `.gitignore` re-asserted |
+| Entrypoint | `src/AGENT.md.tmpl` | `AGENT.md` | what the tool reads; inlines the constitution, links the rest |
+| Ontology | `src/ontology/` | `ontology/` | the mind the rules govern — Telos, Evidence, Decisions, Conduct; always on, never toggleable |
+| Governance | `src/laws/` | `laws/` | the nine universal invariants; always on, never toggleable |
+| Doctrines | `src/doctrines/` | `doctrines/` | the four practice packs — the one build-time axis that changes *which rules ship*; the whole catalogue is written to disk either way |
+| Delegation | `src/agents/` | `agents/` | capability specialists with output contracts |
+| Workflows | `src/skills/` | `skills/` | repeatable procedures |
+| Memory | `src/memory/` | `memory/` | one-fact-per-file convention + index |
+| Notebook | `src/notebook/` | `notebook/` | the agent's sovereign space — any medium, seed-once charter the agent may rewrite; only `.gitignore` re-asserted |
 | Posture | `src/postures/` | inlined into `AGENT.md` | how much ceremony the agent brings to a task |
 | Mode | `src/modes/` | inlined into `AGENT.md` | the working axis (solo, foreman, …) — orthogonal to posture |
 | Context | `js/emit.mjs` | `context.json` | empty per-repo manifest, written once and never overwritten; git-ignore it |

@@ -60,6 +60,7 @@ import { promptLine } from '../setup.mjs';
 // which resolves because everything either side needs of the other is a hoisted function
 // declaration, not a value read at module-evaluation time.
 import { preflight } from '../update.mjs';
+import { doctrinesForBuild } from '../installs.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
 import {
   apiDeployCmd, apiExcludesMutate, apiInstallCmd, apiInstallToggle, apiMcpToggle,
@@ -549,8 +550,13 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     // install, so a re-theme preserves lean/full, the register and the operating mode.
     const [theme, emit] = action === 'build'
       ? buildOverride(state, body) : [state.theme, state.emit];
+    // The pack selection follows the install like footprint/posture/mode, and is read here
+    // rather than left to the table's default: a console Build must re-emit the constitution
+    // the deployment already carries. Unknown (no `Active packs:` marker) resolves to ALL
+    // packs — never to `harness.config.json`, which would drop the consent gate.
     const cmds = actionCommands(action, {
       theme, emit, footprint: state.footprint, posture: state.posture, mode: state.mode,
+      doctrines: doctrinesForBuild(state.target),
     });
     if (!pyTruthy(cmds)) {
       return sendJson(res, { error: `unknown action ${action}` }, 404, ae);

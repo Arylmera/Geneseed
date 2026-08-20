@@ -1,11 +1,11 @@
 <!--
   Authoring a new agent:
   1. Reuse first — if an existing {{AGENT}}'s capability already covers the need,
-     extend it instead of adding a file (universal Law V applies to specialists too).
+     extend it instead of adding a file ({{DOCTRINE}} craft 1 applies to specialists too).
   2. Copy this file to agents/<name>.md and fill in every section. In an installed
      harness the purpose line is plain prose; in the Geneseed source repo it is the
      DESC_<NAME> token with the prose defined per theme.
-  3. Register the new {{AGENT}} in the table in AGENT.md §2 (the table is
+  3. Register the new {{AGENT}} in the table in AGENT.md §3 (the table is
      hand-authored; the agent files themselves auto-render). doctor fails if the
      table and the agent files disagree, so neither can silently drift.
   Geneseed source repo only (skip in an installed harness):
@@ -42,7 +42,7 @@
 
 ## Procedure
 0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists in the harness, read it first —
-   it holds your durable lessons from prior dispatches ({{LAW}} VI).
+   it holds your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
 1. Step-by-step method this {{AGENT}} follows.
 
 ## Output contract
@@ -73,4 +73,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{LAW}} VI's bar — most reports carry no feedback at all.
+{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.

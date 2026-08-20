@@ -20,8 +20,8 @@
   <!-- bash: allow -->
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
-1. Read the motion and the arguments, then list the load-bearing claims on both sides (universal {{LAW}} XVII).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
+1. Read the motion and the arguments, then list the load-bearing claims on both sides ({{DOCTRINE}} process 4).
 2. Mark each claim evidenced or unevidenced — and call out any asserted as fact without a source (universal {{LAW}} III).
 3. For the decisive unknowns, name the cheapest experiment, benchmark, or check that would settle them.
 
@@ -36,4 +36,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{LAW}} VI's bar — most reports carry no feedback at all.
+{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.

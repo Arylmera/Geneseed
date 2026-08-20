@@ -35,8 +35,8 @@ import path from 'node:path';
 import { main as driverMain } from '../bin/geneseed.mjs';
 import { ROOT } from './checkout.mjs';
 import {
-  EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, footprintOfDir, installState,
-  installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
+  EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
+  footprintOfDir, installState, installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
 } from './installs.mjs';
 import { DEFAULT_EMIT, setupBuildArgs } from './generate.mjs';
 import {
@@ -206,7 +206,12 @@ export function cmdMigrate(args = {}) {
     try { rmSync(stash, { recursive: true, force: true }); } catch { /* nothing to undo */ }
   };
 
-  // Step 3 — re-emit, in each install's OWN five values. Same reads as `cmdRebuildAll`.
+  // Step 3 — re-emit, in each install's OWN six values. Same reads as `cmdRebuildAll`, and
+  // the pack selection is the sixth: leaving it out re-emitted a narrowed install at whatever
+  // `harness.config.json` said, which WIDENS a constitution its owner had cut down (and, the
+  // other way, can strip the consent gate). `null` — a pre-marker carrier, which on a MIGRATION
+  // is the common case and not the rare one — resolves to ALL packs through
+  // `doctrinesForBuild`, never to `harness.config.json`, which is what makes it fail-closed.
   for (const r of rows) {
     const marker = r.marker && (EMIT_HOST_SCOPE.get(r.marker) ?? ['', ''])[0] === r.host
       ? r.marker : '';
@@ -214,7 +219,8 @@ export function cmdMigrate(args = {}) {
     const theme = themeOfDir(r.root) || defaultTheme();
     const out = r.scope === 'global' ? null : r.root;
     const argv = setupBuildArgs(theme, emit, out, out, footprintOfDir(r.root),
-      postureOfDir(r.root) || defaultPosture(), modeOfDir(r.root) || defaultMode());
+      postureOfDir(r.root) || defaultPosture(), modeOfDir(r.root) || defaultMode(),
+      doctrinesForBuild(r.root));
     const label = `${r.host}:${r.scope} (${r.root})`;
     pyPrint(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
     let rc = 1;

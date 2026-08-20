@@ -9,7 +9,7 @@
 Durable knowledge that must survive across sessions lives here as **one fact per
 file**. An agent reads `MEMORY.md` (the local index it creates) at the start of a
 session and writes a new file whenever a session yields something worth keeping
-(universal {{LAW}} VI).
+({{DOCTRINE}} process 1).
 
 This store is for **curated facts**, written for recall. For freeform working space
 the agent shapes for itself — plans, scratch designs, working theories, with no
@@ -102,7 +102,7 @@ Read and write follow one rule each:
   {{AGENT}}'s file. A caller may also fold a returned `spec-feedback:` line in by
   hand.
 
-Same bar as {{LAW}} VI: capture only how this {{AGENT}} should work *next time* —
+Same bar as {{DOCTRINE}} process 1: capture only how this {{AGENT}} should work *next time* —
 a boundary that proved wrong, an input it always needs — never task residue. Files
 are capped (oldest bullets drop) so they never grow unbounded. The `agents/`
 subdirectory name is literal (not themed), because the write code addresses it

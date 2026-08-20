@@ -65,9 +65,9 @@ project-bypasses-global need. An older Bob install that wrote a stale exclude is
 ## Hooks — best-effort
 
 The `settings.json` hooks use the **Claude dialect** (a `PreToolUse:Bash`
-git-gate for Rule XX consent, `SessionStart` context injection, and
-`Stop`/`SubagentStop` learn/memory capture — the same three `harness.py`
-subcommands the OpenCode plugins drive). Bob's hook execution is **unverified**:
+git-gate for Doctrine process 5 consent — present only when the `process` pack is
+built in — `SessionStart` context injection, and `Stop`/`SubagentStop` learn/memory
+capture, the same `geneseed-hook` subcommands the OpenCode plugins drive). Bob's hook execution is **unverified**:
 if Bob honours Claude-shaped hooks they fire; if not, they are inert and the
 harness still works fully through the `AGENTS.md`/`rules` preamble prose. This is
 the same behaviour-contract parity every non-OpenCode host gets — the mechanism

@@ -16,7 +16,7 @@ real implementation.
 2. Throwaway from day one, and marked as such: place it near the code it
    prototypes for, but name it so a casual reader sees it is not production.
    No persistence (state lives in memory), no tests, no error handling beyond
-   what makes it runnable, no abstractions ({{LAW}} XXV).
+   what makes it runnable, no abstractions ({{DOCTRINE}} craft 6).
 3. One command to run, using the project's existing task runner — the user
    must be able to start it without thinking.
 4. Surface the full relevant state after every action or variant switch, so
@@ -37,7 +37,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

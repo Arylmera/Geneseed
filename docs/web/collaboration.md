@@ -4,7 +4,7 @@ order: 11
 title: "The collaboration layer"
 kind: "concept"
 ---
-Beyond the Laws, four mechanisms shape *how* the agent works with you — the register, the mutual contract, how memory binds, and who you are. All four are plain content in `AGENT.md` and its neighbours, so they ride to every host (OpenCode, Claude, Bob, Copilot) unchanged.
+Beside the [constitution](#/docs/rules), a handful of mechanisms shape *how* the agent works with you — the two registers, the mutual contract, how memory binds, and who you are. All of them are plain content in `AGENT.md` and its neighbours, so they ride to every host (OpenCode, Claude, Bob, Copilot) unchanged.
 
 ### Postures — the register
 
@@ -16,7 +16,7 @@ A **mode** is the session's operating register — *how* work gets executed, as 
 
 ### The Pact — a two-way contract
 
-Where the Laws bind the agent, the **Pact** binds the collaboration. It holds three co-equal protections (you, the truth, the agent) and — unusually — names what *you* owe back: don't punish candour that honours the pact, give context up front, decide when shown a fork. It is framing, not an enforced rule.
+Where the Rules bind the agent, the **Pact** binds the collaboration — and it is not a layer beside them: it is stated inside the Ontology's **Telos**, the tier that is always in force, so it holds in every task and every repository. It carries three co-equal protections (you, the truth, the agent), never traded one for another, and — unusually — names what *you* owe back: don't punish candour that honours the pact, give context up front, decide when shown a fork. Your half is not enforceable against you; the agent's half is binding on it.
 
 ### Typed memory — binding force
 
@@ -24,4 +24,4 @@ A memory may carry an optional `force` — **constraint** (imposed, not the agen
 
 ### Your profile — identity
 
-`PROFILE.md`, seeded once beside `AGENT.md` and never overwritten, holds *who you are*: role, habits, register preferences. It is identity, not rules — it colours how the agent works but never binds (precedence is Laws, then `user-rules.md`, then the profile). Edit it here under the **Profile** tab, or in the file directly — or let the agent draft it: the [[profile]] skill interviews you (who you are, how you work, how you like answers pitched) and writes the file only with your consent, routing anything that is really a standing rule to `user-rules.md` instead.
+`PROFILE.md`, seeded once beside `AGENT.md` and never overwritten, holds *who you are*: role, habits, register preferences. It is identity, not rules — it colours how the agent works but never binds (precedence is the Ontology and the Rules, then `user-rules.md`, then the active Doctrines, then the profile). Edit it here under the **Profile** tab, or in the file directly — or let the agent draft it: the [[profile]] skill interviews you (who you are, how you work, how you like answers pitched) and writes the file only with your consent, routing anything that is really a standing rule to `user-rules.md` instead.

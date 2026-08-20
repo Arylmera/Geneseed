@@ -67,13 +67,35 @@ export function discoverNames(dir, first) {
 }
 
 /**
+ * The doctrine packs, in the order they are rendered into AGENT.md — the ONE owner.
+ *
+ * DELIBERATELY NOT `discoverNames('doctrines', 'craft')`. That helper `.sort()`s, so it
+ * answers `craft, ops, process, rigor`; the constitution's order is a reading order —
+ * write it (craft), prove it (rigor), run it (ops), ship it (process) — and no sort
+ * produces it. Discovery still runs, but as a GATE rather than as the order: `js/render.mjs`
+ * refuses to build when a pack file exists under `src/doctrines/` that is missing from this
+ * array, so a fifth pack cannot be silently dropped from every install.
+ *
+ * It lives here, beside `makeCfg` and `discoverNames`, because every consumer (the cfg
+ * default, the render loop, the `Active packs:` marker, the CLI flag, the wizard, the
+ * doctor) already imports this module and this module imports nothing of theirs — the one
+ * placement that cannot introduce a cycle.
+ */
+export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process'];
+
+/**
  * `_build_core.js_cfg()`, originated rather than received.
  *
  * `posture` and `mode` are `_build_core`'s module defaults (`peer` / `direct`) unless a
  * caller overrides them. `build.py`'s `main()` sets them from its flags; `rituals/harness.py`
  * never touches them, so every harness verb that renders renders at the defaults.
+ *
+ * `doctrines` is the third register and the first that is a SET rather than a scalar: all
+ * four packs unless a caller narrows it. Copied, never aliased — `cfg.doctrines` is handed
+ * out to renderers and a caller that sorted or spliced it in place would rewrite
+ * `PACK_ORDER` for the whole process.
  */
-export function makeCfg({ posture = 'peer', mode = 'direct' } = {}) {
+export function makeCfg({ posture = 'peer', mode = 'direct', doctrines = PACK_ORDER } = {}) {
   return {
     root: ROOT,
     src: SRC,
@@ -84,5 +106,6 @@ export function makeCfg({ posture = 'peer', mode = 'direct' } = {}) {
     workflowSrc: WORKFLOW_SRC,
     posture,
     mode,
+    doctrines: Array.isArray(doctrines) ? [...doctrines] : [...PACK_ORDER],
   };
 }

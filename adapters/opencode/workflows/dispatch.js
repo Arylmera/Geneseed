@@ -3,7 +3,7 @@
 //
 // The model-driven fallback is the parallel-agents skill; this runs the same
 // shape on rails: the script, not the model, enforces routing and the handoff
-// envelope (context in, output contract back, no commits — Law XX stays with
+// envelope (context in, output contract back, no commits — Doctrine process 5 stays with
 // the caller).
 //
 // args: { goal: string, context?: string, agents?: string[] }

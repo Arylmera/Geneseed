@@ -78,18 +78,20 @@
     },
     {
       "name": "catalog",
-      "help": "list what this harness ships: every agent, skill and law, with its one-line purpose and lifecycle status",
+      "help": "list what this harness ships: every agent, skill and constitutional rule, with its one-line purpose and lifecycle status",
       "description": "",
       "positionals": [
         {
           "names": [],
           "dest": "section",
           "metavar": null,
-          "help": "limit the listing to one section (default: all three)",
+          "help": "limit the listing to one section (default: all five)",
           "choices": [
             "agents",
             "skills",
-            "laws"
+            "ontology",
+            "laws",
+            "doctrines"
           ],
           "default": null,
           "required": false,
@@ -135,7 +137,7 @@
     },
     {
       "name": "context",
-      "help": "print context.json eager entries for a SessionStart hook (Rule XVIII)",
+      "help": "print context.json eager entries for a SessionStart hook",
       "description": "",
       "positionals": [],
       "options": [
@@ -336,7 +338,7 @@
     },
     {
       "name": "git-gate",
-      "help": "PreToolUse hook: force an ASK before every git commit/push (Law XX backstop)",
+      "help": "PreToolUse hook: force an ASK before every git commit/push (process 5 backstop)",
       "description": "",
       "positionals": [],
       "options": [
@@ -584,7 +586,7 @@
     },
     {
       "name": "rule-gate",
-      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or memory (Law VI backstop)",
+      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or memory (process 1 backstop)",
       "description": "",
       "positionals": [],
       "options": [

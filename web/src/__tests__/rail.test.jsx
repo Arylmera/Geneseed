@@ -40,12 +40,17 @@ describe('Rail navigation', () => {
     expect(agentsLink.textContent).toContain('16')
   })
 
-  it('exposes Laws as its own rail entry between Dashboard and Library', () => {
+  it('exposes the Constitution as its own rail entry between Dashboard and Library', () => {
+    // The LABEL says Constitution; the route, the id and the badge key stay `laws`. That split
+    // is deliberate — `tests/helpers/cli_golden.mjs` hard-requires web/src/pages/Laws.jsx and
+    // every deep link in the wild is `#/laws` — so the pairing under it still reads: the
+    // Constitution is Geneseed's, the Rules below are yours.
     render(<Rail route={{ view: 'laws' }} overview={overview} />)
-    const lawsLink = screen.getByText('Laws').closest('a')
+    const lawsLink = screen.getByText('Constitution').closest('a')
     expect(lawsLink.getAttribute('href')).toBe('#/laws')
     expect(lawsLink.className).toContain('active')
-    // count badge sourced from overview.counts.laws
+    // count badge sourced from overview.counts.laws — the INVARIANT count, not the whole
+    // constitution, which is why the label beside it is a name and not a total.
     expect(lawsLink.textContent).toContain('20')
   })
 

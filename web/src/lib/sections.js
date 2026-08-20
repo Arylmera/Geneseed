@@ -11,7 +11,12 @@
 export const SECTIONS = {
   agents: { label: 'Agents', type: 'agent', desc: 'capability specialists', icon: 'agent' },
   skills: { label: 'Skills', type: 'skill', desc: 'repeatable workflows', icon: 'skill' },
-  laws: { label: 'Laws', type: 'law', desc: 'governance rules', icon: 'law' },
+  laws: {
+    label: 'Constitution',
+    type: 'law',
+    desc: 'ontology, invariants, doctrines',
+    icon: 'law',
+  },
   memory: { label: 'Memory', type: 'memory', desc: 'durable facts', icon: 'library' },
   notebook: { label: 'Notebook', type: 'notebook', desc: 'sovereign space', icon: 'notebook' },
   // The wiki chip is the merged "Knowledge" view: it lists the two setup

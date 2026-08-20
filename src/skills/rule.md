@@ -7,7 +7,7 @@ their own ("always…", "never…", "from now on…", "make that a rule") or a d
 fact ("remember that…", "note that…", "keep in mind…"). Also fires when a
 `feedback` {{MEMORY}} lesson keeps recurring and deserves promotion, or when
 `user-rules.md` needs review — a trial rule past its date, a stale rule, a bloated
-set. Nothing reaches `user-rules.md` or {{MEMORY}} except through here ({{LAW}} VI).
+set. Nothing reaches `user-rules.md` or {{MEMORY}} except through here ({{DOCTRINE}} process 1).
 
 ## Procedure
 
@@ -50,8 +50,8 @@ re-derived. Then take exactly one branch.
 4. **Legality.** A user rule may *tighten* a {{LAW}}, never repeal or weaken one.
    If the rule conflicts — "push without asking", "skip the tests" — refuse, cite
    the {{LAW}} it would repeal, and offer the nearest compliant version. Never write
-   rules into the {{LAWS}} file itself: it is regenerated on every update and the
-   edit would be silently lost.
+   rules into the {{ONTOLOGY}}, {{LAWS}}, or {{DOCTRINES}} files themselves: they are
+   regenerated on every update and the edit would be silently lost.
 5. **Destination.** Scope decides the file: a rule that holds across all the user's
    work goes to the *global* install's `user-rules.md`, a rule bound to this
    codebase to the project's. Read the target first ({{LAW}} III — the real current
@@ -84,7 +84,7 @@ adoption.
   `force`, its `type` and its `MEMORY.md` line — or a rule stands in the right
   `user-rules.md`, having survived reformulation, its own counter-example and the
   {{LAWS}}, consented to explicitly, with any promoted source memory archived. The
-  {{LAWS}} file is untouched either way.
+  {{ONTOLOGY}}, {{LAWS}} and {{DOCTRINES}} files are untouched either way.
 
 ## Self-improvement
 
@@ -93,7 +93,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most

@@ -107,7 +107,7 @@ import { statSync } from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 import path from 'node:path';
 
-import { ROOT } from '../checkout.mjs';
+import { ROOT, PACK_ORDER } from '../checkout.mjs';
 import { setupBuildArgs } from '../generate.mjs';
 import { isDict } from '../mcp.mjs';
 import { jsonDumpsCompact, parseJson, pyTruthy, readText, writeText } from '../lib/fs.mjs';
@@ -444,11 +444,20 @@ export const NOT_PORTED_ACTIONS = new Set();
  */
 export const INLINE_ACTIONS = ['restore', 'install', 'deploy'];
 
+/**
+ * ⚠ `doctrines` DEFAULTS TO THE FULL SET, and it is the one axis here whose default is not the
+ * generator's own. `theme`/`emit`/`footprint`/`posture`/`mode` fall back to a frozen literal
+ * that costs nothing when it is wrong; a missing `--doctrines` falls through to
+ * `harness.config.json`, and a `{"doctrines":["craft"]}` there re-emits the deployed install
+ * without its commit/push consent gate. So a caller that forgets the axis gets ALL packs —
+ * unknown resolves to the full set, never to a config value (`doctrinesForBuild`).
+ */
 function actionTable({
   theme = 'neutral', emit = 'opencode-global', footprint = 'full',
-  posture = 'peer', mode = 'direct',
+  posture = 'peer', mode = 'direct', doctrines = [...PACK_ORDER],
 } = {}) {
-  const buildArgv = setupBuildArgs(theme, emit, null, null, footprint, posture, mode);
+  const buildArgv = setupBuildArgs(theme, emit, null, null, footprint, posture, mode,
+    doctrines);
   return {
     doctor: [[NODE(), CLI(), 'doctor']],
     build: [[NODE(), GEN(), ...buildArgv]],

@@ -38,7 +38,9 @@ import { BOB_RULES_STUB } from '../../js/emit.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate, installUninstall,
 } from '../../js/uninstall.mjs';
-import { installState, installTargets, manifestIsClaude } from '../../js/installs.mjs';
+import {
+  doctrinesOfDir, installState, installTargets, manifestIsClaude,
+} from '../../js/installs.mjs';
 import {
   hookShimPath, GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings,
 } from '../../js/settings.mjs';
@@ -79,8 +81,8 @@ const readTextPy = (p) => fs.readFileSync(p, 'utf8').split('\r\n').join('\n');
 
 const globalEmit = (host, out, cfgDir) => captured(
   () => emitGlobalInto(host, { theme: 'neutral', out, cfgDir, footprint: 'full' }));
-const projectEmit = (host, out, root) => captured(
-  () => emitProjectInto(host, { theme: 'neutral', out, root, footprint: 'full' }));
+const projectEmit = (host, out, root, doctrines = null) => captured(
+  () => emitProjectInto(host, { theme: 'neutral', out, root, footprint: 'full', doctrines }));
 
 /** `_hook_cmds` — every hook command in a settings file, across every event and group. */
 const hookCmds = (settings) => Object.values(settings.hooks ?? {})
@@ -427,6 +429,38 @@ test('deactivate then reactivate round-trips, and the user prose never moves', (
     assert.ok(cm.includes('keep'));
     assert.ok(geneseedCmds(readJson(cfg, 'settings.json')).length > 0, 'hooks were not re-wired');
     assert.ok(!fs.existsSync(path.join(cfg, '.geneseed-disabled')), 'the stash was not cleaned up');
+  });
+});
+
+test('a PROJECT reactivate reads the pack selection off the repo root, not the config dir', () => {
+  // ⚠ THE CARRIER IS NOT ALWAYS UNDER `cfg`. `remergeClaudeHooks` was handed the CONFIG dir and
+  // asked it for the pack selection — but on a project install that is `<repo>/.claude` and the
+  // carrier is `<repo>/CLAUDE.md`, so the read answered `null` ("unknown") for every project
+  // install and the reactivate re-wired the git-gate unconditionally. Fail-closed, so never a
+  // hole — but it made the toggle ONE-WAY for project scope: turn the process pack off, disable,
+  // re-enable, and the boundary is back while AGENT.md says nothing about it.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    projectEmit('claude', path.join(d, 'bundle-proj'), repo, ['craft']);
+    const cfg = path.join(repo, '.claude');
+
+    // The precondition, both halves: the selection is legible from the ROOT and invisible from
+    // the config dir. Without this the assertion below could pass for the wrong reason.
+    assert.deepEqual(doctrinesOfDir(repo), ['craft'], 'the emit did not narrow the packs');
+    assert.equal(doctrinesOfDir(cfg), null, 'the config dir is not where the carrier lives');
+    assert.deepEqual(geneseedCmds(readJson(cfg, 'settings.local.json')).filter((c) => c.includes('git-gate')),
+      [], 'the emit itself wired a gate the pack selection had turned off');
+
+    captured(() => installDeactivate(repo, 'claude', 'project'));
+    assert.equal(installState(repo, 'claude', 'project'), 'disabled');
+    const res = captured(() => installReactivate(repo, 'claude', 'project'));
+    assert.ok(res.ok, JSON.stringify(res));
+
+    const back = geneseedCmds(readJson(cfg, 'settings.local.json'));
+    assert.ok(back.length > 0, 'the reactivate wired no hooks at all');
+    assert.deepEqual(back.filter((c) => c.includes('git-gate')), [],
+      'the reactivate put the consent gate back into an install whose owner had removed it');
   });
 });
 
@@ -800,6 +834,98 @@ test('a re-emit prunes a pre---root git-gate group instead of stacking beside it
     const gitGates = cmds.filter((c) => c.includes('git-gate'));
     assert.equal(gitGates.length, 1, `expected 1 git-gate, got ${gitGates.length}: ${cmds}`);
     assert.ok(gitGates.every((c) => c.includes('--root')), `git-gate lost --root: ${gitGates}`);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The consent gate follows the `process` doctrine pack — prompt and boundary must agree.
+//
+// The one outcome the three-tier split forbids is a boundary enforcing a rule the constitution
+// no longer states. `--doctrines` already removes doctrine process 5's TEXT from AGENT.md; these
+// assert that the same switch removes its HOOK, and — the direction that actually ships — that
+// every way of not knowing leaves the hook exactly where it was.
+//
+// ⚠ THE TWO ARMS OF B6 ARE SEPARATE CELLS ON PURPOSE. "no marker" and "the marker says none" are
+// different states of the world that a single `?.includes('process')` would collapse into one
+// wrong answer, and the wrong answer is the unsafe one: every install built before packs existed
+// carries no marker, and reading that as "no packs" would strip the consent gate from all of them
+// on their next upgrade. A test that only covered `none` would go green on that bug.
+
+/** Every command in a hook group table, flattened — position-independent, unlike the tests above. */
+const hookCommands = (groups) => Object.values(groups)
+  .flatMap((gs) => gs.flatMap((g) => g.hooks.map((h) => h.command)));
+
+test('the process pack off drops the git gate and keeps every other hook', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    const on = hookCommands(claudeHookGroups(cfg, hookRunnerEntry(), ['craft', 'process']));
+    const off = hookCommands(claudeHookGroups(cfg, hookRunnerEntry(), ['craft']));
+
+    assert.ok(on.some((c) => c.includes('git-gate')), 'the gate is missing with the pack ON');
+    assert.ok(!off.some((c) => c.includes('git-gate')),
+      `the git gate survived --doctrines craft: ${off.join(' | ')}`);
+    // NOT a blanket removal. The rule gate answers "standing rule or durable fact?", which is the
+    // user's call rather than a way of running work, and the two SessionStart/learn pairs are not
+    // the process pack's either. Asserting the survivors is what stops this from going green on a
+    // change that simply emptied the table.
+    for (const verb of ['rule-gate', 'context', 'learn']) {
+      assert.ok(off.some((c) => c.includes(verb)), `${verb} went with the process pack: ${off}`);
+    }
+    assert.equal(off.length, on.length - 1, `exactly one hook should have gone: ${off}`);
+  });
+});
+
+test('an install with NO Active packs: marker keeps the consent gate (B6, fail closed)', () => {
+  withDir((d) => {
+    // A pre-migration install: a real carrier, with everything except the marker line. It has to
+    // be a carrier rather than an empty directory, or the test would pass on a reader that simply
+    // never found a file to read.
+    fs.writeFileSync(path.join(d, 'CLAUDE.md'), '# Geneseed\n\nNo packs section here.\n');
+    assert.equal(doctrinesOfDir(d), null,
+      'a carrier with no marker must read as UNKNOWN (null), never as an empty selection');
+
+    const cmds = hookCommands(claudeHookGroups(path.join(d, 'dotclaude'), hookRunnerEntry(),
+      doctrinesOfDir(d)));
+    assert.ok(cmds.some((c) => c.includes('git-gate')),
+      'the consent gate was stripped from an install that never said it did not want it');
+  });
+});
+
+test('an install whose marker reads `none` loses the consent gate (B6, the other arm)', () => {
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'CLAUDE.md'), '# Geneseed\n\nActive packs: none\n');
+    assert.deepEqual(doctrinesOfDir(d), [],
+      '`none` is a real configuration and must read as the empty selection, not as unknown');
+
+    const cmds = hookCommands(claudeHookGroups(path.join(d, 'dotclaude'), hookRunnerEntry(),
+      doctrinesOfDir(d)));
+    assert.ok(!cmds.some((c) => c.includes('git-gate')),
+      `an explicit \`none\` left the gate wired: ${cmds.join(' | ')}`);
+  });
+});
+
+test('a re-emit with the process pack off UNWIRES the git gate it previously managed', () => {
+  // The upgrade round trip, and the half that makes the toggle two-way: dropping the group from
+  // `claudeHookGroups` only stops it being ADDED. `mergeClaudeSettings` prunes every recorded
+  // group that is no longer canonical, which is what takes it back out of a user's settings.json.
+  withDir((d) => {
+    const cfg = path.join(d, 'settings_test');
+    fs.mkdirSync(cfg);
+    const settings = path.join(cfg, 'settings.json');
+    fs.writeFileSync(settings, '{}');
+
+    const [, claimed] = captured(() => mergeClaudeSettings(settings, 'global', null,
+      hookRunnerEntry(), ['craft', 'process']));
+    const wired = readJson(settings).hooks.PreToolUse
+      .flatMap((g) => g.hooks.map((h) => h.command));
+    assert.ok(wired.some((c) => c.includes('git-gate')), `the first emit wired no gate: ${wired}`);
+
+    captured(() => mergeClaudeSettings(settings, 'global', claimed, hookRunnerEntry(), ['craft']));
+    const after = readJson(settings).hooks.PreToolUse
+      .flatMap((g) => g.hooks.map((h) => h.command));
+    assert.ok(!after.some((c) => c.includes('git-gate')),
+      `the gate was left orphaned in settings.json: ${after.join(' | ')}`);
+    assert.ok(after.some((c) => c.includes('rule-gate')), `the prune took too much: ${after}`);
   });
 });
 

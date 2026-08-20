@@ -46,7 +46,7 @@ import path from 'node:path';
 
 import { main as driverMain, resolveOut } from '../bin/geneseed.mjs';
 import { playLine } from './anim.mjs';
-import { discoverNames } from './checkout.mjs';
+import { discoverNames, PACK_ORDER } from './checkout.mjs';
 import { exportImprovements } from './diff.mjs';
 import { cmdDoctor } from './doctor.mjs';
 import { setupBuildArgs } from './generate.mjs';
@@ -212,6 +212,23 @@ const MODE_BLURBS = {
 };
 
 /**
+ * One line per doctrine pack, written for someone who has never read `src/doctrines/README.md`
+ * — this is the only description of a pack an installer ever sees.
+ *
+ * `process` says what turning it OFF costs, and it is the only one that has to. The other three
+ * trade practices for context; process 5 is the commit/push consent gate, so dropping the pack
+ * drops the rule that every commit and every push is asked for. A blurb that read "planning and
+ * context economy" would have sold that away in a menu.
+ */
+const DOCTRINE_BLURBS = {
+  craft: 'how code is written — reuse first, house conventions, docs, the smallest diff',
+  rigor: 'how work is proven — idempotence, honest tests, coverage, gates that can fail',
+  ops: 'how the machine is driven — tool discovery, non-blocking commands, teardown',
+  process: 'how a session runs — planning, context economy, docs first, and the consent gate '
+    + 'on every commit and push (drop this pack and that gate goes with it)',
+};
+
+/**
  * `_harness_setup._theme_options`.
  *
  * The sort key is `(name != "neutral", name)`, which floats `neutral` to the top and leaves
@@ -244,6 +261,20 @@ export function modeOptions() {
 }
 
 /**
+ * The doctrine packs, in `PACK_ORDER` — the third option table, and the one that is a SET.
+ *
+ * The order is NARRATIVE and comes from `PACK_ORDER`; `discoverNames` only says which packs
+ * this checkout actually ships. Ordering by discovery instead would read `craft, ops, process,
+ * rigor` — it `.sort()`s — and the menu a human answers would stop matching the `Active packs:`
+ * line the build writes, which is normalised into `PACK_ORDER` at the driver. Same intersection
+ * the driver's `parseDoctrines` and the config loader take, for the same reason.
+ */
+export function doctrineOptions() {
+  const known = discoverNames('doctrines', PACK_ORDER[0]);
+  return PACK_ORDER.filter((n) => known.includes(n)).map((n) => [n, DOCTRINE_BLURBS[n] ?? '']);
+}
+
+/**
  * `_harness_setup.EMIT_OPTIONS`.
  *
  * Exported since P6b: `/api/themes` returns the same nine as its `emits` list, and a copy
@@ -272,12 +303,60 @@ const FOOTPRINT_OPTIONS = [
 // --------------------------------------------------------------------------------------
 
 /**
- * `_harness_setup._collect_setup_lines` — the five questions, the plan, the confirm.
+ * The Doctrine-packs question — one `all`/`choose` gate, then a y/n per pack.
+ *
+ * TWO LEVELS RATHER THAN FOUR QUESTIONS, because the overwhelmingly common answer is "all of
+ * them" and a wizard that asks four yes/nos to get there taxes every install for the rare one.
+ * The gate's default is `all`, so an installer who holds Enter through the whole wizard gets
+ * the full set — which is what every pre-packs install already had.
+ *
+ * `askChoice` and not `confirm` for the per-pack question: `confirm` reads the first character
+ * and prints no description, so the pack's blurb — the only place a reader is told what the
+ * pack costs — would have nowhere to go. Two named options give it a line.
+ *
+ * Answering `no` to all four is legal and yields `[]`, which `setupBuildArgs` spells
+ * `--doctrines none`. That is a real configuration (invariants and ontology only), not a
+ * mistake to guard against, so it is not second-guessed here.
+ *
+ * `deployed` is what the machine's carriers already say (`installedDefaults().doctrines`), and
+ * it drives BOTH levels: a narrowed install opens on `choose` with its own packs pre-ticked,
+ * so holding Enter through the wizard KEEPS the selection instead of silently widening it back
+ * to all four. `null` — no carrier said — still opens on `all`, which is the same resolution
+ * `doctrinesForBuild` gives unknown, so the wizard and the build agree about silence.
+ *
+ * ⚠ It never returns `null`, at either level, and `tests/unit/setup.test.mjs` pins that: this
+ * is the one call site allowed to reach `setupBuildArgs` without a `doctrinesForBuild`
+ * fallback, and that exemption is only sound while the function is total.
+ */
+function askDoctrines(deployed = null) {
+  const opts = doctrineOptions();
+  const all = opts.map(([n]) => n);
+  const known = Array.isArray(deployed) ? all.filter((n) => deployed.includes(n)) : null;
+  const narrowed = known !== null && known.length !== all.length;
+  const pick = askChoice('Doctrine packs', [
+    ['all', `${all.join(' + ')}${narrowed ? '' : ' (default)'}`],
+    ['choose', `pick packs${narrowed ? ` (installed: ${known.join(', ') || 'none'})` : ''}`],
+  ], narrowed ? 'choose' : 'all');
+  if (pick !== 'choose') return all;
+  return all.filter((name) => askChoice(`Include ${name} — ${DOCTRINE_BLURBS[name] ?? name}`,
+    [['yes', `build ${name} into AGENT.md`], ['no', `leave ${name} out`]],
+    known === null || known.includes(name) ? 'yes' : 'no') === 'yes');
+}
+
+/**
+ * `_harness_setup._collect_setup_lines` — the six questions, the plan, the confirm.
  *
  * Returns the selection, or null when the confirm is declined. Every default is the
  * DEPLOYED value first (`installedDefaults`) and the CONFIGURED one second, which is why
  * P5i is the phase that had to give `installedDefaults` its posture, mode and footprint keys
  * back: three of the five questions read them.
+ *
+ * Doctrines reads the same walk, and joined it last because the `Active packs:` marker reader
+ * did not exist when the question shipped. Until it did, every re-run of the wizard offered
+ * `all` to an installer who had deliberately narrowed their packs — the one register where
+ * holding Enter SILENTLY WIDENED a selection instead of keeping it. `inst.doctrines` is passed
+ * whole, `null` included, because `askDoctrines` distinguishes "no carrier said" from "a
+ * carrier said none" and the two open the question differently.
  */
 export function collectSetupLines() {
   pyPrint('Geneseed setup — answer a few questions; nothing is written until you confirm.\n');
@@ -285,6 +364,7 @@ export function collectSetupLines() {
   const theme = askChoice('Theme', themeOptions(), inst.theme || defaultTheme());
   const posture = askChoice('Posture', postureOptions(), inst.posture || defaultPosture());
   const mode = askChoice('Mode', modeOptions(), inst.mode || defaultMode());
+  const doctrines = askDoctrines(inst.doctrines);
   const emit = askChoice('Install mode', EMIT_OPTIONS, inst.emit || 'opencode-global');
   const footprint = askChoice('Footprint', FOOTPRINT_OPTIONS.map(([k, d]) => [k, d]),
     inst.footprint || 'lean');
@@ -299,10 +379,15 @@ export function collectSetupLines() {
   } else if (emit === 'files') {
     out = ask('Output dir for the bundle', 'Harness');
   }
+  // The full pack list is passed as the elision default rather than left to `setupBuildArgs`'s
+  // own: the menu the user just answered was built from `doctrineOptions()`, so "they picked
+  // everything" must be judged against that same list, not against a second one.
+  const allPacks = doctrineOptions().map(([n]) => n);
   pyPrint(`\nAbout to run:  geneseed build ${
-    setupBuildArgs(theme, emit, out, root, footprint, posture, mode).join(' ')}\n`);
+    setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks)
+      .join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
-  return { theme, posture, mode, emit, out, root, footprint };
+  return { theme, posture, mode, doctrines, emit, out, root, footprint };
 }
 
 // --------------------------------------------------------------------------------------
@@ -441,6 +526,7 @@ export function setupLines() {
   }
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
+    doctrines = null,
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, and the self-improvement loops
@@ -455,7 +541,11 @@ export function setupLines() {
       pyPrint(`! could not export local edits (${e && e.message}) — continuing.\n`);
     }
   }
-  const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode);
+  // Same list the question was built from — see `collectSetupLines`. The build that actually
+  // runs must carry the pack selection the plan line just previewed, or the wizard would print
+  // one command and run another.
+  const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
+    doctrineOptions().map(([n]) => n));
   pyPrint(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {

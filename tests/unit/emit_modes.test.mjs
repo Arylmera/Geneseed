@@ -94,7 +94,10 @@ test('the files emit writes the core tree', () => {
     const out = path.join(d, 'Harness');
     buildBundle(out);
     assert.ok(statSync(path.join(out, 'AGENT.md')).isFile());
-    for (const sub of ['laws', 'agents', 'skills']) {
+    // All three constitutional tiers, and `doctrines/` is the one that matters most here: the
+    // whole catalogue ships in every bundle even when a pack is not built into AGENT.md, which
+    // is what lets a citation into an inactive pack still resolve on disk.
+    for (const sub of ['ontology', 'laws', 'doctrines', 'agents', 'skills']) {
       assert.ok(statSync(path.join(out, sub)).isDirectory(), `${sub}/ missing`);
     }
     assert.ok(statSync(path.join(out, 'agents', 'reviewer.md')).isFile());

@@ -238,7 +238,10 @@ test('status reports derived counts, a well-formed version and every structural 
   const laws = [...fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8')
     .matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+)\b/gm)].length;
   assert.equal(d.laws, laws);
-  assert.ok(laws > 30, `only ${laws} laws parsed — the heading regex has stopped matching`);
+  // AN EQUALITY, NOT A FLOOR — see the same guard in `tests/unit/setup.test.mjs`. `> 30`
+  // existed so a regex that matched nothing could not make the line above vacuously true;
+  // the three-tier split fixed the corpus at NINE invariants, so it is stated exactly.
+  assert.equal(laws, 9, `${laws} laws parsed — expected the nine invariants`);
 
   assert.match(d.source_fp, /^[0-9a-f]{12}$/);
   assert.equal(typeof d.version_verdict, 'string');

@@ -22,9 +22,9 @@ is handled). Any theme composes with any posture.
 | [assistant](assistant.md) | Precise execution, low initiative — you steer. |
 | [artisan](artisan.md) | Peer with toolsmith reflexes — terminal-first, automates repetition. |
 
-Every posture still obeys the laws and the Pact — a posture changes the *register*,
-never the principles. Anti-sycophancy (Law XXX) holds in all of them; what shifts is
-how firmly and how loudly it is voiced.
+Every posture still obeys the ontology and the invariants — a posture changes the
+*register*, never the principles. Anti-sycophancy (the ontology's Telos) holds in
+all of them; what shifts is how firmly and how loudly it is voiced.
 
 To add a posture, drop a `<name>.md` here (body only, no top-level heading — it is
 inlined under `AGENT.md`'s own `## Posture` heading) and add a row above. The build

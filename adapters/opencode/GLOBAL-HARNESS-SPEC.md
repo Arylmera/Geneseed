@@ -190,7 +190,7 @@ enforcement paths read the same. Adds a machine marker (first line) for §4.
 
 ```
 <!-- geneseed-context:v2 -->
-=== PROJECT CONTEXT — binding for this repo per Law XVIII ===
+=== PROJECT CONTEXT — binding for this repo ===
 
 ----- <path> — <description> -----
 <full file contents, trailing newlines stripped>
@@ -204,7 +204,7 @@ enforcement paths read the same. Adds a machine marker (first line) for §4.
   - [demoted: README.md exceeded 16 KB — read on demand]
 ```
 
-- Header keeps the exact `=== PROJECT CONTEXT … Law XVIII ===` wording.
+- Header keeps the exact `=== PROJECT CONTEXT — binding for this repo ===` wording.
 - A `MISSING` eager file emits `[context] MISSING eager file: <err>` inline (as today).
 - The `<!-- geneseed-context:v2 -->` marker is the idempotency sentinel.
 
@@ -269,12 +269,17 @@ exactly one copy and the setup guide (§10) removes project copies. Document thi
 
 ---
 
-## 8. Fallback Law (for tools without the plugin)
+## 8. Fallback rule (for tools without the plugin)
 
-Add to the universal laws so non-OpenCode tools and uncovered repos still get
-project context — the *instruction* tier behind the *injection* tier:
+⚠ HISTORICAL. This was written when the corpus was a flat, open-ended list of laws.
+It is not one now: the invariants are a closed set of nine, and project-context
+discovery is one of the two old laws absorbed into AGENT.md's own **§9 Context**
+section, which every build carries as prose. Nothing an adapter spec writes is
+added to the invariants. The text below survives as the *instruction* tier behind
+the *injection* tier, and `{{DOCTRINE}} process 4` (Read the Docs First) is its
+nearest live citation:
 
-> **Law (Project Context Discovery).** When project context has not already been
+> **Rule (Project Context Discovery).** When project context has not already been
 > injected, before substantive work read the repo's agent-directed rules and entry
 > docs — `AGENTS.md`/`AGENT.md`/`CLAUDE.md`, root `README.md`, and any `.harness/`
 > manifest — and treat `docs/`, `adr/`, and architecture notes as lazy: consult

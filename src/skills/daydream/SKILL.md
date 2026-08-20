@@ -15,7 +15,7 @@ Inspired by [Gwern's LLM Daydreaming](https://gwern.net/ai-daydreaming).
 Before the first run, make sure the pieces this skill depends on are in place:
 
 1. **A vault to mine.** Declare your Obsidian vault in the harness `wiki.jsonc`
-   (AGENT.md §7) — give a `wikis[]` entry a `path` to the vault root. Without it the
+   (AGENT.md §8) — give a `wikis[]` entry a `path` to the vault root. Without it the
    skill falls back to detecting a `.obsidian/` folder in the current directory, then
    asks. No vault → nothing to daydream about.
 2. **Parallel subagents.** Synthesis and critique fan out across ~10–20 subagents per

@@ -4,11 +4,11 @@ order: 3
 title: "geneseed-guard"
 kind: "concept"
 ---
-Enforces the safety Laws at the tool boundary (`tool.execute.before`) — the same *enforce by injection, don't just instruct* stance as the context plugin. High-confidence patterns only, so legitimate work is never caught:
+Enforces the safety Laws at the tool boundary (`tool.execute.before`) — the same *enforce by injection, don't just instruct* stance as the context plugin. The guard ships whole on every install, whatever [doctrine packs](#/docs/setup-choices) it built in — its blocking arms are **invariant** territory, and the speed-bump below is about which store a note belongs in, which is your call either way. The one boundary that does follow a pack is the commit/push consent gate, and that lives in the permission block rather than here. High-confidence patterns only, so legitimate work is never caught:
 
-- **Blocks** — writes to private-key / credential files (**Law I**), catastrophic shell like `rm -rf /` (**Law IV**), and any mutation under a declared wiki's `protected` folders (AGENT.md §7, from `wiki.jsonc`).
+- **Blocks** — writes to private-key / credential files (**Law I**), catastrophic shell like `rm -rf /` (**Law IV**), and any mutation under a declared wiki's `protected` folders (AGENT.md §8, from `wiki.jsonc`).
 - **Warns** (logged, allowed) — `.env` writes and force-push.
-- **Speed-bumps** — the *first* write to `user-rules.md` or a memory file is refused, naming **Law VI**: a standing rule or a durable fact is the user's call, settled through the rule skill. A re-issued write goes through, so a legitimate write is never trapped. (On Claude Code and Bob the same guard is a `geneseed-hook rule-gate` hook, which can *ask* the user instead of refusing — OpenCode's `tool.execute.before` has no ask tier.)
+- **Speed-bumps** — the *first* write to `user-rules.md` or a memory file is refused, naming **Doctrine process 1**: a standing rule or a durable fact is the user's call, settled through the rule skill. A re-issued write goes through, so a legitimate write is never trapped. (On Claude Code and Bob the same guard is a `geneseed-hook rule-gate` hook, which can *ask* the user instead of refusing — OpenCode's `tool.execute.before` has no ask tier.)
 
 ### Install
 

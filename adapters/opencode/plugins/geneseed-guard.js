@@ -4,9 +4,9 @@
 // "enforce by injection, don't just instruct" stance as the context plugin:
 //   - Law I  (Sealed Secrets):  block writes to private-key / credential files.
 //   - Law IV (Deletion Is Deliberate):  block catastrophic shell commands.
-//   - Law VI (rule vs memory):  speed-bump the first write to user-rules.md or a
+//   - Doctrine process 1 (rule vs memory):  speed-bump the first write to user-rules.md
 //     memory file — that choice belongs to the user, via the rule skill.
-//   - Wiki (AGENT.md §7):  block mutations under a declared wiki's `protected`
+//   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in wiki.jsonc.
 // High-confidence patterns only, so legitimate work is never caught. Borderline cases
 // (.env edits, force-push) are WARNED, not blocked.
@@ -114,7 +114,7 @@ const WRITE_TOOLS = ["write", "edit", "patch", "create", "save", "insert", "repl
 const SHELL_TOOLS = ["bash", "shell", "exec", "command", "terminal", "run"]
 const hasAny = (name, parts) => parts.some((s) => name.includes(s))
 
-// ---- protected wiki folders (AGENT.md §7) --------------------------------------
+// ---- protected wiki folders (AGENT.md §8) --------------------------------------
 // wiki.jsonc (the machine-level knowledge-base manifest) may list `protected` folders
 // per wiki. Mutating anything under one is denied. Same resolution chain as the
 // context plugin: $GENESEED_WIKI -> $GENESEED_HARNESS/wiki.jsonc -> beside the install.
@@ -207,7 +207,7 @@ async function protectedPrefixes() {
   return prefixes
 }
 
-// ---- the rule / memory stores (Law VI) -----------------------------------------
+// ---- the rule / memory stores (Doctrine process 1) -----------------------------
 // Whether something the user wants kept is a standing rule or a durable fact is THEIR
 // call, settled through the rule skill. `tool.execute.before` can only allow or throw —
 // it has no "ask the user" tier like the Claude/Bob rule-gate hook —
@@ -257,7 +257,7 @@ export const GeneseedGuard = async () => {
           if (store && !RULE_STORE_BUMPED.has(p)) {
             RULE_STORE_BUMPED.add(p)
             deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
-                 `choice is the user's (Law VI). Settle it through the rule skill, ` +
+                 `choice is the user's (Doctrine process 1). Settle it through the rule skill, ` +
                  `then re-issue this write`)
             return
           }
@@ -268,7 +268,7 @@ export const GeneseedGuard = async () => {
             const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/").toLowerCase()
             const hit = (await protectedPrefixes()).find(
               (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
-            if (hit) { deny(`mutation in protected wiki folder — ${hit.label} (AGENT.md §7)`); return }
+            if (hit) { deny(`mutation in protected wiki folder — ${hit.label} (AGENT.md §8)`); return }
           }
         }
         // NOT else-if: a compound tool name (e.g. exec_and_save) can match both

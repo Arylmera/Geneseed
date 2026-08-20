@@ -43,12 +43,12 @@ page is mostly about *what it does not automate* and why the harness still holds
 Copilot has **no `settings.json` and no lifecycle-hook mechanism**, so the whole
 settings/hooks/excludes stage is skipped. Concretely, Copilot does **not** get:
 
-- **automated context injection** — Rule XVIII's project-context load falls back
+- **automated context injection** — the project-context load falls back
   to the preamble instructing the agent to read the docs itself;
 - **automated memory / learn write-back** — no `Stop`/`SubagentStop` hook; the
   memory convention rides the preamble's instructions (the agent writes its own
   memories) rather than a session-end distiller;
-- **the git-gate consent backstop** — Rule XX (*consent before every commit and
+- **the git-gate consent backstop** — Doctrine process 5 (*consent before every commit and
   push*) is enforced by the **preamble prose only**, not at the tool boundary.
   There is no hook to force the prompt;
 - **sovereign-repo excludes** — Copilot documents no exclude/shadow mechanism
@@ -58,8 +58,9 @@ settings/hooks/excludes stage is skipped. Concretely, Copilot does **not** get:
   installs already exist.
 
 None of this is a build gap — it is Copilot's ceiling. The harness still applies
-in full: every Rule, agent, and skill is present; only the *automation* of a few
-Rules degrades to instruction-only. This is behaviour-contract parity, the same
+in full: the Ontology, every Rule, every doctrine rule the install built in, and
+every agent and skill are present; only the *automation* of a few of them degrades
+to instruction-only. This is behaviour-contract parity, the same
 principle every non-OpenCode host follows.
 
 ## MCP

@@ -104,7 +104,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { emitGlobalInto } from '../../bin/geneseed.mjs';
-import { ROOT, discoverNames } from '../checkout.mjs';
+import { ROOT, discoverNames, PACK_ORDER } from '../checkout.mjs';
 import { withStdoutSwallowed } from '../diff.mjs';
 import { excludeAdd, excludeRemove } from '../excludes.mjs';
 import { setupBuildArgs } from '../generate.mjs';
@@ -114,8 +114,8 @@ import {
   pyResolve,
 } from '../hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
-  readMaybe,
+  EMIT_HOST_SCOPE, doctrinesForBuild, footprintOfDir, installState, installTargets, modeOfDir,
+  postureOfDir, readMaybe,
 } from '../installs.mjs';
 import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
@@ -139,6 +139,36 @@ const bget = (body, key, dflt = null) => (isDict(body) && Object.hasOwn(body, ke
 
 /** `str(x or "")` — Python's truthiness, then Python's `str`. */
 const strOr = (v) => (pyTruthy(v) ? pyStr(v) : '');
+
+/**
+ * A request body's `doctrines` -> a normalised pack list, or `null` for "said nothing usable".
+ *
+ * THE SAME TRUST BOUNDARY THE THEME CROSSES, and it needs more care than posture or mode do
+ * because this value is a LIST: `discoverNames(...).includes(x)` closes a scalar in one call,
+ * but a list has to be closed member by member or one bogus element rides in beside three good
+ * ones and reaches an argv. Every name is checked against DISCOVERY — what this checkout
+ * actually ships — and the result is re-ordered through `PACK_ORDER`, because the
+ * `Active packs:` line the build writes is a marker that a later reader parses back out and a
+ * marker whose contents depend on request-body order compares unequal to itself.
+ *
+ * `null` rather than a substituted default on every rejection, so the caller decides what
+ * "unspecified" means for its own endpoint — a rebuild keeps the deployment's answer, a fresh
+ * deploy takes the configured one. That mirrors the bogus-theme fallback right beside it.
+ *
+ * Accepts an array (what the console sends) or a comma string (what a curl by hand sends), and
+ * `none`/`[]` both mean the deliberate empty selection — a real configuration, not a rejection.
+ */
+function bodyDoctrines(body) {
+  const raw = bget(body, 'doctrines');
+  if (Array.isArray(raw) && !raw.length) return [];
+  const names = Array.isArray(raw) ? raw
+    : (typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(Boolean) : null);
+  if (names === null || !names.length) return null;
+  if (names.length === 1 && names[0] === 'none') return [];
+  const known = discoverNames('doctrines', PACK_ORDER[0]);
+  if (!names.every((n) => typeof n === 'string' && known.includes(n))) return null;
+  return PACK_ORDER.filter((p) => names.includes(p));
+}
 
 /** `str.split()` with no argument — runs of PYTHON whitespace, no empties. */
 const pyWords = (s) => s.split(new RegExp(`[${PY_SPACE}]+`)).filter(Boolean);
@@ -702,6 +732,13 @@ export function apiRestore(state, files) {
       footprint: state.footprint,
       posture: state.posture,
       mode: state.mode,
+      // THE PACK SELECTION IS THE FIFTH, and it is the one that makes this verb a BOUNDARY
+      // question rather than a cosmetic one. `expected` rendered at all four packs, and this
+      // verb COPIES OUT OF IT: restoring AGENT.md onto an install built `--doctrines craft`
+      // wrote a carrier stating doctrine process 5 while `claudeHookGroups` had wired no gate
+      // behind it — prompt and boundary disagreeing by a WRITE, the write-side twin of the
+      // read-side hole `diffCollect` had (and the reason the panel offered the file at all).
+      doctrines: doctrinesForBuild(target),
     }));
     for (const raw of (pyTruthy(files) ? files : [])) {
       const rel = pyStripSpace(pyStr(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
@@ -781,8 +818,15 @@ export function apiInstallCmd(state, body) {
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode)
     ? bmode : (modeOfDir(root) || 'direct');
+  // Unspecified means "keep what this install already has", exactly as theme, footprint,
+  // posture and mode above do — a rebuild through the console is not a place to silently
+  // re-decide the constitution. ⚠ AND A CARRIER WITH NO `Active packs:` MARKER (a pre-2.3
+  // install) MUST NOT LAND ON `harness.config.json`: `doctrinesOfDir` answers `null` there,
+  // `null` elided the flag, and the generator's config fallback then narrowed the install and
+  // took its consent gate with it. `doctrinesForBuild` resolves unknown to ALL packs.
+  const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
   const out = scope === 'global' ? null : String(root);
-  const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode);
+  const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
 }
 
@@ -878,7 +922,14 @@ export function apiDeployCmd(state, body) {
   const pos = discoverNames('postures', 'peer').includes(bpos) ? bpos : 'peer';
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode) ? bmode : 'direct';
+  // Same resolution as `apiInstallCmd` above, and for the same reason: the console's Deploy
+  // form sends host/path/theme/footprint/posture/mode and NO pack selection, and nothing stops
+  // it landing on a directory that already holds an install. Taking `bodyDoctrines` alone left
+  // the flag off, the generator fell back to `harness.config.json`, and deploying onto an
+  // existing all-four Claude install dropped it to one pack — measured: 6 hook groups became 5
+  // and `PreToolUse::Bash` went with them. `doctrinesForBuild` resolves unknown to ALL packs.
+  const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
   // project-scope emit name == host name (opencode / claude / bob / copilot)
-  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode);
+  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
 }

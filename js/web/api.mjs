@@ -61,7 +61,7 @@ import { doctorCollect } from '../doctor.mjs';
 import { excludesSnapshot } from '../excludes.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, pyResolve } from '../hosts.mjs';
 import {
-  footprintOfDir, installState, installTargets, installedDefaults, modeOfDir,
+  doctrinesForBuild, footprintOfDir, installState, installTargets, installedDefaults, modeOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../installs.mjs';
 import { frontmatter } from '../hooks.mjs';
@@ -273,16 +273,22 @@ export function specEntries(root, nested) {
  * `_web_core._deployed_inventory` — the agents and skills actually installed at
  * `state.target`, not a fresh render of `src/`.
  *
- * Laws still come from the render: once deployed they live inside AGENT.md rather than as
- * separate files, so the deployed arm replaces two of the three and not all three. A
- * deployed spec file carries neither a category nor a lifecycle status, so each is tagged
- * BY NAME from the same two sources the source render uses — and an entity the registry
- * does not know reads "personal" for both, which is the honest answer rather than a
- * borrowed one: filing it under the `build` fallback would claim a Geneseed taxonomy slot
- * it was never given.
+ * All three constitutional tiers still come from the render: once deployed they live inside
+ * AGENT.md rather than as separate files, so the deployed arm replaces the two ENTITY rosters
+ * and none of the constitution. A deployed spec file carries neither a category nor a
+ * lifecycle status, so each is tagged BY NAME from the same two sources the source render
+ * uses — and an entity the registry does not know reads "personal" for both, which is the
+ * honest answer rather than a borrowed one: filing it under the `build` fallback would claim
+ * a Geneseed taxonomy slot it was never given.
+ *
+ * ⚠ THE PACK SELECTION IS THE ONE THING THE RENDER CANNOT KNOW. `renderAll` emits all four
+ * pack files whatever `cfg.doctrines` says — measured: `makeCfg({doctrines:['craft']})` yields
+ * the same 105 items — because the filtering happens when AGENT.md's §2 is assembled, not in
+ * the walk. So the catalogue is always whole, and which packs this INSTALL built in comes from
+ * its own carrier via `doctrinesForBuild`, which resolves "no marker" to every pack.
  */
 export function deployedInventory(state) {
-  const render = tuiInventory(state.theme);
+  const render = tuiInventory(state.theme, doctrinesForBuild(state.target));
   const registry = loadRegistry();
   const skills = specEntries(path.join(state.target, 'skills'), true);
   for (const e of skills) {
@@ -292,7 +298,12 @@ export function deployedInventory(state) {
   }
   const agents = specEntries(path.join(state.target, 'agents'), false);
   for (const e of agents) e.status = entityStatus(registry, `agents/${e.name}`);
-  return { agents, skills, laws: render.laws, theme: state.theme };
+  return { agents,
+    skills,
+    laws: render.laws,
+    ontology: render.ontology,
+    doctrines: render.doctrines,
+    theme: state.theme };
 }
 
 /** `WebState.inventory` — the deployed record when there is one, else the source render. */
@@ -592,8 +603,52 @@ function configManifest(name, p) {
   return null;
 }
 
-/** `_web_core.SECTIONS` — a closed list; anything else is a 404. */
+/**
+ * `_web_core.SECTIONS` — a closed list; anything else is a 404.
+ *
+ * ⚠ `laws` STAYS ONE SECTION FOR ALL THREE TIERS, and that is a decision rather than an
+ * oversight. The console has ONE Constitution entry, not three, so a reader keeps the "read it
+ * top to bottom" property; the id stays `laws` because `tests/helpers/cli_golden.mjs`
+ * hard-requires `web/src/pages/Laws.jsx` and because a route rename buys nothing and costs a
+ * redirect. The tier lives on the ITEM (`tier: 'ontology' | 'invariant' | 'doctrine'`), which
+ * is where a consumer can act on it.
+ */
 export const SECTIONS = ['agents', 'skills', 'laws', 'memory', 'notebook', 'wiki', 'config'];
+
+/**
+ * The `laws` section's items — the whole constitution, in constitutional order, one flat list.
+ *
+ * FLAT AND NOT NESTED, because every other section is `{section, items}` and a second shape
+ * for one section is a second client path for one roster. The pack's grouping metadata rides
+ * on each doctrine row (`pack`, `packTitle`, `packDesc`, `active`), so a consumer groups by
+ * `pack` and has everything a header needs without a second fetch.
+ *
+ * Names are ADDRESSES and the three shapes cannot collide: `ont:<slug>` carries a colon no
+ * numeral has, an invariant is `[IVXLCDM]+`, a doctrine rule is `<pack>.<n>`. `apiItem`
+ * resolves all three off the same list.
+ */
+function constitutionItems(inv) {
+  return [
+    ...(inv.ontology ?? []).map((e) => ({ name: `ont:${e.id}`, title: e.title, desc: '',
+      tier: 'ontology' })),
+    ...inv.laws.map((e) => ({ name: e.num, title: `Rule ${e.num} — ${e.title}`, desc: '',
+      klass: e.klass ?? 'craft', tier: 'invariant' })),
+    ...(inv.doctrines ?? []).flatMap((p) => p.rules.map((r) => ({
+      name: `${r.pack}.${r.n}`,
+      title: `Doctrine ${r.pack} ${r.n} — ${r.title}`,
+      desc: '',
+      klass: r.klass ?? p.pack,
+      tier: 'doctrine',
+      pack: p.pack,
+      packTitle: p.title,
+      packDesc: p.desc,
+      // ⚠ EVERY RULE IS LISTED WHETHER OR NOT ITS PACK IS BUILT IN. An inactive pack that
+      // vanished from the payload would be indistinguishable from one that never shipped, and
+      // the console could not then offer the command that turns it back on.
+      active: p.active,
+    }))),
+  ];
+}
 
 /** `_web_catalog.api_catalog`. */
 export function apiCatalog(state, section) {
@@ -607,8 +662,7 @@ export function apiCatalog(state, section) {
     items = inv.skills.map((e) => ({ name: e.name, title: e.name, desc: e.desc,
       source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown' }));
   } else if (section === 'laws') {
-    items = inv.laws.map((e) => ({ name: e.num, title: `Rule ${e.num} — ${e.title}`,
-      desc: '', klass: e.klass ?? 'craft' }));
+    items = constitutionItems(inv);
   } else if (section === 'memory') {
     items = memoryItems(state);
   } else if (section === 'notebook') {
@@ -634,10 +688,21 @@ export function apiItem(state, type, name) {
     return out;
   }
   if (type === 'law') {
-    const e = inv.laws.find((x) => x.num === name);
+    // ONE ARM FOR THREE TIERS, resolved off the same list the catalogue publishes — so a name
+    // that appears in `/api/catalog/laws` always opens, and one that does not always 404s.
+    // Building the list twice is what would let the two drift.
+    const e = constitutionItems(inv).find((x) => x.name === name);
     if (!e) throw new NotFound(name);
-    return { type, name, title: `Rule ${e.num} — ${e.title}`, desc: '', body: e.body,
-      links: [], klass: e.klass ?? 'craft' };
+    const body = e.tier === 'ontology'
+      ? (inv.ontology.find((s) => `ont:${s.id}` === name)?.body ?? '')
+      : (e.tier === 'invariant'
+        ? (inv.laws.find((x) => x.num === name)?.body ?? '')
+        : (inv.doctrines.flatMap((p) => p.rules)
+          .find((r) => `${r.pack}.${r.n}` === name)?.body ?? ''));
+    // `links: []` — a constitution body is not link-resolved. It cites its siblings by
+    // ADDRESS (`Rule IV`, `Doctrine ops 1`, `Ontology: Telos`), not by path, and there is no
+    // file behind those to resolve to.
+    return { ...e, type, name, body, links: [] };
   }
   if (type === 'memory' || type === 'notebook') {
     flatName(name);
@@ -795,7 +860,21 @@ export function apiOverview(state) {
     counts: {
       agents: inv.agents.length,
       skills: inv.skills.length,
+      // ⚠ `laws` STAYS THE INVARIANT COUNT. The rail badge reads it, `docCounts` mirrors it as
+      // `{N_LAWS}`, and the doctor's frozen `proseMirrorProblems` compares README and
+      // SHIPPED.md prose against the same number. Widening it to "the whole constitution"
+      // would silently move all four at once.
       laws: inv.laws.length,
+      ontology: (inv.ontology ?? []).length,
+      // The tier's own summary, kept out of the section counts because it is not a section:
+      // `active`/`total` is the fraction the dashboard shows, `rules` counts only the packs
+      // this install built in — what it is bound by, not what its bundle carries.
+      doctrines: {
+        active: (inv.doctrines ?? []).filter((p) => p.active).length,
+        total: (inv.doctrines ?? []).length,
+        rules: (inv.doctrines ?? []).filter((p) => p.active)
+          .reduce((n, p) => n + p.rules.length, 0),
+      },
       memory: memoryItems(state).length,
       notebook: notebookItems(state).length,
       wiki: wikiItems(state).length,

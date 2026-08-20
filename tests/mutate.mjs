@@ -392,8 +392,10 @@ export const MUTATIONS = [
     id: 'M21',
     name: 'make the deploy resolver ignore the requested host',
     file: 'js/web/actions.mjs',
-    find: "  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode);",
-    replace: "  const argv = setupBuildArgs(theme || 'neutral', 'files', root, root, fp, pos, mode);",
+    find: "  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, "
+      + 'doctrines);',
+    replace: "  const argv = setupBuildArgs(theme || 'neutral', 'files', root, root, fp, pos, "
+      + 'mode, doctrines);',
     gate: UNIT,
     why: "`apiDeployCmd`'s `{cmd: [...]}` is handed straight to the job runner and never reaches "
       + 'the wire, so a resolver that deployed the host-agnostic bundle to every host would '
@@ -539,8 +541,9 @@ export const MUTATIONS = [
     id: 'M30',
     name: 'fold the Claude wire stage away',
     file: 'js/emit.mjs',
-    find: "function claudeWire(job, claudeMdText, hasAgentText) {\n  phaseLog('WIRE');\n",
-    replace: 'function claudeWire(job, claudeMdText, hasAgentText) {\n',
+    find: "function claudeWire(job, claudeMdText, hasAgentText, doctrines = null) {\n"
+      + "  phaseLog('WIRE');\n",
+    replace: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null) {\n',
     gate: UNIT,
     why: "THE EXACT SHAPE THE REFERENCE'S OWN VACUITY GUARD WAS BUILT FOR. An emit whose wire "
       + 'was folded into its render sibling still renders, still prunes, still manifests and is '

@@ -26,7 +26,7 @@ const NAV = [
   {
     hash: '#/laws',
     id: 'laws',
-    label: 'Laws',
+    label: 'Constitution',
     icon: 'law',
     match: (r) =>
       r.view === 'laws' ||

@@ -1,10 +1,10 @@
 ---
 group: start
 order: 1
-title: "Posture & footprint"
+title: "Posture, doctrines & footprint"
 kind: "concept"
 ---
-The setup wizard asks four starting parameters. The first, the **theme**, is the *voice* — banner, sigil, prose register — previewed live as you move through the wizard; it never changes structure or rules, so pick whatever reads best to you ([voice vs structure](#/docs/themes)). The other three shape how the agent works and are explained below. All four have safe defaults — accept them and move on, or pick deliberately here. All are set-and-forget: preserved across every rebuild and re-theme, changeable later from **Settings**, the **Harnesses** page, or the wizard.
+The setup wizard asks five starting parameters. The first, the **theme**, is the *voice* — banner, sigil, prose register — previewed live as you move through the wizard; it never changes structure or rules, so pick whatever reads best to you ([voice vs structure](#/docs/themes)). The other four shape how the agent works and are explained below. All five have safe defaults — accept them and move on, or pick deliberately here. All are set-and-forget: preserved across every rebuild and re-theme, changeable later from **Settings**, the **Harnesses** page, or the wizard.
 
 ### Posture — the relationship register
 
@@ -27,13 +27,26 @@ How the session runs the work you hand it, fixed at build time:
 
 Pick **direct** unless you want the session managing a crew for you. Switch back any time with `--mode direct`.
 
-### Footprint — full or lean Rules
+### Doctrine packs — which practices bind
 
-How much of the Rules `AGENT.md` carries inline every turn. A token-cost dial, not a rules cut — every Rule always applies:
+Which practice rules this install adopts, fixed at build time. Unlike the dials above this one really does change *which rules apply*: the [Ontology and the Rules](#/docs/rules) are always on, the doctrines are yours to pick. All four ship enabled, and leaving one out is a deliberate choice, not a default:
 
-- **full** *(default)* — every Rule's text *and* rationale inline. Best when token cost is a non-issue or you run a smaller model.
-- **lean** — one line per Rule plus a pointer to the complete laws file, read on demand. Trims the Rules section by roughly 40% for long sessions or cost-sensitive runs.
+- **craft** — how code is written: reuse first, house conventions, docs in step, the smallest diff.
+- **rigor** — how work is proven: idempotence, honest tests, coverage, gates that can actually fail.
+- **ops** — how the machine is driven: tool discovery, commands that return, complete teardowns.
+- **process** — how a session runs: planning, context economy, docs first, and the **consent gate on every commit and push**.
+
+Turning **process** off takes that consent gate with it, at the tool boundary as well as in the prose: the OpenCode permission block and the Claude/Bob `PreToolUse` hook that ask before a commit or a push are wired only when the pack is built in, because a boundary that keeps asking for a rule the install never adopted is a gate arguing with its own harness. The invariant-territory refusals — `rm -rf`, a force-push — stay in every build; they are the Rules' territory, not the pack's.
+
+A pack you leave out still ships in the bundle under `doctrines/`, so you can read it before turning it on, and a rule that cites it still resolves. Change the set with `geneseed-build --doctrines craft,rigor` (or `--doctrines none`), or in `harness.config.json`.
+
+### Footprint — how much of the constitution loads inline
+
+How much of the constitution `AGENT.md` carries inline every turn. A token-cost dial, not a rules cut — whatever this install adopted always applies:
+
+- **lean** *(default)* — the Ontology whole, then each Rule and each doctrine rule as its heading plus its first line, with a pointer to the complete text shipped beside `AGENT.md` and read on demand.
+- **full** — every Rule's and every active doctrine rule's complete text *and* rationale inline. Best when token cost is a non-issue or you run a smaller model, which applies a rule's nuance more reliably with the *why* eagerly in context.
 
 ---
 
-**Deeper:** [The collaboration layer](#/docs/collaboration) · [Footprint (lean vs full)](#/docs/footprint) · **Next:** [Verify it works](#/docs/verify)
+**Deeper:** [The constitution](#/docs/rules) · [The collaboration layer](#/docs/collaboration) · [Footprint (lean vs full)](#/docs/footprint) · **Next:** [Verify it works](#/docs/verify)

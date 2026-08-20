@@ -14,8 +14,10 @@ bin/geneseed-hook.mjs …` — so at user scope they would fire and fail in ever
 repo that doesn't vendor the harness. A generated global install wires
 absolute-path hooks instead — `geneseed setup` does that for you.) It:
 
-- on **PreToolUse** (matcher `Bash`), runs `harness git-gate` — a tool-boundary
-  backstop for Rule XX (*consent before every commit and push*). The hook inspects the
+- on **PreToolUse** (matcher `Bash`), **on an install that built the `process` pack in**,
+  runs `harness git-gate` — the tool-boundary half of Doctrine process 5 (*consent before
+  every commit and push*). Drop that pack and this hook is not written at all; the
+  invariant-territory refusals (`rm -rf`, force-push) stay in every build. The hook inspects
   command and, when it runs a `git commit` or `git push` (bare, flagged, `-C <path>`,
   or chained like `git add . && git commit … && git push`), returns
   `permissionDecision: "ask"` so Claude Code **prompts on every such call**. Crucially
@@ -31,7 +33,7 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   doesn't recognise as a commit/push, so over-matching the tool surface is harmless.
 - on **SessionStart** (`startup`/`clear` only — a fresh context), prints `AGENT.md`
   so the harness is in context from the first turn, then runs `harness context` to
-  **inject the project context** directly into the session — so Rule XVIII is enforced
+  **inject the project context** directly into the session — so the project-context load is
   by the hook, not left to the agent to remember (lazy entries are only listed). On
   **`resume`** it runs `harness context` *without* re-`cat`ting `AGENT.md`: the resumed
   conversation already carries the harness, so re-injecting the static file each resume
@@ -59,7 +61,7 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
 Adjust the paths if your harness bundle is not at the repository root. On Windows
 the commands are identical (`node bin/geneseed-hook.mjs …`).
 
-Why inject rather than instruct? Rule XVIII tells the agent to read the project
+Why inject rather than instruct? The constitution tells the agent to read the project
 context at startup, but startup rituals are exactly what agents skip. The
 `harness context` hook removes the choice: the eager files' contents land in
 context before the first turn regardless of agent discipline. On tools without

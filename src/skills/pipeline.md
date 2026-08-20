@@ -28,7 +28,7 @@ The minimum roster per task type. The parent may add specialists on top — secu
 5. **Two execution shapes**, chosen by host capability (same pattern as the [workflow {{SKILL}}](workflow.md)):
    - *Deterministic:* where the host exposes a `workflow` tool, run a saved script encoding analyst → developer → (tester ⇄ developer)×≤5 → proof.
    - *Model-driven fallback:* everywhere else, run the same stages via the [parallel-agents {{SKILL}}](parallel-agents.md) or sequential personas, with the same handoff envelopes and the same delivery contract.
-6. On success, attach the mechanical proof to the branch (test + lint output, exit codes) and hand the result back to the parent for the merge decision — the pipeline never commits, pushes, or merges on its own ({{LAW}} XX).
+6. On success, attach the mechanical proof to the branch (test + lint output, exit codes) and hand the result back to the parent for the merge decision — the pipeline never commits, pushes, or merges on its own ({{DOCTRINE}} process 5).
 
 ## Delivery contract
 
@@ -45,7 +45,7 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   is a flaw in this file. Propose the exact edit (trigger, procedure, or
   done-when) and apply it with the user's assent ({{LAW}} II).
 - A lesson that is *not* a flaw in this file goes to {{MEMORY}} only if it
-  clears {{LAW}} VI's bar: it would change how a future session behaves, and a
+  clears {{DOCTRINE}} process 1's bar: it would change how a future session behaves, and a
   fresh read of the repo would not re-derive it. Update an existing memory over
   adding one; when in doubt, leave it out.
 - No friction, nothing learned — move on; this loop earns no ceremony. Most
