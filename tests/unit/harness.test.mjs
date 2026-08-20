@@ -24,6 +24,7 @@ import {
 import {
   themeParityProblems, countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt,
   themesToCheck, globalEmitProblems, renderedProblems, authoringProblems, claudeBobEmitProblems,
+  doctrineMetaProblems,
 } from '../../js/doctor.mjs';
 import {
   memoryDropIndex, discoverContext, resolveContextSets, resolveAgentName, appendAgentLesson,
@@ -612,6 +613,74 @@ test('roman numerals bridge to LAW_META\'s arabic keys', () => {
     assert.equal(romanToInt(roman), n, roman);
   }
   assert.equal(romanToInt('nope'), 0);
+});
+
+// ---------------------------------------------------------------------------------------------
+// DOCTRINE_META — the same column, one tier over and 23 rules wide.
+
+/** The doctrine addresses as the pack files really spell them. Derived, never transcribed. */
+const doctrineAddrs = () => ['craft', 'rigor', 'ops', 'process'].flatMap((p) =>
+  [...fs.readFileSync(path.join(SRC, 'doctrines', `${p}.md`), 'utf8')
+    .matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)].map((m) => `${m[1]}.${m[2]}`));
+
+test('every doctrine rule carries a DOCTRINE_META principle', () => {
+  const addrs = doctrineAddrs();
+  assert.equal(addrs.length, 23, `${addrs.length} rules parsed — expected 23`);
+  assert.deepEqual(doctrineMetaProblems(addrs), []);
+});
+
+test('the DOCTRINE_META gate reads the real literal, wrapped rows included', () => {
+  // SAME PRECONDITION AS LAW_META'S, and it bites harder here: 23 rows at printWidth 100 with
+  // a quoted key put SEVERAL over the line, so the wrapped form is not a rare case in this
+  // literal — it is most of the long ones. A row regex that could not span newlines would lose
+  // exactly the rules whose principle is longest, silently.
+  const text = fs.readFileSync(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx'), 'utf8');
+  const block = /^const DOCTRINE_META = \{$([\s\S]*?)^\}/m.exec(text);
+  assert.ok(block, 'DOCTRINE_META literal not found in Laws.jsx');
+  // The split anchor has to be the KEY and not just a quote: a wrapped row's continuation lines
+  // are themselves quoted strings, so `\n(?=\s*['"])` cuts one row into three and this cell
+  // would then fail on a perfectly good literal — which it did, on the first run.
+  const rows = block[1].split(/\n(?=\s*['"][a-z]+\.\d+['"]:)/).filter((s) => s.trim());
+  assert.equal(rows.length, doctrineAddrs().length,
+    'DOCTRINE_META has a different number of rows than the pack files have rules');
+  assert.ok(rows.some((r) => r.trim().split('\n').length > 1),
+    'no DOCTRINE_META row is reflowed across lines any more, so the check above has stopped '
+    + 'covering the prettier-wrapped form. Restore a wrapped row, or gate the row regex '
+    + 'directly against a crafted literal.');
+});
+
+test('the DOCTRINE_META gate flags a missing row, a stale row and a wrong pack', () => {
+  // A rule with no row at all — the failure that shipped twice on the invariants side, and
+  // has 23 places to happen here.
+  assert.ok(doctrineMetaProblems(['craft.1', 'craft.99'])
+    .some((x) => x.includes('craft.99') && x.includes('DOCTRINE_META')));
+  // A row for a rule no pack file defines: the residue a deleted rule leaves in the console.
+  assert.ok(doctrineMetaProblems(['craft.1'])
+    .some((x) => x.includes('lists craft.2')));
+  // ⚠ THE ARM WITH NO INVARIANT EQUIVALENT. A doctrine rule's class IS its pack, so this is an
+  // equality rather than a vocabulary check — and it is what catches a row pasted from the
+  // pack above it, which would render under the wrong colour and the wrong chip while every
+  // count stayed right.
+  const text = fs.readFileSync(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx'), 'utf8');
+  const swapped = text.replace("'ops.1': ['ops',", "'ops.1': ['craft',");
+  assert.notEqual(swapped, text, 'the ops.1 row has moved — re-site this fault');
+  const problems = withFault({ 'web/src/pages/Laws.jsx': swapped },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(problems.some((x) => x.includes("DOCTRINE_META['ops.1']") && x.includes("'ops'")),
+    `a doctrine row filed under the wrong pack went unflagged: ${JSON.stringify(problems)}`);
+});
+
+test('the DOCTRINE_META gate flags the literal going missing entirely', () => {
+  // The whole-literal arm, which the invariants' gate has and which is the one a page rewrite
+  // trips: `lawMetaProblems` would still be satisfied by a Laws.jsx that kept LAW_META and
+  // dropped DOCTRINE_META, and the doctrine rows would render with blank principles.
+  const text = fs.readFileSync(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx'), 'utf8');
+  const gone = text.replace('const DOCTRINE_META = {', 'const DOCTRINE_META_RENAMED = {');
+  assert.notEqual(gone, text, 'the DOCTRINE_META literal has moved — re-site this fault');
+  const problems = withFault({ 'web/src/pages/Laws.jsx': gone },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(problems.some((x) => x.includes('DOCTRINE_META literal not found')),
+    `a missing DOCTRINE_META went unflagged: ${JSON.stringify(problems)}`);
 });
 
 // ---------------------------------------------------------------------------------------------

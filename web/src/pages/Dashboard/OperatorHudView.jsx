@@ -161,7 +161,13 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
       <div className="c-kpi-row">
         <CKpi label="AGENTS" value={c.agents ?? '—'} />
         <CKpi label="SKILLS" value={c.skills ?? '—'} />
-        <CKpi label="LAWS" value={c.laws ?? '—'} />
+        {/* `c.laws` is the invariant count; `CKpi` has no sub slot, so the packs get their own
+            cell rather than a label that over-claims what the number covers. */}
+        <CKpi label="INVARIANTS" value={c.laws ?? '—'} />
+        <CKpi
+          label="PACKS"
+          value={c.doctrines ? `${c.doctrines.active}/${c.doctrines.total}` : '—'}
+        />
         <CKpi label="MEMORY" value={c.memory ?? '—'} />
         <CKpi label="NOTEBOOK" value={c.notebook ?? '—'} />
         <CKpi label="EDITS" value={edits} />

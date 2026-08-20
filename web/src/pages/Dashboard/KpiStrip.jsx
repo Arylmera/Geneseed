@@ -11,7 +11,9 @@ export default function KpiStrip({ overview }) {
   const segs = [
     { key: 'agents', label: 'Agents', hash: '#/agents' },
     { key: 'skills', label: 'Skills', hash: '#/skills' },
-    { key: 'laws', label: 'Laws', hash: '#/laws' },
+    // The value is `counts.laws`, which is the INVARIANT count — so the label says so. Calling
+    // the tile "Constitution" over a 9 would under-report the ontology and the packs by 27.
+    { key: 'laws', label: 'Invariants', hash: '#/laws' },
   ]
   return (
     <div className="card kpiband rise mb-16">

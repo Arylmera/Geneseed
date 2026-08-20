@@ -285,7 +285,21 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
             color={B_CATS[1]}
             icon="skill"
           />
-          <BTile label="Laws" value={c.laws ?? '—'} sub="all upheld" color={B_CATS[2]} icon="law" />
+          {/* `c.laws` is the INVARIANT count, so the tile says so — and the sub-line is where
+              the packs become visible at a glance, which is the whole point of a build-time
+              toggle: an install running three of four packs must LOOK different from one
+              running all four. */}
+          <BTile
+            label="Invariants"
+            value={c.laws ?? '—'}
+            sub={
+              c.doctrines
+                ? `${c.doctrines.active}/${c.doctrines.total} packs · ${c.doctrines.rules} rules`
+                : 'all upheld'
+            }
+            color={B_CATS[2]}
+            icon="law"
+          />
           <BTile label="Edits" value={edits} sub="to graft" color={B_CATS[3]} icon="changes" />
         </div>
       </div>

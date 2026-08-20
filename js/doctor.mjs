@@ -665,6 +665,63 @@ export function lawMetaProblems(lawNums, lawClass, lawClasses) {
   return problems;
 }
 
+/** `LAW_META_ROW`'s twin for a STRING key — `'<pack>.<n>': ['<pack>', '<principle>'],`. */
+const DOCTRINE_META_ROW =
+  /^[^\S\n]*(['"])([a-z]+\.\d+)\1:\s*\[\s*(['"])(.*?)\3\s*,\s*(['"])(.*?)\5\s*,?\s*\]\s*,?[^\S\n]*$/gm;
+
+/**
+ * `lawMetaProblems`' doctrine half — the console's per-rule Principle column stays complete.
+ *
+ * SAME DEFECT, ONE TIER OVER. `DOCTRINE_META` holds copy that exists nowhere else in the tree,
+ * and a rule with no row falls back to an empty principle: it renders with a blank description
+ * while every count upstream reads correct. Two invariants shipped exactly that way before
+ * `lawMetaProblems` existed, and 23 new rules is a much larger surface to lose one in.
+ *
+ * ⚠ THE CLASS ARM IS DIFFERENT FROM THE INVARIANTS'. An invariant's class is checked against
+ * `LAW_CLASSES`, a vocabulary of six; a doctrine rule has no second taxonomy — its class IS its
+ * pack — so the check is an EQUALITY against the pack in its own key. That catches the copy
+ * error a six-way vocabulary cannot: a row pasted from the pack above it, keeping the class of
+ * the pack it came from, which would colour the row and label its chip with the wrong pack.
+ */
+export function doctrineMetaProblems(addrs) {
+  const page = path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx');
+  let text;
+  try { text = readText(page); } catch (e) {
+    return [`[authoring] web/src/pages/Laws.jsx unreadable: ${e.message}`];
+  }
+  const block = /^const DOCTRINE_META = \{$([\s\S]*?)^\}$/m.exec(text);
+  if (!block) {
+    return ['[authoring] DOCTRINE_META literal not found in web/src/pages/Laws.jsx — the '
+      + "console's doctrine rows would have no gate on their Principle column"];
+  }
+  const meta = new Map();
+  for (const m of block[1].matchAll(DOCTRINE_META_ROW)) meta.set(m[2], [m[4], m[6]]);
+  const problems = [];
+  const seen = new Set();
+  for (const addr of addrs) {
+    seen.add(addr);
+    if (!meta.has(addr)) {
+      problems.push(`[authoring] doctrine rule ${addr} has no row in DOCTRINE_META `
+        + '(web/src/pages/Laws.jsx) — the console would render it with a blank Principle');
+      continue;
+    }
+    const [klass, principle] = meta.get(addr);
+    if (!principle.trim()) {
+      problems.push(`[authoring] DOCTRINE_META['${addr}'] has an empty principle line — that `
+        + 'rule would render with a blank description');
+    }
+    const pack = addr.split('.')[0];
+    if (klass !== pack) {
+      problems.push(`[authoring] DOCTRINE_META['${addr}'] carries pack '${klass}' — a doctrine `
+        + `rule's class IS its pack, so this must read '${pack}'`);
+    }
+  }
+  for (const addr of [...meta.keys()].filter((k) => !seen.has(k)).sort()) {
+    problems.push(`[authoring] DOCTRINE_META lists ${addr} but no pack file defines it`);
+  }
+  return problems;
+}
+
 /**
  * `_harness_build._prose_mirror_problems` — the human-readable count mirrors, the ones the
  * badge regex never sees.
@@ -837,6 +894,11 @@ export function constitutionProblems() {
       rules.set(`${named}.${Number(n)}`, true);
     });
   }
+
+  // The console's Principle column, keyed off the rules just parsed — so the gate is driven by
+  // the SOURCE and a rule added to a pack file is caught the same day, not when someone
+  // notices a blank description in the browser.
+  problems.push(...doctrineMetaProblems([...rules.keys()]));
 
   // ---- every `{{DOCTRINE}} <pack> <n>` anywhere in src/ resolves to a rule that exists.
   //
