@@ -349,6 +349,94 @@ test('the inventory counts match the source tree and every entry has a body', ()
   assert.ok(inv.laws.every((l) => l.title && l.body), 'a law entry has no title or body');
 });
 
+test('the inventory carries all three tiers, and the pack ids are contiguous', () => {
+  // Every count is DERIVED from the source the same way the law count above is — a transcribed
+  // 23 would go stale the first time a rule is added, and would then be testing the number
+  // rather than the parse.
+  const inv = tuiInventory('neutral');
+  assert.deepEqual(inv.ontology.map((s) => s.id), ['telos', 'evidence', 'decisions', 'conduct']);
+  assert.ok(inv.ontology.every((s) => s.title && s.body), 'an ontology section has no body');
+
+  // ⚠ FOUR PACKS, NOT FIVE, AND IN NARRATIVE ORDER. `src/doctrines/README.md` passes the
+  // `_`-scaffold filter, so publishing whatever the walk found would put a fifth pack with zero
+  // rules in the catalogue; `PACK_ORDER` is the single owner of both the set and the order, and
+  // this equality is the cell that reddens if the list is ever built from the walk instead. The
+  // existence check keeps it from passing vacuously once the README is gone.
+  assert.deepEqual(inv.doctrines.map((p) => p.pack), [...PACK_ORDER]);
+  assert.ok(fs.existsSync(path.join(SRC, 'doctrines', 'README.md')),
+    'the README that makes the assertion above non-vacuous is gone — re-site this gate');
+  assert.notDeepEqual([...PACK_ORDER], [...PACK_ORDER].sort(),
+    'PACK_ORDER is now in alphabetical order, so this cell no longer tells the narrative order '
+    + 'from what discovery would have produced');
+
+  for (const p of inv.doctrines) {
+    const src = fs.readFileSync(path.join(SRC, 'doctrines', `${p.pack}.md`), 'utf8');
+    const want = [...src.matchAll(/^### \{\{DOCTRINE\}\} (\w+) (\d+)\b/gm)];
+    assert.equal(p.rules.length, want.length, `${p.pack}: parsed ${p.rules.length} of ${want.length}`);
+    assert.ok(p.rules.length > 0, `${p.pack} parsed to no rules at all`);
+    // Contiguous from 1, and every rule filed under the pack whose file it is in. The `pack`
+    // field is read from the HEADING, so this is the cell that catches a rule mis-addressed as
+    // `ops 3` inside `craft.md` rather than letting its container silently rename it.
+    assert.deepEqual(p.rules.map((r) => r.n), p.rules.map((_, i) => i + 1),
+      `${p.pack}'s rule ids are not 1..${p.rules.length}`);
+    assert.ok(p.rules.every((r) => r.pack === p.pack),
+      `${p.pack}.md contains a rule addressed to another pack`);
+    // The pack id IS the class — there is no six-class chip over a doctrine rule.
+    assert.ok(p.rules.every((r) => r.klass === p.pack && r.title && r.body),
+      `${p.pack} has a rule with no title, no body, or a class that is not its pack`);
+    assert.ok(p.title && p.desc, `${p.pack} has no themed name or blurb`);
+  }
+  // 9 + 23 + the four absorbed-into-prose sections is the whole constitution.
+  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 23);
+});
+
+test('every theme parses to the same three tiers, whatever it calls them', () => {
+  // ⚠ THE TIER NOUN IS THEMED AND BOTH HEADING REGEXES MATCH IT WITH `\\S+`. A theme whose
+  // `DOCTRINE` value is two words does not error — it stops matching, and that pack parses to
+  // ZERO rules while everything downstream reports a smaller constitution in perfect silence.
+  // Nothing but running all fourteen can see it, so all fourteen are run.
+  const counts = (inv) => [inv.laws.length, inv.ontology.length, inv.doctrines.length,
+    inv.doctrines.reduce((n, p) => n + p.rules.length, 0)];
+  const base = counts(tuiInventory('neutral'));
+  assert.deepEqual(base, [9, 4, 4, 23]);
+  for (const t of themeNames()) {
+    const inv = tuiInventory(t);
+    assert.deepEqual(counts(inv), base, `${t} parses to a different constitution`);
+    // The ontology's ids are ADDRESSES — a deep link must survive a theme change — so they
+    // come from STRUCTURE and must be identical in every voice. The pack TITLES are themed and
+    // deliberately differ; only the ids are pinned.
+    assert.deepEqual(inv.ontology.map((s) => s.id),
+      ['telos', 'evidence', 'decisions', 'conduct'], `${t} renamed an ontology address`);
+    assert.deepEqual(inv.doctrines.map((p) => p.pack), [...PACK_ORDER],
+      `${t} renamed a pack address`);
+  }
+  assert.ok(themeNames().length >= 14, 'the theme list went short — this gate is now weaker');
+});
+
+test('a pack is listed whether or not it is built in, and only `active` moves', () => {
+  // THE WHOLE CATALOGUE SHIPS IN EVERY BUNDLE, which is what lets a cross-pack citation resolve
+  // when its pack is off and what lets the console offer the command to turn one back on. So a
+  // narrowed selection must not shorten the list — if it did, an inactive pack would be
+  // indistinguishable from one that does not exist.
+  const all = tuiInventory('neutral');
+  const one = tuiInventory('neutral', ['craft']);
+  const none = tuiInventory('neutral', []);
+  for (const inv of [all, one, none]) {
+    assert.deepEqual(inv.doctrines.map((p) => p.pack), [...PACK_ORDER], 'a pack left the catalogue');
+    assert.deepEqual(inv.doctrines.map((p) => p.rules.length),
+      all.doctrines.map((p) => p.rules.length), 'a narrowed build lost a pack\'s rules');
+  }
+  assert.deepEqual(all.doctrines.map((p) => p.active), [true, true, true, true]);
+  assert.deepEqual(one.doctrines.map((p) => p.active), [true, false, false, false]);
+  assert.deepEqual(none.doctrines.map((p) => p.active), [false, false, false, false]);
+  // ⚠ `null` IS NOT `[]`. No argument means "no install to ask" and resolves to every pack, the
+  // same answer `doctrinesForBuild` gives an unknown; an explicit empty list is a stated
+  // `--doctrines none`. `catalog`, `status` and the graph all pass nothing, so a reader that
+  // collapsed the two would report every pack inactive on three verbs at once.
+  assert.deepEqual(tuiInventory('neutral', null).doctrines.map((p) => p.active),
+    [true, true, true, true], 'unknown was read as none');
+});
+
 test('the entry rows carry every kind, and a selection yields real detail', () => {
   const inv = tuiInventory('neutral');
   const rows = tuiEntries(inv);
