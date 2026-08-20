@@ -25,7 +25,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const DOC = loadMatrix();
 
 test('the exported matrix is the matrix', () => {
-  assert.equal(DOC.cells.length, 259);
+  assert.equal(DOC.cells.length, 261);
   assert.equal(DOC.deletion_cells.length, 9);
 });
 
@@ -35,6 +35,14 @@ test('a cell id is theme/emit/footprint, with the optional axes appended', () =>
   assert.equal(cellId({ theme: 'neutral', emit: 'files', footprint: 'lean', posture: 'strict' }),
     'neutral/files/lean/strict');
   assert.equal(cellId({ label: 'bob/lean-to-full' }), 'bob/lean-to-full');
+  // ⚠ THE FOURTH AXIS IS A LIST, AND AN EMPTY ONE IS AN ANSWER. `--doctrines none` is a real
+  // configuration, so its id must differ from the default build's — a truthiness test would
+  // give both `neutral/files/lean` and collide two cells into one.
+  const base = { theme: 'neutral', emit: 'files', footprint: 'lean' };
+  assert.equal(cellId({ ...base, doctrines: ['craft'] }), 'neutral/files/lean/craft');
+  assert.equal(cellId({ ...base, doctrines: ['craft', 'rigor'] }), 'neutral/files/lean/craft+rigor');
+  assert.equal(cellId({ ...base, doctrines: [] }), 'neutral/files/lean/none');
+  assert.notEqual(cellId({ ...base, doctrines: [] }), cellId(base));
 });
 
 test('argv carries the optional axes only when the cell has them', () => {
@@ -44,6 +52,25 @@ test('argv carries the optional axes only when the cell has them', () => {
   assert.ok(argvFor({ ...base, posture: 'strict' }, '/o').includes('--posture'));
   assert.ok(argvFor({ ...base, mode: 'foreman' }, '/o').includes('--mode'));
   assert.ok(!argvFor(base, '/o').includes('--posture'));
+  // The same asymmetry on the way out: an empty list is spelled `none`, because the driver
+  // refuses a bare `--doctrines ` as a usage error rather than reading it as "no packs".
+  assert.deepEqual(argvFor({ ...base, doctrines: ['craft', 'rigor'] }, '/o').slice(-2),
+    ['--doctrines', 'craft,rigor']);
+  assert.deepEqual(argvFor({ ...base, doctrines: [] }, '/o').slice(-2), ['--doctrines', 'none']);
+  assert.ok(!argvFor(base, '/o').includes('--doctrines'));
+});
+
+test('the matrix really exercises the doctrines axis in both directions', () => {
+  // A cell added to the matrix is INERT until `cellId` and `argvFor` know the axis — the two
+  // above are pure, so this is what proves the wiring reaches the corpus that replays it. Both
+  // directions, because a narrowed build and an emptied one take different arms of the render.
+  const doc = DOC.cells.filter((c) => c.doctrines !== undefined);
+  assert.equal(doc.length, 2, 'the doctrines axis lost its cells');
+  assert.deepEqual(doc.map((c) => c.doctrines).sort((a, b) => a.length - b.length),
+    [[], ['craft']]);
+  for (const c of doc) {
+    assert.ok(argvFor(c, '/o').includes('--doctrines'), `${cellId(c)} does not reach the flag`);
+  }
 });
 
 test('an unknown flag is refused rather than ignored', () => {
@@ -67,7 +94,7 @@ test('a corpus replay cannot also be a self-comparison', () => {
 
 test('every narrowing flag selects fewer cells and announces itself', () => {
   const full = selectCells(DOC, parseArgs([]));
-  assert.equal(full.length, 259);
+  assert.equal(full.length, 261);
   assert.equal(narrowingReason(parseArgs([])), null,
     'a full run must NOT skip the orphan check');
 

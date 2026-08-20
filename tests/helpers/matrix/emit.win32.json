@@ -1301,6 +1301,20 @@
       "footprint": "lean",
       "mode": "foreman",
       "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "doctrines": [
+        "craft"
+      ],
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "doctrines": [],
+      "theme": "neutral"
     }
   ],
   "deletion_cells": [
