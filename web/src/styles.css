@@ -813,6 +813,8 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   border-radius: 50%; background: var(--text-2); transition: transform .15s, background .15s; }
 .sw-toggle.on { background: var(--accent-soft); border-color: var(--accent-line); }
 .sw-toggle.on::after { transform: translateX(16px); background: var(--accent); }
+.sw-toggle:disabled { opacity: 0.5; cursor: wait; }
+.sw-toggle.busy::after { animation: pulse 1s infinite; }
 
 /* ============================ CONSOLE DRAWER ========================= */
 .console { position: fixed; left: var(--rail-w); right: 0; bottom: 0; z-index: 20;
@@ -1204,15 +1206,16 @@ a.rail-item.active { color: var(--text); }
 .ont-row .law-princ { color: var(--dim); font-style: italic; }
 
 .pack-head {
-  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  display: grid; grid-template-columns: 1fr auto 80px 48px; gap: 12px; align-items: center;
   padding: 13px 18px; border-bottom: 1px solid var(--line);
 }
 .pack-name { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
 .pack-name .cdot {
   width: 8px; height: 8px; border-radius: 50%; background: var(--cc, var(--dim));
 }
-.pack-desc { color: var(--dim); font-size: 13px; flex: 1; }
-.pack-state { color: var(--dim); font-size: 12px; letter-spacing: 0.04em; }
+.pack-desc { color: var(--dim); font-size: 13px; }
+.pack-state { color: var(--dim); font-size: 12px; letter-spacing: 0.04em; text-align: right; }
+.pack-toggle { margin-left: auto; }
 /* ⚠ DIMMED, NEVER HIDDEN. A pack that is not built in stays legible: hiding it
    makes "off" indistinguishable from "never existed", and the enable command
    below is the only place a reader is told how to get it back. */

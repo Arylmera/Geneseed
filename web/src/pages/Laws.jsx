@@ -209,11 +209,13 @@ function OntologyCard({ sec, isOpen, onToggle }) {
 // `selected` is the address from a #/item/law/<address> deep-link (Spotlight, the old Library
 // route). The open row is driven straight off the URL so those links pre-open the rule and any
 // opened rule is itself shareable.
-export default function Laws({ selected }) {
+export default function Laws({ selected, onAction }) {
   const { data, error } = useAsync(() => api.catalog('laws'), [])
   const [sel, setSel] = useState('all')
   const open = selected || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)
+  const [toggling, setToggling] = useState(null) // pack being toggled
+  const [note, setNote] = useState('')
 
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
@@ -290,6 +292,28 @@ export default function Laws({ selected }) {
   const facets = LAW_CAT_ORDER.filter((k) => counts[k])
   const shown = sel === 'all' ? laws : laws.filter((l) => l.cat === sel)
 
+  const onTogglePack = (packName) => {
+    setToggling(packName)
+    setNote('')
+    const allPacks = ['craft', 'rigor', 'ops', 'process']
+    const current = packs.map((p) => (p.active ? p.pack : null)).filter(Boolean)
+    const next = current.includes(packName)
+      ? current.filter((p) => p !== packName)
+      : [...current, packName]
+    onAction?.('build', { doctrines: next.length > 0 ? next : allPacks })
+      .then((res) => {
+        if (res?.job_id) {
+          setNote(
+            `Build queued — pack "${packName}" ${next.includes(packName) ? 'enabled' : 'disabled'}.`,
+          )
+        } else {
+          setNote(res?.error || 'Build failed.')
+        }
+      })
+      .catch((e) => setNote(e.message || 'Build failed.'))
+    setTimeout(() => setToggling(null), 1500)
+  }
+
   return (
     <>
       <div className="head-row mb-16">
@@ -303,6 +327,12 @@ export default function Laws({ selected }) {
           </p>
         </div>
       </div>
+
+      {note ? (
+        <p className="sub rule-notice" style={{ marginBottom: 16 }}>
+          {note}
+        </p>
+      ) : null}
 
       <div className="tier-head">
         <h2 className="tier-h">Ontology</h2>
@@ -391,6 +421,20 @@ export default function Laws({ selected }) {
             <span className="pack-state">
               {p.rules.length} rules · {p.active ? 'active' : 'not built in'}
             </span>
+            {onAction && (
+              <button
+                className={`sw-toggle ${p.active ? 'on' : ''} ${toggling === p.pack ? 'busy' : ''}`}
+                onClick={() => onTogglePack(p.pack)}
+                disabled={toggling === p.pack}
+                title={
+                  p.active
+                    ? `Disable pack "${p.pack}" — triggers a rebuild`
+                    : `Enable pack "${p.pack}" — triggers a rebuild`
+                }
+                aria-label={`Toggle ${p.pack} pack`}
+                aria-pressed={p.active}
+              />
+            )}
           </div>
           {!p.active && (
             // ⚠ THE COMMAND IS THE POINT. An inactive pack is shown rather than hidden so "off"

@@ -211,13 +211,13 @@ export default function App() {
               {route.view === 'agents' && (
                 <Library overview={overview} section="agents" dataRev={dataRev} />
               )}
-              {route.view === 'laws' && <Laws />}
+              {route.view === 'laws' && <Laws onAction={runAction} />}
               {route.view === 'rules' && <Rules />}
               {route.view === 'profile' && <Profile />}
               {route.view === 'skills' && <Skills />}
               {route.view === 'section' &&
                 (route.section === 'laws' ? (
-                  <Laws />
+                  <Laws onAction={runAction} />
                 ) : route.section === 'skills' ? (
                   <Skills />
                 ) : (
