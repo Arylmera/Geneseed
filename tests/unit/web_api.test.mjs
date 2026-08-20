@@ -26,6 +26,7 @@ import {
 } from '../../js/web/api.mjs';
 import { apiGraph } from '../../js/web/graph.mjs';
 import { tuiInventory } from '../../js/inventory.mjs';
+import { PACK_ORDER } from '../../js/checkout.mjs';
 import {
   apiActivity, apiActivityDetail, apiActivityToggle,
 } from '../../js/web/activity.mjs';
@@ -258,6 +259,29 @@ test('the glossary names all three tiers, and the Pact says where it now lives',
   }
   assert.match(rows.find((r) => r.label === 'Pact').desc, /Telos/,
     'the Pact still reads as a peer of the Rules — it is a concept inside the Ontology now');
+});
+
+test('the overview names the packs, so a toggle can render one row each', () => {
+  // ⚠ NAMES, NOT JUST THE FRACTION. `counts.doctrines` says 3/4; it cannot say WHICH one is
+  // off, so a settings control built on it would render four switches it could not set. This
+  // is the payload that control reads.
+  const o = apiOverview(neutral());
+  assert.deepEqual(o.doctrines.map((p) => p.pack), [...PACK_ORDER],
+    'the roster is not in PACK_ORDER — the console sends it back in the order it arrives, and '
+    + 'the `Active packs:` marker a build writes is parsed back out and compared to itself');
+  for (const p of o.doctrines) {
+    for (const k of ['pack', 'title', 'desc', 'active', 'rules']) {
+      assert.ok(k in p, `no ${k} on the ${p.pack} row`);
+    }
+    assert.ok(p.rules > 0 && p.title, `${p.pack} carries no rule count or no themed name`);
+  }
+  // Every pack is listed whether or not it is built in — a switch cannot be turned back ON
+  // for a pack the payload omitted.
+  const narrowed = apiOverview({ ...neutral(), inventory: tuiInventory('neutral', ['craft']) });
+  assert.equal(narrowed.doctrines.length, 4, 'a pack that is off left the roster');
+  assert.deepEqual(narrowed.doctrines.map((p) => p.active), [true, false, false, false]);
+  assert.deepEqual(narrowed.doctrines.map((p) => p.rules), o.doctrines.map((p) => p.rules),
+    'a narrowed install lost a pack\'s rule count, so its switch would render "0 rules"');
 });
 
 test('the overview counts the tiers without moving the laws badge', () => {

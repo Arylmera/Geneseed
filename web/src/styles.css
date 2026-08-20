@@ -1225,6 +1225,32 @@ a.rail-item.active { color: var(--text); }
 }
 .law-row.law-off .law-name { text-decoration: line-through; text-decoration-thickness: 1px; }
 
+/* Doctrine-pack toggles on the Settings page. One row per pack, staged locally and
+   committed by the Apply button below them — see the comment at their state in
+   Settings/index.jsx for why this is not a per-click action like every other control
+   on that page. */
+.pack-toggles { display: grid; gap: 10px; margin-bottom: 14px; }
+.pack-toggle {
+  display: grid; grid-template-columns: 38px 1fr; gap: 12px; align-items: start;
+  padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); cursor: pointer;
+}
+.pack-toggle:hover { border-color: var(--accent-line); }
+.pack-toggle .sw-toggle { cursor: pointer; }
+.pack-toggle-body { display: grid; gap: 3px; min-width: 0; }
+.pack-toggle-name { display: flex; align-items: baseline; gap: 9px; font-weight: 600; }
+.pack-toggle-n {
+  font-size: 11px; font-weight: 400; color: var(--dim);
+  letter-spacing: .03em; text-transform: uppercase;
+}
+.pack-warn {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  font-size: 13px; color: var(--warn); margin: 0 0 14px;
+  padding: 10px 13px; border: 1px solid var(--line-2); border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+.pack-apply { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
 /* Skills ledger — same visual language as Laws, 3-col grid (no № column). The
    chips (.law-cat), expand panel (.law-expand) and class tag (.law-class) are
    reused verbatim; only the row layout differs. */
