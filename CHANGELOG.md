@@ -8,6 +8,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.1.1] — 2026-08-21
+
 ### Added
 
 - **Doctrines toggle per RULE, not per pack.** A second build-time axis,
@@ -39,6 +41,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   `process 7` beside it does not. Prompt and boundary are never allowed to disagree; `doctor`
   gained a gate that fails if `js/settings.mjs`'s hardcoded `process.5` ever stops naming the
   consent rule. `rm -rf` and force-push refusals remain Rule IV's territory and ride no axis.
+
+### Fixed
+
+- **Independent doctrine controls.** Each Constitution doctrine row now keeps its detail
+  disclosure separate from the right-aligned switch. Toggling a staged rule no longer opens or
+  closes its detail, and the existing bottom **Apply** action remains the sole point at which a
+  selection changes the deployed harness.
 
 ## [3.1.0] — 2026-08-20
 
