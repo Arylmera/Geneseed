@@ -150,27 +150,27 @@ function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
       )}
     </>
   )
-  // With a toggle column, the row is a 5-cell grid: № · Rule · Principle · Pack · Toggle.
-  // The toggle sits inside the 5th cell so the whole row is one grid.
-  // The toggle's onClick calls toggleRule; its event bubbles to the row's onClick which calls onToggle —
-  // both fire, so clicking the toggle changes the rule state AND expands the row.
+  // Doctrine rows expose two separate actions: the first four columns are one disclosure
+  // button, while the fifth is the selection switch. Keeping them as siblings means a switch
+  // click changes only the staged selection, never the open rule.
   return toggleCol ? (
     <>
       <div
-        className={`law-row ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
+        className={`law-row has-toggle ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
         style={{ '--cc': law.c }}
-        onClick={() => onToggle()}
       >
-        <span className="law-no">
-          <span className="x">›</span>
-          {law.pad}
-        </span>
-        <span className="law-name">{law.name}</span>
-        <span className="law-princ">{law.ess}</span>
-        <span className="law-class">
-          <span className="cdot" />
-          {law.catLabel}
-        </span>
+        <button className="law-disclosure" onClick={onToggle} aria-expanded={isOpen}>
+          <span className="law-no">
+            <span className="x">›</span>
+            {law.pad}
+          </span>
+          <span className="law-name">{law.name}</span>
+          <span className="law-princ">{law.ess}</span>
+          <span className="law-class">
+            <span className="cdot" />
+            {law.catLabel}
+          </span>
+        </button>
         <span className="toggle-col">{toggleCol}</span>
       </div>
       {expandRow}
@@ -537,34 +537,30 @@ export default function Laws({ selected, overview, onAction }) {
             </div>
           )}
           <div className="law-rowhead">
-              <span>№</span>
-              <span>Rule</span>
-              <span>Principle</span>
-              <span>Pack</span>
-              <span className="toggle-col">Toggle</span>
-            </div>
+            <span>№</span>
+            <span>Rule</span>
+            <span>Principle</span>
+            <span>Pack</span>
+            <span className="toggle-col">Toggle</span>
+          </div>
           {p.rules.map((r) => (
             <LawRow
               key={r.addr}
               law={{ ...r, off: !isOn(r.addr) }}
               isOpen={open === r.addr}
               onToggle={() => toggle(r.addr)}
-              toggleCol={canApply ? (
-                <span
-                  className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
-                  role="switch"
-                  aria-checked={isOn(r.addr)}
-                  aria-label={`${r.name} rule`}
-                  tabIndex={0}
-                  onClick={() => toggleRule(r.addr)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      if (e.key === ' ') e.preventDefault()
-                      toggleRule(r.addr)
-                    }
-                  }}
-                />
-              ) : null}
+              toggleCol={
+                canApply ? (
+                  <button
+                    type="button"
+                    className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
+                    role="switch"
+                    aria-checked={isOn(r.addr)}
+                    aria-label={`${r.name} rule`}
+                    onClick={() => toggleRule(r.addr)}
+                  />
+                ) : null
+              }
             />
           ))}
         </div>

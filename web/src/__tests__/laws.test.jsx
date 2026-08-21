@@ -265,6 +265,15 @@ describe('Constitution page — doctrine toggles', () => {
     vi.restoreAllMocks()
   })
 
+  it('changes a switch without opening its rule', async () => {
+    const { container } = render(withInstall())
+    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    const disclosure = container.querySelector('.law-disclosure')
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(sw(container, 'Automate Repetition'))
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('keeps a pack while excluding one of its rules', async () => {
     // ⚠ THE CASE THE PACK-LEVEL CONTROL COULD NOT EXPRESS: everything in Process except one
     // rule. `doctrines` must still carry `process` — dropping the pack would take the other
