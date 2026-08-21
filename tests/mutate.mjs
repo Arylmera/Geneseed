@@ -106,7 +106,7 @@ export const MUTATIONS = [
   {
     id: 'M4',
     name: 'drop `|| exit 0` from a non-gate hook command',
-    file: 'js/settings.mjs',
+    file: 'js/hosts/settings.mjs',
     find: 'const context = `${run} context --root "${cfg}" || exit 0`;',
     replace: 'const context = `${run} context --root "${cfg}"`;',
     gate: UNIT_HOOK_FORM,
@@ -120,7 +120,7 @@ export const MUTATIONS = [
   {
     id: 'M5',
     name: 'break the ownership claim so an emit overwrites a file it never owned',
-    file: 'js/native.mjs',
+    file: 'js/hosts/native.mjs',
     find: '    if (oldSet.has(rel)) return true;',
     replace: '    if (rel || true) return true;',
     gate: UNIT,
@@ -157,7 +157,7 @@ export const MUTATIONS = [
   {
     id: 'M13',
     name: 'let rmtreeQuiet delete a file where shutil.rmtree refuses one',
-    file: 'js/uninstall.mjs',
+    file: 'js/maintain/uninstall.mjs',
     find: '    if (!lstatSync(p).isDirectory()) return;\n',
     replace: '',
     gate: UNIT,
@@ -192,7 +192,7 @@ export const MUTATIONS = [
   {
     id: 'M7',
     name: 'make an emit non-idempotent',
-    file: 'js/settings.mjs',
+    file: 'js/hosts/settings.mjs',
     find: '    writeText(p, pre + block + lstripNewlines(post));',
     replace: '    writeText(p, pre + block + post);',
     gate: IDEMPOTENT,
@@ -281,7 +281,7 @@ export const MUTATIONS = [
   {
     id: 'M14',
     name: 'drop the registry prune-on-read write',
-    file: 'js/registry.mjs',
+    file: 'js/inspect/registry.mjs',
     find: '  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {\n'
       + '    registrySave(kept);',
     replace: '  if (false) {\n    registrySave(kept);',
@@ -295,7 +295,7 @@ export const MUTATIONS = [
   {
     id: 'M15',
     name: 'make copilotConfigDir ignore its relocation variable',
-    file: 'js/hosts.mjs',
+    file: 'js/hosts/hosts.mjs',
     find: '  const env = process.env.COPILOT_CONFIG_DIR;',
     replace: '  const env = null;',
     gate: UNIT,
@@ -329,7 +329,7 @@ export const MUTATIONS = [
   {
     id: 'M17',
     name: 'drop the orphan half of the registry gate',
-    file: 'js/doctor.mjs',
+    file: 'js/inspect/doctor.mjs',
     find: "  problems.push(...[...present].filter((k) => !expected.has(k)).sort()\n"
       + "    .map((key) => `[authoring] registry.json lists '${key}' but no such entity "
       + "exists`));\n",
@@ -343,7 +343,7 @@ export const MUTATIONS = [
   {
     id: 'M18',
     name: 'make the credential sweep echo what it found',
-    file: 'js/doctor.mjs',
+    file: 'js/inspect/doctor.mjs',
     find: '            problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} — a `\n'
       + "              + 'credential must never be committed');",
     replace: '            problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} '
@@ -360,7 +360,7 @@ export const MUTATIONS = [
   {
     id: 'M19',
     name: 'let an empty registry relabel the shipped catalogue as personal',
-    file: 'js/inventory.mjs',
+    file: 'js/inspect/inventory.mjs',
     find: "    return Object.keys(registry).length ? 'personal' : 'unknown';",
     replace: "    return 'personal';",
     gate: UNIT,
@@ -477,7 +477,7 @@ export const MUTATIONS = [
   {
     id: 'M26',
     name: 'emit the shim path even when the shim could not be written',
-    file: 'js/settings.mjs',
+    file: 'js/hosts/settings.mjs',
     find: '  if (shim !== null) return `"${shim}"`;',
     replace: '  if (true) return `"${shim}"`;',
     gate: UNIT,
@@ -491,7 +491,7 @@ export const MUTATIONS = [
   {
     id: 'M27',
     name: 'drop the POSIX argv placeholder from the shim exemption',
-    file: 'js/settings.mjs',
+    file: 'js/hosts/settings.mjs',
     find: "export const SHIM_ARGV = new Set(['$@', '%*']);",
     replace: "export const SHIM_ARGV = new Set(['%*']);",
     gate: UNIT,
@@ -508,7 +508,7 @@ export const MUTATIONS = [
   {
     id: 'M28',
     name: 'leave the scratch file behind when the atomic rename fails',
-    file: 'js/settings.mjs',
+    file: 'js/hosts/settings.mjs',
     find: '    rmSync(tmp, { force: true });\n',
     replace: '',
     gate: UNIT,
@@ -522,7 +522,7 @@ export const MUTATIONS = [
   {
     id: 'M29',
     name: 'skip a user-authored file silently instead of saying so',
-    file: 'js/native.mjs',
+    file: 'js/hosts/native.mjs',
     find: "    warn(`[geneseed] kept your existing ${rel} — skipped Geneseed's copy to avoid `\n"
       + "      + 'clobbering it');",
     replace: '',
@@ -540,7 +540,7 @@ export const MUTATIONS = [
   {
     id: 'M30',
     name: 'fold the Claude wire stage away',
-    file: 'js/emit.mjs',
+    file: 'js/build/emit.mjs',
     find: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, '
       + "excludeRules = []) {\n  phaseLog('WIRE');\n",
     replace: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, '
@@ -555,7 +555,7 @@ export const MUTATIONS = [
   {
     id: 'M31',
     name: 'log the phase boundaries to stdout',
-    file: 'js/emit.mjs',
+    file: 'js/build/emit.mjs',
     find: '  process.stderr.write(`[geneseed:phase] ${phase}\\n`);',
     replace: '  process.stdout.write(`[geneseed:phase] ${phase}\\n`);',
     gate: UNIT,
@@ -573,7 +573,7 @@ export const MUTATIONS = [
   {
     id: 'M32',
     name: 'key the consent gate on the pack instead of the rule',
-    file: 'js/settings.mjs',
+    file: 'js/hosts/settings.mjs',
     find: '  processPackOn(d) && !(Array.isArray(excluded) && excluded.includes(CONSENT_RULE));',
     replace: '  processPackOn(d);',
     gate: UNIT,
@@ -587,7 +587,7 @@ export const MUTATIONS = [
   {
     id: 'M33',
     name: 'let an emptied pack keep its place in the active set',
-    file: 'js/render.mjs',
+    file: 'js/build/render.mjs',
     find: '.filter(survives)',
     replace: '',
     gate: UNIT,

@@ -169,7 +169,7 @@ test('no wiring call escapes a WIRE-marked function', () => {
   // wiring set with `ast` rather than hand-listing it, on the argument that "a hand-list contains
   // exactly the names someone remembered, which is how `_opencode_target` went unmeasured for
   // three phases". Same derivation here, over `js/settings.mjs`.
-  const settings = readFileSync(path.join(ROOT, 'js', 'settings.mjs'), 'utf8');
+  const settings = readFileSync(path.join(ROOT, 'js', 'hosts', 'settings.mjs'), 'utf8');
   const MUTATORS = /\b(writeText|writeFileSync|renameSync|rmSync|mkdirSync|unlinkSync|chmodSync|atomicWriteJson)\s*\(/;
   const fns = [...settings.matchAll(/^export function (\w+)\(/gm)].map((m) => m[1]);
   assert.ok(fns.length > 10, `only ${fns.length} exported settings functions found`);
@@ -184,7 +184,7 @@ test('no wiring call escapes a WIRE-marked function', () => {
     + 'stale, and an empty set makes every check below pass');
 
   // Every function in the emit module that CALLS one of them must itself be WIRE-marked.
-  const emitSrc = readFileSync(path.join(ROOT, 'js', 'emit.mjs'), 'utf8');
+  const emitSrc = readFileSync(path.join(ROOT, 'js', 'build', 'emit.mjs'), 'utf8');
   const bodies = [...emitSrc.matchAll(/^(?:export )?function (\w+)\(/gm)].map((m, i, all) => {
     const start = m.index;
     const end = i + 1 < all.length ? all[i + 1].index : emitSrc.length;
@@ -197,10 +197,10 @@ test('no wiring call escapes a WIRE-marked function', () => {
     if (!calls.length) continue;
     checked += 1;
     assert.ok(body.includes("phaseLog('WIRE')"),
-      `js/emit.mjs's ${name}() calls ${calls.join(', ')} — a routine that reconciles a file the `
+      `js/build/emit.mjs's ${name}() calls ${calls.join(', ')} — a routine that reconciles a file the `
       + 'user co-owns — but the function logs no WIRE, so the ordering gate cannot see it. Mark '
       + 'it, or move the call into a function that is marked.');
   }
   assert.ok(checked >= 2,
-    `only ${checked} functions in js/emit.mjs were found to wire at all, so this equality is thin`);
+    `only ${checked} functions in js/build/emit.mjs were found to wire at all, so this equality is thin`);
 });

@@ -46,24 +46,24 @@
  * for the file as a whole is that its transitive imports now reach two modules that spawn,
  * which `_ALLOWED_SPAWNS` in `tests/test_hook_cli_parity.py` declares argv by argv.
  */
-import { cmdCatalog } from '../js/catalog.mjs';
-import { cliSpec, printHelp } from '../js/cli.mjs';
-import { cmdDiff } from '../js/diff.mjs';
-import { cmdDoctor, cmdValidate } from '../js/doctor.mjs';
+import { cmdCatalog } from '../js/build/catalog.mjs';
+import { cliSpec, printHelp } from '../js/ui/cli.mjs';
+import { cmdDiff } from '../js/inspect/diff.mjs';
+import { cmdDoctor, cmdValidate } from '../js/inspect/doctor.mjs';
 import { parseDriverArgs } from './geneseed.mjs';
-import { cmdExclude } from '../js/excludes.mjs';
-import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
-import { cmdMigrate } from '../js/migrate.mjs';
+import { cmdExclude } from '../js/inspect/excludes.mjs';
+import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/build/generate.mjs';
+import { cmdMigrate } from '../js/maintain/migrate.mjs';
 import { pyInt } from '../js/lib/fs.mjs';
-import { cmdLink, cmdUnlink } from '../js/link.mjs';
-import { cmdMcp } from '../js/mcp.mjs';
-import { cmdMemory } from '../js/memory.mjs';
-import { cmdHome, cmdMenu } from '../js/menu.mjs';
-import { cmdTui } from '../js/tui.mjs';
-import { cmdSetup } from '../js/setup.mjs';
-import { cmdStatus, cmdVersion } from '../js/status.mjs';
-import { cmdUninstall } from '../js/uninstall.mjs';
-import { cmdBootstrap, cmdSyncSelf, cmdUpgrade } from '../js/update.mjs';
+import { cmdLink, cmdUnlink } from '../js/hosts/link.mjs';
+import { cmdMcp } from '../js/hosts/mcp.mjs';
+import { cmdMemory } from '../js/maintain/memory.mjs';
+import { cmdHome, cmdMenu } from '../js/ui/menu.mjs';
+import { cmdTui } from '../js/ui/tui.mjs';
+import { cmdSetup } from '../js/maintain/setup.mjs';
+import { cmdStatus, cmdVersion } from '../js/inspect/status.mjs';
+import { cmdUninstall } from '../js/maintain/uninstall.mjs';
+import { cmdBootstrap, cmdSyncSelf, cmdUpgrade } from '../js/maintain/update.mjs';
 import { cmdWeb } from '../js/web/server.mjs';
 
 /**

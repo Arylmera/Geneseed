@@ -30,12 +30,12 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { hookRunnerEntry } from '../../bin/geneseed.mjs';
-import { shimProblems } from '../../js/doctor.mjs';
+import { shimProblems } from '../../js/inspect/doctor.mjs';
 import {
   GENESEED_HOOK_SNIFF, SHIM_ARGV, claudeHookGroups, ephemeralCheckout, hookPrefix, hookShimBody,
   hookShimPath, writeHookShim,
-} from '../../js/settings.mjs';
-import { ROOT } from '../../js/checkout.mjs';
+} from '../../js/hosts/settings.mjs';
+import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
 // ⚠ FIRST, AND FOR THE WHOLE FILE. `hookPrefix` WRITES the shim, at a path that comes from the

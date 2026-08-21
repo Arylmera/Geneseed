@@ -72,19 +72,19 @@ import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { destRel, renderAll, renderFile, SRC_DIR_TOKENS } from './render.mjs';
-import { writeNativeLayer, loadAgentOverrides } from './native.mjs';
+import { writeNativeLayer, loadAgentOverrides } from '../hosts/native.mjs';
 import {
   ensureAgentOverridesStub, writePrimaryAgent, writeCommandLayer, writePonytailCommand,
   writeTheme, writeColorThemes, copyPlugins, copyWorkflows, sourceReleaseVersion,
-} from './opencode.mjs';
+} from '../hosts/opencode.mjs';
 import {
   mergeOpencodeJson, mergeClaudeSettings, wireClaudeExcludes, unwireClaudeExcludes,
   unwireClaudeSettings, managedBlockWrite, managedBlockRemove,
-} from './settings.mjs';
-import { VERSION_MARKER } from './hosts.mjs';
+} from '../hosts/settings.mjs';
+import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import {
   writeText, readText, copyFile, jsonDumpsIndent, parseJson, pyAscii, pyTruthy,
-} from './lib/fs.mjs';
+} from '../lib/fs.mjs';
 /** `_build_render.SRC_DIRS_MARKER`. */
 const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
 /**

@@ -34,7 +34,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { cliSpec } from '../../js/cli.mjs';
+import { cliSpec } from '../../js/ui/cli.mjs';
 import { NOT_PORTED_POST, PORTED_POST_INLINE } from '../../js/web/server.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 

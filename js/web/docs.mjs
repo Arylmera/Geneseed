@@ -40,13 +40,13 @@
 import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { ROOT, THEMES } from '../checkout.mjs';
-import { cliReference } from '../cli.mjs';
-import { readJsonMaybe, readMaybe } from '../installs.mjs';
-import { pyResolve } from '../hosts.mjs';
+import { ROOT, THEMES } from '../build/source.mjs';
+import { cliReference } from '../ui/cli.mjs';
+import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
+import { pyResolve } from '../hosts/hosts.mjs';
 import { PY_SPACE, normcase, parseJson, pyStripSpace } from '../lib/fs.mjs';
-import { statusData } from '../status.mjs';
-import { originDisplay } from '../update.mjs';
+import { statusData } from '../inspect/status.mjs';
+import { originDisplay } from '../maintain/update.mjs';
 import { NotFound, deployed, resolveLinks } from './api.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };

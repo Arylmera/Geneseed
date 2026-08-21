@@ -32,17 +32,17 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
-import { main as driverMain } from '../bin/geneseed.mjs';
-import { ROOT } from './checkout.mjs';
+import { main as driverMain } from '../../bin/geneseed.mjs';
+import { ROOT } from '../build/source.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
   footprintOfDir, installState, installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
-} from './installs.mjs';
-import { DEFAULT_EMIT, setupBuildArgs } from './generate.mjs';
+} from '../hosts/installs.mjs';
+import { DEFAULT_EMIT, setupBuildArgs } from '../build/generate.mjs';
 import {
   autostartPaths, autostartStale, hookShimPath, migrateShape, readJsonc, shimHome,
-} from './settings.mjs';
-import { writeText, pyPrint, pyPrintErr } from './lib/fs.mjs';
+} from '../hosts/settings.mjs';
+import { writeText, pyPrint, pyPrintErr } from '../lib/fs.mjs';
 
 /** Every emit name the generator answers to — the set an unrecognised marker is NOT in. */
 const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());

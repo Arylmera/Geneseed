@@ -36,7 +36,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { parseDriverArgs } from '../../bin/geneseed.mjs';
-import { GENESEED_HOOK_SNIFF, SHIM_MARK } from '../../js/settings.mjs';
+import { GENESEED_HOOK_SNIFF, SHIM_MARK } from '../../js/hosts/settings.mjs';
 import { walkFiles } from '../helpers/golden.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
@@ -174,7 +174,7 @@ test('the driver builds with no python reachable on PATH', (t) => {
 test('the static half of the refutation is gated by the walk that superseded it', () => {
   // RETIREMENT, MADE CHECKABLE. `test_the_driver_imports_no_child_process_module` read
   // `bin/geneseed.mjs`'s own source for three banned specifiers — which a single
-  // `import … from './js/hooks.mjs'` would have walked straight past, leaving child_process in
+  // `import … from '../../js/hosts/hooks.mjs'` would have walked straight past, leaving child_process in
   // the driver's process with the driver's own source still clean. The gate named here walks the
   // transitive import closure instead, so it is the same claim strictly enlarged, and pointing at
   // it is only worth anything if the pointer is checked.

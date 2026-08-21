@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url';
 import {
   MCP_PRESETS, mcpPresetBlock, mcpApply, mcpState, mcpSetEnabled, mcpLoad, mcpSave,
   mcpCommented, mcpConfigFor, mcpKnownNames, mcpMeta, cmdMcp,
-} from '../../js/mcp.mjs';
+} from '../../js/hosts/mcp.mjs';
 import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -232,7 +232,7 @@ test('the entry dispatches `mcp` at this module', () => {
   const src = fs.readFileSync(path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'utf8');
   assert.match(src, /\n {2}mcp: \{\n {4}fn: cmdMcp,/,
     "bin/geneseed-cli.mjs's VERBS table no longer routes `mcp` to cmdMcp");
-  assert.match(src, /import \{ cmdMcp \} from '\.\.\/js\/mcp\.mjs';/,
+  assert.match(src, /import \{ cmdMcp \} from '\.\.\/js\/hosts\/mcp\.mjs';/,
     'the entry does not import cmdMcp from this module');
   assert.equal(typeof cmdMcp, 'function');
 });
@@ -262,19 +262,19 @@ test('the verb is read-only, and that is asserted rather than described', () => 
   // Claude install the config is `~/.claude.json`, which holds projects and history, and a save
   // built on a config that failed to parse would write `{}` over all of it. That guard lives in
   // one place and this face must not grow a second copy of it by growing a write path first.
-  const src = fs.readFileSync(path.join(ROOT, 'js', 'mcp.mjs'), 'utf8');
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'hosts', 'mcp.mjs'), 'utf8');
   const at = src.indexOf('export function cmdMcp(');
-  assert.notEqual(at, -1, 'js/mcp.mjs no longer exports cmdMcp — the scrape has gone stale');
+  assert.notEqual(at, -1, 'js/hosts/mcp.mjs no longer exports cmdMcp — the scrape has gone stale');
   const body = src.slice(at, at + src.slice(at).indexOf('\n}\n'));
   assert.ok(body.length > 200, `the cmdMcp scrape found ${body.length} chars, which is too few`);
   for (const writer of ['mcpSave', 'mcpApply', 'mcpSetEnabled', 'writeFileSync', 'writeText']) {
     assert.ok(!body.includes(writer),
       `cmdMcp calls ${writer}. If a terminal toggle is wanted, move the console's non-HTTP `
-      + 'core down into js/mcp.mjs and have both faces call it — do not grow a second one here');
+      + 'core down into js/hosts/mcp.mjs and have both faces call it — do not grow a second one here');
   }
   // …and the positive control: the writers are still in the module, so the scan above is a
   // statement about `cmdMcp` and not about a file that has nothing left to find.
   for (const writer of ['mcpSave', 'mcpApply', 'mcpSetEnabled']) {
-    assert.ok(src.includes(`export function ${writer}(`), `js/mcp.mjs no longer has ${writer}`);
+    assert.ok(src.includes(`export function ${writer}(`), `js/hosts/mcp.mjs no longer has ${writer}`);
   }
 });

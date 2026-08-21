@@ -29,22 +29,22 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../bin/geneseed.mjs';
-import { cmdRebuildAll } from '../../js/generate.mjs';
-import { globalHookStandingDown, cmdContext } from '../../js/hooks.mjs';
+import { cmdRebuildAll } from '../../js/build/generate.mjs';
+import { globalHookStandingDown, cmdContext } from '../../js/hosts/hooks.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
-} from '../../js/hosts.mjs';
-import { BOB_RULES_STUB } from '../../js/emit.mjs';
+} from '../../js/hosts/hosts.mjs';
+import { BOB_RULES_STUB } from '../../js/build/emit.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate, installUninstall,
-} from '../../js/uninstall.mjs';
+} from '../../js/maintain/uninstall.mjs';
 import {
   doctrinesOfDir, installState, installTargets, manifestIsClaude,
-} from '../../js/installs.mjs';
+} from '../../js/hosts/installs.mjs';
 import {
   hookShimPath, GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings,
-} from '../../js/settings.mjs';
-import { ROOT } from '../../js/checkout.mjs';
+} from '../../js/hosts/settings.mjs';
+import { ROOT } from '../../js/build/source.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';

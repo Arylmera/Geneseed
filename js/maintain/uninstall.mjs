@@ -47,26 +47,26 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
-import { hookRunnerEntry } from '../bin/geneseed.mjs';
+import { hookRunnerEntry } from '../../bin/geneseed.mjs';
 import { confirm } from './setup.mjs';
 import {
   claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, excludedRulesOfDir, installKind,
   installState,
   registeredTargets, readMaybe, DISABLED_STASH,
-} from './installs.mjs';
+} from '../hosts/installs.mjs';
 import {
   GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, pyResolve,
-} from './hosts.mjs';
-import { mcpCommented } from './mcp.mjs';
+} from '../hosts/hosts.mjs';
+import { mcpCommented } from '../hosts/mcp.mjs';
 import {
   managedBlockRead, managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
   opencodeTarget, readJsonc, settingsIntegrityCheck, wireClaudeExcludes,
   unwireClaudeExcludes, unwireClaudeSettings,
-} from './settings.mjs';
+} from '../hosts/settings.mjs';
 import {
   comparePaths, indexOfEq, jsonDumps, jsonDumpsIndent, pyEq, pyIsAbsolute, pyPrint,
   pyPrintErr, readText, within, writeText,
-} from './lib/fs.mjs';
+} from '../lib/fs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };

@@ -12,8 +12,8 @@ import path from 'node:path';
 
 import {
   improvementsMd, cmpKey, writeImprovements, exportImprovements, flushExportNotes,
-} from '../../js/diff.mjs';
-import { VERSION_MARKER } from '../../js/hosts.mjs';
+} from '../../js/inspect/diff.mjs';
+import { VERSION_MARKER } from '../../js/hosts/hosts.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 function withDir(fn) {

@@ -23,10 +23,10 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { buildInto, emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
-import { makeCfg } from '../../js/checkout.mjs';
-import { stripCapabilityLinks } from '../../js/emit.mjs';
-import { GLOBAL_MANIFEST } from '../../js/hosts.mjs';
-import { colorThemeFiles } from '../../js/opencode.mjs';
+import { makeCfg } from '../../js/build/source.mjs';
+import { stripCapabilityLinks } from '../../js/build/emit.mjs';
+import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
+import { colorThemeFiles } from '../../js/hosts/opencode.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
 // ⚠ FIRST. These emit IN PROCESS, and the hook-shim writer targets the ENVIRONMENT's home rather

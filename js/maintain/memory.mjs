@@ -30,9 +30,9 @@
 import { readdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { memoryDropIndex } from './hooks.mjs';
-import { resolveMemoryDir } from './hosts.mjs';
-import { pyPrint, pyPrintErr } from './lib/fs.mjs';
+import { memoryDropIndex } from '../hosts/hooks.mjs';
+import { resolveMemoryDir } from '../hosts/hosts.mjs';
+import { pyPrint, pyPrintErr } from '../lib/fs.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 

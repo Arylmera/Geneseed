@@ -151,7 +151,7 @@ export function trackedFiles() {
   // names what P4 leaves behind. A required-file list that outlives the files it requires would
   // make the deletion commit fail here, in a fixture, for a reason that has nothing to do with
   // what the deletion changed.
-  for (const needed of ['bin/geneseed-cli.mjs', 'js/doctor.mjs', 'src/AGENT.md.tmpl',
+  for (const needed of ['bin/geneseed-cli.mjs', 'js/inspect/doctor.mjs', 'src/AGENT.md.tmpl',
     'registry.json', 'web/src/pages/Laws.jsx']) {
     if (!names.includes(needed)) {
       throw new Error(`the checkout fixture's file list is missing ${needed} — every doctor `

@@ -19,8 +19,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { themeJson } from '../../js/opencode.mjs';
-import { ROOT } from '../../js/checkout.mjs';
+import { themeJson } from '../../js/hosts/opencode.mjs';
+import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 

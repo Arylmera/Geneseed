@@ -70,7 +70,7 @@ git(sb.path, 'clone', '-q', ORIGIN, OTHER);
 git(OTHER, 'config', 'user.email', 'fixture@geneseed.test');
 git(OTHER, 'config', 'user.name', 'fixture');
 
-const U = await import(pathToFileURL(path.join(CO, 'js', 'update.mjs')).href);
+const U = await import(pathToFileURL(path.join(CO, 'js', 'maintain', 'update.mjs')).href);
 
 /**
  * A bundle target nothing has written to yet, per arm.

@@ -25,8 +25,8 @@ import {
   apiThemes, apiDoctor, apiInstalls, apiExcludes, apiSetup, viewCfg,
 } from '../../js/web/api.mjs';
 import { apiGraph } from '../../js/web/graph.mjs';
-import { tuiInventory } from '../../js/inventory.mjs';
-import { PACK_ORDER } from '../../js/checkout.mjs';
+import { tuiInventory } from '../../js/inspect/inventory.mjs';
+import { PACK_ORDER } from '../../js/build/source.mjs';
 import {
   apiActivity, apiActivityDetail, apiActivityToggle,
 } from '../../js/web/activity.mjs';
@@ -38,17 +38,17 @@ import {
   apiInstallCmd, apiSelectView, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
   apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE,
 } from '../../js/web/actions.mjs';
-import { installState, themeOfDir, installTargets } from '../../js/installs.mjs';
-import { installDeactivate, installReactivate, installUninstall } from '../../js/uninstall.mjs';
-import { registryRecord, registryRoots } from '../../js/registry.mjs';
-import { parseOrigin, originDisplay } from '../../js/update.mjs';
+import { installState, themeOfDir, installTargets } from '../../js/hosts/installs.mjs';
+import { installDeactivate, installReactivate, installUninstall } from '../../js/maintain/uninstall.mjs';
+import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
+import { parseOrigin, originDisplay } from '../../js/maintain/update.mjs';
 import { MCP_PRESETS as _P, mcpApply, mcpConfigFor, mcpLoad, mcpSave, mcpState, mcpSetEnabled }
-  from '../../js/mcp.mjs';
-import { MCP_PRESETS } from '../../js/mcp.mjs';
-import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts.mjs';
+  from '../../js/hosts/mcp.mjs';
+import { MCP_PRESETS } from '../../js/hosts/mcp.mjs';
+import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts/hosts.mjs';
 import { normcase } from '../../js/lib/fs.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
-import { diffCollect } from '../../js/diff.mjs';
+import { diffCollect } from '../../js/inspect/diff.mjs';
 import { makeSandbox, TMP_ROOT, RELOCATION_VARS } from '../helpers/sandbox.mjs';
 import { webFixture, webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
 import { withGlobalInstalls as withGlobalInstallsFixture } from '../helpers/installs_fixture.mjs';

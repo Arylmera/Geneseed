@@ -78,9 +78,9 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 
-import { ROOT } from './checkout.mjs';
+import { ROOT } from '../build/source.mjs';
 import { readMaybe } from './installs.mjs';
-import { pyPathStr, pyPrint, pyPrintErr, writeText } from './lib/fs.mjs';
+import { pyPathStr, pyPrint, pyPrintErr, writeText } from '../lib/fs.mjs';
 
 const IS_WIN = process.platform === 'win32';
 

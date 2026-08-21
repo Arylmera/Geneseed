@@ -283,7 +283,7 @@ const SHIPS = [
   ['js/', 'the port'],
   ['src/', 'the product: what a bundle is rendered from'],
   ['themes/', 'render.loadTheme reads these; a themeless install renders nothing'],
-  ['adapters/', 'bin/geneseed.mjs, js/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
+  ['adapters/', 'bin/geneseed.mjs, js/hosts/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
   ['docs/web/', "js/web/docs.mjs serves ROOT/docs; the console's Docs pages ARE these files"],
   // ONE ROW FOR THE NON-WEB PAGES, not one per page, and the reason is that every per-file row
   // this replaced gave the SAME reason — the literal string `docs/*.md`, seven times. The
@@ -323,8 +323,8 @@ const SHIPS = [
   // product path was chosen over `tests/__snapshots__/` — a table imported out of `tests/`
   // would have forced a tests/ path into `files[]`, contradicting this partition's own
   // argument that npm ships the tool and not its test rig.
-  ['harness.config.json', 'js/checkout.mjs CONFIG — every render reads it'],
-  ['registry.json', "js/inventory.mjs and doctor's registryProblems read it"],
+  ['harness.config.json', 'js/build/source.mjs CONFIG — every render reads it'],
+  ['registry.json', "js/inspect/inventory.mjs and doctor's registryProblems read it"],
   // RE-ARGUED THREE TIMES TOO, and cut from four files to two. `link` crossed and the Node
   // CLI's shim names `bin/geneseed-cli.mjs`, so nothing puts the launchers on PATH from an npm
   // install any more; there are no Python-only verbs to route to; and since P2 Task 4 the

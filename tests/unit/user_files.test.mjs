@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { writeNativeLayer } from '../../js/native.mjs';
+import { writeNativeLayer } from '../../js/hosts/native.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 // One install root with a `src` tree beside it, shaped the way `writeNativeLayer` reads: each

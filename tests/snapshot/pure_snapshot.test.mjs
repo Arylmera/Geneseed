@@ -35,13 +35,13 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { DWIDTH_UNIDATA } from '../../js/tui.mjs';
-import { makeCfg } from '../../js/checkout.mjs';
-import { winUserPathScript } from '../../js/link.mjs';
-import { pyTextWrap } from '../../js/cli.mjs';
+import { DWIDTH_UNIDATA } from '../../js/ui/tui.mjs';
+import { makeCfg } from '../../js/build/source.mjs';
+import { winUserPathScript } from '../../js/hosts/link.mjs';
+import { pyTextWrap } from '../../js/ui/cli.mjs';
 import { pySplitLines } from '../../js/lib/udiff.mjs';
-import { renderAll } from '../../js/render.mjs';
-import { modeOptions, postureOptions, themeOptions } from '../../js/setup.mjs';
+import { renderAll } from '../../js/build/render.mjs';
+import { modeOptions, postureOptions, themeOptions } from '../../js/maintain/setup.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -760,7 +760,7 @@ test('the width sweep still produces the recorded runs', { skip: dwidth ? false
   // follows compares a frozen answer against a table obliged to name the Unicode it encodes —
   // and neither side can move without saying so.
   assert.equal(dwidth.unidata_version, DWIDTH_UNIDATA,
-    `the sweep was recorded against unidata ${dwidth.unidata_version} and js/tui.mjs's `
+    `the sweep was recorded against unidata ${dwidth.unidata_version} and js/ui/tui.mjs's `
     + `WIDE/COMBINING tables declare ${DWIDTH_UNIDATA}. Regenerating the tables means moving `
     + 'DWIDTH_UNIDATA and re-recording this corpus together.');
   assert.equal(dwidth.declared_by.value, DWIDTH_UNIDATA,
@@ -816,9 +816,9 @@ test('the width tables name a unicode version, in the source and at runtime', ()
   // satisfiable by the declaration being deleted and the value arriving some other way; the
   // import proves the value, the regex proves the form, and the two agreeing is what says the
   // constant a reader finds beside the tables is the one the code uses.
-  const src = readFileSync(path.join(ROOT, 'js', 'tui.mjs'), 'utf8');
+  const src = readFileSync(path.join(ROOT, 'js', 'ui', 'tui.mjs'), 'utf8');
   const m = /export const DWIDTH_UNIDATA = '([^']+)';/.exec(src);
-  assert.ok(m, 'js/tui.mjs no longer declares DWIDTH_UNIDATA in that form — the width tables are '
+  assert.ok(m, 'js/ui/tui.mjs no longer declares DWIDTH_UNIDATA in that form — the width tables are '
     + 'a snapshot of one Unicode version and have to say which one');
   assert.match(m[1], /^\d+\.\d+\.\d+$/,
     `DWIDTH_UNIDATA is ${JSON.stringify(m[1])}, which is not a Unicode version`);

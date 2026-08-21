@@ -23,11 +23,11 @@
  * NOTHING HERE PAINTS. No cursor moves, no clears, no alternate screen: this writes lines
  * and stops, exactly as `status` does. That is what keeps the dropped panel dropped.
  */
-import { helpWidth } from './cli.mjs';
-import { tuiInventory } from './inventory.mjs';
-import { defaultTheme, installedDefaults } from './installs.mjs';
-import { pyPrint } from './lib/fs.mjs';
-import { dwidth, fit, icon, truncd, tuiEntries } from './tui.mjs';
+import { helpWidth } from '../ui/cli.mjs';
+import { tuiInventory } from '../inspect/inventory.mjs';
+import { defaultTheme, installedDefaults } from '../hosts/installs.mjs';
+import { pyPrint } from '../lib/fs.mjs';
+import { dwidth, fit, icon, truncd, tuiEntries } from '../ui/tui.mjs';
 
 /**
  * The listing's section names, and the row kind each one selects.

@@ -28,10 +28,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { installUninstall, cmdUninstall } from '../../js/uninstall.mjs';
-import { registryRecord, registryRoots } from '../../js/registry.mjs';
-import { GLOBAL_MANIFEST } from '../../js/hosts.mjs';
-import { ROOT } from '../../js/checkout.mjs';
+import { installUninstall, cmdUninstall } from '../../js/maintain/uninstall.mjs';
+import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
+import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
+import { ROOT } from '../../js/build/source.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';

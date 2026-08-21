@@ -49,18 +49,18 @@ import { join, resolve as pathResolve, dirname, extname, basename, sep } from 'n
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-import { GLOBAL_MANIFEST, pyResolve } from '../hosts.mjs';
+import { GLOBAL_MANIFEST, pyResolve } from '../hosts/hosts.mjs';
 import {
   jsonDumpsCompact, parseJson, pyInt, pyPrint, pyStr, pyTruthy, pyUnquote, pyWhich, writeText,
 } from '../lib/fs.mjs';
-import { promptLine } from '../setup.mjs';
+import { promptLine } from '../maintain/setup.mjs';
 // P8c. The reference imports `_update` LAZILY inside the handler, to keep `build` and its
 // `sys.path` side effect out of web-import time; ESM has no such side effect and the import is
 // static. `js/update.mjs` imports `restartDaemon` from THIS module, so the two form a cycle —
 // which resolves because everything either side needs of the other is a hoisted function
 // declaration, not a value read at module-evaluation time.
-import { preflight } from '../update.mjs';
-import { doctrinesForBuild } from '../installs.mjs';
+import { preflight } from '../maintain/update.mjs';
+import { doctrinesForBuild } from '../hosts/installs.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
 import {
   apiDeployCmd, apiExcludesMutate, apiInstallCmd, apiInstallToggle, apiMcpToggle,

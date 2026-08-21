@@ -29,9 +29,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { sovereignBypass } from '../../js/hooks.mjs';
-import { excludeAdd, excludeRemove, excludesSnapshot, cmdExclude } from '../../js/excludes.mjs';
-import { pyResolve } from '../../js/hosts.mjs';
+import { sovereignBypass } from '../../js/hosts/hooks.mjs';
+import { excludeAdd, excludeRemove, excludesSnapshot, cmdExclude } from '../../js/inspect/excludes.mjs';
+import { pyResolve } from '../../js/hosts/hosts.mjs';
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
 import { withGlobalInstalls } from '../helpers/installs_fixture.mjs';
 import { ROOT } from '../helpers/web_fixture.mjs';

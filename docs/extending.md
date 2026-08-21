@@ -33,7 +33,7 @@ Three seams, and almost every question about "where do I edit?" resolves to one 
 Two rules follow from the table and they cause most of the surprises:
 
 - **Nothing propagates by itself.** A bundle is a *render*. Editing `src/` changes nothing on any
-  machine until something re-emits (`js/emit.mjs:362` re-fingerprints, `js/status.mjs:80`
+  machine until something re-emits (`js/build/emit.mjs:362` re-fingerprints, `js/inspect/status.mjs:80`
   reports the drift).
 - **`docs/web/` is data, `web/src/` is code.** A new documentation page is one file and no
   rebuild. A new screen is a new hashed chunk and a mandatory `web/dist` commit.
@@ -54,7 +54,7 @@ literally, on the screen, as those nine characters.
 
 Typing a literal number into a `docs/web` page is caught by `proseMirrorProblems`. The README
 badges and prose, and the `N laws, N agents, N skills` line in `SHIPPED.md`, are the hand-written
-exceptions — and each has its own arm in `js/doctor.mjs` (`countTableProblems` walks the five
+exceptions — and each has its own arm in `js/inspect/doctor.mjs` (`countTableProblems` walks the five
 badge keys `agents`/`skills`/`laws`/`themes`/`plugins`; `proseMirrorProblems` holds the prose).
 
 ---
@@ -166,7 +166,7 @@ Five files, none of them a count. This is the slot most new material belongs in,
 on purpose so that the invariant slot stays scarce.
 
 1. `src/doctrines/<pack>.md` — **append** `### {{DOCTRINE}} <pack> <n> — {{DOC_<PACK>_<n>}}` plus
-   the body. Two gates in `constitutionProblems` (`js/doctor.mjs`) sit on this: the pack named in
+   the body. Two gates in `constitutionProblems` (`js/inspect/doctor.mjs`) sit on this: the pack named in
    the *heading* is what addresses the rule (not the filename, so a rule filed in the wrong file is
    reported rather than silently renamed), and ids must run **contiguously from 1**, so appending
    at the end is the only place `n` is free. Packs are numbered independently — nothing outside
@@ -216,7 +216,7 @@ a defect.
 Steps 1 and 9 of §2c, plus `LAW_META` if the Principle line moved. Two cautions:
 
 - `--footprint` defaults to **lean**, and lean keeps only the heading plus the first sentence
-  (`terseBlocks` in `js/render.mjs`). A clause added to the second paragraph is invisible in the
+  (`terseBlocks` in `js/build/render.mjs`). A clause added to the second paragraph is invisible in the
   default build. Amend the first sentence, or the amendment does not exist for most installs. The
   same is true of a doctrine rule; it is **not** true of the ontology, which ships whole at both
   footprints.
@@ -231,7 +231,7 @@ the bar is in `DESIGN.md` Decision 7, and most candidates belong in a doctrine p
 
 1. `src/laws/universal.md` — **append** `### {{LAW}} <roman> — {{LEX_<roman>}}` plus the body.
    Never insert: the `{{LAW}}` cross-references counted above live all over `src/`, plus hardcoded
-   citations in `js/hooks.mjs` and two OpenCode plugins, and **nothing resolves a cross-reference
+   citations in `js/hosts/hooks.mjs` and two OpenCode plugins, and **nothing resolves a cross-reference
    against the canon**. Renumbering silently rewires every one of them.
 2. `themes/_TEMPLATE.json` — add `LEX_<roman>` in template order. Gated, as in §2a step 2:
    `constitutionProblems` holds `LEX_I..LEX_IX` as an **equality** across all fifteen files (the
@@ -239,7 +239,7 @@ the bar is in `DESIGN.md` Decision 7, and most candidates belong in a doctrine p
    arm exists because the renumber left `LEX_XXII`, `LEX_XXIII`, `LEX_XXIV` and `LEX_XXXVI` behind
    in every file and parity was silent — they were absent from nowhere.
 3. `--sync-themes`, then restyle all fourteen by hand (§2a step 3).
-4. `LAW_CLASS` in `js/inventory.mjs` — one of the six in `LAW_CLASSES` beside it.
+4. `LAW_CLASS` in `js/inspect/inventory.mjs` — one of the six in `LAW_CLASSES` beside it.
 5. `LAW_META` in `web/src/pages/Laws.jsx` — same class, plus the one-line Principle. Note the map
    is keyed by **arabic** number where `universal.md` heads with a Roman numeral. **This copy
    exists nowhere else**; a rule absent here renders with a blank description. It is why that one
@@ -277,7 +277,7 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    skipping it.
 3. `PACK_<NAME>` in `themes/_TEMPLATE.json` and all fourteen voices. Unlike `DOC_*`, this family is
    held only by `themeParityProblems` — presence, across the voices, template excluded.
-4. `DOCTRINE_BLURBS` in `js/setup.mjs` — the one-line description an installer sees in the wizard,
+4. `DOCTRINE_BLURBS` in `js/maintain/setup.mjs` — the one-line description an installer sees in the wizard,
    and the only place a pack is ever explained to them. Missing entries fall back to the bare name.
 5. `harness.config.json` if the pack should be on by default; `constitutionProblems` refuses a
    `doctrines` array naming a pack this checkout does not ship.
@@ -286,7 +286,7 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
 
 ## 3 — Adding a SKILL or an AGENT
 
-**Order matters at the first two steps.** `missingReferencedSpecs` (in `js/emit.mjs`) *aborts the
+**Order matters at the first two steps.** `missingReferencedSpecs` (in `js/build/emit.mjs`) *aborts the
 build* when `AGENT.md.tmpl` names a spec with no file — so the file comes before the table row, or
 nothing builds at all. The refusal is clean: `tests/unit/emit_gates.test.mjs:265` proves a refused
 emit leaves the prior install intact.
@@ -299,20 +299,20 @@ emit leaves the prior install intact.
    Gated both ways: a row with no file, and a file with no row.
 3. `DESC_<NAME>` in **all fourteen** themes. Theme parity catches a missing one; nothing catches
    an unstyled placeholder.
-4. **Skills only** — `SKILL_CLASS` in `js/inventory.mjs`. Gated both ways, inside
+4. **Skills only** — `SKILL_CLASS` in `js/inspect/inventory.mjs`. Gated both ways, inside
    `countTableProblems`, which matters because the runtime fallback is silent: an unclassified
    skill renders as `build`.
 5. `registry.json` — a row keyed `skills/<name>` or `agents/<name>` with `status` ∈
    {`experimental`, `approved`, `deprecated`}, a semver `version`, a non-blank `owner`, an ISO
    `added`, and `last_verified: ""`. **This is the most forgettable step**: four hand-typed fields,
-   and the gate fires in both directions (`js/doctor.mjs:388-436`).
+   and the gate fires in both directions (`js/inspect/doctor.mjs:388-436`).
 6. `README.md` — the badge, the `**🤖 Agents** (N)` / `**🛠 Skills** (N)` count, and for a skill the
    `·`-separated name in the 🛠 row (that enumeration is gated two ways, unlike the laws' one).
 7. `SHIPPED.md` — the `N laws, N agents, N skills` triple.
 8. `doctor --all`, then the suite.
 
 **A vendored skill folder** (`src/skills/<name>/SKILL.md`) is a different shape: add it to
-`VENDORED_SKILL_DIRS` (`js/native.mjs:37` — the literal is frozen in
+`VENDORED_SKILL_DIRS` (`js/hosts/native.mjs:37` — the literal is frozen in
 `tests/unit/authoring_gates.test.mjs:312`), write a `VENDOR.md` carrying `**Upstream:**`,
 `**Commit:**` (a 40-hex commit, never a moving branch) and `**License:**`, add the registry row —
 and **skip steps 2, 4, 6, 7**: the flat-spec globs only see `*.md` at the top level.
@@ -320,7 +320,7 @@ and **skip steps 2, 4, 6, 7**: the flat-spec globs only see `*.md` at the top le
 Two traps worth knowing before you write the spec:
 
 - **The word "Read-only" anywhere in an agent spec locks its emit.** It is a bare substring test
-  (`js/native.mjs:148`). The escape hatch is an explicit `<!-- bash: allow -->` marker, which
+  (`js/hosts/native.mjs:148`). The escape hatch is an explicit `<!-- bash: allow -->` marker, which
   re-opens bash on all three hosts.
 - **The console has a fourth, ungated copy of the skill taxonomy.** `SKILL_CATS` in
   `web/src/pages/Skills.jsx:19` mirrors `SKILL_CLASS` with nothing comparing them (contrast
@@ -358,8 +358,8 @@ No `registry.json` row, no `package.json` edit — `files[]` ships `adapters/` w
 
 ⚠ **Read §5 first. A fifth hook verb has no green path today.**
 
-The mechanical part: implement `cmd<Verb>` in `js/hooks.mjs`; wire the command string in
-`claudeHookGroups` (`js/settings.mjs:434`, spelled `` `${run} <verb> …` `` — the gate scrapes that
+The mechanical part: implement `cmd<Verb>` in `js/hosts/hooks.mjs`; wire the command string in
+`claudeHookGroups` (`js/hosts/settings.mjs:434`, spelled `` `${run} <verb> …` `` — the gate scrapes that
 shape); add the entry to `bin/geneseed-hook.mjs:43` `VERBS` with **exactly two-space indent**; add
 a row to `js/cli-table.json` with a help string over 20 characters.
 
@@ -405,7 +405,7 @@ against*) is the same reason a verb postdating the reference has none, so it is 
 not two. Nothing measurable was lost: the hook verb set is pinned twice more, from editable
 sources, twelve lines above.
 
-**To add a hook verb today:** implement `cmd<Verb>` in `js/hooks.mjs`, wire the string in
+**To add a hook verb today:** implement `cmd<Verb>` in `js/hosts/hooks.mjs`, wire the string in
 `claudeHookGroups`, add the `VERBS` entry, add the `js/cli-table.json` row, then name the verb in
 `NATIVE` in **both** `tests/unit/hook_cli.test.mjs` and `tests/snapshot/cli_help.test.mjs` (they
 read each other's source, so one alone fails) and give it an absolute unit gate.
@@ -434,7 +434,7 @@ anything owns **every** install's hooks. Emitting from a git worktree or a temp 
 repoint the shim at that disposable path; removing the worktree then killed hooks for every
 install on the machine.
 
-**`hookPrefix` now refuses the claim** (`js/settings.mjs`, `ephemeralCheckout`): an emit whose
+**`hookPrefix` now refuses the claim** (`js/hosts/settings.mjs`, `ephemeralCheckout`): an emit whose
 checkout is under the OS temp root, or is a linked git worktree (`.git` is a *file*), leaves a
 shim that still resolves exactly as it is and wires the emitted hooks to it anyway. The bundle it
 writes is byte-identical to a normal emit — the install simply keeps running the durable
@@ -511,12 +511,12 @@ only, at best, on its presence.
 | The README keyword enumerations | `README.md`, `docs/web/rules.md` | nothing |
 | The plugin capability enumeration | `docs/web/model.md` | nothing (the number substitutes; the list does not) |
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |
-| `THEME_BLURBS` (8 of 14), `ART` (8 of 14) | `js/setup.mjs`, `js/anim.mjs` | nothing — missing entries fall back silently |
+| `THEME_BLURBS` (8 of 14), `ART` (8 of 14) | `js/maintain/setup.mjs`, `js/ui/anim.mjs` | nothing — missing entries fall back silently |
 | `LOADED_SIGIL` uniqueness | `themes/*.json` | nothing, and it is load-bearing for theme detection |
 | `adapters/claude-code/settings.json` | — | nothing compares it to what the emitter writes; **it is already divergent** |
 | `NATIVE`, twice | two test files | they check each other, which is the gate that makes the duplication safe |
 | The emit-size `CEILING` | `tests/unit/emit_smoke.test.mjs:54` | a hand-transcribed measurement |
-| Stale docblock counts | `js/themes.mjs:62` ("137 values" → 140), `js/render.mjs:116` ("145 tokens" → 148) | nothing |
+| Stale docblock counts | `js/build/themes.mjs:62` ("137 values" → 140), `js/build/render.mjs:116` ("145 tokens" → 148) | nothing |
 
 ---
 
@@ -555,7 +555,7 @@ answer.
 5. **Numbers in docblocks that had drifted** — `_TEMPLATE.json`'s "137 values" (140), "the 145
    tokens" `src/` uses (148), and "sixteen `_*_problems` checks" (fifteen — the sixteenth was
    named as `cli`, which was removed).
-6. **A claim that was simply false.** `js/render.mjs` said `--theme` is validated against
+6. **A claim that was simply false.** `js/build/render.mjs` said `--theme` is validated against
    `choices` before anything renders, which is why its own refusal read as an unreachable nicety.
    It is not in `choicesFor`; that refusal is the only one there is, on every path.
 7. **Five dead cross-references** to `tests/snapshot/no_python_in_corpus.test.mjs`, retired with
@@ -563,7 +563,7 @@ answer.
    Plus a skip message naming a `record-corpus` CI job that no longer exists.
 8. **`CHANGELOG.md` said 2.0.0 was "not yet published"**, with "no tag, no release and no install
    URL"; `geneseed@2.0.0` has been on npm since 2026-08-17. And **`SETUP.md`** documented
-   `geneseed upgrade v1.0.0 # pin to a tag`, which `js/update.mjs` prints is IGNORED.
+   `geneseed upgrade v1.0.0 # pin to a tag`, which `js/maintain/update.mjs` prints is IGNORED.
 9. **`docs/web/agents.md`** enumerated 16 agents and omitted `developer`, where README says 17 —
    the doctor arm cannot fire, because the page spells `{N_AGENTS}` and that arm only ever catches
    a literal. **`docs/web/rules.md`** called each law "a short markdown file under `src/laws/`";

@@ -23,18 +23,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/emit.mjs';
-import { sourceReleaseVersion } from '../../js/opencode.mjs';
-import { versionVerdict, statusData, statusLines } from '../../js/status.mjs';
+import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/build/emit.mjs';
+import { sourceReleaseVersion } from '../../js/hosts/opencode.mjs';
+import { versionVerdict, statusData, statusLines } from '../../js/inspect/status.mjs';
 import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
   projectQualifies,
-} from '../../js/uninstall.mjs';
-import { emitHostScopeOf } from '../../js/installs.mjs';
-import { registryRecord, registryRoots } from '../../js/registry.mjs';
-import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts.mjs';
+} from '../../js/maintain/uninstall.mjs';
+import { emitHostScopeOf } from '../../js/hosts/installs.mjs';
+import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
+import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts/hosts.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
-import { CONFIG, ROOT, SRC, makeCfg } from '../../js/checkout.mjs';
+import { CONFIG, ROOT, SRC, makeCfg } from '../../js/build/source.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';

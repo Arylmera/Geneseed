@@ -22,7 +22,7 @@ import path from 'node:path';
 
 import {
   resolveEmit, markerTheme, configTheme, migrateStrayBundle, redactUrlCreds, parseOrigin,
-} from '../../js/update.mjs';
+} from '../../js/maintain/update.mjs';
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
 
 // `setUpModule`, ported. The route is not visible in this file's own syntax and the reference

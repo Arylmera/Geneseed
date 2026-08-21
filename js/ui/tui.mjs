@@ -42,10 +42,10 @@
  */
 import path from 'node:path';
 
-import { THEMES } from './checkout.mjs';
-import { readJsonMaybe } from './installs.mjs';
-import { pySplitLines } from './lib/udiff.mjs';
-import { pyPrint } from './lib/fs.mjs';
+import { THEMES } from '../build/source.mjs';
+import { readJsonMaybe } from '../hosts/installs.mjs';
+import { pySplitLines } from '../lib/udiff.mjs';
+import { pyPrint } from '../lib/fs.mjs';
 
 // ---- display tiers -------------------------------------------------------------------
 //

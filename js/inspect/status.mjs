@@ -56,13 +56,13 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { THEMES, ROOT, makeCfg } from './checkout.mjs';
+import { THEMES, ROOT, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
-import { readVersion, sourceFingerprint } from './emit.mjs';
+import { readVersion, sourceFingerprint } from '../build/emit.mjs';
 import {
   claudeConfigDir, bobConfigDir, copilotConfigDir, opencodeConfigDir, pyResolve,
   resolveMemoryDir,
-} from './hosts.mjs';
+} from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs now read them. `defaultTheme`, `manifestIsClaude` and `installedDefaults` are
@@ -70,8 +70,8 @@ import {
 // and a corpus that followed the code to its new file would stop testing the caller's view.
 import {
   defaultTheme, installedDefaults, manifestIsClaude, readJsonMaybe, readMaybe,
-} from './installs.mjs';
-import { pyLen, pyLjust, pyPrint } from './lib/fs.mjs';
+} from '../hosts/installs.mjs';
+import { pyLen, pyLjust, pyPrint } from '../lib/fs.mjs';
 
 export { defaultTheme, manifestIsClaude };
 

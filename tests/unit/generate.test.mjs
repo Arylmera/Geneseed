@@ -14,25 +14,25 @@ import { spawnSync } from 'node:child_process';
 
 import {
   substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, STRUCTURE,
-} from '../../js/render.mjs';
-import { build } from '../../js/emit.mjs';
+} from '../../js/build/render.mjs';
+import { build } from '../../js/build/emit.mjs';
 import {
   isVendoredPath, loadAgentOverrides, writeNativeLayer, descBlockProblem,
   validateIsVendored, VENDORED_SKILL_DIRS,
-} from '../../js/native.mjs';
-import { cmdValidate, validateSandboxProblems } from '../../js/doctor.mjs';
-import { syncThemes } from '../../js/themes.mjs';
+} from '../../js/hosts/native.mjs';
+import { cmdValidate, validateSandboxProblems } from '../../js/inspect/doctor.mjs';
+import { syncThemes } from '../../js/build/themes.mjs';
 import { writeText } from '../../js/lib/fs.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { DENY_SKIP, deny } from '../helpers/deny.mjs';
 import {
   writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
-} from '../../js/opencode.mjs';
-import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/settings.mjs';
-import { doctrinesOfDir, excludedRulesOfDir, themeFiles } from '../../js/installs.mjs';
+} from '../../js/hosts/opencode.mjs';
+import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/hosts/settings.mjs';
+import { doctrinesOfDir, excludedRulesOfDir, themeFiles } from '../../js/hosts/installs.mjs';
 import {
   ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER,
-} from '../../js/checkout.mjs';
+} from '../../js/build/source.mjs';
 import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,

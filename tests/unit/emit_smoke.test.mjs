@@ -29,10 +29,10 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { hostCatalogsNatively } from '../../js/hosts.mjs';
+import { hostCatalogsNatively } from '../../js/hosts/hosts.mjs';
 // The ontology's four section names are theme-INDEPENDENT, so the expected heading comes from
 // the same table the renderer substitutes from rather than from a theme file or a literal.
-import { STRUCTURE } from '../../js/render.mjs';
+import { STRUCTURE } from '../../js/build/render.mjs';
 import { walkFiles } from '../helpers/golden.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
 

@@ -72,7 +72,7 @@ git(sb.path, 'clone', '-q', ORIGIN, OTHER);
 git(OTHER, 'config', 'user.email', 'fixture@geneseed.test');
 git(OTHER, 'config', 'user.name', 'fixture');
 
-const U = await import(pathToFileURL(path.join(CO, 'js', 'update.mjs')).href);
+const U = await import(pathToFileURL(path.join(CO, 'js', 'maintain', 'update.mjs')).href);
 
 test.after(() => {
   if (SAVED_PROTOCOL === undefined) delete process.env.GIT_ALLOW_PROTOCOL;
@@ -87,7 +87,7 @@ test('the fixture repository is the one under test, not the developer checkout',
   assert.notEqual(path.resolve(CO), path.resolve(process.cwd()));
   assert.equal(git(CO, 'rev-parse', '--abbrev-ref', 'HEAD'), 'main');
   assert.equal(git(CO, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'), 'origin/main');
-  assert.ok(fs.existsSync(path.join(CO, 'js', 'update.mjs')));
+  assert.ok(fs.existsSync(path.join(CO, 'js', 'maintain', 'update.mjs')));
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -267,7 +267,7 @@ git(sb.path, 'clone', '-q', ORIGIN2, OTHER2);
 git(OTHER2, 'config', 'user.email', 'fixture@geneseed.test');
 git(OTHER2, 'config', 'user.name', 'fixture');
 
-const U2 = await import(pathToFileURL(path.join(CO2, 'js', 'update.mjs')).href);
+const U2 = await import(pathToFileURL(path.join(CO2, 'js', 'maintain', 'update.mjs')).href);
 const COLLIDE = 'an-upstream-addition.txt';
 
 test('a pull blocked by an untracked collision returns collision and changes nothing', () => {

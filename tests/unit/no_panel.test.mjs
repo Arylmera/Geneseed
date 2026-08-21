@@ -52,7 +52,7 @@ const PANEL_OUTPUT_MARKS = ['\x1b[?1049h', '\x1b[?25l', 'AGENTS (', 'SKILLS (', 
 // and that was never true: `menu.mjs` appears nowhere in `tests/test_tui_boundary.py`. The
 // module is clean today, so the honest repair is to make the claim true rather than to narrow
 // it — the menu is the other thing a returning panel would come back through.
-const QUIET = ['js/setup.mjs', 'js/update.mjs', 'js/tui.mjs', 'js/menu.mjs'];
+const QUIET = ['js/maintain/setup.mjs', 'js/maintain/update.mjs', 'js/ui/tui.mjs', 'js/ui/menu.mjs'];
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
@@ -76,11 +76,11 @@ for (const rel of QUIET) {
 // `js/anim.mjs` is the module that legitimately writes cursor moves: `playLine` is the LINE
 // mode's animation, it emits `\x1b[nA` by design, and it is excluded from the quiet list BY NAME
 // rather than by omission. So it is exactly the file that must trip the same scan.
-test('the paint scan can actually fail — js/anim.mjs trips it', () => {
-  const src = read('js/anim.mjs');
+test('the paint scan can actually fail — js/ui/anim.mjs trips it', () => {
+  const src = read('js/ui/anim.mjs');
   const hits = PAINT_MARKS.filter((seq) => src.includes(seq));
   assert.ok(hits.length > 0,
-    'no mark in PAINT_MARKS appears in js/anim.mjs, which paints by design — the mark list has '
+    'no mark in PAINT_MARKS appears in js/ui/anim.mjs, which paints by design — the mark list has '
     + 'stopped matching how this codebase spells an escape sequence, and every assertion above '
     + 'is now vacuous');
 });
@@ -100,7 +100,7 @@ const nodeRun = () => {
       + 'const rc = cmdTui();'
       + 'process.stderr.write(JSON.stringify({ rc }));';
     const proc = spawnSync(process.execPath,
-      ['--input-type=module', '-e', script, '--', path.join(ROOT, 'js', 'tui.mjs')],
+      ['--input-type=module', '-e', script, '--', path.join(ROOT, 'js', 'ui', 'tui.mjs')],
       { cwd: ROOT, encoding: 'utf8', windowsHide: true,
         env: { ...process.env, ...homeOverrides(box.path) } });
     assert.equal(proc.status, 0, `the probe itself failed to run: ${proc.stderr}`);
@@ -108,7 +108,7 @@ const nodeRun = () => {
   } finally { box.cleanup(); }
 };
 
-test('js/tui.mjs refuses on a TTY, and the refusal is not a dead end', () => {
+test('js/ui/tui.mjs refuses on a TTY, and the refusal is not a dead end', () => {
   const { stdout, rc } = nodeRun();
 
   assert.equal(rc, 1, 'the refusal must be a failure exit, not a silent success');
@@ -143,7 +143,7 @@ test('js/tui.mjs refuses on a TTY, and the refusal is not a dead end', () => {
     + 'fallback\'s clothes, which is the exact defect the verbatim assertion used to hide');
 });
 
-test('js/tui.mjs leaves none of a panel behind, and the refusal is all it writes', () => {
+test('js/ui/tui.mjs leaves none of a panel behind, and the refusal is all it writes', () => {
   const { stdout } = nodeRun();
 
   for (const mark of PANEL_OUTPUT_MARKS) {

@@ -41,9 +41,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
-import { ENTITY_STATUSES, entityStatus, loadRegistry } from '../../js/inventory.mjs';
-import { registryProblems, secretProblems, vendorPinProblems } from '../../js/doctor.mjs';
-import { tuiInventory } from '../../js/inventory.mjs';
+import { ENTITY_STATUSES, entityStatus, loadRegistry } from '../../js/inspect/inventory.mjs';
+import { registryProblems, secretProblems, vendorPinProblems } from '../../js/inspect/doctor.mjs';
+import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
@@ -60,7 +60,7 @@ async function checkoutFixture(prefix, faults) {
   const co = path.join(sb.path, 'checkout');
   copyCheckout(co, faults);
   const at = (rel) => pathToFileURL(path.join(co, rel)).href;
-  return { co, doctor: await import(at('js/doctor.mjs')), inv: await import(at('js/inventory.mjs')) };
+  return { co, doctor: await import(at('js/inspect/doctor.mjs')), inv: await import(at('js/inspect/inventory.mjs')) };
 }
 
 // THE SHARED COPY. Twenty of the twenty-four rows run against this one instance, because the
@@ -311,12 +311,12 @@ test('a listed folder that does not exist is flagged', async () => {
   // line itself is rewritten in the copy, and the copy's own module graph is imported.
   const decl = "export const VENDORED_SKILL_DIRS = new Set(["
     + "'react-view-transitions', 'daydream', 'token-report']);";
-  const live = readFileSync(path.join(ROOT, 'js', 'native.mjs'), 'utf8');
+  const live = readFileSync(path.join(ROOT, 'js', 'hosts', 'native.mjs'), 'utf8');
   assert.ok(live.includes(decl),
-    'js/native.mjs no longer declares VENDORED_SKILL_DIRS the way this fault rewrites it — the '
+    'js/hosts/native.mjs no longer declares VENDORED_SKILL_DIRS the way this fault rewrites it — the '
     + 'mutation would apply to nothing and this row would pass by planting no fault at all');
   const g = await checkoutFixture('authoring-gone-', {
-    'js/native.mjs': live.replace(decl,
+    'js/hosts/native.mjs': live.replace(decl,
       "export const VENDORED_SKILL_DIRS = new Set(['gone']);"),
   });
   assert.ok(some(g.doctor.vendorPinProblems(), 'does not exist'),

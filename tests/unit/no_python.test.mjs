@@ -130,7 +130,7 @@ const RULES = [
 // ---------------------------------------------------------------------------------------------
 
 const PERMITTED = [
-  ['js/settings.mjs', 'PY_LITERAL', "'harness.py'", 2,
+  ['js/hosts/settings.mjs', 'PY_LITERAL', "'harness.py'", 2,
     'LEGACY-INSTALL DETECTION, and it must keep working precisely BECAUSE the file is gone. '
     + 'Two sites, one string, two different questions. `GENESEED_HOOK_SNIFF` answers "is this '
     + "hook Geneseed's?\" and carries the pre-shim direct form (an interpreter plus a checkout "

@@ -38,14 +38,14 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } fro
 import os from 'node:os';
 import path from 'node:path';
 
-import { emitGlobalInto } from '../bin/geneseed.mjs';
-import { GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir } from './hosts.mjs';
+import { emitGlobalInto } from '../../bin/geneseed.mjs';
+import { GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, footprintOfDir, modeOfDir, postureOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
-} from './installs.mjs';
-import { unifiedDiff, pySplitLines } from './lib/udiff.mjs';
-import { pyPathStr, pyPrint, pyPrintErr, readText, writeText } from './lib/fs.mjs';
+} from '../hosts/installs.mjs';
+import { unifiedDiff, pySplitLines } from '../lib/udiff.mjs';
+import { pyPathStr, pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 

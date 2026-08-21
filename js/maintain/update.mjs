@@ -42,15 +42,15 @@ import { cpSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { ROOT } from './checkout.mjs';
-import { exportImprovements, flushExportNotes } from './diff.mjs';
-import { opencodeConfigDir } from './hosts.mjs';
+import { ROOT } from '../build/source.mjs';
+import { exportImprovements, flushExportNotes } from '../inspect/diff.mjs';
+import { opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   PY_SPACE, appendText, copyFile, pyInt, pyPathStr, pyPrint, pyPrintErr, pyStripSpace, pyWhich,
   readText, writeText,
-} from './lib/fs.mjs';
-import { NO_WINDOW } from './lib/proc.mjs';
-import { restartDaemon } from './web/server.mjs';
+} from '../lib/fs.mjs';
+import { NO_WINDOW } from '../lib/proc.mjs';
+import { restartDaemon } from '../web/server.mjs';
 
 /**
  * `_CREDS_RE` / `_redact_url_creds` — strip a `user[:token]@` userinfo out of any URL in

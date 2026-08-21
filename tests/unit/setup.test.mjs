@@ -20,13 +20,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { setupBuildArgs } from '../../js/generate.mjs';
-import { doctrineOptions, javaMajorOk, lspPrereqs, setupSummaryLines } from '../../js/setup.mjs';
-import { themeFlair, tuiEntries, detailLines } from '../../js/tui.mjs';
-import { catalogLines } from '../../js/catalog.mjs';
-import { tuiInventory } from '../../js/inventory.mjs';
-import { doctrinesForBuild, doctrinesOfDir, themeFiles } from '../../js/installs.mjs';
-import { ROOT, SRC, PACK_ORDER, discoverNames } from '../../js/checkout.mjs';
+import { setupBuildArgs } from '../../js/build/generate.mjs';
+import { doctrineOptions, javaMajorOk, lspPrereqs, setupSummaryLines } from '../../js/maintain/setup.mjs';
+import { themeFlair, tuiEntries, detailLines } from '../../js/ui/tui.mjs';
+import { catalogLines } from '../../js/build/catalog.mjs';
+import { tuiInventory } from '../../js/inspect/inventory.mjs';
+import { doctrinesForBuild, doctrinesOfDir, themeFiles } from '../../js/hosts/installs.mjs';
+import { ROOT, SRC, PACK_ORDER, discoverNames } from '../../js/build/source.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const themeNames = () => themeFiles().map((p) => path.basename(p, '.json'));
@@ -146,7 +146,7 @@ test('every RE-EMIT of an existing install states its pack selection', () => {
   // argument (the wizard now pre-selects the installed packs) and an anchored-empty match
   // would have made this gate VACUOUS rather than red, which is the failure mode a source
   // gate has and a fixture does not.
-  const ask = readSrc('js/setup.mjs').match(/function askDoctrines\([^)]*\)\s*\{[\s\S]*?\n\}/)?.[0];
+  const ask = readSrc('js/maintain/setup.mjs').match(/function askDoctrines\([^)]*\)\s*\{[\s\S]*?\n\}/)?.[0];
   assert.ok(ask, 'askDoctrines has moved — re-site the exemption in the gate above');
   assert.ok(!/return\s+(null|undefined)/.test(ask),
     'askDoctrines can now answer null, so it is no longer a stated selection — it must go '
@@ -203,12 +203,12 @@ test('no build-side consumer can resolve an unknown pack set out of harness.conf
   // — the case where there is no install to ask. Anything else holding a directory calls
   // `doctrinesForBuild`, whose `null` arm is `[...PACK_ORDER]`.
   assert.ok(JS_SOURCES.length > 20, `the source walk found ${JS_SOURCES.length} files`);
-  assert.ok(JS_SOURCES.includes('js/installs.mjs') && JS_SOURCES.includes('bin/geneseed.mjs'));
+  assert.ok(JS_SOURCES.includes('js/hosts/installs.mjs') && JS_SOURCES.includes('bin/geneseed.mjs'));
   for (const rel of JS_SOURCES) {
     const src = readSrc(rel).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     assert.ok(!/defaultDoctrines/.test(src),
       `${rel} resolves an install's packs out of harness.config.json — unknown must resolve `
-      + 'to the FULL pack set (js/installs.mjs `doctrinesForBuild`), never to a config value');
+      + 'to the FULL pack set (js/hosts/installs.mjs `doctrinesForBuild`), never to a config value');
     if (rel === 'bin/geneseed.mjs') continue;      // configDefaults: the no-install-to-ask case
     assert.ok(!/configuredDefault\(\s*'doctrines'/.test(src),
       `${rel} reads the doctrines config key directly — see above`);

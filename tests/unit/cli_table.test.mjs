@@ -23,7 +23,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { cliCommand, cliReference, cliSpec, helpWidth } from '../../js/cli.mjs';
+import { cliCommand, cliReference, cliSpec, helpWidth } from '../../js/ui/cli.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
 

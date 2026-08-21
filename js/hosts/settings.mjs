@@ -41,7 +41,7 @@ import os from 'node:os';
 import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, pyEq, pyRepr, indexOfEq,
   pyPrintErr, readText, writeText,
-} from './lib/fs.mjs';
+} from '../lib/fs.mjs';
 
 export const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
 

@@ -21,11 +21,11 @@
  */
 import path from 'node:path';
 
-import { ROOT, SRC, makeCfg, PACK_ORDER } from './checkout.mjs';
-import { firstBlockquote } from './native.mjs';
-import { renderAll } from './render.mjs';
-import { pyResolve } from './hosts.mjs';
-import { parseJson, readText } from './lib/fs.mjs';
+import { ROOT, SRC, makeCfg, PACK_ORDER } from '../build/source.mjs';
+import { firstBlockquote } from '../hosts/native.mjs';
+import { renderAll } from '../build/render.mjs';
+import { pyResolve } from '../hosts/hosts.mjs';
+import { parseJson, readText } from '../lib/fs.mjs';
 
 /**
  * `_harness_tui.LAW_HEADING_RE` — a heading in the RENDERED laws file, e.g.

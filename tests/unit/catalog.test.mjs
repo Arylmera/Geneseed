@@ -28,9 +28,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
 process.env.GENESEED_TUI_ASCII = '1';
-const { catalogLines, CATALOG_KINDS } = await import('../../js/catalog.mjs');
-const { tuiInventory } = await import('../../js/inventory.mjs');
-const { dwidth } = await import('../../js/tui.mjs');
+const { catalogLines, CATALOG_KINDS } = await import('../../js/build/catalog.mjs');
+const { tuiInventory } = await import('../../js/inspect/inventory.mjs');
+const { dwidth } = await import('../../js/ui/tui.mjs');
 
 /** A fixture inventory in `tuiInventory`'s shape — one row per section, all fields present. */
 const INV = () => ({
@@ -165,8 +165,8 @@ test('the listing paints nothing', () => {
   // The dropped panel stays dropped. `tests/unit/no_panel.test.mjs` makes this claim for the
   // modules that once had screens; `js/catalog.mjs` is the new consumer of the panel's own
   // layout helpers, so it is the obvious place for one to come back through.
-  const src = readFileSync(path.join(ROOT, 'js', 'catalog.mjs'), 'utf8');
+  const src = readFileSync(path.join(ROOT, 'js', 'build', 'catalog.mjs'), 'utf8');
   for (const seq of ['\\x1b', '\\u001b', '\\033', '\\e[']) {
-    assert.ok(!src.includes(seq), `js/catalog.mjs contains ${seq} — it has grown a panel`);
+    assert.ok(!src.includes(seq), `js/build/catalog.mjs contains ${seq} — it has grown a panel`);
   }
 });

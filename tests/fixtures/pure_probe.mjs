@@ -12,12 +12,12 @@ import path from 'node:path';
 
 import {
   accentFor, defaultTheme, manifestIsClaude, statusLines, versionVerdict,
-} from '../../js/status.mjs';
-import { fenceFor, setupBuildArgs } from '../../js/generate.mjs';
-import { cmpKey } from '../../js/diff.mjs';
-import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/native.mjs';
-import { proseMirrorProblems, romanToInt, themesToCheck } from '../../js/doctor.mjs';
-import { pyCapitalize } from '../../js/installs.mjs';
+} from '../../js/inspect/status.mjs';
+import { fenceFor, setupBuildArgs } from '../../js/build/generate.mjs';
+import { cmpKey } from '../../js/inspect/diff.mjs';
+import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/hosts/native.mjs';
+import { proseMirrorProblems, romanToInt, themesToCheck } from '../../js/inspect/doctor.mjs';
+import { pyCapitalize } from '../../js/hosts/installs.mjs';
 import {
   comparePaths, jsonDumpsCompact, normcase, parseJson, pyInt, pyIsAbsolute, pyLen, pyLjust,
   pyPathStr, pyStripSpace, pyUnquote, pyWhich, writeText,
@@ -25,26 +25,26 @@ import {
 // `expanduser` and `pyResolve` are NOT in `fs.mjs` — they are host-config resolvers and
 // live beside the config-dir lookups that need them. Verified rather than assumed; the
 // private copies in `js/hooks.mjs` are a second pair and not these.
-import { expanduser, pyResolve } from '../../js/hosts.mjs';
-import { installedDefaults } from '../../js/installs.mjs';
-import { installAgentEntryOf } from '../../js/uninstall.mjs';
+import { expanduser, pyResolve } from '../../js/hosts/hosts.mjs';
+import { installedDefaults } from '../../js/hosts/installs.mjs';
+import { installAgentEntryOf } from '../../js/maintain/uninstall.mjs';
 import {
   ask, askChoice, collectSetupLines, confirm, javaMajorOk, modeOptions, postureOptions,
   promptLine, setupSummaryLines, themeOptions,
-} from '../../js/setup.mjs';
+} from '../../js/maintain/setup.mjs';
 import { unifiedDiff, pySplitLines } from '../../js/lib/udiff.mjs';
 import { stampMinute } from '../../js/web/api.mjs';
 import { buildPlan, daemonArgs, restartArgs } from '../../js/web/server.mjs';
-import { fetchPhases, parseOrigin, pyCount, redactUrlCreds } from '../../js/update.mjs';
+import { fetchPhases, parseOrigin, pyCount, redactUrlCreds } from '../../js/maintain/update.mjs';
 import {
   sliceSection, slugifyHeading, stripHarnessBlocks,
 } from '../../js/web/docs.mjs';
-import { webFirstOk } from '../../js/menu.mjs';
+import { webFirstOk } from '../../js/ui/menu.mjs';
 import {
   clamp, detailLines, dwidth, fit, glyphs, icon, logoLines, mark, progressBar, spin,
   themeFlair, themePreview, truncd, tuiEntries,
-} from '../../js/tui.mjs';
-import { animOk, artFor, height, place, playLine, tile } from '../../js/anim.mjs';
+} from '../../js/ui/tui.mjs';
+import { animOk, artFor, height, place, playLine, tile } from '../../js/ui/anim.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 /**

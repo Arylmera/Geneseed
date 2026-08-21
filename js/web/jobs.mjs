@@ -107,9 +107,9 @@ import { statSync } from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 import path from 'node:path';
 
-import { ROOT, PACK_ORDER } from '../checkout.mjs';
-import { setupBuildArgs } from '../generate.mjs';
-import { isDict } from '../mcp.mjs';
+import { ROOT, PACK_ORDER } from '../build/source.mjs';
+import { setupBuildArgs } from '../build/generate.mjs';
+import { isDict } from '../hosts/mcp.mjs';
 import { jsonDumpsCompact, parseJson, pyTruthy, readText, writeText } from '../lib/fs.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };

@@ -24,12 +24,12 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync }
   from 'node:fs';
 import path from 'node:path';
-import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from './emit.mjs';
-import { wireClaudeExcludes, unwireClaudeExcludes } from './settings.mjs';
-import { GLOBAL_MANIFEST, HOSTS, pyResolve } from './hosts.mjs';
+import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from '../build/emit.mjs';
+import { wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
+import { GLOBAL_MANIFEST, HOSTS, pyResolve } from '../hosts/hosts.mjs';
 import {
   readText, writeText, parseJson, jsonDumpsIndent, normcase, pyPathStr, pyPrint, pyPrintErr,
-} from './lib/fs.mjs';
+} from '../lib/fs.mjs';
 
 const get = (o, k) => (o && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
 const isDict = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);

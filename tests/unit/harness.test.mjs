@@ -20,22 +20,22 @@ import { pathToFileURL } from 'node:url';
 
 import {
   LEARN_PROMPT_HEAD, frontmatter, readNotes, existingSlugs, writeMemories,
-} from '../../js/hooks.mjs';
+} from '../../js/hosts/hooks.mjs';
 import {
   themeParityProblems, countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt,
   themesToCheck, globalEmitProblems, renderedProblems, authoringProblems, claudeBobEmitProblems,
   doctrineMetaProblems,
-} from '../../js/doctor.mjs';
+} from '../../js/inspect/doctor.mjs';
 import {
   memoryDropIndex, discoverContext, resolveContextSets, resolveAgentName, appendAgentLesson,
   consolidateMemory,
-} from '../../js/hooks.mjs';
-import { memoryFactCount } from '../../js/status.mjs';
-import { stripSkillBodyLinks } from '../../js/native.mjs';
-import { stripCapabilityLinks } from '../../js/emit.mjs';
-import { themeOfDir } from '../../js/installs.mjs';
-import { LAW_CLASS, LAW_CLASSES } from '../../js/inventory.mjs';
-import { PLUGIN_SRC, ROOT, SRC } from '../../js/checkout.mjs';
+} from '../../js/hosts/hooks.mjs';
+import { memoryFactCount } from '../../js/inspect/status.mjs';
+import { stripSkillBodyLinks } from '../../js/hosts/native.mjs';
+import { stripCapabilityLinks } from '../../js/build/emit.mjs';
+import { themeOfDir } from '../../js/hosts/installs.mjs';
+import { LAW_CLASS, LAW_CLASSES } from '../../js/inspect/inventory.mjs';
+import { PLUGIN_SRC, ROOT, SRC } from '../../js/build/source.mjs';
 import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 
@@ -227,7 +227,7 @@ function withFault(faults, fn) {
  */
 function gate(root, expr) {
   GATE_HOME ??= makeSandbox('gs-gatehome-');
-  const url = pathToFileURL(path.join(root, 'js', 'doctor.mjs')).href;
+  const url = pathToFileURL(path.join(root, 'js', 'inspect', 'doctor.mjs')).href;
   const r = spawnSync(process.execPath, ['--input-type=module', '-e',
     `const m = await import(${JSON.stringify(url)});`
     + `process.stdout.write(JSON.stringify(${expr}));`],
@@ -448,14 +448,14 @@ test('the gate holds knownRuleIds to the rules the pack files actually define', 
   //
   // Planted in the ENUMERATOR rather than in the source, because a fault in a pack file moves
   // both readers together and proves nothing about their agreement.
-  const checkout = fs.readFileSync(path.join(ROOT, 'js', 'checkout.mjs'), 'utf8');
+  const checkout = fs.readFileSync(path.join(ROOT, 'js', 'build', 'source.mjs'), 'utf8');
   const anchor = "      if (m[1] === pack) out.push(`${pack}.${Number(m[2])}`);";
   assert.ok(checkout.includes(anchor),
     'the knownRuleIds body moved — re-aim this fault before trusting the result');
 
   // Offers less than the source defines: skip every rule numbered 1.
   const short = withFault(
-    { 'js/checkout.mjs': checkout.replace(anchor,
+    { 'js/build/source.mjs': checkout.replace(anchor,
       "      if (m[1] === pack && m[2] !== '1') out.push(`${pack}.${Number(m[2])}`);") },
     (root) => gate(root, 'm.constitutionProblems()'));
   assert.ok(short.some((p) => p.includes('craft 1') && p.includes('knownRuleIds')),
@@ -463,7 +463,7 @@ test('the gate holds knownRuleIds to the rules the pack files actually define', 
 
   // ...and the other direction, which a containment check in one direction would miss.
   const long = withFault(
-    { 'js/checkout.mjs': checkout.replace(anchor,
+    { 'js/build/source.mjs': checkout.replace(anchor,
       `${anchor}\n      if (m[2] === '1') out.push(\`\${pack}.99\`);`) },
     (root) => gate(root, 'm.constitutionProblems()'));
   assert.ok(long.some((p) => p.includes('craft 99') && p.includes('no pack file defines')),
@@ -894,13 +894,13 @@ test('the claude/bob check catches the dead link it was written for', () => {
   // `js/emit.mjs` with no injection point left (`cfg.capabilityLinkRe` was the Python driver's
   // seam and the Node path supplies none), so the narrowed pattern is PLANTED IN THE COPY and
   // the check is run out of it — the same discovery route the theme and count gates use.
-  const real = fs.readFileSync(path.join(ROOT, 'js', 'emit.mjs'), 'utf8');
+  const real = fs.readFileSync(path.join(ROOT, 'js', 'build', 'emit.mjs'), 'utf8');
   const wide = '/\\[([^\\]]+)\\]\\((?:(?!https?:\\/\\/|\\/)[A-Za-z0-9_.-]+\\/)*'
     + '(?:agents|skills)\\/[A-Za-z0-9_-]+\\.md\\)/g';
   const narrow = '/\\[([^\\]]+)\\]\\((?:agents|skills)\\/[A-Za-z0-9_-]+\\.md\\)/g';
   assert.ok(real.includes(wide),
     'the CAPABILITY_LINK_RE literal has been reworded — this fault no longer plants anything');
-  const problems = withFault({ 'js/emit.mjs': real.replace(wide, narrow) },
+  const problems = withFault({ 'js/build/emit.mjs': real.replace(wide, narrow) },
     (root) => gate(root, "m.claudeBobEmitProblems('neutral')"));
   assert.ok(problems.some((p) => p.includes('dead link') && p.includes('skills/')),
     `expected a seeded dead skill link, got: ${JSON.stringify(problems.slice(0, 5))}`);
@@ -1110,7 +1110,7 @@ test('the sweep widens when what was detected is unknown or absent', () => {
 function memoryResolver(harnessVar, cwd, home) {
   const env = { ...process.env, ...homeOverrides(home), GENESEED_HARNESS: harnessVar };
   delete env.GENESEED_MEMORY;
-  const url = pathToFileURL(path.join(ROOT, 'js', 'hosts.mjs')).href;
+  const url = pathToFileURL(path.join(ROOT, 'js', 'hosts', 'hosts.mjs')).href;
   const r = spawnSync(process.execPath, ['--input-type=module', '-e',
     `import {resolveMemoryDir} from ${JSON.stringify(url)};`
     + 'process.stdout.write(String(resolveMemoryDir(null)));'],

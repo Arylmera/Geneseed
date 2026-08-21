@@ -55,27 +55,27 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { ROOT, THEMES, discoverNames } from '../checkout.mjs';
-import { diffCollect } from '../diff.mjs';
-import { doctorCollect } from '../doctor.mjs';
-import { excludesSnapshot } from '../excludes.mjs';
-import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, pyResolve } from '../hosts.mjs';
+import { ROOT, THEMES, discoverNames } from '../build/source.mjs';
+import { diffCollect } from '../inspect/diff.mjs';
+import { doctorCollect } from '../inspect/doctor.mjs';
+import { excludesSnapshot } from '../inspect/excludes.mjs';
+import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, pyResolve } from '../hosts/hosts.mjs';
 import {
   doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState, installTargets,
   installedDefaults, modeOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
-} from '../installs.mjs';
-import { frontmatter } from '../hooks.mjs';
+} from '../hosts/installs.mjs';
+import { frontmatter } from '../hosts/hooks.mjs';
 import {
   SKILL_CLASS, entityStatus, loadRegistry, tuiInventory,
-} from '../inventory.mjs';
-import { firstBlockquote } from '../native.mjs';
-import { EMIT_OPTIONS, themeOptions } from '../setup.mjs';
-import { accentFor, statusData } from '../status.mjs';
+} from '../inspect/inventory.mjs';
+import { firstBlockquote } from '../hosts/native.mjs';
+import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
+import { accentFor, statusData } from '../inspect/status.mjs';
 import {
   comparePaths, normcase, pyStripSpace, pyUnquote, readText, withDiscardableStderr, within,
 } from '../lib/fs.mjs';
-import { readJsonc } from '../settings.mjs';
+import { readJsonc } from '../hosts/settings.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
 import { apiMcp, apiRules } from './actions.mjs';
 import { apiGraph } from './graph.mjs';

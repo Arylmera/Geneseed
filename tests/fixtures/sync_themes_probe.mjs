@@ -16,7 +16,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
-import { syncThemes } from '../../js/themes.mjs';
+import { syncThemes } from '../../js/build/themes.mjs';
 import { withPyNewlines } from '../../js/lib/fs.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 

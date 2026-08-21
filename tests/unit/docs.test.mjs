@@ -453,9 +453,9 @@ test('every workflow that count-gates `node --test` pins the TAP reporter', () =
 const ADVICE_RE = /update it by hand to run: (.+?)(?:\\n)?['"]/g;
 
 function advice() {
-  const found = [...read('js', 'migrate.mjs').matchAll(ADVICE_RE)].map((m) => m[1].trim());
+  const found = [...read('js', 'maintain', 'migrate.mjs').matchAll(ADVICE_RE)].map((m) => m[1].trim());
   assert.equal(found.length, 1,
-    `js/migrate.mjs should carry exactly one 'update it by hand to run:' advice, found `
+    `js/maintain/migrate.mjs should carry exactly one 'update it by hand to run:' advice, found `
     + `${found.length} — a scrape that matches nothing must fail here, not pass silently`);
   return found[0];
 }
@@ -466,7 +466,7 @@ test('the migrate advice names a launcher this package installs', () => {
   const bins = Object.keys(readJson('package.json').bin);
   const token = advice().split(/\s+/)[0];
   assert.ok(bins.includes(token),
-    `js/migrate.mjs advises running '${token}', which is not one of the commands this package `
+    `js/maintain/migrate.mjs advises running '${token}', which is not one of the commands this package `
     + `installs (${bins.sort()})`);
 });
 

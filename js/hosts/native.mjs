@@ -31,7 +31,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { writeText, copyFile, jsonDumps, parseJson, pyStr, pyRepr, pyTruthy, readText }
-  from './lib/fs.mjs';
+  from '../lib/fs.mjs';
 
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
 export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report']);

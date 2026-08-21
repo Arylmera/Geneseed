@@ -37,8 +37,8 @@
  * every Geneseed hook returns 0 and signals through stdout — so "did nothing" and "worked"
  * are the same observation.
  */
-import { cmdContext, cmdGitGate, cmdRuleGate, cmdLearn } from '../js/hooks.mjs';
-import { printHelp } from '../js/cli.mjs';
+import { cmdContext, cmdGitGate, cmdRuleGate, cmdLearn } from '../js/hosts/hooks.mjs';
+import { printHelp } from '../js/ui/cli.mjs';
 
 const VERBS = {
   context: { fn: cmdContext, flags: { '--root': 'root' } },

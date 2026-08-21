@@ -557,9 +557,9 @@ test('the wizard still plays the animation between the build and the summary', (
   //
   // A weak test on purpose, and honest about which half it covers: the corpus proves the animation
   // is RIGHT, this proves it is WIRED, and neither claims the other.
-  const whole = readFileSync(path.join(ROOT, 'js', 'setup.mjs'), 'utf8');
+  const whole = readFileSync(path.join(ROOT, 'js', 'maintain', 'setup.mjs'), 'utf8');
   const from = whole.indexOf('export function setupLines(');
-  assert.ok(from > 0, 'js/setup.mjs no longer exports setupLines under that name');
+  assert.ok(from > 0, 'js/maintain/setup.mjs no longer exports setupLines under that name');
   const rest = whole.slice(from);
   const to = rest.indexOf('\nexport function ');
   const src = to > 0 ? rest.slice(0, to) : rest;

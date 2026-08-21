@@ -38,8 +38,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender, phaseLog,
-} from '../js/emit.mjs';
-import { settingsIntegrityCheck } from '../js/settings.mjs';
+} from '../js/build/emit.mjs';
+import { settingsIntegrityCheck } from '../js/hosts/settings.mjs';
 import { writeText, parseJson, jsonDumpsIndent, withPyNewlines } from '../js/lib/fs.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
@@ -47,24 +47,24 @@ import { writeText, parseJson, jsonDumpsIndent, withPyNewlines } from '../js/lib
 import {
   GLOBAL_MANIFEST, pyResolve, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   copilotConfigDir,
-} from '../js/hosts.mjs';
+} from '../js/hosts/hosts.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg. golden.py's 259 cells all build one, which is what made the move safe.
 import {
   ROOT, CONFIG, THEMES, discoverNames, makeCfg, PACK_ORDER, knownRuleIds,
-} from '../js/checkout.mjs';
+} from '../js/build/source.mjs';
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
 // registry to find every install it must re-emit, and a CLI verb may not reach into a driver
 // for a reader. See js/registry.mjs.
-import { registryRecord, registryRoots } from '../js/registry.mjs';
+import { registryRecord, registryRoots } from '../js/inspect/registry.mjs';
 
 // P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
 // of textual surgery over committed files with a corpus of its own, and it is the half of the
 // maintainer pair that needs nothing this driver is banned from having.
-import { syncThemes } from '../js/themes.mjs';
+import { syncThemes } from '../js/build/themes.mjs';
 
 /** The nine `--emit` choices, in build.py:337-338's order. */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',

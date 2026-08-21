@@ -41,7 +41,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { winUserPathScript } from '../../js/link.mjs';
+import { winUserPathScript } from '../../js/hosts/link.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const RECORDING = JSON.parse(readFileSync(
@@ -128,9 +128,9 @@ test('the spawn carries no logic, which is what leaves its success arm safely un
   // builder's output to PowerShell and maps the outcome. If logic ever drifts INTO it, the
   // ungated region grows and nothing else in the repo would notice — which is the one way an
   // honestly-declared gap turns into a hidden one.
-  const src = readFileSync(path.join(ROOT, 'js', 'link.mjs'), 'utf8');
+  const src = readFileSync(path.join(ROOT, 'js', 'hosts', 'link.mjs'), 'utf8');
   const at = src.indexOf('function winUserPath(action, directory) {');
-  assert.notEqual(at, -1, 'js/link.mjs has no winUserPath — row 4 is about a function that is '
+  assert.notEqual(at, -1, 'js/hosts/link.mjs has no winUserPath — row 4 is about a function that is '
     + 'gone, and this test is the only place that said what it was for');
   const body = src.slice(at, at + src.slice(at).indexOf('\n}\n'));
 

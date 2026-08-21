@@ -35,28 +35,28 @@ import path from 'node:path';
 
 import {
   CONFIG, PACK_ORDER, PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC, knownRuleIds, makeCfg,
-} from './checkout.mjs';
+} from '../build/source.mjs';
 import {
   buildInto, main as driverMain, emitGlobalInto, emitProjectInto,
-} from '../bin/geneseed.mjs';
-import { stripCapabilityLinks } from './emit.mjs';
-import { hostCatalogsNatively, pyResolve } from './hosts.mjs';
-import { EMIT_HOST_SCOPE, footprintOfDir, installedDefaults, themeFiles } from './installs.mjs';
+} from '../../bin/geneseed.mjs';
+import { stripCapabilityLinks } from '../build/emit.mjs';
+import { hostCatalogsNatively, pyResolve } from '../hosts/hosts.mjs';
+import { EMIT_HOST_SCOPE, footprintOfDir, installedDefaults, themeFiles } from '../hosts/installs.mjs';
 import {
   ENTITY_STATUSES, LAW_CLASS, LAW_CLASSES, SKILL_CLASS,
 } from './inventory.mjs';
 import {
   VENDORED_SKILL_DIRS, descBlockProblem, firstBlockquote, isVendoredPath, validateIsVendored,
-} from './native.mjs';
-import { PALETTE_ROLES, colorThemeFiles } from './opencode.mjs';
-import { STRUCTURE, renderAll } from './render.mjs';
-import { hookShimPath, shimDeadPaths } from './settings.mjs';
-import { pySplitLines } from './lib/udiff.mjs';
-import { NO_WINDOW } from './lib/proc.mjs';
+} from '../hosts/native.mjs';
+import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
+import { STRUCTURE, renderAll } from '../build/render.mjs';
+import { hookShimPath, shimDeadPaths } from '../hosts/settings.mjs';
+import { pySplitLines } from '../lib/udiff.mjs';
+import { NO_WINDOW } from '../lib/proc.mjs';
 import {
   comparePaths, normcase, parseJson, pyPrint, pyPrintErr, pyRepr, pyStr, pyStripSpace, pyWhich,
   readText, withDiscardableStderr,
-} from './lib/fs.mjs';
+} from '../lib/fs.mjs';
 
 // --------------------------------------------------------------------------------------
 // _harness_core's scanning primitives
@@ -933,7 +933,7 @@ export function constitutionProblems() {
   try { processText = readText(path.join(dir, 'process.md')); } catch { /* reported above */ }
   if (processText && !new RegExp(`^### \\{\\{DOCTRINE\\}\\} process 5 — \\{\\{${consentTitle}\\}\\}`,
     'm').test(processText)) {
-    problems.push('[authoring] js/settings.mjs gates git commit/push on doctrine \'process 5\', '
+    problems.push('[authoring] js/hosts/settings.mjs gates git commit/push on doctrine \'process 5\', '
       + `but doctrines/process.md does not number {${consentTitle}} 5 — the tool boundary and `
       + 'the prompt now name different rules');
   }

@@ -33,7 +33,7 @@ could type, and now it names nothing at all. This CLI already spells itself `gen
 error it prints (`geneseed: error: …`, `bin/geneseed-cli.mjs`'s `die`), so reproducing `harness`
 here would make the help text the only surface still pointing at the old name.
 
-**How it stays honest.** `prog` is an ARGUMENT of `js/cli.mjs`'s `formatHelp`, not a constant.
+**How it stays honest.** `prog` is an ARGUMENT of `js/ui/cli.mjs`'s `formatHelp`, not a constant.
 `tests/snapshot/cli_help.test.mjs` replays all 26 recorded fixtures through it with the reference's own
 prog and requires them byte for byte. The rename is the only thing that moves, and a separate
 assertion pins the shipped spelling so a renderer that ignored `prog` could not pass both.
@@ -178,7 +178,7 @@ the same list.
 **Why the recording could not be kept as the whole answer.** The matrix was exported by the
 reference implementation, which was deleted on 2026-08-17 along with every recorder that could
 write a cell. So the covered set is frozen at four hook verbs for good. A fifth hook verb —
-wired in `js/settings.mjs`, carried in `bin/geneseed-hook.mjs`, declared in `js/cli-table.json` —
+wired in `js/hosts/settings.mjs`, carried in `bin/geneseed-hook.mjs`, declared in `js/cli-table.json` —
 would fail this equality with **no green path**: the corpus cannot grow, and the failure message
 correctly forbids deleting cells to pass. The gate had become a wall, and a wall that stops a
 legitimate change is not protection, it is an accident of when the recorder died.

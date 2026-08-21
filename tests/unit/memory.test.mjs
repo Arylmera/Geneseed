@@ -21,7 +21,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { isFactName, memoryDelete, memoryFacts } from '../../js/memory.mjs';
+import { isFactName, memoryDelete, memoryFacts } from '../../js/maintain/memory.mjs';
 import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));

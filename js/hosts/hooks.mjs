@@ -35,15 +35,15 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readText, writeText, jsonDumpsCompact, normcase, comparePaths, pyPathStr, pyPrint,
-  pyPrintErr, withDiscardableStderr } from './lib/fs.mjs';
-import { NO_WINDOW } from './lib/proc.mjs';
+  pyPrintErr, withDiscardableStderr } from '../lib/fs.mjs';
+import { NO_WINDOW } from '../lib/proc.mjs';
 // `harness status` reports the memory store, and `bin/geneseed-cli.mjs` cannot import THIS
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
 // spawns. So the resolver has one owner in `js/hosts.mjs` rather than a second copy — and
 // with it went this file's private `opencodeConfigDir`, whose only caller it was.
 import { resolveMemoryDir, expanduser } from './hosts.mjs';
 
-const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
 // ---- Python path and text primitives -------------------------------------------------
 // Small, and each one is here because a JS-idiomatic equivalent differs observably.

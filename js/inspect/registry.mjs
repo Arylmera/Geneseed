@@ -17,8 +17,8 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync
 import path from 'node:path';
 import os from 'node:os';
 
-import { expanduser } from './hosts.mjs';
-import { writeText, parseJson, jsonDumpsIndent, pyPathStr } from './lib/fs.mjs';
+import { expanduser } from '../hosts/hosts.mjs';
+import { writeText, parseJson, jsonDumpsIndent, pyPathStr } from '../lib/fs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };

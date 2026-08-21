@@ -22,9 +22,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { diffCollect } from '../../js/diff.mjs';
-import { ROOT } from '../../js/checkout.mjs';
-import { postureOfDir, modeOfDir, doctrinesOfDir } from '../../js/installs.mjs';
+import { diffCollect } from '../../js/inspect/diff.mjs';
+import { ROOT } from '../../js/build/source.mjs';
+import { postureOfDir, modeOfDir, doctrinesOfDir } from '../../js/hosts/installs.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';

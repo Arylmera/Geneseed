@@ -32,19 +32,19 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { main as driverMain } from '../bin/geneseed.mjs';
-import { makeCfg, PACK_ORDER } from './checkout.mjs';
-import { opencodeConfigDir, pyResolve } from './hosts.mjs';
+import { main as driverMain } from '../../bin/geneseed.mjs';
+import { makeCfg, PACK_ORDER } from './source.mjs';
+import { opencodeConfigDir, pyResolve } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
   excludedRulesOfDir, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
   readMaybe, themeOfDir,
-} from './installs.mjs';
-import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from './opencode.mjs';
+} from '../hosts/installs.mjs';
+import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
 import {
   jsonDumpsIndent, parseJson, pyPrint, pyPrintErr, pyRepr, readText, writeText,
-} from './lib/fs.mjs';
+} from '../lib/fs.mjs';
 
 /** `_harness_build._HEX_RE`. Anchored at BOTH ends — `#123` and `#1122334` both fail. */
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;

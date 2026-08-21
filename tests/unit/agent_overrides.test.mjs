@@ -20,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const SRC = fs.readFileSync(path.join(ROOT, 'js', 'opencode.mjs'), 'utf8');
+const SRC = fs.readFileSync(path.join(ROOT, 'js', 'hosts', 'opencode.mjs'), 'utf8');
 const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'harness.config.json'), 'utf8'));
 
 test('the stub the emit writes carries the CONFIGURED release, not a literal', () => {

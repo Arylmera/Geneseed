@@ -44,18 +44,18 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readSync } from 'node:fs';
 import path from 'node:path';
 
-import { main as driverMain, resolveOut } from '../bin/geneseed.mjs';
-import { playLine } from './anim.mjs';
-import { discoverNames, PACK_ORDER } from './checkout.mjs';
-import { exportImprovements } from './diff.mjs';
-import { cmdDoctor } from './doctor.mjs';
-import { setupBuildArgs } from './generate.mjs';
-import { GLOBAL_MANIFEST, opencodeConfigDir } from './hosts.mjs';
+import { main as driverMain, resolveOut } from '../../bin/geneseed.mjs';
+import { playLine } from '../ui/anim.mjs';
+import { discoverNames, PACK_ORDER } from '../build/source.mjs';
+import { exportImprovements } from '../inspect/diff.mjs';
+import { cmdDoctor } from '../inspect/doctor.mjs';
+import { setupBuildArgs } from '../build/generate.mjs';
+import { GLOBAL_MANIFEST, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   defaultMode, defaultPosture, defaultTheme, installedDefaults, themeFiles,
-} from './installs.mjs';
-import { pyInt, pyPrint, pyPrintErr, pyWhich } from './lib/fs.mjs';
-import { NO_WINDOW } from './lib/proc.mjs';
+} from '../hosts/installs.mjs';
+import { pyInt, pyPrint, pyPrintErr, pyWhich } from '../lib/fs.mjs';
+import { NO_WINDOW } from '../lib/proc.mjs';
 
 // --------------------------------------------------------------------------------------
 // the three readers

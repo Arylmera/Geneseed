@@ -50,8 +50,8 @@ function block(text, start, end, where) {
  * hook entry has to satisfy, read out of the emitter.
  */
 function wiredHookVerbs() {
-  const body = block(read('js', 'settings.mjs'), 'export function claudeHookGroups', '\n}\n',
-    'js/settings.mjs');
+  const body = block(read('js', 'hosts', 'settings.mjs'), 'export function claudeHookGroups', '\n}\n',
+    'js/hosts/settings.mjs');
   return new Set([...body.matchAll(/\$\{run\}\s+([a-z][a-z-]*)/g)].map((m) => m[1]));
 }
 
@@ -84,7 +84,7 @@ const sorted = (s) => [...s].sort();
 test('the hook entry carries exactly the verbs the emitter wires', () => {
   const wired = wiredHookVerbs();
   assert.deepEqual(sorted(wired), ['context', 'git-gate', 'learn', 'rule-gate'],
-    'js/settings.mjs wires a different set of hook commands than this gate was written for — '
+    'js/hosts/settings.mjs wires a different set of hook commands than this gate was written for — '
     + 'read the new one before deciding what it needs');
   assert.deepEqual(sorted(verbsOf(HOOK)), sorted(wired),
     'bin/geneseed-hook.mjs and the emitted settings.json disagree about which verbs are hooks. A '
@@ -455,30 +455,30 @@ test('the vacuity check reports each kind of broken expectation', () => {
 // compared against all seven. The hook entry's own single spawn is gated by name below, which is
 // what the column's one interesting row (`hooks.mjs`, delegated) was pointing at anyway.
 const ALLOWED_SPAWNS = {
-  'hooks.mjs': {
+  'hosts/hooks.mjs': {
     gatedBy: 'the only spawn in the hook entry is the model CLI',
     what: '`$GENESEED_LLM` — the model CLI `learn` shells out to',
   },
-  'doctor.mjs': {
+  'inspect/doctor.mjs': {
     binding: '{ spawnSync }',
     calls: 1,
     what: '`node --check <plugin>`',
     literals: ["spawnSync(node, ['--check', js]", "const node = pyWhich('node');"],
   },
-  'setup.mjs': {
+  'maintain/setup.mjs': {
     binding: '{ spawnSync }',
     calls: 1,
     what: '`java -version`',
     literals: ["spawnSync(java, ['-version']", "const java = pyWhich('java');"],
   },
-  'link.mjs': {
+  'hosts/link.mjs': {
     binding: '{ spawnSync }',
     calls: 1,
     what: '`powershell -NoProfile -Command <script>` — the persistent USER Path',
     literals: ["const r = spawnSync('powershell',",
       "['-NoProfile', '-Command', winUserPathScript(action, directory)],"],
   },
-  'update.mjs': {
+  'maintain/update.mjs': {
     binding: '{ spawn, spawnSync }',
     calls: 6,
     spawnCalls: 1,
@@ -559,23 +559,23 @@ test('the only spawn in the hook entry is the model CLI', () => {
   // The property is that there is exactly ONE spawn site and it is the model CLI, which is what
   // makes the dynamic half below meaningful: an absolute-path `spawn('C:/Python313/python.exe')`
   // never consults PATH and so would never notice that PATH lost anything.
-  const text = read('js', 'hooks.mjs');
+  const text = read('js', 'hosts', 'hooks.mjs');
   // THE IMPORT, not a scan for call sites. A `\bexec\s*\(` scan matches every `SOME_RE.exec(...)`
   // in the file — it fired on three of them — and would still miss `cp.exec()` behind a namespace
   // import. Naming the one binding that may be imported closes both.
   const imports = [...text.matchAll(/import\s+(.+?)\s+from\s+'node:child_process'/g)]
     .map((m) => m[1]);
   assert.deepEqual(imports, ['{ spawnSync }'],
-    `js/hooks.mjs imports ${imports} from child_process; exactly one binding is allowed`);
+    `js/hosts/hooks.mjs imports ${imports} from child_process; exactly one binding is allowed`);
   assert.equal((text.match(/(?<![.\w])spawnSync\s*\(/g) ?? []).length, 1,
-    'js/hooks.mjs has more than one spawnSync call site');
+    'js/hosts/hooks.mjs has more than one spawnSync call site');
   assert.ok(text.includes('const argv = pyWords(llm);'),
     'the one spawn no longer takes its command from $GENESEED_LLM');
   // The entry point must not spawn either — and again the check is the IMPORT, not the word: a
   // scan for the string fired on the module docblock, which explains at length why the DRIVER may
   // not have one.
   assert.ok(!importsChildProcess(read(...HOOK.split('/'))),
-    `${HOOK} imports child_process; only js/hooks.mjs's model CLI may`);
+    `${HOOK} imports child_process; only js/hosts/hooks.mjs's model CLI may`);
 });
 
 test('the CLI entry reaches child_process only where it is declared', () => {

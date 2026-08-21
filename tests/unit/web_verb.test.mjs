@@ -24,7 +24,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
-import { ROOT } from '../../js/checkout.mjs';
+import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
 
 const TABLE = JSON.parse(fs.readFileSync(path.join(ROOT, 'js', 'cli-table.json'), 'utf8'));

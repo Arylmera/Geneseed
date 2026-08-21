@@ -106,27 +106,27 @@ import path from 'node:path';
 import { emitGlobalInto } from '../../bin/geneseed.mjs';
 import {
   ROOT, discoverNames, knownRuleIds, PACK_ORDER,
-} from '../checkout.mjs';
-import { withStdoutSwallowed } from '../diff.mjs';
-import { excludeAdd, excludeRemove } from '../excludes.mjs';
-import { setupBuildArgs } from '../generate.mjs';
-import { frontmatter, memoryDropIndex } from '../hooks.mjs';
+} from '../build/source.mjs';
+import { withStdoutSwallowed } from '../inspect/diff.mjs';
+import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
+import { setupBuildArgs } from '../build/generate.mjs';
+import { frontmatter, memoryDropIndex } from '../hosts/hooks.mjs';
 import {
   HOSTS, bobConfigDir, claudeConfigDir, copilotConfigDir, expanduser, opencodeConfigDir,
   pyResolve,
-} from '../hosts.mjs';
+} from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState,
   installTargets, modeOfDir, postureOfDir, readMaybe,
-} from '../installs.mjs';
+} from '../hosts/installs.mjs';
 import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
   mcpMeta, mcpPresetBlock, mcpSave, mcpSetEnabled, mcpState,
-} from '../mcp.mjs';
+} from '../hosts/mcp.mjs';
 import {
   PY_SPACE, parseJson, pyLen, pyRepr, pyStr, pyStripSpace, pyTruthy, readText, writeText,
 } from '../lib/fs.mjs';
-import { installDeactivate, installReactivate, installUninstall } from '../uninstall.mjs';
+import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { pySplitLines } from '../lib/udiff.mjs';
 import {
   NotFound, deployed, emitChoices, fingerprint, themeChoices, viewCfg, within,

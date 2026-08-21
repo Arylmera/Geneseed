@@ -28,9 +28,9 @@
  */
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { readText, parseJson, normcase, comparePaths } from './lib/fs.mjs';
+import { readText, parseJson, normcase, comparePaths } from '../lib/fs.mjs';
 // `js/checkout.mjs` imports nothing but node builtins, so this direction cannot cycle.
-import { PACK_ORDER } from './checkout.mjs';
+import { PACK_ORDER } from './source.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
 export const STRUCTURE = {
@@ -265,7 +265,7 @@ function activeDoctrines(cfg) {
   const stray = onDisk.filter((n) => !PACK_ORDER.includes(n));
   if (stray.length) {
     const e = new Error(`doctrine pack file(s) ${stray.join(', ')} exist under src/doctrines/ `
-      + 'but are missing from PACK_ORDER (js/checkout.mjs) — add them there, or they render '
+      + 'but are missing from PACK_ORDER (js/build/source.mjs) — add them there, or they render '
       + 'into no install at all');
     e.exitCode = 1;
     throw e;

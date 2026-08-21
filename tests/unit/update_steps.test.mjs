@@ -53,7 +53,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { diagnoseFailedStep } from '../../js/update.mjs';
+import { diagnoseFailedStep } from '../../js/maintain/update.mjs';
 import { runCell } from '../helpers/cli_golden.mjs';
 import { ROOT } from '../helpers/golden.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';

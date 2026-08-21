@@ -27,7 +27,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { atomicWriteJson, wireClaudeExcludes } from '../../js/settings.mjs';
+import { atomicWriteJson, wireClaudeExcludes } from '../../js/hosts/settings.mjs';
 import { DENY_SKIP, deny } from '../helpers/deny.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 

@@ -27,11 +27,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   glyphs, GLYPH, dwidth, truncd, fit, icon, mark, spin, logoLines, clamp, progressBar,
-} from '../../js/tui.mjs';
-import { CATALOG_KINDS } from '../../js/catalog.mjs';
+} from '../../js/ui/tui.mjs';
+import { CATALOG_KINDS } from '../../js/build/catalog.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const TUI_URL = pathToFileURL(path.join(ROOT, 'js', 'tui.mjs')).href;
+const TUI_URL = pathToFileURL(path.join(ROOT, 'js', 'ui', 'tui.mjs')).href;
 
 /**
  * Evaluate an expression against `js/tui.mjs` in a child with `env` applied.
