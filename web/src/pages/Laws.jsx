@@ -126,13 +126,56 @@ function ruleName(rawTitle, romanNum, arabicNum) {
 // One expandable row, shared by the invariant and doctrine bands: lazy-loads its full body via
 // /api/item/law/<address> the first time it opens, cached on subsequent toggles. The address is
 // the catalog's `name` — a Roman numeral or `<pack>.<n>` — never the display number.
-function LawRow({ law, isOpen, onToggle, sw = null }) {
+function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
   const { data: detail } = useAsync(
     () => (isOpen ? api.item('law', law.addr) : Promise.resolve(null)),
     [isOpen, law.addr],
   )
   const body = detail?.body || law.ess
-  const row = (
+  const expandRow = (
+    <>
+      {isOpen && (
+        <div className="law-expand">
+          {detail ? (
+            <p>
+              <LawText text={body} />
+            </p>
+          ) : (
+            <p className="dim">Loading…</p>
+          )}
+          <div className="law-srcline">
+            $ geneseed law {law.addr} · {law.src}
+          </div>
+        </div>
+      )}
+    </>
+  )
+  // With a toggle column, the row is a 5-cell grid: № · Rule · Principle · Pack · Toggle.
+  // The toggle sits inside the 5th cell so the whole row is one grid.
+  // The toggle's onClick calls toggleRule; its event bubbles to the row's onClick which calls onToggle —
+  // both fire, so clicking the toggle changes the rule state AND expands the row.
+  return toggleCol ? (
+    <>
+      <div
+        className={`law-row ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
+        style={{ '--cc': law.c }}
+        onClick={() => onToggle()}
+      >
+        <span className="law-no">
+          <span className="x">›</span>
+          {law.pad}
+        </span>
+        <span className="law-name">{law.name}</span>
+        <span className="law-princ">{law.ess}</span>
+        <span className="law-class">
+          <span className="cdot" />
+          {law.catLabel}
+        </span>
+        <span className="toggle-col">{toggleCol}</span>
+      </div>
+      {expandRow}
+    </>
+  ) : (
     <>
       <button
         className={`law-row ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
@@ -151,31 +194,8 @@ function LawRow({ law, isOpen, onToggle, sw = null }) {
           {law.catLabel}
         </span>
       </button>
-      {isOpen && (
-        <div className="law-expand">
-          {detail ? (
-            <p>
-              <LawText text={body} />
-            </p>
-          ) : (
-            <p className="dim">Loading…</p>
-          )}
-          <div className="law-srcline">
-            $ geneseed law {law.addr} · {law.src}
-          </div>
-        </div>
-      )}
+      {expandRow}
     </>
-  )
-  // No switch (an invariant, or a console with no install) means no wrapper at all — the row
-  // keeps the exact grid it has on every other tier.
-  return sw ? (
-    <div className="rule-line">
-      {sw}
-      <div className="rule-line-row">{row}</div>
-    </div>
-  ) : (
-    row
   )
 }
 
@@ -517,42 +537,34 @@ export default function Laws({ selected, overview, onAction }) {
             </div>
           )}
           <div className="law-rowhead">
-            <span>№</span>
-            <span>Rule</span>
-            <span>Principle</span>
-            <span>Pack</span>
-          </div>
+              <span>№</span>
+              <span>Rule</span>
+              <span>Principle</span>
+              <span>Pack</span>
+              <span className="toggle-col">Toggle</span>
+            </div>
           {p.rules.map((r) => (
             <LawRow
               key={r.addr}
               law={{ ...r, off: !isOn(r.addr) }}
               isOpen={open === r.addr}
               onToggle={() => toggle(r.addr)}
-              // The switch sits OUTSIDE the row button — a `<button>` inside a `<button>` is
-              // invalid HTML and the inner click never arrives — and stops the click from
-              // also expanding the row it lives on.
-              sw={
-                canApply && (
-                  <span
-                    className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
-                    role="switch"
-                    aria-checked={isOn(r.addr)}
-                    aria-label={`${r.name} rule`}
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation()
+              toggleCol={canApply ? (
+                <span
+                  className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
+                  role="switch"
+                  aria-checked={isOn(r.addr)}
+                  aria-label={`${r.name} rule`}
+                  tabIndex={0}
+                  onClick={() => toggleRule(r.addr)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.key === ' ') e.preventDefault()
                       toggleRule(r.addr)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        if (e.key === ' ') e.preventDefault()
-                        e.stopPropagation()
-                        toggleRule(r.addr)
-                      }
-                    }}
-                  />
-                )
-              }
+                    }
+                  }}
+                />
+              ) : null}
             />
           ))}
         </div>
