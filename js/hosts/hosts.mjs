@@ -16,8 +16,8 @@
 import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { pyPrintErr, withDiscardableStderr } from '../lib/fs.mjs';
-import { pyPathStr } from '../lib/paths.mjs';
+import { printErr, withDiscardableStderr } from '../lib/fs.mjs';
+import { toPlatformPath } from '../lib/paths.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 
@@ -67,7 +67,7 @@ export function expanduser(p) {
     const msg = `refusing '${p}': a '~user' path is not expanded by this port (Python's `
       + "ntpath/posixpath would guess a home directory for 'user' — this port does not); "
       + 'pass an absolute path, or "~" / "~/…" for your own home directory';
-    pyPrintErr(`${msg}\n`);
+    printErr(`${msg}\n`);
     const e = new Error(msg);
     e.exitCode = 1;
     throw e;
@@ -84,7 +84,7 @@ export function expanduser(p) {
  * the part that exists and appends the rest verbatim, so that is what this reproduces.
  * It matters because the resolved directory is printed on stdout and compared byte-for-byte.
  */
-export function pyResolve(p) {
+export function resolvePath(p) {
   let cur = path.resolve(expanduser(p));
   const tail = [];
   for (;;) {
@@ -110,10 +110,10 @@ export function pyResolve(p) {
  */
 export function opencodeConfigDir() {
   const env = process.env.OPENCODE_CONFIG_DIR;
-  if (env) return pyResolve(env);
+  if (env) return resolvePath(env);
   const xdg = process.env.XDG_CONFIG_HOME;
   const base = xdg ? expanduser(xdg) : path.join(os.homedir(), '.config');
-  return pyResolve(path.join(base, 'opencode'));
+  return resolvePath(path.join(base, 'opencode'));
 }
 
 /**
@@ -126,8 +126,8 @@ export function opencodeConfigDir() {
  */
 export function copilotConfigDir() {
   const env = process.env.COPILOT_CONFIG_DIR;
-  if (env) return pyResolve(env);
-  return pyResolve(path.join(os.homedir(), '.copilot'));
+  if (env) return resolvePath(env);
+  return resolvePath(path.join(os.homedir(), '.copilot'));
 }
 
 /**
@@ -142,14 +142,14 @@ export function copilotConfigDir() {
  * as an omission.
  */
 export function claudeConfigDir() {
-  return pyResolve(path.join(os.homedir(), '.claude'));
+  return resolvePath(path.join(os.homedir(), '.claude'));
 }
 
 /** `_build_core._bob_config_dir` — `~/.bob`, relocatable via `$BOB_CONFIG_DIR`. */
 export function bobConfigDir() {
   const env = process.env.BOB_CONFIG_DIR;
-  if (env) return pyResolve(env);
-  return pyResolve(path.join(os.homedir(), '.bob'));
+  if (env) return resolvePath(env);
+  return resolvePath(path.join(os.homedir(), '.bob'));
 }
 
 /**
@@ -222,11 +222,11 @@ const MEMORY_DIR_NAMES = ['memory', 'anamnesis'];
  */
 export function resolveMemoryDir(explicit) {
   if (explicit) {
-    const p = pyPathStr(explicit);
+    const p = toPlatformPath(explicit);
     return isDir(p) ? p : null;
   }
   const env = process.env.GENESEED_MEMORY;
-  if (env && isDir(env)) return pyPathStr(env);
+  if (env && isDir(env)) return toPlatformPath(env);
   const cwd = process.cwd();
   const bases = [cwd, path.join(cwd, 'Harness')];
   const gh = process.env.GENESEED_HARNESS;

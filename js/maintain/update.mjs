@@ -45,9 +45,9 @@ import path from 'node:path';
 import { ROOT } from '../build/source.mjs';
 import { exportImprovements, flushExportNotes } from '../inspect/diff.mjs';
 import { opencodeConfigDir } from '../hosts/hosts.mjs';
-import { appendText, copyFile, pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
-import { pyPathStr, pyWhich } from '../lib/paths.mjs';
-import { PY_SPACE, pyInt, pyStripSpace } from '../lib/text.mjs';
+import { appendText, copyFile, printOut, printErr, readText, writeText } from '../lib/fs.mjs';
+import { toPlatformPath, which } from '../lib/paths.mjs';
+import { WHITESPACE, parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import { restartDaemon } from '../web/server.mjs';
 
@@ -55,12 +55,12 @@ import { restartDaemon } from '../web/server.mjs';
  * `_CREDS_RE` / `_redact_url_creds` — strip a `user[:token]@` userinfo out of any URL in
  * `text` so a tokened remote never reaches a log line or an HTTP response.
  *
- * `PY_SPACE` rather than `\s`: the class is NEGATED, so the two definitions disagree about
+ * `WHITESPACE` rather than `\s`: the class is NEGATED, so the two definitions disagree about
  * whether a `\uFEFF` or a `\u001c` ends the userinfo. Unreachable through a git remote and
  * spelled correctly anyway, for the reason `js/lib/fs.mjs` gives — an approximated
  * primitive is the one that is wrong the day something reaches it.
  */
-const CREDS_RE = new RegExp(`(://)[^/@${PY_SPACE}]+@`, 'g');
+const CREDS_RE = new RegExp(`(://)[^/@${WHITESPACE}]+@`, 'g');
 
 export function redactUrlCreds(text) {
   return (text || '').replace(CREDS_RE, '$1');
@@ -83,7 +83,7 @@ export const DEFAULT_ORIGIN = { url: 'https://github.com/Arylmera/Geneseed',
  * which-guarded, no-window, stripped + credential-redacted, NEVER raises. Returns
  * `[rc, out, err]`; `rc` is null when git is absent or the spawn failed.
  *
- * `pyWhich` and not a bare `'git'`: the reference answers `(None, "", "")` — which
+ * `which` and not a bare `'git'`: the reference answers `(None, "", "")` — which
  * `preflight` reports as "git is not installed or not on PATH" — when the lookup misses,
  * and a port that let the OS resolve the name would get an ENOENT instead and have to guess
  * which of the two it was.
@@ -93,7 +93,7 @@ export const DEFAULT_ORIGIN = { url: 'https://github.com/Arylmera/Geneseed',
  * "clean enough".
  */
 export function gitRun(args, { timeout = 10, network = false } = {}) {
-  const exe = pyWhich('git');
+  const exe = which('git');
   if (!exe) return [null, '', ''];
   const cmd = ['-C', String(ROOT)];
   let env;
@@ -111,8 +111,8 @@ export function gitRun(args, { timeout = 10, network = false } = {}) {
   // the arm the reference reaches for every other failure.
   if (r.error || r.status === null) return [null, '', ''];
   return [r.status,
-    redactUrlCreds(pyStripSpace(universal(r.stdout))),
-    redactUrlCreds(pyStripSpace(universal(r.stderr)))];
+    redactUrlCreds(stripWhitespace(universal(r.stdout))),
+    redactUrlCreds(stripWhitespace(universal(r.stderr)))];
 }
 
 /**
@@ -152,7 +152,7 @@ function urlsplitHostPath(o) {
  * Userinfo and port dropped from the url; slug set only for a two-segment github.com path.
  */
 export function parseOrigin(origin) {
-  const o = pyStripSpace(origin || '');
+  const o = stripWhitespace(origin || '');
   let host = '';
   let p = '';
   if (!o.includes('://') && o.includes('@') && o.split('@').slice(1).join('@').includes(':')) {
@@ -219,9 +219,9 @@ export function preflight() {
   return pre('ready');
 }
 
-/** `_fetch_timeout()`. `pyInt` is null where `int()` raises, which is the `except` arm. */
+/** `_fetch_timeout()`. `parseIntStrict` is null where `int()` raises, which is the `except` arm. */
 export function fetchTimeout() {
-  const n = pyInt(process.env.GENESEED_NET_TIMEOUT ?? '120');
+  const n = parseIntStrict(process.env.GENESEED_NET_TIMEOUT ?? '120');
   if (n === null) return 120;
   return Math.max(30, n);
 }
@@ -234,8 +234,8 @@ export function fetchTimeout() {
  * (`rev-list --count` prints ASCII). Reproducing the crash would be reproducing a bug; the
  * divergence is confined to input git cannot emit and is recorded rather than matched.
  */
-export function pyCount(s) {
-  const t = pyStripSpace(s || '');
+export function countOccurrences(s) {
+  const t = stripWhitespace(s || '');
   return /^[0-9]+$/.test(t) ? Number(t) : 0;
 }
 
@@ -268,7 +268,7 @@ export function killTree(child) {
 export function fetchPhases(rawLines, last = '') {
   const out = [];
   for (const raw of rawLines) {
-    const line = redactUrlCreds(pyStripSpace(raw));
+    const line = redactUrlCreds(stripWhitespace(raw));
     if (!line) continue;
     const phase = line.split(':')[0];
     if (phase !== last) {
@@ -291,7 +291,7 @@ export function fetchPhases(rawLines, last = '') {
  * since P6h.
  */
 export async function fetchStreaming(log = null) {
-  const exe = pyWhich('git');
+  const exe = which('git');
   if (!exe) return [null, 'git is not installed or not on PATH'];
   const timeout = fetchTimeout();
   const args = ['-C', String(ROOT),
@@ -322,7 +322,7 @@ export async function fetchStreaming(log = null) {
     const [emit, next] = fetchPhases(parts, last);
     last = next;
     for (const p of parts) {
-      const s = redactUrlCreds(pyStripSpace(p));
+      const s = redactUrlCreds(stripWhitespace(p));
       if (s) lines.push(s);
     }
     if (log) for (const l of emit) log(`[geneseed]   ${l}`);
@@ -372,8 +372,8 @@ export async function measureUpstream(log = null) {
   if (rc !== 0) return ['fetch_failed', 0, err];
   const [, aheadRaw] = gitRun(['rev-list', '--count', '@{u}..HEAD']);
   const [, behindRaw] = gitRun(['rev-list', '--count', 'HEAD..@{u}']);
-  const ahead = pyCount(aheadRaw);
-  const behind = pyCount(behindRaw);
+  const ahead = countOccurrences(aheadRaw);
+  const behind = countOccurrences(behindRaw);
   if (ahead > 0) {
     const [mrc] = gitRun(['merge-base', 'HEAD', '@{u}']);
     return [mrc === 0 ? 'diverged' : 'unrelated', 0, ''];
@@ -412,7 +412,7 @@ export function runDoctor(cand) {
   // streams are interleaved in write order and arrive as `proc.stdout`. `spawnSync` has no
   // way to hand two descriptors the same pipe, so the two are concatenated instead: equal
   // whenever the child writes to only one of them, which `doctor` does (`js/doctor.mjs`
-  // reports every problem through `pyPrint`), and the reason the two doctor cells below are
+  // reports every problem through `printOut`), and the reason the two doctor cells below are
   // the gate on this rather than a comment. If a future check reports on stderr the
   // ORDERING here is what would differ, not the content.
   return [r.status === 0, universal(r.stdout) + universal(r.stderr)];
@@ -453,7 +453,7 @@ export function logfile() {
   // `Path(env)`, stringified with the platform separator when `upgrade` prints it — the same
   // rule `GENESEED_OUT` needed. No cell can set this (`cell_env` clears every `GENESEED_*`
   // and no upgrade cell re-adds it), so it is spelled from the rule rather than from a gate.
-  if (env) return pyPathStr(env);
+  if (env) return toPlatformPath(env);
   return path.join(os.homedir(), '.geneseed-install.log');
 }
 
@@ -470,7 +470,7 @@ export class Log {
   }
 
   call(msg) {
-    pyPrint(`${msg}\n`);
+    printOut(`${msg}\n`);
     if (this.path !== null) {
       try { appendText(this.path, `${msg}\n`); } catch { /* OSError: pass */ }
     }
@@ -484,7 +484,7 @@ export function resolveEmit(cfg, out) {
   for (const marker of [path.join(String(cfg), '.geneseed-emit'),
     path.join(String(out), '.geneseed-emit')]) {
     try {
-      const val = pyStripSpace(readText(marker));
+      const val = stripWhitespace(readText(marker));
       if (val) return val;
     } catch { /* OSError: pass */ }
   }
@@ -496,7 +496,7 @@ export function markerTheme(cfg, out) {
   for (const marker of [path.join(String(cfg), '.geneseed-theme'),
     path.join(String(out), '.geneseed-theme')]) {
     try {
-      const val = pyStripSpace(readText(marker));
+      const val = stripWhitespace(readText(marker));
       if (val) return val;
     } catch { /* OSError: pass */ }
   }
@@ -622,13 +622,13 @@ export async function upgrade(ref = null, themeArg = null) {
       + 'current branch (tag/branch pinning was removed with the zip path).');
   }
   const here = String(ROOT);
-  // `Path(os.environ.get(...) or ...)`, and `pyPathStr` is the `Path(str)` half of it: the
+  // `Path(os.environ.get(...) or ...)`, and `toPlatformPath` is the `Path(str)` half of it: the
   // reference stringifies with the PLATFORM separator, so a `GENESEED_OUT` spelled
   // `C:/x/bundle` — which is how a JSON config, a shell script and this harness's own
   // `{sb/}` placeholder all spell it — reaches the log as `C:\x\bundle`. Six cells differed
   // on exactly that and nothing else.
-  const out = pyPathStr(process.env.GENESEED_OUT || path.join(path.dirname(here), 'Harness'));
-  const rootDir = pyPathStr(process.env.GENESEED_ROOT || path.dirname(out));
+  const out = toPlatformPath(process.env.GENESEED_OUT || path.join(path.dirname(here), 'Harness'));
+  const rootDir = toPlatformPath(process.env.GENESEED_ROOT || path.dirname(out));
   const cfg = opencodeConfigDir();
   const emit = resolveEmit(cfg, out);
 
@@ -646,7 +646,7 @@ export async function upgrade(ref = null, themeArg = null) {
     return p.kind === 'info' ? 3 : 1;
   }
 
-  log(`[geneseed] fetching from origin (git: ${pyWhich('git') || 'git'}, `
+  log(`[geneseed] fetching from origin (git: ${which('git') || 'git'}, `
     + `timeout: ${fetchTimeout()}s) ...`);
   const [code, behind, err] = await measureUpstream(log);
   if (code === 'fetch_failed') {
@@ -714,11 +714,11 @@ export async function cmdUpgrade(args) {
   try {
     const [ipath] = exportImprovements();
     if (ipath) {
-      pyPrint(`[upgrade] deployed harness carries local edits — saved to ${ipath}\n`);
-      pyPrint('[upgrade] hand that file to your agent to back-port them into src/.\n');
+      printOut(`[upgrade] deployed harness carries local edits — saved to ${ipath}\n`);
+      printOut('[upgrade] hand that file to your agent to back-port them into src/.\n');
     }
   } catch (e) {
-    pyPrintErr(`[upgrade] ⚠️  could not export local edits (${e && e.message ? e.message : e}) — `
+    printErr(`[upgrade] ⚠️  could not export local edits (${e && e.message ? e.message : e}) — `
       + 'run `geneseed diff --out FILE` before upgrading to keep them.\n');
   }
   let { ref } = args;
@@ -861,17 +861,17 @@ async function bootstrapPlain() {
   let failed = false;
   for (let i = 0; i < steps.length; i += 1) {
     const [title, cmd, step] = steps[i];
-    pyPrint(`[geneseed] step ${i + 1}/${steps.length}: ${title} ...\n`);
+    printOut(`[geneseed] step ${i + 1}/${steps.length}: ${title} ...\n`);
     // eslint-disable-next-line no-await-in-loop
     const rc = await step();
     if (rc !== 0 && rc !== 3) {
       failed = true;
       for (const ln of diagnoseFailedStep(i + 1, steps.length, title, cmd, rc, '')) {
-        pyPrint(`${ln}\n`);
+        printOut(`${ln}\n`);
       }
     }
   }
-  if (!failed) pyPrint('[geneseed] ✓ update complete.\n');
+  if (!failed) printOut('[geneseed] ✓ update complete.\n');
   return failed;
 }
 

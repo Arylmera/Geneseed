@@ -24,7 +24,7 @@
  * `1` on the way back out. `readJsonc` already learned this; the strict-JSON fork has to
  * learn it separately, because it does not go through `readJsonc` at all.
  *
- * A PyNumber IS AN OBJECT TO `typeof`, which is why `isDict` is spelled out rather than
+ * A JsonNumber IS AN OBJECT TO `typeof`, which is why `isDict` is spelled out rather than
  * written as `typeof v === 'object'`. Python's `isinstance(x, dict)` is false for a float;
  * the JS twin has to be false for its wrapper.
  */
@@ -32,11 +32,11 @@ import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { bobConfigDir, copilotConfigDir, pyResolve } from './hosts.mjs';
+import { bobConfigDir, copilotConfigDir, resolvePath } from './hosts.mjs';
 import { installState, installTargets } from './installs.mjs';
-import { pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
+import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson } from '../lib/json.mjs';
-import { pyLjust } from '../lib/text.mjs';
+import { padEndToWidth } from '../lib/text.mjs';
 import { opencodeTarget, readJsonc } from './settings.mjs';
 
 /**
@@ -241,7 +241,7 @@ export function mcpConfigFor(host, scope, root) {
   if (host === 'opencode') return opencodeTarget(path.join(root, 'opencode.json'));
   if (host === 'claude') {
     return scope === 'project' ? path.join(root, '.mcp.json')
-      : pyResolve(path.join(os.homedir(), '.claude.json'));
+      : resolvePath(path.join(os.homedir(), '.claude.json'));
   }
   if (host === 'bob') {
     return scope === 'project' ? path.join(root, '.bob', 'settings.json')
@@ -306,18 +306,18 @@ export function cmdMcp() {
   const targets = mcpInstallTargets()
     .filter(([, , host, scope, root]) => installState(root, host, scope) === 'active');
   if (!targets.length) {
-    pyPrintErr('[mcp] no active Geneseed install found. Run `geneseed setup` first.\n');
+    printErr('[mcp] no active Geneseed install found. Run `geneseed setup` first.\n');
     return 1;
   }
   for (const [label, p, host] of targets) {
     const cfg = mcpLoad(p, host);
-    pyPrint(`[mcp] ${host} ${label}: ${p}${existsSync(p) ? '' : ' (not written yet)'}\n`);
+    printOut(`[mcp] ${host} ${label}: ${p}${existsSync(p) ? '' : ' (not written yet)'}\n`);
     if (mcpCommented(p)) {
-      pyPrint('  this config carries comments — edit it by hand so they survive.\n');
+      printOut('  this config carries comments — edit it by hand so they survive.\n');
     }
     for (const name of mcpKnownNames(cfg, host)) {
       const [lbl] = mcpMeta(name);
-      pyPrint(`  ${pyLjust(mcpState(cfg, name, host), 8)}  ${pyLjust(name, 12)}  ${lbl}\n`);
+      printOut(`  ${padEndToWidth(mcpState(cfg, name, host), 8)}  ${padEndToWidth(name, 12)}  ${lbl}\n`);
     }
   }
   return 0;

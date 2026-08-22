@@ -463,13 +463,13 @@ const ALLOWED_SPAWNS = {
     binding: '{ spawnSync }',
     calls: 1,
     what: '`node --check <plugin>`',
-    literals: ["spawnSync(node, ['--check', js]", "const node = pyWhich('node');"],
+    literals: ["spawnSync(node, ['--check', js]", "const node = which('node');"],
   },
   'maintain/setup.mjs': {
     binding: '{ spawnSync }',
     calls: 1,
     what: '`java -version`',
-    literals: ["spawnSync(java, ['-version']", "const java = pyWhich('java');"],
+    literals: ["spawnSync(java, ['-version']", "const java = which('java');"],
   },
   'hosts/link.mjs': {
     binding: '{ spawnSync }',
@@ -484,7 +484,7 @@ const ALLOWED_SPAWNS = {
     spawnCalls: 1,
     what: '`git …` (the update transport), `taskkill /T` (a timed-out fetch\'s tree), and '
       + '`node bin/geneseed-{cli,}.mjs` re-executed over the PULLED source',
-    literals: ["const exe = pyWhich('git');",
+    literals: ["const exe = which('git');",
       "spawnSync('taskkill', ['/F', '/T', '/PID', String(child.pid)]",
       "[path.join(String(cand), 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle'],",
       "[path.join(String(here), 'bin', 'build-driver.mjs'), ...buildArgs],",
@@ -500,7 +500,7 @@ const ALLOWED_SPAWNS = {
       + '`npm install` / `npm run build`, and the desktop\'s URL opener',
     literals: ["const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web',",
       "detached: true, windowsHide: true, stdio: ['ignore', out, out],",
-      "const plan = buildPlan(dist, webDir, pyWhich('npm'), Boolean(process.stdin.isTTY));",
+      "const plan = buildPlan(dist, webDir, which('npm'), Boolean(process.stdin.isTTY));",
       'const r = spawnSync(win ? `"${npm}"` : npm, step, {',
       "? [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start \"\" \"${url}\"`],",
       "(process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);"],
@@ -569,7 +569,7 @@ test('the only spawn in the hook entry is the model CLI', () => {
     `js/hosts/hooks.mjs imports ${imports} from child_process; exactly one binding is allowed`);
   assert.equal((text.match(/(?<![.\w])spawnSync\s*\(/g) ?? []).length, 1,
     'js/hosts/hooks.mjs has more than one spawnSync call site');
-  assert.ok(text.includes('const argv = pyWords(llm);'),
+  assert.ok(text.includes('const argv = splitWords(llm);'),
     'the one spawn no longer takes its command from $GENESEED_LLM');
   // The entry point must not spawn either — and again the check is the IMPORT, not the word: a
   // scan for the string fired on the module docblock, which explains at length why the DRIVER may
@@ -953,7 +953,7 @@ test('every newline the entry points write is the platform\'s', () => {
   //
   // The equality dies with the reference. The absolute residue is that the port writes the
   // PLATFORM's line ending, which is what the reference did through `sys.stdout` and what
-  // `js/hooks.mjs`'s translating funnels and `withPyNewlines` were added to reproduce.
+  // `js/hooks.mjs`'s translating funnels and `withPlatformNewlines` were added to reproduce.
   //
   // THE SAME THREE ROWS, for the reasons the reference's docstring gives. `context` covers the
   // hooks. `prompt` is ~400 KB of rendered tree through a CLI module that could reach

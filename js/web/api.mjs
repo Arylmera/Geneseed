@@ -46,7 +46,7 @@
  * carries the key, which is why its replay harness erases it before comparing.
  *
  * P6c's ROUTES ARE THE FIRST THAT PARSE A PATH, which brings three things no earlier
- * endpoint could reach: `pyUnquote` (NOT `decodeURIComponent`, which throws where the
+ * endpoint could reach: `percentDecode` (NOT `decodeURIComponent`, which throws where the
  * reference leaves a stray `%` alone), the `NotFound` → 404 convention, and `flatName`'s
  * traversal refusal — a GET carries no token, so before that check the item route was an
  * arbitrary-file read.
@@ -59,7 +59,7 @@ import { ROOT, THEMES, discoverNames } from '../build/source.mjs';
 import { diffCollect } from '../inspect/diff.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
-import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, pyResolve } from '../hosts/hosts.mjs';
+import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState, installTargets,
   installedDefaults, modeOfDir,
@@ -74,7 +74,7 @@ import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, statusData } from '../inspect/status.mjs';
 import { readText, withDiscardableStderr } from '../lib/fs.mjs';
 import { comparePaths, normcase, within } from '../lib/paths.mjs';
-import { pyStripSpace, pyUnquote } from '../lib/text.mjs';
+import { stripWhitespace, percentDecode } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
 import { apiMcp, apiRules } from './actions.mjs';
@@ -87,7 +87,7 @@ const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /** Two resolved paths, compared as `PurePath.__eq__` does — case-folded on Windows. */
-const samePath = (a, b) => normcase(pyResolve(a)) === normcase(pyResolve(b));
+const samePath = (a, b) => normcase(resolvePath(a)) === normcase(resolvePath(b));
 
 /** `dict.get(key, default)` — `??` would also swallow an explicit null the file declared. */
 const dget = (obj, key, dflt) => (Object.hasOwn(obj, key) ? obj[key] : dflt);
@@ -177,7 +177,7 @@ export function webState(theme = null, target = null) {
       try {
         const em = path.join(d, '.geneseed-emit');
         if (isFile(em)) {
-          const v = pyStripSpace(readText(em));
+          const v = stripWhitespace(readText(em));
           if (v) return v;
         }
       } catch { /* as the Python's `except OSError: pass` */ }
@@ -264,7 +264,7 @@ export function specEntries(root, nested) {
     if (!isFile(p)) continue;
     const [fm, body] = frontmatter(readMaybe(p) ?? '');
     const name = nested ? path.basename(path.dirname(p)) : path.basename(p, '.md');
-    out.push({ name, desc: specDesc(fm, body), body, source: pyResolve(p) });
+    out.push({ name, desc: specDesc(fm, body), body, source: resolvePath(p) });
   }
   out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   return out;
@@ -353,7 +353,7 @@ export function memoryItems(state) {
       name: stem,
       title: fm.has('name') ? fm.get('name') : stem,
       desc: fm.has('description') ? fm.get('description') : '',
-      source: pyResolve(p),
+      source: resolvePath(p),
     };
   });
 }
@@ -363,7 +363,7 @@ export function notebookItems(state) {
   const d = notebookDir(state);
   if (!isDir(d)) return [];
   return globMd(d).map((n) => ({
-    name: stemOf(n), title: stemOf(n), desc: '', source: pyResolve(path.join(d, n)),
+    name: stemOf(n), title: stemOf(n), desc: '', source: resolvePath(path.join(d, n)),
   }));
 }
 
@@ -381,7 +381,7 @@ export function configItems(state) {
     if (!isFile(p)) continue;
     const [title, desc] = CONFIG_META[fname] ?? [fname, ''];
     out.push({ name: fname, title, desc, type: 'config', kind: 'manifest',
-      source: pyResolve(p) });
+      source: resolvePath(p) });
   }
   return out;
 }
@@ -389,7 +389,7 @@ export function configItems(state) {
 export const WIKI_FILE_CAP = 5000;
 
 /**
- * `pyResolve` for a path that came out of a HAND-MAINTAINED manifest — `null`, never a throw.
+ * `resolvePath` for a path that came out of a HAND-MAINTAINED manifest — `null`, never a throw.
  *
  * The three wiki sites below are the only request-path callers of `expanduser`, and it now
  * REFUSES a `~user` form by printing and throwing (`js/hosts.mjs`'s docblock). None of them
@@ -413,7 +413,7 @@ export const WIKI_FILE_CAP = 5000;
  */
 function wikiPath(p) {
   try {
-    return withDiscardableStderr(() => pyResolve(p));
+    return withDiscardableStderr(() => resolvePath(p));
   } catch {
     return null;
   }
@@ -423,7 +423,7 @@ function wikiPath(p) {
  * `_web_catalog._wiki_manifest` — `$GENESEED_WIKI` first, else `wiki.jsonc` beside the
  * deployed bundle, read with the harness's generic JSONC loader.
  *
- * `pyResolve` where the reference only `expanduser()`s. NOT OBSERVABLE, so it stays: `p` is
+ * `resolvePath` where the reference only `expanduser()`s. NOT OBSERVABLE, so it stays: `p` is
  * consumed by `isFile` and `mcpLoad` and never reaches a response body, and both of those
  * follow symlinks and resolve a relative path against the same cwd anyway.
  */
@@ -476,7 +476,7 @@ export function wikiItems(state) {
     if (!w || typeof w !== 'object' || Array.isArray(w)) continue;
     const wname = String(dget(w, 'name', null) || 'wiki');
     // PER ENTRY, and the loop continues — one unusable `path` in the manifest must not blank
-    // every OTHER vault in it. `pyResolve` where the reference only `expanduser()`s is again
+    // every OTHER vault in it. `resolvePath` where the reference only `expanduser()`s is again
     // unobservable: `root` is only ever joined against or used as the base of a `relative()`
     // whose other operand was built FROM it, and `source` is `.resolve()`d on both sides.
     const root = wikiPath(String(dget(w, 'path', null) || ''));
@@ -504,7 +504,7 @@ export function wikiItems(state) {
         seen.add(key);
         items.push({ name: key, title: path.basename(md, '.md'),
           desc: mds.length === 1 ? desc : r, type: 'wiki', kind: 'page', group: wname,
-          source: pyResolve(md) });
+          source: resolvePath(md) });
       }
     }
   }
@@ -525,7 +525,7 @@ export function apiWikiItem(state, name) {
     // where the reference lands when the expanded root turns out not to exist.
     const root = wikiPath(String(dget(w, 'path', null) || ''));
     if (!root) continue;
-    const p = pyResolve(path.join(root, rel));
+    const p = resolvePath(path.join(root, rel));
     if (rel && path.extname(p) === '.md' && within(p, root) && isFile(p)) {
       const body = readMaybe(p) ?? '';
       return { type: 'wiki', name, title: path.basename(p, '.md'), desc: '',
@@ -577,9 +577,9 @@ export function resolveLinks(state, body) {
   const links = [];
   const seen = new Set();
   for (const m of body.matchAll(WIKILINK_RE)) {
-    // `pyStripSpace`, not `trim()` — P6d measured the two whitespace classes apart and P6e
+    // `stripWhitespace`, not `trim()` — P6d measured the two whitespace classes apart and P6e
     // gave this regex a second reader, so the two call sites answer with one rule.
-    const label = pyStripSpace(m[1]);
+    const label = stripWhitespace(m[1]);
     if (known.has(label) && !seen.has(label)) {
       seen.add(label);
       links.push({ label, type: known.get(label), name: label });
@@ -715,7 +715,7 @@ export function apiItem(state, type, name) {
     if (!isFile(p)) throw new NotFound(name);
     const body = readMaybe(p) ?? '';
     return { type, name, title: name, desc: '', body,
-      links: resolveLinks(state, body), source: pyResolve(p) };
+      links: resolveLinks(state, body), source: resolvePath(p) };
   }
   if (type === 'wiki') return apiWikiItem(state, name);
   if (type === 'config') {
@@ -725,7 +725,7 @@ export function apiItem(state, type, name) {
     const raw = readMaybe(p) ?? '';
     const [title, desc] = CONFIG_META[name] ?? [name, ''];
     return { type, name, title, desc, manifest: configManifest(name, p),
-      body: `\`\`\`json\n${raw}\n\`\`\``, links: [], source: pyResolve(p) };
+      body: `\`\`\`json\n${raw}\n\`\`\``, links: [], source: resolvePath(p) };
   }
   throw new NotFound(type);
 }
@@ -913,7 +913,7 @@ export function apiOverview(state) {
 /**
  * `_web_server.do_GET`'s prefix routes, the ported ones — path in, response out.
  *
- * `pyUnquote` and not `decodeURIComponent`: the JS builtin throws a `URIError` on a `%`
+ * `percentDecode` and not `decodeURIComponent`: the JS builtin throws a `URIError` on a `%`
  * that is not an escape, which the shell would answer as a 500 where the reference answers
  * a 404 naming the literal text.
  */
@@ -925,13 +925,13 @@ export const PREFIX_ROUTES = [
   ['/api/item/', (state, p) => {
     const parts = splitN(p, '/', 4);
     if (parts.length < 5 || !parts[4]) throw new NotFound(p);
-    return apiItem(state, parts[3], pyUnquote(parts[4]));
+    return apiItem(state, parts[3], percentDecode(parts[4]));
   }],
   // P6e. The reference's own `path[len("/api/activity/"):]`, unquoted — the sid keeps
   // whatever it carries and `api_activity_detail`'s safe-name scheme is what makes the
   // lookup safe, rather than a check out here.
   ['/api/activity/', (state, p) => apiActivityDetail(
-    state, pyUnquote(p.slice('/api/activity/'.length)))],
+    state, percentDecode(p.slice('/api/activity/'.length)))],
 ];
 
 /** `str.split(sep, maxsplit)` — at most `n` splits, the remainder kept whole. */

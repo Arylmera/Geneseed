@@ -111,8 +111,8 @@ const lines = (buf) => buf.toString('utf8').split('\n').filter((ln) => ln !== ''
  * Python's key for `sorted(Path)`, written out rather than imported from `js/lib/fs.mjs`.
  * Deriving the expectation from the code under test would make this agree with any drift in it.
  */
-const pyPathKey = (n) => (process.platform === 'win32' ? n.toLowerCase() : n);
-const byPyPath = (a, b) => (pyPathKey(a) < pyPathKey(b) ? -1 : pyPathKey(a) > pyPathKey(b) ? 1 : 0);
+const pathSortKey = (n) => (process.platform === 'win32' ? n.toLowerCase() : n);
+const byPyPath = (a, b) => (pathSortKey(a) < pathSortKey(b) ? -1 : pathSortKey(a) > pathSortKey(b) ? 1 : 0);
 
 // Run every case ONCE, at module scope: twenty child processes is the whole cost of this file.
 const ANSWERS = Object.fromEntries(CORPUS.rows.map((r) => [r.name, runProbe(r)]));
@@ -181,7 +181,7 @@ test('theme files are visited in THIS platform\'s Path collation order', () => {
     `\`--sync-themes\` visited ${got} but Python's sorted(Path) orders them ${want} on `
     + `${process.platform}`);
 
-  // AND THE DERIVATION IS TIED BACK TO A MEASUREMENT. `pyPathKey` is my reading of
+  // AND THE DERIVATION IS TIED BACK TO A MEASUREMENT. `pathSortKey` is my reading of
   // `_str_normcase`; on the platform this corpus was recorded on, that reading must reproduce
   // the order the REFERENCE actually printed. Without this the rule above is only an argument.
   if (HOME_PLATFORM) {

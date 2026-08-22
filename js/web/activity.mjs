@@ -33,7 +33,7 @@
  * a third party and carry `cost` — a float. Python's `json.loads` types `1.0` a float and
  * `json.dumps` writes it back `1.0`; `JSON.parse` gives a bare `1` that `bareInts` then
  * renders `1`. `parseJson`'s wrapper is the only thing that survives the round trip, and
- * `s-live`'s `"cost": 1.0` is the cell that says so. Its companion is `pyTruthy`: an
+ * `s-live`'s `"cost": 1.0` is the cell that says so. Its companion is `isTruthy`: an
  * `entry.get("cost") or 0` over a wrapper object is TRUE for a wrapped zero, where Python's
  * `0.0 or 0` is the int `0` — so `s-older`'s `"cost": 0.0` must come back `0` and not `0.0`.
  */
@@ -41,9 +41,9 @@ import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
 import { readText, writeText } from '../lib/fs.mjs';
-import { parseJson, pyTruthy } from '../lib/json.mjs';
+import { parseJson, isTruthy } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
-import { pyInt, pyStripSpace } from '../lib/text.mjs';
+import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 import { NotFound } from './api.mjs';
 
 /**
@@ -87,7 +87,7 @@ export function activityEnabled(state) {
   } catch {
     return true;
   }
-  return !['off', '0', 'false', 'no'].includes(pyStripSpace(raw).toLowerCase());
+  return !['off', '0', 'false', 'no'].includes(stripWhitespace(raw).toLowerCase());
 }
 
 /**
@@ -100,10 +100,10 @@ export function activityEnabled(state) {
  * what `int({})` and `int([])` raising looks like from here. `int(1.9)` truncates and
  * `int(True)` is 1, both of which a hand-edited snapshot can produce.
  */
-function pyIntOf(raw) {
+function toIntOr(raw) {
   if (raw === true) return 1;
   if (raw === false) return 0;
-  if (typeof raw === 'string') return pyInt(pyStripSpace(raw));
+  if (typeof raw === 'string') return parseIntStrict(stripWhitespace(raw));
   const n = (raw !== null && typeof raw === 'object' && !Array.isArray(raw))
     ? raw.valueOf() : raw;
   if (typeof n !== 'number' || !Number.isFinite(n)) return null;
@@ -112,7 +112,7 @@ function pyIntOf(raw) {
 
 /** `_pid_alive` — best-effort liveness for the writer process. See this file's header. */
 export function pidAlive(raw) {
-  const pid = pyIntOf(raw);
+  const pid = toIntOr(raw);
   if (pid === null || pid <= 0) return false;
   try {
     process.kill(pid, 0);
@@ -132,7 +132,7 @@ export function pidAlive(raw) {
  */
 function normalizeEntry(entry, stem) {
   const g = (k) => (Object.hasOwn(entry, k) ? entry[k] : null);
-  const or = (k, dflt) => (pyTruthy(g(k)) ? g(k) : dflt);
+  const or = (k, dflt) => (isTruthy(g(k)) ? g(k) : dflt);
   return {
     session_id: or('session_id', stem),
     agent: g('agent'),
@@ -165,7 +165,7 @@ function readEntry(p) {
 
 /** `_is_live` — the writer's pid is alive AND the snapshot is not stale. */
 function isLive(entry, now) {
-  const updated = pyTruthy(Object.hasOwn(entry, 'updated_at') ? entry.updated_at : null)
+  const updated = isTruthy(Object.hasOwn(entry, 'updated_at') ? entry.updated_at : null)
     ? entry.updated_at : 0;
   return (now - Number(updated)) <= ACTIVITY_STALE_SECONDS && pidAlive(
     Object.hasOwn(entry, 'pid') ? entry.pid : null);
@@ -237,7 +237,7 @@ export function apiActivityDetail(state, sid) {
   let timeline = [];
   let full = {};
   const det = readEntry(path.join(d, `${stem}.detail.json`));
-  if (pyTruthy(det)) {
+  if (isTruthy(det)) {
     const tl = Object.hasOwn(det, 'timeline') ? det.timeline : null;
     timeline = Array.isArray(tl) ? tl : [];
     full = det;
@@ -246,14 +246,14 @@ export function apiActivityDetail(state, sid) {
   // The detail file carries the uncapped lists; fall back to the snapshot's capped ones.
   // Assigning over an existing key keeps its POSITION in both languages, which is what lets
   // the response stay byte-comparable.
-  session.files = pyTruthy(fg('files')) ? fg('files') : session.files;
-  session.todos = pyTruthy(fg('todos')) ? fg('todos') : session.todos;
+  session.files = isTruthy(fg('files')) ? fg('files') : session.files;
+  session.todos = isTruthy(fg('todos')) ? fg('todos') : session.todos;
   // The compact transcript: an ordered list of {role, text, t} turns. Empty falls back to
   // the title as the opening user turn, because OpenCode derives the title from the first
   // prompt.
   const conv = fg('conversation');
   let conversation = Array.isArray(conv) ? conv : [];
-  if (conversation.length === 0 && pyTruthy(session.title)) {
+  if (conversation.length === 0 && isTruthy(session.title)) {
     conversation = [{ role: 'user', text: session.title }];
   }
   return { session, timeline, conversation };
@@ -273,7 +273,7 @@ export function apiActivityDetail(state, sid) {
  */
 export function apiActivityToggle(state, body) {
   const raw = (body && Object.hasOwn(body, 'enabled')) ? body.enabled : true;
-  const enabled = pyTruthy(raw);
+  const enabled = isTruthy(raw);
   const p = activityFlag(state);
   try {
     mkdirSync(path.dirname(p), { recursive: true });

@@ -108,8 +108,8 @@ export function compare(recorded, live) {
     let detail = '';
     const verb = recorded.verbatim || {};
     if (k in verb) {
-      detail = `\n      recorded: ${pyRepr(verb[k])}`
-        + `\n      live:     ${pyRepr(live.get(k).toString('utf8'))}`;
+      detail = `\n      recorded: ${formatRepr(verb[k])}`
+        + `\n      live:     ${formatRepr(live.get(k).toString('utf8'))}`;
     }
     out.push(
       `    CHANGED ${k} (${recorded.sizes[k]} -> ${live.get(k).length} bytes)${detail}`,
@@ -122,7 +122,7 @@ export function compare(recorded, live) {
 // difference that matters in this file is almost always whitespace — a trailing `\r`, a lost
 // newline — which is invisible unescaped. Single quotes, doubled only when the text contains one
 // and no double, exactly as CPython chooses.
-function pyRepr(s) {
+function formatRepr(s) {
   const quote = s.includes("'") && !s.includes('"') ? '"' : "'";
   let out = quote;
   for (const ch of s) {

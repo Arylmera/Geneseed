@@ -42,7 +42,7 @@ import { DEFAULT_EMIT, setupBuildArgs } from '../build/generate.mjs';
 import {
   autostartPaths, autostartStale, hookShimPath, migrateShape, readJsonc, shimHome,
 } from '../hosts/settings.mjs';
-import { writeText, pyPrint, pyPrintErr } from '../lib/fs.mjs';
+import { writeText, printOut, printErr } from '../lib/fs.mjs';
 
 /** Every emit name the generator answers to — the set an unrecognised marker is NOT in. */
 const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
@@ -150,34 +150,34 @@ export function cmdMigrate(args = {}) {
   if (unrecognised.length) {
     // Refuse the WHOLE run. A migration that skipped the row it did not understand and
     // migrated the rest is the half-migrated machine this verb exists to prevent.
-    pyPrintErr('[migrate] REFUSED — unrecognised install marker(s):\n');
+    printErr('[migrate] REFUSED — unrecognised install marker(s):\n');
     for (const u of unrecognised) {
-      pyPrintErr(`[migrate]   ${u.host}:${u.scope} (${u.root}) has .geneseed-emit `
+      printErr(`[migrate]   ${u.host}:${u.scope} (${u.root}) has .geneseed-emit `
         + `'${u.marker}', which is not an emit this generator answers to.\n`);
     }
-    pyPrintErr('[migrate] Nothing was changed. Fix or delete the marker, then re-run.\n');
+    printErr('[migrate] Nothing was changed. Fix or delete the marker, then re-run.\n');
     return 3;
   }
 
   if (!rows.length) {
-    pyPrint('[migrate] no active installs detected.\n');
+    printOut('[migrate] no active installs detected.\n');
     return 0;
   }
 
   if (!needed) {
-    pyPrint(`[migrate] already on the npm shape (${rows.length} install(s)); nothing to do.\n`);
+    printOut(`[migrate] already on the npm shape (${rows.length} install(s)); nothing to do.\n`);
     return 0;
   }
 
-  pyPrint(`[migrate] ${rows.length} install(s), wiring shape: ${shape}\n`);
+  printOut(`[migrate] ${rows.length} install(s), wiring shape: ${shape}\n`);
   if (dryRun) {
     for (const r of rows) {
-      pyPrint(`[migrate] would re-emit ${r.host}:${r.scope} (${r.root})\n`);
+      printOut(`[migrate] would re-emit ${r.host}:${r.scope} (${r.root})\n`);
     }
     for (const p of autostartFindings()) {
-      pyPrint(`[migrate] would report the autostart entry at ${p}\n`);
+      printOut(`[migrate] would report the autostart entry at ${p}\n`);
     }
-    pyPrint('[migrate] --dry-run: nothing was written.\n');
+    printOut('[migrate] --dry-run: nothing was written.\n');
     return 0;
   }
 
@@ -195,7 +195,7 @@ export function cmdMigrate(args = {}) {
       saved.push([p, dest]);
     }
   } catch (e) {
-    pyPrintErr(`[migrate] could not stage a backup (${e.message}); nothing was changed.\n`);
+    printErr(`[migrate] could not stage a backup (${e.message}); nothing was changed.\n`);
     return 1;
   }
 
@@ -222,15 +222,15 @@ export function cmdMigrate(args = {}) {
       postureOfDir(r.root) || defaultPosture(), modeOfDir(r.root) || defaultMode(),
       doctrinesForBuild(r.root));
     const label = `${r.host}:${r.scope} (${r.root})`;
-    pyPrint(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
+    printOut(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
     let rc = 1;
     try { rc = driverMain(argv); } catch { rc = 1; }
     if (rc !== 0) {
       // Step 4 — ALL OR NOTHING. `rebuild-all` continues here on purpose; a migration
       // must not, or the machine is left half on each shape.
-      pyPrintErr(`[migrate] FAILED ${label} (exit ${rc}) — rolling back.\n`);
+      printErr(`[migrate] FAILED ${label} (exit ${rc}) — rolling back.\n`);
       restore();
-      pyPrintErr(`[migrate] rolled back ${saved.length} file(s); the install is unchanged.\n`);
+      printErr(`[migrate] rolled back ${saved.length} file(s); the install is unchanged.\n`);
       return 1;
     }
   }
@@ -241,7 +241,7 @@ export function cmdMigrate(args = {}) {
     writeText(stampPath(), `${ROOT}\n`);
   } catch { /* an unwritable stamp costs a redundant re-emit next run, never correctness */ }
 
-  pyPrint(`[migrate] migrated ${rows.length} install(s).\n`);
+  printOut(`[migrate] migrated ${rows.length} install(s).\n`);
 
   // Step 5 — what could NOT be fixed automatically. Reported, never rewritten: nothing in
   // this repository has ever written an autostart entry, so migrate does not own the file.
@@ -250,7 +250,7 @@ export function cmdMigrate(args = {}) {
   // `web restart` and `web status` stay blind to the server this note just told someone to
   // launch at every login. Derived, not trusted: `TheMigrateNoteAdvisesARealWebAction`.
   for (const p of autostartFindings()) {
-    pyPrint(`[migrate] NOTE: the autostart entry at ${p} still names another checkout — `
+    printOut(`[migrate] NOTE: the autostart entry at ${p} still names another checkout — `
       + 'update it by hand to run: geneseed web start --no-browser\n');
   }
   return 0;

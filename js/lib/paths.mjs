@@ -2,7 +2,8 @@
  * Comparing and locating — how a path is case-folded, ordered, contained, spelled and found.
  *
  * These are definitions, not an adaptation of somebody else's; see `fs.mjs` for why the
- * measurements against CPython are recorded per function and why the `py` prefix stays.
+ * measurements against CPython are recorded per function, and why NONE of these is the Node
+ * default — the warning the retired `py` prefix used to carry now lives in each docblock.
  * Path semantics are the most PLATFORM-SHAPED rules in the tool — several of these have a
  * different right answer on Windows and on POSIX, and each says which.
  */
@@ -116,7 +117,7 @@ export function within(child, parent) {
  * a UNC root's leading pair is part of it, so collapsing runs turns `//server/share/x` into
  * `\server\share\x`.
  */
-export function pyPathStr(s) {
+export function toPlatformPath(s) {
   const win = path.sep === '\\';
   let raw = path.parse(s).root;
   if (!win && raw && /^\/\/(?!\/)/.test(s)) raw = '//';
@@ -154,7 +155,7 @@ export function pyPathStr(s) {
  *
  * Gated by a corpus in `tests/test_pure_function_parity.py`: no cell can vary the shape.
  */
-export function pyIsAbsolute(s) {
+export function isAbsolutePath(s) {
   if (process.platform !== 'win32') return s.startsWith('/');
   // Python is absolute iff the path has a DRIVE (or UNC share) *and* a root — `C:x` has the
   // drive and no root, `/x` has the root and no drive, and neither is absolute. In
@@ -197,7 +198,7 @@ export function pyIsAbsolute(s) {
  * Gated as a pure function over a seeded directory in `tests/test_pure_function_parity.py`:
  * a cell can only ever observe the one answer this machine's PATH gives.
  */
-export function pyWhich(cmd, searchPath = null) {
+export function which(cmd, searchPath = null) {
   const win = process.platform === 'win32';
   const isExec = (p) => {
     try {

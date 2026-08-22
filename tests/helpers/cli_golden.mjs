@@ -517,7 +517,7 @@ export function checkExpectations(cell, snap, side = 'the port') {
     }
   }
   for (const pat of cell.expect_re || []) {
-    if (!pyRegex(pat).test(text)) {
+    if (!toJsRegex(pat).test(text)) {
       problems.push(`${side}'s output no longer matches ${JSON.stringify(pat)} — this cell has `
         + 'stopped exercising what it names');
     }
@@ -560,15 +560,15 @@ export function checkExpectations(cell, snap, side = 'the port') {
  * The difference that reaches this corpus is the space class: Python's `\s` is
  * `[ \t\n\r\f\v\x1c-\x1f\x85\xa0\u1680\u2000-\u200a…]` and JavaScript's is that set minus
  * `\x1c-\x1f` and `\x85`, plus `\ufeff`. `js/lib/fs.mjs` already owns the exact class as
- * `PY_SPACE` for the same reason. Substituted here rather than left to chance, because a
+ * `WHITESPACE` for the same reason. Substituted here rather than left to chance, because a
  * pattern that silently matches differently turns an absolute assertion into a coin flip.
  */
-const PY_SPACE_CLASS = '\\t\\n\\v\\f\\r \\u001c-\\u001f\\u0085\\u00a0\\u1680'
+const WHITESPACE_CLASS = '\\t\\n\\v\\f\\r \\u001c-\\u001f\\u0085\\u00a0\\u1680'
   + '\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
 
-export function pyRegex(pattern) {
+export function toJsRegex(pattern) {
   const out = pattern
-    .split('\\s').join(`[${PY_SPACE_CLASS}]`)
-    .split('\\S').join(`[^${PY_SPACE_CLASS}]`);
+    .split('\\s').join(`[${WHITESPACE_CLASS}]`)
+    .split('\\S').join(`[^${WHITESPACE_CLASS}]`);
   return new RegExp(out);
 }

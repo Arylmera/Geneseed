@@ -38,8 +38,8 @@ import { fileURLToPath } from 'node:url';
 import { DWIDTH_UNIDATA } from '../../js/ui/tui.mjs';
 import { makeCfg } from '../../js/build/source.mjs';
 import { winUserPathScript } from '../../js/hosts/link.mjs';
-import { pyTextWrap } from '../../js/ui/cli.mjs';
-import { pySplitLines } from '../../js/lib/udiff.mjs';
+import { wrapText } from '../../js/ui/cli.mjs';
+import { splitLines } from '../../js/lib/udiff.mjs';
 import { renderAll } from '../../js/build/render.mjs';
 import { modeOptions, postureOptions, themeOptions } from '../../js/maintain/setup.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -333,12 +333,12 @@ test('the diff corpus reaches past what a cell can seed', { skip: coverageSkip }
 });
 
 test('the splitlines corpus breaks where a newline split does not', { skip: coverageSkip }, () => {
-  // `pySplitLines` exists for the boundaries `split('\n')` does not break on — \v, \f, \x1c,
+  // `splitLines` exists for the boundaries `split('\n')` does not break on — \v, \f, \x1c,
   // U+2028 and the rest. A corpus without one is an equality between two `split('\n')`s.
   const extra = argsFor('py_split_lines')
-    .filter(([s]) => pySplitLines(s).length !== s.split('\n').length);
+    .filter(([s]) => splitLines(s).length !== s.split('\n').length);
   assert.ok(extra.length > 0, "no case breaks on a boundary split('\\n') misses, so the "
-    + 'pySplitLines gate is vacuous');
+    + 'splitLines gate is vacuous');
 });
 
 test('the capitalize corpus has a case where the rest matters', { skip: coverageSkip }, () => {
@@ -357,17 +357,17 @@ test('the corpus separates code points from UTF-16 units', { skip: coverageSkip 
   // trusted: at least one case must be a string whose two lengths DIFFER.
   const astral = argsFor('py_len').filter(([s]) => [...s].length !== s.length);
   assert.ok(astral.length > 0, 'no case distinguishes code points from UTF-16 units, so the '
-    + 'pyLen gate is vacuous');
+    + 'codePointLength gate is vacuous');
 });
 
 test('the is-absolute corpus reaches the rootless shape', { skip: coverageSkip }, () => {
-  // `pyIsAbsolute` exists for ONE disagreement: a rootless `/x` or `\x`, which
+  // `isAbsolutePath` exists for ONE disagreement: a rootless `/x` or `\x`, which
   // `path.isAbsolute` calls absolute and `Path.is_absolute` does not. On POSIX the two rules
   // genuinely coincide, so this asserts the SHAPE is present rather than that the answers
   // differ on this machine.
   const cases = argsFor('py_is_absolute').map(([s]) => s);
   assert.ok(cases.some((s) => '/\\'.includes(s.slice(0, 1)) && !/^([/\\])\1/.test(s)),
-    'no case is a ROOTLESS absolute path, so the pyIsAbsolute gate cannot tell the rules apart');
+    'no case is a ROOTLESS absolute path, so the isAbsolutePath gate cannot tell the rules apart');
   assert.ok(cases.some((s) => /^[A-Za-z]:[^\\/]/.test(s)),
     "no case is drive-RELATIVE (`C:x`), the shape a naive `parse().root !== ''` rule gets wrong");
 });
@@ -401,7 +401,7 @@ test('the agent-entry corpus can see the absolute rule it depends on', { skip: c
 // So these three own their fixtures. They are NOT gated on `coverageSkip`: nothing here reads the
 // recording, which means they still run on a platform whose corpus has never been recorded.
 
-/** `_which_cases` — a seeded PATH, because `pyWhich` reads the filesystem. */
+/** `_which_cases` — a seeded PATH, because `which` reads the filesystem. */
 function whichCases(tmp) {
   const a = path.join(tmp, 'whichA');
   const b = path.join(tmp, 'whichB');
@@ -446,7 +446,7 @@ test('the curdir rule is driven in both of its environment states', {
 }, () => {
   // `NoDefaultCurrentDirectoryInExePath` is an INPUT to `shutil.which`, and until CI ran this
   // corpus nothing varied it: Git Bash defines it and so does this repo's developer machine, so
-  // every recording measured ONE state, `pyWhich` was written to match that state, and the port
+  // every recording measured ONE state, `which` was written to match that state, and the port
   // answered null where the reference answered `.\geneseed.CMD` the first time it ran somewhere
   // the variable was absent.
   //
@@ -631,7 +631,7 @@ test('both platform halves of str(Path(x)) are recorded and cover the same input
   //
   // WHAT DID NOT CROSS, stated rather than left implicit. The reference could derive
   // platform-sensitivity INDEPENDENTLY, by calling `PureWindowsPath` and `PurePosixPath` from one
-  // host — both import anywhere. `pyPathStr` reads `path.sep` with no parameter, and no child
+  // host — both import anywhere. `toPlatformPath` reads `path.sep` with no parameter, and no child
   // process can change it, so there is nothing here that can re-derive the split from the CODE. A
   // recording that drifted from the port on the platform this run is not on would be invisible;
   // what catches it is the other platform's own CI job replaying its own half.
@@ -854,13 +854,13 @@ test('the display width does not read the display tier', { skip: dwidth ? false
     + 'says nothing about the other');
 });
 
-test('pyTextWrap still answers every recorded wrap', { skip: textwrapCorpus ? false
+test('wrapText still answers every recorded wrap', { skip: textwrapCorpus ? false
   : 'tests/__snapshots__/textwrap.json has not been recorded' }, () => {
   // THE ONE CPYTHON ORACLE P1 LEFT AS A LIVE COMPARISON. `tests/test_cli_reference.py`'s
   // sweep computes its expectation from the RUNNING interpreter's `textwrap`, so it dies with
   // `rituals/harness.py` — and what would survive is 26 help fixtures at ONE wrap column,
   // which that sweep's own docstring records as having proved nothing: a greedy space-only
-  // wrap passed all 26. `pyTextWrap` is ~40 lines including a hand-transcribed `WORDSEP`, and
+  // wrap passed all 26. `wrapText` is ~40 lines including a hand-transcribed `WORDSEP`, and
   // Task 10b showed its payload is one term subtle. This is the frozen half.
   assert.equal(textwrapCorpus.corpus, 'textwrap');
   assert.equal(textwrapCorpus.oracle, 'textwrap.wrap, post-gh-139065',
@@ -888,7 +888,7 @@ test('pyTextWrap still answers every recorded wrap', { skip: textwrapCorpus ? fa
 
   for (const [i, t] of textwrapCorpus.cases.entries()) {
     for (const [j, w] of widths.entries()) {
-      assert.deepStrictEqual(pyTextWrap(t, w), textwrapCorpus.matrix[i][j],
+      assert.deepStrictEqual(wrapText(t, w), textwrapCorpus.matrix[i][j],
         `case ${i} at width ${w}: the port's line breaker disagrees with the textwrap.wrap `
         + `the reference recorded, on ${JSON.stringify(t)}`);
     }

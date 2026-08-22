@@ -111,7 +111,7 @@ import { ROOT, PACK_ORDER } from '../build/source.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
 import { isDict } from '../hosts/mcp.mjs';
 import { readText, writeText } from '../lib/fs.mjs';
-import { jsonDumpsCompact, parseJson, pyTruthy } from '../lib/json.mjs';
+import { jsonDumpsCompact, parseJson, isTruthy } from '../lib/json.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
@@ -233,7 +233,7 @@ export class JobManager {
       return;
     }
     for (const j of Array.isArray(jobs) ? jobs : []) {
-      if (isDict(j) && pyTruthy(j.id) && j.status !== 'running') this._jobs.set(String(j.id), j);
+      if (isDict(j) && isTruthy(j.id) && j.status !== 'running') this._jobs.set(String(j.id), j);
     }
   }
 

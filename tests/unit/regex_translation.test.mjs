@@ -1,4 +1,4 @@
-// `pyRegex` — the one place the CLI replayer TRANSLATES a pattern rather than copying it.
+// `toJsRegex` — the one place the CLI replayer TRANSLATES a pattern rather than copying it.
 //
 // `expect_re` values are Python regexes written against the reference and now handed to V8. Most
 // of the 38 in the matrix use only constructs the two engines agree on; exactly ONE uses `\s`,
@@ -19,7 +19,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { pyRegex } from '../helpers/cli_golden.mjs';
+import { toJsRegex } from '../helpers/cli_golden.mjs';
 
 // Python calls these space; JavaScript does not.
 const PY_ONLY = ['\u001c', '\u001d', '\u001e', '\u001f', '\u0085'];
@@ -30,7 +30,7 @@ const name = (ch) => `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(
 
 test('the characters Python calls space and JavaScript does not', () => {
   for (const ch of PY_ONLY) {
-    assert.ok(pyRegex('a\\sb').test(`a${ch}b`), `${name(ch)}: the translation did not accept it`);
+    assert.ok(toJsRegex('a\\sb').test(`a${ch}b`), `${name(ch)}: the translation did not accept it`);
     // The control. Without it the assertion above would pass on an engine that already agreed,
     // and the translation would be untested rather than correct.
     assert.ok(!/a\sb/.test(`a${ch}b`),
@@ -40,7 +40,7 @@ test('the characters Python calls space and JavaScript does not', () => {
 
 test('the character JavaScript calls space and Python does not', () => {
   for (const ch of JS_ONLY) {
-    assert.ok(!pyRegex('a\\sb').test(`a${ch}b`), `${name(ch)}: the translation accepted it`);
+    assert.ok(!toJsRegex('a\\sb').test(`a${ch}b`), `${name(ch)}: the translation accepted it`);
     assert.ok(/a\sb/.test(`a${ch}b`),
       `${name(ch)}: V8's own \\s rejects it — the premise has changed`);
   }
@@ -48,22 +48,22 @@ test('the character JavaScript calls space and Python does not', () => {
 
 test('the negated class is translated too', () => {
   // `\S` is the complement, and getting only `\s` right would leave every negated assertion
-  // reading the OTHER definition — the failure mode `js/update.mjs` records for `PY_SPACE`.
-  assert.ok(!pyRegex('a\\Sb').test('a\u001cb'), 'U+001C is space to Python, so \\S must reject it');
+  // reading the OTHER definition — the failure mode `js/update.mjs` records for `WHITESPACE`.
+  assert.ok(!toJsRegex('a\\Sb').test('a\u001cb'), 'U+001C is space to Python, so \\S must reject it');
   assert.ok(/a\Sb/.test('a\u001cb'), "V8's own \\S accepts it — the premise has changed");
 });
 
 test('the ordinary characters both engines agree on are unchanged', () => {
   for (const ch of [' ', '\t', '\n', '\r', '\f', '\v', '\u00a0', '\u3000']) {
-    assert.ok(pyRegex('a\\sb').test(`a${ch}b`), name(ch));
+    assert.ok(toJsRegex('a\\sb').test(`a${ch}b`), name(ch));
   }
-  assert.ok(!pyRegex('a\\sb').test('axb'));
+  assert.ok(!toJsRegex('a\\sb').test('axb'));
 });
 
 // The one pattern in the matrix that reaches this helper, kept as a live case so the WIRING is
 // proved and not only the translation.
 test('the matrix pattern that uses the class still matches what it names', () => {
   const pat = '\\[version\\] source:\\s+[0-9a-f]{12}';
-  assert.ok(pyRegex(pat).test('[version] source:   c81317fdc842'));
-  assert.ok(!pyRegex(pat).test('[version] source:   nothexatall'));
+  assert.ok(toJsRegex(pat).test('[version] source:   c81317fdc842'));
+  assert.ok(!toJsRegex(pat).test('[version] source:   nothexatall'));
 });

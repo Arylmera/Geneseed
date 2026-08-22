@@ -44,9 +44,9 @@ import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, footprintOfDir, modeOfDir, postureOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
-import { unifiedDiff, pySplitLines } from '../lib/udiff.mjs';
-import { pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
-import { pyPathStr } from '../lib/paths.mjs';
+import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
+import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
+import { toPlatformPath } from '../lib/paths.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
@@ -101,7 +101,7 @@ export function manifestScope(d) {
  *
  * The emit prints its own summary line, which is not part of `diff`'s output; the Python
  * swallows it and lets stderr through, so a WARN from the emit still reaches the user. Both
- * halves matter and only the first needs code here — `pyPrint` and every driver funnel go
+ * halves matter and only the first needs code here — `printOut` and every driver funnel go
  * through `process.stdout.write`, so replacing that one method is the whole redirect.
  *
  * `finally`, because the emit can throw: a swallow that leaked would silence every later line
@@ -184,13 +184,13 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
         const ta = readText(a);
         const tb = readText(b);
         if (cmpKey(rel, ta) !== cmpKey(rel, tb)) {
-          const diff = unifiedDiff(pySplitLines(tb), pySplitLines(ta), {
+          const diff = unifiedDiff(splitLines(tb), splitLines(ta), {
             fromfile: `source/${rel}`, tofile: `deployed/${rel}`, lineterm: '',
           });
           files.push({ rel, status: 'edited', diff });
         }
       } else if (isFile(a)) {
-        const body = pySplitLines(readText(a));
+        const body = splitLines(readText(a));
         files.push({
           rel,
           status: 'added',
@@ -335,8 +335,8 @@ export function flushExportNotes() {
       .sort();
   } catch { return; }
   if (fresh.length === 0) return;
-  for (const p of fresh) pyPrint(`[geneseed] improvements file saved: ${pyPathStr(p)}\n`);
-  pyPrint('[geneseed] the deployed harness carried local edits — hand the file to '
+  for (const p of fresh) printOut(`[geneseed] improvements file saved: ${toPlatformPath(p)}\n`);
+  printOut('[geneseed] the deployed harness carried local edits — hand the file to '
     + 'your agent to back-port them into src/.\n');
 }
 
@@ -345,14 +345,14 @@ export function cmdDiff(args) {
   const { target, theme, files } = diffCollect({ target: args.target, theme: args.theme });
   if (files === null) {
     if (existsSync(path.join(target, GLOBAL_MANIFEST)) && manifestScope(target) === 'project') {
-      pyPrintErr(`[diff] ${target} is a PROJECT install — diff only compares GLOBAL `
+      printErr(`[diff] ${target} is a PROJECT install — diff only compares GLOBAL `
         + 'installs against a fresh render (a project layer is diffed against '
         + 'its own repo, which this command does not do). Pass --target at a '
         + 'global config dir (opencode-global/claude-global/bob-global/'
         + 'copilot-global), or omit '
         + '--target to use the default.\n');
     } else {
-      pyPrintErr(`[diff] no global Geneseed install at ${target} (no ${GLOBAL_MANIFEST}). `
+      printErr(`[diff] no global Geneseed install at ${target} (no ${GLOBAL_MANIFEST}). `
         + 'Pass --target, or run `--emit opencode-global` first.\n');
     }
     return 1;
@@ -360,31 +360,31 @@ export function cmdDiff(args) {
   const edited = files.filter((f) => f.status === 'edited');
   const added = files.filter((f) => f.status === 'added');
   const missing = files.filter((f) => f.status === 'missing');
-  pyPrint(`[diff] deployed ${target}  vs  source (theme: ${theme})\n`);
-  pyPrint(`[diff] ${edited.length} edited, ${added.length} added-in-deployed, `
+  printOut(`[diff] deployed ${target}  vs  source (theme: ${theme})\n`);
+  printOut(`[diff] ${edited.length} edited, ${added.length} added-in-deployed, `
     + `${missing.length} missing-from-deployed\n`);
-  for (const f of edited) pyPrint(`  ~ ${f.rel}   (edited in deployed — review to back-port)\n`);
-  for (const f of added) pyPrint(`  + ${f.rel}   (only in deployed — your addition)\n`);
-  for (const f of missing) pyPrint(`  - ${f.rel}   (in source, not deployed — re-emit to add)\n`);
+  for (const f of edited) printOut(`  ~ ${f.rel}   (edited in deployed — review to back-port)\n`);
+  for (const f of added) printOut(`  + ${f.rel}   (only in deployed — your addition)\n`);
+  for (const f of missing) printOut(`  - ${f.rel}   (in source, not deployed — re-emit to add)\n`);
   if (args.out) {
     if (files.length) {
       // Bare `--out` is argparse's `nargs="?"` const: True, meaning "the default timestamped
       // path". `parse()` gives a flag `true` and an option a string, so the two arrive
       // distinguishable here without a third kind of entry in the VERBS table.
       const outPath = args.out === true ? null : args.out;
-      pyPrint(`[diff] improvements file written: ${
+      printOut(`[diff] improvements file written: ${
         writeImprovements(target, theme, files, outPath)}\n`);
     } else {
-      pyPrint('[diff] no differences — nothing written.\n');
+      printOut('[diff] no differences — nothing written.\n');
     }
   }
   if (args.full) {
     for (const f of edited) {
-      pyPrint(`\n--- ${f.rel} (source -> deployed) ---\n`);
-      pyPrint(`${f.diff.join('\n')}\n`);
+      printOut(`\n--- ${f.rel} (source -> deployed) ---\n`);
+      printOut(`${f.diff.join('\n')}\n`);
     }
   } else if (edited.length && !args.out) {
-    pyPrint('\nRun with --full to see the line-level diffs, or --out FILE to export them.\n');
+    printOut('\nRun with --full to see the line-level diffs, or --out FILE to export them.\n');
   }
   return 0;
 }

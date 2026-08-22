@@ -113,7 +113,7 @@ import { setupBuildArgs } from '../build/generate.mjs';
 import { frontmatter, memoryDropIndex } from '../hosts/hooks.mjs';
 import {
   HOSTS, bobConfigDir, claudeConfigDir, copilotConfigDir, expanduser, opencodeConfigDir,
-  pyResolve,
+  resolvePath,
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState,
@@ -124,10 +124,10 @@ import {
   mcpMeta, mcpPresetBlock, mcpSave, mcpSetEnabled, mcpState,
 } from '../hosts/mcp.mjs';
 import { readText, writeText } from '../lib/fs.mjs';
-import { parseJson, pyRepr, pyStr, pyTruthy } from '../lib/json.mjs';
-import { PY_SPACE, pyLen, pyStripSpace } from '../lib/text.mjs';
+import { parseJson, formatRepr, formatValue, isTruthy } from '../lib/json.mjs';
+import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
-import { pySplitLines } from '../lib/udiff.mjs';
+import { splitLines } from '../lib/udiff.mjs';
 import {
   NotFound, deployed, emitChoices, fingerprint, themeChoices, viewCfg, within,
 } from './api.mjs';
@@ -140,7 +140,7 @@ const bget = (body, key, dflt = null) => (isDict(body) && Object.hasOwn(body, ke
   ? body[key] : dflt);
 
 /** `str(x or "")` — Python's truthiness, then Python's `str`. */
-const strOr = (v) => (pyTruthy(v) ? pyStr(v) : '');
+const strOr = (v) => (isTruthy(v) ? formatValue(v) : '');
 
 /**
  * A request body's `doctrines` -> a normalised pack list, or `null` for "said nothing usable".
@@ -199,7 +199,7 @@ function bodyExcludeRules(body) {
 }
 
 /** `str.split()` with no argument — runs of PYTHON whitespace, no empties. */
-const pyWords = (s) => s.split(new RegExp(`[${PY_SPACE}]+`)).filter(Boolean);
+const splitWords = (s) => s.split(new RegExp(`[${WHITESPACE}]+`)).filter(Boolean);
 
 /** `datetime.date.today().isoformat()` — LOCAL, as the reference's naive `date.today()` is. */
 export function todayIso(d = new Date()) {
@@ -241,7 +241,7 @@ const rulesPath = (state) => path.join(state.target, RULES_FILE);
  * `_web_catalog.RULE_HEAD_RE` — `## R<n> — Title`, anchored at column 0 so a rule body's
  * fenced code and the stub's indented format example never parse as rules.
  *
- * The whitespace classes are `PY_SPACE`, not `\s`: P6d measured the two apart and this
+ * The whitespace classes are `WHITESPACE`, not `\s`: P6d measured the two apart and this
  * pattern runs over a HAND-EDITED file, which is where a non-breaking space actually turns
  * up. `\S` is its complement for the same reason.
  *
@@ -253,26 +253,26 @@ const rulesPath = (state) => path.join(state.target, RULES_FILE);
  * and the web editor cannot produce (it writes `R<n>` itself from `max(ids) + 1`).
  */
 export const RULE_HEAD_RE = new RegExp(
-  `^##[${PY_SPACE}]+R(\\d+)[${PY_SPACE}]*[—–-]+[${PY_SPACE}]*`
-  + `([^${PY_SPACE}].*?)[${PY_SPACE}]*$`,
+  `^##[${WHITESPACE}]+R(\\d+)[${WHITESPACE}]*[—–-]+[${WHITESPACE}]*`
+  + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
 );
 
 /** `_web_catalog.RULES_BUDGET` — advisory; nothing blocks past it. */
 export const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
 
-const META_RE = new RegExp(`^\\((.+)\\)[${PY_SPACE}]*$`);
+const META_RE = new RegExp(`^\\((.+)\\)[${WHITESPACE}]*$`);
 
 /** `_web_catalog._parse_rule_meta` — `{}` when the line is body rather than metadata. */
 function parseRuleMeta(line) {
-  const m = META_RE.exec(pyStripSpace(line));
+  const m = META_RE.exec(stripWhitespace(line));
   if (!m) return {};
   const meta = {};
   for (const part of m[1].split('|')) {
     const at = part.indexOf(':');
     if (at < 0) continue;               // `partition` with no separator — not a pair
-    const key = pyStripSpace(part.slice(0, at)).toLowerCase().replaceAll(' ', '_');
+    const key = stripWhitespace(part.slice(0, at)).toLowerCase().replaceAll(' ', '_');
     if (['scope', 'source', 'trial_until'].includes(key)) {
-      meta[key] = pyStripSpace(part.slice(at + 1));
+      meta[key] = stripWhitespace(part.slice(at + 1));
     }
   }
   return meta;
@@ -286,7 +286,7 @@ function parseRuleMeta(line) {
  * formatting, hand-written sections — untouched.
  */
 export function parseRules(text) {
-  const lines = pySplitLines(text);
+  const lines = splitLines(text);
   const rules = [];
   const warnings = [];
   const seen = new Set();
@@ -301,7 +301,7 @@ export function parseRules(text) {
     if (seen.has(rid)) warnings.push(`duplicate rule id R${rid}`);
     seen.add(rid);
     let k = idx + 1;
-    while (k < end && !pyStripSpace(lines[k])) k += 1;
+    while (k < end && !stripWhitespace(lines[k])) k += 1;
     const meta = k < end ? parseRuleMeta(lines[k]) : {};
     if (Object.keys(meta).length) k += 1;
     rules.push({
@@ -310,7 +310,7 @@ export function parseRules(text) {
       scope: Object.hasOwn(meta, 'scope') ? meta.scope : 'project',
       source: Object.hasOwn(meta, 'source') ? meta.source : '',
       trial_until: Object.hasOwn(meta, 'trial_until') ? meta.trial_until : '',
-      body: pyStripSpace(lines.slice(k, end).join('\n')),
+      body: stripWhitespace(lines.slice(k, end).join('\n')),
       start: idx,
       end,
     });
@@ -338,8 +338,8 @@ export function apiRules(state) {
   return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text),
     // `len(text) // 4` — CODE POINTS. `String.length` counts UTF-16 units, so an emoji in a
     // rule body would put the two token estimates two apart.
-    stats: { rules: rules.length, lines: pySplitLines(text).length,
-      tokens: Math.floor(pyLen(text) / 4), ...RULES_BUDGET } };
+    stats: { rules: rules.length, lines: splitLines(text).length,
+      tokens: Math.floor(codePointLength(text) / 4), ...RULES_BUDGET } };
 }
 
 /** `_web_actions._rules_read`. */
@@ -353,7 +353,7 @@ function ruleBlock(rid, title, scope, source, trialUntil, body) {
   const meta = [`scope: ${scope}`];
   if (source) meta.push(`source: ${source}`);
   if (trialUntil) meta.push(`trial until: ${trialUntil}`);
-  return `## R${rid} — ${title}\n(${meta.join(' | ')})\n${pyStripSpace(body)}\n`;
+  return `## R${rid} — ${title}\n(${meta.join(' | ')})\n${stripWhitespace(body)}\n`;
 }
 
 /**
@@ -365,14 +365,14 @@ function ruleBlock(rid, title, scope, source, trialUntil, body) {
  * `int()`.
  */
 function ruleFields(body) {
-  const title = pyWords(strOr(bget(body, 'title'))).join(' ');
-  const text = pyStripSpace(strOr(bget(body, 'body')));
+  const title = splitWords(strOr(bget(body, 'title'))).join(' ');
+  const text = stripWhitespace(strOr(bget(body, 'body')));
   if (!title) throw new Error('a rule needs a title');
   if (!text) throw new Error('a rule needs body text');
   let scope = bget(body, 'scope');
   if (scope !== 'user' && scope !== 'project') scope = 'project';
-  const source = pyWords(strOr(bget(body, 'source'))).join(' ');
-  const trial = pyStripSpace(strOr(bget(body, 'trial_until')));
+  const source = splitWords(strOr(bget(body, 'source'))).join(' ');
+  const trial = stripWhitespace(strOr(bget(body, 'trial_until')));
   if (trial && !/^\p{Nd}{4}-\p{Nd}{2}-\p{Nd}{2}$/u.test(trial)) {
     throw new Error('trial until must be YYYY-MM-DD');
   }
@@ -388,7 +388,7 @@ function ruleFields(body) {
  */
 function ruleId(v) {
   if (typeof v === 'string') {
-    const s = pyStripSpace(v);
+    const s = stripWhitespace(v);
     if (!/^[+-]?\d+$/.test(s)) throw new NotFound('rule id');
     return Number(s);
   }
@@ -412,7 +412,7 @@ function ruleId(v) {
 export function apiRulesMutate(state, body) {
   const op = bget(body, 'op');
   if (op !== 'add' && op !== 'update' && op !== 'delete') {
-    throw new NotFound(`rules op ${pyRepr(op)}`);
+    throw new NotFound(`rules op ${formatRepr(op)}`);
   }
   const [p, original] = rulesRead(state);
   let text = original;
@@ -432,17 +432,17 @@ export function apiRulesMutate(state, body) {
     rid = ruleId(bget(body, 'id'));
     const target = rules.find((r) => r.id === rid);
     if (target === undefined) throw new NotFound(`rule R${rid}`);
-    const lines = pySplitLines(text);
+    const lines = splitLines(text);
     if (op === 'update') {
       const [title, rtext, scope, source, trial] = ruleFields(body);
       const block = ruleBlock(rid, title, scope, source, trial, rtext);
       lines.splice(target.start, target.end - target.start,
-        ...pySplitLines(block.replace(/\n+$/, '')));
+        ...splitLines(block.replace(/\n+$/, '')));
     } else {
       // delete — also swallow ONE preceding blank separator line, or repeated deletes leave
       // a growing run of blank lines in the user's file.
       let start = target.start;
-      if (start > 0 && !pyStripSpace(lines[start - 1])) start -= 1;
+      if (start > 0 && !stripWhitespace(lines[start - 1])) start -= 1;
       lines.splice(start, target.end - start);
     }
     next = `${lines.join('\n').replace(/\n+$/, '')}\n`;
@@ -475,14 +475,14 @@ export function apiRulesPromote(state, body) {
   const res = apiRulesMutate(state, {
     op: 'add',
     fingerprint: bget(body, 'fingerprint', ''),
-    title: pyTruthy(bget(body, 'title')) ? bget(body, 'title') : fmName,
-    body: pyTruthy(bget(body, 'body')) ? bget(body, 'body')
-      : (pyStripSpace(memBody) || fmDesc),
+    title: isTruthy(bget(body, 'title')) ? bget(body, 'title') : fmName,
+    body: isTruthy(bget(body, 'body')) ? bget(body, 'body')
+      : (stripWhitespace(memBody) || fmDesc),
     scope: bget(body, 'scope'),
     source: `memory ${name}, promoted ${today}`,
     trial_until: trial,
   });
-  if (pyTruthy(res.ok) && pyTruthy(bget(body, 'delete_memory'))) {
+  if (isTruthy(res.ok) && isTruthy(bget(body, 'delete_memory'))) {
     apiMemoryDelete(state, name);
     res.deleted_memory = name;
   }
@@ -548,7 +548,7 @@ export function apiMemoryDelete(state, name) {
  */
 export function apiExcludesMutate(state, body) {
   const action = bget(body, 'action');
-  const p = pyStripSpace(strOr(bget(body, 'path')));
+  const p = stripWhitespace(strOr(bget(body, 'path')));
   if ((action !== 'add' && action !== 'remove') || !p) {
     return { ok: false, path: p,
       messages: ['body must be {action: add|remove, path: <folder>}'] };
@@ -613,7 +613,7 @@ export function mcpTargetPaths() {
 
 export function apiMcpToggle(state, body) {
   const name = strOr(bget(body, 'name'));
-  const want = pyTruthy(bget(body, 'enabled'));
+  const want = isTruthy(bget(body, 'enabled'));
   const pathArg = strOr(bget(body, 'path'));
   const known = mcpTargetPaths();
   const hit = known.get(pathArg);
@@ -749,10 +749,10 @@ export function apiRestore(state, files) {
   const restored = [];
   const deleted = [];
   const errors = [];
-  const target = pyResolve(state.target);
+  const target = resolvePath(state.target);
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-restore-'));
   try {
-    const expected = pyResolve(path.join(tmp, 'expected'));
+    const expected = resolvePath(path.join(tmp, 'expected'));
     withStdoutSwallowed(() => emitGlobalInto(globalEmitHostFor(state.emit), {
       theme: state.theme,
       out: path.join(tmp, 'bundle'),
@@ -768,10 +768,10 @@ export function apiRestore(state, files) {
       // read-side hole `diffCollect` had (and the reason the panel offered the file at all).
       doctrines: doctrinesForBuild(target),
     }));
-    for (const raw of (pyTruthy(files) ? files : [])) {
-      const rel = pyStripSpace(pyStr(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
-      const dst = pyResolve(path.join(target, rel));
-      const src = pyResolve(path.join(expected, rel));
+    for (const raw of (isTruthy(files) ? files : [])) {
+      const rel = stripWhitespace(formatValue(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
+      const dst = resolvePath(path.join(target, rel));
+      const src = resolvePath(path.join(expected, rel));
       if (!rel || !within(dst, target) || !within(src, expected)) {
         errors.push(`${rel}: outside the deployed tree`);
       } else if (isFile(src)) {
@@ -909,26 +909,26 @@ export function apiInstallToggle(state, body) {
     // is validated IN THE ENGINE — an unknown value falls back to `keep`, never a surprise
     // delete, which is why a bogus body value is passed through rather than rejected here.
     const mem = bget(body, 'memory');
-    res = installUninstall(root, host, scope, pyTruthy(mem) ? mem : 'keep');
+    res = installUninstall(root, host, scope, isTruthy(mem) ? mem : 'keep');
   } else {
     // `{action!r}` — Python's repr, SINGLE-quoted. `JSON.stringify` would double-quote it
     // inside a JSON string body and the two sides would differ on every typo.
-    res = { ok: false, error: `unknown action ${pyRepr(action)}` };
+    res = { ok: false, error: `unknown action ${formatRepr(action)}` };
   }
   state.refresh();
   return res;
 }
 
 export function apiDeployCmd(state, body) {
-  const host = pyStripSpace(strOr(bget(body, 'host')));
+  const host = stripWhitespace(strOr(bget(body, 'host')));
   if (!HOSTS.some((h) => h.host === host)) {
     return { error: `unknown host: ${host || '(none)'}` };
   }
-  const raw = pyStripSpace(strOr(bget(body, 'path')));
+  const raw = stripWhitespace(strOr(bget(body, 'path')));
   if (!raw) return { error: 'no folder given' };
   let root;
   try {
-    root = pyResolve(expanduser(raw));
+    root = resolvePath(expanduser(raw));
   } catch {
     return { error: `bad path: ${raw}` };
   }
@@ -941,7 +941,7 @@ export function apiDeployCmd(state, body) {
   const cfgdirs = new Set();
   for (const fn of [opencodeConfigDir, claudeConfigDir, bobConfigDir, copilotConfigDir]) {
     try {
-      cfgdirs.add(pyResolve(fn()));
+      cfgdirs.add(resolvePath(fn()));
     } catch { /* the reference's bare `except: pass` */ }
   }
   if (cfgdirs.has(root)) {

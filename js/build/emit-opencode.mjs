@@ -9,13 +9,21 @@
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
-import { copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer, writePonytailCommand, writePrimaryAgent, writeTheme } from '../hosts/opencode.mjs';
+import {
+  copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
+  writePonytailCommand, writePrimaryAgent, writeTheme,
+} from '../hosts/opencode.mjs';
 import { mergeOpencodeJson } from '../hosts/settings.mjs';
 import { readText, writeText } from '../lib/fs.mjs';
 import { assertSourceComplete, build, phaseLog } from './bundle.mjs';
-import { globalMemory, globalNotebook, isFile, relPosix, shipLeanLaws, stripCapabilityLinks } from './emit-common.mjs';
+import {
+  globalMemory, globalNotebook, isFile, relPosix, shipLeanLaws, stripCapabilityLinks,
+} from './emit-common.mjs';
 import { renderAll } from './render.mjs';
-import { ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex, ensureProfileStub, ensureRulesStub, ensureWikiStub } from './stubs.mjs';
+import {
+  ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex, ensureProfileStub, ensureRulesStub,
+  ensureWikiStub,
+} from './stubs.mjs';
 import { writeVersion } from './version.mjs';
 import { mkdirSync } from 'node:fs';
 

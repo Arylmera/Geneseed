@@ -8,11 +8,11 @@
  */
 import path from 'node:path';
 import { buildInto, emitGlobalInto, emitProjectInto } from '../../bin/build-driver.mjs';
-import { pyResolve } from '../hosts/hosts.mjs';
+import { resolvePath } from '../hosts/hosts.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
-import { pyPrint, pyPrintErr, readText } from '../lib/fs.mjs';
+import { printOut, printErr, readText } from '../lib/fs.mjs';
 import { comparePaths } from '../lib/paths.mjs';
-import { pyStripSpace } from '../lib/text.mjs';
+import { stripWhitespace } from '../lib/text.mjs';
 import { linkProblems } from './checks-build.mjs';
 import { cmdDoctor } from './doctor.mjs';
 import { TOKEN_RE, isDir, isFile, rglob, sortedUnique, withTempDir, within } from './scan.mjs';
@@ -34,7 +34,7 @@ import { TOKEN_RE, isDir, isFile, rglob, sortedUnique, withTempDir, within } fro
  * `linkProblems`, `readText`) is the shared one, which is the half that could actually drift.
  */
 export function validateSandboxProblems(sandbox) {
-  const out = pyResolve(sandbox);
+  const out = resolvePath(sandbox);
   const problems = [];
   for (const md of rglob(out)) {
     if (!md.endsWith('.md') || !isFile(md)) continue;
@@ -57,7 +57,7 @@ export function validateSandboxProblems(sandbox) {
  * The reference shells to `harness.py doctor`; this calls `cmdDoctor` directly, and the
  * difference has to be undone in one place: a child's `capture_output` hands the parent
  * UNIVERSAL-NEWLINE text, so `r.stdout` holds `\n` on Windows even though the child wrote
- * `\r\n`. `pyPrint` inside `cmdDoctor` writes `\r\n`. Without the fold, the `.strip()` below
+ * `\r\n`. `printOut` inside `cmdDoctor` writes `\r\n`. Without the fold, the `.strip()` below
  * would leave every interior line CRLF and the re-print would double the translation.
  */
 function captureStreams(fn) {
@@ -112,7 +112,7 @@ export function cmdValidate(args) {
     // `.resolve()` mirrors `_check_build`'s: on Windows a temp dir can come back in 8.3
     // short form (`RUNNER~1`) while every link TARGET below is resolved long-form, and
     // `within` then rejects every relative link rather than only the escaping ones.
-    const tmp = pyResolve(tmpRaw);
+    const tmp = resolvePath(tmpRaw);
     // With a distinct `--root` the per-repo emits split their output — the bundle under
     // `out`, the native layer under `root` — so the sandbox bundle nests INSIDE the sandbox
     // root and the scan covers both layers.
@@ -145,7 +145,7 @@ export function cmdValidate(args) {
       // says `unknown theme 'x'` where the reference says `1`. The corpus in
       // `tests/test_maintainer_tools_parity.py` is what found it; nothing else could.
       if (e && e.exitCode !== undefined) {
-        pyPrint(`[validate-only] render/emit FAILED for theme '${args.theme}' `
+        printOut(`[validate-only] render/emit FAILED for theme '${args.theme}' `
           + `emit '${emit}': ${e.exitCode}\n`);
         return null;
       }
@@ -154,9 +154,9 @@ export function cmdValidate(args) {
 
     const written = scanDirs.filter(isDir).flatMap((d) => rglob(d)).filter(isFile)
       .sort(comparePaths);
-    pyPrint(`[validate-only] theme=${args.theme} emit=${emit} `
+    printOut(`[validate-only] theme=${args.theme} emit=${emit} `
       + `footprint=${args.footprint}\n`);
-    pyPrint(`[validate-only] would write ${written.length} file(s) under ${args.out}`
+    printOut(`[validate-only] would write ${written.length} file(s) under ${args.out}`
       + (args.root ? ` (root ${args.root})` : '')
       + ' — nothing was actually written (sandboxed).\n');
     if (args.verbose) {
@@ -165,7 +165,7 @@ export function cmdValidate(args) {
         for (const d of scanDirs) {
           if (within(p, d)) { base = d; break; }
         }
-        pyPrint(`  would write: ${path.relative(base, p)}\n`);
+        printOut(`  would write: ${path.relative(base, p)}\n`);
       }
     }
     for (const d of scanDirs) {
@@ -180,18 +180,18 @@ export function cmdValidate(args) {
   // in the doctor, so they run through it rather than being re-derived. The reference SHELLS
   // to `harness.py doctor --theme T --no-bundle`; one process is what this port has.
   const doctor = captureStreams(() => cmdDoctor({ theme: args.theme, noBundle: true }));
-  if (pyStripSpace(doctor.out)) pyPrint(`${pyStripSpace(doctor.out)}\n`);
-  if (pyStripSpace(doctor.err)) pyPrintErr(`${pyStripSpace(doctor.err)}\n`);
+  if (stripWhitespace(doctor.out)) printOut(`${stripWhitespace(doctor.out)}\n`);
+  if (stripWhitespace(doctor.err)) printErr(`${stripWhitespace(doctor.err)}\n`);
   if (doctor.code !== 0) {
     problems.push(`[doctor] source-tree validation failed for theme '${args.theme}' `
       + '(see output above)');
   }
 
   if (problems.length) {
-    pyPrint(`[validate-only] ${problems.length} problem(s):\n`);
-    for (const p of problems) pyPrint(`  - ${p}\n`);
+    printOut(`[validate-only] ${problems.length} problem(s):\n`);
+    for (const p of problems) printOut(`  - ${p}\n`);
     return 1;
   }
-  pyPrint('[validate-only] ok — would render and emit cleanly, no problems found.\n');
+  printOut('[validate-only] ok — would render and emit cleanly, no problems found.\n');
   return 0;
 }

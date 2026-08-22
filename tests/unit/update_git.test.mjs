@@ -147,7 +147,7 @@ test('preflight reports a directory that is not a git checkout', () => {
 });
 
 test('preflight reports git missing from PATH', () => {
-  // `pyWhich` reads PATH at CALL time, so this needs no child — and emptying PATH is the honest
+  // `which` reads PATH at CALL time, so this needs no child — and emptying PATH is the honest
   // stand-in for the reference's `rc=None` seam: it is the same question asked of the real
   // lookup rather than of a tuple.
   const saved = process.env.PATH;

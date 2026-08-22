@@ -21,7 +21,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { setupBuildArgs } from '../../js/build/generate.mjs';
-import { doctrineOptions, javaMajorOk, lspPrereqs, setupSummaryLines } from '../../js/maintain/setup.mjs';
+import {
+  doctrineOptions, javaMajorOk, lspPrereqs, setupSummaryLines,
+} from '../../js/maintain/setup.mjs';
 import { themeFlair, tuiEntries, detailLines } from '../../js/ui/tui.mjs';
 import { catalogLines } from '../../js/build/catalog.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
@@ -308,7 +310,7 @@ test('an unknown theme degrades safely rather than throwing', () => {
   const f = themeFlair('no-such-theme');
   assert.equal(f.accent, 'cyan');
   assert.equal(f.tagline, '');
-  // `[]`, not `['']` — `pySplitLines` on the empty string, which is the difference between a
+  // `[]`, not `['']` — `splitLines` on the empty string, which is the difference between a
   // themeless banner and a banner made of one blank row.
   assert.deepEqual(f.banner, []);
 });

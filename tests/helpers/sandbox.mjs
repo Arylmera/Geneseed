@@ -45,7 +45,7 @@ export function homeOverrides(home) {
 
 // CANONICAL TEMP ROOT, resolved ONCE at import — the counterpart of the reference's
 // `tempfile.tempdir = realpath(...)`. GitHub's Windows runner spells `TEMP` as the 8.3 alias
-// `C:\Users\RUNNER~1\…`; a child's `Path.resolve()` / `pyResolve` expands it to the long form
+// `C:\Users\RUNNER~1\…`; a child's `Path.resolve()` / `resolvePath` expands it to the long form
 // before printing, so a root handed out short appears NOWHERE in the bytes it is meant to
 // normalise. That was 49 byte comparisons on the first Windows CI run, all one bug, and it
 // also broke a CELL rather than a comparison: `git-gate/sovereign-bypass` seeds `excludes.json`

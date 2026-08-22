@@ -260,7 +260,7 @@ export function unifiedDiff(a, b, {
  */
 const LINE_BOUNDARY = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/g;
 
-export function pySplitLines(text) {
+export function splitLines(text) {
   const out = [];
   let last = 0;
   LINE_BOUNDARY.lastIndex = 0;

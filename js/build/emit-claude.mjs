@@ -3,19 +3,27 @@
  *
  * Split out of `emit.mjs` beside `emit-opencode.mjs`, over the shared writers in
  * `emit-common.mjs`. `claudeWire` is the half that touches a file the USER also edits, and
- * its prior-claim pruning is the reason `pyEq` exists — read it before changing anything here.
+ * its prior-claim pruning is the reason `deepEquals` exists — read it before changing anything here.
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub } from '../hosts/opencode.mjs';
-import { managedBlockRemove, managedBlockWrite, mergeClaudeSettings, unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes } from '../hosts/settings.mjs';
+import {
+  managedBlockRemove, managedBlockWrite, mergeClaudeSettings, unwireClaudeExcludes,
+  unwireClaudeSettings, wireClaudeExcludes,
+} from '../hosts/settings.mjs';
 import { writeText } from '../lib/fs.mjs';
-import { pyTruthy } from '../lib/json.mjs';
+import { isTruthy } from '../lib/json.mjs';
 import { assertSourceComplete, phaseLog } from './bundle.mjs';
-import { get, globalMemory, globalNotebook, isDict, relPosix, shipLeanLaws, stripCapabilityLinks } from './emit-common.mjs';
+import {
+  get, globalMemory, globalNotebook, isDict, relPosix, shipLeanLaws, stripCapabilityLinks,
+} from './emit-common.mjs';
 import { renderAll, renderFile } from './render.mjs';
-import { BOB_RULES_STUB, ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex, ensureProfileStub, ensureRulesStub, ensureWikiStub } from './stubs.mjs';
+import {
+  BOB_RULES_STUB, ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex, ensureProfileStub,
+  ensureRulesStub, ensureWikiStub,
+} from './stubs.mjs';
 import { writeVersion } from './version.mjs';
 import { existsSync, mkdirSync } from 'node:fs';
 
@@ -174,7 +182,7 @@ export function emitClaudeRender(cfg, job) {
  * (`STRUCTURE` at P2d, `capabilityLinkRe` at P2e); this one edits a file the user co-owns.
  *
  * `GENESEED_STACK_GLOBAL` is read from the environment on BOTH sides — the child inherits
- * `process.env`, so the opt-out reaches here without travelling in the job. `pyTruthy` is
+ * `process.env`, so the opt-out reaches here without travelling in the job. `isTruthy` is
  * not needed for it: Python tests `os.environ.get(...)` for truthiness and an env var is
  * always a string, so `''` is the only falsy value either language sees.
  */
@@ -206,7 +214,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     // and only one of them is obviously safe.
     const rel = path.relative(cfgDir, claudeMd).split(path.sep).join('/') || '.';
     managed.claude_md = { rel };
-  } else if (isBob && scope === 'global' && pyTruthy(get(old, 'claude_md'))) {
+  } else if (isBob && scope === 'global' && isTruthy(get(old, 'claude_md'))) {
     const oldCm = isDict(get(old, 'claude_md')) ? get(old, 'claude_md') : {};
     // `.resolve()` on the Python side; `path.resolve` is its counterpart and both are
     // applied to a path already built from an absolute cfgDir.

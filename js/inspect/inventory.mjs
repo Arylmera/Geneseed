@@ -24,7 +24,7 @@ import path from 'node:path';
 import { ROOT, SRC, makeCfg, PACK_ORDER } from '../build/source.mjs';
 import { firstBlockquote } from '../hosts/native.mjs';
 import { renderAll } from '../build/render.mjs';
-import { pyResolve } from '../hosts/hosts.mjs';
+import { resolvePath } from '../hosts/hosts.mjs';
 import { readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 
@@ -266,7 +266,7 @@ export function tuiInventory(themeName, doctrines = null, excluded = []) {
     const name = two ? parts[1].slice(0, -3) : null;
     if (two && (parts[0] === 'agents' || parts[0] === 'skills')) {
       const entry = { name, desc: firstBlockquote(text), body: text,
-        source: pyResolve(src), status: entityStatus(registry, `${parts[0]}/${name}`) };
+        source: resolvePath(src), status: entityStatus(registry, `${parts[0]}/${name}`) };
       if (parts[0] === 'agents') agents.push(entry);
       else {
         entry.klass = has(SKILL_CLASS, name) ? SKILL_CLASS[name] : 'build';
@@ -280,7 +280,7 @@ export function tuiInventory(themeName, doctrines = null, excluded = []) {
     if (two && parts[0] === 'doctrines') {
       const lead = text.split('\n').map((l) => PACK_LEAD_RE.exec(l)).find(Boolean);
       packs.set(name, { pack: name, title: lead ? lead[1] : name, desc: lead ? lead[2] : '',
-        source: pyResolve(src), rules: parseDoctrines(text) });
+        source: resolvePath(src), rules: parseDoctrines(text) });
     }
     // Scoped to the laws dir, not matched on the basename: `src/ontology/universal.md`
     // shares the name, sorts after `laws/`, and would clobber the parse with `[]` —

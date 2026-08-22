@@ -10,13 +10,15 @@ import path from 'node:path';
 import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
 import { CONFIG, makeCfg } from '../build/source.mjs';
-import { hostCatalogsNatively, pyResolve } from '../hosts/hosts.mjs';
+import { hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
 import { EMIT_HOST_SCOPE, footprintOfDir, themeFiles } from '../hosts/installs.mjs';
 import { isVendoredPath } from '../hosts/native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
 import { readText, withDiscardableStderr } from '../lib/fs.mjs';
-import { parseJson, pyRepr } from '../lib/json.mjs';
-import { ABS_LINK_RE, LINK_RE, TOKEN_RE, has, isDir, isFile, rglob, stemOf, stripCode, within } from './scan.mjs';
+import { parseJson, formatRepr } from '../lib/json.mjs';
+import {
+  ABS_LINK_RE, LINK_RE, TOKEN_RE, has, isDir, isFile, rglob, stemOf, stripCode, within,
+} from './scan.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 
 // --------------------------------------------------------------------------------------
@@ -41,10 +43,10 @@ export function linkProblems(md, text, out, rel) {
       problems.push(`non-hermetic absolute link '${link}' in ${rel}`);
       continue;
     }
-    // `(md.parent / raw).resolve()` — `pyResolve`, not `path.resolve`, because Python's
+    // `(md.parent / raw).resolve()` — `resolvePath`, not `path.resolve`, because Python's
     // canonicalises the symlinks in the part that exists and this comparison is against an
     // `out` that went through the same call.
-    const target = pyResolve(path.join(path.dirname(md), raw));
+    const target = resolvePath(path.join(path.dirname(md), raw));
     if (!existsSync(target)) problems.push(`dead link '${link}' in ${rel}`);
     else if (!within(target, out)) {
       problems.push(`non-hermetic link '${link}' escapes the bundle in ${rel}`);
@@ -66,7 +68,7 @@ export function linkProblems(md, text, out, rel) {
  * — every emit-scan cell in the acceptance matrix names a backslash on Windows.
  */
 export function checkBuild(themeName, out, isVendored = isVendoredPath) {
-  const outAbs = pyResolve(out);
+  const outAbs = resolvePath(out);
   const problems = [];
   for (const md of rglob(outAbs)) {
     if (!md.endsWith('.md') || !isFile(md)) continue;
@@ -144,7 +146,7 @@ export function colorThemeProblems() {
     }
     for (const [role, val] of Object.entries(pal)) {
       if (!(typeof val === 'string' && HEX_RE.test(val))) {
-        problems.push(`[colors] '${stemOf(p)}' role '${role}' is not #rrggbb hex: ${pyRepr(val)}`);
+        problems.push(`[colors] '${stemOf(p)}' role '${role}' is not #rrggbb hex: ${formatRepr(val)}`);
       }
     }
   }

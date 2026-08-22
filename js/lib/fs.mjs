@@ -8,12 +8,16 @@
  * compare this module's output byte for byte and can never be re-recorded — so a rule here
  * is a frozen fact about what this tool emits, and changing one is a product change.
  *
- * The `py`-prefixed export names are kept on purpose. Each marks a function whose contract
- * is a language primitive's exact behaviour rather than a convenience wrapper, and that mark
- * is what stops a later reader "simplifying" one back to the Node default it deliberately is
- * not. For the same reason the per-function comments still name what was measured: that
- * provenance is the only surviving record of WHY a rule is the shape it is, and it is the
- * first thing to read before touching one.
+ * ⚠ NONE OF THESE IS THE NODE DEFAULT, AND THAT IS THE ONE THING TO KNOW BEFORE EDITING ONE.
+ * Each is a deliberate divergence from the obvious one-liner, and the obvious one-liner is
+ * wrong here in a way no test in this repository would tell you about pleasantly. These names
+ * carried a `py` prefix until the prefix was retired, precisely to say so; the warning now
+ * lives where it belongs, in the per-function comment naming WHAT WAS MEASURED and against
+ * what. That provenance is the only surviving record of why a rule has the shape it has, and
+ * it is the first thing to read before touching one.
+ *
+ * In this module the divergence is `os.linesep`: every write translates `\n` to the platform's
+ * separator, and `printOut`/`printErr` do the same on the way to the console.
  *
  * The rest of the old single `fs.mjs` lives beside this file: `json.mjs` (quoting and the
  * parsed-value model), `paths.mjs` (comparing and locating), `text.mjs` (string primitives).
@@ -111,8 +115,8 @@ export function copyFile(src, dest) {
  * that exists twice is a translation that can be fixed once.
  */
 const xlate = (s) => (EOL === '\n' ? s : s.replaceAll('\n', EOL));
-export const pyPrint = (s) => process.stdout.write(xlate(s));
-export const pyPrintErr = (s) => process.stderr.write(xlate(s));
+export const printOut = (s) => process.stdout.write(xlate(s));
+export const printErr = (s) => process.stderr.write(xlate(s));
 
 /**
  * Hold `fn`'s stderr, and emit it only if `fn` RETURNS.
@@ -124,7 +128,7 @@ export const pyPrintErr = (s) => process.stderr.write(xlate(s));
  * identical for every caller that lets the throw propagate, and wrong for every caller that
  * catches.
  *
- * MOVED HERE beside `pyPrintErr`, whose writes it intercepts, when the hook became the
+ * MOVED HERE beside `printErr`, whose writes it intercepts, when the hook became the
  * second and third such caller: `js/hosts.mjs`'s `expanduser` refuses a `~user` path by
  * printing and throwing, and `js/hooks.mjs` catches it twice — once per `excludes.json`
  * entry and once around `$GENESEED_ROOT`/`--root`. Its old docblock in `js/doctor.mjs`
@@ -151,12 +155,12 @@ export function withDiscardableStderr(fn) {
  * The same rule applied to a whole CALL rather than to one string — `bin/build-driver.mjs`'s
  * answer to the newline item P5e recorded and could not gate.
  *
- * WHY THE DRIVER NEEDS A FUNNEL WHERE EVERY OTHER CALLER NEEDS `pyPrint`. The generator
+ * WHY THE DRIVER NEEDS A FUNNEL WHERE EVERY OTHER CALLER NEEDS `printOut`. The generator
  * prints from ~25 sites across `bin/build-driver.mjs`, `js/emit.mjs`, `js/settings.mjs`,
  * `js/opencode.mjs`, `js/native.mjs` and `js/render.mjs`, and those modules are ALSO the
  * body of the `GENESEED_NO_JS` seam child, whose `main` buffers both streams and hands them
  * to a Python parent that re-prints them through `print()`. Converting those sites to
- * `pyPrint` would translate once in Node and again in Python — `\r\r\n` on every line, on the
+ * `printOut` would translate once in Node and again in Python — `\r\r\n` on every line, on the
  * path `tests/golden.py` drives 259 times. So the translation belongs to whichever process
  * OWNS the stream, and the seam child does not own it. This wraps the driver's `main`, and
  * only the driver's `main`.
@@ -171,7 +175,7 @@ export function withDiscardableStderr(fn) {
  * path writes binary to a stream, so translating one would be corrupting data rather than
  * reproducing Python.
  */
-export function withPyNewlines(fn) {
+export function withPlatformNewlines(fn) {
   if (EOL === '\n') return fn();
   const outW = process.stdout.write.bind(process.stdout);
   const errW = process.stderr.write.bind(process.stderr);

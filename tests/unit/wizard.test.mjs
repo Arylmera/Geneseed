@@ -299,7 +299,7 @@ test('confirm reads the first character only, and defaults at EOF', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// THE MENU, and the measurement behind `pyInt`.
+// THE MENU, and the measurement behind `parseIntStrict`.
 
 test('the choice corpus reaches all three fallback arms', () => {
   // A menu answered only with digits and blanks never separates "parsed and out of range" from

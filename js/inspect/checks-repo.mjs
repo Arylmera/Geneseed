@@ -11,8 +11,8 @@ import { PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC } from '../build/source.mjs
 import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
 import { hookShimPath, shimDeadPaths } from '../hosts/settings.mjs';
 import { readText } from '../lib/fs.mjs';
-import { pyRepr, pyStr } from '../lib/json.mjs';
-import { pySplitLines } from '../lib/udiff.mjs';
+import { formatRepr, formatValue } from '../lib/json.mjs';
+import { splitLines } from '../lib/udiff.mjs';
 import { ENTITY_STATUSES } from './inventory.mjs';
 import { has, isDir, isFile, rglob, srcStems } from './scan.mjs';
 import { readFileSync } from 'node:fs';
@@ -77,22 +77,22 @@ export function registryProblems() {
       continue;
     }
     // `row.get(...)` is None for an absent key, and `!r` renders that as `None`; a bare JS
-    // lookup is `undefined`, which `pyRepr` would not recognise as one.
+    // lookup is `undefined`, which `formatRepr` would not recognise as one.
     if (!ENTITY_STATUSES.includes(row.status)) {
-      problems.push(`[authoring] registry.json['${key}'].status ${pyRepr(row.status ?? null)} `
-        + `is not one of ${pyRepr(ENTITY_STATUSES)}`);
+      problems.push(`[authoring] registry.json['${key}'].status ${formatRepr(row.status ?? null)} `
+        + `is not one of ${formatRepr(ENTITY_STATUSES)}`);
     }
-    if (!SEMVER_RE.test(pyStr(row.version ?? ''))) {
+    if (!SEMVER_RE.test(formatValue(row.version ?? ''))) {
       problems.push(`[authoring] registry.json['${key}'].version `
-        + `${pyRepr(row.version ?? null)} is not a semver (N.N.N)`);
+        + `${formatRepr(row.version ?? null)} is not a semver (N.N.N)`);
     }
-    if (!pyStr(row.owner ?? '').trim()) {
+    if (!formatValue(row.owner ?? '').trim()) {
       problems.push(`[authoring] registry.json['${key}'] has no owner`);
     }
     for (const field of ['added', 'last_verified']) {
-      const value = pyStr(row[field] ?? '');
+      const value = formatValue(row[field] ?? '');
       if (value && !ISO_DATE_RE.test(value)) {
-        problems.push(`[authoring] registry.json['${key}'].${field} ${pyRepr(value)} is `
+        problems.push(`[authoring] registry.json['${key}'].${field} ${formatRepr(value)} is `
           + 'not an ISO date (YYYY-MM-DD) or empty');
       }
     }
@@ -146,7 +146,7 @@ export function secretProblems() {
         .split(path.sep).join('/');
       // `str.splitlines()`, not `split('\n')`: it also breaks on VT, FF, NEL and the two
       // Unicode separators, and the line NUMBER is printed.
-      pySplitLines(s).forEach((line, i) => {
+      splitLines(s).forEach((line, i) => {
         for (const [label, pattern] of SECRET_PATTERNS) {
           if (pattern.test(line)) {
             problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} — a `

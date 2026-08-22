@@ -416,7 +416,7 @@ function inCwd(dir, fn) {
   try { return fn(); } finally { process.chdir(saved); }
 }
 
-// `pyResolve(repo)` is what every branch of the resolver returns, so the expectation is the
+// `resolvePath(repo)` is what every branch of the resolver returns, so the expectation is the
 // resolved spelling — not the one the fixture happened to hand out.
 const resolved = (p) => fs.realpathSync.native(p);
 

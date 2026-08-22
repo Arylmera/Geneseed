@@ -26,10 +26,10 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, un
 import path from 'node:path';
 import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from '../build/stubs.mjs';
 import { wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
-import { GLOBAL_MANIFEST, HOSTS, pyResolve } from '../hosts/hosts.mjs';
-import { readText, writeText, pyPrint, pyPrintErr } from '../lib/fs.mjs';
+import { GLOBAL_MANIFEST, HOSTS, resolvePath } from '../hosts/hosts.mjs';
+import { readText, writeText, printOut, printErr } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
-import { normcase, pyPathStr } from '../lib/paths.mjs';
+import { normcase, toPlatformPath } from '../lib/paths.mjs';
 
 const get = (o, k) => (o && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
 const isDict = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
@@ -78,19 +78,19 @@ function writeExcludes(cfg, data) {
 }
 
 /** `_canon` — `Path(p).expanduser().resolve()`. */
-const canon = (p) => pyResolve(p);
+const canon = (p) => resolvePath(p);
 
 /**
  * `_same` — is this stored entry the same folder as `repo`?
  *
- * `pyPathStr` and not `path.normalize`: the latter collapses `a/../b` to `b`, and Python's
+ * `toPlatformPath` and not `path.normalize`: the latter collapses `a/../b` to `b`, and Python's
  * `Path()` does not, so a hand-edited entry carrying `..` matches here and would not match
  * there. Getting that backwards makes `exclude remove` unwire a repo the reference left
  * alone.
  */
 function same(stored, repo) {
   if (typeof stored !== 'string' || !stored) return false;
-  return normcase(pyPathStr(stored)) === normcase(repo);
+  return normcase(toPlatformPath(stored)) === normcase(repo);
 }
 
 /**
@@ -112,7 +112,7 @@ export function excludeAdd(target) {
     const priorWired = (isDict(prior) ? get(prior, 'wired') : null) || {};
     const wired = {};
     if (host === 'claude' && isDir(repo)) {
-      const entry = pyResolve(path.join(cfg, 'CLAUDE.md')).split(path.sep).join('/');
+      const entry = resolvePath(path.join(cfg, 'CLAUDE.md')).split(path.sep).join('/');
       const added = wireClaudeExcludes(
         path.join(repo, '.claude', 'settings.local.json'), [entry]);
       if (added.length) {
@@ -200,7 +200,7 @@ export function excludeRemove(target) {
         // Node's own wording. No cell can reach this branch (`unlink` on a file that
         // `isFile` just confirmed, `rmdir` on a directory just measured empty), so a
         // translation table here would be an unobservable guess. Same class as P5b's
-        // untested `die()` newline; `js/settings.mjs`'s `pyOsError` is the same stub for
+        // untested `die()` newline; `js/settings.mjs`'s `asOsError` is the same stub for
         // the same reason.
         messages.push(`${host}: could not remove ${stub} (${e.message})`);
       }
@@ -224,7 +224,7 @@ export function excludesSnapshot() {
     for (const e of readExcludes(cfg).excludes) {
       const p = isDict(e) ? get(e, 'path') : e;
       if (typeof p !== 'string' || !p) continue;
-      const key = normcase(pyPathStr(p));
+      const key = normcase(toPlatformPath(p));
       if (!byPath.has(key)) {
         byPath.set(key, { path: p, hosts: [],
           wired: (isDict(e) ? get(e, 'wired') : null) || {} });
@@ -242,11 +242,11 @@ export function cmdExclude(args) {
   if (args.action === 'list') {
     const snap = excludesSnapshot();
     if (!snap.installs.length) {
-      pyPrint('[geneseed] no global install found.\n');
+      printOut('[geneseed] no global install found.\n');
       return 1;
     }
     if (!snap.excludes.length) {
-      pyPrint('[geneseed] no folders excluded.\n');
+      printOut('[geneseed] no folders excluded.\n');
       return 0;
     }
     const allHosts = new Set(snap.installs.map((i) => i.host));
@@ -254,18 +254,18 @@ export function cmdExclude(args) {
       const missing = [...allHosts].filter((h) => !rec.hosts.includes(h)).sort();
       const flag = missing.length
         ? `  (MISSING from: ${missing.join(', ')} — re-run \`harness exclude add\`)` : '';
-      pyPrint(`  ${rec.path}  [${rec.hosts.slice().sort().join(', ')}]${flag}\n`);
+      printOut(`  ${rec.path}  [${rec.hosts.slice().sort().join(', ')}]${flag}\n`);
     }
     return 0;
   }
   if (!args.path) {
-    pyPrintErr('[geneseed] exclude add/remove needs a folder path.\n');
+    printErr('[geneseed] exclude add/remove needs a folder path.\n');
     return 2;
   }
   const res = args.action === 'add' ? excludeAdd(args.path) : excludeRemove(args.path);
-  for (const m of res.messages) pyPrintErr(`[geneseed] ${m}\n`);
+  for (const m of res.messages) printErr(`[geneseed] ${m}\n`);
   const verb = args.action === 'add' ? 'excluded' : 're-included';
-  pyPrint(res.ok ? `[geneseed] ${res.path} ${verb}.\n`
+  printOut(res.ok ? `[geneseed] ${res.path} ${verb}.\n`
     : `[geneseed] nothing done for ${res.path}.\n`);
   return res.ok ? 0 : 1;
 }

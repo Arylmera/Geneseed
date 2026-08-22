@@ -36,10 +36,10 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, PACK_ORDER, THEMES, discoverNames } from '../build/source.mjs';
-import { GLOBAL_MANIFEST, HOSTS, pyResolve } from './hosts.mjs';
+import { GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
-import { pyPrintErr, readText } from '../lib/fs.mjs';
-import { pyRepr } from '../lib/json.mjs';
+import { printErr, readText } from '../lib/fs.mjs';
+import { formatRepr } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
@@ -182,7 +182,7 @@ export function footprintOfDir(d) {
     const v = (readMaybe(marker) ?? '').trim();
     if (FOOTPRINTS.includes(v)) return v;
     if (v) {
-      pyPrintErr(`[geneseed] WARN: ${marker} holds unknown footprint ${pyRepr(v)} — `
+      printErr(`[geneseed] WARN: ${marker} holds unknown footprint ${formatRepr(v)} — `
         + `reading it as 'full'. Known: ${FOOTPRINTS.join(', ')}.\n`);
     }
   }
@@ -204,7 +204,7 @@ export function footprintOfDir(d) {
  * lowercasing. Every shipped name is already lowercase, which is exactly why the difference
  * would go unnoticed — the corpus in `tests/test_pure_function_parity.py` is what covers it.
  */
-export function pyCapitalize(s) {
+export function capitalize(s) {
   return s.length ? s[0].toUpperCase() + s.slice(1).toLowerCase() : s;
 }
 
@@ -213,7 +213,7 @@ function leadOfDir(d, names) {
     const text = readMaybe(path.join(d, carrier));
     if (text === null) continue;
     for (const name of names) {
-      if (text.includes(`**${pyCapitalize(name)}**`)) return name;
+      if (text.includes(`**${capitalize(name)}**`)) return name;
     }
   }
   return null;
@@ -420,7 +420,7 @@ export function registeredTargets() {
  * De-duplicated on the (host, RESOLVED path) pair, which is three behaviours in one rule: a
  * cwd carrying both `.opencode/` and `.claude/` yields two correctly-typed rows, a cwd that
  * IS a global config dir never doubles its own host's row, and a registered root that is also
- * the cwd never doubles either. `pyResolve` rather than `path.resolve` because Python's
+ * the cwd never doubles either. `resolvePath` rather than `path.resolve` because Python's
  * `Path.resolve()` returns the filesystem's own casing — on Windows two spellings of the same
  * directory differ as strings and not as installs, and this Set is keyed by string.
  */
@@ -435,12 +435,12 @@ export function installTargets() {
     if (scope !== 'global') {
       try {
         const spec = HOSTS.find((h) => h.host === host);
-        if (pyResolve(path.join(root, spec.projectMarker)) === pyResolve(spec.configDir())) {
+        if (resolvePath(path.join(root, spec.projectMarker)) === resolvePath(spec.configDir())) {
           return;
         }
       } catch { /* as the Python's bare `except Exception: pass` */ }
     }
-    const key = `${host}\0${pyResolve(root)}`;
+    const key = `${host}\0${resolvePath(root)}`;
     if (!seen.has(key)) { seen.add(key); out.push([host, scope, root]); }
   };
 

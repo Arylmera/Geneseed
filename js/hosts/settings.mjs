@@ -38,8 +38,11 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { pyPrintErr, readText, writeText } from '../lib/fs.mjs';
-import { jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, pyEq, pyRepr, indexOfEq } from '../lib/json.mjs';
+import { printErr, readText, writeText } from '../lib/fs.mjs';
+import {
+  jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals, formatRepr,
+  indexOfDeepEqual,
+} from '../lib/json.mjs';
 
 export const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
 
@@ -347,7 +350,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
       raw = readText(target);
     } catch (e) {
       if (!isOsError(e)) throw e;
-      process.stderr.write(`[geneseed] WARN: could not read ${target} (${pyOsError(e)}) `
+      process.stderr.write(`[geneseed] WARN: could not read ${target} (${asOsError(e)}) `
         + `— NOT touching it. Add ${jsonDumps(agentPath)} to its "instructions" array by `
         + "hand once it's readable again.\n");
       return target;
@@ -365,7 +368,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
   if (!has(config, '$schema')) config.$schema = OPENCODE_SCHEMA;
   let instr = get(config, 'instructions');
   if (!Array.isArray(instr)) instr = [];
-  const addInstr = indexOfEq(instr, agentPath) < 0;
+  const addInstr = indexOfDeepEqual(instr, agentPath) < 0;
   if (addInstr) instr.push(agentPath);
   config.instructions = instr;
   // Absent ⇒ write the whole block; present ⇒ reconcile Geneseed's own git keys. Adding is
@@ -426,7 +429,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
     atomicWriteJson(target, config);
   } catch (e) {
     if (!isOsError(e)) throw e;
-    process.stderr.write(`[geneseed] WARN: could not write ${target} (${pyOsError(e)}) — `
+    process.stderr.write(`[geneseed] WARN: could not write ${target} (${asOsError(e)}) — `
       + `the harness will NOT auto-load until this is fixed. Add ${jsonDumps(agentPath)} `
       + 'to its "instructions" array by hand.\n');
   }
@@ -442,7 +445,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
  * with an injectable failure instead and compares everything except the OS's own wording.
  * Named here so the gap is a decision rather than a surprise at GA.
  */
-function pyOsError(e) {
+function asOsError(e) {
   return e.message;
 }
 
@@ -512,7 +515,7 @@ function expanduser(p) {
   if (p.startsWith('~')) {
     const msg = `refusing '${p}': a '~user' path is not expanded by this port; pass an `
       + 'absolute path, or "~" / "~/…" for your own home directory';
-    pyPrintErr(`${msg}\n`);
+    printErr(`${msg}\n`);
     const e = new Error(msg);
     e.exitCode = 1;
     throw e;
@@ -783,12 +786,12 @@ export function mergeClaudeSettings(p, scope = 'global', priorHooks = null, hook
   }
   let pruned = false;
   for (const rec of prior) {
-    if (indexOfEq(canonFlat, rec) >= 0) continue;
+    if (indexOfDeepEqual(canonFlat, rec) >= 0) continue;
     const event = get(rec, 'event');
     const group = get(rec, 'group');
     const arr = get(hooks, event);
     if (Array.isArray(arr)) {
-      const at = indexOfEq(arr, group);
+      const at = indexOfDeepEqual(arr, group);
       if (at >= 0) {
         arr.splice(at, 1);
         pruned = true;
@@ -801,14 +804,14 @@ export function mergeClaudeSettings(p, scope = 'global', priorHooks = null, hook
     let arr = get(hooks, event);
     if (!Array.isArray(arr)) arr = [];
     for (const g of newGroups) {
-      if (indexOfEq(arr, g) >= 0) continue;
+      if (indexOfDeepEqual(arr, g) >= 0) continue;
       arr.push(g);
       added.push({ event, group: g });
     }
     hooks[event] = arr;
   }
-  const survivors = prior.filter((r) => indexOfEq(canonFlat, r) >= 0);
-  const managedNow = survivors.concat(added.filter((a) => indexOfEq(survivors, a) < 0));
+  const survivors = prior.filter((r) => indexOfDeepEqual(canonFlat, r) >= 0);
+  const managedNow = survivors.concat(added.filter((a) => indexOfDeepEqual(survivors, a) < 0));
   if (!added.length && !pruned) return [p, managedNow];
   if (hadComments) {
     process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
@@ -853,7 +856,7 @@ export function unwireClaudeSettings(p, added) {
     const group = get(rec, 'group');
     let arr = get(hooks, event);
     if (Array.isArray(arr)) {
-      const at = indexOfEq(arr, group);
+      const at = indexOfDeepEqual(arr, group);
       if (at >= 0) arr.splice(at, 1);
     }
     arr = get(hooks, event);
@@ -894,7 +897,7 @@ export function wireClaudeExcludes(p, excludes) {
   }
   let cur = get(config, 'claudeMdExcludes');
   if (!Array.isArray(cur)) cur = [];
-  const added = want.filter((e) => indexOfEq(cur, e) < 0);
+  const added = want.filter((e) => indexOfDeepEqual(cur, e) < 0);
   if (!added.length) return [];
   if (hadComments) {
     process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
@@ -909,7 +912,7 @@ export function wireClaudeExcludes(p, excludes) {
     atomicWriteJson(p, config);
   } catch (e) {
     if (!isOsError(e)) throw e;
-    process.stderr.write(`[geneseed] WARN: could not write ${p} (${pyOsError(e)}) — `
+    process.stderr.write(`[geneseed] WARN: could not write ${p} (${asOsError(e)}) — `
       + 'claudeMdExcludes were not wired. Add to its "claudeMdExcludes" array by hand: '
       + `${jsonDumpsCompact(added)}\n`);
     return [];
@@ -932,7 +935,7 @@ export function unwireClaudeExcludes(p, excludes) {
   const cur = get(loaded, 'claudeMdExcludes');
   if (!Array.isArray(cur)) return;
   for (const e of excludes) {
-    const at = indexOfEq(cur, e);
+    const at = indexOfDeepEqual(cur, e);
     if (at >= 0) cur.splice(at, 1);
   }
   if (cur.length) loaded.claudeMdExcludes = cur;
@@ -1058,7 +1061,7 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
     [loaded] = readJsonc(readText(p));
   } catch (e) {
     if (!isOsError(e)) throw e;
-    problems.push(`${p}: could not read the file (${pyOsError(e)})`);
+    problems.push(`${p}: could not read the file (${asOsError(e)})`);
     return flush();
   }
   if (!isDict(loaded)) {
@@ -1075,25 +1078,25 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
   for (const rec of recordedHooks) {
     const event = get(rec, 'event');
     const group = get(rec, 'group');
-    const hit = presentGroups.some(([e, g]) => pyEq(e, event) && pyEq(g, group));
+    const hit = presentGroups.some(([e, g]) => deepEquals(e, event) && deepEquals(g, group));
     if (expect === 'present' && !hit) {
-      problems.push(`${p}: recorded hook group missing — event=${pyRepr(event ?? null)} `
+      problems.push(`${p}: recorded hook group missing — event=${formatRepr(event ?? null)} `
         + `group=${jsonDumpsCompact(group ?? null)}`);
     } else if (expect === 'absent' && hit) {
       problems.push(`${p}: recorded hook group still present after unwire — `
-        + `event=${pyRepr(event ?? null)} group=${jsonDumpsCompact(group ?? null)}`);
+        + `event=${formatRepr(event ?? null)} group=${jsonDumpsCompact(group ?? null)}`);
     }
   }
 
   let exclCur = get(loaded, 'claudeMdExcludes');
   exclCur = Array.isArray(exclCur) ? exclCur : [];
   for (const entry of (get(m, 'settings_excludes') || [])) {
-    const hit = indexOfEq(exclCur, entry) >= 0;
+    const hit = indexOfDeepEqual(exclCur, entry) >= 0;
     if (expect === 'present' && !hit) {
-      problems.push(`${p}: recorded claudeMdExcludes entry missing: ${pyRepr(entry)}`);
+      problems.push(`${p}: recorded claudeMdExcludes entry missing: ${formatRepr(entry)}`);
     } else if (expect === 'absent' && hit) {
       problems.push(`${p}: recorded claudeMdExcludes entry still present after unwire: `
-        + `${pyRepr(entry)}`);
+        + `${formatRepr(entry)}`);
     }
   }
 
@@ -1101,17 +1104,17 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
   // auto-delete (they may be user-authored, or a claim this run legitimately did not
   // inherit).
   const recordedSet = new Set(recordedHooks.map(
-    (r) => `${pyRepr(get(r, 'event') ?? null)}\u0000`
+    (r) => `${formatRepr(get(r, 'event') ?? null)}\u0000`
       + `${jsonDumpsCompact(get(r, 'group') ?? null, { sortKeys: true })}`));
   for (const [event, group] of presentGroups) {
-    const key = `${pyRepr(event)}\u0000${jsonDumpsCompact(group, { sortKeys: true })}`;
+    const key = `${formatRepr(event)}\u0000${jsonDumpsCompact(group, { sortKeys: true })}`;
     if (recordedSet.has(key)) continue;
     const cmds = (get(group, 'hooks') || []).filter(isDict)
       .map((h) => (has(h, 'command') ? h.command : ''));
     if (cmds.some((c) => typeof c === 'string'
       && GENESEED_HOOK_SNIFF.some((mk) => c.includes(mk)))) {
       problems.push(`${p}: Geneseed-pattern hook present but NOT recorded in the manifest `
-        + `(event=${pyRepr(event)}) — possibly user-authored; left alone`);
+        + `(event=${formatRepr(event)}) — possibly user-authored; left alone`);
     }
   }
 
@@ -1131,7 +1134,7 @@ function delimiters(blockId) {
  */
 export function managedBlockWrite(p, content, blockId = 'GENESEED') {
   const [begin, end] = delimiters(blockId);
-  const block = `${begin}\n${pyRstrip(content)}\n${end}\n`;
+  const block = `${begin}\n${stripEnd(content)}\n${end}\n`;
   if (!existsSync(p)) {
     mkdirSync(path.dirname(p), { recursive: true });
     writeText(p, block);
@@ -1161,7 +1164,7 @@ export function managedBlockRemove(p, blockId = 'GENESEED', whole = false) {
   if (!existing.includes(begin) || !existing.includes(end)) return;
   const pre = existing.split(begin)[0];
   const post = existing.slice(existing.indexOf(end) + end.length);
-  const rest = pyStrip(`${pyRstripNewlines(pre)}\n${lstripNewlines(post)}`);
+  const rest = stripEnds(`${stripTrailingNewlines(pre)}\n${lstripNewlines(post)}`);
   if (rest) writeText(p, `${rest}\n`);
   else unlinkSync(p);
 }
@@ -1181,17 +1184,17 @@ export function managedBlockRead(p, blockId = 'GENESEED') {
 // U+001C–U+001F, which `trim()` leaves. A managed block is user-editable prose in a file
 // Geneseed shares with the user, so the set is spelled out rather than approximated — and
 // spelled with escapes, never literals: a raw U+2028 in a JS source file ends the line.
-const PY_SPACE = '[\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a'
+const WHITESPACE = '[\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a'
   + '\u2028\u2029\u202f\u205f\u3000]';
 
-const RSTRIP_RE = new RegExp(`${PY_SPACE}+$`);
-const LSTRIP_RE = new RegExp(`^${PY_SPACE}+`);
+const RSTRIP_RE = new RegExp(`${WHITESPACE}+$`);
+const LSTRIP_RE = new RegExp(`^${WHITESPACE}+`);
 
-function pyRstrip(s) {
+function stripEnd(s) {
   return s.replace(RSTRIP_RE, '');
 }
 
-function pyStrip(s) {
+function stripEnds(s) {
   return s.replace(LSTRIP_RE, '').replace(RSTRIP_RE, '');
 }
 
@@ -1199,10 +1202,10 @@ function lstripNewlines(s) {
   return s.replace(/^\n+/, '');
 }
 
-function pyRstripNewlines(s) {
+function stripTrailingNewlines(s) {
   return s.replace(/\n+$/, '');
 }
 
 function stripNewlines(s) {
-  return lstripNewlines(pyRstripNewlines(s));
+  return lstripNewlines(stripTrailingNewlines(s));
 }

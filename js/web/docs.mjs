@@ -43,10 +43,10 @@ import path from 'node:path';
 import { ROOT, THEMES } from '../build/source.mjs';
 import { cliReference } from '../ui/cli.mjs';
 import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
-import { pyResolve } from '../hosts/hosts.mjs';
+import { resolvePath } from '../hosts/hosts.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
-import { PY_SPACE, pyStripSpace } from '../lib/text.mjs';
+import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { statusData } from '../inspect/status.mjs';
 import { originDisplay } from '../maintain/update.mjs';
 import { NotFound, deployed, resolveLinks } from './api.mjs';
@@ -264,7 +264,7 @@ export function harnessBlocksBalanced(lines) {
 /** `_web_docs._strip_harness_blocks`. */
 export function stripHarnessBlocks(body, harnessName) {
   if (!HARNESS_HINT_RE.test(body)) return body;
-  const lines = pySplitlines(body);
+  const lines = splitLines(body);
   if (!harnessBlocksBalanced(lines)) return body;
   const out = [];
   let keep = true;
@@ -290,7 +290,7 @@ export function stripHarnessBlocks(body, harnessName) {
  * instead of yielding a final empty string, and that difference reaches the output here
  * because the result is re-joined with `\n`.
  */
-function pySplitlines(s) {
+function splitLines(s) {
   const parts = s.split('\n');
   if (parts.length && parts[parts.length - 1] === '') parts.pop();
   return parts;
@@ -309,8 +309,8 @@ function visibleGroups(harnessName) {
 
 // ---- slugs and section slicing ----------------------------------------------------------
 
-const SLUG_STRIP_RE = new RegExp(`[^a-z0-9${PY_SPACE}-]`, 'g');
-const SLUG_WS_RE = new RegExp(`[${PY_SPACE}]+`, 'g');
+const SLUG_STRIP_RE = new RegExp(`[^a-z0-9${WHITESPACE}-]`, 'g');
+const SLUG_WS_RE = new RegExp(`[${WHITESPACE}]+`, 'g');
 const SLUG_DASH_RE = /-+/g;
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
 
@@ -318,14 +318,14 @@ const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
  * `_web_docs._slugify_heading` — the same rules the frontend's `slug()` uses, so a
  * registry `anchor` written against a heading matches the id the renderer assigns.
  *
- * `PY_SPACE` and `pyStripSpace` rather than `\s` and `trim()`, and the corpus in
+ * `WHITESPACE` and `stripWhitespace` rather than `\s` and `trim()`, and the corpus in
  * `tests/test_pure_function_parity.py` is what made that necessary rather than tidy: the
  * two languages' whitespace classes differ at U+FEFF and at U+001C-U+001F, and a heading
- * carrying one slugs differently on each side. See `PY_SPACE`'s docblock for the measured
+ * carrying one slugs differently on each side. See `WHITESPACE`'s docblock for the measured
  * set.
  */
 export function slugifyHeading(text) {
-  let s = pyStripSpace(text.toLowerCase()).replace(SLUG_STRIP_RE, '');
+  let s = stripWhitespace(text.toLowerCase()).replace(SLUG_STRIP_RE, '');
   s = s.replace(SLUG_WS_RE, '-').replace(SLUG_DASH_RE, '-');
   return s.replace(/^-+|-+$/g, '');
 }
@@ -338,7 +338,7 @@ export function slugifyHeading(text) {
  * H2 — `max(level, 2)` — so it captures an intro paragraph rather than the whole file.
  */
 export function sliceSection(body, anchor) {
-  const lines = pySplitlines(body);
+  const lines = splitLines(body);
   let start = -1;
   let startLevel = 0;
   let inFence = false;
@@ -385,7 +385,7 @@ function findDocPage(pageId) {
  * but the guard is what makes that safe to say.
  */
 function readDocSource(rel) {
-  const target = pyResolve(path.join(ROOT, rel));
+  const target = resolvePath(path.join(ROOT, rel));
   if (!within(target, ROOT) || !isFile(target)) throw new NotFound(rel);
   return readMaybe(target) ?? '';
 }

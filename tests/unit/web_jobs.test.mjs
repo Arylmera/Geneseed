@@ -34,7 +34,9 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { INLINE_ACTIONS, NOT_PORTED_ACTIONS, PORTED_ACTIONS, actionCommands } from '../../js/web/jobs.mjs';
+import {
+  INLINE_ACTIONS, NOT_PORTED_ACTIONS, PORTED_ACTIONS, actionCommands,
+} from '../../js/web/jobs.mjs';
 import { apiDeployCmd } from '../../js/web/actions.mjs';
 import { webState } from '../../js/web/api.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -208,7 +210,7 @@ test('the deploy argv resolves the body it is handed', () => {
   // `actions__install-and-deploy-refuse-every-body-they-cannot-validate` drives it through the
   // real detector instead, on both refusal arms.
   // `makeSandbox`, NOT a raw `mkdtempSync`, and `tests/unit/sandbox.test.mjs` caught the first
-  // draft doing the latter. It is not tidiness here: `apiDeployCmd` runs `pyResolve(expanduser(
+  // draft doing the latter. It is not tidiness here: `apiDeployCmd` runs `resolvePath(expanduser(
   // raw))` on the path it is handed, and GitHub's Windows runner spells TEMP as the 8.3 alias
   // `C:\Users\RUNNER~1\…`. The resolver expands it, so the substitution below would have matched
   // nothing and the frozen tail would have failed on windows-latest for a reason that is the

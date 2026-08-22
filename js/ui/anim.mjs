@@ -33,8 +33,8 @@
  * captured on the reference side through a real `TextIOWrapper`, so the CRLF translation is
  * inside the comparison rather than outside it.
  */
-import { pyPrint } from '../lib/fs.mjs';
-import { pyInt, pyLen, pyLjust } from '../lib/text.mjs';
+import { printOut } from '../lib/fs.mjs';
+import { parseIntStrict, codePointLength, padEndToWidth } from '../lib/text.mjs';
 
 export const ART = {
   imperial: {
@@ -185,14 +185,14 @@ const cut = (s, a, b) => Array.from(s).slice(a, b).join('');
 /**
  * `shutil.get_terminal_size((80, 24)).columns`.
  *
- * `pyInt` and not `parseInt`, and the corpus has a case for exactly that: Python's `int()`
+ * `parseIntStrict` and not `parseInt`, and the corpus has a case for exactly that: Python's `int()`
  * refuses `'80x'` outright and `get_terminal_size` swallows the ValueError into the fallback,
  * where `parseInt('80x')` is a cheerful 80. A width one column off is invisible in a terminal
  * and loud in a byte comparison. `<= 0` is the reference's own guard, which is why `'0'` and
  * `'-5'` fall through to the fallback rather than producing a zero-width canvas.
  */
 function terminalColumns() {
-  const env = pyInt(process.env.COLUMNS);
+  const env = parseIntStrict(process.env.COLUMNS);
   if (env !== null && env > 0) return env;
   // `sys.__stdout__` over there, `process.stdout` here. Both are undefined-ish off a
   // terminal, and both then take the (80, 24) fallback.
@@ -238,7 +238,7 @@ export function place(row, x, width) {
  */
 export function tile(tileStr, width, phase = 0) {
   if (!tileStr) return '';
-  const n = pyLen(tileStr);
+  const n = codePointLength(tileStr);
   const base = tileStr.repeat(Math.max(0, Math.floor(width / n) + 2));
   const off = ((phase % n) + n) % n;
   return cut(base, off, off + width);
@@ -257,8 +257,8 @@ export function height(poses) {
  * both odd the extra column goes on the LEFT, and otherwise on the right. Nothing about
  * "centre this" implies it. The title line of every animation is the only caller.
  */
-function pyCenter(s, width) {
-  const marg = width - pyLen(s);
+function centerText(s, width) {
+  const marg = width - codePointLength(s);
   if (marg <= 0) return s;
   /* eslint-disable-next-line no-bitwise */
   const left = Math.floor(marg / 2) + (marg & width & 1);
@@ -281,21 +281,21 @@ const sleep = (ms) => {
 export function playLine(theme, ok = true) {
   const art = artFor(theme);
   const width = Math.min(terminalColumns() - 1, 56);
-  pyPrint('\n');
-  pyPrint(`${pyCenter(art.title, width)}\n`);
+  printOut('\n');
+  printOut(`${centerText(art.title, width)}\n`);
   if (!ok) return;
   if (!animOk()) {
-    for (const r of art.card) pyPrint(`${cut(r, 0, width)}\n`);
-    pyPrint('\n');
+    for (const r of art.card) printOut(`${cut(r, 0, width)}\n`);
+    printOut('\n');
     return;
   }
   const poses = art.sprite;
   const ground = art.ground || '';
   const h = height(poses);
   const canvasH = h + (ground ? 1 : 0);
-  const spriteW = Math.max(0, ...poses.flatMap((p) => p.map((r) => pyLen(r))));
+  const spriteW = Math.max(0, ...poses.flatMap((p) => p.map((r) => codePointLength(r))));
   try {
-    pyPrint('\n'.repeat(canvasH));
+    printOut('\n'.repeat(canvasH));
     const steps = Math.min(width + spriteW, 64);      // cap to ~1.6s of motion
     for (let i = 0; i <= steps; i += 1) {
       const pose = poses[Math.floor(i / 3) % poses.length];
@@ -303,25 +303,25 @@ export function playLine(theme, ok = true) {
       const lines = [];
       for (let r = 0; r < h; r += 1) lines.push(place(r < pose.length ? pose[r] : '', x, width));
       if (ground) lines.push(tile(ground, width, i));
-      pyPrint(`\x1b[${canvasH}A`);
-      for (const ln of lines) pyPrint(`\r${cut(pyLjust(ln, width), 0, width)}\n`);
+      printOut(`\x1b[${canvasH}A`);
+      for (const ln of lines) printOut(`\r${cut(padEndToWidth(ln, width), 0, width)}\n`);
       sleep(25);
     }
     // settle on the card
-    pyPrint(`\x1b[${canvasH}A`);
+    printOut(`\x1b[${canvasH}A`);
     const card = art.card;
     for (let r = 0; r < canvasH; r += 1) {
       const row = r < card.length ? cut(card[r], 0, width) : '';
-      pyPrint(`\r${cut(pyLjust(row, width), 0, width)}\n`);
+      printOut(`\r${cut(padEndToWidth(row, width), 0, width)}\n`);
     }
     // any extra card rows beyond the canvas
-    for (let r = canvasH; r < card.length; r += 1) pyPrint(`${cut(card[r], 0, width)}\n`);
-    pyPrint('\n');
+    for (let r = canvasH; r < card.length; r += 1) printOut(`${cut(card[r], 0, width)}\n`);
+    printOut('\n');
   } catch {
     // Terminal didn't cooperate — leave a clean static card.
     try {
-      for (const r of art.card) pyPrint(`${cut(r, 0, width)}\n`);
-      pyPrint('\n');
+      for (const r of art.card) printOut(`${cut(r, 0, width)}\n`);
+      printOut('\n');
     } catch { /* nothing left to try */ }
   }
 }

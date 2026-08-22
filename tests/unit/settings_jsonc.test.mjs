@@ -176,7 +176,7 @@ test('every state the reference matrix required by name still has an owner', () 
       'VERIFY reports an orphaned geneseed hook, and says nothing without one'],
     'opencode/jsonc-commented': ['generate.test.mjs',
       'a merge warns about and refuses to rewrite a commented .jsonc'],
-    'opencode/float-round-trip': ['py_primitives.test.mjs',
+    'opencode/float-round-trip': ['lib_primitives.test.mjs',
       'an integral float survives a read-modify-write as an integral float'],
   };
   assert.equal(Object.keys(OWNERS).length, 10, 'the reference required exactly ten states');

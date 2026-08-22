@@ -42,7 +42,7 @@ test('a true integer stays an integer', () => {
 // property the REFERENCE does not have either. CPython answers `10000000000.0`, and a port
 // "fixed" to satisfy my expectation would have diverged from the thing it reproduces.
 //
-// The mechanism, once read rather than guessed: `PyNumber` keeps the source text only to decide
+// The mechanism, once read rather than guessed: `JsonNumber` keeps the source text only to decide
 // INT or FLOAT — whether it carried a `.` or an `e` — and the writer then renders `repr(float)`,
 // which normalises the spelling. So the corpus below is CPython's own output, taken from
 // `json.dumps(json.loads(...))`, not the input echoed back.
@@ -74,7 +74,7 @@ test('the indented writer preserves the same spellings', () => {
 // below was taken from CPython on 2026-08-16.
 //
 // THE FIXTURES ARE BUILT THROUGH `parseJson`, NOT AS OBJECT LITERALS, and that is not style: a
-// bare JS number makes `pyStr` THROW on purpose, because `JSON.parse` has already collapsed
+// bare JS number makes `formatValue` THROW on purpose, because `JSON.parse` has already collapsed
 // int 1 and float 1.0 by the time the literal exists. Measured while writing this — the first
 // draft threw.
 // ⚠ AND `sortKeys` IS AN OPTION, NOT THE DEFAULT — the first draft of this table asserted

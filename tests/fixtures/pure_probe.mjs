@@ -18,25 +18,31 @@ import { cmpKey } from '../../js/inspect/diff.mjs';
 import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/hosts/native.mjs';
 import { proseMirrorProblems, romanToInt } from '../../js/inspect/checks-authoring.mjs';
 import { themesToCheck } from '../../js/inspect/doctor.mjs';
-import { pyCapitalize } from '../../js/hosts/installs.mjs';
+import { capitalize } from '../../js/hosts/installs.mjs';
 import { writeText } from '../../js/lib/fs.mjs';
 import { jsonDumpsCompact, parseJson } from '../../js/lib/json.mjs';
-import { comparePaths, normcase, pyIsAbsolute, pyPathStr, pyWhich } from '../../js/lib/paths.mjs';
-import { pyInt, pyLen, pyLjust, pyStripSpace, pyUnquote } from '../../js/lib/text.mjs';
-// `expanduser` and `pyResolve` are NOT in `fs.mjs` — they are host-config resolvers and
+import {
+  comparePaths, normcase, isAbsolutePath, toPlatformPath, which,
+} from '../../js/lib/paths.mjs';
+import {
+  parseIntStrict, codePointLength, padEndToWidth, stripWhitespace, percentDecode,
+} from '../../js/lib/text.mjs';
+// `expanduser` and `resolvePath` are NOT in `fs.mjs` — they are host-config resolvers and
 // live beside the config-dir lookups that need them. Verified rather than assumed; the
 // private copies in `js/hooks.mjs` are a second pair and not these.
-import { expanduser, pyResolve } from '../../js/hosts/hosts.mjs';
+import { expanduser, resolvePath } from '../../js/hosts/hosts.mjs';
 import { installedDefaults } from '../../js/hosts/installs.mjs';
 import { installAgentEntryOf } from '../../js/maintain/uninstall.mjs';
 import {
   ask, askChoice, collectSetupLines, confirm, javaMajorOk, modeOptions, postureOptions,
   promptLine, setupSummaryLines, themeOptions,
 } from '../../js/maintain/setup.mjs';
-import { unifiedDiff, pySplitLines } from '../../js/lib/udiff.mjs';
+import { unifiedDiff, splitLines } from '../../js/lib/udiff.mjs';
 import { stampMinute } from '../../js/web/api.mjs';
 import { buildPlan, daemonArgs, restartArgs } from '../../js/web/server.mjs';
-import { fetchPhases, parseOrigin, pyCount, redactUrlCreds } from '../../js/maintain/update.mjs';
+import {
+  fetchPhases, parseOrigin, countOccurrences, redactUrlCreds,
+} from '../../js/maintain/update.mjs';
 import {
   sliceSection, slugifyHeading, stripHarnessBlocks,
 } from '../../js/web/docs.mjs';
@@ -53,7 +59,7 @@ import { makeSandbox } from '../helpers/sandbox.mjs';
  * environment (read at CALL time by `_anim_ok`, so a per-case dict is the real read and not
  * a monkeypatch) and stdout.
  *
- * THE CAPTURE REPLACES `process.stdout.write`, NOT `process.stdout`. `pyPrint` closes over
+ * THE CAPTURE REPLACES `process.stdout.write`, NOT `process.stdout`. `printOut` closes over
  * `process.stdout` at call time, so patching the method is enough — and it has to be the
  * method, because the probe's own results document goes out on the SAME stream afterwards.
  * `isTTY` is assigned rather than faked with a device: `< /dev/null` reads as a TTY to
@@ -96,15 +102,15 @@ const FNS = {
   manifest_is_claude: (a) => manifestIsClaude(a[0]),
   accent_for: (a) => accentFor(a[0]),
   default_theme: () => defaultTheme(),
-  py_len: (a) => pyLen(a[0]),
-  py_ljust: (a) => pyLjust(a[0], a[1]),
+  py_len: (a) => codePointLength(a[0]),
+  py_ljust: (a) => padEndToWidth(a[0], a[1]),
   fence_for: (a) => fenceFor(a[0]),
   unified_diff: (a) => unifiedDiff(a[0], a[1], {
     fromfile: 'source/f', tofile: 'deployed/f', lineterm: '',
   }),
-  py_split_lines: (a) => pySplitLines(a[0]),
+  py_split_lines: (a) => splitLines(a[0]),
   cmp_key: (a) => cmpKey(a[0], a[1]),
-  py_capitalize: (a) => pyCapitalize(a[0]),
+  py_capitalize: (a) => capitalize(a[0]),
   setup_build_args: (a) => setupBuildArgs(...a),
   themes_to_check: (a) => themesToCheck(...a),
   roman_to_int: (a) => romanToInt(a[0]),
@@ -113,23 +119,23 @@ const FNS = {
   prose_mirror_problems: (a) => proseMirrorProblems(a[0], a[1], a[2], new Set(a[3]), a[4]),
   is_vendored_path: (a) => isVendoredPath(a[0]),
   validate_is_vendored: (a) => validateIsVendored(a[0]),
-  py_which: (a) => pyWhich(a[0], a[1]),
-  py_is_absolute: (a) => pyIsAbsolute(a[0]),
+  py_which: (a) => which(a[0], a[1]),
+  py_is_absolute: (a) => isAbsolutePath(a[0]),
 
   // ---- the primitives whose answers ARE the bytes on a user's disk --------------------
-  py_path_str: (a) => pyPathStr(a[0]),
-  py_resolve: (a) => pyResolve(a[0]),
-  // `pyPathStr` AFTER IT, because the reference's `expanduser` is a Path METHOD and this
+  py_path_str: (a) => toPlatformPath(a[0]),
+  py_resolve: (a) => resolvePath(a[0]),
+  // `toPlatformPath` AFTER IT, because the reference's `expanduser` is a Path METHOD and this
   // one is a string function: `Path("")` is `.` before `expanduser` is even consulted, so a
   // raw comparison would score `py_path_str`'s job as an `expanduser` divergence. The
   // composite is what `js/hooks.mjs` actually writes, and `py_path_str` gates its own half
   // over its own corpus — so a real tilde divergence still shows through, and does.
-  expanduser: (a) => pyPathStr(expanduser(a[0])),
+  expanduser: (a) => toPlatformPath(expanduser(a[0])),
   normcase: (a) => normcase(a[0]),
   compare_paths: (a) => comparePaths(a[0], a[1]),
   json_dumps: (a) => jsonDumpsCompact(a[0]),
   parse_json_roundtrip: (a) => jsonDumpsCompact(parseJson(a[0])),
-  py_strip_space: (a) => pyStripSpace(a[0]),
+  py_strip_space: (a) => stripWhitespace(a[0]),
   // HEX, NOT TEXT — see the reference probe's comment. `readFileSync` with no encoding is
   // the raw buffer, which is the only reading that can see `writeText`'s translation.
   write_text_linesep: (a) => {
@@ -138,7 +144,7 @@ const FNS = {
     return readFileSync(p).toString('hex');
   },
   install_agent_entry_of: (a) => installAgentEntryOf(a[0]),
-  py_int: (a) => pyInt(a[0]),
+  py_int: (a) => parseIntStrict(a[0]),
   java_major_ok: (a) => javaMajorOk(...a),
   theme_options: () => themeOptions(),
   posture_options: () => postureOptions(),
@@ -146,7 +152,7 @@ const FNS = {
   installed_defaults: () => installedDefaults(),
   // Seconds in, as `st_mtime` is; `stampMinute` takes ms, as `mtimeMs` is.
   minute_stamp: (a) => stampMinute(a[0] * 1000),
-  py_unquote: (a) => pyUnquote(a[0]),
+  py_unquote: (a) => percentDecode(a[0]),
   build_plan: (a) => buildPlan(a[0], a[1], a[2], a[3]),
   daemon_args: (a) => daemonArgs(a[0], a[1]),
   restart_args: (a) => restartArgs(a[0]),
@@ -166,7 +172,7 @@ const FNS = {
   // which JSON carries as a list — hence the two-element array here.
   parse_origin: (a) => { const o = parseOrigin(a[0]); return [o.url, o.githubSlug]; },
   redact_url_creds: (a) => redactUrlCreds(a[0]),
-  count_or_zero: (a) => pyCount(a[0]),
+  count_or_zero: (a) => countOccurrences(a[0]),
   fetch_phases: (a) => fetchPhases(a[0], a[1]),
   // P7a. `args[0]` FAKES `isTTY`, because a probe's stdin is a seeded file and every branch
   // past the isatty test would otherwise be dead on both sides — the one input no cell and

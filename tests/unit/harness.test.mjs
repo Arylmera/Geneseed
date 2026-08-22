@@ -21,9 +21,14 @@ import { pathToFileURL } from 'node:url';
 import {
   LEARN_PROMPT_HEAD, frontmatter, readNotes, existingSlugs, writeMemories,
 } from '../../js/hosts/hooks.mjs';
-import { countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt, authoringProblems, doctrineMetaProblems } from '../../js/inspect/checks-authoring.mjs';
+import {
+  countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt, authoringProblems,
+  doctrineMetaProblems,
+} from '../../js/inspect/checks-authoring.mjs';
 import { themeParityProblems, renderedProblems } from '../../js/inspect/checks-build.mjs';
-import { themesToCheck, globalEmitProblems, claudeBobEmitProblems } from '../../js/inspect/doctor.mjs';
+import {
+  themesToCheck, globalEmitProblems, claudeBobEmitProblems,
+} from '../../js/inspect/doctor.mjs';
 import {
   memoryDropIndex, discoverContext, resolveContextSets, resolveAgentName, appendAgentLesson,
   consolidateMemory,

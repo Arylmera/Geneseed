@@ -55,7 +55,7 @@ import { parseDriverArgs } from './build-driver.mjs';
 import { cmdExclude } from '../js/inspect/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/build/generate.mjs';
 import { cmdMigrate } from '../js/maintain/migrate.mjs';
-import { pyInt } from '../js/lib/text.mjs';
+import { parseIntStrict } from '../js/lib/text.mjs';
 import { cmdLink, cmdUnlink } from '../js/hosts/link.mjs';
 import { cmdMcp } from '../js/hosts/mcp.mjs';
 import { cmdMemory } from '../js/maintain/memory.mjs';
@@ -275,7 +275,7 @@ function parse(spec, argv) {
     // `type=int`. argparse's own wording, minus the usage block it prints around it — the
     // same rule the rest of this parser follows. The VALUE stays a string in `args`; the
     // command converts, and this is what guarantees the conversion cannot fail there.
-    if ((spec.ints ?? []).includes(flag) && pyInt(value) === null) {
+    if ((spec.ints ?? []).includes(flag) && parseIntStrict(value) === null) {
       return { error: `argument ${flag}: invalid int value: '${value}'` };
     }
     args[dest] = value;

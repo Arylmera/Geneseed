@@ -17,7 +17,7 @@
  * read its body, it joins on `', '`. So the twin needs no new helper and the response
  * bodies stay byte-comparable.
  *
- * Its one condition is the int/float distinction. `pyStr` refuses a BARE JS number
+ * Its one condition is the int/float distinction. `formatValue` refuses a BARE JS number
  * because `json.loads` tells `20` from `1.0` and `JSON.parse` does not — but the numbers
  * in a response body are not parsed from JSON, they are computed here (counts, a port, a
  * pid, a unix second), and every one of them is a Python `int`, which renders identically
@@ -49,11 +49,11 @@ import { join, resolve as pathResolve, dirname, extname, basename, sep } from 'n
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-import { GLOBAL_MANIFEST, pyResolve } from '../hosts/hosts.mjs';
-import { pyPrint, writeText } from '../lib/fs.mjs';
-import { jsonDumpsCompact, parseJson, pyStr, pyTruthy } from '../lib/json.mjs';
-import { pyWhich } from '../lib/paths.mjs';
-import { pyInt, pyUnquote } from '../lib/text.mjs';
+import { GLOBAL_MANIFEST, resolvePath } from '../hosts/hosts.mjs';
+import { printOut, writeText } from '../lib/fs.mjs';
+import { jsonDumpsCompact, parseJson, formatValue, isTruthy } from '../lib/json.mjs';
+import { which } from '../lib/paths.mjs';
+import { parseIntStrict, percentDecode } from '../lib/text.mjs';
 import { promptLine } from '../maintain/setup.mjs';
 // P8c. The reference imports `_update` LAZILY inside the handler, to keep `build` and its
 // `sys.path` side effect out of web-import time; ESM has no such side effect and the import is
@@ -200,7 +200,7 @@ const POST_ROUTES = new Map([
   // `(self._read_json_body().get("name") or "")` — the SHELL resolves the name, and the
   // endpoint takes a bare slug rather than a body.
   ['/api/memory/delete',
-    [(state, b) => apiMemoryDelete(state, pyTruthy(b.name) ? pyStr(b.name) : ''), false]],
+    [(state, b) => apiMemoryDelete(state, isTruthy(b.name) ? formatValue(b.name) : ''), false]],
   ['/api/rules', [apiRulesMutate, true]],
   ['/api/rules/promote', [apiRulesPromote, true]],
   ['/api/profile', [apiProfileSave, true]],
@@ -342,8 +342,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
 
   function serveStatic(res, path, acceptEncoding) {
     const rel = (path === '/' || path === '') ? 'index.html' : path.replace(/^\/+/, '');
-    const index = pyResolve(join(dist, 'index.html'));
-    let fp = pyResolve(join(dist, rel));
+    const index = resolvePath(join(dist, 'index.html'));
+    let fp = resolvePath(join(dist, rel));
     // `dist not in fp.parents`: STRICTLY under dist. `Path.parents` never contains the
     // path itself, so `fp == dist` takes the fallback too.
     if (!(fp.startsWith(dist + sep) && fp !== dist) && fp !== index) fp = join(dist, 'index.html');
@@ -381,7 +381,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       return sendJson(res, apiDocs(state, harnessParam(req.url)), 200, ae);
     }
     if (path.startsWith('/api/docs/page/')) {
-      const pid = pyUnquote(path.slice('/api/docs/page/'.length));
+      const pid = percentDecode(path.slice('/api/docs/page/'.length));
       try {
         return sendJson(res, apiDocsPage(state, pid, harnessParam(req.url)), 200, ae);
       } catch (e) {
@@ -476,7 +476,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     if (route !== undefined) {
       const [fn, okIs409] = route;
       const obj = fn(state, readJsonBody(body));
-      return sendJson(res, obj, (okIs409 && !pyTruthy(obj.ok)) ? 409 : 200, ae);
+      return sendJson(res, obj, (okIs409 && !isTruthy(obj.ok)) ? 409 : 200, ae);
     }
     if (path.startsWith('/api/jobs/') && path.endsWith('/cancel')) {
       // `path.split("/")[3]`, positional — so `/api/jobs/<id>/cancel` takes `<id>` and a
@@ -518,7 +518,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
    */
   function doAction(res, action, body, ae) {
     if (action === 'restore') {
-      return sendJson(res, apiRestore(state, pyTruthy(body.files) ? body.files : []), 200, ae);
+      return sendJson(res, apiRestore(state, isTruthy(body.files) ? body.files : []), 200, ae);
     }
     if (action === 'install') {
       const plan = apiInstallCmd(state, body);
@@ -559,7 +559,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       theme, emit, footprint: state.footprint, posture: state.posture, mode: state.mode,
       doctrines: doctrinesForBuild(state.target),
     });
-    if (!pyTruthy(cmds)) {
+    if (!isTruthy(cmds)) {
       return sendJson(res, { error: `unknown action ${action}` }, 404, ae);
     }
     return startJob(res, action, cmds, ae);
@@ -611,7 +611,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         // shell whose two implementations diverged only under load would be the worst
         // kind of divergence to carry. UNREACHABLE is not the word for it: the branch
         // runs on every POST, it simply cannot be observed to matter on this runtime.
-        const length = pyInt(String(req.headers['content-length'] ?? '')) ?? 0;
+        const length = parseIntStrict(String(req.headers['content-length'] ?? '')) ?? 0;
         return readBody(req, length, (buf) => {
           req._body = buf;
           try {
@@ -660,8 +660,8 @@ function harnessParam(url) {
   for (const pair of url.slice(at + 1).split('&')) {
     if (!pair) continue;
     const eq = pair.indexOf('=');
-    const k = pyUnquote((eq < 0 ? pair : pair.slice(0, eq)).replace(/\+/g, ' '));
-    const v = eq < 0 ? '' : pyUnquote(pair.slice(eq + 1).replace(/\+/g, ' '));
+    const k = percentDecode((eq < 0 ? pair : pair.slice(0, eq)).replace(/\+/g, ' '));
+    const v = eq < 0 ? '' : percentDecode(pair.slice(eq + 1).replace(/\+/g, ' '));
     if (k === 'harness' && v !== '') return v;
   }
   return null;
@@ -802,8 +802,8 @@ export function postShutdown(url, token, timeout = 3.0) {
  */
 export async function liveDaemon(target) {
   const st = readDaemon(target);
-  if (st && pyTruthy(st.url) && await probe(st.url)) return st;
-  if (pyTruthy(st)) clearDaemon(target);
+  if (st && isTruthy(st.url) && await probe(st.url)) return st;
+  if (isTruthy(st)) clearDaemon(target);
   return null;
 }
 
@@ -849,14 +849,14 @@ function spawnDetached(webArgs, log) {
  *  corpus: the binary differs per side by design, the FLAGS may not. */
 export function daemonArgs(port, theme) {
   const args = ['--daemon-internal', '--port', String(port), '--no-browser'];
-  if (pyTruthy(theme)) args.push('--theme', theme);
+  if (isTruthy(theme)) args.push('--theme', theme);
   return args;
 }
 
 /** The same for the out-of-band restart — `_restart_args`. */
 export function restartArgs(theme) {
   const args = ['restart', '--no-browser'];
-  if (pyTruthy(theme)) args.push('--theme', theme);
+  if (isTruthy(theme)) args.push('--theme', theme);
   return args;
 }
 
@@ -912,7 +912,7 @@ export async function startDaemon(theme, port, openBrowser = true) {
   const { target } = webState(theme);
   const st = await liveDaemon(target);
   if (st) {
-    pyPrint(`[web] already running on ${st.url}  (pid ${none(st.pid)})\n`);
+    printOut(`[web] already running on ${st.url}  (pid ${none(st.pid)})\n`);
     if (openBrowser) openUrl(st.url);
     return 0;
   }
@@ -924,39 +924,39 @@ export async function startDaemon(theme, port, openBrowser = true) {
   for (let i = 0; i < 60; i += 1) {
     const rec = readDaemon(target);
     // eslint-disable-next-line no-await-in-loop
-    if (rec && pyTruthy(rec.url) && await probe(rec.url, 0.5)) {
-      pyPrint(`[web] Geneseed UI on ${rec.url}  (theme: ${none(rec.theme)}, `
+    if (rec && isTruthy(rec.url) && await probe(rec.url, 0.5)) {
+      printOut(`[web] Geneseed UI on ${rec.url}  (theme: ${none(rec.theme)}, `
         + `pid ${none(rec.pid)})\n`);
-      pyPrint('[web] running in the background — `geneseed web stop` to stop it.\n');
+      printOut('[web] running in the background — `geneseed web stop` to stop it.\n');
       if (openBrowser) openUrl(rec.url);
       return 0;
     }
     // eslint-disable-next-line no-await-in-loop
     await sleep(200);
   }
-  pyPrint('[web] daemon did not come up in time — check the log:\n');
-  pyPrint(`      ${log}\n`);
+  printOut('[web] daemon did not come up in time — check the log:\n');
+  printOut(`      ${log}\n`);
   return 1;
 }
 
 export async function stopDaemon(theme = null) {
   const { target } = webState(theme);
   const st = readDaemon(target);
-  if (!pyTruthy(st) || !pyTruthy(st.url)) {
+  if (!isTruthy(st) || !isTruthy(st.url)) {
     // NO `clearDaemon` HERE, and the asymmetry with `liveDaemon` is the reference's. A
     // record that names no url is left exactly where it is; `web status` on the same file
     // deletes it. Both directions are cells, because a port that unified them would delete
     // a file the reference keeps and stdout would look identical.
-    pyPrint('[web] no running server recorded.\n');
+    printOut('[web] no running server recorded.\n');
     return 0;
   }
-  if (await postShutdown(st.url, pyTruthy(st.token) ? st.token : '')) {
+  if (await postShutdown(st.url, isTruthy(st.token) ? st.token : '')) {
     clearDaemon(target);
-    pyPrint(`[web] stopped (pid ${none(st.pid)}).\n`);
+    printOut(`[web] stopped (pid ${none(st.pid)}).\n`);
     return 0;
   }
   clearDaemon(target);
-  pyPrint('[web] no live server (cleared a stale record).\n');
+  printOut('[web] no live server (cleared a stale record).\n');
   return 0;
 }
 
@@ -964,12 +964,12 @@ export async function statusDaemon(theme = null) {
   const { target } = webState(theme);
   const st = await liveDaemon(target);
   if (st) {
-    pyPrint(`[web] running on ${st.url}  (theme: ${none(st.theme)}, pid ${none(st.pid)})\n`);
+    printOut(`[web] running on ${st.url}  (theme: ${none(st.theme)}, pid ${none(st.pid)})\n`);
     return 0;
   }
   // EXIT 1, which is the verb's whole contract for a script. The snapshot's `<exit>`
   // column is what gates it.
-  pyPrint('[web] not running.\n');
+  printOut('[web] not running.\n');
   return 1;
 }
 
@@ -979,7 +979,7 @@ export async function restartDaemon(theme = null, port = 4747, openBrowser = tru
   const st = readDaemon(target);
   const live = (await liveDaemon(target)) !== null;
   if (onlyIfRunning && !live) return 0;
-  const usePort = (st && pyTruthy(st.port) ? st.port : null) || port;
+  const usePort = (st && isTruthy(st.port) ? st.port : null) || port;
   let open = openBrowser;
   if (live) {
     // A live daemon means a tab is already open on this (preserved) port and will
@@ -1029,7 +1029,7 @@ export function buildPlan(dist, webDir, npm, interactive) {
  * library to call instead; a Node twin that reimplemented `npm install` is not a thing that
  * exists.
  *
- * `shell` ON WINDOWS, and it is required rather than stylistic: `pyWhich('npm')` resolves
+ * `shell` ON WINDOWS, and it is required rather than stylistic: `which('npm')` resolves
  * to `npm.CMD` through PATHEXT, and Node refuses to `spawn` a `.cmd` directly. The path is
  * quoted because Node wraps the whole command in one more pair and `cmd /s` strips only
  * the outermost — `C:\Program Files\…` would otherwise split at the space.
@@ -1037,13 +1037,13 @@ export function buildPlan(dist, webDir, npm, interactive) {
 export function npmBuild(npm, webDir) {
   const win = process.platform === 'win32';
   for (const step of [['install'], ['run', 'build']]) {
-    pyPrint(`[web] npm ${step.join(' ')} ...\n`);
+    printOut(`[web] npm ${step.join(' ')} ...\n`);
     const r = spawnSync(win ? `"${npm}"` : npm, step, {
       cwd: webDir, stdio: 'inherit', shell: win,
     });
     const code = r.status === null || r.status === undefined ? 1 : r.status;
     if (code) {
-      pyPrint(`[web] npm ${step.join(' ')} failed (exit ${code}).\n`);
+      printOut(`[web] npm ${step.join(' ')} failed (exit ${code}).\n`);
       return code;
     }
   }
@@ -1057,22 +1057,22 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   const manual = '        cd web && npm install && npm run build';
   // `sys.stdin.isatty()`. `process.stdin.isTTY` is `undefined` rather than false on a pipe,
   // which is the same trap `cmdSetup` documents.
-  const plan = buildPlan(dist, webDir, pyWhich('npm'), Boolean(process.stdin.isTTY));
+  const plan = buildPlan(dist, webDir, which('npm'), Boolean(process.stdin.isTTY));
   if (plan === 'no-source') {
-    pyPrint(`[web] web/ sources are missing from ${ROOT}.\n`);
-    pyPrint('      Run `geneseed upgrade` to fetch them (twice on installs whose\n');
-    pyPrint('      updater predates web/ in the sync list).\n');
+    printOut(`[web] web/ sources are missing from ${ROOT}.\n`);
+    printOut('      Run `geneseed upgrade` to fetch them (twice on installs whose\n');
+    printOut('      updater predates web/ in the sync list).\n');
     return 1;
   }
   if (plan === 'no-npm') {
-    pyPrint('[web] web/dist is missing and npm was not found. Install Node.js,\n');
-    pyPrint('      then build the UI:\n');
-    pyPrint(`${manual}\n`);
+    printOut('[web] web/dist is missing and npm was not found. Install Node.js,\n');
+    printOut('      then build the UI:\n');
+    printOut(`${manual}\n`);
     return 1;
   }
   if (plan === 'no-tty') {
-    pyPrint('[web] web/dist is missing. Build the UI first:\n');
-    pyPrint(`${manual}\n`);
+    printOut('[web] web/dist is missing. Build the UI first:\n');
+    printOut(`${manual}\n`);
     return 1;
   }
   if (plan === 'ask') {
@@ -1084,18 +1084,18 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
     const line = promptLine('[web] UI not built — run npm install && npm run build now? [Y/n] ');
     const answer = line === null ? 'n' : line;
     if (['', 'y', 'yes'].includes(answer.trim().toLowerCase())) {
-      const code = npmBuild(pyWhich('npm'), webDir);
+      const code = npmBuild(which('npm'), webDir);
       if (code) return code;
     } else {
-      pyPrint('[web] skipped. Build the UI manually:\n');
-      pyPrint(`${manual}\n`);
+      printOut('[web] skipped. Build the UI manually:\n');
+      printOut(`${manual}\n`);
       return 0;
     }
   }
   const state = webState(theme);
   if (!existsSync(join(state.target, GLOBAL_MANIFEST))) {
-    pyPrint(`[web] no deployed harness at ${state.target}.\n`);
-    pyPrint('      Run `geneseed setup` first — serving anyway (read-only UI).\n');
+    printOut(`[web] no deployed harness at ${state.target}.\n`);
+    printOut('      Run `geneseed setup` first — serving anyway (read-only UI).\n');
   }
   const token = randomBytes(24).toString('base64url');
   const holder = {};
@@ -1120,15 +1120,15 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
           token, theme: state.theme, started: Math.floor(Date.now() / 1000),
         });
       }
-      pyPrint(`[web] Geneseed UI on ${url}  (theme: ${state.theme})\n`);
-      pyPrint(daemon ? '[web] daemon ready.\n' : '[web] Ctrl-C to stop.\n');
+      printOut(`[web] Geneseed UI on ${url}  (theme: ${state.theme})\n`);
+      printOut(daemon ? '[web] daemon ready.\n' : '[web] Ctrl-C to stop.\n');
       if (openBrowser) openUrl(url);
       // `except KeyboardInterrupt: print("\n[web] stopped.")` around `serve_forever`. Node
       // kills on SIGINT by default, which would skip the message AND the record cleanup in
       // the `finally` below — a foreground `--daemon-internal` server stopped with Ctrl-C
       // would leave a record pointing at a dead port.
       process.on('SIGINT', () => {
-        pyPrint('\n[web] stopped.\n');
+        printOut('\n[web] stopped.\n');
         srv.close();
         srv.closeAllConnections();
       });
@@ -1157,8 +1157,8 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
  */
 export async function cmdWeb(args) {
   // `--port` is `type=int` on the reference, and `bin/geneseed-cli.mjs`'s `ints` column
-  // refuses a non-integer before this runs — so `pyInt` cannot be null here.
-  const port = args.port === null ? 4747 : pyInt(args.port);
+  // refuses a non-integer before this runs — so `parseIntStrict` cannot be null here.
+  const port = args.port === null ? 4747 : parseIntStrict(args.port);
   const openBrowser = !args.noBrowser;
   if (args.action === 'start') return startDaemon(args.theme, port, openBrowser);
   if (args.action === 'stop') return stopDaemon(args.theme);
@@ -1182,12 +1182,12 @@ async function main(argv) {
   let daemon = false;
   let openBrowser = true;
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--theme') { theme = argv[i + 1]; i += 1; } else if (argv[i] === '--port') { port = pyInt(String(argv[i + 1])) ?? 4747; i += 1; } else if (argv[i] === '--daemon-internal') daemon = true;
+    if (argv[i] === '--theme') { theme = argv[i + 1]; i += 1; } else if (argv[i] === '--port') { port = parseIntStrict(String(argv[i + 1])) ?? 4747; i += 1; } else if (argv[i] === '--daemon-internal') daemon = true;
     else if (argv[i] === '--no-browser') openBrowser = false;
   }
   return serve({ theme, port, openBrowser, daemon });
 }
 
-if (process.argv[1] && pyResolve(process.argv[1]) === pyResolve(fileURLToPath(import.meta.url))) {
+if (process.argv[1] && resolvePath(process.argv[1]) === resolvePath(fileURLToPath(import.meta.url))) {
   process.exitCode = await main(process.argv.slice(2));
 }

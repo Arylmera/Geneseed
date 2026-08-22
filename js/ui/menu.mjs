@@ -37,15 +37,15 @@
  * one input no cell can vary. See that file's P7a section for what it reaches and what it
  * declares.
  */
-import { pyPrint, pyPrintErr } from '../lib/fs.mjs';
-import { pyWhich } from '../lib/paths.mjs';
+import { printOut, printErr } from '../lib/fs.mjs';
+import { which } from '../lib/paths.mjs';
 import { startDaemon } from '../web/server.mjs';
 
 /** `_menu_help` — the off-TTY arm, and the fallback both TTY arms end in. */
 export function menuHelp() {
-  pyPrint('Geneseed — no interactive menu here. Get started with:  geneseed setup\n');
-  pyPrint('Other commands:  bootstrap · update · build · doctor · diff · tui · web\n');
-  pyPrint('On a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.\n');
+  printOut('Geneseed — no interactive menu here. Get started with:  geneseed setup\n');
+  printOut('Other commands:  bootstrap · update · build · doctor · diff · tui · web\n');
+  printOut('On a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.\n');
   return 0;
 }
 
@@ -67,7 +67,7 @@ export function menuHelp() {
  */
 function browserAvailable() {
   if (process.platform === 'win32' || process.platform === 'darwin') return true;
-  return pyWhich('xdg-open') !== null;
+  return which('xdg-open') !== null;
 }
 
 /**
@@ -104,14 +104,14 @@ export function cmdMenu() {
   // Python panel, and P2 took the pointer out rather than re-aiming it: the panel it named
   // is the Python this migration deletes, and a refusal that sends a user to a file which
   // will not be there is worse than one that simply says the screen does not exist.
-  pyPrintErr('[menu] TUI unavailable (this entry has no full-screen menu).\n');
+  printErr('[menu] TUI unavailable (this entry has no full-screen menu).\n');
   return menuHelp();
 }
 
 /** `cmd_home` — the default for a bare `geneseed`. */
 export async function cmdHome(args) {
   if (webFirstOk()) {
-    pyPrint('[geneseed] opening the web console — `geneseed menu` for the terminal UI, '
+    printOut('[geneseed] opening the web console — `geneseed menu` for the terminal UI, '
       + 'GENESEED_NO_WEB=1 to disable.\n');
     return startDaemon(null, 4747, true);
   }

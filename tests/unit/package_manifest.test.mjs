@@ -72,14 +72,14 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
-import { pyWhich } from '../../js/lib/paths.mjs';
+import { which } from '../../js/lib/paths.mjs';
 import { TMP_ROOT } from '../helpers/sandbox.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const MANIFEST = path.join(ROOT, 'package.json');
 
 const WIN = process.platform === 'win32';
-const NPM = pyWhich('npm');
+const NPM = which('npm');
 const NO_NPM = NPM ? false : 'npm is not on PATH';
 
 const manifest = () => JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
@@ -92,7 +92,7 @@ const tracked = (...paths) =>
 
 /**
  * `npm`, captured. `shell` ON WINDOWS and it is required rather than stylistic, for exactly
- * the reason `js/web/server.mjs`'s `npmBuild` already documents: `pyWhich('npm')` resolves to
+ * the reason `js/web/server.mjs`'s `npmBuild` already documents: `which('npm')` resolves to
  * `npm.CMD` through PATHEXT and Node REFUSES to spawn a `.cmd` directly (EINVAL since the
  * CVE-2024-27980 fix) — which the reference never met, because Windows `CreateProcess` runs a
  * `.cmd` for you and Python's `subprocess` therefore just worked.
@@ -646,7 +646,7 @@ const API_FLOOR = [
   // `ExperimentalWarning` on stderr — the stream this port compares byte-for-byte in 294
   // harness cells. So the floor is where it stops warning, not where it starts existing.
   ['fs.cpSync (stable)', '22.3.0', /\bcpSync\b/],
-  // js/lib/fs.mjs — pyStr's toJSON writes verbatim text. Its own comment says "Node >= 21".
+  // js/lib/fs.mjs — formatValue's toJSON writes verbatim text. Its own comment says "Node >= 21".
   ['JSON.rawJSON', '21.0.0', /\bJSON\.rawJSON\b/],
   ['Object.hasOwn', '16.9.0', /\bObject\.hasOwn\b/],
   ['String.prototype.replaceAll', '15.0.0', /\.replaceAll\(/],

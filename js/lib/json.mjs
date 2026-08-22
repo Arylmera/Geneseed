@@ -3,12 +3,13 @@
  * rules that decide what a parsed number renders as.
  *
  * These are definitions, not an adaptation of somebody else's; see `fs.mjs` for why the
- * measurements against CPython are recorded per function and why the `py` prefix stays.
+ * measurements against CPython are recorded per function, and why NONE of these is the Node
+ * default — the warning the retired `py` prefix used to carry now lives in each docblock.
  * A rule here is a frozen fact about what this tool emits — the corpora under
  * `tests/__snapshots__/` compare it byte for byte and can never be re-recorded.
  *
- * `PyNumber` is why this module holds both the parser and the renderers: the wrapper is
- * created by `parseJson` and read by `pyStr`, `pyRepr`, `pyTruthy` and `pyEq`, so the
+ * `JsonNumber` is why this module holds both the parser and the renderers: the wrapper is
+ * created by `parseJson` and read by `formatValue`, `formatRepr`, `isTruthy` and `deepEquals`, so the
  * four cannot be separated from it without a cycle.
  */
 /**
@@ -23,38 +24,38 @@
  * overrides stub, so no golden cell has ever had an override to render. It is only
  * reachable on a real user's machine, which is the worst place to find it.
  */
-class PyNumber {
+class JsonNumber {
   constructor(value, source) { this.value = value; this.source = source; }
   valueOf() { return this.value; }
-  toString() { return pyStr(this); }
+  toString() { return formatValue(this); }
 
   /**
    * Re-serialising parsed JSON must round-trip the way Python's does. Without this,
    * `JSON.stringify` would walk the wrapper and emit `{"value":1,"source":"1.0"}`.
-   * `JSON.rawJSON` (Node >= 21) writes the text verbatim, and `pyStr` supplies the text
+   * `JSON.rawJSON` (Node >= 21) writes the text verbatim, and `formatValue` supplies the text
    * Python would have \u2014 NOT the original literal, because `json.dumps(json.loads('1.50'))`
    * is `1.5`: Python re-formats through repr rather than echoing the source.
    */
-  toJSON() { return JSON.rawJSON(pyStr(this)); }
+  toJSON() { return JSON.rawJSON(formatValue(this)); }
 }
 
 /**
- * `json.loads(text)`, preserving the int/float distinction (see `PyNumber`).
+ * `json.loads(text)`, preserving the int/float distinction (see `JsonNumber`).
  *
  * Uses the reviver's `context.source` (Node >= 21). Where it is unavailable the numbers
- * come back bare and `pyStr` throws rather than formatting them wrongly — a loud failure
+ * come back bare and `formatValue` throws rather than formatting them wrongly — a loud failure
  * on an old runtime beats bytes that differ from Python's only for some values.
  */
 export function parseJson(text) {
   return JSON.parse(text, function (key, value, context) {
     return typeof value === 'number' && context && typeof context.source === 'string'
-      ? new PyNumber(value, context.source)
+      ? new JsonNumber(value, context.source)
       : value;
   });
 }
 
-/** `repr(float)` — the half of `pyStr` where the two languages disagree most. */
-function pyFloat(n) {
+/** `repr(float)` — the half of `formatValue` where the two languages disagree most. */
+function formatFloat(n) {
   if (Number.isNaN(n)) return 'nan';
   if (!Number.isFinite(n)) return n > 0 ? 'inf' : '-inf';
   const a = Math.abs(n);
@@ -79,33 +80,33 @@ function pyFloat(n) {
  * it throws instead: an override file with a value nobody has decided the semantics for is
  * a question to answer, not a byte to guess at.
  */
-export function pyStr(value) {
+export function formatValue(value) {
   if (typeof value === 'string') return value;
-  if (value instanceof PyNumber) {
+  if (value instanceof JsonNumber) {
     // `json.decoder` picks parse_float for any literal carrying a fraction or an exponent
     // and parse_int otherwise — so the literal, not the resulting double, is what decides.
     // Ints are exact in Python at any width; BigInt keeps that (and normalises `-0`).
-    return /[.eE]/.test(value.source) ? pyFloat(value.value) : BigInt(value.source).toString();
+    return /[.eE]/.test(value.source) ? formatFloat(value.value) : BigInt(value.source).toString();
   }
   if (typeof value === 'number') {
-    throw new TypeError(`pyStr got a bare number (${value}); parse JSON with parseJson so `
+    throw new TypeError(`formatValue got a bare number (${value}); parse JSON with parseJson so `
       + `int 1 and float 1.0 stay distinguishable, as they are in Python`);
   }
-  throw new TypeError(`pyStr has no Python-agreeing rendering for ${typeof value}`);
+  throw new TypeError(`formatValue has no Python-agreeing rendering for ${typeof value}`);
 }
 
 /**
  * Python truthiness — `if value:` — for a value that came out of `json.loads`.
  *
- * `Boolean()` is not it, and the gap is not academic: a `PyNumber` is an OBJECT, so
- * `Boolean(PyNumber(0))` is `true` where Python's `if 0` is false. In the other direction
+ * `Boolean()` is not it, and the gap is not academic: a `JsonNumber` is an OBJECT, so
+ * `Boolean(JsonNumber(0))` is `true` where Python's `if 0` is false. In the other direction
  * `Number('0')` is `0` where Python's `if "0"` is true. Both spellings appear in the
  * override tests, so neither shortcut is safe.
  */
-export function pyTruthy(value) {
+export function isTruthy(value) {
   if (value === undefined || value === null || value === false) return false;
   if (typeof value === 'string') return value !== '';
-  if (value instanceof PyNumber) return value.value !== 0;
+  if (value instanceof JsonNumber) return value.value !== 0;
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === 'object') return Object.keys(value).length > 0;
   return Boolean(value);
@@ -117,20 +118,20 @@ export function pyTruthy(value) {
  * Python quotes strings with `'`, switching to `"` only when the string contains a `'`
  * and no `"`, and spells the three singletons with a capital. Anything else is a
  * container, whose repr differs structurally; guessing at a rendering would be worse
- * than failing, so it falls through to `pyStr`.
+ * than failing, so it falls through to `formatValue`.
  *
- * Lives here rather than beside its first caller because `pyAscii` below is the same
+ * Lives here rather than beside its first caller because `formatReprAscii` below is the same
  * function with one more escaping rule, and two copies of the quote choice would be two
  * things to keep in agreement.
  *
- * Containers ARE rendered, unlike in `pyStr`, and the difference is not an inconsistency.
- * `pyStr` interpolates into an emitted file, where a shape nobody decided the semantics
+ * Containers ARE rendered, unlike in `formatValue`, and the difference is not an inconsistency.
+ * `formatValue` interpolates into an emitted file, where a shape nobody decided the semantics
  * for must be a question rather than a guessed byte. `repr` renders a value into a WARNING
  * about that very value — a list in `.geneseed-srcdirs.json` is precisely what the warning
  * exists to report, and throwing there would turn "this file is corrupt" into a crash. The
  * value always came from JSON, so the type set is closed and the rendering is exact.
  */
-function pyReprImpl(v, ascii) {
+function formatReprImpl(v, ascii) {
   if (typeof v === 'string') {
     let body = '';
     for (const ch of v) {                 // by CODE POINT: `\U########` is one escape
@@ -155,18 +156,18 @@ function pyReprImpl(v, ascii) {
   if (v === null) return 'None';
   if (v === true) return 'True';
   if (v === false) return 'False';
-  if (Array.isArray(v)) return `[${v.map((x) => pyReprImpl(x, ascii)).join(', ')}]`;
-  if (typeof v === 'object' && !(v instanceof PyNumber)) {
+  if (Array.isArray(v)) return `[${v.map((x) => formatReprImpl(x, ascii)).join(', ')}]`;
+  if (typeof v === 'object' && !(v instanceof JsonNumber)) {
     // JSON object keys are always strings, so `repr(key)` is the string branch above.
     return `{${Object.entries(v)
-      .map(([k, x]) => `${pyReprImpl(k, ascii)}: ${pyReprImpl(x, ascii)}`)
+      .map(([k, x]) => `${formatReprImpl(k, ascii)}: ${formatReprImpl(x, ascii)}`)
       .join(', ')}}`;
   }
-  return pyStr(v);
+  return formatValue(v);
 }
 
-export function pyRepr(v) {
-  return pyReprImpl(v, false);
+export function formatRepr(v) {
+  return formatReprImpl(v, false);
 }
 
 /**
@@ -179,13 +180,13 @@ export function pyRepr(v) {
  * terminal, and Python already made that choice by spelling it `ascii()` rather than an
  * f-string.
  *
- * The two share ONE implementation on purpose. The first draft gave `pyAscii` its own
+ * The two share ONE implementation on purpose. The first draft gave `formatReprAscii` its own
  * container and quote handling, and a mutation exposed the consequence immediately:
- * `pyRepr`'s container branches became unreachable, so half of the code was dead and
+ * `formatRepr`'s container branches became unreachable, so half of the code was dead and
  * neither copy's escaping could drift without the other silently keeping the gate green.
  */
-export function pyAscii(v) {
-  return pyReprImpl(v, true);
+export function formatReprAscii(v) {
+  return formatReprImpl(v, true);
 }
 
 /**
@@ -196,30 +197,30 @@ export function pyAscii(v) {
  * `_merge_claude_settings` re-adds its own hook group on every emit \u2014 the exact defect the
  * prior-claim pruning exists to prevent, reintroduced by a one-word translation.
  *
- * `PyNumber` compares by its VALUE, which is right: Python's `{"a": 1} == {"a": 1.0}` is
+ * `JsonNumber` compares by its VALUE, which is right: Python's `{"a": 1} == {"a": 1.0}` is
  * True even though `repr` renders the two differently. The one gap left is Python's
  * `1 == True`; a settings.json holding a bool where the manifest recorded a number is not
  * a shape any writer here produces.
  */
-export function pyEq(a, b) {
-  const x = a instanceof PyNumber ? a.value : a;
-  const y = b instanceof PyNumber ? b.value : b;
+export function deepEquals(a, b) {
+  const x = a instanceof JsonNumber ? a.value : a;
+  const y = b instanceof JsonNumber ? b.value : b;
   if (x === null || y === null || typeof x !== 'object' || typeof y !== 'object') {
     return x === y;
   }
   if (Array.isArray(x) !== Array.isArray(y)) return false;
   if (Array.isArray(x)) {
-    return x.length === y.length && x.every((v, i) => pyEq(v, y[i]));
+    return x.length === y.length && x.every((v, i) => deepEquals(v, y[i]));
   }
   const kx = Object.keys(x);
   const ky = Object.keys(y);
   return kx.length === ky.length
-    && kx.every((k) => Object.prototype.hasOwnProperty.call(y, k) && pyEq(x[k], y[k]));
+    && kx.every((k) => Object.prototype.hasOwnProperty.call(y, k) && deepEquals(x[k], y[k]));
 }
 
-/** `value in list` and `list.index(value)` under `pyEq` \u2014 Python's `in`, not `includes`. */
-export function indexOfEq(arr, value) {
-  return arr.findIndex((v) => pyEq(v, value));
+/** `value in list` and `list.index(value)` under `deepEquals` \u2014 Python's `in`, not `includes`. */
+export function indexOfDeepEqual(arr, value) {
+  return arr.findIndex((v) => deepEquals(v, value));
 }
 
 /**
@@ -295,7 +296,7 @@ export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
  * non-finite number throws rather than emitting `NaN`/`Infinity`: Python's encoder writes
  * those bare tokens, which is not valid JSON, and no caller here can produce one.
  *
- * `bareInts` admits a BARE JS number, reading it as a Python `int`. `pyStr` refuses one by
+ * `bareInts` admits a BARE JS number, reading it as a Python `int`. `formatValue` refuses one by
  * default and is right to: a value that came out of `json.loads` carries the int/float
  * distinction and a bare double has lost it. But P6's caller is `_send_json`, whose values
  * are COMPUTED here — counts, a port, a pid, a unix second — and Python types every one of
@@ -316,16 +317,16 @@ function compactImpl(v, sortKeys, bareInts) {
   if (v === true) return 'true';
   if (v === false) return 'false';
   if (typeof v === 'string') return JSON.stringify(v);
-  if (v instanceof PyNumber || typeof v === 'number') {
-    const n = v instanceof PyNumber ? v.value : v;
+  if (v instanceof JsonNumber || typeof v === 'number') {
+    const n = v instanceof JsonNumber ? v.value : v;
     if (!Number.isFinite(n)) {
       throw new TypeError(`jsonDumpsCompact got ${n}; Python's encoder writes a bare `
         + 'NaN/Infinity token there, which is not JSON, and nothing here can produce one');
     }
     if (bareInts && typeof v === 'number') {
-      return Number.isSafeInteger(n) ? String(n) : pyFloat(n);
+      return Number.isSafeInteger(n) ? String(n) : formatFloat(n);
     }
-    return pyStr(v);
+    return formatValue(v);
   }
   if (Array.isArray(v)) {
     return `[${v.map((x) => compactImpl(x, sortKeys, bareInts)).join(', ')}]`;

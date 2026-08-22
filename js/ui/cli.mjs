@@ -48,7 +48,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from '../build/source.mjs';
-import { pyInt, pyStripSpace } from '../lib/text.mjs';
+import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 
 const CLI_JSON = path.join(ROOT, 'js', 'cli-table.json');
 
@@ -150,7 +150,7 @@ function actionInvocation(a, positional) {
   return args ? `${a.names.join(', ')} ${args}` : a.names.join(', ');
 }
 
-// `textwrap`'s `wordsep_re`, which is what makes `pyTextWrap` below a port rather than a guess.
+// `textwrap`'s `wordsep_re`, which is what makes `wrapText` below a port rather than a guess.
 //
 // A GREEDY SPACE-ONLY WRAP WAS THE FIRST DRAFT AND THE GATE REFUSED IT. `textwrap` splits a
 // hyphenated word into two chunks, so it can break a line inside `back-compat` where a
@@ -185,7 +185,7 @@ const WORDSEP = new RegExp(
  * `rituals/_harness_tui*.py` calls `textwrap.wrap` in seven places and is declared unported;
  * move this when that changes, not before.
  */
-export function pyTextWrap(text, width) {
+export function wrapText(text, width) {
   const chunks = text.split(WORDSEP).filter(Boolean).reverse();
   const blank = (s) => s.trim() === '';
   const lines = [];
@@ -297,7 +297,7 @@ function formatAction(a, positional, helpPosition, width) {
     // `_whitespace_matcher` is `re.compile(r'\s+', re.ASCII)` — the ASCII class, so a help
     // string carrying U+00A0 keeps it rather than having it collapsed to a break opportunity.
     const collapsed = help.replace(/[ \t\n\v\f\r]+/g, ' ').trim();
-    const lines = pyTextWrap(collapsed, Math.max(width - helpPosition, 11));
+    const lines = wrapText(collapsed, Math.max(width - helpPosition, 11));
     parts.push(`${' '.repeat(indentFirst)}${lines[0]}\n`);
     for (const line of lines.slice(1)) parts.push(`${' '.repeat(helpPosition)}${line}\n`);
   } else if (!parts[0].endsWith('\n')) {
@@ -405,7 +405,7 @@ export function formatHelp(cmd, prog, width) {
  * reads `COLUMNS` before it asks the tty, and falls back to 80 when neither answers, which is
  * every pipe both implementations write help into.)
  *
- * `pyInt`, NOT `Number.parseInt`, and the tree already owned it. `get_terminal_size` spells
+ * `parseIntStrict`, NOT `Number.parseInt`, and the tree already owned it. `get_terminal_size` spells
  * this `int(os.environ['COLUMNS'])` inside `except (KeyError, ValueError)`, and `int` is not
  * `parseInt`. Measured against the reference over a corpus of `$COLUMNS` values
  * (`test_the_ports_help_width_is_shutil_get_terminal_size`): `COLUMNS=1_0` is 10 to Python and
@@ -415,11 +415,11 @@ export function formatHelp(cmd, prog, width) {
  * why the corpus is the gate rather than a cell. A non-positive value falls through on both
  * sides, which is Python's `if columns <= 0` and was already right here.
  *
- * `pyStripSpace` because THIS is the caller `pyInt`'s docblock did not have: its other two
+ * `stripWhitespace` because THIS is the caller `parseIntStrict`'s docblock did not have: its other two
  * strip before calling, and `$COLUMNS` arrives however the shell set it — `int(' 80 ')` is 80.
  */
 export function helpWidth() {
-  const env = pyInt(pyStripSpace(process.env.COLUMNS ?? ''));
+  const env = parseIntStrict(stripWhitespace(process.env.COLUMNS ?? ''));
   if (env !== null && env > 0) return env - 2;
   return (process.stdout.columns > 0 ? process.stdout.columns : 80) - 2;
 }

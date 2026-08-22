@@ -30,8 +30,10 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { sovereignBypass } from '../../js/hosts/hooks.mjs';
-import { excludeAdd, excludeRemove, excludesSnapshot, cmdExclude } from '../../js/inspect/excludes.mjs';
-import { pyResolve } from '../../js/hosts/hosts.mjs';
+import {
+  excludeAdd, excludeRemove, excludesSnapshot, cmdExclude,
+} from '../../js/inspect/excludes.mjs';
+import { resolvePath } from '../../js/hosts/hosts.mjs';
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
 import { withGlobalInstalls } from '../helpers/installs_fixture.mjs';
 import { ROOT } from '../helpers/web_fixture.mjs';
@@ -210,7 +212,7 @@ function withExcludes(hosts, fn) {
 }
 
 const entryFor = (cfg, repo) => readJson(path.join(cfg, 'excludes.json')).excludes
-  .find((e) => pyResolve(e.path) === pyResolve(repo));
+  .find((e) => resolvePath(e.path) === resolvePath(repo));
 
 test('exclude add and remove round-trip across every detected install', () => {
   withExcludes(['claude', 'bob'], ({ tmp, cfgs }) => {
@@ -225,7 +227,7 @@ test('exclude add and remove round-trip across every detected install', () => {
     // claude wiring: `claudeMdExcludes` in the EXCLUDED repo's own settings.local.json.
     const localPath = path.join(repo, '.claude', 'settings.local.json');
     assert.ok(readJson(localPath).claudeMdExcludes
-      .includes(asPosix(pyResolve(path.join(cfgs.claude, 'CLAUDE.md')))));
+      .includes(asPosix(resolvePath(path.join(cfgs.claude, 'CLAUDE.md')))));
     // bob wiring: the shadow stub.
     assert.ok(fs.statSync(path.join(repo, '.bob', 'rules', 'geneseed.md')).isFile());
 
@@ -291,7 +293,7 @@ test('exclude add does not claim pre-existing claude wiring', () => {
   withExcludes(['claude', 'bob'], ({ tmp, cfgs }) => {
     const repo = path.join(tmp, 'vault');
     fs.mkdirSync(repo, { recursive: true });
-    const claudeMd = asPosix(pyResolve(path.join(cfgs.claude, 'CLAUDE.md')));
+    const claudeMd = asPosix(resolvePath(path.join(cfgs.claude, 'CLAUDE.md')));
     const settingsDir = path.join(repo, '.claude');
     fs.mkdirSync(settingsDir, { recursive: true });
     const localPath = path.join(settingsDir, 'settings.local.json');
@@ -321,7 +323,7 @@ test('an idempotent re-add still records ownership of its own wiring', () => {
     assert.equal(excludeAdd(repo).ok, true);
 
     const entry = entryFor(cfgs.claude, repo);
-    const claudeMd = asPosix(pyResolve(path.join(cfgs.claude, 'CLAUDE.md')));
+    const claudeMd = asPosix(resolvePath(path.join(cfgs.claude, 'CLAUDE.md')));
     assert.ok(((entry.wired || {}).claude_md_excludes || []).includes(claudeMd),
       'the second add dropped the ownership record the first one earned');
 

@@ -5,7 +5,7 @@
 // `bin/build-driver.mjs`'s `resolveOut`, documented in its own docblock as a user-visible defect
 // found by GitHub's Windows runner: the reference ends in `Path.resolve()`, which CANONICALISES
 // — 8.3 short names expanded, symlinks followed, the filesystem's own casing — where
-// `path.resolve` only normalises `.` and `..`. Nine `pyResolve` call sites had the rule and this
+// `path.resolve` only normalises `.` and `..`. Nine `resolvePath` call sites had the rule and this
 // one did not, so the two entry points printed the same directory under two different names.
 //
 // Reverted, the ENTIRE Node suite stayed green: 68 unit tests and 12 emit cells, all passing.
@@ -50,7 +50,7 @@ test('resolveOut makes a relative path absolute against the cwd', () => {
 });
 
 // A BARE `~` IS A LEGAL DIRECTORY NAME, and the reference does not expand it here. The argument
-// is made absolute BEFORE `pyResolve` sees it precisely so `expanduser` cannot fire — a rule
+// is made absolute BEFORE `resolvePath` sees it precisely so `expanduser` cannot fire — a rule
 // that is one `path.resolve` away from being lost and that nothing else states.
 test('resolveOut does not expand a leading tilde', () => {
   const got = resolveOut('~');

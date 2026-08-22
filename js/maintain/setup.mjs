@@ -54,9 +54,9 @@ import { GLOBAL_MANIFEST, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   defaultMode, defaultPosture, defaultTheme, installedDefaults, themeFiles,
 } from '../hosts/installs.mjs';
-import { pyPrint, pyPrintErr } from '../lib/fs.mjs';
-import { pyWhich } from '../lib/paths.mjs';
-import { pyInt } from '../lib/text.mjs';
+import { printOut, printErr } from '../lib/fs.mjs';
+import { which } from '../lib/paths.mjs';
+import { parseIntStrict } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 
 // --------------------------------------------------------------------------------------
@@ -85,7 +85,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
  */
 export function ask(prompt, dflt = '') {
   const suffix = dflt ? ` [${dflt}]` : '';
-  // `input()` writes its prompt to stdout with no newline — nothing for `pyPrint` to
+  // `input()` writes its prompt to stdout with no newline — nothing for `printOut` to
   // translate, and it must NOT gain one.
   process.stdout.write(`${prompt}${suffix}: `);
   // `?? ''` because `readLine` reports EOF-with-nothing-read as null since P6h; `_ask`
@@ -156,7 +156,7 @@ export function confirm(prompt, dflt = true) {
  *     integer never reaches it. `99` against a five-option menu returns the default; it does
  *     not go looking for an option literally named `99`.
  *   * An in-range index wins, a parsed out-of-range index falls to the default, and only an
- *     UNPARSEABLE answer is matched against the keys. `pyInt` is what separates the second
+ *     UNPARSEABLE answer is matched against the keys. `parseIntStrict` is what separates the second
  *     case from the third, and it is not `Number()` — see its own docblock.
  *   * The default's index is computed with `next(...)` and no fallback, so a default that is
  *     not in `options` raises `StopIteration` on the reference. That is reachable (a
@@ -165,15 +165,15 @@ export function confirm(prompt, dflt = true) {
  *     place, and a silent `-1` here would be a divergence dressed as robustness.
  */
 export function askChoice(prompt, options, dflt) {
-  pyPrint(`\n${prompt}:\n`);
+  printOut(`\n${prompt}:\n`);
   options.forEach(([key, desc], i) => {
     const label = desc ? `${key} — ${desc}` : key;
-    pyPrint(`  ${i + 1}) ${label}${key === dflt ? '   (default)' : ''}\n`);
+    printOut(`  ${i + 1}) ${label}${key === dflt ? '   (default)' : ''}\n`);
   });
   const defaultIdx = options.findIndex(([k]) => k === dflt);
   if (defaultIdx < 0) throw new Error(`StopIteration: no option named ${dflt}`);
   const raw = ask('Choose', String(defaultIdx + 1));
-  const idx = pyInt(raw);
+  const idx = parseIntStrict(raw);
   if (idx !== null) {
     if (idx >= 1 && idx <= options.length) return options[idx - 1][0];
   } else {
@@ -361,7 +361,7 @@ function askDoctrines(deployed = null) {
  * carrier said none" and the two open the question differently.
  */
 export function collectSetupLines() {
-  pyPrint('Geneseed setup — answer a few questions; nothing is written until you confirm.\n');
+  printOut('Geneseed setup — answer a few questions; nothing is written until you confirm.\n');
   const inst = installedDefaults();
   const theme = askChoice('Theme', themeOptions(), inst.theme || defaultTheme());
   const posture = askChoice('Posture', postureOptions(), inst.posture || defaultPosture());
@@ -395,7 +395,7 @@ export function collectSetupLines() {
   // `setupBuildArgs` spell `--exclude-rules none`, and that string would land in the
   // "About to run:" line every recorded wizard probe compares byte for byte.
   const excludeRules = inst.excludeRules?.length ? inst.excludeRules : null;
-  pyPrint(`\nAbout to run:  geneseed build ${
+  printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
       excludeRules).join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
@@ -411,14 +411,14 @@ export function collectSetupLines() {
  *
  * `21.0.2` gives 21 and the legacy `1.8.0` gives 1, which is never >= 21 — that asymmetry is
  * the whole function. `\p{Nd}` rather than `[0-9]` because Python's `\d` matches any Unicode
- * decimal and JS's does not without the flag, and `pyInt` reads the group for the same
+ * decimal and JS's does not without the flag, and `parseIntStrict` reads the group for the same
  * reason. No `java` prints such a banner; matching Python where it is free is cheaper than a
  * comment explaining where it does not.
  */
 export function javaMajorOk(versionOutput, minimum = 21) {
   const m = /version "(\p{Nd}+)/u.exec(versionOutput);
   if (!m) return false;
-  const n = pyInt(m[1]);
+  const n = parseIntStrict(m[1]);
   return n !== null && n >= minimum;
 }
 
@@ -434,7 +434,7 @@ export function javaMajorOk(versionOutput, minimum = 21) {
  * interpreter.
  */
 export function lspPrereqs() {
-  const java = pyWhich('java');
+  const java = which('java');
   let ok = false;
   if (java) {
     try {
@@ -533,7 +533,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
 export function setupLines() {
   const sel = collectSetupLines();
   if (!sel) {
-    pyPrint('[setup] cancelled — nothing written.\n');
+    printOut('[setup] cancelled — nothing written.\n');
     return 0;
   }
   const {
@@ -546,11 +546,11 @@ export function setupLines() {
     try {
       const [ipath] = exportImprovements();
       if (ipath) {
-        pyPrint(`- local edits found in the deployed harness — saved to ${ipath}\n`);
-        pyPrint('  (hand that file to your agent to back-port them into src/)\n');
+        printOut(`- local edits found in the deployed harness — saved to ${ipath}\n`);
+        printOut('  (hand that file to your agent to back-port them into src/)\n');
       }
     } catch (e) {
-      pyPrint(`! could not export local edits (${e && e.message}) — continuing.\n`);
+      printOut(`! could not export local edits (${e && e.message}) — continuing.\n`);
     }
   }
   // Same list the question was built from — see `collectSetupLines`. The build that actually
@@ -558,17 +558,17 @@ export function setupLines() {
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
     doctrineOptions().map(([n]) => n), excludeRules);
-  pyPrint(`Running:  geneseed build ${argv.join(' ')}\n`);
+  printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {
-    pyPrintErr('[setup] build failed — no harness written (see the output above).\n');
+    printErr('[setup] build failed — no harness written (see the output above).\n');
     return rc;
   }
   try {
     playLine(theme, true);        // themed install animation (motion → reveal card)
   } catch { /* cosmetic only — never block a successful install */ }
   for (const [kind, text] of setupSummaryLines(theme, emit, out, root, true)) {
-    pyPrint(`${{ ok: '✓', warn: '!', info: '-' }[kind] ?? '-'} ${text}\n`);
+    printOut(`${{ ok: '✓', warn: '!', info: '-' }[kind] ?? '-'} ${text}\n`);
   }
   if (confirm('\nRun a health check (doctor) now?', true)) {
     // Scoped to the theme just installed — no full-sweep noise post-install.
@@ -586,7 +586,7 @@ export function setupLines() {
  */
 export function cmdSetup() {
   if (!process.stdin.isTTY) {
-    pyPrintErr('[setup] needs an interactive terminal. Non-interactive? e.g.:\n'
+    printErr('[setup] needs an interactive terminal. Non-interactive? e.g.:\n'
       + '  geneseed build --emit opencode-global --theme neutral\n');
     return 1;
   }

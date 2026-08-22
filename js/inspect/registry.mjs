@@ -20,7 +20,7 @@ import os from 'node:os';
 import { expanduser } from '../hosts/hosts.mjs';
 import { writeText } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
-import { pyPathStr } from '../lib/paths.mjs';
+import { toPlatformPath } from '../lib/paths.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -82,7 +82,7 @@ export function registryRoots() {
   const kept = [];
   const seen = new Set();
   for (const s of original) {
-    // `Path(s).expanduser()`, and `pyPathStr` is the `str()` around it — which is where the
+    // `Path(s).expanduser()`, and `toPlatformPath` is the `str()` around it — which is where the
     // NORMALISATION happens. Python turns `C:/x/other` into `C:\x\other` before it is
     // compared, kept, returned and printed, so a registry entry spelled with forward slashes
     // (routine: every tool that writes one from Git Bash) makes Python rewrite the file and
@@ -95,7 +95,7 @@ export function registryRoots() {
     // for every other install, so it is dropped exactly like any other dead row rather than
     // propagated. `rebuild-all`'s contract is "one broken install never blocks the rest".
     let root;
-    try { root = pyPathStr(expanduser(s)); } catch { continue; }
+    try { root = toPlatformPath(expanduser(s)); } catch { continue; }
     let key;
     try { key = existsSync(root) ? realpathSync.native(root) : root; } catch { key = root; }
     if (seen.has(key)) continue;

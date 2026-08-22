@@ -95,9 +95,9 @@ test('the table is the document the entry reads, and the page is derived from it
 });
 
 test('the help width is the terminal width less two, and COLUMNS wins', () => {
-  // `helpWidth()` against `shutil.get_terminal_size().columns - 2`. THE THIRD CALLER `pyInt`'s
+  // `helpWidth()` against `shutil.get_terminal_size().columns - 2`. THE THIRD CALLER `parseIntStrict`'s
   // docblock did not have: `$COLUMNS` arrives however the shell set it, so this one strips
-  // first — and the port had reached for `parseInt` in a tree that already owned `pyInt` for
+  // first — and the port had reached for `parseInt` in a tree that already owned `parseIntStrict` for
   // exactly this. Every help assertion in `tests/snapshot/cli_help.test.mjs` runs at `COLUMNS=80`, so
   // both the env-parse branch and the fallback were exercised at one value each.
   const saved = process.env.COLUMNS;

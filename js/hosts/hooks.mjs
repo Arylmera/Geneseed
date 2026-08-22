@@ -34,9 +34,9 @@ import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSyn
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readText, writeText, pyPrint, pyPrintErr, withDiscardableStderr } from '../lib/fs.mjs';
+import { readText, writeText, printOut, printErr, withDiscardableStderr } from '../lib/fs.mjs';
 import { jsonDumpsCompact } from '../lib/json.mjs';
-import { normcase, comparePaths, pyPathStr } from '../lib/paths.mjs';
+import { normcase, comparePaths, toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 // `harness status` reports the memory store, and `bin/geneseed-cli.mjs` cannot import THIS
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
@@ -53,8 +53,8 @@ const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.ur
 // coupling a hook to the emitter", with `readText`/`writeText`/`normcase` as the stated
 // exceptions. That is the wrong line, and `pyStrPath` is what proved it: it was a second
 // implementation of `str(Path(p))` under a different NAME from `js/lib/fs.mjs`'s
-// `pyPathStr`, and the two disagreed. P5c found that `path.normalize` collapses `a/../b`
-// where `PurePath` keeps it, fixed `pyPathStr`, and gated it with a 25-path corpus — and
+// `toPlatformPath`, and the two disagreed. P5c found that `path.normalize` collapses `a/../b`
+// where `PurePath` keeps it, fixed `toPlatformPath`, and gated it with a 25-path corpus — and
 // none of that reached this file, because a corpus finds what it is pointed at and nothing
 // named `pyStrPath` was. The consequence was live: `sovereignBypass` compares an
 // `excludes.json` entry against cwd, so a hand-edited `..` entry made the NODE hook stand
@@ -64,7 +64,7 @@ const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.ur
 // So the line is not "duplicate rather than couple" — it is "one owner for anything that
 // reproduces a language primitive, wherever it is used". `fs.mjs` carries no
 // `child_process` and costs nothing at hook latency. What stays local is what is genuinely
-// only the hook's (`fnmatch`, the transcript readers, `pyOsError`'s errno table).
+// only the hook's (`fnmatch`, the transcript readers, `asOsError`'s errno table).
 //
 // AND `expanduser` WAS THE SECOND VIOLATION, closed here. This file carried its own, which
 // returned a `~user` path UNCHANGED while `js/hosts.mjs`'s single owner REFUSES the form —
@@ -73,7 +73,7 @@ const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.ur
 // refusal throws, so `sovereignBypass` and `cmdContext` below contain it per entry / per
 // call: a hook that CRASHES reports success, because these gates exit 0 and signal on
 // stdout, so "the gate blew up" and "the gate found nothing" are the same observation to
-// Claude. `pyResolve` just below is the THIRD copy of a primitive `js/hosts.mjs` also
+// Claude. `resolvePath` just below is the THIRD copy of a primitive `js/hosts.mjs` also
 // exports, and is the next item in this series.
 
 /**
@@ -83,7 +83,7 @@ const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.ur
  * `excludes.json` may name a folder that was deleted), so the existing prefix is
  * canonicalised and the rest appended verbatim — `resolve(strict=False)`'s behaviour.
  */
-function pyResolve(p) {
+function resolvePath(p) {
   let cur = path.resolve(expanduser(p));
   const tail = [];
   for (;;) {
@@ -122,7 +122,7 @@ function selfAndParents(p) {
  * the other. The trailing empty is dropped the way Python drops it (`"a\n"` is one line,
  * `""` is none).
  */
-function pySplitlines(text) {
+function splitLines(text) {
   if (!text) return [];
   const parts = text.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/);
   if (parts.length && parts[parts.length - 1] === '') parts.pop();
@@ -130,7 +130,7 @@ function pySplitlines(text) {
 }
 
 /** `str.split()` with no argument — runs of whitespace, ends stripped, no empties. */
-function pyWords(s) {
+function splitWords(s) {
   return s.split(/\s+/).filter(Boolean);
 }
 
@@ -157,7 +157,7 @@ const _ERRNO = {
   EPERM: [1, 'Operation not permitted'],
 };
 
-function pyOsError(e, filename) {
+function asOsError(e, filename) {
   const hit = _ERRNO[e && e.code];
   if (!hit) return String((e && e.message) || e);
   // Python reprs the filename, so a Windows path comes out with its backslashes doubled.
@@ -211,8 +211,8 @@ function readStdin() {
 // `js/lib/fs.mjs` in P5c — beside `writeText`, which is the same rule for FILES — when
 // `js/excludes.mjs` became the second caller; see that docblock for why the translation
 // exists and which gate can see it.
-const out = pyPrint;
-const err = pyPrintErr;
+const out = printOut;
+const err = printErr;
 
 // ======================================================================================
 // context — project-context discovery
@@ -244,7 +244,7 @@ export function globalHookStandingDown(hookRoot, cwd) {
     if (isFile(path.join(cand, GENESEED_MANIFEST))) {
       // Path equality, which is case-folded on Windows — `~/.claude` and `~/.Claude` are
       // the same install there and two different ones on Linux.
-      return normcase(pyResolve(cand)) !== normcase(pyResolve(hookRoot));
+      return normcase(resolvePath(cand)) !== normcase(resolvePath(hookRoot));
     }
   }
   return false;
@@ -266,7 +266,7 @@ export function sovereignBypass(root) {
   }
   let cwd;
   try {
-    cwd = normcase(pyResolve(process.cwd()));
+    cwd = normcase(resolvePath(process.cwd()));
   } catch {
     return false;
   }
@@ -282,7 +282,7 @@ export function sovereignBypass(root) {
       // and this caller catches: the reference prints nothing here, so replaying the
       // message would be a stderr divergence on every hook call for one bad entry.
       base = withDiscardableStderr(
-        () => normcase(pyPathStr(expanduser(raw.trim()))).replace(/[\\/]+$/, ''));
+        () => normcase(toPlatformPath(expanduser(raw.trim()))).replace(/[\\/]+$/, ''));
     } catch {
       // PER ENTRY, and the loop continues. One unusable line in a file the USER hand-edits
       // must not decide the whole function — `expanduser` refuses a `~user` form, and the
@@ -382,7 +382,7 @@ export function resolveContextSets(root) {
   if (env && isFile(env)) {
     // `Path(env)`, and the label is printed — so the separators are folded exactly the
     // way `str(Path(...))` folds them, or the source line differs by every slash in it.
-    manifest = pyPathStr(env);
+    manifest = toPlatformPath(env);
   } else {
     for (const cand of [path.join(root, '.harness', 'context.json'),
       path.join(root, 'context.json')]) {
@@ -399,7 +399,7 @@ export function resolveContextSets(root) {
   try {
     raw = readText(manifest);
   } catch (e) {
-    err(`[context] could not read ${manifest}: ${pyOsError(e, manifest)}\n`);
+    err(`[context] could not read ${manifest}: ${asOsError(e, manifest)}\n`);
     return [[], [], String(manifest)];
   }
   let entries;
@@ -454,7 +454,7 @@ export function resolveContextSets(root) {
       }
       continue;
     }
-    const abs = path.isAbsolute(raw) ? raw : pyResolve(path.join(root, raw));
+    const abs = path.isAbsolute(raw) ? raw : resolvePath(path.join(root, raw));
     put(abs, load, desc);
   }
 
@@ -469,8 +469,8 @@ export function resolveContextSets(root) {
 export function cmdContext(args) {
   // Discovery runs against the project root the hook was launched from — Claude runs
   // SessionStart hooks with cwd = repo root — not the harness package dir.
-  // The only two `pyResolve` calls in this file whose argument can be a `~user` path the
-  // user typed — `$GENESEED_ROOT` and `--root` — and `pyResolve` expands, so both can now
+  // The only two `resolvePath` calls in this file whose argument can be a `~user` path the
+  // user typed — `$GENESEED_ROOT` and `--root` — and `resolvePath` expands, so both can now
   // throw. Every other caller either builds its argument by `path.join` from an absolute
   // root (so no leading tilde survives) or already sits inside a `try`. Refused input
   // injects nothing, which is the same degrade as "nothing to load" below.
@@ -478,8 +478,8 @@ export function cmdContext(args) {
   let hookRoot;
   try {
     ({ root, hookRoot } = withDiscardableStderr(() => ({
-      root: pyResolve(process.env.GENESEED_ROOT || process.cwd()),
-      hookRoot: args.root ? pyResolve(args.root) : null,
+      root: resolvePath(process.env.GENESEED_ROOT || process.cwd()),
+      hookRoot: args.root ? resolvePath(args.root) : null,
     })));
   } catch {
     return 0;
@@ -506,7 +506,7 @@ export function cmdContext(args) {
     try {
       lines.push(readText(target).replace(/\n+$/, ''));
     } catch (e) {
-      lines.push(`[context] MISSING eager file: ${pyOsError(e, target)}`);
+      lines.push(`[context] MISSING eager file: ${asOsError(e, target)}`);
     }
     lines.push('');
   }
@@ -584,9 +584,9 @@ export function ruleGateTarget(p, root) {
   if (name === 'memory.md') return 'the memory index';
   if (!root || !name.endsWith('.md')) return null;
   try {
-    const store = normcase(pyResolve(path.join(root, 'memory')));
+    const store = normcase(resolvePath(path.join(root, 'memory')));
     // `.parents`, so the store dir itself is not one of its own ancestors.
-    return selfAndParents(pyResolve(p)).slice(1).some((d) => normcase(d) === store)
+    return selfAndParents(resolvePath(p)).slice(1).some((d) => normcase(d) === store)
       ? 'memory' : null;
   } catch {
     return null;
@@ -661,11 +661,11 @@ export function appendAgentLesson(memDir, agent, lesson) {
   mkdirSync(d, { recursive: true });
   const f = path.join(d, `${agent}.md`);
   let bullets = [];
-  if (existsSync(f)) bullets = pySplitlines(readText(f)).filter((l) => l.startsWith('- '));
+  if (existsSync(f)) bullets = splitLines(readText(f)).filter((l) => l.startsWith('- '));
   const now = new Date();
   const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`
     + `${String(now.getDate()).padStart(2, '0')}`;
-  bullets.push(`- ${day}: ${pyWords(lesson).join(' ')}`);
+  bullets.push(`- ${day}: ${splitWords(lesson).join(' ')}`);
   bullets = bullets.slice(-MAX_AGENT_BULLETS);
   writeText(f, `# ${agent} \u2014 lessons\n${bullets.join('\n')}\n`);
   return f;
@@ -704,7 +704,7 @@ function flattenTranscript(p) {
     return '';
   }
   const acc = [];
-  for (let line of pySplitlines(raw)) {
+  for (let line of splitLines(raw)) {
     line = line.trim();
     if (!line) continue;
     let obj;
@@ -765,7 +765,7 @@ export function frontmatter(md) {
   const m = FRONTMATTER_RE.exec(md);
   if (!m) return [new Map(), md];
   const fm = new Map();
-  for (const line of pySplitlines(m[1])) {
+  for (const line of splitLines(m[1])) {
     const at = line.indexOf(':');
     if (at >= 0) {
       // `str.strip('"')` strips the character from BOTH ends, however many there are.
@@ -854,7 +854,7 @@ export function memoryDropIndex(memDir, name) {
   const idx = path.join(memDir, 'MEMORY.md');
   let lines;
   try {
-    lines = pySplitlines(readText(idx));
+    lines = splitLines(readText(idx));
   } catch {
     return;                       // the reference's `except OSError: return`
   }
@@ -883,7 +883,7 @@ export function consolidateMemory(memDir) {
   const index = path.join(memDir, 'MEMORY.md');
   const oldSlugs = new Set();
   if (existsSync(index)) {
-    for (const line of pySplitlines(readText(index))) {
+    for (const line of splitLines(readText(index))) {
       const m = /^- \[[^\]]*\]\(([^)]+)\.md\)/.exec(line.trim());
       if (m) oldSlugs.add(m[1]);
     }
@@ -913,7 +913,7 @@ export function consolidateMemory(memDir) {
  * would truncate a long reply into a silently-half-parsed set of memory files.
  */
 function runLlm(llm, prompt) {
-  const argv = pyWords(llm);
+  const argv = splitWords(llm);
   // `_harness_learn.py:85` runs this through the wrapped `run(..., capture_output=True)`,
   // which folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
   // otherwise pops a console for as long as it takes to answer.
@@ -959,7 +959,7 @@ function learnAgentLesson(meta, notes, args) {
   const proc = runLlm(llm, prompt);
   const text = proc.stdout.trim();
   if (text && text.toUpperCase() !== 'NOTHING') {
-    const lesson = pySplitlines(text)[0].replace(/^[-*]+/, '').trim();
+    const lesson = splitLines(text)[0].replace(/^[-*]+/, '').trim();
     const n = Array.from(lesson).length;   // code points, as `len()` counts them
     if (n >= 10 && n <= 300) {
       err(`[learn] agent lesson -> ${appendAgentLesson(memDir, agent, lesson)}\n`);
@@ -986,7 +986,7 @@ export function cmdLearn(args) {
 
   // The Stop/SubagentStop hook always passes `--memory <cfg>/memory`; inside an excluded
   // folder the global install must not learn.
-  if (args.memory && sovereignBypass(path.dirname(pyPathStr(args.memory)))) return 0;
+  if (args.memory && sovereignBypass(path.dirname(toPlatformPath(args.memory)))) return 0;
 
   const raw = args.file ? readText(args.file) : readStdin();
   let notes = readNotes(raw);

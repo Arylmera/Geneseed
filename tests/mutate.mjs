@@ -142,12 +142,12 @@ export const MUTATIONS = [
     id: 'M12',
     name: 'let resolveOut normalise instead of canonicalise (a REAL historical defect)',
     file: 'bin/build-driver.mjs',
-    find: '  return pyResolve(path.resolve(process.cwd(), raw));',
+    find: '  return resolvePath(path.resolve(process.cwd(), raw));',
     replace: '  return path.resolve(process.cwd(), raw);',
     gate: UNIT,
     why: 'The reference ends in Path.resolve(), which CANONICALISES - 8.3 short names expanded, '
       + 'symlinks followed, the filesystem own casing - where path.resolve only normalises . '
-      + 'and .. . Nine pyResolve call sites had the rule and this one did not, so the two entry '
+      + 'and .. . Nine resolvePath call sites had the rule and this one did not, so the two entry '
       + 'points printed the same directory under two different names, a 70-byte difference in a '
       + 'line compared byte for byte. Invisible on a machine whose paths are already canonical, '
       + 'which is every machine this ran on until a runner handed it C:/Users/RUNNER~1/... The '
@@ -176,16 +176,16 @@ export const MUTATIONS = [
     id: 'M6',
     name: 'make parseJson collapse an integral float',
     file: 'js/lib/json.mjs',
-    find: '      ? new PyNumber(value, context.source)',
-    replace: '      ? (Number.isInteger(value) ? value : new PyNumber(value, context.source))',
+    find: '      ? new JsonNumber(value, context.source)',
+    replace: '      ? (Number.isInteger(value) ? value : new JsonNumber(value, context.source))',
     gate: UNIT,
     why: "`1.0` and `1` are different values to Python's json round-trip and the same value to "
       + "JSON.parse. CLOSED AT P3/T7, after two phases declared ungated: the mutation above was "
       + "a NO-OP that only documented the hole, because a real one needs the reviver and the "
       + "corpus has no cell whose settings carry an integral float. This edit is the real thing "
-      + "- it drops the PyNumber wrapper for any integral value, so a read-modify-write of a "
+      + "- it drops the JsonNumber wrapper for any integral value, so a read-modify-write of a "
       + "user's `temperature: 1.0` writes back `1` and silently changes the value every "
-      + "consumer reads. tests/unit/py_primitives.test.mjs is the gate, and it is absolute "
+      + "consumer reads. tests/unit/lib_primitives.test.mjs is the gate, and it is absolute "
       + "rather than a comparison because after P4 these functions are not Python "
       + "compatibility, they ARE the spec for what Geneseed writes to a user's disk.",
   },

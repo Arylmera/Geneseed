@@ -40,13 +40,13 @@ import { build, phaseLog } from '../js/build/bundle.mjs';
 import { emitClaudeRender } from '../js/build/emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from '../js/build/emit-opencode.mjs';
 import { settingsIntegrityCheck } from '../js/hosts/settings.mjs';
-import { writeText, withPyNewlines } from '../js/lib/fs.mjs';
+import { writeText, withPlatformNewlines } from '../js/lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../js/lib/json.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
 // that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
 import {
-  GLOBAL_MANIFEST, pyResolve, opencodeConfigDir, claudeConfigDir, bobConfigDir,
+  GLOBAL_MANIFEST, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   copilotConfigDir,
 } from '../js/hosts/hosts.mjs';
 
@@ -102,18 +102,18 @@ const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: fals
  *  follows the invocation and not the checkout — which is what
  *  `build/the-bundle-follows-cwd-not-the-checkout` exists to gate.
  *
- *  `pyResolve` AND NOT `path.resolve`, and the difference is the whole reason `pyResolve`
+ *  `resolvePath` AND NOT `path.resolve`, and the difference is the whole reason `resolvePath`
  *  exists: the reference ends in `.resolve()`, which canonicalises — 8.3 short names expanded
  *  on Windows, symlinks followed on POSIX, the filesystem's own casing — where `path.resolve`
- *  only normalises `.`/`..`. Nine `pyResolve` call sites had the rule and this one did not.
+ *  only normalises `.`/`..`. Nine `resolvePath` call sites had the rule and this one did not.
  *  It is invisible on a machine whose paths are already canonical, which is every machine
  *  this ran on until GitHub's Windows runner handed it a `C:\\Users\\RUNNER~1\\...` and the
  *  two CLIs printed the same directory under two different names — a 70-byte difference in a
  *  line compared BYTE for byte by `test_the_two_entry_points_agree_on_stdout_BYTES`. The
- *  argument to `pyResolve` is made absolute first so its `expanduser` cannot fire: the
+ *  argument to `resolvePath` is made absolute first so its `expanduser` cannot fire: the
  *  reference does not expand `~` here, and a bare `~` is a legal directory name. */
 export function resolveOut(raw) {
-  return pyResolve(path.resolve(process.cwd(), raw));
+  return resolvePath(path.resolve(process.cwd(), raw));
 }
 
 /**
@@ -358,11 +358,11 @@ function parseArgs(argv, defaults) {
  * hand-rolled copy would have its own `--target` alias, its own `choices` lists and its own
  * `-h`, and `test_the_help_text_names_every_flag_the_reference_takes` gates only this one.
  *
- * `withPyNewlines` because the refusal and `-h` paths WRITE: called from `bin/build-driver.mjs`
+ * `withPlatformNewlines` because the refusal and `-h` paths WRITE: called from `bin/build-driver.mjs`
  * they sit inside `main`'s funnel, and called from the CLI binary they would not.
  */
 export function parseDriverArgs(argv) {
-  return withPyNewlines(() => parseArgs(argv, configDefaults()));
+  return withPlatformNewlines(() => parseArgs(argv, configDefaults()));
 }
 
 function choice(flag, value, allowed) {
@@ -472,7 +472,7 @@ export function hookRunnerEntry() {
  */
 function preambleExclude(claudeMd) {
   if (path.basename(claudeMd) !== 'CLAUDE.md') return null;
-  return pyResolve(path.join(claudeConfigDir(), 'CLAUDE.md')).split(path.sep).join('/');
+  return resolvePath(path.join(claudeConfigDir(), 'CLAUDE.md')).split(path.sep).join('/');
 }
 
 /**
@@ -1008,7 +1008,7 @@ export function emitProjectInto(host, { theme, out, root, footprint = 'full', do
   // same reason: a drift reader that renders `expected` at the DEFAULT pack set reports the
   // whole doctrines section as edited on every narrowed install. `null` means "no opinion" and
   // `makeCfg` renders all four, which is what every validation caller wants.
-  return withPyNewlines(() => emit(makeCfg(doctrines ? { doctrines } : {}),
+  return withPlatformNewlines(() => emit(makeCfg(doctrines ? { doctrines } : {}),
     { theme, footprint, root }, out));
 }
 
@@ -1021,7 +1021,7 @@ export function emitProjectInto(host, { theme, out, root, footprint = 'full', do
  * exactly as `run` inherits it below.
  */
 export function buildInto({ theme, out, footprint = 'lean' }) {
-  return withPyNewlines(
+  return withPlatformNewlines(
     () => build(makeCfg(), theme, out, { footprint, nativeCatalog: false }),
   );
 }
@@ -1043,7 +1043,7 @@ export function emitGlobalInto(host, {
   // rendering at `peer`/`direct`; the drift readers pass what the deployment actually says,
   // because rendering `expected` at the defaults reports AGENT.md as edited on every install
   // that chose a register — the same scar the footprint left in `diffCollect`, one axis over.
-  return withPyNewlines(
+  return withPlatformNewlines(
     () => emit(
       // THE PACK SELECTION RIDES THE SAME RAIL, with one difference: `doctrinesOfDir` answers
       // `null` for "no marker / undetectable", and that must render at ALL packs rather than
@@ -1068,11 +1068,11 @@ export function emitGlobalInto(host, {
  * CLI's argv.
  */
 export function main(argv) {
-  // `withPyNewlines` is what makes this driver's bytes Python's bytes on Windows, for every
+  // `withPlatformNewlines` is what makes this driver's bytes Python's bytes on Windows, for every
   // print site in the whole render tree at once — see its docblock for why a funnel and not
-  // 25 calls to `pyPrint`. It wraps the `catch` as well as `run`, because `die` writes its
+  // 25 calls to `printOut`. It wraps the `catch` as well as `run`, because `die` writes its
   // line on the way out.
-  return withPyNewlines(() => {
+  return withPlatformNewlines(() => {
     try {
       return run(argv);
     } catch (e) {

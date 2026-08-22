@@ -103,7 +103,7 @@ test('the web spec carries every argument the reference declared', () => {
 });
 
 test('a non-integer port is refused rather than defaulted', () => {
-  // THE `ints` COLUMN, DRIVEN, and its whole reason is that the alternative is SILENT: `pyInt`
+  // THE `ints` COLUMN, DRIVEN, and its whole reason is that the alternative is SILENT: `parseIntStrict`
   // answers null for 'abc' and a `?? 4747` would bind the default while the operator believes
   // they asked for another port. The reference's WORDING is not the claim — it prints a usage
   // block computed from the whole parser tree — but the refusal and its exit code are, and this

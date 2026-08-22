@@ -12,12 +12,14 @@
  * `node --check` over every OpenCode plugin. See `doctor.mjs` for what that allow-list costs.
  */
 import path from 'node:path';
-import { CONFIG, PACK_ORDER, PLUGIN_SRC, ROOT, SRC, THEMES, knownRuleIds } from '../build/source.mjs';
+import {
+  CONFIG, PACK_ORDER, PLUGIN_SRC, ROOT, SRC, THEMES, knownRuleIds,
+} from '../build/source.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
 import { descBlockProblem, firstBlockquote } from '../hosts/native.mjs';
 import { readText } from '../lib/fs.mjs';
-import { parseJson, pyRepr } from '../lib/json.mjs';
-import { pyWhich } from '../lib/paths.mjs';
+import { parseJson, formatRepr } from '../lib/json.mjs';
+import { which } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import { registryProblems, secretProblems, vendorPinProblems } from './checks-repo.mjs';
 import { LAW_CLASS, LAW_CLASSES, SKILL_CLASS } from './inventory.mjs';
@@ -98,7 +100,7 @@ export function lawMetaProblems(lawNums, lawClass, lawClasses) {
     }
     if (!lawClasses.includes(klass)) {
       problems.push(`[authoring] LAW_META[${n}] class '${klass}' is not a known class `
-        + `${pyRepr(lawClasses)}`);
+        + `${formatRepr(lawClasses)}`);
     } else if (lawClass[roman] && klass !== lawClass[roman]) {
       problems.push(`[authoring] LAW_META[${n}] classes rule ${roman} as '${klass}' but `
         + `LAW_CLASS says '${lawClass[roman]}'`);
@@ -455,7 +457,7 @@ export function constitutionProblems() {
     for (const key of ['LAW', 'DOCTRINE']) {
       const v = theme[key];
       if (typeof v === 'string' && /\s/.test(v)) {
-        problems.push(`[authoring] ${name} spells {${key}} as ${pyRepr(v)} — the heading `
+        problems.push(`[authoring] ${name} spells {${key}} as ${formatRepr(v)} — the heading `
           + 'parsers match the tier noun with \\S+, so a value with a space makes every '
           + `${key === 'LAW' ? 'invariant' : 'doctrine rule'} parse to nothing, in silence`);
       }
@@ -489,7 +491,7 @@ export function constitutionProblems() {
       for (const [, n] of text.matchAll(/§(\d+)/g)) {
         if (declared.has(Number(n))) continue;
         problems.push(`[authoring] ${rel} cites AGENT.md §${n}, and the template declares no `
-          + `such section ${pyRepr([...declared].sort((a, b) => a - b).map(String))} — a `
+          + `such section ${formatRepr([...declared].sort((a, b) => a - b).map(String))} — a `
           + 'renumber moved it, and this pointer renders into every bundle');
       }
     }
@@ -504,8 +506,8 @@ export function constitutionProblems() {
   if (cfgDoctrines) {
     for (const pack of cfgDoctrines) {
       if (!PACK_ORDER.includes(pack)) {
-        problems.push(`[authoring] harness.config.json names doctrine pack ${pyRepr(pack)}, `
-          + `which this checkout does not ship ${pyRepr([...PACK_ORDER])} — every build reading `
+        problems.push(`[authoring] harness.config.json names doctrine pack ${formatRepr(pack)}, `
+          + `which this checkout does not ship ${formatRepr([...PACK_ORDER])} — every build reading `
           + 'that default would fail');
       }
     }
@@ -516,7 +518,7 @@ export function constitutionProblems() {
   const dangling = [...cited].filter(([k]) => rules.has(k) && !on.includes(k.split('.')[0]));
   if (dangling.length) {
     const packs = [...new Set(dangling.map(([k]) => k.split('.')[0]))].sort();
-    problems.push(`${NOTE}harness.config.json builds ${pyRepr(on)}, and ${dangling.length} `
+    problems.push(`${NOTE}harness.config.json builds ${formatRepr(on)}, and ${dangling.length} `
       + `citation(s) in src/ point into ${packs.join(', ')}. Those rules still SHIP — every `
       + 'pack file is in the bundle — so the reference resolves on disk; it is the rendered '
       + 'AGENT.md that will not contain them. Legal, and recorded here so it is not silent');
@@ -575,7 +577,7 @@ export function countTableProblems() {
   for (const num of Object.keys(LAW_CLASS).sort()) {
     if (!LAW_CLASSES.includes(LAW_CLASS[num])) {
       problems.push(`[authoring] LAW_CLASS['${num}'] = '${LAW_CLASS[num]}' is not a known `
-        + `class ${pyRepr(LAW_CLASSES)}`);
+        + `class ${formatRepr(LAW_CLASSES)}`);
     }
   }
   problems.push(...lawMetaProblems(lawNums, LAW_CLASS, LAW_CLASSES));
@@ -729,7 +731,7 @@ export function authoringProblems() {
     problems.push('[authoring] LEARN_PROMPT_HEAD drifted between geneseed-learn.js '
       + "and the harness's loaded copy");
   }
-  const node = pyWhich('node');
+  const node = which('node');
   if (node) {
     for (const js of globSorted(PLUGIN_SRC, (n) => n.endsWith('.js'))) {
       // THE ONE SPAWN. `node --check` and nothing else — see the module header, and

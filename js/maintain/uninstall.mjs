@@ -55,7 +55,7 @@ import {
   registeredTargets, readMaybe, DISABLED_STASH,
 } from '../hosts/installs.mjs';
 import {
-  GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, pyResolve,
+  GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import { mcpCommented } from '../hosts/mcp.mjs';
 import {
@@ -63,9 +63,9 @@ import {
   opencodeTarget, readJsonc, settingsIntegrityCheck, wireClaudeExcludes,
   unwireClaudeExcludes, unwireClaudeSettings,
 } from '../hosts/settings.mjs';
-import { pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
-import { indexOfEq, jsonDumps, jsonDumpsIndent, pyEq } from '../lib/json.mjs';
-import { comparePaths, pyIsAbsolute, within } from '../lib/paths.mjs';
+import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
+import { indexOfDeepEqual, jsonDumps, jsonDumpsIndent, deepEquals } from '../lib/json.mjs';
+import { comparePaths, isAbsolutePath, within } from '../lib/paths.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -181,12 +181,12 @@ function unlinkOwned(base, owned, label = '') {
 
 /** The two WARNs every reversal prints when an owned file survives. Identical in all three. */
 function warnSurvivors(failed) {
-  pyPrintErr('[uninstall] WARN: could not remove '
+  printErr('[uninstall] WARN: could not remove '
     + `${failed.length} owned file(s): ${failed.join(', ')}\n`);
 }
 
 function warnMarkersKept() {
-  pyPrintErr('[uninstall] WARN: the manifest and markers were KEPT so '
+  printErr('[uninstall] WARN: the manifest and markers were KEPT so '
     + '`geneseed uninstall` can be retried once the file(s) are '
     + 'unlocked/removable.\n');
 }
@@ -215,7 +215,7 @@ export function unmergeOpencodeJson(p, entry) {
   const instr = cfg.instructions;
   if (!Array.isArray(instr) || !instr.includes(entry)) return false;
   if (path.extname(target) === '.jsonc' && hadComments) {
-    pyPrint(`[uninstall] ${path.basename(target)} has comments — not rewriting it. Remove `
+    printOut(`[uninstall] ${path.basename(target)} has comments — not rewriting it. Remove `
       + `this from its "instructions" by hand: ${jsonDumps(entry)}\n`);
     return false;
   }
@@ -264,7 +264,7 @@ function settingsFile(cfg, managed) {
 /** `_harness_mcp._claude_md_path` — where the manifest says the managed block lives. */
 function claudeMdPath(cfg, managed) {
   const rel = ((managed && managed.claude_md) || {}).rel || 'CLAUDE.md';
-  return pyResolve(path.join(cfg, rel));
+  return resolvePath(path.join(cfg, rel));
 }
 
 /** A manifest's `managed` map, or `{}` — the Python's `isinstance(..., dict)` guard. */
@@ -360,7 +360,7 @@ function mcpLoadOpencode(p) {
  *
  * A global install wires the ABSOLUTE posix path; a project install wires the relative
  * `…/AGENT.md` the emit recorded, read back off the live config so a bundle sub-dir layout
- * round-trips. `pyIsAbsolute` and not `path.isAbsolute`: they disagree on Windows for a
+ * round-trips. `isAbsolutePath` and not `path.isAbsolute`: they disagree on Windows for a
  * ROOTLESS `/repo/AGENT.md`, which Python keeps and `path.isAbsolute` would have skipped.
  */
 export function installAgentEntry(root, kind) {
@@ -382,7 +382,7 @@ export function installAgentEntry(root, kind) {
 export function installAgentEntryOf(instr) {
   if (Array.isArray(instr)) {
     for (const e of instr) {
-      if (typeof e === 'string' && !pyIsAbsolute(e) && path.basename(e) === 'AGENT.md') return e;
+      if (typeof e === 'string' && !isAbsolutePath(e) && path.basename(e) === 'AGENT.md') return e;
     }
   }
   return 'AGENT.md';
@@ -508,7 +508,7 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
   if (survivors.length || failed.length) {
     if (survivors.length && !failed.length) {
       // With `failed` set the reversal already warned twice — no third overlapping WARN.
-      pyPrintErr('[uninstall] WARN: could not fully remove the install — still present: '
+      printErr('[uninstall] WARN: could not fully remove the install — still present: '
         + `${survivors.join(', ')}. The install marker was KEPT so you can retry `
         + '`geneseed uninstall` once the file(s) are unlocked/removable.\n');
     }
@@ -544,7 +544,7 @@ export function projectQualifies(root, host) {
   const cfg = path.join(root, spec.projectMarker);
   if (!isDir(cfg)) return false;
   try {
-    if (pyResolve(cfg) === pyResolve(spec.configDir())) return false;
+    if (resolvePath(cfg) === resolvePath(spec.configDir())) return false;
   } catch { /* as the Python's bare `except Exception: pass` */ }
   if (isFile(path.join(cfg, GLOBAL_MANIFEST))) return true;
   const hs = emitHostScopeOf(root);
@@ -568,7 +568,7 @@ export function uninstallResolve(targetArg) {
   const globalHit = (p) => {
     for (const spec of HOSTS) {
       try {
-        if (p === pyResolve(spec.configDir())) return [spec.host, 'global', p];
+        if (p === resolvePath(spec.configDir())) return [spec.host, 'global', p];
       } catch { continue; }
     }
     return null;
@@ -580,7 +580,7 @@ export function uninstallResolve(targetArg) {
     return null;
   };
   if (targetArg) {
-    const p = pyResolve(expanduser(targetArg));
+    const p = resolvePath(expanduser(targetArg));
     const hit = globalHit(p);
     if (hit) return hit;
     for (const spec of HOSTS) {
@@ -594,7 +594,7 @@ export function uninstallResolve(targetArg) {
   // `.resolve()` so the cwd fallback matches every other branch and the registry, which
   // stores resolved paths — a short-form (8.3) cwd, as Windows CI hands back for %TEMP%,
   // would otherwise return a root that LOOKS different from the identical directory.
-  const hit = projectHit(pyResolve(process.cwd()));
+  const hit = projectHit(resolvePath(process.cwd()));
   if (hit) return hit;
   return ['opencode', 'global', opencodeConfigDir()];
 }
@@ -608,11 +608,11 @@ export function uninstallResolve(targetArg) {
  * rediscovered from, and the just-removed root is excluded.
  */
 export function survivingProjectInstalls(removedRoot) {
-  const rroot = pyResolve(removedRoot);
+  const rroot = resolvePath(removedRoot);
   const out = [];
   for (const [host, scope, root] of registeredTargets()) {
     if (scope !== 'project') continue;
-    try { if (pyResolve(root) === rroot) continue; } catch { /* as the Python's except OSError */ }
+    try { if (resolvePath(root) === rroot) continue; } catch { /* as the Python's except OSError */ }
     out.push([host, scope, root]);
   }
   return out;
@@ -622,10 +622,10 @@ export function survivingProjectInstalls(removedRoot) {
 export function printSurvivingProjectInventory(removedRoot) {
   const survivors = survivingProjectInstalls(removedRoot);
   if (!survivors.length) return;
-  pyPrint(`[uninstall] ${survivors.length} project install(s) remain — the global removal `
+  printOut(`[uninstall] ${survivors.length} project install(s) remain — the global removal `
     + 'does not affect them (each is self-contained):\n');
   for (const [host, scope, root] of survivors) {
-    pyPrint(`  - ${root} (${host}:${scope}) — remove with: `
+    printOut(`  - ${root} (${host}:${scope}) — remove with: `
       + `geneseed uninstall --target "${root}" --yes\n`);
   }
 }
@@ -639,7 +639,7 @@ export function printSurvivingProjectInventory(removedRoot) {
 export function printOtherHostHits(root, removedHost) {
   for (const spec of HOSTS) {
     if (spec.host !== removedHost && projectQualifies(root, spec.host)) {
-      pyPrint(`[uninstall] also found ${spec.host}:project here — run \`harness `
+      printOut(`[uninstall] also found ${spec.host}:project here — run \`harness `
         + 'uninstall\` again to remove it.\n');
     }
   }
@@ -673,8 +673,8 @@ export function cmdUninstall(args) {
   if (hit === null) {
     // `uninstallResolve(null)` never returns null — it falls back to the OpenCode global
     // default — so reaching here means `--target` was given and was not recognised.
-    const targetDesc = pyResolve(expanduser(args.target));
-    pyPrintErr(`[uninstall] no Geneseed install detected at ${targetDesc}.\n`
+    const targetDesc = resolvePath(expanduser(args.target));
+    printErr(`[uninstall] no Geneseed install detected at ${targetDesc}.\n`
       + '[uninstall] pass --target <repo> for a project install (.opencode/.claude/'
       + '.bob/.github) or --target <config dir> for a global one.\n');
     return 1;
@@ -683,60 +683,60 @@ export function cmdUninstall(args) {
   if (installState(root, host, scope) === 'absent') {
     const where = scope === 'project' && host !== 'opencode'
       ? ` under ${hostSpec(host).projectMarker}/` : '';
-    pyPrintErr(`[uninstall] no ${host}:${scope} Geneseed install at ${root} `
+    printErr(`[uninstall] no ${host}:${scope} Geneseed install at ${root} `
       + `(no ${GLOBAL_MANIFEST}${where}).\n`);
     return 1;
   }
   const data = installDataDir(root, host, scope);
   const stores = ['memory', 'notebook'].filter((n) => isDir(path.join(data, n)));
-  pyPrint(`[uninstall] target: ${root} (${host}:${scope})\n`);
+  printOut(`[uninstall] target: ${root} (${host}:${scope})\n`);
   if (host === 'copilot') {
-    pyPrint('[uninstall] removes: agents/, skills/, markers, and the '
+    printOut('[uninstall] removes: agents/, skills/, markers, and the '
       + `${hostSpec(host).agentFile} managed block (Copilot has no `
       + 'settings.json/hooks to unwire; your own .github files are kept).\n');
   } else if (host === 'claude' || host === 'bob') {
-    pyPrint('[uninstall] removes: agents/, skills/, markers, the '
+    printOut('[uninstall] removes: agents/, skills/, markers, the '
       + `${hostSpec(host).agentFile} managed block, and Geneseed's `
       + 'settings.json hooks/excludes (your own keys/hooks are kept).\n');
   } else if (scope === 'global') {
-    pyPrint('[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the '
+    printOut('[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the '
       + 'opencode.json instructions entry.\n');
   } else {
-    pyPrint('[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the '
+    printOut('[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the '
       + 'opencode.json instructions entry.\n');
   }
-  pyPrint('[uninstall] memory/ and notebook/ are kept in place (never deleted here)'
+  printOut('[uninstall] memory/ and notebook/ are kept in place (never deleted here)'
     + (stores.length ? ' — --archive-memory sets both aside.' : '.') + '\n');
   if (stores.length && args.archiveMemory) {
-    pyPrint(`[uninstall] ${stores.join(' + ')}: will be ARCHIVED to a sibling `
+    printOut(`[uninstall] ${stores.join(' + ')}: will be ARCHIVED to a sibling `
       + 'archived-<name>/<timestamp>/ (never deleted)\n');
   }
   if (!args.yes) {
     if (!process.stdin.isTTY) {
-      pyPrintErr('[uninstall] refusing to proceed without --yes (non-interactive).\n');
+      printErr('[uninstall] refusing to proceed without --yes (non-interactive).\n');
       return 1;
     }
     if (!confirm('Proceed with uninstall?', false)) {
-      pyPrint('[uninstall] cancelled — nothing removed.\n');
+      printOut('[uninstall] cancelled — nothing removed.\n');
       return 0;
     }
   }
   const memory = args.archiveMemory ? 'archive' : 'keep';
   const s = installUninstall(root, host, scope, memory);
   if (!(s.ok ?? true)) {
-    pyPrintErr(`[uninstall] failed: ${s.error || 'unknown error'}\n`);
+    printErr(`[uninstall] failed: ${s.error || 'unknown error'}\n`);
     return 1;
   }
   const archived = s.archived || [];
   const mem = archived.length ? `archived -> ${archived.join(', ')}` : 'kept in place';
   const cfgfile = host === 'opencode' ? 'opencode.json' : 'settings.json';
   if (s.incomplete && s.incomplete.length) {
-    pyPrint(`[uninstall] INCOMPLETE — removed ${s.removed} file(s), but `
+    printOut(`[uninstall] INCOMPLETE — removed ${s.removed} file(s), but `
       + `${s.incomplete.length} item(s) survived (see the WARN above); `
       + 'the install marker was kept — retry `geneseed uninstall` once they\'re '
       + `removable. ${cfgfile} updated where needed; memory/notebook ${mem}.\n`);
   } else {
-    pyPrint(`[uninstall] done — removed ${s.removed} file(s); ${cfgfile} updated where `
+    printOut(`[uninstall] done — removed ${s.removed} file(s); ${cfgfile} updated where `
       + `needed; memory/notebook ${mem}. Start a new session to apply.\n`);
   }
   if (scope === 'global') printSurvivingProjectInventory(root);
@@ -835,8 +835,8 @@ function installMoveList(root, kind) {
   } else {
     rels = ownedOf(claudeReadManifest(root)).filter((r) => r !== VERSION_MARKER);
   }
-  const rroot = pyResolve(root);
-  return rels.filter((r) => r && within(pyResolve(path.resolve(rroot, r)), rroot));
+  const rroot = resolvePath(root);
+  return rels.filter((r) => r && within(resolvePath(path.resolve(rroot, r)), rroot));
 }
 
 /**
@@ -862,9 +862,9 @@ export function installReaddEntry(target, entry) {
   const [cfg, hadComments] = readJsonc(raw);
   if (typeof cfg !== 'object' || cfg === null || Array.isArray(cfg)) return false;
   const instr = Array.isArray(cfg.instructions) ? cfg.instructions : [];
-  if (indexOfEq(instr, entry) >= 0) return false;
+  if (indexOfDeepEqual(instr, entry) >= 0) return false;
   if (path.extname(target) === '.jsonc' && hadComments) {
-    pyPrint(`[activate] ${path.basename(target)} has comments — not rewriting it. Add this `
+    printOut(`[activate] ${path.basename(target)} has comments — not rewriting it. Add this `
       + `to its "instructions" by hand: ${jsonDumps(entry)}\n`);
     return false;
   }
@@ -1039,7 +1039,7 @@ function remergeClaudeHooks(cfg, root = cfg) {
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed), 'global',
     managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded);
   // `and data` — a manifest that did not parse is not one to write back.
-  if (!pyEq(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
+  if (!deepEquals(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
     managed.settings_hooks = claims;
     data.managed = managed;
     const tmp = path.join(cfg, `${GLOBAL_MANIFEST}.tmp`);
@@ -1062,9 +1062,9 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
   const man = claudeReadManifest(cfg);
   const managed = managedOf(man);
   const stash = path.join(cfg, DISABLED_STASH, host);
-  const rroot = pyResolve(cfg);
+  const rroot = resolvePath(cfg);
   const rels = ownedOf(man).filter((r) => r && r !== VERSION_MARKER
-    && within(pyResolve(path.resolve(rroot, r)), rroot));
+    && within(resolvePath(path.resolve(rroot, r)), rroot));
   const done = [];
   for (const rel of rels) {
     const src = path.join(cfg, rel);

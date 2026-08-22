@@ -76,7 +76,7 @@ export function rglob(dir) {
 
 // `withDiscardableStderr` was defined here while `renderedProblems` was its only caller.
 // `js/hooks.mjs` became the second and third when the hook started CATCHING `expanduser`'s
-// refusal, so it moved beside `pyPrintErr` in `js/lib/fs.mjs` — the writes it intercepts —
+// refusal, so it moved beside `printErr` in `js/lib/fs.mjs` — the writes it intercepts —
 // and its docblock carries the "not for silencing noise" warning with it.
 
 /** `Path.stem` — the basename with its last suffix removed. */

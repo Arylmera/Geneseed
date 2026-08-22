@@ -13,10 +13,13 @@
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { copyFile, readText, writeText } from '../lib/fs.mjs';
-import { jsonDumpsIndent, parseJson, pyAscii, pyTruthy } from '../lib/json.mjs';
+import { jsonDumpsIndent, parseJson, formatReprAscii, isTruthy } from '../lib/json.mjs';
 import { OWNED_SRC_DIRS, SRC_DIRS_MARKER, TMPL_SPEC_RE, isDir, isFile } from './emit-common.mjs';
 import { SRC_DIR_TOKENS, renderAll } from './render.mjs';
-import { ensureBundleGitignore, ensureContextStub, ensureMemoryIndex, ensureNotebookIndex, ensureProfileStub, ensureRulesStub, ensureWikiStub } from './stubs.mjs';
+import {
+  ensureBundleGitignore, ensureContextStub, ensureMemoryIndex, ensureNotebookIndex,
+  ensureProfileStub, ensureRulesStub, ensureWikiStub,
+} from './stubs.mjs';
 import { writeVersion } from './version.mjs';
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 
@@ -171,19 +174,19 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
     resolvedSrcDirs[srcDir] = dirname;
     const managed = path.join(out, dirname);
 
-    // `pyTruthy`, not `priorName &&`: the marker is user-editable JSON, and Python's
+    // `isTruthy`, not `priorName &&`: the marker is user-editable JSON, and Python's
     // `if prior_name` is false for `[]`, `{}` and `0` where JS's is true for the first
     // two. Getting that wrong warns about a value Python skips in silence — a stderr
     // divergence reachable only from a hand-edited file, which is the one place nobody
     // would look for it.
     const priorName = priorSrcDirs[srcDir];
-    if (isBundle && pyTruthy(priorName) && priorName !== dirname) {
+    if (isBundle && isTruthy(priorName) && priorName !== dirname) {
       if (safePriorDirName(out, priorName)) {
         const stale = path.join(out, priorName);
         if (isDir(stale)) rmSync(stale, { recursive: true, force: true });
       } else {
         process.stderr.write('[geneseed] WARN: ignoring suspicious prior dir name '
-          + `${pyAscii(priorName)} recorded in ${SRC_DIRS_MARKER} - not pruned.\n`);
+          + `${formatReprAscii(priorName)} recorded in ${SRC_DIRS_MARKER} - not pruned.\n`);
       }
     }
 

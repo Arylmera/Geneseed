@@ -26,7 +26,7 @@
 import { helpWidth } from '../ui/cli.mjs';
 import { tuiInventory } from '../inspect/inventory.mjs';
 import { defaultTheme, installedDefaults } from '../hosts/installs.mjs';
-import { pyPrint } from '../lib/fs.mjs';
+import { printOut } from '../lib/fs.mjs';
 import { dwidth, fit, icon, truncd, tuiEntries } from '../ui/tui.mjs';
 
 /**
@@ -129,9 +129,9 @@ export function cmdCatalog(args) {
   const lines = catalogLines(tuiInventory(theme, inst.doctrines), args.section,
     helpWidth() + 2, args.source);
   if (!lines.length) {
-    pyPrint(`[catalog] nothing to list${args.section ? ` under ${args.section}` : ''}.\n`);
+    printOut(`[catalog] nothing to list${args.section ? ` under ${args.section}` : ''}.\n`);
     return 1;
   }
-  for (const line of lines) pyPrint(`${line}\n`);
+  for (const line of lines) printOut(`${line}\n`);
   return 0;
 }

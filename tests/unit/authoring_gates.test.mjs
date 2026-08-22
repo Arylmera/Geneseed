@@ -42,7 +42,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { ENTITY_STATUSES, entityStatus, loadRegistry } from '../../js/inspect/inventory.mjs';
-import { registryProblems, secretProblems, vendorPinProblems } from '../../js/inspect/checks-repo.mjs';
+import {
+  registryProblems, secretProblems, vendorPinProblems,
+} from '../../js/inspect/checks-repo.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));

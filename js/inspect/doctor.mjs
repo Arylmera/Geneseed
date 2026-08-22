@@ -32,12 +32,14 @@
 import path from 'node:path';
 import { emitGlobalInto, emitProjectInto, main as driverMain } from '../../bin/build-driver.mjs';
 import { ROOT } from '../build/source.mjs';
-import { pyResolve } from '../hosts/hosts.mjs';
+import { resolvePath } from '../hosts/hosts.mjs';
 import { installedDefaults, themeFiles } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
-import { pyPrint } from '../lib/fs.mjs';
+import { printOut } from '../lib/fs.mjs';
 import { authoringProblems } from './checks-authoring.mjs';
-import { checkBuild, colorThemeProblems, renderedProblems, themeParityProblems } from './checks-build.mjs';
+import {
+  checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
+} from './checks-build.mjs';
 import { shimProblems } from './checks-repo.mjs';
 import { isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
 
@@ -62,7 +64,7 @@ export function themesToCheck(theme, allThemes, detected, available) {
  * The Python redirects stdout and leaves stderr alone, so a WARN from the emit still reaches
  * the user. Reproducing that exactly is the point: swallowing both would hide
  * `warnBobGlobalOverProject` and swallowing neither would put ~200 lines of emit summary into
- * doctor's output. `withPyNewlines` inside `emitGlobalInto` wraps whatever `write` is
+ * doctor's output. `withPlatformNewlines` inside `emitGlobalInto` wraps whatever `write` is
  * installed at call time, so it translates into this buffer and the bytes never leave.
  */
 function swallowStdout(fn) {
@@ -206,10 +208,10 @@ export function doctorCollect({
   // `tests/test_cli_reference.py`'s argparse-vs-table equality, for as long as the parser is
   // still here to walk.
   if (!noBundle) {
-    // `Path(bundle).expanduser().resolve()`, which `pyResolve` already IS — the default is
+    // `Path(bundle).expanduser().resolve()`, which `resolvePath` already IS — the default is
     // deliberately NOT resolved, because the Python's `ROOT / "Harness"` is not either and
     // the resolved spelling is what the messages print.
-    const b = bundle ? pyResolve(bundle) : path.join(ROOT, 'Harness');
+    const b = bundle ? resolvePath(bundle) : path.join(ROOT, 'Harness');
     problems = problems.concat(ran('bundle', 'Committed bundle drift', renderedProblems(b)));
   }
   return [themes, sortedUnique(problems)];
@@ -237,7 +239,7 @@ export function cmdDoctor(args) {
     noBundle: Boolean(args.noBundle),
   });
   if (!themes.length) {
-    pyPrint(`${collected.length ? collected[0] : '[doctor] no themes found'}\n`);
+    printOut(`${collected.length ? collected[0] : '[doctor] no themes found'}\n`);
     return 1;
   }
   // ⚠ NOTES ARE PRINTED AND NOT COUNTED. The only producer is the pack-off citation report in
@@ -251,12 +253,12 @@ export function cmdDoctor(args) {
   const scoped = !args.theme && !args.all && themes.length === 1;
   const note = scoped
     ? `  (scoped to installed theme '${themes[0]}'; run with --all to sweep every theme)` : '';
-  for (const n of notes) pyPrint(`${n}\n`);
+  for (const n of notes) printOut(`${n}\n`);
   if (problems.length) {
-    pyPrint(`[doctor] ${problems.length} problem(s) across ${themes.length} theme(s):\n`);
-    for (const p of problems) pyPrint(`  - ${p}\n`);
+    printOut(`[doctor] ${problems.length} problem(s) across ${themes.length} theme(s):\n`);
+    for (const p of problems) printOut(`  - ${p}\n`);
     if (problems.some((p) => p.includes('dead link'))) {
-      pyPrint('  tip: dead links to skills mean your source is incomplete — run '
+      printOut('  tip: dead links to skills mean your source is incomplete — run '
         + '`./geneseed update` (or re-sync src/), then re-check.\n');
     }
     if (problems.some((p) => p.startsWith('[themes]') && p.includes('missing key'))) {
@@ -268,17 +270,17 @@ export function cmdDoctor(args) {
       // advice, for as long as the premise went unchecked. The flag belongs to the GENERATOR,
       // whose binary is `geneseed-build` — which is what `README.md` and `SETUP.md` have said
       // all along. A hint is a command; if it is not runnable it is decoration.
-      pyPrint('  tip: a theme is missing a key another theme defines — run '
+      printOut('  tip: a theme is missing a key another theme defines — run '
         + '`geneseed-build --sync-themes` to fill it from _TEMPLATE.json, '
         + 'then restyle the added key(s) and re-check.\n');
     }
-    if (note) pyPrint(`${note}\n`);
+    if (note) printOut(`${note}\n`);
     return 1;
   }
-  pyPrint('[doctor] ok — ' + `${themes.length} theme(s) clean: no unresolved tokens, no dead `
+  printOut('[doctor] ok — ' + `${themes.length} theme(s) clean: no unresolved tokens, no dead `
     + 'links, nothing escapes the bundle; themes in parity; specs carry purpose '
     + 'lines; rendered bundle in sync\n');
-  if (note) pyPrint(`${note}\n`);
+  if (note) printOut(`${note}\n`);
   return 0;
 }
 

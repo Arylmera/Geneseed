@@ -80,8 +80,8 @@ import os from 'node:os';
 
 import { ROOT } from '../build/source.mjs';
 import { readMaybe } from './installs.mjs';
-import { pyPrint, pyPrintErr, writeText } from '../lib/fs.mjs';
-import { pyPathStr } from '../lib/paths.mjs';
+import { printOut, printErr, writeText } from '../lib/fs.mjs';
+import { toPlatformPath } from '../lib/paths.mjs';
 
 const IS_WIN = process.platform === 'win32';
 
@@ -155,28 +155,28 @@ export function cmdLink(args) {
       writeText(shim, '@echo off\r\n'
         + `"${process.execPath}" "${path.join(here, 'bin', 'geneseed-cli.mjs')}" %*\r\n`);
     } catch (e) {
-      pyPrintErr(`geneseed: could not write ${shim} (${pyOsError(e)})\n`);
+      printErr(`geneseed: could not write ${shim} (${asOsError(e)})\n`);
       return 1;
     }
-    pyPrint(`geneseed: wrote shim ${shim}\n`);
+    printOut(`geneseed: wrote shim ${shim}\n`);
     const on_path = (process.env.PATH || '').toLowerCase().includes(bindir.toLowerCase());
     if (on_path || winUserPath('add', bindir)) {
-      pyPrint(`geneseed: '${bindir}' is on your user PATH — open a NEW terminal, then run \`geneseed\`.\n`);
+      printOut(`geneseed: '${bindir}' is on your user PATH — open a NEW terminal, then run \`geneseed\`.\n`);
     } else {
-      pyPrint(`geneseed: add '${bindir}' to your PATH manually, then run \`geneseed\` from anywhere.\n`);
+      printOut(`geneseed: add '${bindir}' to your PATH manually, then run \`geneseed\` from anywhere.\n`);
     }
     return 0;
   }
   // Unix: write a shim into a bin dir (default ~/.local/bin, no sudo). See the shim
   // comment below for why this is no longer a symlink to `ROOT/geneseed`.
-  // `Path(args.dir)` — and `pyPathStr` is that conversion, not decoration. The reference
+  // `Path(args.dir)` — and `toPlatformPath` is that conversion, not decoration. The reference
   // builds a `Path` here and prints `str(target_dir)` twice (the PATH notice and the `export
   // PATH=` line) as well as comparing it against `PATH.split(os.pathsep)`, so an argument
   // that is not already normalised diverges in three places at once. A trailing slash is the
   // cheapest one: `str(Path('/x/bin/'))` is `/x/bin` and the raw string is not.
   // `harness_golden`'s `link/an-explicit-dir-argument-is-used-instead-of-the-default` passes
   // one, and it is the cell that found this.
-  let targetDir = args.dir ? pyPathStr(args.dir) : null;
+  let targetDir = args.dir ? toPlatformPath(args.dir) : null;
   if (targetDir === null) {
     const local = path.join(os.homedir(), '.local', 'bin');
     try {
@@ -203,16 +203,16 @@ export function cmdLink(args) {
       + `exec "${process.execPath}" "${entry}" "$@"\n`);
     chmodSync(dest, 0o755);
   } catch (e) {
-    pyPrintErr(`geneseed: could not write ${dest} (${pyOsError(e)}) — pick a writable dir: `
+    printErr(`geneseed: could not write ${dest} (${asOsError(e)}) — pick a writable dir: `
       + 'geneseed link <dir>\n');
     return 1;
   }
-  pyPrint(`geneseed: linked ${dest} -> ${entry}\n`);
+  printOut(`geneseed: linked ${dest} -> ${entry}\n`);
   if ((process.env.PATH || '').split(path.delimiter).includes(targetDir)) {
-    pyPrint(`geneseed: '${targetDir}' is on PATH — run 'geneseed' from anywhere.\n`);
+    printOut(`geneseed: '${targetDir}' is on PATH — run 'geneseed' from anywhere.\n`);
   } else {
-    pyPrint(`geneseed: NOTE '${targetDir}' is not on your PATH. Add it, e.g.:\n`);
-    pyPrint(`  echo 'export PATH="${targetDir}:$PATH"' >> ~/.zshrc   # or ~/.bashrc\n`);
+    printOut(`geneseed: NOTE '${targetDir}' is not on your PATH. Add it, e.g.:\n`);
+    printOut(`  echo 'export PATH="${targetDir}:$PATH"' >> ~/.zshrc   # or ~/.bashrc\n`);
   }
   return 0;
 }
@@ -227,15 +227,15 @@ export function cmdUnlink() {
       try {
         rmSync(shim);
         removed = true;
-        pyPrint(`geneseed: removed ${shim}\n`);
+        printOut(`geneseed: removed ${shim}\n`);
       } catch (e) {
-        pyPrintErr(`geneseed: could not remove ${shim} (${pyOsError(e)})\n`);
+        printErr(`geneseed: could not remove ${shim} (${asOsError(e)})\n`);
       }
     }
     if (winUserPath('remove', bindir)) {
-      pyPrint(`geneseed: removed '${bindir}' from your user PATH (open a new terminal).\n`);
+      printOut(`geneseed: removed '${bindir}' from your user PATH (open a new terminal).\n`);
     }
-    if (!removed) pyPrint('geneseed: no linked launcher found.\n');
+    if (!removed) printOut('geneseed: no linked launcher found.\n');
     return 0;
   }
   let removed = false;
@@ -257,12 +257,12 @@ export function cmdUnlink() {
     if (ours) {
       try {
         rmSync(f);
-        pyPrint(`geneseed: removed ${f}\n`);
+        printOut(`geneseed: removed ${f}\n`);
         removed = true;
       } catch { /* `except OSError: pass` */ }
     }
   }
-  if (!removed) pyPrint('geneseed: no linked launcher found on PATH\n');
+  if (!removed) printOut('geneseed: no linked launcher found on PATH\n');
   return 0;
 }
 
@@ -282,6 +282,6 @@ function isSymlink(p) {
  * in a different order. Not byte-reproducible and not worth pretending otherwise: both cells
  * that can reach it assert the arm, not the errno text.
  */
-function pyOsError(e) {
+function asOsError(e) {
   return e && e.message ? e.message : String(e);
 }

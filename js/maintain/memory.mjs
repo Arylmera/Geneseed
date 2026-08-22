@@ -32,7 +32,7 @@ import path from 'node:path';
 
 import { memoryDropIndex } from '../hosts/hooks.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
-import { pyPrint, pyPrintErr } from '../lib/fs.mjs';
+import { printOut, printErr } from '../lib/fs.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
@@ -77,22 +77,22 @@ export function cmdMemory(args) {
   if (dir === null) {
     // The resolver answers null for "no store anywhere on the chain", which is also what an
     // explicit `--memory` that is not a directory gives — so the message names both.
-    pyPrintErr('[memory] no memory store found. Pass --memory <dir>, set $GENESEED_MEMORY, '
+    printErr('[memory] no memory store found. Pass --memory <dir>, set $GENESEED_MEMORY, '
       + 'or run this from a directory with a memory/ store.\n');
     return 1;
   }
   if (args.action === 'list') {
     const facts = memoryFacts(dir);
     if (!facts.length) {
-      pyPrint(`[memory] ${dir}: no facts.\n`);
+      printOut(`[memory] ${dir}: no facts.\n`);
       return 0;
     }
-    pyPrint(`[memory] ${dir}\n`);
-    for (const name of facts) pyPrint(`  ${name}\n`);
+    printOut(`[memory] ${dir}\n`);
+    for (const name of facts) printOut(`  ${name}\n`);
     return 0;
   }
   if (!args.name) {
-    pyPrintErr('[memory] rm needs the name of a fact.\n');
+    printErr('[memory] rm needs the name of a fact.\n');
     return 2;
   }
   if (!memoryDelete(dir, args.name)) {
@@ -100,9 +100,9 @@ export function cmdMemory(args) {
     // `NotFound(name)` for a reserved name, a name with a separator and a fact that is not
     // there. Telling a caller that `MEMORY` exists but is protected is a distinction this
     // verb has no reason to draw.
-    pyPrintErr(`[memory] no such fact '${args.name}' in ${dir}.\n`);
+    printErr(`[memory] no such fact '${args.name}' in ${dir}.\n`);
     return 1;
   }
-  pyPrint(`[memory] deleted ${args.name}.\n`);
+  printOut(`[memory] deleted ${args.name}.\n`);
   return 0;
 }

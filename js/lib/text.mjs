@@ -2,11 +2,12 @@
  * String primitives — measuring, padding, stripping, decoding and reading an integer.
  *
  * These are definitions, not an adaptation of somebody else's; see `fs.mjs` for why the
- * measurements against CPython are recorded per function and why the `py` prefix stays.
- * Every function here is where Python's answer and the Node default DIVERGE: `pyLen` counts
- * code points where `.length` counts units, `PY_SPACE` is a wider set than `String.trim`'s,
- * `pyInt` accepts what `Number()` does not and rejects what it does, and `pyUnquote` leaves
- * a bad escape alone where `decodeURIComponent` throws.
+ * measurements against CPython are recorded per function, and why NONE of these is the Node
+ * default — the warning the retired `py` prefix used to carry now lives in each docblock.
+ * Every function here is a place the Node default DIVERGES from the answer this tool needs:
+ * `codePointLength` counts code points where `.length` counts units, `WHITESPACE` is a wider
+ * set than `String.trim`'s, `parseIntStrict` accepts what `Number()` does not and rejects what
+ * it does, and `percentDecode` leaves a bad escape alone where `decodeURIComponent` throws.
  */
 /**
  * `len(s)` — CODE POINTS, where `String.length` counts UTF-16 units.
@@ -16,14 +17,14 @@
  * it — a theme name or a memory path outside the BMP would shear the frame by one column
  * per character under `.length`.
  */
-export const pyLen = (s) => [...s].length;
+export const codePointLength = (s) => [...s].length;
 
 /**
  * `str.ljust(width)` — pad with spaces to `width` CODE POINTS, never truncate.
  *
- * `String.padEnd` counts UTF-16 units, so it is `pyLen`'s difference again, one call later.
+ * `String.padEnd` counts UTF-16 units, so it is `codePointLength`'s difference again, one call later.
  */
-export const pyLjust = (s, width) => s + ' '.repeat(Math.max(0, width - pyLen(s)));
+export const padEndToWidth = (s, width) => s + ' '.repeat(Math.max(0, width - codePointLength(s)));
 
 /**
  * `int(s)` for a base-10 string — the VALUE, or null where Python raises `ValueError`.
@@ -51,7 +52,7 @@ export const pyLjust = (s, width) => s + ' '.repeat(Math.max(0, width - pyLen(s)
  * Gated by a corpus in `tests/test_pure_function_parity.py` — a primitive reproduction gets
  * one owner and a corpus, never a cell (P5c).
  */
-export function pyInt(s) {
+export function parseIntStrict(s) {
   if (typeof s !== 'string' || s === '') return null;
   let body = s;
   let sign = 1;
@@ -95,20 +96,20 @@ export function pyInt(s) {
  * up in a docs heading anyone has written — which is exactly why it took a corpus rather
  * than a cell, and why it is spelled out here rather than approximated with `\s`.
  */
-export const PY_SPACE = '\t\n\v\f\r \u001c-\u001f\u0085\u00a0\u1680'
+export const WHITESPACE = '\t\n\v\f\r \u001c-\u001f\u0085\u00a0\u1680'
   + '\u2000-\u200a\u2028\u2029\u202f\u205f\u3000';
 
-const PY_STRIP_RE = new RegExp(`^[${PY_SPACE}]+|[${PY_SPACE}]+$`, 'g');
-const PY_LSTRIP_RE = new RegExp(`^[${PY_SPACE}]+`);
-const PY_RSTRIP_RE = new RegExp(`[${PY_SPACE}]+$`);
+const STRIP_RE = new RegExp(`^[${WHITESPACE}]+|[${WHITESPACE}]+$`, 'g');
+const STRIP_START_RE = new RegExp(`^[${WHITESPACE}]+`);
+const STRIP_END_RE = new RegExp(`[${WHITESPACE}]+$`);
 
 /** `str.strip()` — Python's whitespace set, which `String.trim()`'s is not. */
-export function pyStripSpace(s) {
-  return s.replace(PY_STRIP_RE, '');
+export function stripWhitespace(s) {
+  return s.replace(STRIP_RE, '');
 }
 
 /**
- * `str.lstrip()` / `str.rstrip()` — the ONE-SIDED halves, over the same `PY_SPACE`.
+ * `str.lstrip()` / `str.rstrip()` — the ONE-SIDED halves, over the same `WHITESPACE`.
  *
  * P2 added them for `_build_render._insert_theme_keys`, which uses all three spellings within
  * four lines (`lines[0].strip()`, `ln.lstrip().startswith('"')`,
@@ -117,12 +118,12 @@ export function pyStripSpace(s) {
  * the character class, and a THIRD one — in the module that decides where a comma goes in a
  * committed theme file — is how the three drift apart. One owner of the set, three views of it.
  */
-export function pyLStripSpace(s) {
-  return s.replace(PY_LSTRIP_RE, '');
+export function stripWhitespaceStart(s) {
+  return s.replace(STRIP_START_RE, '');
 }
 
-export function pyRStripSpace(s) {
-  return s.replace(PY_RSTRIP_RE, '');
+export function stripWhitespaceEnd(s) {
+  return s.replace(STRIP_END_RE, '');
 }
 /**
  * `urllib.parse.unquote(s)` — percent-decoding as Python does it, which is NOT
@@ -164,7 +165,7 @@ function unquoteToBytes(run) {
   return Buffer.concat(out);
 }
 
-export function pyUnquote(s) {
+export function percentDecode(s) {
   if (!s.includes('%')) return s;
   // `re.split` with ONE capture group alternates [gap, group, gap, group, …], so the ASCII
   // runs are the odd indices on both sides.

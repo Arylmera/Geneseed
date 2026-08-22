@@ -23,8 +23,8 @@
  * ban on starting processes, which this module's imports respect. Its sibling
  * `--validate-only` needs the doctor and therefore could not stay; see `cmdValidate`.
  *
- * THE PRIMITIVES ARE BORROWED, NOT REWRITTEN. `pySplitLines`, `pyStripSpace`/`pyLStripSpace`/
- * `pyRStripSpace`, `parseJson`, `pyEq`, `jsonDumpsCompact`, `jsonDumpsIndent`, `readText` and
+ * THE PRIMITIVES ARE BORROWED, NOT REWRITTEN. `splitLines`, `stripWhitespace`/`stripWhitespaceStart`/
+ * `stripWhitespaceEnd`, `parseJson`, `deepEquals`, `jsonDumpsCompact`, `jsonDumpsIndent`, `readText` and
  * `writeText` all already exist and are all already gated. This file's documented failure
  * mode is the same primitive existing twice under two names and the two disagreeing, and
  * `str.strip` and `json.dumps` are precisely the two that would have been re-derived here.
@@ -33,10 +33,10 @@ import path from 'node:path';
 
 import { THEMES } from './source.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
-import { pySplitLines } from '../lib/udiff.mjs';
+import { splitLines } from '../lib/udiff.mjs';
 import { readText, writeText } from '../lib/fs.mjs';
-import { jsonDumpsCompact, jsonDumpsIndent, parseJson, pyEq } from '../lib/json.mjs';
-import { pyLStripSpace, pyRStripSpace, pyStripSpace } from '../lib/text.mjs';
+import { jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals } from '../lib/json.mjs';
+import { stripWhitespaceStart, stripWhitespaceEnd, stripWhitespace } from '../lib/text.mjs';
 
 /**
  * `_build_render._insert_theme_keys` — insert ONLY the missing keys into the theme's existing
@@ -52,7 +52,7 @@ import { pyLStripSpace, pyRStripSpace, pyStripSpace } from '../lib/text.mjs';
  * caller then falls back to a full re-dump.
  *
  * FOUR PRIMITIVES CARRY THE WHOLE THING, and each is a place the two languages differ:
- *   - `pySplitLines` is `str.splitlines()`, which breaks on U+2028/U+2029 where `split('\\n')`
+ *   - `splitLines` is `str.splitlines()`, which breaks on U+2028/U+2029 where `split('\\n')`
  *     does not — a theme file that acquired one from a paste would be re-lined by Python and
  *     not by a naive port, and the insertion index would then point at a different key;
  *   - the three `strip` spellings are Python's whitespace set, not `String.prototype.trim`'s;
@@ -61,13 +61,13 @@ import { pyLStripSpace, pyRStripSpace, pyStripSpace } from '../lib/text.mjs';
  *     `AGENT_COLORS`, the only non-string among `_TEMPLATE.json`'s 140 values. `ensureAscii`
  *     is false because the reference passes `ensure_ascii=False`, and 33 template values
  *     carry non-ASCII text that would otherwise be escaped into the committed file;
- *   - `pyEq`, because the safety net compares two `json.loads` results and `===` is identity
+ *   - `deepEquals`, because the safety net compares two `json.loads` results and `===` is identity
  *     for containers — a `===` here would return `null` every time and silently route every
  *     theme through the re-dump fallback, i.e. rewrite all 14 files in full.
  */
 export function insertThemeKeys(raw, theme, tmpl, tmplKeys, missing) {
-  const lines = pySplitLines(raw);
-  if (!lines.length || pyStripSpace(lines[0]) !== '{') return null;
+  const lines = splitLines(raw);
+  if (!lines.length || stripWhitespace(lines[0]) !== '{') return null;
 
   const lineOf = (key) => {
     // `f'  "{key}":'` — raw interpolation, NOT a JSON-escaped key. A theme key carrying a
@@ -91,9 +91,9 @@ export function insertThemeKeys(raw, theme, tmpl, tmplKeys, missing) {
     }
     if (pred === null) {
       // No earlier template key exists in this theme: insert right after `{`.
-      const follows = lines.slice(1).some((ln) => pyLStripSpace(ln).startsWith('"'));
+      const follows = lines.slice(1).some((ln) => stripWhitespaceStart(ln).startsWith('"'));
       lines.splice(1, 0, entry + (follows ? ',' : ''));
-    } else if (pyRStripSpace(lines[pred]).endsWith(',')) {
+    } else if (stripWhitespaceEnd(lines[pred]).endsWith(',')) {
       lines.splice(pred + 1, 0, `${entry},`);
     } else {
       // Predecessor was the last entry: it gains the comma, the new line is last.
@@ -108,7 +108,7 @@ export function insertThemeKeys(raw, theme, tmpl, tmplKeys, missing) {
   try { reparsed = parseJson(newText); } catch { return null; }
   const want = { ...theme };
   for (const k of missing) want[k] = tmpl[k];
-  return pyEq(reparsed, want) ? newText : null;
+  return deepEquals(reparsed, want) ? newText : null;
 }
 
 /**
@@ -121,8 +121,8 @@ export function insertThemeKeys(raw, theme, tmpl, tmplKeys, missing) {
  * default is the checkout's own `themes/`, which is what the driver passes.
  *
  * PRINTS THROUGH A BARE `process.stdout.write`, like the generator's other ~25 print sites and
- * unlike every CLI verb: `bin/build-driver.mjs`'s `main` wraps the whole run in `withPyNewlines`,
- * so a `pyPrint` here would translate a second time and put `\r\r\n` on every line.
+ * unlike every CLI verb: `bin/build-driver.mjs`'s `main` wraps the whole run in `withPlatformNewlines`,
+ * so a `printOut` here would translate a second time and put `\r\r\n` on every line.
  *
  * ONE DELIBERATE DIVERGENCE FROM THE REFERENCE, changed on BOTH sides in this commit: a
  * missing or unreadable `_TEMPLATE.json` used to print and `return 0`, which the CLI maps to

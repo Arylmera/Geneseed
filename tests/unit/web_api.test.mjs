@@ -39,13 +39,15 @@ import {
   apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE,
 } from '../../js/web/actions.mjs';
 import { installState, themeOfDir, installTargets } from '../../js/hosts/installs.mjs';
-import { installDeactivate, installReactivate, installUninstall } from '../../js/maintain/uninstall.mjs';
+import {
+  installDeactivate, installReactivate, installUninstall,
+} from '../../js/maintain/uninstall.mjs';
 import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import { parseOrigin, originDisplay } from '../../js/maintain/update.mjs';
 import { MCP_PRESETS as _P, mcpApply, mcpConfigFor, mcpLoad, mcpSave, mcpState, mcpSetEnabled }
   from '../../js/hosts/mcp.mjs';
 import { MCP_PRESETS } from '../../js/hosts/mcp.mjs';
-import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts/hosts.mjs';
+import { GLOBAL_MANIFEST, VERSION_MARKER, resolvePath } from '../../js/hosts/hosts.mjs';
 import { normcase } from '../../js/lib/paths.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
@@ -55,9 +57,9 @@ import { withGlobalInstalls as withGlobalInstallsFixture } from '../helpers/inst
 
 // `js/web/api.mjs` keeps its own `samePath` module-private. Rebuilt here from the same two
 // primitives rather than exported from the product for a test's benefit — and it must be
-// `normcase(pyResolve(...))` on both sides, because on Windows the two spellings this
+// `normcase(resolvePath(...))` on both sides, because on Windows the two spellings this
 // comparison exists to reconcile differ in CASE as well as in shape.
-const samePath = (a, b) => normcase(pyResolve(a)) === normcase(pyResolve(b));
+const samePath = (a, b) => normcase(resolvePath(a)) === normcase(resolvePath(b));
 
 const FIXTURE = webFixture();
 after(webFixtureTeardown);
@@ -1548,7 +1550,7 @@ test('the excludes endpoint round-trips an add and a remove', () => {
     // stores the RESOLVED path with separators normalised to `/`, and on a Windows runner that
     // expands the 8.3 short temp name. Comparing against the raw argument passes on this
     // laptop and fails on CI, which is the defect this comment exists to prevent.
-    assert.equal(snap.excludes[0].path.replace(/\/+$/, ''), asPosix(pyResolve(repo)));
+    assert.equal(snap.excludes[0].path.replace(/\/+$/, ''), asPosix(resolvePath(repo)));
 
     assert.equal(apiExcludesMutate(st, { action: 'remove', path: repo }).ok, true);
     assert.deepEqual(apiExcludes(st).excludes, []);
@@ -2028,7 +2030,7 @@ test('the v1.1 fields pass through', () => {
     assert.equal(e.phase, 'Editing x');
     assert.equal(e.error, 'oops');
 
-    // A PARSED NUMBER IS A `PyNumber`, NOT A JS NUMBER, and that is the port working rather
+    // A PARSED NUMBER IS A `JsonNumber`, NOT A JS NUMBER, and that is the port working rather
     // than leaking. `parseJson` keeps each number's SOURCE SPELLING so a read-modify-write
     // round-trips `1.0` as `1.0` instead of collapsing it to `1` — the exact distinction
     // `tests/mutate.mjs`'s M6 is about. The reader hands the parsed object through, so the
@@ -2051,7 +2053,7 @@ test('a v1 file gets safe defaults', () => {
     assert.equal(e.model, null);
     assert.equal(e.phase, null);
     assert.equal(e.files, null);
-    // THE DEFAULTS ARE RAW JS NUMBERS where a parsed field is a `PyNumber` — the reader
+    // THE DEFAULTS ARE RAW JS NUMBERS where a parsed field is a `JsonNumber` — the reader
     // SUPPLIES these rather than reading them, so nothing was parsed to keep a spelling of.
     // Asserted strictly on purpose: it is the one place in this file where the difference
     // between "read from the file" and "filled in by the reader" is observable.
@@ -2186,8 +2188,8 @@ test('the deploy command validates its host and its path', () => {
     const cmd = plan.cmd.map(String);
     assert.equal(after$(cmd, '--emit'), 'opencode', 'a deploy is a PROJECT emit, never global');
     assert.equal(after$(cmd, '--theme'), 'imperial');
-    assert.equal(after$(cmd, '--out'), pyResolve(sb.path));
-    assert.equal(after$(cmd, '--root'), pyResolve(sb.path));
+    assert.equal(after$(cmd, '--out'), resolvePath(sb.path));
+    assert.equal(after$(cmd, '--root'), resolvePath(sb.path));
   } finally { sb.cleanup(); }
 });
 

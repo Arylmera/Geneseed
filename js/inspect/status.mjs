@@ -60,7 +60,7 @@ import { THEMES, ROOT, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
-  claudeConfigDir, bobConfigDir, copilotConfigDir, opencodeConfigDir, pyResolve,
+  claudeConfigDir, bobConfigDir, copilotConfigDir, opencodeConfigDir, resolvePath,
   resolveMemoryDir,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
@@ -71,8 +71,8 @@ import {
 import {
   defaultTheme, installedDefaults, manifestIsClaude, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
-import { pyPrint } from '../lib/fs.mjs';
-import { pyLen, pyLjust } from '../lib/text.mjs';
+import { printOut } from '../lib/fs.mjs';
+import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
 export { defaultTheme, manifestIsClaude };
 
@@ -92,9 +92,9 @@ export function versionVerdict(installed, current) {
 export function cmdVersion(args) {
   const cfg = makeCfg();
   const current = sourceFingerprint(cfg);
-  // `Path(args.target).expanduser().resolve()` — `pyResolve` already expands, so the tilde
+  // `Path(args.target).expanduser().resolve()` — `resolvePath` already expands, so the tilde
   // is handled once rather than twice.
-  let target = args.target ? pyResolve(args.target) : opencodeConfigDir();
+  let target = args.target ? resolvePath(args.target) : opencodeConfigDir();
   let installed = readVersion(target);
   if (installed === null) {
     // A claude/bob/copilot-only machine must not report "no install detected". The bundle
@@ -105,10 +105,10 @@ export function cmdVersion(args) {
       if (v) { installed = v; target = base; break; }
     }
   }
-  pyPrint(`[version] source:    ${current}   (${ROOT})\n`);
-  pyPrint(`[version] installed: ${installed || '(none found)'}`
+  printOut(`[version] source:    ${current}   (${ROOT})\n`);
+  printOut(`[version] installed: ${installed || '(none found)'}`
     + (installed ? `   (${target})` : '') + '\n');
-  pyPrint(`[version] ${versionVerdict(installed, current)}\n`);
+  printOut(`[version] ${versionVerdict(installed, current)}\n`);
   return 0;
 }
 
@@ -295,29 +295,29 @@ export function statusLines(d, color = false) {
       `${d.agent_md}  (${d.agent_md_present ? 'present' : 'MISSING'})`]);
   }
 
-  const labelW = Math.max(...rows.map(([k]) => pyLen(k)));
-  const body = rows.map(([k, v]) => `  ${pyLjust(k, labelW)}   ${v}`);
+  const labelW = Math.max(...rows.map(([k]) => codePointLength(k)));
+  const body = rows.map(([k, v]) => `  ${padEndToWidth(k, labelW)}   ${v}`);
   const verdict = `  ${mark} ${d.version_verdict}`;
   const title = ` ${badge} Geneseed ${emdash} status `;
-  const width = Math.max(...body.map(pyLen), pyLen(verdict), pyLen(title) + 2);
+  const width = Math.max(...body.map(codePointLength), codePointLength(verdict), codePointLength(title) + 2);
 
   const ac = ANSI_CODES[d.accent] ?? '36';
   const c = (s, code) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
 
   const top = color
-    ? c(TL + H, ac) + c(title, `${ac};1`) + c(H.repeat(width - pyLen(title) - 1) + TR, ac)
-    : TL + H + title + H.repeat(width - pyLen(title) - 1) + TR;
+    ? c(TL + H, ac) + c(title, `${ac};1`) + c(H.repeat(width - codePointLength(title) - 1) + TR, ac)
+    : TL + H + title + H.repeat(width - codePointLength(title) - 1) + TR;
   const edge = c(V, ac);
   const lines = [top];
-  for (const b of body) lines.push(edge + pyLjust(b, width) + edge);
+  for (const b of body) lines.push(edge + padEndToWidth(b, width) + edge);
   lines.push(c(LT + H.repeat(width) + RT, ac));
-  lines.push(edge + c(pyLjust(verdict, width), vcode) + edge);
+  lines.push(edge + c(padEndToWidth(verdict, width), vcode) + edge);
   lines.push(c(BL + H.repeat(width) + BR, ac));
   return lines;
 }
 
 /** `_harness_status.cmd_status`. */
 export function cmdStatus() {
-  for (const line of statusLines(statusData(), colorEnabled())) pyPrint(`${line}\n`);
+  for (const line of statusLines(statusData(), colorEnabled())) printOut(`${line}\n`);
   return 0;
 }

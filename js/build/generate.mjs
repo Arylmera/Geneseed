@@ -34,7 +34,7 @@ import path from 'node:path';
 
 import { main as driverMain } from '../../bin/build-driver.mjs';
 import { makeCfg, PACK_ORDER } from './source.mjs';
-import { opencodeConfigDir, pyResolve } from '../hosts/hosts.mjs';
+import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
   excludedRulesOfDir, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
@@ -42,8 +42,8 @@ import {
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
-import { pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
-import { jsonDumpsIndent, parseJson, pyRepr } from '../lib/json.mjs';
+import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
+import { jsonDumpsIndent, parseJson, formatRepr } from '../lib/json.mjs';
 
 /** `_harness_build._HEX_RE`. Anchored at BOTH ends — `#123` and `#1122334` both fail. */
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -57,12 +57,12 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
  * exception, so dressing a crash as a one-liner would hide a bug.
  */
 function sysExit(msg) {
-  // `pyPrintErr`, NOT a local newline translation. The first draft inlined the `\n` ->
+  // `printErr`, NOT a local newline translation. The first draft inlined the `\n` ->
   // `\r\n` rule here and every cell passed, because `harness_golden` reads stderr through
   // `subprocess`'s universal-newline decode and cannot see the difference — the same
   // transport hole P5b measured. A second copy of a translation is exactly what P5d's
-  // `pyStrPath`/`pyPathStr` split was, and it is ungated in precisely the same way.
-  pyPrintErr(`${msg}\n`);
+  // `pyStrPath`/`toPlatformPath` split was, and it is ungated in precisely the same way.
+  printErr(`${msg}\n`);
   const e = new Error(msg);
   e.exitCode = 1;
   throw e;
@@ -187,7 +187,7 @@ export const DEFAULT_EMIT = new Map([
 export function cmdRebuildAll() {
   const targets = installTargets().filter(([h, s, r]) => installState(r, h, s) === 'active');
   if (!targets.length) {
-    pyPrint('[rebuild-all] no active installs detected.\n');
+    printOut('[rebuild-all] no active installs detected.\n');
     return 0;
   }
   const failures = [];
@@ -217,20 +217,20 @@ export function cmdRebuildAll() {
     const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
       PACK_ORDER, excludeRules);
     const label = `${host}:${scope} (${root})`;
-    pyPrint(`[rebuild-all] ${label}: theme=${theme} emit=${emit} footprint=${footprint} `
+    printOut(`[rebuild-all] ${label}: theme=${theme} emit=${emit} footprint=${footprint} `
       + `posture=${posture} mode=${mode}\n`);
     const rc = driverMain(argv);
     if (rc !== 0) {
       failures.push(label);
-      pyPrintErr(`[rebuild-all] FAILED ${label} (exit ${rc})\n`);
+      printErr(`[rebuild-all] FAILED ${label} (exit ${rc})\n`);
     }
   }
   if (failures.length) {
-    pyPrintErr(`[rebuild-all] ${failures.length}/${targets.length} install(s) failed: `
+    printErr(`[rebuild-all] ${failures.length}/${targets.length} install(s) failed: `
       + `${failures.join(', ')}\n`);
     return 1;
   }
-  pyPrint(`[rebuild-all] rebuilt ${targets.length} install(s).\n`);
+  printOut(`[rebuild-all] rebuilt ${targets.length} install(s).\n`);
   return 0;
 }
 
@@ -310,9 +310,9 @@ export function cmdPrompt(args) {
     if (dest) mkdirSync(dest, { recursive: true });
     writeText(args.out, text);
     // The RAW argument, not the resolved path — `f"[prompt] wrote {args.out}"`.
-    pyPrint(`[prompt] wrote ${args.out} (${themeName})\n`);
+    printOut(`[prompt] wrote ${args.out} (${themeName})\n`);
   } else {
-    pyPrint(text);
+    printOut(text);
   }
   return 0;
 }
@@ -323,8 +323,8 @@ export function cmdPrompt(args) {
 
 /** `_harness_build._resolve_themes_dir` — explicit `--dir`, else a repo `.opencode/`, else global. */
 export function resolveThemesDir(args) {
-  // `Path(args.dir).expanduser().resolve()` — `pyResolve` already expands a leading `~`.
-  if (args.dir) return pyResolve(args.dir);
+  // `Path(args.dir).expanduser().resolve()` — `resolvePath` already expands a leading `~`.
+  if (args.dir) return resolvePath(args.dir);
   const repo = path.join(process.cwd(), '.opencode');
   if (!args.globalDir && isDir(repo)) return path.join(repo, 'themes');
   return path.join(opencodeConfigDir(), 'themes');
@@ -382,7 +382,7 @@ export function loadUserPalette(args, cfg) {
   }
   // `f"{r}={pal[r]!r}"` — Python's repr, so a string is single-quoted and an int is bare.
   const bad = [...pal].filter(([, v]) => !(typeof v === 'string' && HEX_RE.test(v)))
-    .map(([r, v]) => `${r}=${pyRepr(v)}`);
+    .map(([r, v]) => `${r}=${formatRepr(v)}`);
   if (bad.length) sysExit(`[theme] non-#rrggbb value(s): ${bad.join(', ')}`);
   return pal;
 }
@@ -420,8 +420,8 @@ export function cmdTheme(args) {
     writeText(dest, `${jsonDumpsIndent(colorThemeJson(Object.fromEntries(pal), transparent))}\n`);
     written.push(dest);
   }
-  pyPrint(`[theme] wrote ${written.map((p) => path.basename(p)).join(', ')} to ${destDir}\n`);
-  pyPrint(`[theme] select in OpenCode with: /theme ${full}`
+  printOut(`[theme] wrote ${written.map((p) => path.basename(p)).join(', ')} to ${destDir}\n`);
+  printOut(`[theme] select in OpenCode with: /theme ${full}`
     + (args.solidOnly ? '' : `  (or /theme ${full}-transparent)`) + '\n');
   return 0;
 }

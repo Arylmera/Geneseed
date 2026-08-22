@@ -34,7 +34,7 @@
  *
  * **DO NOT WRITE A SECOND LINE BREAKER.** This block used to argue that `textwrap.wrap` was
  * "a second `difflib` — a stdlib payload with no Node twin". It has one since P1:
- * `pyTextWrap` in `js/cli.mjs`, written because `--help` was the caller that finally
+ * `wrapText` in `js/cli.mjs`, written because `--help` was the caller that finally
  * required it, frozen at `tests/__snapshots__/textwrap.json` and swept against the running
  * interpreter at every width from 11 to 198. When P7c brings `_wrap_lines` across it wraps
  * THAT, and the only open question is the ASCII/glyph width the panel measures in. `_parse_laws`, `load_registry`, `entity_status` and
@@ -44,8 +44,8 @@ import path from 'node:path';
 
 import { THEMES } from '../build/source.mjs';
 import { readJsonMaybe } from '../hosts/installs.mjs';
-import { pySplitLines } from '../lib/udiff.mjs';
-import { pyPrint } from '../lib/fs.mjs';
+import { splitLines } from '../lib/udiff.mjs';
+import { printOut } from '../lib/fs.mjs';
 
 // ---- display tiers -------------------------------------------------------------------
 //
@@ -332,10 +332,10 @@ const BAR_EIGHTHS = ' ▏▎▍▌▋▊▉█';
 export function progressBar(frac, width = 24) {
   const f = Math.max(0.0, Math.min(1.0, frac));
   if (TUI_ASCII) {
-    const filled = pyRound(f * width);
+    const filled = roundHalfEven(f * width);
     return '#'.repeat(filled) + '-'.repeat(width - filled);
   }
-  const eighths = pyRound(f * width * 8);
+  const eighths = roundHalfEven(f * width * 8);
   const full = Math.floor(eighths / 8);
   const rem = eighths % 8;
   if (full >= width) return '█'.repeat(width);
@@ -347,7 +347,7 @@ export function progressBar(frac, width = 24) {
  * one place in the file where that shows: a bar at exactly 0.5 of a cell is the frontier
  * case the eighths resolution exists to draw, and `round(0.5)` is 0 there and 1 here.
  */
-function pyRound(x) {
+function roundHalfEven(x) {
   const f = Math.floor(x);
   const d = x - f;
   if (d > 0.5) return f + 1;
@@ -382,7 +382,7 @@ export function themeFlair(theme) {
     // the empty string where `''.split('\n')` answers `['']`, which would put a blank row
     // in the banner of every theme that omits one; and its boundary set is Python's rather
     // than `\s`, which P6d measured apart.
-    banner: pySplitLines(banner),
+    banner: splitLines(banner),
     benediction: data.BENEDICTION ?? '',
   };
 }
@@ -462,9 +462,9 @@ export function detailLines(kind, label, data) {
   // because all three are a titled rule rather than a rendered spec. New kinds only: the nine
   // recorded cases name kinds that already existed, so no recorded answer moves.
   if (kind === 'law' || kind === 'doctrine' || kind === 'ontology') {
-    return [label, ''].concat(data ? pySplitLines(data.body) : []);
+    return [label, ''].concat(data ? splitLines(data.body) : []);
   }
-  if ((kind === 'agent' || kind === 'skill') && data) return pySplitLines(data.body);
+  if ((kind === 'agent' || kind === 'skill') && data) return splitLines(data.body);
   return null;
 }
 
@@ -476,12 +476,12 @@ export function detailLines(kind, label, data) {
  */
 export function cmdTui() {
   if (!process.stdin.isTTY) {
-    pyPrint('[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
+    printOut('[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
     return 1;
   }
   // The pointer to the Python panel is gone for `js/menu.mjs`'s reason: the
   // panel it named is the Python being deleted. What is left is true and stays true.
-  pyPrint('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
+  printOut('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
     + 'half, not its screens). Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
   return 1;
 }

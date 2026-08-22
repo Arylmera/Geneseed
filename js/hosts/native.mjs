@@ -31,7 +31,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { writeText, copyFile, readText } from '../lib/fs.mjs';
-import { jsonDumps, parseJson, pyStr, pyRepr, pyTruthy } from '../lib/json.mjs';
+import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy } from '../lib/json.mjs';
 
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
 export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report']);
@@ -125,7 +125,7 @@ const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
  * comment is stripped.
  *
  * `.replace` with a `g` regex, matching `re.sub`'s replace-all; the Python's pattern is
- * non-global-looking but `re.sub` always is. `split('\n')` rather than `pySplitLines`: the
+ * non-global-looking but `re.sub` always is. `split('\n')` rather than `splitLines`: the
  * text has been through `readText`, and the reason `firstBlockquote` gives for the same
  * choice applies verbatim to the same files.
  */
@@ -133,12 +133,12 @@ export function descBlockProblem(text) {
   const nonblank = text.replace(HTML_COMMENT_RE, '').split('\n').filter((ln) => ln.trim());
   if (!nonblank.length) return 'file is empty (after stripping authoring comments)';
   if (!nonblank[0].replace(/^\s+/, '').startsWith('#')) {
-    return `first content line is not a title ('# ...'): ${pyRepr(nonblank[0].trim())}`;
+    return `first content line is not a title ('# ...'): ${formatRepr(nonblank[0].trim())}`;
   }
   if (nonblank.length < 2) return 'has a title but no purpose blockquote after it';
   const second = nonblank[1].trim();
   if (!second.startsWith('>')) {
-    return `first block after the title is not a '>' blockquote: ${pyRepr(second)}`;
+    return `first block after the title is not a '>' blockquote: ${formatRepr(second)}`;
   }
   if (!second.replace(/^>+/, '').trim()) return 'purpose blockquote is empty';
   return '';
@@ -167,7 +167,7 @@ function agentColorMap(theme) {
     if (VALID_AGENT_COLOR_SLOTS.has(v)) {
       cleaned[k] = v;
     } else {
-      warn(`[geneseed] WARN: AGENT_COLORS[${pyRepr(k)}] = ${pyRepr(v)} is not a valid `
+      warn(`[geneseed] WARN: AGENT_COLORS[${formatRepr(k)}] = ${formatRepr(v)} is not a valid `
         + `OpenCode theme slot (${[...VALID_AGENT_COLOR_SLOTS].sort().join(', ')}) — `
         + `falling back to 'secondary'`);
       cleaned[k] = 'secondary';
@@ -222,17 +222,17 @@ function agentOverride(overrides, stem) {
  * ever diverge the gate says so instead of the copies silently rotting apart.
  */
 export function pushOverrideLines(fm, ov) {
-  if (pyTruthy(ov.model)) fm.push(`model: ${pyStr(ov.model)}`);
-  if (given(ov.temperature)) fm.push(`temperature: ${pyStr(ov.temperature)}`);
-  if (pyTruthy(ov.variant)) fm.push(`variant: ${pyStr(ov.variant)}`);
-  if (given(ov.steps)) fm.push(`steps: ${pyStr(ov.steps)}`);
+  if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
+  if (given(ov.temperature)) fm.push(`temperature: ${formatValue(ov.temperature)}`);
+  if (isTruthy(ov.variant)) fm.push(`variant: ${formatValue(ov.variant)}`);
+  if (given(ov.steps)) fm.push(`steps: ${formatValue(ov.steps)}`);
 }
 
 /** `_build_emit._claude_agent_frontmatter`. */
 function claudeAgentFrontmatter(stem, text, overrides) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
   const ov = agentOverride(overrides, stem);
-  if (pyTruthy(ov.model)) fm.push(`model: ${pyStr(ov.model)}`);
+  if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
   if (isReadonly(text)) {
     const denied = ['Write', 'Edit', 'NotebookEdit', 'WebFetch'];
     if (!text.includes('<!-- bash: allow -->')) denied.push('Bash');
@@ -245,7 +245,7 @@ function claudeAgentFrontmatter(stem, text, overrides) {
 function copilotAgentFrontmatter(stem, text, overrides) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
   const ov = agentOverride(overrides, stem);
-  if (pyTruthy(ov.model)) fm.push(`model: ${pyStr(ov.model)}`);
+  if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
   if (isReadonly(text)) {
     const allowed = ['read', 'search', 'todo', 'agent'];
     if (text.includes('<!-- bash: allow -->')) allowed.push('execute');
@@ -271,7 +271,7 @@ function opencodeAgentFrontmatter(stem, text, overrides, theme = null) {
 export function loadAgentOverrides(base) {
   let data;
   try {
-    // parseJson, not JSON.parse: the override values are rendered with `pyStr`, which
+    // parseJson, not JSON.parse: the override values are rendered with `formatValue`, which
     // needs the int/float distinction the raw literal carries and `JSON.parse` discards.
     data = parseJson(readText(path.join(base, 'agent-overrides.json')));
   } catch {

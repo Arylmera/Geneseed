@@ -830,7 +830,7 @@ for (const [name, body] of [
 // present .jsonc — and must never rewrite one carrying comments, which a JSON round trip would
 // silently delete. The refusal is the feature; the warning is what makes it usable.
 
-// `readJsonc` parses through `parseJson`, so every number comes back as a PyNumber carrying the
+// `readJsonc` parses through `parseJson`, so every number comes back as a JsonNumber carrying the
 // int/float distinction Python has and `JSON.parse` discards (the file gets written BACK, and a
 // user's `"temperature": 1.0` must not return as `1` — the mutation that collapses it is M6).
 // Transcribing the reference's `assertEqual(data, {"a": 1})` therefore fails on the wrapper
@@ -942,7 +942,7 @@ test('a merge returns the resolved target, not the path it was asked about', () 
 // decided to throw, where this proves it catches the one the operating system actually raises.
 //
 // ONE ASSERTION CANNOT CROSS, and getting it wrong is what the first draft of this pair did.
-// `js/settings.mjs`'s own `pyOsError` docblock already records that Python renders `[Errno 13]
+// `js/settings.mjs`'s own `asOsError` docblock already records that Python renders `[Errno 13]
 // Permission denied: '...'` where Node renders its own message, and that the two cannot be made
 // to agree — so the reference's literal "Permission denied" was rewritten as a case-insensitive
 // match on the same words. It still failed: a denied ACL on Windows raises EPERM, "operation not
@@ -1086,7 +1086,7 @@ test('agent overrides are absent, parsed, or malformed — never fatal', () => {
 test('an override emits model and temperature only where one is set', () => {
   withDir((d) => {
     // THE OVERRIDES COME THROUGH THE PRODUCT'S OWN READER, and that is not decoration. A
-    // hand-built `{ temperature: 0.1 }` makes `pyStr` throw outright: it refuses a bare JS
+    // hand-built `{ temperature: 0.1 }` makes `formatValue` throw outright: it refuses a bare JS
     // number because Python's `str` renders int 1 and float 1.0 differently and `JSON.parse`
     // has already collapsed the two. `parseJson` is what carries the distinction, so the only
     // faithful stand-in for the reference's Python dict literal is the JSON that produced it —
