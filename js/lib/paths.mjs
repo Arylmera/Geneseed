@@ -145,7 +145,7 @@ export function toPlatformPath(s) {
  * skipped it and fallen through to the literal `AGENT.md`, unwiring nothing.
  *
  * ONE OWNER, and the five pre-existing `path.isAbsolute` calls in `js/` were READ rather than
- * assumed to be copies. Three cannot reach the divergence — `js/doctor.mjs` and
+ * assumed to be copies. Three cannot reach the divergence — `js/inspect/doctor.mjs` and
  * `bin/build-driver.mjs` test the output of `path.relative`, which is never rootless-absolute,
  * and `js/build/bundle.mjs`'s `safePriorDirName` is `&&`-guarded by `basename(p) === p` immediately
  * after. The two in `js/hosts/hooks.mjs` (a context entry's `path`) DO carry the same hazard and

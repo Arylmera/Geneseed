@@ -287,7 +287,7 @@ test('FIRING CONTROL: each rule catches a planted offender', () => {
     // INVOCATION
     ['README.md', 'run `python build.py --emit claude` first', 'INVOCATION'],
     ['docs/x.md', '#!/usr/bin/env python3', 'INVOCATION'],
-    ['js/x.mjs', 'python3 -c "import sys"', 'INVOCATION'],
+    ['js/build/x.mjs', 'python3 -c "import sys"', 'INVOCATION'],
     ['docs/y.md', '$ uv run thing.py', 'INVOCATION'],
     // BARE_INVOCATION — the arm INVOCATION cannot reach
     ['docs/web/footprint.md', 'build.py --footprint lean', 'BARE_INVOCATION'],
@@ -295,7 +295,7 @@ test('FIRING CONTROL: each rule catches a planted offender', () => {
     // ARGV_SPLIT — the shape a whitespace-anchored pattern cannot see
     ['.claude/launch.json', '"runtimeArgs": ["python", "-c", "print(1)"]', 'ARGV_SPLIT'],
     // PY_LITERAL
-    ['js/doctor.mjs', "readText(path.join(ROOT, 'rituals', '_web_core.py'))", 'PY_LITERAL'],
+    ['js/inspect/doctor.mjs', "readText(path.join(ROOT, 'rituals', '_web_core.py'))", 'PY_LITERAL'],
   ];
   for (const [rel, text, rule] of planted) {
     const got = hits([{ rel, text }]).map((h) => h.rule);
@@ -326,7 +326,7 @@ test('FIRING CONTROL: the widened rules do not fire on what must stay', () => {
     ['docs/limits.md', 'row 6 — its only gate was test_tui_boundary.py'],
     // The port's own successors, which must never read as the thing they replaced.
     ['.claude/skills/token-report/scripts/token_report.mjs', "spawnSync('node', ['token_report.mjs'])"],
-    ['js/x.mjs', "spawnSync(process.execPath, ['-e', 'x'])"],
+    ['js/build/x.mjs', "spawnSync(process.execPath, ['-e', 'x'])"],
     ['docs/x.md', 'node bin/geneseed-hook.mjs'],
   ];
   const fired = hits(innocent.map(([rel, text]) => ({ rel, text }))).map(label);

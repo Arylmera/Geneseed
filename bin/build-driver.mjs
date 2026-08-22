@@ -20,7 +20,7 @@
  * `js_cfg()` (_build_core.py:199) always sends `structure` and `capabilityLinkRe`, because
  * the Python originals are module-level names that TESTS MUTATE — `_OWNED` membership
  * asked one level out. This driver has no Python module to mutate, so it sends neither and
- * `js/build/render.mjs:215`'s `cfg.structure ?? STRUCTURE` and `js/emit.mjs:680`'s
+ * `js/build/render.mjs:215`'s `cfg.structure ?? STRUCTURE` and `js/build/bundle.mjs`'s
  * `cfg.capabilityLinkRe ? ... : <default>` take their right-hand branches for the first
  * time. Those two fallbacks have been dead code since they were written — always
  * overridden by the driver that always supplies them. P4 is what makes them live.
@@ -465,7 +465,7 @@ export function hookRunnerEntry() {
  * through `_build_core._claude_config_dir`, an `_OWNED` name precisely because the suite
  * redirects it at a sandbox, and a redirect that stops at a subprocess half-works in
  * silence. The child must therefore never derive it — but this file is the PARENT, so
- * deriving it is exactly this file's job, and `js/emit.mjs` receives the answer.
+ * deriving it is exactly this file's job, and `the host emit` receives the answer.
  *
  * POSIX spelling, per the original: `claudeMdExcludes` entries are glob patterns, where a
  * backslash is an escape, so the Windows-native form risks never matching.
@@ -733,7 +733,7 @@ function emitOpencodeGlobal(cfg, args, out) {
  * `_build_global._emit_claude_core` — the shared engine behind six emits.
  *
  * Only the two Copilot ones run through it so far, and that is a deliberate split rather
- * than an arbitrary stopping point: `js/emit.mjs:1166` gates the entire settings/hook path
+ * than an arbitrary stopping point: `js/build/emit-claude.mjs's wire` gates the entire settings/hook path
  * behind `if (!isCopilot)`, so a Copilot emit never reaches `hookPrefix` and therefore never
  * needs `hookOpts` — the pair of machine-absolute values (`sys.executable` and the harness
  * entry point) that a Node driver has no way to produce. Copilot crossing first isolates
@@ -1094,7 +1094,7 @@ function run(argv) {
   // check — build.py:393-397's mapping, and a refusal (exit 2) if the template is unreadable.
   if (args.syncThemes) return syncThemes() ? 1 : 0;
   // `--validate-only` is NOT, and cannot be: its source-tree half is the doctor, and
-  // `js/doctor.mjs` starts a process (`node --check` over the OpenCode plugins). This driver
+  // `js/inspect/checks-authoring.mjs` starts a process (`node --check` over the OpenCode plugins). This driver
   // is under a transitive ban on reaching any such module, gated twice — by a source grep in
   // `tests/test_node_cli_parity.py` and by an import walk in `tests/test_hook_cli_parity.py`.
   // So the tool crossed onto the CLI binary, which already carries the doctor, and this flag
@@ -1172,7 +1172,7 @@ function run(argv) {
  * Run only when this file IS the entry point, not when `js/build/generate.mjs` imports it.
  *
  * `import.meta.main` would say this in one word and is Node 24; the spec's `engines` floor
- * is still open and this machine runs v22, the same reason `js/emit.mjs` avoids it. So the
+ * is still open and this machine runs v22, which is why the comparison is spelled out rather than using it. So the
  * check is the manual one, through `realpathSync` because `process.argv[1]` is whatever the
  * caller typed and `import.meta.url` is always the resolved file — an `npx`-generated shim
  * or a `geneseed link` symlink makes those differ as strings while naming the same file.

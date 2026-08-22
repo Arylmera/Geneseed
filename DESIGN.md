@@ -195,7 +195,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Notebook | `src/notebook/` | `notebook/` | the agent's sovereign space — any medium, seed-once charter the agent may rewrite; only `.gitignore` re-asserted |
 | Posture | `src/postures/` | inlined into `AGENT.md` | how much ceremony the agent brings to a task |
 | Mode | `src/modes/` | inlined into `AGENT.md` | the working axis (solo, foreman, …) — orthogonal to posture |
-| Context | `js/emit.mjs` | `context.json` | empty per-repo manifest, written once and never overwritten; git-ignore it |
+| Context | `js/build/stubs.mjs` | `context.json` | empty per-repo manifest, written once and never overwritten; git-ignore it |
 | Themes | `themes/*.json` | — | token → label maps; `themes/opencode/` is a separate colour system |
 | Release label | `harness.config.json` | `.geneseed-version` | the theme and the human-readable version the driver reads; the canonical identity is the source fingerprint, not this string |
 | Lifecycle | `registry.json` | — | maintainer-side status/version/owner per agent and skill; never rendered into a bundle |
@@ -219,7 +219,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
   driven by the *runtime* as well as by an emit (`js/hosts/mcp.mjs` uses ten of them
   for deactivate, remerge, reactivate and uninstall; `exclude` and `doctor` use the rest).
   Its dependency closure points one way only: nothing in it calls into `js/build/render.mjs` or
-  `js/emit.mjs`. Keep it that way — that closure is what makes it a unit.
+  `js/build/bundle.mjs`. Keep it that way — that closure is what makes it a unit.
 - **Every emit runs five stages in one order: `RENDER* → WIRE* → PRUNE → MANIFEST →
   VERIFY`.** RENDER writes files Geneseed owns wholesale; WIRE is `js/hosts/settings.mjs`
   reconciling files you co-own; PRUNE removes what the previous manifest owned and this

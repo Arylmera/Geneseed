@@ -14,7 +14,7 @@
 //     runs on EVERY emit, so a real `--emit files` exercises the marker, the `[release X]`
 //     stamp and the downgrade warning through the public face — which gates the wiring too.
 //   * `version_is_newer` DID need exporting, and the argument for it is written at the export
-//     site in `js/emit.mjs` rather than here. Its only caller warns or stays silent, so
+//     site in `js/build/version.mjs` rather than here. Its only caller warns or stays silent, so
 //     `false` and `null` are the same observation through an emit and six of its nine claims
 //     are invisible from outside.
 import test, { after } from 'node:test';

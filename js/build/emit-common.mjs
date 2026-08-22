@@ -118,7 +118,7 @@ export function relPosix(base, p) {
 /**
  * `_build_emit._strip_capability_links` — `re.sub(r"\1")`, so the pattern needs `g`.
  *
- * Exported for `js/doctor.mjs`: `_rendered_problems` applies the same de-linking before
+ * Exported for `js/inspect/checks-build.mjs`: `_rendered_problems` applies the same de-linking before
  * comparing an OpenCode bundle's AGENT.md against a fresh render, because the emit puts
  * that difference back by design and a check that did not would report the file stale on
  * every run forever.

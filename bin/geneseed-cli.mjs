@@ -15,7 +15,7 @@
  *     wrote, and the verb sets matching is what makes that safe. Relaxing it to a subset
  *     relation to admit `exclude` would be the single most damaging edit available here.
  *     Two more reasons point the same way, and the second is not in that file's own
- *     argument: `exclude`'s writer imports `js/hosts/settings.mjs` and `js/emit.mjs`, ~2,100 lines
+ *     argument: `exclude`'s writer imports `js/hosts/settings.mjs` and `the emit modules`, ~2,100 lines
  *     that would then load on EVERY PreToolUse call — the spec's hook-latency budget says
  *     the shim must exec a minimal entry, not the CLI. And the entry's refusal list, which
  *     names every verb it does not carry, is what makes "silently accepted `doctor` and did
@@ -398,7 +398,7 @@ async function main(argv) {
     return await spec.fn(parsed.args);
   } catch (e) {
     // `e.exitCode` is the generator's existing marker for a DELIBERATE refusal that has
-    // already explained itself on stderr — `js/emit.mjs:1289` reads the same flag, and it is
+    // already explained itself on stderr — `js/build/emit-claude.mjs` reads the same flag, and it is
     // `sys.exit(<message>)` on the Python side. Anything without it is a crash and keeps its
     // stack: Python prints a traceback for an unhandled exception, and turning one into a
     // tidy one-liner here would hide a bug behind a refusal's clothing.

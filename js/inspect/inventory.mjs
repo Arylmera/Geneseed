@@ -4,11 +4,11 @@
  * panel and the web console all read.
  *
  * WHY THIS FILE EXISTS RATHER THAN A THIRD COPY OF THE TABLES. `LAW_CLASS`, `SKILL_CLASS`,
- * `LAW_CLASSES` and `ENTITY_STATUSES` crossed in P5g, inside `js/doctor.mjs`, because
+ * `LAW_CLASSES` and `ENTITY_STATUSES` crossed in P5g, inside `js/inspect/doctor.mjs`, because
  * doctor's authoring gates are what validate them — and `js/inspect/status.mjs`'s docblock said
  * flatly that "the taxonomy P7 owns" was not ported, which was true of `_parse_laws` and
  * `entity_status` and had stopped being true of the tables. P6c needs all of it, so the
- * tables move HERE, to the module that mirrors where Python keeps them, and `js/doctor.mjs`
+ * tables move HERE, to the module that mirrors where Python keeps them, and `js/inspect/checks-authoring.mjs`
  * imports them. A copy of a value under test silently stops being the value under test.
  *
  * AND `inventoryCounts` FOLDS BACK INTO `tuiInventory`. P5d shipped a counting-only twin
@@ -32,7 +32,7 @@ import { parseJson } from '../lib/json.mjs';
  * `_harness_tui.LAW_HEADING_RE` — a heading in the RENDERED laws file, e.g.
  * `### Rule IV — Deletion Is Deliberate`.
  *
- * Not `js/doctor.mjs`'s `LAW_HEADING_RE`, which matches the `{{LAW}}` token in the
+ * Not `js/inspect/checks-authoring.mjs`'s `LAW_HEADING_RE`, which matches the `{{LAW}}` token in the
  * unrendered source. Two patterns, two inputs, two names in Python as well.
  */
 export const LAW_HEADING_RE = /^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$/;

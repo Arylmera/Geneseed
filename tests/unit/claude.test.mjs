@@ -6,7 +6,7 @@
 // `build.emit_claude_global(theme, cfg=…)` and `build.emit_claude(theme, out, root)` are direct
 // calls with the target passed IN, and `bin/build-driver.mjs` exports `emitGlobalInto(host, …)` /
 // `emitProjectInto(host, …)` with the same shape for the same reason — `js/inspect/diff.mjs`,
-// `js/doctor.mjs` and `js/web/actions.mjs` all need to render a host into a directory they name.
+// `js/inspect/doctor.mjs` and `js/web/actions.mjs` all need to render a host into a directory they name.
 // So nothing here needs a child process, a copied checkout or a redirected home to reach the
 // emit; §3.2's child-emit fixture is for the verbs that DISCOVER their target, and these do not.
 //

@@ -18,7 +18,7 @@
  * through BOTH implementations, comparing the printed output, the return value, and the
  * resulting FILE BYTES.
  *
- * WHY THIS MODULE IS NOT `js/doctor.mjs`. `--sync-themes` has no doctor dependency, so it
+ * WHY THIS MODULE IS NOT `js/inspect/doctor.mjs`. `--sync-themes` has no doctor dependency, so it
  * stays on the generator driver where its flag lives — and the driver is under a transitive
  * ban on starting processes, which this module's imports respect. Its sibling
  * `--validate-only` needs the doctor and therefore could not stay; see `cmdValidate`.
@@ -132,7 +132,7 @@ export function insertThemeKeys(raw, theme, tmpl, tmplKeys, missing) {
  * is what makes the branch gateable at all: `json.JSONDecodeError` and V8's parse error
  * disagree on both wording and offset, so a message carrying `{e}` can never be compared
  * across the two implementations. The PER-THEME unreadable message below keeps its `{e}` and
- * therefore keeps that divergence, matching the convention `js/doctor.mjs` already ships at
+ * therefore keeps that divergence, matching the convention `js/inspect/doctor.mjs` already ships at
  * six sites — a skipped theme is a warning, not the tool's verdict.
  */
 export function syncThemes(themesDir = THEMES) {

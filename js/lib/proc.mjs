@@ -8,7 +8,7 @@
  * seven consoles flashing on a dashboard load.
  *
  * WHY IT LIVES HERE AND NOT IN `js/maintain/update.mjs`, WHICH DEFINED IT FIRST. It was private to
- * that module and six of its spawns used it, so the four spawn sites in `js/doctor.mjs`,
+ * that module and six of its spawns used it, so the four spawn sites in `js/inspect/checks-authoring.mjs`,
  * `js/hosts/hooks.mjs`, `js/maintain/setup.mjs` and `js/hosts/link.mjs` each had to remember the flag on their
  * own. Two of them did not — and the miss is BYTE-INVISIBLE: a console window is not
  * something the CLI prints, so every recorded cell under `tests/__snapshots__/` stays green

@@ -612,7 +612,7 @@ test('the CLI entry reaches child_process only where it is declared', () => {
 
 test('the web module tree spawns only from the declared modules', () => {
   // A TRANSITIVE WALK FROM `js/web/server.mjs` WOULD PROVE THE WRONG THING: that graph reaches
-  // `js/doctor.mjs`, `js/maintain/setup.mjs` and `js/hosts/hooks.mjs`, three modules that legitimately spawn and
+  // `js/inspect/checks-authoring.mjs`, `js/maintain/setup.mjs` and `js/hosts/hooks.mjs`, three modules that legitimately spawn and
   // are declared above. An equality over it would either fail or re-declare all three here, which
   // puts one module's decision in two files. So this is a DIRECTORY scan keyed on the `web/`
   // prefix — every spawning file under `js/web/` has a row.
@@ -748,7 +748,7 @@ test('doctor validates the build with no python on PATH', (t) => {
   // this test's temp directory.
   //
   // ⚠ WHAT THIS DOES NOT SEE, measured by a mutation whose prediction was wrong. Pointing
-  // `js/doctor.mjs`'s lookup at `python` instead of `node` leaves this GREEN: the check is silent
+  // `js/inspect/checks-authoring.mjs`'s lookup at `python` instead of `node` leaves this GREEN: the check is silent
   // on success, so a lookup that finds nothing skips its spawn and doctor still reports the theme
   // clean. Only the allow-list row above catches it, by the literal argv. So this test is the
   // passthrough refutation it was written to be — the verb completes with no interpreter anywhere

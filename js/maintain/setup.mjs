@@ -427,7 +427,7 @@ export function javaMajorOk(versionOutput, minimum = 21) {
  * for itself. Today that is a JDK 21+ for `jdtls`; the JS-runtime servers self-download.
  *
  * THE SECOND SPAWN ON THIS ENTRY POINT, and the reason `test_the_cli_reaches_child_process_\
- * only_where_it_is_declared` became a TABLE. `js/doctor.mjs` was the sole allowed importer
+ * only_where_it_is_declared` became a TABLE. `js/inspect/doctor.mjs` was the sole allowed importer
  * for one binding and one argv; this is the second, and the port's rule is that the second
  * instance of anything turns a special case into a table cross-checked against the source.
  * The argv is asserted literally there, so an allow-list entry cannot be reused to start an

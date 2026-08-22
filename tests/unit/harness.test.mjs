@@ -51,7 +51,7 @@ import { copyCheckout } from '../helpers/cli_golden.mjs';
 // no second copy: `LEARN_PROMPT_HEAD` is EXTRACTED from the plugin's literal at load time via
 // `pluginLiteral()`, so drift is not something a test has to catch — there is nothing to drift
 // from. What survives is that the extraction still WORKS, which is a different and smaller
-// claim, and `js/doctor.mjs`'s authoring check carries the rest.
+// claim, and `js/inspect/checks-authoring.mjs`'s authoring check carries the rest.
 
 test('the learn prompt is extracted from the plugin literal, not copied', () => {
   const js = fs.readFileSync(path.join(PLUGIN_SRC, 'geneseed-learn.js'), 'utf8');
@@ -149,7 +149,7 @@ test('the shipped themes are in parity', () => {
 // THE MONKEYPATCH HAD NO ESM EQUIVALENT, and this is the third shape from the porting rule
 // rather than a fourth. The reference corrupts a theme by assigning `_build_core.THEMES = tmp`
 // and a source tree by assigning `_build_core.SRC = tmp` — Python has no privacy to stop it.
-// `js/doctor.mjs` imports `SRC` and `THEMES` as bindings from `js/build/source.mjs`, where they are
+// `js/inspect/checks-authoring.mjs` imports `SRC` and `THEMES` as bindings from `js/build/source.mjs`, where they are
 // derived from `import.meta.url`; an imported binding cannot be rebound, and there is no
 // environment variable that moves them (`--root` is the emit TARGET, not the source tree). So
 // the injection point the reference used simply does not exist here.
@@ -212,7 +212,7 @@ function withFault(faults, fn) {
 }
 
 /**
- * Evaluate one `js/doctor.mjs` expression INSIDE the copy.
+ * Evaluate one doctor-check expression INSIDE the copy.
  *
  * A child process, and it has to be: the copy's `doctor.mjs` is a different module URL, so
  * importing it here would load a second copy of the module graph into this process — with a

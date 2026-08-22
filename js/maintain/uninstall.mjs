@@ -35,7 +35,7 @@
  * `move` where it has `unlink`, plus an inverse; splitting them would have duplicated the
  * owned-file walk and the ancestor prune a fourth time.
  *
- * NO SPAWN. `bin/geneseed-cli.mjs`'s `child_process` allow-list names `js/doctor.mjs` and one
+ * NO SPAWN. `bin/geneseed-cli.mjs`'s `child_process` allow-list names `js/inspect/checks-authoring.mjs` and one
  * argv, and this module does not extend it: every operation here is a filesystem call. That
  * matters more than usual for this verb — shelling the uninstall out to a Python interpreter
  * would be byte-identical in every cell of the matrix, and the allow-list plus

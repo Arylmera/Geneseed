@@ -25,7 +25,7 @@ const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return 
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
 
 /**
- * `_build_core.VERSION_MARKER`. Third caller, so it moves here — `js/emit.mjs` and
+ * `_build_core.VERSION_MARKER`. Third caller, so it moves here — `js/build/version.mjs` and
  * `js/inspect/diff.mjs` each had a private const of their own and `js/maintain/uninstall.mjs` would have made
  * a third copy of a value whose whole job is being the same string everywhere. Same
  * arithmetic that put `GLOBAL_MANIFEST` above it.

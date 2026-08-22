@@ -93,7 +93,7 @@ export const MUTATIONS = [
     gate: UNIT_MAINTAINER,
     why: 'It orders every listing the product sorts by path. THIS ROW HAS TAKEN FOUR AIMS AND THE '
       + 'FIRST TWO ARE STILL THE INTERESTING PART. An emit gate could not see it: back then '
-      + 'comparePaths had five callers and all five were in js/doctor.mjs. Then all THIRTY doctor '
+      + 'comparePaths had five callers and all five were in js/inspect/doctor.mjs. Then all THIRTY doctor '
       + 'cells could not see it either - doctor sorts its scans internally and reports problems, '
       + 'so the order never reaches an output anyone compares. The third aim, the web catalog '
       + 'cells, caught it at once and went with the corpora. The fourth is stronger than any of '

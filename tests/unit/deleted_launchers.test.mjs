@@ -216,7 +216,7 @@ test('the pointer rule can see an offender, and does not see the verb', () => {
     'geneseed upgrade --theme imperial',
     'geneseed sync-self',
     './geneseed sync-self [ref]   refresh the orchestration layer',
-    'import { cmdSyncSelf } from "../js/sync-self.mjs";',
+    'import { cmdSyncSelf } from "../js/maintain/update.mjs";',
   ]) {
     assert.ok(!POINTERS.some((re) => re.test(innocent)), `the scan would be red on: ${innocent}`);
   }

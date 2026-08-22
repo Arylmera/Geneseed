@@ -2529,7 +2529,7 @@ test('the about payload reports this install own origin and its GitHub flag', ()
 // including the fingerprint conflict gate and SPLICE FIDELITY, which is the property that keeps
 // a mutation inside one rule's block and out of the user's surrounding prose.
 //
-// THE STUB ARRIVES THROUGH A REAL EMIT. `ensureRulesStub` is private to `js/emit.mjs`, and
+// THE STUB ARRIVES THROUGH A REAL EMIT. `ensureRulesStub` is exported by `js/build/stubs.mjs`, and
 // reaching for it would have meant widening the module's face for a test. An emit is how a user
 // gets the file, so an emit is what seeds the fixture — which also makes the seed-once test
 // stronger than the reference's: it proves the guard on the path that actually re-runs it.

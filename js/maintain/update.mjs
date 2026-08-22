@@ -66,7 +66,7 @@ export function redactUrlCreds(text) {
   return (text || '').replace(CREDS_RE, '$1');
 }
 
-// `_NO_WINDOW` was defined here and PRIVATE to this module, which is how `js/doctor.mjs`
+// `_NO_WINDOW` was defined here and PRIVATE to this module, which is how `js/inspect/doctor.mjs`
 // and `js/hosts/hooks.mjs` came to spawn without it — see `js/lib/proc.mjs` for the flag, the
 // capturing-only rule behind it, and why a miss here is invisible to every byte gate.
 
@@ -411,7 +411,7 @@ export function runDoctor(cand) {
   // `stderr=subprocess.STDOUT` — the reference gives the child ONE handle, so its two
   // streams are interleaved in write order and arrive as `proc.stdout`. `spawnSync` has no
   // way to hand two descriptors the same pipe, so the two are concatenated instead: equal
-  // whenever the child writes to only one of them, which `doctor` does (`js/doctor.mjs`
+  // whenever the child writes to only one of them, which `doctor` does (`js/inspect/doctor.mjs`
   // reports every problem through `printOut`), and the reason the two doctor cells below are
   // the gate on this rather than a comment. If a future check reports on stderr the
   // ORDERING here is what would differ, not the content.

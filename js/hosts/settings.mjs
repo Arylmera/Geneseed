@@ -476,7 +476,7 @@ export const SHIM_ARGV = new Set(['$@', '%*']);
  * Every quoted token in a shim body that names a path which is not there — empty is healthy.
  *
  * ONE OWNER, because the rule has two consumers now and a second copy is a second place for the
- * `"$@"` defect above to come back: `js/doctor.mjs` turns this into the `[shim] … does not
+ * `"$@"` defect above to come back: `js/inspect/checks-repo.mjs` turns this into the `[shim] … does not
  * exist` report, and `hookPrefix` reads it to decide whether the shim already on disk is worth
  * protecting from a checkout that will not outlive the emit.
  */

@@ -33,7 +33,7 @@
  * THE TAXONOMY WAS ALREADY PORTED, which the measurement found and the handoff did not.
  * `js/inspect/status.mjs` said flatly that "the ~111 LOC of TUI taxonomy" was P7's; `LAW_CLASS`,
  * `SKILL_CLASS`, `LAW_CLASSES` and `ENTITY_STATUSES` had in fact crossed in P5g inside
- * `js/doctor.mjs`, because doctor's authoring gates are what validate them. P6c moved the
+ * `js/inspect/checks-authoring.mjs`, because doctor's authoring gates are what validate them. P6c moved the
  * four to `js/inspect/inventory.mjs` — where Python keeps them — rather than copying them, and
  * doctor imports them back. Only `parse_laws`, `load_registry` and `entity_status` were
  * genuinely new.
