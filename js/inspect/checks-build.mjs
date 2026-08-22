@@ -7,7 +7,7 @@
  * by a PLANTED FAULT in `tests/unit/harness.test.mjs` rather than by a comparison.
  */
 import path from 'node:path';
-import { stripCapabilityLinks } from '../build/emit.mjs';
+import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
 import { CONFIG, makeCfg } from '../build/source.mjs';
 import { hostCatalogsNatively, pyResolve } from '../hosts/hosts.mjs';

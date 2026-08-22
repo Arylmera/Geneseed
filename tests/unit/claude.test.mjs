@@ -34,7 +34,7 @@ import { globalHookStandingDown, cmdContext } from '../../js/hosts/hooks.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
 } from '../../js/hosts/hosts.mjs';
-import { BOB_RULES_STUB } from '../../js/build/emit.mjs';
+import { BOB_RULES_STUB } from '../../js/build/stubs.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate, installUninstall,
 } from '../../js/maintain/uninstall.mjs';

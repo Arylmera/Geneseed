@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/build/emit.mjs';
+import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/build/version.mjs';
 import { sourceReleaseVersion } from '../../js/hosts/opencode.mjs';
 import { versionVerdict, statusData, statusLines } from '../../js/inspect/status.mjs';
 import {

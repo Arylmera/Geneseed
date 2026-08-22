@@ -58,7 +58,7 @@ import path from 'node:path';
 
 import { THEMES, ROOT, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
-import { readVersion, sourceFingerprint } from '../build/emit.mjs';
+import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, copilotConfigDir, opencodeConfigDir, pyResolve,
   resolveMemoryDir,

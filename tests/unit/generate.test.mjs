@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import {
   substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, STRUCTURE,
 } from '../../js/build/render.mjs';
-import { build } from '../../js/build/emit.mjs';
+import { build } from '../../js/build/bundle.mjs';
 import {
   isVendoredPath, loadAgentOverrides, writeNativeLayer, descBlockProblem,
   validateIsVendored, VENDORED_SKILL_DIRS,

@@ -540,7 +540,7 @@ export const MUTATIONS = [
   {
     id: 'M30',
     name: 'fold the Claude wire stage away',
-    file: 'js/build/emit.mjs',
+    file: 'js/build/emit-claude.mjs',
     find: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, '
       + "excludeRules = []) {\n  phaseLog('WIRE');\n",
     replace: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, '
@@ -555,7 +555,7 @@ export const MUTATIONS = [
   {
     id: 'M31',
     name: 'log the phase boundaries to stdout',
-    file: 'js/build/emit.mjs',
+    file: 'js/build/bundle.mjs',
     find: '  process.stderr.write(`[geneseed:phase] ${phase}\\n`);',
     replace: '  process.stdout.write(`[geneseed:phase] ${phase}\\n`);',
     gate: UNIT,

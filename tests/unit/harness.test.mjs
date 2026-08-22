@@ -30,7 +30,7 @@ import {
 } from '../../js/hosts/hooks.mjs';
 import { memoryFactCount } from '../../js/inspect/status.mjs';
 import { stripSkillBodyLinks } from '../../js/hosts/native.mjs';
-import { stripCapabilityLinks } from '../../js/build/emit.mjs';
+import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { themeOfDir } from '../../js/hosts/installs.mjs';
 import { LAW_CLASS, LAW_CLASSES } from '../../js/inspect/inventory.mjs';
 import { PLUGIN_SRC, ROOT, SRC } from '../../js/build/source.mjs';
@@ -894,16 +894,16 @@ test('the claude/bob check catches the dead link it was written for', () => {
   // style links stopped being stripped and pointed at nothing in the emitted bundle.
   //
   // The reference monkeypatches `_build_core.CAPABILITY_LINK_RE`. Here it is a module const in
-  // `js/emit.mjs` with no injection point left (`cfg.capabilityLinkRe` was the Python driver's
+  // `js/build/emit-common.mjs` with no injection point left (`cfg.capabilityLinkRe` was the Python driver's
   // seam and the Node path supplies none), so the narrowed pattern is PLANTED IN THE COPY and
   // the check is run out of it — the same discovery route the theme and count gates use.
-  const real = fs.readFileSync(path.join(ROOT, 'js', 'build', 'emit.mjs'), 'utf8');
+  const real = fs.readFileSync(path.join(ROOT, 'js', 'build', 'emit-common.mjs'), 'utf8');
   const wide = '/\\[([^\\]]+)\\]\\((?:(?!https?:\\/\\/|\\/)[A-Za-z0-9_.-]+\\/)*'
     + '(?:agents|skills)\\/[A-Za-z0-9_-]+\\.md\\)/g';
   const narrow = '/\\[([^\\]]+)\\]\\((?:agents|skills)\\/[A-Za-z0-9_-]+\\.md\\)/g';
   assert.ok(real.includes(wide),
     'the CAPABILITY_LINK_RE literal has been reworded — this fault no longer plants anything');
-  const problems = withFault({ 'js/build/emit.mjs': real.replace(wide, narrow) },
+  const problems = withFault({ 'js/build/emit-common.mjs': real.replace(wide, narrow) },
     (root) => gate(root, "m.claudeBobEmitProblems('neutral')"));
   assert.ok(problems.some((p) => p.includes('dead link') && p.includes('skills/')),
     `expected a seeded dead skill link, got: ${JSON.stringify(problems.slice(0, 5))}`);

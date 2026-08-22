@@ -24,7 +24,7 @@ import test, { after } from 'node:test';
 
 import { buildInto, emitGlobalInto, emitProjectInto } from '../../bin/build-driver.mjs';
 import { makeCfg } from '../../js/build/source.mjs';
-import { stripCapabilityLinks } from '../../js/build/emit.mjs';
+import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { colorThemeFiles } from '../../js/hosts/opencode.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';

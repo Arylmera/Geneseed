@@ -36,9 +36,9 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender, phaseLog,
-} from '../js/build/emit.mjs';
+import { build, phaseLog } from '../js/build/bundle.mjs';
+import { emitClaudeRender } from '../js/build/emit-claude.mjs';
+import { emitOpencodeRender, emitOpencodeGlobalRender } from '../js/build/emit-opencode.mjs';
 import { settingsIntegrityCheck } from '../js/hosts/settings.mjs';
 import { writeText, withPyNewlines } from '../js/lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../js/lib/json.mjs';

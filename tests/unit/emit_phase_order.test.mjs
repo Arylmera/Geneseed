@@ -183,12 +183,22 @@ test('no wiring call escapes a WIRE-marked function', () => {
     `only ${wiring.length} settings routines mutate the filesystem — the derivation has gone `
     + 'stale, and an empty set makes every check below pass');
 
-  // Every function in the emit module that CALLS one of them must itself be WIRE-marked.
-  const emitSrc = readFileSync(path.join(ROOT, 'js', 'build', 'emit.mjs'), 'utf8');
-  const bodies = [...emitSrc.matchAll(/^(?:export )?function (\w+)\(/gm)].map((m, i, all) => {
-    const start = m.index;
-    const end = i + 1 < all.length ? all[i + 1].index : emitSrc.length;
-    return [m[1], emitSrc.slice(start, end)];
+  // Every function in the emit modules that CALLS one of them must itself be WIRE-marked.
+  //
+  // A LIST OF FILES, not one file, since the emit split: `claudeWire` is in `emit-claude.mjs`
+  // and the OpenCode wires are in `emit-opencode.mjs`, so a walk over `emit.mjs` alone would
+  // find NOTHING that wires and pass by checking nothing. Each file is walked separately —
+  // concatenating them would let one file's last function swallow the next file's header and
+  // report calls it does not make.
+  const EMIT_FILES = ['emit.mjs', 'bundle.mjs', 'emit-common.mjs', 'emit-opencode.mjs',
+    'emit-claude.mjs'];
+  const bodies = EMIT_FILES.flatMap((f) => {
+    const src = readFileSync(path.join(ROOT, 'js', 'build', f), 'utf8');
+    return [...src.matchAll(/^(?:export )?function (\w+)\(/gm)].map((m, i, all) => {
+      const start = m.index;
+      const end = i + 1 < all.length ? all[i + 1].index : src.length;
+      return [`${f}'s ${m[1]}`, src.slice(start, end)];
+    });
   });
   assert.ok(bodies.length > 10, 'the emit module walk found almost nothing');
   let checked = 0;
@@ -197,10 +207,10 @@ test('no wiring call escapes a WIRE-marked function', () => {
     if (!calls.length) continue;
     checked += 1;
     assert.ok(body.includes("phaseLog('WIRE')"),
-      `js/build/emit.mjs's ${name}() calls ${calls.join(', ')} — a routine that reconciles a file the `
+      `${name}() calls ${calls.join(', ')} — a routine that reconciles a file the `
       + 'user co-owns — but the function logs no WIRE, so the ordering gate cannot see it. Mark '
       + 'it, or move the call into a function that is marked.');
   }
   assert.ok(checked >= 2,
-    `only ${checked} functions in js/build/emit.mjs were found to wire at all, so this equality is thin`);
+    `only ${checked} functions across js/build/ were found to wire at all, so this equality is thin`);
 });

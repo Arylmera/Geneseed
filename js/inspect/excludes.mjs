@@ -24,7 +24,7 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync }
   from 'node:fs';
 import path from 'node:path';
-import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from '../build/emit.mjs';
+import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from '../build/stubs.mjs';
 import { wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
 import { GLOBAL_MANIFEST, HOSTS, pyResolve } from '../hosts/hosts.mjs';
 import { readText, writeText, pyPrint, pyPrintErr } from '../lib/fs.mjs';
