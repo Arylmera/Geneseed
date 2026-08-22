@@ -33,7 +33,8 @@
  * captured on the reference side through a real `TextIOWrapper`, so the CRLF translation is
  * inside the comparison rather than outside it.
  */
-import { pyInt, pyLen, pyLjust, pyPrint } from '../lib/fs.mjs';
+import { pyPrint } from '../lib/fs.mjs';
+import { pyInt, pyLen, pyLjust } from '../lib/text.mjs';
 
 export const ART = {
   imperial: {

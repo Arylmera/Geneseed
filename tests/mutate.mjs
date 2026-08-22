@@ -68,7 +68,7 @@ export const MUTATIONS = [
   {
     id: 'M2',
     name: "drop ensure_ascii from jsonDumpsIndent",
-    file: 'js/lib/fs.mjs',
+    file: 'js/lib/json.mjs',
     find: 'export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {\n'
       + '  const text = JSON.stringify(value, null, 2);\n'
       + '  return ensureAscii ? escapeNonAscii(text) : text;',
@@ -87,7 +87,7 @@ export const MUTATIONS = [
   {
     id: 'M3',
     name: "reverse comparePaths' collation",
-    file: 'js/lib/fs.mjs',
+    file: 'js/lib/paths.mjs',
     find: "    if (A[i] !== B[i]) return A[i] < B[i] ? -1 : 1;",
     replace: "    if (A[i] !== B[i]) return A[i] < B[i] ? 1 : -1;",
     gate: UNIT_MAINTAINER,
@@ -175,7 +175,7 @@ export const MUTATIONS = [
   {
     id: 'M6',
     name: 'make parseJson collapse an integral float',
-    file: 'js/lib/fs.mjs',
+    file: 'js/lib/json.mjs',
     find: '      ? new PyNumber(value, context.source)',
     replace: '      ? (Number.isInteger(value) ? value : new PyNumber(value, context.source))',
     gate: UNIT,

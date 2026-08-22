@@ -34,8 +34,9 @@ import path from 'node:path';
 
 import { bobConfigDir, copilotConfigDir, pyResolve } from './hosts.mjs';
 import { installState, installTargets } from './installs.mjs';
-import { jsonDumpsIndent, parseJson, pyLjust, pyPrint, pyPrintErr, readText, writeText }
-  from '../lib/fs.mjs';
+import { pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
+import { jsonDumpsIndent, parseJson } from '../lib/json.mjs';
+import { pyLjust } from '../lib/text.mjs';
 import { opencodeTarget, readJsonc } from './settings.mjs';
 
 /**

@@ -48,7 +48,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from '../build/source.mjs';
-import { pyInt, pyStripSpace } from '../lib/fs.mjs';
+import { pyInt, pyStripSpace } from '../lib/text.mjs';
 
 const CLI_JSON = path.join(ROOT, 'js', 'cli-table.json');
 

@@ -45,10 +45,9 @@ import path from 'node:path';
 import { ROOT } from '../build/source.mjs';
 import { exportImprovements, flushExportNotes } from '../inspect/diff.mjs';
 import { opencodeConfigDir } from '../hosts/hosts.mjs';
-import {
-  PY_SPACE, appendText, copyFile, pyInt, pyPathStr, pyPrint, pyPrintErr, pyStripSpace, pyWhich,
-  readText, writeText,
-} from '../lib/fs.mjs';
+import { appendText, copyFile, pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
+import { pyPathStr, pyWhich } from '../lib/paths.mjs';
+import { PY_SPACE, pyInt, pyStripSpace } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import { restartDaemon } from '../web/server.mjs';
 

@@ -72,7 +72,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
-import { pyWhich } from '../../js/lib/fs.mjs';
+import { pyWhich } from '../../js/lib/paths.mjs';
 import { TMP_ROOT } from '../helpers/sandbox.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');

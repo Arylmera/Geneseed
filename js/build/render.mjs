@@ -28,7 +28,9 @@
  */
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { readText, parseJson, normcase, comparePaths } from '../lib/fs.mjs';
+import { readText } from '../lib/fs.mjs';
+import { parseJson } from '../lib/json.mjs';
+import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/checkout.mjs` imports nothing but node builtins, so this direction cannot cycle.
 import { PACK_ORDER } from './source.mjs';
 

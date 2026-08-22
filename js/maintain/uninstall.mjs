@@ -63,10 +63,9 @@ import {
   opencodeTarget, readJsonc, settingsIntegrityCheck, wireClaudeExcludes,
   unwireClaudeExcludes, unwireClaudeSettings,
 } from '../hosts/settings.mjs';
-import {
-  comparePaths, indexOfEq, jsonDumps, jsonDumpsIndent, pyEq, pyIsAbsolute, pyPrint,
-  pyPrintErr, readText, within, writeText,
-} from '../lib/fs.mjs';
+import { pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
+import { indexOfEq, jsonDumps, jsonDumpsIndent, pyEq } from '../lib/json.mjs';
+import { comparePaths, pyIsAbsolute, within } from '../lib/paths.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };

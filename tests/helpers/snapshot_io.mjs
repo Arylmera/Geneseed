@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-import { jsonDumpsIndent } from '../../js/lib/fs.mjs';
+import { jsonDumpsIndent } from '../../js/lib/json.mjs';
 
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 

@@ -34,8 +34,9 @@ import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSyn
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readText, writeText, jsonDumpsCompact, normcase, comparePaths, pyPathStr, pyPrint,
-  pyPrintErr, withDiscardableStderr } from '../lib/fs.mjs';
+import { readText, writeText, pyPrint, pyPrintErr, withDiscardableStderr } from '../lib/fs.mjs';
+import { jsonDumpsCompact } from '../lib/json.mjs';
+import { normcase, comparePaths, pyPathStr } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 // `harness status` reports the memory store, and `bin/geneseed-cli.mjs` cannot import THIS
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`

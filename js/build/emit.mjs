@@ -82,9 +82,8 @@ import {
   unwireClaudeSettings, managedBlockWrite, managedBlockRemove,
 } from '../hosts/settings.mjs';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import {
-  writeText, readText, copyFile, jsonDumpsIndent, parseJson, pyAscii, pyTruthy,
-} from '../lib/fs.mjs';
+import { writeText, readText, copyFile } from '../lib/fs.mjs';
+import { jsonDumpsIndent, parseJson, pyAscii, pyTruthy } from '../lib/json.mjs';
 /** `_build_render.SRC_DIRS_MARKER`. */
 const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
 /**

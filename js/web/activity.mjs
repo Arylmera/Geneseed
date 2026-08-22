@@ -40,9 +40,10 @@
 import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import {
-  normcase, parseJson, pyInt, pyStripSpace, pyTruthy, readText, writeText,
-} from '../lib/fs.mjs';
+import { readText, writeText } from '../lib/fs.mjs';
+import { parseJson, pyTruthy } from '../lib/json.mjs';
+import { normcase } from '../lib/paths.mjs';
+import { pyInt, pyStripSpace } from '../lib/text.mjs';
 import { NotFound } from './api.mjs';
 
 /**

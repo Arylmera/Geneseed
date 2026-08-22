@@ -123,9 +123,9 @@ import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
   mcpMeta, mcpPresetBlock, mcpSave, mcpSetEnabled, mcpState,
 } from '../hosts/mcp.mjs';
-import {
-  PY_SPACE, parseJson, pyLen, pyRepr, pyStr, pyStripSpace, pyTruthy, readText, writeText,
-} from '../lib/fs.mjs';
+import { readText, writeText } from '../lib/fs.mjs';
+import { parseJson, pyRepr, pyStr, pyTruthy } from '../lib/json.mjs';
+import { PY_SPACE, pyLen, pyStripSpace } from '../lib/text.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { pySplitLines } from '../lib/udiff.mjs';
 import {

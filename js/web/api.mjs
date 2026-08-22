@@ -72,9 +72,9 @@ import {
 import { firstBlockquote } from '../hosts/native.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, statusData } from '../inspect/status.mjs';
-import {
-  comparePaths, normcase, pyStripSpace, pyUnquote, readText, withDiscardableStderr, within,
-} from '../lib/fs.mjs';
+import { readText, withDiscardableStderr } from '../lib/fs.mjs';
+import { comparePaths, normcase, within } from '../lib/paths.mjs';
+import { pyStripSpace, pyUnquote } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
 import { apiMcp, apiRules } from './actions.mjs';

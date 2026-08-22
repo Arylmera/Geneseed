@@ -46,7 +46,7 @@ import { MCP_PRESETS as _P, mcpApply, mcpConfigFor, mcpLoad, mcpSave, mcpState, 
   from '../../js/hosts/mcp.mjs';
 import { MCP_PRESETS } from '../../js/hosts/mcp.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts/hosts.mjs';
-import { normcase } from '../../js/lib/fs.mjs';
+import { normcase } from '../../js/lib/paths.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { makeSandbox, TMP_ROOT, RELOCATION_VARS } from '../helpers/sandbox.mjs';

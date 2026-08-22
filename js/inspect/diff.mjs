@@ -45,7 +45,8 @@ import {
   readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { unifiedDiff, pySplitLines } from '../lib/udiff.mjs';
-import { pyPathStr, pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
+import { pyPrint, pyPrintErr, readText, writeText } from '../lib/fs.mjs';
+import { pyPathStr } from '../lib/paths.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 

@@ -27,9 +27,9 @@ import path from 'node:path';
 import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from '../build/emit.mjs';
 import { wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
 import { GLOBAL_MANIFEST, HOSTS, pyResolve } from '../hosts/hosts.mjs';
-import {
-  readText, writeText, parseJson, jsonDumpsIndent, normcase, pyPathStr, pyPrint, pyPrintErr,
-} from '../lib/fs.mjs';
+import { readText, writeText, pyPrint, pyPrintErr } from '../lib/fs.mjs';
+import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
+import { normcase, pyPathStr } from '../lib/paths.mjs';
 
 const get = (o, k) => (o && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
 const isDict = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);

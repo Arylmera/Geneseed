@@ -34,10 +34,9 @@ import path from 'node:path';
 import { THEMES } from './source.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
 import { pySplitLines } from '../lib/udiff.mjs';
-import {
-  jsonDumpsCompact, jsonDumpsIndent, parseJson, pyEq, pyLStripSpace, pyRStripSpace,
-  pyStripSpace, readText, writeText,
-} from '../lib/fs.mjs';
+import { readText, writeText } from '../lib/fs.mjs';
+import { jsonDumpsCompact, jsonDumpsIndent, parseJson, pyEq } from '../lib/json.mjs';
+import { pyLStripSpace, pyRStripSpace, pyStripSpace } from '../lib/text.mjs';
 
 /**
  * `_build_render._insert_theme_keys` — insert ONLY the missing keys into the theme's existing

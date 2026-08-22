@@ -53,10 +53,10 @@ import { STRUCTURE, renderAll } from '../build/render.mjs';
 import { hookShimPath, shimDeadPaths } from '../hosts/settings.mjs';
 import { pySplitLines } from '../lib/udiff.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import {
-  comparePaths, normcase, parseJson, pyPrint, pyPrintErr, pyRepr, pyStr, pyStripSpace, pyWhich,
-  readText, withDiscardableStderr,
-} from '../lib/fs.mjs';
+import { pyPrint, pyPrintErr, readText, withDiscardableStderr } from '../lib/fs.mjs';
+import { parseJson, pyRepr, pyStr } from '../lib/json.mjs';
+import { comparePaths, normcase, pyWhich } from '../lib/paths.mjs';
+import { pyStripSpace } from '../lib/text.mjs';
 
 // --------------------------------------------------------------------------------------
 // _harness_core's scanning primitives

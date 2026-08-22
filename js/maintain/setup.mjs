@@ -54,7 +54,9 @@ import { GLOBAL_MANIFEST, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   defaultMode, defaultPosture, defaultTheme, installedDefaults, themeFiles,
 } from '../hosts/installs.mjs';
-import { pyInt, pyPrint, pyPrintErr, pyWhich } from '../lib/fs.mjs';
+import { pyPrint, pyPrintErr } from '../lib/fs.mjs';
+import { pyWhich } from '../lib/paths.mjs';
+import { pyInt } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 
 // --------------------------------------------------------------------------------------

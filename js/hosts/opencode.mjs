@@ -23,9 +23,9 @@
  */
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-import {
-  writeText, readText, copyFile, jsonDumps, jsonDumpsIndent, parseJson, comparePaths,
-} from '../lib/fs.mjs';
+import { writeText, readText, copyFile } from '../lib/fs.mjs';
+import { jsonDumps, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
+import { comparePaths } from '../lib/paths.mjs';
 import { descOf, stripSkillBodyLinks, pushOverrideLines } from './native.mjs';
 
 /** ANSI colour-name -> integer (0-7). Mirrors `_build_emit._ANSI`. */

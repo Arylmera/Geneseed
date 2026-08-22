@@ -18,10 +18,10 @@ import { cmpKey } from '../../js/inspect/diff.mjs';
 import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/hosts/native.mjs';
 import { proseMirrorProblems, romanToInt, themesToCheck } from '../../js/inspect/doctor.mjs';
 import { pyCapitalize } from '../../js/hosts/installs.mjs';
-import {
-  comparePaths, jsonDumpsCompact, normcase, parseJson, pyInt, pyIsAbsolute, pyLen, pyLjust,
-  pyPathStr, pyStripSpace, pyUnquote, pyWhich, writeText,
-} from '../../js/lib/fs.mjs';
+import { writeText } from '../../js/lib/fs.mjs';
+import { jsonDumpsCompact, parseJson } from '../../js/lib/json.mjs';
+import { comparePaths, normcase, pyIsAbsolute, pyPathStr, pyWhich } from '../../js/lib/paths.mjs';
+import { pyInt, pyLen, pyLjust, pyStripSpace, pyUnquote } from '../../js/lib/text.mjs';
 // `expanduser` and `pyResolve` are NOT in `fs.mjs` — they are host-config resolvers and
 // live beside the config-dir lookups that need them. Verified rather than assumed; the
 // private copies in `js/hooks.mjs` are a second pair and not these.

@@ -18,7 +18,9 @@ import path from 'node:path';
 import os from 'node:os';
 
 import { expanduser } from '../hosts/hosts.mjs';
-import { writeText, parseJson, jsonDumpsIndent, pyPathStr } from '../lib/fs.mjs';
+import { writeText } from '../lib/fs.mjs';
+import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
+import { pyPathStr } from '../lib/paths.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
