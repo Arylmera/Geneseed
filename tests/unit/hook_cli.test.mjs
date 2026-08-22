@@ -492,18 +492,28 @@ const ALLOWED_SPAWNS = {
       "const r = spawnSync(argv[0], argv.slice(1), { stdio: 'inherit', ...NO_WINDOW });",
       'child = spawn(exe, args, {'],
   },
-  'web/server.mjs': {
-    binding: '{ spawn, spawnSync }',
-    calls: 1,
+  // SPLIT FROM ONE ROW WHEN `web/server.mjs` WAS SPLIT, and the split made both halves
+  // stricter: the union row allowed `{ spawn, spawnSync }` in one file, so either call could
+  // have appeared beside the other. Now the daemon cannot reach `spawnSync` and the server
+  // cannot reach `spawn`, and the binding assertion is what enforces it.
+  'web/daemon.mjs': {
+    binding: '{ spawn }',
+    calls: 0,
     spawnCalls: 2,
-    what: '`node bin/geneseed-cli.mjs web --daemon-internal …` (the detached daemon), '
-      + '`npm install` / `npm run build`, and the desktop\'s URL opener',
+    what: '`node bin/geneseed-cli.mjs web --daemon-internal …` (the detached daemon) and the '
+      + "desktop's URL opener",
     literals: ["const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web',",
       "detached: true, windowsHide: true, stdio: ['ignore', out, out],",
-      "const plan = buildPlan(dist, webDir, which('npm'), Boolean(process.stdin.isTTY));",
-      'const r = spawnSync(win ? `"${npm}"` : npm, step, {',
       "? [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start \"\" \"${url}\"`],",
       "(process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);"],
+  },
+  'web/server.mjs': {
+    binding: '{ spawnSync }',
+    calls: 1,
+    spawnCalls: 0,
+    what: '`npm install` / `npm run build`, and only when `web/dist` is missing',
+    literals: ["const plan = buildPlan(dist, webDir, which('npm'), Boolean(process.stdin.isTTY));",
+      'const r = spawnSync(win ? `"${npm}"` : npm, step, {'],
   },
   'web/jobs.mjs': {
     binding: '{ spawn, spawnSync }',

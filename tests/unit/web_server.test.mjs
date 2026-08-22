@@ -37,11 +37,8 @@ import { fileURLToPath } from 'node:url';
 import { PREFIX_ROUTES, STATE_ROUTES, webState } from '../../js/web/api.mjs';
 import { NOT_PORTED_KINDS, PORTED_KINDS } from '../../js/web/docs.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
-import {
-  DECLINED_POST, NOT_PORTED, NOT_PORTED_POST, NOT_PORTED_POST_PREFIXES, NOT_PORTED_PREFIXES,
-  PORTED_INLINE, PORTED_POST, PORTED_POST_INLINE, POST_BEYOND_REF, POST_ROUTES_CONVENTION,
-  makeHandler,
-} from '../../js/web/server.mjs';
+import { makeHandler } from '../../js/web/handler.mjs';
+import { DECLINED_POST, NOT_PORTED, NOT_PORTED_POST, NOT_PORTED_POST_PREFIXES, NOT_PORTED_PREFIXES, PORTED_INLINE, PORTED_POST, PORTED_POST_INLINE, POST_BEYOND_REF, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
 import { webFixture, webFixtureTeardown } from '../helpers/web_fixture.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));

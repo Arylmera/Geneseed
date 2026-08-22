@@ -1,6 +1,6 @@
 // THE BROWSER OPENER, WHICH NO RECORDED CELL HAS EVER EXECUTED.
 //
-// `js/web/server.mjs`'s own docblock says it: every corpus cell passes `--no-browser`, so the
+// `js/web/daemon.mjs`'s own docblock says it: every corpus cell passes `--no-browser`, so the
 // 690 recorded cells run every other line of the web daemon and never this one. That is a
 // structural hole, not an oversight — a cell that opened a browser on the recording machine
 // would have been unrunnable in CI.
@@ -53,7 +53,7 @@ test('openUrl listens for that event, so a box with no opener does not take the 
   // asynchronous, so calling it here would either prove nothing or leak a process into the
   // suite. What can be checked is that the listener is present — which is the whole fix — and
   // that the `try/catch` alone is never again mistaken for sufficient.
-  const src = fs.readFileSync(path.join(ROOT, 'js', 'web', 'server.mjs'), 'utf8');
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'web', 'daemon.mjs'), 'utf8');
   const fn = src.slice(src.indexOf('function openUrl('));
   const body = fn.slice(0, fn.indexOf('\n}\n') + 3);
 

@@ -39,7 +39,7 @@
  */
 import { printOut, printErr } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
-import { startDaemon } from '../web/server.mjs';
+import { startDaemon } from '../web/daemon.mjs';
 
 /** `_menu_help` — the off-TTY arm, and the fallback both TTY arms end in. */
 export function menuHelp() {

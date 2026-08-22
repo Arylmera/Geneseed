@@ -19,7 +19,8 @@ import { spawnSync } from 'node:child_process';
 
 import http from 'node:http';
 
-import { localHost, makeHandler, buildPlan } from '../../js/web/server.mjs';
+import { localHost, makeHandler } from '../../js/web/handler.mjs';
+import { buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
   apiThemes, apiDoctor, apiInstalls, apiExcludes, apiSetup, viewCfg,

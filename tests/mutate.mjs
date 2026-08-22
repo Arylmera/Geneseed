@@ -411,7 +411,7 @@ export const MUTATIONS = [
   {
     id: 'M22',
     name: 'give /api/activity the 409 treatment',
-    file: 'js/web/server.mjs',
+    file: 'js/web/routes.mjs',
     find: "  ['/api/activity', [apiActivityToggle, false]],",
     replace: "  ['/api/activity', [apiActivityToggle, true]],",
     gate: UNIT,
@@ -425,7 +425,7 @@ export const MUTATIONS = [
   {
     id: 'M23',
     name: 'consult the POST declarations on a GET',
-    file: 'js/web/server.mjs',
+    file: 'js/web/routes.mjs',
     find: '  return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
     replace: '  return NOT_PORTED.has(path) || DECLINED_POST.has(path)\n'
       + '    || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
@@ -445,7 +445,7 @@ export const MUTATIONS = [
   {
     id: 'M24',
     name: 'stop consulting --no-browser on the daemon-came-up arm',
-    file: 'js/web/server.mjs',
+    file: 'js/web/daemon.mjs',
     find: '      if (openBrowser) openUrl(rec.url);',
     replace: '      if (false && openBrowser) openUrl(rec.url);',
     gate: UNIT,

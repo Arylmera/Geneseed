@@ -35,13 +35,21 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { cliSpec } from '../../js/ui/cli.mjs';
-import { NOT_PORTED_POST, PORTED_POST_INLINE } from '../../js/web/server.mjs';
+import { NOT_PORTED_POST, PORTED_POST_INLINE } from '../../js/web/routes.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const CLI = path.join(ROOT, 'bin', 'geneseed-cli.mjs');
-const SERVER_JS = path.join(ROOT, 'js', 'web', 'server.mjs');
-const serverSource = () => readFileSync(SERVER_JS, 'utf8');
+// THREE READERS, BECAUSE THE FILE BECAME THREE. Each assertion below reads the module that
+// actually holds the code it is about: the request branches are in `handler.mjs`, the detached
+// launch and the browser opener are in `daemon.mjs`, and the npm build prompt is in
+// `server.mjs`. One reader over the file that merely kept the NAME would have gone quietly
+// vacuous — `includes()` on the wrong source is false, and a false `assert.ok` is at least
+// loud, but `split().length === 2` on absent text is the shape that passes for the wrong reason.
+const source = (mod) => readFileSync(path.join(ROOT, 'js', 'web', `${mod}.mjs`), 'utf8');
+const handlerSource = () => source('handler');
+const daemonSource = () => source('daemon');
+const serverSource = () => source('server');
 
 /**
  * `harness.py`'s `web` subparser, read out of it with the reference's own `ast` reader on
@@ -148,12 +156,12 @@ test('the restart dispatch is read from source, because probing it costs a daemo
   // control for exactly this assertion — the shape being matched. Its subject is
   // `rituals/_web_server.py` and it goes with the file; what it was holding the port against is
   // now stated directly.
-  const text = serverSource();
+  const text = handlerSource();
   assert.ok(text.includes("if (path === '/api/restart') {"), 'no /api/restart branch');
   assert.ok(text.includes('requestRestart(state.theme);'),
     'the /api/restart branch no longer calls requestRestart');
   assert.ok(text.includes('{ restarting: true }'), 'the /api/restart branch answers differently');
-  assert.match(text,
+  assert.match(daemonSource(),
     /export function requestRestart\([\s\S]{0,400}?spawnDetached\(restartArgs\(theme\)/,
     'requestRestart no longer spawns a DETACHED restart — an in-process one dies with the '
     + 'daemon it was asked to replace');
@@ -172,7 +180,7 @@ test('the stop endpoint answers before it stops', () => {
   // the same guarantee reached by a different means — the reference had to write BEFORE starting
   // the shutdown thread, because its request threads are daemon threads nothing joins. The port
   // reaches it the other way, and that is what is asserted.
-  const text = serverSource();
+  const text = handlerSource();
   const parts = text.split("if (path === '/api/shutdown') {");
   assert.equal(parts.length, 2, 'no /api/shutdown branch');
   const branch = parts[1].split("if (path === '/api/restart')")[0];
@@ -195,7 +203,7 @@ test('the daemon launcher re-executes this runtime and names no interpreter', ()
   //
   // RETIREMENT: `test_the_reference_launches_its_own_interpreter_and_its_own_harness` was the
   // matching half, and after the cut "its own runtime" has only one meaning.
-  const text = serverSource();
+  const text = daemonSource();
   assert.ok(text.includes(
     "const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web',"),
   'the detached launcher no longer names process.execPath and this repo\'s own CLI — a spawn '
@@ -269,7 +277,8 @@ test('the browser open is wired to the flag on all three arms', () => {
   // the bug it caught. So the flag's three consumers (`serve`, and `startDaemon`'s
   // already-running and came-up arms) are COUNTED: a port that dropped one would open no window
   // on a `web start`, and nothing else in this repo would notice.
-  const arms = (serverSource().match(/if \(openBrowser\) openUrl\(/g) ?? []).length;
+  const arms = [daemonSource(), serverSource()]
+    .reduce((n, src) => n + (src.match(/if \(openBrowser\) openUrl\(/g) ?? []).length, 0);
   assert.equal(arms, BROWSER_ARMS,
     `openBrowser is consulted on ${arms} arms; the reference consulted its flag on `
     + `${BROWSER_ARMS}`);

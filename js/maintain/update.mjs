@@ -49,7 +49,7 @@ import { appendText, copyFile, printOut, printErr, readText, writeText } from '.
 import { toPlatformPath, which } from '../lib/paths.mjs';
 import { WHITESPACE, parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { restartDaemon } from '../web/server.mjs';
+import { restartDaemon } from '../web/daemon.mjs';
 
 /**
  * `_CREDS_RE` / `_redact_url_creds` — strip a `user[:token]@` userinfo out of any URL in
