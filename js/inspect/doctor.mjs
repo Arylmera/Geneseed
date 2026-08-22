@@ -38,7 +38,7 @@ import {
 } from '../build/source.mjs';
 import {
   buildInto, main as driverMain, emitGlobalInto, emitProjectInto,
-} from '../../bin/geneseed.mjs';
+} from '../../bin/build-driver.mjs';
 import { stripCapabilityLinks } from '../build/emit.mjs';
 import { hostCatalogsNatively, pyResolve } from '../hosts/hosts.mjs';
 import { EMIT_HOST_SCOPE, footprintOfDir, installedDefaults, themeFiles } from '../hosts/installs.mjs';
@@ -1638,7 +1638,7 @@ function captureStreams(fn) {
  *
  * WHY IT IS HERE AND NOT ON THE GENERATOR DRIVER, which is where its flag lives. The
  * source-tree half of the check IS the doctor, and this module starts a process (`node --check`
- * over the OpenCode plugins). `bin/geneseed.mjs` is under a transitive ban on reaching any
+ * over the OpenCode plugins). `bin/build-driver.mjs` is under a transitive ban on reaching any
  * module that can, gated twice — `tests/test_node_cli_parity.py` greps the driver's source and
  * `tests/test_hook_cli_parity.py` walks its relative imports. Siting the tool on the CLI
  * binary, which already carries the doctor, crosses it with neither gate amended and without

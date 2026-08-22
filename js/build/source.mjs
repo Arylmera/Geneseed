@@ -3,7 +3,7 @@
  * plus the `cfg` every render needs.
  *
  * The inverse of `js/hosts.mjs`. That module answers "where does the output go"; this one
- * answers "where is the source". Both were `bin/geneseed.mjs`'s, and both leave it for the
+ * answers "where is the source". Both were `bin/build-driver.mjs`'s, and both leave it for the
  * same arithmetic reason: `bin/geneseed-cli.mjs` needs them too, and the value that decides
  * which tree gets rendered is the last thing that should exist twice.
  *
@@ -12,13 +12,13 @@
  * `build.render_all(theme)`. So the CLI has to build the same `cfg` the driver builds, and
  * until this move only the driver could.
  *
- * THE TWO ABSENT KEYS ARE STILL ABSENT, and the reason is bin/geneseed.mjs's, unchanged:
+ * THE TWO ABSENT KEYS ARE STILL ABSENT, and the reason is bin/build-driver.mjs's, unchanged:
  * `_build_core.js_cfg()` always sends `structure` and `capabilityLinkRe` because the Python
  * originals are module-level names TESTS MUTATE (`_OWNED` membership asked one level out).
  * A Node process has no Python module to mutate, so it sends neither and
  * `js/render.mjs`'s `cfg.structure ?? STRUCTURE` takes its right-hand branch.
  *
- * The move is safe for the reason P5c's was: `tests/golden.py` drives `bin/geneseed.mjs`
+ * The move is safe for the reason P5c's was: `tests/golden.py` drives `bin/build-driver.mjs`
  * over 259 cells and compares the tree byte-for-byte, and every one of them builds a cfg
  * from these paths. A depth error or a renamed key fails 259 cells, not zero.
  */
@@ -48,7 +48,7 @@ export const WORKFLOW_SRC = path.join(ROOT, 'adapters', 'opencode', 'workflows')
  * `_build_render.posture_names()` / `mode_names()` — discovered, never hardcoded, so a new
  * posture file appears in both CLIs' choices with no code change.
  *
- * P5f moved this here from `bin/geneseed.mjs`, which had the only caller until
+ * P5f moved this here from `bin/build-driver.mjs`, which had the only caller until
  * `js/installs.mjs` needed the same two lists: `_posture_of_dir` scans a deployed carrier for
  * `**<Name>**` and has to be scanning for the SAME names the driver's `--posture` accepts.
  * Two discoveries of one directory is precisely the shape that lets a new posture file be

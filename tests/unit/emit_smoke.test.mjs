@@ -37,7 +37,7 @@ import { walkFiles } from '../helpers/golden.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const DRIVER = path.join(ROOT, 'bin', 'geneseed.mjs');
+const DRIVER = path.join(ROOT, 'bin', 'build-driver.mjs');
 
 const FOOTPRINTS = ['full', 'lean'];
 

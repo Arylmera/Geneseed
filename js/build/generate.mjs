@@ -2,18 +2,18 @@
  * `rituals/_harness_build.py`'s three cheap verbs — `build`, `prompt` and `theme`.
  *
  * These are the harness's GENERATOR FACE: the subcommands whose whole job is to drive the
- * thing `bin/geneseed.mjs` already is. That is why they are the cheapest slice left and why
+ * thing `bin/build-driver.mjs` already is. That is why they are the cheapest slice left and why
  * they are the last one that can be measured by a closure walk alone — `cmd_build`'s body is
  * three lines because the work is a `subprocess`, and a name walk cannot see through one.
  *
  * WHY `build` IMPORTS THE DRIVER RATHER THAN SPAWNING IT. The Python is
  * `run([sys.executable, BUILD, *extra]).returncode` — a passthrough to a second process.
- * Reproducing that shape here would mean spawning `node bin/geneseed.mjs`, and
+ * Reproducing that shape here would mean spawning `node bin/build-driver.mjs`, and
  * `test_the_cli_reaches_no_child_process_module` forbids it: the ban is transitive over this
  * entry's imports, and P5c's argument for keeping it is that `web`, `upgrade` and `setup`
  * will genuinely need to spawn, so the ban should outlive them rather than be dismantled by
  * a verb that does not. It is also the wrong shape on its own terms. Python needs a second
- * process because `build.py` is a different PROGRAM; `bin/geneseed.mjs` is a module in this
+ * process because `build.py` is a different PROGRAM; `bin/build-driver.mjs` is a module in this
  * one, and a Node CLI spawning a Node driver to do work it could do in-process is exactly
  * the passthrough the whole port has been removing. So the driver's `main` is exported and
  * called directly, and the observable contract — the tree, the streams, the exit code — is
@@ -32,7 +32,7 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { main as driverMain } from '../../bin/geneseed.mjs';
+import { main as driverMain } from '../../bin/build-driver.mjs';
 import { makeCfg, PACK_ORDER } from './source.mjs';
 import { opencodeConfigDir, pyResolve } from '../hosts/hosts.mjs';
 import {

@@ -4,7 +4,7 @@
  * invokes. `bin/geneseed-hook.mjs` is the twin of the four it does.
  *
  * WHY A THIRD BINARY. P5c's whole question, and the three candidates were: grow the hook
- * entry, put verbs in `bin/geneseed.mjs`, or this. Each of the other two costs something
+ * entry, put verbs in `bin/build-driver.mjs`, or this. Each of the other two costs something
  * specific.
  *
  *   * GROWING `bin/geneseed-hook.mjs` weakens the gate the design now rests on.
@@ -21,7 +21,7 @@
  *     names every verb it does not carry, is what makes "silently accepted `doctor` and did
  *     nothing" impossible; every Geneseed hook exits 0 and signals through stdout, so a
  *     no-op and a success are one observation.
- *   * `bin/geneseed.mjs` IS `build.py`'s `main()` — a different Python program from
+ *   * `bin/build-driver.mjs` IS `build.py`'s `main()` — a different Python program from
  *     `rituals/harness.py`, not a different half of the same one. It parses generator FLAGS
  *     with a partition asserted over them (`test_the_node_driver_classifies_every_emit`),
  *     `tests/golden.py` drives it 259 times per run, and it is under a hard `child_process`
@@ -31,7 +31,7 @@
  *
  * What this costs is what the P5b handoff predicted: a second acceptance matrix. It is paid
  * in `tests/harness_golden.py`, which now carries a `bin` per cell and takes `--new-cli`
- * beside `--new` — and it would have been paid identically by the `bin/geneseed.mjs` option,
+ * beside `--new` — and it would have been paid identically by the `bin/build-driver.mjs` option,
  * so it is not a discriminator between the two.
  *
  * THE VERB SET REFUSES THE REST BY NAME, exactly as the hook entry does. It carries 22 of the
@@ -50,7 +50,7 @@ import { cmdCatalog } from '../js/build/catalog.mjs';
 import { cliSpec, printHelp } from '../js/ui/cli.mjs';
 import { cmdDiff } from '../js/inspect/diff.mjs';
 import { cmdDoctor, cmdValidate } from '../js/inspect/doctor.mjs';
-import { parseDriverArgs } from './geneseed.mjs';
+import { parseDriverArgs } from './build-driver.mjs';
 import { cmdExclude } from '../js/inspect/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/build/generate.mjs';
 import { cmdMigrate } from '../js/maintain/migrate.mjs';
@@ -347,7 +347,7 @@ async function main(argv) {
   //
   // So a row would have meant amending two gates and recording a corpus half blind. It takes
   // the generator's own parser (see `parseDriverArgs`) because its flags are the generator's,
-  // and it is on THIS binary — not on `bin/geneseed.mjs` — because it runs the doctor, which
+  // and it is on THIS binary — not on `bin/build-driver.mjs` — because it runs the doctor, which
   // starts a process the driver is banned from reaching.
   if (verb === 'validate') {
     try {

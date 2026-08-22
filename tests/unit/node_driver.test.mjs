@@ -9,7 +9,7 @@
  * while it still existed. Nothing crossed as a comparison, and nothing needed to.
  *
  * WHY THIS FILE EXISTS AT ALL. `tests/golden.mjs` proves the emitted bytes; it cannot prove there
- * are two implementations. A `bin/geneseed.mjs` whose entire body was
+ * are two implementations. A `bin/build-driver.mjs` whose entire body was
  * `spawnSync('python', ['build.py', ...args])` would replay all 259 cells perfectly, because it
  * would BE the Python CLI. Everything below is some form of refutation of that, or of a flag no
  * cell passes.
@@ -23,7 +23,7 @@
  *     and so never notices that PATH lost anything.
  *
  * The static half is the one test in this file that did NOT cross: `tests/unit/hook_cli.test.mjs`
- * already owns it, and owns it more strongly — the reference read `bin/geneseed.mjs`'s own source
+ * already owns it, and owns it more strongly — the reference read `bin/build-driver.mjs`'s own source
  * and would have missed an import one module deep, where the surviving gate walks the transitive
  * closure. The delegation is asserted below rather than described, because a retirement whose
  * named gate can be deleted is prose.
@@ -35,13 +35,13 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { parseDriverArgs } from '../../bin/geneseed.mjs';
+import { parseDriverArgs } from '../../bin/build-driver.mjs';
 import { GENESEED_HOOK_SNIFF, SHIM_MARK } from '../../js/hosts/settings.mjs';
 import { walkFiles } from '../helpers/golden.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const DRIVER = path.join(ROOT, 'bin', 'geneseed.mjs');
+const DRIVER = path.join(ROOT, 'bin', 'build-driver.mjs');
 const read = (...p) => readFileSync(path.join(ROOT, ...p), 'utf8');
 
 /**
@@ -162,7 +162,7 @@ test('the driver builds with no python reachable on PATH', (t) => {
     const r = runDriver(['--theme', 'neutral', '--emit', 'files', '--footprint', 'lean',
       '--out', out], strippedEnv(t, home));
     assert.equal(r.status, 0,
-      'bin/geneseed.mjs failed with no python on PATH — it is driving the Python CLI rather than '
+      'bin/build-driver.mjs failed with no python on PATH — it is driving the Python CLI rather than '
       + `being a second implementation of it. stderr: ${(r.stderr || r.stdout).trim().slice(0, 300)}`);
     assert.ok(existsSync(path.join(out, 'AGENT.md')),
       'no bundle was produced with python off PATH');
@@ -173,7 +173,7 @@ test('the driver builds with no python reachable on PATH', (t) => {
 
 test('the static half of the refutation is gated by the walk that superseded it', () => {
   // RETIREMENT, MADE CHECKABLE. `test_the_driver_imports_no_child_process_module` read
-  // `bin/geneseed.mjs`'s own source for three banned specifiers — which a single
+  // `bin/build-driver.mjs`'s own source for three banned specifiers — which a single
   // `import … from '../../js/hosts/hooks.mjs'` would have walked straight past, leaving child_process in
   // the driver's process with the driver's own source still clean. The gate named here walks the
   // transitive import closure instead, so it is the same claim strictly enlarged, and pointing at
@@ -192,10 +192,10 @@ test('the driver classifies every emit', () => {
   // The partition, re-derived from the source. `PORTED` had two spellings across the port — a
   // literal subset while it was partial, `new Set(EMITS)` now that all nine have crossed — and
   // following the alias is what keeps this honest.
-  const text = read('bin', 'geneseed.mjs');
+  const text = read('bin', 'build-driver.mjs');
   const listed = jsStringList(text, 'const EMITS = [');
   assert.deepEqual([...listed].sort(), [...EMITS].sort(),
-    'bin/geneseed.mjs offers a different set of --emit choices than this file freezes; a tenth '
+    'bin/build-driver.mjs offers a different set of --emit choices than this file freezes; a tenth '
     + 'emit needs a row here and a cell of its own somewhere');
   const ported = text.includes('const PORTED = new Set(EMITS)')
     ? listed : jsStringList(text, 'const PORTED = new Set([');
@@ -215,7 +215,7 @@ test('the driver classifies every emit', () => {
 /** The quoted tokens of a JS array literal opened by `marker`. */
 function jsStringList(text, marker) {
   const i = text.indexOf(marker);
-  assert.notEqual(i, -1, `bin/geneseed.mjs no longer contains ${JSON.stringify(marker)}`);
+  assert.notEqual(i, -1, `bin/build-driver.mjs no longer contains ${JSON.stringify(marker)}`);
   const body = text.slice(i + marker.length, text.indexOf(']', i));
   return new Set([...body.matchAll(/'([^']+)'/g)].map((m) => m[1]));
 }
@@ -670,13 +670,13 @@ test('--help names every flag the parser takes', () => {
   // gave the reference the flag for free, and this hand-rolled parser fell through to
   // `unrecognized arguments: --help` and exit 2. A gate that only ever runs inputs both
   // implementations were built for cannot see a flag one of them does not have.
-  const text = read('bin', 'geneseed.mjs');
+  const text = read('bin', 'build-driver.mjs');
   assert.deepEqual(objectKeys(text, 'const VALUED = {'), VALUED_FLAGS.map((f) => f[0]),
-    'bin/geneseed.mjs\'s VALUED table and this file\'s frozen list disagree — the help text '
+    'bin/build-driver.mjs\'s VALUED table and this file\'s frozen list disagree — the help text '
     + 'renders straight out of that table, so a flag missing from BOTH would otherwise be '
     + 'invisible to every gate in the repo');
   assert.deepEqual(objectKeys(text, 'const FLAGS = {'), BARE_FLAGS.map((f) => f[0]),
-    'bin/geneseed.mjs\'s FLAGS table and this file\'s frozen list disagree');
+    'bin/build-driver.mjs\'s FLAGS table and this file\'s frozen list disagree');
 
   const said = help('--help').stdout;
   for (const [flag, dest, value, parsed = value] of VALUED_FLAGS) {
@@ -704,7 +704,7 @@ test('--help names every flag the parser takes', () => {
 /** The quoted keys of a JS object literal opened by `decl`, in source order. */
 function objectKeys(text, decl) {
   const at = text.indexOf(decl);
-  assert.notEqual(at, -1, `bin/geneseed.mjs no longer contains ${JSON.stringify(decl)}`);
+  assert.notEqual(at, -1, `bin/build-driver.mjs no longer contains ${JSON.stringify(decl)}`);
   const body = text.slice(at + decl.length, text.indexOf('};', at));
   return [...body.matchAll(/'(-{1,2}[a-z-]+)'\s*:/g)].map((m) => m[1]);
 }

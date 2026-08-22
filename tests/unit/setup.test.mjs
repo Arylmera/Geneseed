@@ -199,17 +199,17 @@ test('no build-side consumer can resolve an unknown pack set out of harness.conf
   // THE GATE IS ON THE SOURCE BECAUSE THE DEFECT IS A HABIT. Any consumer may read the config
   // for theme, posture or mode — the worst a wrong answer does there is cosmetic. The pack
   // selection decides whether a boundary is installed, so the config key has exactly ONE
-  // legitimate reader: `configDefaults()` in `bin/geneseed.mjs`, which answers `geneseed build`
+  // legitimate reader: `configDefaults()` in `bin/build-driver.mjs`, which answers `geneseed build`
   // — the case where there is no install to ask. Anything else holding a directory calls
   // `doctrinesForBuild`, whose `null` arm is `[...PACK_ORDER]`.
   assert.ok(JS_SOURCES.length > 20, `the source walk found ${JS_SOURCES.length} files`);
-  assert.ok(JS_SOURCES.includes('js/hosts/installs.mjs') && JS_SOURCES.includes('bin/geneseed.mjs'));
+  assert.ok(JS_SOURCES.includes('js/hosts/installs.mjs') && JS_SOURCES.includes('bin/build-driver.mjs'));
   for (const rel of JS_SOURCES) {
     const src = readSrc(rel).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     assert.ok(!/defaultDoctrines/.test(src),
       `${rel} resolves an install's packs out of harness.config.json — unknown must resolve `
       + 'to the FULL pack set (js/hosts/installs.mjs `doctrinesForBuild`), never to a config value');
-    if (rel === 'bin/geneseed.mjs') continue;      // configDefaults: the no-install-to-ask case
+    if (rel === 'bin/build-driver.mjs') continue;      // configDefaults: the no-install-to-ask case
     assert.ok(!/configuredDefault\(\s*'doctrines'/.test(src),
       `${rel} reads the doctrines config key directly — see above`);
   }

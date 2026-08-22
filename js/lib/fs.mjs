@@ -546,11 +546,11 @@ export function withDiscardableStderr(fn) {
 }
 
 /**
- * The same rule applied to a whole CALL rather than to one string — `bin/geneseed.mjs`'s
+ * The same rule applied to a whole CALL rather than to one string — `bin/build-driver.mjs`'s
  * answer to the newline item P5e recorded and could not gate.
  *
  * WHY THE DRIVER NEEDS A FUNNEL WHERE EVERY OTHER CALLER NEEDS `pyPrint`. The generator
- * prints from ~25 sites across `bin/geneseed.mjs`, `js/emit.mjs`, `js/settings.mjs`,
+ * prints from ~25 sites across `bin/build-driver.mjs`, `js/emit.mjs`, `js/settings.mjs`,
  * `js/opencode.mjs`, `js/native.mjs` and `js/render.mjs`, and those modules are ALSO the
  * body of the `GENESEED_NO_JS` seam child, whose `main` buffers both streams and hands them
  * to a Python parent that re-prints them through `print()`. Converting those sites to
@@ -703,7 +703,7 @@ export function pyWhich(cmd, searchPath = null) {
  *
  * ONE OWNER, and the five pre-existing `path.isAbsolute` calls in `js/` were READ rather than
  * assumed to be copies. Three cannot reach the divergence — `js/doctor.mjs` and
- * `bin/geneseed.mjs` test the output of `path.relative`, which is never rootless-absolute,
+ * `bin/build-driver.mjs` test the output of `path.relative`, which is never rootless-absolute,
  * and `js/emit.mjs`'s `safePriorDirName` is `&&`-guarded by `basename(p) === p` immediately
  * after. The two in `js/hooks.mjs` (a context entry's `path`) DO carry the same hazard and
  * are deliberately not repointed here: that is the hook entry's shipped behaviour, no

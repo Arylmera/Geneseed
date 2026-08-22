@@ -22,7 +22,7 @@ import {
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { buildInto, emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
+import { buildInto, emitGlobalInto, emitProjectInto } from '../../bin/build-driver.mjs';
 import { makeCfg } from '../../js/build/source.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';

@@ -39,7 +39,7 @@ function claudeInstall(d) {
   const repo = path.join(d, 'repo');
   fs.mkdirSync(repo, { recursive: true });
   const r = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'claude', '--theme', 'neutral',
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'claude', '--theme', 'neutral',
       '--out', repo, '--root', repo],
     {
       cwd: ROOT,

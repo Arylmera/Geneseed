@@ -357,7 +357,7 @@ function parseArgs(argv, defaults) {
  * hand-rolled copy would have its own `--target` alias, its own `choices` lists and its own
  * `-h`, and `test_the_help_text_names_every_flag_the_reference_takes` gates only this one.
  *
- * `withPyNewlines` because the refusal and `-h` paths WRITE: called from `bin/geneseed.mjs`
+ * `withPyNewlines` because the refusal and `-h` paths WRITE: called from `bin/build-driver.mjs`
  * they sit inside `main`'s funnel, and called from the CLI binary they would not.
  */
 export function parseDriverArgs(argv) {
@@ -1183,7 +1183,7 @@ function run(argv) {
  * BOTH ways of getting this wrong are gated, which is why it is a guard and not a comment,
  * and both were measured rather than argued:
  *
- *   * stuck FALSE — `node bin/geneseed.mjs` becomes a silent no-op: 259 golden cells.
+ *   * stuck FALSE — `node bin/build-driver.mjs` becomes a silent no-op: 259 golden cells.
  *   * stuck TRUE — importing this file runs the generator on the IMPORTER's argv, so it is
  *     not only `build` that breaks. `bin/geneseed-cli.mjs` reaches `js/generate.mjs` at
  *     module load, so every CLI verb dies in the driver's flag parser: **62 of the 166

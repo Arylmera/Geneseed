@@ -69,7 +69,7 @@ after(webFixtureTeardown);
 // is where the install lands.
 function emitInto(cfg, { footprint = 'full', theme = 'neutral', out = null } = {}) {
   const proc = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'opencode-global',
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode-global',
       '--theme', theme, '--footprint', footprint, '--out', out || `${cfg}-bundle`],
     { cwd: ROOT, encoding: 'utf8', windowsHide: true,
       env: { ...process.env, OPENCODE_CONFIG_DIR: cfg } });
@@ -2164,7 +2164,7 @@ test('the detail conversation falls back to the session title', () => {
 // directory for a per-repo layer, which is what the deploy command itself builds.
 function emitProject(dir, emitName, theme = 'neutral') {
   const proc = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', emitName,
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', emitName,
       '--theme', theme, '--out', dir, '--root', dir],
     { cwd: ROOT, encoding: 'utf8', windowsHide: true, env: process.env });
   assert.equal(proc.status, 0, `emit ${emitName} into ${dir} failed:\n${proc.stdout}\n${proc.stderr}`);

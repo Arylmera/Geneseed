@@ -19,7 +19,7 @@
 //   node tests/golden.mjs --against tests/__snapshots__/emit
 //   node tests/golden.mjs --idempotent
 //   node tests/golden.mjs --deletion
-//   ... --gen "node bin/geneseed.mjs" --only neutral/claude --jobs 8 --limit 5
+//   ... --gen "node bin/build-driver.mjs" --only neutral/claude --jobs 8 --limit 5
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,7 +52,7 @@ function loadMatrix() {
 }
 
 function parseArgs(argv) {
-  const a = { jobs: Math.min(8, os.cpus().length), limit: 0, gen: 'node bin/geneseed.mjs' };
+  const a = { jobs: Math.min(8, os.cpus().length), limit: 0, gen: 'node bin/build-driver.mjs' };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
     if (k === '--against') a.against = argv[++i];

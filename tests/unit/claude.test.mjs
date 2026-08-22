@@ -4,7 +4,7 @@
 //
 // THE SEAM IS THE SAME ONE THE REFERENCE USES, which is unusual for this port and worth saying:
 // `build.emit_claude_global(theme, cfg=…)` and `build.emit_claude(theme, out, root)` are direct
-// calls with the target passed IN, and `bin/geneseed.mjs` exports `emitGlobalInto(host, …)` /
+// calls with the target passed IN, and `bin/build-driver.mjs` exports `emitGlobalInto(host, …)` /
 // `emitProjectInto(host, …)` with the same shape for the same reason — `js/diff.mjs`,
 // `js/doctor.mjs` and `js/web/actions.mjs` all need to render a host into a directory they name.
 // So nothing here needs a child process, a copied checkout or a redirected home to reach the
@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../bin/geneseed.mjs';
+import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../bin/build-driver.mjs';
 import { cmdRebuildAll } from '../../js/build/generate.mjs';
 import { globalHookStandingDown, cmdContext } from '../../js/hosts/hooks.mjs';
 import {
@@ -964,7 +964,7 @@ function capturedOut(fn) {
 /** A global install through the PUBLIC entry, so markers and the registry are written too. */
 function cliGlobalEmit(kind) {
   const r = spawnSync(process.execPath,
-    [path.join(String(ROOT), 'bin', 'geneseed.mjs'), '--emit', kind, '--theme', 'neutral'],
+    [path.join(String(ROOT), 'bin', 'build-driver.mjs'), '--emit', kind, '--theme', 'neutral'],
     { cwd: String(ROOT), encoding: 'utf8', env: process.env, maxBuffer: 1 << 26, windowsHide: true });
   assert.equal(r.status, 0, `${kind} emit failed (${r.status}): ${(r.stderr || '').slice(-800)}`);
 }

@@ -52,7 +52,7 @@ export function webFixture() {
   }
 
   const proc = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'opencode-global', '--theme', 'neutral'],
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode-global', '--theme', 'neutral'],
     { cwd: ROOT, encoding: 'utf8', windowsHide: true, env: process.env });
   if (proc.status !== 0) {
     throw new Error(`web fixture emit failed (${proc.status}):\n${proc.stdout}\n${proc.stderr}`);

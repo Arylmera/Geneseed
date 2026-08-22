@@ -42,7 +42,7 @@
  *
  * Python still drives because the runtime *is* Python and calls `build.emit_*` in-process
  * from doctor, web deploy, setup and rebuild-all; Node-as-driver would wrap each of those
- * in a subprocess. The seam is designed to collapse: the driver becomes `geneseed.mjs`, the
+ * in a subprocess. The seam is designed to collapse: the driver becomes `build-driver.mjs`, the
  * spawn becomes an import, and this job object becomes the function signature.
  *
  * STDOUT CARRIES THE PROTOCOL AND NOTHING ELSE, STRUCTURALLY.
@@ -680,7 +680,7 @@ function safePriorDirName(out, priorName) {
  * "not incidental, it is what leaves this walker something to check". THIS PORT DOES NOT HAVE
  * THAT SHAPE: `claudeWire` is a real function but the two OpenCode emits inline their merge
  * (`emitOpencodeRender`, `emitOpencodeGlobalRender`), and PRUNE/MANIFEST/VERIFY are not in this
- * module at all — they are in `bin/geneseed.mjs`'s driver bodies. A walker would have to span two
+ * module at all — they are in `bin/build-driver.mjs`'s driver bodies. A walker would have to span two
  * files and would still be reading source rather than watching a run.
  *
  * So the order is made OBSERVABLE instead, which is strictly the better gate: it reports what

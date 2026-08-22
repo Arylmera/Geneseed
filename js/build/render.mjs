@@ -101,7 +101,7 @@ export function loadTheme(cfg, name) {
     // `sys.exit(<str>)` — the message on stderr, exit 1 — spelled the way
     // `assertSourceComplete` spells it: written at the raise site, and the throw carries
     // only the marker. ⚠ It was once described as an unreachable nicety under
-    // `bin/geneseed.mjs`, on the grounds that `--theme` is validated against `choices` before
+    // `bin/build-driver.mjs`, on the grounds that `--theme` is validated against `choices` before
     // anything renders — it is not: `--theme` takes a value and has no `choices` entry, so THIS
     // is the refusal, on every path. It is also reachable from `geneseed status`, which takes
     // its theme from a `.geneseed-theme`
@@ -253,7 +253,7 @@ function registerBody(cfg, theme, dir, selected, fallback) {
  * entry point and an emit that quietly dropped a pack the user asked for is exactly the
  * failure the `Active packs:` marker would then attest to.
  *
- * Both throw with `exitCode`, the marker `bin/geneseed.mjs`'s `main` turns into a status.
+ * Both throw with `exitCode`, the marker `bin/build-driver.mjs`'s `main` turns into a status.
  */
 function activeDoctrines(cfg) {
   const dir = path.join(cfg.src, 'doctrines');

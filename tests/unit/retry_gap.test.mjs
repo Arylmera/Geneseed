@@ -46,7 +46,7 @@ function withDir(fn) {
 
 function emit(kind, repo, home) {
   const r = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', kind, '--theme', 'neutral',
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', kind, '--theme', 'neutral',
       '--out', repo, '--root', repo],
     {
       cwd: ROOT,

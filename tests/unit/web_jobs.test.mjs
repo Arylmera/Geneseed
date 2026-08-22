@@ -60,7 +60,7 @@ const OPTS = { theme: 'imperial', emit: 'claude-global', footprint: 'lean',
  * "the default location". Both implementations emit it that way.
  */
 const ARGVS = {
-  build: { entry: 'bin/geneseed.mjs',
+  build: { entry: 'bin/build-driver.mjs',
     tail: ['--theme', 'imperial', '--emit', 'claude-global', '--footprint', 'lean',
       '--posture', 'mentor', '--mode', 'foreman', '--doctrines', 'craft',
       // `none` and not an elision: an omitted flag falls through to `harness.config.json`,
@@ -221,7 +221,7 @@ test('the deploy argv resolves the body it is handed', () => {
     const plan = apiDeployCmd(webState('neutral', td), body);
     assert.equal(plan.error, undefined, `deploy refused a body it should accept: ${plan.error}`);
     assert.equal(plan.cmd[0], process.execPath);
-    assert.equal(rel(plan.cmd[1]), 'bin/geneseed.mjs');
+    assert.equal(rel(plan.cmd[1]), 'bin/build-driver.mjs');
     assert.ok(!plan.cmd.join(' ').toLowerCase().includes('python'),
       'the deploy resolver named python');
     // Frozen from the reference, with the only machine-dependent value substituted. `--out` and

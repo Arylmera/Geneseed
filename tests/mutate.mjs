@@ -135,13 +135,13 @@ export const MUTATIONS = [
   },
   {
     // THE FALSIFIER'S ROW. Not invented and not planted: this is a real historical defect,
-    // documented in bin/geneseed.mjs's own docblock, found by GitHub's Windows runner, and
+    // documented in bin/build-driver.mjs's own docblock, found by GitHub's Windows runner, and
     // REVERTED AS AN EXPERIMENT during P3 - at which point the entire Node suite stayed green
     // (68 unit tests, 12 emit cells). That is what the design doc calls a hole named by name,
     // and tests/unit/resolve_out.test.mjs is the gate written to close it.
     id: 'M12',
     name: 'let resolveOut normalise instead of canonicalise (a REAL historical defect)',
-    file: 'bin/geneseed.mjs',
+    file: 'bin/build-driver.mjs',
     find: '  return pyResolve(path.resolve(process.cwd(), raw));',
     replace: '  return path.resolve(process.cwd(), raw);',
     gate: UNIT,
@@ -309,7 +309,7 @@ export const MUTATIONS = [
   {
     id: 'M16',
     name: 'drop the --root prefix from the recorded instruction path',
-    file: 'bin/geneseed.mjs',
+    file: 'bin/build-driver.mjs',
     find: "  const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';",
     replace: "  const agentPath = 'AGENT.md';",
     gate: UNIT,

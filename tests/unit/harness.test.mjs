@@ -1003,12 +1003,12 @@ const AVAIL = ['cyberpunk', 'gamer', 'imperial', 'military', 'neutral', 'pirate'
  * Run the generator into a sandbox, with home redirected.
  *
  * The reference called `build.build(...)` / `build.emit_bob_global(...)` in process. Driving
- * `bin/geneseed.mjs` instead is the PUBLIC entry, so these tests gate the emit wiring on the
+ * `bin/build-driver.mjs` instead is the PUBLIC entry, so these tests gate the emit wiring on the
  * way to the property they are actually about — and it keeps the emit's hook-shim writer,
  * which targets the ENVIRONMENT rather than `--out`, out of the developer's real home.
  */
 function generate(argv, home, extraEnv = {}) {
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv], {
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv], {
     cwd: ROOT,
     encoding: 'utf8',
     env: { ...process.env, ...homeOverrides(home), ...extraEnv },

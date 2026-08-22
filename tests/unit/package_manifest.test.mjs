@@ -261,7 +261,7 @@ function runEntry(genRoot, entry, argv, home, extra = {}) {
 }
 
 function emitBundle(genRoot, out, home) {
-  const r = runEntry(genRoot, 'geneseed.mjs', ['--emit', 'files', '--out', out], home);
+  const r = runEntry(genRoot, 'build-driver.mjs', ['--emit', 'files', '--out', out], home);
   if (r.status !== 0) {
     throw new Error(`emit from ${genRoot} failed (${r.status}): ${(r.stderr || '').slice(-2000)}`);
   }
@@ -283,7 +283,7 @@ const SHIPS = [
   ['js/', 'the port'],
   ['src/', 'the product: what a bundle is rendered from'],
   ['themes/', 'render.loadTheme reads these; a themeless install renders nothing'],
-  ['adapters/', 'bin/geneseed.mjs, js/hosts/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
+  ['adapters/', 'bin/build-driver.mjs, js/hosts/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
   ['docs/web/', "js/web/docs.mjs serves ROOT/docs; the console's Docs pages ARE these files"],
   // ONE ROW FOR THE NON-WEB PAGES, not one per page, and the reason is that every per-file row
   // this replaced gave the SAME reason — the literal string `docs/*.md`, seven times. The
@@ -600,7 +600,7 @@ test('the emitted bundle really carries the ignore files', { skip: NO_NPM }, () 
 // =============================================================================================
 // The bin map is the three entry points, and the user-facing one is the CLI.
 //
-// `bin/geneseed.mjs` IS `build.py`'s `main()` — the generator, whose argv is
+// `bin/build-driver.mjs` IS `build.py`'s `main()` — the generator, whose argv is
 // `--theme/--emit/--out`, not a verb. Mapping the bare name `geneseed` to it would put the
 // generator behind every `geneseed doctor` in the README. The bare name goes to the harness
 // CLI, which is literally what the bash launcher runs — since P2 Task 4 both front doors are
@@ -955,7 +955,7 @@ function acceptanceRuns() {
     ['geneseed-cli.mjs', ['version']],
     ['geneseed-cli.mjs', ['status']],
     ['geneseed-cli.mjs', ['doctor', '--all']],
-    ['geneseed.mjs', ['--emit', 'claude', '--out', path.join(work, 'emitted')]],
+    ['build-driver.mjs', ['--emit', 'claude', '--out', path.join(work, 'emitted')]],
   ]) {
     runs.push({ entry, argv, ...runEntry(pkg, entry, argv, home) });
   }

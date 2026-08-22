@@ -16,7 +16,7 @@
  * "not incidental, it is what leaves this walker something to check". THIS PORT DOES NOT HAVE
  * THAT SHAPE, which is the finding that decided the successor: `claudeWire` is a real function,
  * but both OpenCode emits INLINE their merge, and PRUNE/MANIFEST/VERIFY are not in `js/emit.mjs`
- * at all — they are in `bin/geneseed.mjs`'s driver bodies. A walker would have to span two files
+ * at all — they are in `bin/build-driver.mjs`'s driver bodies. A walker would have to span two files
  * and would still be reading source rather than watching a run.
  *
  * So `phaseLog` makes the order OBSERVABLE, behind `GENESEED_PHASE_LOG`. That is strictly the
@@ -39,7 +39,7 @@ import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
 import { spawnSync } from 'node:child_process';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const DRIVER = path.join(ROOT, 'bin', 'geneseed.mjs');
+const DRIVER = path.join(ROOT, 'bin', 'build-driver.mjs');
 
 const ORDER = ['RENDER', 'WIRE', 'PRUNE', 'MANIFEST', 'VERIFY'];
 const rank = (p) => ORDER.indexOf(p);

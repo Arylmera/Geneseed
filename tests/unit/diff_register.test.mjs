@@ -48,7 +48,7 @@ function install(d, { posture, mode, doctrines }) {
   if (posture) argv.push('--posture', posture);
   if (mode) argv.push('--mode', mode);
   if (doctrines) argv.push('--doctrines', doctrines);
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv], {
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv], {
     cwd: ROOT,
     encoding: 'utf8',
     env: {

@@ -47,7 +47,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
-import { hookRunnerEntry } from '../../bin/geneseed.mjs';
+import { hookRunnerEntry } from '../../bin/build-driver.mjs';
 import { confirm } from './setup.mjs';
 import {
   claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, excludedRulesOfDir, installKind,

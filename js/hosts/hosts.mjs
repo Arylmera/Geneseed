@@ -1,7 +1,7 @@
 /**
  * The four host config dirs, and the two path primitives they are built on.
  *
- * EXTRACTED IN P5c, and the reason is arithmetic rather than taste. `bin/geneseed.mjs`
+ * EXTRACTED IN P5c, and the reason is arithmetic rather than taste. `bin/build-driver.mjs`
  * owned these; `bin/geneseed-cli.mjs` needs the same four to find a global install, and a
  * resolver that decides WHERE a driver writes is the last thing that should exist twice.
  * `js/hooks.mjs` carries a third copy of `opencodeConfigDir` on purpose — the hook path is
@@ -9,7 +9,7 @@
  * owner for both drivers rather than a second exception.
  *
  * The move is a pure one, which is why it could be made at all: `tests/golden.py` runs
- * `bin/geneseed.mjs` over 259 cells and compares the tree byte-for-byte, and roughly half
+ * `bin/build-driver.mjs` over 259 cells and compares the tree byte-for-byte, and roughly half
  * of those resolve a global config dir. A move that changed one of these by a character
  * fails ~126 cells, not zero.
  */
@@ -100,7 +100,7 @@ export function pyResolve(p) {
 
 /**
  * `_build_core._opencode_config_dir` — and the four resolvers like it are the reason
- * `bin/geneseed.mjs` exists rather than a child doing the work.
+ * `bin/build-driver.mjs` exists rather than a child doing the work.
  *
  * P3c's rule was "the child must never resolve this": a render child that did would write
  * 135 files into the developer's real `~/.config/opencode`. A driver is the PARENT, so the
@@ -158,7 +158,7 @@ export function bobConfigDir() {
  * An array rather than an object because the order is observable output, not an
  * implementation detail: `harness exclude add` walks it and prints one message per host, so
  * a reordering is a diff in stderr. (`emit_global` and `native_catalog` stay out;
- * `bin/geneseed.mjs` receives those decisions from its own dispatch rather than reading a
+ * `bin/build-driver.mjs` receives those decisions from its own dispatch rather than reading a
  * table.)
  *
  * `projectMarker` joined in P5f. `_install_targets` asks "does this cwd carry a project

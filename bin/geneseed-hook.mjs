@@ -3,7 +3,7 @@
  * The hook entry point — a Node twin of `rituals/harness.py` for the four verbs the
  * emitted `settings.json` actually invokes.
  *
- * WHY IT IS A SECOND BINARY AND NOT A SUBCOMMAND OF `bin/geneseed.mjs`. Three reasons,
+ * WHY IT IS A SECOND BINARY AND NOT A SUBCOMMAND OF `bin/build-driver.mjs`. Three reasons,
  * and each alone would be enough:
  *
  *   * The generator driver is under a hard `child_process` ban
@@ -14,11 +14,11 @@
  *   * The hook shim bakes ONE entry and forwards `%*` to it. `harness.py` is that entry on
  *     the Python side; a Node twin needs its own, invoked as `<node> <this> context
  *     --root "<cfg>"`.
- *   * `bin/geneseed.mjs` parses generator FLAGS (`--emit`, `--theme`, `--footprint`), and
+ *   * `bin/build-driver.mjs` parses generator FLAGS (`--emit`, `--theme`, `--footprint`), and
  *     `test_the_node_driver_classifies_every_emit` asserts a partition over them. Verbs
  *     are a different shape and would sit awkwardly inside that.
  *
- * WHAT BAKES THIS FILE, SINCE P5b. `bin/geneseed.mjs` writes `<node> <checkout>/bin/
+ * WHAT BAKES THIS FILE, SINCE P5b. `bin/build-driver.mjs` writes `<node> <checkout>/bin/
  * geneseed-hook.mjs` into the machine-wide shim, so an install this driver emitted needs no
  * Python for its hooks. The exit-4 refusal it used to raise when no interpreter was
  * discoverable is gone with the discovery that fed it.

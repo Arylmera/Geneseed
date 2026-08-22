@@ -99,7 +99,7 @@ export const defaultMode = () => configuredDefault('mode', 'direct');
 // pre-2.3 install on its first upgrade — `{"doctrines":["craft"]}` and the gate is gone from
 // carriers that never asked. Unknown resolves to ALL packs; see `doctrinesForBuild` below.
 // The config value keeps exactly one legitimate reader: `configDefaults()` in
-// `bin/geneseed.mjs`, which answers `geneseed build` — the case where there is no install to
+// `bin/build-driver.mjs`, which answers `geneseed build` — the case where there is no install to
 // ask in the first place.
 
 // ---- theme, footprint, posture, mode, read back off a deployed tree -----------------------
@@ -281,7 +281,7 @@ export function doctrinesOfDir(d) {
  * got WIDER when the reader was hardened, because more inputs now answer `null`.
  *
  * A config value is a legitimate default only where there is NO INSTALL TO ASK: a fresh
- * `geneseed build`, which `configDefaults()` in `bin/geneseed.mjs` answers. Anything holding a
+ * `geneseed build`, which `configDefaults()` in `bin/build-driver.mjs` answers. Anything holding a
  * directory has an install to ask, so it calls this and never the config.
  *
  * `[]` still passes through untouched — a marker that reads `none` is an answer, not a silence.

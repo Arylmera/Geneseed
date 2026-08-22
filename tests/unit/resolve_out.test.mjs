@@ -2,7 +2,7 @@
 //
 // HOW THIS FILE CAME TO EXIST, because that is the whole argument for it. P3's falsifier reverts
 // a real historical bug fix and requires the new Node gate set to redden. The fix chosen was
-// `bin/geneseed.mjs`'s `resolveOut`, documented in its own docblock as a user-visible defect
+// `bin/build-driver.mjs`'s `resolveOut`, documented in its own docblock as a user-visible defect
 // found by GitHub's Windows runner: the reference ends in `Path.resolve()`, which CANONICALISES
 // — 8.3 short names expanded, symlinks followed, the filesystem's own casing — where
 // `path.resolve` only normalises `.` and `..`. Nine `pyResolve` call sites had the rule and this
@@ -21,7 +21,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { resolveOut } from '../../bin/geneseed.mjs';
+import { resolveOut } from '../../bin/build-driver.mjs';
 import { ALIAS_SKIP, aliasedTemp } from '../helpers/alias.mjs';
 
 test('resolveOut expands a non-canonical path, it does not merely normalise it', (t) => {

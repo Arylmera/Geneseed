@@ -29,7 +29,7 @@
   "bin": {
     "geneseed": "bin/geneseed-cli.mjs",
     "geneseed-hook": "bin/geneseed-hook.mjs",
-    "geneseed-build": "bin/geneseed.mjs"
+    "geneseed-build": "bin/build-driver.mjs"
   },
   "files": [
     "bin/",

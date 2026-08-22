@@ -103,7 +103,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
-import { emitGlobalInto } from '../../bin/geneseed.mjs';
+import { emitGlobalInto } from '../../bin/build-driver.mjs';
 import {
   ROOT, discoverNames, knownRuleIds, PACK_ORDER,
 } from '../build/source.mjs';
@@ -817,7 +817,7 @@ const EMIT_FOR = new Map([
  * `{cmd: [...]}` IS A RETURN TYPE, NOT A RESPONSE. `_post_routes` hands it straight to the job
  * runner in the same process; it never reaches the wire. That is what collapsed P6f's
  * "argv-in-a-response-body" question — see this file's header — and why the twin's head is
- * `process.execPath` + `bin/geneseed.mjs` rather than a Python argv it would then have to
+ * `process.execPath` + `bin/build-driver.mjs` rather than a Python argv it would then have to
  * pretend to run.
  */
 export function apiInstallCmd(state, body) {
@@ -861,7 +861,7 @@ export function apiInstallCmd(state, body) {
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules);
-  return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
+  return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
 /**
@@ -967,5 +967,5 @@ export function apiDeployCmd(state, body) {
   // project-scope emit name == host name (opencode / claude / bob / copilot)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules);
-  return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
+  return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

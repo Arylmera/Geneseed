@@ -44,7 +44,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readSync } from 'node:fs';
 import path from 'node:path';
 
-import { main as driverMain, resolveOut } from '../../bin/geneseed.mjs';
+import { main as driverMain, resolveOut } from '../../bin/build-driver.mjs';
 import { playLine } from '../ui/anim.mjs';
 import { discoverNames, PACK_ORDER } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';

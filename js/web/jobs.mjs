@@ -33,7 +33,7 @@
  * the chain on the first non-zero. In-process that would be a return value threaded through
  * every verb's error paths, several of which currently end at `process.exitCode`.
  *
- * SO THE ARGV IS `node bin/geneseed-cli.mjs <verb>` — or `node bin/geneseed.mjs <build args>`
+ * SO THE ARGV IS `node bin/geneseed-cli.mjs <verb>` — or `node bin/build-driver.mjs <build args>`
  * for the three rows that run the GENERATOR, which is `build.py`'s twin and the same program
  * by a different entry. `process.execPath` is the running interpreter by absolute path, so
  * stripping `node` off PATH cannot change what starts. Nothing here can name `python`.
@@ -401,7 +401,7 @@ export class JobManager {
  * five. `update` and `export` self-resolve the deployed theme downstream and take no args.
  *
  * THE ARGV HEAD IS THE PORT. The reference names `sys.executable` and `rituals/harness.py` (or
- * `build.py`); this names `process.execPath` and `bin/geneseed-cli.mjs` (or `bin/geneseed.mjs`,
+ * `build.py`); this names `process.execPath` and `bin/geneseed-cli.mjs` (or `bin/build-driver.mjs`,
  * which is `build.py`'s twin). The two can never be byte-equal, `tests/web_golden.py`
  * normalises the `$ <argv>` echo line for that reason, and `tests/test_web_jobs.py` asserts
  * each side's head ABSOLUTELY while comparing the tails literally — which is where a real port
@@ -409,7 +409,7 @@ export class JobManager {
  */
 const NODE = () => process.execPath;
 const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');
-const GEN = () => path.join(ROOT, 'bin', 'geneseed.mjs');
+const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');
 
 /**
  * The rows whose VERB has not crossed. **EMPTY SINCE P10b, AND STILL DECLARED.**

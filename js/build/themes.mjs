@@ -11,7 +11,7 @@
  * gate — is where that would be discovered.
  *
  * NEITHER `--sync-themes` NOR `--validate-only` IS REACHABLE FROM ANY CELL. `golden.py`'s
- * `_argv` emits neither flag (argued in situ at `bin/geneseed.mjs`'s dispatch), so the
+ * `_argv` emits neither flag (argued in situ at `bin/build-driver.mjs`'s dispatch), so the
  * acceptance matrix that gates all nine emits is structurally blind to both, and the driver
  * refused them rather than crossing for exactly that reason. The gate is
  * `tests/test_maintainer_tools_parity.py`: a corpus of hand-made theme directories run
@@ -122,7 +122,7 @@ export function insertThemeKeys(raw, theme, tmpl, tmplKeys, missing) {
  * default is the checkout's own `themes/`, which is what the driver passes.
  *
  * PRINTS THROUGH A BARE `process.stdout.write`, like the generator's other ~25 print sites and
- * unlike every CLI verb: `bin/geneseed.mjs`'s `main` wraps the whole run in `withPyNewlines`,
+ * unlike every CLI verb: `bin/build-driver.mjs`'s `main` wraps the whole run in `withPyNewlines`,
  * so a `pyPrint` here would translate a second time and put `\r\r\n` on every line.
  *
  * ONE DELIBERATE DIVERGENCE FROM THE REFERENCE, changed on BOTH sides in this commit: a

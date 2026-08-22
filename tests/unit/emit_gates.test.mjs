@@ -31,7 +31,7 @@ function withDir(fn) {
 
 /** Run a generator out of `genRoot`, returning the raw result rather than throwing. */
 function emit(genRoot, argv, home, extraEnv = {}) {
-  const r = spawnSync(process.execPath, [path.join(genRoot, 'bin', 'geneseed.mjs'), ...argv], {
+  const r = spawnSync(process.execPath, [path.join(genRoot, 'bin', 'build-driver.mjs'), ...argv], {
     cwd: genRoot,
     encoding: 'utf8',
     env: { ...process.env, ...homeOverrides(home), ...extraEnv },

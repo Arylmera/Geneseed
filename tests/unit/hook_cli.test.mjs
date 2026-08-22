@@ -487,7 +487,7 @@ const ALLOWED_SPAWNS = {
     literals: ["const exe = pyWhich('git');",
       "spawnSync('taskkill', ['/F', '/T', '/PID', String(child.pid)]",
       "[path.join(String(cand), 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle'],",
-      "[path.join(String(here), 'bin', 'geneseed.mjs'), ...buildArgs],",
+      "[path.join(String(here), 'bin', 'build-driver.mjs'), ...buildArgs],",
       "[path.join(String(here), 'bin', 'geneseed-cli.mjs'), 'rebuild-all'],",
       "const r = spawnSync(argv[0], argv.slice(1), { stdio: 'inherit', ...NO_WINDOW });",
       'child = spawn(exe, args, {'],
@@ -513,7 +513,7 @@ const ALLOWED_SPAWNS = {
     literals: ["spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)]",
       'const NODE = () => process.execPath;',
       "const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');",
-      "const GEN = () => path.join(ROOT, 'bin', 'geneseed.mjs');",
+      "const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');",
       'p = spawn(cmd[0], cmd.slice(1), {'],
   },
 };
@@ -537,17 +537,17 @@ function importClosure(entry) {
 const importsChildProcess = (text) => /^\s*import\s.*'node:child_process'/m.test(text);
 
 test('the generator driver still reaches no child-process module', () => {
-  // `bin/geneseed.mjs` is banned from spawning AT ALL, and a source grep on the driver alone
+  // `bin/build-driver.mjs` is banned from spawning AT ALL, and a source grep on the driver alone
   // cannot see an import one module deep: a single `import` of `js/hooks.mjs` would put
   // child_process in the driver's process with its own source still clean. So the walk is
   // transitive, which is the same assertion one level out.
-  const closure = importClosure(path.join(ROOT, 'bin', 'geneseed.mjs'));
+  const closure = importClosure(path.join(ROOT, 'bin', 'build-driver.mjs'));
   assert.ok(closure.size > 1, 'the import walk found no modules, so it proves nothing');
   for (const f of closure) {
     const text = readFileSync(f, 'utf8');
     for (const banned of ['node:child_process', "'child_process'", '"child_process"']) {
       assert.ok(!text.includes(banned),
-        `bin/geneseed.mjs reaches ${banned} through ${path.relative(ROOT, f)} — the Node `
+        `bin/build-driver.mjs reaches ${banned} through ${path.relative(ROOT, f)} — the Node `
         + 'generator must not be able to spawn an interpreter');
     }
   }

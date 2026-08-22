@@ -35,7 +35,7 @@ function withDir(fn) {
 }
 
 function emit(argv, home, extraEnv = {}) {
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv], {
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv], {
     cwd: ROOT,
     encoding: 'utf8',
     env: { ...process.env, ...homeOverrides(home), ...extraEnv },

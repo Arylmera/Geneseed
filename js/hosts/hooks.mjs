@@ -3,7 +3,7 @@
  *
  * These are the commands the emitted `settings.json` actually invokes on a user's machine,
  * every session: a SessionStart injector, two PreToolUse gates, and a Stop/SubagentStop
- * distiller. Since P5b they are also what the emitted hooks name: `bin/geneseed.mjs` bakes
+ * distiller. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
  * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
  * driver emits has no Python in its hook path at all — which is what let the interpreter
  * discovery and its exit-4 refusal be deleted rather than merely bypassed.
@@ -14,7 +14,7 @@
  * ~11,600 lines and the generator behind them. This module loads none of that, and that is
  * deliberate rather than incidental: the Python originals already refuse to import `build`
  * for the marker filenames they need ("literals keep the hook dependency-free"), and
- * `bin/geneseed.mjs` could not be imported anyway, since its last statement runs the
+ * `bin/build-driver.mjs` could not be imported anyway, since its last statement runs the
  * generator. What that rule does NOT license is a second copy of a shared resolver under a
  * different name — see the primitives section below, where P5d found one that had silently
  * diverged from its twin.

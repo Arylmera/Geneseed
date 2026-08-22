@@ -574,7 +574,7 @@ export async function rebuildBundle(here, out, theme, emit, rootDir, log) {
   // and is right to — nothing has changed under it. Here the source on disk was replaced
   // three statements ago, so this must be a new process reading the new files.
   const proc = spawnSync(process.execPath,
-    [path.join(String(here), 'bin', 'geneseed.mjs'), ...buildArgs],
+    [path.join(String(here), 'bin', 'build-driver.mjs'), ...buildArgs],
     { cwd: String(here), stdio: 'inherit' });
   if (proc.status !== 0) return proc.status === null ? 1 : proc.status;
   // If a web daemon is running, bounce it so the new source and the freshly rebuilt web/dist

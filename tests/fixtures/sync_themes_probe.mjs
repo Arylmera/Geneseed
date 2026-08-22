@@ -7,7 +7,7 @@
  *
  * `withPyNewlines` is not decoration. `syncThemes` prints through a bare
  * `process.stdout.write`, exactly like the generator's other ~25 print sites, because
- * `bin/geneseed.mjs`'s `main` is what owns the translation for all of them at once. A probe
+ * `bin/build-driver.mjs`'s `main` is what owns the translation for all of them at once. A probe
  * that called it outside that funnel would compare LF against the reference's CRLF on Windows
  * and fail every case for a reason that has nothing to do with the port.
  */

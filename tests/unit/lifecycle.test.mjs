@@ -64,7 +64,7 @@ function withDir(fn) {
  */
 function emit(out, home, extraArgs = []) {
   const r = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'files', '--theme', 'neutral',
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'files', '--theme', 'neutral',
       '--out', out, ...extraArgs],
     {
       cwd: ROOT,
@@ -279,7 +279,7 @@ function globalInstall(d) {
   const cfg = path.join(d, 'cfg');
   fs.mkdirSync(cfg, { recursive: true });
   const r = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'opencode-global', '--theme', 'neutral'],
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode-global', '--theme', 'neutral'],
     {
       cwd: ROOT,
       encoding: 'utf8',
@@ -393,7 +393,7 @@ test('the unmerge edits a comment-free JSONC file', () => {
 function projectInstall(repo, kind, home) {
   fs.mkdirSync(repo, { recursive: true });
   const r = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', kind, '--theme', 'neutral',
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', kind, '--theme', 'neutral',
       '--out', repo, '--root', repo],
     {
       cwd: ROOT,
@@ -739,7 +739,7 @@ function withHome(dir, fn, extra = {}) {
 
 /** An emit in a child that INHERITS this process's (already redirected) environment. */
 function emitInherited(argv, extraEnv = {}) {
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv], {
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv], {
     cwd: ROOT,
     encoding: 'utf8',
     env: { ...process.env, ...extraEnv },

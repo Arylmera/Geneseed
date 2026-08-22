@@ -101,7 +101,7 @@ test.after(() => {
 test('the fixture is a real checkout with a real upstream, and it is not this one', () => {
   assert.notEqual(path.resolve(CO), path.resolve(process.cwd()));
   assert.equal(git(CO, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'), 'origin/main');
-  assert.ok(fs.existsSync(path.join(CO, 'bin', 'geneseed.mjs')),
+  assert.ok(fs.existsSync(path.join(CO, 'bin', 'build-driver.mjs')),
     'the copy has no generator entry point, so no arm below could rebuild anything');
 });
 

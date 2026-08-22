@@ -33,7 +33,7 @@ import { doctrinesOfDir, excludedRulesOfDir, themeFiles } from '../../js/hosts/i
 import {
   ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER,
 } from '../../js/build/source.mjs';
-import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
+import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../bin/build-driver.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';
@@ -99,7 +99,7 @@ const isFile = (...p) => fs.existsSync(path.join(...p)) && fs.statSync(path.join
  */
 function emitFiles(dir, out, extra = []) {
   const r = spawnSync(process.execPath,
-    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'files', '--theme', 'neutral',
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'files', '--theme', 'neutral',
       '--out', out, ...extra],
     {
       cwd: ROOT,
@@ -400,7 +400,7 @@ test('the notebook charter is agent-owned after seeding', () => {
 // Render and emit into a throwaway sandbox, run doctor-grade checks, write nothing real.
 //
 // THE VERB MOVED, and that is the one structural difference in this class. `--validate-only` was
-// a flag on the generator; in the port `bin/geneseed.mjs` refuses it with exit 2 and a pointer,
+// a flag on the generator; in the port `bin/build-driver.mjs` refuses it with exit 2 and a pointer,
 // because validating runs the doctor and the generator is under a transitive ban on starting a
 // process. It lives on the CLI binary as `geneseed validate`, deliberately outside the 26-verb
 // table (`bin/geneseed-cli.mjs` carries the argument).
@@ -713,7 +713,7 @@ test('--sync-themes maps the changed count to the exit code', (t) => {
     delete broken.VOICE;
     copyCheckout(co, { 'themes/broken.json': `${JSON.stringify(broken, null, 2)}\n` });
     const run = () => spawnSync(process.execPath,
-      [path.join(co, 'bin', 'geneseed.mjs'), '--sync-themes'],
+      [path.join(co, 'bin', 'build-driver.mjs'), '--sync-themes'],
       { cwd: co, encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true });
 
     const first = run();
