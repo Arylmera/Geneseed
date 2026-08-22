@@ -381,6 +381,55 @@ the page renders, wrong, with nothing red.
 
 ---
 
+## 4bis — Adding a RUNTIME DEPENDENCY
+
+**Short answer: you vendor it, or you do not add it.** A dependency arrives as tracked source under
+`js/vendor/<name>/`, imported by relative path, landing in the same `git merge --ff-only` as the
+code that imports it. It never comes from a registry at install time. `tests/unit/dependency_policy.test.mjs`
+gates this, and its header carries the long form.
+
+This is not conservatism. The npm route is *unbuildable* here, for three reasons that were measured
+rather than assumed:
+
+1. **Every fixture would die at module load.** `copyCheckout` lists the tree with
+   `git ls-files --cached --others --exclude-standard`, which honours `.gitignore`, and
+   `.gitignore` ignores `/node_modules/`. The copy is written outside the repository, under the OS
+   temp root, and the product is run out of it as a real child process — so Node's upward resolver
+   walk starts in temp and finds nothing. Eleven test files build such a copy. And this is not a
+   fixture defect to work around: a user's fresh `git clone` has no `node_modules` either. **The
+   fixture is that clone.** Giving the fixture something the real install lacks makes it stop
+   reproducing the failure it exists to catch.
+
+2. **The clone channel cannot install, and it is the only channel that would need to.** `geneseed
+   update` is `git pull` + rebuild. `npm ci` deletes `node_modules` before refetching, so a blocked
+   download leaves an install whose CLI cannot start — the one outcome the update must never
+   produce. `npm install` writes the tracked `package-lock.json`, so `preflight()`'s
+   `git status --porcelain` then reports a dirty tree and the *next* update refuses with "You have
+   local changes": a self-poisoning update. Meanwhile npm/npx installs already resolve
+   `dependencies` at install time and need nothing from us. There is no overlap between the channel
+   that would need a sync step and the channel where one could work.
+
+3. **The hook path pays per tool call.** `bin/geneseed-hook.mjs` loads on every tool call of every
+   agent session (~14 ms). A relative import costs no resolver walk; a bare one does.
+
+What vendoring costs, by contrast, is almost nothing: `files[]` already carries `js/` and the
+manifest partition already carries the `js/` prefix row, so a vendored subtree costs **zero**
+manifest lines and zero partition lines. The existing doctor gate already covers a bad drop, because
+`runDoctor` validates the pulled tree in a fresh interpreter before the rebuild.
+
+**The one exception, and it is not a loophole.** `adapters/` does not run in this tool's process — it
+ships into OpenCode's. A module the *host* provides is resolvable there and nowhere else, so
+reaching for one is legitimate. But it must be a **guarded dynamic import with a working degraded
+path**, never a static one: an older host that lacks it would otherwise fail the whole plugin at
+load instead of losing one capability. `geneseed-workflow.js`'s `@opencode-ai/plugin` is the shape
+to copy. The allow-list in the gate is two-sided — an entry nothing imports fails as loudly as an
+import nothing declares.
+
+**Before proposing one at all, price it.** At the time this was written there were 463 import
+specifiers under `js/`, `bin/` and `adapters/` and exactly one was bare — the host-provided
+exception above. The invariant already held; it had simply never been written down. A library that
+would delete fewer lines than its vendored source adds is not a saving.
+
 ## 5 — The four things that are genuinely hard
 
 These are not checklist items. They are structural, and each one should be settled *before* the
