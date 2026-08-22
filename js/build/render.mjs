@@ -31,7 +31,7 @@ import path from 'node:path';
 import { readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
-// `js/checkout.mjs` imports nothing but node builtins, so this direction cannot cycle.
+// `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
 import { PACK_ORDER } from './source.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
@@ -49,7 +49,7 @@ export const STRUCTURE = {
 
 /**
  * Source top-level dirs whose OUTPUT name is themed. Mirrors `SRC_DIR_TOKENS`.
- * Exported because `js/emit.mjs`'s `build` resolves the same tokens to decide which
+ * Exported because `js/build/bundle.mjs`'s `build` resolves the same tokens to decide which
  * dirs it owns and wipes — one owner, so the two cannot disagree about a folder name.
  */
 export const SRC_DIR_TOKENS = {

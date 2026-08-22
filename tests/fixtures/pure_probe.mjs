@@ -29,7 +29,7 @@ import {
 } from '../../js/lib/text.mjs';
 // `expanduser` and `resolvePath` are NOT in `fs.mjs` — they are host-config resolvers and
 // live beside the config-dir lookups that need them. Verified rather than assumed; the
-// private copies in `js/hooks.mjs` are a second pair and not these.
+// private copies in `js/hosts/hooks.mjs` are a second pair and not these.
 import { expanduser, resolvePath } from '../../js/hosts/hosts.mjs';
 import { installedDefaults } from '../../js/hosts/installs.mjs';
 import { installAgentEntryOf } from '../../js/maintain/uninstall.mjs';
@@ -129,7 +129,7 @@ const FNS = {
   // `toPlatformPath` AFTER IT, because the reference's `expanduser` is a Path METHOD and this
   // one is a string function: `Path("")` is `.` before `expanduser` is even consulted, so a
   // raw comparison would score `py_path_str`'s job as an `expanduser` divergence. The
-  // composite is what `js/hooks.mjs` actually writes, and `py_path_str` gates its own half
+  // composite is what `js/hosts/hooks.mjs` actually writes, and `py_path_str` gates its own half
   // over its own corpus — so a real tilde divergence still shows through, and does.
   expanduser: (a) => toPlatformPath(expanduser(a[0])),
   normcase: (a) => normcase(a[0]),

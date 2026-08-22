@@ -282,7 +282,7 @@ export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
  * `json.dumps(obj)` and `json.dumps(obj, sort_keys=True)` — the COMPACT container form.
  *
  * Deferred through three phases because guessing its signature would have been worse than
- * not having it; `js/settings.mjs` is the code that finally needs it, and the shapes were
+ * not having it; `js/hosts/settings.mjs` is the code that finally needs it, and the shapes were
  * counted with `ast` rather than assumed: four bare `json.dumps(container)` and two
  * `sort_keys=True`, all inside `_build_settings.py`, none of them `ensure_ascii=False`.
  *

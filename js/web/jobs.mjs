@@ -64,7 +64,7 @@
  * the daemon mid-job — which killed the job's own tracking and left the console on `running`
  * forever. It was set here before any ported row read it, because it was P6g's CONTRACT WITH
  * P8, and a contract written after the fact is a contract that was broken once first. P8a is
- * where `js/update.mjs` began honouring it, and P8c is where the `update` row that triggers
+ * where `js/maintain/update.mjs` began honouring it, and P8c is where the `update` row that triggers
  * it crossed — so it is a live pair now rather than a promise.
  *
  * `PYTHONUNBUFFERED=1` reaches the Python child AND its own Python children, or their stdout
@@ -418,7 +418,7 @@ const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');
  * P6g opened it with three rows and wrote the rule that closes it: each removed by the phase
  * that ports its verb. `update` left in P8c; `link` and `unlink` left in P10b, which is the
  * phase that also had to decide whether those two verbs should exist under npm at all
- * (`js/link.mjs`'s docblock carries the argument, and the deciding vote was these two rows —
+ * (`js/hosts/link.mjs`'s docblock carries the argument, and the deciding vote was these two rows —
  * the console's Settings buttons POST here, and only a ported verb can answer them).
  *
  * WHY AN EMPTY SET RATHER THAN A DELETED ONE. The `ast` cross-check in
@@ -474,7 +474,7 @@ function actionTable({
     // P8c. The row names `upgrade`, which is the VERB; `update` is the action name here and
     // argparse's alias there, and the reference's own row is `[py, harness.py, "upgrade"]` for
     // the same reason. The daemon bounce this job must not do itself is `GENESEED_WEB_JOB`'s
-    // job, set by `_run` above and read by `js/update.mjs` — P6g's contract with P8, honoured.
+    // job, set by `_run` above and read by `js/maintain/update.mjs` — P6g's contract with P8, honoured.
     update: [[NODE(), CLI(), 'upgrade']],
     export: [[NODE(), CLI(), 'diff', '--out']],
     // Local-machine maintenance, surfaced in the web Settings. uninstall keeps memory (never

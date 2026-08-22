@@ -15,7 +15,7 @@
  * dispatchers and therefore two statements at every call site — a shape its own docstring calls
  * "not incidental, it is what leaves this walker something to check". THIS PORT DOES NOT HAVE
  * THAT SHAPE, which is the finding that decided the successor: `claudeWire` is a real function,
- * but both OpenCode emits INLINE their merge, and PRUNE/MANIFEST/VERIFY are not in `js/emit.mjs`
+ * but both OpenCode emits INLINE their merge, and PRUNE/MANIFEST/VERIFY are not in `js/build/bundle.mjs`
  * at all — they are in `bin/build-driver.mjs`'s driver bodies. A walker would have to span two files
  * and would still be reading source rather than watching a run.
  *
@@ -168,7 +168,7 @@ test('no wiring call escapes a WIRE-marked function', () => {
   // negative about a call that did not happen on the path a test drove. The reference derived the
   // wiring set with `ast` rather than hand-listing it, on the argument that "a hand-list contains
   // exactly the names someone remembered, which is how `_opencode_target` went unmeasured for
-  // three phases". Same derivation here, over `js/settings.mjs`.
+  // three phases". Same derivation here, over `js/hosts/settings.mjs`.
   const settings = readFileSync(path.join(ROOT, 'js', 'hosts', 'settings.mjs'), 'utf8');
   const MUTATORS = /\b(writeText|writeFileSync|renameSync|rmSync|mkdirSync|unlinkSync|chmodSync|atomicWriteJson)\s*\(/;
   const fns = [...settings.matchAll(/^export function (\w+)\(/gm)].map((m) => m[1]);
@@ -190,8 +190,7 @@ test('no wiring call escapes a WIRE-marked function', () => {
   // find NOTHING that wires and pass by checking nothing. Each file is walked separately —
   // concatenating them would let one file's last function swallow the next file's header and
   // report calls it does not make.
-  const EMIT_FILES = ['emit.mjs', 'bundle.mjs', 'emit-common.mjs', 'emit-opencode.mjs',
-    'emit-claude.mjs'];
+  const EMIT_FILES = ['bundle.mjs', 'emit-common.mjs', 'emit-opencode.mjs', 'emit-claude.mjs'];
   const bodies = EMIT_FILES.flatMap((f) => {
     const src = readFileSync(path.join(ROOT, 'js', 'build', f), 'utf8');
     return [...src.matchAll(/^(?:export )?function (\w+)\(/gm)].map((m, i, all) => {

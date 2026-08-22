@@ -392,7 +392,7 @@ const ALWAYS_PACKED = new Set(['package.json']);
 /**
  * A `*` row, with npm's `files` semantics rather than the shell's.
  *
- * ⚠ `*` DOES NOT CROSS A SEPARATOR — hence `[^/]*`, not `[\s\S]*`. `js/hooks.mjs:172` has an
+ * ⚠ `*` DOES NOT CROSS A SEPARATOR — hence `[^/]*`, not `[\s\S]*`. `js/hosts/hooks.mjs:172` has an
  * `fnmatch` that looks reusable and is the opposite convention on purpose (its own docblock says
  * so): there `docs/*.md` really does select `docs/nested/deep.md`. Reusing it here would silently
  * claim files npm never packs. This direction is the fail-safe one — a glob that is too NARROW

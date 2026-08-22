@@ -34,7 +34,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const TUI_URL = pathToFileURL(path.join(ROOT, 'js', 'ui', 'tui.mjs')).href;
 
 /**
- * Evaluate an expression against `js/tui.mjs` in a child with `env` applied.
+ * Evaluate an expression against `js/ui/tui.mjs` in a child with `env` applied.
  *
  * ONE PROCESS PER TIER. `TUI_ASCII` and friends are `const`s computed at import, so nothing
  * this process does can change them — which is the same constraint the reference works around

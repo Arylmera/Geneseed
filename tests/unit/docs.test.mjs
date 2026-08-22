@@ -447,7 +447,7 @@ test('every workflow that count-gates `node --test` pins the TAP reporter', () =
 // THE ARGV `migrate` TELLS YOU TO PASTE INTO A LOGIN ITEM
 
 // ⚠ ONE SOURCE NOW, NOT TWO. The reference's `test_both_implementations_advise_the_same_argv`
-// compared `rituals/_harness_build.py`'s string against `js/migrate.mjs`'s; that comparison dies
+// compared `rituals/_harness_build.py`'s string against `js/maintain/migrate.mjs`'s; that comparison dies
 // with the file. What it was protecting — that the advice is a REAL invocation — is what the
 // three tests below derive, and they never needed the second copy.
 const ADVICE_RE = /update it by hand to run: (.+?)(?:\\n)?['"]/g;

@@ -50,7 +50,7 @@ export const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
  *
  * `loaded[event]` where `event` came out of a manifest hands back `Object.prototype`'s
  * member for `constructor`, `toString` or `valueOf`, where Python's `.get` returns None.
- * The same hazard `js/native.mjs` hit with `overrides[stem]`, on a dict the USER edits. */
+ * The same hazard `js/hosts/native.mjs` hit with `overrides[stem]`, on a dict the USER edits. */
 function get(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
 }
@@ -502,7 +502,7 @@ export function shimHome() {
 }
 
 /**
- * `Path(x).expanduser()` — private twin of `js/hosts.mjs`'s `expanduser`, same guard.
+ * `Path(x).expanduser()` — private twin of `js/hosts/hosts.mjs`'s `expanduser`, same guard.
  *
  * `GENESEED_HOME` is user-set, same as any config-dir env var there, so a `~user` value here
  * has the identical failure mode (a hook shim written under a literal `~user` directory) and

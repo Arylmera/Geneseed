@@ -51,7 +51,7 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 /**
  * `raise SystemExit(msg)` — the message on stderr, exit 1.
  *
- * The convention `js/emit.mjs`'s `assertSourceComplete` set and `bin/geneseed-cli.mjs`
+ * The convention `js/build/bundle.mjs`'s `assertSourceComplete` set and `bin/geneseed-cli.mjs`
  * honours: write at the raise site, mark the throw as a DELIBERATE refusal with `exitCode`,
  * and let anything unmarked keep its stack. Python prints a traceback for an unhandled
  * exception, so dressing a crash as a one-liner would hide a bug.

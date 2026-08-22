@@ -40,7 +40,7 @@ import { normcase, comparePaths, toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 // `harness status` reports the memory store, and `bin/geneseed-cli.mjs` cannot import THIS
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
-// spawns. So the resolver has one owner in `js/hosts.mjs` rather than a second copy — and
+// spawns. So the resolver has one owner in `js/hosts/hosts.mjs` rather than a second copy — and
 // with it went this file's private `opencodeConfigDir`, whose only caller it was.
 import { resolveMemoryDir, expanduser } from './hosts.mjs';
 
@@ -67,13 +67,13 @@ const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.ur
 // only the hook's (`fnmatch`, the transcript readers, `asOsError`'s errno table).
 //
 // AND `expanduser` WAS THE SECOND VIOLATION, closed here. This file carried its own, which
-// returned a `~user` path UNCHANGED while `js/hosts.mjs`'s single owner REFUSES the form —
+// returned a `~user` path UNCHANGED while `js/hosts/hosts.mjs`'s single owner REFUSES the form —
 // an adjudicated product decision (`TheTildeUserFormIsADeliberateDivergence`) that the hook
 // was quietly exempt from because it had a private copy. It now imports the owner. The
 // refusal throws, so `sovereignBypass` and `cmdContext` below contain it per entry / per
 // call: a hook that CRASHES reports success, because these gates exit 0 and signal on
 // stdout, so "the gate blew up" and "the gate found nothing" are the same observation to
-// Claude. `resolvePath` just below is the THIRD copy of a primitive `js/hosts.mjs` also
+// Claude. `resolvePath` just below is the THIRD copy of a primitive `js/hosts/hosts.mjs` also
 // exports, and is the next item in this series.
 
 /**
@@ -209,7 +209,7 @@ function readStdin() {
 
 // The two output funnels, with Python's newline translation reproduced. They moved to
 // `js/lib/fs.mjs` in P5c — beside `writeText`, which is the same rule for FILES — when
-// `js/excludes.mjs` became the second caller; see that docblock for why the translation
+// `js/inspect/excludes.mjs` became the second caller; see that docblock for why the translation
 // exists and which gate can see it.
 const out = printOut;
 const err = printErr;
@@ -748,7 +748,7 @@ export function readNotes(raw) {
   return raw;
 }
 
-// `resolveMemoryDir` moved to `js/hosts.mjs` in P5d — see the import at the top of this
+// `resolveMemoryDir` moved to `js/hosts/hosts.mjs` in P5d — see the import at the top of this
 // file. Re-exported here so the hook entry's own import list does not change.
 export { resolveMemoryDir };
 

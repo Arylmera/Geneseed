@@ -7,15 +7,15 @@
  * of magnitude:
  *
  *   * `_memory_drop_index` — "check whether P5's `learn` ported it". It did not; nothing in
- *     `js/` referenced it. It lands in `js/hooks.mjs`, beside the other memory-store
+ *     `js/` referenced it. It lands in `js/hosts/hooks.mjs`, beside the other memory-store
  *     primitives, because that is where its Python siblings' twins already live.
  *   * `_mcp_load` — "already in js/ (P6c)". What crossed in P6c is `readJsonc` and a
  *     five-line no-host reader inside `js/web/api.mjs` for `wiki.jsonc`. The host fork and
- *     the other twelve MCP functions are 168 lines of new `js/mcp.mjs`.
+ *     the other twelve MCP functions are 168 lines of new `js/hosts/mcp.mjs`.
  *   * `settings.mjs`'s atomic write — a DIFFERENT Python function from `_mcp_save`, with a
- *     different temp suffix and no parent-directory creation. See `js/mcp.mjs`.
+ *     different temp suffix and no parent-directory creation. See `js/hosts/mcp.mjs`.
  *   * `api_install_toggle` — "~25 new; `_move_tree`, `_prune_empty_ancestors` and the stash
- *     ARE in `js/uninstall.mjs` (P5h)". `DISABLED_STASH`, `installKind` and `installState`
+ *     ARE in `js/maintain/uninstall.mjs` (P5h)". `DISABLED_STASH`, `installKind` and `installState`
  *     are. `_move_tree`, `_prune_empty_ancestors`, `_install_move_list`, `_install_relive`,
  *     `_install_readd_entry`, `_install_deactivate`, `_install_reactivate`,
  *     `_claude_deactivate` and `_claude_reactivate` are not — 293 lines of unported
@@ -708,7 +708,7 @@ export function buildOverride(state, body) {
  * `.geneseed-emit`, so the EXPECTED render uses the install's own host dialect.
  *
  * Returns the HOST rather than a function, because `emitGlobalInto(host, …)` is how the twin
- * of `build.HOSTS[host]["emit_global"]` is already spelt (`js/diff.mjs` calls it that way).
+ * of `build.HOSTS[host]["emit_global"]` is already spelt (`js/inspect/diff.mjs` calls it that way).
  * An unknown or missing marker falls back to OpenCode, exactly as the reference's two
  * `.get(..., default)` calls do.
  */
@@ -882,7 +882,7 @@ export function apiInstallCmd(state, body) {
  * and this endpoint moves and deletes whole trees, so the root is never built from raw body
  * input. An unknown pair is a `NotFound`, which the shell answers 404.
  *
- * THE ENGINE IS `js/uninstall.mjs`'s, and P6i is what brought it. `installDeactivate` /
+ * THE ENGINE IS `js/maintain/uninstall.mjs`'s, and P6i is what brought it. `installDeactivate` /
  * `installReactivate` are the reversible siblings of `installUninstall` — the same owned-file
  * walk and ancestor prune with `move` where the reversal has `unlink` — which is why they live
  * beside it rather than in the web tree. `remove` is `installUninstall`, which crossed in P5h

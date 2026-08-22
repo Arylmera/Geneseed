@@ -113,8 +113,8 @@ export function stripWhitespace(s) {
  *
  * P2 added them for `_build_render._insert_theme_keys`, which uses all three spellings within
  * four lines (`lines[0].strip()`, `ln.lstrip().startswith('"')`,
- * `lines[pred].rstrip().endswith(",")`). They are here rather than in `js/themes.mjs` for the
- * reason this file exists at all: `js/settings.mjs` already carries a private second copy of
+ * `lines[pred].rstrip().endswith(",")`). They are here rather than in `js/build/themes.mjs` for the
+ * reason this file exists at all: `js/hosts/settings.mjs` already carries a private second copy of
  * the character class, and a THIRD one — in the module that decides where a comma goes in a
  * committed theme file — is how the three drift apart. One owner of the set, three views of it.
  */

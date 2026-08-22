@@ -97,7 +97,7 @@ const HOME_PLATFORM = process.platform === CORPUS.recorded_on;
  * `theme_files()` sorts with Python's `sorted()` over `Path` objects, which compare through
  * `_str_normcase` — LOWER-CASED on Windows, the raw string on posix. So `apple.json` precedes
  * `Zebra.json` here and follows it on the ubuntu runner, and both implementations are right on
- * both platforms; `js/installs.mjs`'s own docblock says so, and `comparePaths` is built on the
+ * both platforms; `js/hosts/installs.mjs`'s own docblock says so, and `comparePaths` is built on the
  * same `normcase`. The recording froze this machine's collation and the first fix asserted it
  * everywhere, which is how `validate (ubuntu-latest)` stayed red after the newline split.
  *

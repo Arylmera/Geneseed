@@ -53,7 +53,7 @@ const VERBS = {
 };
 
 function die(code, msg) {
-  // CRLF on Windows, for the same reason `js/hooks.mjs`'s funnels translate: argparse
+  // CRLF on Windows, for the same reason `js/hosts/hooks.mjs`'s funnels translate: argparse
   // writes this line through `sys.stderr`, which does.
   process.stderr.write(`geneseed-hook: error: ${msg}${process.platform === 'win32' ? '\r\n' : '\n'}`);
   return code;
@@ -115,7 +115,7 @@ function main(argv) {
   // `<verb> --help`, for the same reason and by the same owner as `bin/geneseed-cli.mjs`:
   // argparse holds `-h` at the parser, so this entry's `parse` calls it an unrecognized
   // argument. The four hook verbs are four of the reference's 26 and had the same gap.
-  // `js/cli.mjs` reads the CLI table lazily, inside its functions, so importing it costs this
+  // `js/ui/cli.mjs` reads the CLI table lazily, inside its functions, so importing it costs this
   // entry a module parse and no file read on the hook path.
   if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
     const rc = printHelp('geneseed-hook', verb);

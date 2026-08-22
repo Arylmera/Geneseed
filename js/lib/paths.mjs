@@ -27,7 +27,7 @@ const { X_OK } = constants;
  * free because `Path` has already done it — so BOTH readings of the reference fold slashes
  * and this did not. Every sort call site feeds it `path.join` output or a bare `readdir`
  * name, which is why no emitted byte ever moved; `fnTranslate(normcase(pattern))` in
- * `js/hooks.mjs` is where it was reachable, because an exclude pattern is USER-WRITTEN and
+ * `js/hosts/hooks.mjs` is where it was reachable, because an exclude pattern is USER-WRITTEN and
  * `memory/*` never matched a native `memory\x` the way `fnmatch` does.
  */
 export const normcase = process.platform === 'win32'
@@ -46,7 +46,7 @@ export const normcase = process.platform === 'win32'
  *     sorted    : x/a/b.md  <  x/a.md          (component 'a' < 'a.md')
  *     flat cmp  : the reverse again
  *
- * Nothing in the emitted tree could see it: `js/render.mjs` sorts a list whose members share
+ * Nothing in the emitted tree could see it: `js/build/render.mjs` sorts a list whose members share
  * a directory depth, and `golden.py` compared CONTENT rather than order. It became visible
  * the first time a full path list was PRINTED \u2014 `geneseed validate -v` \u2014 against a real
  * skills tree that happens to contain both `skills/geneseed/` and `skills/geneseed-code-review/`.
@@ -70,7 +70,7 @@ export function comparePaths(a, b) {
  *
  * MOVED HERE IN P6i, from `js/web/api.mjs` where P6b first needed it. The Python is a harness
  * CORE primitive (`child.relative_to(parent)` in a try/except), and its second caller is
- * `_install_move_list` in `js/uninstall.mjs` \u2014 a CLI-level module that must not import the
+ * `_install_move_list` in `js/maintain/uninstall.mjs` \u2014 a CLI-level module that must not import the
  * web tree to reach it. Beside `normcase`, which is the thing it is actually about.
  * `js/web/api.mjs` re-exports it so its existing importers are unchanged.
  */
@@ -86,7 +86,7 @@ export function within(child, parent) {
  *
  * `path.normalize` is NOT this: it also collapses `a/../b` to `b`, and `PurePath` keeps the
  * `..` because a symlinked `a` makes those two different directories. The distinction is
- * live in `js/excludes.mjs`, where a hand-edited `excludes.json` entry is compared against a
+ * live in `js/inspect/excludes.mjs`, where a hand-edited `excludes.json` entry is compared against a
  * RESOLVED repo path — Python never matches a `..` entry there, and a normalising port would
  * match it and unwire a file the reference would have left alone.
  */
@@ -147,8 +147,8 @@ export function toPlatformPath(s) {
  * ONE OWNER, and the five pre-existing `path.isAbsolute` calls in `js/` were READ rather than
  * assumed to be copies. Three cannot reach the divergence — `js/doctor.mjs` and
  * `bin/build-driver.mjs` test the output of `path.relative`, which is never rootless-absolute,
- * and `js/emit.mjs`'s `safePriorDirName` is `&&`-guarded by `basename(p) === p` immediately
- * after. The two in `js/hooks.mjs` (a context entry's `path`) DO carry the same hazard and
+ * and `js/build/bundle.mjs`'s `safePriorDirName` is `&&`-guarded by `basename(p) === p` immediately
+ * after. The two in `js/hosts/hooks.mjs` (a context entry's `path`) DO carry the same hazard and
  * are deliberately not repointed here: that is the hook entry's shipped behaviour, no
  * `context` cell varies it, and changing it in this phase would be an ungated edit to a verb
  * that crossed three phases ago. Recorded in the spec's "Still owed" with this reproduction.

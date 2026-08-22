@@ -13,7 +13,7 @@
 //     and greps argparse's output for a subcommand. Its subject is a file P4 deletes.
 //   * `_stale_factory_hint` and the fallback in `_update_step_cmd` exist for ONE failure the
 //     port cannot have: a `harness.py` on disk too old to know `upgrade`, dead-ending on
-//     argparse's `invalid choice`. `js/update.mjs`'s own docblock argues it out — the step is
+//     argparse's `invalid choice`. `js/maintain/update.mjs`'s own docblock argues it out — the step is
 //     an IMPORT, not a spawn, so there is no second program to be stale, no argparse to refuse,
 //     and no `invalid choice` to recognise. A twin that spawned a `--help` probe to answer a
 //     question it already knows would be ceremony. The gap IS the design.
@@ -47,7 +47,7 @@
 // reference's step command names an interpreter and a `.py`, and the port's names
 // `process.execPath` plus this repo's own CLI, so no spelling of `python` can reach it. That is
 // a claim about the SOURCE and it belongs to P4's repo-wide no-python scan, which must name
-// `js/update.mjs` when it is written.
+// `js/maintain/update.mjs` when it is written.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

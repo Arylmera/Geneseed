@@ -67,7 +67,7 @@ export function redactUrlCreds(text) {
 }
 
 // `_NO_WINDOW` was defined here and PRIVATE to this module, which is how `js/doctor.mjs`
-// and `js/hooks.mjs` came to spawn without it — see `js/lib/proc.mjs` for the flag, the
+// and `js/hosts/hooks.mjs` came to spawn without it — see `js/lib/proc.mjs` for the flag, the
 // capturing-only rule behind it, and why a miss here is invisible to every byte gate.
 
 /** `subprocess.run(..., capture_output=True, encoding="utf-8")` reads in UNIVERSAL NEWLINES. */
@@ -569,7 +569,7 @@ export async function rebuildBundle(here, out, theme, emit, rootDir, log) {
   else if (emit === 'opencode-global') buildArgs.push('--emit', 'opencode-global');
   log(`[geneseed] rebuilding bundle -> ${out} (theme: ${theme || 'config default'}, emit: ${emit}) ...`);
   await drainStdout();
-  // THE GENERATOR, RE-EXECUTED. `js/generate.mjs`'s `cmdBuild` calls `driverMain` in-process
+  // THE GENERATOR, RE-EXECUTED. `js/build/generate.mjs`'s `cmdBuild` calls `driverMain` in-process
   // and is right to — nothing has changed under it. Here the source on disk was replaced
   // three statements ago, so this must be a new process reading the new files.
   const proc = spawnSync(process.execPath,

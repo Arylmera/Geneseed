@@ -35,7 +35,7 @@ const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // `ENTITY_STATUSES`, `LAW_CLASSES`, `LAW_CLASS` and `SKILL_CLASS` moved to
-// `js/inventory.mjs` in P6c — see the import above. They crossed HERE in P5g because
+// `js/inspect/inventory.mjs` in P6c — see the import above. They crossed HERE in P5g because
 // doctor's authoring gates are what validate them, and they belong where Python keeps
 // them (`_harness_tui`) now that the catalog reads them too. The gates below are
 // unchanged, which is what licensed the move: a copy would have stopped being the

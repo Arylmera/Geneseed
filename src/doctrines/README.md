@@ -35,7 +35,7 @@ To add a pack, drop a `<name>.md` here (body only, no top-level heading — it i
 inlined under `AGENT.md`'s own Doctrines heading), open it with a bold pack name and
 a one-line characterisation, number its rules from 1, add the pack's title keys to
 every theme, add a row above, and register the name in `PACK_ORDER`
-(`js/checkout.mjs`). That last step is not optional: discovery sorts
+(`js/build/source.mjs`). That last step is not optional: discovery sorts
 alphabetically and `PACK_ORDER` carries the narrative render order, so a pack file
 the list does not name **refuses the build** rather than rendering in the wrong
 place or reaching nobody. `--doctrines <list>` then selects from the registered set.

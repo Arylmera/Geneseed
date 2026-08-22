@@ -4,7 +4,7 @@
  * EXTRACTED IN P5c, and the reason is arithmetic rather than taste. `bin/build-driver.mjs`
  * owned these; `bin/geneseed-cli.mjs` needs the same four to find a global install, and a
  * resolver that decides WHERE a driver writes is the last thing that should exist twice.
- * `js/hooks.mjs` carries a third copy of `opencodeConfigDir` on purpose — the hook path is
+ * `js/hosts/hooks.mjs` carries a third copy of `opencodeConfigDir` on purpose — the hook path is
  * deliberately dependency-free and says so — but the CLI has no such reason, so this is one
  * owner for both drivers rather than a second exception.
  *
@@ -26,7 +26,7 @@ export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
 
 /**
  * `_build_core.VERSION_MARKER`. Third caller, so it moves here — `js/emit.mjs` and
- * `js/diff.mjs` each had a private const of their own and `js/uninstall.mjs` would have made
+ * `js/inspect/diff.mjs` each had a private const of their own and `js/maintain/uninstall.mjs` would have made
  * a third copy of a value whose whole job is being the same string everywhere. Same
  * arithmetic that put `GLOBAL_MANIFEST` above it.
  */
@@ -166,7 +166,7 @@ export function bobConfigDir() {
  * install of host H", and `_claude_cfg` asks "which subdir holds a project install's
  * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.github` value the Python reads
  * out of `build.HOSTS[host]["project_marker"]`, so it belongs beside the config dir rather
- * than in a second table in `js/installs.mjs`.
+ * than in a second table in `js/hosts/installs.mjs`.
  *
  * `agentFile` joined in P5h, and for one caller: `cmd_uninstall` names the managed block's
  * carrier in its "removes:" preamble (`the CLAUDE.md managed block`, `the AGENTS.md managed
@@ -214,7 +214,7 @@ const MEMORY_DIR_NAMES = ['memory', 'anamnesis'];
  * The last two matter for the recommended opencode-global install, whose store lives in
  * `~/.config/opencode` rather than beside any repo. null => stdout-only.
  *
- * HERE rather than in `js/hooks.mjs`, where it was written, because P5d gave it a second
+ * HERE rather than in `js/hosts/hooks.mjs`, where it was written, because P5d gave it a second
  * caller that cannot import that file: `bin/geneseed-cli.mjs` is under a transitive
  * `child_process` ban and `learn` spawns the model CLI. This module is the one both can
  * reach, and it already owns the `opencodeConfigDir` the last fallback needs — so the move
@@ -233,7 +233,7 @@ export function resolveMemoryDir(explicit) {
   if (gh) {
     // PER BASE, and the walk continues. `$GENESEED_HARNESS` is the FOURTH user-controlled
     // tilde input and the one the `~user` refusal was never swept onto: `expanduser` throws
-    // on `~someone/x`, and this resolver is reached by `geneseed status` (js/status.mjs's
+    // on `~someone/x`, and this resolver is reached by `geneseed status` (js/inspect/status.mjs's
     // `resolveMemoryDir(null)`) and by the `learn` hook, whose entry point
     // (`bin/geneseed-hook.mjs`) has NO top-level try — so an unguarded throw here is a stack
     // trace on a hook path and a non-zero exit, the exact failure the other three guards

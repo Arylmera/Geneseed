@@ -48,7 +48,6 @@ as a per-host install at project or global scope.
 | `generate.mjs` | CLI verbs `build`, `prompt`, `theme`, `rebuild-all` — the thin face over `bin/build-driver.mjs` |
 | `catalog.mjs` | `geneseed catalog` — prints the shipped roster. Classifies nothing itself |
 | `themes.mjs` | Maintainer-only `--sync-themes`: inserts `_TEMPLATE.json`'s missing keys into the committed themes |
-| `emit.mjs` | ⚠ Vestigial. Exports nothing and nothing imports it — see *Known debris* below |
 
 **Before editing:** `render.mjs` writes nothing and its output is byte-frozen. `emit-claude.mjs`'s
 wire half edits files the **user** co-owns — get its prior-claim pruning wrong and you delete
@@ -196,10 +195,6 @@ exported sets are deliberately EMPTY and must stay declared: each is half of a p
 
 ## Known debris
 
-* **`js/build/emit.mjs` exports nothing and nothing imports it.** It is still runnable as a script
-  (`node js/build/emit.mjs --kind …`) and that is its only remaining use. Its 66-line docblock
-  describes the Python-spawns-Node protocol, a boundary that no longer exists. Trust the code, not
-  that header, and treat the file as a candidate for deletion.
 * **`js/hosts/settings.mjs` carries a private second copy of Python's whitespace class**, duplicating
   `WHITESPACE` in `js/lib/text.mjs`. `text.mjs` is the owner.
 * **`web/src/pages/Skills.jsx`'s `SKILL_CATS` is a fourth, ungated copy of the skill taxonomy** —

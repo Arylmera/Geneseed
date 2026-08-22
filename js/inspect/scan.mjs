@@ -19,7 +19,7 @@ import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 // --------------------------------------------------------------------------------------
 
 /** `_harness_core.TOKEN_RE` / `LINK_RE` / `ABS_LINK_RE`. `g` where `findall` is used. */
-// Must stay in step with `js/render.mjs`'s TOKEN_RE: a token the renderer substitutes but this
+// Must stay in step with `js/build/render.mjs`'s TOKEN_RE: a token the renderer substitutes but this
 // scan cannot see is an unresolved-token gate that silently stops gating. Digits are legal after
 // the first character for `DOC_<PACK>_<n>`; a leading digit is still not a token.
 export const TOKEN_RE = /\{\{[A-Z_][A-Z0-9_]*\}\}/g;
@@ -75,7 +75,7 @@ export function rglob(dir) {
 }
 
 // `withDiscardableStderr` was defined here while `renderedProblems` was its only caller.
-// `js/hooks.mjs` became the second and third when the hook started CATCHING `expanduser`'s
+// `js/hosts/hooks.mjs` became the second and third when the hook started CATCHING `expanduser`'s
 // refusal, so it moved beside `printErr` in `js/lib/fs.mjs` — the writes it intercepts —
 // and its docblock carries the "not for silencing noise" warning with it.
 

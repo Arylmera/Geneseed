@@ -23,7 +23,7 @@
 //
 // WHAT COUNTS AS AN OFFENCE, WHICH IS THE WHOLE EDITORIAL LINE. An INVOCATION, or a path a
 // reader could follow, is an offence. A comment explaining why the port behaves as it does is
-// not — `js/hooks.mjs`'s "Ported from `_harness_context.py`" is the reason a maintainer can
+// not — `js/hosts/hooks.mjs`'s "Ported from `_harness_context.py`" is the reason a maintainer can
 // still understand the module, and a gate that demanded its deletion would be a gate on the
 // documentation (`tests/unit/no_panel.test.mjs` learnt that one the expensive way). MEASURED,
 // and this is why the bare-filename scan below is narrow rather than broad: a plain `\b\w+\.py\b`
@@ -120,10 +120,10 @@ const RULES = [
 // ---------------------------------------------------------------------------------------------
 // The permitted hits, BY NAME AND BY COUNT — never by a path exclusion.
 //
-// A blanket "`js/settings.mjs` is exempt" would permit the next Python filename to enter that
+// A blanket "`js/hosts/settings.mjs` is exempt" would permit the next Python filename to enter that
 // module in silence, and this file's whole subject is a thing entering in silence. So a row is
 // a file, the rule, the exact matched text, HOW MANY TIMES it occurs, and why it is allowed to.
-// The count is not decoration: both live sites in `js/settings.mjs` match the same six
+// The count is not decoration: both live sites in `js/hosts/settings.mjs` match the same six
 // characters, so a row without one would cover a third site nobody argued for. That is
 // the retired corpus gate's rule — "a new SITE for an already-declared spelling adds no
 // row and would otherwise arrive in silence" — applied to source instead of to a recording.
@@ -316,13 +316,13 @@ test('FIRING CONTROL: the widened rules do not fire on what must stay', () => {
     ['adapters/opencode/plugins/geneseed-context.js', 'const IGNORE = ["node_modules", "__pycache__", ".git"];'],
     ['src/skills/forge-mcp.md', 'FastMCP is the official Python SDK for MCP servers.'],
     ['docs/web/lsp-overview.md', '| pyright | Python | a language server the user may already run |'],
-    ['js/generate.mjs', "  'No Python or build step is required.',"],
+    ['js/build/generate.mjs', "  'No Python or build step is required.',"],
     ['js/cli-table.json', '"help": "print the install prompt (no Python needed to use it)"'],
     // PROVENANCE, the class this file exists NOT to hunt — one from each shape in the tree.
-    ['js/hooks.mjs', ' * Ported from `rituals/_harness_context.py` and `rituals/_harness_learn.py`.'],
-    ['js/render.mjs', ' * `_build_render.py`, whose phase order this reproduces.'],
+    ['js/hosts/hooks.mjs', ' * Ported from `rituals/_harness_context.py` and `rituals/_harness_learn.py`.'],
+    ['js/build/render.mjs', ' * `_build_render.py`, whose phase order this reproduces.'],
     ['web/src/App.jsx', '// harness.py composes the same three panes'],
-    ['js/migrate.mjs', ' * the shape harness.py by then had already written'],
+    ['js/maintain/migrate.mjs', ' * the shape harness.py by then had already written'],
     ['docs/limits.md', 'row 6 — its only gate was test_tui_boundary.py'],
     // The port's own successors, which must never read as the thing they replaced.
     ['.claude/skills/token-report/scripts/token_report.mjs', "spawnSync('node', ['token_report.mjs'])"],

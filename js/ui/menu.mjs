@@ -20,7 +20,7 @@
  * `rituals/_winterm.py` under the name `curses` when it does — so inside the harness the
  * import succeeds, the panel opens, and it is the PORT that has no window. The fallback is
  * still the right shape; only its explanation moved. The alternative that was considered and
- * refused: building a numbered line-menu out of `js/setup.mjs`'s `askChoice`. That is not a
+ * refused: building a numbered line-menu out of `js/maintain/setup.mjs`'s `askChoice`. That is not a
  * port of `_main_menu` — it is a THIRD user interface, differing from the reference on every
  * screen, unreachable from every cell (no cell has a TTY), and it would have to be deleted
  * the day P7c lands the real panel. The fallback is the reference's own contract for "no

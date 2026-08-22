@@ -149,7 +149,7 @@ test('the shipped themes are in parity', () => {
 // THE MONKEYPATCH HAD NO ESM EQUIVALENT, and this is the third shape from the porting rule
 // rather than a fourth. The reference corrupts a theme by assigning `_build_core.THEMES = tmp`
 // and a source tree by assigning `_build_core.SRC = tmp` — Python has no privacy to stop it.
-// `js/doctor.mjs` imports `SRC` and `THEMES` as bindings from `js/checkout.mjs`, where they are
+// `js/doctor.mjs` imports `SRC` and `THEMES` as bindings from `js/build/source.mjs`, where they are
 // derived from `import.meta.url`; an imported binding cannot be rebound, and there is no
 // environment variable that moves them (`--root` is the emit TARGET, not the source tree). So
 // the injection point the reference used simply does not exist here.
@@ -224,7 +224,7 @@ function withFault(faults, fn) {
  * path taken from the environment rather than from `--out` — so this gate baked
  * `<fixture>/bin/geneseed-hook.mjs` into the developer's real `~/.geneseed/bin/geneseed-hook`,
  * and killed every hook in every install on the machine the moment the fixture was cleaned up.
- * Reproduced twice in one session. `js/settings.mjs`'s `ephemeralCheckout` now refuses the
+ * Reproduced twice in one session. `js/hosts/settings.mjs`'s `ephemeralCheckout` now refuses the
  * hijack from the other end as well; this is the near half, and it is the one that keeps a
  * FIRST-ever emit on a machine (no shim yet, nothing to protect) from writing a temp path.
  */
@@ -479,7 +479,7 @@ test('the gate holds knownRuleIds to the rules the pack files actually define', 
 });
 
 test('the gate flags the consent gate and the process pack naming different rules', () => {
-  // ⚠ THE ONE HARDCODED RULE ADDRESS IN THE CODEBASE. `js/settings.mjs` keys the git-gate hooks
+  // ⚠ THE ONE HARDCODED RULE ADDRESS IN THE CODEBASE. `js/hosts/settings.mjs` keys the git-gate hooks
   // on the literal `process.5`, so a renumber of that pack silently re-points the TOOL BOUNDARY
   // at whichever rule inherited the number while the PROMPT still says `process 5` — and the
   // per-rule axis made that worse, because `process 5` can now be excluded on its own.

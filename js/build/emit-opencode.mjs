@@ -109,7 +109,7 @@ export function emitOpencodeRender(cfg, job) {
  * ASSEMBLY, NOT TRANSLATION. Every unit it needs was already here — 58 of the 65 functions
  * in its Python closure, counted with `ast` rather than by name-mapping, which is how the
  * scout that produced this list first reported `_posture_body` and `_mode_body` as missing
- * when both are `registerBody` in `js/render.mjs`. What is new is the assembly and the
+ * when both are `registerBody` in `js/build/render.mjs`. What is new is the assembly and the
  * three values that had to be decided on the Python side.
  *
  * `cfgDir` IS THE FIRST OF THEM AND THE REASON THE OTHERS WERE ASKED ABOUT.

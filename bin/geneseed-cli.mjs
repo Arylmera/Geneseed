@@ -9,13 +9,13 @@
  *
  *   * GROWING `bin/geneseed-hook.mjs` weakens the gate the design now rests on.
  *     `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` asserts EQUALITY between
- *     that file's table and the hooks `js/settings.mjs` wires, and P5b made it load-bearing:
+ *     that file's table and the hooks `js/hosts/settings.mjs` wires, and P5b made it load-bearing:
  *     the shim is machine-wide (`~/.geneseed/bin/geneseed-hook[.cmd]`, no per-install
  *     component) and last-writer-wins, so a Node emit owns the hooks of installs Python
  *     wrote, and the verb sets matching is what makes that safe. Relaxing it to a subset
  *     relation to admit `exclude` would be the single most damaging edit available here.
  *     Two more reasons point the same way, and the second is not in that file's own
- *     argument: `exclude`'s writer imports `js/settings.mjs` and `js/emit.mjs`, ~2,100 lines
+ *     argument: `exclude`'s writer imports `js/hosts/settings.mjs` and `js/emit.mjs`, ~2,100 lines
  *     that would then load on EVERY PreToolUse call — the spec's hook-latency budget says
  *     the shim must exec a minimal entry, not the CLI. And the entry's refusal list, which
  *     names every verb it does not carry, is what makes "silently accepted `doctor` and did
@@ -75,7 +75,7 @@ import { cmdWeb } from '../js/web/server.mjs';
  * `add_argument` calls, gated against the subparsers by NAME only. When
  * `_web_docs._cli_reference` stopped walking the parser and started reading the CLI table,
  * keeping that would have made THREE transcriptions of one parser — the parser, the file, and
- * here. So the argument surface comes from `js/cli.mjs`'s `cliSpec()`, derived from the same
+ * here. So the argument surface comes from `js/ui/cli.mjs`'s `cliSpec()`, derived from the same
  * file the docs page serves, and what is left in a row is the one thing a data file cannot
  * hold: the FUNCTION.
  *
@@ -151,14 +151,14 @@ const VERBS = {
     // Points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness:
     // `sync-self` DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS
     // about one and re-reads it as a theme — so the two verbs answer `sync-self cyberpunk`
-    // and `sync-self v1.2.3` differently. See `js/update.mjs`'s `syncSelf` for both halves.
+    // and `sync-self v1.2.3` differently. See `js/maintain/update.mjs`'s `syncSelf` for both halves.
     fn: cmdSyncSelf,
   },
   bootstrap: {
     fn: cmdBootstrap,
   },
   // P7a. Both are DISPATCHERS whose off-TTY arm is the whole of what a cell can reach, and
-  // `menu`'s on-TTY arm falls back rather than opening a panel — `js/menu.mjs`'s header
+  // `menu`'s on-TTY arm falls back rather than opening a panel — `js/ui/menu.mjs`'s header
   // argues both.
   menu: {
     fn: cmdMenu,
@@ -169,7 +169,7 @@ const VERBS = {
   // P7b, and it is the twenty-fifth and last. `cmd_tui`'s FIRST arm is `if not sys.stdin.
   // isatty()`, so off a TTY — which is every cell there is — the verb is one line and an
   // exit code, and that arm crosses byte for byte. The panel behind it is P7c's;
-  // `js/tui.mjs`'s header argues why this entry falls back to `cmd_tui`'s own
+  // `js/ui/tui.mjs`'s header argues why this entry falls back to `cmd_tui`'s own
   // panel-unavailable line rather than inventing a second full-screen UI, and
   // `tests/test_tui_boundary.py` asserts that the arm it declares is genuinely unreachable
   // here rather than merely untested.
@@ -202,7 +202,7 @@ const VERBS = {
 };
 
 function die(code, msg) {
-  // CRLF on Windows, for the same reason `js/hooks.mjs`'s funnels translate: argparse writes
+  // CRLF on Windows, for the same reason `js/hosts/hooks.mjs`'s funnels translate: argparse writes
   // this line through `sys.stderr`, which does.
   process.stderr.write(`geneseed: error: ${msg}${process.platform === 'win32' ? '\r\n' : '\n'}`);
   return code;
@@ -212,7 +212,7 @@ function die(code, msg) {
  * `argparse`'s surface for the verbs here, and only theirs: ordered positionals, some
  * optional, some with `choices`.
  *
- * `spec` comes from `js/cli.mjs`'s `cliSpec()` since P10c — derived from `js/cli-table.json`,
+ * `spec` comes from `js/ui/cli.mjs`'s `cliSpec()` since P10c — derived from `js/cli-table.json`,
  * which P2 made the owned document. This function's rules are unchanged; what
  * changed is that the table they run over is no longer written out by hand beside them. Every
  * argparse feature named below is a row of that derivation.

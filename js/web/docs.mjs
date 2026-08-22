@@ -16,7 +16,7 @@
  *     cannot even run. This port's standing rule is that a copy of a value under test stops
  *     being the value under test, and this would be the largest copy in it. **PAID IN P10c**,
  *     by the fix the deferral named: the parser's metadata became a FILE both implementations
- *     read — `js/cli-table.json` since P2. `js/cli.mjs` is the reader,
+ *     read — `js/cli-table.json` since P2. `js/ui/cli.mjs` is the reader,
  *     `tests/test_cli_reference.py` is what fails when the table and the parser part company
  *     for as long as the parser exists, and `bin/geneseed-cli.mjs`'s `VERBS` table
  *     — which was a SECOND transcription of the same 43 calls — reads it too, so the port
@@ -482,7 +482,7 @@ function about(state) {
  *
  * `about` left in P8c (`_origin_display` and the `git` spawn behind it, not the page).
  * `cli` left in P10c, and its blocker was neither: it was that `harness.build_argparser()`
- * cannot be introspected from Node at all. See `js/cli.mjs`.
+ * cannot be introspected from Node at all. See `js/ui/cli.mjs`.
  */
 export const NOT_PORTED_KINDS = new Set();
 

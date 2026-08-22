@@ -54,7 +54,7 @@ export function writeText(path, text) {
  * `path.open("a", encoding="utf-8").write(text)` — the APPEND half of the rule above.
  *
  * Same translation, second mode. It lives here rather than inlined at its one call site
- * (`js/update.mjs`'s install log) because the newline rule has exactly one owner in this
+ * (`js/maintain/update.mjs`'s install log) because the newline rule has exactly one owner in this
  * port and a second copy of it is how the rule rots: an appended line written with
  * `appendFileSync` alone is the only LF-terminated line in an otherwise CRLF file, which is
  * invisible in an editor and a whole-file difference to the gate.
@@ -111,7 +111,7 @@ export function copyFile(src, dest) {
  * universal newlines on the way back, folding both shapes to `\n` before any cell compares
  * them, the same shape as the shim's exclusion from `golden.py`. So the gate for it is
  * `test_the_two_entry_points_agree_on_stdout_BYTES`, which captures raw bytes. Moved here
- * from `js/hooks.mjs` in P5c, when `js/excludes.mjs` became the second caller: a translation
+ * from `js/hosts/hooks.mjs` in P5c, when `js/inspect/excludes.mjs` became the second caller: a translation
  * that exists twice is a translation that can be fixed once.
  */
 const xlate = (s) => (EOL === '\n' ? s : s.replaceAll('\n', EOL));
@@ -122,15 +122,15 @@ export const printErr = (s) => process.stderr.write(xlate(s));
  * Hold `fn`'s stderr, and emit it only if `fn` RETURNS.
  *
  * The reproduction of `except SystemExit` for a port that writes its refusal at the raise
- * site (`js/generate.mjs`'s `sysExit` docblock states the convention). `sys.exit(msg)`
+ * site (`js/build/generate.mjs`'s `sysExit` docblock states the convention). `sys.exit(msg)`
  * attaches the message to the EXCEPTION and the interpreter prints it on the way out, so a
  * Python caller that catches sees no output at all — which makes write-at-the-raise-site
  * identical for every caller that lets the throw propagate, and wrong for every caller that
  * catches.
  *
  * MOVED HERE beside `printErr`, whose writes it intercepts, when the hook became the
- * second and third such caller: `js/hosts.mjs`'s `expanduser` refuses a `~user` path by
- * printing and throwing, and `js/hooks.mjs` catches it twice — once per `excludes.json`
+ * second and third such caller: `js/hosts/hosts.mjs`'s `expanduser` refuses a `~user` path by
+ * printing and throwing, and `js/hosts/hooks.mjs` catches it twice — once per `excludes.json`
  * entry and once around `$GENESEED_ROOT`/`--root`. Its old docblock in `js/doctor.mjs`
  * warned that a general helper "would invite a second caller that wanted silence the
  * noise". That warning stands and is the contract: this is for a message that belonged to
@@ -156,8 +156,8 @@ export function withDiscardableStderr(fn) {
  * answer to the newline item P5e recorded and could not gate.
  *
  * WHY THE DRIVER NEEDS A FUNNEL WHERE EVERY OTHER CALLER NEEDS `printOut`. The generator
- * prints from ~25 sites across `bin/build-driver.mjs`, `js/emit.mjs`, `js/settings.mjs`,
- * `js/opencode.mjs`, `js/native.mjs` and `js/render.mjs`, and those modules are ALSO the
+ * prints from ~25 sites across `bin/build-driver.mjs`, `js/build/bundle.mjs`, `js/hosts/settings.mjs`,
+ * `js/hosts/opencode.mjs`, `js/hosts/native.mjs` and `js/build/render.mjs`, and those modules are ALSO the
  * body of the `GENESEED_NO_JS` seam child, whose `main` buffers both streams and hands them
  * to a Python parent that re-prints them through `print()`. Converting those sites to
  * `printOut` would translate once in Node and again in Python — `\r\r\n` on every line, on the

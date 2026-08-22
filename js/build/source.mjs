@@ -2,7 +2,7 @@
  * The checkout this code is running FROM — `_build_core`'s ROOT and the paths under it,
  * plus the `cfg` every render needs.
  *
- * The inverse of `js/hosts.mjs`. That module answers "where does the output go"; this one
+ * The inverse of `js/hosts/hosts.mjs`. That module answers "where does the output go"; this one
  * answers "where is the source". Both were `bin/build-driver.mjs`'s, and both leave it for the
  * same arithmetic reason: `bin/geneseed-cli.mjs` needs them too, and the value that decides
  * which tree gets rendered is the last thing that should exist twice.
@@ -16,7 +16,7 @@
  * `_build_core.js_cfg()` always sends `structure` and `capabilityLinkRe` because the Python
  * originals are module-level names TESTS MUTATE (`_OWNED` membership asked one level out).
  * A Node process has no Python module to mutate, so it sends neither and
- * `js/render.mjs`'s `cfg.structure ?? STRUCTURE` takes its right-hand branch.
+ * `js/build/render.mjs`'s `cfg.structure ?? STRUCTURE` takes its right-hand branch.
  *
  * The move is safe for the reason P5c's was: `tests/golden.py` drives `bin/build-driver.mjs`
  * over 259 cells and compares the tree byte-for-byte, and every one of them builds a cfg
@@ -49,7 +49,7 @@ export const WORKFLOW_SRC = path.join(ROOT, 'adapters', 'opencode', 'workflows')
  * posture file appears in both CLIs' choices with no code change.
  *
  * P5f moved this here from `bin/build-driver.mjs`, which had the only caller until
- * `js/installs.mjs` needed the same two lists: `_posture_of_dir` scans a deployed carrier for
+ * `js/hosts/installs.mjs` needed the same two lists: `_posture_of_dir` scans a deployed carrier for
  * `**<Name>**` and has to be scanning for the SAME names the driver's `--posture` accepts.
  * Two discoveries of one directory is precisely the shape that lets a new posture file be
  * buildable and undetectable.
@@ -72,7 +72,7 @@ export function discoverNames(dir, first) {
  * DELIBERATELY NOT `discoverNames('doctrines', 'craft')`. That helper `.sort()`s, so it
  * answers `craft, ops, process, rigor`; the constitution's order is a reading order —
  * write it (craft), prove it (rigor), run it (ops), ship it (process) — and no sort
- * produces it. Discovery still runs, but as a GATE rather than as the order: `js/render.mjs`
+ * produces it. Discovery still runs, but as a GATE rather than as the order: `js/build/render.mjs`
  * refuses to build when a pack file exists under `src/doctrines/` that is missing from this
  * array, so a fifth pack cannot be silently dropped from every install.
  *

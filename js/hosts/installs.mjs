@@ -2,9 +2,9 @@
  * How a DEPLOYED install is recognised — `_harness_setup`'s detection half and
  * `_harness_mcp`'s registry-reading half, which are one subject in two Python files.
  *
- * EXTRACTED IN P5f, and by the same arithmetic that produced `js/hosts.mjs` and
- * `js/checkout.mjs`: this is the third verb-set to need it. P5d wrote `themeOfDir` and
- * `footprintOfDir` inside `js/status.mjs` because `status` was the only caller; `diff`
+ * EXTRACTED IN P5f, and by the same arithmetic that produced `js/hosts/hosts.mjs` and
+ * `js/build/source.mjs`: this is the third verb-set to need it. P5d wrote `themeOfDir` and
+ * `footprintOfDir` inside `js/inspect/status.mjs` because `status` was the only caller; `diff`
  * renders its 'expected' copy in the theme and footprint the deployment actually uses, and
  * `rebuild-all` re-emits every install in its own theme, emit, footprint, posture and mode.
  * Three callers of one detector is where a private helper becomes a module.

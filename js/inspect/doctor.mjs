@@ -266,7 +266,7 @@ export function cmdDoctor(args) {
       // ⚠ THE TIP USED TO NAME `./geneseed build --sync-themes`, AND THAT COMMAND ERRORS.
       // It was argued here on the premise that "`build` forwards its extra arguments to the
       // generator" — which was true of the reference and is not true of `cmdBuild`
-      // (`js/generate.mjs`), which forwards `--theme` and nothing else. So the front door
+      // (`js/build/generate.mjs`), which forwards `--theme` and nothing else. So the front door
       // answered `unrecognized arguments: --sync-themes` to anyone who followed doctor's own
       // advice, for as long as the premise went unchecked. The flag belongs to the GENERATOR,
       // whose binary is `geneseed-build` — which is what `README.md` and `SETUP.md` have said

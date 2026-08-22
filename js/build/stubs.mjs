@@ -108,7 +108,7 @@ export const EXCLUDES_FILE = 'excludes.json';
 /**
  * `_build_render.EXCLUDES_STUB` — one long line, exactly as Python spells it.
  *
- * Exported since P5c because `js/excludes.mjs` reads it as the single source of the shape a
+ * Exported since P5c because `js/inspect/excludes.mjs` reads it as the single source of the shape a
  * missing or corrupt `excludes.json` degrades to, exactly as `_harness_exclude._read_excludes`
  * reads `build.EXCLUDES_STUB` rather than spelling `{"excludes": []}` a second time.
  */

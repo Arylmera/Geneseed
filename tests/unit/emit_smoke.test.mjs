@@ -296,7 +296,7 @@ test('the carrier still carries every law, themed and in order', () => {
  * on every host, and nothing in the tree would have said so.
  *
  * The ontology is here for the opposite reason: its four section names are NOT theme keys, they
- * are `STRUCTURE` in `js/render.mjs`, so this is the only place that proves the theme-independent
+ * are `STRUCTURE` in `js/build/render.mjs`, so this is the only place that proves the theme-independent
  * half of the constitution renders at all.
  *
  * Every build in this file leaves `--doctrines` at its default, so all four packs are active and

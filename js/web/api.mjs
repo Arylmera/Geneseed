@@ -14,7 +14,7 @@
  * `apiOverview` compute anything of their own, and most of what `apiOverview` computes is
  * counting.
  *
- * THE ONE PARAMETER: `doctorCollect({groups})`. `js/doctor.mjs` carried a `ran(check,
+ * THE ONE PARAMETER: `doctorCollect({groups})`. `js/inspect/doctor.mjs` carried a `ran(check,
  * label, probs)` that returned its third argument and threw the first two away, with a
  * docblock saying the label stays "because it is the one place each check is NAMED, and
  * what P6's accumulator will key on". This is that phase. `on_progress=` — the TUI's — is
@@ -26,15 +26,15 @@
  * `state.inventory` and the badges and taxonomy classes belonged to a phase that had not
  * arrived. `api_catalog` consumes exactly those fields, so this is the phase that would
  * have made the counting half and the reading half two classifiers. It did not:
- * `tuiInventory` in `js/inventory.mjs` is the one walk, `js/status.mjs`'s `inventoryCounts`
+ * `tuiInventory` in `js/inspect/inventory.mjs` is the one walk, `js/inspect/status.mjs`'s `inventoryCounts`
  * is three `length`s off it, and `specEntries` grew out of `specNames` by adding the READ
  * rather than by being written beside it.
  *
  * THE TAXONOMY WAS ALREADY PORTED, which the measurement found and the handoff did not.
- * `js/status.mjs` said flatly that "the ~111 LOC of TUI taxonomy" was P7's; `LAW_CLASS`,
+ * `js/inspect/status.mjs` said flatly that "the ~111 LOC of TUI taxonomy" was P7's; `LAW_CLASS`,
  * `SKILL_CLASS`, `LAW_CLASSES` and `ENTITY_STATUSES` had in fact crossed in P5g inside
  * `js/doctor.mjs`, because doctor's authoring gates are what validate them. P6c moved the
- * four to `js/inventory.mjs` — where Python keeps them — rather than copying them, and
+ * four to `js/inspect/inventory.mjs` — where Python keeps them — rather than copying them, and
  * doctor imports them back. Only `parse_laws`, `load_registry` and `entity_status` were
  * genuinely new.
  *
@@ -392,10 +392,10 @@ export const WIKI_FILE_CAP = 5000;
  * `resolvePath` for a path that came out of a HAND-MAINTAINED manifest — `null`, never a throw.
  *
  * The three wiki sites below are the only request-path callers of `expanduser`, and it now
- * REFUSES a `~user` form by printing and throwing (`js/hosts.mjs`'s docblock). None of them
+ * REFUSES a `~user` form by printing and throwing (`js/hosts/hosts.mjs`'s docblock). None of them
  * may let that escape: `js/web/server.mjs` wraps the whole GET in a blanket `catch` → a JSON
  * 500, so an unguarded refusal would turn ONE bad line in a file the user hand-edits into a
- * dead Knowledge section. That is the same argument `sovereignBypass` makes in `js/hooks.mjs`
+ * dead Knowledge section. That is the same argument `sovereignBypass` makes in `js/hosts/hooks.mjs`
  * — contain the refusal per entry and take the site's OWN degrade — and each of the three
  * already has one: `[]`, `continue`, `continue`-into-404. The reference reaches those same
  * three degrades for a `~user` path, from the other direction: `ntpath.expanduser` expands
@@ -539,7 +539,7 @@ export function apiWikiItem(state, name) {
  * `harness._within` — re-exported from `js/lib/fs.mjs`, where P6i moved it.
  *
  * It lived here from P6b (the restore's containment check) until `_install_move_list` needed
- * the same predicate from `js/uninstall.mjs`, which must not import the web tree. The
+ * the same predicate from `js/maintain/uninstall.mjs`, which must not import the web tree. The
  * re-export keeps `js/web/actions.mjs`'s import path unchanged.
  */
 export { within };

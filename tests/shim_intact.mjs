@@ -8,7 +8,7 @@
  * worktree therefore repoints it at a directory that is deleted seconds later, and every hook in
  * every install on the machine is dead — with nothing to say so, from three directions at once:
  * hooks signal through stdout and return 0 on every path, the shim is excluded from the byte
- * corpora by name (`js/settings.mjs`'s own note), and the damage lands outside the sandbox every
+ * corpora by name (`js/hosts/settings.mjs`'s own note), and the damage lands outside the sandbox every
  * other gate watches. It happened twice in one session before this file existed.
  *
  * WHY A SCRIPT AND NOT A TEST. `node --test` over a glob runs each file in its own process with

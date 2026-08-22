@@ -5,13 +5,13 @@
  * `settings.json` invokes and is kept minimal because the machine-wide shim execs it on every
  * tool call; `bin/geneseed-cli.mjs` carries the harness subcommands a hook never invokes. The
  * CLI matrix DECLARES which verb each cell exercised. It never could prove that those verbs are
- * the four an emitted settings.json actually invokes — a fifth hook wired in `js/settings.mjs`
+ * the four an emitted settings.json actually invokes — a fifth hook wired in `js/hosts/settings.mjs`
  * would simply have no row, and an absent row reads exactly like a forgotten one; since the
  * corpus was retired nothing replays the cells at all, so the declaration is the only thing the
  * matrix still says. That is load-bearing rather than tidy: the shim is machine-wide
  * (`~/.geneseed/bin/geneseed-hook[.cmd]`, no per-install component) and last-writer-wins.
  *
- * EVERY TABLE HERE IS READ FROM ITS SOURCE OF TRUTH, never listed. `js/settings.mjs` is parsed
+ * EVERY TABLE HERE IS READ FROM ITS SOURCE OF TRUTH, never listed. `js/hosts/settings.mjs` is parsed
  * for what it wires, the two `VERBS` tables for what they carry, `js/cli-table.json` for what the
  * driver dispatches, and the exported matrices for what is recorded. A copy of any of them in
  * this file would drift alongside whatever it was supposed to catch.
@@ -46,7 +46,7 @@ function block(text, start, end, where) {
 }
 
 /**
- * The verbs `js/settings.mjs` actually wires into an emitted settings.json — the contract the
+ * The verbs `js/hosts/settings.mjs` actually wires into an emitted settings.json — the contract the
  * hook entry has to satisfy, read out of the emitter.
  */
 function wiredHookVerbs() {
@@ -548,7 +548,7 @@ const importsChildProcess = (text) => /^\s*import\s.*'node:child_process'/m.test
 
 test('the generator driver still reaches no child-process module', () => {
   // `bin/build-driver.mjs` is banned from spawning AT ALL, and a source grep on the driver alone
-  // cannot see an import one module deep: a single `import` of `js/hooks.mjs` would put
+  // cannot see an import one module deep: a single `import` of `js/hosts/hooks.mjs` would put
   // child_process in the driver's process with its own source still clean. So the walk is
   // transitive, which is the same assertion one level out.
   const closure = importClosure(path.join(ROOT, 'bin', 'build-driver.mjs'));
@@ -612,7 +612,7 @@ test('the CLI entry reaches child_process only where it is declared', () => {
 
 test('the web module tree spawns only from the declared modules', () => {
   // A TRANSITIVE WALK FROM `js/web/server.mjs` WOULD PROVE THE WRONG THING: that graph reaches
-  // `js/doctor.mjs`, `js/setup.mjs` and `js/hooks.mjs`, three modules that legitimately spawn and
+  // `js/doctor.mjs`, `js/maintain/setup.mjs` and `js/hosts/hooks.mjs`, three modules that legitimately spawn and
   // are declared above. An equality over it would either fail or re-declare all three here, which
   // puts one module's decision in two files. So this is a DIRECTORY scan keyed on the `web/`
   // prefix — every spawning file under `js/web/` has a row.
@@ -963,7 +963,7 @@ test('every newline the entry points write is the platform\'s', () => {
   //
   // The equality dies with the reference. The absolute residue is that the port writes the
   // PLATFORM's line ending, which is what the reference did through `sys.stdout` and what
-  // `js/hooks.mjs`'s translating funnels and `withPlatformNewlines` were added to reproduce.
+  // `js/hosts/hooks.mjs`'s translating funnels and `withPlatformNewlines` were added to reproduce.
   //
   // THE SAME THREE ROWS, for the reasons the reference's docstring gives. `context` covers the
   // hooks. `prompt` is ~400 KB of rendered tree through a CLI module that could reach

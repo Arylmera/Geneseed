@@ -14,7 +14,7 @@
  * THE SECOND thing the walk shows only as one name: `_diff_collect` runs a whole GLOBAL EMIT
  * into a temp dir. `build.HOSTS[host]["emit_global"]` is a `build.*` reference like any other
  * in the table, and behind it is the generator. That call is why this file imports
- * `bin/build-driver.mjs` — the same in-process route `js/generate.mjs` established for `build`,
+ * `bin/build-driver.mjs` — the same in-process route `js/build/generate.mjs` established for `build`,
  * under the same transitive `child_process` ban.
  *
  * WHAT NO CELL CAN VARY, stated rather than left implicit:

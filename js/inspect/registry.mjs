@@ -5,7 +5,7 @@
  * a module boundary in this port (P5c took the host resolvers, P5d the checkout paths). The
  * driver WRITES the registry, one row per per-repo emit; `harness rebuild-all` READS it to
  * find every install it must re-emit, and `bin/geneseed-cli.mjs` may not reach into a driver
- * for a reader. `js/generate.mjs` importing `main` from `bin/build-driver.mjs` is not a
+ * for a reader. `js/build/generate.mjs` importing `main` from `bin/build-driver.mjs` is not a
  * precedent for it either: `harness build` IS the driver, and a registry reader is not.
  *
  * The move is licensed the same way the two before it were: `tests/golden.py` drives
@@ -89,7 +89,7 @@ export function registryRoots() {
     // print a backslash path while a raw `expanduser` prints the entry verbatim and leaves
     // installs.json alone. Invisible to every cell before P5h, because `rebuild-all`'s
     // registry cells seed native spellings; `uninstall`'s inventory prints the root.
-    // `expanduser` now REFUSES a `~user` entry (js/hosts.mjs's docblock) instead of passing
+    // `expanduser` now REFUSES a `~user` entry (js/hosts/hosts.mjs's docblock) instead of passing
     // it through. This loop scans STORED registry rows, not a fresh CLI argument — a single
     // bad row (hand-edited, or written before this refusal existed) must not abort the scan
     // for every other install, so it is dropped exactly like any other dead row rather than

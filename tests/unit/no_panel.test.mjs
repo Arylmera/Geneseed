@@ -4,10 +4,10 @@
 // no panel to forbid, and its behavioural half was a positive control over Python. But three of
 // its claims are not about Python at all. Their subject is shipping JavaScript:
 //
-//   * `js/setup.mjs` and `js/update.mjs` contain nothing that could paint a screen
+//   * `js/maintain/setup.mjs` and `js/maintain/update.mjs` contain nothing that could paint a screen
 //     (`docs/limits.md` row 6 — its ONLY gate was that retired Python test)
-//   * `js/tui.mjs` contains nothing that could paint a screen, and
-//   * `js/tui.mjs` REFUSES on a TTY with a refusal that still offers what does work
+//   * `js/ui/tui.mjs` contains nothing that could paint a screen, and
+//   * `js/ui/tui.mjs` REFUSES on a TTY with a refusal that still offers what does work
 //     (row 1, whose stated form is already stale: P2 removed the `rituals/harness.py tui`
 //     pointer it claims is there, and a refusal naming a file this migration deletes would be
 //     worse than one that simply says the screen does not exist)
@@ -18,7 +18,7 @@
 //
 // THE MARKS ARE ESCAPE SEQUENCES AND NOT THE WORD "curses". This footnote is carried over from
 // the Python because it cost a debugging session: the first draft looked for the word, and
-// `js/update.mjs` failed it — in the DOCBLOCK where the bootstrap arm is declared. A structural
+// `js/maintain/update.mjs` failed it — in the DOCBLOCK where the bootstrap arm is declared. A structural
 // gate that reads prose is a gate on the documentation, and it would have been satisfied by
 // deleting the paragraph that admits the gap.
 import test from 'node:test';
@@ -47,8 +47,8 @@ const PAINT_MARKS = ['?1049h', '?1049l', '?25l', '\\x1b[', '\\u001b[', '\x1b['];
 // Marks a live panel puts on the WIRE, as opposed to in the source. Used against stdout.
 const PANEL_OUTPUT_MARKS = ['\x1b[?1049h', '\x1b[?25l', 'AGENTS (', 'SKILLS (', 'LAWS ('];
 
-// `js/menu.mjs` IS IN THIS LIST AND WAS NOT IN THE PYTHON'S. `tests/ported.json` described the
-// retiring Python test as "the only assertion that js/tui.mjs and js/menu.mjs paint nothing",
+// `js/ui/menu.mjs` IS IN THIS LIST AND WAS NOT IN THE PYTHON'S. `tests/ported.json` described the
+// retiring Python test as "the only assertion that js/ui/tui.mjs and js/ui/menu.mjs paint nothing",
 // and that was never true: `menu.mjs` appears nowhere in `tests/test_tui_boundary.py`. The
 // module is clean today, so the honest repair is to make the claim true rather than to narrow
 // it — the menu is the other thing a returning panel would come back through.
@@ -73,7 +73,7 @@ for (const rel of QUIET) {
 // including a file that IS painting a screen — a typo in one string above, or a future refactor
 // that changes how this codebase spells an escape, would silently retire all three gates green.
 //
-// `js/anim.mjs` is the module that legitimately writes cursor moves: `playLine` is the LINE
+// `js/ui/anim.mjs` is the module that legitimately writes cursor moves: `playLine` is the LINE
 // mode's animation, it emits `\x1b[nA` by design, and it is excluded from the quiet list BY NAME
 // rather than by omission. So it is exactly the file that must trip the same scan.
 test('the paint scan can actually fail — js/ui/anim.mjs trips it', () => {

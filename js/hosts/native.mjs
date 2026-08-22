@@ -6,7 +6,7 @@
  * one dialect per host (OpenCode / Claude Code / Copilot), vendored skill folders copied
  * through verbatim, authoring templates shipped flat.
  *
- * WHY THIS IS THE HARD HALF. `js/render.mjs` is a pure function of `src/` and `themes/`;
+ * WHY THIS IS THE HARD HALF. `js/build/render.mjs` is a pure function of `src/` and `themes/`;
  * this file is not, in three separate ways, and each one is a place a port can be subtly
  * wrong while looking right:
  *
@@ -297,7 +297,7 @@ function relPosix(base, target) {
  * `items` are `render_all`'s, as `{ rel, text, src }` — `text` null for a binary that is
  * copied rather than rendered. `src` is the absolute source path; `opts.src` is the
  * source root it is relativised against (Python reads `_build_core.SRC` directly, which
- * is the module-level single owner; here it travels explicitly, as in `js/render.mjs`).
+ * is the module-level single owner; here it travels explicitly, as in `js/build/render.mjs`).
  *
  * Returns `{ nAgents, nSkills, written }` — Python's 3-tuple, with `written` as absolute
  * paths in write order.

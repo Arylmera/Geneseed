@@ -157,7 +157,7 @@ const ROTS = [
 // THE ONE FILE NO REPLAY COMPARES ANY MORE, and the only coverage this corpus has ever lost.
 //
 // `agent-overrides.json` carries `"_version": "<the configured release>"`, stamped into every
-// emitted bundle by `ensureAgentOverridesStub` (js/opencode.mjs). The corpus stores a sha256 of
+// emitted bundle by `ensureAgentOverridesStub` (js/hosts/opencode.mjs). The corpus stores a sha256 of
 // that file's CONTENT, taken while the label read 1.0.0 — so EVERY bump of the version, forever,
 // reddens 224 of 259 emit cells and at least one cli cell, and no program that could take a new
 // hash still exists.

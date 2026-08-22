@@ -269,7 +269,7 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
 const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
 const LAW_HEADING_RE = /^### \{\{LAW\}\} ([IVXLCDM]+)\b/gm;
 
-// The doctrine twins of `LAW_HEADING_RE`, over the UNRENDERED source — `js/inventory.mjs`'s
+// The doctrine twins of `LAW_HEADING_RE`, over the UNRENDERED source — `js/inspect/inventory.mjs`'s
 // pair of the same names read the rendered form. A citation is the heading minus its `### `,
 // so one regex cannot serve both: a heading is an anchored line, a citation is anywhere.
 const DOCTRINE_HEADING_RE = /^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm;
@@ -358,7 +358,7 @@ export function constitutionProblems() {
   // ---- the consent gate's address still names the consent rule.
   //
   // ⚠ THE ONE HARDCODED ADDRESS IN THE CODEBASE, and the one whose drift is silent AND unsafe.
-  // `js/settings.mjs` keys the git-gate hooks on `process.5` by literal; a renumber of the
+  // `js/hosts/settings.mjs` keys the git-gate hooks on `process.5` by literal; a renumber of the
   // process pack moves that rule's neighbours under it, and the boundary would then follow
   // whatever rule inherited the number while the prompt still said `process 5`. Checked
   // against the pack file's own title token rather than against prose, so a reworded rule is
@@ -667,7 +667,7 @@ const LEARN_PROMPT_RE = /const LEARN_PROMPT_HEAD = `([\s\S]*?)`/;
  *
  * The single source of truth is the OpenCode plugin, the artifact that ships to the primary
  * runtime, so the CLI extracts it at load time rather than carrying a copy. Reproduced here
- * rather than imported from `js/hooks.mjs`, which this entry may not reach: `learn` spawns the
+ * rather than imported from `js/hosts/hooks.mjs`, which this entry may not reach: `learn` spawns the
  * model CLI, and the allow-list below names ONE call site.
  *
  * The fallback matters as much as the extraction. It is what makes the drift arm of

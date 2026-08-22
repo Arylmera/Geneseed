@@ -8,7 +8,7 @@
 // marker is what makes the operation retriable, so it is the last thing to go.
 //
 // THE LOCK IS REAL, NOT A FAKE, and getting there took measuring rather than reasoning. The
-// reference monkeypatches `Path.unlink` to raise for one filename; `js/uninstall.mjs` imports
+// reference monkeypatches `Path.unlink` to raise for one filename; `js/maintain/uninstall.mjs` imports
 // `unlinkSync` as a NAMED BINDING, which ESM cannot rebind, so that door is shut. Three
 // candidate mechanisms were measured on this platform:
 //

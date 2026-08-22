@@ -35,7 +35,7 @@ vault or a specific tool's hooks.
      names (`ONT_TELOS`, `ONT_EVIDENCE`, `ONT_DECISIONS`, `ONT_CONDUCT`), a few rare
      technical nouns (`Context`, `Scripts`, `Charter`), and the folder names (`laws/`,
      `ontology/`, `doctrines/`, `agents/`, `skills/`, `memory/`, `notebook/` via `DIR_*`).
-     These live in the `STRUCTURE` map in `js/render.mjs` and are laid on top of every
+     These live in the `STRUCTURE` map in `js/build/render.mjs` and are laid on top of every
      render, so a theme can never move a path, a link, or a heading number. No theme file
      defines a `DIR_*` or an `ONT_*` key, and none may: an ontology citation spells the
      section on both sides (`{{ONTOLOGY}}: {{ONT_TELOS}}`), so heading and reference move
@@ -102,7 +102,7 @@ vault or a specific tool's hooks.
      Rules, `I`..`IX`, headed `### {{LAW}} <roman> — {{LEX_<roman>}}`.
    - **Doctrines** (`src/doctrines/{craft,rigor,ops,process}.md`) — *how work is done
      here*. Practice rules addressed by pack and number, cited as `Doctrine process 5`.
-     `PACK_ORDER` (`js/checkout.mjs`) fixes the order craft → rigor → ops → process, which
+     `PACK_ORDER` (`js/build/source.mjs`) fixes the order craft → rigor → ops → process, which
      is narrative and deliberately not alphabetical.
 
    **The Ontology and the Invariants are never toggleable** — every build carries both,
@@ -128,7 +128,7 @@ vault or a specific tool's hooks.
    repeal one; a user rule outranks a doctrine rule outright; nothing outranks an
    invariant. And an always-on tier may never cite a toggleable one — a `--doctrines craft`
    build would otherwise ship an invariant pointing at text its `AGENT.md` does not
-   contain — so `constitutionProblems` (`js/doctor.mjs`) refuses a `{{DOCTRINE}}` token
+   contain — so `constitutionProblems` (`js/inspect/checks-authoring.mjs`) refuses a `{{DOCTRINE}}` token
    anywhere under `src/ontology/` or `src/laws/`.
 
    The bar for a **new invariant** is the highest in the tree: universal (it binds *every*
@@ -146,9 +146,9 @@ vault or a specific tool's hooks.
    |---|---|---|---|
    | body | append to `src/laws/universal.md` — never insert; nothing resolves a cross-reference against the canon | append to `src/doctrines/<pack>.md`, `### {{DOCTRINE}} <pack> <n> — {{DOC_<PACK>_<n>}}`; ids must run contiguously from 1 | a new `src/doctrines/<pack>.md` with its `**Name** — lead line` |
    | themed title | `LEX_<roman>` in all 15 theme files | `DOC_<PACK>_<n>` in all 15 theme files | `PACK_<NAME>` in all 15, plus each rule's `DOC_*` |
-   | class | `LAW_CLASS` in `js/inventory.mjs`, one of the six in `LAW_CLASSES` | **none** — a doctrine rule's class *is* its pack, and there is no second taxonomy over it | — |
+   | class | `LAW_CLASS` in `js/inspect/inventory.mjs`, one of the six in `LAW_CLASSES` | **none** — a doctrine rule's class *is* its pack, and there is no second taxonomy over it | — |
    | console copy | a `LAW_META` row in `web/src/pages/Laws.jsx` (keyed by arabic number) | a `DOCTRINE_META` row in the same file (keyed `<pack>.<n>`) | one `DOCTRINE_META` row per rule |
-   | registration | the numeral is the registration | the number is the registration | the pack name in `PACK_ORDER`, `js/checkout.mjs` |
+   | registration | the numeral is the registration | the number is the registration | the pack name in `PACK_ORDER`, `js/build/source.mjs` |
    | renumber risk | high — appending is the only safe move | none — packs are numbered independently | none |
    | counts | README badge + the `N universal laws` prose, `SHIPPED.md`'s triple, the web onboarding copy | **none** — the console spends the `N_PACKS` / `N_PACKS_ACTIVE` / `N_DOCTRINE_RULES` count tokens, all computed at request time | none, same reason |
    | changelog | `CHANGELOG.md` | `CHANGELOG.md` | `CHANGELOG.md` |
@@ -160,7 +160,7 @@ vault or a specific tool's hooks.
    synonym. `--sync-themes` writes the template's placeholder and only *prints* which keys
    to restyle; a shipped placeholder passes every gate.
 
-   Almost all of it is gated, across six named checks in `js/doctor.mjs` —
+   Almost all of it is gated, across six named checks in `js/inspect/checks-build.mjs` —
    `themeParityProblems` (key parity across the voices), `lawMetaProblems` and
    `doctrineMetaProblems` (the console's Principle column, in both directions),
    `constitutionProblems` (pack numbering and filing, `LEX_I..LEX_IX` as an *equality*, the
@@ -212,23 +212,23 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 - Unknown tokens are left visible (debugging aid); `doctor` flags them.
 - Node built-ins only; no third-party dependencies, ever. (`package.json` carries neither a
   `dependencies` nor a `devDependencies` key, and a test asserts it.)
-- **`js/settings.mjs` is the half of the emit that edits files you co-own** — the
+- **`js/hosts/settings.mjs` is the half of the emit that edits files you co-own** — the
   `settings.json` / `opencode.json` merges, JSONC parsing, the hook shim and the managed
   CLAUDE.md block. It is a separate module because every function in it reconciles
   Geneseed's claim with content Geneseed did not write, and because eleven of its names are
-  driven by the *runtime* as well as by an emit (`js/mcp.mjs` uses ten of them
+  driven by the *runtime* as well as by an emit (`js/hosts/mcp.mjs` uses ten of them
   for deactivate, remerge, reactivate and uninstall; `exclude` and `doctor` use the rest).
-  Its dependency closure points one way only: nothing in it calls into `js/render.mjs` or
+  Its dependency closure points one way only: nothing in it calls into `js/build/render.mjs` or
   `js/emit.mjs`. Keep it that way — that closure is what makes it a unit.
 - **Every emit runs five stages in one order: `RENDER* → WIRE* → PRUNE → MANIFEST →
-  VERIFY`.** RENDER writes files Geneseed owns wholesale; WIRE is `js/settings.mjs`
+  VERIFY`.** RENDER writes files Geneseed owns wholesale; WIRE is `js/hosts/settings.mjs`
   reconciling files you co-own; PRUNE removes what the previous manifest owned and this
   emit no longer produces; MANIFEST records both; VERIFY re-reads the merge to confirm it
   stuck. WIRE must precede MANIFEST because wiring is what fills the `managed` record the
   manifest stores, and no RENDER may follow a WIRE because a render writes wholesale a file
   a wire has just reconciled. `tests/unit/emit_phase_order.test.mjs` fails the build if any of
   the nine emits drifts out of that order, or if a new file-mutating routine in
-  `js/settings.mjs` is called from an emit without being classified. RENDER and WIRE now run
+  `js/hosts/settings.mjs` is called from an emit without being classified. RENDER and WIRE now run
   in the *same process* — the seam that once spawned a second runtime per emit is gone — so
   the render and wire dispatchers stay two separate functions and two separate statements on
   purpose: that shape is the only thing left for the walker to check, and a gate refuses an

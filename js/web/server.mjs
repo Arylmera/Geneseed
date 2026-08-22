@@ -144,7 +144,7 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
     // it is the one a naive port gets backwards: `input()` RAISES at EOF, so the reference
     // reads it as "no", while a read that returned `''` would fall into the empty-answer
     // arm and start an npm install nobody asked for. `promptLine` returns null for exactly
-    // that case — see its docblock in js/setup.mjs.
+    // that case — see its docblock in js/maintain/setup.mjs.
     const line = promptLine('[web] UI not built — run npm install && npm run build now? [Y/n] ');
     const answer = line === null ? 'n' : line;
     if (['', 'y', 'yes'].includes(answer.trim().toLowerCase())) {

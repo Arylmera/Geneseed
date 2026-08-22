@@ -10,7 +10,7 @@
  * of `tui`'s behaviour that the acceptance matrix can reach, and it is ported byte for byte.
  *
  * THE PANEL ITSELF IS P7C'S, AND THIS ENTRY FALLS BACK RATHER THAN INVENTING ONE — the same
- * decision `js/menu.mjs` made in P7a, for the same reason. `cmd_tui` already owns a fourth
+ * decision `js/ui/menu.mjs` made in P7a, for the same reason. `cmd_tui` already owns a fourth
  * path: an `except Exception` around `curses.wrapper` that prints `[tui] full-screen panel
  * unavailable (<reason>)` and returns 1, written for the Windows shim's `Unsupported`. That
  * is the reference's own contract for "no full-screen panel is available here", so the port
@@ -34,11 +34,11 @@
  *
  * **DO NOT WRITE A SECOND LINE BREAKER.** This block used to argue that `textwrap.wrap` was
  * "a second `difflib` — a stdlib payload with no Node twin". It has one since P1:
- * `wrapText` in `js/cli.mjs`, written because `--help` was the caller that finally
+ * `wrapText` in `js/ui/cli.mjs`, written because `--help` was the caller that finally
  * required it, frozen at `tests/__snapshots__/textwrap.json` and swept against the running
  * interpreter at every width from 11 to 198. When P7c brings `_wrap_lines` across it wraps
  * THAT, and the only open question is the ASCII/glyph width the panel measures in. `_parse_laws`, `load_registry`, `entity_status` and
- * `_tui_inventory` crossed in P6c and live in `js/inventory.mjs`.
+ * `_tui_inventory` crossed in P6c and live in `js/inspect/inventory.mjs`.
  */
 import path from 'node:path';
 
@@ -479,7 +479,7 @@ export function cmdTui() {
     printOut('[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
     return 1;
   }
-  // The pointer to the Python panel is gone for `js/menu.mjs`'s reason: the
+  // The pointer to the Python panel is gone for `js/ui/menu.mjs`'s reason: the
   // panel it named is the Python being deleted. What is left is true and stays true.
   printOut('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
     + 'half, not its screens). Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');

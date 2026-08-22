@@ -50,7 +50,7 @@ const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
 /**
  * The settings file a host wires hooks into, or null for a host that has none.
  *
- * Only Claude and Bob carry hook commands. OpenCode's hooks are a PLUGIN (`js/opencode.mjs`
+ * Only Claude and Bob carry hook commands. OpenCode's hooks are a PLUGIN (`js/hosts/opencode.mjs`
  * emits JS that runs in the host's own process and names neither the shim nor `harness.py`),
  * and Copilot has no hook mechanism at all. So those two classify as `none` and their whole
  * migration is the re-emit — which is the same re-emit, in the same change, on all three

@@ -70,7 +70,7 @@ export function isDir(p) {
 
 /** `dict.get(key)` with Python's semantics — OWN properties only.
  *
- * The same hazard `js/settings.mjs` and `js/native.mjs` both spell out: the keys here come
+ * The same hazard `js/hosts/settings.mjs` and `js/hosts/native.mjs` both spell out: the keys here come
  * out of a manifest the user can edit, and `old['constructor']` hands back
  * `Object.prototype`'s member where Python's `.get` returns None. */
 export function get(obj, key) {
@@ -175,7 +175,7 @@ export function globalMemory(cfgDir, items, legacy, srcRoot) {
     if (sp[0] === 'memory' && sp.length > 1) {
       // `destRel`, because this seeds from the SOURCE path and not from the item's `rel`
       // (which is themed, and `memory/` never is). Without it the store would be seeded
-      // with the on-disk name `gitignore` — see `js/render.mjs`'s `destRel`.
+      // with the on-disk name `gitignore` — see `js/build/render.mjs`'s `destRel`.
       const dest = path.join(memDir, destRel(path.join(...sp.slice(1))));
       mkdirSync(path.dirname(dest), { recursive: true });
       if (text !== null) writeText(dest, text);

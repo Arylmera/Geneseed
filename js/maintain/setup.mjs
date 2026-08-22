@@ -70,7 +70,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
  * until EOF rather than until Enter, so a wizard built on it would hang on a real terminal
  * until the user pressed Ctrl-D. Reading fd 0 one byte at a time to the first `\n` is what
  * `input()` does, and it is the only synchronous shape that stops where Enter stops. The
- * body arrived in P5h inside `js/uninstall.mjs`'s `confirm`; `setup` is the second caller,
+ * body arrived in P5h inside `js/maintain/uninstall.mjs`'s `confirm`; `setup` is the second caller,
  * so it moved to where the Python's own owner is — `_harness_setup` — and `confirm` is built
  * on it here exactly as `_confirm` is built on `_ask` there.
  *
@@ -524,7 +524,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
  * sides (`_harness_build.cmd_build`, and `driverMain` here), so the line still names a
  * command the reader can type, and names one that survives the deletion.
  *
- * `theme_anim.play_line` USED TO BE THE SECOND, and P7c crossed it — `js/anim.mjs`, gated by
+ * `theme_anim.play_line` USED TO BE THE SECOND, and P7c crossed it — `js/ui/anim.mjs`, gated by
  * `_theme_anim_cases()` in `tests/test_pure_function_parity.py`. The bare `catch` around it
  * is the reference's own, labelled there "cosmetic only — never block a successful install",
  * and it is kept for the same reason: the animation runs AFTER the build has already

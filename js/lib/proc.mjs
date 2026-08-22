@@ -7,9 +7,9 @@
  * worst case, running `node --check` once per plugin, and it is what a user actually sees:
  * seven consoles flashing on a dashboard load.
  *
- * WHY IT LIVES HERE AND NOT IN `js/update.mjs`, WHICH DEFINED IT FIRST. It was private to
+ * WHY IT LIVES HERE AND NOT IN `js/maintain/update.mjs`, WHICH DEFINED IT FIRST. It was private to
  * that module and six of its spawns used it, so the four spawn sites in `js/doctor.mjs`,
- * `js/hooks.mjs`, `js/setup.mjs` and `js/link.mjs` each had to remember the flag on their
+ * `js/hosts/hooks.mjs`, `js/maintain/setup.mjs` and `js/hosts/link.mjs` each had to remember the flag on their
  * own. Two of them did not — and the miss is BYTE-INVISIBLE: a console window is not
  * something the CLI prints, so every recorded cell under `tests/__snapshots__/` stays green
  * while the windows pop. The property under test never reaches the comparison, which is why

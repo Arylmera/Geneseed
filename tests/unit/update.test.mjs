@@ -1,4 +1,4 @@
-// `tests/test_update.py` — the cross-platform update core, re-aimed at `js/update.mjs`.
+// `tests/test_update.py` — the cross-platform update core, re-aimed at `js/maintain/update.mjs`.
 //
 // The reference covers the network-free logic so the update verbs are exercised without hitting
 // GitHub. That split survives here, and this file is the half of it that needs no git repository

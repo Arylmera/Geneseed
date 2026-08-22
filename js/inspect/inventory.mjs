@@ -5,7 +5,7 @@
  *
  * WHY THIS FILE EXISTS RATHER THAN A THIRD COPY OF THE TABLES. `LAW_CLASS`, `SKILL_CLASS`,
  * `LAW_CLASSES` and `ENTITY_STATUSES` crossed in P5g, inside `js/doctor.mjs`, because
- * doctor's authoring gates are what validate them — and `js/status.mjs`'s docblock said
+ * doctor's authoring gates are what validate them — and `js/inspect/status.mjs`'s docblock said
  * flatly that "the taxonomy P7 owns" was not ported, which was true of `_parse_laws` and
  * `entity_status` and had stopped being true of the tables. P6c needs all of it, so the
  * tables move HERE, to the module that mirrors where Python keeps them, and `js/doctor.mjs`
@@ -174,7 +174,7 @@ export function parseDoctrines(text) {
  *
  * `id` is the slugified title, and it is an ADDRESS: `#/item/law/ont:telos` is how the console
  * deep-links a section, so it has to survive a theme change. It does, because the four titles
- * come from `STRUCTURE` in `js/render.mjs` and not from any theme file — the same reason a
+ * come from `STRUCTURE` in `js/build/render.mjs` and not from any theme file — the same reason a
  * citation can spell itself `({{ONTOLOGY}}: {{ONT_TELOS}})` with a token on both sides.
  *
  * The preamble above the first `####` is dropped, as in the two parsers above. It is the
@@ -203,7 +203,7 @@ export function parseOntology(text) {
  *
  * Deliberately forgiving on BOTH failure modes, as the reference is: a missing file and a
  * corrupt one both yield `{}`, which reads every badge as "unknown" rather than breaking
- * the browser. `registryProblems` in `js/doctor.mjs` is the loud reader of the same file
+ * the browser. `registryProblems` in `js/inspect/checks-repo.mjs` is the loud reader of the same file
  * and stays separate — the two answer different questions.
  */
 export function loadRegistry() {
@@ -285,7 +285,7 @@ export function tuiInventory(themeName, doctrines = null, excluded = []) {
     // Scoped to the laws dir, not matched on the basename: `src/ontology/universal.md`
     // shares the name, sorts after `laws/`, and would clobber the parse with `[]` —
     // `LAW_HEADING_RE` wants `###` and the ontology uses `####`. Same spelling as the
-    // already-scoped sites at `js/render.mjs`'s `rel === 'laws/universal.md'`.
+    // already-scoped sites at `js/build/render.mjs`'s `rel === 'laws/universal.md'`.
     if (parts.join('/') === 'laws/universal.md') laws = parseLaws(text);
     if (parts.join('/') === 'ontology/universal.md') ontology = parseOntology(text);
   }
@@ -295,7 +295,7 @@ export function tuiInventory(themeName, doctrines = null, excluded = []) {
   // ⚠ `PACK_ORDER` IS THE SINGLE OWNER OF THE SET, and of its order. Filtering the order by
   // what was found — rather than publishing what was found — is what keeps `README.md` and any
   // other stray `.md` in that directory out of the catalogue, and it is the same membership
-  // rule `js/render.mjs` refuses the build over, so a fifth pack cannot be silently dropped
+  // rule `js/build/render.mjs` refuses the build over, so a fifth pack cannot be silently dropped
   // here either. Order because `sortedSourceFiles` walks alphabetically, which puts `ops`
   // second: the narrative order is the reading order, and it is what the marker line, the
   // wizard and the rendered section all use.

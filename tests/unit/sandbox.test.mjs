@@ -169,7 +169,7 @@ test('every relocation variable is cleared even when set', () => {
 //
 // A READ, NOT THE NAME — and the first draft got this wrong in the way `docs/limits.md`
 // row 6 already records. Scanning for the word reported `CLAUDE_CONFIG_DIR` as a missing entry,
-// because `js/hosts.mjs:131` carries a docblock saying that setting it must NOT move the
+// because `js/hosts/hosts.mjs:131` carries a docblock saying that setting it must NOT move the
 // target: an INVERSE row, deliberately unread. A structural gate that matches prose is a gate
 // on the documentation, and it would have been "fixed" by sandboxing a variable the generator
 // ignores. What is scanned for is the read itself.

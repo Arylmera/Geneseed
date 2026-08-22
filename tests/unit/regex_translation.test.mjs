@@ -48,7 +48,7 @@ test('the character JavaScript calls space and Python does not', () => {
 
 test('the negated class is translated too', () => {
   // `\S` is the complement, and getting only `\s` right would leave every negated assertion
-  // reading the OTHER definition — the failure mode `js/update.mjs` records for `WHITESPACE`.
+  // reading the OTHER definition — the failure mode `js/maintain/update.mjs` records for `WHITESPACE`.
   assert.ok(!toJsRegex('a\\Sb').test('a\u001cb'), 'U+001C is space to Python, so \\S must reject it');
   assert.ok(/a\Sb/.test('a\u001cb'), "V8's own \\S accepts it — the premise has changed");
 });

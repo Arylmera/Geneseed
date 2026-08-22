@@ -30,7 +30,7 @@
  *
  * WHERE THE DETECTORS WENT. `themeOfDir`, `footprintOfDir`, `installedDefaults`,
  * `manifestIsClaude` and the configured defaults were written here in P5d because `status`
- * was their only caller. `js/installs.mjs` owns them since P5f, when `diff` and `rebuild-all`
+ * was their only caller. `js/hosts/installs.mjs` owns them since P5f, when `diff` and `rebuild-all`
  * became the second and third. Nothing about them changed in the move — the 166-cell
  * acceptance matrix is what licensed attempting it, `status`'s own eleven cells among them.
  *
@@ -122,7 +122,7 @@ export function cmdVersion(args) {
  * and porting them to produce three integers would have been absurd — with a docblock
  * warning that the two must not become two classifiers. `api_catalog` consumes exactly the
  * fields the count threw away, so P6c is the phase that would have made them two. It did
- * not: `tuiInventory` in `js/inventory.mjs` is the one walk, this is three `length`s off
+ * not: `tuiInventory` in `js/inspect/inventory.mjs` is the one walk, this is three `length`s off
  * it, and the eleven `status` cells and the catalog cells now gate the same classifier
  * from opposite ends.
  */

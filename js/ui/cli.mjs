@@ -39,7 +39,7 @@
  * that checks the WHOLE table, and outlives the parser, is `tests/unit/cli_table.test.mjs`;
  * after that the table is simply the source of truth and is edited directly.
  *
- * THE COST, NAMED: this entry cannot parse anything without this file. `js/checkout.mjs`
+ * THE COST, NAMED: this entry cannot parse anything without this file. `js/build/source.mjs`
  * already reads `harness.config.json` at import for every render, so a tracked data document
  * the code needs is not a new shape here — and this is not the hook entry, whose latency
  * budget is `bin/geneseed-hook.mjs`'s and is untouched.

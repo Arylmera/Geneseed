@@ -1,4 +1,4 @@
-// `tests/test_build.py` — unit tests of the GENERATOR, re-aimed at `js/render.mjs` and the
+// `tests/test_build.py` — unit tests of the GENERATOR, re-aimed at `js/build/render.mjs` and the
 // driver that calls it.
 //
 // The corpus already compares 259 emitted trees byte for byte, so nothing here re-checks that a
@@ -942,7 +942,7 @@ test('a merge returns the resolved target, not the path it was asked about', () 
 // decided to throw, where this proves it catches the one the operating system actually raises.
 //
 // ONE ASSERTION CANNOT CROSS, and getting it wrong is what the first draft of this pair did.
-// `js/settings.mjs`'s own `asOsError` docblock already records that Python renders `[Errno 13]
+// `js/hosts/settings.mjs`'s own `asOsError` docblock already records that Python renders `[Errno 13]
 // Permission denied: '...'` where Node renders its own message, and that the two cannot be made
 // to agree — so the reference's literal "Permission denied" was rewritten as a case-insensitive
 // match on the same words. It still failed: a denied ACL on Windows raises EPERM, "operation not
@@ -1104,7 +1104,7 @@ test('an override emits model and temperature only where one is set', () => {
 
 test('the primary agent and the command layer are opt-in', () => {
   withDir((d) => {
-    // `truthyEnv` is read at CALL time here, not at import as `js/tui.mjs`'s tiers are, so
+    // `truthyEnv` is read at CALL time here, not at import as `js/ui/tui.mjs`'s tiers are, so
     // this needs no child process — but it does need the restore, because the variable is
     // process-wide and every later test in this file renders too.
     const before = { GENESEED_PRIMARY: process.env.GENESEED_PRIMARY,
@@ -1291,7 +1291,7 @@ test('a merge preserves an mcp block it does not own', () => {
 // Shipped themes never vary DIR_* today: STRUCTURE always wins over a theme's own value, which
 // is exactly what `structure overrides a theme voice` above asserts. So the rename has to be
 // SIMULATED, and where the reference mutates the module-level dict `build()` resolves against,
-// the port takes it as `cfg.structure` — the injection point `js/render.mjs` documents for this
+// the port takes it as `cfg.structure` — the injection point `js/build/render.mjs` documents for this
 // class by name. That is a straight improvement rather than a workaround: `makeCfg()` hands back
 // a fresh object per call, so there is no global to restore and no way for one test's rename to
 // leak into the next.

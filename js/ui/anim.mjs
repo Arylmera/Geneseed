@@ -8,7 +8,7 @@
  * that has nothing to do with curses: it draws on the ORDINARY terminal, with cursor-up
  * escapes and a sleep, and its only caller is a function that already crossed.
  *
- * SO IT IS NOT IN `js/tui.mjs`, DELIBERATELY. That module carries a structural assertion that
+ * SO IT IS NOT IN `js/ui/tui.mjs`, DELIBERATELY. That module carries a structural assertion that
  * it contains no escape sequence at all — the thing that makes "the panel is declared" a
  * measurement instead of a promise. This file necessarily contains `\x1b[{n}A`, so putting it
  * there would have turned that assertion red and invited someone to weaken it. A line-mode

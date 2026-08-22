@@ -1,7 +1,7 @@
 /**
  * `rituals/_harness_exclude.py` — the sovereign-repo exclusion WRITER.
  *
- * THE READER WAS ALREADY HERE. `js/hooks.mjs` has carried `sovereignBypass`, `EXCLUDES_FILE`
+ * THE READER WAS ALREADY HERE. `js/hosts/hooks.mjs` has carried `sovereignBypass`, `EXCLUDES_FILE`
  * and `EXCLUDE_DIRS` since P5a: every hook call reads `excludes.json` and stands down when
  * cwd is under an excluded folder. This module is the other half — `harness exclude
  * add|remove|list`, which maintains that file across every global install and wires the
@@ -19,7 +19,7 @@
  * the file, which is the same guarantee the single-writer version had against itself.
  *
  * Every path a hook takes on this file is READ-only, so nothing here is on the PreToolUse
- * latency budget — which is why it lives beside the CLI and not in `js/hooks.mjs`.
+ * latency budget — which is why it lives beside the CLI and not in `js/hosts/hooks.mjs`.
  */
 import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync }
   from 'node:fs';
@@ -200,7 +200,7 @@ export function excludeRemove(target) {
         // Node's own wording. No cell can reach this branch (`unlink` on a file that
         // `isFile` just confirmed, `rmdir` on a directory just measured empty), so a
         // translation table here would be an unobservable guess. Same class as P5b's
-        // untested `die()` newline; `js/settings.mjs`'s `asOsError` is the same stub for
+        // untested `die()` newline; `js/hosts/settings.mjs`'s `asOsError` is the same stub for
         // the same reason.
         messages.push(`${host}: could not remove ${stub} (${e.message})`);
       }

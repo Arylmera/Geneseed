@@ -130,7 +130,7 @@ test('the shared flag is actually set on Windows', async () => {
 // inherited-stream spawn discarded the child's stdout. So the draft asserted that no inheriting
 // spawn may set the flag.
 //
-// Three real call sites say otherwise — `js/link.mjs:136`, `js/update.mjs:890` and
+// Three real call sites say otherwise — `js/hosts/link.mjs:136`, `js/maintain/update.mjs:890` and
 // `js/web/server.mjs:781` all inherit AND hide, and all three are correct. The finding the
 // assertion was built on is about Python's `CREATE_NO_WINDOW` CREATION FLAG, which suppresses
 // the console the child would have written through. Node's `windowsHide` is a different

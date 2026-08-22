@@ -53,6 +53,6 @@ The two dirs are distinct: **shipped palettes** here (re-emitted as `geneseed-<n
 4. Validate: `./geneseed doctor --all` (runs the `colours` gate).
 5. Borrow a proven palette rather than inventing hues — credit it in the `credit` field.
 
-The shared slot→role mapping lives in `js/opencode.mjs` (`SLOT_ROLE`), so a new theme is
+The shared slot→role mapping lives in `js/hosts/opencode.mjs` (`SLOT_ROLE`), so a new theme is
 just a palette file — no code. Full rationale:
 [docs/specs/2026-06-17-opencode-color-themes.md](../../docs/specs/2026-06-17-opencode-color-themes.md).

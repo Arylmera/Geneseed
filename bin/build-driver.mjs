@@ -20,7 +20,7 @@
  * `js_cfg()` (_build_core.py:199) always sends `structure` and `capabilityLinkRe`, because
  * the Python originals are module-level names that TESTS MUTATE — `_OWNED` membership
  * asked one level out. This driver has no Python module to mutate, so it sends neither and
- * `js/render.mjs:215`'s `cfg.structure ?? STRUCTURE` and `js/emit.mjs:680`'s
+ * `js/build/render.mjs:215`'s `cfg.structure ?? STRUCTURE` and `js/emit.mjs:680`'s
  * `cfg.capabilityLinkRe ? ... : <default>` take their right-hand branches for the first
  * time. Those two fallbacks have been dead code since they were written — always
  * overridden by the driver that always supplies them. P4 is what makes them live.
@@ -59,7 +59,7 @@ import {
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
 // registry to find every install it must re-emit, and a CLI verb may not reach into a driver
-// for a reader. See js/registry.mjs.
+// for a reader. See js/inspect/registry.mjs.
 import { registryRecord, registryRoots } from '../js/inspect/registry.mjs';
 
 // P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
@@ -96,7 +96,7 @@ const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: fals
 /** `_build_render.resolve_out` — absolute, or relative to the CURRENT WORKING DIRECTORY
  *  (not to ROOT), so the harness renders straight into any repository.
  *
- *  EXPORTED IN P5i because `js/setup.mjs` became its second caller: `_setup_summary_lines`
+ *  EXPORTED IN P5i because `js/maintain/setup.mjs` became its second caller: `_setup_summary_lines`
  *  names the AGENT.md a bundle emit just wrote, and it names it by the same resolution the
  *  emit used. Copying the one line would be a second owner of the rule that a bare `Harness`
  *  follows the invocation and not the checkout — which is what
@@ -219,7 +219,7 @@ function choicesFor() {
  * carrier, and a marker whose contents depend on argument order is one that compares unequal
  * to itself. Validation is against DISCOVERY, not `PACK_ORDER`, so the refusal names the
  * packs the checkout actually has; a discovered pack missing from `PACK_ORDER` is a
- * different fault and `js/render.mjs` refuses the whole build for it.
+ * different fault and `js/build/render.mjs` refuses the whole build for it.
  */
 /**
  * `--exclude-rules "process 7,craft 3"` (or `process.7`) -> the cfg's exclusion array.
@@ -442,7 +442,7 @@ function die(code, msg) {
  * re-emit, which is P10's migration arriving five phases early.
  *
  * EXPORTED SINCE P6i, because the emitter is no longer its only caller.
- * `js/uninstall.mjs`'s `remergeClaudeHooks` re-merges the canonical hooks when a disabled
+ * `js/maintain/uninstall.mjs`'s `remergeClaudeHooks` re-merges the canonical hooks when a disabled
  * Claude install is turned back on, and `mergeClaudeSettings` refuses to guess the pair —
  * correctly. There is exactly one right answer on this side and it is this function, so the
  * second caller imports it rather than restating two lines that must never drift: a
@@ -1059,7 +1059,7 @@ export function emitGlobalInto(host, {
  * `_harness_build.cmd_build` is `run([sys.executable, BUILD, *extra]).returncode` — Python
  * needs a second process because `build.py` is a different PROGRAM. Here it is a module in
  * the same one, and `bin/geneseed-cli.mjs` is under a transitive `child_process` ban, so
- * `js/generate.mjs` calls this directly. The export is what makes the auto-run below need a
+ * `js/build/generate.mjs` calls this directly. The export is what makes the auto-run below need a
  * guard: without one, importing this file to reach `main` would RUN the generator with the
  * CLI's argv.
  */
@@ -1089,7 +1089,7 @@ function run(argv) {
   // different places because the transitive `child_process` ban splits them.
   //
   // `--sync-themes` is HERE, because it needs nothing this driver may not have: it reads
-  // `themes/`, rewrites the files textually, and prints. `js/themes.mjs` carries it.
+  // `themes/`, rewrites the files textually, and prints. `js/build/themes.mjs` carries it.
   // Non-zero when files were CHANGED (0 == already in sync), so CI can run it as a drift
   // check — build.py:393-397's mapping, and a refusal (exit 2) if the template is unreadable.
   if (args.syncThemes) return syncThemes() ? 1 : 0;
@@ -1169,7 +1169,7 @@ function run(argv) {
 }
 
 /**
- * Run only when this file IS the entry point, not when `js/generate.mjs` imports it.
+ * Run only when this file IS the entry point, not when `js/build/generate.mjs` imports it.
  *
  * `import.meta.main` would say this in one word and is Node 24; the spec's `engines` floor
  * is still open and this machine runs v22, the same reason `js/emit.mjs` avoids it. So the
@@ -1182,7 +1182,7 @@ function run(argv) {
  *
  *   * stuck FALSE — `node bin/build-driver.mjs` becomes a silent no-op: 259 golden cells.
  *   * stuck TRUE — importing this file runs the generator on the IMPORTER's argv, so it is
- *     not only `build` that breaks. `bin/geneseed-cli.mjs` reaches `js/generate.mjs` at
+ *     not only `build` that breaks. `bin/geneseed-cli.mjs` reaches `js/build/generate.mjs` at
  *     module load, so every CLI verb dies in the driver's flag parser: **62 of the 166
  *     acceptance cells**, `exclude` and `status` and `version` among them.
  */

@@ -6,7 +6,7 @@
 //
 //   * `setupBuildArgs`, `setupSummaryLines`, `javaMajorOk`, `lspPrereqs`, `themeFlair`,
 //     `tuiInventory`, `tuiEntries` and `detailLines` ALL CROSSED. The last four live in
-//     `js/tui.mjs` and `js/inventory.mjs` — the module refuses to open a SCREEN, it did not
+//     `js/ui/tui.mjs` and `js/inspect/inventory.mjs` — the module refuses to open a SCREEN, it did not
 //     stop being where the shared helpers live, and the web console is their caller now.
 //   * `_setup_done_title` and `_setup_done_lines` did NOT cross, and three tests retire with
 //     them. They compose the wizard's full-screen DONE panel: an `art` row carrying the

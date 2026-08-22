@@ -82,7 +82,7 @@ test('the indented writer preserves the same spellings', () => {
 // reached from the fixture side: I had measured `json.dumps(o, sort_keys=True)` and then held
 // the port to a property its own default does not have. Both columns below are CPython's, taken
 // separately: `json.dumps(o)` preserves insertion order and `json.dumps(o, sort_keys=True)` does
-// not, and `js/settings.mjs` has call sites of each.
+// not, and `js/hosts/settings.mjs` has call sites of each.
 const CONTAINERS = [
   // [source, compact (insertion order), sorted]
   ['{}', '{}', '{}'],

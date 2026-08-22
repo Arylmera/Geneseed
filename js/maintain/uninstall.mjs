@@ -172,7 +172,7 @@ function unlinkOwned(base, owned, label = '') {
       // `f"{rel} ({e})"`. `str(OSError)` and an `Error.message` word the same fault
       // differently, and no cell can reach this: it needs a file that exists, is a file, and
       // cannot be unlinked. Recorded rather than papered over — the same standing item
-      // `js/excludes.mjs` carries for its `could not remove <stub>` branch.
+      // `js/inspect/excludes.mjs` carries for its `could not remove <stub>` branch.
       failed.push(`${label}${rel} (${e && e.message ? e.message : e})`);
     }
   }
@@ -648,7 +648,7 @@ export function printOtherHostHits(root, removedHost) {
 /**
  * `_harness_setup._confirm`, and the only interactive read this verb makes.
  *
- * MOVED TO `js/setup.mjs` IN P5i, where the Python's own owner is: `_confirm` lives in
+ * MOVED TO `js/maintain/setup.mjs` IN P5i, where the Python's own owner is: `_confirm` lives in
  * `_harness_setup` beside the `_ask` it is built on, and `setup` is its second caller. The
  * body stayed here for one phase because a helper with one caller is not shared yet; the
  * rule this port uses is that the SECOND owner is what moves it, and a byte gate is what

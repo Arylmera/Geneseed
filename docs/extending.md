@@ -272,7 +272,7 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
 1. `src/doctrines/<pack>.md`, opening with its lead line — `**{{PACK_<NAME>}}** — how … .` A pack
    file `PACK_ORDER` names but cannot read, or one carrying no `### {{DOCTRINE}} <pack> <n>`
    heading at all, is a refusal.
-2. `PACK_ORDER` in `js/checkout.mjs` — the registration, and the render order. It is **narrative,
+2. `PACK_ORDER` in `js/build/source.mjs` — the registration, and the render order. It is **narrative,
    not alphabetical** (craft → rigor → ops → process); discovery sorts alphabetically and the
    renderer refuses a `.md` under `src/doctrines/` that `PACK_ORDER` does not name, rather than
    skipping it.

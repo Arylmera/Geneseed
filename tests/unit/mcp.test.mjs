@@ -5,7 +5,7 @@
 // DROPPED — so the first job here was to find out how much of the class died with it. The
 // answer is: the LOGIC did not, only the screen's target picker did.
 //
-// `js/mcp.mjs` crossed with the WEB console rather than with a CLI verb (`js/web/actions.mjs`
+// `js/hosts/mcp.mjs` crossed with the WEB console rather than with a CLI verb (`js/web/actions.mjs`
 // is its caller), so what was missing was a FACE, not logic: apply, state, set-enabled, load,
 // save and the comment sniff were all here and all exported. `mcp` is now a verb in the CLI
 // table and `cmdMcp` is that face — READ-ONLY, and the last test in this file is what says so,

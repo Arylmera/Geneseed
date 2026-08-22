@@ -10,7 +10,7 @@
  *   - `str(Path(x))` is `ntpath`/`posixpath`, not `path.win32`/`path.posix`;
  *   - `difflib`'s autojunk and its longest-block recursion have no Node twin at any rung;
  *   - `unicodedata.east_asian_width` and `unicodedata.combining` have NO JavaScript
- *     counterpart, which is why `js/tui.mjs` carries hand-written range tables and why
+ *     counterpart, which is why `js/ui/tui.mjs` carries hand-written range tables and why
  *     `.github/workflows/ci.yml` pins the interpreter. After the cut, `dwidth.json` is what
  *     pins those tables: a sha256 over the whole sweep plus the Unicode version DECLARED
  *     beside them. This file checks both without a Python anywhere on the machine.
@@ -560,7 +560,7 @@ test('the web-daemon corpus reaches every answer it claims', () => {
 });
 
 test('the fence corpus still describes the real tree', () => {
-  // `js/generate.mjs` states that no CELL can vary the fence, and that is a claim about the
+  // `js/build/generate.mjs` states that no CELL can vary the fence, and that is a claim about the
   // CONTENT of `src/` rather than about the code — so it is re-derived here instead of trusted.
   // The day a source file grows a four-backtick run the claim stops holding, a `prompt` cell
   // becomes able to cover the branch, and this fails to say so.
@@ -844,7 +844,7 @@ test('the display width does not read the display tier', { skip: dwidth ? false
   : 'tests/__snapshots__/dwidth.json has not been recorded' }, () => {
   // THE ASSERTION THAT LICENSES SWEEPING ONE GLYPH MODE. `dwidth` reads no tier constant, so the
   // corpus runs it once — and that is a claim, not a definition. It is the kind of coupling a
-  // later phase adds by accident, because every function beside it in `js/tui.mjs` DOES read the
+  // later phase adds by accident, because every function beside it in `js/ui/tui.mjs` DOES read the
   // tier, and the corpus would then be a half-measurement with nothing saying so.
   const plain = runProbe([{ fn: 'dwidth_rle', args: dwidth.range }], false)[0];
   const ascii = runProbe([{ fn: 'dwidth_rle', args: dwidth.range }], true)[0];

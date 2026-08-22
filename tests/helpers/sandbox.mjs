@@ -134,7 +134,7 @@ const PROCESS_HOMES = [];
  * WHY A CHILD'S `cellEnv` IS NOT ENOUGH. The hook-shim writer runs on EVERY emit and writes
  * `<home>/.geneseed/bin/geneseed-hook[.cmd]` — the machine-wide shim every installed hook execs
  * — at a path that comes from the ENVIRONMENT and not from the emit's own `--out`. A test that
- * calls into `js/generate.mjs` in process therefore rewrites the DEVELOPER'S live shim on every
+ * calls into `js/build/generate.mjs` in process therefore rewrites the DEVELOPER'S live shim on every
  * run of the suite.
  *
  * AND IT LEAVES NO TRACE, which is why it survived ten phases: an emit reproduces the body the

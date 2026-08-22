@@ -12,7 +12,7 @@
  * `_harness_build.ROOT`, `_build_core.SRC/THEMES/PLUGIN_SRC/WORKFLOW_SRC/VENDORED_SKILL_DIRS`
  * — and built a two-file tree underneath them. ESM cannot rebind an imported binding, and the
  * standing question ("does the port already take this as a PARAMETER?") answers no here: every
- * one of the six is a module constant, five of them derived from `js/checkout.mjs`'s own file
+ * one of the six is a module constant, five of them derived from `js/build/source.mjs`'s own file
  * location. So the fixture is P5g's: `copyCheckout` a private checkout, plant the fault in the
  * COPY, and `import` the copy's `js/inspect/checks-repo.mjs` so its `ROOT` resolves there.
  *
@@ -20,7 +20,7 @@
  * saving. `registryProblems`, `secretProblems` and `vendorPinProblems` read `registry.json`,
  * `src/` and the VENDOR.md files at CALL time, so one module instance answers any number of
  * on-disk states. Only `VENDORED_SKILL_DIRS` is a constant baked at import, so only the row
- * about a listed-but-absent folder needs a second copy — with `js/native.mjs` itself rewritten,
+ * about a listed-but-absent folder needs a second copy — with `js/hosts/native.mjs` itself rewritten,
  * which is what that `mock.patch.object` becomes.
  *
  * AND THE FAULTS ARE PLANTED ON A REAL TREE, not on a two-file stand-in. The reference's
@@ -49,7 +49,7 @@ import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
-/** The three vendored folders, frozen: `js/native.mjs` is the owner and this is the check on it. */
+/** The three vendored folders, frozen: `js/hosts/native.mjs` is the owner and this is the check on it. */
 const VENDORED = ['react-view-transitions', 'daydream', 'token-report'];
 
 const sandboxes = [];
@@ -307,7 +307,7 @@ test('a proper pin is accepted', () => {
 });
 
 test('a listed folder that does not exist is flagged', async () => {
-  // THE ONE ROW THAT NEEDS A SECOND COPY. `VENDORED_SKILL_DIRS` is a `const` in `js/native.mjs`
+  // THE ONE ROW THAT NEEDS A SECOND COPY. `VENDORED_SKILL_DIRS` is a `const` in `js/hosts/native.mjs`
   // baked at import, so no on-disk state reaches it — which is what the reference's
   // `mock.patch.object(_build_core, "VENDORED_SKILL_DIRS", ("gone",))` becomes here: the source
   // line itself is rewritten in the copy, and the copy's own module graph is imported.

@@ -15,7 +15,7 @@ import ErrorState from '../components/ErrorState.jsx'
 //
 // ⚠ SIX, THOUGH ONLY FOUR HAVE A MEMBER. `context` and `comms` lost theirs when the corpus became
 // nine invariants — that material moved to the ontology and the doctrine packs, neither of which
-// is classed here. The list stays six because it is the VOCABULARY that js/inventory.mjs's
+// is classed here. The list stays six because it is the VOCABULARY that js/inspect/inventory.mjs's
 // LAW_CLASSES publishes and doctor quotes verbatim; the PAGE renders only non-empty facets, which
 // is a display decision and not a change to the taxonomy.
 const LAW_CATS = {

@@ -163,7 +163,7 @@ test('the verb runs against the real render and prints one row per entry', () =>
 
 test('the listing paints nothing', () => {
   // The dropped panel stays dropped. `tests/unit/no_panel.test.mjs` makes this claim for the
-  // modules that once had screens; `js/catalog.mjs` is the new consumer of the panel's own
+  // modules that once had screens; `js/build/catalog.mjs` is the new consumer of the panel's own
   // layout helpers, so it is the obvious place for one to come back through.
   const src = readFileSync(path.join(ROOT, 'js', 'build', 'catalog.mjs'), 'utf8');
   for (const seq of ['\\x1b', '\\u001b', '\\033', '\\e[']) {

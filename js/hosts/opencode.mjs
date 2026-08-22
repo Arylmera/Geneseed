@@ -1,6 +1,6 @@
 /**
  * The OpenCode-native extras, in Node — everything `emit_opencode` writes beyond the
- * agents and skills that `js/native.mjs` already owns.
+ * agents and skills that `js/hosts/native.mjs` already owns.
  *
  * A translation of the second half of `_build_emit.py`: the branded and curated colour
  * themes, the opt-in primary agent, the opt-in slash-command layer plus the always-on
@@ -15,7 +15,7 @@
  * indent is what switches Python's separators to the ones `JSON.stringify` already uses.
  *
  * TWO STREAMS, AND THE SPLIT IS NOT TIDY. `_warn_if_overrides_stale` prints to STDOUT
- * while every warning in `js/native.mjs` goes to stderr. That is the Python's own
+ * while every warning in `js/hosts/native.mjs` goes to stderr. That is the Python's own
  * inconsistency and it is reproduced, not corrected: the parity gate compares both
  * streams, so "fixing" it here would be a divergence. It is safe because this is the
  * generator's CLI, which prints progress to stdout by design — unlike a hook path, where

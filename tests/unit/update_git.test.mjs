@@ -5,10 +5,10 @@
 // HOW THE SEAM CROSSED, because it is the whole design of this file. The reference reaches every
 // one of these through `mock.patch.object(_update, "_git", side_effect=seam)`, handing the parser
 // a tuple it wrote itself. ESM cannot rebind an imported binding, and `gitRun` has no seam: it
-// runs `git -C ROOT`, where `ROOT` is derived from `js/update.mjs`'s own location.
+// runs `git -C ROOT`, where `ROOT` is derived from `js/maintain/update.mjs`'s own location.
 //
 // So the injection point is the MODULE PATH. `copyCheckout` builds a private checkout, `git init`
-// makes it a real repository with a real bare origin, and importing `js/update.mjs` OUT OF THE
+// makes it a real repository with a real bare origin, and importing `js/maintain/update.mjs` OUT OF THE
 // COPY gives it that copy's `ROOT`. ESM caches per URL, so one copy is one module instance and
 // one import serves the whole file — measured at 1.7 s for the copy and 72 ms for the import.
 //
@@ -164,7 +164,7 @@ test('preflight reports git missing from PATH', () => {
 // `update.test.mjs`.
 
 test('a local-path origin falls back to the default', () => {
-  // NOT a contrivance: the fixture's remote is a Windows path, and `js/update.mjs`'s
+  // NOT a contrivance: the fixture's remote is a Windows path, and `js/maintain/update.mjs`'s
   // `urlsplitHostPath` docblock predicts exactly this — `urlsplit` answers with a scheme of `c`
   // and no host, which is the fallback every local checkout takes.
   assert.deepEqual(U.originDisplay(), U.DEFAULT_ORIGIN);
