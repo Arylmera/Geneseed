@@ -199,7 +199,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Themes | `themes/*.json` | — | token → label maps; `themes/opencode/` is a separate colour system |
 | Release label | `harness.config.json` | `.geneseed-version` | the theme and the human-readable version the driver reads; the canonical identity is the source fingerprint, not this string |
 | Lifecycle | `registry.json` | — | maintainer-side status/version/owner per agent and skill; never rendered into a bundle |
-| Generator | `bin/geneseed.mjs` (`geneseed-build`) | — | substitution + `<!-- INCLUDE: -->` inlining, and the nine `--emit` targets |
+| Generator | `bin/build-driver.mjs` (`geneseed-build`) | — | substitution + `<!-- INCLUDE: -->` inlining, and the nine `--emit` targets |
 | CLI, as data | `js/cli-table.json` | — | the owned document the entry point parses its own argv from |
 | Automation | `bin/geneseed-cli.mjs` (`geneseed`) | — | 25 verbs — `build` / `doctor` / `status` / `prompt` / `diff` / `setup` / `web` / `upgrade` / … |
 | Hooks | `bin/geneseed-hook.mjs` (`geneseed-hook`) | — | the four verbs an emitted `settings.json` invokes: `context` / `git-gate` / `rule-gate` / `learn` |
@@ -233,7 +233,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
   the render and wire dispatchers stay two separate functions and two separate statements on
   purpose: that shape is the only thing left for the walker to check, and a gate refuses an
   emit whose sequence has lost its WIRE.
-  `bin/geneseed.mjs`'s `main()` is classified too, as the one stage no per-emit gate can see: it
+  `bin/build-driver.mjs`'s `main()` is classified too, as the one stage no per-emit gate can see: it
   writes the `.geneseed-emit` / `-footprint` / `-theme` markers and the install-registry
   record *after* every emit returns, and nothing that reconciles a file you co-own may run
   there, because there is no manifest to record the claim and no teardown able to undo it.

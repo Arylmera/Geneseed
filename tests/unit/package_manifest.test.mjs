@@ -362,6 +362,10 @@ const WITHHELD = [
   ['.claude/', "this repository's OWN agent config — a deployed harness, not the product"],
   ['.gitignore', 'repo mechanics; npm strips it from a tarball anyway'],
   ['.gitattributes', 'repo mechanics'],
+  ['CLAUDE.md', "this repository's OWN contributor guide — the same reason `.claude/` is withheld, "
+    + 'plus a sharper one: this tool EMITS a CLAUDE.md into a user\'s project, and shipping one in '
+    + 'the tarball would put a file that talks about editing Geneseed next to the files that are '
+    + 'Geneseed. It is not in `files[]`, and this row is what makes that deliberate'],
   ['eslint.config.js', 'the lint config for js/ bin/ tests/ adapters/ — a developer gate, and '
     + 'the linter it configures is a devDependency nothing installs'],
   ['package-lock.json', 'it pins the devDependencies only. `dependencies` is empty and gated '

@@ -240,3 +240,69 @@ export function vendorPinProblems() {
   return problems;
 }
 
+
+/**
+ * `js/README.md` describes every module under `js/`, and only modules that exist.
+ *
+ * THE MAP IS THE ONLY THING IN THIS REPO THAT ANSWERS "WHERE DOES X LIVE?", and a map is worse
+ * than no map once it is wrong: a reader who cannot find a module knows they are lost, and a
+ * reader sent to the wrong file does not. Nothing else notices — the map is prose, it compiles
+ * to nothing, and every suite here stays green while it rots.
+ *
+ * It went in when `js/` reached 56 modules across seven folders, most of them named within the
+ * previous week by splits that moved code between files without moving any behaviour. That is
+ * exactly the change a map cannot survive unattended.
+ *
+ * TWO-SIDED, like the partitions elsewhere in this tree: a module with no row is unfindable, and
+ * a row naming a module that does not exist sends a reader to an ENOENT. Both are reported.
+ * The scan reads the fenced table cells rather than the prose, so a module merely MENTIONED in a
+ * paragraph does not count as documented.
+ */
+export function moduleMapProblems() {
+  const problems = [];
+  const mapPath = path.join(String(ROOT), 'js', 'README.md');
+  let text;
+  try {
+    text = readText(mapPath);
+  } catch {
+    return ['[authoring] js/README.md is missing — it is the module map, and js/inspect/'
+      + 'checks-repo.mjs asserts it describes every module under js/'];
+  }
+
+  // A row is `| `name.mjs` | … |`. Reading the CODE SPAN and not the whole line keeps a module
+  // named in a "Before editing" paragraph from counting as a row.
+  const documented = new Set(
+    [...text.matchAll(/^\|\s*`([a-z0-9-]+\.mjs)`\s*\|/gm)].map((m) => m[1]),
+  );
+
+  const onDisk = new Set();
+  const jsDir = path.join(String(ROOT), 'js');
+  for (const rel of rglob(jsDir)) {
+    if (!rel.endsWith('.mjs')) continue;
+    // One level down only: `js/<domain>/<module>.mjs` is the shape the map is drawn in.
+    // Separators are normalised first: `path.relative` answers with the PLATFORM's, so a split
+    // that only knew `/` finds ONE part on Windows and therefore zero modules — which is what
+    // the vacuity guard below caught the first time this ran.
+    const parts = path.relative(jsDir, rel).replaceAll('\\', '/').split('/');
+    if (parts.length === 2) onDisk.add(parts[1]);
+  }
+
+  if (onDisk.size < 30) {
+    return [`[authoring] the module scan found only ${onDisk.size} modules under js/ — the walk `
+      + 'has gone stale and this check is no longer reading the tree it claims to read'];
+  }
+
+  for (const mod of [...onDisk].sort()) {
+    if (!documented.has(mod)) {
+      problems.push(`[authoring] js/${mod} has no row in js/README.md — a module the map does not `
+        + 'name is a module nobody can find');
+    }
+  }
+  for (const mod of [...documented].sort()) {
+    if (!onDisk.has(mod)) {
+      problems.push(`[authoring] js/README.md has a row for ${mod}, which does not exist — the map `
+        + 'sends a reader to a file that is not there');
+    }
+  }
+  return problems;
+}

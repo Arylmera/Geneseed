@@ -94,9 +94,10 @@ cd web && npm ci && npm run lint && npm run format:check && npm test && npm run 
 
 Notes that matter:
 
-- The root `package.json` has **no `scripts` key**, and no pre-commit hook, Makefile or justfile
-  exists either. `npm test` at the root exits 1 with *Missing script: "test"*; the suite is run by
-  hand with the glob above.
+- The root `package.json` has exactly one script, `lint`, and no pre-commit hook, Makefile or
+  justfile exists. `npm test` at the root exits 1 with *Missing script: "test"*; the suite is run
+  by hand with the glob above. `npm ci` once per clone installs the devDependencies `lint` needs
+  — it pulls no runtime dependency, because there are none.
 - `--test-reporter=tap` is not decoration. Both workflows gate on the *count* (`# tests N ≥ 500`)
   because `node --test` over a glob that matches nothing prints `# tests 0` and **exits 0**. Node's
   default reporter changed between majors, which is how a green 1043-test suite once reported zero.
@@ -179,7 +180,7 @@ on purpose so that the invariant slot stays scarce.
 3. Seed the fourteen themes:
 
    ```bash
-   node bin/geneseed.mjs --sync-themes
+   node bin/build-driver.mjs --sync-themes
    ```
 
    ⚠ Four spellings of this command are in circulation and two of them fail — `doctor`'s own tip
@@ -711,9 +712,9 @@ stop a change today, and all of them cost a contributor a wrong turn until they 
    and today nothing warns you before the snapshot goes red.
 4. **Gate `AGENT_LESSON_PROMPT` like its sibling (§7.7), and either gate or delete
    `adapters/claude-code/settings.json` (§7.10).** Two silent failure modes, both cheap to close.
-5. **Consider a `scripts` block in the root `package.json`.** There is currently no single command
-   that runs what CI runs; every contributor reassembles the five by hand from this file. A
-   `verify` script is three lines and makes §1 executable rather than descriptive.
+5. **Finish the `scripts` block in the root `package.json`.** `lint` landed with the ESLint
+   config; the rest of what CI runs is still reassembled by hand from this file. A `verify` script
+   chaining lint + suite + doctor is three lines and makes §1 executable rather than descriptive.
 
 The list of hand-maintained satellites in §6 is the *design*, not a defect — this project
 deliberately keeps tables and prose hand-written and gates them from the source tree. The

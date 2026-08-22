@@ -1,8 +1,8 @@
 /**
  * `geneseed doctor` — validate the build.
  *
- * Fifteen `*Problems` checks over one theme (or every theme) — and `[doctor] ok — …` when all
- * fifteen find nothing. The checks themselves live beside this file, in `checks-build.mjs`,
+ * Sixteen `*Problems` checks over one theme (or every theme) — and `[doctor] ok — …` when all
+ * sixteen find nothing. The checks themselves live beside this file, in `checks-build.mjs`,
  * `checks-repo.mjs` and `checks-authoring.mjs`, over the primitives in `scan.mjs`; what is left
  * here is the driver that chooses the themes, runs the checks and prints the verdict.
  *
@@ -40,7 +40,7 @@ import { authoringProblems } from './checks-authoring.mjs';
 import {
   checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
-import { shimProblems } from './checks-repo.mjs';
+import { moduleMapProblems, shimProblems } from './checks-repo.mjs';
 import { isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
 
 /**
@@ -200,6 +200,7 @@ export function doctorCollect({
   problems = problems.concat(ran('colors', 'Colour themes', colorThemeProblems()));
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
+  problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed
   // `rituals/harness.py` and compared that against a digest baked into `cli.json`, to catch a
   // parser edited without regenerating the table. P2 made the table the OWNED document

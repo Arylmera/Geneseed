@@ -1386,3 +1386,38 @@ test('a portable bundle keeps its links and a native global strips them', () => 
     assert.ok(!PER_ROW.test(agent), 'the native AGENT.md kept its per-row spec links');
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// The module map
+// ---------------------------------------------------------------------------------------------
+
+test('the module map gate sees a module nobody documented, and a row for a module that is gone', () => {
+  // ONE PLANTED FAULT PER CHECK, for the reason this whole file exists: delete any single doctor
+  // check and a clean run is byte-identical, so nothing but a planted fault can tell a full
+  // doctor from a stub that prints the OK line.
+  //
+  // BOTH DIRECTIONS, because the map is a two-sided partition and only one side is obvious. A
+  // module with no row is unfindable — a reader greps, misses, and concludes the code is
+  // elsewhere. A row for a module that no longer exists is WORSE and is the half a reviewer
+  // forgets: it does not look wrong, it sends someone confidently to an ENOENT. The rename that
+  // produces it is exactly the kind of change this repository has been making all week.
+  const clean = gate(fixture(), 'm.moduleMapProblems()');
+  assert.deepEqual(clean, [],
+    `the untouched copy already fails the module map, so the faults below prove nothing: ${JSON.stringify(clean)}`);
+
+  // A module the map does not name. Written into the copy, not the real tree.
+  const undocumented = withFault({ 'js/lib/orphan.mjs': 'export const x = 1;\n' },
+    (root) => gate(root, 'm.moduleMapProblems()'));
+  assert.ok(undocumented.some((p) => p.includes('orphan.mjs') && p.includes('no row')),
+    `a module with no row went unreported: ${JSON.stringify(undocumented)}`);
+
+  // A row naming a module that does not exist — planted by rewriting the map itself.
+  const map = fs.readFileSync(path.join(fixture(), 'js', 'README.md'), 'utf8');
+  const withGhost = map.replace('| `source.mjs` |', '| `ghost.mjs` |\n| `source.mjs` |');
+  assert.notEqual(withGhost, map,
+    'js/README.md no longer has the row this fault rewrites — re-aim it at a row that exists');
+  const dangling = withFault({ 'js/README.md': withGhost },
+    (root) => gate(root, 'm.moduleMapProblems()'));
+  assert.ok(dangling.some((p) => p.includes('ghost.mjs') && p.includes('does not exist')),
+    `a row for a missing module went unreported: ${JSON.stringify(dangling)}`);
+});
