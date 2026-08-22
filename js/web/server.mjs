@@ -1,7 +1,8 @@
 /**
- * The web console's HTTP shell — `rituals/_web_server.py`'s handler, static route and
- * `serve()` entry. P6a: the shell and `/api/ping`, and nothing that answers a real
- * endpoint.
+ * The `geneseed web` VERB — the UI-bundle decision, the npm build, `serve()` and the CLI
+ * entry. The request handler and the static route are in `handler.mjs`, the route
+ * declarations in `routes.mjs`, the daemon record and lifecycle in `daemon.mjs`; this file
+ * binds a socket and wires the three together.
  *
  * WHY THE SHELL FIRST, AND ALONE. `_web_server.py` is 654 lines and none of it is an API
  * function: it is routing, two security guards, gzip negotiation, the static route with
@@ -25,14 +26,17 @@
  * call sites in a factory. A Python float would be the counter-example — `1.0` against
  * JS's `1` — and the byte gate over every endpoint body is what would catch one.
  *
- * P6h FINISHED IT, and the file grew a second half rather than a second module. The
- * reference keeps the handler and the daemon lifecycle in ONE file under a
- * `# ---- daemon mode` banner, and splitting them here would have made `serve()` (which
- * needs `npmBuild`) and the launcher (which needs `readDaemon`) import each other. So
- * `_probe`, `_live_daemon`, `_spawn_detached`, `start|stop|status|restart_daemon`,
- * `_npm_build` and `cmd_web` all live below, and `bin/geneseed-cli.mjs` is finally a
- * caller — which is what put this tree on the CLI's import graph and moved
- * `js/web/jobs.mjs`'s spawn row to `entry: "cli"`.
+ * THE DAEMON LIFECYCLE MOVED OUT, AND THE PREDICTED CYCLE DID NOT MATERIALISE. This
+ * docblock used to argue that splitting the handler from the daemon would make `serve()`
+ * (which needs `npmBuild`) and the launcher (which needs `readDaemon`) import each other.
+ * They do not: the dependency runs ONE WAY, `server → daemon`, because `npmBuild` stayed
+ * here with `serve` and only the record readers went. `probe`, `liveDaemon`,
+ * `spawnDetached`, `start|stop|status|restartDaemon`, `openUrl` and `requestRestart` are in
+ * `daemon.mjs`; `npmBuild`, `buildPlan`, `serve` and `cmdWeb` are here.
+ *
+ * `bin/geneseed-cli.mjs` imports `cmdWeb` statically, which is what put this tree on the
+ * CLI's import graph and moved `js/web/jobs.mjs`'s spawn row to `entry: "cli"` — and it is
+ * why a runtime dependency reached from here would load on EVERY `geneseed` invocation.
  *
  * WHAT IS STILL NOT HERE, SINCE P6i: `/api/pick-folder` alone, and it is DECLINED rather than
  * deferred — an OS-native folder chooser has no Node twin that is not a new GUI dependency.

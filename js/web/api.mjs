@@ -391,9 +391,10 @@ export const WIKI_FILE_CAP = 5000;
 /**
  * `resolvePath` for a path that came out of a HAND-MAINTAINED manifest — `null`, never a throw.
  *
- * The three wiki sites below are the only request-path callers of `expanduser`, and it now
- * REFUSES a `~user` form by printing and throwing (`js/hosts/hosts.mjs`'s docblock). None of them
- * may let that escape: `js/web/server.mjs` wraps the whole GET in a blanket `catch` → a JSON
+ * The three wiki sites below, and `apiDeployCmd` in `js/web/actions.mjs`, are the
+ * request-path callers of `expanduser`, and it REFUSES a `~user` form by printing and throwing
+ * (`js/hosts/hosts.mjs`'s docblock). None of them may let that escape: `js/web/handler.mjs`
+ * wraps the whole GET in a blanket `catch` → a JSON
  * 500, so an unguarded refusal would turn ONE bad line in a file the user hand-edits into a
  * dead Knowledge section. That is the same argument `sovereignBypass` makes in `js/hosts/hooks.mjs`
  * — contain the refusal per entry and take the site's OWN degrade — and each of the three
@@ -536,7 +537,10 @@ export function apiWikiItem(state, name) {
 }
 
 /**
- * `harness._within` — re-exported from `js/lib/fs.mjs`, where P6i moved it.
+ * `harness._within` — re-exported from `js/lib/paths.mjs`, where the lib split put it.
+ *
+ * ⚠ A SECOND, INDEPENDENT COPY lives in `js/inspect/scan.mjs`, written for the doctor's tree
+ * walks. A change to the containment rule has to land on both, and nothing compares them.
  *
  * It lived here from P6b (the restore's containment check) until `_install_move_list` needed
  * the same predicate from `js/maintain/uninstall.mjs`, which must not import the web tree. The
@@ -905,10 +909,11 @@ export function apiOverview(state) {
  * `_web_server.Handler.STATE_ROUTES`, the ported half.
  *
  * A literal path to `api_X(state)`, exactly as the reference's table is — and the reason
- * it is a table on this side too is `tests/test_web_server.py`'s cross-check, which reads
- * the reference's table out of `rituals/_web_server.py` with `ast` and requires this one
- * plus `NOT_PORTED` to equal it. On the second instance of anything, the gate becomes a
- * table cross-checked against the source of truth.
+ * it is a table on this side too is `tests/unit/web_server.test.mjs`'s cross-check, which
+ * requires this table plus `PREFIX_ROUTES`, `PORTED_INLINE` and `NOT_PORTED` to equal
+ * `REF_GET` — a FROZEN LITERAL of what the reference daemon answered, since the source it
+ * was once read from with `ast` is deleted. On the second instance of anything, the gate
+ * becomes a table cross-checked against a declaration.
  */
 /**
  * `_web_server.do_GET`'s prefix routes, the ported ones — path in, response out.

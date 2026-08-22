@@ -4,14 +4,15 @@
  * EXTRACTED IN P5c, and the reason is arithmetic rather than taste. `bin/build-driver.mjs`
  * owned these; `bin/geneseed-cli.mjs` needs the same four to find a global install, and a
  * resolver that decides WHERE a driver writes is the last thing that should exist twice.
- * `js/hosts/hooks.mjs` carries a third copy of `opencodeConfigDir` on purpose — the hook path is
- * deliberately dependency-free and says so — but the CLI has no such reason, so this is one
- * owner for both drivers rather than a second exception.
+ * `js/hosts/hooks.mjs` USED to carry a third copy of `opencodeConfigDir`, on the rule that the
+ * hook path stays dependency-free; P5d deleted it when `resolveMemoryDir` moved here and the
+ * hook became an importer instead. This module is now the single owner for both drivers AND
+ * for the hook.
  *
- * The move is a pure one, which is why it could be made at all: `tests/golden.py` runs
- * `bin/build-driver.mjs` over 259 cells and compares the tree byte-for-byte, and roughly half
- * of those resolve a global config dir. A move that changed one of these by a character
- * fails ~126 cells, not zero.
+ * The move is a pure one. What holds it is no longer a byte corpus — `tests/golden.mjs`'s two
+ * modes compare a run against another run of the SAME generator, so they would follow a
+ * changed resolver rather than catch it — but `tests/unit/node_driver.test.mjs`'s relocation
+ * table, which asserts each host's global target absolutely.
  */
 import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';

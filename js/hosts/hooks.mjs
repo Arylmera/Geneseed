@@ -26,8 +26,10 @@
  * failure has to be diagnosable, and its hook command carries `|| exit 0` for exactly that
  * reason.
  *
- * The gate is `tests/harness_golden.py`, which runs each verb through both CLIs in a
- * seeded sandbox and compares stdout, stderr, the exit code and every file left behind.
+ * The gate is `tests/helpers/cli_golden.mjs` replaying `tests/helpers/matrix/cli.{posix,win32}.json`:
+ * each verb run in a seeded sandbox, with ABSOLUTE assertions on stdout, stderr, the exit code
+ * and every file left behind. Absolute rather than compared is what let it survive the deletion
+ * of the implementation it was once compared against.
  */
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSync }
   from 'node:fs';

@@ -32,8 +32,9 @@ import { existsSync, mkdirSync } from 'node:fs';
 // ---------------------------------------------------------------------------
 
 /**
- * The RENDER half of `_build_global._emit_claude_core`: everything up to (not including)
- * the CLAUDE.md managed-block merge. WIRE, PRUNE, MANIFEST and VERIFY stay in Python.
+ * RENDER and WIRE for `_build_global._emit_claude_core`: this renders wholesale, then calls
+ * `claudeWire` below for the CLAUDE.md managed-block merge and the settings file. PRUNE,
+ * MANIFEST and VERIFY are the driver's, in `bin/build-driver.mjs`.
  *
  * Six emits route through here — claude, bob and copilot at both scopes — so this one
  * job is what puts two thirds of the matrix on the seam.
@@ -170,15 +171,14 @@ export function emitClaudeRender(cfg, job) {
  *
  * Everything the render half wrote, it wrote wholesale. Everything here reconciles
  * Geneseed's claim with content it did not write. The return value is `managed`, the claim
- * set Python records in the manifest so every teardown path unwires exactly what was wired
+ * set `bin/build-driver.mjs` records in the manifest so every teardown path unwires what was wired
  * — which is why WIRE must precede MANIFEST, and why `managed` travels back rather than
  * being recomputed.
  *
- * `preambleExclude` arrives decided and is NOT derived here. Python computes it from
- * `_PREAMBLE_CONFIG_DIR`, which resolves through `_build_core._claude_config_dir` — an
- * `_OWNED` name precisely because the suite redirects it at a sandbox. Resolving `~/.claude`
- * on this side would write the developer's REAL CLAUDE.md path into a test's exclude list
- * and suppress it. Third phase running that a name had to travel rather than be re-derived
+ * `preambleExclude` arrives decided and is NOT derived here. `bin/build-driver.mjs` computes
+ * it from the Claude config dir it resolved, and the suite redirects that at a sandbox.
+ * Resolving `~/.claude` on this side would write the developer's REAL CLAUDE.md path into a
+ * test's exclude list and suppress it. Third phase running that a name had to travel rather than be re-derived
  * (`STRUCTURE` at P2d, `capabilityLinkRe` at P2e); this one edits a file the user co-owns.
  *
  * `GENESEED_STACK_GLOBAL` is read from the environment on BOTH sides — the child inherits
@@ -225,7 +225,8 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   // Hooks embed machine-absolute paths. At PROJECT scope for Claude they go into
   // settings.local.json — the personal, untracked file — never the team-shared
   // settings.json, which would hand every teammate failing hooks pointing at this machine's
-  // python. (Bob documents no local variant, so it keeps settings.json.) Copilot has NO
+  // node and this machine's checkout. (Bob documents no local variant, so it keeps
+  // settings.json.) Copilot has NO
   // settings.json and no hook mechanism at all, so the whole stage is skipped: nothing
   // written, no settings_* keys recorded for the lifecycle to unwire.
   if (!isCopilot) {

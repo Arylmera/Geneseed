@@ -24,10 +24,12 @@
  * THE TWO TRIGGERS, AND WHY IT TAKES BOTH. Work is needed when the machine's wiring is
  * `legacy` (see `migrateShape` — and note that shapes 2 and 3 differ only inside the shim
  * body, never in the settings file) OR when the stamp does not name this ROOT. Neither alone
- * is enough: an OpenCode-only machine wires no hooks at all, so its shape is permanently
- * `none` and a shape-only trigger would re-emit it on every run forever; and a user who
- * reinstalls the old Python build flips the shape back to `legacy` while the stamp still
- * matches, which must migrate again. Both inputs, and the stamp is written only on success.
+ * was enough: an OpenCode-only machine wires no hooks at all, so its shape is permanently
+ * `none` and a shape-only trigger would re-emit it on every run forever; and reinstalling the
+ * old build flipped the shape back to `legacy` while the stamp still matched, which had to
+ * migrate again. With the old build gone the second case can no longer arise, but the shape
+ * read stays: it is what makes the verb idempotent rather than stamp-dependent. The stamp is
+ * written only on success.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';

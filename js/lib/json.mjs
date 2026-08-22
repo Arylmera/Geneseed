@@ -20,9 +20,11 @@
  * and `String(1.0)` is `"1"` — so an `agent-overrides.json` carrying `"temperature": 1.0`
  * emits `temperature: 1.0` from Python and `temperature: 1` from Node.
  *
- * That divergence is invisible to the golden harness: the emit always writes an EMPTY
- * overrides stub, so no golden cell has ever had an override to render. It is only
- * reachable on a real user's machine, which is the worst place to find it.
+ * That divergence WAS invisible to the golden harness — the emit always writes an EMPTY
+ * overrides stub, so no golden cell ever had an override to render, and mutation M6 stood
+ * ungated for two phases because of it. What holds it now is
+ * `tests/unit/lib_primitives.test.mjs`, which round-trips `{"temperature": 1.0}` and requires
+ * the `1.0` back.
  */
 class JsonNumber {
   constructor(value, source) { this.value = value; this.source = source; }
@@ -298,10 +300,11 @@ export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
  *
  * `bareInts` admits a BARE JS number, reading it as a Python `int`. `formatValue` refuses one by
  * default and is right to: a value that came out of `json.loads` carries the int/float
- * distinction and a bare double has lost it. But P6's caller is `_send_json`, whose values
- * are COMPUTED here — counts, a port, a pid, a unix second — and Python types every one of
- * them `int`, which both languages render identically. The flag is where that claim is
- * stated; the byte gate over every endpoint body is what would catch a float. A
+ * distinction and a bare double has lost it. But the caller it was written for is `sendJson`
+ * in `js/web/handler.mjs`, whose values are COMPUTED — counts, a port, a pid, a unix second
+ * — every one of them an integer, which both languages render identically. The flag is where
+ * that claim is stated. It has two further callers now, and neither is an endpoint:
+ * `js/web/jobs.mjs` writes the job history and `js/web/activity.mjs` the activity record. A
  * non-integral value still renders through `repr(float)`, which is the honest reading of
  * `0.5`; only an INTEGRAL float (`1.0` against JS's `1`) is unrepresentable, and it is
  * unrepresentable whatever this flag says.

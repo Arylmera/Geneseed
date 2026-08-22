@@ -57,15 +57,13 @@
  *
  * `web/dist` therefore does NOT need rebuilding, and it was not rebuilt.
  *
- * WHAT GATES IT, since no cell can. The value never reaches a response, so
- * `tests/web_golden.py` is structurally blind to it — which is exactly the shape a corpus
- * answers and a cell cannot (the phase rule: a cell runs the PROGRAM, a corpus runs the
- * FUNCTION). The gate is a unit test that calls BOTH implementations and asserts three
- * things: the reference's argv head is its own interpreter and `build.py`, absolutely; the
- * twin's head is `process.execPath` and `bin/geneseed-cli.mjs`, absolutely; and the TAIL —
- * every argument after the head, which is where a real port bug would live — is identical.
- * That is the absolute-assertion-per-side discipline a tolerant comparison owes, applied to
- * a value the byte gate cannot reach.
+ * WHAT GATES IT, since no cell can. The value never reaches a response, so a request-level
+ * corpus is structurally blind to it — exactly the shape a function-level gate answers and a
+ * cell cannot. That gate is `tests/unit/web_jobs.test.mjs`: it asserts the argv HEAD
+ * absolutely — `process.execPath` plus `bin/build-driver.mjs`, and no interpreter name
+ * anywhere in it — and pins the TAIL, every argument after the head, against a frozen
+ * literal. The tail is where a real bug would live, and asserting it absolutely rather than
+ * by comparison is what let it outlive the implementation it was once compared against.
  *
  * THE CODE IS P6g's, THE DECISION IS THIS PHASE's. `api_install_cmd`, `api_deploy_cmd` and
  * `api_restore` all sit behind `/api/actions/<x>`, which needs the `JobManager` to route at
@@ -86,16 +84,17 @@
  * behaviour a 501 produces.
  *
  * ---------------------------------------------------------------------------------------
- * `api_install_toggle` IS DEFERRED, with its measurement.
+ * `api_install_toggle` CROSSED IN P6i, AND THE ENGINE CAME WITH IT.
  *
- * The endpoint is 27 lines over three engine calls. One of the three (`_install_uninstall`)
- * crossed in P5h. The other two pull in 293 lines of all-or-nothing tree moves with
- * rollback, a stash layout, an `instructions`-entry unmerge, a re-emit-while-disabled guard
- * and a host fork into `_claude_deactivate`/`_claude_reactivate`. None of it is web code and
- * none of it has a `harness` VERB — which is why P5 never reached it — and its gate is a
- * file-move fixture of the kind `harness_golden` is built for, not a request script. Porting
- * it inside a web phase would put the largest unported engine block behind the weakest
- * available gate. `/api/install` stays in `NOT_PORTED_POST`.
+ * The endpoint is 27 lines over three engine calls, and the reason it waited is worth
+ * keeping: two of the three pull in 293 lines of all-or-nothing tree moves with rollback, a
+ * stash layout, an `instructions`-entry unmerge, a re-emit-while-disabled guard and a host
+ * fork. None of that is web code, and porting it inside a web phase would have put the
+ * largest engine block behind the weakest available gate — a request script rather than a
+ * file-move fixture. So it landed where it belongs: `installDeactivate` and
+ * `installReactivate` live in `js/maintain/uninstall.mjs` beside `installUninstall`, the
+ * reversible siblings of the same owned-file walk, and `apiInstallToggle` below is the thin
+ * endpoint over them.
  */
 import {
   accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync, unlinkSync,

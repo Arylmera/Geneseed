@@ -8,8 +8,10 @@
  * doctor's authoring gates are what validate them — and `js/inspect/status.mjs`'s docblock said
  * flatly that "the taxonomy P7 owns" was not ported, which was true of `_parse_laws` and
  * `entity_status` and had stopped being true of the tables. P6c needs all of it, so the
- * tables move HERE, to the module that mirrors where Python keeps them, and `js/inspect/checks-authoring.mjs`
- * imports them. A copy of a value under test silently stops being the value under test.
+ * tables move HERE, to the module that mirrors where Python keeps them, and the doctor's
+ * check modules import them — `checks-authoring.mjs` takes `LAW_CLASS`, `LAW_CLASSES` and
+ * `SKILL_CLASS`, `checks-repo.mjs` takes `ENTITY_STATUSES`. A copy of a value under test
+ * silently stops being the value under test.
  *
  * AND `inventoryCounts` FOLDS BACK INTO `tuiInventory`. P5d shipped a counting-only twin
  * with a docblock warning that the two must not become two classifiers; this is the phase

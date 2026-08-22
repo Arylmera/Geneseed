@@ -22,17 +22,19 @@
  *   * **The diff algorithm.** A cell can produce ONE edited file and see one hunk. It cannot
  *     produce the shapes where `difflib`'s choices differ from any other diff's — ties, the
  *     recursion's alignment, and above all `autojunk`, which only engages at 200 lines and
- *     changes the hunks on every real harness file. Gated as a corpus in
- *     `tests/test_pure_function_parity.py`, measured in both directions (28 of the 176 cases
- *     there disagree when `autojunk` is switched off, so the corpus is not describing a
- *     constant).
+ *     changes the hunks on every real harness file. Gated as a corpus —
+ *     `tests/fixtures/pure_probe.mjs`'s `unified_diff` entry, replayed by
+ *     `tests/snapshot/pure_snapshot.test.mjs` against `tests/__snapshots__/primitives/` —
+ *     measured in both directions (28 of the 176 cases there disagree when `autojunk` is
+ *     switched off, so the corpus is not describing a constant).
  *   * **The timestamp.** `_write_improvements` names the file `improvements-%Y%m%d-%H%M%S.md`
  *     and stamps the report with `datetime.now()`, so the two implementations cannot write the
  *     same bytes across a second boundary — and a cell runs them in sequence, so the boundary
- *     is a coin flip. `harness_golden._STAMPS` normalises both spellings out of the snapshot,
- *     which costs the FORMAT assertion and pays it back in
- *     `test_the_improvements_filename_is_stamped_the_same_way_by_both` — absolute, per
- *     implementation, because a comparison made tolerant of a value owes one somewhere else.
+ *     is a coin flip. The cell harness normalises both spellings out of the snapshot, which
+ *     costs the FORMAT assertion and pays it back in `tests/unit/hook_cli.test.mjs`'s
+ *     `the improvements filename is stamped the declared way` — absolute, and asserted
+ *     directly rather than by comparison, because a check made tolerant of a value owes one
+ *     somewhere else.
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';

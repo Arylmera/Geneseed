@@ -8,7 +8,7 @@
  * for a reader. `js/build/generate.mjs` importing `main` from `bin/build-driver.mjs` is not a
  * precedent for it either: `harness build` IS the driver, and a registry reader is not.
  *
- * The move is licensed the same way the two before it were: `tests/golden.py` drives
+ * The move is licensed the same way the two before it were: `tests/golden.mjs` drives
  * `bin/build-driver.mjs` over 259 cells with `$XDG_CONFIG_HOME` redirected into the sandbox and
  * compares `installs.json` byte-for-byte, so a changed path or a dropped prune fails cells
  * rather than passing quietly.
@@ -55,7 +55,7 @@ export function registrySave(items) {
  *
  * `realpathSync` rather than `path.resolve`, because Python's `Path.resolve()` returns the
  * filesystem's own casing and follows links; `path.resolve` only makes a path absolute. The
- * registry is compared byte-for-byte by `tests/golden.py` (XDG is redirected into the
+ * registry is compared byte-for-byte by `tests/golden.mjs` (XDG is redirected into the
  * sandbox), so a differently-cased entry is a failing cell.
  */
 export function registryRecord(dir) {

@@ -10,11 +10,13 @@
  * RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY (see `_build_global._emit_claude_core`
  * and tests/test_emit_phase_order.py). RENDER produces files Geneseed owns wholesale;
  * WIRE reconciles files the user co-owns (settings.json, opencode.json, the CLAUDE.md
- * managed block) and stays in Python for now, in `_build_settings.py`. Node takes RENDER
+ * managed block) and lives in `js/hosts/settings.mjs`, driven from the two emit modules.
+ * THIS module is only RENDER
  * because it is the only stage whose output is a pure function of the source tree.
  *
  * PARITY IS THE CONTRACT, NOT THE INTENT. Every function here has a named Python
- * counterpart and must produce byte-identical output for it; tests/test_render_parity.py
+ * counterpart and had to produce byte-identical output for it. The reference is gone, so
+ * what holds the line is `tests/golden.mjs --against`, replaying recorded emit cells;
  * drives both over every theme x footprint x posture x mode and byte-compares the
  * written trees. Where Python and JS semantics differ silently — path sort order,
  * `.suffix`, `splitlines`, universal newlines — the difference is spelled out at the

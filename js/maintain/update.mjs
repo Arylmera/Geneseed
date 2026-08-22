@@ -31,9 +31,10 @@
  * `tests/test_pure_function_parity.py`; the heartbeat and the hard deadline are gated by
  * neither and are declared in the P8a handoff.
  *
- * NOT HERE, DELIBERATELY: `sync_self`, `main` (the launchers' self-heal entry) and
- * `cmd_bootstrap` are P8b's, and `update`'s row in `js/web/jobs.mjs`' `NOT_PORTED_ACTIONS`
- * is P8c's one-line payment. `parseOrigin` is ported in full here even though only `upgrade`
+ * ALSO HERE, SINCE P8b: `syncSelf`/`cmdSyncSelf` and the bootstrap step runner
+ * (`cmdBootstrap`, `bootstrapPlain`) at the bottom of this file. Still NOT here: `main`, the
+ * launchers' self-heal entry. `NOT_PORTED_ACTIONS` in `js/web/jobs.mjs` is empty now — every
+ * action row crosses. `parseOrigin` is ported in full here even though only `upgrade`
  * needs its fallback, because P8c's docs `about` kind needs the slug half and splitting one
  * pure function across two phases is how a second classifier gets written.
  */

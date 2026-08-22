@@ -24,10 +24,10 @@
  * binding, one call site, and a test that names the argv. What the ban actually protects —
  * that this tool never shells back to the generator — is asserted directly instead.
  *
- * WHAT `doctorCollect` DOES NOT REACH, MEASURED RATHER THAN ASSUMED. It takes `onProgress`
- * and `groups`; `cmdDoctor` passes neither, and they are the TUI's and the web's. `ran` is
- * kept anyway, because it is four lines and dropping it would make the web's use of
- * `doctorCollect` a rewrite rather than a parameter.
+ * WHAT `doctorCollect` DOES NOT REACH, MEASURED RATHER THAN ASSUMED. It takes `groups` and
+ * `cmdDoctor` does not pass it: that parameter is the WEB's, and `apiDoctor` in
+ * `js/web/api.mjs` is its only caller. `ran` exists for it — four lines of accumulator that
+ * keep the Doctor page's per-check cards a parameter rather than a rewrite.
  */
 import path from 'node:path';
 import { emitGlobalInto, emitProjectInto, main as driverMain } from '../../bin/build-driver.mjs';
@@ -140,13 +140,12 @@ export function claudeBobEmitProblems(themeName) {
 /**
  * `_harness_build._doctor_collect` — run every check; return `[themes, problems]`.
  *
- * TWO PARAMETERS OF THE PYTHON ARE NOT HERE, and both are absences on purpose. `on_progress`
- * is the TUI's — it drags ~140 lines of curses drawing behind it and no caller this binary
- * has can supply one. `groups` is the WEB's, the structured `{check, label, problems}` view
- * the Doctor page renders, and `_web_actions.py` / `_web_core.py` are its only callers; both
- * stay Python until P6. Four lines of accumulator with no caller and no cell is unreachable
- * code that is not part of an asserted partition, which is this port's own criterion for
- * deleting rather than keeping. P6 adds it with the caller that needs it.
+ * ONE PARAMETER OF THE PYTHON IS NOT HERE, and the absence is on purpose. `on_progress` is
+ * the TUI's — it drags ~140 lines of curses drawing behind it and nothing in this tree can
+ * supply one. `groups` DID land, with the caller that needed it: it is the structured
+ * `{check, label, problems}` view the Doctor page renders, and `js/web/api.mjs`'s `apiDoctor`
+ * passes an array. `cmdDoctor` passes nothing and gets the flat list, so the return contract
+ * is the same either way.
  *
  * THE PER-THEME BUILD IS THE DRIVER, IN-PROCESS. The Python shells to `build.py` and reads a
  * return code; here that is `driverMain`, the route P5e established and the only one the
@@ -206,8 +205,8 @@ export function doctorCollect({
   // parser edited without regenerating the table. P2 made the table the OWNED document
   // (`js/cli-table.json`), so there is no generator to fall behind and no second file to hash
   // — the digest was a claim about a file this migration deletes. What replaces it is
-  // `tests/test_cli_reference.py`'s argparse-vs-table equality, for as long as the parser is
-  // still here to walk.
+  // `tests/unit/cli_table.test.mjs`, which holds the owned table against the two entry points
+  // that dispatch from it: no second file to hash, and no generator that can fall behind.
   if (!noBundle) {
     // `Path(bundle).expanduser().resolve()`, which `resolvePath` already IS — the default is
     // deliberately NOT resolved, because the Python's `ROOT / "Harness"` is not either and

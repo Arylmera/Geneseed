@@ -30,7 +30,8 @@ import { TOKEN_RE, isDir, isFile, rglob, sortedUnique, withTempDir, within } fro
  * here and bare `set(...)` there, the message carries no `[theme]` prefix (the caller adds
  * `[emit]` instead), and an unreadable file is SKIPPED rather than raised. Python duplicates
  * the loop because `build.py` cannot import the harness tree; here the two live in one file
- * and the duplication is eight lines — every primitive underneath (`rglob`, `stripCode`,
+ * and the two now sit one file apart (`checkBuild` is in `checks-build.mjs`); the
+ * duplication is eight lines — every primitive underneath (`rglob`, `stripCode`,
  * `linkProblems`, `readText`) is the shared one, which is the half that could actually drift.
  */
 export function validateSandboxProblems(sandbox) {
@@ -86,8 +87,9 @@ function captureStreams(fn) {
  * WHY IT IS HERE AND NOT ON THE GENERATOR DRIVER, which is where its flag lives. The
  * source-tree half of the check IS the doctor, and this module starts a process (`node --check`
  * over the OpenCode plugins). `bin/build-driver.mjs` is under a transitive ban on reaching any
- * module that can, gated twice — `tests/test_node_cli_parity.py` greps the driver's source and
- * `tests/test_hook_cli_parity.py` walks its relative imports. Siting the tool on the CLI
+ * module that can, gated by `tests/unit/hook_cli.test.mjs`, which walks the driver's TRANSITIVE
+ * imports rather than grepping its own source — a source grep walks straight past an
+ * `import … from './x.mjs'` that reaches child_process. Siting the tool on the CLI
  * binary, which already carries the doctor, crosses it with neither gate amended and without
  * the dynamic `import()` that would evade the walk.
  *
@@ -101,10 +103,10 @@ function captureStreams(fn) {
  * `swallowStdout` and this deliberately does not: `_validate_only` has no `redirect_stdout`,
  * so the ~200 lines of emit summary ARE part of what a dry run shows the operator.
  *
- * NO CELL CAN REACH THIS. `golden.py`'s `_argv` never emitted `--validate-only`, so the flag
- * was ungated across implementations for the whole port; the gate is the corpus in
- * `tests/test_maintainer_tools_parity.py`, which runs the reference and this side over the
- * same flags and compares stdout, stderr and the exit code.
+ * NO CELL REACHES THIS. The recorded corpus's argv never emitted `--validate-only`, so the
+ * flag was ungated across implementations for the whole port. What holds it now is
+ * `tests/unit/generate.test.mjs`, which drives `cmdValidate` directly and asserts its exit
+ * contract absolutely — this verb is deliberately outside the verb table, so nothing else does.
  */
 export function cmdValidate(args) {
   const problems = [];

@@ -7,16 +7,13 @@
  * add|remove|list`, which maintains that file across every global install and wires the
  * host-native per-repo suppression into the excluded repo.
  *
- * THE PYTHON WRITER STAYS, AND THAT IS A DECISION RATHER THAN AN OMISSION.
- * `rituals/_web_actions.py:371-390` calls `excludes_snapshot()`, `exclude_add` and
- * `exclude_remove` "verbatim: this endpoint owns no exclusion logic of its own", and the web
- * server is P6. So until that phase there are two writers for one user-owned file. What
- * makes that survivable is what makes it survivable for the machine-wide hook shim: the two
- * implementations are held byte-equal by `tests/harness_golden.py`, which runs every cell
- * against both and compares stdout, stderr, the exit code and every file left behind. What
- * it does NOT cover is two processes writing at the same instant — `_write_excludes` is
- * temp-plus-rename on both sides, so a concurrent pair loses one edit rather than tearing
- * the file, which is the same guarantee the single-writer version had against itself.
+ * THE WEB ENDPOINT IS THIS MODULE — there is exactly ONE writer. `js/web/actions.mjs`
+ * dispatches straight to `excludeAdd`/`excludeRemove` here, and `apiExcludes` in
+ * `js/web/api.mjs` is `excludesSnapshot()` unmodified, so the CLI and the console are one
+ * writer over one user-owned file. It used to be two, with a Python endpoint calling the
+ * same three names, and the surviving hazard is the one that outlived the split: two
+ * PROCESSES writing at the same instant. `writeExcludes` is temp-plus-rename, so a
+ * concurrent pair loses one edit rather than tearing the file.
  *
  * Every path a hook takes on this file is READ-only, so nothing here is on the PreToolUse
  * latency budget — which is why it lives beside the CLI and not in `js/hosts/hooks.mjs`.
@@ -213,8 +210,8 @@ export function excludeRemove(target) {
 }
 
 /**
- * `excludes_snapshot` — the union view across installs, shared by the CLI `list` and (on the
- * Python side) the web endpoint. Also flags installs whose lists diverge: a global emit made
+ * `excludes_snapshot` — the union view across installs, shared by the CLI `list` and by the
+ * web endpoint (`apiExcludes` in `js/web/api.mjs` is this function, unmodified). Also flags installs whose lists diverge: a global emit made
  * after the exclusions were added starts with an empty stub.
  */
 export function excludesSnapshot() {

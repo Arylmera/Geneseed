@@ -28,9 +28,10 @@
  *     removal from `NOT_PORTED_KINDS` and a row in `KIND_ROUTES`.
  *
  * So `NOT_PORTED_KINDS` declares what is left, `api_docs_page` answers 501 for it, and
- * `tests/test_web_server.py` cross-checks that set against the kinds `_web_docs.py`
- * actually dispatches on — the same partition shape the route table took in P6b, which is
- * why it is a table here too and not two `if`s.
+ * `tests/unit/web_server.test.mjs` requires `PORTED_KINDS` ∪ `NOT_PORTED_KINDS` to equal
+ * `REF_KINDS` — a FROZEN LITERAL of the five kinds the reference dispatched on, since the
+ * reference itself is deleted. Same partition shape as the route table, which is why it is a
+ * table here too and not two `if`s.
  *
  * THE `?harness=` QUERY PARAM LANDS HERE. P6a skipped it deliberately (no caller); it is
  * the Docs selector, and it is the ONLY input to these endpoints that is not the checkout,

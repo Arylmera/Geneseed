@@ -17,7 +17,8 @@
  * TWO STREAMS, AND THE SPLIT IS NOT TIDY. `_warn_if_overrides_stale` prints to STDOUT
  * while every warning in `js/hosts/native.mjs` goes to stderr. That is the Python's own
  * inconsistency and it is reproduced, not corrected: the parity gate compares both
- * streams, so "fixing" it here would be a divergence. It is safe because this is the
+ * specification, and `tests/unit/agent_overrides.test.mjs` pins the stale notice to stdout.
+ * It is safe because this is the
  * generator's CLI, which prints progress to stdout by design — unlike a hook path, where
  * a stray stdout byte silently disarms a blocking gate.
  */
@@ -98,7 +99,11 @@ function truthyEnv(name) {
   return ['1', 'on', 'true', 'yes'].includes((process.env[name] || '').toLowerCase());
 }
 
-/** `_build_core.source_release_version`. Belongs to core; travels in `cfg` until core lands. */
+/**
+ * `_build_core.source_release_version`. It reads `cfg.config`, so it takes `cfg` rather than
+ * importing core — and it stayed HERE when core landed as `js/build/source.mjs`, which is why
+ * `js/build/version.mjs` reaches back into the OpenCode module for it.
+ */
 export function sourceReleaseVersion(cfg) {
   try {
     const data = parseJson(readText(cfg.config));

@@ -19,9 +19,9 @@
  *      (`<name>.agent.md`) that drags a link rewrite along with it.
  *
  * None of the three is reachable from the golden harness's happy path: golden emits into
- * a fresh tree with an empty overrides stub. `tests/test_native_layer_parity.py` drives
- * both implementations over the cells golden cannot construct, and byte-compares the
- * written trees, the returned values AND the warning stream.
+ * a fresh tree with an empty overrides stub. `tests/unit/user_files.test.mjs` drives
+ * claim-on-create over the states a clean fixture cannot produce, and asserts the written
+ * tree, the return value AND the warning stream.
  *
  * NOTHING HERE MAY WRITE TO STDOUT. Python's warnings all go to stderr, and the emitted
  * hook gates signal by printing JSON on stdout — a stray byte from a library on that path
@@ -216,10 +216,12 @@ function agentOverride(overrides, stem) {
  * `model`/`variant` tests are truthiness and the `temperature`/`steps` tests are
  * `is not None` — a configured `temperature: 0` must survive, an empty model must not.
  *
- * Python spells these four ifs out twice, in `_opencode_agent_frontmatter` and in
- * `_write_primary_agent`. One owner here rather than a second copy: the two Python
- * bodies are identical today, and the parity gate drives BOTH call sites, so if they
- * ever diverge the gate says so instead of the copies silently rotting apart.
+ * Python spelled these four ifs out twice, in `_opencode_agent_frontmatter` and in
+ * `_write_primary_agent`. One owner here rather than a second copy, and the reason is
+ * sharper now than parity was: the two call sites are `opencodeAgentFrontmatter` below and
+ * `writePrimaryAgent` in `js/hosts/opencode.mjs`, and the second is behind
+ * `GENESEED_PRIMARY` — so only `tests/unit/agent_overrides.test.mjs` reaches it. Sharing the
+ * body is what stops the opt-in path rotting away from the default one unobserved.
  */
 export function pushOverrideLines(fm, ov) {
   if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);

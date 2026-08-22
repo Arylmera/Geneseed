@@ -35,11 +35,11 @@
  * `move` where it has `unlink`, plus an inverse; splitting them would have duplicated the
  * owned-file walk and the ancestor prune a fourth time.
  *
- * NO SPAWN. `bin/geneseed-cli.mjs`'s `child_process` allow-list names `js/inspect/checks-authoring.mjs` and one
- * argv, and this module does not extend it: every operation here is a filesystem call. That
- * matters more than usual for this verb — shelling the uninstall out to a Python interpreter
- * would be byte-identical in every cell of the matrix, and the allow-list plus
- * `test_uninstall_removes_an_install_with_no_python_on_path` are what refute it.
+ * NO SPAWN. `ALLOWED_SPAWNS` in `tests/unit/hook_cli.test.mjs` is the table of every module
+ * allowed to reach `child_process` and the argv each may use; this module has no row and
+ * does not want one, because every operation here is a filesystem call. That matters more
+ * than usual for this verb: shelling the uninstall out to an interpreter would have been
+ * byte-identical in every cell of the matrix, so only the allow-list refutes it.
  */
 import {
   existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync,

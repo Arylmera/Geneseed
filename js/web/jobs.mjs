@@ -47,15 +47,16 @@
  * primitive, not this program.
  *
  * ---------------------------------------------------------------------------------------
- * THE PARTITION — six of the eight action rows cross and two do not.
+ * THE PARTITION — all eight action rows cross, and the declaration outlives them.
  *
- * `doctor`, `build`, `build-all`, `export`, `uninstall` and — since P8c — `update` all name a
- * verb that has crossed. `link`/`unlink` run `harness.py link|unlink` (P10b). A Node runner
- * that spawned the Python harness for those would put Python back into a "no Python
- * needed" install, so they are DECLARED in `NOT_PORTED_ACTIONS` and answered 501 by the
- * dispatcher, and P10b ends by deleting both rows. `tests/test_web_jobs.py` cross-checks the
- * two sets against `action_commands`' own keys with `ast`, so a NINTH row added to the
- * reference cannot quietly answer "unknown action".
+ * `doctor`, `build`, `build-all`, `export`, `uninstall`, `update`, `link` and `unlink` each
+ * name a verb `bin/geneseed-cli.mjs` runs. `link`/`unlink` were the last two: they ran
+ * `harness.py link|unlink` until P10b, and a runner that spawned the Python harness would
+ * have put Python back into a "no Python needed" install.
+ *
+ * `NOT_PORTED_ACTIONS` IS EMPTY AND STILL DECLARED, which is the point of it: a ninth action
+ * added later cannot quietly answer "unknown action", because `tests/unit/web_jobs.test.mjs`
+ * holds the two sets against `actionCommands`' own keys.
  *
  * ---------------------------------------------------------------------------------------
  * THREE DETAILS OF `_run`, EACH A COMMENT EXPLAINING A BUG IT ALREADY FIXED.

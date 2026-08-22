@@ -38,11 +38,10 @@
  * have run, and inventing one writes a shim that names an interpreter the user may not have.
  * P5b settled this shape for the hook shim — "Node bakes node" — and P3a settled the gate:
  * the shim is byte-comparable once runner and entry are ARGUMENTS. So this bakes
- * `process.execPath` + `bin/geneseed-cli.mjs`, `tests/harness_golden.py` normalises the
- * shim's argv line the way `js/web/jobs.mjs` normalises the job runner's, and each side's
- * real content is asserted ABSOLUTELY in `tests/test_win_user_path.py`. A shim written by
- * the Node CLI reaches sixteen verbs rather than twenty-four; that is the cost of the port
- * being a port, and it disappears when P7 lands `tui`/`menu`/`home`.
+ * `process.execPath` + `bin/geneseed-cli.mjs`, the cell harness normalises the shim's argv
+ * line the way `js/web/jobs.mjs` normalises the job runner's, and the real content is
+ * asserted ABSOLUTELY in `tests/unit/win_user_path.test.mjs`. The shim reaches every verb in
+ * the `VERBS` table, `tui`/`menu`/`home` included since P7 — the gap the port opened is closed.
  *
  * THE DOUBLE CARRIAGE RETURN IS NOT A TYPO. The reference builds the shim with explicit
  * `\r\n` and writes it with `Path.write_text`, whose default newline handling then turns
@@ -67,9 +66,10 @@
  *     and the verb takes its "removed the shim, said nothing about PATH" branch. A real arm,
  *     reached honestly, with the registry untouched.
  *
- * THE SUCCESS ARM OF `winUserPath` IS THEREFORE UNGATED, DELIBERATELY, IN BOTH
- * IMPLEMENTATIONS — declared here rather than faked, because the only way to gate it is to
- * edit the machine running the gate.
+ * THE SUCCESS ARM OF `winUserPath` IS THEREFORE UNGATED, DELIBERATELY — declared here and
+ * in `tests/unit/win_user_path.test.mjs`'s coverage row rather than faked, because the only
+ * way to gate it is to edit the machine running the gate. What stands in for it is
+ * source-level: that file asserts the spawn's shape without running it.
  */
 import {
   chmodSync, existsSync, lstatSync, mkdirSync, readlinkSync, rmSync,

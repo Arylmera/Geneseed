@@ -32,16 +32,17 @@ import { mkdirSync } from 'node:fs';
 // ---------------------------------------------------------------------------
 
 /**
- * The RENDER half of `_build_emit.emit_opencode`: everything up to (not including) the
- * `_merge_opencode_json` call. WIRE, PRUNE and MANIFEST stay in Python.
+ * RENDER and WIRE for `_build_emit.emit_opencode` — everything through the
+ * `mergeOpencodeJson` call at the bottom. PRUNE and MANIFEST are the driver's, in
+ * `bin/build-driver.mjs`.
  *
  * `oldOwned` and `manifestExisted` arrive in the job rather than being read here. The
- * manifest is Python's stage — it writes it, prunes against it, and now reads it too, so
- * there is one owner of the file instead of two processes racing to interpret it.
+ * manifest is the DRIVER's stage: it reads the file, hands the prior claim in, and prunes
+ * and rewrites it after this returns. One owner of the file, and this function is not it.
  *
- * `nativeCatalog` likewise arrives decided. It is `HOSTS['opencode']['native_catalog']`,
- * and the HOSTS registry stays Python this phase; passing the decision keeps the registry
- * in exactly one place rather than duplicating it for one boolean.
+ * `nativeCatalog` likewise arrives decided. It is `HOSTS['opencode']['native_catalog']` from
+ * `js/hosts/hosts.mjs`, resolved by the driver before the call; passing the decision rather
+ * than re-reading the registry keeps one owner of it.
  */
 export function emitOpencodeRender(cfg, job) {
   phaseLog('RENDER');
@@ -103,7 +104,7 @@ export function emitOpencodeRender(cfg, job) {
 
 /**
  * BOTH halves of `_build_global.emit_opencode_global`, the "everything global, zero
- * per-repo" OpenCode deployment. PRUNE and MANIFEST stay in Python; there is no VERIFY,
+ * per-repo" OpenCode deployment. PRUNE and MANIFEST are the driver's; there is no VERIFY,
  * because this emit writes no settings file.
  *
  * ASSEMBLY, NOT TRANSLATION. Every unit it needs was already here — 58 of the 65 functions
@@ -192,9 +193,10 @@ export function emitOpencodeGlobalRender(cfg, job) {
   shipLeanLaws(items, theme, cfgDir, owned, footprint);
 
   // WIRE — the one file of this emit the user co-owns, and the last render is now behind
-  // us. Inlined the way `emitOpencodeRender`'s is (one call, the same merge, the same
-  // file name), while the Python side keeps it a separate `_opencode_global_wire_py`:
-  // that split is what `tests/test_emit_phase_order.py` walks, and it walks the Python.
+  // us. Inlined the way `emitOpencodeRender`'s is (one call, the same merge, the same file
+  // name). Nothing walks the SOURCE for that split now: `tests/unit/emit_phase_order.test.mjs`
+  // reads the runtime `GENESEED_PHASE_LOG` trace instead, so the `phaseLog('WIRE')` below is
+  // what the gate sees — and deleting it is mutation M30.
   phaseLog('WIRE');
   const cfgName = path.basename(mergeOpencodeJson(path.join(cfgDir, 'opencode.json'),
     agentPath, cfg.doctrines, cfg.excludeRules));

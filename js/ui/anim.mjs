@@ -27,11 +27,12 @@
  * environments in `tests/test_pure_function_parity.py` — none of which can produce it on
  * either side.
  *
- * WHAT GATES IT. `tests/test_pure_function_parity.py`'s `_theme_anim_cases()`: `art_for` over
- * every key plus the prototype-chain names, `_place`/`_tile`/`_height` over their arithmetic,
- * `_anim_ok` over its whole decision table, and `play_line` itself over 24 environments —
- * captured on the reference side through a real `TextIOWrapper`, so the CRLF translation is
- * inside the comparison rather than outside it.
+ * WHAT GATES IT. `tests/__snapshots__/primitives/{posix,win32}.json`, replayed by
+ * `tests/snapshot/pure_snapshot.test.mjs`: `art_for` over every key plus the prototype-chain
+ * names, `_place`/`_tile`/`_height` over their arithmetic, `anim_ok` over its whole decision
+ * table, and `play_line` itself over 24 environments — captured on the reference side through
+ * a real `TextIOWrapper`, so the CRLF translation is inside the recording rather than outside
+ * it. There is no recorder left, so a red run means these functions moved, never the corpus.
  */
 import { printOut } from '../lib/fs.mjs';
 import { parseIntStrict, codePointLength, padEndToWidth } from '../lib/text.mjs';

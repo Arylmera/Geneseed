@@ -50,7 +50,7 @@ function missingReferencedSpecs(cfg) {
  *
  * Python raises `SystemExit(1)` after writing to stderr. Here the message goes to the
  * captured stderr buffer and the throw carries the exit code, which the driver turns
- * back into a `SystemExit(1)` on the Python side — so the caller sees the same stream
+ * into a process status by `bin/build-driver.mjs`'s `main` — so the caller sees the same stream
  * bytes and the same exit status whichever runtime rendered.
  */
 export function assertSourceComplete(cfg, context = '') {

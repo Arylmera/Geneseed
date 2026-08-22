@@ -29,10 +29,10 @@ export const padEndToWidth = (s, width) => s + ' '.repeat(Math.max(0, width - co
 /**
  * `int(s)` for a base-10 string — the VALUE, or null where Python raises `ValueError`.
  *
- * Null rather than a throw because both call sites branch on the failure rather than
- * propagate it: `askChoice` falls through to matching the answer against the option KEYS,
- * and `javaMajorOk` treats an unparseable major as "not new enough". Python spells the same
- * two branches as `except ValueError`.
+ * Null rather than a throw because EVERY call site branches on the failure rather than
+ * propagating it: `askChoice` falls through to matching the answer against the option KEYS,
+ * `javaMajorOk` treats an unparseable major as "not new enough", and the terminal-width,
+ * port and timeout readers each fall back to a default. Python spells that `except ValueError`.
  *
  * Three things separate this from `Number(s)` and each one changes an answer:
  *
@@ -45,9 +45,10 @@ export const padEndToWidth = (s, width) => s + ' '.repeat(Math.max(0, width - co
  *     Every `Nd` block is exactly ten contiguous code points, so a digit's value is its
  *     offset from the first `Nd` code point at or below it, which is what the walk finds.
  *
- * Surrounding whitespace is Python's to strip and both callers have already done it, so this
- * does NOT strip: `int(' 1')` is 1, but reproducing that here would need Python's
- * `str.isspace()` set, which is a separate standing item.
+ * Surrounding whitespace is Python's to strip and this does NOT strip it: `int(' 1')` is 1
+ * where this answers null. STRIPPING IS THE CALLER'S JOB, and the callers that are handed a
+ * raw environment value do it — `js/ui/cli.mjs`'s `helpWidth` and `js/web/activity.mjs` wrap
+ * the argument in `stripWhitespace` first.
  *
  * Gated by a corpus in `tests/test_pure_function_parity.py` — a primitive reproduction gets
  * one owner and a corpus, never a cell (P5c).

@@ -158,12 +158,13 @@ export function withDiscardableStderr(fn) {
  * WHY THE DRIVER NEEDS A FUNNEL WHERE EVERY OTHER CALLER NEEDS `printOut`. The generator
  * prints from ~25 sites across `bin/build-driver.mjs`, `js/build/bundle.mjs`, `js/hosts/settings.mjs`,
  * `js/hosts/opencode.mjs`, `js/hosts/native.mjs` and `js/build/render.mjs`, and those modules are ALSO the
- * body of the `GENESEED_NO_JS` seam child, whose `main` buffers both streams and hands them
- * to a Python parent that re-prints them through `print()`. Converting those sites to
- * `printOut` would translate once in Node and again in Python — `\r\r\n` on every line, on the
- * path `tests/golden.py` drives 259 times. So the translation belongs to whichever process
- * OWNS the stream, and the seam child does not own it. This wraps the driver's `main`, and
- * only the driver's `main`.
+ * body of what used to be a seam child, whose `main` buffered both streams and handed them
+ * to a Python parent that re-printed them through `print()`. Converting those sites to
+ * `printOut` would have translated once in Node and again in Python — `\r\r\n` on every line.
+ * So the translation belongs to whichever process OWNS the stream, and that child did not.
+ * This wraps the driver's `main`, and equally the four render entry points the CLI can reach
+ * WITHOUT `main` on the stack: `parseDriverArgs`, `buildInto`, `emitProjectInto` and
+ * `emitGlobalInto`.
  *
  * The item it closes: a plain `--emit files` handed its caller 104 bytes where `python
  * build.py` handed over 105, and `tests/golden.py`'s `text=True` capture folds both to the

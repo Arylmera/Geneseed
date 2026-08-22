@@ -41,10 +41,11 @@
  * know), `accentFor`'s cyan fallback (an unknown theme is refused upstream by
  * `effectiveTheme`), and the whole ANSI half of `statusLines` (`_color_enabled` is
  * `sys.stdout.isatty()`, and every harness captures stdout through a pipe). All three are
- * PURE FUNCTIONS of their arguments, so all three are gated as a corpus in
- * `tests/test_pure_function_parity.py` instead — which is a third answer to the colour
- * question the P5c handoff posed as a choice between shipping it ungated and not shipping
- * it.
+ * PURE FUNCTIONS of their arguments, so all three are gated as a corpus instead:
+ * `tests/fixtures/pure_probe.mjs` calls them and `tests/snapshot/pure_snapshot.test.mjs`
+ * replays that against `tests/__snapshots__/primitives/`. That was a third answer to the
+ * colour question, which had been posed as a choice between shipping it ungated and not
+ * shipping it.
  *
  * `manifestIsClaude` was a FOURTH until wave 2 of the P0/P1 review: it is only reached for
  * a candidate with no known host, and `ROOT/"Harness"` was ordered ahead of the sandbox's

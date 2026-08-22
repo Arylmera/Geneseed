@@ -6,8 +6,10 @@
  * `cmd_tui` (`rituals/_harness_tui.py`) is twenty-six lines and three arms. Off a TTY it
  * prints one line and returns 1; when `import curses` fails it prints one line and returns
  * 1; otherwise it builds the inventory and hands the screen to `curses.wrapper(_tui_loop)`.
- * **Every cell in `tests/harness_golden.py` runs off a TTY**, so the first arm is the whole
- * of `tui`'s behaviour that the acceptance matrix can reach, and it is ported byte for byte.
+ * NO CELL COULD EVER GIVE `cmd_tui` A TTY while the acceptance matrix was the gate, so the
+ * off-TTY arm was the whole of its reachable behaviour. That changed with the matrix:
+ * `tests/unit/no_panel.test.mjs` fakes `isTTY` true in a child and asserts BOTH arms — the
+ * exit code, and that the refusal names the console rather than pretending to draw.
  *
  * THE PANEL ITSELF IS P7C'S, AND THIS ENTRY FALLS BACK RATHER THAN INVENTING ONE — the same
  * decision `js/ui/menu.mjs` made in P7a, for the same reason. `cmd_tui` already owns a fourth
@@ -27,17 +29,16 @@
  * this port has shipped code before whose absence nothing would have noticed, and these are
  * not that.
  *
- * WHAT IS DELIBERATELY NOT HERE: `_bx` (its non-ASCII arm returns `curses.ACS_*` chtype ints,
- * which belong with the window), `_wrap_lines` (no consumer until the screens arrive, so
- * porting it now would be a reduced port with no caller to check it against), and every
- * `(stdscr, curses, pal)` drawing helper.
+ * WHAT IS DELIBERATELY NOT HERE: `_bx` (its non-ASCII arm returned `curses.ACS_*` chtype
+ * ints, which belonged with the window) and every `(stdscr, curses, pal)` drawing helper.
+ * `_wrap_lines` is NOT deferred but RETIRED — it reflowed a body into a fixed-width detail
+ * pane, the pane is gone, and the web console does its own wrapping.
  *
  * **DO NOT WRITE A SECOND LINE BREAKER.** This block used to argue that `textwrap.wrap` was
  * "a second `difflib` — a stdlib payload with no Node twin". It has one since P1:
  * `wrapText` in `js/ui/cli.mjs`, written because `--help` was the caller that finally
- * required it, frozen at `tests/__snapshots__/textwrap.json` and swept against the running
- * interpreter at every width from 11 to 198. When P7c brings `_wrap_lines` across it wraps
- * THAT, and the only open question is the ASCII/glyph width the panel measures in. `_parse_laws`, `load_registry`, `entity_status` and
+ * required it, frozen at `tests/__snapshots__/textwrap.json` at every width from 11 to 198.
+ * Anything that needs wrapping wraps THAT. `_parse_laws`, `load_registry`, `entity_status` and
  * `_tui_inventory` crossed in P6c and live in `js/inspect/inventory.mjs`.
  */
 import path from 'node:path';
@@ -84,12 +85,11 @@ export const GLYPH = glyphs(TUI_ASCII);
 // are the port's own, and no dependency was added to get them.
 //
 // A HAND-CARRIED UNICODE TABLE IS THE KIND OF THING THAT IS RIGHT UNTIL IT IS NOT, so the
-// gate over it is not a case list. `tests/test_pure_function_parity.py` walks EVERY
-// codepoint from U+0000 to U+2FFFF on both sides, run-length encodes the widths, and
-// compares the run lists — 196 608 inputs, and a range this table gets wrong has nowhere to
-// hide. The comparison is against Python's LIVE `unicodedata`, never against a copy of it,
-// so the day the reference's Unicode version moves under these tables the gate says so
-// instead of agreeing with itself.
+// gate over it is not a case list. `tests/__snapshots__/dwidth.json` holds the whole
+// U+0000..U+2FFFF sweep run-length encoded — 196 608 inputs, and a range this table gets wrong
+// has nowhere to hide — replayed by `tests/snapshot/pure_snapshot.test.mjs`. It was RECORDED
+// from Python's live `unicodedata` while that was still here; it cannot be re-recorded now, so
+// a run that goes red is a change in these tables and never a change in the reference.
 //
 // THE VERSION IS DECLARED, not left in a comment, and that changed on the day the gate fired
 // for real. `python3.14` ships unidata 16.0.0, which assigned U+0897 a combining class these
@@ -97,9 +97,11 @@ export const GLYPH = glyphs(TUI_ASCII);
 // as designed, on a machine whose only difference was the interpreter. That is not a defect
 // in either implementation and it must not read as one: the sweep is a comparison against a
 // SPECIFIC Unicode version, and a comparison is meaningless against a different one. So the
-// version is a constant the test reads, `.github/workflows/ci.yml` pins the interpreter that
-// supplies it, and `tests/test_pure_function_parity.py` asserts the pin and the constant
-// still agree. Regenerating the tables means bumping all three together.
+// version is a constant, `tests/__snapshots__/dwidth.json` records the version its runs were
+// measured at, and `tests/snapshot/pure_snapshot.test.mjs` asserts the two still agree —
+// reading the constant both by import and by regex out of this file, so the declaration
+// cannot be satisfied by deleting it. There is no interpreter left to pin: CI now FAILS if
+// python is findable at all.
 export const DWIDTH_UNIDATA = '15.1.0';
 
 //: East_Asian_Width W or F, below U+1F000 — above it the reference's own `>= 0x1F000` rule

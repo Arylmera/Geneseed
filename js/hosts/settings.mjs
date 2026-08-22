@@ -7,16 +7,20 @@
  * last is that it is also the unit the RUNTIME drives: eleven of its names have a consumer
  * outside the emit tree, ten of them in `rituals/_harness_mcp.py` (remerge, deactivate,
  * reactivate, uninstall), two in `rituals/_harness_exclude.py`, one in
- * `rituals/_harness_build.py`. Nothing imports this module yet — P3a proves the unit,
- * P3b flips the call sites.
+ * `rituals/_harness_build.py`. Every emit and every lifecycle verb goes through it now:
+ * `js/build/emit-opencode.mjs` and `js/build/emit-claude.mjs` wire the host config,
+ * `js/maintain/uninstall.mjs` and `js/maintain/migrate.mjs` drive the unwire and the shim
+ * migration, `js/inspect/checks-repo.mjs` reads `shimDeadPaths` for the doctor, and
+ * `js/web/api.mjs` borrows the same readers for the console.
  *
  * THE STDOUT RULE BINDS HARDEST HERE. The hooks this module writes signal their verdict as
  * a JSON object on stdout and return 0 on EVERY path (`|| exit 0` is not what it looks
  * like — see the shim comment below), so a stray byte printed on a hook path does not make
  * noise, it silently disables a gate. Everything printed here is a generator-time message;
- * the streams are compared byte for byte by `tests/test_settings_parity.py`, and the
- * asymmetry between the two (`_warn_commented_jsonc` prints to STDOUT, every other message
- * to stderr) is the Python's own and is reproduced, not tidied.
+ * the split between them is asserted absolutely by `tests/unit/settings_jsonc.test.mjs` and
+ * `tests/unit/settings_integrity.test.mjs`. The asymmetry (`_warn_commented_jsonc` prints to
+ * STDOUT, every other message to stderr) is inherited from `_build_settings.py` and kept
+ * deliberately rather than tidied.
  *
  * HOOKS ARE APPEND-ONLY AND FAIL-CLOSED. Nothing here rewrites a hook group in place:
  * `mergeClaudeSettings` appends what is missing and removes only groups the manifest
@@ -537,12 +541,12 @@ export function hookShimPath(platform = process.platform) {
  * refuses to compare the emitted shim for that reason (`_SHIM_GLOB`) and asserts
  * `_shim_health` instead.
  *
- * So the parity gate's answer here is NOT "skip it". Taking `runner` and `entry` as
- * arguments makes the BODY a pure function of three inputs, and the gate feeds Node the
- * same two values Python computed — which makes every byte of it comparable: the `@echo
- * off`, the CRLF, `exit /b` vs `exec`, the quoting that keeps `--root "<cfg>"` intact. What
- * the gate does not prove is WHICH values a Node driver will pass, and that is a one-line
- * decision at P3b's call site rather than anything in this body.
+ * So the answer here is NOT "skip it". Taking `runner`, `entry` and `platform` as arguments
+ * makes the BODY a pure function of three inputs, which is what lets
+ * `tests/unit/hook_form.test.mjs` assert BOTH platform shapes absolutely in one run on
+ * whichever host it happens to be on: the `@echo off`, the CRLF, `exit /b` vs `exec`, the
+ * quoting that keeps `--root "<cfg>"` intact. What it does not prove is WHICH values the
+ * driver passes — that is `bin/build-driver.mjs`'s `hookRunnerEntry()`, gated separately.
  */
 export function hookShimBody(runner, entry, platform = process.platform) {
   if (platform === 'win32') {
@@ -823,8 +827,10 @@ export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hoo
   // carries four events, so by the time control reaches here `hooks` is never empty. A
   // mutation keeping the empty block instead of deleting it is the one of thirty-three that
   // stays green, and it stays green because there is nothing to detect — recorded the way
-  // `themed_rel` and `lstripNewlines` are, so "the gate cannot see it" and "there is
-  // nothing to see" keep their distance.
+  // `themed_rel` is, so "the gate cannot see it" and "there is nothing to see" keep their
+  // distance. NOT the way `lstripNewlines` is: that one looked unobservable for two phases
+  // and turned out to be mutation M7, killed by `golden.mjs --idempotent` through
+  // `managedBlockWrite`'s `updated` branch, which only a RE-emit reaches.
   if (Object.keys(hooks).length) config.hooks = hooks;
   else delete config.hooks;
   mkdirSync(path.dirname(p), { recursive: true });
@@ -972,8 +978,9 @@ export const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
 /**
  * `_build_settings._migrate_shape` — 'legacy' | 'current' | 'none'.
  *
- * PURE, so `tests/test_settings_parity.py` runs it over a corpus of real config text no cell
- * can seed. 'none' is not a fault: a Copilot install wires no hooks, and a user's own
+ * PURE — and currently reached only END TO END, by the `migrate/a-node-baked-shim-reads-as-current`
+ * cell. No unit corpus drives it directly, which is worth knowing before trusting it.
+ * 'none' is not a fault: a Copilot install wires no hooks, and a user's own
  * settings.json may carry three hand-written hooks and no Geneseed entry. Both must read as
  * "nothing to migrate" rather than "unrecognised", or `migrate` refuses on the commonest
  * config on any machine.

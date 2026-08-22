@@ -7,11 +7,11 @@
  * directory self-cleans), and returns what is left. Writer and reader share only that
  * directory: no RPC, crash-isolated, and cross-tool by construction.
  *
- * ONLY THE GET HALF CROSSES IN P6e. `/api/activity` answers both verbs and
- * `api_activity_toggle` is a WRITE, so the path stays in `NOT_PORTED_POST` and the
- * partition test in `tests/test_web_server.py` keeps that honest. The consequence for the
- * gate is that the on/off flag can be READ but never flipped, which is why its two arms are
- * two cells rather than two requests in one.
+ * BOTH VERBS CROSS. `/api/activity` answers a GET through `apiActivity` and a POST through
+ * `apiActivityToggle` at the bottom of this file; `NOT_PORTED_POST` is empty and still
+ * declared. It is also the one POST route whose result is sent at 200 whatever `ok` says,
+ * which is why `POST_ROUTES` in `js/web/routes.mjs` carries a 409 COLUMN rather than a rule —
+ * and giving this row the 409 treatment is mutation M22.
  *
  * THE PLAN GUESSED `tasklist` AND THE SOURCE SAYS OTHERWISE. `_win_pid_alive` shells
  * nothing: it goes through `ctypes` to `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` and
