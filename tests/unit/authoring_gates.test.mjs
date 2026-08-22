@@ -14,7 +14,7 @@
  * standing question ("does the port already take this as a PARAMETER?") answers no here: every
  * one of the six is a module constant, five of them derived from `js/checkout.mjs`'s own file
  * location. So the fixture is P5g's: `copyCheckout` a private checkout, plant the fault in the
- * COPY, and `import` the copy's `js/doctor.mjs` so its `ROOT` resolves there.
+ * COPY, and `import` the copy's `js/inspect/checks-repo.mjs` so its `ROOT` resolves there.
  *
  * ONE COPY SERVES TWENTY OF THE TWENTY-FOUR, and that is a property of the gates rather than a
  * saving. `registryProblems`, `secretProblems` and `vendorPinProblems` read `registry.json`,
@@ -42,7 +42,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { ENTITY_STATUSES, entityStatus, loadRegistry } from '../../js/inspect/inventory.mjs';
-import { registryProblems, secretProblems, vendorPinProblems } from '../../js/inspect/doctor.mjs';
+import { registryProblems, secretProblems, vendorPinProblems } from '../../js/inspect/checks-repo.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -60,7 +60,7 @@ async function checkoutFixture(prefix, faults) {
   const co = path.join(sb.path, 'checkout');
   copyCheckout(co, faults);
   const at = (rel) => pathToFileURL(path.join(co, rel)).href;
-  return { co, doctor: await import(at('js/inspect/doctor.mjs')), inv: await import(at('js/inspect/inventory.mjs')) };
+  return { co, checks: await import(at('js/inspect/checks-repo.mjs')), inv: await import(at('js/inspect/inventory.mjs')) };
 }
 
 // THE SHARED COPY. Twenty of the twenty-four rows run against this one instance, because the
@@ -105,9 +105,9 @@ const some = (problems, ...needles) => problems.some((p) => needles.every((n) =>
 // satisfied by a copy so broken the gate flags everything.
 
 test('the untouched copy is silent under all three gates', () => {
-  assert.deepEqual(F.doctor.registryProblems(), []);
-  assert.deepEqual(F.doctor.secretProblems(), []);
-  assert.deepEqual(F.doctor.vendorPinProblems(), []);
+  assert.deepEqual(F.checks.registryProblems(), []);
+  assert.deepEqual(F.checks.secretProblems(), []);
+  assert.deepEqual(F.checks.vendorPinProblems(), []);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -147,7 +147,7 @@ test('a missing row and an orphan row are both flagged', () => {
   // is gone shows no lifecycle badge in the TUI and web catalogs while doctor stays green.
   withFault('src/skills/zz-unregistered.md', '> a planted spec\n', () => {
     withRegistry((e) => { e['skills/zz-ghost'] = row(); }, () => {
-      const problems = F.doctor.registryProblems();
+      const problems = F.checks.registryProblems();
       assert.ok(some(problems, 'skills/zz-unregistered has no row'), problems.join('\n'));
       assert.ok(some(problems, "'skills/zz-ghost'", 'no such entity'), problems.join('\n'));
     });
@@ -158,7 +158,7 @@ test('a vendored folder needs a row too', () => {
   // Vendored folders have no flat spec and are still shipped capabilities, so they are keyed
   // into the same namespace. Dropping the row for one must be as loud as dropping a skill's.
   withRegistry((e) => { delete e['skills/daydream']; }, () => {
-    assert.ok(some(F.doctor.registryProblems(), 'skills/daydream has no row'));
+    assert.ok(some(F.checks.registryProblems(), 'skills/daydream has no row'));
   });
 });
 
@@ -169,7 +169,7 @@ test('malformed fields are flagged by field', () => {
     e['skills/daydream'] = row({ owner: '  ' });
     e['skills/token-report'] = row({ last_verified: 'last tuesday' });
   }, () => {
-    const problems = F.doctor.registryProblems();
+    const problems = F.checks.registryProblems();
     const joined = problems.join('\n');
     assert.ok(some(problems, "'retired'", 'status'), joined);
     assert.ok(some(problems, 'skills/rule', 'semver'), joined);
@@ -185,19 +185,19 @@ test('an empty last_verified is accepted', () => {
   // Nothing writes the field yet, so empty is the shipped state and must not be a fault; a date
   // is only required once one is recorded.
   withRegistry((e) => { e['skills/commit'] = row({ last_verified: '' }); }, () => {
-    assert.deepEqual(F.doctor.registryProblems(), []);
+    assert.deepEqual(F.checks.registryProblems(), []);
   });
 });
 
 test('an absent, corrupt and entity-less registry are each flagged', () => {
   withFault('registry.json', null, () => {
-    assert.ok(some(F.doctor.registryProblems(), 'unreadable'));
+    assert.ok(some(F.checks.registryProblems(), 'unreadable'));
   });
   withFault('registry.json', '{not json', () => {
-    assert.ok(some(F.doctor.registryProblems(), 'not valid JSON'));
+    assert.ok(some(F.checks.registryProblems(), 'not valid JSON'));
   });
   withFault('registry.json', '{}', () => {
-    assert.ok(some(F.doctor.registryProblems(), "no 'entities'"));
+    assert.ok(some(F.checks.registryProblems(), "no 'entities'"));
   });
 });
 
@@ -211,7 +211,7 @@ test('the shipped source carries no credential', () => {
 test('a planted credential is flagged without being echoed', () => {
   const planted = `ghp_${'b'.repeat(36)}`;
   withFault('src/leak.md', `token\n${planted}\n`, () => {
-    const problems = F.doctor.secretProblems();
+    const problems = F.checks.secretProblems();
     assert.equal(problems.length, 1, problems.join('\n'));
     assert.ok(problems[0].includes('src/leak.md:2'), problems[0]);
     assert.ok(problems[0].includes('GitHub token'), problems[0]);
@@ -235,7 +235,7 @@ test('every shipped tree is swept', () => {
     return p;
   });
   try {
-    const problems = F.doctor.secretProblems();
+    const problems = F.checks.secretProblems();
     assert.equal(problems.length, 4, problems.join('\n'));
     for (const rel of seeded) {
       assert.ok(some(problems, rel.split('/').pop(), rel.split('/')[0]),
@@ -253,7 +253,7 @@ test('binary files are ignored', () => {
   writeFileSync(p, Buffer.concat([Buffer.from([0xff, 0xfe, 0x00]),
     Buffer.from(`sk-ant-${'c'.repeat(30)}`, 'utf8')]));
   try {
-    assert.deepEqual(F.doctor.secretProblems(), []);
+    assert.deepEqual(F.checks.secretProblems(), []);
   } finally {
     rmSync(p, { force: true });
   }
@@ -268,7 +268,7 @@ test('the shipped vendored folders are pinned', () => {
 
 test('a missing VENDOR.md is flagged', () => {
   withFault('src/skills/daydream/VENDOR.md', null, () => {
-    assert.ok(some(F.doctor.vendorPinProblems(), 'no VENDOR.md'));
+    assert.ok(some(F.checks.vendorPinProblems(), 'no VENDOR.md'));
   });
 });
 
@@ -276,14 +276,14 @@ test('a moving branch pin is flagged', () => {
   // Re-copying months later changes the shipped skill, so a branch name is not a pin.
   withFault('src/skills/daydream/VENDOR.md',
     '- **Upstream:** https://example.invalid/x\n- **Commit:** main\n- **License:** MIT\n', () => {
-      assert.ok(some(F.doctor.vendorPinProblems(), 'moving branch'));
+      assert.ok(some(F.checks.vendorPinProblems(), 'moving branch'));
     });
 });
 
 test('a short pin and a missing license are flagged', () => {
   withFault('src/skills/daydream/VENDOR.md',
     '- **Upstream:** https://example.invalid/x\n- **Commit:** abc1234\n', () => {
-      const problems = F.doctor.vendorPinProblems();
+      const problems = F.checks.vendorPinProblems();
       assert.ok(some(problems, '40-character'), problems.join('\n'));
       assert.ok(some(problems, 'License'), problems.join('\n'));
     });
@@ -294,13 +294,13 @@ test('a first-party folder needs no pin', () => {
   // to drift against, so it declares that instead and is exempt.
   withFault('src/skills/daydream/VENDOR.md',
     '- **Upstream:** this repository (first-party)\n- **License:** same as Geneseed\n', () => {
-      assert.deepEqual(F.doctor.vendorPinProblems(), []);
+      assert.deepEqual(F.checks.vendorPinProblems(), []);
     });
 });
 
 test('a proper pin is accepted', () => {
   withFault('src/skills/daydream/VENDOR.md', PINNED, () => {
-    assert.deepEqual(F.doctor.vendorPinProblems(), []);
+    assert.deepEqual(F.checks.vendorPinProblems(), []);
   });
 });
 
@@ -319,8 +319,8 @@ test('a listed folder that does not exist is flagged', async () => {
     'js/hosts/native.mjs': live.replace(decl,
       "export const VENDORED_SKILL_DIRS = new Set(['gone']);"),
   });
-  assert.ok(some(g.doctor.vendorPinProblems(), 'does not exist'),
-    g.doctor.vendorPinProblems().join('\n'));
+  assert.ok(some(g.checks.vendorPinProblems(), 'does not exist'),
+    g.checks.vendorPinProblems().join('\n'));
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -49,7 +49,8 @@
 import { cmdCatalog } from '../js/build/catalog.mjs';
 import { cliSpec, printHelp } from '../js/ui/cli.mjs';
 import { cmdDiff } from '../js/inspect/diff.mjs';
-import { cmdDoctor, cmdValidate } from '../js/inspect/doctor.mjs';
+import { cmdDoctor } from '../js/inspect/doctor.mjs';
+import { cmdValidate } from '../js/inspect/validate.mjs';
 import { parseDriverArgs } from './build-driver.mjs';
 import { cmdExclude } from '../js/inspect/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/build/generate.mjs';

@@ -16,7 +16,8 @@ import {
 import { fenceFor, setupBuildArgs } from '../../js/build/generate.mjs';
 import { cmpKey } from '../../js/inspect/diff.mjs';
 import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/hosts/native.mjs';
-import { proseMirrorProblems, romanToInt, themesToCheck } from '../../js/inspect/doctor.mjs';
+import { proseMirrorProblems, romanToInt } from '../../js/inspect/checks-authoring.mjs';
+import { themesToCheck } from '../../js/inspect/doctor.mjs';
 import { pyCapitalize } from '../../js/hosts/installs.mjs';
 import { writeText } from '../../js/lib/fs.mjs';
 import { jsonDumpsCompact, parseJson } from '../../js/lib/json.mjs';

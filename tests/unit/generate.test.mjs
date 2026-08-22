@@ -20,7 +20,7 @@ import {
   isVendoredPath, loadAgentOverrides, writeNativeLayer, descBlockProblem,
   validateIsVendored, VENDORED_SKILL_DIRS,
 } from '../../js/hosts/native.mjs';
-import { cmdValidate, validateSandboxProblems } from '../../js/inspect/doctor.mjs';
+import { cmdValidate, validateSandboxProblems } from '../../js/inspect/validate.mjs';
 import { syncThemes } from '../../js/build/themes.mjs';
 import { writeText } from '../../js/lib/fs.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';

@@ -329,7 +329,7 @@ export const MUTATIONS = [
   {
     id: 'M17',
     name: 'drop the orphan half of the registry gate',
-    file: 'js/inspect/doctor.mjs',
+    file: 'js/inspect/checks-repo.mjs',
     find: "  problems.push(...[...present].filter((k) => !expected.has(k)).sort()\n"
       + "    .map((key) => `[authoring] registry.json lists '${key}' but no such entity "
       + "exists`));\n",
@@ -343,7 +343,7 @@ export const MUTATIONS = [
   {
     id: 'M18',
     name: 'make the credential sweep echo what it found',
-    file: 'js/inspect/doctor.mjs',
+    file: 'js/inspect/checks-repo.mjs',
     find: '            problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} — a `\n'
       + "              + 'credential must never be committed');",
     replace: '            problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} '

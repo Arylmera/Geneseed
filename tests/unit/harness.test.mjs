@@ -21,11 +21,9 @@ import { pathToFileURL } from 'node:url';
 import {
   LEARN_PROMPT_HEAD, frontmatter, readNotes, existingSlugs, writeMemories,
 } from '../../js/hosts/hooks.mjs';
-import {
-  themeParityProblems, countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt,
-  themesToCheck, globalEmitProblems, renderedProblems, authoringProblems, claudeBobEmitProblems,
-  doctrineMetaProblems,
-} from '../../js/inspect/doctor.mjs';
+import { countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt, authoringProblems, doctrineMetaProblems } from '../../js/inspect/checks-authoring.mjs';
+import { themeParityProblems, renderedProblems } from '../../js/inspect/checks-build.mjs';
+import { themesToCheck, globalEmitProblems, claudeBobEmitProblems } from '../../js/inspect/doctor.mjs';
 import {
   memoryDropIndex, discoverContext, resolveContextSets, resolveAgentName, appendAgentLesson,
   consolidateMemory,
@@ -227,9 +225,14 @@ function withFault(faults, fn) {
  */
 function gate(root, expr) {
   GATE_HOME ??= makeSandbox('gs-gatehome-');
-  const url = pathToFileURL(path.join(root, 'js', 'inspect', 'doctor.mjs')).href;
+  // `m` is EVERY module the doctor's checks live in, merged. The checks were one file until the
+  // split and the call sites below still name them bare — merging here keeps `expr` a plain
+  // `themeParityProblems()` rather than making each row know which sibling owns its check.
+  const urls = ['doctor', 'scan', 'checks-build', 'checks-repo', 'checks-authoring']
+    .map((n) => pathToFileURL(path.join(root, 'js', 'inspect', `${n}.mjs`)).href);
+  const loads = urls.map((u) => `await import(${JSON.stringify(u)})`).join(', ');
   const r = spawnSync(process.execPath, ['--input-type=module', '-e',
-    `const m = await import(${JSON.stringify(url)});`
+    `const m = Object.assign({}, ${loads});`
     + `process.stdout.write(JSON.stringify(${expr}));`],
   {
     cwd: root,

@@ -459,7 +459,7 @@ const ALLOWED_SPAWNS = {
     gatedBy: 'the only spawn in the hook entry is the model CLI',
     what: '`$GENESEED_LLM` — the model CLI `learn` shells out to',
   },
-  'inspect/doctor.mjs': {
+  'inspect/checks-authoring.mjs': {
     binding: '{ spawnSync }',
     calls: 1,
     what: '`node --check <plugin>`',

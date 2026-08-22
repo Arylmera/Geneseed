@@ -30,7 +30,7 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { hookRunnerEntry } from '../../bin/build-driver.mjs';
-import { shimProblems } from '../../js/inspect/doctor.mjs';
+import { shimProblems } from '../../js/inspect/checks-repo.mjs';
 import {
   GENESEED_HOOK_SNIFF, SHIM_ARGV, claudeHookGroups, ephemeralCheckout, hookPrefix, hookShimBody,
   hookShimPath, writeHookShim,
