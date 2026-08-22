@@ -12,6 +12,20 @@ Harness/
 improvements/
 # Host-specific project-context manifest, if a build drops one at the repo root.
 /context.json
+# The bundle skeleton an emit leaves at the repo root when it is given no `--out` — which the
+# suite and `tests/golden.mjs` both do, so a proof run drops these on every pass. ANCHORED with
+# a leading slash on purpose: a bare `agents/` would also ignore `src/agents/`, which is the
+# authored source these are rendered FROM. Left unignored they are invisible only while empty:
+# the moment a run leaves a file in one, `copyCheckout` copies it into every harness fixture,
+# for the same reason `*.tgz` below is ignored.
+/agents/
+/doctrines/
+/laws/
+/memory/
+/modes/
+/ontology/
+/postures/
+/skills/
 # Agent Notebook — personal/agent scratch space, never committed (AGENT.md §5).
 notebook/
 
