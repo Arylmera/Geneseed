@@ -640,7 +640,7 @@ export function printOtherHostHits(root, removedHost) {
   for (const spec of HOSTS) {
     if (spec.host !== removedHost && projectQualifies(root, spec.host)) {
       printOut(`[uninstall] also found ${spec.host}:project here — run \`harness `
-        + 'uninstall\` again to remove it.\n');
+        + 'uninstall` again to remove it.\n');
     }
   }
 }

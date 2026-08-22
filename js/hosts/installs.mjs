@@ -32,7 +32,7 @@
  * web cells recorded it. Both candidates are gone (the argument is in the Python), and the
  * claim is now true rather than aspirational.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, PACK_ORDER, THEMES, discoverNames } from '../build/source.mjs';

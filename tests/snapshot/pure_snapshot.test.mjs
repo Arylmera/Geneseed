@@ -28,7 +28,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync,
 } from 'node:fs';
 import { EOL, homedir, tmpdir } from 'node:os';
 import path from 'node:path';

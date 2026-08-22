@@ -263,7 +263,7 @@ test('--root prefixes the instruction path the config records', () => {
   // `AGENT.md`. A port that derived one value from the other passes either half alone.
   for (const [withRoot, wantPath, wantInstruction] of [[true, 'repo', 'Harness/AGENT.md'],
     [false, 'out', 'AGENT.md']]) {
-    const { sb, home, env } = emitSandbox('driver-root-');
+    const { sb, env } = emitSandbox('driver-root-');
     try {
       const repo = path.join(sb.path, 'repo');
       const out = withRoot ? path.join(repo, 'Harness') : path.join(sb.path, 'out');
@@ -455,7 +455,7 @@ test('the emitted hook shim answers the gate it bakes', () => {
   //
   // git-gate rather than `context`: it is the verb whose entire output is a JSON document on
   // stdout, so a truncated or polluted stream fails here and merely looks quiet there.
-  const { sb, home, env } = emitSandbox('driver-shim-');
+  const { sb, env } = emitSandbox('driver-shim-');
   try {
     const out = path.join(sb.path, 'out');
     const r = runDriver(['--theme', 'neutral', '--emit', 'claude', '--footprint', 'lean',
@@ -486,7 +486,7 @@ test('an emitted hook command actually runs, and is silent where it should be', 
   // Everything else about hooks is checked structurally — settings.json is compared byte for
   // byte, the shim is asserted to exist and to name existing files. None of that executes
   // anything, and a hook that runs but answers nothing is invisible to all of it.
-  const { sb, home, env } = emitSandbox('driver-hookrun-');
+  const { sb, env } = emitSandbox('driver-hookrun-');
   try {
     const out = path.join(sb.path, 'out');
     const r = runDriver(['--theme', 'neutral', '--emit', 'claude', '--footprint', 'lean',
@@ -569,7 +569,7 @@ test('the pre-shim fallback command is still recognisable as geneseed', () => {
   // The fallback is reached BEHAVIOURALLY rather than by reading the source: point
   // `$GENESEED_HOME` at a regular FILE, so the mkdir under it fails with ENOTDIR and the shim
   // write returns null.
-  const { sb, home, env: base } = emitSandbox('driver-fallback-');
+  const { sb, env: base } = emitSandbox('driver-fallback-');
   try {
     const blocker = path.join(sb.path, 'not-a-dir');
     writeFileSync(blocker, '', 'utf8');
@@ -605,7 +605,7 @@ test('VERIFY reports an orphaned geneseed hook, and says nothing without one', (
   // So this creates one. A user-authored hook whose command matches a sniff marker but sits in no
   // recorded claim group is exactly what the orphan scan exists to report, and it survives the
   // merge, which only prunes groups it RECORDED.
-  const { sb, home, env } = emitSandbox('driver-orphan-');
+  const { sb, env } = emitSandbox('driver-orphan-');
   try {
     const out = path.join(sb.path, 'repo');
     const emit = () => {

@@ -26,7 +26,7 @@ import {
 } from '../../js/web/api.mjs';
 import { apiGraph } from '../../js/web/graph.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
-import { PACK_ORDER } from '../../js/build/source.mjs';
+
 import {
   apiActivity, apiActivityDetail, apiActivityToggle,
 } from '../../js/web/activity.mjs';
@@ -51,7 +51,7 @@ import { GLOBAL_MANIFEST, VERSION_MARKER, resolvePath } from '../../js/hosts/hos
 import { normcase } from '../../js/lib/paths.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
-import { makeSandbox, TMP_ROOT, RELOCATION_VARS } from '../helpers/sandbox.mjs';
+import { makeSandbox, TMP_ROOT } from '../helpers/sandbox.mjs';
 import { webFixture, webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
 import { withGlobalInstalls as withGlobalInstallsFixture } from '../helpers/installs_fixture.mjs';
 

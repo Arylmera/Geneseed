@@ -486,7 +486,7 @@ export function cliSpec(verb) {
   }
   for (const a of cmd.options ?? []) {
     const dest = camel(a.dest);
-    // eslint-disable-next-line no-nested-ternary
+     
     const table = a.is_flag ? 'flags' : (a.nargs === '?' ? 'optValue' : 'options');
     for (const name of a.names ?? []) {
       (spec[table] ??= {})[name] = dest;

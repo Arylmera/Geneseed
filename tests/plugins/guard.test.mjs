@@ -5,7 +5,6 @@
 import { test, after } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
-import os from "node:os"
 import * as path from "node:path"
 import { GeneseedGuard } from "../../adapters/opencode/plugins/geneseed-guard.js"
 import { makeSandbox } from "../helpers/sandbox.mjs";

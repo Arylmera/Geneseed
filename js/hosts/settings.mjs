@@ -758,7 +758,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [])
  *
  * `scope` is accepted and unused, exactly as in the Python.
  */
-export function mergeClaudeSettings(p, scope = 'global', priorHooks = null, hookOpts = {},
+export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hookOpts = {},
   doctrines = null, excluded = []) {
   const prior = (priorHooks || []).filter(isDict);
   let config = {};

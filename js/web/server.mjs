@@ -923,7 +923,7 @@ export async function startDaemon(theme, port, openBrowser = true) {
   // write its record. The probe timeout is the reference's shorter 0.5 here, not 1.5.
   for (let i = 0; i < 60; i += 1) {
     const rec = readDaemon(target);
-    // eslint-disable-next-line no-await-in-loop
+     
     if (rec && isTruthy(rec.url) && await probe(rec.url, 0.5)) {
       printOut(`[web] Geneseed UI on ${rec.url}  (theme: ${none(rec.theme)}, `
         + `pid ${none(rec.pid)})\n`);
@@ -931,7 +931,7 @@ export async function startDaemon(theme, port, openBrowser = true) {
       if (openBrowser) openUrl(rec.url);
       return 0;
     }
-    // eslint-disable-next-line no-await-in-loop
+     
     await sleep(200);
   }
   printOut('[web] daemon did not come up in time — check the log:\n');
@@ -987,9 +987,9 @@ export async function restartDaemon(theme = null, port = 4747, openBrowser = tru
     open = false;
     await stopDaemon(theme);
     for (let i = 0; i < 50; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
+       
       if (!await probe(`http://127.0.0.1:${usePort}`, 0.2)) break;
-      // eslint-disable-next-line no-await-in-loop
+       
       await sleep(100);
     }
   }

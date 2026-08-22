@@ -39,7 +39,7 @@ function entryVerbs() {
   const body = src.slice(at, at + src.slice(at).indexOf('\n};'));
   // ⚠ TWO-SPACE INDENT EXACTLY. The rows are `name: { fn: cmdX }`, so a `\s*` prefix also
   // matches the nested `fn:` — the first draft reported `fn` as an undescribed verb.
-  const names = [...body.matchAll(/^  '?([a-z][a-z-]*)'?:/gm)].map((m) => m[1]);
+  const names = [...body.matchAll(/^ {2}'?([a-z][a-z-]*)'?:/gm)].map((m) => m[1]);
   assert.ok(names.length > 15, `the VERBS scrape found only ${names.length} rows`);
   return [...new Set(names)];
 }

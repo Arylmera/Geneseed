@@ -25,6 +25,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # THE FIRST LINT THIS HALF OF THE REPO HAS EVER HAD. `web/` has been linted since the UI
+      # landed; `js/`, `bin/`, `tests/` and `adapters/` never were, and the gap was not
+      # theoretical — the first run found 77 problems, including seven `eslint-disable`
+      # comments written for a linter that was not configured to read them.
+      #
+      # `npm ci` installs devDependencies ONLY. The zero-dependency claim gated in
+      # tests/unit/package_manifest.test.mjs is about what an INSTALL pulls down —
+      # `dependencies`, `peer`, `optional`, `bundle` — and this adds to none of them.
+      - run: npm ci
+      - name: lint
+        run: npm run lint
       # ON BOTH OPERATING SYSTEMS, which is stronger than the gate this replaces: the same
       # sweep used to run here from the reference and, bare, from a Linux-only cell job.
       # The one Node test that drives `doctor --all` out of the checkout root is skipped when

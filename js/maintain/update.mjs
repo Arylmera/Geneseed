@@ -129,7 +129,7 @@ function urlsplitHostPath(o) {
   // A scheme is `[A-Za-z][A-Za-z0-9+.-]*` before the first `:` — and only then. `urlsplit`
   // leaves `foo:bar` alone when `foo` is not a legal scheme, which is what keeps an scp-form
   // remote out of this branch (the caller checks for that shape first anyway).
-  const m = /^([A-Za-z][A-Za-z0-9+.\-]*):(.*)$/s.exec(rest);
+  const m = /^([A-Za-z][A-Za-z0-9+.-]*):(.*)$/s.exec(rest);
   if (m) rest = m[2];
   let netloc = '';
   if (rest.startsWith('//')) {
@@ -862,7 +862,7 @@ async function bootstrapPlain() {
   for (let i = 0; i < steps.length; i += 1) {
     const [title, cmd, step] = steps[i];
     printOut(`[geneseed] step ${i + 1}/${steps.length}: ${title} ...\n`);
-    // eslint-disable-next-line no-await-in-loop
+     
     const rc = await step();
     if (rc !== 0 && rc !== 3) {
       failed = true;

@@ -6,8 +6,8 @@
  * exported functions and does nothing else — every branch it reaches is the port's own,
  * which is the only reason a probe is allowed to exist beside a byte matrix.
  */
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
+
 import path from 'node:path';
 
 import {

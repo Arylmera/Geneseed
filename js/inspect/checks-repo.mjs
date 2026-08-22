@@ -14,7 +14,7 @@ import { readText } from '../lib/fs.mjs';
 import { formatRepr, formatValue } from '../lib/json.mjs';
 import { splitLines } from '../lib/udiff.mjs';
 import { ENTITY_STATUSES } from './inventory.mjs';
-import { has, isDir, isFile, rglob, srcStems } from './scan.mjs';
+import { isDir, isFile, rglob, srcStems } from './scan.mjs';
 import { readFileSync } from 'node:fs';
 
 /**

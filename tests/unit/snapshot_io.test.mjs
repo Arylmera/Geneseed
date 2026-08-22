@@ -17,11 +17,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { compare, read, safeName, write } from '../helpers/snapshot_io.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const B = (s) => Buffer.from(s, 'utf8');
 const tmp = () => fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'snapio-'));
 

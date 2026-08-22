@@ -67,7 +67,6 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync, spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
@@ -363,6 +362,11 @@ const WITHHELD = [
   ['.claude/', "this repository's OWN agent config — a deployed harness, not the product"],
   ['.gitignore', 'repo mechanics; npm strips it from a tarball anyway'],
   ['.gitattributes', 'repo mechanics'],
+  ['eslint.config.js', 'the lint config for js/ bin/ tests/ adapters/ — a developer gate, and '
+    + 'the linter it configures is a devDependency nothing installs'],
+  ['package-lock.json', 'it pins the devDependencies only. `dependencies` is empty and gated '
+    + 'as empty below, so this file gives an INSTALL nothing to resolve — it exists for `npm '
+    + 'ci` in CI'],
 ];
 
 // EMPTY, AND KEPT DECLARED. This held the one tracked file `npm pack` refused to carry:

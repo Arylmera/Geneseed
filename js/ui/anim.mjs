@@ -260,7 +260,7 @@ export function height(poses) {
 function centerText(s, width) {
   const marg = width - codePointLength(s);
   if (marg <= 0) return s;
-  /* eslint-disable-next-line no-bitwise */
+   
   const left = Math.floor(marg / 2) + (marg & width & 1);
   return ' '.repeat(left) + s + ' '.repeat(marg - left);
 }

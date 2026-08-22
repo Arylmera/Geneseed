@@ -54,7 +54,7 @@ import {
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg. golden.py's 259 cells all build one, which is what made the move safe.
 import {
-  ROOT, CONFIG, THEMES, discoverNames, makeCfg, PACK_ORDER, knownRuleIds,
+  ROOT, CONFIG, discoverNames, makeCfg, PACK_ORDER, knownRuleIds,
 } from '../js/build/source.mjs';
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
@@ -565,10 +565,6 @@ function pruneOwned(oc, oldOwned, owned) {
     process.stderr.write('[geneseed] WARN: could not remove stale owned file(s): '
       + `${failed.join(', ')}\n`);
   }
-}
-
-function isDir(p) {
-  try { return statSync(p).isDirectory(); } catch { return false; }
 }
 
 /**

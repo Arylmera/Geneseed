@@ -16,7 +16,6 @@
 // WHAT DID NOT CROSS: the `--ref`/`--new` comparison and `--record`. Both need something that
 // will not exist.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 

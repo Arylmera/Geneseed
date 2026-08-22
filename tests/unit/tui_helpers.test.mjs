@@ -26,7 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
-  glyphs, GLYPH, dwidth, truncd, fit, icon, mark, spin, logoLines, clamp, progressBar,
+  glyphs, GLYPH, dwidth, truncd, fit, logoLines, clamp, progressBar,
 } from '../../js/ui/tui.mjs';
 import { CATALOG_KINDS } from '../../js/build/catalog.mjs';
 

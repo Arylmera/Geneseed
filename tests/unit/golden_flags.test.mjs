@@ -11,17 +11,12 @@
 // operating systems and costs milliseconds.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import {
   VERBATIM_CELLS, loadMatrix, narrowingReason, parseArgs, selectCells,
 } from '../golden.mjs';
-import { cellId, argvFor, PLATFORM_CORPUS } from '../helpers/golden.mjs';
-import * as snapshotIo from '../helpers/snapshot_io.mjs';
+import { cellId, argvFor } from '../helpers/golden.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DOC = loadMatrix();
 
 test('the exported matrix is the matrix', () => {
