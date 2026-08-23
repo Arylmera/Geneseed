@@ -32,6 +32,7 @@ export default function Topbar({
   navOpen,
   onToggleNav,
   target,
+  version,
   query,
   onQuery,
   mode,
@@ -57,6 +58,9 @@ export default function Topbar({
         <span className="path">{promptPath(target)}</span>
         <span className="sep">$</span>
         <span className="cmd">geneseed</span> <span className="flag">--tab={tabFlag(route)}</span>
+        {/* Dimmed, and dropped entirely when the server could not read a label — a prompt that
+            says --version= with nothing after it reads as a bug in the tool. */}
+        {version && <span className="flag ver"> --version={version}</span>}
         <span className="cur" />
       </div>
       <div className="topbar-spacer" />

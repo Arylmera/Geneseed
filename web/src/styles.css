@@ -327,6 +327,11 @@ button { font-family: inherit; }
 .prompt .sep { color: var(--accent); margin: 0 7px 0 2px; }
 .prompt .cmd { color: var(--text); }
 .prompt .flag { color: var(--text-2); }
+/* The version sits a step quieter than the tab flag: it is reference information, not the thing
+   the prompt is telling you. Hidden on phones, where the prompt is already the first thing to
+   lose room. */
+.prompt .ver { color: var(--text-3, var(--text-2)); opacity: 0.75; }
+@media (max-width: 720px) { .prompt .ver { display: none; } }
 .prompt .cur { display: inline-block; width: 7px; height: 15px; vertical-align: -2px;
   margin-left: 5px; background: var(--accent); animation: blink 1.05s steps(2) infinite; }
 @keyframes blink { 0%,50% { opacity: 1; } 50.01%,100% { opacity: 0; } }
