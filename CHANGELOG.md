@@ -8,6 +8,36 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.1.2] — 2026-08-23
+
+### Changed
+
+- **`js/` is now domain folders, not a flat drawer.** The tree splits into `build/`, `hosts/`,
+  `inspect/`, and `main/`, and the four largest modules split with it: `server.mjs` into
+  routes / handler / daemon / server, `emit.mjs` into common / stubs / version / bundle,
+  `doctor.mjs` into scan plus three check groups, and `fs.mjs` into fs / json / paths / text.
+  The Node generator driver is renamed to `bin/build-driver.mjs`; the `geneseed-build` bin name
+  is unchanged, so nothing on an installed harness has to move.
+
+  **No emitted byte moves.** The 261-cell corpus replays identical across all 14 themes, which
+  is the whole warrant for a reorganization this size — 151 files, 8502 insertions, 6481
+  deletions, and zero observable difference for anyone who installed 3.1.1.
+
+- **Docs point at the code that exists.** A module map and front door in `js/README.md`, with a
+  doctor arm that keeps them honest; 201 stale paths repointed in prose, the 35 split-module
+  pointers resolved, and 69 docblock claims corrected where the code had stopped supporting
+  what the comment promised. The vestigial `emit.mjs` is deleted.
+
+- **The Python-era `py` identifier prefix is retired**, and `js/ bin/ tests/ adapters/` are now
+  linted — the half of the tree that never was.
+
+### Added
+
+- **A gate on how a runtime dependency may enter**: vendored under `js/vendor/<name>/` as tracked
+  source behind a relative import, never installed. Fixtures run from the OS temp root and cannot
+  resolve a bare specifier, and neither can a fresh `git clone`; devDependencies are unaffected.
+
+
 ## [3.1.1] — 2026-08-21
 
 ### Added
