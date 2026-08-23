@@ -1,5 +1,5 @@
 /**
- * `rituals/_harness_build.py`'s three cheap verbs — `build`, `prompt` and `theme`.
+ * The three cheap generator verbs — `build`, `prompt` and `theme`.
  *
  * These are the harness's GENERATOR FACE: the subcommands whose whole job is to drive the
  * thing `bin/build-driver.mjs` already is. That is why they are the cheapest slice left and why

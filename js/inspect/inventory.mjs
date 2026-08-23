@@ -1,5 +1,5 @@
 /**
- * `rituals/_harness_tui.py`'s CATALOG half — the taxonomy tables, the rendered-laws
+ * The CATALOG surface — the taxonomy tables, the rendered-laws
  * parser, the entity registry, and the render-accurate inventory the TUI, the `status`
  * panel and the web console all read.
  *

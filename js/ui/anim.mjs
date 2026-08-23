@@ -1,5 +1,5 @@
 /**
- * `rituals/theme_anim.py` — the per-theme install animation the LINE wizard plays.
+ * The per-theme install animation the LINE wizard plays.
  *
  * P7c, and the one leftover of that phase that is NOT the declared curses panel. P5i ported
  * `_setup_lines` and left this out with a note — "belongs to P7 with the rest of the terminal

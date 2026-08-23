@@ -1,5 +1,5 @@
 /**
- * `rituals/_harness_exclude.py` — the sovereign-repo exclusion WRITER.
+ * The sovereign-repo exclusion WRITER.
  *
  * THE READER WAS ALREADY HERE. `js/hosts/hooks.mjs` has carried `sovereignBypass`, `EXCLUDES_FILE`
  * and `EXCLUDE_DIRS` since P5a: every hook call reads `excludes.json` and stands down when

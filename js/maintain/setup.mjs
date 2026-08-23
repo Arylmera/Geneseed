@@ -1,5 +1,5 @@
 /**
- * `rituals/_harness_setup.py`'s wizard — the LINE-MODE install flow, and the first verb in
+ * The install wizard — the LINE-MODE flow, and the first verb in
  * this port that reads stdin.
  *
  * WHAT `setup` ACTUALLY IS, measured rather than taken from the brief. `cmd_setup` is 21
