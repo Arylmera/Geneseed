@@ -209,6 +209,7 @@ export default function App() {
           navOpen={navOpen}
           onToggleNav={() => setNavOpen((v) => !v)}
           target={overview?.target}
+          version={overview?.version}
           query={query}
           onQuery={setQuery}
           mode={mode}

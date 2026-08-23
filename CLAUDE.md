@@ -41,8 +41,10 @@ node bin/geneseed-cli.mjs doctor --all
 node tests/golden.mjs
 ```
 
-Byte-identity over a 261-cell corpus. Run it after anything that touches the emit path. Its
-`--idempotent` and `--deletion` modes cover re-emit and the prune phase.
+Runs all 261 emit configurations and requires each to render without crashing. Run it after
+anything that touches the emit path. Its `--idempotent` mode re-emits into the same tree and
+requires the second pass to change nothing; `--deletion` covers the prune phase. All three are
+self-comparisons — nothing is measured against a stored answer.
 
 ```bash
 node tests/mutate.mjs --verify
@@ -55,10 +57,11 @@ leaves the product tree **mutated**, so check `git status` before doing anything
 
 ## What bites
 
-**Some outputs are frozen and can never be re-recorded.** `tests/__snapshots__/` holds recordings
-made against an implementation that no longer exists. There is no `--record`. If a legitimate change
-is blocked by one, move the logic to the nearest caller that is *not* recorded — `docs/extending.md`
-§5.4 works the example.
+**Expected values are written out, not recorded.** Every table in `tests/` states its answers in
+the file — `tests/unit/text_layout.test.mjs` and `tests/unit/settings_jsonc.test.mjs` are the
+pattern. There is no snapshot directory and no `--record`: if a change makes a row wrong, change
+the row *and* the sentence above it explaining the rule, in the same commit, and say why in the
+message. A test whose expectation nobody can defend in words is a test nobody can maintain.
 
 **`web/dist/` is tracked, and must be rebuilt and committed whenever `web/src/` changes.** It ships
 in `files[]` so an install never has to build the UI. `git diff` alone is not enough to check —

@@ -1,24 +1,15 @@
 /**
- * `readJsonc`, replayed against a corpus RECORDED FROM THE REFERENCE.
+ * `readJsonc` — reading a settings file a human has edited.
  *
- * SUCCESSOR TO the surviving half of `tests/test_settings_parity.py`. The wiring comparison
- * retires into the emit corpus; this does not, and the row said why before the port began:
- * JSONC parsing is a LIVE PRODUCT PROPERTY — users hand-edit `settings.json` and `opencode.json`
- * with comments, and every emit re-reads what they wrote — and its answers are absolute, not
- * relative to an implementation.
+ * WHY THIS IS A LIVE PRODUCT PROPERTY rather than a formatting detail. Users hand-edit
+ * `settings.json` and `opencode.json`, with comments and trailing commas, and every emit
+ * re-reads what they wrote and writes it back. A parser that gets a row below wrong does not
+ * fail loudly — it silently rewrites a config the user still believes says something else.
  *
- * THE CORPUS IS RECORDED, NOT TRANSCRIBED, and that is the difference between this and the four
- * frozen literals earlier in the wave. Twenty-four inputs with twenty-four answers is past the
- * size where a hand-copied table is trustworthy, and `tests/__snapshots__/help/` already
- * established the pattern: freeze the reference's own output while it exists, replay it after.
- * `tests/__snapshots__/jsonc.json` was produced by running `_read_jsonc` over the reference's
- * own `JSONC_CORPUS` on 2026-08-16.
- *
- * ⚠ THE ANSWER IS RECORDED AS RENDERED TEXT, not as a JSON value, and the corpus says so in its
- * own `doc` field. A JSON document cannot carry Python's int/float distinction, and
- * `{"float": 1.0, "int": 20, "exp": 1e3}` → `{"float": 1.0, "int": 20, "exp": 1000.0}` is a row
- * that exists for exactly that: `1e3` expands, `1.0` keeps its point, `20` does not grow one.
- * Recording the value would have collapsed all three on the way into the file.
+ * The table lives in this file. Each row is a shape that breaks a naive comment stripper, and
+ * `out` is the round trip, not just the parse, because the round trip is what lands back on
+ * disk. Merge behaviour and the int/float rule have their own tests, named below where they
+ * matter.
  */
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -32,67 +23,78 @@ import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/
 import { jsonDumpsCompact } from '../../js/lib/json.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const CORPUS = JSON.parse(readFileSync(path.join(ROOT, 'tests', '__snapshots__', 'jsonc.json'),
-  'utf8'));
+
+// WHAT `readJsonc` ANSWERS, stated as a table rather than sampled from a recording.
+//
+// Each row is one way a real settings.json breaks a naive comment stripper. `out` is what
+// `jsonDumpsCompact` renders the parsed value back to — the tool's own writer, so a row is
+// asserting the round trip a user's file actually takes on every merge, not just the parse.
+// `out: null` means "did not parse, or was the literal null": `readJsonc` does not distinguish
+// them and no caller needs it to — an unreadable file and an empty one are both refused.
+const JSONC = [
+  // Plain JSON, untouched.
+  { src: '{"a": 1}', out: '{"a": 1}', comments: false },
+  { src: '{}', out: '{}', comments: false },
+  { src: '[1, 2, 3]', out: '[1, 2, 3]', comments: false },
+  { src: '"just a string"', out: '"just a string"', comments: false },
+  { src: '{"2": "numeric key", "b": 1}', out: '{"2": "numeric key", "b": 1}', comments: false },
+  // Nothing to read.
+  { src: '', out: null, comments: false },
+  { src: '   ', out: null, comments: false },
+  { src: 'null', out: null, comments: false },
+  // Comments, in every position.
+  { src: '// leading\n{"a": 1}', out: '{"a": 1}', comments: true },
+  { src: '{"a": 1} // trailing', out: '{"a": 1}', comments: true },
+  { src: '{/* block */ "a": 1}', out: '{"a": 1}', comments: true },
+  { src: '{"a": 1, /* multi\nline */ "b": 2}', out: '{"a": 1, "b": 2}', comments: true },
+  // ⚠ A `//` INSIDE A STRING IS NOT A COMMENT. Getting this wrong truncates the user's whole
+  // config at the first URL — and every OpenCode config starts with a $schema URL.
+  { src: '{"$schema": "https://opencode.ai/config.json"}',
+    out: '{"$schema": "https://opencode.ai/config.json"}', comments: false },
+  { src: '{"note": "it\'s a // not-comment"}', out: '{"note": "it\'s a // not-comment"}',
+    comments: false },
+  // An escaped quote before a `//`, and a string ending in a backslash. A stripper that scans
+  // for `//` without tracking string state gets these two wrong in opposite directions.
+  { src: '{"note": "escaped \\" then // still a string"}',
+    out: '{"note": "escaped \\" then // still a string"}', comments: false },
+  { src: '{"a": "trailing backslash in string \\\\"}',
+    out: '{"a": "trailing backslash in string \\\\"}', comments: false },
+  // Trailing commas — accepted, and dropped on the way out.
+  { src: '{"a": [1, 2, 3,], }', out: '{"a": [1, 2, 3]}', comments: false },
+  { src: '{"a": [1, 2, 3,],\n  }', out: '{"a": [1, 2, 3]}', comments: false },
+  { src: '{"nested": {"b": [ {"c": 1,}, ],}}', out: '{"nested": {"b": [{"c": 1}]}}',
+    comments: false },
+  // Malformed past rescuing.
+  { src: '{"a": 1,,}', out: null, comments: false },
+  { src: '{ not json at all', out: null, comments: false },
+  { src: '{"a": 1 /* unterminated', out: null, comments: true },
+  // ⚠ THE INT/FLOAT DISTINCTION SURVIVES THE ROUND TRIP. `1.0` keeps its point and `20` does
+  // not grow one, because an OpenCode config that round-trips `temperature: 1.0` into `1` is a
+  // config the host then reads differently. `lib_primitives.test.mjs` owns the general rule.
+  { src: '{"float": 1.0, "int": 20, "exp": 1e3}',
+    out: '{"float": 1.0, "int": 20, "exp": 1000.0}', comments: false },
+  // Non-ASCII is escaped on the way out, astral planes as surrogate pairs.
+  { src: '{"unicode": "a — b", "emoji": "😀"}',
+    out: '{"unicode": "a \\u2014 b", "emoji": "\\ud83d\\ude00"}', comments: false },
+];
 
 // The two merge cells below reach `hookPrefix`, which WRITES the shim at a path taken from the
 // environment — so the developer's machine-wide shim needs moving out of the way first.
 sandboxProcessHome();
 after(restoreProcessHome);
 
-test('the recording is the shape it claims to be', () => {
-  // THE POSITIVE CONTROLS FIRST. Every assertion below is vacuous against an empty corpus, and
-  // "the fixtures did not load" and "the port agrees with all of them" are the same green.
-  assert.equal(CORPUS.rows.length, 24, 'the recorded corpus has changed size');
-  assert.match(CORPUS.recorded_with.python, /^\d+\.\d+$/,
-    'a patch digit makes a corpus disagree with itself across two machines that both recorded '
-    + 'it correctly');
-  assert.ok(CORPUS.rows.some((r) => r.isNull), 'no unparseable input');
-  assert.ok(CORPUS.rows.some((r) => r.hadComments), 'no commented input');
-  assert.ok(CORPUS.rows.some((r) => !r.hadComments && !r.isNull), 'no plain-JSON input');
-});
-
-test('the corpus keeps its hard shapes', () => {
-  // THE GATE ON THE CORPUS, ported verbatim in intent from the reference: a corpus edited down
-  // to `{"a": 1}` would replay green and gate nothing. Each shape below is here because it is a
-  // way a real user's file breaks a naive comment stripper.
-  const joined = CORPUS.rows.map((r) => r.src).join('');
-  assert.ok(joined.includes('https://'),
-    'no `//` inside a string — the shape that truncates a user\'s whole config');
-  assert.ok(CORPUS.rows.some((r) => r.src.trim() === ''), 'no empty input');
-  assert.ok(CORPUS.rows.some((r) => r.src.includes('/*')), 'no block comment');
-  assert.ok(CORPUS.rows.some((r) => /,\s*[\]}]/.test(r.src)), 'no trailing comma');
-  assert.ok(CORPUS.rows.some((r) => r.src.includes('1.0')),
-    'no float — the int/float distinction has to survive a round trip through a real config');
-  // Two the reference's own gate did not name, and both are in its corpus: an escaped quote
-  // before a `//`, and a string ending in a backslash. A stripper that scans for `//` without
-  // tracking string state gets both wrong in opposite directions.
-  assert.ok(CORPUS.rows.some((r) => r.src.includes('escaped \\"')), 'no escaped quote');
-  assert.ok(CORPUS.rows.some((r) => r.src.includes('trailing backslash')),
-    'no string ending in a backslash');
-});
-
-test('every recorded answer is what the port reads', () => {
-  let comments = 0;
-  let nulls = 0;
-  for (const row of CORPUS.rows) {
+test('readJsonc answers the table, row for row', () => {
+  for (const row of JSONC) {
     const [loaded, hadComments] = readJsonc(row.src);
-    assert.equal(Boolean(hadComments), row.hadComments,
-      `hadComments disagrees for ${JSON.stringify(row.src)}`);
-    if (hadComments) comments += 1;
-    if (row.isNull) {
-      nulls += 1;
-      // ⚠ `null` HERE IS TWO ANSWERS THE REFERENCE NEVER SEPARATED: an input that does not
-      // parse, and the literal `null`. Recorded rather than resolved — inventing a distinction
-      // the reference did not have is exactly the trap that has fired twice in this port.
-      assert.equal(loaded, null, `expected null for ${JSON.stringify(row.src)}`);
-      continue;
+    assert.equal(Boolean(hadComments), row.comments,
+      `hadComments is wrong for ${JSON.stringify(row.src)}`);
+    if (row.out === null) {
+      assert.equal(loaded, null, `expected no value for ${JSON.stringify(row.src)}`);
+    } else {
+      assert.equal(jsonDumpsCompact(loaded), row.out,
+        `readJsonc round-tripped ${JSON.stringify(row.src)} wrongly`);
     }
-    assert.equal(jsonDumpsCompact(loaded), row.rendered,
-      `readJsonc read ${JSON.stringify(row.src)} differently from the reference`);
   }
-  assert.ok(comments >= 4, `only ${comments} rows exercised the comment path`);
-  assert.ok(nulls >= 4, `only ${nulls} rows exercised the unparseable path`);
 });
 
 test('user hooks in the file survive the merge', () => {

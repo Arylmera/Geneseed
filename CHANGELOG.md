@@ -8,6 +8,44 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Removed
+
+- **The recorded corpora, and the notion of a corpus with them.** `tests/__snapshots__/` held
+  2.6 MB of transcripts taken from the CPython reference before it was deleted, replayed by
+  `tests/snapshot/`. With no recorder left they could never be re-blessed, so a red run could
+  only ever mean *you changed something*, never *you broke something* — and every deliberate
+  change to emitted text arrived as a red gate. The 1381-cell retirement of 2026-08-17 had
+  already made the argument; this finishes it.
+
+  **What they owned is now written out.** `wrapText`, `dwidth` and `formatHelp` had zero unit
+  coverage — the recordings were their only gate — so `tests/unit/text_layout.test.mjs` states
+  their rules explicitly and renders all 29 verbs. The JSONC, Windows-PATH and token-report
+  tables moved inline; `sync_themes` became an owned fixture with plain-text expectations. The
+  "corpus contains what it is named for" gates went with them: when the apostrophe is visible in
+  the file, nothing has to assert it is there.
+
+  Recoverable at tag `corpus-reference-v3.1.2`. Nothing can regenerate them.
+
+- **Three migration statistics.** "N of the M subcommands run from Node", "0 commands have no
+  Node twin", and a native-verb list duplicated across two files purely so each could police the
+  other. A migration percentage is not a fact about a finished tool. The durable property under
+  the first two — every declared verb is dispatched by an entry point — is now asserted directly.
+
+- **`golden.mjs --against`**, which could not have worked since the emit corpus was retired, and
+  `orphanCheck`, `narrowingReason` and `tests/helpers/snapshot_io.mjs` with it. The three
+  surviving modes are all self-comparisons.
+
+### Changed
+
+- **Two of "the four things that are genuinely hard" are resolved rather than rewritten.**
+  `docs/extending.md` §5.2 — seven theme keys pinned byte-for-byte, so restyling a tagline was a
+  red gate — and §5.4 — *a snapshot red is a finding, not a step*. Theme text is free to edit,
+  and a red test is a step again. Editing a CLI verb's help text or flags is an ordinary edit.
+
+- **The standing rule is now "expected values are written out, not recorded"**: change the
+  expectation and the sentence that explains it in the same commit, and say why in the message.
+
+
 ## [3.1.2] — 2026-08-23
 
 ### Changed

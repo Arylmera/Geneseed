@@ -1,6 +1,5 @@
 # Extending — what it costs to change this tool
 
-`docs/limits.md` is the standing answer to *"what does this tool not prove about itself?"*.
 This file is its companion: **"what does it cost to add one thing?"** — one invariant, one
 doctrine rule, one skill, one plugin, one hook verb, one doc page, one theme, one screen.
 
@@ -47,7 +46,7 @@ three-tier split added — `{N_ONTOLOGY}` (the ontology's sections), `{N_PACKS}`
 packs). `{N_LAWS}` is the **invariant** count and nothing else; there is deliberately no token
 meaning "the whole constitution", because `proseMirrorProblems` holds README and `SHIPPED.md`
 prose to that same number and a token that quietly meant something wider would put the docs and
-the gate at odds with no way to re-bless either.
+the gate at odds.
 
 ⚠ **Only a `kind: "concept"` page is substituted.** A `markdown`-kind page renders `{N_PACKS}`
 literally, on the screen, as those nine characters.
@@ -221,9 +220,6 @@ Steps 1 and 9 of §2c, plus `LAW_META` if the Principle line moved. Two cautions
   default build. Amend the first sentence, or the amendment does not exist for most installs. The
   same is true of a doctrine rule; it is **not** true of the ontology, which ships whole at both
   footprints.
-- ⚠ **Rule I is frozen.** `LEX_I` is one of seven theme keys recorded byte-for-byte in the
-  primitives corpus (§5.2). Retitling Rule I in any theme reddens a snapshot that cannot be
-  re-blessed.
 
 ### 2c — Adding an INVARIANT
 
@@ -328,7 +324,6 @@ Two traps worth knowing before you write the spec:
   `LAW_META`, which *is* cross-checked). Inventing a new *category* means editing that file —
   which drags in the `web/dist` rebuild — and an unknown category renders as Build with no warning.
 
-Adding a spec reddens no recording: none of the surviving snapshots contains a skill or agent name.
 
 ---
 
@@ -448,34 +443,24 @@ already exempted a named `NATIVE` list; the hook half exempted nothing — so a 
 failed with **no green path**, since the recorder died on 2026-08-17 and the failure message
 correctly forbids deleting cells to pass.
 
-Both halves now filter through the same `NATIVE` list, and the reverse check refuses an
-exemption for a verb neither entry point carries. The argument is in `docs/declined.md` — the
-short version is that the reason those verbs have no cell (*the reference had nothing to compare
-against*) is the same reason a verb postdating the reference has none, so it is one exemption,
-not two. Nothing measurable was lost: the hook verb set is pinned twice more, from editable
-sources, twelve lines above.
+`NATIVE` in `tests/unit/hook_cli.test.mjs` names the verbs held to the structural rules rather
+than to a per-verb gate, and the reverse check refuses an exemption for a verb neither entry point
+carries — so a name that stops meaning anything fails rather than sitting there.
 
 **To add a hook verb today:** implement `cmd<Verb>` in `js/hosts/hooks.mjs`, wire the string in
-`claudeHookGroups`, add the `VERBS` entry, add the `js/cli-table.json` row, then name the verb in
-`NATIVE` in **both** `tests/unit/hook_cli.test.mjs` and `tests/snapshot/cli_help.test.mjs` (they
-read each other's source, so one alone fails) and give it an absolute unit gate.
+`claudeHookGroups`, add the `VERBS` entry, add the `js/cli-table.json` row, then give it an
+absolute unit gate. `NATIVE` used to be duplicated across two files that read each other's source
+to stay in step; there is one copy now, so there is nothing to keep in step.
 
-### 5.2 ⚠ Seven theme keys are frozen byte-for-byte
+### 5.2 ✅ Theme text is free to edit — resolved 2026-08-23
 
-`tests/__snapshots__/primitives/{posix,win32}.json` record `theme_preview` and `theme_flair`
-answers for all fourteen themes **and the template**. Those probes read the live `themes/*.json`
-at replay time, which pins:
+Seven keys (`TAGLINE`, `LOADED_SIGIL`, `VOICE`, `LEX_I`, `BENEDICTION`, `ACCENT`, `BANNER`) used to
+be pinned byte-for-byte by a recording with no re-bless path, so restyling a theme's tagline was a
+red gate. **That recording is gone.** Theme text is now held only by `doctor --all` — key presence,
+cross-theme parity, and no unresolved tokens — which is a claim about structure, not wording.
 
-| Probe | Frozen keys |
-|---|---|
-| `theme_preview` | `TAGLINE`, `LOADED_SIGIL`, `VOICE`, **`LEX_I`**, `BENEDICTION` |
-| `theme_flair` | `ACCENT`, `BANNER` |
-
-Editing any of those, in any theme, reddens a snapshot with **no re-bless path**. Adding a *new*
-law is safe (only `LEX_I` is recorded). Restyling an existing theme's tagline or banner is not.
-
-This was proven, not inferred: prefixing `marvin.json`'s `TAGLINE` turned
-`tests/snapshot/pure_snapshot.test.mjs` red at `case 1275`.
+Restyle freely. What still bites is `LOADED_SIGIL` uniqueness (§6): it is load-bearing for theme
+detection and nothing checks it.
 
 ### 5.3 ⚠ The hook shim is machine-wide and last-writer-wins
 
@@ -513,37 +498,30 @@ remains the cheapest thing to run.
 Related: a stray `console.log` on a hook path silently disables a gate. Hooks signal through
 stdout JSON and return 0 on every path — a printed byte is not a warning, it is a disabled gate.
 
-### 5.4 ⚠ A snapshot red is a finding, not a step
+### 5.4 ✅ Expected values are written out — resolved 2026-08-23
 
-Everything left under `tests/__snapshots__/` — the primitives, the 26 help texts, and the small
-pure-function recordings — was produced by an implementation that no longer exists. There is no
-`--record`. A change that moves a recorded byte leaves two honest options: revert it, or argue in
-writing (in `docs/declined.md`) that the recording was wrong. `docs/limits.md` carries the full
-argument and the measurement that licensed retiring the three larger corpora.
+This section used to say that a snapshot red was a finding rather than a step: the recordings under
+`tests/__snapshots__/` came from an implementation that no longer existed, there was no `--record`,
+and a change that moved a recorded byte left only two honest options — revert it, or argue in
+writing that the recording was wrong. The rule that fell out of it was *when a frozen recording
+blocks a change, move the logic to the nearest caller that is not frozen*.
 
-**A worked example, from the session that wrote this file.** Closing a real defect — three count
-gates that go green when you *delete* the sentence they check — turned the primitives corpus red
-at `case 371`: `proseMirrorProblems` is a recorded pure function, the recording holds a case that
-passes an empty `shipped` string and expects `[]`, and the new absence arm answered otherwise.
-Both obvious moves are wrong. Re-blessing is impossible. Abandoning the fix leaves a gate failing
-open. The third move is the one to reach for: **the presence check moved up one level, into
-`countTableProblems`, which is not recorded** — where it reads better anyway, beside the code that
-already knows whether the file could be opened. The rule that falls out: *when a frozen recording
-blocks a change, look for the nearest caller that is not frozen.* Check with
+**None of that applies any more.** The recordings are retired (tag `corpus-reference-v3.1.2` is the
+only way back to them), and every expected value now lives in the test file that asserts it, above
+a sentence saying which decision it pins. The rule is correspondingly ordinary:
 
-```bash
-node -e "const j=require('./tests/__snapshots__/primitives/win32.json');console.log([...new Set(j.cases.map(c=>c.fn))].join('\n'))"
-```
+> **Change the expectation and the sentence that explains it in the same commit, and say why in
+> the message.**
 
-The concrete consequence for evolution: **editing the help text or the flags of any of the 26
-recorded CLI verbs is a frozen surface.** New verbs have a path (`NATIVE`); changes to old ones
-do not. `docs/limits.md:311-316` names this cluster as the one open standing decision.
+A red test is a step again. What it costs is an argument, in prose, that the new answer is better —
+the cost that keeps the tables honest, and far cheaper than the one it replaced.
 
-The CLI surface is the most expensive thing in the repo to change, because four hand-written
-equalities converge on it: `js/cli-table.json`'s 29-command count (`tests/unit/cli_table.test.mjs:67`),
-the 5-entry hidden-argument list (`tests/snapshot/cli_help.test.mjs:219`), the 25-subparser count
-(`tests/unit/docs.test.mjs:193`), and the 26 unblessable help fixtures. Plus
-`tests/unit/docs.test.mjs:554`, which validates every fenced `geneseed <verb> <flags>` line in
+The CLI surface is no longer the most expensive thing in the repo to change. Editing a verb's help
+text or flags is now an ordinary edit: `js/cli-table.json` is the owned document, and
+`tests/unit/text_layout.test.mjs` renders every verb through `formatHelp` to check the layout
+holds. Three hand-written equalities still converge on it and are cheap to keep in step — the
+29-command count and the hidden-argument rule (`tests/unit/cli_table.test.mjs`), and
+`tests/unit/docs.test.mjs`, which validates every fenced `geneseed <verb> <flags>` line in
 `README.md`, `SETUP.md`, `QUICKSTART.md` and `SHIPPED.md` against the table.
 
 ---

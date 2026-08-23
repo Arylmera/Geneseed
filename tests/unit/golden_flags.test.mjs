@@ -13,7 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  VERBATIM_CELLS, loadMatrix, narrowingReason, parseArgs, selectCells,
+  VERBATIM_CELLS, loadMatrix, parseArgs, selectCells,
 } from '../golden.mjs';
 import { cellId, argvFor } from '../helpers/golden.mjs';
 
@@ -80,29 +80,16 @@ test('the two self-comparison modes are mutually exclusive', () => {
   assert.throws(() => parseArgs(['--idempotent', '--deletion']), /exclusive/);
 });
 
-// `--against` replays a RECORDED corpus; `--idempotent`/`--deletion` compare a run against
-// another run of the same implementation. Combining them would silently pick one.
-test('a corpus replay cannot also be a self-comparison', () => {
-  assert.throws(() => parseArgs(['--against', 'x', '--idempotent']), /have no corpus/);
-  assert.throws(() => parseArgs(['--against', 'x', '--deletion']), /have no corpus/);
-});
-
-test('every narrowing flag selects fewer cells and announces itself', () => {
+test('every narrowing flag selects fewer cells, and none selects none', () => {
   const full = selectCells(DOC, parseArgs([]));
   assert.equal(full.length, 261);
-  assert.equal(narrowingReason(parseArgs([])), null,
-    'a full run must NOT skip the orphan check');
-
   for (const argv of [['--quick'], ['--emits', 'claude'], ['--only', 'neutral/claude'],
     ['--limit', '5'], ['--shard', '0/4']]) {
-    const a = parseArgs(argv);
-    const got = selectCells(DOC, a);
+    const got = selectCells(DOC, parseArgs(argv));
+    // BOTH DIRECTIONS. A flag that selected everything would narrow nothing; one that selected
+    // nothing would make the run vacuously green, which reads identically in a CI log.
     assert.ok(got.length < full.length && got.length > 0,
       `${argv.join(' ')} selected ${got.length} of ${full.length}`);
-    assert.ok(narrowingReason(a),
-      `${argv.join(' ')} narrows the matrix and must skip the orphan check out loud — a corpus `
-      + 'entry a narrowed run did not consume proves nothing, and a green narrowed replay reads '
-      + 'exactly like a green full one in a CI log');
   }
 });
 

@@ -1,5 +1,5 @@
 /**
- * `rituals/_web_activity.py` — the live-activity surface, and the first web endpoint that
+ * The live-activity surface — the one web endpoint that
  * DELETES.
  *
  * It reads the per-session JSON files the `geneseed-activity` OpenCode plugin writes into

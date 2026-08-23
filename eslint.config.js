@@ -19,8 +19,7 @@ import globals from 'globals';
 // a promise nobody awaits — which is the half a reader cannot check by eye.
 export default [
   {
-    ignores: ['node_modules/', 'web/', 'Harness/', 'notebook/', 'tests/__snapshots__/',
-      'src/skills/*/scripts/', '.claude/'],
+    ignores: ['node_modules/', 'web/', 'Harness/', 'notebook/', 'src/skills/*/scripts/', '.claude/'],
   },
   js.configs.recommended,
   {

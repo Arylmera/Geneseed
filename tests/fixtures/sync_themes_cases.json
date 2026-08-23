@@ -1,0 +1,309 @@
+{
+  "doc": "Cases for `geneseed-build --sync-themes`. Each case is a theme directory (`files`), the report the run must print (`stdout`/`stderr`, newlines as \\n — the running platform's separator is asserted separately), the exit code, how many themes changed, and the files the run must leave behind (`after`).",
+  "cases": [
+    {
+      "name": "a-key-that-already-exists-anchors-the-insertion",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\",\n  \"C\": \"<c>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\",\n  \"C\": \"world\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+IiwKICAiQyI6ICI8Yz4iCn0K",
+        "mytheme.json": "ew0KICAiQSI6ICJoZWxsbyIsDQogICJCIjogIjxiPiIsDQogICJDIjogIndvcmxkIg0KfQ0K"
+      }
+    },
+    {
+      "name": "the-one-container-value-in-the-real-template",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"VOICE\": \"<v>\",\n  \"AGENT_COLORS\": {\"architect\": \"primary\", \"reviewer\": \"warning\", \"tester\": \"success\", \"docs\": \"info\", \"security\": \"error\", \"explorer\": \"accent\", \"_default\": \"secondary\"},\n  \"LAST\": \"<l>\"\n}\n",
+        "mytheme.json": "{\n  \"VOICE\": \"plain\",\n  \"LAST\": \"end\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: AGENT_COLORS\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJWT0lDRSI6ICI8dj4iLAogICJBR0VOVF9DT0xPUlMiOiB7ImFyY2hpdGVjdCI6ICJwcmltYXJ5IiwgInJldmlld2VyIjogIndhcm5pbmciLCAidGVzdGVyIjogInN1Y2Nlc3MiLCAiZG9jcyI6ICJpbmZvIiwgInNlY3VyaXR5IjogImVycm9yIiwgImV4cGxvcmVyIjogImFjY2VudCIsICJfZGVmYXVsdCI6ICJzZWNvbmRhcnkifSwKICAiTEFTVCI6ICI8bD4iCn0K",
+        "mytheme.json": "ew0KICAiVk9JQ0UiOiAicGxhaW4iLA0KICAiQUdFTlRfQ09MT1JTIjogeyJhcmNoaXRlY3QiOiAicHJpbWFyeSIsICJyZXZpZXdlciI6ICJ3YXJuaW5nIiwgInRlc3RlciI6ICJzdWNjZXNzIiwgImRvY3MiOiAiaW5mbyIsICJzZWN1cml0eSI6ICJlcnJvciIsICJleHBsb3JlciI6ICJhY2NlbnQiLCAiX2RlZmF1bHQiOiAic2Vjb25kYXJ5In0sDQogICJMQVNUIjogImVuZCINCn0NCg=="
+      }
+    },
+    {
+      "name": "an-unconventionally-formatted-theme-falls-back-to-a-full-re-dump",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\",\n  \"ZED\": \"<z>\"\n}\n",
+        "mytheme.json": "{\"A\": \"hello\", \"ZED\": \"café — raw\"}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+IiwKICAiWkVEIjogIjx6PiIKfQo=",
+        "mytheme.json": "ew0KICAiQSI6ICJoZWxsbyIsDQogICJCIjogIjxiPiIsDQogICJaRUQiOiAiY2Fmw6kg4oCUIHJhdyINCn0NCg=="
+      }
+    },
+    {
+      "name": "a-missing-first-key-goes-straight-after-the-brace",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"FIRST\": \"<f>\",\n  \"A\": \"<a>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: FIRST\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJGSVJTVCI6ICI8Zj4iLAogICJBIjogIjxhPiIKfQo=",
+        "mytheme.json": "ew0KICAiRklSU1QiOiAiPGY+IiwNCiAgIkEiOiAiaGVsbG8iDQp9DQo="
+      }
+    },
+    {
+      "name": "an-empty-theme-takes-the-key-with-no-trailing-comma",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"ONLY\": \"<o>\"\n}\n",
+        "mytheme.json": "{\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: ONLY\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJPTkxZIjogIjxvPiIKfQo=",
+        "mytheme.json": "ew0KICAiT05MWSI6ICI8bz4iDQp9DQo="
+      }
+    },
+    {
+      "name": "a-missing-last-key-gives-its-predecessor-the-comma",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"LAST\": \"<l>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: LAST\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkxBU1QiOiAiPGw+Igp9Cg==",
+        "mytheme.json": "ew0KICAiQSI6ICJoZWxsbyIsDQogICJMQVNUIjogIjxsPiINCn0NCg=="
+      }
+    },
+    {
+      "name": "trailing-whitespace-after-a-comma-still-reads-as-a-comma",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\",\n  \"C\": \"<c>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\",   \n  \"C\": \"world\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+IiwKICAiQyI6ICI8Yz4iCn0K",
+        "mytheme.json": "ew0KICAiQSI6ICJoZWxsbyIsICAgDQogICJCIjogIjxiPiIsDQogICJDIjogIndvcmxkIg0KfQ0K"
+      }
+    },
+    {
+      "name": "several-missing-keys-insert-in-template-order",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\",\n  \"C\": \"<c>\",\n  \"D\": \"<d>\",\n  \"E\": \"<e>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\",\n  \"E\": \"end\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 3 key(s) from the template — RESTYLE these in this theme's voice: B, C, D\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+IiwKICAiQyI6ICI8Yz4iLAogICJEIjogIjxkPiIsCiAgIkUiOiAiPGU+Igp9Cg==",
+        "mytheme.json": "ew0KICAiQSI6ICJoZWxsbyIsDQogICJCIjogIjxiPiIsDQogICJDIjogIjxjPiIsDQogICJEIjogIjxkPiIsDQogICJFIjogImVuZCINCn0NCg=="
+      }
+    },
+    {
+      "name": "an-in-sync-theme-is-not-rewritten-at-all",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"caf\\u00e9 — raw\"\n}\n"
+      },
+      "stdout": "[sync-themes] all themes already carry every template key.\n",
+      "stderr": "",
+      "changed": 0,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIKfQo=",
+        "mytheme.json": "ewogICJBIjogImNhZlx1MDBlOSDigJQgcmF3Igp9Cg=="
+      }
+    },
+    {
+      "name": "a-one-key-sync-keeps-both-unicode-spellings-byte-for-byte",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\",\n  \"C\": \"<c>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello — caf\\u00e9\",\n  \"C\": \"\\u2603 world\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+IiwKICAiQyI6ICI8Yz4iCn0K",
+        "mytheme.json": "ew0KICAiQSI6ICJoZWxsbyDigJQgY2FmXHUwMGU5IiwNCiAgIkIiOiAiPGI+IiwNCiAgIkMiOiAiXHUyNjAzIHdvcmxkIg0KfQ0K"
+      }
+    },
+    {
+      "name": "an-extra-key-is-reported-and-kept-when-nothing-is-missing",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\",\n  \"ZZZ\": \"keep-me\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: in sync (extra key(s) not in template, not removed: ZZZ)\n[sync-themes] all themes already carry every template key.\n",
+      "stderr": "",
+      "changed": 0,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIKfQo=",
+        "mytheme.json": "ewogICJBIjogImhlbGxvIiwKICAiWlpaIjogImtlZXAtbWUiCn0K"
+      }
+    },
+    {
+      "name": "an-extra-key-survives-a-sync-that-adds-one",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\",\n  \"ZZZ\": \"keep-me\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n[sync-themes] mytheme.json: extra key(s) not in template, not removed: ZZZ\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+Igp9Cg==",
+        "mytheme.json": "ew0KICAiQSI6ICJoZWxsbyIsDQogICJCIjogIjxiPiIsDQogICJaWloiOiAia2VlcC1tZSINCn0NCg=="
+      }
+    },
+    {
+      "name": "a-line-separator-inside-a-value-reaches-the-reparse-safety-net",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"caf\\u00e9 before after\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+Igp9Cg==",
+        "mytheme.json": "ew0KICAiQSI6ICJjYWbDqSBiZWZvcmXigKhhZnRlciIsDQogICJCIjogIjxiPiINCn0NCg=="
+      }
+    },
+    {
+      "name": "an-int-and-a-float-template-value-keep-their-spelling",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"N\": 1,\n  \"F\": 1.0,\n  \"A\": \"<a>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 2 key(s) from the template — RESTYLE these in this theme's voice: N, F\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJOIjogMSwKICAiRiI6IDEuMCwKICAiQSI6ICI8YT4iCn0K",
+        "mytheme.json": "ew0KICAiTiI6IDEsDQogICJGIjogMS4wLA0KICAiQSI6ICJoZWxsbyINCn0NCg=="
+      }
+    },
+    {
+      "name": "a-prototype-shaped-key-is-still-a-missing-key",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"constructor\": \"<c>\",\n  \"A\": \"<a>\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: constructor\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJjb25zdHJ1Y3RvciI6ICI8Yz4iLAogICJBIjogIjxhPiIKfQo=",
+        "mytheme.json": "ew0KICAiY29uc3RydWN0b3IiOiAiPGM+IiwNCiAgIkEiOiAiaGVsbG8iDQp9DQo="
+      }
+    },
+    {
+      "name": "theme-files-are-visited-in-the-references-order",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\"\n}\n",
+        "Zebra.json": "{\n  \"A\": \"z\"\n}\n",
+        "apple.json": "{\n  \"A\": \"a\"\n}\n"
+      },
+      "stdout": "[sync-themes] apple.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n[sync-themes] Zebra.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n",
+      "stderr": "",
+      "changed": 2,
+      "exit": 0,
+      "after": {
+        "Zebra.json": "ew0KICAiQSI6ICJ6IiwNCiAgIkIiOiAiPGI+Ig0KfQ0K",
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+Igp9Cg==",
+        "apple.json": "ew0KICAiQSI6ICJhIiwNCiAgIkIiOiAiPGI+Ig0KfQ0K"
+      }
+    },
+    {
+      "name": "an-underscore-prefixed-file-is-a-scaffold-and-not-a-theme",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\",\n  \"B\": \"<b>\"\n}\n",
+        "_scratch.json": "{\n  \"A\": \"ignore me\"\n}\n",
+        "mytheme.json": "{\n  \"A\": \"hello\"\n}\n"
+      },
+      "stdout": "[sync-themes] mytheme.json: added 1 key(s) from the template — RESTYLE these in this theme's voice: B\n",
+      "stderr": "",
+      "changed": 1,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIsCiAgIkIiOiAiPGI+Igp9Cg==",
+        "_scratch.json": "ewogICJBIjogImlnbm9yZSBtZSIKfQo=",
+        "mytheme.json": "ew0KICAiQSI6ICJoZWxsbyIsDQogICJCIjogIjxiPiINCn0NCg=="
+      }
+    },
+    {
+      "name": "nothing-to-do-says-so-once",
+      "files": {
+        "_TEMPLATE.json": "{\n  \"A\": \"<a>\"\n}\n",
+        "one.json": "{\n  \"A\": \"1\"\n}\n",
+        "two.json": "{\n  \"A\": \"2\"\n}\n"
+      },
+      "stdout": "[sync-themes] all themes already carry every template key.\n",
+      "stderr": "",
+      "changed": 0,
+      "exit": 0,
+      "after": {
+        "_TEMPLATE.json": "ewogICJBIjogIjxhPiIKfQo=",
+        "one.json": "ewogICJBIjogIjEiCn0K",
+        "two.json": "ewogICJBIjogIjIiCn0K"
+      }
+    },
+    {
+      "name": "an-unreadable-template-refuses-instead-of-reporting-sync",
+      "files": {
+        "_TEMPLATE.json": "{ this is not json\n",
+        "mytheme.json": "{\n  \"A\": \"hello\"\n}\n"
+      },
+      "stdout": "[sync-themes] _TEMPLATE.json is missing or unreadable — there is nothing to sync against.\n",
+      "stderr": "",
+      "changed": null,
+      "exit": 2,
+      "after": {
+        "_TEMPLATE.json": "eyB0aGlzIGlzIG5vdCBqc29uCg==",
+        "mytheme.json": "ewogICJBIjogImhlbGxvIgp9Cg=="
+      }
+    },
+    {
+      "name": "a-missing-template-refuses-too",
+      "files": {
+        "mytheme.json": "{\n  \"A\": \"hello\"\n}\n"
+      },
+      "stdout": "[sync-themes] _TEMPLATE.json is missing or unreadable — there is nothing to sync against.\n",
+      "stderr": "",
+      "changed": null,
+      "exit": 2,
+      "after": {
+        "mytheme.json": "ewogICJBIjogImhlbGxvIgp9Cg=="
+      }
+    }
+  ]
+}

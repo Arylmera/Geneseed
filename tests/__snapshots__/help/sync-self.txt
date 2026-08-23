@@ -1,4 +1,0 @@
-usage: harness sync-self [-h]
-
-options:
-  -h, --help  show this help message and exit

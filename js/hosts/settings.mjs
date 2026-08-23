@@ -7,7 +7,7 @@
  * last is that it is also the unit the RUNTIME drives: eleven of its names have a consumer
  * outside the emit tree, ten of them in `rituals/_harness_mcp.py` (remerge, deactivate,
  * reactivate, uninstall), two in `rituals/_harness_exclude.py`, one in
- * `rituals/_harness_build.py`. Every emit and every lifecycle verb goes through it now:
+ * Every emit and every lifecycle verb goes through this module:
  * `js/build/emit-opencode.mjs` and `js/build/emit-claude.mjs` wire the host config,
  * `js/maintain/uninstall.mjs` and `js/maintain/migrate.mjs` drive the unwire and the shim
  * migration, `js/inspect/checks-repo.mjs` reads `shimDeadPaths` for the doctor, and

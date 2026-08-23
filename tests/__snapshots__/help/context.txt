@@ -1,8 +1,0 @@
-usage: harness context [-h] [--root ROOT]
-
-options:
-  -h, --help   show this help message and exit
-  --root ROOT  the install's own dir (set by the emitted hook). A GLOBAL
-               install's hook stands down when a Geneseed project install of
-               the same host is at/above cwd (project-bypasses-global);
-               GENESEED_STACK_GLOBAL=1 disables.

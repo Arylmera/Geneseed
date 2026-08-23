@@ -55,7 +55,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { ROOT, THEMES, discoverNames } from '../build/source.mjs';
+import { CONFIG, ROOT, THEMES, discoverNames } from '../build/source.mjs';
+import { sourceReleaseVersion } from '../hosts/opencode.mjs';
 import { diffCollect } from '../inspect/diff.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
@@ -902,7 +903,23 @@ export function apiOverview(state) {
     doctor: state.doctor,
     diff,
     build_time: buildTime,
+    // The RELEASE LABEL OF THE SOURCE THIS CONSOLE IS SERVED FROM, not of the deployed install —
+    // the two differ whenever something has changed since the last emit, which is exactly when
+    // knowing which one you are looking at matters. `.geneseed-version` carries the install's own
+    // label and the fingerprint comparison already reports the drift; this answers the plainer
+    // question the topbar asks, "what is running".
+    //
+    // Degrades to null rather than to a wrong number: `sourceReleaseVersion` answers '0.0.0' for
+    // an unreadable config, and a console confidently displaying 0.0.0 is worse than one that
+    // shows nothing.
+    version: releaseLabel(),
   };
+}
+
+/** The source's release label, or null when it cannot be read. */
+function releaseLabel() {
+  const v = sourceReleaseVersion({ config: CONFIG });
+  return v && v !== '0.0.0' ? v : null;
 }
 
 /**

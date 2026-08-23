@@ -44,16 +44,23 @@ import { fileURLToPath } from 'node:url';
 import { winUserPathScript } from '../../js/hosts/link.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-const RECORDING = JSON.parse(readFileSync(
-  path.join(ROOT, 'tests', '__snapshots__', 'win_user_path.json'), 'utf8'));
-
-// ⚠ THE ROWS ARE IN `cases`, AND `corpus` IS THE RECORDING'S OWN NAME — a string. The first
-// draft read `RECORDING.corpus` as the row map: `Object.values('win_user_path')` is thirteen
-// single characters, so the machine-scope test ran twenty-six times over one-letter directories
-// and PASSED. It was the sibling test failing on `.includes` of undefined that exposed it.
-// Derived from `cases` now, which is where the recorder actually put them.
-const CORPUS = Object.fromEntries(RECORDING.cases.map((c) => [c.row, c.directory]));
-const ACTIONS = [...new Set(RECORDING.cases.map((c) => c.action))];
+// THE DIRECTORIES THIS SCRIPT HAS TO SURVIVE. Each one is a hazard, not a sample: an
+// apostrophe closes a PowerShell string, a semicolon is the PATH separator itself, a UNC root
+// starts with two backslashes, and an already-doubled apostrophe is what proves the escape is
+// not applied twice. A row that exercises none of them would be a comment, not a test.
+const DIRECTORIES = {
+  plain: 'C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin',
+  apostrophe: "C:\\Users\\O'Brien\\AppData\\Local\\Geneseed\\bin",
+  two_apostrophes: "C:\\Users\\O'Br'ien\\Geneseed\\bin",
+  doubled_apostrophe: "C:\\Users\\O''Brien\\Geneseed\\bin",
+  unc: '\\\\\\\\fileserver\\team$\\dev\\Geneseed\\bin',
+  semicolon: 'C:\\Users\\dev\\we;ird\\Geneseed\\bin',
+  trailing_backslash: 'C:\\Users\\dev\\Geneseed\\bin\\',
+  spaces: 'C:\\Program Files\\Geneseed (x86)\\bin',
+  unicode: 'C:\\Users\\Guillaume Lemer\\Généseed\\bin',
+  empty: '',
+};
+const ACTIONS = ['add', 'remove'];
 
 test('an apostrophe is doubled and never left bare', () => {
   // THE SEVERE ONE. An unescaped `'` closes the PowerShell string and everything after it in
@@ -90,35 +97,13 @@ test('neither arm can reach the machine scope', () => {
   // on the box. Driven over every recorded row and both actions, not one hand-picked pair.
   let checked = 0;
   for (const action of ACTIONS) {
-    for (const directory of Object.values(CORPUS)) {
+    for (const directory of Object.values(DIRECTORIES)) {
       assert.ok(!winUserPathScript(action, directory).includes("'Machine'"),
         `${action} on ${directory} reaches the machine scope`);
       checked += 1;
     }
   }
   assert.ok(checked >= 20, `only ${checked} (action, row) pairs were checked`);
-});
-
-test('the corpus contains what it is named for', () => {
-  // A ROW THAT EXERCISES NONE OF THE FOUR HAZARDS IS A COMMENT, NOT A TEST — the reference's own
-  // rule, and the same shape as the JSONC corpus gate. Each name below is checked against what
-  // the row actually holds, so a row renamed or edited flat fails here rather than replaying
-  // green against a recording of itself.
-  const c = CORPUS;
-  assert.ok(Object.keys(c).length >= 8, `only ${Object.keys(c).length} corpus rows`);
-  assert.ok(c.apostrophe.includes("'"), 'the apostrophe row carries no apostrophe');
-  assert.ok(c.two_apostrophes.split("'").length - 1 >= 2, 'the two-apostrophe row has fewer');
-  assert.ok(c.doubled_apostrophe.includes("''"),
-    'the doubled-apostrophe row does not carry an already-doubled pair — the input that proves '
-    + 'the escape is not applied twice');
-  assert.ok(c.unc.startsWith('\\\\'), 'the UNC row is not a UNC path');
-  assert.ok(c.semicolon.includes(';'),
-    'the semicolon row carries no separator — the input that would split into two entries');
-  assert.ok(c.trailing_backslash.endsWith('\\'), 'the trailing-backslash row does not');
-  assert.ok(/\s/.test(c.spaces), 'the spaces row has no space');
-  assert.ok([...c.unicode].some((ch) => ch.codePointAt(0) > 126),
-    'the unicode row is pure ASCII');
-  assert.equal(c.empty, '', 'the empty row is not empty');
 });
 
 test('the spawn carries no logic, which is what leaves its success arm safely ungated', () => {

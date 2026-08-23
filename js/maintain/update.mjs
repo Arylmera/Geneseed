@@ -1,5 +1,5 @@
 /**
- * `rituals/_update.py` — self-update: `git pull` the install's own origin, validate, rebuild.
+ * Self-update: `git pull` the install's own origin, validate, rebuild.
  *
  * The verb this whole port exists for. Every other subcommand can be Python for one more
  * release; `upgrade` is the one operation a "no Python needed" install cannot delegate,

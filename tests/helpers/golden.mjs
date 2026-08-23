@@ -26,7 +26,6 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { cellEnv, makeSandbox } from './sandbox.mjs';
-import * as snapshotIo from './snapshot_io.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -553,30 +552,4 @@ export function recomputeDeclaredLengths(out) {
       .replace(CLEN_HEADER, () => `Content-Length: ${body.length}`);
     out.set(k, Buffer.from(text, 'utf8'));
   }
-}
-
-/**
- * THE INVERSE OF the replay's one failure direction, and the whole of it.
- *
- * A replay fails a cell that ran but has no recorded snapshot. Nothing enumerated the corpus,
- * so the other direction — the corpus holds entries this run never consumed — exited 0 in all
- * three harnesses. A narrowed matrix therefore replays green over fewer cells while the files
- * it skipped sit in git looking like regression proof. After the reference is deleted these
- * corpora are the only gate left, and its two failure modes are "a cell was lost from the
- * matrix" and "the corpus is stale relative to the matrix".
- *
- * DELIBERATE NARROWING IS NOT A DEFECT, so a narrowing reason SKIPS the check — announced,
- * never silent, because a skipped gate nobody was told about is the failure this argues against.
- */
-export function orphanCheck(againstDir, ids, narrowed) {
-  if (narrowed) {
-    return { skipped: `orphan check SKIPPED — the matrix was narrowed by ${narrowed}, so a `
-      + 'corpus entry this run did not consume proves nothing' };
-  }
-  const have = new Set(fs.readdirSync(againstDir).filter((f) => f.endsWith('.json'))
-    .map((f) => f.slice(0, -'.json'.length)));
-  const want = new Set([...ids].map((cid) => snapshotIo.safeName(cid)));
-  const orphans = [...have].filter((n) => !want.has(n)).sort();
-  if (orphans.length === 0) return null;
-  return { orphans };
 }
