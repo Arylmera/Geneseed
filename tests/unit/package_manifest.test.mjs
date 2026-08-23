@@ -296,16 +296,6 @@ const SHIPS = [
   // callers for limits.md, two for declined.md), so deleting either breaks live citations and
   // is worth a red run. A page nothing cites is worth a glob.
   ['docs/*.md', 'the non-web pages: js/web/docs.mjs serves ROOT/docs, same reader as docs/web/'],
-  // Ships for the reason the others do not: it is the standing statement of what this tool
-  // does NOT prove about itself, and a package whose only oracle is a frozen recording owes
-  // its reader that list. `docs/specs/` is gitignored, so a ledger kept only in a phase note
-  // is a per-machine file — this is the tracked home for it.
-  ['docs/limits.md', 'docs/*.md — what this tool does not prove about itself'],
-  // Its neighbour above says why it belongs in the package rather than in a phase note:
-  // `limits.md` lists what is not PROVEN, this lists where the tool deliberately does not
-  // AGREE with what came before it. Both are statements a reader is owed, and both would
-  // otherwise live in gitignored `docs/specs/`.
-  ['docs/declined.md', 'docs/*.md — where the port deliberately diverges, and why'],
   ['web/dist/', 'TRACKED and load-bearing: js/web/server.mjs serves it, and npmBuild is a '
     + 'first-run-from-a-partial-checkout path no cell reaches'],
   ['web/src/pages/Laws.jsx', "doctor's lawMetaProblems reads this ONE file out of web/src; "

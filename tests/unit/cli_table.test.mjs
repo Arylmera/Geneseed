@@ -171,17 +171,24 @@ test('the same copy with the table present runs', () => {
   }
 });
 
-test('the hidden arguments are still the five the recording froze', () => {
-  // The claim `test_the_file_carries_the_arguments_argparse_hides` made against the live parser.
-  // `tests/snapshot/cli_help.test.mjs` already asserts the same equality against the recorded corpus; the
-  // pointer is checked rather than duplicated, because two owners of one claim drift apart.
-  const owner = readFileSync(path.join(ROOT, 'tests', 'snapshot', 'cli_help.test.mjs'), 'utf8');
-  assert.ok(owner.includes("test('the table carries the surface argparse hides'"),
-    'tests/snapshot/cli_help.test.mjs no longer owns the hidden-argument equality — every SUPPRESS-ed '
-    + 'argument binds a real value, and without it `geneseed upgrade v1 imperial` mis-parses');
-  // …and the one thing that pointer cannot carry: the table must still HAVE hidden rows, or the
-  // owner is asserting an equality between two empty sets.
-  const hidden = cliCommand('web').options.filter((a) => a.hidden);
-  assert.ok(hidden.length > 0, 'the web command has no hidden option — `--daemon-internal` is '
-    + 'passed 95 times a run by the recorded web cells');
+test('a hidden argument is hidden from help but still binds a value', () => {
+  // ⚠ HIDDEN IS A DISPLAY PROPERTY, NEVER A PARSING ONE. An argument left out of `--help` must
+  // still be declared, still have a destination, and still take its value — the daemon passes
+  // `--daemon-internal` on every launch, and an option that is hidden AND inert would send the
+  // web daemon down the interactive path instead.
+  const hidden = [];
+  for (const cmd of JSON.parse(readFileSync(TABLE, 'utf8')).commands) {
+    for (const opt of cmd.options ?? []) {
+      if (!opt.hidden) continue;
+      hidden.push(`${cmd.name} ${opt.names?.[0] ?? opt.dest}`);
+      assert.ok(opt.dest, `${cmd.name}: a hidden option with no dest binds nothing`);
+      assert.ok((opt.names ?? []).length > 0,
+        `${cmd.name}: a hidden option with no flag cannot be passed at all`);
+    }
+  }
+  // The positive control: an equality between two empty sets is not a claim.
+  assert.ok(hidden.length > 0, 'no command declares a hidden option — either they were deleted '
+    + 'or `hidden` stopped being read, and `--daemon-internal` is the one that matters');
+  assert.ok(cliCommand('web').options.some((a) => a.hidden),
+    '`web` has no hidden option — `--daemon-internal` is how a launch says it is the daemon');
 });

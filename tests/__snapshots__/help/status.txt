@@ -1,4 +1,0 @@
-usage: harness status [-h]
-
-options:
-  -h, --help  show this help message and exit

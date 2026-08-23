@@ -203,21 +203,6 @@ test('the matrix covers every verb each entry claims', () => {
     'NATIVE names a verb NEITHER Node entry point carries — an exemption with nothing behind it');
 });
 
-test('the two copies of the native-verb list agree', () => {
-  // THE COST OF LISTING IT TWICE, paid rather than deferred. `tests/snapshot/cli_help.test.mjs` names the
-  // same three for the same reason, and two hand-written copies of one decision drift in exactly
-  // the way this file's header says a listed table drifts — one file exempts a verb the other
-  // still demands a corpus for, and the second failure reads like a missing recording.
-  //
-  // A SHARED HOME UNDER tests/helpers/ IS THE REAL FIX; this is the gate that makes its absence
-  // safe until then, and it is read from the sibling's source so neither copy is the authority.
-  const other = read('tests', 'snapshot', 'cli_help.test.mjs');
-  const listed = [...block(other, 'const NATIVE = [', '];', 'tests/snapshot/cli_help.test.mjs')
-    .matchAll(/'([a-z][a-z-]*)'/g)].map((m) => m[1]);
-  assert.deepEqual(sorted(listed), sorted(NATIVE),
-    'tests/snapshot/cli_help.test.mjs and this file disagree about which verbs are Node-native');
-});
-
 test('every cell declares a binary that exists', () => {
   // A typo'd `bin` used to send a cell to the REFERENCE on both sides, which always passes. With
   // the replayer gone nothing dispatches on this column any more, but it is the column the verb

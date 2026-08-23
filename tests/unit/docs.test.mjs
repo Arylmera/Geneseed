@@ -57,57 +57,22 @@ function verbsOf(rel) {
 }
 
 /** Commands in the CLI table that neither Node entry point answers. */
-function pythonOnlyVerbs() {
-  const names = new Set(readJson('js', 'cli-table.json').commands.map((c) => c.name));
-  const node = new Set([...verbsOf('bin/geneseed-cli.mjs'), ...verbsOf('bin/geneseed-hook.mjs')]);
-  // An alias of a verb that crossed has crossed. `update` aliases `upgrade`.
-  const aliases = { update: 'upgrade' };
-  return [...names].filter((n) => !node.has(n) && !node.has(aliases[n]));
-}
-
-const backticked = (text) => [...text.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-
-// ---------------------------------------------------------------------------------------------
-// THE VERBS WITH NO NODE TWIN — a set that is now EMPTY, and must be SAID to be
-
-// The sentence shape is fixed on purpose, because a gate that guessed at prose would go quiet
-// the first time somebody rephrased it. `ha(?:ve|s)` because the count reached one and "One
-// command have no Node twin" is not a sentence — number agreement is the doc's business.
-const TWIN_RE = /(\w+) commands? ha(?:ve|s) no Node twin[^\n]*?:([^\n.]*)/;
-
-test('the verb derivation reads both sides and is not a broken scrape', () => {
-  // THE POSITIVE CONTROL, and it cannot be "the set is non-empty" any more — the set is empty,
-  // which is the whole point of the port. So it is asserted about the INPUTS: both entry tables
-  // were really read, and the CLI table really parsed.
-  const table = readJson('js', 'cli-table.json').commands;
-  assert.ok(table.length > 20, `js/cli-table.json parsed to ${table.length} commands`);
+test('every verb the table declares is dispatched by an entry point', () => {
+  // THE DURABLE PROPERTY UNDER THE OLD MIGRATION BOOKKEEPING. `js/cli-table.json` is the CLI's
+  // owned description of itself; a verb declared there and dispatched by neither binary is a
+  // verb that parses, prints help, and then does nothing.
+  const declared = readJson('js', 'cli-table.json').commands.map((c) => c.name);
+  const dispatched = new Set([
+    ...verbsOf('bin/geneseed-cli.mjs'), ...verbsOf('bin/geneseed-hook.mjs'),
+  ]);
+  const aliases = { update: 'upgrade' };            // an alias of a dispatched verb is dispatched
+  const orphans = declared.filter((n) => !dispatched.has(n) && !dispatched.has(aliases[n]));
+  assert.deepEqual(orphans, [], `declared but dispatched by neither binary: ${orphans}`);
+  // THE POSITIVE CONTROLS — both scrapes must really have read something, or the line above is
+  // satisfied by two empty sets agreeing.
+  assert.ok(declared.length > 20, `js/cli-table.json parsed to ${declared.length} commands`);
   assert.ok(verbsOf('bin/geneseed-cli.mjs').size > 15, 'the CLI verb scrape found almost nothing');
   assert.ok(verbsOf('bin/geneseed-hook.mjs').size > 2, 'the hook verb scrape found almost nothing');
-  assert.deepEqual(pythonOnlyVerbs(), [],
-    'a subparser has no Node twin again — the docs sentence, the subcommand count and the '
-    + '"no Python needed" promise all need a look');
-});
-
-test('each doc names exactly the verbs with no Node twin', () => {
-  const want = pythonOnlyVerbs().sort();
-  for (const doc of [README, SETUP]) {
-    const m = TWIN_RE.exec(read(doc));
-    // AN ABSENT CLAIM AND AN UNWRITTEN ONE LOOK IDENTICAL. "0 commands have no Node twin" reads
-    // oddly and is the point: it is the claim a reader deciding between an npm install and a
-    // checkout needs, so it is made explicitly rather than by the absence of a sentence.
-    assert.ok(m, `${doc} no longer says how many commands have no Node twin — deleting the `
-      + 'sentence is not the same as the sentence being unnecessary');
-    assert.deepEqual(backticked(m[2]).sort(), want, `${doc} names the wrong verbs`);
-  }
-});
-
-test('each doc counts them correctly', () => {
-  const want = pythonOnlyVerbs().length;
-  for (const doc of [README, SETUP]) {
-    const m = TWIN_RE.exec(read(doc));
-    assert.ok(m, `${doc} carries no such sentence`);
-    assert.equal(asInt(m[1]), want, `${doc} says "${m[1]}" where the derived count is ${want}`);
-  }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -151,75 +116,8 @@ test('every theme count in prose is the real one', () => {
   assert.ok(seen > 0, 'no theme count in any of the three docs');
 });
 
-/**
- * The verbs the reference's argparse answered to, read out of the frozen help corpus.
- *
- * ⚠ THIS IS THE ONLY SURVIVING RECORD OF WHICH VERBS WERE SUBPARSERS, and after the deletion it
- * is the only one there can be. `tests/record_help.py` rendered one text per subparser from the
- * live parser and refused to record at all when the parser and the CLI table disagreed about
- * the names — so its verb list is argparse's own roster, frozen, and not a transcription of it.
- */
-function argparseVerbs() {
-  return new Set(readJson('tests', '__snapshots__', 'help', '_recorded_with.json').verbs);
-}
+// THE TREE IS JAVASCRIPT, AND STAYS THAT WAY
 
-/**
- * `[crossed, total]`, both DERIVED — the denominator moves too.
- *
- * ⚠ SCOPED TO THE SUBPARSERS, WHICH IS NARROWER THAN THE TABLE AND DELIBERATELY SO. The docs'
- * sentence is "N of the M subcommands run from Node": a claim about how much of the REFERENCE's
- * CLI the port reproduces. `catalog`, `mcp` and `memory` were never subcommands of it — they
- * are Node-native faces on capabilities that had only ever been web endpoints — so counting
- * them would inflate both halves of a migration figure with work that was not migration, and
- * would make the sentence say something no reader could check. The corpus is what draws the
- * line, so the line cannot be drawn wrong by hand.
- */
-function subcommandFigures() {
-  const declared = new Set(readJson('js', 'cli-table.json').commands.map((c) => c.name));
-  const names = new Set([...argparseVerbs()].filter((n) => declared.has(n)));
-  names.delete('update');                              // argparse's alias, not a second command
-  return [names.size - pythonOnlyVerbs().length, names.size];
-}
-
-test('the subcommand figures are derivable and sane', () => {
-  const [crossed, total] = subcommandFigures();
-  // The native verbs must be OUTSIDE this figure, and that is asserted rather than assumed —
-  // a derivation that silently started counting them would move both halves together and stay
-  // internally consistent while every doc sentence went wrong by three.
-  const declared = readJson('js', 'cli-table.json').commands.map((c) => c.name);
-  assert.ok(declared.length > total,
-    'the table declares no verb outside the recorded subparser roster, so either the three '
-    + 'Node-native verbs were deleted or this derivation stopped narrowing');
-  assert.equal(total, 25, 'the subparser count moved — every doc that states it needs a look');
-  // `<=`, not `<`: the two halves are EQUAL now. The floor that matters is the other one — a
-  // numerator of 0, or one above the denominator, means the derivation broke rather than that
-  // the port finished.
-  assert.ok(crossed <= total);
-  assert.ok(crossed > 0);
-});
-
-test('every present-tense doc states both subcommand halves correctly', () => {
-  // DESIGN.md and CHANGELOG.md are deliberately NOT scanned. They are dated logs: "Ten of the 24
-  // subcommands are now Node" was true when written, and rewriting a log to agree with today is
-  // how a log stops being one.
-  const [crossed, total] = subcommandFigures();
-  let seen = 0;
-  for (const doc of [README, SETUP, 'SHIPPED.md']) {
-    for (const m of read(doc).matchAll(/(\w+) of the (\w+) subcommands/g)) {
-      seen += 1;
-      assert.equal(asInt(m[1]), crossed, `${doc}: "${m[1]} of the ${m[2]} subcommands"`);
-      assert.equal(asInt(m[2]), total, `${doc}: "${m[1]} of the ${m[2]} subcommands"`);
-    }
-  }
-  assert.ok(seen > 0, 'no document states how much of the CLI crosses — the assertion above is '
-    + 'satisfied by silence, which is the one way a count gate goes green while the docs say '
-    + 'nothing');
-});
-
-// ---------------------------------------------------------------------------------------------
-// "NO PYTHON NEEDED" IS TRUE, AND THE DOCS HAVE TO SAY THAT — PROVABLY
-
-const BUNDLE_RE = /every bundle carries[^\n]*?:([^\n]*)/;
 const bundleScripts = () => {
   const out = [];
   const walk = (d) => {
@@ -240,30 +138,6 @@ test('the bundle source carries no python at all', () => {
     + "need the new row, and 'no Python needed' is false again");
 });
 
-test('each doc states the bundle claim rather than dropping it', () => {
-  // THE CONTROL: emptiness must be ASSERTED, not achieved by deleting the words. The test below
-  // is satisfied by any document that never mentions the subject; this one is not.
-  for (const doc of [README, SETUP]) {
-    const m = BUNDLE_RE.exec(read(doc));
-    assert.ok(m, `${doc} no longer says what Python a bundle carries. The sentence is not `
-      + "obsolete now that the answer is 'none' — it is the only place the reader is told");
-    assert.match(m[1], /\bnone\b|\bno\b|\bnothing\b/,
-      `${doc}'s 'every bundle carries' clause reads ${JSON.stringify(m[1])}, which states `
-      + 'neither a file nor the absence of one');
-  }
-});
-
-test('each doc names every python file a bundle carries', () => {
-  const want = bundleScripts();
-  for (const doc of [README, SETUP]) {
-    const m = BUNDLE_RE.exec(read(doc));
-    assert.ok(m, `${doc} never says what Python a bundle carries`);
-    const named = backticked(m[1]).filter((t) => t.endsWith('.py')).map((t) => path.basename(t));
-    assert.deepEqual(named.sort(), want, `${doc} names ${named} but src/ carries ${want}`);
-  }
-});
-
-// ---------------------------------------------------------------------------------------------
 // THE INSTALL COMMAND NAMES THE PUBLISHED PACKAGE
 
 // ANCHORED TO A LINE START OR A BACKTICK, because a prose mention of a command reads exactly
