@@ -49,7 +49,8 @@ as a per-host install at project or global scope.
 | `catalog.mjs` | `geneseed catalog` — prints the shipped roster. Classifies nothing itself |
 | `themes.mjs` | Maintainer-only `--sync-themes`: inserts `_TEMPLATE.json`'s missing keys into the committed themes |
 
-**Before editing:** `render.mjs` writes nothing and its output is byte-frozen. `emit-claude.mjs`'s
+**Before editing:** `render.mjs` writes nothing, and its output is what every emit target
+serialises — a change there is visible in all 14 themes at once. `emit-claude.mjs`'s
 wire half edits files the **user** co-owns — get its prior-claim pruning wrong and you delete
 someone's own settings keys. `emit-opencode.mjs` is shaped as a twin on purpose: a change that
 lands on one host and not the other is the historical defect here, so edit both or neither.
@@ -104,8 +105,9 @@ swallows its own errors on purpose: a registry hiccup must never fail a build.
 
 ## `js/lib/` — the primitives
 
-Zero dependencies. **Every function here exists because the Node default is wrong for this tool**,
-and the exact bytes are frozen by recordings that can never be re-made.
+Zero dependencies. **Every function here exists because the Node default is wrong for this tool** —
+each one's docblock says which default, and why. Change a rule and you change what the tool writes
+into files users have committed, so change the test that states it in the same commit.
 
 | module | owns |
 |---|---|
@@ -189,7 +191,7 @@ exported sets are deliberately EMPTY and must stay declared: each is half of a p
 | a hook verb | `js/hosts/hooks.mjs` | `claudeHookGroups` in `settings.mjs`, `VERBS` in `bin/geneseed-hook.mjs`. Keep the import graph tiny |
 | a console doc page | `docs/web/<id>.md` — the stem is the id | `docs/extending.md` §4c. Only `kind: "concept"` gets `{N_*}` substitution |
 | an OpenCode plugin | `adapters/opencode/plugins/geneseed-<name>.js` | `docs/extending.md` §4a — the `geneseed-` prefix is mechanically load-bearing |
-| to change a `js/lib/` primitive | `tests/fixtures/pure_probe.mjs` **first** | check whether it is one of the 63 recorded in `tests/__snapshots__/primitives/` — there is no re-bless |
+| to change a `js/lib/` primitive | `tests/fixtures/pure_probe.mjs` **first** | the docblock says which Node default it deliberately departs from — change that sentence too, or the next reader restores the default |
 
 ---
 

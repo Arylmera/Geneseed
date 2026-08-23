@@ -124,16 +124,14 @@ jobs:
           # someone later adds a count gate to.
           node --test --test-reporter=tap tests/unit/package_manifest.test.mjs
 
-  # THE SELF-COMPARISONS — what is left of the cell harnesses once the recorded corpora are
-  # gone. The emit, cli and web recordings were retired in the same change that added Law
-  # XXXVIII: they were produced by an implementation that no longer exists, could never be
-  # re-recorded, and so reddened on every deliberate content change while saying nothing about
-  # a defect that happened to be stable. `docs/limits.md` carries the retirement and the
-  # measurement that licensed it — all five mutations whose only declared gate was a corpus
-  # replay are killed by `tests/unit/` alone.
+  # THE SELF-COMPARISONS. Both modes below run the generator twice and compare the two runs
+  # against each other, so they assert a property — re-emitting changes nothing, and the prune
+  # really removes what the previous configuration left — rather than an answer. That is what
+  # makes them survive any deliberate change to the content: there is no stored expectation for
+  # a reworded sentence to contradict.
   #
-  # WHAT SURVIVES NEEDS NO CORPUS: both modes below compare a run against another run of the
-  # same implementation, so they keep working however the content changes.
+  # These are the only two gates in the repo that need a full render of every configuration, and
+  # they are the reason a two-byte-per-rebuild growth bug cannot ship unnoticed.
   #
   # UBUNTU **AND** WINDOWS. Every Windows defect this project has shipped — CRLF/LF, 8.3 short
   # paths, console flashes, cp1252 — was invisible to a Linux-only job, and a platform that has

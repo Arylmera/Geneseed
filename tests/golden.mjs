@@ -1,22 +1,23 @@
-// THE EMIT CORPUS, REPLAYED — with no Python involved.
+// THE EMIT MATRIX — every configuration this generator can be asked for, exercised.
 //
-// CI's `cells` job used to replay this corpus through the reference's own golden runner. That
-// step survives P4 in spirit and dies in fact, because it was a Python program. This is the same
-// replay, driven from Node, reading the same recorded bytes and the same exported matrix.
+// WHAT THE THREE MODES PROVE, and they are self-comparisons: nothing here is measured against a
+// stored answer.
 //
-// WHAT IT CANNOT DO, deliberately: `--record` (the oracle is gone, and a corpus re-blessed from
-// the port proves determinism rather than regression) and `--ref` (a comparison needs a second
-// implementation). What it does do is the three gates that still mean something with one
-// runtime: replay the recorded corpus, re-emit into the same tree and require the bytes to be
-// identical, and emit configuration A then B and require the result to equal a fresh B.
+//   * default — every cell RUNS. 261 configurations render without crashing, which is the
+//     cheapest thing worth knowing after any change to the emit path and the only thing a
+//     matrix this wide can say quickly.
+//   * `--idempotent` — emit twice into the same tree and require the second to change nothing.
+//     A generator that grows a file by two bytes on every rebuild is invisible to a single emit.
+//   * `--deletion` — emit configuration A, then B, and require the result to equal a fresh B.
+//     This is the prune phase: what A left behind must be gone, not merely overwritten.
 //
-// A SEPARATE SCRIPT RATHER THAN A `*.test.mjs`, because 259 cells is minutes of wall clock and
+// A SEPARATE SCRIPT RATHER THAN A `*.test.mjs`, because 261 cells is minutes of wall clock and
 // `node --test "tests/**/*.test.mjs"` runs on every push on two operating systems. The pure
-// halves — the normaliser, the destamp, the corpus stamps — are gated in `tests/unit/` where
-// they cost nothing. This is what the cells job runs.
+// halves — the normaliser, the flag parsing — are gated in `tests/unit/`, where they cost
+// nothing.
 //
 // USAGE:
-//   node tests/golden.mjs --against tests/__snapshots__/emit
+//   node tests/golden.mjs
 //   node tests/golden.mjs --idempotent
 //   node tests/golden.mjs --deletion
 //   ... --gen "node bin/build-driver.mjs" --only neutral/claude --jobs 8 --limit 5
@@ -26,11 +27,7 @@ import path from 'node:path';
 
 import { fileURLToPath } from 'node:url';
 
-import {
-  PLATFORM_CORPUS, ROOT, VERBATIM_CELLS, cellId, corpusNormalise, dropUncompared, orphanCheck,
-  runCell,
-} from './helpers/golden.mjs';
-import * as snapshotIo from './helpers/snapshot_io.mjs';
+import { VERBATIM_CELLS, cellId, runCell } from './helpers/golden.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MATRIX = path.join(HERE, 'helpers', 'matrix');
@@ -55,8 +52,7 @@ function parseArgs(argv) {
   const a = { jobs: Math.min(8, os.cpus().length), limit: 0, gen: 'node bin/build-driver.mjs' };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
-    if (k === '--against') a.against = argv[++i];
-    else if (k === '--gen') a.gen = argv[++i];
+    if (k === '--gen') a.gen = argv[++i];
     else if (k === '--only') a.only = argv[++i];
     else if (k === '--emits') a.emits = argv[++i];
     else if (k === '--jobs') a.jobs = Number(argv[++i]);
@@ -69,23 +65,7 @@ function parseArgs(argv) {
   }
   if (!(a.jobs > 0)) throw new Error('--jobs must be positive');
   if (a.idempotent && a.deletion) throw new Error('--idempotent and --deletion are exclusive');
-  if (a.against && (a.idempotent || a.deletion)) {
-    throw new Error('--against replays the recorded corpus; --idempotent/--deletion compare a '
-      + 'run against another run of the same implementation and have no corpus');
-  }
   return a;
-}
-
-// The narrowing reason, for `orphanCheck`. A corpus entry a NARROWED run did not consume proves
-// nothing, so the check is skipped — announced, never silent.
-function narrowingReason(a) {
-  const why = [];
-  if (a.only) why.push(`--only ${a.only}`);
-  if (a.emits) why.push(`--emits ${a.emits}`);
-  if (a.quick) why.push('--quick');
-  if (a.limit) why.push(`--limit ${a.limit}`);
-  if (a.shard) why.push(`--shard ${a.shard}`);
-  return why.length ? why.join(' + ') : null;
 }
 
 function selectCells(doc, a) {
@@ -111,36 +91,18 @@ function main(argv) {
   const cells = selectCells(doc, a);
   if (cells.length === 0) throw new Error('the selection is empty — nothing would be checked');
 
-  const against = a.against ? path.join(a.against, PLATFORM_CORPUS) : null;
-  if (against && !fs.existsSync(against)) {
-    throw new Error(`no recorded corpus at ${against} for this platform`);
-  }
-  const mode = against ? `against ${path.relative(ROOT, against)}`
-    : (a.idempotent ? 'idempotent' : (a.deletion ? 'deletion' : 'run only'));
+  const mode = a.idempotent ? 'idempotent' : (a.deletion ? 'deletion' : 'run only');
   console.log(`[golden] ${cells.length} cells, ${mode}, gen=${a.gen}`);
 
   const failures = [];
   let done = 0;
   for (const cell of cells) {
     const cid = cellId(cell);
-    const problems = against ? replay(gen, cell, cid, against)
-      : (a.idempotent ? idempotent(gen, cell)
-        : (a.deletion ? deletion(gen, cell) : justRun(gen, cell)));
+    const problems = a.idempotent ? idempotent(gen, cell)
+      : (a.deletion ? deletion(gen, cell) : justRun(gen, cell));
     if (problems.length) failures.push(`  ${cid}\n${problems.join('\n')}`);
     done += 1;
     if (done % 25 === 0) console.log(`[golden] ${done}/${cells.length}`);
-  }
-
-  if (against) {
-    const orph = orphanCheck(against, new Set(cells.map(cellId)), narrowingReason(a));
-    if (orph && orph.skipped) console.log(`[corpus] ${orph.skipped}`);
-    else if (orph) {
-      failures.push(`  CORPUS ORPHANS: ${orph.orphans.length} recorded snapshot(s) in `
-        + `${against} were not consumed by this run — the matrix has shrunk away from its own `
-        + `corpus, and the replay would otherwise pass over the gap:\n`
-        + orph.orphans.slice(0, 10).map((n) => `    ${n}`).join('\n')
-        + (orph.orphans.length > 10 ? `\n    ... and ${orph.orphans.length - 10} more` : ''));
-    }
   }
 
   if (failures.length) {
@@ -150,18 +112,6 @@ function main(argv) {
   }
   console.log(`[golden] ${cells.length} cells ... ok`);
   return 0;
-}
-
-function replay(gen, cell, cid, against) {
-  const snap = runCell(gen, cell);
-  if (typeof snap === 'string') return [`    RAN BADLY: ${snap}`];
-  const recorded = snapshotIo.read(against, cid);
-  if (recorded === null) {
-    return [`    NO RECORDED SNAPSHOT in ${against} — a cell that ran with nothing to compare `
-      + 'against is a hole, not a pass'];
-  }
-  // The version-carrying stub, dropped from both sides — see `dropUncompared`'s docblock.
-  return snapshotIo.compare(recorded, dropUncompared(recorded, corpusNormalise(snap)));
 }
 
 // THE STREAMS ARE ONLY COMPARABLE WHEN BOTH SIDES RAN THE SAME NUMBER OF TIMES. Emit two
@@ -235,7 +185,7 @@ function diffMaps(a, b, aName, bName) {
 
 // Kept exported so `tests/unit/golden_flags.test.mjs` can drive the argument layer without
 // spawning 259 emits — the same split the reference's own flag-wiring tests relied on.
-export { parseArgs, selectCells, narrowingReason, loadMatrix, VERBATIM_CELLS };
+export { parseArgs, selectCells, loadMatrix, VERBATIM_CELLS };
 
 if (import.meta.url === `file://${process.argv[1].split(path.sep).join('/')}`
   || process.argv[1] === fileURLToPath(import.meta.url)) {
