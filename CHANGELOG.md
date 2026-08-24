@@ -6,9 +6,48 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
-## [Unreleased]
+## [3.1.2] — 2026-08-24
+
+### Changed
+
+
+- **`js/` is now domain folders, not a flat drawer.** The tree splits into `build/`, `hosts/`,
+  `inspect/`, and `main/`, and the four largest modules split with it: `server.mjs` into
+  routes / handler / daemon / server, `emit.mjs` into common / stubs / version / bundle,
+  `doctor.mjs` into scan plus three check groups, and `fs.mjs` into fs / json / paths / text.
+  The Node generator driver is renamed to `bin/build-driver.mjs`; the `geneseed-build` bin name
+  is unchanged, so nothing on an installed harness has to move.
+
+  **No emitted byte moves.** The 261-cell corpus replays identical across all 14 themes, which
+  is the whole warrant for a reorganization this size — 151 files, 8502 insertions, 6481
+  deletions, and zero observable difference for anyone who installed 3.1.1.
+
+- **Docs point at the code that exists.** A module map and front door in `js/README.md`, with a
+  doctor arm that keeps them honest; 201 stale paths repointed in prose, the 35 split-module
+  pointers resolved, and 69 docblock claims corrected where the code had stopped supporting
+  what the comment promised. The vestigial `emit.mjs` is deleted.
+
+- **The Python-era `py` identifier prefix is retired**, and `js/ bin/ tests/ adapters/` are now
+  linted — the half of the tree that never was.
+
+
+- **Two of "the four things that are genuinely hard" are resolved rather than rewritten.**
+  `docs/extending.md` §5.2 — seven theme keys pinned byte-for-byte, so restyling a tagline was a
+  red gate — and §5.4 — *a snapshot red is a finding, not a step*. Theme text is free to edit,
+  and a red test is a step again. Editing a CLI verb's help text or flags is an ordinary edit.
+
+- **The standing rule is now "expected values are written out, not recorded"**: change the
+  expectation and the sentence that explains it in the same commit, and say why in the message.
+
+### Added
+
+
+- **A gate on how a runtime dependency may enter**: vendored under `js/vendor/<name>/` as tracked
+  source behind a relative import, never installed. Fixtures run from the OS temp root and cannot
+  resolve a bare specifier, and neither can a fresh `git clone`; devDependencies are unaffected.
 
 ### Removed
+
 
 - **The recorded corpora, and the notion of a corpus with them.** `tests/__snapshots__/` held
   2.6 MB of transcripts taken from the CPython reference before it was deleted, replayed by
@@ -34,46 +73,6 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **`golden.mjs --against`**, which could not have worked since the emit corpus was retired, and
   `orphanCheck`, `narrowingReason` and `tests/helpers/snapshot_io.mjs` with it. The three
   surviving modes are all self-comparisons.
-
-### Changed
-
-- **Two of "the four things that are genuinely hard" are resolved rather than rewritten.**
-  `docs/extending.md` §5.2 — seven theme keys pinned byte-for-byte, so restyling a tagline was a
-  red gate — and §5.4 — *a snapshot red is a finding, not a step*. Theme text is free to edit,
-  and a red test is a step again. Editing a CLI verb's help text or flags is an ordinary edit.
-
-- **The standing rule is now "expected values are written out, not recorded"**: change the
-  expectation and the sentence that explains it in the same commit, and say why in the message.
-
-
-## [3.1.2] — 2026-08-23
-
-### Changed
-
-- **`js/` is now domain folders, not a flat drawer.** The tree splits into `build/`, `hosts/`,
-  `inspect/`, and `main/`, and the four largest modules split with it: `server.mjs` into
-  routes / handler / daemon / server, `emit.mjs` into common / stubs / version / bundle,
-  `doctor.mjs` into scan plus three check groups, and `fs.mjs` into fs / json / paths / text.
-  The Node generator driver is renamed to `bin/build-driver.mjs`; the `geneseed-build` bin name
-  is unchanged, so nothing on an installed harness has to move.
-
-  **No emitted byte moves.** The 261-cell corpus replays identical across all 14 themes, which
-  is the whole warrant for a reorganization this size — 151 files, 8502 insertions, 6481
-  deletions, and zero observable difference for anyone who installed 3.1.1.
-
-- **Docs point at the code that exists.** A module map and front door in `js/README.md`, with a
-  doctor arm that keeps them honest; 201 stale paths repointed in prose, the 35 split-module
-  pointers resolved, and 69 docblock claims corrected where the code had stopped supporting
-  what the comment promised. The vestigial `emit.mjs` is deleted.
-
-- **The Python-era `py` identifier prefix is retired**, and `js/ bin/ tests/ adapters/` are now
-  linted — the half of the tree that never was.
-
-### Added
-
-- **A gate on how a runtime dependency may enter**: vendored under `js/vendor/<name>/` as tracked
-  source behind a relative import, never installed. Fixtures run from the OS temp root and cannot
-  resolve a bare specifier, and neither can a fresh `git clone`; devDependencies are unaffected.
 
 
 ## [3.1.1] — 2026-08-21
