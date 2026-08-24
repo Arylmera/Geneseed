@@ -137,12 +137,15 @@ streams the output of background jobs and keeps their history across reloads.
 ### 🎨 Setup
 
 - **Harness** (`#/harness`) — this machine's own install first (path, voice, footprint,
-  and when it was built), then the **Voice** gallery, then every detected install.
+  and when it was built), then the **Voice** reference, then every detected install.
   `#/harnesses` and `#/themes` both still resolve here, so old links and bookmarks keep
   working.
-  - The **Voice** card is the former Themes tab: every shipped voice with its tagline,
-    the deployed one pinned first and marked. **Apply voice** rebuilds the deployed
-    harness in that voice — structure identical, only the words and the accent shift.
+  - The **Voice** card is the former Themes tab, kept as a REFERENCE rather than a second
+    control: a collapsed row that opens to every shipped voice with its tagline, the
+    deployed one pinned first and marked. It is the one place you can read what a voice
+    sounds like — the per-install picker below is a list of bare names. Applying happens
+    there, per install, beside that install's own footprint, posture and mode; a gallery at
+    the top of the page could only ever act on one of them.
   - **Every install** lists each detected install (host × scope), one row each. An
     ACTIVE row carries per-row **Voice**, **Footprint**, **Posture** and **Mode**
     pickers plus **Apply**, an on/off switch, and remove; a host that is NOT installed

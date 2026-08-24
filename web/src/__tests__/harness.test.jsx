@@ -151,9 +151,8 @@ describe('Harness', () => {
     expect(within(screen.getByText('voice').closest('.kv')).getByText('imperial')).toBeTruthy()
   })
 
-  it('carries the retired Themes tab as the voice gallery, current pinned and disabled', async () => {
+  it('carries the retired Themes tab as a reference, closed and with nothing to apply', async () => {
     const onAction = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(
       <Harness
         onAction={onAction}
@@ -165,49 +164,31 @@ describe('Harness', () => {
         ]}
       />,
     )
-    // The tagline, quoted — unique to the gallery. The bare voice NAMES are not: they are
-    // also <option>s in the active row's voice picker below.
-    await waitFor(() => expect(screen.getByText('“for the Emperor”')).toBeTruthy())
-    // The deployed voice is pinned FIRST and cannot be re-applied to itself.
+    // Scoped, not `getByText('Voice')`: the install table below has a Voice COLUMN, and an
+    // unscoped match would resolve to whichever came first in the DOM.
+    await waitFor(() => expect(document.querySelector('.voice-ref')).toBeTruthy())
+    const details = document.querySelector('.voice-ref')
+    expect(within(details).getByText('Voice')).toBeTruthy()
+    // CLOSED BY DEFAULT. The install card above already states the deployed voice, so this
+    // is something you open when choosing — not a wall of prose on every visit.
+    expect(details.open).toBe(false)
+    expect(screen.getByText(/2 to choose from/)).toBeTruthy()
+
+    // ⚠ THE POINT OF THE CHANGE: the reference offers no way to act. Voice is picked per
+    // install in the table below, beside that install's own footprint, posture and mode —
+    // a gallery at the top of the page could only ever have acted on ONE of them, which is
+    // what made "Apply voice" here and "Apply" on a row two different things.
+    expect(screen.queryByRole('button', { name: /apply voice/i })).toBeNull()
+    expect(within(details).queryAllByRole('button')).toEqual([])
+
+    // Opened, it is what a bare <select> of names cannot be: the taglines, with the
+    // deployed voice marked and pinned first.
+    details.open = true
+    expect(screen.getByText('“for the Emperor”')).toBeTruthy()
     const rows = document.querySelectorAll('.voice-row')
     expect(rows[0].className).toContain('current')
     expect(within(rows[0]).getByText('neutral')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'current' }).disabled).toBe(true)
-    // "Apply voice" — deliberately not "Apply", which the table's active row owns for a
-    // different action on a different target.
-    fireEvent.click(screen.getByRole('button', { name: 'Apply voice' }))
-    // THE EMIT COMES FROM THE OVERVIEW AND MUST BE PRESENT. A build dispatched with
-    // `emit: undefined` re-emits against the default target instead of the install's own,
-    // and JSON.stringify drops the key so the server never sees that anything was missing.
-    expect(onAction).toHaveBeenCalledWith('build', {
-      theme: 'imperial',
-      emit: 'opencode-global',
-    })
-  })
-
-  it('re-themes an active install via the voice picker (the Apply button)', async () => {
-    const onAction = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-    vi.mocked(api.installs).mockResolvedValueOnce({
-      installs: [
-        {
-          id: 'opencode:global',
-          host: 'opencode',
-          scope: 'global',
-          path: 'C:/cfg',
-          state: 'active',
-          theme: 'neutral',
-        },
-      ],
-    })
-    render(<Harness onAction={onAction} themes={[{ name: 'neutral' }, { name: 'imperial' }]} />)
-    const select = await screen.findByLabelText('voice for opencode · global')
-    fireEvent.change(select, { target: { value: 'imperial' } }) // Apply enables once the voice differs
-    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
-    expect(onAction).toHaveBeenCalledWith(
-      'install',
-      expect.objectContaining({ host: 'opencode', theme: 'imperial' }),
-    )
+    expect(onAction).not.toHaveBeenCalled()
   })
 
   it('renders switch toggles for the active install and its nested MCP servers', async () => {
@@ -349,8 +330,9 @@ describe('Harness', () => {
       <Harness onAction={() => {}} themes={[{ name: 'neutral', tagline: 'plain', blurb: '' }]} />,
     )
     await waitFor(() => expect(screen.getByText('Every install')).toBeTruthy())
-    expect(screen.queryByRole('button', { name: 'Apply voice' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'current' })).toBeNull()
+    // No overview means no deployed voice to mark — and a reference that marks nothing as
+    // current, or marks the wrong row, is worse than one that appears a moment later.
+    expect(document.querySelector('.voice-ref')).toBeNull()
   })
 
   it('renders the Excluded folders card when a global install exists', async () => {

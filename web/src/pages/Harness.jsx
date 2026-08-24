@@ -270,53 +270,47 @@ function ThisInstall({ overview }) {
 //
 // It reads the `themes` App already fetched for the voice popover instead of fetching its
 // own list: the old page's `api.themes()` call existed because it was mounted standalone.
-function VoiceGallery({ themes, overview, onAction }) {
-  // ⚠ GATED ON THE OVERVIEW, NOT JUST ON THE THEME LIST. `useOverview` fills `themes` and
-  // `overview` from two independent effects with two independent setState calls, so the
-  // theme list can arrive first. Rendering then would paint every voice — the deployed one
-  // included — as applicable, because `current` is still undefined, and applying one would
-  // POST a build whose `emit` is undefined and therefore dropped by JSON.stringify: a
-  // re-emit against the default target rather than the install's own. The page this
-  // replaced fetched `current.emit` itself and showed a spinner until it had it.
+// The voice REFERENCE — what each voice sounds like, and nothing you can act on.
+//
+// ⚠ IT USED TO CARRY AN "APPLY VOICE" BUTTON PER ROW, AND THAT WAS A SECOND DOOR ONTO A
+// CHOICE THAT ALREADY HAD ONE. Every install in the table below picks its own voice beside
+// its own footprint, posture and mode; a gallery at the top of the page could only ever act
+// on ONE install (the deployed one), so the same word meant "for this machine" here and
+// "for this row" a scroll further down. What the gallery is genuinely good for is the thing
+// a <select> of fourteen bare names cannot do: tell you what a voice actually sounds like
+// before you pick it. So it keeps the taglines and gives up the buttons.
+//
+// A <details>, not a state hook: this is disclosure, and the platform element is keyboard
+// operable, findable by in-page search when open, and needs no state to go wrong. Closed by
+// default — the install card above already states which voice is deployed, so the list is
+// something you open when choosing, not something you read every visit.
+function VoiceGallery({ themes, overview }) {
+  // Gated on the overview as well as the theme list: `useOverview` fills the two from
+  // independent effects, and a list that marked nothing as current — or marked the wrong
+  // row — is worse than one that appears a moment later.
   if (!themes.length || !overview) return null
   const current = overview.theme
-  const emit = overview.emit
-  // Current first, then source order — a gallery whose current row is somewhere in the middle
+  // Current first, then source order — a list whose current row is somewhere in the middle
   // makes you hunt for the one fact you came to read.
   const rows = [...themes].sort((a, b) => (a.name === current ? -1 : b.name === current ? 1 : 0))
-  const apply = (name) => {
-    if (
-      window.confirm(
-        `Rebuild the deployed harness with the "${name}" voice?\nThe rebuild runs in the console.`,
-      )
-    )
-      onAction?.('build', { theme: name, emit })
-  }
   return (
-    <div className="card pad-lg mb-16">
-      <div className="card-head">
-        <h3>Voice</h3>
-        <span className="tick right">
-          applying one rebuilds the install — structure stays identical
+    <details className="card voice-ref mb-16">
+      <summary>
+        <span className="vr-title">Voice</span>
+        <span className="vr-current">{current}</span>
+        <span className="tick vr-hint">
+          {themes.length} to choose from — set it per install below
         </span>
-      </div>
-      {rows.map((t) => {
-        const isCur = t.name === current
-        return (
-          <div className={`voice-row${isCur ? ' current' : ''}`} key={t.name}>
+      </summary>
+      <div className="vr-list">
+        {rows.map((t) => (
+          <div className={`voice-row${t.name === current ? ' current' : ''}`} key={t.name}>
             <span className="vr-name">{t.name}</span>
             <span className="vr-desc">{t.tagline ? `“${t.tagline}”` : t.blurb}</span>
-            {/* "Apply VOICE", not "Apply". The table below has its own Apply on every active
-                row, and that one commits four choices to ONE install; this one re-emits the
-                deployed harness in a different voice. Two buttons a scroll apart reading
-                the same word, meaning different things, is how you click the wrong one. */}
-            <button className="btn ghost sm" disabled={isCur} onClick={() => apply(t.name)}>
-              {isCur ? 'current' : 'Apply voice'}
-            </button>
           </div>
-        )
-      })}
-    </div>
+        ))}
+      </div>
+    </details>
   )
 }
 
@@ -599,7 +593,7 @@ export default function Harnesses({
       </div>
 
       <ThisInstall overview={overview} />
-      <VoiceGallery themes={themes} overview={overview} onAction={onAction} />
+      <VoiceGallery themes={themes} overview={overview} />
 
       <div className="card pad-lg mb-16">
         <div className="card-head">
