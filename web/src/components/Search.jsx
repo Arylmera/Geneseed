@@ -42,10 +42,14 @@ export default function Search({ value, onChange }) {
   }, [focused])
 
   const open = focused && !!value.trim()
+  // HOISTED OUT OF THE KEY HANDLER, because the INPUT needs it too. `aria-activedescendant`
+  // has to name a row that exists or name nothing at all, so the input has to know how many
+  // there are — and the handler was already recomputing this on every keystroke.
+  const results = open && index ? filterAndRank(index, value) : []
+  const activeId = active < results.length ? `spot-opt-${active}` : undefined
 
   const onKeyDown = (e) => {
     if (!open) return
-    const results = filterAndRank(index, value)
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setActive((a) => Math.min(a + 1, Math.max(results.length - 1, 0)))
@@ -73,8 +77,22 @@ export default function Search({ value, onChange }) {
   return (
     <div className="tb-search" ref={wrapRef}>
       <Icon name="search" className="mag glyph" />
+      {/* ⚠ THE COMBOBOX WIRING, AND IT WAS MISSING ENTIRELY. The dropdown was already a
+          correct `listbox` of `option`s with `aria-selected` — but nothing connected it to
+          this input, so the two halves were orphaned: no announcement that results had
+          appeared, and arrow keys moved a highlight that reported nothing. Focus never
+          leaves the input in this pattern, so `aria-activedescendant` is the ONLY channel
+          that can say which row is current; without it the selection is visual only.
+          `aria-controls` is conditional because pointing at an id that is not in the
+          document is its own defect. */}
       <input
         ref={ref}
+        role="combobox"
+        aria-label="Search the harness"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={open ? 'spotlight-list' : undefined}
+        aria-activedescendant={activeId}
         value={value}
         onChange={(e) => {
           onChange(e.target.value)
@@ -93,6 +111,13 @@ export default function Search({ value, onChange }) {
           field is noise, and the chord is the one you reach for when `/` is being typed
           into something. */}
       <span className="kbd">/</span>
+      {/* `aria-expanded` tells a screen reader a list appeared; it does not say whether
+          anything is IN it. Typing narrows the results silently otherwise — the one thing a
+          sighted user gets for free from watching the list shrink. Polite, so it queues
+          behind whatever the row announcement is saying rather than interrupting it. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {!open ? '' : results.length ? `${results.length} results` : 'no matches'}
+      </span>
       {open && (
         <Spotlight
           query={value}
