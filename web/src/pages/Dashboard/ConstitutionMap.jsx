@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../../api/index.js'
 import { go } from '../../lib/router.js'
-import { invariantColor, packColor } from '../../lib/lawCats.js'
+import { packColor } from '../../lib/lawCats.js'
 import { rulesInForce } from '../../lib/format.js'
 
 // THE CONSTITUTION, DRAWN AS WHAT IT IS: a hub of rules in force, its three tiers around
@@ -15,33 +15,55 @@ import { rulesInForce } from '../../lib/format.js'
 // satellites, four governed nodes — whose whole meaning is in the positions. A layout
 // algorithm would move them, and the picture would stop saying anything.
 //
-// Coordinates come from the approved prototype's 940×330 viewBox. The satellite mini-nodes
-// are the one thing the prototype hardcoded and this cannot: it drew nine invariants and
-// four packs because that is what shipped that week. Both are laid on the SAME ELLIPTICAL
-// ARCS the prototype's hand-placed nodes sat on (fitted from its own coordinates), so a
-// harness with seven invariants or six packs draws the same picture, spaced to fit.
-const HUB = { x: 330, y: 165, r: 76 }
-const ONTOLOGY = { x: 126, y: 95, r: 46 }
-const INVARIANTS = { x: 560, y: 78, r: 42 }
-const DOCTRINES = { x: 560, y: 252, r: 42 }
+// ⚠ EVERY CIRCLE IS SIZED FROM ITS OWN TEXT, and the first version was not. It carried the
+// prototype's hand-drawn radii, which were fitted to the prototype's strings in the
+// prototype's font — so live data in a mono skin overflowed them: "9 · never broken" ran
+// out past the Invariants rim on both sides, and the pack names were being truncated to
+// four characters (`craf`, `rigo`, `proc`) to fit a circle that had been guessed at. The
+// centres are still the approved composition; only the radii are computed.
 
-// The arcs the mini-nodes ride, in degrees, fitted from the prototype's placements:
-// invariants sweep left-to-right over their node, packs sweep down its left flank.
-const INV_ARC = { rx: 118, ry: 68, from: -134, to: -12 }
-const PACK_ARC = { rx: 110, ry: 62, from: 216, to: 109 }
+// Advance width per character as a fraction of the font size. Sized for the WIDEST case the
+// console can produce: four skins (Matrix, Cobalt, Operator, Neon) set --font-mono for
+// everything, and JetBrains/Space Mono advance at ~0.6em. A proportional skin then sits
+// comfortably inside its circle rather than being clipped — this estimate's error only ever
+// makes a circle roomier, which is the safe direction to be wrong in.
+const ADVANCE = 0.62
+const textWidth = (s, size) => String(s).length * size * ADVANCE
 
-// Evenly spaced points along an arc. A single node sits at the midpoint rather than at the
-// start — one invariant hanging off the left end would read as the first of a row that
-// failed to render.
-function arcPoints(node, arc, n) {
-  if (n <= 0) return []
-  const out = []
-  for (let i = 0; i < n; i += 1) {
-    const t = n === 1 ? (arc.from + arc.to) / 2 : arc.from + ((arc.to - arc.from) * i) / (n - 1)
-    const rad = (t * Math.PI) / 180
-    out.push({ x: node.x + arc.rx * Math.cos(rad), y: node.y + arc.ry * Math.sin(rad) })
+// The radius that contains a stack of centred lines. NOT simply "widest line / 2 + pad":
+// a line sitting off-centre is limited by the chord at its own height, not by the diameter,
+// so each line's far CORNER is what has to fit. `dy` is the baseline offset from the centre;
+// the 0.75/0.25 split approximates a glyph box around that baseline.
+function fitRadius(lines, pad) {
+  let r = 0
+  for (const l of lines) {
+    if (l.t === '' || l.t == null) continue
+    const hw = textWidth(l.t, l.size) / 2
+    r = Math.max(r, Math.hypot(hw, l.dy - l.size * 0.75), Math.hypot(hw, l.dy + l.size * 0.25))
   }
-  return out
+  return Math.ceil(r + pad)
+}
+
+// A curved edge from the RIM of `a` to the rim of `b`. Rim-to-rim rather than centre-to-
+// centre because the hub's fill is translucent: a spoke drawn from the centre showed
+// through it, so three lines crossed inside the Constitution circle. Recomputed from
+// whatever radius the text produced, so it cannot come loose when a count gains a digit.
+function edgePath(a, b, bow = 0) {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const d = Math.hypot(dx, dy) || 1
+  const ux = dx / d
+  const uy = dy / d
+  const sx = a.x + ux * a.r
+  const sy = a.y + uy * a.r
+  const ex = b.x - ux * b.r
+  const ey = b.y - uy * b.r
+  const off = bow * d
+  const n = (v) => v.toFixed(1)
+  return (
+    `M${n(sx)} ${n(sy)} C${n(sx + ux * d * 0.3 - uy * off)} ${n(sy + uy * d * 0.3 + ux * off)} ` +
+    `${n(ex - ux * d * 0.3 - uy * off)} ${n(ey - uy * d * 0.3 + ux * off)} ${n(ex)} ${n(ey)}`
+  )
 }
 
 // A tappable node: the group carries the click, and a focusable rect-free <g> is not
@@ -66,26 +88,11 @@ function Node({ hash, label, children }) {
   )
 }
 
-// One of the four things the constitution governs, on the right-hand column.
-function Governed({ x, y, r, label, count, hash }) {
-  return (
-    <Node hash={hash} label={`${label}: ${count}`}>
-      <circle cx={x} cy={y} r={r} className="cm-gov-disc" />
-      <text x={x} y={y - 2} textAnchor="middle" className="cm-gov-name">
-        {label}
-      </text>
-      <text x={x} y={y + 10} textAnchor="middle" className="cm-gov-num">
-        {count}
-      </text>
-    </Node>
-  )
-}
-
 export default function ConstitutionMap({ overview }) {
-  // The catalogue is what carries the per-rule class and the per-pack roster — the overview
-  // deliberately does not (api.mjs says why: one source for the roster, and it is this one).
-  // Fetched here so the map is the only thing that pays for it, and degrading to `null` just
-  // means the satellites draw without their mini-nodes.
+  // The catalogue is what carries the per-pack roster — the overview deliberately does not
+  // (api.mjs says why: one source for the roster, and it is this one). Fetched here so the
+  // map is the only thing that pays for it, and degrading to `null` just means the doctrine
+  // satellite draws without its pack nodes.
   const [laws, setLaws] = useState(null)
   useEffect(() => {
     let alive = true
@@ -100,158 +107,234 @@ export default function ConstitutionMap({ overview }) {
 
   const counts = overview?.counts || {}
   const inForce = rulesInForce(counts)
-  const invariants = (laws || []).filter((it) => it.tier === 'invariant')
   // Packs in catalogue order, each with the count of its rules THIS INSTALL switched on —
-  // the same per-rule `active` the overview's `doctrines.rules` totals, so the mini-nodes
+  // the same per-rule `active` the overview's `doctrines.rules` totals, so the pack nodes
   // and the satellite's own number can never disagree.
   const packs = []
   for (const it of (laws || []).filter((x) => x.tier === 'doctrine')) {
     let p = packs.find((q) => q.id === it.pack)
-    if (!p) packs.push((p = { id: it.pack, title: it.packTitle || it.pack, on: 0 }))
+    if (!p) packs.push((p = { id: it.pack, on: 0 }))
     if (it.active !== false) p.on += 1
   }
-  const invPts = arcPoints(INVARIANTS, INV_ARC, invariants.length)
-  const packPts = arcPoints(DOCTRINES, PACK_ARC, packs.length)
+
+  // ---- the composition: prototype centres, computed radii ----
+  const footNote = overview?.footprint === 'lean' ? 'lean — first line only' : 'full text inlined'
+  const hub = {
+    x: 330,
+    y: 165,
+    r: fitRadius(
+      [
+        { t: 'Constitution', size: 17, dy: -12 },
+        { t: `${inForce} rules in force`, size: 10, dy: 8 },
+        { t: footNote, size: 8.5, dy: 24 },
+      ],
+      12,
+    ),
+  }
+  const ontology = {
+    x: 126,
+    y: 95,
+    r: fitRadius(
+      [
+        { t: 'Ontology', size: 12.5, dy: -7 },
+        { t: `${counts.ontology ?? 0} sections`, size: 10, dy: 10 },
+      ],
+      11,
+    ),
+  }
+  // ⚠ THE QUALIFIER MOVED OUT OF THE CIRCLE. "9 · never broken" and "23 · chosen at build"
+  // were the two strings that overflowed, and sizing a circle to hold them made both
+  // satellites nearly as large as the hub — which inverts the composition, since the hub is
+  // supposed to dominate. The NUMBER is the fact worth reading at a glance; the phrase is a
+  // caption, and it reads perfectly well underneath.
+  const invariants = {
+    x: 560,
+    y: 78,
+    r: fitRadius(
+      [
+        { t: 'Invariants', size: 12.5, dy: -6 },
+        { t: `${counts.laws ?? 0}`, size: 13, dy: 12 },
+      ],
+      11,
+    ),
+  }
+  const doctrines = {
+    x: 560,
+    y: 252,
+    r: fitRadius(
+      [
+        { t: 'Doctrines', size: 12.5, dy: -6 },
+        { t: `${counts.doctrines?.rules ?? 0}`, size: 13, dy: 12 },
+      ],
+      11,
+    ),
+  }
+  const governedNode = (x, y, label, count) => ({
+    x,
+    y,
+    label,
+    count,
+    r: fitRadius(
+      [
+        { t: label, size: 10.5, dy: -2 },
+        { t: `${count}`, size: 9, dy: 10 },
+      ],
+      9,
+    ),
+  })
+  const governed = [
+    { ...governedNode(812, 52, 'Skills', counts.skills ?? 0), hash: '#/skills', from: invariants },
+    { ...governedNode(820, 126, 'Agents', counts.agents ?? 0), hash: '#/agents', from: invariants },
+    {
+      ...governedNode(816, 232, 'Memory', counts.memory ?? 0),
+      hash: '#/section/memory',
+      from: doctrines,
+    },
+    {
+      ...governedNode(812, 300, 'Wiki', counts.wiki ?? 0),
+      hash: '#/section/wiki',
+      from: doctrines,
+    },
+  ]
+  // The pack nodes ride an ellipse on the doctrine satellite's free flank, each sized to its
+  // own name — so `ops` is a small disc and `process` a larger one, and neither is abbreviated.
+  const PACK_ARC = { rx: 122, ry: 68, from: 212, to: 112 }
+  const packNodes = packs.map((p, i) => {
+    const t =
+      packs.length === 1
+        ? (PACK_ARC.from + PACK_ARC.to) / 2
+        : PACK_ARC.from + ((PACK_ARC.to - PACK_ARC.from) * i) / (packs.length - 1)
+    const rad = (t * Math.PI) / 180
+    return {
+      ...p,
+      x: doctrines.x + PACK_ARC.rx * Math.cos(rad),
+      y: doctrines.y + PACK_ARC.ry * Math.sin(rad),
+      r: fitRadius(
+        [
+          { t: p.id, size: 7.5, dy: -2 },
+          { t: `${p.on}`, size: 7.5, dy: 8 },
+        ],
+        4,
+      ),
+    }
+  })
 
   // role="group", NOT role="img". An `img` role makes the whole subtree presentational,
   // which prunes every one of the focusable role="button" nodes below out of the
-  // accessibility tree — leaving a screen-reader user with nine-plus silent tab stops
-  // inside a graphic that announces one alt text. `group` keeps the name AND the children.
+  // accessibility tree — leaving a screen-reader user with silent tab stops inside a
+  // graphic that announces one alt text. `group` keeps the name AND the children.
   return (
-    <svg className="cmap" viewBox="0 0 940 330" role="group" aria-label="The constitution map">
-      {/* Hub → satellite: the constitution IS these three tiers. Solid. */}
-      <path d="M330 165 C260 140 220 125 158 105" className="cm-edge" />
-      <path d="M330 165 C420 105 460 90 520 78" className="cm-edge" />
-      <path d="M330 165 C420 225 460 240 520 252" className="cm-edge" />
-      {/* Satellite → governed: the rules REACH these, which is a weaker relation than
-          being made of them. Dashed, and labelled once at the top right. */}
-      <path d="M598 78 C680 62 720 55 780 50" className="cm-edge-gov" />
-      <path d="M598 78 C690 95 730 105 786 122" className="cm-edge-gov" />
-      <path d="M598 252 C680 250 724 245 782 240" className="cm-edge-gov" />
-      <path d="M598 252 C680 272 722 282 778 296" className="cm-edge-gov" />
+    <svg className="cmap" viewBox="0 0 940 350" role="group" aria-label="The constitution map">
+      {/* Hub → satellite: the constitution IS these three tiers. Solid, and bowed so the
+          three spokes fan apart instead of leaving the hub as one thick line. */}
+      <path d={edgePath(hub, ontology, 0.05)} className="cm-edge" />
+      <path d={edgePath(hub, invariants, -0.07)} className="cm-edge" />
+      <path d={edgePath(hub, doctrines, 0.07)} className="cm-edge" />
+      {/* Satellite → governed: the rules REACH these, which is a weaker relation than being
+          made of them. Dashed, and labelled once at the top right. */}
+      {governed.map((g) => (
+        <path key={`e-${g.label}`} d={edgePath(g.from, g, 0.03)} className="cm-edge-gov" />
+      ))}
 
       <Node hash="#/laws" label={`Constitution: ${inForce} rules in force`}>
-        <circle cx={HUB.x} cy={HUB.y} r={HUB.r} className="cm-hub-disc" />
-        <text x={HUB.x} y={HUB.y - 12} textAnchor="middle" className="cm-hub-name">
+        <circle cx={hub.x} cy={hub.y} r={hub.r} className="cm-hub-disc" />
+        <text x={hub.x} y={hub.y - 12} textAnchor="middle" className="cm-hub-name">
           Constitution
         </text>
-        <text x={HUB.x} y={HUB.y + 8} textAnchor="middle" className="cm-hub-num">
+        <text x={hub.x} y={hub.y + 8} textAnchor="middle" className="cm-hub-num">
           {inForce} rules in force
         </text>
-        <text x={HUB.x} y={HUB.y + 24} textAnchor="middle" className="cm-note">
-          {overview?.footprint === 'lean' ? 'lean — first line only' : 'full text inlined'}
+        <text x={hub.x} y={hub.y + 24} textAnchor="middle" className="cm-note">
+          {footNote}
         </text>
       </Node>
 
       <Node hash="#/laws" label={`Ontology: ${counts.ontology ?? 0} sections`}>
-        <circle cx={ONTOLOGY.x} cy={ONTOLOGY.y} r={ONTOLOGY.r} className="cm-sat-disc" />
-        <text x={ONTOLOGY.x} y={ONTOLOGY.y - 7} textAnchor="middle" className="cm-sat-name">
+        <circle cx={ontology.x} cy={ontology.y} r={ontology.r} className="cm-sat-disc" />
+        <text x={ontology.x} y={ontology.y - 7} textAnchor="middle" className="cm-sat-name">
           Ontology
         </text>
-        <text x={ONTOLOGY.x} y={ONTOLOGY.y + 10} textAnchor="middle" className="cm-sat-num">
+        <text x={ontology.x} y={ontology.y + 10} textAnchor="middle" className="cm-sat-num">
           {counts.ontology ?? 0} sections
         </text>
       </Node>
-      <text x={ONTOLOGY.x} y={162} textAnchor="middle" className="cm-note">
+      <text x={ontology.x} y={ontology.y + ontology.r + 16} textAnchor="middle" className="cm-note">
         how it thinks, not a rule
       </text>
 
       <Node hash="#/laws" label={`Invariants: ${counts.laws ?? 0}, never broken`}>
-        <circle cx={INVARIANTS.x} cy={INVARIANTS.y} r={INVARIANTS.r} className="cm-sat-disc" />
-        <text x={INVARIANTS.x} y={INVARIANTS.y - 5} textAnchor="middle" className="cm-sat-name">
+        <circle cx={invariants.x} cy={invariants.y} r={invariants.r} className="cm-sat-disc" />
+        <text x={invariants.x} y={invariants.y - 6} textAnchor="middle" className="cm-sat-name">
           Invariants
         </text>
-        <text x={INVARIANTS.x} y={INVARIANTS.y + 12} textAnchor="middle" className="cm-sat-num">
-          {counts.laws ?? 0} · never broken
+        <text x={invariants.x} y={invariants.y + 12} textAnchor="middle" className="cm-sat-big">
+          {counts.laws ?? 0}
         </text>
       </Node>
-      <g className="cm-mini">
-        {invariants.map((it, i) => (
-          <g key={it.name}>
-            <circle
-              cx={invPts[i].x}
-              cy={invPts[i].y}
-              r="8"
-              className="cm-mini-disc"
-              style={{ stroke: invariantColor(it.klass) }}
-            />
-            <text
-              x={invPts[i].x}
-              y={invPts[i].y + 3}
-              textAnchor="middle"
-              style={{ fill: invariantColor(it.klass) }}
-            >
-              {String(i + 1).padStart(2, '0')}
-            </text>
-          </g>
-        ))}
-      </g>
-      <text x={INVARIANTS.x} y={132} textAnchor="middle" className="cm-note">
-        coloured by what each protects
+      <text
+        x={invariants.x}
+        y={invariants.y + invariants.r + 16}
+        textAnchor="middle"
+        className="cm-note"
+      >
+        never broken
       </text>
 
       <Node
         hash="#/laws"
         label={`Doctrines: ${counts.doctrines?.rules ?? 0} rules chosen at build`}
       >
-        <circle cx={DOCTRINES.x} cy={DOCTRINES.y} r={DOCTRINES.r} className="cm-sat-disc" />
-        <text x={DOCTRINES.x} y={DOCTRINES.y - 5} textAnchor="middle" className="cm-sat-name">
+        <circle cx={doctrines.x} cy={doctrines.y} r={doctrines.r} className="cm-sat-disc" />
+        <text x={doctrines.x} y={doctrines.y - 6} textAnchor="middle" className="cm-sat-name">
           Doctrines
         </text>
-        <text x={DOCTRINES.x} y={DOCTRINES.y + 12} textAnchor="middle" className="cm-sat-num">
-          {counts.doctrines?.rules ?? 0} · chosen at build
+        <text x={doctrines.x} y={doctrines.y + 12} textAnchor="middle" className="cm-sat-big">
+          {counts.doctrines?.rules ?? 0}
         </text>
       </Node>
+      {/* Anchored to the RIGHT of the satellite, not centred under it: the pack discs ride
+          the lower-left flank and a centred caption lay straight across them. */}
+      <text x={doctrines.x + 22} y={doctrines.y + doctrines.r + 20} className="cm-note">
+        {counts.doctrines
+          ? `chosen at build · ${counts.doctrines.active}/${counts.doctrines.total} packs lit`
+          : 'chosen at build'}
+      </text>
+
       <g className="cm-mini">
-        {packs.map((p, i) => (
+        {packNodes.map((p) => (
           <g key={p.id}>
             <circle
-              cx={packPts[i].x}
-              cy={packPts[i].y}
-              r="15"
+              cx={p.x}
+              cy={p.y}
+              r={p.r}
               className="cm-pack-disc"
               style={{ stroke: packColor(p.id) }}
             />
-            <text x={packPts[i].x} y={packPts[i].y - 2} textAnchor="middle" className="cm-pack-id">
-              {p.id.slice(0, 4)}
+            <text x={p.x} y={p.y - 2} textAnchor="middle" className="cm-pack-id">
+              {p.id}
             </text>
-            <text
-              x={packPts[i].x}
-              y={packPts[i].y + 8}
-              textAnchor="middle"
-              style={{ fill: packColor(p.id) }}
-            >
+            <text x={p.x} y={p.y + 8} textAnchor="middle" style={{ fill: packColor(p.id) }}>
               {p.on}
             </text>
           </g>
         ))}
       </g>
-      <text x={640} y={296} className="cm-note">
-        {counts.doctrines ? `${counts.doctrines.active}/${counts.doctrines.total} packs lit` : ''}
-      </text>
 
-      <text x={800} y={20} className="cm-govern-label">
+      <text x={866} y={16} textAnchor="middle" className="cm-govern-label">
         GOVERNS THE HARNESS
       </text>
-      <Governed x={812} y={50} r={26} label="Skills" count={counts.skills ?? 0} hash="#/skills" />
-      <Governed x={820} y={122} r={26} label="Agents" count={counts.agents ?? 0} hash="#/agents" />
-      <Governed
-        x={816}
-        y={240}
-        r={26}
-        label="Memory"
-        count={counts.memory ?? 0}
-        hash="#/section/memory"
-      />
-      <Governed
-        x={812}
-        y={304}
-        r={24}
-        label="Wiki"
-        count={counts.wiki ?? 0}
-        hash="#/section/wiki"
-      />
-      <text x={ONTOLOGY.x} y={220} textAnchor="middle" className="cm-note">
+      {governed.map((g) => (
+        <Node key={g.label} hash={g.hash} label={`${g.label}: ${g.count}`}>
+          <circle cx={g.x} cy={g.y} r={g.r} className="cm-gov-disc" />
+          <text x={g.x} y={g.y - 2} textAnchor="middle" className="cm-gov-name">
+            {g.label}
+          </text>
+          <text x={g.x} y={g.y + 10} textAnchor="middle" className="cm-gov-num">
+            {g.count}
+          </text>
+        </Node>
+      ))}
+      <text x={ontology.x} y={228} textAnchor="middle" className="cm-note">
         tap any node to open its ledger
       </text>
     </svg>
