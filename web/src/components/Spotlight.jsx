@@ -62,17 +62,40 @@ export default function Spotlight({ query, index, loading, active, onActive, onC
   if (!query.trim()) return null
 
   return (
-    <div className="spotlight" ref={containerRef} role="listbox">
-      {loading && !index && <div className="spot-empty">Loading…</div>}
+    <div
+      className="spotlight"
+      ref={containerRef}
+      id="spotlight-list"
+      role="listbox"
+      aria-label="Search results"
+    >
+      {/* `presentation` on the two status rows: a listbox may own `option`s and `group`s and
+          nothing else, so a bare div here made every option below an invalid child. The
+          emptiness is announced by the live region in Search instead, which is where a
+          screen reader will actually hear it. */}
+      {loading && !index && (
+        <div className="spot-empty" role="presentation">
+          Loading…
+        </div>
+      )}
       {!loading && results.length === 0 && index && (
-        <div className="spot-empty">No matches for &ldquo;{query}&rdquo;.</div>
+        <div className="spot-empty" role="presentation">
+          No matches for &ldquo;{query}&rdquo;.
+        </div>
       )}
       {groups.map((g) => (
-        <div key={g.kind} className="spot-group">
-          <div className="spot-group-head">{g.kind}</div>
+        <div key={g.kind} className="spot-group" role="group" aria-label={g.kind}>
+          {/* The heading is the group's aria-label already; leaving it exposed would make a
+              screen reader read every section name twice. */}
+          <div className="spot-group-head" aria-hidden="true">
+            {g.kind}
+          </div>
           {g.rows.map(({ entry, index: i }) => (
             <div
               key={`${entry.route}-${i}`}
+              // The id `aria-activedescendant` on the input points at — this is the half that
+              // makes the moving highlight audible.
+              id={`spot-opt-${i}`}
               data-spot-row={i}
               role="option"
               aria-selected={i === active}

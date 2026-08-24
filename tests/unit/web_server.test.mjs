@@ -38,7 +38,7 @@ import { PREFIX_ROUTES, STATE_ROUTES, webState } from '../../js/web/api.mjs';
 import { NOT_PORTED_KINDS, PORTED_KINDS } from '../../js/web/docs.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
 import { makeHandler } from '../../js/web/handler.mjs';
-import { DECLINED_POST, NOT_PORTED, NOT_PORTED_POST, NOT_PORTED_POST_PREFIXES, NOT_PORTED_PREFIXES, PORTED_INLINE, PORTED_POST, PORTED_POST_INLINE, POST_BEYOND_REF, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
+import { DECLINED_POST, GET_BEYOND_REF, NOT_PORTED, NOT_PORTED_POST, NOT_PORTED_POST_PREFIXES, NOT_PORTED_PREFIXES, PORTED_INLINE, PORTED_POST, PORTED_POST_INLINE, POST_BEYOND_REF, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
 import { webFixture, webFixtureTeardown } from '../helpers/web_fixture.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -290,12 +290,29 @@ const nodeUnportedGet = () => [...NOT_PORTED, ...NOT_PORTED_PREFIXES];
 const nodeUnportedPost = () => [...NOT_PORTED_POST, ...NOT_PORTED_POST_PREFIXES];
 
 test('every GET route is either ported or declared unported', () => {
+  // THREE PARTS, and the third is `GET_BEYOND_REF` — the GET half of the argument
+  // `POST_BEYOND_REF` makes below. `REF_GET` is a RECORD of what the Python daemon answered,
+  // so it is not the thing to widen when this daemon grows a route; widening it would forge
+  // the record, and leaving the equality unqualified would say this daemon may never grow a
+  // GET at all. The comparison is therefore against the reference's surface PLUS the declared
+  // additions: the reference's routes stay pinned exactly, and anything past them has to be
+  // enumerated rather than merely appear.
   const covered = new Set([...nodeGet(), ...nodeUnportedGet()]);
   assert.deepEqual(REF_GET.filter((p) => !covered.has(p)), [],
     'the reference answered GET paths the daemon neither ports nor declares unported — each '
     + 'falls through to the SPA and answers HTML at a 200 where the client expects JSON');
-  assert.deepEqual(sorted([...covered].filter((p) => !REF_GET.includes(p))), [],
-    'the daemon claims GET paths the reference did not answer');
+  assert.deepEqual(sorted([...covered].filter((p) => !REF_GET.includes(p)
+    && !GET_BEYOND_REF.has(p))), [],
+  'the daemon claims GET paths the reference did not answer and does not declare as additions');
+  // AND NO ADDITION MAY HIDE A REFERENCE ROUTE — the same guard the POST side carries. Moving a
+  // path the reference really did answer into `GET_BEYOND_REF` would keep the check above green
+  // while quietly deleting the claim that the path is ported; the set is for routes with NO
+  // reference, only.
+  assert.deepEqual(sorted([...GET_BEYOND_REF].filter((p) => REF_GET.includes(p))), [],
+    'a route the reference answered was declared as a post-port addition');
+  // Every declared addition must actually be dispatched — a declaration is not a dispatcher.
+  assert.deepEqual(sorted([...GET_BEYOND_REF].filter((p) => !covered.has(p))), [],
+    'a GET declared beyond the reference is not in any dispatch table');
 });
 
 test('every POST route is either ported or declared unported', () => {
@@ -367,6 +384,14 @@ test('the declared partition is the one the dispatcher uses', async () => {
     // `NOT_PORTED` is empty since P6g crossed `/api/jobs`, so there is no unported GET left to
     // ask for a 501. The set stays declared and the partition test above keeps it honest.
     assert.equal(await hit('GET', '/api/jobs'), 200, 'GET /api/jobs crossed in P6g');
+    // THE `GET_BEYOND_REF` PROBE. `/api/recent` has no reference body to be held to, so this
+    // dispatch check is the only gate that it is wired at all: a 200 means the declaration and
+    // the table agree, and anything else — an HTML 200 from the SPA fallback included — means
+    // the route is declared and not dispatched. (The SPA fallback cannot answer 200 here: this
+    // probe's dist root is 'nowhere', so a fall-through is a 404.)
+    assert.equal(await hit('GET', '/api/recent'), 200,
+      'GET /api/recent must answer — GET_BEYOND_REF declares it, so a 404 means the '
+      + 'declaration is not dispatched on');
     assert.equal(await hit('POST', '/api/excludes', 'tok'), 409,
       'a ported POST must answer, and an empty body is the 409 arm of the convention — the '
       + 'control for the refusals below');

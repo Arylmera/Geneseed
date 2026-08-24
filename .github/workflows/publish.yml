@@ -162,6 +162,37 @@ jobs:
       - name: the suite left the machine-wide hook shim intact
         run: node tests/shim_intact.mjs
 
+      # ⚠ THE THIRD GATE THAT READS THE TREE THE TARBALL IS CUT FROM, and the one that was
+      # missing. `web/dist/` is in package.json's `files`, so the console ships in every
+      # tarball — and until this step nothing on the publish path built it or looked at it.
+      # The freshness check lives in the CI workflow, which runs on pull requests;
+      # `workflow_dispatch` can publish ANY ref, including one no pull request ever saw, so a
+      # stale console could reach the registry with no gate between it and the user. Same
+      # argument as the doctor and suite steps above, and the same stake: a published version
+      # cannot be taken back after 72 hours.
+      #
+      # IT ASSERTS RATHER THAN REBUILDING INTO THE TARBALL. Building and letting `npm publish`
+      # pick up the result would ship a console that does not match the tag it claims to be cut
+      # from — trading a staleness problem for a provenance one, which is worse because nothing
+      # downstream can see it. Failing here leaves the ref publishable the moment someone
+      # commits the rebuild.
+      #
+      # NOT A `prepack` SCRIPT, which is the obvious spelling and the wrong one here:
+      # `tests/unit/package_manifest.test.mjs` runs the REAL `npm pack`, so a prepack hook
+      # would fire `npm ci` and a vite build on every run of the suite — offline-fragile, slow,
+      # and it would rewrite `web/dist` underneath the tests that read it.
+      - name: the shipped console matches its source
+        shell: bash
+        run: |
+          ( cd web && npm ci && npm run build )
+          git diff --exit-code --stat -- web/dist
+          drift="$(git status --porcelain -- web/dist)"
+          if [ -n "$drift" ]; then
+            echo "web/dist is not what web/src builds to — this ref must not be published:"
+            echo "$drift"
+            exit 1
+          fi
+
       # ⚠ ONE `run:` LINE WHOSE ARGUMENTS VARY — deliberately NOT a second, dry-run step.
       # `tests/unit/docs.test.mjs` ("the publish workflow publishes once") asserts that EXACTLY
       # one line in this file matches `run:.*npm publish`, so that a second publish path cannot

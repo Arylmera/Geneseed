@@ -842,8 +842,18 @@ export function apiOverview(state) {
     }
   }
   let buildTime = null;
+  // The SAME mtime twice, on purpose. `build_time` is the stamp a person reads; `build_epoch`
+  // is the number a relative label ("20h") is computed from. The console used to have only the
+  // first and had to re-parse it, and `Date.parse` on a space-separated local stamp is
+  // engine-dependent — a plausible-but-wrong "2h" is the exact failure a second field costs
+  // nothing to prevent.
+  let buildEpoch = null;
   const agentMd = path.join(state.target, 'AGENT.md');
-  if (isFile(agentMd)) buildTime = stampMinute(statSync(agentMd).mtimeMs);
+  if (isFile(agentMd)) {
+    const ms = statSync(agentMd).mtimeMs;
+    buildTime = stampMinute(ms);
+    buildEpoch = Math.floor(ms / 1000);
+  }
   // Which detected install the current view points at, so the dashboard's footprint hero
   // can re-emit exactly it. Mirrors `viewCfg`'s rule, spelled out as the reference spells
   // it out — the two are separate code in the Python too.
@@ -903,6 +913,7 @@ export function apiOverview(state) {
     doctor: state.doctor,
     diff,
     build_time: buildTime,
+    build_epoch: buildEpoch,
     // The RELEASE LABEL OF THE SOURCE THIS CONSOLE IS SERVED FROM, not of the deployed install —
     // the two differ whenever something has changed since the last emit, which is exactly when
     // knowing which one you are looking at matters. `.geneseed-version` carries the install's own
@@ -914,6 +925,73 @@ export function apiOverview(state) {
     // shows nothing.
     version: releaseLabel(),
   };
+}
+
+/**
+ * How many files `apiRecent` will `stat` before it gives up on a section.
+ *
+ * The wiki is the only section with no ceiling — `WIKI_FILE_CAP` lets one vault contribute
+ * 5000 pages — and "the newest N of the first 1200 I looked at" is not the newest N. So a
+ * section over the cap is DROPPED and NAMED in `skipped`, rather than answered from a
+ * truncated pool: the card can then say which shelves it read, which is a fact, where a
+ * silently-biased list would be a wrong one nobody could catch.
+ */
+const RECENT_STAT_CAP = 1200;
+
+/** How many entries `/api/recent` returns — the card shows a handful, not a feed. */
+const RECENT_LIMIT = 8;
+
+/**
+ * THE NEWEST FILE-BACKED ENTRIES ACROSS THE HARNESS — the "freshly grown" card's whole payload.
+ *
+ * A GET BEYOND THE REFERENCE (`GET_BEYOND_REF` in `routes.mjs`), and the first one. It exists
+ * because NOTHING else in this API carries a per-entry date: every catalog row is
+ * `{name, title, desc, source}` and the only two timestamps on the whole surface are
+ * `overview.build_time` and `doctor.checked_at`. A client cannot stat a path, so "what changed
+ * lately" was unanswerable without a server that looks.
+ *
+ * ONLY THE SECTIONS THE USER WRITES BY HAND. Memory, notebook, wiki and config each name a
+ * file someone actually authored, at a moment that means something.
+ *
+ * ⚠ SKILLS AND AGENTS ARE EXCLUDED, AND THEY WERE IN HERE FIRST — a live check is what took
+ * them out. Their `source` is the EMITTED artefact (`~/.config/opencode/skills/<x>/SKILL.md`),
+ * written by the last build, so on a real install all 67 of them carry ONE mtime and it is
+ * `overview.build_epoch` to the second. Sorted newest-first they filled the whole answer with
+ * the alphabetical head of the last rebuild — `advocate, architect, brainstorm, clarify…` —
+ * and pushed out every genuinely recent memory and note. Dating a rendered file dates the
+ * BUILD, which the overview already states once and correctly. (Reading the repo's `src/`
+ * instead would not save it: a fresh clone stamps every file with the checkout.)
+ *
+ * The constitution is out for the same family of reason: its tiers are entries inside shared
+ * law files, so a per-rule mtime would be the file's, repeated — one wrong date on nine rows.
+ */
+export function apiRecent(state) {
+  const sections = [
+    ['memory', 'memory', () => memoryItems(state)],
+    ['notebook', 'notebook', () => notebookItems(state)],
+    ['wiki', 'wiki', () => wikiItems(state)],
+    ['config', 'config', () => configItems(state)],
+  ];
+  const items = [];
+  const skipped = [];
+  for (const [section, type, load] of sections) {
+    let rows;
+    try { rows = load() ?? []; } catch { skipped.push(section); continue; }
+    if (rows.length > RECENT_STAT_CAP) { skipped.push(section); continue; }
+    for (const r of rows) {
+      if (!r.source) continue;
+      let mtime;
+      // A row whose file has been moved or deleted since the inventory was rendered is not an
+      // error — it is simply not among the newest anything. Skipping beats a null date that
+      // would sort somewhere.
+      try { mtime = Math.floor(statSync(r.source).mtimeMs / 1000); } catch { continue; }
+      items.push({ section, type, name: r.name, title: r.title || r.name, mtime });
+    }
+  }
+  // Newest first, ties broken by name so the order is stable between two requests a second
+  // apart — several files written by one rebuild share a second exactly.
+  items.sort((a, b) => (b.mtime - a.mtime) || comparePaths(a.name, b.name));
+  return { items: items.slice(0, RECENT_LIMIT), skipped, limit: RECENT_LIMIT };
 }
 
 /** The source's release label, or null when it cannot be read. */
@@ -972,6 +1050,9 @@ function splitN(s, sep, n) {
 
 export const STATE_ROUTES = {
   '/api/overview': apiOverview,
+  // Beyond the reference — declared in `GET_BEYOND_REF`, which is what keeps the partition
+  // gate's set equality honest instead of forging `REF_GET`.
+  '/api/recent': apiRecent,
   '/api/themes': apiThemes,
   '/api/setup': apiSetup,
   '/api/doctor': apiDoctor,

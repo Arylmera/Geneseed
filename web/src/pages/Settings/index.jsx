@@ -1,13 +1,102 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
+import { api } from '../../api/index.js'
 import { FLAVOURS } from '../../hooks/useFlavour.js'
 import { ACCENT_MODES } from '../../hooks/useAccentMode.js'
 import { LAYOUTS, defaultLayoutFor } from '../../hooks/useLayout.js'
 import ServerControl from './ServerControl.jsx'
 
+// The repo the install actually updates from (its git origin). Falls back to the canonical
+// upstream when the About payload can't be fetched. The github-shaped deep links (/issues,
+// /blob/main/LICENSE) only resolve on github.com, so they are gated on repo_is_github.
+const FALLBACK_REPO = 'https://github.com/Arylmera/Geneseed'
+const CREATOR_URL = 'https://github.com/Arylmera'
+
+// The About cards, folded in from the retired `#/about` tab (which still resolves here —
+// router.js's VIEW_ALIAS). It was a two-card page of static prose with one fetch, reached
+// from its own rail group of one; as the last section of Setup → Settings it costs a scroll
+// instead of a tab, and the rail loses a group whose only member was a colophon.
+function AboutSection() {
+  const [repo, setRepo] = useState(FALLBACK_REPO)
+  const [isGithub, setIsGithub] = useState(true)
+  useEffect(() => {
+    // Wrapped rather than called bare: Settings renders in suites that stub the api module
+    // down to the calls the page under test makes, and an optional-chained miss yields
+    // `undefined`, which has no `.then`. The fallback repo above is the whole point — this
+    // fetch only ever upgrades a constant.
+    Promise.resolve(api.docsPage?.('about'))
+      .then((p) => {
+        if (p?.repo) {
+          setRepo(p.repo)
+          setIsGithub(!!p.repo_is_github)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  return (
+    <>
+      <div className="card pad-lg mb-16">
+        <div className="card-head">
+          <h3>About</h3>
+        </div>
+        <p className="sub mb-16">
+          Geneseed is a portable, theme-able harness you implant once and use everywhere to grow a
+          disciplined AI coding agent. One canonical source, many voices, MIT-licensed.
+        </p>
+        <div className="row wrap gap-10">
+          <a className="btn ghost" href={repo} target="_blank" rel="noreferrer">
+            <Icon name="github" />
+            {isGithub ? 'Source on GitHub' : 'Source repo'}
+          </a>
+          {isGithub && (
+            <>
+              <a className="btn ghost" href={repo + '/issues'} target="_blank" rel="noreferrer">
+                <Icon name="external" />
+                Issues
+              </a>
+              <a
+                className="btn ghost"
+                href={repo + '/blob/main/LICENSE'}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Icon name="external" />
+                MIT License
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="card pad-lg">
+        <div className="card-head">
+          <h3>Creator</h3>
+        </div>
+        <p className="sub mb-16">
+          Geneseed is built by <strong>Guillaume Lemer</strong>. It started as a personal,
+          Obsidian-vault-grown agent operating system and was distilled into the repo you are
+          running. Implant it once, and a disciplined agent grows around the same inherited rules,
+          skills, and memory in every repo it follows you into.
+        </p>
+        <p className="sub mb-16">
+          If you find this useful, a star on the repo or an issue with feedback is the best way to
+          help shape what comes next.
+        </p>
+        <div className="row wrap gap-10">
+          <a className="btn ghost" href={CREATOR_URL} target="_blank" rel="noreferrer">
+            <Icon name="github" />
+            @Arylmera on GitHub
+          </a>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // The settings page: the console direction picker, machine maintenance
-// (PATH/uninstall, git-pull update), and server control. Per-install detail and
-// building live in the Harnesses tab and the Dashboard.
+// (PATH/uninstall, git-pull update), server control, and the About colophon.
+// Per-install detail and building live in the Harness tab and the Dashboard.
 export default function Settings({
   overview,
   onAction,
@@ -37,9 +126,9 @@ export default function Settings({
         <div>
           <h1 className="h">Settings</h1>
           <p className="sub">
-            Console direction, harness footprint, machine maintenance (incl. git-pull update), and
-            server control. See per-install detail in the Harnesses tab; build from there and the
-            Dashboard.
+            Console direction, harness footprint, machine maintenance (incl. git-pull update),
+            server control, and about. See per-install detail in the Harness tab; build from there
+            and the Dashboard.
           </p>
         </div>
       </div>
@@ -223,7 +312,7 @@ export default function Settings({
       </div>
 
       {/* Server card */}
-      <div className="card pad-lg">
+      <div className="card pad-lg mb-16">
         <div className="card-head">
           <h3>Server</h3>
         </div>
@@ -233,6 +322,8 @@ export default function Settings({
         </p>
         <ServerControl />
       </div>
+
+      <AboutSection />
     </div>
   )
 }

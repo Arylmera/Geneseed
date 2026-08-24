@@ -7,6 +7,7 @@ const FLAT_VIEWS = new Set([
   'activity',
   'diff',
   'settings',
+  'harness',
   'harnesses',
   'doctor',
   'themes',
@@ -20,6 +21,24 @@ const FLAT_VIEWS = new Set([
   'about',
 ])
 
+// Retired route names -> the page that absorbed them. Two pages merged (Themes
+// folded into Harness, About into Settings) and every deep link, bookmark and
+// docs cross-reference in the wild still spells the old name — so the old names
+// stay in FLAT_VIEWS above and resolve here instead of falling through to the
+// dashboard, which is what an unknown hash does (and would have looked like the
+// page had simply vanished).
+//
+// RESOLUTION, NOT A REWRITE. The obvious alternative is `location.replace` to
+// canonicalise the address bar, but `parse()` runs inside `useState(parse)` —
+// during render — where a navigation side effect fires twice under StrictMode
+// and races the `hashchange` listener that would re-enter it. The hash the user
+// typed is left alone; only the view it selects moves.
+const VIEW_ALIAS = {
+  themes: 'harness',
+  harnesses: 'harness',
+  about: 'settings',
+}
+
 export function useRoute() {
   const parse = () => {
     const h = (typeof window !== 'undefined' ? window.location.hash : '') || '#/'
@@ -31,7 +50,7 @@ export function useRoute() {
       return { view: 'docs', page: decodeURIComponent(parts.slice(1).join('/') || '') }
     if (parts[0] === 'activity' && parts[1])
       return { view: 'activity-detail', sid: decodeURIComponent(parts[1]) }
-    if (FLAT_VIEWS.has(parts[0])) return { view: parts[0] }
+    if (FLAT_VIEWS.has(parts[0])) return { view: VIEW_ALIAS[parts[0]] || parts[0] }
     return { view: 'dashboard' }
   }
   const [route, setRoute] = useState(parse)

@@ -15,9 +15,15 @@ export default function Search({ value, onChange }) {
   const [active, setActive] = useState(0)
   const { index, prime } = useSearchIndex()
 
+  // Two bindings, and the second is not a duplicate of the first. `/` is the fast one and
+  // costs nothing to press — but it is only available when no field has focus, which is
+  // exactly why ⌘K/Ctrl-K exists beside it: the modifier chord is the one convention that
+  // still works from inside a text box, which is where a user editing their rules or their
+  // profile actually is when they want to jump somewhere else.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== '/' || e.target.closest('input, textarea, select')) return
+      const chord = (e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k'
+      if (!chord && (e.key !== '/' || e.target.closest('input, textarea, select'))) return
       e.preventDefault()
       ref.current?.focus()
     }
@@ -36,10 +42,14 @@ export default function Search({ value, onChange }) {
   }, [focused])
 
   const open = focused && !!value.trim()
+  // HOISTED OUT OF THE KEY HANDLER, because the INPUT needs it too. `aria-activedescendant`
+  // has to name a row that exists or name nothing at all, so the input has to know how many
+  // there are — and the handler was already recomputing this on every keystroke.
+  const results = open && index ? filterAndRank(index, value) : []
+  const activeId = active < results.length ? `spot-opt-${active}` : undefined
 
   const onKeyDown = (e) => {
     if (!open) return
-    const results = filterAndRank(index, value)
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setActive((a) => Math.min(a + 1, Math.max(results.length - 1, 0)))
@@ -67,8 +77,22 @@ export default function Search({ value, onChange }) {
   return (
     <div className="tb-search" ref={wrapRef}>
       <Icon name="search" className="mag glyph" />
+      {/* ⚠ THE COMBOBOX WIRING, AND IT WAS MISSING ENTIRELY. The dropdown was already a
+          correct `listbox` of `option`s with `aria-selected` — but nothing connected it to
+          this input, so the two halves were orphaned: no announcement that results had
+          appeared, and arrow keys moved a highlight that reported nothing. Focus never
+          leaves the input in this pattern, so `aria-activedescendant` is the ONLY channel
+          that can say which row is current; without it the selection is visual only.
+          `aria-controls` is conditional because pointing at an id that is not in the
+          document is its own defect. */}
       <input
         ref={ref}
+        role="combobox"
+        aria-label="Search the harness"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={open ? 'spotlight-list' : undefined}
+        aria-activedescendant={activeId}
         value={value}
         onChange={(e) => {
           onChange(e.target.value)
@@ -80,8 +104,20 @@ export default function Search({ value, onChange }) {
         }}
         onKeyDown={onKeyDown}
         placeholder="Search the harness…"
+        title="Press / to jump here, or Ctrl-K / ⌘K from inside any field"
       />
+      {/* The badge still shows `/`: it is the shorter binding and the one that fits. The
+          chord is in the title above rather than a second badge — two keycaps in a topbar
+          field is noise, and the chord is the one you reach for when `/` is being typed
+          into something. */}
       <span className="kbd">/</span>
+      {/* `aria-expanded` tells a screen reader a list appeared; it does not say whether
+          anything is IN it. Typing narrows the results silently otherwise — the one thing a
+          sighted user gets for free from watching the list shrink. Polite, so it queues
+          behind whatever the row announcement is saying rather than interrupting it. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {!open ? '' : results.length ? `${results.length} results` : 'no matches'}
+      </span>
       {open && (
         <Spotlight
           query={value}

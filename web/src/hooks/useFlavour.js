@@ -16,6 +16,7 @@ const FLAV_KEY = 'geneseed-flavour'
 //   cobalt      — Cobalt Terminal  (mono terminal; fixed blue, IBM Plex Mono)
 //   cosmic      — Cosmic           (deep-space sci-fi; Audiowide, cut corners)
 //   neon        — Neon             (mono dark; fixed hot-pink, Geist Mono, glass)
+//   atlas       — Atlas            (field journal; loam dark, sage ink, Space Grotesk)
 export const FLAVOURS = [
   {
     id: 'cultivar',
@@ -89,6 +90,12 @@ export const FLAVOURS = [
     short: 'Neon',
     name: 'Neon',
     tagline: 'Neon-noir: hot-pink edge-glow on near-black, all-mono Geist, frosted glass.',
+  },
+  {
+    id: 'atlas',
+    short: 'Atlas',
+    name: 'Atlas',
+    tagline: 'The field journal — loam dark, sage ink, the codex as a living map.',
   },
 ]
 

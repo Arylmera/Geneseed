@@ -23,7 +23,7 @@ import { localHost, makeHandler } from '../../js/web/handler.mjs';
 import { buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
-  apiThemes, apiDoctor, apiInstalls, apiExcludes, apiSetup, viewCfg,
+  apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg,
 } from '../../js/web/api.mjs';
 import { apiGraph } from '../../js/web/graph.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
@@ -312,6 +312,61 @@ test('an item answers with its body and its links', () => {
 
 test('a missing item raises NotFound', () => {
   assert.throws(() => apiItem(neutral(), 'agent', 'does-not-exist-xyz'), NotFound);
+});
+
+// ---------------------------------------------------------------------------------------------
+// /api/recent — the dashboard's "freshly grown" card.
+
+// ⚠ THE REGRESSION THIS EXISTS FOR, AND IT SHIPPED FOR AN AFTERNOON. `apiRecent` first asked six
+// sections, skills and agents among them. On a real install those two ARE the answer by volume —
+// 67 rows against a handful of notes — and their `source` is the EMITTED artefact, so every one
+// of them carries the mtime of the last build, to the second. Sorted newest-first they filled the
+// whole list with the alphabetical head of the rebuild (`advocate, architect, brainstorm…`) and
+// pushed out every genuinely recent note. A live check found it; nothing else could have, which
+// is why the claim is written down here.
+//
+// THE ASSERTION IS THE PARTITION, not the ordering: the fixture is a real emitted install whose
+// inventory is full of skills and agents, and none of them may appear.
+test('recency answers only the sections a person writes by hand', () => {
+  const st = neutral();
+  assert.ok(st.inventory.skills.length > 0 && st.inventory.agents.length > 0,
+    'the fixture has no skills or agents — this test would pass vacuously');
+  const { items, skipped, limit } = apiRecent(st);
+  assert.equal(limit, 8);
+  assert.deepEqual(items.filter((i) => i.section === 'skills' || i.section === 'agents'), [],
+    'a rendered artefact was dated: its mtime belongs to the BUILD, which the overview '
+    + 'already states once and correctly as build_time');
+  for (const i of items) {
+    assert.ok(['memory', 'notebook', 'wiki', 'config'].includes(i.section),
+      `unexpected section ${i.section}`);
+  }
+  assert.ok(Array.isArray(skipped));
+});
+
+// Newest first, and the shape each row must carry for the card to build a route out of it.
+// Hermetic: three files with mtimes a day apart, written in an order that is NOT the answer, so
+// a sort that silently did nothing would come back in creation order and fail.
+test('recency sorts newest first and carries a routable name', () => {
+  const sb = makeSandbox();
+  try {
+    const nb = path.join(sb.path, 'notebook');
+    fs.mkdirSync(nb);
+    const DAY = 86400;
+    const now = Math.floor(Date.now() / 1000) - 10;
+    // Written oldest-name-first but stamped middle / oldest / newest.
+    for (const [name, ago] of [['alpha', 1], ['beta', 2], ['gamma', 0]]) {
+      const f = path.join(nb, `${name}.md`);
+      fs.writeFileSync(f, `# ${name}
+`);
+      fs.utimesSync(f, now - ago * DAY, now - ago * DAY);
+    }
+    const { items } = apiRecent(webState('neutral', sb.path));
+    assert.deepEqual(items.map((i) => i.name), ['gamma', 'alpha', 'beta']);
+    assert.equal(items[0].type, 'notebook',
+      'the row must carry the SINGULAR type: the card builds `#/item/<type>/<name>` from it, '
+      + 'and the plural section key resolves to nothing');
+    assert.equal(items[0].mtime, now);
+  } finally { sb.cleanup(); }
 });
 
 // Agents and skills expose their `src/` file too, so the UI shows the real path instead of

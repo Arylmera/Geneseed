@@ -62,6 +62,10 @@ export const CURATED_ACCENT = {
   cobalt: { dark: '#2BA8FF', light: '#1668A8', ink: '#021018', inkLight: '#FFFFFF' },
   cosmic: { dark: '#C081FF', light: '#7A33CC', ink: '#1A0833', inkLight: '#FFFFFF' },
   neon: { dark: '#DB245C', light: '#D81E5B', ink: '#FFFFFF', inkLight: '#FFFFFF' },
+  // Atlas' sage, and the ink is the prototype's own #14200F rather than the shared
+  // near-black: a sage fill wants a dark GREEN on it, not a neutral, or the primary
+  // button reads as a sticker laid over the page instead of part of it.
+  atlas: { dark: '#8FD694', light: '#1C8450', ink: '#14200F', inkLight: '#FFFFFF' },
 }
 
 // Write a flavour's curated accent on the app root (light reads the deeper

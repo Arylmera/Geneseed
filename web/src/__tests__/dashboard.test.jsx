@@ -2,14 +2,11 @@ import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
+// `setup` is no longer fetched here: App owns the one copy (the rail's germination ring
+// reads the same two fingerprints) and hands it down as a prop, so the mock lost its
+// `setup` arm and every render below passes the snapshot instead.
 vi.mock('../api/index.js', () => ({
   api: {
-    setup: () =>
-      Promise.resolve({
-        installed_fp: 'a3f1c9e2',
-        source_fp: 'a3f1c9e2',
-        version_verdict: 'up to date (0.1.0)',
-      }),
     jobs: () =>
       Promise.resolve({
         jobs: [
@@ -43,10 +40,15 @@ const overview = {
 const themes = [
   { name: 'imperial', accent: 'yellow', tagline: '', sigil: 'The Codex in force.', blurb: '' },
 ]
+const setup = {
+  installed_fp: 'a3f1c9e2',
+  source_fp: 'a3f1c9e2',
+  version_verdict: 'up to date (0.1.0)',
+}
 
 describe('Dashboard', () => {
   it('renders the status direction with ring, KPIs, and genome counts', async () => {
-    render(<Dashboard overview={overview} themes={themes} onAction={() => {}} />)
+    render(<Dashboard overview={overview} themes={themes} setup={setup} onAction={() => {}} />)
     await waitFor(() => expect(screen.getByText('germination')).toBeTruthy())
     expect(screen.getByText('The Codex in force')).toBeTruthy() // headline
     expect(screen.getByText('The Codex in force.')).toBeTruthy() // sigil (trailing period)
@@ -57,7 +59,7 @@ describe('Dashboard', () => {
   })
 
   it('switches directions via the segmented control', async () => {
-    render(<Dashboard overview={overview} themes={themes} onAction={() => {}} />)
+    render(<Dashboard overview={overview} themes={themes} setup={setup} onAction={() => {}} />)
     fireEvent.click(screen.getByText('Lineage'))
     await waitFor(() => expect(screen.getByText('Gene-seed lineage')).toBeTruthy())
     fireEvent.click(screen.getByText('Operator'))

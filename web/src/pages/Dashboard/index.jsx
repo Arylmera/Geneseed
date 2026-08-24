@@ -5,30 +5,37 @@ import LineageView from './LineageView.jsx'
 import OperatorView from './OperatorView.jsx'
 import GreenhouseView from './GreenhouseView.jsx'
 import OperatorHudView from './OperatorHudView.jsx'
+import JournalView from './JournalView.jsx'
 import Onboarding from './Onboarding.jsx'
 import { resolveLayout } from '../../hooks/useLayout.js'
 
-// The dashboard shell: loads the supplementary data (install snapshot, job
-// history, graph, doctor) the directions share, then renders the chosen
-// direction. The Status lens is a layout chosen independently of the flavour
-// (skin) — Cultivar's hero+kpi+genome, Greenhouse's ring+tiles+donut, or
-// Operator HUD's strip+modules — while Lineage and Operator stay one shared
-// layout (they're optional data dives, not layout variants).
-export default function Dashboard({ overview, themes, onAction, flavour = 'a', layout = 'auto' }) {
+// The dashboard shell: loads the supplementary data (job history, graph, doctor,
+// recency) the directions share, then renders the chosen direction. The Status
+// lens is a layout chosen independently of the flavour (skin) — Cultivar's
+// hero+kpi+genome, Greenhouse's ring+tiles+donut, Operator HUD's strip+modules, or
+// the Journal's rings+map — while Lineage and Operator stay one shared layout
+// (they're optional data dives, not layout variants).
+//
+// `setup` arrives as a prop rather than being fetched here: the rail's germination
+// ring needs the same two fingerprints, and App owns the one copy.
+export default function Dashboard({
+  overview,
+  themes,
+  setup,
+  onAction,
+  flavour = 'a',
+  layout = 'auto',
+}) {
   const lens = resolveLayout(flavour, layout)
   const [dir, setDir] = useState('status')
-  const [setup, setSetup] = useState(null)
   const [jobs, setJobs] = useState([])
   const [graph, setGraph] = useState(null)
   const [doctor, setDoctor] = useState(null)
+  const [recent, setRecent] = useState(null)
   const sigil = overview ? themes.find((t) => t.name === overview.theme)?.sigil || '' : ''
 
   useEffect(() => {
     let alive = true
-    api
-      .setup()
-      .then((v) => alive && setSetup(v))
-      .catch(() => {})
     api
       .jobs()
       .then((r) => alive && setJobs(r.jobs || []))
@@ -46,6 +53,14 @@ export default function Dashboard({ overview, themes, onAction, flavour = 'a', l
         .then((v) => alive && setDoctor(v))
         .catch(() => {})
     }
+    // Recency stats every file-backed entry in the harness server-side, so it is
+    // fetched by the one lens that shows it and by nothing else.
+    if (lens === 'journal') {
+      api
+        .recent()
+        .then((v) => alive && setRecent(v))
+        .catch(() => {})
+    }
     return () => {
       alive = false
     }
@@ -56,6 +71,16 @@ export default function Dashboard({ overview, themes, onAction, flavour = 'a', l
   // Nothing deployed yet → onboard the user into a first deploy instead of
   // showing an empty, read-only dashboard.
   if (!overview.deployed) return <Onboarding onAction={onAction} />
+
+  // The Journal lens is a page, not a panel: it brings its own header (the field
+  // journal's date line and its two actions), so the shared head-row and the
+  // direction switcher would be a second, contradictory title above it. Lineage
+  // and Operator stay reachable from the rail's Activity/Changes rows and from
+  // Settings' layout picker — the switcher returns with any other lens.
+  if (dir === 'status' && lens === 'journal')
+    return (
+      <JournalView overview={overview} recent={recent} onAction={onAction} onDirection={setDir} />
+    )
 
   return (
     <>

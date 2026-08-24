@@ -127,7 +127,7 @@ describe('Constitution page', () => {
     // This is the no-install case: with one to rebuild, the switches take over and the command
     // is not shown at all (see the toggle suite below).
     const { container } = render(<Laws />)
-    await waitFor(() => expect(container.querySelector('.pack-wrap')).toBeTruthy())
+    await settled(container)
     expect(screen.getByText(/not built in/)).toBeTruthy()
     expect(container.querySelector('.pack-wrap.pack-off')).toBeTruthy()
     // ⚠ `geneseed-build`, NOT `geneseed build`. The CLI's `build` verb forwards `--theme` and
@@ -224,6 +224,17 @@ describe('Constitution page', () => {
 // Codes That Persist" is expressible — which the pack-level control it replaced could not say.
 
 const INSTALL = { host: 'opencode', scope: 'global' }
+// ⚠ WAIT FOR THE SELECTION TO SETTLE, NOT MERELY FOR THE ROWS TO EXIST — and this gate is the
+// difference between a green suite and a green-ish one. `picked` starts as `[]` and is seeded
+// from the deployed rule set in an effect (Laws.jsx), so there is a real rendered frame in which
+// every pack and every switch reads OFF. Gating on existence admitted that frame: two tests in
+// this file failed roughly ONE RUN IN THREE — `.pack-off` counting 3 instead of 1, and a
+// deployed rule's switch reading `aria-checked="false"`. Both were the same race, and neither
+// was a product defect. Settling is observable as "at least one pack is not off", which cannot
+// be true until the seed lands.
+const settled = (c) =>
+  waitFor(() => expect(c.querySelector('.pack-wrap:not(.pack-off)')).toBeTruthy())
+
 const sw = (c, name) => c.querySelector(`[aria-label="${name} rule"]`)
 const applyBtn = () => screen.getByText(/^Apply/).closest('button')
 const withInstall = (onAction = () => {}) => (
@@ -233,7 +244,7 @@ const withInstall = (onAction = () => {}) => (
 describe('Constitution page — doctrine toggles', () => {
   it('renders a switch per RULE, reflecting what is deployed', async () => {
     const { container } = render(withInstall())
-    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    await settled(container)
     // One live pack, one rule excluded from it, one pack off entirely — three states, and the
     // switch reads the RULE every time.
     expect(sw(container, 'Automate Repetition').getAttribute('aria-checked')).toBe('true')
@@ -251,7 +262,7 @@ describe('Constitution page — doctrine toggles', () => {
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
-    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    await settled(container)
     fireEvent.click(sw(container, 'Documentation in Step')) // off -> on
     fireEvent.click(sw(container, 'English Configuration')) // on  -> off
     expect(onAction).not.toHaveBeenCalled() // still nothing — this is the claim
@@ -267,7 +278,7 @@ describe('Constitution page — doctrine toggles', () => {
 
   it('changes a switch without opening its rule', async () => {
     const { container } = render(withInstall())
-    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    await settled(container)
     const disclosure = container.querySelector('.law-disclosure')
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(sw(container, 'Automate Repetition'))
@@ -297,7 +308,7 @@ describe('Constitution page — doctrine toggles', () => {
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
-    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    await settled(container)
     fireEvent.click(sw(container, 'Automate Repetition'))
     fireEvent.click(sw(container, 'English Configuration')) // craft.3 is already off
     fireEvent.click(applyBtn())
@@ -313,7 +324,7 @@ describe('Constitution page — doctrine toggles', () => {
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
-    await waitFor(() => expect(sw(container, 'Automate Repetition')).toBeTruthy())
+    await settled(container)
     for (const name of [
       'Automate Repetition',
       'English Configuration',

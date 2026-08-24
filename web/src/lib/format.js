@@ -68,3 +68,13 @@ export const maxCount = (counts) => Math.max(...SECTION_ORDER.map((k) => counts?
 
 // Local edits awaiting export = edited + added files from the diff summary.
 export const editCount = (diff) => (diff?.edited ?? 0) + (diff?.added ?? 0)
+
+// How many RULES bind this install: every invariant, plus the doctrine rules the
+// packs it built in actually switched on.
+//
+// THE ONTOLOGY IS DELIBERATELY NOT IN IT. That tier is sections of framing the agent
+// thinks with — telos, evidence, decisions, conduct — not clauses it can break, and
+// `counts.ontology` counts sections, not rules. Adding it would inflate one number by
+// a quantity of a different kind, on the one figure that claims to say what the agent
+// is bound by. The map lists the sections beside the total instead.
+export const rulesInForce = (counts) => (counts?.laws ?? 0) + (counts?.doctrines?.rules ?? 0)
