@@ -950,11 +950,20 @@ const RECENT_LIMIT = 8;
  * `overview.build_time` and `doctor.checked_at`. A client cannot stat a path, so "what changed
  * lately" was unanswerable without a server that looks.
  *
- * ONLY THE SECTIONS WHOSE ROWS ARE A FILE. Memory, notebook, wiki and config each name a real
- * `source`; skills and agents come out of the rendered inventory and name one when they were
- * read from disk. The constitution deliberately does not appear: its tiers are entries inside
- * shared law files, so a per-rule mtime would be the file's, repeated — the same wrong date on
- * nine rows.
+ * ONLY THE SECTIONS THE USER WRITES BY HAND. Memory, notebook, wiki and config each name a
+ * file someone actually authored, at a moment that means something.
+ *
+ * ⚠ SKILLS AND AGENTS ARE EXCLUDED, AND THEY WERE IN HERE FIRST — a live check is what took
+ * them out. Their `source` is the EMITTED artefact (`~/.config/opencode/skills/<x>/SKILL.md`),
+ * written by the last build, so on a real install all 67 of them carry ONE mtime and it is
+ * `overview.build_epoch` to the second. Sorted newest-first they filled the whole answer with
+ * the alphabetical head of the last rebuild — `advocate, architect, brainstorm, clarify…` —
+ * and pushed out every genuinely recent memory and note. Dating a rendered file dates the
+ * BUILD, which the overview already states once and correctly. (Reading the repo's `src/`
+ * instead would not save it: a fresh clone stamps every file with the checkout.)
+ *
+ * The constitution is out for the same family of reason: its tiers are entries inside shared
+ * law files, so a per-rule mtime would be the file's, repeated — one wrong date on nine rows.
  */
 export function apiRecent(state) {
   const sections = [
@@ -962,8 +971,6 @@ export function apiRecent(state) {
     ['notebook', 'notebook', () => notebookItems(state)],
     ['wiki', 'wiki', () => wikiItems(state)],
     ['config', 'config', () => configItems(state)],
-    ['skills', 'skill', () => state.inventory.skills],
-    ['agents', 'agent', () => state.inventory.agents],
   ];
   const items = [];
   const skipped = [];

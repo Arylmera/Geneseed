@@ -1,6 +1,6 @@
 import React from 'react'
 import { go } from '../lib/router.js'
-import { editCount, readiness } from '../lib/format.js'
+import { editCount, readiness, relTime } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
 
 // Left navigation rail, grouped like the design: the Dashboard on its own, then
@@ -230,7 +230,12 @@ function RailVitals({ overview, setup }) {
         </div>
         <div>
           <span>Built</span>
-          <b className="plain">{overview.build_time || 'never'}</b>
+          {/* The relative label, from `build_epoch` — the rail is 232px wide and
+              "2026-08-23 16:09" does not fit beside a 66px ring. The full stamp is on
+              the Harness page, where there is room for the precise fact. */}
+          <b className="plain" title={overview.build_time || undefined}>
+            {overview.build_epoch ? relTime(overview.build_epoch) : 'never'}
+          </b>
         </div>
       </div>
     </div>
