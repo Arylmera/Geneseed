@@ -92,7 +92,18 @@
   --r-lg: 16px;
   --r-xl: 22px;
 
-  --rail-w: 232px;
+  /* The rail SCALES between the two widths the design has been drawn at rather than
+     picking one: 232px is what every skin shipped with, 256px is what the Journal
+     Atlas boards were laid out on. `clamp` reaches 256 only past ~1420px — where the
+     main column can spare 24px without reflowing anything — and holds 232 below it,
+     so no existing layout moves on the screens most sessions actually run at.
+
+     ⚠ STILL A :root DECLARATION, and it must stay one. The two breakpoint overrides
+     below (62px icon strip at 960, 248px drawer at 720) are also `:root` rules and
+     win purely by ORDER, so this may never move onto `.app` or into a `.fl-*` block —
+     a `.app`-level copy would outrank both media queries and the rail would stop
+     collapsing. See the Atlas flavour's own note for the version of this that bit. */
+  --rail-w: clamp(232px, 18vw, 256px);
   --topbar-h: 56px;
   --shadow-pop: 0 18px 50px -12px rgba(0,0,0,.7), 0 2px 0 rgba(255,255,255,.02) inset;
   --shadow-card: 0 1px 0 rgba(255,255,255,.02) inset, 0 14px 40px -28px rgba(0,0,0,.9);
