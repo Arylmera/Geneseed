@@ -6,6 +6,61 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
+## [3.1.3] — 2026-08-24
+
+### Added
+
+- **The Journal Atlas console.** A fourth dashboard lens, `journal`: growth rings per section,
+  the newest hand-authored entries, and the constitution drawn as a map — a hub of rules in
+  force, its three tiers, and dashed edges to the skills, agents, memory and wiki they govern.
+  Every node navigates. The map is data-driven where the design was hand-placed: circles size
+  to the text they hold and the pack nodes ride a fitted arc, so a harness with seven
+  invariants or six packs draws the same picture rather than overflowing it.
+- **`atlas`, a twelfth console skin** — loam dark, sage ink, Space Grotesk, pills, in both
+  light and dark. Atlas and Greenhouse default to the journal lens; every other skin is
+  unchanged, and the lens is pickable from any of them in Settings.
+- **`GET /api/recent`** — the newest file-backed entries across the harness. Nothing on the API
+  carried a per-entry date: every catalog row is `{name, title, desc, source}` and a browser
+  cannot stat a path. It answers only the four sections a person writes by hand, and drops any
+  section too large to stat exhaustively rather than reporting the newest of a truncated
+  sample. Declared in `GET_BEYOND_REF` — the GET twin of `POST_BEYOND_REF` — so the route
+  partition keeps its set equality against a reference surface that must not be rewritten.
+- **`overview.install` now reports `build_epoch`** beside `build_time`, so a relative label is
+  computed rather than parsed back out of a formatted stamp.
+- **`Ctrl`/`⌘`+`K` opens Spotlight**, beside `/`. The chord is the one that still works from
+  inside a text field, which is where `/` deliberately does not fire.
+
+### Changed
+
+- **The rail regroups into Codex · Care · Setup**, with the Dashboard on its own and a vitals
+  card above the index — germination, drift, the doctor's verdict, and how long ago the harness
+  was built, on every page. Doctor badges `clean` in words; it used to badge nothing, which
+  reads the same as never having run.
+- **Harnesses and Themes merge into one Harness page**, and About folds into Settings. No route
+  dies: `#/harnesses`, `#/themes` and `#/about` all still resolve. An uninstalled host now
+  offers one `Install…` that discloses its four choices instead of rendering them inline.
+- **The voice gallery is a reference, not a second control.** Every install picks its own voice
+  beside its own footprint, posture and mode; a gallery at the top of the page could only ever
+  act on one of them. It keeps the taglines — which a `<select>` of bare names cannot show —
+  and gives up the buttons.
+- **The rail width is responsive**, `clamp(232px, 18vw, 256px)`, between the two widths the
+  console has been designed at. The breakpoint overrides still win, so it still collapses.
+
+### Fixed
+
+- **The Spotlight input was never wired to its own listbox.** No `role="combobox"`,
+  `aria-expanded`, `aria-controls`, or `aria-activedescendant`, and the rows had no ids —
+  so the arrow keys moved a highlight that was visual and nothing else, and a screen reader
+  was never told results had appeared.
+- **The rail overflowed the document** on short windows once the vitals card was added: a fixed
+  `100vh` box with no scroller of its own produced a second scrollbar beside the page's.
+- **`web/dist` is now gated on the publish path.** It ships in `files[]`, and until now nothing
+  on that path built it or looked at it — the freshness check ran only on pull requests, while
+  `workflow_dispatch` can publish any ref.
+- **Two tests in `laws.test.jsx` failed roughly one run in three.** They gated on rows existing,
+  but the pack selection is seeded in an effect, so there is a rendered frame in which every
+  pack reads as off. The same race, twice, and neither was a product defect.
+
 ## [3.1.2] — 2026-08-24
 
 ### Changed
