@@ -191,10 +191,20 @@ button { font-family: inherit; }
 .app ::-webkit-scrollbar-track, .app ::-webkit-scrollbar-corner { background: transparent; }
 
 /* ---- left rail ---- */
-.rail { position: sticky; top: 0; align-self: start; height: 100vh;
+/* `overflow-y: auto` because the rail is a FIXED 100vh box with a variable amount in it.
+   It held fourteen nav items and a footer and happened to fit, so nothing enforced the
+   height; the vitals card above the index added ~90px and pushed the whole column past
+   the viewport on a 800px-tall window — where, having no scroller of its own, it overflowed
+   into the DOCUMENT and produced a second scrollbar beside the page's. The rail now scrolls
+   itself, which is what a fixed-height list of unknown length has to do. */
+.rail { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
   display: flex; flex-direction: column; gap: 2px;
   padding: 18px 14px; border-right: 1px solid var(--line);
   background: linear-gradient(180deg, var(--bg-2), var(--bg)); }
+/* The vitals card must not be squeezed by the flex algorithm when the rail is tight —
+   a 90px card compressed to 40px is a ring with its number cropped. It keeps its size
+   and the rail scrolls instead. */
+.rail-vitals { flex: none; }
 .rail-brand { display: flex; align-items: center; gap: 11px; padding: 6px 10px 16px;
   cursor: pointer; user-select: none;
   background: none; border: 0; font: inherit; color: inherit; text-align: left; }
@@ -3447,3 +3457,66 @@ a.rail-item.active { color: var(--text); }
   .vr-name { width: 100%; }
   .voice-row { flex-wrap: wrap; }
 }
+
+/* ---- the Journal lens claims the whole pane ---- */
+/* Every other page is capped at `.pad`'s 1180px, which is right for prose and ledgers
+   and wrong for this one: the journal's centrepiece is a MAP, and a map reads better the
+   more room it has. On a 2000px screen the capped version left a third of the pane empty
+   beside a map squeezed into 940 units.
+
+   `:has()` RATHER THAN A FLAG THREADED THROUGH App. The alternative is for App to compute
+   `resolveLayout(flavour, layout) === 'journal'` and swap the pad class — but App cannot
+   see the dashboard's own direction state, so the pad would stay wide after switching to
+   Lineage or Operator, which are not built for it. Keying on the journal's own header
+   element means the rule holds exactly while the journal is on screen and lets go the
+   moment it is not. Where `:has()` is unsupported the page simply stays capped, which is
+   the old layout rather than a broken one.
+
+   Only the OTHER dashboards are excluded; this deliberately does not widen Cultivar,
+   Greenhouse or Operator, each of which was composed against the 1180 cap. */
+/* ⚠ THE WHOLE CHAIN NEEDS A DEFINITE HEIGHT, and this is the line that supplies it.
+   `.col` ships `min-height: 100vh`, which is a FLOOR, not a height — so the column's
+   height stays content-driven, `.page`'s `flex: 1` has no free space to distribute, and
+   every "fill the leftover" below degrades to "be as tall as your content". That is not
+   theoretical: without this the map grew to its natural 566px at full width and pushed
+   the page 213px past the viewport, turning "use the space" into a scrollbar.
+   Scoped to the journal with `:has()` so no other page's scrolling changes. */
+.col:has(.pad > .jr-head) { height: 100vh; }
+/* The scroll container becomes a column so the pad can take a share of it. */
+.page:has(> .pad > .jr-head) { display: flex; flex-direction: column; }
+.pad:has(> .jr-head) {
+  max-width: none;
+  /* `flex: 1` and NOT `min-height: 100%`. The percentage was the obvious spelling and it
+     was wrong: `.page`'s own height is content-driven, so the percentage resolved against
+     a height the pad was itself contributing to, the pad grew past the viewport, and the
+     page gained 213px of scroll — the exact opposite of filling the space. Flexing against
+     a settled parent height fits it precisely instead. */
+  flex: 1;
+  min-height: 0;
+  /* `.pad`'s own `margin: 0 auto` is what centres every other page inside its cap. In a
+     flex COLUMN that auto margin resolves on the cross axis and makes the box size to its
+     content instead of stretching — which silently undid the whole point and left the pad
+     at 962px on a 2000px screen. Cancelled explicitly. */
+  margin: 0;
+  width: 100%;
+  /* A column so the map can take the leftover height instead of sitting in a 330px
+     letterbox with dead space under it. */
+  display: flex;
+  flex-direction: column;
+}
+.pad:has(> .jr-head) .jr-map {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pad:has(> .jr-head) .jr-map .card-head { flex: none; }
+/* The SVG keeps its 940×330 viewBox and its default `xMidYMid meet`, so growing the box
+   SCALES the drawing rather than stretching it — the composition is preserved and simply
+   gets bigger. `min-height` keeps it legible when the window is short. */
+/* `min-height: 0` is what lets the SVG SHRINK below its natural aspect-ratio height —
+   without it a flex item never goes under its content size, which is exactly how the map
+   overflowed. The floor is a legibility limit for short windows; past it the page scrolls,
+   which is the right answer rather than an unreadable sliver. */
+.pad:has(> .jr-head) .cmap { flex: 1; min-height: 240px; height: auto; }
+.pad:has(> .jr-head) .jr-others { flex: none; }

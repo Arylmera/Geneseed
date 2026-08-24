@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../../api/index.js'
 import { go } from '../../lib/router.js'
-import { lawCatColor } from '../../lib/lawCats.js'
+import { invariantColor, packColor } from '../../lib/lawCats.js'
 import { rulesInForce } from '../../lib/format.js'
 
 // THE CONSTITUTION, DRAWN AS WHAT IT IS: a hub of rules in force, its three tiers around
@@ -113,8 +113,12 @@ export default function ConstitutionMap({ overview }) {
   const invPts = arcPoints(INVARIANTS, INV_ARC, invariants.length)
   const packPts = arcPoints(DOCTRINES, PACK_ARC, packs.length)
 
+  // role="group", NOT role="img". An `img` role makes the whole subtree presentational,
+  // which prunes every one of the focusable role="button" nodes below out of the
+  // accessibility tree — leaving a screen-reader user with nine-plus silent tab stops
+  // inside a graphic that announces one alt text. `group` keeps the name AND the children.
   return (
-    <svg className="cmap" viewBox="0 0 940 330" role="img" aria-label="The constitution map">
+    <svg className="cmap" viewBox="0 0 940 330" role="group" aria-label="The constitution map">
       {/* Hub → satellite: the constitution IS these three tiers. Solid. */}
       <path d="M330 165 C260 140 220 125 158 105" className="cm-edge" />
       <path d="M330 165 C420 105 460 90 520 78" className="cm-edge" />
@@ -135,9 +139,7 @@ export default function ConstitutionMap({ overview }) {
           {inForce} rules in force
         </text>
         <text x={HUB.x} y={HUB.y + 24} textAnchor="middle" className="cm-note">
-          {overview?.footprint === 'lean'
-            ? 'lean ships each rule’s first line'
-            : 'full text inlined'}
+          {overview?.footprint === 'lean' ? 'lean — first line only' : 'full text inlined'}
         </text>
       </Node>
 
@@ -150,8 +152,8 @@ export default function ConstitutionMap({ overview }) {
           {counts.ontology ?? 0} sections
         </text>
       </Node>
-      <text x={ONTOLOGY.x} y={165} textAnchor="middle" className="cm-note">
-        how it thinks — not a rule it can break
+      <text x={ONTOLOGY.x} y={162} textAnchor="middle" className="cm-note">
+        how it thinks, not a rule
       </text>
 
       <Node hash="#/laws" label={`Invariants: ${counts.laws ?? 0}, never broken`}>
@@ -171,13 +173,13 @@ export default function ConstitutionMap({ overview }) {
               cy={invPts[i].y}
               r="8"
               className="cm-mini-disc"
-              style={{ stroke: lawCatColor(it.klass) }}
+              style={{ stroke: invariantColor(it.klass) }}
             />
             <text
               x={invPts[i].x}
               y={invPts[i].y + 3}
               textAnchor="middle"
-              style={{ fill: lawCatColor(it.klass) }}
+              style={{ fill: invariantColor(it.klass) }}
             >
               {String(i + 1).padStart(2, '0')}
             </text>
@@ -185,7 +187,7 @@ export default function ConstitutionMap({ overview }) {
         ))}
       </g>
       <text x={INVARIANTS.x} y={132} textAnchor="middle" className="cm-note">
-        one dot per rule, coloured by what it protects
+        coloured by what each protects
       </text>
 
       <Node
@@ -208,7 +210,7 @@ export default function ConstitutionMap({ overview }) {
               cy={packPts[i].y}
               r="15"
               className="cm-pack-disc"
-              style={{ stroke: lawCatColor(p.id) }}
+              style={{ stroke: packColor(p.id) }}
             />
             <text x={packPts[i].x} y={packPts[i].y - 2} textAnchor="middle" className="cm-pack-id">
               {p.id.slice(0, 4)}
@@ -217,7 +219,7 @@ export default function ConstitutionMap({ overview }) {
               x={packPts[i].x}
               y={packPts[i].y + 8}
               textAnchor="middle"
-              style={{ fill: lawCatColor(p.id) }}
+              style={{ fill: packColor(p.id) }}
             >
               {p.on}
             </text>
@@ -225,9 +227,7 @@ export default function ConstitutionMap({ overview }) {
         ))}
       </g>
       <text x={640} y={296} className="cm-note">
-        {counts.doctrines
-          ? `${counts.doctrines.active}/${counts.doctrines.total} packs lit — toggle per install`
-          : ''}
+        {counts.doctrines ? `${counts.doctrines.active}/${counts.doctrines.total} packs lit` : ''}
       </text>
 
       <text x={800} y={20} className="cm-govern-label">

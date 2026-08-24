@@ -3,7 +3,7 @@ group: extend
 order: 1
 title: "Write a new theme"
 kind: "concept"
-link: {"hash": "#/themes", "label": "Open the theme gallery →"}
+link: {"hash": "#/harness", "label": "Open the voice gallery →"}
 ---
 A theme is one JSON file under `themes/` declaring voice tokens only: `BANNER`, `TAGLINE`, `LOADED_SIGIL`, `VOICE`, the core nouns (`ONTOLOGY`/`LAW(S)`/`DOCTRINE(S)`/`AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`WIKI`), the section intros `INTRO_*`, the epigraphs `EPI_*`, the `BENEDICTION`, the `ROAST_PERSONA`, and `DESC_*` blurbs. Copy `themes/neutral.json` and edit. `geneseed build --theme yours` renders it; `doctor` checks for missing tokens.
 

@@ -158,6 +158,7 @@ describe('Harness', () => {
       <Harness
         onAction={onAction}
         currentTheme="neutral"
+        overview={{ theme: 'neutral', emit: 'opencode-global' }}
         themes={[
           { name: 'neutral', tagline: 'plain', blurb: '' },
           { name: 'imperial', tagline: 'for the Emperor', blurb: '' },
@@ -175,7 +176,13 @@ describe('Harness', () => {
     // "Apply voice" — deliberately not "Apply", which the table's active row owns for a
     // different action on a different target.
     fireEvent.click(screen.getByRole('button', { name: 'Apply voice' }))
-    expect(onAction).toHaveBeenCalledWith('build', { theme: 'imperial', emit: undefined })
+    // THE EMIT COMES FROM THE OVERVIEW AND MUST BE PRESENT. A build dispatched with
+    // `emit: undefined` re-emits against the default target instead of the install's own,
+    // and JSON.stringify drops the key so the server never sees that anything was missing.
+    expect(onAction).toHaveBeenCalledWith('build', {
+      theme: 'imperial',
+      emit: 'opencode-global',
+    })
   })
 
   it('re-themes an active install via the voice picker (the Apply button)', async () => {
@@ -331,6 +338,19 @@ describe('Harness', () => {
     await waitFor(() => expect(screen.getByText('MarkItDown')).toBeTruthy())
     expect(screen.getByText('GitLab')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy()
+  })
+
+  it('draws no voice gallery until the overview lands', async () => {
+    // The race `useOverview` makes possible: two effects, two setState calls, so the theme
+    // list can arrive first. With no overview there is no deployed voice to pin and no emit
+    // to build against, so the card must not paint at all — a gallery in that window offers
+    // "Apply voice" on the voice you are already running.
+    render(
+      <Harness onAction={() => {}} themes={[{ name: 'neutral', tagline: 'plain', blurb: '' }]} />,
+    )
+    await waitFor(() => expect(screen.getByText('Every install')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: 'Apply voice' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'current' })).toBeNull()
   })
 
   it('renders the Excluded folders card when a global install exists', async () => {

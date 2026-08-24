@@ -3,7 +3,7 @@ group: concepts
 order: 9
 title: "Sovereign repos (exclusions)"
 kind: "concept"
-link: {"hash": "#/harnesses", "label": "Manage in Harnesses →"}
+link: {"hash": "#/harness", "label": "Manage in Harness →"}
 ---
 A **sovereign repo** is a folder where every GLOBAL harness install goes fully dormant: hooks stay silent and the global preamble (`AGENT.md`/`CLAUDE.md`) is never loaded there. A repo that ships its own agent config you don't want a global harness layered onto is the usual case.
 

@@ -270,8 +270,17 @@ function ThisInstall({ overview }) {
 //
 // It reads the `themes` App already fetched for the voice popover instead of fetching its
 // own list: the old page's `api.themes()` call existed because it was mounted standalone.
-function VoiceGallery({ themes, current, emit, onAction }) {
-  if (!themes.length) return null
+function VoiceGallery({ themes, overview, onAction }) {
+  // ⚠ GATED ON THE OVERVIEW, NOT JUST ON THE THEME LIST. `useOverview` fills `themes` and
+  // `overview` from two independent effects with two independent setState calls, so the
+  // theme list can arrive first. Rendering then would paint every voice — the deployed one
+  // included — as applicable, because `current` is still undefined, and applying one would
+  // POST a build whose `emit` is undefined and therefore dropped by JSON.stringify: a
+  // re-emit against the default target rather than the install's own. The page this
+  // replaced fetched `current.emit` itself and showed a spinner until it had it.
+  if (!themes.length || !overview) return null
+  const current = overview.theme
+  const emit = overview.emit
   // Current first, then source order — a gallery whose current row is somewhere in the middle
   // makes you hunt for the one fact you came to read.
   const rows = [...themes].sort((a, b) => (a.name === current ? -1 : b.name === current ? 1 : 0))
@@ -590,12 +599,7 @@ export default function Harnesses({
       </div>
 
       <ThisInstall overview={overview} />
-      <VoiceGallery
-        themes={themes}
-        current={currentTheme}
-        emit={overview?.emit}
-        onAction={onAction}
-      />
+      <VoiceGallery themes={themes} overview={overview} onAction={onAction} />
 
       <div className="card pad-lg mb-16">
         <div className="card-head">
@@ -893,7 +897,7 @@ export default function Harnesses({
             </div>
           </td>
         </tr>
-        {wizard === inst.id ? (
+        {inst.state === 'absent' && wizard === inst.id ? (
           <tr className="h-detail-row h-setup-row">
             <td />
             <td colSpan={5} className="h-detail">

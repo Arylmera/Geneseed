@@ -50,12 +50,17 @@ The left rail mirrors the harness's own shape:
 
 | Group | Views |
 | --- | --- |
-| **🧬 Harness** | Dashboard · Activity · Constitution · Rules · Profile · Skills · Agents · Library · Docs · Graph |
-| **🔧 Maintain** | Changes · Doctor |
-| **🎨 Configure** | Harnesses · Themes · Settings |
-| **ℹ️ About** | About |
+| *(ungrouped)* | Dashboard |
+| **📖 Codex** | Constitution · Rules · Profile · Skills · Agents · Library · Docs · Graph |
+| **🩺 Care** | Activity · Changes · Doctor |
+| **🎨 Setup** | Harness · Settings |
 
-A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it, type
+Above the index sits a **vitals** card — the germination ring, drift, the doctor's verdict
+and how long ago the harness was built — so those four facts are on screen from every page.
+It is hidden where the rail collapses to icons (≤960px) and returns with the phone drawer.
+
+A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it (or
+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, which also works from inside a text field), type
 to jump to any agent, skill, doc, spec, MCP server, or constitutional rule — the `laws`
 catalog it indexes is the whole constitution, so an ontology section, an invariant and a
 doctrine rule are all reachable by name; <kbd>↑</kbd>/<kbd>↓</kbd> to
@@ -129,32 +134,36 @@ streams the output of background jobs and keeps their history across reloads.
   theme, parity, links, authoring gates, drift), grouping any problems per check. Re-run
   on demand.
 
-### 🎨 Configure
+### 🎨 Setup
 
-- **Harnesses** (`#/harnesses`) — every detected install (host × scope), one row each,
-  with per-row **Voice**, **Footprint**, **Posture**, and **Mode** pickers plus
-  Install/Apply, an on/off switch, and remove. **Posture** is the relationship register
-  (peer/mentor/expert/assistant/artisan — default **peer**); **Mode** is the operating
-  register (direct/foreman — default **direct**; foreman triages tasks into isolated
-  pipelines instead of working every one itself). Both are orthogonal to voice and to
-  each other, picked here or via the setup wizard, and preserved across every rebuild.
-  "Deploy to folder…" and "Rebuild all" apply to the whole set. An **Excluded folders**
-  card (shown once a global install exists) manages sovereign repos — folders where every
-  global harness goes dormant (hooks stay silent, the global preamble never loads);
-  add or remove one here, the web mirror of `harness exclude add|remove|list`.
-- **Themes** (`#/themes`) — a gallery of the shipped voices (name, tagline, sigil, accent
-  glow). **Apply** a voice to rebuild the deployed harness in that theme; the current one
-  is marked.
+- **Harness** (`#/harness`) — this machine's own install first (path, voice, footprint,
+  and when it was built), then the **Voice** gallery, then every detected install.
+  `#/harnesses` and `#/themes` both still resolve here, so old links and bookmarks keep
+  working.
+  - The **Voice** card is the former Themes tab: every shipped voice with its tagline,
+    the deployed one pinned first and marked. **Apply voice** rebuilds the deployed
+    harness in that voice — structure identical, only the words and the accent shift.
+  - **Every install** lists each detected install (host × scope), one row each. An
+    ACTIVE row carries per-row **Voice**, **Footprint**, **Posture** and **Mode**
+    pickers plus **Apply**, an on/off switch, and remove; a host that is NOT installed
+    yet shows a single **Install…** that discloses the same four choices as steps.
+    **Posture** is the relationship register (peer/mentor/expert/assistant/artisan —
+    default **peer**); **Mode** is the operating register (direct/foreman — default
+    **direct**; foreman triages tasks into isolated pipelines instead of working every
+    one itself). Both are orthogonal to voice and to each other, picked here or via the
+    setup wizard, and preserved across every rebuild.
+  - "Deploy to folder…" and "Rebuild all" apply to the whole set. An **Excluded folders**
+    card (shown once a global install exists) manages sovereign repos — folders where every
+    global harness goes dormant (hooks stay silent, the global preamble never loads);
+    add or remove one here, the web mirror of `harness exclude add|remove|list`.
 - **Settings** (`#/settings`) — a **Console direction** picker (the visual flavour of the
   console) with a **Dashboard layout** control (Auto follows each theme's designed Status
-  lens; Cultivar / Greenhouse / Operator force one regardless of skin), the install snapshot
-  (deployed/target/theme/version/memory store), a Maintenance card (PATH link/unlink,
-  uninstall), an offline package download, and server controls (Stop). Build, update, and MCP
-  wiring live in the Harnesses tab.
-
-### ℹ️ About
-
-- **About** (`#/about`) — project + creator credits and the source link.
+  lens; Cultivar / Greenhouse / Operator / Journal force one regardless of skin), the
+  install snapshot (deployed/target/theme/version/memory store), a Maintenance card (PATH
+  link/unlink, uninstall), an offline package download, server controls (Stop), and the
+  **About** colophon — project + creator credits and the source link, folded in from the
+  retired `#/about` tab (which still resolves here). Build, update, and MCP wiring live in
+  the Harness tab.
 
 ## Rebuilding the UI
 

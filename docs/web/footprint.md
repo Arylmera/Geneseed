@@ -29,7 +29,7 @@ Neither setting hides text from the agent; they hide it from *every turn*.
 It's set-and-forget — stored in the `.geneseed-footprint` marker, preserved across every rebuild, identical on every host (OpenCode, Claude Code, Bob, Copilot). Changing it re-emits the install.
 
 - **Settings** — the **Footprint** toggle flips the current install (full ⇄ lean) and rebuilds it in place.
-- **Harnesses tab** — a per-harness dropdown sets it for any one install independently, then **Apply**.
+- **Harness tab** — on an active install, a per-harness dropdown sets it for that install independently, then **Apply**. On a host that is not installed yet, it is step 2 of **Install…**.
 - **Setup / re-theme wizard** — asks for footprint alongside voice, posture, mode, and doctrine packs.
 - **CLI** — `geneseed-build --footprint lean` (with any `--emit`).
 
