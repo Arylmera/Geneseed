@@ -9,7 +9,7 @@ const TAB_FLAG = {
   dashboard: 'overview',
   diff: 'diff',
   doctor: 'doctor',
-  themes: 'themes',
+  harness: 'harness',
   graph: 'graph',
   settings: 'settings',
 }

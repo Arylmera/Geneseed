@@ -2235,6 +2235,98 @@ a.rail-item.active { color: var(--text); }
 .fl-neon .atmos { background: radial-gradient(680px 460px at 84% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%); opacity: 1; }
 .fl-neon .atmos::after { background-image: radial-gradient(color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px); background-size: 3px 3px; opacity: .5; mix-blend-mode: normal; }
 
+/* ---- Flavour · Atlas ---- */
+/* The field journal: warm loam dark, sage ink, the codex as a living map. Close
+   kin to Greenhouse and deliberately NOT a mutation of it — Greenhouse is the
+   soft rounded one with Poppins; Atlas is drier and more cartographic, with
+   Space Grotesk's flat terminals, a cooler loam, and full pills everywhere.
+   Designed around the Journal dashboard lens (useLayout.js pairs them).
+
+   ⚠ NO --rail-w HERE, and the temptation is real: the design was drawn at a
+   256px rail. A `.fl-atlas { --rail-w: … }` would sit on `.app`, which BEATS the
+   `:root` override the 960px media query uses to collapse the rail to a 62px
+   icon strip — so the one skin that set it would be the one skin whose rail
+   never collapsed. Layout vars belong to :root and the breakpoints; skins take
+   surfaces, lines, text, radii and type. */
+.fl-atlas {
+  --bg:        #15130E;
+  --bg-2:      #100E0A;
+  --surface:   #1C1A12;
+  --surface-2: #211E15;
+  --surface-3: #2A2619;
+  --line:      #322D22;
+  --line-2:    #453E2E;
+  --line-3:    #5C5340;
+  --text:      #EFEAE0;
+  --text-2:    #B5AC99;
+  --text-3:    #8A8172;
+  --good:      #8FD694;
+  --warn:      #E8B53D;
+  --bad:       #FF6F69;
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 24px;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-ui:      'Hanken Grotesk', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+  --shadow-card: 0 1px 0 rgba(255,255,255,.03) inset, 0 22px 50px -32px rgba(0,0,0,.85);
+}
+/* Warm paper, sage darkened until it holds on it. Every flavour ships both modes:
+   the console has a light toggle and a skin with only half a palette inherits the
+   base light theme's cool greys, which fights everything above. */
+.fl-atlas.light {
+  --bg:        #F4F0E6;
+  --bg-2:      #EBE6D8;
+  --surface:   #FCFAF4;
+  --surface-2: #F6F2E7;
+  --surface-3: #EDE8D9;
+  --line:      #E2DAC6;
+  --line-2:    #CFC5AC;
+  --line-3:    #A2977C;
+  --text:      #1F1D16;
+  --text-2:    #56503F;
+  --text-3:    #837B66;
+  --good:      #1C8450;
+  --warn:      #9C6A10;
+  --bad:       #CC4A45;
+}
+.fl-atlas h1.h, .fl-atlas h2, .fl-atlas h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -.015em; }
+.fl-atlas .card-head h3 { font-family: var(--font-display); font-weight: 600; }
+/* Cards are flat panes with a sage-lit top edge — a journal page, not a lifted
+   object. Greenhouse's card is a gradient the whole way down; this one only
+   tints the first few percent, so a page of stacked cards stays quiet. */
+.fl-atlas .card {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 4%, var(--surface)) 0%,
+    var(--surface) 22%);
+  border-radius: var(--r-lg);
+}
+/* Pills everywhere: buttons, badges, and the tags in the rail. */
+.fl-atlas .btn { border-radius: 999px; }
+.fl-atlas .btn:not(.ghost):not(.soft) {
+  background-image: linear-gradient(rgba(255,255,255,.1), transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 8px 20px -12px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.fl-atlas .badge, .fl-atlas .rail-item .tag { border-radius: 999px; }
+.fl-atlas .rail-item { border-radius: var(--r-sm); }
+.fl-atlas .rail-item.active { background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.fl-atlas .rail-vitals { border-radius: 18px; }
+.fl-atlas .tb-search, .fl-atlas .sel, .fl-atlas .inp { border-radius: 999px; }
+/* Atmosphere: one wide sage bloom off the top-right, the prototype's own
+   background. Accent-relative, so Curated's sage and a voice's accent both land
+   somewhere sensible and light mode does not get a dark wash. */
+.fl-atlas .atmos {
+  background: radial-gradient(900px 560px at 70% -10%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 60%);
+  opacity: 1;
+}
+.fl-atlas .atmos::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  opacity: .03; mix-blend-mode: overlay;
+}
+
 
 /* ============================================================================
    SETTINGS — Console direction picker tiles (one per flavour).
@@ -2280,6 +2372,13 @@ a.rail-item.active { color: var(--text); }
 .dir-cultivar .dir-thumb-bar:nth-child(2) { background: #2C333B; }
 .dir-cultivar .dir-thumb-bar:nth-child(3) { background: #2C333B; }
 .dir-cultivar .dir-thumb-dot { background: #3AD4C4; box-shadow: 0 0 8px #2BA89B; }
+
+.dir-atlas .dir-thumb { background: #15130E; border-radius: 18px; }
+.dir-atlas .dir-thumb-rail { background: #1C1A12; border-right: 1px solid #322D22; }
+.dir-atlas .dir-thumb-bar { background: #8FD694; border-radius: 999px; }
+.dir-atlas .dir-thumb-bar:nth-child(2) { background: #322D22; }
+.dir-atlas .dir-thumb-bar:nth-child(3) { background: #322D22; }
+.dir-atlas .dir-thumb-dot { background: #C9E8A8; box-shadow: 0 0 8px #5C7A50; }
 
 .dir-greenhouse .dir-thumb { background: #15110B; border-radius: 16px; }
 .dir-greenhouse .dir-thumb-rail { background: #1A2116; border-right: 1px solid #33402B; }
@@ -3221,3 +3320,119 @@ a.rail-item.active { color: var(--text); }
   text-transform: uppercase; letter-spacing: .06em;
 }
 .rule-date { width: 150px; }
+
+/* ---- rail vitals (the harness's pulse, above the index on every page) ---- */
+.rail-vitals { display: flex; align-items: center; gap: 14px;
+  margin: 2px 4px 12px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface-2); }
+.rv-ring { flex: none; }
+.rv-ring-num { fill: var(--accent); font-family: var(--font-display); font-size: 17px;
+  font-weight: 700; }
+.rv-ring-lbl { fill: var(--text-3); font-family: var(--font-mono); font-size: 6.5px;
+  letter-spacing: 1px; }
+.rv-rows { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px;
+  font-size: 12px; }
+.rv-rows > div { display: flex; justify-content: space-between; gap: 8px; }
+.rv-rows span { color: var(--text-2); }
+.rv-rows b { font-family: var(--font-mono); font-weight: 500; font-size: 11px;
+  color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-rows b.plain { color: var(--text); }
+
+/* ---- Harness · this install, voice gallery, install wizard ---- */
+.motto { border-top: 1px solid var(--line-2); margin: 12px 0 0; padding-top: 10px;
+  font-style: italic; max-width: 62ch; }
+.voice-row { display: flex; align-items: baseline; gap: 12px; padding: 9px 12px;
+  border-radius: var(--r-sm); border: 1px solid transparent; }
+.voice-row:hover { background: var(--surface-2); }
+.voice-row.current { border-color: var(--accent-line); background: var(--accent-soft); }
+.vr-name { flex: none; width: 120px; font-family: var(--font-display); font-weight: 600;
+  font-size: 13.5px; text-transform: capitalize; }
+.vr-desc { flex: 1; min-width: 0; color: var(--text-2); font-size: 12px; font-style: italic; }
+.voice-row .btn { flex: none; }
+.h-setup { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.h-setup .hs-msg { margin: 0; }
+.hs-steps { display: flex; flex-wrap: wrap; gap: 14px; }
+.hs-step { display: flex; align-items: center; gap: 8px; }
+.hs-step > span { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+
+/* ---- Dashboard · the Journal lens ---- */
+.jr-head { margin-bottom: 14px; }
+.jr-row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px; margin-bottom: 14px; }
+.jr-card { padding-top: 14px; padding-bottom: 14px; }
+.jr-card .card-head { margin-bottom: 10px; }
+.jr-ring { display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 5px 0; border: 0; background: none; color: inherit; cursor: pointer;
+  font: inherit; text-align: left; }
+.jr-ring:hover .jr-ring-label { color: var(--text); }
+.jr-ring-label { flex: none; width: 88px; font-size: 11.5px; color: var(--text-2); }
+.jr-ring-track { flex: 1; height: 8px; border-radius: 999px; overflow: hidden;
+  background: var(--surface-3); }
+.jr-ring-fill { display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
+.jr-ring-num { flex: none; width: 34px; text-align: right;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); }
+.jr-fresh { display: flex; align-items: baseline; gap: 10px; width: 100%;
+  padding: 6px 0; border: 0; border-bottom: 1px solid var(--line-2);
+  background: none; color: inherit; cursor: pointer; font: inherit; text-align: left; }
+.jr-fresh:hover .jr-fresh-name { color: var(--accent); }
+.jr-fresh-kind { flex: none; width: 64px; font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.jr-fresh-name { flex: 1; min-width: 0; font-size: 11.5px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.jr-fresh-when { flex: none; font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-3); }
+.jr-skipped { margin: 8px 0 0; font-size: 11px; }
+.jr-care { border-top: 1px solid var(--line-2); margin: 8px 0 0; padding-top: 9px;
+  font-size: 11.5px; color: var(--text-3); }
+.jr-go { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent);
+  background: none; border: 0; padding: 0; cursor: pointer; }
+.jr-go:hover { text-decoration: underline; }
+.jr-go.right { margin-left: auto; }
+.jr-map { border-color: var(--accent-line); }
+.jr-others { margin: 14px 0 0; font-size: 11.5px; }
+
+/* ---- the constitution map ---- */
+.cmap { display: block; width: 100%; height: auto; min-height: 300px; }
+.cm-edge { fill: none; stroke: var(--line-3); stroke-width: 1.5; }
+.cm-edge-gov { fill: none; stroke: var(--line-2); stroke-width: 1.2; stroke-dasharray: 4 5; }
+.cm-node { cursor: pointer; }
+.cm-node:hover circle { stroke-width: 2.6; }
+.cm-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cm-hub-disc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.cm-hub-name { fill: var(--accent); font-family: var(--font-display); font-size: 17px;
+  font-weight: 600; }
+.cm-hub-num { fill: var(--text); font-family: var(--font-mono); font-size: 10px; }
+.cm-sat-disc { fill: var(--surface-2); stroke: var(--accent); stroke-width: 1.5; }
+.cm-sat-name { fill: var(--text); font-family: var(--font-display); font-size: 12.5px;
+  font-weight: 600; }
+.cm-sat-num { fill: var(--accent); font-family: var(--font-mono); font-size: 10px; }
+.cm-mini { font-family: var(--font-mono); font-size: 7.5px; }
+.cm-mini-disc { fill: var(--surface); stroke-width: 1.2; }
+.cm-pack-disc { fill: var(--accent-soft); stroke-width: 1.2; }
+.cm-pack-id { fill: var(--text); }
+.cm-gov-disc { fill: var(--surface); stroke: var(--line-3); stroke-width: 1.3; }
+.cm-gov-name { fill: var(--text); font-family: var(--font-display); font-size: 10.5px;
+  font-weight: 600; }
+.cm-gov-num { fill: var(--accent); font-family: var(--font-mono); font-size: 9px; }
+.cm-note { fill: var(--text-3); font-family: var(--font-mono); font-size: 8.5px; }
+.cm-govern-label { fill: var(--text-3); font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 1.5px; }
+
+/* The three contract breakpoints (1180 / 960 / 720), reused — never a fourth.
+   1180: the journal's two cards stack before the map gets narrow enough to blur.
+   960:  the rail is a 62px icon strip, which has no room for a vitals card.
+   720:  the rail is a full-width drawer again, so the vitals come back with it. */
+@media (max-width: 1180px) {
+  .jr-row2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 960px) {
+  .rail-vitals { display: none; }
+}
+@media (max-width: 720px) {
+  .rail-vitals { display: flex; }
+  .vr-name { width: 100%; }
+  .voice-row { flex-wrap: wrap; }
+}

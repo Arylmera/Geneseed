@@ -5,6 +5,7 @@ import { useAsync } from '../hooks/useAsync.js'
 import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import { LAW_CATS, LAW_CAT_ORDER, PACK_CATS } from '../lib/lawCats.js'
 
 // THE FILENAME AND THE ROUTE STAY `laws`. tests/helpers/cli_golden.mjs hard-requires this path,
 // doctor's lawMetaProblems reads this ONE file out of web/src, and the npm partition ships it
@@ -18,24 +19,9 @@ import ErrorState from '../components/ErrorState.jsx'
 // is classed here. The list stays six because it is the VOCABULARY that js/inspect/inventory.mjs's
 // LAW_CLASSES publishes and doctor quotes verbatim; the PAGE renders only non-empty facets, which
 // is a display decision and not a change to the taxonomy.
-const LAW_CATS = {
-  security: { label: 'Security', c: 'oklch(0.74 0.085 45)' },
-  verify: { label: 'Verification', c: 'oklch(0.78 0.075 200)' },
-  process: { label: 'Process', c: 'oklch(0.76 0.075 150)' },
-  craft: { label: 'Craft', c: 'oklch(0.78 0.085 95)' },
-  context: { label: 'Context', c: 'oklch(0.74 0.08 280)' },
-  comms: { label: 'Communication', c: 'oklch(0.76 0.085 345)' },
-}
-const LAW_CAT_ORDER = ['security', 'verify', 'process', 'craft', 'context', 'comms']
-
-// A doctrine rule's class IS its pack — there is no second taxonomy over one. Colours only; the
-// pack's NAME and blurb are themed and come from the API, so they are never transcribed here.
-const PACK_CATS = {
-  craft: 'oklch(0.78 0.085 95)',
-  rigor: 'oklch(0.78 0.075 200)',
-  ops: 'oklch(0.76 0.075 150)',
-  process: 'oklch(0.74 0.085 45)',
-}
+// The colour vocabulary moved to lib/lawCats.js when the Journal dashboard's constitution
+// map started painting the same rules — this page cannot be imported from the app shell
+// (it is lazy for a reason) and it cannot move (doctor reads LAW_META out of this path).
 
 // One row per invariant in src/laws/universal.md: its class (fallback for an older server that
 // returns no `klass`) and the one-line principle shown in the table's "Principle" column — display

@@ -17,7 +17,7 @@ import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
 import Loading from './components/Loading.jsx'
 // Dashboard is the landing route, so it ships in the shell. Every other page is
-// code-split: importing all seventeen statically put the whole console — graph
+// code-split: importing all fourteen statically put the whole console — graph
 // rendering, the harness manager, the docs viewer — into one chunk that had to be
 // downloaded and parsed before the dashboard could paint, on a tool most sessions
 // only ever open to the dashboard.
@@ -31,12 +31,10 @@ const Profile = lazy(() => import('./pages/Profile.jsx'))
 const Skills = lazy(() => import('./pages/Skills.jsx'))
 const Diff = lazy(() => import('./pages/Diff.jsx'))
 const Doctor = lazy(() => import('./pages/Doctor.jsx'))
-const Themes = lazy(() => import('./pages/Themes.jsx'))
 const Graph = lazy(() => import('./pages/Graph.jsx'))
 const Settings = lazy(() => import('./pages/Settings/index.jsx'))
-const Harnesses = lazy(() => import('./pages/Harnesses.jsx'))
+const Harness = lazy(() => import('./pages/Harness.jsx'))
 const Docs = lazy(() => import('./pages/Docs/index.jsx'))
-const About = lazy(() => import('./pages/About.jsx'))
 
 // App is a thin shell: it wires the hooks (overview, jobs, color mode) to the
 // chrome (rail, topbar, console) and dispatches the active route to a page. All
@@ -110,6 +108,22 @@ export default function App() {
     onFinish: refresh,
     onError,
   })
+
+  // The install snapshot (fingerprints + version verdict). ONE fetch for the whole shell:
+  // the rail's germination ring and the dashboard's Status/Lineage/Operator views all read
+  // it, and it was being fetched twice — once for the dashboard, once for the rail — for the
+  // same two fields. Refetched on `dataRev` so a rebuild moves the ring with everything else.
+  const [setup, setSetup] = useState(null)
+  useEffect(() => {
+    let alive = true
+    api
+      .setup()
+      .then((v) => alive && setSetup(v))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [dataRev])
 
   // One sentence describing what the job runner is doing, for the live region.
   const lastRun = runs[runs.length - 1]
@@ -189,6 +203,7 @@ export default function App() {
       <Rail
         route={route}
         overview={overview}
+        setup={setup}
         onOpenVoice={() => setVoiceOpen((v) => !v)}
         onNavigate={() => setNavOpen(false)}
       />
@@ -219,12 +234,13 @@ export default function App() {
           onSwitch={refresh}
         />
         <main className="page" id="main" tabIndex={-1}>
-          <div className={route.view === 'harnesses' ? 'pad pad-wide' : 'pad'}>
+          <div className={route.view === 'harness' ? 'pad pad-wide' : 'pad'}>
             <Suspense fallback={<Loading />}>
               {route.view === 'dashboard' && (
                 <Dashboard
                   overview={overview}
                   themes={themes}
+                  setup={setup}
                   onAction={runAction}
                   flavour={flavour}
                   layout={layout}
@@ -260,7 +276,6 @@ export default function App() {
               {route.view === 'profile' && <Profile />}
               {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
               {route.view === 'doctor' && <Doctor />}
-              {route.view === 'themes' && <Themes onAction={runAction} />}
               {route.view === 'graph' && <Graph />}
               {route.view === 'settings' && (
                 <Settings
@@ -274,11 +289,12 @@ export default function App() {
                   onLayout={setLayout}
                 />
               )}
-              {route.view === 'harnesses' && (
-                <Harnesses
+              {route.view === 'harness' && (
+                <Harness
                   onAction={runAction}
                   themes={themes}
                   currentTheme={overview?.theme}
+                  overview={overview}
                   dataRev={dataRev}
                   onMutated={refresh}
                 />
@@ -286,7 +302,6 @@ export default function App() {
               {route.view === 'docs' && (
                 <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
               )}
-              {route.view === 'about' && <About />}
             </Suspense>
           </div>
         </main>

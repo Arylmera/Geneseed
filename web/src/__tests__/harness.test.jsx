@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
@@ -58,12 +58,12 @@ vi.mock('../api/index.js', () => ({
   },
 }))
 
-import Harnesses from '../pages/Harnesses.jsx'
+import Harness from '../pages/Harness.jsx'
 import { api } from '../api/index.js'
 
-describe('Harnesses', () => {
+describe('Harness', () => {
   it('lists each install (host · scope) and a Rebuild all button', async () => {
-    render(<Harnesses onAction={() => {}} />)
+    render(<Harness onAction={() => {}} />)
     await waitFor(() => expect(screen.getAllByText(/global/).length).toBeGreaterThan(0))
     // both the active OpenCode and the absent Claude rows render
     expect(screen.getAllByText(/opencode/).length).toBeGreaterThan(0)
@@ -73,26 +73,34 @@ describe('Harnesses', () => {
 
   it('Rebuild all dispatches the build-all action', async () => {
     const onAction = vi.fn()
-    render(<Harnesses onAction={onAction} />)
+    render(<Harness onAction={onAction} />)
     const btn = await screen.findByRole('button', { name: /rebuild all/i })
     fireEvent.click(btn)
     expect(onAction).toHaveBeenCalledWith('build-all')
   })
 
-  it('offers Install on an absent row and dispatches install with the chosen voice', async () => {
+  it('discloses the install steps before dispatching, and defaults the voice to the deployed one', async () => {
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    // The voice picker defaults to the current deployed voice.
     render(
-      <Harnesses
+      <Harness
         onAction={onAction}
         currentTheme="imperial"
         themes={[{ name: 'neutral' }, { name: 'imperial' }]}
       />,
     )
-    // The mock's claude:global row is absent -> exactly one Install button.
-    const btn = await screen.findByRole('button', { name: 'Install' })
-    fireEvent.click(btn)
+    // An absent row shows ONE control, not four selects and a button. THE DISCLOSURE IS THE
+    // ASSERTION: before it is opened there is no voice picker for this row at all, which is
+    // the whole change — a machine with three uninstalled hosts used to render twelve
+    // dropdowns for choices nobody had asked to make.
+    const open = await screen.findByRole('button', { name: 'Install…' })
+    expect(screen.queryByLabelText('voice for claude · global')).toBeNull()
+    fireEvent.click(open)
+    // Opened, the four steps are there and the voice defaults to the deployed one.
+    expect(screen.getByLabelText('voice for claude · global')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    // The PAYLOAD IS UNCHANGED from the inline lane this replaced — same action, same six
+    // fields, same defaults. Only the moment the user is asked has moved.
     expect(onAction).toHaveBeenCalledWith('install', {
       host: 'claude',
       scope: 'global',
@@ -104,20 +112,70 @@ describe('Harnesses', () => {
     })
   })
 
-  it('the voice picker changes the install theme', async () => {
+  it('the disclosed voice picker changes the install theme', async () => {
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(
-      <Harnesses
+      <Harness
         onAction={onAction}
         currentTheme="imperial"
         themes={[{ name: 'neutral' }, { name: 'imperial' }]}
       />,
     )
-    const select = await screen.findByLabelText('voice for claude · global')
+    fireEvent.click(await screen.findByRole('button', { name: 'Install…' }))
+    const select = screen.getByLabelText('voice for claude · global')
     fireEvent.change(select, { target: { value: 'neutral' } })
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
     expect(onAction).toHaveBeenCalledWith('install', expect.objectContaining({ theme: 'neutral' }))
+  })
+
+  it('renders this machine’s install as the first card, from the overview', async () => {
+    render(
+      <Harness
+        onAction={() => {}}
+        overview={{
+          install: { host: 'opencode', scope: 'global', path: 'C:/cfg' },
+          theme: 'imperial',
+          footprint: 'lean',
+          build_time: '2026-08-23 16:09',
+        }}
+      />,
+    )
+    // The four facts the prototype's first card states, and they come from the OVERVIEW —
+    // not from the installs table below, which does not carry the footprint or the build.
+    // Scoped to the card's own key/value row: "lean" is also an <option> in the table's
+    // footprint picker, and an unscoped match would pass on the wrong element.
+    await waitFor(() => expect(screen.getByText('2026-08-23 16:09')).toBeTruthy())
+    const fpRow = screen.getByText('footprint').closest('.kv')
+    expect(within(fpRow).getByText('lean')).toBeTruthy()
+    expect(within(screen.getByText('voice').closest('.kv')).getByText('imperial')).toBeTruthy()
+  })
+
+  it('carries the retired Themes tab as the voice gallery, current pinned and disabled', async () => {
+    const onAction = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(
+      <Harness
+        onAction={onAction}
+        currentTheme="neutral"
+        themes={[
+          { name: 'neutral', tagline: 'plain', blurb: '' },
+          { name: 'imperial', tagline: 'for the Emperor', blurb: '' },
+        ]}
+      />,
+    )
+    // The tagline, quoted — unique to the gallery. The bare voice NAMES are not: they are
+    // also <option>s in the active row's voice picker below.
+    await waitFor(() => expect(screen.getByText('“for the Emperor”')).toBeTruthy())
+    // The deployed voice is pinned FIRST and cannot be re-applied to itself.
+    const rows = document.querySelectorAll('.voice-row')
+    expect(rows[0].className).toContain('current')
+    expect(within(rows[0]).getByText('neutral')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'current' }).disabled).toBe(true)
+    // "Apply voice" — deliberately not "Apply", which the table's active row owns for a
+    // different action on a different target.
+    fireEvent.click(screen.getByRole('button', { name: 'Apply voice' }))
+    expect(onAction).toHaveBeenCalledWith('build', { theme: 'imperial', emit: undefined })
   })
 
   it('re-themes an active install via the voice picker (the Apply button)', async () => {
@@ -135,7 +193,7 @@ describe('Harnesses', () => {
         },
       ],
     })
-    render(<Harnesses onAction={onAction} themes={[{ name: 'neutral' }, { name: 'imperial' }]} />)
+    render(<Harness onAction={onAction} themes={[{ name: 'neutral' }, { name: 'imperial' }]} />)
     const select = await screen.findByLabelText('voice for opencode · global')
     fireEvent.change(select, { target: { value: 'imperial' } }) // Apply enables once the voice differs
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
@@ -146,7 +204,7 @@ describe('Harnesses', () => {
   })
 
   it('renders switch toggles for the active install and its nested MCP servers', async () => {
-    render(<Harnesses onAction={() => {}} />)
+    render(<Harness onAction={() => {}} />)
     // The active OpenCode row carries its own install switch, on by default.
     await waitFor(() => expect(screen.getAllByRole('switch').length).toBeGreaterThan(0))
     const switches = screen.getAllByRole('switch')
@@ -156,7 +214,7 @@ describe('Harnesses', () => {
   })
 
   it('collapses and re-expands an active row’s MCP wiring via the chevron', async () => {
-    render(<Harnesses onAction={() => {}} />)
+    render(<Harness onAction={() => {}} />)
     await waitFor(() => expect(screen.getByText('MarkItDown')).toBeTruthy())
     const chevron = screen.getByRole('button', { name: /collapse MCP for opencode/i })
     fireEvent.click(chevron)
@@ -196,7 +254,7 @@ describe('Harnesses', () => {
         },
       ],
     })
-    render(<Harnesses onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    render(<Harness onAction={() => {}} themes={[{ name: 'neutral' }]} />)
     // Absent preset → Add button; absent non-preset → nothing. One Add in total.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy())
     expect(screen.getAllByRole('button', { name: 'Add' }).length).toBe(1)
@@ -217,7 +275,7 @@ describe('Harnesses', () => {
         },
       ],
     })
-    render(<Harnesses onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    render(<Harness onAction={() => {}} themes={[{ name: 'neutral' }]} />)
     const btn = await waitFor(() => screen.getByRole('button', { name: 'Open folder' }))
     fireEvent.click(btn)
     // THE TARGET'S CONFIG PATH, not the install root. The server's allowlist is keyed on the
@@ -268,7 +326,7 @@ describe('Harnesses', () => {
       ],
       default: 0,
     })
-    render(<Harnesses onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    render(<Harness onAction={() => {}} themes={[{ name: 'neutral' }]} />)
     // The enabled Claude server shows nested; the absent preset offers Add.
     await waitFor(() => expect(screen.getByText('MarkItDown')).toBeTruthy())
     expect(screen.getByText('GitLab')).toBeTruthy()
@@ -276,7 +334,7 @@ describe('Harnesses', () => {
   })
 
   it('renders the Excluded folders card when a global install exists', async () => {
-    render(<Harnesses onAction={() => {}} />)
+    render(<Harness onAction={() => {}} />)
     await waitFor(() => expect(screen.getByText('Excluded folders')).toBeTruthy())
   })
 })

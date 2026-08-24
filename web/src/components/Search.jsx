@@ -15,9 +15,15 @@ export default function Search({ value, onChange }) {
   const [active, setActive] = useState(0)
   const { index, prime } = useSearchIndex()
 
+  // Two bindings, and the second is not a duplicate of the first. `/` is the fast one and
+  // costs nothing to press — but it is only available when no field has focus, which is
+  // exactly why ⌘K/Ctrl-K exists beside it: the modifier chord is the one convention that
+  // still works from inside a text box, which is where a user editing their rules or their
+  // profile actually is when they want to jump somewhere else.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== '/' || e.target.closest('input, textarea, select')) return
+      const chord = (e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k'
+      if (!chord && (e.key !== '/' || e.target.closest('input, textarea, select'))) return
       e.preventDefault()
       ref.current?.focus()
     }
@@ -80,7 +86,12 @@ export default function Search({ value, onChange }) {
         }}
         onKeyDown={onKeyDown}
         placeholder="Search the harness…"
+        title="Press / to jump here, or Ctrl-K / ⌘K from inside any field"
       />
+      {/* The badge still shows `/`: it is the shorter binding and the one that fits. The
+          chord is in the title above rather than a second badge — two keycaps in a topbar
+          field is noise, and the chord is the one you reach for when `/` is being typed
+          into something. */}
       <span className="kbd">/</span>
       {open && (
         <Spotlight

@@ -5,13 +5,26 @@ import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 
-// The harness orchestration page as one table: every detected install (host × scope) is
-// a row — OpenCode and Claude, global and per-repo — independently activated, re-themed,
+// Setup → Harness: this machine's install first, everything else under it.
+//
+// THE PAGE THAT ATE THE THEMES TAB. Two tabs used to answer one question between them —
+// "what is deployed here, and in what voice" — and the split meant picking a voice was a
+// different screen from seeing which install it would land on. So the voice gallery is a
+// card on this page now (`#/themes` still resolves here, router.js's VIEW_ALIAS), and the
+// page reads top-down the way the decision does: the install you are on, the voice it
+// speaks, then every other install on the machine.
+//
+// The table below is unchanged and deliberately kept: every detected install (host × scope)
+// is a row — OpenCode and Claude, global and per-repo — independently activated, re-themed,
 // or deactivated. The MCP servers wired into an install live INSIDE its row: an active
 // install with MCP wiring expands to a detail panel listing its servers (OpenCode under
 // opencode.json's `mcp`, Claude under .mcp.json / ~/.claude.json's `mcpServers`).
 // "Rebuild all" re-emits every active install in its own voice + mode as one background
 // job. Mutations refetch via dataRev / onMutated — no full reload, nothing flashes.
+//
+// "Single-harness home" was a decision about the DASHBOARD, not about this page: the
+// dashboard stopped leading with a fleet tree, and the fleet moved here, where managing it
+// is the whole point.
 
 // A voice <select> in the app's `.sel` style. Renders nothing until the theme list loads.
 function VoiceSelect({ label, value, themes, onChange }) {
@@ -211,7 +224,101 @@ function ExclusionsCard() {
   )
 }
 
-export default function Harnesses({ onAction, themes = [], currentTheme, dataRev, onMutated }) {
+// This machine's own install, as the prototype's first card: where it lives, how it was
+// built, and when. `overview.install` is the detected (host, scope, path) the console is
+// pointed at — null before the overview loads, and null for a target that matches no
+// detected install, in which case the card simply does not render and the table below is
+// still the whole truth.
+function ThisInstall({ overview }) {
+  const inst = overview?.install
+  if (!inst) return null
+  return (
+    <div className="card pad-lg mb-16">
+      <div className="card-head">
+        <h3>
+          {inst.host} · {inst.scope}
+        </h3>
+        <span className="tick right">active</span>
+      </div>
+      <div className="kv">
+        <span className="k">path</span>
+        <code className="v">{inst.path}</code>
+      </div>
+      <div className="kv">
+        <span className="k">voice</span>
+        <span className="v mono">{overview.theme || '—'}</span>
+      </div>
+      <div className="kv">
+        <span className="k">footprint</span>
+        <span className="v mono">{overview.footprint || '—'}</span>
+      </div>
+      <div className="kv">
+        <span className="k">built</span>
+        <span className="v mono">{overview.build_time || 'never'}</span>
+      </div>
+      <p className="sub motto">
+        Per-folder overrides global: inside a folder with its own harness, only the folder’s harness
+        loads there.
+      </p>
+    </div>
+  )
+}
+
+// The voice gallery — the whole of the retired Themes tab, restated as the prototype's rows
+// rather than a card grid. The deployed voice is pinned first and marked; applying any other
+// one re-emits the install in place (structure identical, only words and accent shift).
+//
+// It reads the `themes` App already fetched for the voice popover instead of fetching its
+// own list: the old page's `api.themes()` call existed because it was mounted standalone.
+function VoiceGallery({ themes, current, emit, onAction }) {
+  if (!themes.length) return null
+  // Current first, then source order — a gallery whose current row is somewhere in the middle
+  // makes you hunt for the one fact you came to read.
+  const rows = [...themes].sort((a, b) => (a.name === current ? -1 : b.name === current ? 1 : 0))
+  const apply = (name) => {
+    if (
+      window.confirm(
+        `Rebuild the deployed harness with the "${name}" voice?\nThe rebuild runs in the console.`,
+      )
+    )
+      onAction?.('build', { theme: name, emit })
+  }
+  return (
+    <div className="card pad-lg mb-16">
+      <div className="card-head">
+        <h3>Voice</h3>
+        <span className="tick right">
+          applying one rebuilds the install — structure stays identical
+        </span>
+      </div>
+      {rows.map((t) => {
+        const isCur = t.name === current
+        return (
+          <div className={`voice-row${isCur ? ' current' : ''}`} key={t.name}>
+            <span className="vr-name">{t.name}</span>
+            <span className="vr-desc">{t.tagline ? `“${t.tagline}”` : t.blurb}</span>
+            {/* "Apply VOICE", not "Apply". The table below has its own Apply on every active
+                row, and that one commits four choices to ONE install; this one re-emits the
+                deployed harness in a different voice. Two buttons a scroll apart reading
+                the same word, meaning different things, is how you click the wrong one. */}
+            <button className="btn ghost sm" disabled={isCur} onClick={() => apply(t.name)}>
+              {isCur ? 'current' : 'Apply voice'}
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export default function Harnesses({
+  onAction,
+  themes = [],
+  currentTheme,
+  overview,
+  dataRev,
+  onMutated,
+}) {
   const { data: instData, error: instErr } = useAsync(() => api.installs(), [dataRev]) // { installs }
   const { data: mcpData, error: mcpErr } = useAsync(() => api.mcp(), [dataRev]) // { targets }
   const [note, setNote] = useState('')
@@ -225,6 +332,12 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   const [deploy, setDeploy] = useState(null) // null = closed; { path, host, theme } = the deploy form
   const [browsing, setBrowsing] = useState(false) // native folder picker in flight
   const [removing, setRemoving] = useState(null) // null = closed; { id, host, path, memory } = remove-confirm
+  // The id of the absent row whose install wizard is open, or ''. An absent row used to
+  // carry four selects and a button inline — the same seven lanes an active row needs to
+  // align against — so a machine with three uninstalled hosts showed twelve dropdowns for
+  // choices nobody had asked to make yet. The row now offers one button and discloses the
+  // steps when you take it; the payload it POSTs is unchanged.
+  const [wizard, setWizard] = useState('')
 
   // Group MCP targets by their owning install (host, root). api_mcp only returns targets
   // for active installs, so every group has a matching harness row to nest beneath.
@@ -455,21 +568,42 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
 
   return (
     <>
+      <div className="head-row mb-18">
+        <div>
+          <div className="eyebrow">Setup</div>
+          <h1 className="h">Harness</h1>
+          <p className="sub">
+            This machine’s install: where it lives, how it’s built, and the voice it speaks with.
+            Other hosts (Claude Code, Bob, Copilot) install from here too.
+          </p>
+        </div>
+        <div className="row wrap gap-10">
+          {onAction ? (
+            <button className="btn" onClick={() => (deploy ? setDeploy(null) : openDeploy())}>
+              <Icon name="folder" /> Deploy to folder…
+            </button>
+          ) : null}
+          <button className="btn" onClick={() => onAction('build-all')}>
+            <Icon name="refresh" /> Rebuild all
+          </button>
+        </div>
+      </div>
+
+      <ThisInstall overview={overview} />
+      <VoiceGallery
+        themes={themes}
+        current={currentTheme}
+        emit={overview?.emit}
+        onAction={onAction}
+      />
+
       <div className="card pad-lg mb-16">
         <div className="card-head">
-          <h3>Harnesses</h3>
+          <h3>Every install</h3>
           <div className="right">
             <span className="tick">
               {activeCount} active · {installs.length} total
             </span>
-            {onAction ? (
-              <button className="btn" onClick={() => (deploy ? setDeploy(null) : openDeploy())}>
-                <Icon name="folder" /> Deploy to folder…
-              </button>
-            ) : null}
-            <button className="btn" onClick={() => onAction('build-all')}>
-              <Icon name="refresh" /> Rebuild all
-            </button>
           </div>
         </div>
 
@@ -665,10 +799,12 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
           <td>
             {/* Seven fixed lanes so controls align into columns regardless of which
                           ones a row shows: voice · footprint · posture · mode · install/apply · switch · trash.
-                          Every lane is always rendered (empty when N/A) so nothing shifts. */}
+                          Every lane is always rendered (empty when N/A) so nothing shifts.
+                          An ABSENT row leaves the first four empty — its choices live in the
+                          disclosed wizard below it, not inline. */}
             <div className="h-acts">
               <div className="ha-cell ha-voice">
-                {(inst.state === 'absent' || on) && onAction ? (
+                {on && onAction ? (
                   <VoiceSelect
                     label={label}
                     value={voiceFor(inst)}
@@ -678,7 +814,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                 ) : null}
               </div>
               <div className="ha-cell ha-fp">
-                {(inst.state === 'absent' || on) && onAction ? (
+                {on && onAction ? (
                   <FootprintSelect
                     label={`footprint for ${inst.host} · ${inst.scope}`}
                     value={footprintFor(inst)}
@@ -687,7 +823,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                 ) : null}
               </div>
               <div className="ha-cell ha-posture">
-                {(inst.state === 'absent' || on) && onAction ? (
+                {on && onAction ? (
                   <PostureSelect
                     label={`posture for ${inst.host} · ${inst.scope}`}
                     value={postureFor(inst)}
@@ -697,7 +833,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                 ) : null}
               </div>
               <div className="ha-cell ha-mode">
-                {(inst.state === 'absent' || on) && onAction ? (
+                {on && onAction ? (
                   <ModeSelect
                     label={`mode for ${inst.host} · ${inst.scope}`}
                     value={modeFor(inst)}
@@ -708,8 +844,12 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
               </div>
               <div className="ha-cell ha-btn">
                 {inst.state === 'absent' && onAction ? (
-                  <button className="btn ghost sm" onClick={() => applyVoice(inst)}>
-                    Install
+                  <button
+                    className="btn ghost sm"
+                    aria-expanded={wizard === inst.id}
+                    onClick={() => setWizard((w) => (w === inst.id ? '' : inst.id))}
+                  >
+                    Install…
                   </button>
                 ) : on && onAction ? (
                   <button
@@ -753,6 +893,68 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
             </div>
           </td>
         </tr>
+        {wizard === inst.id ? (
+          <tr className="h-detail-row h-setup-row">
+            <td />
+            <td colSpan={5} className="h-detail">
+              {/* The stepped disclosure. The host is already decided — it is the row you
+                  opened — so the steps are the four choices that remain, in the order the
+                  install actually consumes them. Same `install` action, same payload as the
+                  inline lane it replaces; only the moment you are asked has moved. */}
+              <div className="h-setup">
+                <p className="sub hs-msg">
+                  Install Geneseed into <code>{inst.path}</code> as <strong>{inst.host}</strong>.
+                  Files are added non-destructively; deactivate or uninstall later.
+                </p>
+                <div className="hs-steps">
+                  <label className="hs-step">
+                    <span>1 · Voice</span>
+                    <VoiceSelect
+                      label={label}
+                      value={voiceFor(inst)}
+                      themes={themes}
+                      onChange={(v) => setVoice(inst, v)}
+                    />
+                  </label>
+                  <label className="hs-step">
+                    <span>2 · Footprint</span>
+                    <FootprintSelect
+                      label={`footprint for ${inst.host} · ${inst.scope}`}
+                      value={footprintFor(inst)}
+                      onChange={(v) => setFootprint(inst, v)}
+                    />
+                  </label>
+                  <label className="hs-step">
+                    <span>3 · Posture</span>
+                    <PostureSelect
+                      label={`posture for ${inst.host} · ${inst.scope}`}
+                      value={postureFor(inst)}
+                      postures={postures}
+                      onChange={(v) => setPosture(inst, v)}
+                    />
+                  </label>
+                  <label className="hs-step">
+                    <span>4 · Mode</span>
+                    <ModeSelect
+                      label={`mode for ${inst.host} · ${inst.scope}`}
+                      value={modeFor(inst)}
+                      modes={modes}
+                      onChange={(v) => setMode(inst, v)}
+                    />
+                  </label>
+                </div>
+                <div className="hr-acts">
+                  <button className="btn sm" onClick={() => applyVoice(inst)}>
+                    Install
+                  </button>
+                  <button className="btn ghost sm" onClick={() => setWizard('')}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        ) : null}
         {removing?.id === inst.id ? (
           <tr className="h-detail-row h-remove-row">
             <td />

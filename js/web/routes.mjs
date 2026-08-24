@@ -185,6 +185,28 @@ export const POST_BEYOND_REF = new Set([
   '/api/reveal',
 ]);
 
+/**
+ * GET routes THAT NEVER EXISTED ON THE REFERENCE — the same fourth part of the partition, one
+ * verb over, and it exists for the reason `POST_BEYOND_REF` above spells out in full.
+ *
+ * `test_every_get_route_is_either_ported_or_declared_unported` asserts SET EQUALITY against
+ * `REF_GET`, a frozen literal of the paths the Python daemon answered. Widening that list to
+ * admit a route added in 2026 would forge the record; leaving the equality unqualified would
+ * mean this daemon may never grow a GET. So additions are enumerated here instead, and the
+ * gate compares the covered set against the reference's surface PLUS this one.
+ *
+ * `/api/recent` is the first, and it is a genuine gap rather than a convenience: no catalog row
+ * on the whole surface carries a date, and a browser cannot stat the `source` path it is handed
+ * — so "what changed lately" had no answer that did not involve the server looking. See
+ * `apiRecent` in `api.mjs` for what it will and will not date.
+ *
+ * A route belongs here only once it is dispatched; the dispatcher probe is what keeps this from
+ * becoming a declaration nobody honours.
+ */
+export const GET_BEYOND_REF = new Set([
+  '/api/recent',
+]);
+
 export function notPorted(path) {
   return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));
 }
