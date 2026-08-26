@@ -119,7 +119,7 @@ export function sourceReleaseVersion(cfg) {
 export function themeJson(theme) {
   const raw = theme && theme.ACCENT !== undefined ? theme.ACCENT : 'cyan';
   const key = String(raw).toLowerCase();
-  const acc = Object.prototype.hasOwnProperty.call(ANSI, key) ? ANSI[key] : 6;
+  const acc = Object.hasOwn(ANSI, key) ? ANSI[key] : 6;
   const GRAY = 8;
   const GREEN = 2;
   const RED = 1;
@@ -177,7 +177,7 @@ export function colorThemeJson(palette, transparent) {
     // `palette[role]` is a plain subscript in Python: a palette missing a role raises
     // KeyError and aborts the emit. A bare JS lookup would yield undefined, which
     // JSON.stringify DROPS — silently emitting a theme with missing slots.
-    if (!Object.prototype.hasOwnProperty.call(palette, role)) {
+    if (!Object.hasOwn(palette, role)) {
       throw new Error(`palette has no role '${role}' (slot '${slot}')`);
     }
     t[slot] = palette[role];
@@ -257,7 +257,7 @@ export function writePrimaryAgent(cfg, agentsDir, overrides) {
   const desc = 'Primary orchestrator — works by the harness Rules and delegates to the '
     + 'capability subagents.';
   const fm = [`description: ${jsonDumps(desc)}`, 'mode: primary', 'color: primary'];
-  const ov = (Object.prototype.hasOwnProperty.call(overrides, 'orchestrator')
+  const ov = (Object.hasOwn(overrides, 'orchestrator')
     && overrides.orchestrator) || {};
   pushOverrideLines(fm, ov);
   const dest = path.join(agentsDir, 'orchestrator.md');

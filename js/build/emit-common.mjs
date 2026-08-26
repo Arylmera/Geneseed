@@ -13,7 +13,7 @@ import path from 'node:path';
 import { copyFile, writeText, isFile, isDir } from '../lib/fs.mjs';
 import { get, isDict } from '../lib/json.mjs';
 import { SRC_DIR_TOKENS, destRel } from './render.mjs';
-import { mkdirSync, readdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, cpSync } from 'node:fs';
 
 // `isFile`/`isDir`/`get`/`isDict` are owned by `js/lib` now (single owner across `hosts/`,
 // `build/`, `inspect/` and `web/` — layering forbids `build/` reaching into `inspect/scan.mjs`
@@ -65,33 +65,18 @@ const CAPABILITY_LINK_RE =
 /** `_build_render._TMPL_SPEC_RE`. */
 export const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
 
-/** `Path.rglob("*")` restricted to files, skipping `__pycache__` as Python's callers do. */
-export function rglobFiles(root, out = []) {
-  for (const name of readdirSync(root)) {
-    if (name === '__pycache__') continue;
-    const full = path.join(root, name);
-    if (isDir(full)) rglobFiles(full, out);
-    else out.push(full);
-  }
-  return out;
-}
-
 /**
- * `Path.rglob("*")` restricted to files, keeping EVERYTHING — including `__pycache__`.
+ * `Path.rglob("*")` restricted to files, skipping `__pycache__` as Python's callers do.
  *
- * Not a duplicate of `rglobFiles` by accident: `source_fingerprint`'s Python filters
- * `__pycache__` and the legacy-store migration in `_global_memory` does not, so a single
- * walk would be wrong for one caller either way. A user's legacy bundle really can carry
- * one (the harness ships `.py` skill scripts), and copying it or not is a byte difference
- * the two runtimes would disagree on silently.
+ * `recursive: true, withFileTypes: true` (Node >= 20.1, `parentPath` >= 21.4 — this repo
+ * requires >= 22.3) replaces a hand-rolled walk; the order it yields is NOT the walk's
+ * order, but `sourceFingerprint`, this function's one caller, re-sorts every result by a
+ * plain string key before it is ever observed, so no caller depends on it.
  */
-function rglobAllFiles(root, out = []) {
-  for (const name of readdirSync(root)) {
-    const full = path.join(root, name);
-    if (isDir(full)) rglobAllFiles(full, out);
-    else out.push(full);
-  }
-  return out;
+export function rglobFiles(root) {
+  return readdirSync(root, { recursive: true, withFileTypes: true })
+    .filter((d) => d.isFile() && !d.parentPath.split(path.sep).includes('__pycache__'))
+    .map((d) => path.join(d.parentPath, d.name));
 }
 
 /** `p.relative_to(base).as_posix()`. */
@@ -142,11 +127,11 @@ export function globalMemory(cfgDir, items, legacy, srcRoot) {
     for (const nm of [...new Set([memName, 'memory', 'anamnesis'])]) {
       const src = path.join(legacy, nm);
       if (isDir(src) && readdirSync(src).length) {
-        for (const f of rglobAllFiles(src)) {
-          const dest = path.join(memDir, path.relative(src, f));
-          mkdirSync(path.dirname(dest), { recursive: true });
-          copyFile(f, dest);
-        }
+        // `cpSync(..., {preserveTimestamps: true})` — the recursive-copy equivalent of
+        // `copyFile` above (byte copy + carried mtime, no `shutil.copy2` mode bits; see
+        // that function's docblock in `js/lib/fs.mjs`), replacing a walk-then-copyFile
+        // loop that visited every legacy file one at a time.
+        cpSync(src, memDir, { recursive: true, preserveTimestamps: true });
         return `migrated ${nm}/ -> ${memName}/`;
       }
     }
@@ -175,11 +160,8 @@ export function globalNotebook(cfgDir, items, legacy, srcRoot) {
   if (legacy) {
     const src = path.join(legacy, nbName);
     if (isDir(src) && readdirSync(src).length) {
-      for (const f of rglobAllFiles(src)) {
-        const dest = path.join(nbDir, path.relative(src, f));
-        mkdirSync(path.dirname(dest), { recursive: true });
-        copyFile(f, dest);
-      }
+      // Same `cpSync` swap as `globalMemory` above.
+      cpSync(src, nbDir, { recursive: true, preserveTimestamps: true });
       return `migrated ${nbName}/`;
     }
   }

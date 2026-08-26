@@ -238,10 +238,12 @@ export function unmergeOpencodeJson(p, entry) {
  * copy path back.
  */
 export function archiveStore(store) {
-  const now = new Date();
-  const p2 = (n) => String(n).padStart(2, '0');
-  const stamp = `${now.getFullYear()}${p2(now.getMonth() + 1)}${p2(now.getDate())}`
-    + `-${p2(now.getHours())}${p2(now.getMinutes())}${p2(now.getSeconds())}`;
+  // `toLocaleString('sv-SE')` — LOCAL time, matching the old hand-rolled stamp
+  // (`getHours()`/`getMinutes()`/`getSeconds()` are all local-time getters, unlike
+  // `toISOString()`'s UTC). sv-SE's default format is already zero-padded
+  // "YYYY-MM-DD HH:MM:SS"; stripping the punctuation and reinserting one dash reproduces
+  // the exact `YYYYMMDD-HHMMSS` shape the padStart version built by hand.
+  const stamp = new Date().toLocaleString('sv-SE').replace(/\D/g, '').replace(/^(\d{8})/, '$1-');
   const dest = path.join(path.dirname(store), `archived-${path.basename(store)}`, stamp);
   mkdirSync(path.dirname(dest), { recursive: true });
   renameSync(store, dest);

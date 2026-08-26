@@ -367,7 +367,7 @@ function loadUserPalette(args, cfg) {
     // `Path(args.palette)` — relative to cwd, with no expanduser and no resolve.
     const raw = parseJson(readText(args.palette));
     // `raw.get("palette", raw)` — a document with no "palette" key IS the role map.
-    const map = Object.prototype.hasOwnProperty.call(raw, 'palette') ? raw.palette : raw;
+    const map = Object.hasOwn(raw, 'palette') ? raw.palette : raw;
     for (const [k, v] of Object.entries(map)) pal.set(k, v);
   }
   if (pal.size === 0) {

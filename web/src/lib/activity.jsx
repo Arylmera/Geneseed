@@ -22,16 +22,17 @@ export function baseName(p) {
 }
 
 // 48213 → "48.2k", 250000 → "250k", 1.2e6 → "1.2M".
-export const compact = (n) =>
-  !n
-    ? '0'
-    : n < 1000
-      ? String(n)
-      : n < 1e5
-        ? (n / 1000).toFixed(1) + 'k'
-        : n < 1e6
-          ? (n / 1000).toFixed(0) + 'k'
-          : (n / 1e6).toFixed(1) + 'M'
+//
+// Pinned to 'en-US' rather than the viewer's locale: this is a token count beside a
+// monospace, terminal-styled dashboard, not prose, and Intl's compact notation otherwise
+// follows the browser's locale — a comma decimal, different grouping — which would read as
+// a formatting bug next to the rest of the console. `K` is lowercased to match the existing
+// 'k' this file (and its tests) already use; `M` was already this shape.
+const COMPACT_FMT = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+export const compact = (n) => (!n ? '0' : COMPACT_FMT.format(n).replace(/K$/, 'k'))
 
 export function fmtElapsed(sec) {
   sec = Math.max(0, Math.floor(sec))

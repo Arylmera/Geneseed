@@ -217,7 +217,7 @@ export function deepEquals(a, b) {
   const kx = Object.keys(x);
   const ky = Object.keys(y);
   return kx.length === ky.length
-    && kx.every((k) => Object.prototype.hasOwnProperty.call(y, k) && deepEquals(x[k], y[k]));
+    && kx.every((k) => Object.hasOwn(y, k) && deepEquals(x[k], y[k]));
 }
 
 /** `value in list` and `list.index(value)` under `deepEquals` \u2014 Python's `in`, not `includes`. */
@@ -241,11 +241,11 @@ export function indexOfDeepEqual(arr, value) {
  * one of them would force the others to import up the graph to reach it.
  */
 export function get(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
+  return Object.hasOwn(obj, key) ? obj[key] : undefined;
 }
 
 export function has(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key);
+  return Object.hasOwn(obj, key);
 }
 
 export function isDict(v) {

@@ -173,14 +173,14 @@ function agentColorMap(theme) {
       cleaned[k] = 'secondary';
     }
   }
-  if (!Object.prototype.hasOwnProperty.call(cleaned, '_default')) cleaned._default = 'secondary';
+  if (!Object.hasOwn(cleaned, '_default')) cleaned._default = 'secondary';
   return cleaned;
 }
 
 /** `_build_emit._agent_color`. */
 function agentColor(stem, theme) {
   const colors = agentColorMap(theme);
-  return Object.prototype.hasOwnProperty.call(colors, stem) ? colors[stem] : colors._default;
+  return Object.hasOwn(colors, stem) ? colors[stem] : colors._default;
 }
 
 function isPlainObject(v) {
@@ -195,7 +195,7 @@ function given(v) {
 /**
  * `overrides.get(stem) or {}`.
  *
- * The `hasOwnProperty` guard is not ceremony: a bare `overrides[stem]` reaches
+ * The `Object.hasOwn` guard is not ceremony: a bare `overrides[stem]` reaches
  * `Object.prototype` for an agent named `constructor`, `toString` or `valueOf`, and would
  * hand back a function where Python hands back `None`.
  *
@@ -206,7 +206,7 @@ function given(v) {
  * difference on any path the gate covers — a difference in which malformed input crashes.
  */
 function agentOverride(overrides, stem) {
-  return (Object.prototype.hasOwnProperty.call(overrides, stem) && overrides[stem]) || {};
+  return (Object.hasOwn(overrides, stem) && overrides[stem]) || {};
 }
 
 /**

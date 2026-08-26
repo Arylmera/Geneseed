@@ -14,11 +14,9 @@ import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { webState } from './api.mjs';
 import { spawn } from 'node:child_process';
 import { chmodSync, mkdirSync, openSync, readFileSync, unlinkSync } from 'node:fs';
-import { request as httpRequest } from 'node:http';
 import { join, resolve as pathResolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const ROOT = pathResolve(fileURLToPath(import.meta.url), '..', '..', '..');
+const ROOT = pathResolve(import.meta.dirname, '..', '..');
 
 // ---- the daemon record -----------------------------------------------------
 
@@ -60,57 +58,47 @@ export function clearDaemon(target) {
 //     synchronous. Node has no synchronous HTTP client, so every function below that
 //     reaches one is `async` and `cmdWeb` awaits it — which is why `bin/geneseed-cli.mjs`
 //     awaits its dispatch. Nothing about the ORDER of the reference's steps changes.
-//   * `agent: false` on both requests. Node's global agent has kept sockets alive by
-//     default since v19, and a pooled idle socket keeps the event loop referenced — a
-//     `web status` that answered correctly would then hang for the keep-alive timeout
-//     instead of exiting. Python's `urlopen` opens and closes a connection per call.
+//   * Both requests are drained (`res.body?.cancel()`) whether or not the caller wants the
+//     body, matching Python's `urlopen` closing its connection per call — an undrained
+//     `fetch` response can keep a keep-alive socket referenced, which is the same hang a
+//     `web status` that answered correctly would otherwise suffer waiting to exit.
 
 /** `f"{url}/api/ping"` answered 200 — the cheap liveness probe both `status` and the
  *  launcher's wait loop are built on. Every failure mode is False, as the reference's
  *  `(URLError, OSError, ValueError)` catch is. */
-export function probe(url, timeout = 1.5) {
-  return new Promise((done) => {
-    let settled = false;
-    const finish = (v) => { if (!settled) { settled = true; done(v); } };
-    let req;
-    try {
-      req = httpRequest(`${url}/api/ping`, { method: 'GET', agent: false }, (res) => {
-        res.resume();          // drain, or the socket never closes
-        finish(res.statusCode === 200);
-      });
-    } catch {
-      return finish(false);    // a malformed url is `ValueError` there and a throw here
-    }
-    req.setTimeout(Math.round(timeout * 1000), () => { req.destroy(); finish(false); });
-    req.on('error', () => finish(false));
-    req.end();
-    return undefined;
-  });
+export async function probe(url, timeout = 1.5) {
+  try {
+    const res = await fetch(`${url}/api/ping`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(Math.round(timeout * 1000)),
+    });
+    const ok = res.status === 200;
+    // Drained after the verdict is already read: a failure canceling the body must not
+    // flip an already-successful ping to `false`.
+    await res.body?.cancel().catch(() => {});
+    return ok;
+  } catch {
+    // network error, an aborted-by-timeout `TimeoutError`, or a malformed url's
+    // `TypeError` — the reference's `(URLError, OSError, ValueError)` catch, one `false`.
+    return false;
+  }
 }
 
 /** The token-carrying POST `geneseed web stop` and the in-page Stop button both send. */
-export function postShutdown(url, token, timeout = 3.0) {
-  return new Promise((done) => {
-    let settled = false;
-    const finish = (v) => { if (!settled) { settled = true; done(v); } };
-    let req;
-    try {
-      req = httpRequest(`${url}/api/shutdown`, {
-        method: 'POST',
-        agent: false,
-        headers: { 'X-Geneseed-Token': token, 'Content-Type': 'application/json' },
-      }, (res) => {
-        res.resume();
-        finish(res.statusCode === 200);
-      });
-    } catch {
-      return finish(false);
-    }
-    req.setTimeout(Math.round(timeout * 1000), () => { req.destroy(); finish(false); });
-    req.on('error', () => finish(false));
-    req.end('{}');
-    return undefined;
-  });
+export async function postShutdown(url, token, timeout = 3.0) {
+  try {
+    const res = await fetch(`${url}/api/shutdown`, {
+      method: 'POST',
+      headers: { 'X-Geneseed-Token': token, 'Content-Type': 'application/json' },
+      body: '{}',
+      signal: AbortSignal.timeout(Math.round(timeout * 1000)),
+    });
+    const ok = res.status === 200;
+    await res.body?.cancel().catch(() => {});
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 /**

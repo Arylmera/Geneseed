@@ -26,7 +26,6 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 /**
  * `_build_core.ROOT` — the checkout, from this file's own location (`js/..`).
@@ -39,7 +38,7 @@ import { fileURLToPath } from 'node:url';
  * which is what makes them comparable and what makes them unfenceable. See the
  * status/version section of `tests/harness_golden.py`.
  */
-export const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
+export const ROOT = path.resolve(import.meta.dirname, '../..');
 export const SRC = path.join(ROOT, 'src');
 export const CONFIG = path.join(ROOT, 'harness.config.json');
 export const THEMES = path.join(ROOT, 'themes');

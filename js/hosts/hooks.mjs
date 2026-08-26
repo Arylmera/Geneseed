@@ -35,7 +35,6 @@ import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSyn
   from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { readText, writeText, printOut, printErr, withDiscardableStderr } from '../lib/fs.mjs';
 import { jsonDumpsCompact } from '../lib/json.mjs';
 import { normcase, comparePaths, toPlatformPath } from '../lib/paths.mjs';
@@ -46,7 +45,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 // with it went this file's private `opencodeConfigDir`, whose only caller it was.
 import { resolveMemoryDir, expanduser } from './hosts.mjs';
 
-const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
+const ROOT = path.resolve(import.meta.dirname, '../..');
 
 // ---- Python path and text primitives -------------------------------------------------
 // Small, and each one is here because a JS-idiomatic equivalent differs observably.

@@ -456,16 +456,18 @@ function mcpLoad(p) {
   return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
 }
 
-/** Every `.md` under `dir`, recursively, POSIX-relative to it and sorted — `rglob("*.md")`. */
-function rglobMd(dir, base = dir, out = []) {
+/**
+ * Every `.md` under `dir`, recursively — `rglob("*.md")`.
+ *
+ * `recursive: true` replaces the hand-rolled walk; its one caller re-sorts the result with
+ * `comparePaths` before using it, so the order this returns is never observed.
+ */
+function rglobMd(dir) {
   let entries;
-  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
-  for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) rglobMd(full, base, out);
-    else if (normcase(e.name).endsWith('.md')) out.push(full);
-  }
-  return out;
+  try { entries = readdirSync(dir, { recursive: true, withFileTypes: true }); } catch { return []; }
+  return entries
+    .filter((e) => e.isFile() && normcase(e.name).endsWith('.md'))
+    .map((e) => path.join(e.parentPath, e.name));
 }
 
 /** `_web_catalog._wiki_items`. */

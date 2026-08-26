@@ -81,17 +81,17 @@ function suffixOf(name) {
   return 0 < i && i < name.length - 1 ? name.slice(i) : '';
 }
 
-/** `Path.rglob("*")` restricted to files, then `sorted()`. */
+/**
+ * `Path.rglob("*")` restricted to files, then `sorted()`.
+ *
+ * `recursive: true, withFileTypes: true` replaces the hand-rolled walk — the order it
+ * yields is not the walk's order, but the explicit `.sort(comparePaths)` below is what
+ * every caller actually observes, so a different collection order changes nothing.
+ */
 function sortedSourceFiles(src) {
-  const out = [];
-  (function walk(dir) {
-    for (const name of readdirSync(dir)) {
-      const full = path.join(dir, name);
-      if (name === '__pycache__') continue;          // `"__pycache__" in path.parts`
-      if (statSync(full).isDirectory()) walk(full);  // rglob yields dirs; render_all skips them
-      else out.push(full);
-    }
-  })(src);
+  const out = readdirSync(src, { recursive: true, withFileTypes: true })
+    .filter((d) => d.isFile() && !d.parentPath.split(path.sep).includes('__pycache__'))
+    .map((d) => path.join(d.parentPath, d.name));
   return out.sort(comparePaths);   // `sorted()` — case-folded on Windows only
 }
 
@@ -126,7 +126,7 @@ export function loadTheme(cfg, name) {
 /** `_build_render.substitute`. */
 export function substitute(text, theme) {
   return text.replace(TOKEN_RE, (whole, key) => {
-    if (!Object.prototype.hasOwnProperty.call(theme, key)) return whole;  // visible for debugging
+    if (!Object.hasOwn(theme, key)) return whole;  // visible for debugging
     const v = theme[key];
     // Python renders `str(theme[key])`, which agrees with JS only for strings —
     // `str(True)`/`String(true)` and `str({...})`/`String({...})` do not. Every one of
@@ -397,7 +397,7 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
 /** `_build_render.themed_rel` — rename the top-level folder of an output path per theme. */
 export function themedRel(rel, theme) {
   const parts = rel.split(path.sep);
-  if (parts.length && Object.prototype.hasOwnProperty.call(SRC_DIR_TOKENS, parts[0])) {
+  if (parts.length && Object.hasOwn(SRC_DIR_TOKENS, parts[0])) {
     parts[0] = theme[SRC_DIR_TOKENS[parts[0]]] ?? parts[0];
   }
   return parts.join(path.sep);

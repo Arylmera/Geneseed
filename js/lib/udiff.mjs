@@ -261,15 +261,10 @@ export function unifiedDiff(a, b, {
 const LINE_BOUNDARY = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/g;
 
 export function splitLines(text) {
-  const out = [];
-  let last = 0;
-  LINE_BOUNDARY.lastIndex = 0;
-  let m = LINE_BOUNDARY.exec(text);
-  while (m !== null) {
-    out.push(text.slice(last, m.index));
-    last = m.index + m[0].length;
-    m = LINE_BOUNDARY.exec(text);
-  }
-  if (last < text.length) out.push(text.slice(last));
+  // `String.split` doesn't touch the shared regex's `lastIndex`, so no reset is needed —
+  // and a text ending exactly on a boundary is the ONLY way `split` can hand back a
+  // trailing empty string here, which is exactly the case `splitlines()` drops.
+  const out = text.split(LINE_BOUNDARY);
+  if (out.at(-1) === '') out.pop();
   return out;
 }

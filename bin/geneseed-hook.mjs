@@ -39,6 +39,9 @@
  */
 import { cmdContext, cmdGitGate, cmdRuleGate, cmdLearn } from '../js/hosts/hooks.mjs';
 import { printHelp } from '../js/ui/cli.mjs';
+// Not a new module on the hot path: `js/hosts/hooks.mjs` above already imports
+// `js/lib/fs.mjs`, so this edge names a file the process has already loaded.
+import { printErr } from '../js/lib/fs.mjs';
 
 const VERBS = {
   context: { fn: cmdContext, flags: { '--root': 'root' } },
@@ -54,8 +57,8 @@ const VERBS = {
 
 function die(code, msg) {
   // CRLF on Windows, for the same reason `js/hosts/hooks.mjs`'s funnels translate: argparse
-  // writes this line through `sys.stderr`, which does.
-  process.stderr.write(`geneseed-hook: error: ${msg}${process.platform === 'win32' ? '\r\n' : '\n'}`);
+  // writes this line through `sys.stderr`, which does. `printErr` owns the `\n`-to-`os.linesep` rule.
+  printErr(`geneseed-hook: error: ${msg}\n`);
   return code;
 }
 

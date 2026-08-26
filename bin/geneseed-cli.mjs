@@ -56,6 +56,7 @@ import { cmdExclude } from '../js/inspect/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/build/generate.mjs';
 import { cmdMigrate } from '../js/maintain/migrate.mjs';
 import { parseIntStrict } from '../js/lib/text.mjs';
+import { printErr } from '../js/lib/fs.mjs';
 import { cmdLink, cmdUnlink } from '../js/hosts/link.mjs';
 import { cmdMcp } from '../js/hosts/mcp.mjs';
 import { cmdMemory } from '../js/maintain/memory.mjs';
@@ -203,8 +204,8 @@ const VERBS = {
 
 function die(code, msg) {
   // CRLF on Windows, for the same reason `js/hosts/hooks.mjs`'s funnels translate: argparse writes
-  // this line through `sys.stderr`, which does.
-  process.stderr.write(`geneseed: error: ${msg}${process.platform === 'win32' ? '\r\n' : '\n'}`);
+  // this line through `sys.stderr`, which does. `printErr` owns the `\n`-to-`os.linesep` rule.
+  printErr(`geneseed: error: ${msg}\n`);
   return code;
 }
 

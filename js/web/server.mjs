@@ -59,7 +59,7 @@ import { createServer } from 'node:http';
 import { join, resolve as pathResolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = pathResolve(fileURLToPath(import.meta.url), '..', '..', '..');
+const ROOT = pathResolve(import.meta.dirname, '..', '..');
 
 // Re-exported so the console's state lives in one place and its importers are unchanged.
 export { webState };
