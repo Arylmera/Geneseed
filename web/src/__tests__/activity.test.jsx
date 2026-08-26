@@ -3,11 +3,26 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import Activity from '../pages/Activity.jsx'
+import { compact } from '../lib/activity.jsx'
 
 const okResp = (body) => ({ ok: true, json: () => Promise.resolve(body) })
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('compact()', () => {
+  it('keeps the forced decimal on a round k value', () => {
+    expect(compact(5000)).toBe('5.0k') // round thousands still carry ".0", not bare "5k"
+  })
+
+  it('leaves negatives uncompacted', () => {
+    expect(compact(-5000)).toBe('-5000') // n<1000 is a signed comparison — negatives fall in, unformatted
+  })
+
+  it('keeps the forced decimal on a round M value', () => {
+    expect(compact(1000000)).toBe('1.0M') // round millions still carry ".0", not bare "1M"
+  })
 })
 
 describe('Activity page', () => {

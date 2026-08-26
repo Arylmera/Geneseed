@@ -23,16 +23,22 @@ export function baseName(p) {
 
 // 48213 → "48.2k", 250000 → "250k", 1.2e6 → "1.2M".
 //
-// Pinned to 'en-US' rather than the viewer's locale: this is a token count beside a
-// monospace, terminal-styled dashboard, not prose, and Intl's compact notation otherwise
-// follows the browser's locale — a comma decimal, different grouping — which would read as
-// a formatting bug next to the rest of the console. `K` is lowercased to match the existing
-// 'k' this file (and its tests) already use; `M` was already this shape.
-const COMPACT_FMT = new Intl.NumberFormat('en-US', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-})
-export const compact = (n) => (!n ? '0' : COMPACT_FMT.format(n).replace(/K$/, 'k'))
+// Hand-rolled rather than Intl.NumberFormat({notation:'compact'}): Intl drops the forced
+// decimal on round values (5000 → "5K" not "5.0k") and compacts negatives (-5000 → "-5K"
+// instead of falling into the n<1000 branch as "-5000"). Worse, at the k/M boundary Intl
+// picks its unit from the rounded value, not the raw one, so 999950 comes out "1M" where
+// this always said "1000k" — a real behaviour change Intl's options can't undo. See
+// docs/specs/2026-08-26-ponytail-refactor-tranches.md Self-improvement table.
+export const compact = (n) =>
+  !n
+    ? '0'
+    : n < 1000
+      ? String(n)
+      : n < 1e5
+        ? (n / 1000).toFixed(1) + 'k'
+        : n < 1e6
+          ? (n / 1000).toFixed(0) + 'k'
+          : (n / 1e6).toFixed(1) + 'M'
 
 export function fmtElapsed(sec) {
   sec = Math.max(0, Math.floor(sec))
