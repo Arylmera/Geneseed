@@ -32,18 +32,15 @@
  * web cells recorded it. Both candidates are gone (the argument is in the Python), and the
  * claim is now true rather than aspirational.
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, PACK_ORDER, THEMES, discoverNames } from '../build/source.mjs';
 import { GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
-import { printErr, readText } from '../lib/fs.mjs';
+import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
-
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /**
  * `Path.read_text(encoding="utf-8")`, or null where Python raises OSError.

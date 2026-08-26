@@ -104,17 +104,14 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { statSync } from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 import path from 'node:path';
 
 import { ROOT, PACK_ORDER } from '../build/source.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
 import { isDict } from '../hosts/mcp.mjs';
-import { readText, writeText } from '../lib/fs.mjs';
+import { readText, writeText, isFile } from '../lib/fs.mjs';
 import { jsonDumpsCompact, parseJson, isTruthy } from '../lib/json.mjs';
-
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /**
  * `_kill_job_tree` — terminate a job's WHOLE process tree.

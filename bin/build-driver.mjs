@@ -34,7 +34,7 @@
  */
 import {
   existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync,
-  statSync, unlinkSync,
+  unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +42,7 @@ import { build, phaseLog } from '../js/build/bundle.mjs';
 import { emitClaudeRender } from '../js/build/emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from '../js/build/emit-opencode.mjs';
 import { settingsIntegrityCheck } from '../js/hosts/settings.mjs';
-import { writeText, withPlatformNewlines } from '../js/lib/fs.mjs';
+import { writeText, withPlatformNewlines, isFile } from '../js/lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../js/lib/json.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
@@ -532,10 +532,6 @@ function writeManifestAtomic(file, data) {
   const tmp = `${file}.tmp`;
   writeText(tmp, `${jsonDumpsIndent(data)}\n`);
   renameSync(tmp, file);
-}
-
-function isFile(p) {
-  try { return statSync(p).isFile(); } catch { return false; }
 }
 
 /**

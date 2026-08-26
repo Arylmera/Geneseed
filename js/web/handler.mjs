@@ -21,9 +21,14 @@ import { openUrl, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { NOT_PORTED_ACTIONS, actionCommands } from './jobs.mjs';
 import { POST_ROUTES, notPorted, notPortedPost, readJsonBody } from './routes.mjs';
-import { readFileSync, statSync } from 'node:fs';
+import { isFile } from '../lib/fs.mjs';
+import { readFileSync } from 'node:fs';
 import { basename, dirname, extname, join, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
+
+// `isFile` is owned by `js/lib/fs.mjs` now (single owner). Re-exported here so
+// `js/web/server.mjs`'s existing `import { isFile, ... } from './handler.mjs'` keeps working.
+export { isFile };
 
 /**
  * DNS-rebinding guard. The reference's own comment carries the why; the shape is the
@@ -423,14 +428,6 @@ function readBody(req, length, done) {
     seen += c.length;
   });
   req.on('end', () => done(Buffer.concat(chunks)));
-}
-
-export function isFile(p) {
-  try {
-    return statSync(p).isFile();
-  } catch {
-    return false;
-  }
 }
 
 /** `bytes.replace(old, new, 1)` — the first occurrence only. */

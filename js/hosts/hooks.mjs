@@ -101,6 +101,7 @@ function resolvePath(p) {
   }
 }
 
+// NOT imported from `js/lib/fs.mjs` (the owner everywhere else) — hot path, no new import cost.
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 

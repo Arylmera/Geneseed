@@ -197,7 +197,5 @@ exported sets are deliberately EMPTY and must stay declared: each is half of a p
 
 ## Known debris
 
-* **`js/hosts/settings.mjs` carries a private second copy of Python's whitespace class**, duplicating
-  `WHITESPACE` in `js/lib/text.mjs`. `text.mjs` is the owner.
 * **`web/src/pages/Skills.jsx`'s `SKILL_CATS` is a fourth, ungated copy of the skill taxonomy** —
   nothing compares it to `SKILL_CLASS`, and an unknown category renders as Build with no warning.

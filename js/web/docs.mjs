@@ -38,7 +38,7 @@
  * so it is also the only thing a cell can vary. Every filtering rule below is gated by
  * sending both values over one page.
  */
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT, THEMES } from '../build/source.mjs';
@@ -46,13 +46,12 @@ import { cliReference } from '../ui/cli.mjs';
 import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
 import { parseJson } from '../lib/json.mjs';
+import { isFile } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { statusData } from '../inspect/status.mjs';
 import { originDisplay } from '../maintain/update.mjs';
 import { NotFound, deployed, resolveLinks } from './api.mjs';
-
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 const DOC_DIR = path.join(ROOT, 'docs', 'web');
 

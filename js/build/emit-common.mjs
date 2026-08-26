@@ -10,9 +10,17 @@
  * `emit-claude.mjs` do that; `emit.mjs` renders the bundle they read from.
  */
 import path from 'node:path';
-import { copyFile, writeText } from '../lib/fs.mjs';
+import { copyFile, writeText, isFile, isDir } from '../lib/fs.mjs';
+import { get, isDict } from '../lib/json.mjs';
 import { SRC_DIR_TOKENS, destRel } from './render.mjs';
-import { mkdirSync, readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync } from 'node:fs';
+
+// `isFile`/`isDir`/`get`/`isDict` are owned by `js/lib` now (single owner across `hosts/`,
+// `build/`, `inspect/` and `web/` — layering forbids `build/` reaching into `inspect/scan.mjs`
+// for them, so `js/lib` is the one home both sides can reach). Re-exported here so this
+// module's own existing callers (`emit-claude.mjs`, `emit-opencode.mjs`, `version.mjs`,
+// `bundle.mjs`) keep importing them from `./emit-common.mjs` unchanged.
+export { isFile, isDir, get, isDict };
 
 /** `_build_render.SRC_DIRS_MARKER`. */
 export const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
@@ -56,32 +64,6 @@ const CAPABILITY_LINK_RE =
 
 /** `_build_render._TMPL_SPEC_RE`. */
 export const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
-
-// ---------------------------------------------------------------------------
-// Small filesystem predicates. Python spells these `Path.is_file()` / `is_dir()`, both
-// of which answer False for a missing path rather than raising; `statSync` throws.
-// ---------------------------------------------------------------------------
-
-export function isFile(p) {
-  try { return statSync(p).isFile(); } catch { return false; }
-}
-
-export function isDir(p) {
-  try { return statSync(p).isDirectory(); } catch { return false; }
-}
-
-/** `dict.get(key)` with Python's semantics — OWN properties only.
- *
- * The same hazard `js/hosts/settings.mjs` and `js/hosts/native.mjs` both spell out: the keys here come
- * out of a manifest the user can edit, and `old['constructor']` hands back
- * `Object.prototype`'s member where Python's `.get` returns None. */
-export function get(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
-}
-
-export function isDict(v) {
-  return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-}
 
 /** `Path.rglob("*")` restricted to files, skipping `__pycache__` as Python's callers do. */
 export function rglobFiles(root, out = []) {

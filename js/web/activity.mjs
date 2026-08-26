@@ -37,14 +37,14 @@
  * `entry.get("cost") or 0` over a wrapper object is TRUE for a wrapped zero, where Python's
  * `0.0 or 0` is the int `0` — so `s-older`'s `"cost": 0.0` must come back `0` and not `0.0`.
  */
-import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { readText, writeText } from '../lib/fs.mjs';
+import { readText, writeText, isDir, isFile } from '../lib/fs.mjs';
 import { parseJson, isTruthy } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
-import { NotFound } from './api.mjs';
+import { NotFound, stemOf } from './api.mjs';
 
 /**
  * `_web_activity.ACTIVITY_STALE_SECONDS` — a session whose writer is gone, or that has not
@@ -54,9 +54,6 @@ import { NotFound } from './api.mjs';
  * (process-still-alive) session ages out.
  */
 export const ACTIVITY_STALE_SECONDS = 1800;
-
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /** `time.time()` — unix seconds as a float. */
 const nowSeconds = () => Date.now() / 1000;
@@ -170,9 +167,6 @@ function isLive(entry, now) {
   return (now - Number(updated)) <= ACTIVITY_STALE_SECONDS && pidAlive(
     Object.hasOwn(entry, 'pid') ? entry.pid : null);
 }
-
-/** `Path.stem` — the name without its LAST suffix, so `s-live.detail.json` keeps the dot. */
-const stemOf = (name) => name.slice(0, name.length - path.extname(name).length);
 
 /**
  * `_activity_entries` — every live session, dead and stale ones pruned AND their files

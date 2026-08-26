@@ -18,21 +18,15 @@
  * Every path a hook takes on this file is READ-only, so nothing here is on the PreToolUse
  * latency budget — which is why it lives beside the CLI and not in `js/hosts/hooks.mjs`.
  */
-import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync }
+import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, unlinkSync }
   from 'node:fs';
 import path from 'node:path';
 import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from '../build/stubs.mjs';
 import { wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
 import { GLOBAL_MANIFEST, HOSTS, resolvePath } from '../hosts/hosts.mjs';
-import { readText, writeText, printOut, printErr } from '../lib/fs.mjs';
-import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
+import { readText, writeText, printOut, printErr, isDir, isFile, isOsError } from '../lib/fs.mjs';
+import { parseJson, jsonDumpsIndent, get, isDict } from '../lib/json.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
-
-const get = (o, k) => (o && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
-const isDict = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-const isOsError = (e) => Boolean(e) && typeof e.code === 'string';
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /** `_global_installs` — every host whose GLOBAL config dir carries a Geneseed manifest. */
 function globalInstalls() {

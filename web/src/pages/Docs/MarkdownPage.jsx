@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react'
-import { marked } from 'marked'
 import { go } from '../../lib/router.js'
+import { renderMarkdown } from '../../components/Markdown.jsx'
 
 // Slugify a heading title into a stable id we can also use as a CSS anchor.
 // Always returns a value that is safe inside `id="..."` AND inside a CSS
@@ -55,21 +55,6 @@ function extractToc(body) {
   return out
 }
 
-// Render the markdown body and turn [[name]] wikilinks into hash-router
-// links. We deliberately don't override marked's renderer for headings —
-// instead we walk the DOM after mount and assign ids there. That keeps us
-// off the renderer-API churn between marked minor versions and means a weird
-// heading can never poison the parser.
-function renderHtml(body, links) {
-  const byLabel = new Map((links || []).map((l) => [l.label, l]))
-  const withLinks = (body || '').replace(/\[\[([^\]]+)\]\]/g, (m, label) => {
-    const l = byLabel.get(label.trim())
-    if (!l) return m
-    return `[${l.label}](#/item/${l.type}/${encodeURIComponent(l.name)})`
-  })
-  return marked.parse(withLinks, { breaks: false })
-}
-
 // State-aware overlay: when this page is the Setup page and we know the
 // deployed `emit` mode, highlight that path's heading so the user sees which
 // row applies to their install at a glance.
@@ -84,11 +69,14 @@ const SETUP_ANCHOR_BY_EMIT = {
 export default function MarkdownPage({ page, overview, onAction }) {
   const ref = useRef(null)
   const toc = useMemo(() => extractToc(page.body), [page.body])
-  const html = useMemo(() => renderHtml(page.body, page.links), [page.body, page.links])
+  const html = useMemo(() => renderMarkdown(page.body, page.links), [page.body, page.links])
 
   // After the markdown lands in the DOM, assign id="..." to each h1/h2/h3
   // based on slug(textContent). One pass per render — matches the TOC's
-  // numbering by walking in the same order extractToc did.
+  // numbering by walking in the same order extractToc did. We deliberately
+  // don't override marked's renderer for headings — walking the DOM after
+  // mount keeps us off the renderer-API churn between marked minor versions,
+  // and means a weird heading can never poison the parser.
   useEffect(() => {
     const el = ref.current
     if (!el) return

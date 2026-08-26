@@ -42,7 +42,7 @@
  * byte-identical in every cell of the matrix, so only the allow-list refutes it.
  */
 import {
-  existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync,
+  existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync,
   unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -63,12 +63,10 @@ import {
   opencodeTarget, readJsonc, settingsIntegrityCheck, wireClaudeExcludes,
   unwireClaudeExcludes, unwireClaudeSettings,
 } from '../hosts/settings.mjs';
-import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
+import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, jsonDumps, jsonDumpsIndent, deepEquals } from '../lib/json.mjs';
 import { comparePaths, isAbsolutePath, within } from '../lib/paths.mjs';
 
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
 
 /** The Claude-STYLE hosts — one manifest shape, one reversal. Spelled once. */
@@ -293,11 +291,12 @@ export function claudeUninstall(cfg, archiveMemory) {
   const [removed, failed] = unlinkOwned(cfg, ownedOf(man));
   if (failed.length) warnSurvivors(failed);
   const hooks = managed.settings_hooks || [];
-  const unwired = unwireClaudeSettings(settingsFile(cfg, managed), hooks);
-  unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
+  const sf = settingsFile(cfg, managed);
+  const unwired = unwireClaudeSettings(sf, hooks);
+  unwireClaudeExcludes(sf, managed.settings_excludes || []);
   // The unwire is VERIFIED, not assumed: a commented settings file is never rewritten, so a
   // supposedly-uninstalled repo could keep firing Geneseed's hooks. Loud, never fatal.
-  settingsIntegrityCheck(settingsFile(cfg, managed), managed, 'absent');
+  settingsIntegrityCheck(sf, managed, 'absent');
   // Always EXCISE, never whole-file delete: even where Geneseed created CLAUDE.md the user
   // may have added prose since. The file goes only if the excision leaves it empty.
   managedBlockRemove(claudeMdPath(cfg, managed));
@@ -758,9 +757,6 @@ export function cmdUninstall(args) {
 // answers for. `tests/web_golden.py`'s `install/a-deactivate-whose-second-move-collides…`
 // drives it: a manifest naming a file AND its parent directory is the only shape a seeded
 // world can use to make the SECOND move collide.
-
-/** `e` is an OSError rather than a programming fault — Node tags fs errors with `code`. */
-const isOsError = (e) => Boolean(e) && typeof e.code === 'string';
 
 /**
  * `_harness_mcp._move_tree` — move a file or dir, refusing an existing destination.

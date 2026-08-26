@@ -1,27 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/index.js'
+import { waitForServerThenReload } from './waitForServer.js'
 
 // How often the running job is polled for fresh output while the console streams.
 const JOB_POLL_INTERVAL_MS = 600
-
-// After an update the server restarts itself to load the new code; wait for it
-// to answer /api/ping again (same pattern as ServerControl), then hard-reload so
-// the page picks up the new UI bundle and CSRF token.
-const RESTART_POLL_INTERVAL_MS = 1000
-const RESTART_MAX_TRIES = 30
-
-async function reloadWhenServerBack(initialDelayMs) {
-  await new Promise((r) => setTimeout(r, initialDelayMs))
-  for (let i = 0; i < RESTART_MAX_TRIES; i++) {
-    try {
-      await api.ping()
-      break
-    } catch {
-      await new Promise((r) => setTimeout(r, RESTART_POLL_INTERVAL_MS))
-    }
-  }
-  window.location.reload()
-}
 
 // Owns the console's run history and the running-job poller. On mount it
 // hydrates from the server's job history (so runs survive reload/restart) and
@@ -79,7 +61,7 @@ export function useJobs({ onFinish, onError } = {}) {
           if (isUpdate) {
             // The restart is already queued server-side; give it a beat to go
             // down, then reload once it answers again.
-            reloadWhenServerBack(2000)
+            waitForServerThenReload(2000)
             return
           }
           // Every action re-emits the harness (never the served web assets), so a soft
@@ -91,7 +73,7 @@ export function useJobs({ onFinish, onError } = {}) {
         clearInterval(t)
         // Server went away under the poller (the post-update bounce): wait for
         // it to come back and reload — the job's final state is in its history.
-        if (isUpdate) reloadWhenServerBack(0)
+        if (isUpdate) waitForServerThenReload(0)
       }
     }, JOB_POLL_INTERVAL_MS)
     return () => clearInterval(t)

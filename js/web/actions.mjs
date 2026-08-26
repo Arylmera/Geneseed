@@ -97,7 +97,7 @@
  * endpoint over them.
  */
 import {
-  accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync, unlinkSync,
+  accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, rmSync, unlinkSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -122,7 +122,7 @@ import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
   mcpMeta, mcpPresetBlock, mcpSave, mcpSetEnabled, mcpState,
 } from '../hosts/mcp.mjs';
-import { readText, writeText } from '../lib/fs.mjs';
+import { readText, writeText, isFile, isDir } from '../lib/fs.mjs';
 import { parseJson, formatRepr, formatValue, isTruthy } from '../lib/json.mjs';
 import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
@@ -130,9 +130,6 @@ import { splitLines } from '../lib/udiff.mjs';
 import {
   NotFound, deployed, emitChoices, fingerprint, themeChoices, viewCfg, within,
 } from './api.mjs';
-
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 
 /** `dict.get(key, default)` over a `json.loads` result. */
 const bget = (body, key, dflt = null) => (isDict(body) && Object.hasOwn(body, key)

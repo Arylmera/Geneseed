@@ -73,7 +73,7 @@ import {
 import { firstBlockquote } from '../hosts/native.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, statusData } from '../inspect/status.mjs';
-import { readText, withDiscardableStderr } from '../lib/fs.mjs';
+import { readText, withDiscardableStderr, isDir, isFile } from '../lib/fs.mjs';
 import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace, percentDecode } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
@@ -83,9 +83,6 @@ import { apiGraph } from './graph.mjs';
 
 /** `_web_core.NotFound` — a requested catalog section or item that does not exist. */
 export class NotFound extends Error {}
-
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /** Two resolved paths, compared as `PurePath.__eq__` does — case-folded on Windows. */
 const samePath = (a, b) => normcase(resolvePath(a)) === normcase(resolvePath(b));
@@ -340,7 +337,8 @@ function globMd(dir) {
     .sort(comparePaths);
 }
 
-const stemOf = (name) => name.slice(0, name.length - path.extname(name).length);
+/** `Path.stem` for a bare filename — single owner, imported by `js/web/activity.mjs` too. */
+export const stemOf = (name) => name.slice(0, name.length - path.extname(name).length);
 
 /** `_web_catalog._memory_items`. */
 export function memoryItems(state) {

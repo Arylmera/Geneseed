@@ -226,6 +226,33 @@ export function indexOfDeepEqual(arr, value) {
 }
 
 /**
+ * `dict.get(key)` / `k in d` / `isinstance(x, dict)` \u2014 Python dict semantics, OWN properties
+ * only, for a value that came out of `parseJson`.
+ *
+ * SINGLE OWNER of three helpers that had accumulated private copies in `js/hosts/settings.mjs`,
+ * `js/build/emit-common.mjs`, `js/inspect/scan.mjs` (`has` only) and `js/inspect/excludes.mjs`.
+ * They live beside `parseJson` rather than beside `js/lib/fs.mjs`'s filesystem primitives
+ * because every caller is reading a manifest, a theme or an overrides file \u2014 `obj['constructor']`
+ * or `obj['toString']` answering `Object.prototype`'s member instead of `undefined` is the same
+ * hazard `JsonNumber` and `deepEquals` above exist to guard against for the same values.
+ *
+ * They cannot live in `hosts/`, `build/` or `inspect/` themselves: callers on BOTH sides of the
+ * one-way dependency line those three sit on (`js/README.md`) need all three, and a copy in any
+ * one of them would force the others to import up the graph to reach it.
+ */
+export function get(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
+}
+
+export function has(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+export function isDict(v) {
+  return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+}
+
+/**
  * `json.dumps(s)` for a STRING, with Python's default `ensure_ascii=True`.
  *
  * Every emitted `description:` line is built this way, and 44-50 of them per theme carry

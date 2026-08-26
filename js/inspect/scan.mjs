@@ -12,7 +12,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { SRC } from '../build/source.mjs';
 import { comparePaths, normcase } from '../lib/paths.mjs';
-import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { isDir, isFile } from '../lib/fs.mjs';
+import { has } from '../lib/json.mjs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+
+// `isDir`/`isFile`/`has` are owned by `js/lib` now (single owner across `hosts/`, `build/`,
+// `inspect/` and `web/`) — re-exported here so this module's own existing callers keep
+// importing them from `./scan.mjs` unchanged.
+export { isDir, isFile, has };
 
 // --------------------------------------------------------------------------------------
 // _harness_core's scanning primitives
@@ -47,9 +54,6 @@ export function within(child, parent) {
   const p = normcase(parent).split(/[\\/]/);
   return p.length <= c.length && p.every((seg, i) => c[i] === seg);
 }
-
-export const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-export const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /** `sorted(d.glob(pat))`, or `[]` for a directory that is not there. */
 export function globSorted(dir, filter) {
@@ -86,17 +90,6 @@ export const stemOf = (p) => path.basename(p, path.extname(p));
 export const sortedUnique = (xs) => [...new Set(xs)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 /** `sorted(probs)` — SORTED, not deduped, which is what `_ran` fills a group with. */
 export const sortedProblems = (xs) => [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-
-/**
- * `k in d` for a Python dict — OWN keys only.
- *
- * Every membership test in this file reads a key that came out of a JSON document or a source
- * filename, and a bare `k in obj` would answer true for `constructor`, `toString` and the rest
- * of `Object.prototype`. A theme defining a `toString` voice token, or a skill file named
- * `valueOf.md`, would then be reported as missing by the reference and not by this port — a
- * divergence no cell can reach and no reviewer would look for.
- */
-export const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
 /** `_harness_build._src_stems` — spec stems under `src/<folder>`, minus `_`-scaffolds. */
 export function srcStems(folder) {

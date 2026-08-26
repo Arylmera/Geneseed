@@ -42,7 +42,7 @@ import {
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
-import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
+import { printOut, printErr, readText, writeText, isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson, formatRepr } from '../lib/json.mjs';
 
 /** `_harness_build._HEX_RE`. Anchored at BOTH ends — `#123` and `#1122334` both fail. */
@@ -67,8 +67,6 @@ function sysExit(msg) {
   e.exitCode = 1;
   throw e;
 }
-
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 
 // --------------------------------------------------------------------------------------
 // build

@@ -47,10 +47,8 @@ import {
   readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
-import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
+import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
-
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /**
  * `_harness_core._T0` — this process's start, in epoch seconds.

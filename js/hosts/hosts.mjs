@@ -14,13 +14,11 @@
  * changed resolver rather than catch it — but `tests/unit/node_driver.test.mjs`'s relocation
  * table, which asserts each host's global target absolutely.
  */
-import { realpathSync, statSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { printErr, withDiscardableStderr } from '../lib/fs.mjs';
+import { printErr, withDiscardableStderr, isDir } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
-
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';

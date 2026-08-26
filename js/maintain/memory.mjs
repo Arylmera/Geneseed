@@ -27,14 +27,12 @@
  * `memoryDropIndex` is the hook module's, not a copy: writing the fact and unwriting its
  * index line are two halves of one format, and the half that writes lives there.
  */
-import { readdirSync, statSync, unlinkSync } from 'node:fs';
+import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
 import { memoryDropIndex } from '../hosts/hooks.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
-import { printOut, printErr } from '../lib/fs.mjs';
-
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
+import { printOut, printErr, isFile } from '../lib/fs.mjs';
 
 /**
  * The two names the store owns rather than holds: the index the agent reads at session
