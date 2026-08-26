@@ -26,12 +26,12 @@ const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /** `_install_registry._path()` — `$XDG_CONFIG_HOME/geneseed/installs.json`. */
-export function registryPath() {
+function registryPath() {
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   return path.join(base, 'geneseed', 'installs.json');
 }
 
-export function registryLoad() {
+function registryLoad() {
   try {
     const data = parseJson(readFileSync(registryPath(), 'utf8'));
     return Array.isArray(data) ? data.map(String) : [];

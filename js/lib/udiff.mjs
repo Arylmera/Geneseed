@@ -40,7 +40,7 @@
  * have its index hoisted to the front of an object literal (the P3a hazard). Nothing here
  * iterates `b2j`, so the hoist would be invisible until the day something did.
  */
-function chainB(b, autojunk) {
+function chainB(b) {
   const b2j = new Map();
   for (let i = 0; i < b.length; i += 1) {
     const cur = b2j.get(b[i]);
@@ -48,7 +48,7 @@ function chainB(b, autojunk) {
     else cur.push(i);
   }
   const n = b.length;
-  if (autojunk && n >= 200) {
+  if (n >= 200) {
     const ntest = Math.floor(n / 100) + 1;
     for (const [elt, idxs] of [...b2j]) {
       if (idxs.length > ntest) b2j.delete(elt);
@@ -135,8 +135,8 @@ function matchingBlocks(a, b, b2j) {
 }
 
 /** `SequenceMatcher.get_opcodes` — [tag, i1, i2, j1, j2]. */
-export function opcodes(a, b, { autojunk = true } = {}) {
-  const b2j = chainB(b, autojunk);
+function opcodes(a, b) {
+  const b2j = chainB(b);
   let i = 0;
   let j = 0;
   const answer = [];
@@ -159,8 +159,8 @@ export function opcodes(a, b, { autojunk = true } = {}) {
  * Returns a list rather than a generator: the Python's caller is a `for` loop that consumes
  * it once, and a lazy JS equivalent would buy nothing but a second shape to reason about.
  */
-export function groupedOpcodes(a, b, n = 3, opts) {
-  let codes = opcodes(a, b, opts);
+function groupedOpcodes(a, b, n = 3) {
+  let codes = opcodes(a, b);
   if (!codes.length) codes = [['equal', 0, 1, 0, 1]];
   if (codes[0][0] === 'equal') {
     const [tag, i1, i2, j1, j2] = codes[0];

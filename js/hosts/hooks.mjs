@@ -575,7 +575,7 @@ export function cmdGitGate(args) {
  * Geneseed's own coinage and match anywhere; any other markdown matches only inside THIS
  * install's `<root>/memory/`.
  */
-export function ruleGateTarget(p, root) {
+function ruleGateTarget(p, root) {
   if (typeof p !== 'string') return null;
   // Split on BOTH separators rather than taking a basename: a payload carrying a Windows
   // path reaches a POSIX host with its backslashes intact, and `path.basename` there

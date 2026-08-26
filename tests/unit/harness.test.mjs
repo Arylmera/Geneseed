@@ -1264,9 +1264,10 @@ test('the skill-body stripper drops relative .md links and keeps URLs', () => {
 });
 
 test('the capability stripper drops per-row spec links and keeps folder pointers', () => {
-  // `{}` is the whole cfg this needs: the pattern is overridable per theme, and an empty
-  // config takes the default — which is the shape the reference's argument-less helper had.
-  const out = stripCapabilityLinks({},
+  // No cfg argument: the override branch this took a `cfg` for never had a producer
+  // (`bin/build-driver.mjs` deliberately never sends `capabilityLinkRe`) and was deleted
+  // as dead code, so the function is just the reference's argument-less helper now.
+  const out = stripCapabilityLinks(
     '| [reviewer](agents/reviewer.md) | when ready |\n'
     + '| [brainstorm](skills/brainstorm.md) | new design |\n'
     + 'Specs live in [`agents/`](agents/) and [`skills/`](skills/).\n'

@@ -98,7 +98,7 @@ export function emitClaudeRender(cfg, job) {
     const rulesMd = path.join(cfgDir, 'rules', 'geneseed.md');
     mkdirSync(path.dirname(rulesMd), { recursive: true });
     writeText(rulesMd, scope === 'project' ? BOB_RULES_STUB
-      : stripCapabilityLinks(cfg, prefixedAgentText('../') || agentText));
+      : stripCapabilityLinks(prefixedAgentText('../') || agentText));
     owned.push('rules/geneseed.md');
   }
 
@@ -146,7 +146,7 @@ export function emitClaudeRender(cfg, job) {
   // consumes and no more.
   let claudeMdText = null;
   if (agentText !== null && !(isBob && scope === 'global')) {
-    claudeMdText = stripCapabilityLinks(cfg, prefixedAgentText(lawsPrefix) || agentText);
+    claudeMdText = stripCapabilityLinks(prefixedAgentText(lawsPrefix) || agentText);
   }
 
   // WIRE — see `claudeWire` below. One child per emit, so the two halves are two

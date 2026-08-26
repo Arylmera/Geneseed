@@ -401,7 +401,7 @@ export function installAgentEntryOf(instr) {
  * describing a file that no longer exists, which the fallback would then paper over with the
  * canonical spelling — and a bundle sub-dir layout would be left wired.
  */
-export function opencodeProjectUninstall(root) {
+function opencodeProjectUninstall(root) {
   const entry = installAgentEntry(root, 'project');
   let removed = 0;
   let failed = [];
@@ -436,7 +436,7 @@ export function opencodeProjectUninstall(root) {
 }
 
 /** `_harness_mcp._install_data_dir` — where the manifest and the runtime stores live. */
-export function installDataDir(root, host = 'opencode', scope = 'global') {
+function installDataDir(root, host = 'opencode', scope = 'global') {
   if (scope === 'project' && CLAUDE_STYLE.includes(host)) {
     return path.join(root, hostSpec(host).projectMarker);
   }
@@ -607,7 +607,7 @@ export function uninstallResolve(targetArg) {
  * config dir. The registry is the only place a project install outside the cwd can be
  * rediscovered from, and the just-removed root is excluded.
  */
-export function survivingProjectInstalls(removedRoot) {
+function survivingProjectInstalls(removedRoot) {
   const rroot = resolvePath(removedRoot);
   const out = [];
   for (const [host, scope, root] of registeredTargets()) {
@@ -619,7 +619,7 @@ export function survivingProjectInstalls(removedRoot) {
 }
 
 /** `_harness_mcp._print_surviving_project_inventory` — informational, never a cascade. */
-export function printSurvivingProjectInventory(removedRoot) {
+function printSurvivingProjectInventory(removedRoot) {
   const survivors = survivingProjectInstalls(removedRoot);
   if (!survivors.length) return;
   printOut(`[uninstall] ${survivors.length} project install(s) remain — the global removal `
@@ -636,7 +636,7 @@ export function printSurvivingProjectInventory(removedRoot) {
  * A repo can carry `.opencode/`, `.claude/` and `.bob/` side by side and `uninstall` only ever
  * removes the one it resolved to, so a repeat run needs to know there is more to do.
  */
-export function printOtherHostHits(root, removedHost) {
+function printOtherHostHits(root, removedHost) {
   for (const spec of HOSTS) {
     if (spec.host !== removedHost && projectQualifies(root, spec.host)) {
       printOut(`[uninstall] also found ${spec.host}:project here — run \`harness `
@@ -849,7 +849,7 @@ function installMoveList(root, kind) {
  * tells the operator what to add rather than failing the whole reactivate. That asymmetry is
  * the reference's and is gated per side.
  */
-export function installReaddEntry(target, entry) {
+function installReaddEntry(target, entry) {
   if (!existsSync(target)) {
     mkdirSync(path.dirname(target), { recursive: true });
     writeText(target, `${jsonDumpsIndent({

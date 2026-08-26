@@ -56,7 +56,7 @@ export function emitOpencodeRender(cfg, job) {
   // OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
   // plain names (the portable build keeps them). A deliberate de-link, not a fix.
   const agentMd = path.join(out, 'AGENT.md');
-  if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(cfg, readText(agentMd)));
+  if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(readText(agentMd)));
 
   const owned = [];
   const { theme, items } = renderAll(cfg, _theme);
@@ -149,7 +149,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
     // plain names. Memory links stay RELATIVE: in the global layout AGENT.md and the
     // store are siblings, so `memory/` resolves from AGENT.md's own location and stays
     // hermetic — no absolute path a doctor check would flag as an escape.
-    writeText(path.join(cfgDir, 'AGENT.md'), stripCapabilityLinks(cfg, agentText));
+    writeText(path.join(cfgDir, 'AGENT.md'), stripCapabilityLinks(agentText));
     owned.push('AGENT.md');
   }
 

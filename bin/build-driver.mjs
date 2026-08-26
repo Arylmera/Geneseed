@@ -16,14 +16,16 @@
  * values this file must originate. `ROOT` and the seven paths under it come from this
  * script's own location, not from an inherited `cfg`.
  *
- * TWO KEYS ARE DELIBERATELY ABSENT FROM `cfg`, and their absence is load-bearing.
- * `js_cfg()` (_build_core.py:199) always sends `structure` and `capabilityLinkRe`, because
- * the Python originals are module-level names that TESTS MUTATE — `_OWNED` membership
- * asked one level out. This driver has no Python module to mutate, so it sends neither and
- * `js/build/render.mjs:215`'s `cfg.structure ?? STRUCTURE` and `js/build/bundle.mjs`'s
- * `cfg.capabilityLinkRe ? ... : <default>` take their right-hand branches for the first
- * time. Those two fallbacks have been dead code since they were written — always
- * overridden by the driver that always supplies them. P4 is what makes them live.
+ * A KEY IS DELIBERATELY ABSENT FROM `cfg`, and its absence is load-bearing.
+ * `js_cfg()` (_build_core.py:199) always sent `structure` and `capabilityLinkRe`, because
+ * the Python originals were module-level names that TESTS MUTATE — `_OWNED` membership
+ * asked one level out. This driver has no Python module to mutate, so it sends neither;
+ * `js/build/render.mjs:215`'s `cfg.structure ?? STRUCTURE` takes its right-hand branch for
+ * that reason — a fallback that was dead code until P4, always overridden by the driver
+ * that always supplies it. `capabilityLinkRe`'s equivalent fallback in
+ * `js/build/emit-common.mjs`'s `stripCapabilityLinks` was P4's other one made live, and the
+ * over-engineering cleanup then deleted the override branch outright: nothing had ever
+ * supplied one, so there was no longer a `cfg` left to be absent from.
  *
  * THE FOOTPRINT DEFAULT IS THE FLAG'S, NOT THE FUNCTION'S. `--footprint` defaults to
  * `lean` (build.py:354); every `emit_*`/`build` SIGNATURE defaults to `full`. A driver

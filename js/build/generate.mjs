@@ -322,7 +322,7 @@ export function cmdPrompt(args) {
 // --------------------------------------------------------------------------------------
 
 /** `_harness_build._resolve_themes_dir` — explicit `--dir`, else a repo `.opencode/`, else global. */
-export function resolveThemesDir(args) {
+function resolveThemesDir(args) {
   // `Path(args.dir).expanduser().resolve()` — `resolvePath` already expands a leading `~`.
   if (args.dir) return resolvePath(args.dir);
   const repo = path.join(process.cwd(), '.opencode');
@@ -352,7 +352,7 @@ export function resolveThemesDir(args) {
  * escaping rule) traded for the ORDER OF TWO NAMES in an error message that both
  * implementations still emit, for the same values, with the same exit code.
  */
-export function loadUserPalette(args, cfg) {
+function loadUserPalette(args, cfg) {
   const pal = new Map();
   if (args.fromTheme) {
     const src = path.join(cfg.colorThemes, `${args.fromTheme}.json`);

@@ -383,7 +383,7 @@ export async function measureUpstream(log = null) {
   return ['ready', behind, ''];
 }
 
-export const DOCTOR_LEGEND = [
+const DOCTOR_LEGEND = [
   '[geneseed] doctor problem legend — what the lines above mean / how to fix:',
   "  • 'dead link'          → a skill/agent body links a sibling as <dir>/<name>.md; use the BARE <name>.md (source bug)",
   "  • 'unresolved token'   → a {{TOKEN}} is missing from a theme; add it to ALL theme JSONs",
@@ -600,7 +600,7 @@ export async function rebuildBundle(here, out, theme, emit, rootDir, log) {
  * emit-marker rebuild only covers THIS checkout's own bundle; without this pass a
  * claude-global or bob install keeps serving the OLD render after every upgrade, silently.
  */
-export async function rebuildInstalls(here, log) {
+async function rebuildInstalls(here, log) {
   log('[geneseed] refreshing every active install (rebuild-all) ...');
   await drainStdout();
   const proc = spawnSync(process.execPath,

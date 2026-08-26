@@ -12,11 +12,13 @@
  * `build.render_all(theme)`. So the CLI has to build the same `cfg` the driver builds, and
  * until this move only the driver could.
  *
- * THE TWO ABSENT KEYS ARE STILL ABSENT, and the reason is bin/build-driver.mjs's, unchanged:
- * `_build_core.js_cfg()` always sends `structure` and `capabilityLinkRe` because the Python
- * originals are module-level names TESTS MUTATE (`_OWNED` membership asked one level out).
- * A Node process has no Python module to mutate, so it sends neither and
+ * THE ABSENT KEY IS STILL ABSENT, and the reason is bin/build-driver.mjs's, unchanged:
+ * `_build_core.js_cfg()` always sent `structure` and `capabilityLinkRe` because the Python
+ * originals were module-level names TESTS MUTATE (`_OWNED` membership asked one level out).
+ * A Node process has no Python module to mutate, so it sends no `structure`, and
  * `js/build/render.mjs`'s `cfg.structure ?? STRUCTURE` takes its right-hand branch.
+ * `capabilityLinkRe`'s equivalent override in `stripCapabilityLinks` had no producer either
+ * and was deleted outright in the over-engineering cleanup, `cfg` param and all.
  *
  * The move is safe for the reason P5c's was: `tests/golden.py` drives `bin/build-driver.mjs`
  * over 259 cells and compares the tree byte-for-byte, and every one of them builds a cfg

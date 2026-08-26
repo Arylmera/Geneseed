@@ -62,7 +62,7 @@ export const DOCTRINE_HEADING_RE = /^###\s+\S+\s+([a-z]+)\s+(\d+)\s+[—-]\s+(.+
  * from `STRUCTURE` rather than from a theme, so the id below is stable across all fourteen
  * voices and is safe to put in a deep link.
  */
-export const ONTOLOGY_HEADING_RE = /^####\s+(.+?)\s*$/;
+const ONTOLOGY_HEADING_RE = /^####\s+(.+?)\s*$/;
 
 /** The lead line of a pack file — `**Craft** — how code is written.` */
 const PACK_LEAD_RE = /^\*\*(.+?)\*\*\s+[—-]\s+(.+?)\s*$/;
@@ -118,7 +118,7 @@ const has = (obj, k) => Object.hasOwn(obj, k);
  * strips each body at the end. Reproduced literally: a body's internal blank lines are
  * kept and only its ends are trimmed.
  */
-export function parseLaws(text) {
+function parseLaws(text) {
   const laws = [];
   let cur = null;
   for (const line of text.split('\n')) {
@@ -183,7 +183,7 @@ export function parseDoctrines(text) {
  * paragraph that states the tier order, and it renders into AGENT.md whole — the catalogue
  * lists sections, and the preamble is not one.
  */
-export function parseOntology(text) {
+function parseOntology(text) {
   const sections = [];
   let cur = null;
   for (const line of text.split('\n')) {

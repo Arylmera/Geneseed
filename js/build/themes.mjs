@@ -66,7 +66,7 @@ import { stripWhitespaceStart, stripWhitespaceEnd, stripWhitespace } from '../li
  *     for containers — a `===` here would return `null` every time and silently route every
  *     theme through the re-dump fallback, i.e. rewrite all 14 files in full.
  */
-export function insertThemeKeys(raw, theme, tmpl, tmplKeys, missing) {
+function insertThemeKeys(raw, theme, tmpl, tmplKeys, missing) {
   const lines = splitLines(raw);
   if (!lines.length || stripWhitespace(lines[0]) !== '{') return null;
 

@@ -143,7 +143,7 @@ export function substitute(text, theme) {
 }
 
 /** `_build_render._resolve_catalogs`. */
-export function resolveCatalogs(text, nativeCatalog) {
+function resolveCatalogs(text, nativeCatalog) {
   return text.replace(CATALOG_BLOCK_RE, (_m, table, pointer) => (nativeCatalog ? pointer : table));
 }
 

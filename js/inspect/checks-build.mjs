@@ -217,7 +217,7 @@ export function renderedProblems(bundle) {
       // The OpenCode emits de-link AGENT.md's per-row table entries after rendering, so the
       // bundle on disk legitimately differs from `renderAll`'s output for this one file.
       const text = host === 'opencode' && outRel === 'AGENT.md'
-        ? stripCapabilityLinks(cfg, rendered) : rendered;
+        ? stripCapabilityLinks(rendered) : rendered;
       if (readText(dest) !== text) {
         problems.push(`[rendered] ${name}/${outRel} stale (differs from a fresh render) `
           + '— rebuild');

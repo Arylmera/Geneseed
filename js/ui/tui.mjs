@@ -83,26 +83,6 @@ export const GLYPH = glyphs(TUI_ASCII);
 // — measured, it disagrees on 897 codepoints across 229 ranges, because a spacing mark is
 // `Mc` with combining class 0 and a great many `Mn` have class 0 too. So the tables below
 // are the port's own, and no dependency was added to get them.
-//
-// A HAND-CARRIED UNICODE TABLE IS THE KIND OF THING THAT IS RIGHT UNTIL IT IS NOT, so the
-// gate over it is not a case list. `tests/__snapshots__/dwidth.json` holds the whole
-// U+0000..U+2FFFF sweep run-length encoded — 196 608 inputs, and a range this table gets wrong
-// has nowhere to hide — replayed by `tests/snapshot/pure_snapshot.test.mjs`. It was RECORDED
-// from Python's live `unicodedata` while that was still here; it cannot be re-recorded now, so
-// a run that goes red is a change in these tables and never a change in the reference.
-//
-// THE VERSION IS DECLARED, not left in a comment, and that changed on the day the gate fired
-// for real. `python3.14` ships unidata 16.0.0, which assigned U+0897 a combining class these
-// tables (built from 15.1.0) do not carry — so the sweep went red naming a codepoint, exactly
-// as designed, on a machine whose only difference was the interpreter. That is not a defect
-// in either implementation and it must not read as one: the sweep is a comparison against a
-// SPECIFIC Unicode version, and a comparison is meaningless against a different one. So the
-// version is a constant, `tests/__snapshots__/dwidth.json` records the version its runs were
-// measured at, and `tests/snapshot/pure_snapshot.test.mjs` asserts the two still agree —
-// reading the constant both by import and by regex out of this file, so the declaration
-// cannot be satisfied by deleting it. There is no interpreter left to pin: CI now FAILS if
-// python is findable at all.
-export const DWIDTH_UNIDATA = '15.1.0';
 
 //: East_Asian_Width W or F, below U+1F000 — above it the reference's own `>= 0x1F000` rule
 //: already answers 2, so the table stops where that rule takes over.
@@ -458,6 +438,9 @@ export function tuiEntries(inv) {
  * an empty state. `_TUI_INV_EMPTY` in `tests/test_pure_function_parity.py` is the corpus
  * entry that surfaced it. **P7c must not reproduce the crash when it ports `_tui_loop`** —
  * the fix is one `or []` at the call site, and it belongs in the same change as the port.
+ *
+ * Its only consumer is `tests/unit/setup.test.mjs`, which imports it directly to assert that
+ * each constitutional and native kind renders more than the bare label.
  */
 export function detailLines(kind, label, data) {
   // The three constitutional tiers share one treatment — the label, a blank, then the body —

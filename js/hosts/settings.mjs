@@ -48,7 +48,7 @@ import {
   indexOfDeepEqual,
 } from '../lib/json.mjs';
 
-export const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
+const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
 
 /** `dict.get(key)` with Python's semantics — OWN properties only.
  *
@@ -114,7 +114,7 @@ const consentRuleOn = (d, excluded = []) =>
  * Law IV's territory — an always-on invariant — not the process pack's, and the guard
  * plugin's own force-push arm is unconditional for the same reason.
  */
-export function defaultPermission(doctrines = null, excluded = []) {
+function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
   if (consentRuleOn(doctrines, excluded)) {
     bash['git commit*'] = 'ask';
@@ -305,7 +305,7 @@ export function readJsonc(text) {
  * already has a `permission` key to add one is not saying so. Any other truthy value is read as
  * `'add'`, which is what the boolean callers this replaced meant.
  */
-export function warnCommentedJsonc(target, agentPath, permission,
+function warnCommentedJsonc(target, agentPath, permission,
   includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = []) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
@@ -973,7 +973,7 @@ export const GENESEED_HOOK_SNIFF = ['harness.py', SHIM_MARK];
 // 2 and 3 differ ONLY inside the shim body. A classifier reading the host config alone would
 // call a fully-unmigrated machine "already migrated" — silently — and `migrate` would no-op on
 // exactly the installs it exists for. The shim body is a REQUIRED input, not a refinement.
-export const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
+const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
 
 /**
  * `_build_settings._migrate_shape` — 'legacy' | 'current' | 'none'.
@@ -1028,7 +1028,7 @@ export function autostartStale(text, root) {
 }
 
 /** `_build_settings._settings_hook_groups` — flatten `hooks` to [event, group] pairs. */
-export function settingsHookGroups(loaded) {
+function settingsHookGroups(loaded) {
   const hooks = get(loaded, 'hooks');
   if (!isDict(hooks)) return [];
   const out = [];

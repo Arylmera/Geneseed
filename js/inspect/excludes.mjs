@@ -35,7 +35,7 @@ const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /** `_global_installs` — every host whose GLOBAL config dir carries a Geneseed manifest. */
-export function globalInstalls() {
+function globalInstalls() {
   const out = [];
   for (const { host, configDir } of HOSTS) {
     let cfg;

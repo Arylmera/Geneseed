@@ -41,13 +41,15 @@ export const OWNED_SRC_DIRS = ['laws', 'agents', 'skills', 'ontology', 'doctrine
 const LEAN_FULL_TEXT_DIRS = ['laws', 'ontology', 'doctrines'];
 
 /**
- * `_build_core.CAPABILITY_LINK_RE` — the DEFAULT only.
+ * `_build_core.CAPABILITY_LINK_RE`.
  *
- * `cfg.capabilityLinkRe` overrides it and the driver always supplies one, for the same
- * reason `cfg.structure` exists: the constant is in `_OWNED` because a doctor test
- * redirects it to the pre-fix form and asserts the emit then renders dead links, and a
- * redirect that stops at the process boundary half-works silently. The literal stays as
- * the fallback for the parity harnesses, which drive this module in-process.
+ * NOT OVERRIDABLE. Python's `cfg.capabilityLinkRe` was the driver's seam for tests that
+ * monkeypatch `_build_core.CAPABILITY_LINK_RE`; `bin/build-driver.mjs` deliberately never
+ * sends one (see its docblock), so the override branch that used to sit in
+ * `stripCapabilityLinks` never took its left-hand side and was deleted as dead code in the
+ * over-engineering cleanup. `tests/unit/harness.test.mjs`'s planted-fault test drives this
+ * exact constant by rewriting the module's source text instead, which is what "no injection
+ * point left" means there.
  */
 const CAPABILITY_LINK_RE =
   /\[([^\]]+)\]\((?:(?!https?:\/\/|\/)[A-Za-z0-9_.-]+\/)*(?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/g;
@@ -123,11 +125,8 @@ export function relPosix(base, p) {
  * that difference back by design and a check that did not would report the file stale on
  * every run forever.
  */
-export function stripCapabilityLinks(cfg, text) {
-  const re = cfg.capabilityLinkRe
-    ? new RegExp(cfg.capabilityLinkRe, 'g')
-    : CAPABILITY_LINK_RE;
-  return text.replace(re, '$1');
+export function stripCapabilityLinks(text) {
+  return text.replace(CAPABILITY_LINK_RE, '$1');
 }
 
 // ---------------------------------------------------------------------------

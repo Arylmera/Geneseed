@@ -42,7 +42,7 @@ import { which } from '../lib/paths.mjs';
 import { startDaemon } from '../web/daemon.mjs';
 
 /** `_menu_help` — the off-TTY arm, and the fallback both TTY arms end in. */
-export function menuHelp() {
+function menuHelp() {
   printOut('Geneseed — no interactive menu here. Get started with:  geneseed setup\n');
   printOut('Other commands:  bootstrap · update · build · doctor · diff · tui · web\n');
   printOut('On a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.\n');

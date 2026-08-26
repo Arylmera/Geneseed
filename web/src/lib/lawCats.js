@@ -30,15 +30,4 @@ export const PACK_CATS = {
   process: 'oklch(0.74 0.085 45)',
 }
 
-// TWO LOOKUPS, NOT ONE, AND THE MERGED VERSION WAS A BUG. The obvious helper is a
-// single `lawCatColor(klass)` that tries LAW_CATS then PACK_CATS — but the two tables
-// SHARE KEYS with different values: `process` is both an invariant class (green, hue
-// 150) and a doctrine pack (orange, hue 45), and `craft` is in both as well. Whichever
-// table such a helper checked first would silently win for those two, and it did: the
-// `process` pack rendered in the invariant Process green, which is byte-identical to
-// the `ops` pack's colour — so two packs came out the same on the map, and neither
-// matched the same pack on the Constitution page.
-//
-// The caller always knows which tier it is drawing, so it says so.
-export const invariantColor = (klass) => LAW_CATS[klass]?.c || 'var(--text-3)'
 export const packColor = (pack) => PACK_CATS[pack] || 'var(--text-3)'
