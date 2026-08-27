@@ -1,55 +1,13 @@
 /**
- * The web console's read endpoints — P6b's `overview`, `themes`, `doctor`, `diff`,
- * `installs`, `excludes`, `setup` and `profile`, P6c's `catalog`, `item` and `wiki_item`,
- * and the `WebState` all eleven read from.
+ * The web console's read endpoints — `overview`, `themes`, `doctor`, `diff`, `installs`,
+ * `excludes`, `setup`, `profile`, `catalog`, `item` and `wiki_item` — and the `WebState`
+ * all eleven read from.
  *
- * WHAT WAS ACTUALLY NEW HERE, MEASURED BY READING `js/` RATHER THAN BY GREPPING A NAME.
- * The P6 handoff scored this group at "~430 LOC new against ~1,600 already ported" and
- * the order was right, but the shape is worth stating because it is the same discovery
- * every P5 sub-phase made: six of the eight are a JSON face over a function `js/` already
- * owns. `apiSetup` is `statusData()` plus four fields. `apiDiff` is `diffCollect()`
- * reshaped. `apiExcludes` is `excludesSnapshot()`, unmodified. `apiInstalls` is a row per
- * `installTargets()` entry through five detectors P5d and P5f ported. `apiDoctor` is
- * `doctorCollect()` — with the one parameter it did not have. Only `apiThemes` and
- * `apiOverview` compute anything of their own, and most of what `apiOverview` computes is
- * counting.
- *
- * THE ONE PARAMETER: `doctorCollect({groups})`. `js/inspect/doctor.mjs` carried a `ran(check,
- * label, probs)` that returned its third argument and threw the first two away, with a
- * docblock saying the label stays "because it is the one place each check is NAMED, and
- * what P6's accumulator will key on". This is that phase. `on_progress=` — the TUI's — is
- * still absent, still P7's: nothing here passes it and adding it would be a claim no cell
- * can check.
- *
- * THE INVENTORY IS THE FULL RECORD SINCE P6c, AND THERE IS STILL ONE CLASSIFIER. P6b
- * shipped `inventoryFor` as three integers, because `apiOverview` reads three `len()`s off
- * `state.inventory` and the badges and taxonomy classes belonged to a phase that had not
- * arrived. `api_catalog` consumes exactly those fields, so this is the phase that would
- * have made the counting half and the reading half two classifiers. It did not:
- * `tuiInventory` in `js/inspect/inventory.mjs` is the one walk, `js/inspect/status.mjs`'s `inventoryCounts`
- * is three `length`s off it, and `specEntries` grew out of `specNames` by adding the READ
- * rather than by being written beside it.
- *
- * THE TAXONOMY WAS ALREADY PORTED, which the measurement found and the handoff did not.
- * `js/inspect/status.mjs` said flatly that "the ~111 LOC of TUI taxonomy" was P7's; `LAW_CLASS`,
- * `SKILL_CLASS`, `LAW_CLASSES` and `ENTITY_STATUSES` had in fact crossed in P5g inside
- * `js/inspect/checks-authoring.mjs`, because doctor's authoring gates are what validate them. P6c moved the
- * four to `js/inspect/inventory.mjs` — where Python keeps them — rather than copying them, and
- * doctor imports them back. Only `parse_laws`, `load_registry` and `entity_status` were
- * genuinely new.
- *
- * THE SNAPSHOT REPORTS NO INTERPRETER VERSION, and the absence is deliberate. The server
- * this one replaced ran on an interpreter and published its version under a key named for
- * it; nothing here answers that question, and answering it with this runtime's version
- * under that name would have been a lie the UI printed. So the field is gone rather than
- * present-and-empty. The recorded web corpus was taken from the old server and still
- * carries the key, which is why its replay harness erases it before comparing.
- *
- * P6c's ROUTES ARE THE FIRST THAT PARSE A PATH, which brings three things no earlier
- * endpoint could reach: `percentDecode` (NOT `decodeURIComponent`, which throws where the
- * reference leaves a stray `%` alone), the `NotFound` → 404 convention, and `flatName`'s
- * traversal refusal — a GET carries no token, so before that check the item route was an
- * arbitrary-file read.
+ * `PREFIX_ROUTES` below are the first routes that parse a path, which brings three things
+ * no state-keyed route needs: `percentDecode` (NOT `decodeURIComponent`, which throws on a
+ * `%` that is not an escape, where this shell instead answers a 404 naming the literal
+ * text), the `NotFound` → 404 convention, and `flatName`'s traversal refusal — a GET
+ * carries no token, so before that check the item route was an arbitrary-file read.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, statSync } from 'node:fs';
@@ -81,24 +39,23 @@ import { apiActivity, apiActivityDetail } from './activity.mjs';
 import { apiMcp, apiRules } from './actions.mjs';
 import { apiGraph } from './graph.mjs';
 
-/** `_web_core.NotFound` — a requested catalog section or item that does not exist. */
+/** A requested catalog section or item that does not exist. */
 export class NotFound extends Error {}
 
-/** Two resolved paths, compared as `PurePath.__eq__` does — case-folded on Windows. */
+/** Two resolved paths, compared case-folded on Windows. */
 const samePath = (a, b) => normcase(resolvePath(a)) === normcase(resolvePath(b));
 
-/** `dict.get(key, default)` — `??` would also swallow an explicit null the file declared. */
+/** `??` would also swallow an explicit `null` the file declared; this does not. */
 const dget = (obj, key, dflt) => (Object.hasOwn(obj, key) ? obj[key] : dflt);
 
-/** `hashlib.sha256(text.encode()).hexdigest()[:16]`, and "" for an empty file. */
+/** SHA-256 hex, first 16 chars — `""` for an empty file. */
 export function fingerprint(text) {
   return text ? createHash('sha256').update(text, 'utf-8').digest('hex').slice(0, 16) : '';
 }
 
 /**
- * `datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")` — LOCAL time, as the reference's
- * naive `fromtimestamp` is. `toISOString` would be UTC and would read as a port bug in
- * every timezone but one.
+ * `YYYY-MM-DD HH:MM`, LOCAL time — `toISOString` would be UTC, which reads wrong in every
+ * timezone but one for a user-facing timestamp.
  */
 export function stampMinute(ms) {
   const d = new Date(ms);
@@ -110,19 +67,19 @@ export function stampMinute(ms) {
 // ---- WebState ---------------------------------------------------------------------------
 
 /**
- * `_web_core.WebState` — the resolved view of the deployed harness a request reads from.
+ * The resolved view of the deployed harness a request reads from.
  *
  * A factory returning a plain object rather than a class, because the two cached
  * properties are the only behaviour and a getter pair expresses them without ceremony.
  * THE CACHING IS BEHAVIOUR, NOT AN OPTIMISATION: `doctorCollect` renders a theme per call
  * and the dashboard GETs `/api/overview` on every navigation, so an uncached `doctor`
  * would put a full build on the request path. `refresh()` is what a mutation calls to
- * drop both (P6f's).
+ * drop both.
  */
 export function webState(theme = null, target = null) {
   const st = {
-    // `Path(target) if target else _opencode_config_dir()` — NOT resolved. `target` is
-    // printed by three endpoints, so resolving it here would change what they answer.
+    // NOT resolved: `target` is printed by three endpoints, so resolving it here would
+    // change what they answer.
     target: target || opencodeConfigDir(),
     root: null,
     theme: null,
@@ -161,14 +118,12 @@ export function webState(theme = null, target = null) {
     st._doctor = { ok: !problems.length, problems, checked_at: stampMinute(Date.now()) };
   };
   /**
-   * `WebState._detect_emit` — the CURRENT install's mode, from its `.geneseed-emit` marker:
-   * the ROOT first (where every emit writes it), then the data dir.
+   * The CURRENT install's mode, from its `.geneseed-emit` marker: the ROOT first (where
+   * every emit writes it), then the data dir.
    *
-   * P6b ported `refresh()` WITHOUT this, because nothing called `refresh()` yet and the
-   * constructor reads `installedDefaults()` instead. P6f is the phase with mutations, so
-   * `refresh()` finally runs — and the reference's `self.emit = self._detect_emit() or
-   * self.emit` line was missing here, which would have left `emit` stale after any write
-   * that re-themed or re-pointed the install. Restored with its caller.
+   * `refresh()` below MUST call this: without it, `emit` goes stale after any write that
+   * re-themes or re-points the install, since the constructor only reads it once via
+   * `installedDefaults()`.
    */
   st.detectEmit = () => {
     for (const d of [st.root, st.target]) {
@@ -178,12 +133,12 @@ export function webState(theme = null, target = null) {
           const v = stripWhitespace(readText(em));
           if (v) return v;
         }
-      } catch { /* as the Python's `except OSError: pass` */ }
+      } catch { /* unreadable marker: try the next candidate */ }
     }
     return existsSync(path.join(st.root, 'CLAUDE.md')) ? 'claude-global' : 'opencode-global';
   };
   /**
-   * `WebState.select_view` — re-point the console at another detected install's data dir.
+   * Re-point the console at another detected install's data dir.
    *
    * `root` is the install ROOT the markers and sigils live at. It defaults to `target` and
    * differs only for claude/bob/copilot PROJECT installs, where the data sits under
@@ -214,13 +169,12 @@ export function webState(theme = null, target = null) {
   return st;
 }
 
-/** `_web_core._deployed`. */
 export function deployed(state) {
   return existsSync(path.join(state.target, GLOBAL_MANIFEST));
 }
 
 /**
- * `_web_core._spec_desc` — a deployed spec's one-line purpose.
+ * A deployed spec's one-line purpose.
  *
  * The `> blockquote` convention every rendered skill and agent carries, then the
  * frontmatter `description`, then the first prose paragraph. The fallbacks are for the
@@ -240,13 +194,13 @@ export function specDesc(fm, body) {
 }
 
 /**
- * `_web_core._spec_entries` — agent/skill specs read straight off a DEPLOYED harness dir.
+ * Agent/skill specs read straight off a DEPLOYED harness dir.
  *
  * Agents are flat `<root>/<name>.md` (skipping `_*` templates); skills use OpenCode's
- * folder layout `<root>/<name>/SKILL.md`. `glob("*.md")` is case-INSENSITIVE on Windows,
- * as pathlib's is — `normcase` rather than a bare `endsWith`. The frontmatter is stripped
- * because it is host plumbing rather than prose, which is what makes a deployed entry the
- * same shape as a source-rendered one and every consumer indifferent to the origin.
+ * folder layout `<root>/<name>/SKILL.md`. Matched case-INSENSITIVE on Windows via
+ * `normcase`, not a bare `endsWith`. The frontmatter is stripped because it is host
+ * plumbing rather than prose, which is what makes a deployed entry the same shape as a
+ * source-rendered one and every consumer indifferent to the origin.
  */
 export function specEntries(root, nested) {
   const out = [];
@@ -269,8 +223,7 @@ export function specEntries(root, nested) {
 }
 
 /**
- * `_web_core._deployed_inventory` — the agents and skills actually installed at
- * `state.target`, not a fresh render of `src/`.
+ * The agents and skills actually installed at `state.target`, not a fresh render of `src/`.
  *
  * All three constitutional tiers still come from the render: once deployed they live inside
  * AGENT.md rather than as separate files, so the deployed arm replaces the two ENTITY rosters
@@ -306,28 +259,25 @@ export function deployedInventory(state) {
     theme: state.theme };
 }
 
-/** `WebState.inventory` — the deployed record when there is one, else the source render. */
+/** The deployed record when there is one, else the source render. */
 export function inventoryFor(state) {
   return deployed(state) ? deployedInventory(state) : tuiInventory(state.theme);
 }
 
 // ---- the catalog stores overview counts ---------------------------------------------------
 
-/** `_web_catalog._memory_dir` — always `<target>/memory`, never the CWD-scanning resolver. */
+/** Always `<target>/memory` — never the CWD-scanning resolver. */
 const memoryDir = (state) => path.join(state.target, 'memory');
 const notebookDir = (state) => path.join(state.target, 'notebook');
 
 /**
- * `sorted(pathlib.Path.glob("*.md"))` — matched, case-insensitive on Windows.
+ * Matched case-insensitively on Windows.
  *
- * `comparePaths` AND NOT A BARE `.sort()`, and this was a LIVE BUG until P6f's memory cells
- * put an uppercase filename in the directory. `sorted()` over `Path` objects compares
- * `_str_normcase`, so on Windows `MEMORY.md` sorts under `m` and lands after `a-fact.md`;
- * JS's default comparator is UTF-16 code units, so `M` (0x4D) sorts before `a` (0x61) and
- * the whole catalog came back in a different order. Every seeded memory and notebook file in
- * P6b and P6c was lower-case, which is why nothing said so for three phases. The `normcase`
- * in the filter beside it was already here for exactly this reason — the sort was the half
- * that got missed.
+ * `comparePaths` and NOT a bare `.sort()`: on Windows, filenames sort case-insensitively, so
+ * `MEMORY.md` sorts under `m` and lands after `a-fact.md`; JS's default comparator is UTF-16
+ * code units, so `M` (0x4D) sorts before `a` (0x61) and the whole catalog comes back in a
+ * different order. The `normcase` in the filter beside it only fixes matching, not
+ * ordering — this is the other half.
  */
 function globMd(dir) {
   if (!isDir(dir)) return [];
@@ -337,10 +287,9 @@ function globMd(dir) {
     .sort(comparePaths);
 }
 
-/** `Path.stem` for a bare filename — single owner, imported by `js/web/activity.mjs` too. */
+/** Filename without its extension — single owner, imported by `js/web/activity.mjs` too. */
 export const stemOf = (name) => name.slice(0, name.length - path.extname(name).length);
 
-/** `_web_catalog._memory_items`. */
 export function memoryItems(state) {
   const d = memoryDir(state);
   if (!isDir(d)) return [];
@@ -357,7 +306,6 @@ export function memoryItems(state) {
   });
 }
 
-/** `_web_catalog._notebook_items`. */
 export function notebookItems(state) {
   const d = notebookDir(state);
   if (!isDir(d)) return [];
@@ -366,13 +314,12 @@ export function notebookItems(state) {
   }));
 }
 
-/** `_web_catalog._CONFIG_META` — the two setup manifests, in listing order. */
+/** The two setup manifests, in listing order. */
 const CONFIG_META = {
   'context.json': ['Project context', 'what the agent loads for this project'],
   'wiki.jsonc': ['Wiki manifest', 'your machine-wide knowledge base(s)'],
 };
 
-/** `_web_catalog._config_items`. */
 export function configItems(state) {
   const out = [];
   for (const fname of ['context.json', 'wiki.jsonc']) {
@@ -393,23 +340,18 @@ export const WIKI_FILE_CAP = 5000;
  * The three wiki sites below, and `apiDeployCmd` in `js/web/actions.mjs`, are the
  * request-path callers of `expanduser`, and it REFUSES a `~user` form by printing and throwing
  * (`js/hosts/hosts.mjs`'s docblock). None of them may let that escape: `js/web/handler.mjs`
- * wraps the whole GET in a blanket `catch` → a JSON
- * 500, so an unguarded refusal would turn ONE bad line in a file the user hand-edits into a
- * dead Knowledge section. That is the same argument `sovereignBypass` makes in `js/hosts/hooks.mjs`
- * — contain the refusal per entry and take the site's OWN degrade — and each of the three
- * already has one: `[]`, `continue`, `continue`-into-404. The reference reaches those same
- * three degrades for a `~user` path, from the other direction: `ntpath.expanduser` expands
- * `~nosuchuser` to `C:\Users\nosuchuser\…`, which does not exist, so `is_file()`/`is_dir()`
- * answer False. `_wiki_path` in `_web_catalog.py` is the guard that makes POSIX agree, where
- * the same call raises RuntimeError instead.
+ * wraps the whole GET in a blanket `catch` → a JSON 500, so an unguarded refusal would turn
+ * ONE bad line in a file the user hand-edits into a dead Knowledge section. That is the same
+ * argument `sovereignBypass` makes in `js/hosts/hooks.mjs` — contain the refusal per entry
+ * and take the site's OWN degrade — and each of the three already has one: `[]`, `continue`,
+ * `continue`-into-404.
  *
- * `withDiscardableStderr` because `expanduser` writes its refusal at the RAISE SITE and this
- * caller catches — the reference prints nothing here, and `<server stderr>` is compared as
- * bytes by `tests/web_golden.py`, so replaying it would be a divergence on every cell.
+ * `withDiscardableStderr` because `expanduser` prints its refusal at the RAISE SITE, and
+ * this caller wants that swallowed along with the exception rather than logged.
  *
- * DELIBERATE, ADJUDICATED RESIDUE: if `C:\Users\<other-user>\…` really exists, the reference
- * on Windows READS ANOTHER ACCOUNT'S FILE where this refuses. Refusing is the settled product
- * decision — the reference is the side that is wrong — and the reference is being deleted.
+ * DELIBERATE PRODUCT DECISION: a `~otherUser` path is refused rather than resolved, even
+ * where the account happens to exist — reading another account's files through a
+ * hand-edited wiki manifest is not a feature.
  */
 function wikiPath(p) {
   try {
@@ -420,12 +362,12 @@ function wikiPath(p) {
 }
 
 /**
- * `_web_catalog._wiki_manifest` — `$GENESEED_WIKI` first, else `wiki.jsonc` beside the
- * deployed bundle, read with the harness's generic JSONC loader.
+ * `$GENESEED_WIKI` first, else `wiki.jsonc` beside the deployed bundle, read with the
+ * harness's generic JSONC loader.
  *
- * `resolvePath` where the reference only `expanduser()`s. NOT OBSERVABLE, so it stays: `p` is
- * consumed by `isFile` and `mcpLoad` and never reaches a response body, and both of those
- * follow symlinks and resolve a relative path against the same cwd anyway.
+ * `resolvePath`, not merely `expanduser`: harmless here because `p` is consumed by `isFile`
+ * and `mcpLoad` and never reaches a response body, and both of those follow symlinks and
+ * resolve a relative path against the same cwd anyway.
  */
 function wikiManifest(state) {
   const cand = process.env.GENESEED_WIKI;
@@ -437,16 +379,14 @@ function wikiManifest(state) {
 }
 
 /**
- * `harness._mcp_load(path)` with no host — the COMMENT-TOLERANT dict loader, `{}` for a
- * file that is missing, unreadable, unparseable, or not an object.
+ * The COMMENT-TOLERANT dict loader, `{}` for a file that is missing, unreadable,
+ * unparseable, or not an object.
  *
- * Comment-tolerant is the whole point and the first draft of this got it wrong. The two
- * files it reads are `wiki.jsonc` and `context.json`, and the first is `.jsonc` because it
- * is HAND-MAINTAINED: a `//` in it parses on the reference and would have made
- * `JSON.parse` return null here, so the wiki section would have silently listed nothing
- * and the config item's `manifest` would have come back empty. The seeded manifests in
- * `tests/web_golden.py` are plain JSON, so no cell had one — `catalog/…-tolerates-comments`
- * is the cell that does now.
+ * Comment-tolerant is the whole point, and getting this wrong is silent: the two files it
+ * reads are `wiki.jsonc` and `context.json`, hand-maintained, so a `//` line is expected.
+ * Plain `JSON.parse` would throw on it and this loader would then answer `{}` — the wiki
+ * section listing nothing and the config item's `manifest` coming back empty, with no
+ * error surfaced anywhere.
  */
 function mcpLoad(p) {
   if (!isFile(p)) return {};
@@ -457,9 +397,9 @@ function mcpLoad(p) {
 }
 
 /**
- * Every `.md` under `dir`, recursively — `rglob("*.md")`.
+ * Every `.md` under `dir`, recursively.
  *
- * `recursive: true` replaces the hand-rolled walk; its one caller re-sorts the result with
+ * `recursive: true` replaces a hand-rolled walk; its one caller re-sorts the result with
  * `comparePaths` before using it, so the order this returns is never observed.
  */
 function rglobMd(dir) {
@@ -470,17 +410,14 @@ function rglobMd(dir) {
     .map((e) => path.join(e.parentPath, e.name));
 }
 
-/** `_web_catalog._wiki_items`. */
 export function wikiItems(state) {
   const items = [];
   const seen = new Set();
   for (const w of wikiManifest(state)) {
     if (!w || typeof w !== 'object' || Array.isArray(w)) continue;
     const wname = String(dget(w, 'name', null) || 'wiki');
-    // PER ENTRY, and the loop continues — one unusable `path` in the manifest must not blank
-    // every OTHER vault in it. `resolvePath` where the reference only `expanduser()`s is again
-    // unobservable: `root` is only ever joined against or used as the base of a `relative()`
-    // whose other operand was built FROM it, and `source` is `.resolve()`d on both sides.
+    // PER ENTRY, and the loop continues — one unusable `path` in the manifest must not
+    // blank every OTHER vault in it.
     const root = wikiPath(String(dget(w, 'path', null) || ''));
     if (!root || !isDir(root)) continue;
     const entries = (dget(w, 'entries', null) || [])
@@ -496,7 +433,7 @@ export function wikiItems(state) {
       const fp = path.join(root, rel);
       let mds;
       if (isFile(fp) && path.extname(fp) === '.md') mds = [fp];
-      // `sorted(fp.rglob("*.md"))[:cap]` — `comparePaths`, for the reason `globMd` carries.
+      // Capped and sorted via `comparePaths`, for the reason `globMd` carries.
       else if (isDir(fp)) mds = rglobMd(fp).sort(comparePaths).slice(0, WIKI_FILE_CAP);
       else continue;
       for (const md of mds) {
@@ -513,7 +450,7 @@ export function wikiItems(state) {
   return items;
 }
 
-/** `_web_catalog.api_wiki_item` — one page by `<wiki>:<relpath>`, never outside the vault. */
+/** One page by `<wiki>:<relpath>`, never outside the vault. */
 export function apiWikiItem(state, name) {
   const at = name.indexOf(':');
   const wname = at < 0 ? name : name.slice(0, at);
@@ -522,9 +459,8 @@ export function apiWikiItem(state, name) {
   for (const w of wikiManifest(state)) {
     if (!w || typeof w !== 'object' || Array.isArray(w)) continue;
     if (String(dget(w, 'name', null) || 'wiki') !== wname) continue;
-    // The reference is `.expanduser().resolve()` here, so this site matches on resolve and
-    // differs only on the refusal — which falls through to the `NotFound` below, exactly
-    // where the reference lands when the expanded root turns out not to exist.
+    // An unresolvable or refused root falls through to the `NotFound` below, the same as
+    // one that simply does not exist.
     const root = wikiPath(String(dget(w, 'path', null) || ''));
     if (!root) continue;
     const p = resolvePath(path.join(root, rel));
@@ -538,19 +474,18 @@ export function apiWikiItem(state, name) {
 }
 
 /**
- * `harness._within` — re-exported from `js/lib/paths.mjs`, where the lib split put it.
+ * Re-exported from `js/lib/paths.mjs`, where the lib split put it.
  *
  * ⚠ A SECOND, INDEPENDENT COPY lives in `js/inspect/scan.mjs`, written for the doctor's tree
  * walks. A change to the containment rule has to land on both, and nothing compares them.
  *
- * It lived here from P6b (the restore's containment check) until `_install_move_list` needed
- * the same predicate from `js/maintain/uninstall.mjs`, which must not import the web tree. The
- * re-export keeps `js/web/actions.mjs`'s import path unchanged.
+ * Re-exported here (rather than imported directly by callers) so `js/web/actions.mjs`'s
+ * import path stays unchanged.
  */
 export { within };
 
 /**
- * `_web_catalog._flat_name` — catalog names are flat basenames.
+ * Catalog names are flat basenames.
  *
  * A separator, a `..` or a drive colon in the URL segment is someone steering the join
  * outside the catalog dir. A GET carries no token, so before this check the endpoint was
@@ -563,16 +498,14 @@ function flatName(name) {
   }
 }
 
-/** `_web_core.WIKILINK_RE`. Exported since P6e — `js/web/graph.mjs` is its second reader. */
+/** `js/web/graph.mjs` is a second reader of this pattern. */
 export const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
 /**
- * `_web_catalog._resolve_links` — `[[name]]` matched against known agent and skill names.
+ * `[[name]]` matched against known agent and skill names.
  *
  * AGENTS FIRST, SKILLS SECOND, into ONE map — so a name that is both resolves as a SKILL.
- * That is not a preference, it is what the reference's two loops do in that order, and
- * `item/an-agent-carries-its-body-and-its-resolved-links` is the cell that would catch the
- * other order.
+ * This ordering is deliberate and must not be swapped.
  */
 export function resolveLinks(state, body) {
   const inv = state.inventory;
@@ -582,8 +515,8 @@ export function resolveLinks(state, body) {
   const links = [];
   const seen = new Set();
   for (const m of body.matchAll(WIKILINK_RE)) {
-    // `stripWhitespace`, not `trim()` — P6d measured the two whitespace classes apart and P6e
-    // gave this regex a second reader, so the two call sites answer with one rule.
+    // `stripWhitespace`, not `trim()` — the two whitespace classes differ, and both call
+    // sites on this regex must answer with the same rule.
     const label = stripWhitespace(m[1]);
     if (known.has(label) && !seen.has(label)) {
       seen.add(label);
@@ -594,8 +527,8 @@ export function resolveLinks(state, body) {
 }
 
 /**
- * `_web_catalog._config_manifest` — a setup file parsed into the shape the detail pane
- * renders as cards, or `null` so the caller falls back to the raw body.
+ * A setup file parsed into the shape the detail pane renders as cards, or `null` so the
+ * caller falls back to the raw body.
  */
 function configManifest(name, p) {
   const cfg = mcpLoad(p);
@@ -611,7 +544,7 @@ function configManifest(name, p) {
 }
 
 /**
- * `_web_core.SECTIONS` — a closed list; anything else is a 404.
+ * A closed list; anything else is a 404.
  *
  * ⚠ `laws` STAYS ONE SECTION FOR ALL THREE TIERS, and that is a decision rather than an
  * oversight. The console has ONE Constitution entry, not three, so a reader keeps the "read it
@@ -659,7 +592,6 @@ function constitutionItems(inv) {
   ];
 }
 
-/** `_web_catalog.api_catalog`. */
 export function apiCatalog(state, section) {
   if (!SECTIONS.includes(section)) throw new NotFound(section);
   const inv = state.inventory;
@@ -684,7 +616,6 @@ export function apiCatalog(state, section) {
   return { section, items };
 }
 
-/** `_web_catalog.api_item`. */
 export function apiItem(state, type, name) {
   const inv = state.inventory;
   if (type === 'agent' || type === 'skill') {
@@ -737,7 +668,7 @@ export function apiItem(state, type, name) {
 
 // ---- the eight endpoints -------------------------------------------------------------
 
-/** `_web_actions._theme_choices`. Exported since P6g — `_build_override` is its third reader. */
+/** `buildOverride` in `actions.mjs` is a third reader of this. */
 export function themeChoices() {
   return themeOptions().map(([name, blurb]) => {
     const data = readJsonMaybe(path.join(THEMES, `${name}.json`));
@@ -747,16 +678,19 @@ export function themeChoices() {
   });
 }
 
-/** `_web_actions._emit_choices`. */
 export const emitChoices = () => EMIT_OPTIONS.map(([name, desc]) => ({ name, desc }));
 
-/** `_web_actions.api_themes`. */
 export function apiThemes(state) {
   return { themes: themeChoices(), emits: emitChoices(),
     current: { theme: state.theme, emit: state.emit } };
 }
 
-/** `_web_actions.api_setup`. */
+/**
+ * No interpreter/runtime version field, deliberately: this server has no interpreter
+ * version worth reporting under that name, and reporting this runtime's own version there
+ * would misrepresent what actually changed. The field is absent rather than
+ * present-and-empty.
+ */
 export function apiSetup(state) {
   return {
     ...statusData(),
@@ -766,7 +700,7 @@ export function apiSetup(state) {
   };
 }
 
-/** `_web_actions.api_doctor` — the same engine as the `doctor` verb, grouped per check. */
+/** The same engine as the `doctor` verb, grouped per check. */
 export function apiDoctor(state) {
   const groups = [];
   const [themes, problems] = doctorCollect({ theme: state.theme, groups });
@@ -775,19 +709,18 @@ export function apiDoctor(state) {
     checked_at: state.doctor.checked_at };
 }
 
-/** `_web_actions.api_diff`. */
 export function apiDiff(state) {
   const { target, theme, files } = diffCollect({
     target: state.target, theme: state.theme, emit: state.emit });
   return { deployed: files !== null, target, theme, files: files || [] };
 }
 
-/** `_web_actions.api_excludes` — the union across every global install, verbatim. */
+/** The union across every global install, verbatim. */
 export const apiExcludes = () => excludesSnapshot();
 
 /**
- * `_web_actions._view_cfg` — the data dir an install's inventory/memory/diff is read from.
- * Host-driven, so a new nested-marker host cannot silently read the bare root.
+ * The data dir an install's inventory/memory/diff is read from. Host-driven, so a new
+ * nested-marker host cannot silently read the bare root.
  */
 export function viewCfg(host, scope, root) {
   if (scope === 'project' && ['claude', 'bob', 'copilot'].includes(host)) {
@@ -796,7 +729,6 @@ export function viewCfg(host, scope, root) {
   return root;
 }
 
-/** `_web_actions.api_installs`. */
 export function apiInstalls(state) {
   const out = [];
   for (const [host, scope, root] of installTargets()) {
@@ -814,11 +746,10 @@ export function apiInstalls(state) {
     modes: discoverNames('modes', 'direct') };
 }
 
-/** `_web_catalog._profile_path` — `build.PROFILE_FILE` beside the deployed AGENT.md. */
+/** Beside the deployed AGENT.md. */
 export const PROFILE_FILE = 'PROFILE.md';
 export const profilePath = (state) => path.join(state.target, PROFILE_FILE);
 
-/** `_web_catalog.api_profile`. */
 export function apiProfile(state) {
   const p = profilePath(state);
   if (!isFile(p)) return { exists: false, path: p, text: '', fingerprint: '' };
@@ -826,7 +757,7 @@ export function apiProfile(state) {
   return { exists: true, path: p, text, fingerprint: fingerprint(text) };
 }
 
-/** `_web_overview.api_overview` — the dashboard aggregate. */
+/** The dashboard aggregate. */
 export function apiOverview(state) {
   const inv = state.inventory;
   let diff = null;
@@ -855,8 +786,7 @@ export function apiOverview(state) {
     buildEpoch = Math.floor(ms / 1000);
   }
   // Which detected install the current view points at, so the dashboard's footprint hero
-  // can re-emit exactly it. Mirrors `viewCfg`'s rule, spelled out as the reference spells
-  // it out — the two are separate code in the Python too.
+  // can re-emit exactly it. Mirrors `viewCfg`'s rule, spelled out separately here.
   let install = null;
   for (const [host, scope, root] of installTargets()) {
     const data = (scope === 'project' && ['claude', 'bob', 'copilot'].includes(host))
@@ -866,7 +796,7 @@ export function apiOverview(state) {
         install = { host, scope, path: root, footprint: footprintOfDir(root) };
         break;
       }
-    } catch { /* as the Python's `except OSError: pass` */ }
+    } catch { /* an unreadable candidate just isn't a match */ }
   }
   return {
     theme: state.theme,
@@ -944,9 +874,9 @@ const RECENT_LIMIT = 8;
 /**
  * THE NEWEST FILE-BACKED ENTRIES ACROSS THE HARNESS — the "freshly grown" card's whole payload.
  *
- * A GET BEYOND THE REFERENCE (`GET_BEYOND_REF` in `routes.mjs`), and the first one. It exists
- * because NOTHING else in this API carries a per-entry date: every catalog row is
- * `{name, title, desc, source}` and the only two timestamps on the whole surface are
+ * A GET added after the reference surface was frozen (`GET_BEYOND_REF` in `routes.mjs`), and
+ * the first one. It exists because NOTHING else in this API carries a per-entry date: every
+ * catalog row is `{name, title, desc, source}` and the only two timestamps on the whole surface are
  * `overview.build_time` and `doctor.checked_at`. A client cannot stat a path, so "what changed
  * lately" was unanswerable without a server that looks.
  *
@@ -1001,43 +931,36 @@ function releaseLabel() {
 }
 
 /**
- * `_web_server.Handler.STATE_ROUTES`, the ported half.
- *
- * A literal path to `api_X(state)`, exactly as the reference's table is — and the reason
- * it is a table on this side too is `tests/unit/web_server.test.mjs`'s cross-check, which
- * requires this table plus `PREFIX_ROUTES`, `PORTED_INLINE` and `NOT_PORTED` to equal
- * `REF_GET` — a FROZEN LITERAL of what the reference daemon answered, since the source it
- * was once read from with `ast` is deleted. On the second instance of anything, the gate
- * becomes a table cross-checked against a declaration.
- */
-/**
- * `_web_server.do_GET`'s prefix routes, the ported ones — path in, response out.
+ * The prefix routes — path in, response out.
  *
  * `percentDecode` and not `decodeURIComponent`: the JS builtin throws a `URIError` on a `%`
- * that is not an escape, which the shell would answer as a 500 where the reference answers
- * a 404 naming the literal text.
+ * that is not an escape, where this shell instead answers a 404 naming the literal text.
  */
 export const PREFIX_ROUTES = [
   ['/api/catalog/', (state, p) => apiCatalog(state, p.split('/').pop())],
   // /api/item/<type>/<name> — TYPE has no slash, the NAME keeps its slashes so a wiki
-  // page's relpath survives. A missing name is a 404 here rather than an IndexError and a
-  // 500 two frames down.
+  // page's relpath survives. A missing name is a 404 here rather than a 500 two frames down.
   ['/api/item/', (state, p) => {
     const m = /^\/api\/item\/([^/]+)\/(.+)$/.exec(p);
     if (!m) throw new NotFound(p);
     return apiItem(state, m[1], percentDecode(m[2]));
   }],
-  // P6e. The reference's own `path[len("/api/activity/"):]`, unquoted — the sid keeps
-  // whatever it carries and `api_activity_detail`'s safe-name scheme is what makes the
-  // lookup safe, rather than a check out here.
+  // The sid is passed through unquoted — `apiActivityDetail`'s safe-name scheme is what
+  // makes the lookup safe, rather than a check out here.
   ['/api/activity/', (state, p) => apiActivityDetail(
     state, percentDecode(p.slice('/api/activity/'.length)))],
 ];
 
+/**
+ * A literal path to `api_X(state)`, table-keyed rather than a chain of `if`s — the reason
+ * it is a table is `tests/unit/web_server.test.mjs`'s cross-check, which requires this
+ * table plus `PREFIX_ROUTES`, `PORTED_INLINE` and `NOT_PORTED` to equal `REF_GET`, a frozen
+ * record of every GET this daemon has ever needed to answer.
+ */
 export const STATE_ROUTES = {
   '/api/overview': apiOverview,
-  // Beyond the reference — declared in `GET_BEYOND_REF`, which is what keeps the partition
-  // gate's set equality honest instead of forging `REF_GET`.
+  // Added after the reference surface was frozen — declared in `GET_BEYOND_REF`, which
+  // keeps the partition gate's set equality honest instead of forging `REF_GET`.
   '/api/recent': apiRecent,
   '/api/themes': apiThemes,
   '/api/setup': apiSetup,
@@ -1048,9 +971,9 @@ export const STATE_ROUTES = {
   '/api/diff': apiDiff,
   '/api/graph': apiGraph,
   '/api/activity': apiActivity,
-  // P6f. `/api/rules` had to cross as a PAIR: `api_rules_mutate` splices `parse_rules`' line
-  // indices, and the fingerprint every mutation must send back is what this GET answers —
-  // so a Node daemon whose POST worked and whose GET 501'd would have no way to obtain one.
+  // `/api/rules` must exist as a PAIR with its POST: `apiRulesMutate` splices `parseRules`'
+  // line indices, and the fingerprint every mutation must send back is what this GET
+  // answers — a daemon whose POST worked and whose GET 501'd would have no way to obtain one.
   '/api/rules': apiRules,
   '/api/mcp': apiMcp,
 };

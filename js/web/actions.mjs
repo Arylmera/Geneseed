@@ -1,75 +1,12 @@
 /**
- * The web console's WRITES — `rituals/_web_actions.py`'s mutating endpoints plus the two
- * GETs that had to cross with them.
+ * The web console's WRITES — the mutating endpoints, plus the two GETs that belong beside
+ * them.
  *
- * WHAT THE PLAN'S TABLE GOT WRONG, measured by reading `js/` rather than by trusting it.
- * Three of its five "already ported" claims were false and one endpoint was out by an order
- * of magnitude:
- *
- *   * `_memory_drop_index` — "check whether P5's `learn` ported it". It did not; nothing in
- *     `js/` referenced it. It lands in `js/hosts/hooks.mjs`, beside the other memory-store
- *     primitives, because that is where its Python siblings' twins already live.
- *   * `_mcp_load` — "already in js/ (P6c)". What crossed in P6c is `readJsonc` and a
- *     five-line no-host reader inside `js/web/api.mjs` for `wiki.jsonc`. The host fork and
- *     the other twelve MCP functions are 168 lines of new `js/hosts/mcp.mjs`.
- *   * `settings.mjs`'s atomic write — a DIFFERENT Python function from `_mcp_save`, with a
- *     different temp suffix and no parent-directory creation. See `js/hosts/mcp.mjs`.
- *   * `api_install_toggle` — "~25 new; `_move_tree`, `_prune_empty_ancestors` and the stash
- *     ARE in `js/maintain/uninstall.mjs` (P5h)". `DISABLED_STASH`, `installKind` and `installState`
- *     are. `_move_tree`, `_prune_empty_ancestors`, `_install_move_list`, `_install_relive`,
- *     `_install_readd_entry`, `_install_deactivate`, `_install_reactivate`,
- *     `_claude_deactivate` and `_claude_reactivate` are not — 293 lines of unported
- *     move-and-roll-back engine, scored at zero. It is deferred; see below.
- *
- * ---------------------------------------------------------------------------------------
- * THE ARGV-IN-A-RESPONSE-BODY TRAP, SETTLED — AND ITS PREMISE IS FALSE.
- *
- * The plan says `api_install_cmd` and `api_deploy_cmd` "return the interpreter and the
- * generator's path — a Python argv, as DATA, in a response body", and offers two
- * options: (a) the Node twin returns its own argv head and the harness normalises it, or
- * (b) the endpoint returns the ACTION and its arguments and the job runner resolves the
- * command — "the better design", at the cost of changing the reference and rebuilding the
- * tracked `web/dist`.
- *
- * MEASURED FIRST, as the phase's own rule says. Two measurements decide it:
- *
- *   1. `grep` over `web/src/` finds NO consumer of either response. The React client's only
- *      calls into that area are `pickFolder`; nothing reads a `cmd` field.
- *   2. `rituals/_web_server.py` explains why. `_post_routes` calls `api_install_cmd`, and
- *      the ONLY thing it does with the result is `if "error" in plan: send_json(plan, 409)`
- *      / `jm.start("install", plan["cmd"], …)`. The argv is handed to the job runner in the
- *      SAME PROCESS. `{"cmd": [...]}` never reaches the wire; the client sees a `job_id` at
- *      202 or an `error`.
- *
- * So there is no argv in a response body. `{"cmd": [...]}` is a function's return TYPE, not
- * an endpoint's response, and the byte gate was never going to see it. That collapses the
- * choice:
- *
- *   * Option (b) buys nothing. Its whole value was making two implementations return the
- *     same wire bytes; they already do, because neither returns these bytes at all. The
- *     resolver and the runner are already in one process, so "let the runner resolve it" is
- *     a rename. It would change the reference and force a `web/dist` rebuild for zero
- *     observable difference — the definition of work this port refuses.
- *   * Option (a) is what remains, minus the harness change: the Node twin returns
- *     `[process.execPath, bin/geneseed-cli.mjs, …]`, which is the honest command for the
- *     runtime it will run on, and naming a Python interpreter there would put Python back into
- *     a "no Python needed" install for the one operation the console exists to run.
- *
- * `web/dist` therefore does NOT need rebuilding, and it was not rebuilt.
- *
- * WHAT GATES IT, since no cell can. The value never reaches a response, so a request-level
- * corpus is structurally blind to it — exactly the shape a function-level gate answers and a
- * cell cannot. That gate is `tests/unit/web_jobs.test.mjs`: it asserts the argv HEAD
- * absolutely — `process.execPath` plus `bin/build-driver.mjs`, and no interpreter name
- * anywhere in it — and pins the TAIL, every argument after the head, against a frozen
- * literal. The tail is where a real bug would live, and asserting it absolutely rather than
- * by comparison is what let it outlive the implementation it was once compared against.
- *
- * THE CODE IS P6g's, THE DECISION IS THIS PHASE's. `api_install_cmd`, `api_deploy_cmd` and
- * `api_restore` all sit behind `/api/actions/<x>`, which needs the `JobManager` to route at
- * all — so porting them here would produce three functions with no call site, no cell and
- * no route, which is the "declaration that is not a dispatch" this project keeps being
- * bitten by. P6g wires the prefix and brings them across with the gate described above.
+ * `{cmd: [...]}`, returned by `apiInstallCmd` and `apiDeployCmd` below, IS A FUNCTION'S
+ * RETURN TYPE, NOT A RESPONSE BODY: the dispatcher hands it straight to the job runner in
+ * the same process, and the client only ever sees a `job_id` at 202 or an `error`. That is
+ * why the argv head is `process.execPath` + `bin/build-driver.mjs` — the honest command for
+ * the runtime this actually runs on.
  *
  * ---------------------------------------------------------------------------------------
  * `api_pick_folder` DOES NOT CROSS, and that is permanent.
@@ -84,17 +21,14 @@
  * behaviour a 501 produces.
  *
  * ---------------------------------------------------------------------------------------
- * `api_install_toggle` CROSSED IN P6i, AND THE ENGINE CAME WITH IT.
+ * `apiInstallToggle` is a thin endpoint over an engine that lives elsewhere on purpose.
  *
- * The endpoint is 27 lines over three engine calls, and the reason it waited is worth
- * keeping: two of the three pull in 293 lines of all-or-nothing tree moves with rollback, a
+ * Two of its three actions pull in 293 lines of all-or-nothing tree moves with rollback, a
  * stash layout, an `instructions`-entry unmerge, a re-emit-while-disabled guard and a host
- * fork. None of that is web code, and porting it inside a web phase would have put the
- * largest engine block behind the weakest available gate — a request script rather than a
- * file-move fixture. So it landed where it belongs: `installDeactivate` and
- * `installReactivate` live in `js/maintain/uninstall.mjs` beside `installUninstall`, the
- * reversible siblings of the same owned-file walk, and `apiInstallToggle` below is the thin
- * endpoint over them.
+ * fork. None of that is web code, and putting the largest engine block behind a web request
+ * script would give it the weakest available gate instead of a file-move fixture. So it
+ * lives in `js/maintain/uninstall.mjs`: `installDeactivate` and `installReactivate` beside
+ * `installUninstall`, the reversible siblings of the same owned-file walk.
  */
 import {
   accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, rmSync, unlinkSync,
@@ -131,11 +65,9 @@ import {
   NotFound, deployed, emitChoices, fingerprint, themeChoices, viewCfg, within,
 } from './api.mjs';
 
-/** `dict.get(key, default)` over a `json.loads` result. */
 const bget = (body, key, dflt = null) => (isDict(body) && Object.hasOwn(body, key)
   ? body[key] : dflt);
 
-/** `str(x or "")` — Python's truthiness, then Python's `str`. */
 const strOr = (v) => (isTruthy(v) ? formatValue(v) : '');
 
 /**
@@ -194,22 +126,21 @@ function bodyExcludeRules(body) {
   return known.filter((id) => ids.includes(id));
 }
 
-/** `str.split()` with no argument — runs of PYTHON whitespace, no empties. */
+/** Splits on runs of `WHITESPACE` (not `\s`), dropping empty strings. */
 const splitWords = (s) => s.split(new RegExp(`[${WHITESPACE}]+`)).filter(Boolean);
 
-/** `datetime.date.today().isoformat()` — LOCAL, as the reference's naive `date.today()` is. */
+/** Today's date, LOCAL (not UTC) — this is a user-facing date, not a wire timestamp. */
 export function todayIso(d = new Date()) {
   const p2 = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
 
 /**
- * `today` and `today + timedelta(days=n)` from ONE sample of the clock.
+ * `today` and `today + n days`, from ONE sample of the clock.
  *
- * The reference binds `today = datetime.date.today()` once and derives both dates from it.
- * Two `new Date()` calls would put the provenance line and the expiry on either side of a
- * midnight that fell between them — a one-run-in-86400 disagreement, which is the worst kind
- * to debug.
+ * Two separate `new Date()` calls would let the provenance line and the expiry land on
+ * either side of a midnight that fell between them — a one-run-in-86400 disagreement, which
+ * is the worst kind to debug.
  */
 function promoteDates(days) {
   const d = new Date();
@@ -219,46 +150,42 @@ function promoteDates(days) {
 }
 
 /**
- * `body.get(k, "") != <a str>` — Python's `!=`, where a non-string NEVER equals a string.
- *
- * `str(...)` would be wrong here and measurably so: the reference compares the RAW body
- * value, so a client sending `"fingerprint": 0` against an ABSENT file (whose fingerprint is
- * `""`) gets a conflict there, where a coerced comparison would find `"" == ""` and write.
+ * Strict equality on the RAW body value, not run through `strOr` first. `strOr(0)` folds to
+ * `''` (0 is falsy), which would wrongly equal an absent file's `''` fingerprint and let a
+ * client send `"fingerprint": 0` and overwrite regardless of what is actually on disk.
  */
 const fpMatches = (got, want) => typeof got === 'string' && got === want;
 
 // ---- user rules (user-rules.md) ----------------------------------------------------------
 
-/** `build.RULES_FILE`. */
 export const RULES_FILE = 'user-rules.md';
 const rulesPath = (state) => path.join(state.target, RULES_FILE);
 
 /**
- * `_web_catalog.RULE_HEAD_RE` — `## R<n> — Title`, anchored at column 0 so a rule body's
- * fenced code and the stub's indented format example never parse as rules.
+ * `## R<n> — Title`, anchored at column 0 so a rule body's fenced code and the stub's
+ * indented format example never parse as rules.
  *
- * The whitespace classes are `WHITESPACE`, not `\s`: P6d measured the two apart and this
- * pattern runs over a HAND-EDITED file, which is where a non-breaking space actually turns
- * up. `\S` is its complement for the same reason.
+ * The whitespace classes are `WHITESPACE`, not `\s`: this pattern runs over a HAND-EDITED
+ * file, which is where a non-breaking space actually turns up. `\S` is its complement for
+ * the same reason.
  *
- * `\d` IS LEFT ASCII, and that is a declared divergence rather than an oversight. Python's
- * `\d` on a `str` pattern is `\p{Nd}`, so `## R١ — …` parses there and not here. Matching it
- * would only move the problem one line down: the reference then calls `int()` on the captured
- * text, and `int()` accepts every Unicode decimal digit where `Number()` accepts none — so
- * closing the gap needs `int`'s digit table, for a heading no theme seeds, no build writes
- * and the web editor cannot produce (it writes `R<n>` itself from `max(ids) + 1`).
+ * `\d` IS LEFT ASCII, and that is a declared divergence rather than an oversight, unlike
+ * `ruleFields` below which uses `\p{Nd}`. No theme seeds a non-ASCII rule id, no build
+ * writes one, and the web editor cannot produce one either — it writes `R<n>` itself from
+ * `max(ids) + 1`. Widening this to match would only move the gap one line down, to whatever
+ * parses the captured digits back into a number.
  */
 export const RULE_HEAD_RE = new RegExp(
   `^##[${WHITESPACE}]+R(\\d+)[${WHITESPACE}]*[—–-]+[${WHITESPACE}]*`
   + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
 );
 
-/** `_web_catalog.RULES_BUDGET` — advisory; nothing blocks past it. */
+/** Advisory only; nothing blocks past it. */
 export const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
 
 const META_RE = new RegExp(`^\\((.+)\\)[${WHITESPACE}]*$`);
 
-/** `_web_catalog._parse_rule_meta` — `{}` when the line is body rather than metadata. */
+/** `{}` when the line is body rather than metadata. */
 function parseRuleMeta(line) {
   const m = META_RE.exec(stripWhitespace(line));
   if (!m) return {};
@@ -275,7 +202,7 @@ function parseRuleMeta(line) {
 }
 
 /**
- * `_web_catalog.parse_rules` — user-rules.md to `[rules, warnings]`.
+ * `user-rules.md` parsed to `[rules, warnings]`.
  *
  * Every rule carries its `start`/`end` LINE INDICES, which is what lets `apiRulesMutate`
  * splice exactly one block and leave every other byte of the user's file — prose,
@@ -314,7 +241,6 @@ export function parseRules(text) {
   return [rules, warnings];
 }
 
-/** `_web_catalog.api_rules` — the Rules page payload. */
 export function apiRules(state) {
   const p = rulesPath(state);
   if (!isFile(p)) {
@@ -332,19 +258,17 @@ export function apiRules(state) {
     body: r.body,
   }));
   return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text),
-    // `len(text) // 4` — CODE POINTS. `String.length` counts UTF-16 units, so an emoji in a
-    // rule body would put the two token estimates two apart.
+    // CODE POINTS, not `String.length` (UTF-16 units) — an emoji in a rule body would
+    // otherwise put the token estimate off.
     stats: { rules: rules.length, lines: splitLines(text).length,
       tokens: Math.floor(codePointLength(text) / 4), ...RULES_BUDGET } };
 }
 
-/** `_web_actions._rules_read`. */
 function rulesRead(state) {
   const p = rulesPath(state);
   return [p, isFile(p) ? (readMaybe(p) ?? '') : ''];
 }
 
-/** `_web_actions._rule_block`. */
 function ruleBlock(rid, title, scope, source, trialUntil, body) {
   const meta = [`scope: ${scope}`];
   if (source) meta.push(`source: ${source}`);
@@ -353,12 +277,12 @@ function ruleBlock(rid, title, scope, source, trialUntil, body) {
 }
 
 /**
- * `_web_actions._rule_fields` — validate and normalise a rule's writable fields.
+ * Validate and normalise a rule's writable fields. Throws (→ the shell's JSON 500 carrying
+ * the message) on an unusable rule.
  *
- * Throws (→ the shell's JSON 500 carrying the message) on an unusable rule. `\p{Nd}` here and
- * not `\d`, unlike `RULE_HEAD_RE`: this one is a pure predicate over a string that is stored
- * as a string, so matching Python's Unicode-aware `\d` exactly costs nothing and needs no
- * `int()`.
+ * `\p{Nd}` here and not `\d`, unlike `RULE_HEAD_RE` above: this is a pure predicate over a
+ * string that stays a string, so accepting any Unicode decimal digit costs nothing and
+ * needs no numeric parse afterward.
  */
 function ruleFields(body) {
   const title = splitWords(strOr(bget(body, 'title'))).join(' ');
@@ -376,11 +300,10 @@ function ruleFields(body) {
 }
 
 /**
- * `int(body.get("id"))`, with both of its failures folded into `NotFound("rule id")`.
- *
- * Python's `int()` takes an int, a bool (which IS an int there), a float (truncating) and a
- * decimal string with surrounding whitespace; everything else is a TypeError or ValueError,
- * and the reference catches both.
+ * Coerces whatever `id` came out of the parsed body into an integer, or throws
+ * `NotFound('rule id')`. Handles a decimal string (surrounding whitespace stripped), a
+ * boolean, a bare number (truncated), and a `JsonNumber`-shaped value via its `valueOf()` —
+ * whatever `parseJson` could have produced for this field.
  */
 function ruleId(v) {
   if (typeof v === 'string') {
@@ -398,7 +321,7 @@ function ruleId(v) {
 }
 
 /**
- * `_web_actions.api_rules_mutate` — add / update / delete on user-rules.md.
+ * Add / update / delete on user-rules.md.
  *
  * EVERY MUTATION REQUIRES THE FINGERPRINT OF THE CONTENT THE CLIENT LAST READ. An agent
  * session may be editing the same file mid-flight, so a stale write returns `ok: false`
@@ -448,11 +371,9 @@ export function apiRulesMutate(state, body) {
 }
 
 /**
- * `_web_actions.api_rules_promote` — one memory fact into a trial rule.
- *
- * The provenance line and the month of probation are the rule this endpoint owns, and both
- * are DATES read from the clock. `tests/web_golden.py` gates them from its own shared
- * per-cell clock rather than destamping them — a destamp would erase exactly the thing.
+ * One memory fact promoted into a trial rule. The provenance line and the month of
+ * probation are the rule this endpoint owns, and both are DATES read from the real clock —
+ * not destamped, since destamping would erase exactly the thing being recorded.
  */
 export function apiRulesPromote(state, body) {
   const name = strOr(bget(body, 'name'));
@@ -487,7 +408,7 @@ export function apiRulesPromote(state, body) {
 
 // ---- PROFILE.md --------------------------------------------------------------------------
 
-/** `_web_actions.api_profile_save` — the whole file, fingerprint-guarded like the rules. */
+/** The whole file, fingerprint-guarded like the rules above. */
 export function apiProfileSave(state, body) {
   const p = path.join(state.target, 'PROFILE.md');
   const cur = isFile(p) ? (readMaybe(p) ?? '') : '';
@@ -505,11 +426,11 @@ export function apiProfileSave(state, body) {
 
 // ---- memory ------------------------------------------------------------------------------
 
-/** `_web_catalog._memory_dir` — always `<target>/memory`, never the CWD-scanning resolver. */
+/** Always `<target>/memory` — never the CWD-scanning resolver. */
 const memoryDir = (state) => path.join(state.target, 'memory');
 
 /**
- * `_web_actions.api_memory_delete` — one fact file, and its line in the MEMORY.md index.
+ * One fact file, and its line in the MEMORY.md index.
  *
  * `name` is a BARE SLUG: a path separator, or one of the two reserved names, is refused, so
  * this can only ever remove a fact inside the resolved memory dir. MEMORY.md is the index the
@@ -535,8 +456,8 @@ export function apiMemoryDelete(state, name) {
 // ---- sovereign-repo exclusions -------------------------------------------------------------
 
 /**
- * `_web_actions.api_excludes_mutate` — this endpoint owns no exclusion logic of its own; it
- * validates the body and hands off to the same engine `harness exclude add|remove` calls.
+ * This endpoint owns no exclusion logic of its own; it validates the body and hands off to
+ * the same engine `harness exclude add|remove` calls.
  *
  * A malformed body is rejected with `ok: false` (→ 409) rather than reaching `excludeAdd`,
  * which assumes a real path string. That arm is also where a body that never parsed lands:
@@ -554,7 +475,6 @@ export function apiExcludesMutate(state, body) {
 
 // ---- MCP ----------------------------------------------------------------------------------
 
-/** `_web_actions.api_mcp` — MCP servers per ACTIVE install, host-aware. */
 export function apiMcp() {
   const out = [];
   for (const [label, p, host, scope, root] of mcpInstallTargets()) {
@@ -575,20 +495,6 @@ export function apiMcp() {
 }
 
 /**
- * `_web_actions.api_mcp_toggle` — enable / disable / first-add one server.
- *
- * THE PATH COMES OUT OF THE REQUEST BODY, so the allowlist is the whole security of this
- * endpoint: `known` is built from the detected install targets and an unlisted path is a 404
- * before anything is read or written. Without it this is "write arbitrary JSON to an
- * arbitrary file", behind a CSRF token and nothing else.
- *
- * The Claude-shaped hosts are parsed ONCE, STRICTLY, and that exact object is what gets
- * rewritten — so the safety check and the value saved come from the same read, with no
- * time-of-check/time-of-use gap and no comment-stripper touching a string that contains
- * `,]`. A file that will not parse is refused rather than clobbered: it may be
- * `~/.claude.json`, which holds projects and history far beyond MCP wiring.
- */
-/**
  * The MCP config paths a request body is allowed to name, as `path -> [path, host]`.
  *
  * LIFTED OUT OF `apiMcpToggle` BECAUSE IT NOW HAS A SECOND CALLER, not for tidiness. `/api/reveal`
@@ -607,6 +513,20 @@ export function mcpTargetPaths() {
   return known;
 }
 
+/**
+ * Enable / disable / first-add one server.
+ *
+ * THE PATH COMES OUT OF THE REQUEST BODY, so the allowlist is the whole security of this
+ * endpoint: `known` is built from the detected install targets and an unlisted path is a 404
+ * before anything is read or written. Without it this is "write arbitrary JSON to an
+ * arbitrary file", behind a CSRF token and nothing else.
+ *
+ * The Claude-shaped hosts are parsed ONCE, STRICTLY, and that exact object is what gets
+ * rewritten — so the safety check and the value saved come from the same read, with no
+ * time-of-check/time-of-use gap and no comment-stripper touching a string that contains
+ * `,]`. A file that will not parse is refused rather than clobbered: it may be
+ * `~/.claude.json`, which holds projects and history far beyond MCP wiring.
+ */
 export function apiMcpToggle(state, body) {
   const name = strOr(bget(body, 'name'));
   const want = isTruthy(bget(body, 'enabled'));
@@ -657,7 +577,7 @@ export function apiMcpToggle(state, body) {
 // ---- the harness selector ------------------------------------------------------------------
 
 /**
- * `_web_actions.api_select_view` — re-point the whole console at a detected install.
+ * Re-point the whole console at a detected install.
  *
  * The (host, path) PAIR must be one of the detected targets, and the ROOT is threaded through
  * beside the data dir: markers and sigils live at the install root, not in the data dir, and
@@ -681,14 +601,14 @@ export function apiSelectView(state, body) {
   return { ok: true, target: state.target, theme: state.theme, emit: state.emit };
 }
 
-// ---- P6g — restore, and the two build-command resolvers -------------------------------------
+// ---- restore, and the two build-command resolvers ---------------------------------------
 
 /**
- * `_web_actions._build_override` — (theme, emit) for a Build POST.
+ * (theme, emit) for a Build POST.
  *
  * A valid override in the body wins; anything missing or unrecognised falls back to the
  * DETECTED install, so a bogus body value can never reach the build argv. That is the same
- * allowlist shape `api_install_cmd` uses, and it is the reason neither endpoint needs to
+ * allowlist shape `apiInstallCmd` uses, and it is the reason neither endpoint needs to
  * sanitise a string: an unknown one is simply not used.
  */
 export function buildOverride(state, body) {
@@ -700,13 +620,12 @@ export function buildOverride(state, body) {
 }
 
 /**
- * `_web_actions._global_emitter_for` — the global emit matching a deployed install's
- * `.geneseed-emit`, so the EXPECTED render uses the install's own host dialect.
+ * The global emit matching a deployed install's `.geneseed-emit`, so the EXPECTED render
+ * uses the install's own host dialect.
  *
- * Returns the HOST rather than a function, because `emitGlobalInto(host, …)` is how the twin
- * of `build.HOSTS[host]["emit_global"]` is already spelt (`js/inspect/diff.mjs` calls it that way).
- * An unknown or missing marker falls back to OpenCode, exactly as the reference's two
- * `.get(..., default)` calls do.
+ * Returns the HOST rather than a function, because `emitGlobalInto(host, …)` is the shape
+ * `js/inspect/diff.mjs` already calls it with. An unknown or missing marker falls back to
+ * OpenCode.
  */
 export function globalEmitHostFor(emit) {
   const host = (EMIT_HOST_SCOPE.get(emit || '') ?? ['opencode', 'global'])[0];
@@ -714,22 +633,21 @@ export function globalEmitHostFor(emit) {
 }
 
 /**
- * `_web_actions.api_restore` — restore selected drifted files from the SOURCE render.
+ * Restore selected drifted files from the SOURCE render.
  *
  * Source wins and local edits are discarded (the inverse, keeping them, is Export
- * improvements). Renders the expected copy exactly as `_diff_collect` does, then per rel:
+ * improvements). Renders the expected copy exactly as `diffCollect` does, then per rel:
  * expected present -> overwrite/create the deployed copy; expected absent but deployed present
  * (an 'added' file) -> delete it; neither -> an error and nothing touched.
  *
  * SYNCHRONOUS, AND NOT A JOB. One render, the same cost as a diff GET, and it returns a
- * structured result rather than a job id — which is why `_post_routes` answers it before it
+ * structured result rather than a job id — which is why the dispatcher answers it before it
  * ever consults the action table.
  *
- * THE EMIT AND THE FOOTPRINT ARE READ OFF THE DEPLOYMENT, and the reference's comment says
- * what each one costs: a silently-OpenCode `expected` would overwrite a Claude install's
- * agents with the wrong frontmatter, and a full-footprint `expected` on a lean install
- * rewrites AGENT.md with the inlined laws and DELETES `laws/universal.md`, which only the lean
- * emit writes.
+ * THE EMIT AND THE FOOTPRINT ARE READ OFF THE DEPLOYMENT: a silently-OpenCode `expected`
+ * would overwrite a Claude install's agents with the wrong frontmatter, and a full-footprint
+ * `expected` on a lean install rewrites AGENT.md with the inlined laws and DELETES
+ * `laws/universal.md`, which only the lean emit writes.
  *
  * THE POSTURE AND THE MODE cost the most of the four, because this verb WRITES. Rendering
  * `expected` at `peer`/`direct` made restoring AGENT.md silently revert the user's chosen
@@ -772,8 +690,8 @@ export function apiRestore(state, files) {
         errors.push(`${rel}: outside the deployed tree`);
       } else if (isFile(src)) {
         mkdirSync(path.dirname(dst), { recursive: true });
-        // `shutil.copyfile` — a BYTE copy, so the restored file keeps the render's own line
-        // endings rather than the platform's (the `writeText`/`copy2` rule, one file over).
+        // A BYTE copy, so the restored file keeps the render's own line endings rather than
+        // the platform's (the `writeText`/`copy2` rule, one file over).
         copyFileSync(src, dst);
         restored.push(rel);
       } else if (isFile(dst)) {
@@ -784,14 +702,13 @@ export function apiRestore(state, files) {
       }
     }
   } finally {
-    // `tempfile.TemporaryDirectory()`'s cleanup, which runs on the exception path too.
     rmSync(tmp, { recursive: true, force: true });
   }
   state.refresh();
   return { restored, deleted, errors };
 }
 
-/** `_web_actions._EMIT_FOR` — (host, scope) -> the emit name that installs it. */
+/** (host, scope) -> the emit name that installs it. */
 const EMIT_FOR = new Map([
   ['opencode global', 'opencode-global'], ['opencode project', 'opencode'],
   ['claude global', 'claude-global'], ['claude project', 'claude'],
@@ -800,21 +717,17 @@ const EMIT_FOR = new Map([
 ]);
 
 /**
- * `_web_actions.api_install_cmd` — the build command that installs Geneseed into a DETECTED
- * location, or re-themes an already-active one (an in-place re-emit, the same command either
- * way).
+ * The build command that installs Geneseed into a DETECTED location, or re-themes an
+ * already-active one (an in-place re-emit, the same command either way).
  *
  * The (host, path) pair MUST be one of the detected targets — the same allowlist
- * `api_select_view` uses, and the reason the target is never built from raw body input — and
+ * `apiSelectView` uses, and the reason the target is never built from raw body input — and
  * it must not be `disabled` (reactivate first). Every other field follows the same rule: a
  * VALID picked value wins, else the install's own, so a re-theme never silently flips the
  * footprint, the register or the mode, and a bogus body value cannot reach the argv.
  *
- * `{cmd: [...]}` IS A RETURN TYPE, NOT A RESPONSE. `_post_routes` hands it straight to the job
- * runner in the same process; it never reaches the wire. That is what collapsed P6f's
- * "argv-in-a-response-body" question — see this file's header — and why the twin's head is
- * `process.execPath` + `bin/build-driver.mjs` rather than a Python argv it would then have to
- * pretend to run.
+ * `{cmd: [...]}` IS A RETURN TYPE, NOT A RESPONSE — see this file's header for why that
+ * matters and what the argv head is.
  */
 export function apiInstallCmd(state, body) {
   const known = new Map();
@@ -861,28 +774,17 @@ export function apiInstallCmd(state, body) {
 }
 
 /**
- * `_web_actions.api_deploy_cmd` — the build command that deploys a FRESH per-repo harness into
- * an arbitrary folder the user chose.
- *
- * The open-ended sibling of `api_install_cmd`, which only rebuilds a pre-detected target from a
- * tight allowlist. Scope is always `project`: a global lands in the host's config dir, never a
- * chosen folder. THIS ENDPOINT TAKES A RAW PATH, so it is the trust boundary — the path is
- * validated here as an existing, writable directory that is not a host's own global config dir
- * (deploying a `project` emit there would mislabel as the global row and collide on dedup).
- */
-/**
- * `_web_actions.api_install_toggle` — deactivate, reactivate, or REMOVE one install.
+ * Deactivate, reactivate, or REMOVE one install.
  *
  * KEYED ON THE (host, path) PAIR, and the pair must be one of the DETECTED installs. A cwd can
  * carry both an OpenCode and a Claude install at the same path, so a path alone is ambiguous;
  * and this endpoint moves and deletes whole trees, so the root is never built from raw body
  * input. An unknown pair is a `NotFound`, which the shell answers 404.
  *
- * THE ENGINE IS `js/maintain/uninstall.mjs`'s, and P6i is what brought it. `installDeactivate` /
- * `installReactivate` are the reversible siblings of `installUninstall` — the same owned-file
- * walk and ancestor prune with `move` where the reversal has `unlink` — which is why they live
- * beside it rather than in the web tree. `remove` is `installUninstall`, which crossed in P5h
- * and reaches the wire for the first time here.
+ * THE ENGINE IS `js/maintain/uninstall.mjs`'s: `installDeactivate` / `installReactivate` are
+ * the reversible siblings of `installUninstall` — the same owned-file walk and ancestor prune
+ * with `move` where the reversal has `unlink` — which is why they live beside it rather than
+ * in the web tree.
  */
 export function apiInstallToggle(state, body) {
   const known = new Map();
@@ -907,14 +809,25 @@ export function apiInstallToggle(state, body) {
     const mem = bget(body, 'memory');
     res = installUninstall(root, host, scope, isTruthy(mem) ? mem : 'keep');
   } else {
-    // `{action!r}` — Python's repr, SINGLE-quoted. `JSON.stringify` would double-quote it
-    // inside a JSON string body and the two sides would differ on every typo.
+    // `formatRepr`, not `JSON.stringify` — SINGLE-quoted, consistent with every other error
+    // message in this file that echoes an unrecognised value.
     res = { ok: false, error: `unknown action ${formatRepr(action)}` };
   }
   state.refresh();
   return res;
 }
 
+/**
+ * The build command that deploys a FRESH per-repo harness into an arbitrary folder the user
+ * chose.
+ *
+ * The open-ended sibling of `apiInstallCmd`, which only rebuilds a pre-detected target from
+ * a tight allowlist. Scope is always `project`: a global lands in the host's config dir,
+ * never a chosen folder. THIS ENDPOINT TAKES A RAW PATH, so it is the trust boundary — the
+ * path is validated here as an existing, writable directory that is not a host's own global
+ * config dir (deploying a `project` emit there would mislabel as the global row and collide
+ * on dedup).
+ */
 export function apiDeployCmd(state, body) {
   const host = stripWhitespace(strOr(bget(body, 'host')));
   if (!HOSTS.some((h) => h.host === host)) {
@@ -930,7 +843,7 @@ export function apiDeployCmd(state, body) {
   }
   if (!isDir(root)) return { error: `not a folder: ${root}` };
   try {
-    accessSync(root, constants.W_OK);         // `os.access(root, os.W_OK)`
+    accessSync(root, constants.W_OK);
   } catch {
     return { error: `folder not writable: ${root}` };
   }
@@ -938,7 +851,7 @@ export function apiDeployCmd(state, body) {
   for (const fn of [opencodeConfigDir, claudeConfigDir, bobConfigDir, copilotConfigDir]) {
     try {
       cfgdirs.add(resolvePath(fn()));
-    } catch { /* the reference's bare `except: pass` */ }
+    } catch { /* not every host has a resolvable config dir; skip it */ }
   }
   if (cfgdirs.has(root)) {
     return { error: "that's a host global config dir — use its existing row to build a global install" };

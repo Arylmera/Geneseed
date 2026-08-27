@@ -31,10 +31,9 @@ import { gzipSync } from 'node:zlib';
 export { isFile };
 
 /**
- * DNS-rebinding guard. The reference's own comment carries the why; the shape is the
- * part a port gets wrong. `h.split(":", 1)[0]` keeps everything before the FIRST colon,
- * so `localhost:4747` passes and a bare IPv6 literal would not — which is what the
- * `[::1]` prefix test above it is for.
+ * DNS-rebinding guard. `h.split(":", 1)[0]` keeps everything before the FIRST colon, so
+ * `localhost:4747` passes and a bare IPv6 literal would not — which is what the `[::1]`
+ * prefix check above it is for.
  */
 export function localHost(host) {
   const h = (host || '').trim().toLowerCase();
@@ -57,11 +56,6 @@ const CTYPES = {
 
 // ---- the request handler ---------------------------------------------------
 
-/**
- * `make_handler(state, jm, token, dist, holder)` — `jm` is the SECOND argument here as it is
- * there. P6a shipped this without it because there was no `JobManager` to pass; every caller
- * moved in the same commit that added one.
- */
 export function makeHandler(state, jm, token, dist, holder = null) {
   const staticCache = new Map();
 
@@ -90,8 +84,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     const rel = (path === '/' || path === '') ? 'index.html' : path.replace(/^\/+/, '');
     const index = resolvePath(join(dist, 'index.html'));
     let fp = resolvePath(join(dist, rel));
-    // `dist not in fp.parents`: STRICTLY under dist. `Path.parents` never contains the
-    // path itself, so `fp == dist` takes the fallback too.
+    // STRICTLY under `dist`: `fp === dist` itself must also take the fallback below, which
+    // is why this checks `fp !== dist` and not just the prefix.
     if (!(fp.startsWith(dist + sep) && fp !== dist) && fp !== index) fp = join(dist, 'index.html');
     if (!isFile(fp)) fp = join(dist, 'index.html');
     if (!isFile(fp)) {
@@ -115,8 +109,6 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   }
 
   function doGet(req, res, path, ae) {
-    // The reference's own table first, then the routes that parse the path — and `ping`
-    // sits between them there too, so the order here is its order.
     const route = STATE_ROUTES[path];
     if (route !== undefined) return sendJson(res, route(state), 200, ae);
     if (path === '/api/ping') return sendJson(res, { ok: true, theme: state.theme }, 200, ae);
@@ -131,16 +123,16 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       try {
         return sendJson(res, apiDocsPage(state, pid, harnessParam(req.url)), 200, ae);
       } catch (e) {
-        // A kind P6d does not answer says so, rather than falling through to the
-        // `NotFound` at the bottom of `apiDocsPage` and claiming the page is missing.
+        // An unimplemented doc kind says so explicitly (501), rather than falling through
+        // to the `NotFound` at the bottom of `apiDocsPage` and claiming the page is missing.
         if (e && e.notPorted) return sendJson(res, { error: e.message }, 501, ae);
         throw e;
       }
     }
     if (path === '/api/jobs') return sendJson(res, { jobs: jm.recent() }, 200, ae);
     if (path.startsWith('/api/jobs/')) {
-      // `path.rsplit("/", 1)[1]` — the LAST segment, so `/api/jobs/a/b` looks up `b` and
-      // misses, rather than 404ing on the shape.
+      // The LAST segment: `/api/jobs/a/b` looks up `b` and misses (no such job) rather than
+      // 404ing on the URL shape.
       const j = jm.get(path.slice(path.lastIndexOf('/') + 1));
       return j ? sendJson(res, j, 200, ae)
         : sendJson(res, { error: 'no such job' }, 404, ae);
@@ -159,12 +151,10 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       return sendJson(res, { error: 'forbidden' }, 403, ae);
     }
     if (path === '/api/shutdown') {
-      // The one POST route the SHELL owns. It must answer BEFORE it stops, which is why
-      // the reference runs `srv.shutdown()` on its own thread — called inline it would
-      // deadlock against `serve_forever`. Here the equivalent is closing after the
-      // response has flushed. `closeAllConnections` is the other half: `close()` alone
-      // waits for idle keep-alive sockets, and the client that just sent this request is
-      // holding one open. The reference drops them by exiting.
+      // The one POST route the SHELL owns. It must answer BEFORE it stops, so closing is
+      // deferred to `res.on('finish', ...)` so the response flushes first.
+      // `closeAllConnections` is the other half: `close()` alone waits for idle keep-alive
+      // sockets, and the client that just sent this request is holding one open.
       res.on('finish', () => {
         holder.srv.close();
         holder.srv.closeAllConnections();
@@ -174,19 +164,15 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     if (path === '/api/restart') {
       // THE ONE ROUTE IN THIS FILE NO TEST MAY REACH, and it is declared rather than probed.
       // `requestRestart` spawns a DETACHED `web restart`, which stops whatever daemon the
-      // record names and starts a fresh one that outlives the caller. Every way of asking it
-      // a question runs it: `tests/web_golden.py` would have its own server stopped and a
-      // replacement orphaned into a sandbox about to be deleted, and
-      // `tests/test_web_server.py`'s dispatcher probe runs in the DEVELOPER'S environment,
-      // where the replacement would bind 4747 and serve the checkout forever. That is the
-      // same reasoning P6g used to ban a job cell that starts real work, one step further:
-      // there the child was merely orphaned, here it is a second daemon.
+      // record names and starts a fresh one that outlives the caller. Actually driving this
+      // route from a test would either stop the test's own server or, worse, orphan a real
+      // daemon that binds 4747 and serves the checkout forever in the developer's own
+      // environment.
       //
-      // So the gate is `tests/test_web_daemon.py`, which reads both implementations and
-      // asserts they dispatch this path to `request_restart(state.theme)` and answer the
-      // same body. Rule 7 says a declaration is not a dispatcher — this is the one route
-      // where probing the dispatcher costs more than the assurance is worth, and saying so
-      // beats a silently missing probe.
+      // So the gate asserts this dispatches to `requestRestart(state.theme)` directly rather
+      // than by hitting the route through a live request — a declaration is not normally
+      // enough to stand in for a dispatcher, but here probing the dispatcher costs more than
+      // the assurance is worth.
       requestRestart(state.theme);
       return sendJson(res, { restarting: true }, 200, ae);
     }
@@ -225,8 +211,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       return sendJson(res, obj, (okIs409 && !isTruthy(obj.ok)) ? 409 : 200, ae);
     }
     if (path.startsWith('/api/jobs/') && path.endsWith('/cancel')) {
-      // `path.split("/")[3]`, positional — so `/api/jobs/<id>/cancel` takes `<id>` and a
-      // deeper path takes its third segment, which is what the reference looks up.
+      // Positional: `/api/jobs/<id>/cancel` takes `<id>` and a deeper path takes its third
+      // segment regardless.
       const jid = path.split('/')[3];
       return jm.cancel(jid) ? sendJson(res, { cancelled: jid }, 200, ae)
         : sendJson(res, { error: 'no running job by that id' }, 404, ae);
@@ -241,22 +227,21 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   }
 
   /**
-   * `/api/actions/<x>` — the reference's own order, which is the part a port gets wrong.
+   * `/api/actions/<x>` dispatch order, and the order is deliberate rather than incidental.
    *
    * `restore` is answered BEFORE anything else because it is synchronous and returns a result
    * rather than a job id. `install` and `deploy` resolve their argv from the body, and their
    * refusal statuses DIFFER — 409 for install (its target came from an allowlist, so a refusal
    * means the world changed under the client) and 400 for deploy (its path came from the body,
-   * so a refusal means the body was wrong). That asymmetry is the reference's; a port that
-   * unified them would be wrong on one of the two and no cell would say which.
+   * so a refusal means the body was wrong). Unifying the two would be wrong for one of them.
    *
-   * `update` COMES NEXT AND IS INLINE, since P8c: it is gated on a LOCAL-ONLY preflight before
-   * a job is ever started, so a dirty tree or a zip-download install gets a friendly 422 the UI
-   * renders as an info popup instead of a job that spawns and then fails. Its finish handler is
-   * its own too — the child skips its own daemon bounce (`GENESEED_WEB_JOB`, set by `_run`), so
-   * the restart happens HERE, after the job is saved as finished, and only when it succeeded: a
-   * failed update changed nothing worth reloading and bouncing would disconnect the PWA for no
-   * reason.
+   * `update` COMES NEXT AND IS INLINE: it is gated on a LOCAL-ONLY preflight before a job is
+   * ever started, so a dirty tree or a zip-download install gets a friendly 422 the UI renders
+   * as an info popup instead of a job that spawns and then fails. Its finish handler is its own
+   * too — the child skips its own daemon bounce (`GENESEED_WEB_JOB`, set by `_run` in
+   * `jobs.mjs`), so the restart happens HERE, after the job is saved as finished, and only when
+   * it succeeded: a failed update changed nothing worth reloading and bouncing would disconnect
+   * the PWA for no reason.
    *
    * THEN the unported rows, and only then the table. Order matters: `link`/`unlink` are REAL
    * actions whose verb has not crossed, and letting them fall through to `actionCommands` would
@@ -314,7 +299,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   /**
    * The 202/409 pair every job route ends in. `state.refresh()` on finish is not optional: a
    * Build may re-theme the install, and the re-detect must read the new `.geneseed-emit` or
-   * the console keeps serving the old mode (the line P6b dropped and P6f restored).
+   * the console keeps serving the old mode.
    */
   function startJob(res, action, cmds, ae) {
     const jid = jm.start(action, cmds, () => state.refresh());
@@ -333,10 +318,9 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         try {
           return doGet(req, res, path, ae);
         } catch (e) {
-          // The `NotFound` → 404 convention, which P6c is the first phase to raise. It
-          // wraps the ROUTE DISPATCH and not each handler, exactly as the reference's
-          // `try` around `do_GET`'s body does — an endpoint several frames down raises and
-          // the shell decides the status. Anything else is still the outer 500.
+          // The `NotFound` → 404 convention wraps the ROUTE DISPATCH as a whole, not each
+          // handler individually: an endpoint several frames down raises and this decides
+          // the status. Anything else still falls to the outer 500.
           if (e instanceof NotFound) {
             return sendJson(res, { error: `not found: ${e.message}` }, 404, ae);
           }
@@ -344,30 +328,20 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         }
       }
       if (req.method === 'POST') {
-        // Drain the body BEFORE routing, as the reference does and for its stated
-        // reason — under keep-alive an unread body is parsed as the next request line,
-        // and both guards answer without ever reaching a route that would read it.
-        //
-        // THIS HALF OF IT IS INDISTINGUISHABLE HERE, and measured rather than assumed:
-        // two mutations — reading zero bytes, then neither reading nor resuming the
-        // stream — both survived the keep-alive cell, which the reference needs the
-        // drain to pass. Node's HTTP parser owns the message boundary, so unread body
-        // bytes are discarded when the response ends instead of being re-parsed. It
-        // stays because `_read_json_body` needs the bytes from P6f on, and because a
-        // shell whose two implementations diverged only under load would be the worst
-        // kind of divergence to carry. UNREACHABLE is not the word for it: the branch
-        // runs on every POST, it simply cannot be observed to matter on this runtime.
+        // The body is drained before routing regardless of what the route needs it for:
+        // `readJsonBody` needs the bytes for a real POST body, and Node's own HTTP parser
+        // owns the message boundary anyway — unread bytes are discarded when the response
+        // ends rather than mis-parsed as the next request line, so this is where the bytes
+        // have to come from either way.
         const length = parseIntStrict(String(req.headers['content-length'] ?? '')) ?? 0;
         return readBody(req, length, (buf) => {
           req._body = buf;
           try {
             return doPost(req, res, path, ae, buf);
           } catch (e) {
-            // `do_POST`'s own two-armed catch, and P6f is the phase that needs the first
-            // arm: `api_mcp_toggle`, `api_select_view`, `api_memory_delete`,
-            // `api_rules_mutate` and `api_rules_promote` all raise `NotFound` for an
-            // unknown target, and the reference answers 404. The 500 arm below it is what
-            // carries `_rule_fields`' ValueError message, which is a 500 there too.
+            // `apiMcpToggle`, `apiSelectView`, `apiMemoryDelete`, `apiRulesMutate` and
+            // `apiRulesPromote` all raise `NotFound` for an unknown target, mapped to 404
+            // here; anything else falls to the 500 arm below, carrying its own message.
             if (e instanceof NotFound) {
               return sendJson(res, { error: `not found: ${e.message}` }, 404, ae);
             }
@@ -421,8 +395,8 @@ function readBody(req, length, done) {
   const chunks = [];
   let seen = 0;
   req.on('data', (c) => {
-    // Exactly `Content-Length` bytes, as `rfile.read(length)` takes: a longer body is
-    // the next request's bytes and belongs to the parser, not to this handler.
+    // Exactly `Content-Length` bytes: any more belongs to the next request and is the HTTP
+    // parser's concern, not this handler's.
     if (seen >= length) return;
     chunks.push(c.subarray(0, length - seen));
     seen += c.length;
@@ -430,7 +404,7 @@ function readBody(req, length, done) {
   req.on('end', () => done(Buffer.concat(chunks)));
 }
 
-/** `bytes.replace(old, new, 1)` — the first occurrence only. */
+/** Replaces the first occurrence only. */
 function replaceOnce(buf, find, repl) {
   const at = buf.indexOf(find);
   if (at < 0) return buf;

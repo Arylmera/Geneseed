@@ -4,39 +4,16 @@
  * declarations in `routes.mjs`, the daemon record and lifecycle in `daemon.mjs`; this file
  * binds a socket and wires the three together.
  *
- * WHY THE SHELL FIRST, AND ALONE. `_web_server.py` is 654 lines and none of it is an API
- * function: it is routing, two security guards, gzip negotiation, the static route with
- * its per-request token injection, and the daemon record. Every one of those is invisible
- * to a test that calls `api_X(state)` in process — which is how `tests/test_web.py`
- * reaches all 136 of its assertions — so the shell is both the part with no existing
- * coverage and the part every later sub-phase builds on. `tests/web_golden.py` is its
- * gate and was written before this file.
- *
- * THE SERIALISER, WHICH TOUCHES ALL 29 PATHS. `_send_json` is a bare `json.dumps(obj)`:
- * Python's DEFAULT separators, `(', ', ': ')`, and `ensure_ascii=True`. That is exactly
- * `jsonDumpsCompact` — whose name says "compact" meaning "no indent", not "no spaces";
- * read its body, it joins on `', '`. So the twin needs no new helper and the response
- * bodies stay byte-comparable.
- *
- * Its one condition is the int/float distinction. `formatValue` refuses a BARE JS number
- * because `json.loads` tells `20` from `1.0` and `JSON.parse` does not — but the numbers
- * in a response body are not parsed from JSON, they are computed here (counts, a port, a
- * pid, a unix second), and every one of them is a Python `int`, which renders identically
- * in both languages. `bareInts` says that out loud rather than wrapping several dozen
- * call sites in a factory. A Python float would be the counter-example — `1.0` against
- * JS's `1` — and the byte gate over every endpoint body is what would catch one.
- *
- * THE DAEMON LIFECYCLE MOVED OUT, AND THE PREDICTED CYCLE DID NOT MATERIALISE. This
- * docblock used to argue that splitting the handler from the daemon would make `serve()`
- * (which needs `npmBuild`) and the launcher (which needs `readDaemon`) import each other.
- * They do not: the dependency runs ONE WAY, `server → daemon`, because `npmBuild` stayed
- * here with `serve` and only the record readers went. `probe`, `liveDaemon`,
+ * MODULE BOUNDARY: the dependency runs one way, `server → daemon`. `probe`, `liveDaemon`,
  * `spawnDetached`, `start|stop|status|restartDaemon`, `openUrl` and `requestRestart` are in
- * `daemon.mjs`; `npmBuild`, `buildPlan`, `serve` and `cmdWeb` are here.
+ * `daemon.mjs`; `npmBuild`, `buildPlan`, `serve` and `cmdWeb` are here — `npmBuild` stays with
+ * `serve` rather than moving with the rest of the daemon lifecycle, which is why the split
+ * does not produce a two-way import.
  *
  * `bin/geneseed-cli.mjs` imports `cmdWeb` statically, which is what put this tree on the
- * CLI's import graph and moved `js/web/jobs.mjs`'s spawn row to `entry: "cli"` — and it is
- * why a runtime dependency reached from here would load on EVERY `geneseed` invocation.
+ * CLI's import graph and moved `js/web/jobs.mjs`'s `ALLOWED_SPAWNS` row to `entry: "cli"` —
+ * and it is why a runtime dependency reached from here would load on EVERY `geneseed`
+ * invocation.
  *
  * WHAT IS STILL NOT HERE, SINCE P6i: `/api/pick-folder` alone, and it is DECLINED rather than
  * deferred — an OS-native folder chooser has no Node twin that is not a new GUI dependency.
@@ -67,16 +44,10 @@ export { webState };
 // ---- serve -----------------------------------------------------------------
 
 /**
- * Pure: what `serve()` should do about the UI bundle. Ported ahead of the rest of the
- * verb because it decides whether a server starts at all, and because it is the second
- * interactive prompt in this port — `interactive` is an ARGUMENT, which is what makes it
- * gateable by a corpus rather than only by a cell.
- *
- * P6h GAVE IT BOTH KINDS OF GATE AND FOUND THE CLAIM ABOVE HAD NEVER BEEN PAID. It had a
- * Python unit test (`tests/test_web.py`) and nothing cross-implementation until now: the
- * corpus in `tests/test_pure_function_parity.py` covers all five answers, and two
- * `harness_golden` cells cover the two arms that TERMINATE — which are also the only two
- * that let a `web` cell exist at all, since every other arm of `serve` binds a socket.
+ * Pure: what `serve()` should do about the UI bundle, decided before anything else since it
+ * decides whether a server starts at all. `interactive` is a plain argument rather than a
+ * read of `process.stdin.isTTY` inside this function, which is what keeps it callable from a
+ * test without mocking stdin.
  */
 export function buildPlan(dist, webDir, npm, interactive) {
   if (isFile(join(dist, 'index.html'))) return 'serve';
@@ -87,15 +58,14 @@ export function buildPlan(dist, webDir, npm, interactive) {
 }
 
 /**
- * `npm install` then `npm run build` in `web/`, streams inherited — the third spawn this
+ * `npm install` then `npm run build` in `web/`, streams inherited — one of the spawns this
  * module declares, and the one NO test reaches.
  *
- * THAT IS A DECLARED PARTITION, not an omission. `web/dist/index.html` is TRACKED (asserted
- * by `tests/test_web_daemon.py` against `git ls-files`, so the claim cannot rot), which
- * means `buildPlan` answers `serve` in every checkout a cell can build and the `ask` arm is
- * reachable only from a partial checkout on an interactive terminal. There is no npm
- * library to call instead; a Node twin that reimplemented `npm install` is not a thing that
- * exists.
+ * THAT IS A DECLARED GAP, not an omission. `web/dist/index.html` is TRACKED (asserted by
+ * `tests/unit/web_daemon.test.mjs` against `git ls-files`, so the claim cannot rot), which
+ * means `buildPlan` answers `serve` in any checkout a test can build against, and the `ask`
+ * arm is reachable only from a partial checkout on an interactive terminal. There is no npm
+ * library to call instead of the real thing.
  *
  * `shell` ON WINDOWS, and it is required rather than stylistic: `which('npm')` resolves
  * to `npm.CMD` through PATHEXT, and Node refuses to `spawn` a `.cmd` directly. The path is
@@ -123,8 +93,8 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   const dist = join(ROOT, 'web', 'dist');
   const webDir = join(ROOT, 'web');
   const manual = '        cd web && npm install && npm run build';
-  // `sys.stdin.isatty()`. `process.stdin.isTTY` is `undefined` rather than false on a pipe,
-  // which is the same trap `cmdSetup` documents.
+  // `process.stdin.isTTY` is `undefined` rather than false on a pipe — the same trap
+  // `cmdSetup` documents.
   const plan = buildPlan(dist, webDir, which('npm'), Boolean(process.stdin.isTTY));
   if (plan === 'no-source') {
     printOut(`[web] web/ sources are missing from ${ROOT}.\n`);
@@ -144,11 +114,10 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
     return 1;
   }
   if (plan === 'ask') {
-    // `except (EOFError, KeyboardInterrupt): answer = "n"`. EOF is the arm that matters and
-    // it is the one a naive port gets backwards: `input()` RAISES at EOF, so the reference
-    // reads it as "no", while a read that returned `''` would fall into the empty-answer
-    // arm and start an npm install nobody asked for. `promptLine` returns null for exactly
-    // that case — see its docblock in js/maintain/setup.mjs.
+    // EOF is the arm that matters: treated as an empty string it would fall into the
+    // empty-answer arm below (which defaults to yes) and start an npm install nobody asked
+    // for. `promptLine` returns null for exactly that case — see its docblock in
+    // js/maintain/setup.mjs — which is why `null` maps to `'n'` here.
     const line = promptLine('[web] UI not built — run npm install && npm run build now? [Y/n] ');
     const answer = line === null ? 'n' : line;
     if (['', 'y', 'yes'].includes(answer.trim().toLowerCase())) {
@@ -167,14 +136,14 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   }
   const token = randomBytes(24).toString('base64url');
   const holder = {};
-  // `JobManager(history_path=state.target / ".geneseed-web-runs.json")` — the console's job
-  // list survives a reload and a restart because it is a FILE, not a process's memory.
+  // The console's job list survives a reload and a restart because it is a FILE on disk,
+  // not held in process memory.
   const jm = new JobManager(join(state.target, '.geneseed-web-runs.json'));
   const srv = createServer(makeHandler(state, jm, token, dist, holder));
   holder.srv = srv;
   return new Promise((done) => {
     srv.on('error', () => {
-      // The reference retries on port 0; the same fallback, one level in.
+      // On a listen error, retry with port 0 so the OS picks a free one.
       srv.listen(0, '127.0.0.1', () => ready());
     });
     srv.listen(port, '127.0.0.1', () => ready());
@@ -191,10 +160,9 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
       printOut(`[web] Geneseed UI on ${url}  (theme: ${state.theme})\n`);
       printOut(daemon ? '[web] daemon ready.\n' : '[web] Ctrl-C to stop.\n');
       if (openBrowser) openUrl(url);
-      // `except KeyboardInterrupt: print("\n[web] stopped.")` around `serve_forever`. Node
-      // kills on SIGINT by default, which would skip the message AND the record cleanup in
-      // the `finally` below — a foreground `--daemon-internal` server stopped with Ctrl-C
-      // would leave a record pointing at a dead port.
+      // Node kills on SIGINT by default, which would skip this message and the record
+      // cleanup in `srv.on('close', ...)` below — a foreground `--daemon-internal` server
+      // stopped with Ctrl-C would otherwise leave a record pointing at a dead port.
       process.on('SIGINT', () => {
         printOut('\n[web] stopped.\n');
         srv.close();
@@ -212,20 +180,18 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
 }
 
 /**
- * `cmd_web` — the verb `bin/geneseed-cli.mjs` dispatches to, and the reason this module is
+ * `cmdWeb` — the verb `bin/geneseed-cli.mjs` dispatches to, and the reason this module is
  * on the CLI's import graph at all (which is what moved `js/web/jobs.mjs`'s
- * `_ALLOWED_SPAWNS` row from `entry: "web"` to `entry: "cli"`).
+ * `ALLOWED_SPAWNS` row from `entry: "web"` to `entry: "cli"`).
  *
- * The reference's `cmd_web` does `import web` INSIDE the function; the ESM equivalent would
- * be a dynamic `import()`, and it is deliberately NOT used — a static import is what lets
- * `test_the_cli_reaches_child_process_only_where_it_is_declared` walk the CLI's graph and
- * find the two spawning modules under `js/web/`. The cost is parsing the web tree on every
- * CLI invocation; `bin/geneseed-cli.mjs` is user-invoked and carries no latency budget (the
- * hook entry, which does, is a different binary for exactly this reason).
+ * The import above is static rather than dynamic on purpose: a static import is what lets the
+ * spawn-graph walk find the two spawning modules under `js/web/`. The cost is parsing the web
+ * tree on every CLI invocation; `bin/geneseed-cli.mjs` is user-invoked and carries no latency
+ * budget (the hook entry, which does, is a different binary for exactly this reason).
  */
 export async function cmdWeb(args) {
-  // `--port` is `type=int` on the reference, and `bin/geneseed-cli.mjs`'s `ints` column
-  // refuses a non-integer before this runs — so `parseIntStrict` cannot be null here.
+  // `bin/geneseed-cli.mjs`'s `ints` column refuses a non-integer before this runs — so
+  // `parseIntStrict` cannot be null here.
   const port = args.port === null ? 4747 : parseIntStrict(args.port);
   const openBrowser = !args.noBrowser;
   if (args.action === 'start') return startDaemon(args.theme, port, openBrowser);
@@ -237,12 +203,9 @@ export async function cmdWeb(args) {
 
 // ---- entry -----------------------------------------------------------------
 //
-// KEPT AFTER P6h, and it is not a duplicate of the verb above. `tests/web_golden.py` drove
-// this module directly for all of P6a–P6g, and its 95 cells are what license the MOVE: the
-// same matrix now runs against `node bin/geneseed-cli.mjs web` as well, and a byte gate
-// that passed against one command proves nothing about the other until it is re-aimed. The
-// module entry is also what a debugging session reaches for when the CLI's argument layer
-// is the thing under suspicion.
+// Not a duplicate of `cmdWeb` above: this lets `node js/web/server.mjs` be run directly,
+// which is what a debugging session reaches for when the CLI's own argument layer is the
+// thing under suspicion.
 
 async function main(argv) {
   let theme = null;
