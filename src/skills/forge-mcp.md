@@ -22,7 +22,8 @@ depends on it.
 4. Define each tool's input and output schema (Pydantic or Zod), set the
    annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
    `openWorldHint`), and write error messages that name the specific, actionable
-   fix.
+   fix. A destructive tool's guard is enforced server-side, at the boundary the
+   call must cross — never left to the calling model's judgement ({{LAW}} IX).
 5. Review and test: kill duplication, ensure consistent errors and full type
    coverage, then build and exercise every tool with the MCP Inspector — don't
    assume it works ({{LAW}} III).
