@@ -26,7 +26,7 @@ function filterAndRank(index, query) {
   return hits.slice(0, MAX_RESULTS).map((h) => h.e)
 }
 
-export default function Spotlight({ query, index, loading, active, onActive, onClose }) {
+export default function Spotlight({ query, index, loading, error, active, onActive, onClose }) {
   const results = useMemo(() => filterAndRank(index, query), [index, query])
   const containerRef = useRef(null)
 
@@ -73,7 +73,12 @@ export default function Spotlight({ query, index, loading, active, onActive, onC
           nothing else, so a bare div here made every option below an invalid child. The
           emptiness is announced by the live region in Search instead, which is where a
           screen reader will actually hear it. */}
-      {loading && !index && (
+      {error && !index && (
+        <div className="spot-empty" role="presentation">
+          Could not load the search index — {error}
+        </div>
+      )}
+      {loading && !index && !error && (
         <div className="spot-empty" role="presentation">
           Loading…
         </div>

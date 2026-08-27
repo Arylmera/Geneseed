@@ -1,6 +1,6 @@
 // ANSI accent name (a theme's ACCENT field) -> Cultivar UI palette. The single
 // source for live theming, the theme gallery, and the voice popover.
-export const ACCENT_HEX = {
+const ACCENT_HEX = {
   red: '#FF5C57',
   green: '#4ED888',
   yellow: '#E8B53D',
@@ -11,7 +11,7 @@ export const ACCENT_HEX = {
 }
 
 // Darker companion per accent (gradient ends, light-mode reads this as the base).
-export const ACCENT_2 = {
+const ACCENT_2 = {
   red: '#C53A36',
   green: '#2FA864',
   yellow: '#B8862A',
@@ -24,7 +24,7 @@ export const ACCENT_2 = {
 export const accentHex = (name) => ACCENT_HEX[name] || ACCENT_HEX.cyan
 
 // Readable text on a filled accent.
-export const accentInk = (name) =>
+const accentInk = (name) =>
   name === 'yellow' || name === 'white' || name === 'cyan' || name === 'green'
     ? '#06100D'
     : '#FFFFFF'

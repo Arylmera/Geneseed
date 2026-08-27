@@ -13,7 +13,7 @@ export default function Search({ value, onChange }) {
   const wrapRef = useRef(null)
   const [focused, setFocused] = useState(false)
   const [active, setActive] = useState(0)
-  const { index, prime } = useSearchIndex()
+  const { index, error, prime } = useSearchIndex()
 
   // Two bindings, and the second is not a duplicate of the first. `/` is the fast one and
   // costs nothing to press — but it is only available when no field has focus, which is
@@ -123,6 +123,7 @@ export default function Search({ value, onChange }) {
           query={value}
           index={index}
           loading={!index}
+          error={error}
           active={active}
           onActive={setActive}
           onClose={() => {

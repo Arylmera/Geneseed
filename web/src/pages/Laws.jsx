@@ -188,8 +188,8 @@ function OntologyCard({ sec, isOpen, onToggle }) {
 // `selected` is the address from a #/item/law/<address> deep-link (Spotlight, the old Library
 // route). The open row is driven straight off the URL so those links pre-open the rule and any
 // opened rule is itself shareable.
-export default function Laws({ selected, overview, onAction }) {
-  const { data, error } = useAsync(() => api.catalog('laws'), [])
+export default function Laws({ selected, overview, onAction, dataRev }) {
+  const { data, error } = useAsync(() => api.catalog('laws'), [dataRev])
   const [sel, setSel] = useState('all')
   const open = selected || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)

@@ -34,7 +34,7 @@ export default function Profile() {
   }, [data && data.fingerprint])
 
   if (loading && !data) return <Loading />
-  if (error) return <ErrorState message={error} onRetry={reload} />
+  if (error) return <ErrorState error={error} />
 
   const dirty = data && text !== (data.text || '')
 
