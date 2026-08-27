@@ -59,9 +59,11 @@ const FOOTPRINT_OPTIONS = ['full', 'lean']
 // + conditional handlers. Enter is the one behaviour the platform does NOT give a
 // checkbox (it activates a nearby submit button, never this one), so it keeps the single
 // keydown handler the old code had for it.
-function Switch({ on, disabled, label, onToggle }) {
+// Exported only so the Enter-key guard below can be exercised directly in a test — this
+// is still the page's own private control, not the shared component PR B extracts.
+export function Switch({ on, disabled, label, onToggle }) {
   const onKeyDown = (e) => {
-    if (e.key === 'Enter') onToggle()
+    if (e.key === 'Enter' && !disabled) onToggle()
   }
   return (
     <input
@@ -567,6 +569,7 @@ export default function Harnesses({
                 value={deploy.path}
                 onChange={(e) => setDeploy((d) => ({ ...d, path: e.target.value }))}
                 onKeyDown={(e) => e.key === 'Enter' && submitDeploy()}
+                aria-label="Folder to deploy into"
               />
               <button className="btn ghost sm" disabled={browsing} onClick={browseFolder}>
                 {browsing ? 'Choosing…' : 'Browse…'}

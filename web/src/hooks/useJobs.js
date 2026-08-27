@@ -28,6 +28,7 @@ export function useJobs({ onFinish, onError } = {}) {
             status: j.status,
             output: j.output || '',
             duration: j.duration,
+            started: j.started,
           })),
         )
         const running = jobs.find((j) => j.status === 'running')
@@ -48,13 +49,20 @@ export function useJobs({ onFinish, onError } = {}) {
     const t = setInterval(async () => {
       try {
         const j = await api.job(activeId)
-        setRuns((rs) =>
-          rs.map((r) =>
-            r.id === activeId
-              ? { ...r, output: j.output || '', status: j.status, duration: j.duration }
-              : r,
-          ),
-        )
+        setRuns((rs) => {
+          const idx = rs.findIndex((r) => r.id === activeId)
+          if (idx === -1) return rs
+          const r = rs[idx]
+          const output = j.output || ''
+          // Bail out with the SAME array reference when nothing actually changed, so React
+          // skips re-rendering Rail/Topbar/Console/the mounted page on quiet poll ticks.
+          // Comparing inside the updater (not against the closed-over `runs`) keeps this
+          // race-safe against overlapping ticks.
+          if (r.output === output && r.status === j.status && r.duration === j.duration) return rs
+          const next = rs.slice()
+          next[idx] = { ...r, output, status: j.status, duration: j.duration }
+          return next
+        })
         if (j.status !== 'running') {
           clearInterval(t)
           setActiveId(null)
@@ -85,7 +93,10 @@ export function useJobs({ onFinish, onError } = {}) {
     try {
       const { job_id } = await api.action(name, opts)
       const label = name === 'build' && opts?.theme ? `build (${opts.theme} · ${opts.emit})` : name
-      setRuns((rs) => [...rs, { id: job_id, action: label, status: 'running', output: '' }])
+      setRuns((rs) => [
+        ...rs,
+        { id: job_id, action: label, status: 'running', output: '', started: Date.now() / 1000 },
+      ])
       setActiveId(job_id)
       setConsoleOpen(true)
       return job_id // truthy on success so callers can close a form only when accepted

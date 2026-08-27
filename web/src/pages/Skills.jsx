@@ -72,8 +72,8 @@ function SkillRow({ skill, isOpen, onToggle }) {
 // `selected` is the name from a #/item/skill/<name> deep-link (Spotlight, wiki
 // cross-links). The open row is driven straight off the URL so those links
 // pre-open the skill and any opened skill is itself shareable.
-export default function Skills({ selected }) {
-  const { data, error } = useAsync(() => api.catalog('skills'), [])
+export default function Skills({ selected, dataRev }) {
+  const { data, error } = useAsync(() => api.catalog('skills'), [dataRev])
   const [sel, setSel] = useState('all')
   const open = selected || null
   const toggle = (name) => go(open === name ? '#/skills' : `#/item/skill/${name}`)

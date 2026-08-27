@@ -182,6 +182,7 @@ export default function Diff({ onMutated, dataRev }) {
                       checked={sel.has(f.rel)}
                       onChange={() => toggle(f.rel)}
                       onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select ${f.rel}`}
                     />
                     <span className="fname">{f.rel}</span>
                     <span className={`badge ${statusClass}`}>
@@ -195,6 +196,8 @@ export default function Diff({ onMutated, dataRev }) {
                       className="iconbtn"
                       onClick={() => toggleOpenFile(f.rel)}
                       style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}
+                      aria-label={isOpen ? `Collapse ${f.rel}` : `Expand ${f.rel}`}
+                      aria-expanded={isOpen}
                     >
                       <Icon name="chevron" />
                     </button>
