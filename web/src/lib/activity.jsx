@@ -40,7 +40,7 @@ export const compact = (n) =>
           ? (n / 1000).toFixed(0) + 'k'
           : (n / 1e6).toFixed(1) + 'M'
 
-export function fmtElapsed(sec) {
+function fmtElapsed(sec) {
   sec = Math.max(0, Math.floor(sec))
   if (sec < 60) return `${sec}s`
   const m = Math.floor(sec / 60)

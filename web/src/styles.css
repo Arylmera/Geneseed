@@ -800,7 +800,14 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 /* ============================ DOCTOR ================================== */
 .check { padding: 16px 20px; transition: border-color .15s; }
 .check.bad { border-color: color-mix(in srgb, var(--bad) 34%, var(--line)); }
-.check-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.check-head {
+  display: flex; align-items: center; gap: 12px; cursor: pointer; width: 100%;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+}
+.check-head:disabled { cursor: default; }
+.check-head:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px;
+}
 .check-head h3 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 14.5px; }
 .check-head .chev { margin-left: auto; color: var(--text-3); transition: transform .15s; }
 .check.open .check-head .chev { transform: rotate(90deg); }

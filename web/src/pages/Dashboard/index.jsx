@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/index.js'
 import StatusView from './StatusView.jsx'
 import LineageView from './LineageView.jsx'
@@ -9,26 +9,28 @@ import JournalView from './JournalView.jsx'
 import Onboarding from './Onboarding.jsx'
 import { resolveLayout } from '../../hooks/useLayout.js'
 
-// The dashboard shell: loads the supplementary data (job history, graph, doctor,
-// recency) the directions share, then renders the chosen direction. The Status
-// lens is a layout chosen independently of the flavour (skin) — Cultivar's
-// hero+kpi+genome, Greenhouse's ring+tiles+donut, Operator HUD's strip+modules, or
-// the Journal's rings+map — while Lineage and Operator stay one shared layout
-// (they're optional data dives, not layout variants).
+// The dashboard shell: loads the supplementary data (graph, doctor, recency) the
+// directions share, then renders the chosen direction. The Status lens is a layout
+// chosen independently of the flavour (skin) — Cultivar's hero+kpi+genome,
+// Greenhouse's ring+tiles+donut, Operator HUD's strip+modules, or the Journal's
+// rings+map — while Lineage and Operator stay one shared layout (they're optional
+// data dives, not layout variants).
 //
-// `setup` arrives as a prop rather than being fetched here: the rail's germination
-// ring needs the same two fingerprints, and App owns the one copy.
+// `setup` and `runs` (job history) arrive as props rather than being fetched here:
+// the rail and the console own those same copies, and App owns the one fetch of
+// each — so they stay live while a job streams instead of showing a stale snapshot.
 export default function Dashboard({
   overview,
   themes,
   setup,
+  runs: jobs,
   onAction,
   flavour = 'a',
   layout = 'auto',
+  dataRev,
 }) {
   const lens = resolveLayout(flavour, layout)
   const [dir, setDir] = useState('status')
-  const [jobs, setJobs] = useState([])
   const [graph, setGraph] = useState(null)
   const [doctor, setDoctor] = useState(null)
   const [recent, setRecent] = useState(null)
@@ -36,14 +38,6 @@ export default function Dashboard({
 
   useEffect(() => {
     let alive = true
-    api
-      .jobs()
-      .then((r) => alive && setJobs(r.jobs || []))
-      .catch(() => {})
-    api
-      .graph()
-      .then((v) => alive && setGraph(v))
-      .catch(() => {})
     // Doctor is only needed by Greenhouse (ring + check chips) and Operator
     // HUD (check matrix). Cultivar's Status lens doesn't read it, so the load
     // is lazy: skipping it on Cultivar saves a round-trip on dashboard mount.
@@ -64,7 +58,29 @@ export default function Dashboard({
     return () => {
       alive = false
     }
-  }, [lens])
+  }, [lens, dataRev])
+
+  // The graph is the heaviest supplementary fetch and only LineageView reads it, which
+  // only renders after the user clicks the Lineage segment — so fetch lazily, on first
+  // visit to that dir. graphRevRef caches it per dataRev: switching dir away and back
+  // doesn't refetch, but a job finishing (dataRev bumps) invalidates the cache for the
+  // next time Lineage is open or opened.
+  const graphRevRef = useRef(null)
+  useEffect(() => {
+    if (dir !== 'lineage' || graphRevRef.current === dataRev) return
+    let alive = true
+    api
+      .graph()
+      .then((v) => {
+        if (!alive) return
+        setGraph(v)
+        graphRevRef.current = dataRev
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [dir, dataRev])
 
   if (!overview) return <div className="loading">Loading&#8230;</div>
 
@@ -92,13 +108,18 @@ export default function Dashboard({
             drift from source.
           </p>
         </div>
-        <div className="seg">
+        <div className="seg" role="group" aria-label="Dashboard view">
           {[
             ['status', 'Status'],
             ['lineage', 'Lineage'],
             ['operator', 'Operator'],
           ].map(([k, l]) => (
-            <button key={k} className={dir === k ? 'on' : ''} onClick={() => setDir(k)}>
+            <button
+              key={k}
+              className={dir === k ? 'on' : ''}
+              onClick={() => setDir(k)}
+              aria-pressed={dir === k}
+            >
               {l}
             </button>
           ))}

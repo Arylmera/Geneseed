@@ -10,10 +10,12 @@ function CheckCard({ group }) {
   const [open, setOpen] = useState(!clean)
   return (
     <div className={`card check ${clean ? '' : 'bad'} ${open ? 'open' : ''}`}>
-      <div
+      <button
         className="check-head"
-        onClick={() => !clean && setOpen((v) => !v)}
+        onClick={() => setOpen((v) => !v)}
+        disabled={clean}
         style={{ cursor: clean ? 'default' : 'pointer' }}
+        aria-expanded={clean ? undefined : open}
       >
         <span className={`feed-dot ${clean ? 'ok' : 'bad'}`} style={{ width: 9, height: 9 }} />
         <h3>{group.label}</h3>
@@ -24,7 +26,7 @@ function CheckCard({ group }) {
             : `${group.problems.length} problem${group.problems.length === 1 ? '' : 's'}`}
         </span>
         {!clean && <Icon name="chevron" className="chev glyph" />}
-      </div>
+      </button>
       {!clean && open && (
         <div className="check-body">
           {group.problems.map((p) => (
