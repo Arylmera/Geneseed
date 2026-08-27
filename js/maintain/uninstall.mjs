@@ -899,6 +899,68 @@ function stashFiles(stash) {
 const asPosix = (rel) => rel.split(path.sep).join('/');
 
 /**
+ * The move-with-rollback loop `installDeactivate` and `claudeDeactivate` each wrote out
+ * inline: move every `rel` from `srcBase` to `dstBase`, and on the first failure put every
+ * earlier move back onto `srcBase` before reporting it. All-or-nothing is the property
+ * (see the P6i note above `moveTree`), so a caught failure never leaves a partial move
+ * standing even though this function itself takes no side action on failure beyond the
+ * rollback — cleaning up the now-empty stash is the caller's, because the two hosts name
+ * their stash differently (`rmtreeQuiet(stash)` plain, `cleanHostStash(cfg, host)` tagged).
+ *
+ * Returns `{ done }` on a clean run, or `{ done, failed }` once a move has failed and been
+ * rolled back — `done` stays the moved-so-far list either way, which is what `rolled_back:
+ * done.length` in both callers reports.
+ */
+function moveAll(srcBase, dstBase, rels) {
+  const done = [];
+  for (const rel of rels) {
+    const src = path.join(srcBase, rel);
+    if (!existsSync(src)) continue;   // a manifest entry already gone — nothing to move
+    try {
+      moveTree(src, path.join(dstBase, rel));
+      done.push(rel);
+    } catch (e) {
+      if (!isOsError(e)) throw e;
+      for (const r of [...done].reverse()) {
+        try { renameSync(path.join(dstBase, r), path.join(srcBase, r)); } catch { /* OSError */ }
+      }
+      return { done, failed: [`${rel} (${e.message})`] };
+    }
+  }
+  return { done };
+}
+
+/**
+ * The stash-restore loop `installReactivate` and `claudeReactivate` each wrote out inline:
+ * move every file under `stash` back onto `base`, by its relative path. `skip`, when given,
+ * is one relative-posix path to leave untouched — `claudeReactivate`'s
+ * `_claude_md_block.txt`, which holds the managed block's TEXT and is restored separately by
+ * `managedBlockWrite` rather than a raw file move, because it is not a file that belongs
+ * verbatim at that relative path.
+ *
+ * NEVER deletes the stash while anything is unrestored: a destination collision is a
+ * leftover, reported rather than clobbered, so a retry has something left to restore from.
+ */
+function restoreAll(stash, base, skip = null) {
+  const leftovers = [];
+  let moved = 0;
+  for (const src of stashFiles(stash)) {
+    const rel = path.relative(stash, src);
+    if (skip && asPosix(rel) === skip) continue;
+    const dst = path.join(base, rel);
+    if (existsSync(dst)) {
+      // NEVER delete the stash while anything is unrestored — skip, keep, report.
+      leftovers.push(asPosix(rel));
+      continue;
+    }
+    mkdirSync(path.dirname(dst), { recursive: true });
+    renameSync(src, dst);
+    moved += 1;
+  }
+  return { leftovers, moved };
+}
+
+/**
  * `_harness_mcp._install_deactivate` — turn an OpenCode install off without deleting a byte.
  *
  * The config edit is the LAST step and the only non-move mutation, so a move failure rolls
@@ -921,21 +983,10 @@ export function installDeactivate(root, host = 'opencode', scope = 'global') {
         + 'Disable by hand or convert it to plain .json first.' };
   }
   const stash = path.join(root, DISABLED_STASH);
-  const done = [];   // rels already moved, for rollback
-  for (const rel of installMoveList(root, kind)) {
-    const src = path.join(root, rel);
-    if (!existsSync(src)) continue;   // a manifest entry already gone — nothing to move
-    try {
-      moveTree(src, path.join(stash, rel));
-      done.push(rel);
-    } catch (e) {
-      if (!isOsError(e)) throw e;
-      for (const r of [...done].reverse()) {
-        try { renameSync(path.join(stash, r), path.join(root, r)); } catch { /* OSError */ }
-      }
-      rmtreeQuiet(stash);
-      return { ok: false, failed: [`${rel} (${e.message})`], rolled_back: done.length };
-    }
+  const { done, failed } = moveAll(root, stash, installMoveList(root, kind));
+  if (failed) {
+    rmtreeQuiet(stash);
+    return { ok: false, failed, rolled_back: done.length };
   }
   unmergeOpencodeJson(path.join(root, 'opencode.json'), installAgentEntry(root, kind));
   for (const rel of done) pruneAncestors(path.dirname(path.join(root, rel)), root);
@@ -960,20 +1011,7 @@ export function installReactivate(root, host = 'opencode', scope = 'global') {
     return { ok: true,
       note: 'install was re-created while disabled; discarded the stashed snapshot' };
   }
-  const leftovers = [];
-  let moved = 0;
-  for (const src of stashFiles(stash)) {
-    const rel = path.relative(stash, src);
-    const dst = path.join(root, rel);
-    if (existsSync(dst)) {
-      // NEVER delete the stash while anything is unrestored — skip, keep, report.
-      leftovers.push(asPosix(rel));
-      continue;
-    }
-    mkdirSync(path.dirname(dst), { recursive: true });
-    renameSync(src, dst);
-    moved += 1;
-  }
+  const { leftovers, moved } = restoreAll(stash, root);
   if (leftovers.length) return { ok: false, failed: leftovers, moved };
   const kind = installKind(root) || 'global';
   installReaddEntry(target, installAgentEntry(root, kind));
@@ -1063,21 +1101,10 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
   const rroot = resolvePath(cfg);
   const rels = ownedOf(man).filter((r) => r && r !== VERSION_MARKER
     && within(resolvePath(path.resolve(rroot, r)), rroot));
-  const done = [];
-  for (const rel of rels) {
-    const src = path.join(cfg, rel);
-    if (!existsSync(src)) continue;
-    try {
-      moveTree(src, path.join(stash, rel));
-      done.push(rel);
-    } catch (e) {
-      if (!isOsError(e)) throw e;
-      for (const r of [...done].reverse()) {
-        try { renameSync(path.join(stash, r), path.join(cfg, r)); } catch { /* OSError */ }
-      }
-      cleanHostStash(cfg, host);
-      return { ok: false, failed: [`${rel} (${e.message})`], rolled_back: done.length };
-    }
+  const { done, failed } = moveAll(cfg, stash, rels);
+  if (failed) {
+    cleanHostStash(cfg, host);
+    return { ok: false, failed, rolled_back: done.length };
   }
   unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || []);
   unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
@@ -1125,20 +1152,7 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
     return { ok: true,
       note: 'install was re-created while disabled; discarded the stashed snapshot' };
   }
-  const leftovers = [];
-  let moved = 0;
-  for (const src of stashFiles(stash)) {
-    const rel = path.relative(stash, src);
-    if (asPosix(rel) === '_claude_md_block.txt') continue;   // restored separately, below
-    const dst = path.join(cfg, rel);
-    if (existsSync(dst)) {
-      leftovers.push(asPosix(rel));
-      continue;
-    }
-    mkdirSync(path.dirname(dst), { recursive: true });
-    renameSync(src, dst);
-    moved += 1;
-  }
+  const { leftovers, moved } = restoreAll(stash, cfg, '_claude_md_block.txt');
   if (leftovers.length) return { ok: false, failed: leftovers, moved };
   const managed = claudeReadManifest(cfg).managed || {};
   // ⚠ THE CARRIER IS RESTORED BEFORE THE HOOKS ARE RE-MERGED, AND THE ORDER IS LOAD-BEARING.
