@@ -26,9 +26,13 @@ import ErrorState from '../components/ErrorState.jsx'
 // dashboard stopped leading with a fleet tree, and the fleet moved here, where managing it
 // is the whole point.
 
-// A voice <select> in the app's `.sel` style. Renders nothing until the theme list loads.
-function VoiceSelect({ label, value, themes, onChange }) {
-  if (!themes.length) return null
+// A <select> in the app's `.sel` style, shared by every picker on this page — voice,
+// footprint, posture and mode were four near-identical components differing only in
+// their option list. Renders nothing until that list is non-empty: voice/posture/mode
+// are discovered server-side and start empty, where footprint's fixed lean/full pair
+// (FOOTPRINT_OPTIONS below) never is.
+function Sel({ label, value, options, onChange }) {
+  if (!options.length) return null
   return (
     <select
       className="sel"
@@ -36,92 +40,40 @@ function VoiceSelect({ label, value, themes, onChange }) {
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
-      {themes.map((t) => (
-        <option key={t.name} value={t.name}>
-          {t.name}
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
         </option>
       ))}
     </select>
   )
 }
 
-// A footprint <select> in the app's `.sel` style: lean | full. A fixed two-option pair,
-// so unlike VoiceSelect it needs no async list — the choice is the same on every host.
-function FootprintSelect({ label, value, onChange }) {
-  return (
-    <select
-      className="sel"
-      aria-label={label}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      <option value="full">full</option>
-      <option value="lean">lean</option>
-    </select>
-  )
-}
-
-// A posture <select> in the app's `.sel` style: the collaboration register inlined into
-// the install's AGENT.md. The list is discovered server-side (src/postures/), so a new
-// posture appears here with no UI change; falls back to nothing until it loads.
-function PostureSelect({ label, value, postures, onChange }) {
-  if (!postures.length) return null
-  return (
-    <select
-      className="sel"
-      aria-label={label}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {postures.map((p) => (
-        <option key={p} value={p}>
-          {p}
-        </option>
-      ))}
-    </select>
-  )
-}
-
-// A mode <select> in the app's `.sel` style: the operating register inlined into
-// the install's AGENT.md. The list is discovered server-side (src/modes/), so a new
-// mode appears here with no UI change; falls back to nothing until it loads.
-function ModeSelect({ label, value, modes, onChange }) {
-  if (!modes.length) return null
-  return (
-    <select
-      className="sel"
-      aria-label={label}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {modes.map((m) => (
-        <option key={m} value={m}>
-          {m}
-        </option>
-      ))}
-    </select>
-  )
-}
+const FOOTPRINT_OPTIONS = ['full', 'lean']
 
 // An on/off switch — deactivates a whole install (files moved aside, not deleted) or
 // reactivates it; also drives individual MCP servers. The on-disk stash is the truth.
+//
+// A native checkbox: Space toggles for free, and `disabled` alone now blocks every input
+// (click, Space, tab focus) instead of the old div's hand-rolled aria-disabled + tabIndex
+// + conditional handlers. Enter is the one behaviour the platform does NOT give a
+// checkbox (it activates a nearby submit button, never this one), so it keeps the single
+// keydown handler the old code had for it.
 function Switch({ on, disabled, label, onToggle }) {
-  const keyToggle = (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      if (e.key === ' ') e.preventDefault()
-      onToggle()
-    }
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter') onToggle()
   }
   return (
-    <div
-      className={`sw-toggle${on ? ' on' : ''}`}
+    <input
+      type="checkbox"
       role="switch"
+      className={`sw-toggle${on ? ' on' : ''}`}
+      checked={on}
       aria-checked={on}
+      disabled={disabled}
       aria-label={label}
-      aria-disabled={disabled || undefined}
-      tabIndex={disabled ? -1 : 0}
-      onClick={disabled ? undefined : onToggle}
-      onKeyDown={disabled ? undefined : keyToggle}
+      onChange={onToggle}
+      onKeyDown={onKeyDown}
     />
   )
 }
@@ -637,36 +589,37 @@ export default function Harnesses({
               </label>
               <label className="dp-field">
                 <span>Voice</span>
-                <VoiceSelect
+                <Sel
                   label="voice for the new harness"
                   value={deploy.theme}
-                  themes={themes}
+                  options={themes.map((t) => t.name)}
                   onChange={(v) => setDeploy((d) => ({ ...d, theme: v }))}
                 />
               </label>
               <label className="dp-field">
                 <span>Footprint</span>
-                <FootprintSelect
+                <Sel
                   label="footprint for the new harness"
                   value={deploy.footprint}
+                  options={FOOTPRINT_OPTIONS}
                   onChange={(v) => setDeploy((d) => ({ ...d, footprint: v }))}
                 />
               </label>
               <label className="dp-field">
                 <span>Posture</span>
-                <PostureSelect
+                <Sel
                   label="posture for the new harness"
                   value={deploy.posture}
-                  postures={postures}
+                  options={postures}
                   onChange={(v) => setDeploy((d) => ({ ...d, posture: v }))}
                 />
               </label>
               <label className="dp-field">
                 <span>Mode</span>
-                <ModeSelect
+                <Sel
                   label="mode for the new harness"
                   value={deploy.mode}
-                  modes={modes}
+                  options={modes}
                   onChange={(v) => setDeploy((d) => ({ ...d, mode: v }))}
                 />
               </label>
@@ -803,39 +756,40 @@ export default function Harnesses({
             <div className="h-acts">
               <div className="ha-cell ha-voice">
                 {on && onAction ? (
-                  <VoiceSelect
+                  <Sel
                     label={label}
                     value={voiceFor(inst)}
-                    themes={themes}
+                    options={themes.map((t) => t.name)}
                     onChange={(v) => setVoice(inst, v)}
                   />
                 ) : null}
               </div>
               <div className="ha-cell ha-fp">
                 {on && onAction ? (
-                  <FootprintSelect
+                  <Sel
                     label={`footprint for ${inst.host} · ${inst.scope}`}
                     value={footprintFor(inst)}
+                    options={FOOTPRINT_OPTIONS}
                     onChange={(v) => setFootprint(inst, v)}
                   />
                 ) : null}
               </div>
               <div className="ha-cell ha-posture">
                 {on && onAction ? (
-                  <PostureSelect
+                  <Sel
                     label={`posture for ${inst.host} · ${inst.scope}`}
                     value={postureFor(inst)}
-                    postures={postures}
+                    options={postures}
                     onChange={(v) => setPosture(inst, v)}
                   />
                 ) : null}
               </div>
               <div className="ha-cell ha-mode">
                 {on && onAction ? (
-                  <ModeSelect
+                  <Sel
                     label={`mode for ${inst.host} · ${inst.scope}`}
                     value={modeFor(inst)}
-                    modes={modes}
+                    options={modes}
                     onChange={(v) => setMode(inst, v)}
                   />
                 ) : null}
@@ -907,36 +861,37 @@ export default function Harnesses({
                 <div className="hs-steps">
                   <label className="hs-step">
                     <span>1 · Voice</span>
-                    <VoiceSelect
+                    <Sel
                       label={label}
                       value={voiceFor(inst)}
-                      themes={themes}
+                      options={themes.map((t) => t.name)}
                       onChange={(v) => setVoice(inst, v)}
                     />
                   </label>
                   <label className="hs-step">
                     <span>2 · Footprint</span>
-                    <FootprintSelect
+                    <Sel
                       label={`footprint for ${inst.host} · ${inst.scope}`}
                       value={footprintFor(inst)}
+                      options={FOOTPRINT_OPTIONS}
                       onChange={(v) => setFootprint(inst, v)}
                     />
                   </label>
                   <label className="hs-step">
                     <span>3 · Posture</span>
-                    <PostureSelect
+                    <Sel
                       label={`posture for ${inst.host} · ${inst.scope}`}
                       value={postureFor(inst)}
-                      postures={postures}
+                      options={postures}
                       onChange={(v) => setPosture(inst, v)}
                     />
                   </label>
                   <label className="hs-step">
                     <span>4 · Mode</span>
-                    <ModeSelect
+                    <Sel
                       label={`mode for ${inst.host} · ${inst.scope}`}
                       value={modeFor(inst)}
-                      modes={modes}
+                      options={modes}
                       onChange={(v) => setMode(inst, v)}
                     />
                   </label>

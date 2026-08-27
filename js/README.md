@@ -192,10 +192,3 @@ exported sets are deliberately EMPTY and must stay declared: each is half of a p
 | a console doc page | `docs/web/<id>.md` — the stem is the id | `docs/extending.md` §4c. Only `kind: "concept"` gets `{N_*}` substitution |
 | an OpenCode plugin | `adapters/opencode/plugins/geneseed-<name>.js` | `docs/extending.md` §4a — the `geneseed-` prefix is mechanically load-bearing |
 | to change a `js/lib/` primitive | `tests/fixtures/pure_probe.mjs` **first** | the docblock says which Node default it deliberately departs from — change that sentence too, or the next reader restores the default |
-
----
-
-## Known debris
-
-* **`web/src/pages/Skills.jsx`'s `SKILL_CATS` is a fourth, ungated copy of the skill taxonomy** —
-  nothing compares it to `SKILL_CLASS`, and an unknown category renders as Build with no warning.
