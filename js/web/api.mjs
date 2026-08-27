@@ -1019,13 +1019,13 @@ function releaseLabel() {
  */
 export const PREFIX_ROUTES = [
   ['/api/catalog/', (state, p) => apiCatalog(state, p.split('/').pop())],
-  // `path.split("/", 4)` — /api/item/<type>/<name>, and the NAME keeps its slashes so a
-  // wiki page's relpath survives. A missing name is a 404 here rather than an IndexError
-  // and a 500 two frames down.
+  // /api/item/<type>/<name> — TYPE has no slash, the NAME keeps its slashes so a wiki
+  // page's relpath survives. A missing name is a 404 here rather than an IndexError and a
+  // 500 two frames down.
   ['/api/item/', (state, p) => {
-    const parts = splitN(p, '/', 4);
-    if (parts.length < 5 || !parts[4]) throw new NotFound(p);
-    return apiItem(state, parts[3], percentDecode(parts[4]));
+    const m = /^\/api\/item\/([^/]+)\/(.+)$/.exec(p);
+    if (!m) throw new NotFound(p);
+    return apiItem(state, m[1], percentDecode(m[2]));
   }],
   // P6e. The reference's own `path[len("/api/activity/"):]`, unquoted — the sid keeps
   // whatever it carries and `api_activity_detail`'s safe-name scheme is what makes the
@@ -1033,20 +1033,6 @@ export const PREFIX_ROUTES = [
   ['/api/activity/', (state, p) => apiActivityDetail(
     state, percentDecode(p.slice('/api/activity/'.length)))],
 ];
-
-/** `str.split(sep, maxsplit)` — at most `n` splits, the remainder kept whole. */
-function splitN(s, sep, n) {
-  const out = [];
-  let rest = s;
-  for (let i = 0; i < n; i += 1) {
-    const at = rest.indexOf(sep);
-    if (at < 0) break;
-    out.push(rest.slice(0, at));
-    rest = rest.slice(at + sep.length);
-  }
-  out.push(rest);
-  return out;
-}
 
 export const STATE_ROUTES = {
   '/api/overview': apiOverview,
