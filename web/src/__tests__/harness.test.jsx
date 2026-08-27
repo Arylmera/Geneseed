@@ -58,7 +58,7 @@ vi.mock('../api/index.js', () => ({
   },
 }))
 
-import Harness from '../pages/Harness.jsx'
+import Harness, { Switch } from '../pages/Harness.jsx'
 import { api } from '../api/index.js'
 
 describe('Harness', () => {
@@ -338,5 +338,21 @@ describe('Harness', () => {
   it('renders the Excluded folders card when a global install exists', async () => {
     render(<Harness onAction={() => {}} />)
     await waitFor(() => expect(screen.getByText('Excluded folders')).toBeTruthy())
+  })
+
+  it('Switch: Enter toggles when enabled, does nothing when disabled', () => {
+    // Native `disabled` already blocks click/Space/focus; the hand-rolled Enter path is
+    // the one keydown handler that bypassed it (a second Enter before the busy re-render
+    // landed could double-fire toggleInstall/toggleMcp) — this is the regression test.
+    const onToggle = vi.fn()
+    const { rerender } = render(
+      <Switch on={false} disabled={false} label="activate x" onToggle={onToggle} />,
+    )
+    fireEvent.keyDown(screen.getByRole('switch'), { key: 'Enter' })
+    expect(onToggle).toHaveBeenCalledTimes(1)
+
+    rerender(<Switch on={false} disabled={true} label="activate x" onToggle={onToggle} />)
+    fireEvent.keyDown(screen.getByRole('switch'), { key: 'Enter' })
+    expect(onToggle).toHaveBeenCalledTimes(1) // unchanged — the disabled Enter did nothing
   })
 })

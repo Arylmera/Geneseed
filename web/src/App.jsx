@@ -9,6 +9,7 @@ import { useAccentMode } from './hooks/useAccentMode.js'
 import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
+import { useAsync } from './hooks/useAsync.js'
 import Rail from './components/Rail.jsx'
 import Topbar from './components/Topbar.jsx'
 import VoicePopover from './components/VoicePopover.jsx'
@@ -113,17 +114,7 @@ export default function App() {
   // the rail's germination ring and the dashboard's Status/Lineage/Operator views all read
   // it, and it was being fetched twice — once for the dashboard, once for the rail — for the
   // same two fields. Refetched on `dataRev` so a rebuild moves the ring with everything else.
-  const [setup, setSetup] = useState(null)
-  useEffect(() => {
-    let alive = true
-    api
-      .setup()
-      .then((v) => alive && setSetup(v))
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [dataRev])
+  const { data: setup } = useAsync(() => api.setup().catch(() => null), [dataRev])
 
   // One sentence describing what the job runner is doing, for the live region.
   const lastRun = runs[runs.length - 1]
@@ -241,9 +232,11 @@ export default function App() {
                   overview={overview}
                   themes={themes}
                   setup={setup}
+                  runs={runs}
                   onAction={runAction}
                   flavour={flavour}
                   layout={layout}
+                  dataRev={dataRev}
                 />
               )}
               {route.view === 'activity' && <Activity />}
@@ -261,9 +254,14 @@ export default function App() {
                   which is what made it look intermittent rather than broken. Deriving the
                   props and rendering from one slot each lets React reconcile instead. */}
               {showLaws && (
-                <Laws selected={selectedItem} overview={overview} onAction={runAction} />
+                <Laws
+                  selected={selectedItem}
+                  overview={overview}
+                  onAction={runAction}
+                  dataRev={dataRev}
+                />
               )}
-              {showSkills && <Skills selected={selectedItem} />}
+              {showSkills && <Skills selected={selectedItem} dataRev={dataRev} />}
               {showLibrary && (
                 <Library
                   overview={overview}

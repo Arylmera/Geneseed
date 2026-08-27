@@ -246,7 +246,7 @@ export default function Library({ overview, section, selected, dataRev }) {
         </div>
       </div>
       {standalone ? null : (
-        <div className="lib-secbar">
+        <div className="lib-secbar" role="group" aria-label="Section">
           {LIBRARY_ORDER.map((k) => {
             const meta = SECTIONS[k]
             const n = chipCount(k) ?? null
@@ -255,6 +255,7 @@ export default function Library({ overview, section, selected, dataRev }) {
                 key={k}
                 className={`lib-secchip ${sec === k ? 'on' : ''}`}
                 onClick={() => switchSection(k)}
+                aria-pressed={sec === k}
               >
                 <Icon name={meta.icon} className="glyph" />
                 <span>{meta.label}</span>

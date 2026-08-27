@@ -2,24 +2,13 @@ import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-// `setup` is no longer fetched here: App owns the one copy (the rail's germination ring
-// reads the same two fingerprints) and hands it down as a prop, so the mock lost its
-// `setup` arm and every render below passes the snapshot instead.
+// `setup` and job history (`runs`) are no longer fetched here: App owns the one copy of
+// each (the rail's germination ring reads the same two setup fingerprints, and the
+// console owns the one job poll) and hands both down as props, so the mock lost its
+// `setup` and `jobs` arms — every render below passes a `runs` snapshot instead, and
+// `graph` stays mocked because Lineage still fetches it lazily on first visit.
 vi.mock('../api/index.js', () => ({
   api: {
-    jobs: () =>
-      Promise.resolve({
-        jobs: [
-          {
-            id: 'j1',
-            action: 'doctor',
-            status: 'done',
-            output: '',
-            duration: 4,
-            started: Date.now() / 1000 - 120,
-          },
-        ],
-      }),
     graph: () => Promise.resolve({ nodes: [], edges: [] }),
   },
 }))
@@ -45,10 +34,28 @@ const setup = {
   source_fp: 'a3f1c9e2',
   version_verdict: 'up to date (0.1.0)',
 }
+const runs = [
+  {
+    id: 'j1',
+    action: 'doctor',
+    status: 'done',
+    output: '',
+    duration: 4,
+    started: Date.now() / 1000 - 120,
+  },
+]
 
 describe('Dashboard', () => {
   it('renders the status direction with ring, KPIs, and genome counts', async () => {
-    render(<Dashboard overview={overview} themes={themes} setup={setup} onAction={() => {}} />)
+    render(
+      <Dashboard
+        overview={overview}
+        themes={themes}
+        setup={setup}
+        runs={runs}
+        onAction={() => {}}
+      />,
+    )
     await waitFor(() => expect(screen.getByText('germination')).toBeTruthy())
     expect(screen.getByText('The Codex in force')).toBeTruthy() // headline
     expect(screen.getByText('The Codex in force.')).toBeTruthy() // sigil (trailing period)
@@ -59,7 +66,15 @@ describe('Dashboard', () => {
   })
 
   it('switches directions via the segmented control', async () => {
-    render(<Dashboard overview={overview} themes={themes} setup={setup} onAction={() => {}} />)
+    render(
+      <Dashboard
+        overview={overview}
+        themes={themes}
+        setup={setup}
+        runs={runs}
+        onAction={() => {}}
+      />,
+    )
     fireEvent.click(screen.getByText('Lineage'))
     await waitFor(() => expect(screen.getByText('Gene-seed lineage')).toBeTruthy())
     fireEvent.click(screen.getByText('Operator'))

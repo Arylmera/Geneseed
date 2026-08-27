@@ -10,7 +10,11 @@ export default function Toast({ toast, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast])
   return (
-    <div className={`toast ${toast.kind}`}>
+    <div
+      className={`toast ${toast.kind}`}
+      role={toast.kind === 'err' ? 'alert' : 'status'}
+      aria-live={toast.kind === 'err' ? undefined : 'polite'}
+    >
       <div>{toast.msg}</div>
       <div style={{ marginTop: 8 }}>
         <button className="btn ghost" onClick={onClose}>
