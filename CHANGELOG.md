@@ -27,6 +27,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 
+- **`process 7` assumes its tier.** Its closing sentence leaned on the
+  ontology's Conduct section as its justification, which read as a rule living
+  on the wrong floor. It now carries a proper seam sentence — Conduct governs
+  how an answer speaks; this rule is only the addressing convention, adoptable
+  or droppable like any doctrine rule.
 - **Lean surgery on Laws IV, VI, VIII, IX** — each law's operative clause now
   lives in its first sentence (fused with the opening aphorism), because the
   default `--footprint lean` keeps a law's heading plus first sentence only.
