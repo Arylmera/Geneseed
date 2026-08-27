@@ -55,10 +55,17 @@ function wiredHookVerbs() {
   return new Set([...body.matchAll(/\$\{run\}\s+([a-z][a-z-]*)/g)].map((m) => m[1]));
 }
 
-/** The verbs an entry point carries, read out of its own `VERBS` table. */
+/**
+ * The verbs an entry point carries, read out of its own `VERBS` table.
+ *
+ * `:\s*\S` rather than `:\s*\{`: `bin/geneseed-hook.mjs`'s rows are still `name: { fn: … }`
+ * objects, but Task 5 flattened `bin/geneseed-cli.mjs`'s to `name: cmdX` directly, so the
+ * value is no longer always a brace. Any non-whitespace after the colon still means a real
+ * row rather than a bare `name:` with nothing after it on the line.
+ */
 function verbsOf(rel) {
   const body = block(read(...rel.split('/')), 'const VERBS = {', '\n};', rel);
-  const found = new Set([...body.matchAll(/^ {2}'?([a-z][a-z-]*)'?:\s*\{/gm)].map((m) => m[1]));
+  const found = new Set([...body.matchAll(/^ {2}'?([a-z][a-z-]*)'?:\s*\S/gm)].map((m) => m[1]));
   assert.ok(found.size > 0, `${rel}'s VERBS table parsed as empty — every claim about it below `
     + 'would be vacuous');
   return found;

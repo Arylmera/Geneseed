@@ -84,56 +84,31 @@ import { cmdWeb } from '../js/web/server.mjs';
  * `tests/test_hook_cli_parity.py` scrapes `const VERBS = {` for its three matrix gates, and
  * `main`'s refusal lists `Object.keys(VERBS)` IN THIS ORDER, which `harness_golden` cells
  * assert verbatim — the order is the old table's and is not alphabetical.
+ *
+ * FLATTENED TO `verb: fn` since Task 5: every row was a single-field `{ fn: cmdX }` object,
+ * the one field this table has left after `positionals`/`options`/`flags`/etc moved to
+ * `js/cli-table.json` above. `main` reads `VERBS[verb]` directly rather than
+ * `VERBS[verb].fn` now; the scraping regexes in `tests/unit/{cli_table,hook_cli,docs}.test.mjs`
+ * match on the KEY and the colon only; the literal string `const VERBS = {` and the key
+ * order neither changed.
  */
 const VERBS = {
-  exclude: {
-    fn: cmdExclude,
-  },
-  status: {
-    fn: cmdStatus,
-  },
-  version: {
-    fn: cmdVersion,
-  },
-  build: {
-    fn: cmdBuild,
-  },
-  prompt: {
-    fn: cmdPrompt,
-  },
-  theme: {
-    fn: cmdTheme,
-  },
-  diff: {
-    fn: cmdDiff,
-  },
-  'rebuild-all': {
-    fn: cmdRebuildAll,
-  },
-  migrate: {
-    fn: cmdMigrate,
-  },
-  doctor: {
-    fn: cmdDoctor,
-  },
-  uninstall: {
-    fn: cmdUninstall,
-  },
-  link: {
-    fn: cmdLink,
-  },
-  unlink: {
-    fn: cmdUnlink,
-  },
-  setup: {
-    fn: cmdSetup,
-  },
-  web: {
-    fn: cmdWeb,
-  },
-  upgrade: {
-    fn: cmdUpgrade,
-  },
+  exclude: cmdExclude,
+  status: cmdStatus,
+  version: cmdVersion,
+  build: cmdBuild,
+  prompt: cmdPrompt,
+  theme: cmdTheme,
+  diff: cmdDiff,
+  'rebuild-all': cmdRebuildAll,
+  migrate: cmdMigrate,
+  doctor: cmdDoctor,
+  uninstall: cmdUninstall,
+  link: cmdLink,
+  unlink: cmdUnlink,
+  setup: cmdSetup,
+  web: cmdWeb,
+  upgrade: cmdUpgrade,
   // `up.add_parser(..., aliases=["update"])`, reproduced in P8c as a ROW OF ITS OWN rather than
   // as an `aliases` field on the row above — because a field would be a DECLARATION and the
   // three matrix gates read this table as the DISPATCH (rule 7, and M23 is where it was
@@ -145,28 +120,18 @@ const VERBS = {
   //
   // It is NOT what the web console's `update` ACTION needs: that row's argv names `upgrade`,
   // the subparser, and always did. The two were coupled only in a handoff's note.
-  update: {
-    fn: cmdUpgrade,
-  },
-  'sync-self': {
-    // Points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness:
-    // `sync-self` DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS
-    // about one and re-reads it as a theme — so the two verbs answer `sync-self cyberpunk`
-    // and `sync-self v1.2.3` differently. See `js/maintain/update.mjs`'s `syncSelf` for both halves.
-    fn: cmdSyncSelf,
-  },
-  bootstrap: {
-    fn: cmdBootstrap,
-  },
+  update: cmdUpgrade,
+  // Points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness:
+  // `sync-self` DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS
+  // about one and re-reads it as a theme — so the two verbs answer `sync-self cyberpunk`
+  // and `sync-self v1.2.3` differently. See `js/maintain/update.mjs`'s `syncSelf` for both halves.
+  'sync-self': cmdSyncSelf,
+  bootstrap: cmdBootstrap,
   // P7a. Both are DISPATCHERS whose off-TTY arm is the whole of what a cell can reach, and
   // `menu`'s on-TTY arm falls back rather than opening a panel — `js/ui/menu.mjs`'s header
   // argues both.
-  menu: {
-    fn: cmdMenu,
-  },
-  home: {
-    fn: cmdHome,
-  },
+  menu: cmdMenu,
+  home: cmdHome,
   // P7b, and it is the twenty-fifth and last. `cmd_tui`'s FIRST arm is `if not sys.stdin.
   // isatty()`, so off a TTY — which is every cell there is — the verb is one line and an
   // exit code, and that arm crosses byte for byte. The panel behind it is P7c's;
@@ -174,9 +139,7 @@ const VERBS = {
   // panel-unavailable line rather than inventing a second full-screen UI, and
   // `tests/test_tui_boundary.py` asserts that the arm it declares is genuinely unreachable
   // here rather than merely untested.
-  tui: {
-    fn: cmdTui,
-  },
+  tui: cmdTui,
   // THE THREE THAT NEVER HAD A PYTHON ORIGINAL, and they are last for that reason rather
   // than by alphabet: every row above is the twin of a subparser, and these three are not.
   // The information behind them existed only behind the web console — the catalog endpoint,
@@ -191,15 +154,9 @@ const VERBS = {
   // ABSOLUTE — `tests/snapshot/cli_help.test.mjs` splits the two populations by name and refuses a
   // verb that falls into neither, and each has its own unit gate stating what it does rather
   // than that it agrees.
-  catalog: {
-    fn: cmdCatalog,
-  },
-  mcp: {
-    fn: cmdMcp,
-  },
-  memory: {
-    fn: cmdMemory,
-  },
+  catalog: cmdCatalog,
+  mcp: cmdMcp,
+  memory: cmdMemory,
 };
 
 function die(code, msg) {
@@ -359,8 +316,8 @@ async function main(argv) {
       throw e;
     }
   }
-  const spec = VERBS[verb];
-  if (!spec) {
+  const fn = VERBS[verb];
+  if (!fn) {
     // "and every other harness subcommand is still Python — run the interpreter against the
     // old harness script" is GONE, and its removal is not cosmetic: with the four hook verbs
     // named, the two entry points now cover every subcommand there is, so the clause was not
@@ -396,7 +353,7 @@ async function main(argv) {
     // it `process.exitCode` would be assigned a PENDING PROMISE, which Node coerces to 0
     // and prints nothing about. `web status` would then report "not running" and exit 0.
     // Awaiting a number is a no-op for the ten synchronous verbs.
-    return await spec.fn(parsed.args);
+    return await fn(parsed.args);
   } catch (e) {
     // `e.exitCode` is the generator's existing marker for a DELIBERATE refusal that has
     // already explained itself on stderr — `js/build/emit-claude.mjs` reads the same flag, and it is
