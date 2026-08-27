@@ -83,7 +83,8 @@ test('the web spec carries every argument the reference declared', () => {
   //
   // THE SPEC, NOT A SOURCE SCRAPE, and P10c is why. This used to read the `web: { … }` row's own
   // hand-written positionals/options/flags/ints — a second transcription of the same subparser.
-  // The row is `{ fn: cmdWeb }` now and the surface comes from `cliSpec()`, derived from
+  // The row is `web: cmdWeb,` now (Task 5 flattened what P10c had already reduced to a
+  // single-field `{ fn: cmdWeb }`) and the surface comes from `cliSpec()`, derived from
   // `js/cli-table.json`, so this asks the module the entry point itself calls. A `cliSpec` that
   // stopped deriving `ints` would still leave `'--port'` in the file for a scrape to find.
   const spec = cliSpec('web');

@@ -1,17 +1,15 @@
 import React, { useMemo, useState } from 'react'
+import { forceSimulation, forceManyBody, forceLink, forceCenter } from 'd3-force'
 
-// Force-relaxation + layout tuning for the constellation — the knobs that shape the
-// preview. Values are empirical: a golden-angle spiral seed, then a brief relaxation
-// of inverse-square repulsion + edge springs + a gentle centre pull.
+// Layout tuning for the constellation — the knobs that shape the preview. d3-force runs
+// the relaxation now (charge repulsion + link springs + a centring force); ticked
+// synchronously (sim.stop(), then N manual .tick() calls) so the layout is ready the
+// instant this renders, with no timer/animation-frame loop to wait on.
 const LAYOUT = {
   maxNodes: 28, // busiest-by-degree nodes shown
-  goldenAngle: 2.39996, // rad (~137.5°) — even spiral spread
-  seedRadiusScale: 0.42, // spiral radius as a fraction of the viewport
-  iterations: 90,
-  repulsion: 480, // inverse-square push between every pair
-  springLength: 46, // target edge length
-  springStiffness: 0.05,
-  centrePull: 0.005, // drift back toward centre each step
+  iterations: 150,
+  chargeStrength: -220, // node repulsion (d3's charge force is signed; negative repels)
+  linkDistance: 46, // target edge length
   boundsMargin: { x: 16, y: 14 }, // keep nodes off the edges
   edgeCurve: { max: 20, scale: 0.14 }, // quadratic-bezier control-point offset
 }
@@ -54,60 +52,31 @@ export default function MiniGraph({ graph }) {
     const nodeIds = new Set(nodes.map((n) => n.id))
     const edges = graph.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
 
-    // Golden-angle spiral seed: top hub at centre, others spread evenly out.
     const cx = W / 2
     const cy = H / 2
-    const pos = new Map()
-    nodes.forEach((n, i) => {
-      if (i === 0) {
-        pos.set(n.id, { x: cx, y: cy })
-      } else {
-        const a = i * LAYOUT.goldenAngle
-        const r = Math.sqrt(i / nodes.length)
-        pos.set(n.id, {
-          x: cx + Math.cos(a) * r * (W * LAYOUT.seedRadiusScale),
-          y: cy + Math.sin(a) * r * (H * LAYOUT.seedRadiusScale),
-        })
-      }
-    })
 
-    // Short force relaxation — repulsion + edge springs + centre pull.
-    const arr = nodes.map((n) => pos.get(n.id))
-    for (let it = 0; it < LAYOUT.iterations; it++) {
-      for (let i = 0; i < arr.length; i++) {
-        for (let j = i + 1; j < arr.length; j++) {
-          const a = arr[i]
-          const b = arr[j]
-          const dx = a.x - b.x
-          const dy = a.y - b.y
-          const d2 = dx * dx + dy * dy || 1
-          const d = Math.sqrt(d2)
-          const f = LAYOUT.repulsion / d2
-          a.x += (dx / d) * f
-          a.y += (dy / d) * f
-          b.x -= (dx / d) * f
-          b.y -= (dy / d) * f
-        }
-      }
-      for (const e of edges) {
-        const a = pos.get(e.source)
-        const b = pos.get(e.target)
-        const dx = b.x - a.x
-        const dy = b.y - a.y
-        const d = Math.sqrt(dx * dx + dy * dy) || 1
-        const f = (d - LAYOUT.springLength) * LAYOUT.springStiffness
-        a.x += (dx / d) * f
-        a.y += (dy / d) * f
-        b.x -= (dx / d) * f
-        b.y -= (dy / d) * f
-      }
-      for (const p of arr) {
-        p.x += (cx - p.x) * LAYOUT.centrePull
-        p.y += (cy - p.y) * LAYOUT.centrePull
-        p.x = Math.max(LAYOUT.boundsMargin.x, Math.min(W - LAYOUT.boundsMargin.x, p.x))
-        p.y = Math.max(LAYOUT.boundsMargin.y, Math.min(H - LAYOUT.boundsMargin.y, p.y))
-      }
-    }
+    // d3-force mutates plain {id} objects in place (adding x/y/vx/vy); `.stop()` keeps it
+    // from scheduling its own animation-frame timer, and the manual tick loop below runs
+    // it to completion synchronously, in this render.
+    const sim = forceSimulation(nodes.map((n) => ({ id: n.id })))
+      .force('charge', forceManyBody().strength(LAYOUT.chargeStrength))
+      .force(
+        'link',
+        forceLink(edges.map((e) => ({ source: e.source, target: e.target })))
+          .id((d) => d.id)
+          .distance(LAYOUT.linkDistance),
+      )
+      .force('center', forceCenter(cx, cy))
+      .stop()
+    for (let i = 0; i < LAYOUT.iterations; i++) sim.tick()
+
+    const pos = new Map()
+    sim.nodes().forEach((n) => {
+      pos.set(n.id, {
+        x: Math.max(LAYOUT.boundsMargin.x, Math.min(W - LAYOUT.boundsMargin.x, n.x)),
+        y: Math.max(LAYOUT.boundsMargin.y, Math.min(H - LAYOUT.boundsMargin.y, n.y)),
+      })
+    })
 
     const maxDeg = Math.max(1, ...degrees.values())
     return { nodes, edges, pos, degrees, maxDeg }

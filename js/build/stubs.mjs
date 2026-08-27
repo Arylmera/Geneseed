@@ -198,59 +198,51 @@ agent-overrides.json
 // Seeded stubs — write-once, never overwrite
 // ---------------------------------------------------------------------------
 
-/** `_build_render.ensure_context_stub`. */
+/**
+ * `_build_render`'s eight `ensure_*_stub` functions all wrote this same guard out by hand:
+ * write `t` to `p` only when nothing is there yet. The STUB BODIES above are what a recorded
+ * corpus compares byte for byte — this only touches the write-once CHECK every one of them
+ * repeated, never the text.
+ */
+const seed = (p, t) => { if (!existsSync(p)) writeText(p, t); };
+
+/** A stub whose destination is a fixed `out`-relative name and a fixed body. */
+const stubWriter = (file, stub) => (out) => seed(path.join(out, file), stub);
+
+/** `_build_render.ensure_context_stub` — the one stub whose body is computed, not literal. */
 export function ensureContextStub(out) {
-  const dest = path.join(out, 'context.json');
-  if (!existsSync(dest)) {
-    writeText(dest, `${jsonDumpsIndent(CONTEXT_STUB, { ensureAscii: false })}\n`);
-  }
+  seed(path.join(out, 'context.json'), `${jsonDumpsIndent(CONTEXT_STUB, { ensureAscii: false })}\n`);
 }
 
 /** `_build_render.ensure_wiki_stub` — a legacy `wiki.json` counts as present. */
 export function ensureWikiStub(out) {
-  const dest = path.join(out, 'wiki.jsonc');
-  if (!existsSync(dest) && !existsSync(path.join(out, 'wiki.json'))) writeText(dest, WIKI_STUB);
+  if (!existsSync(path.join(out, 'wiki.json'))) seed(path.join(out, 'wiki.jsonc'), WIKI_STUB);
 }
 
 /** `_build_render.ensure_rules_stub`. */
-export function ensureRulesStub(out) {
-  const dest = path.join(out, RULES_FILE);
-  if (!existsSync(dest)) writeText(dest, RULES_STUB);
-}
+export const ensureRulesStub = stubWriter(RULES_FILE, RULES_STUB);
 
 /** `_build_render.ensure_profile_stub`. */
-export function ensureProfileStub(out) {
-  const dest = path.join(out, PROFILE_FILE);
-  if (!existsSync(dest)) writeText(dest, PROFILE_STUB);
-}
+export const ensureProfileStub = stubWriter(PROFILE_FILE, PROFILE_STUB);
 
 /**
  * `_build_render.ensure_excludes_stub` — the sovereign-repo list, seeded once and NEVER
  * overwritten. Reachable only from the Claude-shaped emits, which is why it arrived with
  * `emitClaudeRender` rather than with the bundle stubs beside it.
  */
-export function ensureExcludesStub(out) {
-  const dest = path.join(out, EXCLUDES_FILE);
-  if (!existsSync(dest)) writeText(dest, EXCLUDES_STUB);
-}
+export const ensureExcludesStub = stubWriter(EXCLUDES_FILE, EXCLUDES_STUB);
 
 /** `_build_render.ensure_bundle_gitignore`. */
-export function ensureBundleGitignore(out) {
-  const dest = path.join(out, '.gitignore');
-  if (!existsSync(dest)) writeText(dest, BUNDLE_GITIGNORE);
-}
+export const ensureBundleGitignore = stubWriter('.gitignore', BUNDLE_GITIGNORE);
+
+/** A stub INSIDE an already-existing store dir — a memory/notebook index, only ever seeded
+ * once the store itself exists (`ensureMemoryIndex`/`ensureNotebookIndex` are both called
+ * right after the store dir is created, but never invent the dir themselves). */
+const storeIndexWriter = (file, header) => (dir) => { if (isDir(dir)) seed(path.join(dir, file), header); };
 
 /** `_build_render.ensure_memory_index` — only inside an EXISTING store dir. */
-export function ensureMemoryIndex(memDir) {
-  if (!isDir(memDir)) return;
-  const idx = path.join(memDir, 'MEMORY.md');
-  if (!existsSync(idx)) writeText(idx, '# Memory Index\n');
-}
+export const ensureMemoryIndex = storeIndexWriter('MEMORY.md', '# Memory Index\n');
 
 /** `_build_render.ensure_notebook_index`. */
-export function ensureNotebookIndex(nbDir) {
-  if (!isDir(nbDir)) return;
-  const idx = path.join(nbDir, 'NOTEBOOK.md');
-  if (!existsSync(idx)) writeText(idx, '# Notebook Index\n');
-}
+export const ensureNotebookIndex = storeIndexWriter('NOTEBOOK.md', '# Notebook Index\n');
 

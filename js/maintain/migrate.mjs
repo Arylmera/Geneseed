@@ -65,7 +65,7 @@ function hookSettingsFile(root, host, scope) {
 }
 
 /** Every hook command string in a settings file, or [] when it cannot be read or parsed. */
-export function hookCommandsOf(file) {
+function hookCommandsOf(file) {
   // `readJsonc`, NOT `JSON.parse`. A hand-edited settings.json with comments and a trailing
   // comma is the one shape no machine in this project writes, and strict JSON rejects it —
   // which would classify a wired install as `none` and make `migrate` skip the machine
@@ -89,7 +89,7 @@ export function hookCommandsOf(file) {
 }
 
 /** `<GENESEED_HOME>/.migrated` — the ROOT the last successful migration installed from. */
-export function stampPath() { return path.join(shimHome(), '.migrated'); }
+function stampPath() { return path.join(shimHome(), '.migrated'); }
 
 /** Where the pre-migration copies live while the re-emit runs. */
 function stashDir() { return path.join(shimHome(), '.migrate-backup'); }
@@ -101,7 +101,7 @@ function stashDir() { return path.join(shimHome(), '.migrate-backup'); }
  * no rollback. That ordering is the cheapest atomicity there is and it is why the survey is a
  * separate pass rather than a check inside the loop.
  */
-export function migrateSurvey() {
+function migrateSurvey() {
   const rows = [];
   const commands = [];
   const unrecognised = [];

@@ -6,6 +6,7 @@ import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { LAW_CATS, LAW_CAT_ORDER, PACK_CATS } from '../lib/lawCats.js'
+import CatalogRow from '../components/CatalogRow.jsx'
 
 // THE FILENAME AND THE ROUTE STAY `laws`. tests/helpers/cli_golden.mjs hard-requires this path,
 // doctor's lawMetaProblems reads this ONE file out of web/src, and the npm partition ships it
@@ -109,79 +110,41 @@ function ruleName(rawTitle, romanNum, arabicNum) {
   return String(rawTitle).replace(re, '').trim() || rawTitle
 }
 
-// One expandable row, shared by the invariant and doctrine bands: lazy-loads its full body via
-// /api/item/law/<address> the first time it opens, cached on subsequent toggles. The address is
-// the catalog's `name` — a Roman numeral or `<pack>.<n>` — never the display number.
+// One expandable row, shared by the invariant and doctrine bands via CatalogRow — see that
+// component for the lazy-load/expand-panel machinery. The address is the catalog's `name` —
+// a Roman numeral or `<pack>.<n>` — never the display number.
 function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
-  const { data: detail } = useAsync(
-    () => (isOpen ? api.item('law', law.addr) : Promise.resolve(null)),
-    [isOpen, law.addr],
-  )
-  const body = detail?.body || law.ess
-  const expandRow = (
+  const head = (
     <>
-      {isOpen && (
-        <div className="law-expand">
-          {detail ? (
-            <p>
-              <LawText text={body} />
-            </p>
-          ) : (
-            <p className="dim">Loading…</p>
-          )}
-          <div className="law-srcline">
-            $ geneseed law {law.addr} · {law.src}
-          </div>
-        </div>
+      <span className="law-no">
+        <span className="x">›</span>
+        {law.pad}
+      </span>
+      <span className="law-name">{law.name}</span>
+      <span className="law-princ">{law.ess}</span>
+      <span className="law-class">
+        <span className="cdot" />
+        {law.catLabel}
+      </span>
+    </>
+  )
+  return (
+    <CatalogRow
+      kind="law"
+      addr={law.addr}
+      isOpen={isOpen}
+      onToggle={onToggle}
+      className={`law-row${toggleCol ? ' has-toggle' : ''} ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
+      style={{ '--cc': law.c }}
+      head={head}
+      toggleCol={toggleCol}
+      renderBody={(detail) => (
+        <p>
+          <LawText text={detail.body || law.ess} />
+        </p>
       )}
-    </>
-  )
-  // Doctrine rows expose two separate actions: the first four columns are one disclosure
-  // button, while the fifth is the selection switch. Keeping them as siblings means a switch
-  // click changes only the staged selection, never the open rule.
-  return toggleCol ? (
-    <>
-      <div
-        className={`law-row has-toggle ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
-        style={{ '--cc': law.c }}
-      >
-        <button className="law-disclosure" onClick={onToggle} aria-expanded={isOpen}>
-          <span className="law-no">
-            <span className="x">›</span>
-            {law.pad}
-          </span>
-          <span className="law-name">{law.name}</span>
-          <span className="law-princ">{law.ess}</span>
-          <span className="law-class">
-            <span className="cdot" />
-            {law.catLabel}
-          </span>
-        </button>
-        <span className="toggle-col">{toggleCol}</span>
-      </div>
-      {expandRow}
-    </>
-  ) : (
-    <>
-      <button
-        className={`law-row ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
-        style={{ '--cc': law.c }}
-        onClick={onToggle}
-        aria-expanded={isOpen}
-      >
-        <span className="law-no">
-          <span className="x">›</span>
-          {law.pad}
-        </span>
-        <span className="law-name">{law.name}</span>
-        <span className="law-princ">{law.ess}</span>
-        <span className="law-class">
-          <span className="cdot" />
-          {law.catLabel}
-        </span>
-      </button>
-      {expandRow}
-    </>
+      srcLine={`$ geneseed law ${law.addr} · ${law.src}`}
+    />
   )
 }
 

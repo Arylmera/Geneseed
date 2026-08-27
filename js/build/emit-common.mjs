@@ -10,9 +10,17 @@
  * `emit-claude.mjs` do that; `emit.mjs` renders the bundle they read from.
  */
 import path from 'node:path';
-import { copyFile, writeText } from '../lib/fs.mjs';
+import { copyFile, writeText, isFile, isDir } from '../lib/fs.mjs';
+import { get, isDict } from '../lib/json.mjs';
 import { SRC_DIR_TOKENS, destRel } from './render.mjs';
-import { mkdirSync, readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, cpSync } from 'node:fs';
+
+// `isFile`/`isDir`/`get`/`isDict` are owned by `js/lib` now (single owner across `hosts/`,
+// `build/`, `inspect/` and `web/` — layering forbids `build/` reaching into `inspect/scan.mjs`
+// for them, so `js/lib` is the one home both sides can reach). Re-exported here so this
+// module's own existing callers (`emit-claude.mjs`, `emit-opencode.mjs`, `version.mjs`,
+// `bundle.mjs`) keep importing them from `./emit-common.mjs` unchanged.
+export { isFile, isDir, get, isDict };
 
 /** `_build_render.SRC_DIRS_MARKER`. */
 export const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
@@ -41,13 +49,15 @@ export const OWNED_SRC_DIRS = ['laws', 'agents', 'skills', 'ontology', 'doctrine
 const LEAN_FULL_TEXT_DIRS = ['laws', 'ontology', 'doctrines'];
 
 /**
- * `_build_core.CAPABILITY_LINK_RE` — the DEFAULT only.
+ * `_build_core.CAPABILITY_LINK_RE`.
  *
- * `cfg.capabilityLinkRe` overrides it and the driver always supplies one, for the same
- * reason `cfg.structure` exists: the constant is in `_OWNED` because a doctor test
- * redirects it to the pre-fix form and asserts the emit then renders dead links, and a
- * redirect that stops at the process boundary half-works silently. The literal stays as
- * the fallback for the parity harnesses, which drive this module in-process.
+ * NOT OVERRIDABLE. Python's `cfg.capabilityLinkRe` was the driver's seam for tests that
+ * monkeypatch `_build_core.CAPABILITY_LINK_RE`; `bin/build-driver.mjs` deliberately never
+ * sends one (see its docblock), so the override branch that used to sit in
+ * `stripCapabilityLinks` never took its left-hand side and was deleted as dead code in the
+ * over-engineering cleanup. `tests/unit/harness.test.mjs`'s planted-fault test drives this
+ * exact constant by rewriting the module's source text instead, which is what "no injection
+ * point left" means there.
  */
 const CAPABILITY_LINK_RE =
   /\[([^\]]+)\]\((?:(?!https?:\/\/|\/)[A-Za-z0-9_.-]+\/)*(?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/g;
@@ -55,59 +65,18 @@ const CAPABILITY_LINK_RE =
 /** `_build_render._TMPL_SPEC_RE`. */
 export const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
 
-// ---------------------------------------------------------------------------
-// Small filesystem predicates. Python spells these `Path.is_file()` / `is_dir()`, both
-// of which answer False for a missing path rather than raising; `statSync` throws.
-// ---------------------------------------------------------------------------
-
-export function isFile(p) {
-  try { return statSync(p).isFile(); } catch { return false; }
-}
-
-export function isDir(p) {
-  try { return statSync(p).isDirectory(); } catch { return false; }
-}
-
-/** `dict.get(key)` with Python's semantics — OWN properties only.
- *
- * The same hazard `js/hosts/settings.mjs` and `js/hosts/native.mjs` both spell out: the keys here come
- * out of a manifest the user can edit, and `old['constructor']` hands back
- * `Object.prototype`'s member where Python's `.get` returns None. */
-export function get(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
-}
-
-export function isDict(v) {
-  return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-}
-
-/** `Path.rglob("*")` restricted to files, skipping `__pycache__` as Python's callers do. */
-export function rglobFiles(root, out = []) {
-  for (const name of readdirSync(root)) {
-    if (name === '__pycache__') continue;
-    const full = path.join(root, name);
-    if (isDir(full)) rglobFiles(full, out);
-    else out.push(full);
-  }
-  return out;
-}
-
 /**
- * `Path.rglob("*")` restricted to files, keeping EVERYTHING — including `__pycache__`.
+ * `Path.rglob("*")` restricted to files, skipping `__pycache__` as Python's callers do.
  *
- * Not a duplicate of `rglobFiles` by accident: `source_fingerprint`'s Python filters
- * `__pycache__` and the legacy-store migration in `_global_memory` does not, so a single
- * walk would be wrong for one caller either way. A user's legacy bundle really can carry
- * one (the harness ships `.py` skill scripts), and copying it or not is a byte difference
- * the two runtimes would disagree on silently.
+ * `recursive: true, withFileTypes: true` (Node >= 20.1, `parentPath` >= 21.4 — this repo
+ * requires >= 22.3) replaces a hand-rolled walk; the order it yields is NOT the walk's
+ * order, but `sourceFingerprint`, this function's one caller, re-sorts every result by a
+ * plain string key before it is ever observed, so no caller depends on it.
  */
-function rglobAllFiles(root, out = []) {
-  for (const name of readdirSync(root)) {
-    const full = path.join(root, name);
-    if (isDir(full)) rglobAllFiles(full, out);
-    else out.push(full);
-  }
-  return out;
+export function rglobFiles(root) {
+  return readdirSync(root, { recursive: true, withFileTypes: true })
+    .filter((d) => d.isFile() && !d.parentPath.split(path.sep).includes('__pycache__'))
+    .map((d) => path.join(d.parentPath, d.name));
 }
 
 /** `p.relative_to(base).as_posix()`. */
@@ -123,11 +92,8 @@ export function relPosix(base, p) {
  * that difference back by design and a check that did not would report the file stale on
  * every run forever.
  */
-export function stripCapabilityLinks(cfg, text) {
-  const re = cfg.capabilityLinkRe
-    ? new RegExp(cfg.capabilityLinkRe, 'g')
-    : CAPABILITY_LINK_RE;
-  return text.replace(re, '$1');
+export function stripCapabilityLinks(text) {
+  return text.replace(CAPABILITY_LINK_RE, '$1');
 }
 
 // ---------------------------------------------------------------------------
@@ -135,84 +101,67 @@ export function stripCapabilityLinks(cfg, text) {
 // ---------------------------------------------------------------------------
 
 /**
- * `_build_global._global_memory` — ensure `<cfg>/memory` exists, without ever touching a
- * store that already holds something.
+ * `_build_global._global_memory`/`_global_notebook` — ensure `<cfg>/<name>` exists, without
+ * ever touching a store that already holds something.
  *
  * The three outcomes are the returned status string, which the emit prints, so they are
  * compared through stdout as well as through the tree. Python's `theme` parameter is
- * dropped: the store dir is ALWAYS the classic English `memory/`, never themed (the
+ * dropped for both: the store dir is ALWAYS the classic English name, never themed (the
  * OpenCode config dir uses fixed names), so the argument was never read.
+ *
+ * THE MIGRATED MESSAGE'S SHAPE TRACKS THE ALIAS COUNT, not a caller-supplied format flag.
+ * `memory` is the only store with more than one legacy name — `anamnesis`, an older themed
+ * install's — so its status names which one matched: `migrated anamnesis/ -> memory/`.
+ * `notebook` has exactly one candidate and its status has never named an arrow:
+ * `migrated notebook/`. One alias is nothing a rename could be reporting, so the arrow is
+ * dropped rather than printed as a no-op `notebook/ -> notebook/`.
  *
  * The migration branch copies arbitrary USER files out of a legacy bundle, which is the
  * reason this is not a plain translation: everything it touches is the user's, and the
  * only thing keeping it safe is that it runs at all only when the destination is empty.
  */
-export function globalMemory(cfgDir, items, legacy, srcRoot) {
-  const memName = 'memory';
-  const memDir = path.join(cfgDir, memName);
-  if (isDir(memDir) && readdirSync(memDir).length) return `kept ${memName}/`;
-  mkdirSync(memDir, { recursive: true });
+function globalStore(cfgDir, items, legacy, srcRoot, name, aliases = [name]) {
+  const dir = path.join(cfgDir, name);
+  if (isDir(dir) && readdirSync(dir).length) return `kept ${name}/`;
+  mkdirSync(dir, { recursive: true });
   if (legacy) {
-    // `dict.fromkeys([mem_name, "memory", "anamnesis"])` — de-duplicated, order kept.
-    // `mem_name` is the literal 'memory' and the Python docstring beside it says the
-    // store name is NEVER themed, so the first two entries always collapse and
-    // `anamnesis` — an older themed install's name — is the only live alias. The dedupe
-    // is what keeps the duplicate harmless rather than copying the same dir twice.
-    for (const nm of [...new Set([memName, 'memory', 'anamnesis'])]) {
+    // `dict.fromkeys(aliases)` — de-duplicated, order kept. The dedupe is what keeps a
+    // caller that lists `name` itself among its aliases (as `memory` does) from copying
+    // the same dir twice.
+    for (const nm of [...new Set(aliases)]) {
       const src = path.join(legacy, nm);
       if (isDir(src) && readdirSync(src).length) {
-        for (const f of rglobAllFiles(src)) {
-          const dest = path.join(memDir, path.relative(src, f));
-          mkdirSync(path.dirname(dest), { recursive: true });
-          copyFile(f, dest);
-        }
-        return `migrated ${nm}/ -> ${memName}/`;
+        // `cpSync(..., {preserveTimestamps: true})` — the recursive-copy equivalent of
+        // `copyFile` above (byte copy + carried mtime, no `shutil.copy2` mode bits; see
+        // that function's docblock in `js/lib/fs.mjs`), replacing a walk-then-copyFile
+        // loop that visited every legacy file one at a time.
+        cpSync(src, dir, { recursive: true, preserveTimestamps: true });
+        return aliases.length > 1 ? `migrated ${nm}/ -> ${name}/` : `migrated ${name}/`;
       }
     }
   }
   for (const { text, src } of items) {
     const sp = relPosix(srcRoot, src).split('/');
-    if (sp[0] === 'memory' && sp.length > 1) {
+    if (sp[0] === name && sp.length > 1) {
       // `destRel`, because this seeds from the SOURCE path and not from the item's `rel`
-      // (which is themed, and `memory/` never is). Without it the store would be seeded
-      // with the on-disk name `gitignore` — see `js/build/render.mjs`'s `destRel`.
-      const dest = path.join(memDir, destRel(path.join(...sp.slice(1))));
+      // (which is themed, and the store dir never is). Without it the store would be
+      // seeded with the on-disk name `gitignore` — see `js/build/render.mjs`'s `destRel`.
+      const dest = path.join(dir, destRel(path.join(...sp.slice(1))));
       mkdirSync(path.dirname(dest), { recursive: true });
       if (text !== null) writeText(dest, text);
       else copyFile(src, dest);
     }
   }
-  return `seeded ${memName}/`;
+  return `seeded ${name}/`;
+}
+
+export function globalMemory(cfgDir, items, legacy, srcRoot) {
+  return globalStore(cfgDir, items, legacy, srcRoot, 'memory', ['memory', 'anamnesis']);
 }
 
 /** `_build_global._global_notebook` — the same shape, with no `anamnesis` alias. */
 export function globalNotebook(cfgDir, items, legacy, srcRoot) {
-  const nbName = 'notebook';
-  const nbDir = path.join(cfgDir, nbName);
-  if (isDir(nbDir) && readdirSync(nbDir).length) return `kept ${nbName}/`;
-  mkdirSync(nbDir, { recursive: true });
-  if (legacy) {
-    const src = path.join(legacy, nbName);
-    if (isDir(src) && readdirSync(src).length) {
-      for (const f of rglobAllFiles(src)) {
-        const dest = path.join(nbDir, path.relative(src, f));
-        mkdirSync(path.dirname(dest), { recursive: true });
-        copyFile(f, dest);
-      }
-      return `migrated ${nbName}/`;
-    }
-  }
-  for (const { text, src } of items) {
-    const sp = relPosix(srcRoot, src).split('/');
-    if (sp[0] === nbName && sp.length > 1) {
-      // `destRel` — same reason as `globalMemory` above.
-      const dest = path.join(nbDir, destRel(path.join(...sp.slice(1))));
-      mkdirSync(path.dirname(dest), { recursive: true });
-      if (text !== null) writeText(dest, text);
-      else copyFile(src, dest);
-    }
-  }
-  return `seeded ${nbName}/`;
+  return globalStore(cfgDir, items, legacy, srcRoot, 'notebook');
 }
 
 /**

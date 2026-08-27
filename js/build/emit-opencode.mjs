@@ -27,14 +27,71 @@ import {
 import { writeVersion } from './version.mjs';
 import { mkdirSync } from 'node:fs';
 
+/**
+ * The layer both OpenCode emits share once RENDER has `items`/`theme` in hand: overrides, the
+ * native agents/skills layer, the primary agent, commands, themes, plugins/workflows, and the
+ * final `opencode.json` WIRE. `dir` is the emit's own directory — `.opencode/` for the
+ * per-repo emit, `cfgDir` for the global one — which is why `wireBase` (where `opencode.json`
+ * itself lives) travels separately: the per-repo config sits at the project ROOT, one level
+ * above `dir`, while the global config sits IN `cfgDir`, i.e. `dir` itself.
+ *
+ * Folding WIRE in here moves it earlier in the global emit's own write order (it used to run
+ * after the memory/notebook/laws steps, now before them) — harmless, because none of those
+ * later steps read `opencode.json` back, and the phase-order gate only requires WIRE to log no
+ * earlier than RENDER, which still holds since nothing after this logs a phase at all.
+ *
+ * `manifestExisted` only ever arrives from the per-repo caller; the global emit does not pass
+ * it, matching the Python side, so the pre-manifest header line stays unreachable from there on
+ * both sides.
+ *
+ * `overridesDir` is a THIRD directory, and it is not `dir` for the per-repo emit: the
+ * per-repo `agent-overrides.json` lives beside the portable bundle in `out`, while every other
+ * write in this layer goes under `.opencode/`. The global emit has no such split — `out` there
+ * is only the legacy memory/notebook source, never a write target — so its `overridesDir`
+ * equals `dir`.
+ */
+function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
+  const {
+    oldOwned, manifestExisted, agentPath, wireBase, overridesDir,
+  } = opts;
+  ensureAgentOverridesStub(cfg, overridesDir);
+  const overrides = loadAgentOverrides(overridesDir);
+
+  const { nAgents, nSkills, written } = writeNativeLayer(
+    items, path.join(dir, 'agents'), path.join(dir, 'skills'), overrides,
+    { host: 'opencode', oldOwned, cfg: dir, manifestExisted, theme, src: cfg.src });
+  for (const p of written) owned.push(relPosix(dir, p));
+
+  const primary = writePrimaryAgent(cfg, path.join(dir, 'agents'), overrides);
+  if (primary) owned.push(relPosix(dir, primary));
+
+  const commands = writeCommandLayer(cfg, items, path.join(dir, 'command'));
+  commands.push(writePonytailCommand(path.join(dir, 'command')));   // always-on /ponytail
+  for (const p of commands) owned.push(relPosix(dir, p));
+
+  owned.push(relPosix(dir, writeTheme(path.join(dir, 'themes'), themeName, theme)));
+  for (const p of writeColorThemes(cfg, path.join(dir, 'themes'))) owned.push(relPosix(dir, p));
+
+  const nPlugins = copyPlugins(cfg, path.join(dir, 'plugins'), owned);
+  const nWorkflows = copyWorkflows(cfg, path.join(dir, 'workflows'), owned);
+
+  // WIRE — the one file of this layer the user co-owns.
+  phaseLog('WIRE');
+  const cfgName = path.basename(mergeOpencodeJson(path.join(wireBase, 'opencode.json'),
+    agentPath, cfg.doctrines, cfg.excludeRules));
+
+  return {
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands: commands.length, cfgName,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // emit_opencode — the RENDER stage only
 // ---------------------------------------------------------------------------
 
 /**
- * RENDER and WIRE for `_build_emit.emit_opencode` — everything through the
- * `mergeOpencodeJson` call at the bottom. PRUNE and MANIFEST are the driver's, in
- * `bin/build-driver.mjs`.
+ * RENDER and WIRE for `_build_emit.emit_opencode` — everything through `opencodeLayer`'s
+ * `mergeOpencodeJson` call. PRUNE and MANIFEST are the driver's, in `bin/build-driver.mjs`.
  *
  * `oldOwned` and `manifestExisted` arrive in the job rather than being read here. The
  * manifest is the DRIVER's stage: it reads the file, hands the prior claim in, and prunes
@@ -56,43 +113,21 @@ export function emitOpencodeRender(cfg, job) {
   // OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
   // plain names (the portable build keeps them). A deliberate de-link, not a fix.
   const agentMd = path.join(out, 'AGENT.md');
-  if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(cfg, readText(agentMd)));
+  if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(readText(agentMd)));
 
   const owned = [];
   const { theme, items } = renderAll(cfg, _theme);
 
-  ensureAgentOverridesStub(cfg, out);
-  const overrides = loadAgentOverrides(out);
-
-  const { nAgents, nSkills, written } = writeNativeLayer(
-    items, path.join(oc, 'agents'), path.join(oc, 'skills'), overrides,
-    { host: 'opencode', oldOwned, cfg: oc, manifestExisted, theme, src: cfg.src });
-  for (const p of written) owned.push(relPosix(oc, p));
-
-  const primary = writePrimaryAgent(cfg, path.join(oc, 'agents'), overrides);
-  if (primary) owned.push(relPosix(oc, primary));
-
-  const commands = writeCommandLayer(cfg, items, path.join(oc, 'command'));
-  commands.push(writePonytailCommand(path.join(oc, 'command')));   // always-on /ponytail
-  for (const p of commands) owned.push(relPosix(oc, p));
-
-  owned.push(relPosix(oc, writeTheme(path.join(oc, 'themes'), _theme, theme)));
-  for (const p of writeColorThemes(cfg, path.join(oc, 'themes'))) owned.push(relPosix(oc, p));
-
-  const nPlugins = copyPlugins(cfg, path.join(oc, 'plugins'), owned);
-  const nWorkflows = copyWorkflows(cfg, path.join(oc, 'workflows'), owned);
-
-  // WIRE — the one file of this emit the user co-owns. `agentPath` arrives decided
-  // (`_rel_under` is the Python side by design), and only the BASENAME is consumed
-  // downstream: `opencode.json`, or the `.jsonc` sibling when that is what is on disk.
-  phaseLog('WIRE');
-  const cfgName = path.basename(mergeOpencodeJson(path.join(root, 'opencode.json'), agentPath,
-    cfg.doctrines, cfg.excludeRules));
+  const {
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName,
+  } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
+    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out,
+  });
 
   return {
     owned,
     stats: {
-      nAgents, nSkills, nPlugins, nWorkflows, nCommands: commands.length, primary: !!primary,
+      nAgents, nSkills, nPlugins, nWorkflows, nCommands, primary: !!primary,
     },
     cfgName,
   };
@@ -149,34 +184,17 @@ export function emitOpencodeGlobalRender(cfg, job) {
     // plain names. Memory links stay RELATIVE: in the global layout AGENT.md and the
     // store are siblings, so `memory/` resolves from AGENT.md's own location and stays
     // hermetic — no absolute path a doctor check would flag as an escape.
-    writeText(path.join(cfgDir, 'AGENT.md'), stripCapabilityLinks(cfg, agentText));
+    writeText(path.join(cfgDir, 'AGENT.md'), stripCapabilityLinks(agentText));
     owned.push('AGENT.md');
   }
 
-  ensureAgentOverridesStub(cfg, cfgDir);
-  const overrides = loadAgentOverrides(cfgDir);
-
   // `manifestExisted` is deliberately not passed — the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.
-  const { nAgents, nSkills, written } = writeNativeLayer(
-    items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'), overrides,
-    { host: 'opencode', oldOwned, cfg: cfgDir, theme, src: cfg.src });
-  for (const p of written) owned.push(relPosix(cfgDir, p));
-
-  const primary = writePrimaryAgent(cfg, path.join(cfgDir, 'agents'), overrides);
-  if (primary) owned.push(relPosix(cfgDir, primary));
-
-  const commands = writeCommandLayer(cfg, items, path.join(cfgDir, 'command'));
-  commands.push(writePonytailCommand(path.join(cfgDir, 'command')));   // always-on /ponytail
-  for (const p of commands) owned.push(relPosix(cfgDir, p));
-
-  owned.push(relPosix(cfgDir, writeTheme(path.join(cfgDir, 'themes'), themeName, theme)));
-  for (const p of writeColorThemes(cfg, path.join(cfgDir, 'themes'))) {
-    owned.push(relPosix(cfgDir, p));
-  }
-
-  const nPlugins = copyPlugins(cfg, path.join(cfgDir, 'plugins'), owned);
-  const nWorkflows = copyWorkflows(cfg, path.join(cfgDir, 'workflows'), owned);
+  const {
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName,
+  } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
+    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir,
+  });
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
   ensureMemoryIndex(path.join(cfgDir, 'memory'));
@@ -192,23 +210,13 @@ export function emitOpencodeGlobalRender(cfg, job) {
 
   shipLeanLaws(items, theme, cfgDir, owned, footprint);
 
-  // WIRE — the one file of this emit the user co-owns, and the last render is now behind
-  // us. Inlined the way `emitOpencodeRender`'s is (one call, the same merge, the same file
-  // name). Nothing walks the SOURCE for that split now: `tests/unit/emit_phase_order.test.mjs`
-  // reads the runtime `GENESEED_PHASE_LOG` trace instead, so the `phaseLog('WIRE')` below is
-  // what the gate sees — and deleting it is mutation M30.
-  phaseLog('WIRE');
-  const cfgName = path.basename(mergeOpencodeJson(path.join(cfgDir, 'opencode.json'),
-    agentPath, cfg.doctrines, cfg.excludeRules));
-
   return {
     owned,
     stats: {
-      nAgents, nSkills, nPlugins, nWorkflows, nCommands: commands.length, primary: !!primary,
+      nAgents, nSkills, nPlugins, nWorkflows, nCommands, primary: !!primary,
     },
     memStatus,
     nbStatus,
     cfgName,
   };
 }
-

@@ -193,3 +193,37 @@ export function withPlatformNewlines(fn) {
   }
 }
 
+/**
+ * `Path.is_file()` / `Path.is_dir()` — false for a missing path, never a throw.
+ *
+ * SINGLE OWNER. Six modules (`js/inspect/scan.mjs` plus five more under `hosts/`, `inspect/`,
+ * `build/`, `web/` and `bin/`) each carried a private `(p) => { try {...} catch { return
+ * false; } }` copy of one or both; this is now the one definition, and `scan.mjs` re-exports
+ * it for its own existing callers rather than owning a copy itself. `js/hosts/hooks.mjs` is
+ * the deliberate exception — the hot path keeps its own inline copy rather than pay an import.
+ *
+ * `statSync`'s Node default THROWS for a missing path; `throwIfNoEntry: false` (Node >= 15.3)
+ * is the one option that turns ONLY that case into `undefined`, and still throws for anything
+ * else — a permission failure, a path with a non-directory ancestor (`ENOTDIR`). Every copy
+ * this replaces used a bare `try/catch` instead, which swallowed ALL of those alike into the
+ * same `false`. That is a real, deliberate narrowing: a permission failure silently read as
+ * "not there" was the wrong answer to preserve, not a byte worth keeping.
+ */
+export function isFile(p) {
+  return statSync(p, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+
+export function isDir(p) {
+  return statSync(p, { throwIfNoEntry: false })?.isDirectory() ?? false;
+}
+
+/**
+ * `except OSError` — an fs failure carries a `code`; anything else is a bug, so rethrow.
+ *
+ * SINGLE OWNER of a one-line predicate `js/hosts/settings.mjs`, `js/maintain/uninstall.mjs`
+ * and `js/inspect/excludes.mjs` each declared privately, byte-identically.
+ */
+export function isOsError(e) {
+  return Boolean(e) && typeof e.code === 'string';
+}
+

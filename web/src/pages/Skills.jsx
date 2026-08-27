@@ -6,70 +6,66 @@ import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import Markdown from '../components/Markdown.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
+import CatalogRow from '../components/CatalogRow.jsx'
+import { CAT_HUES } from '../lib/lawCats.js'
 
-// Six-class taxonomy mirroring the Laws view. The class itself comes from the
-// server (SKILL_CLASS, shipped as `klass`); this map only
-// holds the chip label and dot colour. Same OKLCH hues as LAW_CATS so the two
-// ledgers read as one family. Order is the chip-bar order.
+// Six-class taxonomy mirroring the Laws view. The class itself comes from the server
+// (SKILL_CLASS, shipped as `klass`); this map only holds the chip label and reuses
+// LAW_CATS' own hues (CAT_HUES) so the two ledgers read as one family — Design ==
+// Context's hue, Build == Craft's, Review == Security's, Ship == Process's, Understand
+// == Verification's, Learn == Communication's. Order is the chip-bar order.
 //
 // `personal` is the exception: a skill the lifecycle registry has never heard of —
 // your own, living in this install only. Deliberately near-grey rather than a
 // seventh hue in the family, because it is OUTSIDE the taxonomy, not another
 // member of it. Its chip appears only where such skills exist.
 const SKILL_CATS = {
-  design: { label: 'Design', c: 'oklch(0.74 0.08 280)' },
-  build: { label: 'Build', c: 'oklch(0.78 0.085 95)' },
-  review: { label: 'Review', c: 'oklch(0.74 0.085 45)' },
-  ship: { label: 'Ship', c: 'oklch(0.76 0.075 150)' },
-  understand: { label: 'Understand', c: 'oklch(0.78 0.075 200)' },
-  learn: { label: 'Learn', c: 'oklch(0.76 0.085 345)' },
+  design: { label: 'Design', c: CAT_HUES.context },
+  build: { label: 'Build', c: CAT_HUES.craft },
+  review: { label: 'Review', c: CAT_HUES.security },
+  ship: { label: 'Ship', c: CAT_HUES.process },
+  understand: { label: 'Understand', c: CAT_HUES.verify },
+  learn: { label: 'Learn', c: CAT_HUES.comms },
   personal: { label: 'Personal', c: 'oklch(0.72 0.025 250)' },
 }
 const SKILL_CAT_ORDER = ['design', 'build', 'review', 'ship', 'understand', 'learn', 'personal']
 
-// One expandable row: lazy-loads its full body via /api/item/skill/<name> the
-// first time it opens, cached on subsequent toggles. Mirrors LawRow, minus the
-// numeral column — skills are name + one-line desc + class.
+// One expandable row, via CatalogRow (shared with LawRow) — see that component for the
+// lazy-load/expand-panel machinery. Mirrors LawRow, minus the numeral column — skills
+// are name + one-line desc + class, and the body is full Markdown rather than LawText.
 function SkillRow({ skill, isOpen, onToggle }) {
   const cat = SKILL_CATS[skill.cat] || SKILL_CATS.build
-  const { data: detail } = useAsync(
-    () => (isOpen ? api.item('skill', skill.name) : Promise.resolve(null)),
-    [isOpen, skill.name],
+  const head = (
+    <>
+      <span className="skill-name">
+        <span className="x">›</span>
+        {skill.name}
+        <StatusBadge status={skill.status} />
+      </span>
+      <span className="skill-desc">{skill.desc}</span>
+      <span className="law-class">
+        <span className="cdot" />
+        {cat.label}
+      </span>
+    </>
   )
   return (
-    <>
-      <button
-        className={`skill-row ${isOpen ? 'on' : ''}`}
-        style={{ '--cc': cat.c }}
-        onClick={onToggle}
-        aria-expanded={isOpen}
-      >
-        <span className="skill-name">
-          <span className="x">›</span>
-          {skill.name}
-          <StatusBadge status={skill.status} />
-        </span>
-        <span className="skill-desc">{skill.desc}</span>
-        <span className="law-class">
-          <span className="cdot" />
-          {cat.label}
-        </span>
-      </button>
-      {isOpen && (
-        <div className="law-expand skill-expand">
-          {detail ? (
-            <div className="skill-doc">
-              <Markdown body={detail.body} links={detail.links || []} />
-            </div>
-          ) : (
-            <p className="dim">Loading…</p>
-          )}
-          <div className="law-srcline">
-            $ geneseed skill {skill.name} · skills/{skill.name}.md
-          </div>
+    <CatalogRow
+      kind="skill"
+      addr={skill.name}
+      isOpen={isOpen}
+      onToggle={onToggle}
+      className={`skill-row ${isOpen ? 'on' : ''}`}
+      style={{ '--cc': cat.c }}
+      head={head}
+      expandClassName="law-expand skill-expand"
+      renderBody={(detail) => (
+        <div className="skill-doc">
+          <Markdown body={detail.body} links={detail.links || []} />
         </div>
       )}
-    </>
+      srcLine={`$ geneseed skill ${skill.name} · skills/${skill.name}.md`}
+    />
   )
 }
 

@@ -846,9 +846,13 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .mcp-info strong { font-size: 13.5px; }
 .mcp-info p { margin: 3px 0 0; font-size: 12px; color: var(--text-2); }
 
-/* toggle switch */
+/* toggle switch — a plain <button> (Laws' doctrine rows) or a native <input type="checkbox">
+   (Harness' install/MCP rows, since 2026-08-27: it gets Space and disabled for free).
+   appearance:none strips the checkbox's own native box so only the pill + ::after knob below
+   ever paint — without it a browser draws its default checkbox glyph on top of this. */
 .sw-toggle { width: 38px; height: 22px; border-radius: 999px; background: var(--surface-3);
-  border: 1px solid var(--line-2); cursor: pointer; position: relative; transition: background .15s; flex: none; }
+  border: 1px solid var(--line-2); cursor: pointer; position: relative; transition: background .15s; flex: none;
+  appearance: none; -webkit-appearance: none; margin: 0; padding: 0; }
 .sw-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
   border-radius: 50%; background: var(--text-2); transition: transform .15s, background .15s; }
 .sw-toggle.on { background: var(--accent-soft); border-color: var(--accent-line); }

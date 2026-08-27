@@ -62,7 +62,7 @@ export const DOCTRINE_HEADING_RE = /^###\s+\S+\s+([a-z]+)\s+(\d+)\s+[—-]\s+(.+
  * from `STRUCTURE` rather than from a theme, so the id below is stable across all fourteen
  * voices and is safe to put in a deep link.
  */
-export const ONTOLOGY_HEADING_RE = /^####\s+(.+?)\s*$/;
+const ONTOLOGY_HEADING_RE = /^####\s+(.+?)\s*$/;
 
 /** The lead line of a pack file — `**Craft** — how code is written.` */
 const PACK_LEAD_RE = /^\*\*(.+?)\*\*\s+[—-]\s+(.+?)\s*$/;
@@ -110,40 +110,45 @@ export const SKILL_CLASS = {
 const has = (obj, k) => Object.hasOwn(obj, k);
 
 /**
- * `_harness_tui._parse_laws` — the rendered laws file split into
- * `{num, title, klass, body}`.
+ * The one accumulator `_parse_laws`, the doctrine-pack parser and the ontology parser each
+ * wrote out separately: split `text` on its heading regex, opening a new record — everything
+ * `makeRecord(match)` returns, plus a `body` — at every match, and appending every other line
+ * (including a blank one) to the CURRENT record's body. Text before the first heading is
+ * dropped on the floor because `cur` is still null.
  *
- * The accumulator appends `line + "\n"` to every non-heading line INCLUDING the ones
- * before the first heading, which are discarded because `cur` is still None — and then
- * strips each body at the end. Reproduced literally: a body's internal blank lines are
- * kept and only its ends are trimmed.
+ * `str.strip()`, applied at the end to every body. `trim()`'s whitespace set differs from
+ * Python's only at U+FEFF, which is the standing item this port has carried since P4 — a
+ * rendered body cannot end in a BOM, and a fourth primitive to say so would cost more than
+ * it gates.
  */
-export function parseLaws(text) {
-  const laws = [];
+function parseSections(text, re, makeRecord) {
+  const out = [];
   let cur = null;
   for (const line of text.split('\n')) {
-    const m = LAW_HEADING_RE.exec(line);
+    const m = re.exec(line);
     if (m) {
-      if (cur) laws.push(cur);
-      cur = { num: m[1], title: m[2], klass: has(LAW_CLASS, m[1]) ? LAW_CLASS[m[1]] : 'craft', body: '' };
+      if (cur) out.push(cur);
+      cur = { ...makeRecord(m), body: '' };
     } else if (cur !== null) {
       cur.body += `${line}\n`;
     }
   }
-  if (cur) laws.push(cur);
-  // `str.strip()`. `trim()`'s whitespace set differs from Python's only at U+FEFF, which
-  // is the standing item this port has carried since P4 — a rendered law body cannot end
-  // in a BOM, and a fourth primitive to say so would cost more than it gates.
-  for (const law of laws) law.body = law.body.trim();
-  return laws;
+  if (cur) out.push(cur);
+  for (const item of out) item.body = item.body.trim();
+  return out;
+}
+
+/**
+ * `_harness_tui._parse_laws` — the rendered laws file split into
+ * `{num, title, klass, body}`.
+ */
+function parseLaws(text) {
+  return parseSections(text, LAW_HEADING_RE, (m) => (
+    { num: m[1], title: m[2], klass: has(LAW_CLASS, m[1]) ? LAW_CLASS[m[1]] : 'craft' }));
 }
 
 /**
  * One rendered doctrine pack file split into `{pack, n, title, klass, body}` rows.
- *
- * Same accumulator as `parseLaws`, and deliberately so: text before the first heading — the
- * pack's own lead line — is dropped on the floor because `cur` is still null, and each body is
- * trimmed at its ends only.
  *
  * `klass` IS THE PACK ID, not one of `LAW_CLASSES`. A doctrine rule is grouped by the pack it
  * belongs to and there is no second taxonomy over it; the six-class chip is the invariants'.
@@ -155,20 +160,8 @@ export function parseLaws(text) {
  * two; this function just reports what the text says.
  */
 export function parseDoctrines(text) {
-  const rules = [];
-  let cur = null;
-  for (const line of text.split('\n')) {
-    const m = DOCTRINE_HEADING_RE.exec(line);
-    if (m) {
-      if (cur) rules.push(cur);
-      cur = { pack: m[1], n: Number(m[2]), title: m[3], klass: m[1], body: '' };
-    } else if (cur !== null) {
-      cur.body += `${line}\n`;
-    }
-  }
-  if (cur) rules.push(cur);
-  for (const rule of rules) rule.body = rule.body.trim();
-  return rules;
+  return parseSections(text, DOCTRINE_HEADING_RE, (m) => (
+    { pack: m[1], n: Number(m[2]), title: m[3], klass: m[1] }));
 }
 
 /**
@@ -179,25 +172,13 @@ export function parseDoctrines(text) {
  * come from `STRUCTURE` in `js/build/render.mjs` and not from any theme file — the same reason a
  * citation can spell itself `({{ONTOLOGY}}: {{ONT_TELOS}})` with a token on both sides.
  *
- * The preamble above the first `####` is dropped, as in the two parsers above. It is the
- * paragraph that states the tier order, and it renders into AGENT.md whole — the catalogue
- * lists sections, and the preamble is not one.
+ * The preamble above the first `####` is dropped, as `parseSections` drops it for the two
+ * parsers above. It is the paragraph that states the tier order, and it renders into AGENT.md
+ * whole — the catalogue lists sections, and the preamble is not one.
  */
-export function parseOntology(text) {
-  const sections = [];
-  let cur = null;
-  for (const line of text.split('\n')) {
-    const m = ONTOLOGY_HEADING_RE.exec(line);
-    if (m) {
-      if (cur) sections.push(cur);
-      cur = { id: m[1].toLowerCase().replace(/\s+/g, '-'), title: m[1], body: '' };
-    } else if (cur !== null) {
-      cur.body += `${line}\n`;
-    }
-  }
-  if (cur) sections.push(cur);
-  for (const s of sections) s.body = s.body.trim();
-  return sections;
+function parseOntology(text) {
+  return parseSections(text, ONTOLOGY_HEADING_RE, (m) => (
+    { id: m[1].toLowerCase().replace(/\s+/g, '-'), title: m[1] }));
 }
 
 /**

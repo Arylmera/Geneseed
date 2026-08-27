@@ -1,6 +1,10 @@
 // The constitution's colour vocabulary — one class per invariant, one colour per
-// doctrine pack. Shared, because two screens now paint the same rules: the Laws
-// ledger's chips and rows, and the Journal dashboard's constitution map.
+// doctrine pack. Shared, because three taxonomies now paint with it: the Laws
+// ledger's chips and rows, the Journal dashboard's constitution map, and Skills'
+// own SKILL_CATS — a different set of keys and labels over the SAME six hues
+// (CAT_HUES below), which is why the "SKILL_CATS is a fourth, ungated taxonomy
+// copy" README debris bullet was really about the hues never being shared, not
+// about the labels — Skills legitimately needs its own label per class.
 //
 // SPLIT OUT OF Laws.jsx RATHER THAN IMPORTED FROM IT. The Dashboard ships in the
 // app shell (it is the landing route, App.jsx says why), so a dashboard component
@@ -10,13 +14,22 @@
 // that exact path for the LAW_META gate, and `tests/helpers/cli_golden.mjs`
 // hard-requires it. So the shared half moves out and the file stays put.
 
+export const CAT_HUES = {
+  security: 'oklch(0.74 0.085 45)',
+  verify: 'oklch(0.78 0.075 200)',
+  process: 'oklch(0.76 0.075 150)',
+  craft: 'oklch(0.78 0.085 95)',
+  context: 'oklch(0.74 0.08 280)',
+  comms: 'oklch(0.76 0.085 345)',
+}
+
 export const LAW_CATS = {
-  security: { label: 'Security', c: 'oklch(0.74 0.085 45)' },
-  verify: { label: 'Verification', c: 'oklch(0.78 0.075 200)' },
-  process: { label: 'Process', c: 'oklch(0.76 0.075 150)' },
-  craft: { label: 'Craft', c: 'oklch(0.78 0.085 95)' },
-  context: { label: 'Context', c: 'oklch(0.74 0.08 280)' },
-  comms: { label: 'Communication', c: 'oklch(0.76 0.085 345)' },
+  security: { label: 'Security', c: CAT_HUES.security },
+  verify: { label: 'Verification', c: CAT_HUES.verify },
+  process: { label: 'Process', c: CAT_HUES.process },
+  craft: { label: 'Craft', c: CAT_HUES.craft },
+  context: { label: 'Context', c: CAT_HUES.context },
+  comms: { label: 'Communication', c: CAT_HUES.comms },
 }
 
 export const LAW_CAT_ORDER = ['security', 'verify', 'process', 'craft', 'context', 'comms']
@@ -24,21 +37,10 @@ export const LAW_CAT_ORDER = ['security', 'verify', 'process', 'craft', 'context
 // A doctrine rule's class IS its pack — there is no second taxonomy over one. Colours only; the
 // pack's NAME and blurb are themed and come from the API, so they are never transcribed here.
 export const PACK_CATS = {
-  craft: 'oklch(0.78 0.085 95)',
-  rigor: 'oklch(0.78 0.075 200)',
-  ops: 'oklch(0.76 0.075 150)',
-  process: 'oklch(0.74 0.085 45)',
+  craft: CAT_HUES.craft,
+  rigor: CAT_HUES.verify,
+  ops: CAT_HUES.process,
+  process: CAT_HUES.security,
 }
 
-// TWO LOOKUPS, NOT ONE, AND THE MERGED VERSION WAS A BUG. The obvious helper is a
-// single `lawCatColor(klass)` that tries LAW_CATS then PACK_CATS — but the two tables
-// SHARE KEYS with different values: `process` is both an invariant class (green, hue
-// 150) and a doctrine pack (orange, hue 45), and `craft` is in both as well. Whichever
-// table such a helper checked first would silently win for those two, and it did: the
-// `process` pack rendered in the invariant Process green, which is byte-identical to
-// the `ops` pack's colour — so two packs came out the same on the map, and neither
-// matched the same pack on the Constitution page.
-//
-// The caller always knows which tier it is drawing, so it says so.
-export const invariantColor = (klass) => LAW_CATS[klass]?.c || 'var(--text-3)'
 export const packColor = (pack) => PACK_CATS[pack] || 'var(--text-3)'

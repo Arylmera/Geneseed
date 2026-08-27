@@ -37,7 +37,7 @@
 import { printOut } from '../lib/fs.mjs';
 import { parseIntStrict, codePointLength, padEndToWidth } from '../lib/text.mjs';
 
-export const ART = {
+const ART = {
   imperial: {
     title: '+ ADEPTUS ASTARTES +',
     sprite: [

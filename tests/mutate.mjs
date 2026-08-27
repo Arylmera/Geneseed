@@ -429,13 +429,20 @@ export const MUTATIONS = [
     find: '  return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
     replace: '  return NOT_PORTED.has(path) || DECLINED_POST.has(path)\n'
       + '    || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
-    gate: UNIT,
-    why: 'LIMITS ROW 3, AS A DEFECT. This is the one-line collapse the split into separate '
-      + 'GET and POST declarations exists to prevent: every exported set stays exactly as '
-      + 'written, so every partition test that READS them stays green, while a GET to '
-      + '`/api/pick-folder` answers 501 instead of falling through to the SPA that owns the path. '
-      + 'Only a probe of the running dispatcher can see it, which is why row 3 is a probe and not '
-      + 'a declaration — and why the row says so at both sites.',
+    gate: null,
+    why: 'UNGATED AS OF THE `/api/pick-folder` PORT (bf40ddf). This used to be LIMITS ROW 3, '
+      + 'AS A DEFECT: the one-line collapse the split into separate GET and POST declarations '
+      + 'exists to prevent, catchable only by a probe of the running dispatcher because a GET '
+      + 'to `/api/pick-folder` answered 501 instead of falling through to the SPA that owns the '
+      + 'path — while every set-reading partition test stayed green. `/api/pick-folder` crossed '
+      + '(the user overrode the earlier permanent decline) and `DECLINED_POST` is now '
+      + 'PERMANENTLY EMPTY, dispatched inline instead. `DECLINED_POST.has(path)` therefore '
+      + 'evaluates false for every path this mutant or the original could ever receive, so the '
+      + 'two are behaviourally IDENTICAL for any GET — the defect class this row plants has no '
+      + 'live member and no probe left that could tell them apart. Stays declared and ungated, '
+      + 'not deleted, the same reason an empty set stays declared: a future permanent decline '
+      + 'reopens the class, and `tests/unit/web_server.test.mjs`\'s dispatcher probe is the gate '
+      + 'to re-aim this row at when one lands.',
   },
   // ------------------------------------------------------------------------------------------
   // P3 T7, with `tests/unit/web_daemon.test.mjs`. Both defects are real and both are invisible

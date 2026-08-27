@@ -59,6 +59,17 @@ export function themesToCheck(theme, allThemes, detected, available) {
 }
 
 /**
+ * `swallowStdout` and `captureBoth` below are the same operation over a different stream
+ * list: replace each stream's `write` with a no-op for the duration of `fn`, then restore
+ * every original in `finally` regardless of how `fn` exits.
+ */
+function withSwallowed(streams, fn) {
+  const saved = streams.map((s) => [s, s.write.bind(s)]);
+  for (const [s] of saved) s.write = () => true;
+  try { return fn(); } finally { for (const [s, w] of saved) s.write = w; }
+}
+
+/**
  * `contextlib.redirect_stdout(io.StringIO())` — swallow an emit's log, and ONLY stdout.
  *
  * The Python redirects stdout and leaves stderr alone, so a WARN from the emit still reaches
@@ -68,9 +79,34 @@ export function themesToCheck(theme, allThemes, detected, available) {
  * installed at call time, so it translates into this buffer and the bytes never leave.
  */
 function swallowStdout(fn) {
-  const real = process.stdout.write.bind(process.stdout);
-  process.stdout.write = () => true;
-  try { return fn(); } finally { process.stdout.write = real; }
+  return withSwallowed([process.stdout], fn);
+}
+
+/**
+ * The loop `globalEmitProblems`/`claudeBobEmitProblems` each wrote out: render one item into
+ * its own fresh temp dir with stdout swallowed, then `checkBuild` the result — a build
+ * failure and a check finding both prefixed with the SAME per-cell label. `makeCell(tmp,
+ * item)` returns `{ label, dir, run, vendored }`; `vendored` is passed straight through to
+ * `checkBuild`, which defaults it exactly as an omitted third argument always did.
+ */
+function emitProblemsOver(items, makeCell) {
+  const problems = [];
+  for (const item of items) {
+    withTempDir((tmp) => {
+      const { label, dir, run, vendored } = makeCell(tmp, item);
+      try {
+        swallowStdout(run);
+      } catch (e) {
+        if (e && e.exitCode !== undefined) {
+          problems.push(`[${label}] build failed`);
+          return;
+        }
+        throw e;
+      }
+      problems.push(...checkBuild(label, dir, vendored));
+    });
+  }
+  return problems;
 }
 
 /**
@@ -85,25 +121,16 @@ function swallowStdout(fn) {
  * installs actually run.
  */
 export function globalEmitProblems(themeName) {
-  const problems = [];
-  for (const footprint of ['lean', 'full']) {
-    withTempDir((tmp) => {
-      const cfgDir = path.join(tmp, 'cfg');
-      try {
-        swallowStdout(() => emitGlobalInto('opencode', {
-          theme: themeName, out: path.join(tmp, 'bundle'), cfgDir, footprint,
-        }));
-      } catch (e) {
-        if (e && e.exitCode !== undefined) {
-          problems.push(`[${themeName} global/${footprint}] build failed`);
-          return;
-        }
-        throw e;
-      }
-      problems.push(...checkBuild(`${themeName} global/${footprint}`, cfgDir));
-    });
-  }
-  return problems;
+  return emitProblemsOver(['lean', 'full'], (tmp, footprint) => {
+    const cfgDir = path.join(tmp, 'cfg');
+    return {
+      label: `${themeName} global/${footprint}`,
+      dir: cfgDir,
+      run: () => emitGlobalInto('opencode', {
+        theme: themeName, out: path.join(tmp, 'bundle'), cfgDir, footprint,
+      }),
+    };
+  });
 }
 
 /**
@@ -116,25 +143,17 @@ export function globalEmitProblems(themeName) {
  * skills one level deeper than a bundle does.
  */
 export function claudeBobEmitProblems(themeName) {
-  const problems = [];
-  for (const label of ['claude', 'bob', 'copilot']) {
-    withTempDir((tmp) => {
-      const root = path.join(tmp, 'root');
-      try {
-        swallowStdout(() => emitProjectInto(label, {
-          theme: themeName, out: path.join(root, 'bundle'), root,
-        }));
-      } catch (e) {
-        if (e && e.exitCode !== undefined) {
-          problems.push(`[${themeName} ${label}] build failed`);
-          return;
-        }
-        throw e;
-      }
-      problems.push(...checkBuild(`${themeName} ${label}`, root, validateIsVendored));
-    });
-  }
-  return problems;
+  return emitProblemsOver(['claude', 'bob', 'copilot'], (tmp, label) => {
+    const root = path.join(tmp, 'root');
+    return {
+      label: `${themeName} ${label}`,
+      dir: root,
+      run: () => emitProjectInto(label, {
+        theme: themeName, out: path.join(root, 'bundle'), root,
+      }),
+      vendored: validateIsVendored,
+    };
+  });
 }
 
 /**
@@ -219,11 +238,7 @@ export function doctorCollect({
 
 /** `run(..., capture_output=True)` — both streams into the void, the return code out. */
 function captureBoth(fn) {
-  const out = process.stdout.write.bind(process.stdout);
-  const err = process.stderr.write.bind(process.stderr);
-  process.stdout.write = () => true;
-  process.stderr.write = () => true;
-  try { return fn(); } finally { process.stdout.write = out; process.stderr.write = err; }
+  return withSwallowed([process.stdout, process.stderr], fn);
 }
 
 /**

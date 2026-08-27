@@ -20,11 +20,17 @@
  * ON 2026-08-16 with its own `ast` readers, and the test is the second party now.
  *
  * ⚠ LIMITS ROW 3 LIVES IN THIS FILE, in `the declared partition is the one the dispatcher
- * uses`. `/api/pick-folder` is DECLINED, never ported — it opens an OS-native folder dialog on
- * the daemon host — and the claim is PROBED rather than declared: POST must answer 501 and GET
- * must NOT, because a GET has to fall through to the SPA. That pair is what refuses the
- * one-line collapse of the POST sets back into `NOT_PORTED`, which leaves every declaration
- * exactly as written and every set-reading test green.
+ * uses`. It exists because a declaration is not a dispatcher: collapsing the POST sets back
+ * into `NOT_PORTED` leaves every declaration exactly as written and every set-reading test
+ * green, while quietly changing what the real dispatcher does. It used to be PROVED with
+ * `/api/pick-folder` (DECLINED, so POST had to answer 501 and GET had to fall through to the
+ * SPA) — `DECLINED_POST` is EMPTY now (pick-folder crossed 2026-08-27, a user override; see
+ * `js/web/routes.mjs`), so there is no member left to probe that way here. Hitting the live
+ * route would no longer prove the same thing anyway: it now spawns a REAL OS folder dialog on
+ * the daemon host, which this suite must not pop on the developer's own screen (the same
+ * reason `/api/restart` and `/api/reveal`'s success arm are never driven, two probes below) —
+ * its dispatch (and the non-desktop error path) is covered instead by a dedicated unit test
+ * that overrides `process.platform` rather than hitting a live server.
  */
 import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
@@ -401,13 +407,15 @@ test('the declared partition is the one the dispatcher uses', async () => {
     assert.equal(await hit('POST', '/api/install', 'tok'), 404,
       'POST /api/install crossed: an empty body names no install, so it must reach the endpoint '
       + 'and raise NotFound — a 501 means the row is declared unported again');
-    // THE ROW-3 PAIR, and it is the whole reason this test survives the cut.
-    assert.equal(await hit('POST', '/api/pick-folder', 'tok'), 501,
-      'POST /api/pick-folder never crosses and must say so — a 404 here means DECLINED_POST is '
-      + 'declared but not dispatched on');
-    assert.notEqual(await hit('GET', '/api/pick-folder'), 501,
-      'GET /api/pick-folder must fall through to the SPA: the POST sets must not be consulted on '
-      + 'a GET, which is exactly what collapsing them back into NOT_PORTED would do');
+    // THE ROW-3 PAIR used to live here, against `/api/pick-folder` while `DECLINED_POST` still
+    // had a member. It crossed 2026-08-27 (a user override — see `js/web/routes.mjs`) and
+    // `DECLINED_POST` is empty now, so there is nothing left in this partition to probe that
+    // way. It is not replaced with a live hit on `/api/pick-folder` either: unlike
+    // `/api/install` above (which safely 404s on an empty body), pick-folder takes NO client
+    // input at all and spawns a REAL OS folder dialog on every hit regardless of body — the
+    // same reason `/api/restart` and `/api/reveal`'s success arm below are never driven. Its
+    // dispatch and non-desktop error path are covered by a dedicated unit test instead, one
+    // that overrides `process.platform` rather than hitting a live server.
     // THE `POST_BEYOND_REF` PAIR. `/api/reveal` is the first route with no reference at all, so
     // there is no recorded body to hold it to and this dispatch probe is the only gate on it.
     //

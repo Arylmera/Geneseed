@@ -13,25 +13,22 @@
  * compares `installs.json` byte-for-byte, so a changed path or a dropped prune fails cells
  * rather than passing quietly.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
 import { expanduser } from '../hosts/hosts.mjs';
-import { writeText } from '../lib/fs.mjs';
+import { writeText, isFile, isDir } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
-
 /** `_install_registry._path()` — `$XDG_CONFIG_HOME/geneseed/installs.json`. */
-export function registryPath() {
+function registryPath() {
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   return path.join(base, 'geneseed', 'installs.json');
 }
 
-export function registryLoad() {
+function registryLoad() {
   try {
     const data = parseJson(readFileSync(registryPath(), 'utf8'));
     return Array.isArray(data) ? data.map(String) : [];

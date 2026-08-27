@@ -115,36 +115,47 @@ export function sourceReleaseVersion(cfg) {
   return '0.0.0';
 }
 
+const GRAY = 8;
+const GREEN = 2;
+const RED = 1;
+const YEL = 3;
+const MAG = 5;
+const NONE = 'none';
+
+/**
+ * `_build_emit._theme_json`'s role -> value map, one entry per `PALETTE_ROLES` member (19 —
+ * not the 17 the plan that asked for this derivation guessed; logged as a wrong-plan-claim
+ * row). `acc` is the one theme-tinted value; `fn` and `type` happen to share it today but are
+ * kept as their own role entries rather than aliased to `accent`, since nothing requires a
+ * future theme to tint them together.
+ *
+ * ONE SLOT IS NOT A PURE FUNCTION OF ITS ROLE, and folding it in here would be wrong rather
+ * than tidy: `syntaxPunctuation` carries role `fgMuted`, the same role as `textMuted`,
+ * `diffContext`, `diffLineNumber` and `markdownBlockQuote` — all four of which render GRAY —
+ * but `syntaxPunctuation` alone has always rendered NONE. A real asymmetry this theme has
+ * shipped with, reproduced below as a one-slot override rather than smoothed away, the same
+ * pattern `colorThemeJson` already uses for its own `TRANSPARENT_NONE` slots.
+ */
+const roleAnsi = (acc) => ({
+  accent: acc, secondary: MAG, err: RED, warn: YEL, ok: GREEN,
+  fg: NONE, fgMuted: GRAY, border: GRAY,
+  bg: NONE, bgPanel: NONE, bgElement: NONE, addBg: NONE, delBg: NONE,
+  comment: GRAY, kw: MAG, fn: acc, str: GREEN, num: MAG, type: acc,
+});
+
+/** The one slot `roleAnsi`'s role lookup gets wrong on its own — forced to NONE after. */
+const THEME_JSON_NONE_OVERRIDE = new Set(['syntaxPunctuation']);
+
 /** `_build_emit._theme_json` — a COMPLETE terminal-native theme tinted by ACCENT. */
 export function themeJson(theme) {
   const raw = theme && theme.ACCENT !== undefined ? theme.ACCENT : 'cyan';
   const key = String(raw).toLowerCase();
-  const acc = Object.prototype.hasOwnProperty.call(ANSI, key) ? ANSI[key] : 6;
-  const GRAY = 8;
-  const GREEN = 2;
-  const RED = 1;
-  const YEL = 3;
-  const MAG = 5;
-  const NONE = 'none';
-  const t = {
-    primary: acc, secondary: MAG, accent: acc,
-    error: RED, warning: YEL, success: GREEN, info: acc,
-    text: NONE, textMuted: GRAY,
-    background: NONE, backgroundPanel: NONE, backgroundElement: NONE,
-    border: GRAY, borderActive: acc, borderSubtle: GRAY,
-    diffAdded: GREEN, diffRemoved: RED, diffContext: GRAY,
-    diffHunkHeader: acc, diffHighlightAdded: GREEN, diffHighlightRemoved: RED,
-    diffAddedBg: NONE, diffRemovedBg: NONE, diffContextBg: NONE,
-    diffLineNumber: GRAY, diffAddedLineNumberBg: NONE, diffRemovedLineNumberBg: NONE,
-    markdownText: NONE, markdownHeading: acc, markdownLink: MAG,
-    markdownLinkText: acc, markdownCode: GREEN, markdownBlockQuote: GRAY,
-    markdownEmph: YEL, markdownStrong: YEL, markdownHorizontalRule: GRAY,
-    markdownListItem: acc, markdownListEnumeration: acc, markdownImage: MAG,
-    markdownImageText: acc, markdownCodeBlock: NONE,
-    syntaxComment: GRAY, syntaxKeyword: MAG, syntaxFunction: acc,
-    syntaxVariable: NONE, syntaxString: GREEN, syntaxNumber: MAG,
-    syntaxType: acc, syntaxOperator: MAG, syntaxPunctuation: NONE,
-  };
+  const acc = Object.hasOwn(ANSI, key) ? ANSI[key] : 6;
+  const roles = roleAnsi(acc);
+  const t = {};
+  for (const [slot, role] of Object.entries(SLOT_ROLE)) {
+    t[slot] = THEME_JSON_NONE_OVERRIDE.has(slot) ? NONE : roles[role];
+  }
   return { $schema: 'https://opencode.ai/theme.json', theme: t };
 }
 
@@ -177,7 +188,7 @@ export function colorThemeJson(palette, transparent) {
     // `palette[role]` is a plain subscript in Python: a palette missing a role raises
     // KeyError and aborts the emit. A bare JS lookup would yield undefined, which
     // JSON.stringify DROPS — silently emitting a theme with missing slots.
-    if (!Object.prototype.hasOwnProperty.call(palette, role)) {
+    if (!Object.hasOwn(palette, role)) {
       throw new Error(`palette has no role '${role}' (slot '${slot}')`);
     }
     t[slot] = palette[role];
@@ -257,7 +268,7 @@ export function writePrimaryAgent(cfg, agentsDir, overrides) {
   const desc = 'Primary orchestrator — works by the harness Rules and delegates to the '
     + 'capability subagents.';
   const fm = [`description: ${jsonDumps(desc)}`, 'mode: primary', 'color: primary'];
-  const ov = (Object.prototype.hasOwnProperty.call(overrides, 'orchestrator')
+  const ov = (Object.hasOwn(overrides, 'orchestrator')
     && overrides.orchestrator) || {};
   pushOverrideLines(fm, ov);
   const dest = path.join(agentsDir, 'orchestrator.md');

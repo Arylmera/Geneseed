@@ -16,14 +16,16 @@
  * values this file must originate. `ROOT` and the seven paths under it come from this
  * script's own location, not from an inherited `cfg`.
  *
- * TWO KEYS ARE DELIBERATELY ABSENT FROM `cfg`, and their absence is load-bearing.
- * `js_cfg()` (_build_core.py:199) always sends `structure` and `capabilityLinkRe`, because
- * the Python originals are module-level names that TESTS MUTATE — `_OWNED` membership
- * asked one level out. This driver has no Python module to mutate, so it sends neither and
- * `js/build/render.mjs:215`'s `cfg.structure ?? STRUCTURE` and `js/build/bundle.mjs`'s
- * `cfg.capabilityLinkRe ? ... : <default>` take their right-hand branches for the first
- * time. Those two fallbacks have been dead code since they were written — always
- * overridden by the driver that always supplies them. P4 is what makes them live.
+ * A KEY IS DELIBERATELY ABSENT FROM `cfg`, and its absence is load-bearing.
+ * `js_cfg()` (_build_core.py:199) always sent `structure` and `capabilityLinkRe`, because
+ * the Python originals were module-level names that TESTS MUTATE — `_OWNED` membership
+ * asked one level out. This driver has no Python module to mutate, so it sends neither;
+ * `js/build/render.mjs:215`'s `cfg.structure ?? STRUCTURE` takes its right-hand branch for
+ * that reason — a fallback that was dead code until P4, always overridden by the driver
+ * that always supplies it. `capabilityLinkRe`'s equivalent fallback in
+ * `js/build/emit-common.mjs`'s `stripCapabilityLinks` was P4's other one made live, and the
+ * over-engineering cleanup then deleted the override branch outright: nothing had ever
+ * supplied one, so there was no longer a `cfg` left to be absent from.
  *
  * THE FOOTPRINT DEFAULT IS THE FLAG'S, NOT THE FUNCTION'S. `--footprint` defaults to
  * `lean` (build.py:354); every `emit_*`/`build` SIGNATURE defaults to `full`. A driver
@@ -32,15 +34,16 @@
  */
 import {
   existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync,
-  statSync, unlinkSync,
+  unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs as nodeParseArgs } from 'node:util';
 import { build, phaseLog } from '../js/build/bundle.mjs';
 import { emitClaudeRender } from '../js/build/emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from '../js/build/emit-opencode.mjs';
 import { settingsIntegrityCheck } from '../js/hosts/settings.mjs';
-import { writeText, withPlatformNewlines } from '../js/lib/fs.mjs';
+import { writeText, withPlatformNewlines, isFile } from '../js/lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../js/lib/json.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
@@ -189,6 +192,26 @@ const FLAGS = {
 };
 
 /**
+ * `util.parseArgs`'s own option table, DERIVED from `VALUED`/`FLAGS` rather than typed out a
+ * second time — a hand-written twin is exactly the anti-drift failure this module's docblock
+ * already names for `usage()`. Every `VALUED` entry is `type: 'string'` (so a bare `--flag
+ * value` form is captured as one token instead of leaking `value` as an orphan positional);
+ * every long `FLAGS` entry is `type: 'boolean'`. `-v` gets `short: 'v'` for the same reason
+ * `-h` deliberately does NOT get one below `PARSE_OPTIONS` — see `parseArgs`'s docblock.
+ */
+const PARSE_OPTIONS = Object.fromEntries([
+  ...Object.keys(VALUED).map((f) => [f.slice(2), { type: 'string' }]),
+  ...Object.keys(FLAGS).filter((f) => f.startsWith('--')).map((f) => [f.slice(2), { type: 'boolean' }]),
+]);
+PARSE_OPTIONS.verbose = { type: 'boolean', short: 'v' };
+
+/** `token.name` (dashes stripped, short aliases folded in) -> this file's `args` key. */
+const VALUED_BY_NAME = Object.fromEntries(Object.keys(VALUED).map((f) => [f.slice(2), VALUED[f]]));
+const FLAG_BY_NAME = Object.fromEntries(
+  Object.keys(FLAGS).filter((f) => f.startsWith('--')).map((f) => [f.slice(2), FLAGS[f]]),
+);
+
+/**
  * The four flags `choice` validates, as ONE table for the same anti-drift reason.
  *
  * A function and not a constant because two of the four read the checkout: `discoverNames`
@@ -307,7 +330,31 @@ function usage() {
   ].join('\n');
 }
 
-/** argparse's `--flag value` and `--flag=value`, plus the `--target` alias for `--out`. */
+/**
+ * argparse's `--flag value` and `--flag=value`, plus the `--target` alias for `--out` — the
+ * SPLITTING now done by `util.parseArgs({tokens: true})`, with every choice/mutex/wording
+ * decision this function made before P6 (Task 4) still made HERE, unmoved.
+ *
+ * `strict: false` is load-bearing twice: it lets an unrecognized flag surface as a token this
+ * walk can refuse in its OWN words rather than node's, and it is what makes a value-taking
+ * flag (`type: 'string'` in `PARSE_OPTIONS`) swallow the very next raw argument even when that
+ * argument itself looks like a flag — `--theme --posture peer` sets `theme` to the literal
+ * string `"--posture"` and leaves `peer` a stray token, exactly as the hand-rolled version
+ * being replaced did with its own `argv[i += 1]`. That is not a bug this port inherited by
+ * accident: it is the one shape `parseArgs`'s tokenizer reproduces for free, and reproducing
+ * anything smarter (a lookahead that refuses to swallow a flag-shaped value) would be new
+ * behaviour, not a preserved one.
+ *
+ * `-h` DELIBERATELY IS NOT `PARSE_OPTIONS.help`'s short alias. Declaring one would make
+ * `parseArgs` fold a bundled `-vh` into two tokens — `verbose` then `help` — and print the
+ * help text for a cluster the original parser refused outright as one unrecognized argument.
+ * Detecting help by re-reading `argv[tok.index]` for the literal text `-h`/`--help` keeps the
+ * ORIGINAL equality check (`tok === '-h' || tok === '--help'`) intact no matter how `parseArgs`
+ * privately tokenizes the cluster, and `argv[tok.index]` is what recovers that literal text
+ * for every refusal below — `tok.name`/`tok.rawName` are `parseArgs`'s own canonicalisation and
+ * would print `-b`/`-o`/`-g`/`-u`/`-s` for a bundle like `-bogus` where the original parser (and
+ * this one) refuses the whole typed token, `-bogus`, once.
+ */
 function parseArgs(argv, defaults) {
   const args = {
     theme: defaults.theme, posture: defaults.posture, mode: defaults.mode,
@@ -316,11 +363,12 @@ function parseArgs(argv, defaults) {
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false,
   };
-  for (let i = 0; i < argv.length; i += 1) {
-    const tok = argv[i];
-    const eq = tok.indexOf('=');
-    const name = eq > 0 ? tok.slice(0, eq) : tok;
-    if (tok === '-h' || tok === '--help') {
+  const { tokens } = nodeParseArgs({
+    args: argv, options: PARSE_OPTIONS, allowPositionals: true, strict: false, tokens: true,
+  });
+  for (const tok of tokens) {
+    if (tok.kind === 'option' && tok.value === undefined
+      && (argv[tok.index] === '-h' || argv[tok.index] === '--help')) {
       process.stdout.write(usage());
       // The same marker `die` throws, with a SUCCESS code: help is not a refusal, and
       // `main`'s catch is what turns either into this process's exit status. A bare
@@ -330,15 +378,24 @@ function parseArgs(argv, defaults) {
       e.exitCode = 0;
       throw e;
     }
-    if (VALUED[name]) {
-      const val = eq > 0 ? tok.slice(eq + 1) : argv[i += 1];
-      if (val === undefined) die(2, `argument ${name}: expected one argument`);
-      args[VALUED[name]] = val;
-    } else if (FLAGS[tok]) {
-      args[FLAGS[tok]] = true;
-    } else {
-      die(2, `unrecognized arguments: ${tok}`);
+    if (tok.kind === 'option' && VALUED_BY_NAME[tok.name] !== undefined) {
+      if (tok.value === undefined) die(2, `argument ${tok.rawName}: expected one argument`);
+      args[VALUED_BY_NAME[tok.name]] = tok.value;
+      continue;
     }
+    // `tok.value === undefined` excludes `--sync-themes=x` from matching here — a store_true
+    // flag never took `=` in the hand-rolled version either, because its `FLAGS[tok]` lookup
+    // keyed on the WHOLE typed token (equals sign and all), never on the split-off flag name.
+    // `parseArgs` always sets a `value` KEY on every option token (`undefined` when none was
+    // given), so this must compare the VALUE, not `'value' in tok` — the key is always there.
+    if (tok.kind === 'option' && tok.value === undefined && FLAG_BY_NAME[tok.name] !== undefined) {
+      args[FLAG_BY_NAME[tok.name]] = true;
+      continue;
+    }
+    // Every other shape — an unrecognized option, a bare positional, or `--` (which `parseArgs`
+    // always treats as a terminator but this parser never did) — refuses with the literal text
+    // typed at that argv position, matching the original's `unrecognized arguments: ${tok}`.
+    die(2, `unrecognized arguments: ${argv[tok.index]}`);
   }
   const choices = choicesFor();
   for (const flag of Object.keys(choices)) choice(flag, args[VALUED[flag]], choices[flag]);
@@ -532,10 +589,6 @@ function writeManifestAtomic(file, data) {
   renameSync(tmp, file);
 }
 
-function isFile(p) {
-  try { return statSync(p).isFile(); } catch { return false; }
-}
-
 /**
  * Write-before-delete: remove only what this layer owned before and no longer produces.
  *
@@ -565,6 +618,30 @@ function pruneOwned(oc, oldOwned, owned) {
     process.stderr.write('[geneseed] WARN: could not remove stale owned file(s): '
       + `${failed.join(', ')}\n`);
   }
+}
+
+/**
+ * The manifest PRE-read all three emit bodies performed inline: does a manifest already
+ * exist at `manifestPath`, and if so, what does it parse to. `existed` is what
+ * `emitOpencode` alone needs (as `manifestExisted`, threaded into the render job); every
+ * caller reads `doc.owned`, and `emitClaudeCore` also reads `doc.managed` — `doc` is `null`
+ * on a missing OR a corrupt manifest, so `(doc && doc.owned) || []` covers both the same way
+ * the three inline try/catches did.
+ */
+function readManifest(manifestPath) {
+  const existed = existsSync(manifestPath);
+  let doc = null;
+  if (existed) {
+    try { doc = parseJson(readFileSync(manifestPath, 'utf8')); } catch { doc = null; }
+  }
+  return { existed, doc };
+}
+
+/** The "+ primary agent, N command(s)" tail both OpenCode summary lines share. */
+function extrasTail(stats) {
+  const extras = [...(stats.primary ? ['primary agent'] : []),
+    ...(stats.nCommands ? [`${stats.nCommands} command(s)`] : [])];
+  return extras.length ? ` + ${extras.join(', ')}` : '';
 }
 
 /**
@@ -624,14 +701,8 @@ function emitOpencode(cfg, args, out) {
   // PRE. A missing manifest reads as "owned nothing before", which is what makes the first
   // re-emit after an upgrade treat already-existing files as the user's (claim-on-create)
   // rather than deleting them. The prune set is then empty by construction.
-  const manifestExisted = existsSync(manifestPath);
-  let oldOwned = [];
-  if (manifestExisted) {
-    try {
-      const m = parseJson(readFileSync(manifestPath, 'utf8'));
-      oldOwned = (m && m.owned) || [];
-    } catch { oldOwned = []; }
-  }
+  const { existed: manifestExisted, doc } = readManifest(manifestPath);
+  const oldOwned = (doc && doc.owned) || [];
 
   const agentPathRel = relUnder(out, root);
   const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';
@@ -658,9 +729,7 @@ function emitOpencode(cfg, args, out) {
     scope: 'project',
   });
 
-  const extras = [...(stats.primary ? ['primary agent'] : []),
-    ...(stats.nCommands ? [`${stats.nCommands} command(s)`] : [])];
-  const extra = extras.length ? ` + ${extras.join(', ')}` : '';
+  const extra = extrasTail(stats);
   process.stdout.write(`[geneseed] opencode layer: ${stats.nAgents} subagents, `
     + `${stats.nSkills} skills, ${stats.nPlugins} plugin(s), `
     + `${stats.nWorkflows} workflow file(s), ${cfgName} (instructions: ${agentPath})`
@@ -687,13 +756,8 @@ function emitOpencodeGlobal(cfg, args, out) {
   const cfgDir = args.cfgDir ?? opencodeConfigDir();
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
 
-  let oldOwned = [];
-  if (existsSync(manifestPath)) {
-    try {
-      const m = parseJson(readFileSync(manifestPath, 'utf8'));
-      oldOwned = (m && m.owned) || [];
-    } catch { oldOwned = []; }
-  }
+  const { doc } = readManifest(manifestPath);
+  const oldOwned = (doc && doc.owned) || [];
 
   const agentPath = path.join(cfgDir, 'AGENT.md').split(path.sep).join('/');
 
@@ -717,9 +781,7 @@ function emitOpencodeGlobal(cfg, args, out) {
     owned: [...owned].sort(),
   });
 
-  const extras = [...(stats.primary ? ['primary agent'] : []),
-    ...(stats.nCommands ? [`${stats.nCommands} command(s)`] : [])];
-  const extra = extras.length ? ` + ${extras.join(', ')}` : '';
+  const extra = extrasTail(stats);
   process.stdout.write(`[geneseed] opencode-global -> ${cfgDir}: ${stats.nAgents} subagents, `
     + `${stats.nSkills} skills, ${stats.nPlugins} plugin(s), `
     + `${stats.nWorkflows} workflow file(s), AGENT.md, ${memStatus}, ${nbStatus}, `
@@ -749,16 +811,10 @@ function emitOpencodeGlobal(cfg, args, out) {
  */
 function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpts }) {
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
-  let oldOwned = [];
-  let oldManaged = {};
-  if (existsSync(manifestPath)) {
-    try {
-      const data = parseJson(readFileSync(manifestPath, 'utf8'));
-      oldOwned = data.owned || [];
-      oldManaged = (data.managed && typeof data.managed === 'object'
-        && !Array.isArray(data.managed)) ? data.managed : {};
-    } catch { oldOwned = []; oldManaged = {}; }
-  }
+  const { doc } = readManifest(manifestPath);
+  const oldOwned = (doc && doc.owned) || [];
+  const oldManaged = (doc && doc.managed && typeof doc.managed === 'object'
+    && !Array.isArray(doc.managed)) ? doc.managed : {};
   const isCopilot = host === 'copilot';
 
   // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every host
@@ -1123,30 +1179,22 @@ function run(argv) {
   // The marker directory is the emit's TARGET, which for a global emit is the config dir it
   // just rendered into and not `--out` at all — so the emit returns it rather than the
   // caller guessing (build.py:427-436 re-resolves; returning it keeps one resolution).
+  //
+  // NINE ARMS, TWO TABLES ALREADY ON FILE: `GLOBAL_EMITS` and `PROJECT_EMITS` above are
+  // exactly this dispatch's `-global` and per-repo halves, keyed by host rather than by
+  // `--emit` name, so splitting the suffix reaches both without a third map.
   let markerDir = out;
-  if (args.emit === 'opencode') {
-    emitOpencode(cfg, args, out);
-  } else if (args.emit === 'opencode-global') {
-    markerDir = emitOpencodeGlobal(cfg, args, out);
-  } else if (args.emit === 'copilot') {
+  if (args.emit.endsWith('-global')) {
+    markerDir = GLOBAL_EMITS[args.emit.slice(0, -'-global'.length)](cfg, args, out);
+  } else if (args.emit !== 'files') {
     // The PROJECT emits keep their markers in `out`, not in the host config dir the emit
     // wrote to (build.py:435-436) — `.github/` is the layer, `out` is the install.
-    emitCopilot(cfg, args, out);
-  } else if (args.emit === 'copilot-global') {
-    markerDir = emitCopilotGlobal(cfg, args, out);
-  } else if (args.emit === 'claude') {
-    emitClaude(cfg, args, out);
-  } else if (args.emit === 'claude-global') {
-    markerDir = emitClaudeGlobal(cfg, args, out);
-  } else if (args.emit === 'bob') {
-    emitBob(cfg, args, out);
-  } else if (args.emit === 'bob-global') {
-    markerDir = emitBobGlobal(cfg, args, out);
+    PROJECT_EMITS[args.emit](cfg, args, out);
   } else {
-    // `nativeCatalog: false` is build.py:421's three-positional-argument call reproduced:
-    // `build(args.theme, out, args.footprint)` leaves `native_catalog` at its signature
-    // default. It is the one signature default this driver DOES inherit, and it is
-    // inherited because the Python CLI inherits it too.
+    // The ninth choice, a plain bundle: `nativeCatalog: false` is build.py:421's
+    // three-positional-argument call reproduced — `build(args.theme, out, args.footprint)`
+    // leaves `native_catalog` at its signature default. It is the one signature default
+    // this driver DOES inherit, and it is inherited because the Python CLI inherits it too.
     build(cfg, args.theme, out, { footprint: args.footprint, nativeCatalog: false });
   }
 

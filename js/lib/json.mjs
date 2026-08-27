@@ -217,12 +217,39 @@ export function deepEquals(a, b) {
   const kx = Object.keys(x);
   const ky = Object.keys(y);
   return kx.length === ky.length
-    && kx.every((k) => Object.prototype.hasOwnProperty.call(y, k) && deepEquals(x[k], y[k]));
+    && kx.every((k) => Object.hasOwn(y, k) && deepEquals(x[k], y[k]));
 }
 
 /** `value in list` and `list.index(value)` under `deepEquals` \u2014 Python's `in`, not `includes`. */
 export function indexOfDeepEqual(arr, value) {
   return arr.findIndex((v) => deepEquals(v, value));
+}
+
+/**
+ * `dict.get(key)` / `k in d` / `isinstance(x, dict)` \u2014 Python dict semantics, OWN properties
+ * only, for a value that came out of `parseJson`.
+ *
+ * SINGLE OWNER of three helpers that had accumulated private copies in `js/hosts/settings.mjs`,
+ * `js/build/emit-common.mjs`, `js/inspect/scan.mjs` (`has` only) and `js/inspect/excludes.mjs`.
+ * They live beside `parseJson` rather than beside `js/lib/fs.mjs`'s filesystem primitives
+ * because every caller is reading a manifest, a theme or an overrides file \u2014 `obj['constructor']`
+ * or `obj['toString']` answering `Object.prototype`'s member instead of `undefined` is the same
+ * hazard `JsonNumber` and `deepEquals` above exist to guard against for the same values.
+ *
+ * They cannot live in `hosts/`, `build/` or `inspect/` themselves: callers on BOTH sides of the
+ * one-way dependency line those three sit on (`js/README.md`) need all three, and a copy in any
+ * one of them would force the others to import up the graph to reach it.
+ */
+export function get(obj, key) {
+  return Object.hasOwn(obj, key) ? obj[key] : undefined;
+}
+
+export function has(obj, key) {
+  return Object.hasOwn(obj, key);
+}
+
+export function isDict(v) {
+  return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 }
 
 /**

@@ -42,35 +42,15 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { printErr, readText, writeText } from '../lib/fs.mjs';
+import { readText, writeText, isOsError } from '../lib/fs.mjs';
 import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals, formatRepr,
-  indexOfDeepEqual,
+  indexOfDeepEqual, get, has, isDict,
 } from '../lib/json.mjs';
+import { expanduser } from './hosts.mjs';
+import { stripWhitespace, stripWhitespaceEnd } from '../lib/text.mjs';
 
-export const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
-
-/** `dict.get(key)` with Python's semantics — OWN properties only.
- *
- * `loaded[event]` where `event` came out of a manifest hands back `Object.prototype`'s
- * member for `constructor`, `toString` or `valueOf`, where Python's `.get` returns None.
- * The same hazard `js/hosts/native.mjs` hit with `overrides[stem]`, on a dict the USER edits. */
-function get(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
-}
-
-function has(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-}
-
-/** `except OSError` — an fs failure carries a `code`; anything else is a bug, so rethrow. */
-function isOsError(e) {
-  return Boolean(e) && typeof e.code === 'string';
-}
-
-function isDict(v) {
-  return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-}
+const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
 
 /**
  * Is the `process` doctrine pack active for the install being emitted?
@@ -114,7 +94,7 @@ const consentRuleOn = (d, excluded = []) =>
  * Law IV's territory — an always-on invariant — not the process pack's, and the guard
  * plugin's own force-push arm is unconditional for the same reason.
  */
-export function defaultPermission(doctrines = null, excluded = []) {
+function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
   if (consentRuleOn(doctrines, excluded)) {
     bash['git commit*'] = 'ask';
@@ -205,22 +185,10 @@ function reconcileOpencodePermission(perm, want) {
   return [changed, stranded, null];
 }
 
-/**
- * `Path.with_suffix(suffix)` for the one shape this module needs.
- *
- * `PurePath.suffix` and `path.extname` disagree on leading-dot and trailing-dot names
- * (`.bashrc`, `x.`); the only caller passes `…/opencode.json`, and the emit's own callers
- * pass a literal. Spelled off `path.extname` with the empty-extension case handled so a
- * future caller with a suffix-less path appends rather than truncates.
- */
-function withSuffix(p, suffix) {
-  const ext = path.extname(p);
-  return (ext ? p.slice(0, p.length - ext.length) : p) + suffix;
-}
-
-/** `_build_settings._opencode_target`. */
+/** `_build_settings._opencode_target`. Only caller of a `.json` -> `.jsonc` suffix swap. */
 export function opencodeTarget(jsonPath) {
-  const jsonc = withSuffix(jsonPath, '.jsonc');
+  const ext = path.extname(jsonPath);
+  const jsonc = (ext ? jsonPath.slice(0, jsonPath.length - ext.length) : jsonPath) + '.jsonc';
   return existsSync(jsonc) ? jsonc : jsonPath;
 }
 
@@ -305,7 +273,7 @@ export function readJsonc(text) {
  * already has a `permission` key to add one is not saying so. Any other truthy value is read as
  * `'add'`, which is what the boolean callers this replaced meant.
  */
-export function warnCommentedJsonc(target, agentPath, permission,
+function warnCommentedJsonc(target, agentPath, permission,
   includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = []) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
@@ -354,7 +322,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
       raw = readText(target);
     } catch (e) {
       if (!isOsError(e)) throw e;
-      process.stderr.write(`[geneseed] WARN: could not read ${target} (${asOsError(e)}) `
+      process.stderr.write(`[geneseed] WARN: could not read ${target} (${e.message}) `
         + `— NOT touching it. Add ${jsonDumps(agentPath)} to its "instructions" array by `
         + "hand once it's readable again.\n");
       return target;
@@ -433,25 +401,18 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
     atomicWriteJson(target, config);
   } catch (e) {
     if (!isOsError(e)) throw e;
-    process.stderr.write(`[geneseed] WARN: could not write ${target} (${asOsError(e)}) — `
+    process.stderr.write(`[geneseed] WARN: could not write ${target} (${e.message}) — `
       + `the harness will NOT auto-load until this is fixed. Add ${jsonDumps(agentPath)} `
       + 'to its "instructions" array by hand.\n');
   }
   return target;
 }
 
-/**
- * `str(OSError)` — what Python interpolates for `except OSError as e: f"({e})"`.
- *
- * Python renders `[Errno 13] Permission denied: 'C:\\x\\y'`; Node's message is
- * `EACCES: permission denied, open 'C:\x\y'`. The two cannot be made to agree, so the
- * parity gate does not drive a cell through a real fs failure — it exercises the branch
- * with an injectable failure instead and compares everything except the OS's own wording.
- * Named here so the gap is a decision rather than a surprise at GA.
- */
-function asOsError(e) {
-  return e.message;
-}
+// `except OSError as e: f"({e})"` is inlined as `e.message` at each call site above and below.
+// Python renders `[Errno 13] Permission denied: 'C:\\x\\y'`; Node's message is
+// `EACCES: permission denied, open 'C:\x\y'`. The two cannot be made to agree, so the parity
+// gate does not drive a cell through a real fs failure — it exercises the branch with an
+// injectable failure instead and compares everything except the OS's own wording.
 
 // ---- the hook shim ----------------------------------------------------------------
 // `|| exit 0` on the emitted commands does NOT mean "ignore failures": git-gate and
@@ -499,32 +460,18 @@ export function shimRel(platform = process.platform) {
   return ['bin', SHIM_MARK + (platform === 'win32' ? '.cmd' : '')];
 }
 
-/** `_build_settings._shim_home`. */
+/**
+ * `_build_settings._shim_home`.
+ *
+ * `expanduser` is `js/hosts/hosts.mjs`'s — GENESEED_HOME is user-set, same as any config-dir
+ * env var there, so a `~user` value here has the identical failure mode (a hook shim written
+ * under a literal `~user` directory) and gets the identical refusal. This module used to carry
+ * a private "same guard" twin; the two had drifted (this one's refusal message dropped the
+ * parenthetical explaining WHY), which is exactly the kind of divergence one owner prevents.
+ */
 export function shimHome() {
   const env = process.env.GENESEED_HOME;
   return env ? expanduser(env) : path.join(os.homedir(), '.geneseed');
-}
-
-/**
- * `Path(x).expanduser()` — private twin of `js/hosts/hosts.mjs`'s `expanduser`, same guard.
- *
- * `GENESEED_HOME` is user-set, same as any config-dir env var there, so a `~user` value here
- * has the identical failure mode (a hook shim written under a literal `~user` directory) and
- * gets the identical fix — refuse rather than pass through. See that file's docblock for why
- * the refusal lives IN the primitive rather than at `shimHome`'s caller.
- */
-function expanduser(p) {
-  if (p === '~') return os.homedir();
-  if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
-  if (p.startsWith('~')) {
-    const msg = `refusing '${p}': a '~user' path is not expanded by this port; pass an `
-      + 'absolute path, or "~" / "~/…" for your own home directory';
-    printErr(`${msg}\n`);
-    const e = new Error(msg);
-    e.exitCode = 1;
-    throw e;
-  }
-  return p;
 }
 
 /** `_build_settings._hook_shim_path`. */
@@ -918,7 +865,7 @@ export function wireClaudeExcludes(p, excludes) {
     atomicWriteJson(p, config);
   } catch (e) {
     if (!isOsError(e)) throw e;
-    process.stderr.write(`[geneseed] WARN: could not write ${p} (${asOsError(e)}) — `
+    process.stderr.write(`[geneseed] WARN: could not write ${p} (${e.message}) — `
       + 'claudeMdExcludes were not wired. Add to its "claudeMdExcludes" array by hand: '
       + `${jsonDumpsCompact(added)}\n`);
     return [];
@@ -973,7 +920,7 @@ export const GENESEED_HOOK_SNIFF = ['harness.py', SHIM_MARK];
 // 2 and 3 differ ONLY inside the shim body. A classifier reading the host config alone would
 // call a fully-unmigrated machine "already migrated" — silently — and `migrate` would no-op on
 // exactly the installs it exists for. The shim body is a REQUIRED input, not a refinement.
-export const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
+const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
 
 /**
  * `_build_settings._migrate_shape` — 'legacy' | 'current' | 'none'.
@@ -1028,7 +975,7 @@ export function autostartStale(text, root) {
 }
 
 /** `_build_settings._settings_hook_groups` — flatten `hooks` to [event, group] pairs. */
-export function settingsHookGroups(loaded) {
+function settingsHookGroups(loaded) {
   const hooks = get(loaded, 'hooks');
   if (!isDict(hooks)) return [];
   const out = [];
@@ -1068,7 +1015,7 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
     [loaded] = readJsonc(readText(p));
   } catch (e) {
     if (!isOsError(e)) throw e;
-    problems.push(`${p}: could not read the file (${asOsError(e)})`);
+    problems.push(`${p}: could not read the file (${e.message})`);
     return flush();
   }
   if (!isDict(loaded)) {
@@ -1128,12 +1075,7 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
   return flush();
 }
 
-const BLOCK_BEGIN = '<!-- BEGIN {id} -->';
-const BLOCK_END = '<!-- END {id} -->';
-
-function delimiters(blockId) {
-  return [BLOCK_BEGIN.replace('{id}', blockId), BLOCK_END.replace('{id}', blockId)];
-}
+const delimiters = (blockId) => [`<!-- BEGIN ${blockId} -->`, `<!-- END ${blockId} -->`];
 
 /**
  * `_build_settings._managed_block_write` — 'created' | 'updated' | 'merged'.
@@ -1141,7 +1083,7 @@ function delimiters(blockId) {
  */
 export function managedBlockWrite(p, content, blockId = 'GENESEED') {
   const [begin, end] = delimiters(blockId);
-  const block = `${begin}\n${stripEnd(content)}\n${end}\n`;
+  const block = `${begin}\n${stripWhitespaceEnd(content)}\n${end}\n`;
   if (!existsSync(p)) {
     mkdirSync(path.dirname(p), { recursive: true });
     writeText(p, block);
@@ -1171,7 +1113,7 @@ export function managedBlockRemove(p, blockId = 'GENESEED', whole = false) {
   if (!existing.includes(begin) || !existing.includes(end)) return;
   const pre = existing.split(begin)[0];
   const post = existing.slice(existing.indexOf(end) + end.length);
-  const rest = stripEnds(`${stripTrailingNewlines(pre)}\n${lstripNewlines(post)}`);
+  const rest = stripWhitespace(`${stripTrailingNewlines(pre)}\n${lstripNewlines(post)}`);
   if (rest) writeText(p, `${rest}\n`);
   else unlinkSync(p);
 }
@@ -1184,25 +1126,6 @@ export function managedBlockRead(p, blockId = 'GENESEED') {
   if (!text.includes(begin) || !text.includes(end)) return null;
   const inner = text.slice(text.indexOf(begin) + begin.length);
   return stripNewlines(inner.slice(0, inner.indexOf(end)));
-}
-
-// `str.strip()` and friends. JS's `trim()` is NOT `strip()`, and the difference runs both
-// ways: `trim()` eats U+FEFF, which Python does not strip, and Python strips U+0085 and
-// U+001C–U+001F, which `trim()` leaves. A managed block is user-editable prose in a file
-// Geneseed shares with the user, so the set is spelled out rather than approximated — and
-// spelled with escapes, never literals: a raw U+2028 in a JS source file ends the line.
-const WHITESPACE = '[\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a'
-  + '\u2028\u2029\u202f\u205f\u3000]';
-
-const RSTRIP_RE = new RegExp(`${WHITESPACE}+$`);
-const LSTRIP_RE = new RegExp(`^${WHITESPACE}+`);
-
-function stripEnd(s) {
-  return s.replace(RSTRIP_RE, '');
-}
-
-function stripEnds(s) {
-  return s.replace(LSTRIP_RE, '').replace(RSTRIP_RE, '');
 }
 
 function lstripNewlines(s) {

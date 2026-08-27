@@ -54,8 +54,7 @@ export function emitClaudeRender(cfg, job) {
 
   // `os.path.relpath(cfg, claude_md.parent)` — note the reversed argument order, and
   // that Python answers '.' for an identical pair where `path.relative` answers ''.
-  const relCfg = path.relative(path.dirname(claudeMd), cfgDir).split(path.sep).join('/')
-    || '.';
+  const relCfg = relPosix(path.dirname(claudeMd), cfgDir) || '.';
   const lawsPrefix = relCfg === '.' ? '' : `${relCfg}/`;
   const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog });
   assertSourceComplete(cfg, `claude-${scope}`);
@@ -98,7 +97,7 @@ export function emitClaudeRender(cfg, job) {
     const rulesMd = path.join(cfgDir, 'rules', 'geneseed.md');
     mkdirSync(path.dirname(rulesMd), { recursive: true });
     writeText(rulesMd, scope === 'project' ? BOB_RULES_STUB
-      : stripCapabilityLinks(cfg, prefixedAgentText('../') || agentText));
+      : stripCapabilityLinks(prefixedAgentText('../') || agentText));
     owned.push('rules/geneseed.md');
   }
 
@@ -146,7 +145,7 @@ export function emitClaudeRender(cfg, job) {
   // consumes and no more.
   let claudeMdText = null;
   if (agentText !== null && !(isBob && scope === 'global')) {
-    claudeMdText = stripCapabilityLinks(cfg, prefixedAgentText(lawsPrefix) || agentText);
+    claudeMdText = stripCapabilityLinks(prefixedAgentText(lawsPrefix) || agentText);
   }
 
   // WIRE — see `claudeWire` below. One child per emit, so the two halves are two
@@ -212,7 +211,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     // above — unreachable here (CLAUDE.md is a file, cfgDir a directory, so the pair is
     // never identical) and spelled anyway, because the two call sites are 400 lines apart
     // and only one of them is obviously safe.
-    const rel = path.relative(cfgDir, claudeMd).split(path.sep).join('/') || '.';
+    const rel = relPosix(cfgDir, claudeMd) || '.';
     managed.claude_md = { rel };
   } else if (isBob && scope === 'global' && isTruthy(get(old, 'claude_md'))) {
     const oldCm = isDict(get(old, 'claude_md')) ? get(old, 'claude_md') : {};

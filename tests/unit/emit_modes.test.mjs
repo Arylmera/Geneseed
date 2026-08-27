@@ -154,17 +154,17 @@ test('the opencode project emit writes the native layer and the config', () => {
     // AGENT.md keeps its prose, and the per-row spec links are de-linked to names.
     //
     // ASKED OF THE PRODUCT'S OWN STRIPPER, not of a transcribed regex. `CAPABILITY_LINK_RE` is a
-    // module-private default that `cfg.capabilityLinkRe` overrides, so a copy of the pattern in
-    // this file would be a second place to be wrong — and would go stale the day the default
-    // moves, exactly as `test_the_prompt_is_word_for_word` warns. If the text carries no link,
-    // stripping it is a NO-OP.
-    const renderCfg = makeCfg();
+    // module-private constant with no override left to thread through (the `cfg` parameter that
+    // once carried one was deleted as dead code — nothing ever supplied `capabilityLinkRe`), so a
+    // copy of the pattern in this file would be a second place to be wrong — and would go stale
+    // the day the default moves, exactly as `test_the_prompt_is_word_for_word` warns. If the text
+    // carries no link, stripping it is a NO-OP.
     const agentMd = read(out, 'AGENT.md');
-    assert.equal(stripCapabilityLinks(renderCfg, agentMd), agentMd,
+    assert.equal(stripCapabilityLinks(agentMd), agentMd,
       'the native layer still carries per-row capability links');
     // THE POSITIVE CONTROL, without which the line above passes against a stripper that does
     // nothing at all.
-    assert.notEqual(stripCapabilityLinks(renderCfg, 'see [Reviewer](agents/reviewer.md) for this'),
+    assert.notEqual(stripCapabilityLinks('see [Reviewer](agents/reviewer.md) for this'),
       'see [Reviewer](agents/reviewer.md) for this',
       'the stripper is a no-op on a text that plainly carries a capability link');
   });

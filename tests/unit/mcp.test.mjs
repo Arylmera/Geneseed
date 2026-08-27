@@ -230,7 +230,9 @@ test('the entry dispatches `mcp` at this module', () => {
   // THE WIRING, and it is the failure this branch has already shipped once in another form: a
   // handler that is correct and simply not reachable is exactly as green as one that is wired.
   const src = fs.readFileSync(path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'utf8');
-  assert.match(src, /\n {2}mcp: \{\n {4}fn: cmdMcp,/,
+  // The row is `mcp: cmdMcp,` since Task 5 flattened the VERBS table (it was
+  // `mcp: { fn: cmdMcp, },` before).
+  assert.match(src, /\n {2}mcp: cmdMcp,/,
     "bin/geneseed-cli.mjs's VERBS table no longer routes `mcp` to cmdMcp");
   assert.match(src, /import \{ cmdMcp \} from '\.\.\/js\/hosts\/mcp\.mjs';/,
     'the entry does not import cmdMcp from this module');

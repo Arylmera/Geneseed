@@ -81,16 +81,6 @@ export function within(child, parent) {
 }
 
 /**
- * `str(PurePath(s))` — separators normalised to the platform's, `.` components dropped,
- * duplicate separators collapsed, a trailing one removed.
- *
- * `path.normalize` is NOT this: it also collapses `a/../b` to `b`, and `PurePath` keeps the
- * `..` because a symlinked `a` makes those two different directories. The distinction is
- * live in `js/inspect/excludes.mjs`, where a hand-edited `excludes.json` entry is compared against a
- * RESOLVED repo path — Python never matches a `..` entry there, and a normalising port would
- * match it and unwire a file the reference would have left alone.
- */
-/**
  * `str(Path(x))` — and it is PLATFORM-SHAPED, because `Path` is.
  *
  * `Path` is `WindowsPath` on Windows and `PosixPath` everywhere else, and the two parsers

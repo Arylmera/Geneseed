@@ -1,26 +1,23 @@
 /**
- * The web console's BACKGROUND JOBS — `rituals/_web_jobs.py`'s `JobManager`, its process-tree
- * kill and the `action_commands` table.
+ * The web console's BACKGROUND JOBS — `JobManager`, its process-tree kill and the
+ * `actionTable`.
  *
  * ---------------------------------------------------------------------------------------
- * WHY THIS SPAWNS, WHEN NOTHING ELSE IN THE PORT IS ALLOWED TO.
+ * WHY THIS SPAWNS, WHEN NOTHING ELSE IN THIS REPO IS ALLOWED TO.
  *
- * `bin/geneseed-cli.mjs` carries a transitive `child_process` ALLOW-LIST
- * (`tests/test_hook_cli_parity.py::_ALLOWED_SPAWNS`) whose criterion is not "this verb
- * spawns" — `build` spawns on the reference and is refused there — but "there is no
- * in-process equivalent, and the spawned thing is not this program". This module spawns THIS
- * PROGRAM, which reads like the passthrough the whole port exists to remove, so the argument
- * has to be made rather than assumed.
+ * `bin/geneseed-cli.mjs` carries a transitive `child_process` ALLOW-LIST (`ALLOWED_SPAWNS`
+ * in `tests/unit/hook_cli.test.mjs`) whose criterion is not "this verb spawns" but "there
+ * is no in-process equivalent, and the spawned thing is not this program". This module
+ * spawns THIS PROGRAM, which reads like the passthrough the ban exists to prevent, so the
+ * argument has to be made rather than assumed.
  *
- * ISOLATION IS THE DISCRIMINATOR, and it is a property of the RUNTIME, not of the verbs.
- * The reference's daemon is threaded: `start()` hands the work to a `threading.Thread` and
- * the HTTP server keeps answering from another. Node's server is single-threaded and every
- * ported `cmdX` is synchronous, so calling one in-process would block the event loop for the
- * whole run — and the console's only progress mechanism is `web/src/api/jobs.js` polling
- * `GET /api/jobs/<id>`. An in-process job therefore freezes the poll that exists to watch it,
- * which is worse than not showing progress: the UI cannot tell a running job from a hung
- * daemon. And a `process.exit` anywhere in a callee kills the DAEMON instead of the job —
- * `cmdRebuildAll` already had to grow a throwing `die` for exactly that reason (P5f).
+ * ISOLATION IS THE DISCRIMINATOR. Node's server is single-threaded and every ported `cmdX`
+ * is synchronous, so calling one in-process would block the event loop for the whole run —
+ * and the console's only progress mechanism is `web/src/api/jobs.js` polling
+ * `GET /api/jobs/<id>`. An in-process job therefore freezes the poll that exists to watch
+ * it, which is worse than not showing progress: the UI cannot tell a running job from a
+ * hung daemon. And a `process.exit` anywhere in a callee kills the DAEMON instead of the
+ * job — `cmdRebuildAll` already had to grow a throwing `die` for exactly that reason.
  *
  * `worker_threads` IS THE ALTERNATIVE AND IT IS WORSE. It restores concurrency, but a worker
  * re-imports the world per job (the generator, the renderer, every host module), needs a
@@ -29,30 +26,28 @@
  * takes the worker down mid-write, which is the same truncation with more machinery. Strictly
  * more work for strictly less isolation.
  *
- * THE EXIT CODE IS EASIER OUT OF PROCESS, not harder. `_run` reads `p.returncode` and stops
- * the chain on the first non-zero. In-process that would be a return value threaded through
- * every verb's error paths, several of which currently end at `process.exitCode`.
+ * THE EXIT CODE IS EASIER OUT OF PROCESS, not harder. `_run` awaits the child's exit code
+ * and stops the chain on the first non-zero. In-process that would be a return value
+ * threaded through every verb's error paths, several of which currently end at
+ * `process.exitCode`.
  *
- * SO THE ARGV IS `node bin/geneseed-cli.mjs <verb>` — or `node bin/build-driver.mjs <build args>`
- * for the three rows that run the GENERATOR, which is `build.py`'s twin and the same program
- * by a different entry. `process.execPath` is the running interpreter by absolute path, so
- * stripping `node` off PATH cannot change what starts. Nothing here can name `python`.
+ * SO THE ARGV IS `node bin/geneseed-cli.mjs <verb>` — or `node bin/build-driver.mjs <build
+ * args>` for the three rows that run the GENERATOR, the same program by a different entry.
+ * `process.execPath` is the running interpreter by absolute path, so stripping `node` off
+ * PATH cannot change what starts. Nothing here can name `python`.
  *
  * THE SECOND SPAWN IS `taskkill`, and it is a different argument. `cancel()` must kill the
- * job's whole process TREE — the reference's comment says why: killing only the direct child
- * leaves ITS children holding the stdout pipe, the read loop stays blocked and the job wedges
- * on `running` forever. POSIX gets that in-process (`detached: true` makes a process group and
- * `process.kill(-pid)` signals it). Windows has no process-group kill in Node's standard
- * library at all, and `taskkill /T` is what the reference reaches for too. It is a machine
- * primitive, not this program.
+ * job's whole process TREE: killing only the direct child leaves ITS children holding the
+ * stdout pipe, the read loop stays blocked and the job wedges on `running` forever. POSIX
+ * gets that in-process (`detached: true` makes a process group and `process.kill(-pid)`
+ * signals it). Windows has no process-group kill in Node's standard library at all, so
+ * `taskkill /T` is a machine primitive here, not this program.
  *
  * ---------------------------------------------------------------------------------------
  * THE PARTITION — all eight action rows cross, and the declaration outlives them.
  *
  * `doctor`, `build`, `build-all`, `export`, `uninstall`, `update`, `link` and `unlink` each
- * name a verb `bin/geneseed-cli.mjs` runs. `link`/`unlink` were the last two: they ran
- * `harness.py link|unlink` until P10b, and a runner that spawned the Python harness would
- * have put Python back into a "no Python needed" install.
+ * name a verb `bin/geneseed-cli.mjs` runs.
  *
  * `NOT_PORTED_ACTIONS` IS EMPTY AND STILL DECLARED, which is the point of it: a ninth action
  * added later cannot quietly answer "unknown action", because `tests/unit/web_jobs.test.mjs`
@@ -61,22 +56,16 @@
  * ---------------------------------------------------------------------------------------
  * THREE DETAILS OF `_run`, EACH A COMMENT EXPLAINING A BUG IT ALREADY FIXED.
  *
- * `GENESEED_WEB_JOB=1` tells `upgrade` it is running INSIDE this daemon so it must not bounce
- * the daemon mid-job — which killed the job's own tracking and left the console on `running`
- * forever. It was set here before any ported row read it, because it was P6g's CONTRACT WITH
- * P8, and a contract written after the fact is a contract that was broken once first. P8a is
- * where `js/maintain/update.mjs` began honouring it, and P8c is where the `update` row that triggers
- * it crossed — so it is a live pair now rather than a promise.
+ * `GENESEED_WEB_JOB=1` tells `upgrade` it is running INSIDE this daemon so it must not
+ * bounce the daemon mid-job — which would kill the job's own tracking and leave the
+ * console on `running` forever. Set here and read by `js/maintain/update.mjs`.
  *
- * `PYTHONUNBUFFERED=1` reaches the Python child AND its own Python children, or their stdout
- * is block-buffered into the pipe and the console looks stuck. THE EQUIVALENT THOUGHT FOR
- * NODE, which is the port and not the copy: there is no unbuffering flag to set, because
- * Node's `process.stdout` on a pipe is not block-buffered by libc — every `write` is queued on
- * the stream and flushed by the event loop. The analogous hazard is a child calling
- * `process.exit()` with writes still queued, which truncates them; both `bin/` entries set
- * `process.exitCode` and return instead, which is what makes the flag unnecessary rather than
- * merely inapplicable. So the variable is NOT set: it would be cargo, and the honest
- * statement is this paragraph.
+ * NO UNBUFFERING FLAG IS SET, and that absence is deliberate rather than an oversight:
+ * Node's `process.stdout` on a pipe is not block-buffered by libc — every `write` is
+ * queued on the stream and flushed by the event loop. The real hazard here is a child
+ * calling `process.exit()` with writes still queued, which truncates them; both `bin/`
+ * entries set `process.exitCode` and return instead, which is what makes an unbuffering
+ * flag unnecessary rather than merely inapplicable.
  *
  * `MEM_CAP` truncates a runaway job's output FROM THE FRONT, so a job that prints forever
  * cannot eat the daemon's memory. `OUTPUT_CAP` is the smaller cap the history FILE keeps.
@@ -84,44 +73,34 @@
  * ---------------------------------------------------------------------------------------
  * TWO DIVERGENCES, DECLARED.
  *
- * 1. THE TWO STREAMS ARE TWO PIPES. `stderr=subprocess.STDOUT` merges them in the OPERATING
- *    SYSTEM, so the reference's interleaving is exact. Node's `stdio` cannot name an
- *    already-created pipe, so `stdout` and `stderr` are read separately and appended in
- *    arrival order — identical for a line-buffered child writing to one stream (which is
- *    every ported row: `rebuild-all` writes stdout only, `diff` writes stderr only), and
- *    potentially reordered for a child interleaving both within one tick. No cell can see it,
- *    and it is named here rather than left to be discovered.
- * 2. `_append`'s cap slices UTF-16 code UNITS where Python slices code POINTS. It differs only
- *    past two million characters and only by a lone surrogate at the truncation front. The
- *    history file's cap does the exact thing (`Array.from`), because it runs once per job
- *    rather than once per line — doing it here would make a runaway job quadratic, which is
- *    the failure the cap exists to prevent.
- *
- * NOT PORTED: `JobManager.wait`. It has no caller in `rituals/` — `tests/test_web.py` is its
- * only consumer, twenty times over. Its Node twin is owed the day a Node-side corpus drives
- * the manager directly, which is P9's; until then it would be a function with no caller and no
- * cell, which is the shape this port keeps being bitten by.
+ * 1. THE TWO STREAMS ARE TWO PIPES, read and appended separately in arrival order — exact
+ *    for a line-buffered child writing to only one stream (which is every row today:
+ *    `rebuild-all` writes stdout only, `diff` writes stderr only), and potentially
+ *    reordered for a child interleaving both within one tick. Named here rather than left
+ *    to be discovered, should a future row ever write to both.
+ * 2. `_append`'s cap slices UTF-16 code UNITS rather than code POINTS, unlike `tailChars`
+ *    (used by the history file's cap via `Array.from`), which differs only past two
+ *    million characters and only by a lone surrogate at the truncation front. The history
+ *    cap can afford code-point precision because it runs once per job; doing that here,
+ *    once per streamed chunk, would make a runaway job quadratic — the exact failure the
+ *    cap exists to prevent.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { statSync } from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 import path from 'node:path';
 
 import { ROOT, PACK_ORDER } from '../build/source.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
 import { isDict } from '../hosts/mcp.mjs';
-import { readText, writeText } from '../lib/fs.mjs';
+import { readText, writeText, isFile } from '../lib/fs.mjs';
 import { jsonDumpsCompact, parseJson, isTruthy } from '../lib/json.mjs';
 
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
-
 /**
- * `_kill_job_tree` — terminate a job's WHOLE process tree.
+ * Terminate a job's WHOLE process tree.
  *
- * NEVER THROWS, as the reference's two nested `except`s do not: it runs from `cancel()` and
- * from the crash path in `_run`'s `catch`, and an exception in either would leave the child
- * alive with the manager believing it dead.
+ * NEVER THROWS: it runs from `cancel()` and from the crash path in `_run`'s `catch`, and an
+ * exception in either would leave the child alive with the manager believing it dead.
  */
 export function killJobTree(child) {
   try {
@@ -131,30 +110,25 @@ export function killJobTree(child) {
         timeout: 15000, windowsHide: true, stdio: 'ignore',
       });
     } else {
-      // `os.killpg(p.pid, SIGTERM)`. The group exists because `_run` spawns with
-      // `detached: true`, which is `start_new_session=True`.
+      // The process GROUP exists because `_run` spawns with `detached: true`.
       process.kill(-child.pid, 'SIGTERM');
     }
   } catch {
     try {
       child.kill();
-    } catch { /* `except OSError: pass` */ }
+    } catch { /* last resort already failed; nothing more to try */ }
   }
 }
 
 /**
- * `Popen(..., text=True, encoding="utf-8", errors="replace")` — the decode Python's text mode
- * performs and Node's pipes do not.
+ * Decodes a child's raw stdout/stderr bytes the way a text-mode read would: UTF-8, and
+ * newlines folded regardless of the platform.
  *
- * TWO THINGS, and the second is the one a port drops. `StringDecoder` holds a partial UTF-8
- * sequence across a chunk boundary (a naive `buf.toString()` per chunk turns one multi-byte
- * character split across two reads into two replacement characters — the exact defect P5i
- * found when a helper reached its second owner). And Python decodes in UNIVERSAL NEWLINES
- * mode, so `\r\n` and a lone `\r` are both `\n` before the caller ever sees them — while Node
- * hands back the bytes. The reference's children are Python processes writing CRLF on Windows;
- * the twin's are Node processes doing the same. Without the fold the job output would carry
- * CRLF on one side and LF on the other, which is P5b's eighth coverage hole with the
- * normalising transport removed.
+ * TWO THINGS. `StringDecoder` holds a partial UTF-8 sequence across a chunk boundary — a
+ * naive `buf.toString()` per chunk would turn one multi-byte character split across two
+ * reads into two replacement characters. And CRLF / a lone CR are both folded to LF before
+ * the caller ever sees them: spawned children write CRLF on Windows, and without the fold
+ * the job output would carry CRLF on one platform and LF on the other.
  *
  * The pending `\r` is held rather than translated on the spot: a `\r\n` split across two
  * chunks would otherwise become two newlines.
@@ -186,25 +160,26 @@ function textDecoder(sink) {
   };
 }
 
-/** `s[-n:]` by CODE POINT, which is what Python slices. */
+/** Last `n` CODE POINTS (not UTF-16 units) of a string. */
 const tailChars = (s, n) => (s.length <= n ? s : Array.from(s).slice(-n).join(''));
 
-/** The signals `killJobTree` sends, for the `-SIGNUM` return code Python reports. */
+/** The signals `killJobTree` sends, mapped for the `-SIGNUM` return code convention. */
 const SIGNUM = { SIGTERM: 15, SIGKILL: 9, SIGINT: 2, SIGHUP: 1 };
 
 /**
- * `_web_jobs.JobManager` — one mutating action at a time, in the background, output captured.
+ * One mutating action at a time, in the background, output captured.
  *
- * A CLASS rather than P6b's factory-of-a-plain-object, because this one has real state and
- * eleven methods over it; `webState` is a factory because its only behaviour is two cached
- * getters.
+ * A CLASS rather than a factory-of-a-plain-object like `webState`, because this one has
+ * real state and eleven methods over it; `webState` is a factory because its only
+ * behaviour is two cached getters.
  *
- * THE LOCK IS GONE AND ITS ABSENCE IS THE PORT. `self._lock` guards `_jobs`, `_busy` and
- * `_procs` against the run thread and the request threads. Node has one thread and no
- * pre-emption inside a synchronous block, so every critical section here is already atomic —
- * a mutex would be a no-op object whose presence claimed a hazard that cannot occur. What the
- * lock's placement DOES carry over is which sequences must not be interrupted, and none of
- * them awaits.
+ * NO LOCK GUARDS `_jobs`, `_busy` and `_procs`, and that absence is deliberate: Node has
+ * one thread and no pre-emption inside a synchronous block, so every critical section here
+ * is already atomic — a mutex would be a no-op object claiming a hazard that cannot occur.
+ * What matters instead is which sequences must not be interrupted, and none of them await.
+ *
+ * DELIBERATELY NO `wait()`: nothing here calls it, and an untested, caller-less method is
+ * exactly the shape this repo keeps getting bitten by.
  */
 export class JobManager {
   static HISTORY_MAX = 20;
@@ -242,14 +217,14 @@ export class JobManager {
     if (!this._historyPath) return;
     const jobs = [...this._jobs.values()].filter((j) => j.status !== 'running')
       .map((j) => ({ ...j }));
-    // `sort(key=...)` is STABLE in both languages, which matters: two jobs started inside the
-    // same clock tick keep insertion order rather than swapping between the two runtimes.
+    // STABLE sort matters: two jobs started inside the same clock tick keep insertion
+    // order rather than swapping unpredictably.
     jobs.sort((a, b) => (Number(a.started ?? 0) || 0) - (Number(b.started ?? 0) || 0));
     const kept = jobs.slice(-JobManager.HISTORY_MAX)
       .map((j) => ({ ...j, output: tailChars(String(j.output), JobManager.OUTPUT_CAP) }));
     try {
       writeText(this._historyPath, jsonDumpsCompact(kept, { bareInts: true }));
-    } catch { /* `except OSError: pass` — a console that cannot persist still runs */ }
+    } catch { /* a console that cannot persist its history still runs */ }
   }
 
   /** Last `n` jobs, oldest first — the order the console appends in. */
@@ -260,9 +235,8 @@ export class JobManager {
   }
 
   /**
-   * `start(action, *cmds, on_done=None)` — `cmds` is a LIST OF ARGVS, run in order, stopping
-   * at the first failure. `null` when a job is already running, which the HTTP layer maps
-   * to 409.
+   * `cmds` is a LIST OF ARGVS, run in order, stopping at the first failure. `null` when a
+   * job is already running, which the HTTP layer maps to 409.
    */
   start(action, cmds, onDone = null) {
     if (this._busy) return null;
@@ -277,8 +251,8 @@ export class JobManager {
       started: Date.now() / 1000,
       duration: null,
     });
-    // The reference's `threading.Thread(...).start()`: hand the work to the scheduler and
-    // return the id NOW, so the 202 goes out before the child has produced a byte.
+    // Hand the work to the scheduler and return the id NOW, so the 202 goes out before the
+    // child has produced a byte.
     void this._run(jid, cmds, onDone);
     return jid;
   }
@@ -303,9 +277,9 @@ export class JobManager {
         p = spawn(cmd[0], cmd.slice(1), {
           cwd: ROOT,
           stdio: ['ignore', 'pipe', 'pipe'],
-          // `harness.NO_WINDOW`: no console window for a child of a windowless daemon.
+          // No console window for a child of a windowless daemon.
           windowsHide: true,
-          // `start_new_session=True` on POSIX — the process GROUP `killJobTree` signals.
+          // POSIX only: the process GROUP `killJobTree` signals.
           detached: process.platform !== 'win32',
           env: { ...process.env, GENESEED_WEB_JOB: '1' },
         });
@@ -323,16 +297,15 @@ export class JobManager {
       this._append(jid, `\n[web] job crashed: ${e && e.message ? e.message : e}`);
       rc = 1;
       // Don't orphan the child on a crash of OUR side: kill its tree, or it lingers.
-      // `p.pid` is undefined when the spawn itself failed, which is the `p is not None`
-      // arm the reference cannot reach at all (its `Popen` raises before the assignment).
+      // `p.pid` is undefined when the spawn itself failed, which this check guards against.
       if (p !== null && p.pid && p.exitCode === null && p.signalCode === null) killJobTree(p);
     } finally {
       this._procs.delete(jid);
       const j = this._jobs.get(jid);
       j.status = rc === 0 ? 'done' : 'failed';
       j.returncode = rc;
-      // `round(x, 1)`. ponytail: JS rounds a .x5 tie away from zero where Python rounds to
-      // even — unreachable for a wall-clock delta, and the field is a display value.
+      // ponytail: `Math.round` breaks a .x5 tie away from zero rather than to even —
+      // unreachable for a wall-clock delta, and the field is a display value only.
       j.duration = Math.round((Date.now() / 1000 - Number(j.started)) * 10) / 10;
       this._busy = false;
       this._saveHistory();
@@ -345,12 +318,11 @@ export class JobManager {
   }
 
   /**
-   * `for line in p.stdout: ...` then `p.wait()` — read to EOF, then the exit code.
+   * Read to EOF, then the exit code.
    *
-   * BOTH `close` AND the two stream ENDS are awaited, not just `exit`: `exit` fires when the
-   * process dies and `close` when its stdio have also closed, and resolving on the former
-   * would let a job report `done` with its last lines still in the pipe. That is the same
-   * ordering the reference gets for free by draining `p.stdout` to EOF before `p.wait()`.
+   * Resolves on `close`, not `exit`: `exit` fires when the process dies and `close` only
+   * once its stdio have also closed, and resolving on the former would let a job report
+   * `done` with its last lines still sitting in the pipe.
    */
   _pump(jid, p) {
     return new Promise((resolve, reject) => {
@@ -363,10 +335,9 @@ export class JobManager {
       p.on('close', (code, signal) => {
         out.end();
         err.end();
-        // `p.returncode` for a signalled child is `-SIGNUM`, and Node splits the exit code
-        // and the signal into two arguments with the code `null` when a signal won. Only
-        // `cancel()` produces one, and only on POSIX — which no cell can reach, so the map
-        // covers what this program SENDS rather than every signal that exists.
+        // Node splits the exit code and the signal into two arguments, with the code
+        // `null` when a signal won. Only `cancel()` produces one, and only on POSIX, so the
+        // map above covers what this program SENDS rather than every signal that exists.
         resolve(code === null ? -(SIGNUM[signal] ?? 1) : code);
       });
     });
@@ -392,57 +363,46 @@ export class JobManager {
 }
 
 /**
- * `_web_jobs.action_commands` — action name -> a list of argvs, each a separate step, stopping
- * at the first failure.
+ * Action name -> a list of argvs, each a separate step, stopping at the first failure.
  *
- * THE TABLE IS THE DISPATCH, so `PORTED_ACTIONS` is its own keys rather than a list beside it
- * (the rule `POST_ROUTES` established one file over, for the reason M23 gave).
+ * THE TABLE IS THE DISPATCH, so `PORTED_ACTIONS` is its own keys rather than a list beside
+ * it — the same rule `POST_ROUTES` establishes one file over.
  *
  * `build` renders the DEPLOYED install in its detected theme + emit + footprint + posture +
- * mode, so a rebuild from an imperial, lean, mentor, foreman opencode-global install stays all
- * five. `update` and `export` self-resolve the deployed theme downstream and take no args.
+ * mode, so a rebuild from an imperial, lean, mentor, foreman opencode-global install stays
+ * all five. `update` and `export` self-resolve the deployed theme downstream and take no
+ * args.
  *
- * THE ARGV HEAD IS THE PORT. The reference names `sys.executable` and `rituals/harness.py` (or
- * `build.py`); this names `process.execPath` and `bin/geneseed-cli.mjs` (or `bin/build-driver.mjs`,
- * which is `build.py`'s twin). The two can never be byte-equal, `tests/web_golden.py`
- * normalises the `$ <argv>` echo line for that reason, and `tests/test_web_jobs.py` asserts
- * each side's head ABSOLUTELY while comparing the tails literally — which is where a real port
- * bug would live.
+ * THE ARGV HEAD IS `process.execPath` + `bin/geneseed-cli.mjs` (or `bin/build-driver.mjs`
+ * for the rows that run the generator) — the running interpreter by absolute path and this
+ * repo's own CLI, never a name any other runtime could shadow.
  */
 const NODE = () => process.execPath;
 const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');
 const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');
 
 /**
- * The rows whose VERB has not crossed. **EMPTY SINCE P10b, AND STILL DECLARED.**
+ * The rows whose VERB has not crossed. EMPTY, AND STILL DECLARED.
  *
- * P6g opened it with three rows and wrote the rule that closes it: each removed by the phase
- * that ports its verb. `update` left in P8c; `link` and `unlink` left in P10b, which is the
- * phase that also had to decide whether those two verbs should exist under npm at all
- * (`js/hosts/link.mjs`'s docblock carries the argument, and the deciding vote was these two rows —
- * the console's Settings buttons POST here, and only a ported verb can answer them).
+ * WHY AN EMPTY SET RATHER THAN A DELETED ONE. This set is cross-checked against
+ * `actionCommands`' own keys, and an empty set is the strongest form that check ever takes:
+ * it asserts that EVERY action this daemon knows how to dispatch on is answered by the
+ * runner. Deleting the declaration would delete that assertion, and the next unported
+ * action would come back as a silent 404 — the thing the 501 exists to prevent.
  *
- * WHY AN EMPTY SET RATHER THAN A DELETED ONE. The `ast` cross-check in
- * `tests/test_web_jobs.py` reads this set against `action_commands`' own keys, and an empty
- * set is the strongest form that check ever takes: it asserts that EVERY action the reference
- * dispatches on is answered by the Node runner. Deleting the declaration would delete that
- * assertion, and the next unported action would come back as a silent 404 — the thing the
- * 501 exists to prevent.
- *
- * A 501 AND NOT THE 404 THE TABLE WOULD PRODUCE. `action_commands` returns `None` for an
- * unknown action and the reference maps that to `{"error": "unknown action <x>"}` at 404 — so
- * a real-but-unported action falling through would answer the same thing a typo gets. With
- * this set empty the 501 branch is now UNREACHABLE by construction, which is exactly what the
- * dispatcher probe in `tests/test_web_server.py` asserts: every real action answers 202 and
- * only an invented one answers 404.
+ * A 501 AND NOT THE 404 THE TABLE WOULD PRODUCE. `actionCommands` returns `null` for an
+ * unknown action, mapped to `{"error": "unknown action <x>"}` at 404 — so a
+ * real-but-unported action falling through would answer the same thing a typo gets. With
+ * this set empty the 501 branch is UNREACHABLE by construction: every real action answers
+ * 202 and only an invented one answers 404.
  */
 export const NOT_PORTED_ACTIONS = new Set();
 
 /**
- * The three actions `_post_routes` answers INLINE, without consulting the table: `restore` is
- * synchronous and returns a result rather than a job id, and `install`/`deploy` resolve their
- * argv from the request body first. Declared so the `ast` cross-check covers every `action ==`
- * the reference dispatches on, not only the table's keys.
+ * The three actions the dispatcher answers INLINE, without consulting the table above:
+ * `restore` is synchronous and returns a result rather than a job id, and `install`/`deploy`
+ * resolve their argv from the request body first. Declared so the partition covers every
+ * action the dispatcher answers, not only the table's keys.
  */
 export const INLINE_ACTIONS = ['restore', 'install', 'deploy'];
 
@@ -472,10 +432,9 @@ function actionTable({
     // Rebuild EVERY active install in place (each in its own theme+emit). The per-install
     // resolution lives in the rebuild-all subcommand, so the web layer threads no theme/emit.
     'build-all': [[NODE(), CLI(), 'rebuild-all']],
-    // P8c. The row names `upgrade`, which is the VERB; `update` is the action name here and
-    // argparse's alias there, and the reference's own row is `[py, harness.py, "upgrade"]` for
-    // the same reason. The daemon bounce this job must not do itself is `GENESEED_WEB_JOB`'s
-    // job, set by `_run` above and read by `js/maintain/update.mjs` — P6g's contract with P8, honoured.
+    // `update` is the action name here; `upgrade` is the VERB it runs. The daemon bounce
+    // this job must not do itself is `GENESEED_WEB_JOB`'s job, set by `_run` above and read
+    // by `js/maintain/update.mjs`.
     update: [[NODE(), CLI(), 'upgrade']],
     export: [[NODE(), CLI(), 'diff', '--out']],
     // Local-machine maintenance, surfaced in the web Settings. uninstall keeps memory (never
@@ -488,10 +447,10 @@ function actionTable({
 
 export function actionCommands(action, opts = {}) {
   const table = actionTable(opts);
-  // `dict.get(action)` — `None` for anything the table does not name, which the HTTP layer
-  // maps to `{"error": "unknown action <x>"}` at 404.
+  // `null` for anything the table does not name, which the HTTP layer maps to
+  // `{"error": "unknown action <x>"}` at 404.
   return Object.hasOwn(table, action) ? table[action] : null;
 }
 
-/** `action_commands`' own keys — the table IS the declaration, so this cannot drift from it. */
+/** `actionTable`'s own keys — the table IS the declaration, so this cannot drift from it. */
 export const PORTED_ACTIONS = Object.keys(actionTable());

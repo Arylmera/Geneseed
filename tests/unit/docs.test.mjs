@@ -48,12 +48,19 @@ function asInt(token) {
     ? WORDS[token.toLowerCase()] : null;
 }
 
-/** The verb table of a `bin/*.mjs` entry, SCRAPED — the table is the dispatch. */
+/**
+ * The verb table of a `bin/*.mjs` entry, SCRAPED — the table is the dispatch.
+ *
+ * `:\s*\S` rather than `:\s*\{`: `bin/geneseed-hook.mjs`'s rows are still `name: { fn: … }`
+ * objects, but Task 5 flattened `bin/geneseed-cli.mjs`'s to `name: cmdX` directly, so the
+ * value is no longer always a brace. Any non-whitespace after the colon still means a real
+ * row rather than a bare `name:` with nothing after it on the line.
+ */
 function verbsOf(rel) {
   const src = read(...rel.split('/'));
   const m = /const VERBS = \{([\s\S]*?)\n\};/.exec(src);
   if (!m) return new Set();
-  return new Set([...m[1].matchAll(/^ {2}'?([a-z][a-z-]*)'?:\s*\{/gm)].map((x) => x[1]));
+  return new Set([...m[1].matchAll(/^ {2}'?([a-z][a-z-]*)'?:\s*\S/gm)].map((x) => x[1]));
 }
 
 /** Commands in the CLI table that neither Node entry point answers. */

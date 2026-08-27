@@ -242,7 +242,7 @@ const ANSI_CODES = {
  * short-circuits on the first, NO_COLOR and TERM are never read through a pipe, which is
  * why `golden.cell_env` clearing them is insurance rather than a fix.
  */
-export function colorEnabled() {
+function colorEnabled() {
   return Boolean(process.stdout.isTTY) && process.env.NO_COLOR === undefined
     && process.env.TERM !== 'dumb';
 }

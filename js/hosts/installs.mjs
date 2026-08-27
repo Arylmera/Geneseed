@@ -32,18 +32,15 @@
  * web cells recorded it. Both candidates are gone (the argument is in the Python), and the
  * claim is now true rather than aspirational.
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, PACK_ORDER, THEMES, discoverNames } from '../build/source.mjs';
 import { GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
-import { printErr, readText } from '../lib/fs.mjs';
+import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
-
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
 /**
  * `Path.read_text(encoding="utf-8")`, or null where Python raises OSError.
@@ -150,6 +147,22 @@ function themeFromAgent(agentMd) {
 const CARRIERS = ['AGENT.md', 'CLAUDE.md', path.join('rules', 'geneseed.md'),
   'copilot-instructions.md', 'AGENTS.md'];
 
+/**
+ * The scan `themeOfDir`, `leadOfDir`, `doctrinesOfDir` and `excludedRulesOfDir` each wrote
+ * out: try each carrier in order, first answer wins. `probe(carrierPath)` returns
+ * `undefined` to mean "keep looking" and anything else — including `null` or `[]`, both
+ * legitimate stop values for the two register readers below — to mean "stop, this is the
+ * answer". `fallback` is what every caller's own trailing `return …;` supplied once the
+ * whole list was exhausted with no answer.
+ */
+function firstCarrier(d, probe, fallback = null) {
+  for (const carrier of CARRIERS) {
+    const result = probe(path.join(d, carrier));
+    if (result !== undefined) return result;
+  }
+  return fallback;
+}
+
 /** `_harness_setup._theme_of_dir` — the marker, else the sigil in one of five carriers. */
 export function themeOfDir(d) {
   const marker = path.join(d, '.geneseed-theme');
@@ -157,11 +170,7 @@ export function themeOfDir(d) {
     const name = (readMaybe(marker) ?? '').trim();
     if (name) return name;
   }
-  for (const carrier of CARRIERS) {
-    const found = themeFromAgent(path.join(d, carrier));
-    if (found) return found;
-  }
-  return null;
+  return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined);
 }
 
 /** `_harness_setup.FOOTPRINTS`. */
@@ -209,14 +218,14 @@ export function capitalize(s) {
 }
 
 function leadOfDir(d, names) {
-  for (const carrier of CARRIERS) {
-    const text = readMaybe(path.join(d, carrier));
-    if (text === null) continue;
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
     for (const name of names) {
       if (text.includes(`**${capitalize(name)}**`)) return name;
     }
-  }
-  return null;
+    return undefined;
+  });
 }
 
 export const postureOfDir = (d) => leadOfDir(d, discoverNames('postures', 'peer'));
@@ -257,17 +266,16 @@ const ACTIVE_PACKS_RE = /^Active packs:[ \t]*(.+?)[ \t]*$/m;
  * exactly the empty field a fold leaves behind, which is what makes this catch it.
  */
 export function doctrinesOfDir(d) {
-  for (const carrier of CARRIERS) {
-    const text = readMaybe(path.join(d, carrier));
-    if (text === null) continue;
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
     const m = ACTIVE_PACKS_RE.exec(text);
-    if (!m) continue;
+    if (!m) return undefined;
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
     if (!named.every((n) => PACK_ORDER.includes(n))) return null;
-    return PACK_ORDER.filter((p) => named.includes(p));
-  }
-  return null;
+    return PACK_ORDER.filter((pk) => named.includes(pk));
+  });
 }
 
 /**
@@ -314,11 +322,11 @@ const EXCLUDED_RULES_RE = /^Excluded rules:[ \t]*(.+?)[ \t]*$/m;
  * take away rules nobody named.
  */
 export function excludedRulesOfDir(d) {
-  for (const carrier of CARRIERS) {
-    const text = readMaybe(path.join(d, carrier));
-    if (text === null) continue;
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
     const m = EXCLUDED_RULES_RE.exec(text);
-    if (!m) continue;
+    if (!m) return undefined;
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
     // `<pack> <n>` on the page, `<pack>.<n>` in the code — the same asymmetry the rendered
@@ -329,8 +337,7 @@ export function excludedRulesOfDir(d) {
         ? `${parts[0]}.${Number(parts[1])}` : null;
     });
     return ids.every(Boolean) ? [...new Set(ids)].sort() : [];
-  }
-  return [];
+  }, []);
 }
 
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------

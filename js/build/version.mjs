@@ -145,9 +145,7 @@ export function writeVersion(cfg, out) {
   // Mutating it away stays green here for a reason no cell can remove — freezing the
   // clock across a process boundary is not something the harness can do — which is
   // exactly why the choice is spelled out instead of relying on the comparison.
-  const d = new Date();
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-`
-    + `${String(d.getDate()).padStart(2, '0')}`;
+  const today = new Date().toLocaleDateString('sv-SE');
   writeText(path.join(out, VERSION_MARKER),
     `${fp} (built ${today}) [release ${release}]\n`);
   return fp;

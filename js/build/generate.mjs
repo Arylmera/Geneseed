@@ -42,7 +42,7 @@ import {
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
-import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
+import { printOut, printErr, readText, writeText, isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson, formatRepr } from '../lib/json.mjs';
 
 /** `_harness_build._HEX_RE`. Anchored at BOTH ends — `#123` and `#1122334` both fail. */
@@ -67,8 +67,6 @@ function sysExit(msg) {
   e.exitCode = 1;
   throw e;
 }
-
-const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 
 // --------------------------------------------------------------------------------------
 // build
@@ -322,7 +320,7 @@ export function cmdPrompt(args) {
 // --------------------------------------------------------------------------------------
 
 /** `_harness_build._resolve_themes_dir` — explicit `--dir`, else a repo `.opencode/`, else global. */
-export function resolveThemesDir(args) {
+function resolveThemesDir(args) {
   // `Path(args.dir).expanduser().resolve()` — `resolvePath` already expands a leading `~`.
   if (args.dir) return resolvePath(args.dir);
   const repo = path.join(process.cwd(), '.opencode');
@@ -352,7 +350,7 @@ export function resolveThemesDir(args) {
  * escaping rule) traded for the ORDER OF TWO NAMES in an error message that both
  * implementations still emit, for the same values, with the same exit code.
  */
-export function loadUserPalette(args, cfg) {
+function loadUserPalette(args, cfg) {
   const pal = new Map();
   if (args.fromTheme) {
     const src = path.join(cfg.colorThemes, `${args.fromTheme}.json`);
@@ -369,7 +367,7 @@ export function loadUserPalette(args, cfg) {
     // `Path(args.palette)` — relative to cwd, with no expanduser and no resolve.
     const raw = parseJson(readText(args.palette));
     // `raw.get("palette", raw)` — a document with no "palette" key IS the role map.
-    const map = Object.prototype.hasOwnProperty.call(raw, 'palette') ? raw.palette : raw;
+    const map = Object.hasOwn(raw, 'palette') ? raw.palette : raw;
     for (const [k, v] of Object.entries(map)) pal.set(k, v);
   }
   if (pal.size === 0) {

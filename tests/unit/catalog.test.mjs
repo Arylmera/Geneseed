@@ -136,7 +136,9 @@ test('the section names are the endpoint\'s, and the entry dispatches at this mo
   assert.deepEqual(cmd.positionals[0].choices, Object.keys(CATALOG_KINDS),
     'the table offers different sections than the renderer knows how to filter');
   const src = readFileSync(path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'utf8');
-  assert.match(src, /\n {2}catalog: \{\n {4}fn: cmdCatalog,/,
+  // The row is `catalog: cmdCatalog,` since Task 5 flattened the VERBS table (it was
+  // `catalog: { fn: cmdCatalog, },` before).
+  assert.match(src, /\n {2}catalog: cmdCatalog,/,
     "bin/geneseed-cli.mjs's VERBS table no longer routes `catalog` to cmdCatalog");
 });
 

@@ -22,6 +22,13 @@ export function baseName(p) {
 }
 
 // 48213 → "48.2k", 250000 → "250k", 1.2e6 → "1.2M".
+//
+// Hand-rolled rather than Intl.NumberFormat({notation:'compact'}): Intl drops the forced
+// decimal on round values (5000 → "5K" not "5.0k") and compacts negatives (-5000 → "-5K"
+// instead of falling into the n<1000 branch as "-5000"). Worse, at the k/M boundary Intl
+// picks its unit from the rounded value, not the raw one, so 999950 comes out "1M" where
+// this always said "1000k" — a real behaviour change Intl's options can't undo. See
+// docs/specs/2026-08-26-ponytail-refactor-tranches.md Self-improvement table.
 export const compact = (n) =>
   !n
     ? '0'

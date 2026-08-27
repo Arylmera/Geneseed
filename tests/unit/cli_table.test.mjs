@@ -37,8 +37,10 @@ function entryVerbs() {
   const at = src.indexOf('const VERBS = {');
   assert.notEqual(at, -1, `${ENTRY} has no VERBS table — the scrape has gone stale`);
   const body = src.slice(at, at + src.slice(at).indexOf('\n};'));
-  // ⚠ TWO-SPACE INDENT EXACTLY. The rows are `name: { fn: cmdX }`, so a `\s*` prefix also
-  // matches the nested `fn:` — the first draft reported `fn` as an undescribed verb.
+  // ⚠ TWO-SPACE INDENT EXACTLY. Rows are `name: cmdX` since Task 5 flattened the table (they
+  // were `name: { fn: cmdX }` before, at which point this same anchor was what kept a `\s*`
+  // prefix from also matching the nested `fn:` line — the first draft reported `fn` as an
+  // undescribed verb). The anchor still matters for any row a future edit re-nests.
   const names = [...body.matchAll(/^ {2}'?([a-z][a-z-]*)'?:/gm)].map((m) => m[1]);
   assert.ok(names.length > 15, `the VERBS scrape found only ${names.length} rows`);
   return [...new Set(names)];

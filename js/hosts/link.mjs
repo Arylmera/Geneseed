@@ -86,7 +86,7 @@ import { toPlatformPath } from '../lib/paths.mjs';
 const IS_WIN = process.platform === 'win32';
 
 /** `_harness_lifecycle._win_bin_dir`. */
-export function winBinDir() {
+function winBinDir() {
   // `os.environ.get(...) or str(Path.home())` — an EMPTY LOCALAPPDATA falls back too,
   // which `??` would not do.
   const base = process.env.LOCALAPPDATA || os.homedir();
