@@ -386,10 +386,19 @@ export function makeHandler(state, jm, token, dist, holder = null) {
  * `Handler._harness` — the `?harness=` query param, `null` when absent.
  *
  * `urllib.parse.parse_qs` with its defaults, reproduced only as far as this one caller
- * needs and no further: pairs split on `&` then `=`, values unquoted with `+` meaning a
- * space, and a BLANK value dropped (`keep_blank_values=False`), so `?harness=` resolves to
- * the installed default rather than to the empty string. The first occurrence wins,
- * because `parse_qs` returns a list and the reference takes `[0]`.
+ * needs and no further: values unquoted with `+` meaning a space, and a BLANK value dropped
+ * (`keep_blank_values=False`), so `?harness=` resolves to the installed default rather than
+ * to the empty string — `''  || null` is what drops it below. The first occurrence wins,
+ * because `parse_qs` returns a list and the reference takes `[0]`, and so does
+ * `URLSearchParams.get`.
+ *
+ * `new URL(url, 'http://x')` rather than a hand-split on `&`/`=`: the base is a throwaway,
+ * needed only because `URL` refuses a bare path-plus-query with no scheme. One measured
+ * difference from the hand-split version this replaced — found by diffing both against a
+ * battery of query strings before this landed — and it is a FIX, not a regression: a literal
+ * `#` in the query is a URL FRAGMENT, which `URLSearchParams` correctly excludes and the old
+ * split-on-`&` did not, because a fragment is a client-side-only construct an HTTP request
+ * line can never actually carry — no `req.url` this handler ever sees can contain one.
  *
  * THE BLANK-VALUE DROP IS INDISTINGUISHABLE HERE, measured rather than assumed: a
  * mutation removing it survived, because `normHarness('')` and `normHarness(null)` both
@@ -401,16 +410,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
  * through the one consumer it has.
  */
 function harnessParam(url) {
-  const at = (url || '').indexOf('?');
-  if (at < 0) return null;
-  for (const pair of url.slice(at + 1).split('&')) {
-    if (!pair) continue;
-    const eq = pair.indexOf('=');
-    const k = percentDecode((eq < 0 ? pair : pair.slice(0, eq)).replace(/\+/g, ' '));
-    const v = eq < 0 ? '' : percentDecode(pair.slice(eq + 1).replace(/\+/g, ' '));
-    if (k === 'harness' && v !== '') return v;
-  }
-  return null;
+  return new URL(url || '', 'http://x').searchParams.get('harness') || null;
 }
 
 function readBody(req, length, done) {
