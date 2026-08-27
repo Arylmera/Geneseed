@@ -621,6 +621,30 @@ function pruneOwned(oc, oldOwned, owned) {
 }
 
 /**
+ * The manifest PRE-read all three emit bodies performed inline: does a manifest already
+ * exist at `manifestPath`, and if so, what does it parse to. `existed` is what
+ * `emitOpencode` alone needs (as `manifestExisted`, threaded into the render job); every
+ * caller reads `doc.owned`, and `emitClaudeCore` also reads `doc.managed` — `doc` is `null`
+ * on a missing OR a corrupt manifest, so `(doc && doc.owned) || []` covers both the same way
+ * the three inline try/catches did.
+ */
+function readManifest(manifestPath) {
+  const existed = existsSync(manifestPath);
+  let doc = null;
+  if (existed) {
+    try { doc = parseJson(readFileSync(manifestPath, 'utf8')); } catch { doc = null; }
+  }
+  return { existed, doc };
+}
+
+/** The "+ primary agent, N command(s)" tail both OpenCode summary lines share. */
+function extrasTail(stats) {
+  const extras = [...(stats.primary ? ['primary agent'] : []),
+    ...(stats.nCommands ? [`${stats.nCommands} command(s)`] : [])];
+  return extras.length ? ` + ${extras.join(', ')}` : '';
+}
+
+/**
  * `_build_global._project_survivors` — registered per-repo PROJECT installs of `emitName`.
  *
  * Each candidate root's own `.geneseed-emit` marker is read and compared to the literal
@@ -677,14 +701,8 @@ function emitOpencode(cfg, args, out) {
   // PRE. A missing manifest reads as "owned nothing before", which is what makes the first
   // re-emit after an upgrade treat already-existing files as the user's (claim-on-create)
   // rather than deleting them. The prune set is then empty by construction.
-  const manifestExisted = existsSync(manifestPath);
-  let oldOwned = [];
-  if (manifestExisted) {
-    try {
-      const m = parseJson(readFileSync(manifestPath, 'utf8'));
-      oldOwned = (m && m.owned) || [];
-    } catch { oldOwned = []; }
-  }
+  const { existed: manifestExisted, doc } = readManifest(manifestPath);
+  const oldOwned = (doc && doc.owned) || [];
 
   const agentPathRel = relUnder(out, root);
   const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';
@@ -711,9 +729,7 @@ function emitOpencode(cfg, args, out) {
     scope: 'project',
   });
 
-  const extras = [...(stats.primary ? ['primary agent'] : []),
-    ...(stats.nCommands ? [`${stats.nCommands} command(s)`] : [])];
-  const extra = extras.length ? ` + ${extras.join(', ')}` : '';
+  const extra = extrasTail(stats);
   process.stdout.write(`[geneseed] opencode layer: ${stats.nAgents} subagents, `
     + `${stats.nSkills} skills, ${stats.nPlugins} plugin(s), `
     + `${stats.nWorkflows} workflow file(s), ${cfgName} (instructions: ${agentPath})`
@@ -740,13 +756,8 @@ function emitOpencodeGlobal(cfg, args, out) {
   const cfgDir = args.cfgDir ?? opencodeConfigDir();
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
 
-  let oldOwned = [];
-  if (existsSync(manifestPath)) {
-    try {
-      const m = parseJson(readFileSync(manifestPath, 'utf8'));
-      oldOwned = (m && m.owned) || [];
-    } catch { oldOwned = []; }
-  }
+  const { doc } = readManifest(manifestPath);
+  const oldOwned = (doc && doc.owned) || [];
 
   const agentPath = path.join(cfgDir, 'AGENT.md').split(path.sep).join('/');
 
@@ -770,9 +781,7 @@ function emitOpencodeGlobal(cfg, args, out) {
     owned: [...owned].sort(),
   });
 
-  const extras = [...(stats.primary ? ['primary agent'] : []),
-    ...(stats.nCommands ? [`${stats.nCommands} command(s)`] : [])];
-  const extra = extras.length ? ` + ${extras.join(', ')}` : '';
+  const extra = extrasTail(stats);
   process.stdout.write(`[geneseed] opencode-global -> ${cfgDir}: ${stats.nAgents} subagents, `
     + `${stats.nSkills} skills, ${stats.nPlugins} plugin(s), `
     + `${stats.nWorkflows} workflow file(s), AGENT.md, ${memStatus}, ${nbStatus}, `
@@ -802,16 +811,10 @@ function emitOpencodeGlobal(cfg, args, out) {
  */
 function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpts }) {
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
-  let oldOwned = [];
-  let oldManaged = {};
-  if (existsSync(manifestPath)) {
-    try {
-      const data = parseJson(readFileSync(manifestPath, 'utf8'));
-      oldOwned = data.owned || [];
-      oldManaged = (data.managed && typeof data.managed === 'object'
-        && !Array.isArray(data.managed)) ? data.managed : {};
-    } catch { oldOwned = []; oldManaged = {}; }
-  }
+  const { doc } = readManifest(manifestPath);
+  const oldOwned = (doc && doc.owned) || [];
+  const oldManaged = (doc && doc.managed && typeof doc.managed === 'object'
+    && !Array.isArray(doc.managed)) ? doc.managed : {};
   const isCopilot = host === 'copilot';
 
   // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every host
@@ -1176,30 +1179,22 @@ function run(argv) {
   // The marker directory is the emit's TARGET, which for a global emit is the config dir it
   // just rendered into and not `--out` at all — so the emit returns it rather than the
   // caller guessing (build.py:427-436 re-resolves; returning it keeps one resolution).
+  //
+  // NINE ARMS, TWO TABLES ALREADY ON FILE: `GLOBAL_EMITS` and `PROJECT_EMITS` above are
+  // exactly this dispatch's `-global` and per-repo halves, keyed by host rather than by
+  // `--emit` name, so splitting the suffix reaches both without a third map.
   let markerDir = out;
-  if (args.emit === 'opencode') {
-    emitOpencode(cfg, args, out);
-  } else if (args.emit === 'opencode-global') {
-    markerDir = emitOpencodeGlobal(cfg, args, out);
-  } else if (args.emit === 'copilot') {
+  if (args.emit.endsWith('-global')) {
+    markerDir = GLOBAL_EMITS[args.emit.slice(0, -'-global'.length)](cfg, args, out);
+  } else if (args.emit !== 'files') {
     // The PROJECT emits keep their markers in `out`, not in the host config dir the emit
     // wrote to (build.py:435-436) — `.github/` is the layer, `out` is the install.
-    emitCopilot(cfg, args, out);
-  } else if (args.emit === 'copilot-global') {
-    markerDir = emitCopilotGlobal(cfg, args, out);
-  } else if (args.emit === 'claude') {
-    emitClaude(cfg, args, out);
-  } else if (args.emit === 'claude-global') {
-    markerDir = emitClaudeGlobal(cfg, args, out);
-  } else if (args.emit === 'bob') {
-    emitBob(cfg, args, out);
-  } else if (args.emit === 'bob-global') {
-    markerDir = emitBobGlobal(cfg, args, out);
+    PROJECT_EMITS[args.emit](cfg, args, out);
   } else {
-    // `nativeCatalog: false` is build.py:421's three-positional-argument call reproduced:
-    // `build(args.theme, out, args.footprint)` leaves `native_catalog` at its signature
-    // default. It is the one signature default this driver DOES inherit, and it is
-    // inherited because the Python CLI inherits it too.
+    // The ninth choice, a plain bundle: `nativeCatalog: false` is build.py:421's
+    // three-positional-argument call reproduced — `build(args.theme, out, args.footprint)`
+    // leaves `native_catalog` at its signature default. It is the one signature default
+    // this driver DOES inherit, and it is inherited because the Python CLI inherits it too.
     build(cfg, args.theme, out, { footprint: args.footprint, nativeCatalog: false });
   }
 
