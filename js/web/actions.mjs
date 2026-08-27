@@ -162,7 +162,10 @@ const fpMatches = (got, want) => typeof got === 'string' && got === want;
  * five minutes (nobody is at the dialog to cancel it in an automated run); the 300 s default
  * ships untouched for a real daemon.
  */
-const PICK_TIMEOUT_MS = Number(process.env.GENESEED_PICK_TIMEOUT_MS) || 300_000;
+// `Number.isFinite`, not `||`: the latter would ignore an explicit `GENESEED_PICK_TIMEOUT_MS=0`
+// (falsy) and fall back to the 300 s default, which defeats a test that wants a timeout of 0.
+const pickTimeoutOverride = Number(process.env.GENESEED_PICK_TIMEOUT_MS);
+const PICK_TIMEOUT_MS = Number.isFinite(pickTimeoutOverride) ? pickTimeoutOverride : 300_000;
 
 // A SINGLE STABLE LITERAL, never built from a request: `apiPickFolder` takes no client input
 // at all (the endpoint's whole POST body is ignored), so there is nothing to interpolate into
