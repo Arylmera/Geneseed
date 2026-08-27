@@ -83,5 +83,7 @@ the session — `D` decisions, `O` options, `F` findings, `R` risks, `Q` questio
 one within each kind, invent a new letter for a kind the list omits, and never
 renumber a code once issued — the user will cite it back, and a moved code makes
 their reply mean something you did not say. A code is an address, not an ornament:
-it lets a long exchange be answered by reference ({{ONTOLOGY}}: {{ONT_CONDUCT}}), and
-a decision taken on turn three still be named on turn thirty.
+it lets a long exchange be answered by reference, and a decision taken on turn
+three still be named on turn thirty. Where the {{ONTOLOGY}}'s {{ONT_CONDUCT}}
+governs how an answer speaks, this is only the addressing convention — a practice
+a repository adopts or drops like any other rule in these {{DOCTRINES}}.
