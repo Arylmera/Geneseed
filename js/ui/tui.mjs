@@ -439,8 +439,8 @@ export function tuiEntries(inv) {
  * entry that surfaced it. **P7c must not reproduce the crash when it ports `_tui_loop`** —
  * the fix is one `or []` at the call site, and it belongs in the same change as the port.
  *
- * Its only consumer is `tests/unit/setup.test.mjs`, which imports it directly to assert that
- * each constitutional and native kind renders more than the bare label.
+ * Its only consumer with direct assertions is `tests/unit/setup.test.mjs`; tests/fixtures/pure_probe.mjs
+ * also dispatches it to exercise wizard/web_first test scenarios.
  */
 export function detailLines(kind, label, data) {
   // The three constitutional tiers share one treatment — the label, a blank, then the body —

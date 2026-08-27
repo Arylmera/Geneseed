@@ -172,7 +172,7 @@ the deployed harness as JSON.
 | `activity.mjs` | The `activity/` session files: pid-liveness prune, list, detail, and the on/off flag |
 
 **Before editing:** `makeHandler(state, jm, token, dist, holder)`'s arity is load-bearing — three
-test call sites construct one directly and drive it without a socket. Four of `routes.mjs`'s
+test call sites construct one directly and drive it without a socket. Five of `routes.mjs`'s
 exported sets are deliberately EMPTY and must stay declared: each is half of a partition test.
 `graph.mjs` contains a literal NUL byte, so `grep`/`ripgrep` treat it as binary and skip it.
 
