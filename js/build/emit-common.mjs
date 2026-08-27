@@ -101,81 +101,67 @@ export function stripCapabilityLinks(text) {
 // ---------------------------------------------------------------------------
 
 /**
- * `_build_global._global_memory` — ensure `<cfg>/memory` exists, without ever touching a
- * store that already holds something.
+ * `_build_global._global_memory`/`_global_notebook` — ensure `<cfg>/<name>` exists, without
+ * ever touching a store that already holds something.
  *
  * The three outcomes are the returned status string, which the emit prints, so they are
  * compared through stdout as well as through the tree. Python's `theme` parameter is
- * dropped: the store dir is ALWAYS the classic English `memory/`, never themed (the
+ * dropped for both: the store dir is ALWAYS the classic English name, never themed (the
  * OpenCode config dir uses fixed names), so the argument was never read.
+ *
+ * THE MIGRATED MESSAGE'S SHAPE TRACKS THE ALIAS COUNT, not a caller-supplied format flag.
+ * `memory` is the only store with more than one legacy name — `anamnesis`, an older themed
+ * install's — so its status names which one matched: `migrated anamnesis/ -> memory/`.
+ * `notebook` has exactly one candidate and its status has never named an arrow:
+ * `migrated notebook/`. One alias is nothing a rename could be reporting, so the arrow is
+ * dropped rather than printed as a no-op `notebook/ -> notebook/`.
  *
  * The migration branch copies arbitrary USER files out of a legacy bundle, which is the
  * reason this is not a plain translation: everything it touches is the user's, and the
  * only thing keeping it safe is that it runs at all only when the destination is empty.
  */
-export function globalMemory(cfgDir, items, legacy, srcRoot) {
-  const memName = 'memory';
-  const memDir = path.join(cfgDir, memName);
-  if (isDir(memDir) && readdirSync(memDir).length) return `kept ${memName}/`;
-  mkdirSync(memDir, { recursive: true });
+function globalStore(cfgDir, items, legacy, srcRoot, name, aliases = [name]) {
+  const dir = path.join(cfgDir, name);
+  if (isDir(dir) && readdirSync(dir).length) return `kept ${name}/`;
+  mkdirSync(dir, { recursive: true });
   if (legacy) {
-    // `dict.fromkeys([mem_name, "memory", "anamnesis"])` — de-duplicated, order kept.
-    // `mem_name` is the literal 'memory' and the Python docstring beside it says the
-    // store name is NEVER themed, so the first two entries always collapse and
-    // `anamnesis` — an older themed install's name — is the only live alias. The dedupe
-    // is what keeps the duplicate harmless rather than copying the same dir twice.
-    for (const nm of [...new Set([memName, 'memory', 'anamnesis'])]) {
+    // `dict.fromkeys(aliases)` — de-duplicated, order kept. The dedupe is what keeps a
+    // caller that lists `name` itself among its aliases (as `memory` does) from copying
+    // the same dir twice.
+    for (const nm of [...new Set(aliases)]) {
       const src = path.join(legacy, nm);
       if (isDir(src) && readdirSync(src).length) {
         // `cpSync(..., {preserveTimestamps: true})` — the recursive-copy equivalent of
         // `copyFile` above (byte copy + carried mtime, no `shutil.copy2` mode bits; see
         // that function's docblock in `js/lib/fs.mjs`), replacing a walk-then-copyFile
         // loop that visited every legacy file one at a time.
-        cpSync(src, memDir, { recursive: true, preserveTimestamps: true });
-        return `migrated ${nm}/ -> ${memName}/`;
+        cpSync(src, dir, { recursive: true, preserveTimestamps: true });
+        return aliases.length > 1 ? `migrated ${nm}/ -> ${name}/` : `migrated ${name}/`;
       }
     }
   }
   for (const { text, src } of items) {
     const sp = relPosix(srcRoot, src).split('/');
-    if (sp[0] === 'memory' && sp.length > 1) {
+    if (sp[0] === name && sp.length > 1) {
       // `destRel`, because this seeds from the SOURCE path and not from the item's `rel`
-      // (which is themed, and `memory/` never is). Without it the store would be seeded
-      // with the on-disk name `gitignore` — see `js/build/render.mjs`'s `destRel`.
-      const dest = path.join(memDir, destRel(path.join(...sp.slice(1))));
+      // (which is themed, and the store dir never is). Without it the store would be
+      // seeded with the on-disk name `gitignore` — see `js/build/render.mjs`'s `destRel`.
+      const dest = path.join(dir, destRel(path.join(...sp.slice(1))));
       mkdirSync(path.dirname(dest), { recursive: true });
       if (text !== null) writeText(dest, text);
       else copyFile(src, dest);
     }
   }
-  return `seeded ${memName}/`;
+  return `seeded ${name}/`;
+}
+
+export function globalMemory(cfgDir, items, legacy, srcRoot) {
+  return globalStore(cfgDir, items, legacy, srcRoot, 'memory', ['memory', 'anamnesis']);
 }
 
 /** `_build_global._global_notebook` — the same shape, with no `anamnesis` alias. */
 export function globalNotebook(cfgDir, items, legacy, srcRoot) {
-  const nbName = 'notebook';
-  const nbDir = path.join(cfgDir, nbName);
-  if (isDir(nbDir) && readdirSync(nbDir).length) return `kept ${nbName}/`;
-  mkdirSync(nbDir, { recursive: true });
-  if (legacy) {
-    const src = path.join(legacy, nbName);
-    if (isDir(src) && readdirSync(src).length) {
-      // Same `cpSync` swap as `globalMemory` above.
-      cpSync(src, nbDir, { recursive: true, preserveTimestamps: true });
-      return `migrated ${nbName}/`;
-    }
-  }
-  for (const { text, src } of items) {
-    const sp = relPosix(srcRoot, src).split('/');
-    if (sp[0] === nbName && sp.length > 1) {
-      // `destRel` — same reason as `globalMemory` above.
-      const dest = path.join(nbDir, destRel(path.join(...sp.slice(1))));
-      mkdirSync(path.dirname(dest), { recursive: true });
-      if (text !== null) writeText(dest, text);
-      else copyFile(src, dest);
-    }
-  }
-  return `seeded ${nbName}/`;
+  return globalStore(cfgDir, items, legacy, srcRoot, 'notebook');
 }
 
 /**
