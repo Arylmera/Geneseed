@@ -6,6 +6,30 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
+## [3.1.4] — 2026-08-27
+
+### Added
+
+- **`POST /api/pick-folder`** — the OS-native folder chooser behind the console's
+  "Exclude a folder…" and "Deploy to folder…" buttons, previously a deliberate 501. PowerShell's
+  `FolderBrowserDialog` on Windows, the original `osascript` prompt on macOS, `{error}` elsewhere;
+  async spawn with a 300 s timeout, no client input on the command line, declared argv in the
+  spawn allow-list. The decline's rationale (a modal dialog was not worth a spawn row) yielded to
+  the feature being asked for.
+
+### Changed
+
+- **The ponytail refactor** (PR #103, tranches 1–7 of the 2026-08-26 over-engineering audit):
+  dead exports and finished-port scaffolding deleted; one owner per primitive (`js/lib/fs.mjs`,
+  `js/lib/json.mjs`); stdlib in place of hand-rolled walks, `Object.hasOwn`,
+  `import.meta.dirname` (the hook's hot path drops an import), `fetch` daemon probes;
+  `util.parseArgs` tokenizing under `build-driver`'s existing wording; thirteen structural twins
+  merged; `js/web` comment ratio 38 % → 33 % with every load-bearing *why* kept; shared
+  `Sel`/`Switch`/`CatalogRow` components and `d3-force` in the console. Net −339 source lines,
+  zero emitted bytes moved, zero runtime dependencies added, 1067 tests green. Where the audit's
+  premise failed, behaviour parity won: `compact()` and the docs slugger stay hand-rolled, the
+  cli/hook argv parsers stay put — each with its reason recorded.
+
 ## [3.1.3] — 2026-08-24
 
 ### Added
