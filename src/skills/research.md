@@ -13,7 +13,8 @@ stop and report it ({{LAW}} V); never substitute recall for verified research.
 1. State the question and what a complete answer must contain. Break a broad question
    into specific sub-questions.
 2. Search the web — use the host's web-search tool or a connected search provider
-   ({{DOCTRINE}} ops 1). Query from several angles; one search is not research. If the host
+   ({{DOCTRINE}} ops 1). Query from several angles; one search is not research,
+   and one empty result is not absence ({{LAW}} XI). If the host
    exposes no web capability at all, stop and report that ({{LAW}} V) — never
    substitute your own knowledge for verified research.
 3. Open the most promising sources and extract only the relevant slice, not the whole

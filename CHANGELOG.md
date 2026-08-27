@@ -8,6 +8,23 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Laws X and XI — the Law III split, by append.** Law III carried four rules;
+  only its first survived the lean footprint. Its two buried, independently
+  operative sub-rules move to appended laws — **X, Echo the Intent** (state an
+  inferred or ambiguous goal and get agreement before building on it; stop and
+  ask when the ambiguity touches auth, security, production, or user data) and
+  **XI, Absence Is a Claim** (an empty or truncated answer carries a duty:
+  suspect the hidden layer, bind limits per entity, surface the cut). No
+  numeral moves — III keeps its verify-before-asserting core and its 40+
+  citations stay valid; the two citations that actually meant intent-echo
+  (`clarify`, `fresh-eyes`, and Law VI's body) retarget to X, and XI is born
+  anchored (`explorer`'s output contract, `research` step 2). Titles added to
+  all 14 theme voices; `LAW_CLASS`, `LAW_META`, README, SHIPPED, and the
+  first-free-numeral fixture (now XII) updated in step.
+  Spec: `docs/specs/2026-08-27-law-iii-split-design.md`.
+
 ### Changed
 
 - **Lean surgery on Laws IV, VI, VIII, IX** — each law's operative clause now

@@ -554,15 +554,15 @@ test('the gate flags a law missing from LAW_CLASS', () => {
   // The numeral has to be one PAST the corpus — `XL` was free until laws XXXIX and XL landed,
   // at which point the fixture stopped introducing anything unclassified and the gate went
   // quiet while the test still read as coverage. The three-tier split cut the corpus to nine
-  // invariants, so the first free numeral moved BACK to `X`, and `XLI` — still absent from
-  // LAW_CLASS — would now plant a rule 32 numerals past anything the file can reach. `X` keeps
-  // the fixture's claim literal: the next rule someone actually adds is the one caught here.
-  const problems = withFault({ 'src/laws/universal.md': `${laws}\n### {{LAW}} X — z\n` },
+  // invariants and the Law III split grew it to eleven, so the first free numeral is now
+  // `XII`. Planting the first FREE numeral keeps the fixture's claim literal: the next rule
+  // someone actually adds is the one caught here.
+  const problems = withFault({ 'src/laws/universal.md': `${laws}\n### {{LAW}} XII — z\n` },
     (root) => gate(root, 'm.countTableProblems()'));
-  // `rule X ` with the trailing space, not a bare `X`: a one-letter substring matches half the
-  // message set by accident, and a gate satisfied by accident is not a gate.
-  assert.ok(problems.some((p) => p.includes('rule X ') && p.includes('LAW_CLASS')),
-    `no X/LAW_CLASS problem in ${JSON.stringify(problems)}`);
+  // `rule XII ` with the trailing space, not a bare `XII`: a short substring matches other
+  // messages by accident, and a gate satisfied by accident is not a gate.
+  assert.ok(problems.some((p) => p.includes('rule XII ') && p.includes('LAW_CLASS')),
+    `no XII/LAW_CLASS problem in ${JSON.stringify(problems)}`);
 });
 
 test('the gate flags an unknown LAW_CLASS value', () => {

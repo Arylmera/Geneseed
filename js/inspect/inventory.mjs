@@ -70,7 +70,8 @@ const PACK_LEAD_RE = /^\*\*(.+?)\*\*\s+[—-]\s+(.+?)\s*$/;
 /** `_harness_tui.LAW_CLASS` — each rule's class, keyed by Roman numeral. */
 export const LAW_CLASS = {
   I: 'security', II: 'process', III: 'verify', IV: 'security', V: 'verify',
-  VI: 'security', VII: 'security', VIII: 'craft', IX: 'security',
+  VI: 'security', VII: 'security', VIII: 'craft', IX: 'security', X: 'verify',
+  XI: 'verify',
 };
 
 /** `_harness_tui.ENTITY_STATUSES` — the lifecycle statuses `registry.json` may carry. */

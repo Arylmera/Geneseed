@@ -364,11 +364,12 @@ test('the inventory counts match the source tree and every entry has a body', ()
   const laws = [...fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8')
     .matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+)\b/gm)].length;
   assert.equal(inv.laws.length, laws);
-  // THE FLOOR IS NOW AN EQUALITY, because the corpus stopped growing. `> 30` was a guard
-  // against the regex silently matching nothing while the derived equality above stayed
-  // vacuously true. The three-tier split fixed the corpus at NINE invariants — the doctrine
-  // packs carry the rest — so the same guard is stated exactly rather than as a floor.
-  assert.equal(laws, 9, `${laws} laws parsed — expected the nine invariants`);
+  // THE FLOOR IS NOW AN EQUALITY, because the corpus grows only by deliberate append. `> 30`
+  // was a guard against the regex silently matching nothing while the derived equality above
+  // stayed vacuously true. The three-tier split fixed the corpus at nine invariants and the
+  // Law III split (X and XI appended) took it to ELEVEN — the doctrine packs carry the rest —
+  // so the same guard is stated exactly rather than as a floor.
+  assert.equal(laws, 11, `${laws} laws parsed — expected the eleven invariants`);
 
   assert.ok(inv.agents.every((e) => e.desc && e.body), 'an agent entry has no desc or body');
   assert.ok(inv.skills.every((e) => e.desc && e.body), 'a skill entry has no desc or body');
@@ -412,7 +413,7 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
       `${p.pack} has a rule with no title, no body, or a class that is not its pack`);
     assert.ok(p.title && p.desc, `${p.pack} has no themed name or blurb`);
   }
-  // 9 + 23 + the four absorbed-into-prose sections is the whole constitution.
+  // 11 + 23 + the four absorbed-into-prose sections is the whole constitution.
   assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 23);
 });
 
@@ -424,7 +425,7 @@ test('every theme parses to the same three tiers, whatever it calls them', () =>
   const counts = (inv) => [inv.laws.length, inv.ontology.length, inv.doctrines.length,
     inv.doctrines.reduce((n, p) => n + p.rules.length, 0)];
   const base = counts(tuiInventory('neutral'));
-  assert.deepEqual(base, [9, 4, 4, 23]);
+  assert.deepEqual(base, [11, 4, 4, 23]);
   for (const t of themeNames()) {
     const inv = tuiInventory(t);
     assert.deepEqual(counts(inv), base, `${t} parses to a different constitution`);
