@@ -6,6 +6,30 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
+## [Unreleased]
+
+### Changed
+
+- **Lean surgery on Laws IV, VI, VIII, IX** — each law's operative clause now
+  lives in its first sentence (fused with the opening aphorism), because the
+  default `--footprint lean` keeps a law's heading plus first sentence only.
+  Before this, a lean install's Law IV confirmed nothing (its first sentence was
+  the CRUD taxonomy), Law IX kept only an aphorism, Law VIII lost its ban list,
+  and Law VI lost its actual rule. No renumbering, no title change; Law VI's
+  closing aphorism ("The web is a source to read…") cut as redundant with the
+  fused opener. Spec: `docs/specs/2026-08-27-lean-surgery-design.md`.
+
+### Fixed
+
+- **`ponytail` cited a law that does not exist** — "`{{LAW}} on reuse`" is now
+  `{{DOCTRINE}} craft 4`, and "`{{LAW}} on scope`" (the only numeral-less law
+  citation in `src/`) is now `{{LAW}} II`.
+- **Laws VI, VII and IX were cited by nothing outside the canon** — each orphan
+  gains one procedural anchor at the step where it bites: VI in `research`
+  (fetched pages) and `ingest` (converted documents), VII in `parallel-agents`
+  (the handoff envelope grants only the access the unit needs), IX in
+  `forge-mcp` (a destructive tool's guard is enforced server-side).
+
 ## [3.1.4] — 2026-08-27
 
 ### Added
