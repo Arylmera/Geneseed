@@ -6,7 +6,7 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
-## [Unreleased]
+## [3.2.0] — 2026-08-27
 
 ### Added
 
