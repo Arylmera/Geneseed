@@ -131,8 +131,9 @@ export const none = (v) => (v === undefined || v === null ? 'None' : String(v));
  *
  * WHAT IT STARTS IS THIS PROGRAM: `process.execPath` + `bin/geneseed-cli.mjs` — the running
  * interpreter by absolute path and this repo's own CLI, re-executing itself rather than
- * shelling out to anything else. `tests/unit/web_daemon.test.mjs` proves it end to end by
- * running with no `python` on PATH at all — this install needs none.
+ * shelling out to anything else. `tests/unit/web_daemon.test.mjs:199-223` scans this
+ * function's own source for `python`/`harness.py`/`build.py`/`sys.executable` and asserts
+ * none of them appear — this daemon may re-execute only itself.
  */
 function spawnDetached(webArgs, log) {
   const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web', ...webArgs];

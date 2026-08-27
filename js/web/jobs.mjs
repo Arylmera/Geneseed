@@ -177,6 +177,9 @@ const SIGNUM = { SIGTERM: 15, SIGKILL: 9, SIGINT: 2, SIGHUP: 1 };
  * one thread and no pre-emption inside a synchronous block, so every critical section here
  * is already atomic — a mutex would be a no-op object claiming a hazard that cannot occur.
  * What matters instead is which sequences must not be interrupted, and none of them await.
+ *
+ * DELIBERATELY NO `wait()`: nothing here calls it, and an untested, caller-less method is
+ * exactly the shape this repo keeps getting bitten by.
  */
 export class JobManager {
   static HISTORY_MAX = 20;
