@@ -230,30 +230,48 @@ export function pushOverrideLines(fm, ov) {
   if (given(ov.steps)) fm.push(`steps: ${formatValue(ov.steps)}`);
 }
 
-/** `_build_emit._claude_agent_frontmatter`. */
-function claudeAgentFrontmatter(stem, text, overrides) {
+/**
+ * The readonly-tool line `claudeAgentFrontmatter`/`copilotAgentFrontmatter` each emit — a
+ * DENYLIST for Claude, an ALLOWLIST for Copilot — differing only in the key, the base list,
+ * the one extra entry the `<!-- bash: allow -->` marker toggles, and whether the value is
+ * bracketed. `extraWhenBashAllowed` is `false` for Claude (Bash is denied UNLESS the marker
+ * allows it) and `true` for Copilot (`execute` is allowed ONLY IF the marker is present) —
+ * the same marker, read in the opposite sense a denylist and an allowlist require.
+ */
+const READONLY_TOOLS = {
+  claude: {
+    key: 'disallowedTools', tools: ['Write', 'Edit', 'NotebookEdit', 'WebFetch'],
+    extra: 'Bash', extraWhenBashAllowed: false, brackets: false,
+  },
+  copilot: {
+    key: 'tools', tools: ['read', 'search', 'todo', 'agent'],
+    extra: 'execute', extraWhenBashAllowed: true, brackets: true,
+  },
+};
+
+/** `_build_emit._claude_agent_frontmatter` / `._copilot_agent_frontmatter`. */
+function claudeCopilotAgentFrontmatter(host, stem, text, overrides) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
   const ov = agentOverride(overrides, stem);
   if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
   if (isReadonly(text)) {
-    const denied = ['Write', 'Edit', 'NotebookEdit', 'WebFetch'];
-    if (!text.includes('<!-- bash: allow -->')) denied.push('Bash');
-    fm.push(`disallowedTools: ${denied.join(', ')}`);
+    const {
+      key, tools, extra, extraWhenBashAllowed, brackets,
+    } = READONLY_TOOLS[host];
+    const list = [...tools];
+    if (text.includes('<!-- bash: allow -->') === extraWhenBashAllowed) list.push(extra);
+    fm.push(`${key}: ${brackets ? `[${list.join(', ')}]` : list.join(', ')}`);
   }
   return fm;
 }
 
-/** `_build_emit._copilot_agent_frontmatter` — `tools:` is an ALLOWLIST, not a denylist. */
+function claudeAgentFrontmatter(stem, text, overrides) {
+  return claudeCopilotAgentFrontmatter('claude', stem, text, overrides);
+}
+
+/** `tools:` is an ALLOWLIST, not a denylist. */
 function copilotAgentFrontmatter(stem, text, overrides) {
-  const fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
-  const ov = agentOverride(overrides, stem);
-  if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
-  if (isReadonly(text)) {
-    const allowed = ['read', 'search', 'todo', 'agent'];
-    if (text.includes('<!-- bash: allow -->')) allowed.push('execute');
-    fm.push(`tools: [${allowed.join(', ')}]`);
-  }
-  return fm;
+  return claudeCopilotAgentFrontmatter('copilot', stem, text, overrides);
 }
 
 /** `_build_emit._opencode_agent_frontmatter`. */
