@@ -518,6 +518,22 @@ const ALLOWED_SPAWNS = {
       "const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');",
       'p = spawn(cmd[0], cmd.slice(1), {'],
   },
+  // ADDED 2026-08-27: `/api/pick-folder`'s native dialog, a user override of the permanent
+  // decline `js/web/routes.mjs`'s `DECLINED_POST` used to record (see that file, now empty).
+  // ONE call site, reused for both platform branches, which is why `spawnCalls` is 1 rather
+  // than 2 — `runPicker` is the only place `spawn(` appears in this file.
+  'web/actions.mjs': {
+    binding: '{ spawn }',
+    calls: 0,
+    spawnCalls: 1,
+    what: '`powershell -NoProfile -STA -Command <script>` (Windows, `FolderBrowserDialog`) or '
+      + '`osascript -e <script>` (macOS, `choose folder`, ported verbatim from the deleted '
+      + 'Python) — never both, and never anything built from the request: the endpoint takes '
+      + 'no client input at all',
+    literals: ["return runPicker('powershell', ['-NoProfile', '-STA', '-Command', PICK_SCRIPT_WIN], done,",
+      "return runPicker('osascript', ['-e', PICK_SCRIPT_MAC], done, (code, out, err) => {",
+      'child = spawn(cmd, args, { ...NO_WINDOW });'],
+  },
 };
 
 /** Every module a file reaches through relative imports, transitively, including itself. */

@@ -15,7 +15,7 @@ import { doctrinesForBuild } from '../hosts/installs.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { parseIntStrict, percentDecode } from '../lib/text.mjs';
 import { preflight } from '../maintain/update.mjs';
-import { apiDeployCmd, apiInstallCmd, apiRestore, buildOverride, mcpTargetPaths } from './actions.mjs';
+import { apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildOverride, mcpTargetPaths } from './actions.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES } from './api.mjs';
 import { openUrl, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
@@ -203,6 +203,16 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       // response says which directory, so the UI can print it as the fallback instruction.
       openUrl(dir);
       return sendJson(res, { ok: true, dir }, 200, ae);
+    }
+    if (path === '/api/pick-folder') {
+      // INLINE, NOT `POST_ROUTES`: that table's `fn(state, body) -> object` shape answers the
+      // instant `fn` returns, and this endpoint cannot — it spawns a native dialog that a human
+      // may sit in front of for a while. `doPost` returns to its caller immediately, unresolved;
+      // `apiPickFolder`'s `done` calls `sendJson` whenever the child actually exits, which is
+      // what lets the daemon keep answering every OTHER request while the dialog is open — see
+      // `apiPickFolder` in `js/web/actions.mjs` for the async-spawn reasoning.
+      apiPickFolder((result) => sendJson(res, result, 200, ae));
+      return;
     }
     const route = POST_ROUTES.get(path);
     if (route !== undefined) {

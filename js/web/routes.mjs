@@ -36,23 +36,19 @@ export const NOT_PORTED_POST = new Set([]);
 export const NOT_PORTED_POST_PREFIXES = [];
 
 /**
- * The POSTs that will NEVER cross, which is a different claim from the set above.
+ * The POSTs that will NEVER cross, which is a different claim from the set above — currently
+ * EMPTY. `/api/pick-folder` was its one member (an OS-native folder chooser, "declined rather
+ * than deferred" because there was no Node twin that was not a new GUI dependency) until the
+ * user overrode that decision 2026-08-27; it now dispatches inline from `js/web/handler.mjs`'s
+ * `doPost` — see `apiPickFolder` in `js/web/actions.mjs`.
  *
- * `/api/pick-folder` opens an OS-NATIVE folder chooser on the daemon host — `osascript` on
- * macOS, a one-shot `tkinter` subprocess elsewhere. There is no Node twin that is not a new
- * GUI dependency, and reaching for one would also be a sixth `_ALLOWED_SPAWNS` row for a
- * modal dialog. The UI already falls back to its editable path field when this endpoint
- * fails, which is what a 501 gives it.
- *
- * SEPARATE FROM `NOT_PORTED_POST` ON PURPOSE. That set is a to-do list every later phase
- * shrinks, and folding a permanent decline into it would make the list wrong in the one
- * direction nobody checks: a phase that emptied it would have to either port a GUI dialog
- * or quietly delete a declaration. Both sets are unioned into the partition the reference's
- * routes are cross-checked against, so neither can drift.
+ * KEPT DECLARED AND EMPTY FOR THE SAME REASON `NOT_PORTED_POST` STAYS DECLARED WHEN IT EMPTIES
+ * (see that set, just above): an empty set here is the partition asserting there is nothing
+ * PERMANENTLY refused, not an omission a later reader has to double-check. `notPortedPost`
+ * below still consults it, so a genuinely permanent decline — if one is ever added again —
+ * needs no dispatcher change, only a member here.
  */
-export const DECLINED_POST = new Set([
-  '/api/pick-folder',
-]);
+export const DECLINED_POST = new Set([]);
 
 /**
  * The POSTs this daemon answers — and this table IS the dispatch, not a declaration beside
@@ -110,9 +106,15 @@ export const PORTED_INLINE = ['/api/ping', '/api/docs', '/api/docs/page/',
  * `/api/actions/<x>` spans six statuses (202, 409, 404, 501, 400, 200) over one prefix, none
  * read off `ok`. Bending the 409 column to fit either would make it lie about the routes it
  * already describes correctly.
+ *
+ * `/api/pick-folder` joined 2026-08-27 for a THIRD reason: `POST_ROUTES`'s `fn(state, body)
+ * -> object` shape answers the instant `fn` returns, and this endpoint cannot — it spawns a
+ * native folder dialog and answers only once a human (or a timeout) closes it. See
+ * `apiPickFolder` in `js/web/actions.mjs`, dispatched inline from `js/web/handler.mjs`'s
+ * `doPost` the same way the other three rows here are.
  */
 export const PORTED_POST_INLINE = ['/api/shutdown', '/api/restart', '/api/jobs/',
-  '/api/actions/'];
+  '/api/actions/', '/api/pick-folder'];
 
 /**
  * POST routes added after the ported reference surface was frozen. Kept separate from

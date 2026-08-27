@@ -15,10 +15,12 @@
  * and it is why a runtime dependency reached from here would load on EVERY `geneseed`
  * invocation.
  *
- * WHAT IS STILL NOT HERE, SINCE P6i: `/api/pick-folder` alone, and it is DECLINED rather than
- * deferred — an OS-native folder chooser has no Node twin that is not a new GUI dependency.
- * `NOT_PORTED_POST` is empty and stays declared, because an empty half of a partition is the
- * partition asserting there is nothing left; `DECLINED_POST` is what still has a member.
+ * WHAT WAS STILL NOT HERE, SINCE P6i UNTIL 2026-08-27: `/api/pick-folder`, DECLINED rather
+ * than deferred — an OS-native folder chooser had no Node twin that was not a new GUI
+ * dependency. The user overrode that decline; the endpoint now dispatches inline from
+ * `js/web/handler.mjs`'s `doPost` (see `apiPickFolder` in `js/web/actions.mjs`). Both
+ * `NOT_PORTED_POST` and `DECLINED_POST` are empty now and stay declared regardless, because an
+ * empty half of a partition is the partition asserting there is nothing left, not an omission.
  */
 import { GLOBAL_MANIFEST, resolvePath } from '../hosts/hosts.mjs';
 import { printOut } from '../lib/fs.mjs';

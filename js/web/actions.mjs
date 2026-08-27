@@ -9,16 +9,11 @@
  * the runtime this actually runs on.
  *
  * ---------------------------------------------------------------------------------------
- * `api_pick_folder` DOES NOT CROSS, and that is permanent.
- *
- * It opens an OS-NATIVE folder chooser on the daemon host: `osascript` on macOS, a one-shot
- * `tkinter` subprocess elsewhere. There is no Node twin that is not a new GUI dependency —
- * and the `child_process` ban would make it a sixth `_ALLOWED_SPAWNS` row for a modal
- * dialog. So it is DECLINED rather than deferred, and `js/web/server.mjs` declares it in
- * `DECLINED_POST` — a set separate from `NOT_PORTED_POST`, because the two mean different
- * things and a phase that empties the second must not silently empty the first. The UI
- * already falls back to its editable path field when this endpoint errors, which is the
- * behaviour a 501 produces.
+ * `apiPickFolder` CROSSED 2026-08-27 — a user override of the permanent decline this section
+ * used to record. `js/web/routes.mjs`'s `DECLINED_POST` still carries the history of that
+ * decision (why a folder dialog looked permanently un-portable) and is now empty because of
+ * it. See `apiPickFolder`'s own docblock, below, for the argv, the async-spawn reasoning, and
+ * why it dispatches inline from `js/web/handler.mjs` rather than through `POST_ROUTES`.
  *
  * ---------------------------------------------------------------------------------------
  * `apiInstallToggle` is a thin endpoint over an engine that lives elsewhere on purpose.
@@ -30,6 +25,7 @@
  * lives in `js/maintain/uninstall.mjs`: `installDeactivate` and `installReactivate` beside
  * `installUninstall`, the reversible siblings of the same owned-file walk.
  */
+import { spawn } from 'node:child_process';
 import {
   accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, rmSync, unlinkSync,
 } from 'node:fs';
@@ -58,6 +54,7 @@ import {
 } from '../hosts/mcp.mjs';
 import { readText, writeText, isFile, isDir } from '../lib/fs.mjs';
 import { parseJson, formatRepr, formatValue, isTruthy } from '../lib/json.mjs';
+import { NO_WINDOW } from '../lib/proc.mjs';
 import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { splitLines } from '../lib/udiff.mjs';
@@ -155,6 +152,109 @@ function promoteDates(days) {
  * client send `"fingerprint": 0` and overwrite regardless of what is actually on disk.
  */
 const fpMatches = (got, want) => typeof got === 'string' && got === want;
+
+// ---- OS-native folder picker ---------------------------------------------------------------
+
+/**
+ * ms before an open dialog is abandoned. The Python original's 300 s, kept as a named
+ * constant rather than a literal in the spawn call. `GENESEED_PICK_TIMEOUT_MS` is a TEST HOOK
+ * ONLY — it overrides the constant so the timeout path can be proven in seconds instead of
+ * five minutes (nobody is at the dialog to cancel it in an automated run); the 300 s default
+ * ships untouched for a real daemon.
+ */
+const PICK_TIMEOUT_MS = Number(process.env.GENESEED_PICK_TIMEOUT_MS) || 300_000;
+
+// A SINGLE STABLE LITERAL, never built from a request: `apiPickFolder` takes no client input
+// at all (the endpoint's whole POST body is ignored), so there is nothing to interpolate into
+// this command line in the first place — and `tests/unit/hook_cli.test.mjs`'s spawn allow-list
+// asserts this exact string, which only holds while that stays true. `-STA`: a WinForms dialog
+// needs the single-threaded apartment; `-NoProfile`: skip the user's `$PROFILE` script, which
+// this one-shot invocation has no business running.
+const PICK_SCRIPT_WIN = 'Add-Type -AssemblyName System.Windows.Forms; '
+  + '$d = New-Object System.Windows.Forms.FolderBrowserDialog; '
+  + 'if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) '
+  + '{ Write-Output $d.SelectedPath }';
+
+// Ported VERBATIM from the deleted Python (`git show 8860c72:rituals/_web_actions.py`,
+// `api_pick_folder`) — same prompt text, same AppleScript shape. `choose folder` is a
+// StandardAdditions command that runs in-process inside `osascript`, so it needs no
+// automation-consent prompt the way scripting another app would.
+const PICK_SCRIPT_MAC = 'set f to POSIX path of (choose folder with prompt '
+  + '"Choose a folder to deploy the harness into")\nreturn f';
+
+/**
+ * Spawns `cmd args`, collects stdout/stderr, and calls `resultOf(exitCode, stdout, stderr)` to
+ * build the response once the child exits (or is killed on timeout, or never starts at all).
+ * `done` fires EXACTLY ONCE regardless of which of those three ends it — timeout, `error`
+ * (spawn itself failed, e.g. the binary is not on PATH), or `close` (the normal exit) all race
+ * for the same `settled` guard.
+ */
+function runPicker(cmd, args, done, resultOf) {
+  let child;
+  try {
+    // `...NO_WINDOW`: this call captures stdout/stderr below rather than inheriting them, and
+    // `tests/unit/spawn_hygiene.test.mjs` gates every such call site in `js/`/`bin/` on it.
+    // Hiding the PowerShell/osascript CONSOLE window is exactly what is wanted here — the GUI
+    // dialog itself (`FolderBrowserDialog`, `choose folder`) is a separate Win32/Carbon window
+    // neither process's own console visibility controls.
+    child = spawn(cmd, args, { ...NO_WINDOW });
+  } catch (e) {
+    return done({ error: `folder picker unavailable: ${e.message}` });
+  }
+  let out = '';
+  let err = '';
+  let settled = false;
+  const finish = (result) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    done(result);
+  };
+  const timer = setTimeout(() => { child.kill(); finish({ error: 'folder picker timed out' }); },
+    PICK_TIMEOUT_MS);
+  child.stdout.on('data', (c) => { out += c; });
+  child.stderr.on('data', (c) => { err += c; });
+  child.on('error', (e) => finish({ error: `folder picker unavailable: ${e.message}` }));
+  child.on('close', (code) => finish(resultOf(code, out, err)));
+}
+
+/**
+ * `/api/pick-folder` — the OS-NATIVE folder chooser, opened ON THE DAEMON HOST. `done` is
+ * called with `{path}` on OK, `{cancelled: true}` on cancel, or `{error}` — the shape
+ * `web/src/api/installs.js`'s `pickFolder()` already expects, unchanged since the endpoint was
+ * DECLINED (see this file's header and `js/web/routes.mjs`'s `DECLINED_POST` for that history,
+ * overridden by the user 2026-08-27).
+ *
+ * ASYNC, NEVER `spawnSync`: a folder dialog stays open until a human answers it — seconds to
+ * minutes — and a synchronous spawn would block this single-threaded server's event loop for
+ * exactly that long, so no OTHER request could be served while the dialog is up. That is also
+ * why `js/web/handler.mjs`'s `doPost` calls this INLINE rather than through `POST_ROUTES`:
+ * that table's dispatch is `fn(state, body) -> object`, sent to the client the moment `fn`
+ * returns — a shape with no room for "answer later," which is exactly what this endpoint does.
+ *
+ * The daemon must be running IN A DESKTOP SESSION for a dialog to actually appear; headless
+ * (no GUI session, or a platform with no branch below), the process still answers — an
+ * `{error}` — never a hang, because `runPicker`'s timeout and `error` handlers both fire
+ * `done` on their own.
+ */
+export function apiPickFolder(done) {
+  if (process.platform === 'win32') {
+    return runPicker('powershell', ['-NoProfile', '-STA', '-Command', PICK_SCRIPT_WIN], done,
+      (code, out, err) => {
+        if (code !== 0) return { error: (err || out).trim() || 'folder picker failed' };
+        const p = out.trim();
+        return p ? { path: p } : { cancelled: true };
+      });
+  }
+  if (process.platform === 'darwin') {
+    return runPicker('osascript', ['-e', PICK_SCRIPT_MAC], done, (code, out, err) => {
+      if (code === 0) return { path: out.trim() };
+      if (err.includes('-128') || err.includes('User canceled')) return { cancelled: true };
+      return { error: err.trim() || 'folder picker failed' };
+    });
+  }
+  return done({ error: 'no native folder dialog on this platform' });
+}
 
 // ---- user rules (user-rules.md) ----------------------------------------------------------
 
