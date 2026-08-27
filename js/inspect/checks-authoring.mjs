@@ -411,7 +411,8 @@ export function constitutionProblems() {
     try { text = readText(path.join(dir, `${pack}.md`)); } catch { continue; }
     for (const [, key] of text.matchAll(DOC_TOKEN_RE)) wanted.add(key);
   }
-  const lexWant = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'].map((r) => `LEX_${r}`);
+  const lexWant = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI']
+    .map((r) => `LEX_${r}`);
   // `_TEMPLATE.json` is included — it is the file `--sync-themes` seeds a new theme from, so a
   // stale key there propagates into every voice added afterwards. `themeFiles()` excludes it.
   const files = [...themeFiles(), path.join(THEMES, '_TEMPLATE.json')];
@@ -443,11 +444,11 @@ export function constitutionProblems() {
     const stale = lex.filter((k) => !lexWant.includes(k));
     const missing = lexWant.filter((k) => !lex.includes(k));
     for (const k of stale) {
-      problems.push(`[authoring] ${name} still defines {${k}} — the invariants are I..IX and `
-        + 'nothing renders this key, so it is a title for a rule that no longer exists');
+      problems.push(`[authoring] ${name} still defines {${k}} — no law heading carries this `
+        + 'numeral and nothing renders this key, so it is a title for a rule that no longer exists');
     }
     for (const k of missing) {
-      problems.push(`[authoring] ${name} has no {${k}} — one of the nine invariants would `
+      problems.push(`[authoring] ${name} has no {${k}} — one of the invariants would `
         + 'render with an empty title');
     }
     // M10 — ⚠ BOTH HEADING PARSERS MATCH THE TIER NOUN WITH `\S+`. A two-word value does not

@@ -248,10 +248,10 @@ test('the capability tables match the declared host capability', () => {
 test('the carrier still carries every law, themed and in order', () => {
   const source = readTextPy(path.join(ROOT, 'src', 'laws', 'universal.md'));
   const romans = [...source.matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+) —/gm)].map((m) => m[1]);
-  assert.equal(romans.length, 9,
-    `${romans.length} rules parsed out of src/laws/universal.md — expected the nine invariants; `
+  assert.equal(romans.length, 11,
+    `${romans.length} rules parsed out of src/laws/universal.md — expected the eleven invariants; `
     + 'either the heading shape moved and this test would assert almost nothing, or the corpus '
-    + 'grew a tenth invariant without the rest of the tree being told');
+    + 'grew a twelfth invariant without the rest of the tree being told');
   const theme = JSON.parse(readTextPy(path.join(ROOT, 'themes', 'neutral.json')));
   // A second theme, read only to be asserted ABSENT — the one claim here that does not share a
   // source with the render.

@@ -12,7 +12,7 @@
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
 [![Skills](https://img.shields.io/badge/skills-47-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-17-orange)](src/agents/)
-[![Laws](https://img.shields.io/badge/laws-9-critical)](src/laws/universal.md)
+[![Laws](https://img.shields.io/badge/laws-11-critical)](src/laws/universal.md)
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
 [![OpenCode · Claude Code · Bob · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
@@ -153,7 +153,7 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 | Layer | What it is |
 | --- | --- |
 | **🧭 Ontology** (`ontology/`) | the mind the rules govern, in four prose sections — **Telos** (the Pact: protect the user, the truth, the agent), **Evidence** (every claim graded by how it was obtained), **Decisions** (classify and tier by reversibility, show the real forks), **Conduct** (answer what was asked, once). Always in force, never toggleable |
-| **🛡️ Rules** (`laws/`) | 9 universal laws the agent obeys — always in force, never toggleable: sealed-secrets, one-intent-one-act, verify-before-assert, deletion-is-deliberate, surface-failures, data-not-orders, least-privilege, root-cause, external-gate |
+| **🛡️ Rules** (`laws/`) | 11 universal laws the agent obeys — always in force, never toggleable: sealed-secrets, one-intent-one-act, verify-before-assert, deletion-is-deliberate, surface-failures, data-not-orders, least-privilege, root-cause, external-gate, echo-the-intent, absence-is-a-claim |
 | **📐 Doctrines** (`doctrines/`) | practice packs, chosen per install at build time: **craft** (how code is written), **rigor** (how work is proven), **ops** (how the machine is operated), **process** (how a task is run). A doctrine rule may tighten a Rule, never repeal one, and the user's own `user-rules.md` outranks it. Pick with `geneseed-build --doctrines craft,rigor` (or `none`), a single rule with `--exclude-rules "process 7"`, in the setup wizard, or through the switches on the console's Constitution page; all four pack files ship on disk either way, so a citation into a pack you left out still resolves |
 | **🤖 Agents** (17) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer`, `developer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
 | **🛠 Skills** (47) | repeatable workflows: brainstorm · **clarify** · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · tdd · **develop** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · geneseed-code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **opencode-theme** · **herdr** · **pipeline** |

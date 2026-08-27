@@ -84,6 +84,8 @@
   "LEX_VII": "<themed title for Law VII (Least Privilege)>",
   "LEX_VIII": "<themed title for Law VIII (Cure the Cause)>",
   "LEX_IX": "<themed title for Law IX (External Gate)>",
+  "LEX_X": "<themed title for Law X (Echo the Intent)>",
+  "LEX_XI": "<themed title for Law XI (Absence Is a Claim)>",
   "PACK_CRAFT": "<display name of the craft doctrine pack — how code is written>",
   "PACK_RIGOR": "<display name of the rigor doctrine pack — how work is proven>",
   "PACK_OPS": "<display name of the ops doctrine pack — how the machine is driven>",

@@ -240,8 +240,9 @@ test('status reports derived counts, a well-formed version and every structural 
   assert.equal(d.laws, laws);
   // AN EQUALITY, NOT A FLOOR — see the same guard in `tests/unit/setup.test.mjs`. `> 30`
   // existed so a regex that matched nothing could not make the line above vacuously true;
-  // the three-tier split fixed the corpus at NINE invariants, so it is stated exactly.
-  assert.equal(laws, 9, `${laws} laws parsed — expected the nine invariants`);
+  // the three-tier split fixed the corpus at nine invariants and the Law III split (X and XI
+  // appended) took it to ELEVEN, so it is stated exactly.
+  assert.equal(laws, 11, `${laws} laws parsed — expected the eleven invariants`);
 
   assert.match(d.source_fp, /^[0-9a-f]{12}$/);
   assert.equal(typeof d.version_verdict, 'string');

@@ -42,6 +42,14 @@ const LAW_META = {
   7: ['security', 'Take only the tools, scope, and credentials the task needs.'],
   8: ['craft', 'Fix the root cause; never hide a failure to fake green.'],
   9: ['security', "Enforce permission at the boundary, never in the agent's own prompt."],
+  10: [
+    'verify',
+    'Echo an inferred or ambiguous goal back and get agreement before building on it.',
+  ],
+  11: [
+    'verify',
+    'An empty or truncated answer is a claim to interrogate, not evidence of absence.',
+  ],
 }
 
 // The same thing for the doctrine packs, keyed `<pack>.<n>` — the address the API publishes and

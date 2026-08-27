@@ -163,7 +163,7 @@ test('the laws section carries all three tiers, in constitutional order', () => 
     `the tiers are missing or out of order: ${JSON.stringify(tiers)}`);
   const by = (t) => items.filter((i) => i.tier === t);
   assert.equal(by('ontology').length, 4);
-  assert.equal(by('invariant').length, 9);
+  assert.equal(by('invariant').length, 11);
   assert.equal(by('doctrine').length, 23);
   // ⚠ THE THREE ADDRESS SHAPES MUST NOT COLLIDE — they share one `type=law` route, so a
   // duplicate name makes one item unreachable.
@@ -171,7 +171,7 @@ test('the laws section carries all three tiers, in constitutional order', () => 
   assert.deepEqual(by('ontology').map((i) => i.name),
     ['ont:telos', 'ont:evidence', 'ont:decisions', 'ont:conduct']);
   assert.deepEqual(by('invariant').map((i) => i.name),
-    ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX']);
+    ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI']);
   assert.ok(by('doctrine').every((i) => /^[a-z]+\.\d+$/.test(i.name)),
     'a doctrine address is not `<pack>.<n>`');
   // A doctrine row carries its pack's header material, so the page groups without a second
@@ -222,7 +222,7 @@ test('the doc tokens count each tier separately, and a pack toggle moves only tw
   // holds README and SHIPPED.md prose to the same number, and it cannot be re-blessed. So the
   // other tiers get their own tokens rather than widening this one.
   assert.deepEqual(docCounts(st), {
-    '{N_LAWS}': 9,
+    '{N_LAWS}': 11,
     '{N_AGENTS}': st.inventory.agents.length,
     '{N_SKILLS}': st.inventory.skills.length,
     '{N_PLUGINS}': docCounts(st)['{N_PLUGINS}'],
@@ -237,7 +237,7 @@ test('the doc tokens count each tier separately, and a pack toggle moves only tw
   assert.equal(narrowed['{N_PACKS_ACTIVE}'], 1);
   assert.equal(narrowed['{N_DOCTRINE_RULES}'], 6);
   assert.equal(narrowed['{N_PACKS}'], 4, 'a pack that is off left the catalogue count');
-  assert.equal(narrowed['{N_LAWS}'], 9, 'a pack toggle moved the invariant count');
+  assert.equal(narrowed['{N_LAWS}'], 11, 'a pack toggle moved the invariant count');
   assert.equal(narrowed['{N_ONTOLOGY}'], 4);
   // ...and a page that spends one really is substituted. `concept` is the only kind
   // `subCounts` runs over, and `rules.md` is the page carrying `{N_LAWS}` today.
@@ -270,11 +270,11 @@ test('the overview counts the tiers without moving the laws badge', () => {
   // and the doctor's FROZEN `proseMirrorProblems` holds README and SHIPPED.md prose to the
   // same number — widening it to the whole constitution moves all four at once, and one of
   // the four cannot be re-blessed.
-  assert.equal(o.counts.laws, 9);
+  assert.equal(o.counts.laws, 11);
   assert.equal(o.counts.ontology, 4);
   assert.deepEqual(o.counts.doctrines, { active: 4, total: 4, rules: 23 });
   const narrowed = apiOverview({ ...neutral(), inventory: tuiInventory('neutral', ['craft', 'rigor']) });
-  assert.equal(narrowed.counts.laws, 9, 'a pack toggle moved the invariant count');
+  assert.equal(narrowed.counts.laws, 11, 'a pack toggle moved the invariant count');
   assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 4, rules: 10 },
     'the summary counts rules this install did not build in');
 });
