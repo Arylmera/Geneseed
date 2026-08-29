@@ -14,11 +14,15 @@ script, then present its markdown output to the user.
 
 ## How to run
 
-Run the script that sits next to this SKILL.md:
+Run the product's own copy of the script — this repository IS the source tree,
+so the deployed skill points at `src/` instead of carrying a second tracked
+copy that would drift:
 
 ```bash
-node <this-skill-directory>/scripts/token_report.mjs
+node src/skills/token-report/scripts/token_report.mjs
 ```
+
+(Path relative to the repository root.)
 
 It auto-detects the host you are running on by locating session data and
 picking the most recently active source:
@@ -72,5 +76,6 @@ session. Do not invent exact numbers.
 ## Self-improvement
 
 If the script failed to find this host's session data, or a host changed its
-storage schema, note the observed layout and fix `scripts/token_report.mjs`
-(or record the finding in memory for the next run) before closing out.
+storage schema, note the observed layout and fix
+`src/skills/token-report/scripts/token_report.mjs` (or record the finding in
+memory for the next run) before closing out.

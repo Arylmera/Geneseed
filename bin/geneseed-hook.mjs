@@ -38,7 +38,6 @@
  * are the same observation.
  */
 import { cmdContext, cmdGitGate, cmdRuleGate, cmdLearn } from '../js/hosts/hooks.mjs';
-import { printHelp } from '../js/ui/cli.mjs';
 // Not a new module on the hot path: `js/hosts/hooks.mjs` above already imports
 // `js/lib/fs.mjs`, so this edge names a file the process has already loaded.
 import { printErr } from '../js/lib/fs.mjs';
@@ -92,7 +91,7 @@ function parse(spec, argv) {
   return { args };
 }
 
-function main(argv) {
+async function main(argv) {
   // `geneseed status | head` closes stdout early. Python exits quietly through
   // BrokenPipeError; the Node equivalent is an EPIPE that would otherwise be an unhandled
   // 'error' event and a stack trace on a hook path.
@@ -118,9 +117,12 @@ function main(argv) {
   // `<verb> --help`, for the same reason and by the same owner as `bin/geneseed-cli.mjs`:
   // argparse holds `-h` at the parser, so this entry's `parse` calls it an unrecognized
   // argument. The four hook verbs are four of the reference's 26 and had the same gap.
-  // `js/ui/cli.mjs` reads the CLI table lazily, inside its functions, so importing it costs this
-  // entry a module parse and no file read on the hook path.
+  // `js/ui/cli.mjs` is imported HERE, not at the top: a static import cost every tool call
+  // of every session a module parse (~3 ms of an ~12 ms controllable budget) for a branch
+  // only a human at a terminal ever takes. The hook path never awaits it, so `main` staying
+  // async-shaped costs the hot verbs nothing.
   if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
+    const { printHelp } = await import('../js/ui/cli.mjs');
     const rc = printHelp('geneseed-hook', verb);
     if (rc !== null) return rc;
   }
@@ -129,4 +131,4 @@ function main(argv) {
   return spec.fn(parsed.args);
 }
 
-process.exitCode = main(process.argv.slice(2));
+main(process.argv.slice(2)).then((code) => { process.exitCode = code; });
