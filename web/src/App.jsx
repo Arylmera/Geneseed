@@ -17,6 +17,7 @@ import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
 import Loading from './components/Loading.jsx'
+import ConfirmDialog from './components/ConfirmDialog.jsx'
 // Dashboard is the landing route, so it ships in the shell. Every other page is
 // code-split: importing all fourteen statically put the whole console — graph
 // rendering, the harness manager, the docs viewer — into one chunk that had to be
@@ -83,6 +84,7 @@ export default function App() {
   // stays false; below it the rail is an off-canvas drawer this opens.
   const [navOpen, setNavOpen] = useState(false)
   const appRef = useRef(null)
+  const colRef = useRef(null)
 
   // Esc closes the drawer, the one shortcut every drawer is expected to have.
   useEffect(() => {
@@ -92,6 +94,22 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [navOpen])
+
+  // While the drawer is open, focus lives IN it: the main column goes `inert` so
+  // Tab cannot land behind the scrim, focus moves into the rail, and on close it
+  // returns to whatever opened the drawer (the topbar toggle). The `inert`
+  // property is set imperatively — React 18 doesn't forward it as an attribute.
+  useEffect(() => {
+    if (!navOpen) return undefined
+    const col = colRef.current
+    const opener = document.activeElement
+    if (col) col.inert = true
+    document.getElementById('rail-nav')?.focus()
+    return () => {
+      if (col) col.inert = false
+      if (opener instanceof HTMLElement) opener.focus()
+    }
   }, [navOpen])
 
   const onError = (e) =>
@@ -113,7 +131,7 @@ export default function App() {
   // the rail's germination ring and the dashboard's Status/Lineage/Operator views all read
   // it, and it was being fetched twice — once for the dashboard, once for the rail — for the
   // same two fields. Refetched on `dataRev` so a rebuild moves the ring with everything else.
-  const { data: setup } = useAsync(() => api.setup().catch(() => null), [dataRev])
+  const { data: setup } = useAsync(() => api.setup().catch(() => null), [dataRev], 'setup')
 
   // One sentence describing what the job runner is doing, for the live region.
   const lastRun = runs[runs.length - 1]
@@ -135,14 +153,11 @@ export default function App() {
 
   // Stop the local server (same /api/shutdown the Settings card uses). The
   // connection drops as the server goes down, so a rejected request right
-  // after the call is still a successful stop.
-  const handleShutdown = async () => {
-    if (
-      !window.confirm(
-        'Stop the local Geneseed server? The console goes offline until you start it again.',
-      )
-    )
-      return
+  // after the call is still a successful stop. Confirmed through the themed
+  // <dialog> rather than window.confirm — same question, console's own chrome.
+  const [confirmStop, setConfirmStop] = useState(false)
+  const doShutdown = async () => {
+    setConfirmStop(false)
     try {
       await api.shutdown()
     } catch {
@@ -208,7 +223,7 @@ export default function App() {
           onClose={() => setVoiceOpen(false)}
         />
       )}
-      <div className="col">
+      <div className="col" ref={colRef}>
         <Topbar
           route={route}
           navOpen={navOpen}
@@ -219,7 +234,7 @@ export default function App() {
           onQuery={setQuery}
           mode={mode}
           onToggleMode={toggleMode}
-          onShutdown={handleShutdown}
+          onShutdown={() => setConfirmStop(true)}
           dataRev={dataRev}
           onSwitch={refresh}
         />
@@ -310,6 +325,15 @@ export default function App() {
           onCancel={cancelJob}
         />
       </div>
+      <ConfirmDialog
+        open={confirmStop}
+        title="Stop the server?"
+        confirmLabel="Stop server"
+        onConfirm={doShutdown}
+        onClose={() => setConfirmStop(false)}
+      >
+        The console goes offline until you start it again with <code>geneseed web</code>.
+      </ConfirmDialog>
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
       {booting && (
         <BootSplash

@@ -243,7 +243,9 @@ function RailVitals({ overview, setup }) {
 
 export default function Rail({ route, overview, setup, onOpenVoice, onNavigate }) {
   return (
-    <aside className="rail" id="rail-nav" aria-label="Harness navigation">
+    // A <nav> landmark, not <aside>: this IS the app's primary navigation, and
+    // tabIndex -1 lets the drawer focus-management in App.jsx move focus here.
+    <nav className="rail" id="rail-nav" aria-label="Harness navigation" tabIndex={-1}>
       <button
         className="rail-brand"
         onClick={() => {
@@ -302,6 +304,6 @@ export default function Rail({ route, overview, setup, onOpenVoice, onNavigate }
           <Icon name="chevron" className="chev glyph" />
         </button>
       </div>
-    </aside>
+    </nav>
   )
 }

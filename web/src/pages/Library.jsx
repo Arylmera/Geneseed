@@ -8,6 +8,7 @@ import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import FilterInput from '../components/FilterInput.jsx'
 
 // The on-disk source path for a given (section, name). Surface text for the
 // "source" meta line in the detail pane — purely informational, doesn't drive
@@ -98,7 +99,11 @@ export default function Library({ overview, section, selected, dataRev }) {
     data: catalog,
     error: catErr,
     reload: reloadCatalog,
-  } = useAsync(() => (sec === 'wiki' ? fetchKnowledge() : api.catalog(sec)), [sec, dataRev])
+  } = useAsync(
+    () => (sec === 'wiki' ? fetchKnowledge() : api.catalog(sec)),
+    [sec, dataRev],
+    'catalog',
+  )
 
   // useAsync keeps the prior section's catalog in `data` while the new one is
   // in flight (so the list doesn't flash empty). Guard against that staleness:
@@ -276,13 +281,11 @@ export default function Library({ overview, section, selected, dataRev }) {
               {ql ? `${matches.length} of ${items.length}` : `${items.length} items`}
             </span>
           </div>
-          <input
-            className="lib-filter"
-            type="text"
+          <FilterInput
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={setQ}
             placeholder={`Filter ${SECTIONS[sec].label.toLowerCase()}…`}
-            aria-label={`Filter ${SECTIONS[sec].label}`}
+            label={`Filter ${SECTIONS[sec].label}`}
           />
           <div className="lib-rows" ref={rowsRef} onKeyDown={onRowsKey}>
             {(() => {

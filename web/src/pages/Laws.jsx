@@ -7,6 +7,7 @@ import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { LAW_CATS, LAW_CAT_ORDER, PACK_CATS } from '../lib/lawCats.js'
 import CatalogRow from '../components/CatalogRow.jsx'
+import FilterInput from '../components/FilterInput.jsx'
 
 // THE FILENAME AND THE ROUTE STAY `laws`. tests/helpers/cli_golden.mjs hard-requires this path,
 // doctor's lawMetaProblems reads this ONE file out of web/src, and the npm partition ships it
@@ -197,8 +198,9 @@ function OntologyCard({ sec, isOpen, onToggle }) {
 // route). The open row is driven straight off the URL so those links pre-open the rule and any
 // opened rule is itself shareable.
 export default function Laws({ selected, overview, onAction, dataRev }) {
-  const { data, error } = useAsync(() => api.catalog('laws'), [dataRev])
+  const { data, error } = useAsync(() => api.catalog('laws'), [dataRev], 'catalog:laws')
   const [sel, setSel] = useState('all')
+  const [q, setQ] = useState('')
   const open = selected || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)
 
@@ -372,7 +374,11 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
   // ⚠ ONLY NON-EMPTY FACETS RENDER. Two of the six classes have no invariant since the split, and
   // a chip reading `Context 0` is a filter that can only ever produce the empty state.
   const facets = LAW_CAT_ORDER.filter((k) => counts[k])
-  const shown = sel === 'all' ? laws : laws.filter((l) => l.cat === sel)
+  // Substring narrowing over address, name and principle — display-only, so the
+  // staged pack selection above keeps operating on the full rule set.
+  const ql = q.trim().toLowerCase()
+  const ruleMatch = (r) => !ql || `${r.addr} ${r.name} ${r.ess}`.toLowerCase().includes(ql)
+  const shown = (sel === 'all' ? laws : laws.filter((l) => l.cat === sel)).filter(ruleMatch)
 
   return (
     <>
@@ -433,6 +439,13 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
             </button>
           ))}
         </div>
+        <FilterInput
+          className="lib-filter law-filter"
+          value={q}
+          onChange={setQ}
+          placeholder="Filter rules…"
+          label="Filter rules"
+        />
         <span className="law-readout">
           {/* Derived, never transcribed: a hardcoded 6 outlived the corpus it counted once. */}
           <b>{shown.length}</b> invariants · <b>{facets.length}</b> classes · source{' '}
@@ -451,8 +464,8 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
         ))}
         {shown.length === 0 && (
           <div className="empty" style={{ padding: 32 }}>
-            <div className="big">No rules in this class</div>
-            Try another class, or pick All.
+            <div className="big">{ql ? 'No matching rules' : 'No rules in this class'}</div>
+            {ql ? <>Nothing matches “{q.trim()}”.</> : <>Try another class, or pick All.</>}
           </div>
         )}
       </div>
@@ -464,64 +477,70 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
           source <b>doctrines/</b>
         </span>
       </div>
-      {packs.map((p) => (
-        <div
-          className={`card law-wrap mb-16 pack-wrap ${packOn(p) ? '' : 'pack-off'}`}
-          key={p.pack}
-        >
-          <div className="pack-head">
-            <span className="pack-name" style={{ '--cc': PACK_CATS[p.pack] }}>
-              <span className="cdot" />
-              {p.title}
-            </span>
-            <span className="pack-desc">{p.desc}</span>
-            {/* Derived from the rules, never held separately — a pack IS however many of its
+      {packs.map((p) => {
+        // The filter narrows the doctrine bands too; a pack with no matching
+        // rule drops out entirely rather than rendering an empty shell.
+        const packRules = p.rules.filter(ruleMatch)
+        if (ql && packRules.length === 0) return null
+        return (
+          <div
+            className={`card law-wrap mb-16 pack-wrap ${packOn(p) ? '' : 'pack-off'}`}
+            key={p.pack}
+          >
+            <div className="pack-head">
+              <span className="pack-name" style={{ '--cc': PACK_CATS[p.pack] }}>
+                <span className="cdot" />
+                {p.title}
+              </span>
+              <span className="pack-desc">{p.desc}</span>
+              {/* Derived from the rules, never held separately — a pack IS however many of its
                 rules are on, and a second source could disagree with the switches above it. */}
-            <span className="pack-state">{packState(p)}</span>
-          </div>
-          {!p.active && !canApply && (
-            // The fallback for a console with no install to rebuild — a reader still needs the
-            // exact selection, because `--doctrines` REPLACES the set rather than adding to it.
-            // ⚠ `geneseed-build`, not `geneseed build`: the CLI's `build` verb forwards
-            // `--theme` and nothing else, so the shorter spelling errors.
-            <div className="pack-enable">
-              $ geneseed-build --doctrines{' '}
-              {packs
-                .filter((q) => q.active || q.pack === p.pack)
-                .map((q) => q.pack)
-                .join(',')}
-              {deployedExcluded.length > 0 && ` --exclude-rules ${deployedExcluded.join(',')}`}
+              <span className="pack-state">{packState(p)}</span>
             </div>
-          )}
-          <div className="law-rowhead">
-            <span>№</span>
-            <span>Rule</span>
-            <span>Principle</span>
-            <span>Pack</span>
-            <span className="toggle-col">Toggle</span>
+            {!p.active && !canApply && (
+              // The fallback for a console with no install to rebuild — a reader still needs the
+              // exact selection, because `--doctrines` REPLACES the set rather than adding to it.
+              // ⚠ `geneseed-build`, not `geneseed build`: the CLI's `build` verb forwards
+              // `--theme` and nothing else, so the shorter spelling errors.
+              <div className="pack-enable">
+                $ geneseed-build --doctrines{' '}
+                {packs
+                  .filter((q) => q.active || q.pack === p.pack)
+                  .map((q) => q.pack)
+                  .join(',')}
+                {deployedExcluded.length > 0 && ` --exclude-rules ${deployedExcluded.join(',')}`}
+              </div>
+            )}
+            <div className="law-rowhead">
+              <span>№</span>
+              <span>Rule</span>
+              <span>Principle</span>
+              <span>Pack</span>
+              <span className="toggle-col">Toggle</span>
+            </div>
+            {packRules.map((r) => (
+              <LawRow
+                key={r.addr}
+                law={{ ...r, off: !isOn(r.addr) }}
+                isOpen={open === r.addr}
+                onToggle={() => toggle(r.addr)}
+                toggleCol={
+                  canApply ? (
+                    <button
+                      type="button"
+                      className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={isOn(r.addr)}
+                      aria-label={`${r.name} rule`}
+                      onClick={() => toggleRule(r.addr)}
+                    />
+                  ) : null
+                }
+              />
+            ))}
           </div>
-          {p.rules.map((r) => (
-            <LawRow
-              key={r.addr}
-              law={{ ...r, off: !isOn(r.addr) }}
-              isOpen={open === r.addr}
-              onToggle={() => toggle(r.addr)}
-              toggleCol={
-                canApply ? (
-                  <button
-                    type="button"
-                    className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
-                    role="switch"
-                    aria-checked={isOn(r.addr)}
-                    aria-label={`${r.name} rule`}
-                    onClick={() => toggleRule(r.addr)}
-                  />
-                ) : null
-              }
-            />
-          ))}
-        </div>
-      ))}
+        )
+      })}
       {canApply && packs.length > 0 && (
         <div className="card pad-lg mb-16">
           {losingConsent && (

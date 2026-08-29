@@ -65,14 +65,17 @@ export default function Topbar({
       <div className="topbar-spacer" />
       <HarnessSelector dataRev={dataRev} onSwitch={onSwitch} />
       <Search value={query} onChange={onQuery} />
+      {/* Icon-only buttons: `title` is a hover hint sighted mouse users get, so each
+          also carries an aria-label — the Icon SVGs are aria-hidden and name nothing. */}
       <button
         className="iconbtn"
         title={mode === 'light' ? 'Switch to dark' : 'Switch to light'}
+        aria-label={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
         onClick={onToggleMode}
       >
         <Icon name={mode === 'light' ? 'moon' : 'sun'} />
       </button>
-      <button className="iconbtn" title="Stop server" onClick={onShutdown}>
+      <button className="iconbtn" title="Stop server" aria-label="Stop server" onClick={onShutdown}>
         <Icon name="power" />
       </button>
     </header>

@@ -7,6 +7,7 @@ import ErrorState from '../components/ErrorState.jsx'
 import Markdown from '../components/Markdown.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import CatalogRow from '../components/CatalogRow.jsx'
+import FilterInput from '../components/FilterInput.jsx'
 import { CAT_HUES } from '../lib/lawCats.js'
 
 // Six-class taxonomy mirroring the Laws view. The class itself comes from the server
@@ -73,8 +74,9 @@ function SkillRow({ skill, isOpen, onToggle }) {
 // cross-links). The open row is driven straight off the URL so those links
 // pre-open the skill and any opened skill is itself shareable.
 export default function Skills({ selected, dataRev }) {
-  const { data, error } = useAsync(() => api.catalog('skills'), [dataRev])
+  const { data, error } = useAsync(() => api.catalog('skills'), [dataRev], 'catalog:skills')
   const [sel, setSel] = useState('all')
+  const [q, setQ] = useState('')
   const open = selected || null
   const toggle = (name) => go(open === name ? '#/skills' : `#/item/skill/${name}`)
 
@@ -97,7 +99,10 @@ export default function Skills({ selected, dataRev }) {
   // The Personal chip is earned, not permanent: an install with no skills of your own
   // would otherwise carry a dead "Personal 0" chip on every visit.
   const cats = SKILL_CAT_ORDER.filter((k) => k !== 'personal' || counts.personal > 0)
-  const shown = sel === 'all' ? skills : skills.filter((s) => s.cat === sel)
+  const ql = q.trim().toLowerCase()
+  const shown = (sel === 'all' ? skills : skills.filter((s) => s.cat === sel)).filter(
+    (s) => !ql || `${s.name} ${s.desc}`.toLowerCase().includes(ql),
+  )
 
   return (
     <>
@@ -130,6 +135,13 @@ export default function Skills({ selected, dataRev }) {
             </button>
           ))}
         </div>
+        <FilterInput
+          className="lib-filter law-filter"
+          value={q}
+          onChange={setQ}
+          placeholder="Filter skills…"
+          label="Filter skills"
+        />
         <span className="law-readout">
           <b>{shown.length}</b> skills · <b>{cats.length}</b> classes ·{' '}
           {experimental > 0 ? (
@@ -156,8 +168,23 @@ export default function Skills({ selected, dataRev }) {
         ))}
         {shown.length === 0 && (
           <div className="empty" style={{ padding: 32 }}>
-            <div className="big">No skills in this class</div>
-            Try another class, or pick All.
+            {/* Three distinct nothings: an empty install, a filter miss, an empty class. */}
+            {skills.length === 0 ? (
+              <>
+                <div className="big">Nothing here yet</div>
+                No skills are deployed; build and install a theme to seed them.
+              </>
+            ) : ql ? (
+              <>
+                <div className="big">No matching skills</div>
+                Nothing matches “{q.trim()}”.
+              </>
+            ) : (
+              <>
+                <div className="big">No skills in this class</div>
+                Try another class, or pick All.
+              </>
+            )}
           </div>
         )}
       </div>
