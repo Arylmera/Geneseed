@@ -113,10 +113,19 @@ export default function ActivityDetail({ sid }) {
         },
       )
     tick()
-    const t = setInterval(tick, 2000)
+    // Same hidden-tab economy as Activity: no polls nobody sees, one refresh
+    // the moment the tab is fronted again.
+    const t = setInterval(() => {
+      if (!document.hidden) tick()
+    }, 2000)
+    const onVis = () => {
+      if (!document.hidden) tick()
+    }
+    document.addEventListener('visibilitychange', onVis)
     return () => {
       alive = false
       clearInterval(t)
+      document.removeEventListener('visibilitychange', onVis)
     }
   }, [sid])
 
