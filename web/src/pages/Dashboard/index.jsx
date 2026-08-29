@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api } from '../../api/index.js'
 import StatusView from './StatusView.jsx'
 import LineageView from './LineageView.jsx'
@@ -9,7 +9,7 @@ import JournalView from './JournalView.jsx'
 import Onboarding from './Onboarding.jsx'
 import { resolveLayout } from '../../hooks/useLayout.js'
 
-// The dashboard shell: loads the supplementary data (graph, doctor, recency) the
+// The dashboard shell: loads the supplementary data (doctor, recency) the
 // directions share, then renders the chosen direction. The Status lens is a layout
 // chosen independently of the flavour (skin) — Cultivar's hero+kpi+genome,
 // Greenhouse's ring+tiles+donut, Operator HUD's strip+modules, or the Journal's
@@ -31,7 +31,6 @@ export default function Dashboard({
 }) {
   const lens = resolveLayout(flavour, layout)
   const [dir, setDir] = useState('status')
-  const [graph, setGraph] = useState(null)
   const [doctor, setDoctor] = useState(null)
   const [recent, setRecent] = useState(null)
   const sigil = overview ? themes.find((t) => t.name === overview.theme)?.sigil || '' : ''
@@ -59,28 +58,6 @@ export default function Dashboard({
       alive = false
     }
   }, [lens, dataRev])
-
-  // The graph is the heaviest supplementary fetch and only LineageView reads it, which
-  // only renders after the user clicks the Lineage segment — so fetch lazily, on first
-  // visit to that dir. graphRevRef caches it per dataRev: switching dir away and back
-  // doesn't refetch, but a job finishing (dataRev bumps) invalidates the cache for the
-  // next time Lineage is open or opened.
-  const graphRevRef = useRef(null)
-  useEffect(() => {
-    if (dir !== 'lineage' || graphRevRef.current === dataRev) return
-    let alive = true
-    api
-      .graph()
-      .then((v) => {
-        if (!alive) return
-        setGraph(v)
-        graphRevRef.current = dataRev
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [dir, dataRev])
 
   if (!overview) return <div className="loading">Loading&#8230;</div>
 
@@ -147,7 +124,7 @@ export default function Dashboard({
         <OperatorHudView overview={overview} jobs={jobs} doctor={doctor} onAction={onAction} />
       )}
       {dir === 'lineage' && (
-        <LineageView overview={overview} sigil={sigil} setup={setup} jobs={jobs} graph={graph} />
+        <LineageView overview={overview} sigil={sigil} setup={setup} jobs={jobs} />
       )}
       {dir === 'operator' && <OperatorView overview={overview} setup={setup} jobs={jobs} />}
     </>

@@ -7,11 +7,9 @@
  * the same file, so there is exactly one description of the CLI surface, not a second
  * transcription of it.
  *
- * So `NOT_PORTED_KINDS` declares what is left, `apiDocsPage` answers 501 for it, and
- * `tests/unit/web_server.test.mjs` requires `PORTED_KINDS` ∪ `NOT_PORTED_KINDS` to equal
- * `REF_KINDS` — a FROZEN LITERAL of the five kinds this daemon has ever needed to dispatch
- * on. Same partition shape as the route table, which is why it is a table here too and not
- * two `if`s.
+ * `tests/unit/web_server.test.mjs` holds `KINDS` against a written-out list of the five
+ * kinds this daemon dispatches on — same declaration-vs-dispatch shape as the route table,
+ * which is why it is a table here too and not five `if`s.
  *
  * THE `?harness=` QUERY PARAM IS the Docs selector, and it is the ONLY input to these
  * endpoints that is not the checkout itself — the one thing a test can vary. Every
@@ -430,22 +428,6 @@ function about(state) {
   };
 }
 
-/**
- * EMPTY, AND KEPT DECLARED — the third partition in this codebase to reach that state,
- * after `NOT_PORTED_POST` and `NOT_PORTED_ACTIONS`.
- *
- * `tests/unit/web_server.test.mjs` cross-checks this set against the kinds `apiDocsPage`
- * dispatches on, and that check is at its STRONGEST when the set is empty: it says every
- * kind this daemon can dispatch on is answered here. A sixth kind added later still cannot
- * quietly fall through to the `NotFound` at the bottom, and it has a place to be declared
- * rather than reading as a typo'd page id.
- *
- * THE 501 ARM HAS NO REACHABLE TARGET TODAY: with this set empty, no page names an
- * unported kind. Its correctness rests on the declaration check above, not on any request
- * that actually reaches it — worth knowing before "simplifying" it away as dead code.
- */
-export const NOT_PORTED_KINDS = new Set();
-
 export function apiDocs(state, harnessName = null) {
   const hn = normHarness(harnessName, state);
   const groups = visibleGroups(hn).map((g) => ({
@@ -466,20 +448,16 @@ export function apiDocsPage(state, pageId, harnessName = null) {
   const hn = normHarness(harnessName, state);
   const render = KIND_ROUTES[page.kind];
   if (render !== undefined) return render(state, pageId, page, hn);
-  if (NOT_PORTED_KINDS.has(page.kind)) {
-    const e = new Error(`not ported yet: docs kind '${page.kind}'`);
-    e.notPorted = true;
-    throw e;
-  }
   throw new NotFound(pageId);
 }
 
 /**
- * The three kinds that cross, as a TABLE and not three `if`s.
+ * The five kinds, as a TABLE and not five `if`s.
  *
- * `tests/unit/web_server.test.mjs` requires `Object.keys(KIND_ROUTES) ∪ NOT_PORTED_KINDS` to
- * equal the kinds `apiDocsPage` dispatches on — this table is what the dispatcher actually
- * consults, so a declaration-only check cannot see a dispatcher that stopped using it.
+ * `tests/unit/web_server.test.mjs` holds `Object.keys(KIND_ROUTES)` against a written-out
+ * list of the kinds `apiDocsPage` must dispatch on — this table is what the dispatcher
+ * actually consults, so a declaration-only check cannot see a dispatcher that stopped
+ * using it.
  */
 const KIND_ROUTES = {
   markdown: (state, pageId, page, hn) => {
@@ -514,4 +492,4 @@ const KIND_ROUTES = {
   }),
 };
 
-export const PORTED_KINDS = Object.keys(KIND_ROUTES);
+export const KINDS = Object.keys(KIND_ROUTES);

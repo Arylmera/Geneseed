@@ -37,7 +37,6 @@ import { stripWhitespace, percentDecode } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
 import { apiMcp, apiRules } from './actions.mjs';
-import { apiGraph } from './graph.mjs';
 
 /** A requested catalog section or item that does not exist. */
 export class NotFound extends Error {}
@@ -498,7 +497,6 @@ function flatName(name) {
   }
 }
 
-/** `js/web/graph.mjs` is a second reader of this pattern. */
 export const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
 /**
@@ -874,8 +872,8 @@ const RECENT_LIMIT = 8;
 /**
  * THE NEWEST FILE-BACKED ENTRIES ACROSS THE HARNESS — the "freshly grown" card's whole payload.
  *
- * A GET added after the reference surface was frozen (`GET_BEYOND_REF` in `routes.mjs`), and
- * the first one. It exists because NOTHING else in this API carries a per-entry date: every
+ * The first GET added after the Python→Node port froze its reference surface. It exists
+ * because NOTHING else in this API carries a per-entry date: every
  * catalog row is `{name, title, desc, source}` and the only two timestamps on the whole surface are
  * `overview.build_time` and `doctor.checked_at`. A client cannot stat a path, so "what changed
  * lately" was unanswerable without a server that looks.
@@ -954,13 +952,11 @@ export const PREFIX_ROUTES = [
 /**
  * A literal path to `api_X(state)`, table-keyed rather than a chain of `if`s — the reason
  * it is a table is `tests/unit/web_server.test.mjs`'s cross-check, which requires this
- * table plus `PREFIX_ROUTES`, `PORTED_INLINE` and `NOT_PORTED` to equal `REF_GET`, a frozen
- * record of every GET this daemon has ever needed to answer.
+ * table plus `PREFIX_ROUTES` and `GET_INLINE` to equal a surface list written out in the
+ * test, so a route cannot appear or vanish unenumerated.
  */
 export const STATE_ROUTES = {
   '/api/overview': apiOverview,
-  // Added after the reference surface was frozen — declared in `GET_BEYOND_REF`, which
-  // keeps the partition gate's set equality honest instead of forging `REF_GET`.
   '/api/recent': apiRecent,
   '/api/themes': apiThemes,
   '/api/setup': apiSetup,
@@ -969,7 +965,6 @@ export const STATE_ROUTES = {
   '/api/excludes': apiExcludes,
   '/api/profile': apiProfile,
   '/api/diff': apiDiff,
-  '/api/graph': apiGraph,
   '/api/activity': apiActivity,
   // `/api/rules` must exist as a PAIR with its POST: `apiRulesMutate` splices `parseRules`'
   // line indices, and the fingerprint every mutation must send back is what this GET

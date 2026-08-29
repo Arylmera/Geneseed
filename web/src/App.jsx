@@ -32,7 +32,6 @@ const Profile = lazy(() => import('./pages/Profile.jsx'))
 const Skills = lazy(() => import('./pages/Skills.jsx'))
 const Diff = lazy(() => import('./pages/Diff.jsx'))
 const Doctor = lazy(() => import('./pages/Doctor.jsx'))
-const Graph = lazy(() => import('./pages/Graph.jsx'))
 const Settings = lazy(() => import('./pages/Settings/index.jsx'))
 const Harness = lazy(() => import('./pages/Harness.jsx'))
 const Docs = lazy(() => import('./pages/Docs/index.jsx'))
@@ -274,7 +273,6 @@ export default function App() {
               {route.view === 'profile' && <Profile />}
               {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
               {route.view === 'doctor' && <Doctor />}
-              {route.view === 'graph' && <Graph />}
               {route.view === 'settings' && (
                 <Settings
                   overview={overview}

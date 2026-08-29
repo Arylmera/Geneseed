@@ -24,7 +24,7 @@
  * The second removes a working feature from every GIT-CHECKOUT user — for whom `link` is
  * the only thing that puts `geneseed` on PATH, because there is no package manager in that
  * story — in order to spare npm users a duplicate. It also spends a `web/dist` rebuild on a
- * deletion. So: they ship, they port, and `NOT_PORTED_ACTIONS` empties.
+ * deletion. So: they ship, and they port.
  *
  * The npm duplication is left as it is rather than papered over with a new "you already have
  * this" refusal: that would be a REDESIGN of the verb, the reference has no such arm, and a

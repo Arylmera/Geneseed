@@ -1,15 +1,12 @@
 import React from 'react'
-import { go } from '../../lib/router.js'
-import { Icon } from '../../components/Icon.jsx'
 import { SECTION_ORDER } from '../../lib/sections.js'
 import { maxCount, editCount } from '../../lib/format.js'
 import StrandRow from './StrandRow.jsx'
-import MiniGraph from './MiniGraph.jsx'
 import ActivityFeed from './ActivityFeed.jsx'
 
-// Direction B · Lineage — the source -> render -> deployed timeline, a graph
-// preview, and the genome-by-volume strand chart.
-export default function LineageView({ overview, sigil, setup, jobs, graph }) {
+// Direction B · Lineage — the source -> render -> deployed timeline and the
+// genome-by-volume strand chart.
+export default function LineageView({ overview, sigil, setup, jobs }) {
   const max = maxCount(overview.counts)
   const verdict = setup?.version_verdict || ''
   const verdictOk = verdict.includes('up to date')
@@ -23,7 +20,7 @@ export default function LineageView({ overview, sigil, setup, jobs, graph }) {
 
   return (
     <>
-      <div className="grid split-lineage mb-16">
+      <div className="mb-16">
         <div className="card pad-lg rise" style={{ position: 'relative', overflow: 'hidden' }}>
           <h2 className="h" style={{ fontSize: 22, margin: '0 0 18px' }}>
             Gene-seed lineage
@@ -56,18 +53,6 @@ export default function LineageView({ overview, sigil, setup, jobs, graph }) {
               {edits} local edits
             </span>
           </div>
-        </div>
-        <div className="card pad-lg rise" style={{ animationDelay: '80ms' }}>
-          <div className="card-head">
-            <h3>Cross-link constellation</h3>
-            <div className="right">
-              <button className="btn soft sm" onClick={() => go('#/graph')}>
-                Open graph
-                <Icon name="arrow" />
-              </button>
-            </div>
-          </div>
-          <MiniGraph graph={graph} />
         </div>
       </div>
 

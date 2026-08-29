@@ -519,7 +519,7 @@ const ALLOWED_SPAWNS = {
       'p = spawn(cmd[0], cmd.slice(1), {'],
   },
   // ADDED 2026-08-27: `/api/pick-folder`'s native dialog, a user override of the permanent
-  // decline `js/web/routes.mjs`'s `DECLINED_POST` used to record (see that file, now empty).
+  // decline the port's `DECLINED_POST` set used to record (retired since; see git history).
   // ONE call site, reused for both platform branches, which is why `spawnCalls` is 1 rather
   // than 2 — `runPicker` is the only place `spawn(` appears in this file.
   'web/actions.mjs': {

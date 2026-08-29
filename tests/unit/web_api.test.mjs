@@ -25,7 +25,6 @@ import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
   apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg,
 } from '../../js/web/api.mjs';
-import { apiGraph } from '../../js/web/graph.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
 import {
@@ -1629,56 +1628,6 @@ test('removing an exclude that was never added is not ok', () => {
       { action: 'remove', path: path.join(tmp, 'never-excluded') });
     assert.equal(res.ok, false);
   });
-});
-
-// ---------------------------------------------------------------------------------------------
-// The citation graph.
-
-test('graph nodes are unique and every edge resolves', () => {
-  const g = apiGraph(neutral());
-  assert.ok(g.nodes.length > 0);
-  const ids = new Set(g.nodes.map((n) => n.id));
-  assert.equal(ids.size, g.nodes.length, 'two nodes share an id');
-  for (const n of g.nodes) assert.ok(['agent', 'skill', 'law'].includes(n.type), n.type);
-  assert.ok(g.nodes.some((n) => n.type === 'law'), 'no law reached the graph');
-
-  // Agents and skills cite EACH OTHER through Markdown cross-links, not only laws — otherwise
-  // the only citation targets are laws and the matrix collapses to a single law column.
-  const typeOf = Object.fromEntries(g.nodes.map((n) => [n.id, n.type]));
-  assert.ok(g.edges.some((e) => typeOf[e.target] !== 'law'),
-    'every edge targets a law — the graph has collapsed to one column');
-
-  for (const e of g.edges) {
-    assert.ok(ids.has(e.source), `dangling source ${e.source}`);
-    assert.ok(ids.has(e.target), `dangling target ${e.target}`);
-    assert.notEqual(e.source, e.target, 'a node cites itself');
-  }
-  const pairs = g.edges.map((e) => `${e.source} ${e.target}`);
-  assert.equal(pairs.length, new Set(pairs).size, 'duplicate edges');
-});
-
-// THE LAW-NOUN IS THEMED — `{{LAW}}` becomes "Dictate", "Code", "Directive" — so a hardcoded
-// `Rule|Law` reference regex found ZERO law edges under any non-neutral theme and the graph
-// rendered with no links at all. The console reads the DEPLOYED harness, so each theme is
-// emitted to its own target and graphed from there; every theme must yield the same non-empty
-// edge set.
-test('graph edges survive a themed law noun', () => {
-  const sb = makeSandbox();
-  try {
-    const graphFor = (theme) => {
-      const cfg = emitInto(path.join(sb.path, `cfg-${theme}`), { theme });
-      return apiGraph(webState(null, cfg));       // theme auto-detected from the install
-    };
-    const baseline = graphFor('neutral').edges.length;
-    assert.ok(baseline > 0, 'the neutral install produced no edges at all');
-
-    for (const theme of ['imperial', 'biker', 'military']) {
-      const g = graphFor(theme);
-      assert.equal(g.edges.length, baseline, `theme ${theme} dropped edges`);
-      const laws = new Set(g.nodes.filter((n) => n.type === 'law').map((n) => n.id));
-      assert.ok(g.edges.some((e) => laws.has(e.target)), `theme ${theme} found no law edges`);
-    }
-  } finally { sb.cleanup(); }
 });
 
 // ---------------------------------------------------------------------------------------------

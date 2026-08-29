@@ -10,10 +10,10 @@
  *
  * ---------------------------------------------------------------------------------------
  * `apiPickFolder` CROSSED 2026-08-27 — a user override of the permanent decline this section
- * used to record. `js/web/routes.mjs`'s `DECLINED_POST` still carries the history of that
- * decision (why a folder dialog looked permanently un-portable) and is now empty because of
- * it. See `apiPickFolder`'s own docblock, below, for the argv, the async-spawn reasoning, and
- * why it dispatches inline from `js/web/handler.mjs` rather than through `POST_ROUTES`.
+ * used to record (why a folder dialog looked permanently un-portable lives in git history,
+ * under `DECLINED_POST` in `js/web/routes.mjs`). See `apiPickFolder`'s own docblock, below,
+ * for the argv, the async-spawn reasoning, and why it dispatches inline from
+ * `js/web/handler.mjs` rather than through `POST_ROUTES`.
  *
  * ---------------------------------------------------------------------------------------
  * `apiInstallToggle` is a thin endpoint over an engine that lives elsewhere on purpose.
@@ -223,10 +223,10 @@ function runPicker(cmd, args, done, resultOf) {
 
 /**
  * `/api/pick-folder` — the OS-NATIVE folder chooser, opened ON THE DAEMON HOST. `done` is
- * called with `{path}` on OK, `{cancelled: true}` on cancel, or `{error}` — the shape
- * `web/src/api/installs.js`'s `pickFolder()` already expects, unchanged since the endpoint was
- * DECLINED (see this file's header and `js/web/routes.mjs`'s `DECLINED_POST` for that history,
- * overridden by the user 2026-08-27).
+ * called with `{path}` on OK, `{cancelled: true}` on cancel, or `{error}` — the shape the
+ * client's `pickFolder()` (in `web/src/api/index.js`) already expects, unchanged since the
+ * endpoint was DECLINED (see this file's header for that history, overridden by the user
+ * 2026-08-27).
  *
  * ASYNC, NEVER `spawnSync`: a folder dialog stays open until a human answers it — seconds to
  * minutes — and a synchronous spawn would block this single-threaded server's event loop for

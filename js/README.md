@@ -168,13 +168,12 @@ the deployed harness as JSON.
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |
 | `jobs.mjs` | `JobManager` and the action→argv table. The only module here that spawns job children |
 | `docs.mjs` | The Docs tab: the `docs/web/` page registry, `?harness=` filtering, the five page kinds |
-| `graph.mjs` | `/api/graph` alone — the agent/skill/law cross-link matrix built from rendered bodies |
 | `activity.mjs` | The `activity/` session files: pid-liveness prune, list, detail, and the on/off flag |
 
 **Before editing:** `makeHandler(state, jm, token, dist, holder)`'s arity is load-bearing — three
-test call sites construct one directly and drive it without a socket. Five of `routes.mjs`'s
-exported sets are deliberately EMPTY and must stay declared: each is half of a partition test.
-`graph.mjs` contains a literal NUL byte, so `grep`/`ripgrep` treat it as binary and skip it.
+test call sites construct one directly and drive it without a socket. `routes.mjs`'s tables
+and inline lists are held against a surface list written out in
+`tests/unit/web_server.test.mjs` — growing or shrinking the API edits both, in one commit.
 
 ---
 

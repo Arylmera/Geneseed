@@ -51,7 +51,7 @@ The left rail mirrors the harness's own shape:
 | Group | Views |
 | --- | --- |
 | *(ungrouped)* | Dashboard |
-| **📖 Codex** | Constitution · Rules · Profile · Skills · Agents · Library · Docs · Graph |
+| **📖 Codex** | Constitution · Rules · Profile · Skills · Agents · Library · Docs |
 | **🩺 Care** | Activity · Changes · Doctor |
 | **🎨 Setup** | Harness · Settings |
 
@@ -72,9 +72,10 @@ streams the output of background jobs and keeps their history across reloads.
 ### 🧬 Harness
 
 - **Dashboard** (`#/`) — a live readout of what's deployed. Three lenses: **Status**
-  (readiness ring, a KPI band, a genome grid, recent activity), **Lineage** (a mini
-  cross-link graph), and **Operator** (a searchable table of every deployed capability).
-  Headlines reflect the active theme's voice.
+  (readiness ring, a KPI band, a genome grid, recent activity), **Lineage** (the
+  source → render → deployed timeline and the genome-by-volume strand chart), and
+  **Operator** (a searchable table of every deployed capability). Headlines reflect the
+  active theme's voice.
 
   The KPI band reads **Agents · Skills · Invariants · Local edits**. That third tile is
   labelled *Invariants* and not *Constitution* on purpose: its value is the invariant count
@@ -107,15 +108,6 @@ streams the output of background jobs and keeps their history across reloads.
   **Promote to rule** control turns a recurring lesson into a trial rule in
   `user-rules.md` — provenance recorded, the source fact deleted so it isn't loaded
   twice — landing you on the Rules page.
-- **Graph** (`#/graph`) — the cross-link constellation across agents, skills and the
-  **invariants only**: every `[[wikilink]]` between agents/skills, plus every `Rule N`
-  mention that lands on a real invariant. ⚠ The reference pattern matches the tier noun
-  followed by a **Roman numeral** — `Rule`, `Law`, or whatever the active theme calls one,
-  which is how `Dictate III` still resolves under `imperial`. A doctrine address is
-  `<pack> <n>` and matches nothing, so **doctrine cross-links are not drawn**; the graph is
-  a view of the invariant backbone, not of the whole constitution. Hover to isolate a
-  neighbourhood, scroll to zoom, drag to pan, search to highlight; orphans dim out. Click a
-  node to open its spec.
 
 ### 📚 Learn
 

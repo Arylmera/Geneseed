@@ -44,14 +44,10 @@
  * `taskkill /T` is a machine primitive here, not this program.
  *
  * ---------------------------------------------------------------------------------------
- * THE PARTITION — all eight action rows cross, and the declaration outlives them.
- *
- * `doctor`, `build`, `build-all`, `export`, `uninstall`, `update`, `link` and `unlink` each
- * name a verb `bin/geneseed-cli.mjs` runs.
- *
- * `NOT_PORTED_ACTIONS` IS EMPTY AND STILL DECLARED, which is the point of it: a ninth action
- * added later cannot quietly answer "unknown action", because `tests/unit/web_jobs.test.mjs`
- * holds the two sets against `actionCommands`' own keys.
+ * THE ACTION SURFACE — `doctor`, `build`, `build-all`, `export`, `uninstall`, `update`,
+ * `link` and `unlink` each name a verb `bin/geneseed-cli.mjs` runs, plus the three
+ * `INLINE_ACTIONS` the dispatcher answers without the table. `tests/unit/web_jobs.test.mjs`
+ * holds the union against a written-out list, so a ninth action cannot appear unchecked.
  *
  * ---------------------------------------------------------------------------------------
  * THREE DETAILS OF `_run`, EACH A COMMENT EXPLAINING A BUG IT ALREADY FIXED.
@@ -382,26 +378,9 @@ const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');
 const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');
 
 /**
- * The rows whose VERB has not crossed. EMPTY, AND STILL DECLARED.
- *
- * WHY AN EMPTY SET RATHER THAN A DELETED ONE. This set is cross-checked against
- * `actionCommands`' own keys, and an empty set is the strongest form that check ever takes:
- * it asserts that EVERY action this daemon knows how to dispatch on is answered by the
- * runner. Deleting the declaration would delete that assertion, and the next unported
- * action would come back as a silent 404 — the thing the 501 exists to prevent.
- *
- * A 501 AND NOT THE 404 THE TABLE WOULD PRODUCE. `actionCommands` returns `null` for an
- * unknown action, mapped to `{"error": "unknown action <x>"}` at 404 — so a
- * real-but-unported action falling through would answer the same thing a typo gets. With
- * this set empty the 501 branch is UNREACHABLE by construction: every real action answers
- * 202 and only an invented one answers 404.
- */
-export const NOT_PORTED_ACTIONS = new Set();
-
-/**
  * The three actions the dispatcher answers INLINE, without consulting the table above:
  * `restore` is synchronous and returns a result rather than a job id, and `install`/`deploy`
- * resolve their argv from the request body first. Declared so the partition covers every
+ * resolve their argv from the request body first. Declared so the surface check covers every
  * action the dispatcher answers, not only the table's keys.
  */
 export const INLINE_ACTIONS = ['restore', 'install', 'deploy'];

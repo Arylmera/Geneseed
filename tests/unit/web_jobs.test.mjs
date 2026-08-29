@@ -21,12 +21,11 @@
  * are different implementations, and after the cut that reduces to "the runner is Node", which
  * is asserted here positively and negatively.
  *
- * ⚠ LIMITS ROW 9 LIVES IN THIS FILE and its weakness must stay visible. `NOT_PORTED_ACTIONS`
- * is empty, so the dispatcher's 501 arm has no target and none can be borrowed — every remaining
- * action either starts a job in the developer's checkout or edits the real user PATH. The claim
- * rests on READING THE SET out of the module, which is a gate on a declaration and weaker than a
- * probe. It is declared as such here and in `docs/limits.md`, and must not be quietly
- * upgraded in prose.
+ * ⚠ LIMITS ROW 9 LIVES IN THIS FILE and its weakness must stay visible. Every action either
+ * starts a job in the developer's checkout or edits the real user PATH, so none can be driven
+ * live here — the argv gates below rest on READING THE TABLE out of the module, which is a gate
+ * on a declaration and weaker than a probe. It is declared as such here and in
+ * `docs/limits.md`, and must not be quietly upgraded in prose.
  */
 import assert from 'node:assert/strict';
 
@@ -35,7 +34,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  INLINE_ACTIONS, NOT_PORTED_ACTIONS, PORTED_ACTIONS, actionCommands,
+  INLINE_ACTIONS, PORTED_ACTIONS, actionCommands,
 } from '../../js/web/jobs.mjs';
 import { apiDeployCmd } from '../../js/web/actions.mjs';
 import { webState } from '../../js/web/api.mjs';
@@ -103,23 +102,6 @@ test('the action table is the eight rows this phase measured', () => {
   assert.deepEqual([...PORTED_ACTIONS].sort(), Object.keys(ARGVS).sort(),
     'js/web/jobs.mjs dispatches on a different set of actions than this file freezes — a ninth '
     + 'row needs a measured tail here, or it ships with no gate on its argv at all');
-});
-
-test('every action is either ported or declared unported', () => {
-  const ported = new Set(PORTED_ACTIONS);
-  assert.deepEqual([...ported].filter((a) => NOT_PORTED_ACTIONS.has(a)), [],
-    'an action is both ported and declared unported');
-  // ⚠ LIMITS ROW 9, AND ITS WEAKNESS STATED RATHER THAN PAPERED OVER. `NOT_PORTED_ACTIONS`
-  // emptied at P10b, so the dispatcher's 501 arm is unreachable BY CONSTRUCTION and no probe can
-  // reach it — every remaining action either starts a job in the developer's checkout or writes
-  // a shim and edits the real user PATH. This is a gate on a DECLARATION, which is weaker than a
-  // probe. The set stays declared so the next unported action has somewhere to be declared
-  // rather than falling through to `unknown action` — which is what a TYPO gets, and not what an
-  // unported verb deserves.
-  assert.deepEqual([...NOT_PORTED_ACTIONS], [],
-    'NOT_PORTED_ACTIONS is empty as of P10b: every action the runner dispatches on is answered. '
-    + 'A new row here is a regression unless a new ACTION arrived with it — and if one did, the '
-    + '501 arm is reachable again and this row must become a probe');
 });
 
 // NAMED FOR WHAT IT NOW PROVES. It used to end by checking each inline action named a real

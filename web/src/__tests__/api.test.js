@@ -20,7 +20,6 @@ describe('api surface', () => {
       'setup',
       'doctor',
       'themes',
-      'graph',
       'catalog',
       'item',
       'memoryDelete',
