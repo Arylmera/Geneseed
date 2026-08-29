@@ -47,6 +47,9 @@ export function useJobs({ onFinish, onError } = {}) {
     // code, so the poller can lose it mid-bounce — reconnect instead of dying.
     const isUpdate = runs.find((r) => r.id === activeId)?.action === 'update'
     const t = setInterval(async () => {
+      // A hidden tab has nobody watching the stream — skip the round-trip and
+      // let the first tick after visibilitychange catch the console up.
+      if (document.hidden) return
       try {
         const j = await api.job(activeId)
         setRuns((rs) => {

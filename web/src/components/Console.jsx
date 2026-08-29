@@ -26,12 +26,19 @@ export default function Console({ runs, open, onToggle, onClear, onCancel, busy 
         </span>
         <span className="count">{runs.length}</span>
         <div className="right" onClick={(e) => e.stopPropagation()}>
-          <button className="iconbtn" title="Clear" onClick={onClear} disabled={!runs.length}>
+          <button
+            className="iconbtn"
+            title="Clear"
+            aria-label="Clear run history"
+            onClick={onClear}
+            disabled={!runs.length}
+          >
             <Icon name="clear" />
           </button>
           <button
             className="iconbtn"
             title={open ? 'Collapse' : 'Expand'}
+            aria-label={open ? 'Collapse console' : 'Expand console'}
             aria-expanded={open}
             onClick={onToggle}
           >
@@ -64,6 +71,7 @@ export default function Console({ runs, open, onToggle, onClear, onCancel, busy 
                   <button
                     className="iconbtn run-cancel"
                     title="Cancel this run"
+                    aria-label={`Cancel the ${r.action} run`}
                     onClick={() => onCancel(r.id)}
                   >
                     <Icon name="x" />

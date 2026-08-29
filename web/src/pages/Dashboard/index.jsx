@@ -1,13 +1,19 @@
-import React, { useEffect, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useState } from 'react'
 import { api } from '../../api/index.js'
 import StatusView from './StatusView.jsx'
 import LineageView from './LineageView.jsx'
 import OperatorView from './OperatorView.jsx'
-import GreenhouseView from './GreenhouseView.jsx'
-import OperatorHudView from './OperatorHudView.jsx'
-import JournalView from './JournalView.jsx'
 import Onboarding from './Onboarding.jsx'
+import Loading from '../../components/Loading.jsx'
 import { resolveLayout } from '../../hooks/useLayout.js'
+
+// Dashboard ships in the eager shell chunk (it is the landing route), so only
+// the DEFAULT lens rides along. The alternative lenses are behind the layout
+// toggle most sessions never flip — lazy chunks, fetched on first use. Journal
+// pulls the ConstitutionMap and with it d3-force, the heaviest of the three.
+const GreenhouseView = lazy(() => import('./GreenhouseView.jsx'))
+const OperatorHudView = lazy(() => import('./OperatorHudView.jsx'))
+const JournalView = lazy(() => import('./JournalView.jsx'))
 
 // The dashboard shell: loads the supplementary data (doctor, recency) the
 // directions share, then renders the chosen direction. The Status lens is a layout
@@ -72,7 +78,9 @@ export default function Dashboard({
   // Settings' layout picker — the switcher returns with any other lens.
   if (dir === 'status' && lens === 'journal')
     return (
-      <JournalView overview={overview} recent={recent} onAction={onAction} onDirection={setDir} />
+      <Suspense fallback={<Loading />}>
+        <JournalView overview={overview} recent={recent} onAction={onAction} onDirection={setDir} />
+      </Suspense>
     )
 
   return (
@@ -112,16 +120,20 @@ export default function Dashboard({
         />
       )}
       {dir === 'status' && lens === 'greenhouse' && (
-        <GreenhouseView
-          overview={overview}
-          sigil={sigil}
-          jobs={jobs}
-          doctor={doctor}
-          onAction={onAction}
-        />
+        <Suspense fallback={<Loading />}>
+          <GreenhouseView
+            overview={overview}
+            sigil={sigil}
+            jobs={jobs}
+            doctor={doctor}
+            onAction={onAction}
+          />
+        </Suspense>
       )}
       {dir === 'status' && lens === 'operator' && (
-        <OperatorHudView overview={overview} jobs={jobs} doctor={doctor} onAction={onAction} />
+        <Suspense fallback={<Loading />}>
+          <OperatorHudView overview={overview} jobs={jobs} doctor={doctor} onAction={onAction} />
+        </Suspense>
       )}
       {dir === 'lineage' && (
         <LineageView overview={overview} sigil={sigil} setup={setup} jobs={jobs} />

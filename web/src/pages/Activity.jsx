@@ -135,10 +135,19 @@ export default function Activity() {
         },
       )
     tick()
-    const t = setInterval(tick, 2000)
+    // Hidden tab → no poll; the visibilitychange tick refreshes the instant
+    // the HUD is looked at again instead of waiting out the interval.
+    const t = setInterval(() => {
+      if (!document.hidden) tick()
+    }, 2000)
+    const onVis = () => {
+      if (!document.hidden) tick()
+    }
+    document.addEventListener('visibilitychange', onVis)
     return () => {
       alive = false
       clearInterval(t)
+      document.removeEventListener('visibilitychange', onVis)
     }
   }, [])
 

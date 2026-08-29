@@ -1,0 +1,1 @@
+function a(i,n=10,r="today"){const s=new Array(n).fill(0).map((o,t)=>({t:t===n-1?r:`${n-1-t}d`,v:0})),f=Date.now();for(const o of i){const t=o.started||o.finished||o.created||o.ts;if(!t)continue;const c=typeof t=="string"?Date.parse(t):t*1e3;if(!Number.isFinite(c))continue;const e=Math.floor((f-c)/864e5);e<0||e>=n||(s[n-1-e].v+=1)}return s}export{a as b};
