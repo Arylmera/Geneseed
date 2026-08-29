@@ -22,7 +22,7 @@ import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands } from './jobs.mjs';
 import { POST_ROUTES, readJsonBody } from './routes.mjs';
 import { isFile } from '../lib/fs.mjs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { basename, dirname, extname, join, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
@@ -57,13 +57,17 @@ const CTYPES = {
 // ---- the request handler ---------------------------------------------------
 
 export function makeHandler(state, jm, token, dist, holder = null) {
+  // fp -> { mtime, data, gz }. Keyed by path but VALIDATED by mtime on every hit, so a
+  // rebuilt web/dist serves fresh bytes without `web restart` — the re-stat costs one
+  // syscall against the readFileSync + gzipSync it saves. `gz` is the gzipped body,
+  // computed once on the first gzip-accepting request instead of per request.
   const staticCache = new Map();
 
-  function sendBytes(res, body, ctype, code = 200, extra = null, acceptEncoding = '') {
+  function sendBytes(res, body, ctype, code = 200, extra = null, acceptEncoding = '', gzStore = null) {
     const headers = { ...(extra || {}) };
     if (body.length >= GZIP_MIN && GZIP_TYPES.some((t) => ctype.startsWith(t))
         && (acceptEncoding || '').includes('gzip')) {
-      body = gzipSync(body, { level: 6 });
+      body = gzStore ? (gzStore.gz ??= gzipSync(body, { level: 6 })) : gzipSync(body, { level: 6 });
       headers['Content-Encoding'] = 'gzip';
       headers.Vary = 'Accept-Encoding';
     }
@@ -91,21 +95,25 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     if (!isFile(fp)) {
       return sendJson(res, { error: 'web/dist missing — run the UI build' }, 500, acceptEncoding);
     }
-    let data = staticCache.get(fp);
-    if (data === undefined) {
-      data = readFileSync(fp);
-      staticCache.set(fp, data);
+    const mtime = statSync(fp).mtimeMs;
+    let entry = staticCache.get(fp);
+    if (entry === undefined || entry.mtime !== mtime) {
+      entry = { mtime, data: readFileSync(fp), gz: null };
+      staticCache.set(fp, entry);
     }
+    let data = entry.data;
     let extra = null;
     if (basename(fp) === 'index.html') {
       const inject = Buffer.from(`<script>window.__GENESEED_TOKEN__="${token}";</script>`, 'utf-8');
       data = replaceOnce(data, Buffer.from('</head>'), Buffer.concat([inject, Buffer.from('</head>')]));
       extra = { 'Cache-Control': 'no-store' };
+      // The injected bytes differ from `entry.data`, so the gz cache must not serve them.
+      entry = null;
     } else if (path.includes('/assets/')) {
       extra = { 'Cache-Control': 'public, max-age=31536000, immutable' };
     }
     return sendBytes(res, data, CTYPES[extname(fp)] || 'application/octet-stream',
-      200, extra, acceptEncoding);
+      200, extra, acceptEncoding, entry);
   }
 
   function doGet(req, res, path, ae) {
