@@ -331,19 +331,24 @@ test('a pulled source that fails the doctor is rolled back to the exact previous
 // ---------------------------------------------------------------------------------------------
 // `NoCellCanReachTheNetwork` — the positive control for the ban this whole file runs under.
 
-test('a real fetch over https is refused by transport, not by luck', () => {
+test('a real fetch over https is refused by transport, not by luck', async () => {
   // Declaring a ban and running under one are two properties and only the second is worth
   // anything. This runs the REAL `fetchStreaming` — no mock, no seam — against a network remote
   // and requires git to refuse it in its own argument handling, before a connection is
   // attempted. Without GIT_ALLOW_PROTOCOL=file the same call fetches, so the gate goes red the
   // moment the ban stops being applied, here or in CI.
+  //
+  // ⚠ `await` INSIDE the try, not `return` — the sync spelling ran its `finally` the moment the
+  // promise was returned, restoring the file:// origin while the spawned git might not yet have
+  // read `.git/config`. On a slow runner the child then fetched the LOCAL origin, which the ban
+  // legitimately allows, and the gate went red claiming the ban was off (seen on CI ubuntu,
+  // 2026-08-29). The reset must wait for the child to finish, not for the promise to exist.
   git(CO2, 'remote', 'set-url', 'origin', 'https://github.com/Arylmera/Geneseed.git');
   try {
-    return U2.fetchStreaming().then(([code, out]) => {
-      assert.notEqual(code, 0, 'the fetch SUCCEEDED — the network ban is not being applied');
-      assert.match(out, /not allowed/,
-        `git failed for some reason other than the transport ban. git said: ${out}`);
-    });
+    const [code, out] = await U2.fetchStreaming();
+    assert.notEqual(code, 0, 'the fetch SUCCEEDED — the network ban is not being applied');
+    assert.match(out, /not allowed/,
+      `git failed for some reason other than the transport ban. git said: ${out}`);
   } finally { git(CO2, 'remote', 'set-url', 'origin', ORIGIN2); }
 });
 
