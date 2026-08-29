@@ -41,32 +41,22 @@
  * keeps the two tables from ever answering the same verb twice, since the shim bakes only one
  * of them.
  *
- * P6h MADE THE DISPATCH ASYNCHRONOUS and put `js/web/` on this entry's import graph. Both
- * are noted where they happen (`main`'s `await`, and the `web` row below); the consequence
- * for the file as a whole is that its transitive imports now reach two modules that spawn,
- * which `_ALLOWED_SPAWNS` in `tests/test_hook_cli_parity.py` declares argv by argv.
+ * P6h MADE THE DISPATCH ASYNCHRONOUS and put `js/web/` on this entry's import graph — LAZILY,
+ * since the slim pass: every command module loads through its verb's thunk, so the graph is
+ * reached per verb rather than per invocation. The modules that spawn are still declared argv
+ * by argv in `ALLOWED_SPAWNS` (`tests/unit/hook_cli.test.mjs`), whose closure walk follows
+ * the dynamic spelling too.
  */
-import { cmdCatalog } from '../js/build/catalog.mjs';
+// THE FOUR EAGER IMPORTS ARE THE PARSER'S OWN, AND NOTHING ELSE LOADS BEFORE DISPATCH.
+// The twenty command modules used to be static imports, which made every invocation pay for
+// all of them: `geneseed status` loaded the web daemon, the TUI, the updater and the whole
+// build driver — 57 modules, ~1 MB, ~40-55 ms — before a byte of its own work. The verb
+// table below now holds one LOADER per row (`() => import(…).then(m => m.cmdX)`), so a verb
+// loads its slice of the tree and no other verb's. The spawn allow-list gate still sees the
+// whole graph: `tests/unit/hook_cli.test.mjs`'s `importClosure` follows both import spellings.
 import { cliSpec, printHelp } from '../js/ui/cli.mjs';
-import { cmdDiff } from '../js/inspect/diff.mjs';
-import { cmdDoctor } from '../js/inspect/doctor.mjs';
-import { cmdValidate } from '../js/inspect/validate.mjs';
-import { parseDriverArgs } from './build-driver.mjs';
-import { cmdExclude } from '../js/inspect/excludes.mjs';
-import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/build/generate.mjs';
-import { cmdMigrate } from '../js/maintain/migrate.mjs';
 import { parseIntStrict } from '../js/lib/text.mjs';
 import { printErr } from '../js/lib/fs.mjs';
-import { cmdLink, cmdUnlink } from '../js/hosts/link.mjs';
-import { cmdMcp } from '../js/hosts/mcp.mjs';
-import { cmdMemory } from '../js/maintain/memory.mjs';
-import { cmdHome, cmdMenu } from '../js/ui/menu.mjs';
-import { cmdTui } from '../js/ui/tui.mjs';
-import { cmdSetup } from '../js/maintain/setup.mjs';
-import { cmdStatus, cmdVersion } from '../js/inspect/status.mjs';
-import { cmdUninstall } from '../js/maintain/uninstall.mjs';
-import { cmdBootstrap, cmdSyncSelf, cmdUpgrade } from '../js/maintain/update.mjs';
-import { cmdWeb } from '../js/web/server.mjs';
 
 /**
  * The verbs this entry answers — and, since P10c, NOTHING ELSE ABOUT THEM.
@@ -85,30 +75,30 @@ import { cmdWeb } from '../js/web/server.mjs';
  * `main`'s refusal lists `Object.keys(VERBS)` IN THIS ORDER, which `harness_golden` cells
  * assert verbatim — the order is the old table's and is not alphabetical.
  *
- * FLATTENED TO `verb: fn` since Task 5: every row was a single-field `{ fn: cmdX }` object,
- * the one field this table has left after `positionals`/`options`/`flags`/etc moved to
- * `js/cli-table.json` above. `main` reads `VERBS[verb]` directly rather than
- * `VERBS[verb].fn` now; the scraping regexes in `tests/unit/{cli_table,hook_cli,docs}.test.mjs`
- * match on the KEY and the colon only; the literal string `const VERBS = {` and the key
- * order neither changed.
+ * FLATTENED TO `verb: fn` since Task 5, AND TO `verb: loader` since the lazy pass: every row
+ * is now a thunk that imports the command's module and resolves to its function, so the one
+ * field a row holds is still the one thing a data file cannot — where the FUNCTION lives.
+ * `main` awaits `VERBS[verb]()` after the parse succeeds; the scraping regexes in
+ * `tests/unit/{cli_table,hook_cli,docs}.test.mjs` match on the KEY and the colon only; the
+ * literal string `const VERBS = {` and the key order neither changed.
  */
 const VERBS = {
-  exclude: cmdExclude,
-  status: cmdStatus,
-  version: cmdVersion,
-  build: cmdBuild,
-  prompt: cmdPrompt,
-  theme: cmdTheme,
-  diff: cmdDiff,
-  'rebuild-all': cmdRebuildAll,
-  migrate: cmdMigrate,
-  doctor: cmdDoctor,
-  uninstall: cmdUninstall,
-  link: cmdLink,
-  unlink: cmdUnlink,
-  setup: cmdSetup,
-  web: cmdWeb,
-  upgrade: cmdUpgrade,
+  exclude: () => import('../js/inspect/excludes.mjs').then((m) => m.cmdExclude),
+  status: () => import('../js/inspect/status.mjs').then((m) => m.cmdStatus),
+  version: () => import('../js/inspect/status.mjs').then((m) => m.cmdVersion),
+  build: () => import('../js/build/generate.mjs').then((m) => m.cmdBuild),
+  prompt: () => import('../js/build/generate.mjs').then((m) => m.cmdPrompt),
+  theme: () => import('../js/build/generate.mjs').then((m) => m.cmdTheme),
+  diff: () => import('../js/inspect/diff.mjs').then((m) => m.cmdDiff),
+  'rebuild-all': () => import('../js/build/generate.mjs').then((m) => m.cmdRebuildAll),
+  migrate: () => import('../js/maintain/migrate.mjs').then((m) => m.cmdMigrate),
+  doctor: () => import('../js/inspect/doctor.mjs').then((m) => m.cmdDoctor),
+  uninstall: () => import('../js/maintain/uninstall.mjs').then((m) => m.cmdUninstall),
+  link: () => import('../js/hosts/link.mjs').then((m) => m.cmdLink),
+  unlink: () => import('../js/hosts/link.mjs').then((m) => m.cmdUnlink),
+  setup: () => import('../js/maintain/setup.mjs').then((m) => m.cmdSetup),
+  web: () => import('../js/web/server.mjs').then((m) => m.cmdWeb),
+  upgrade: () => import('../js/maintain/update.mjs').then((m) => m.cmdUpgrade),
   // `up.add_parser(..., aliases=["update"])`, reproduced in P8c as a ROW OF ITS OWN rather than
   // as an `aliases` field on the row above — because a field would be a DECLARATION and the
   // three matrix gates read this table as the DISPATCH (rule 7, and M23 is where it was
@@ -120,18 +110,18 @@ const VERBS = {
   //
   // It is NOT what the web console's `update` ACTION needs: that row's argv names `upgrade`,
   // the subparser, and always did. The two were coupled only in a handoff's note.
-  update: cmdUpgrade,
+  update: () => import('../js/maintain/update.mjs').then((m) => m.cmdUpgrade),
   // Points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness:
   // `sync-self` DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS
   // about one and re-reads it as a theme — so the two verbs answer `sync-self cyberpunk`
   // and `sync-self v1.2.3` differently. See `js/maintain/update.mjs`'s `syncSelf` for both halves.
-  'sync-self': cmdSyncSelf,
-  bootstrap: cmdBootstrap,
+  'sync-self': () => import('../js/maintain/update.mjs').then((m) => m.cmdSyncSelf),
+  bootstrap: () => import('../js/maintain/update.mjs').then((m) => m.cmdBootstrap),
   // P7a. Both are DISPATCHERS whose off-TTY arm is the whole of what a cell can reach, and
   // `menu`'s on-TTY arm falls back rather than opening a panel — `js/ui/menu.mjs`'s header
   // argues both.
-  menu: cmdMenu,
-  home: cmdHome,
+  menu: () => import('../js/ui/menu.mjs').then((m) => m.cmdMenu),
+  home: () => import('../js/ui/menu.mjs').then((m) => m.cmdHome),
   // P7b, and it is the twenty-fifth and last. `cmd_tui`'s FIRST arm is `if not sys.stdin.
   // isatty()`, so off a TTY — which is every cell there is — the verb is one line and an
   // exit code, and that arm crosses byte for byte. The panel behind it is P7c's;
@@ -139,7 +129,7 @@ const VERBS = {
   // panel-unavailable line rather than inventing a second full-screen UI, and
   // `tests/test_tui_boundary.py` asserts that the arm it declares is genuinely unreachable
   // here rather than merely untested.
-  tui: cmdTui,
+  tui: () => import('../js/ui/tui.mjs').then((m) => m.cmdTui),
   // THE THREE THAT NEVER HAD A PYTHON ORIGINAL, and they are last for that reason rather
   // than by alphabet: every row above is the twin of a subparser, and these three are not.
   // The information behind them existed only behind the web console — the catalog endpoint,
@@ -154,9 +144,9 @@ const VERBS = {
   // ABSOLUTE — `tests/snapshot/cli_help.test.mjs` splits the two populations by name and refuses a
   // verb that falls into neither, and each has its own unit gate stating what it does rather
   // than that it agrees.
-  catalog: cmdCatalog,
-  mcp: cmdMcp,
-  memory: cmdMemory,
+  catalog: () => import('../js/build/catalog.mjs').then((m) => m.cmdCatalog),
+  mcp: () => import('../js/hosts/mcp.mjs').then((m) => m.cmdMcp),
+  memory: () => import('../js/maintain/memory.mjs').then((m) => m.cmdMemory),
 };
 
 function die(code, msg) {
@@ -309,6 +299,11 @@ async function main(argv) {
   // and it is on THIS binary — not on `bin/build-driver.mjs` — because it runs the doctor, which
   // starts a process the driver is banned from reaching.
   if (verb === 'validate') {
+    // Lazy for the same reason the table rows are — `parseDriverArgs` alone drags the whole
+    // generator driver in, and every OTHER verb was paying for it.
+    const [{ cmdValidate }, { parseDriverArgs }] = await Promise.all([
+      import('../js/inspect/validate.mjs'), import('./build-driver.mjs'),
+    ]);
     try {
       return cmdValidate(parseDriverArgs(argv.slice(1)));
     } catch (e) {
@@ -316,8 +311,8 @@ async function main(argv) {
       throw e;
     }
   }
-  const fn = VERBS[verb];
-  if (!fn) {
+  const load = VERBS[verb];
+  if (!load) {
     // "and every other harness subcommand is still Python — run the interpreter against the
     // old harness script" is GONE, and its removal is not cosmetic: with the four hook verbs
     // named, the two entry points now cover every subcommand there is, so the clause was not
@@ -353,7 +348,11 @@ async function main(argv) {
     // it `process.exitCode` would be assigned a PENDING PROMISE, which Node coerces to 0
     // and prints nothing about. `web status` would then report "not running" and exit 0.
     // Awaiting a number is a no-op for the ten synchronous verbs.
-    return await fn(parsed.args);
+    //
+    // The load happens HERE, after the parse succeeded: a bad argument line refuses in a
+    // few milliseconds without touching the command's module tree, which is also why the
+    // parse errors above cannot depend on anything a loader would have brought in.
+    return await (await load())(parsed.args);
   } catch (e) {
     // `e.exitCode` is the generator's existing marker for a DELIBERATE refusal that has
     // already explained itself on stderr — `js/build/emit-claude.mjs` reads the same flag, and it is

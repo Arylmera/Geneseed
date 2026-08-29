@@ -536,7 +536,17 @@ const ALLOWED_SPAWNS = {
   },
 };
 
-/** Every module a file reaches through relative imports, transitively, including itself. */
+/**
+ * Every module a file reaches through relative imports, transitively, including itself.
+ *
+ * BOTH SPELLINGS, since the CLI entry went lazy: `bin/geneseed-cli.mjs`'s verb table now
+ * reaches its command modules through `import('../js/…')` thunks, and a walk that only
+ * followed `from '…'` would see almost nothing of the CLI's graph — the ALLOWED_SPAWNS
+ * equality below would then be comparing an empty set against a real allow-list, which
+ * fails loudly today but would fail SILENTLY the day the list is emptied. A dynamic
+ * import is still a reachable module; laziness changes when it loads, not whether the
+ * ban applies to it.
+ */
 function importClosure(entry) {
   const seen = new Set();
   const queue = [entry];
@@ -545,8 +555,8 @@ function importClosure(entry) {
     if (seen.has(f) || !existsSync(f) || !statSync(f).isFile()) continue;
     seen.add(f);
     const text = readFileSync(f, 'utf8');
-    for (const m of text.matchAll(/from\s+'(\.[^']+)'/g)) {
-      queue.push(path.resolve(path.dirname(f), m[1]));
+    for (const m of text.matchAll(/from\s+'(\.[^']+)'|import\(\s*'(\.[^']+)'\s*\)/g)) {
+      queue.push(path.resolve(path.dirname(f), m[1] ?? m[2]));
     }
   }
   return seen;
@@ -597,9 +607,9 @@ test('the only spawn in the hook entry is the model CLI', () => {
 });
 
 test('the CLI entry reaches child_process only where it is declared', () => {
-  // STATIC and transitive, for the same reason the driver's is. Since the CLI statically imports
-  // `js/web/server.mjs`, this equality covers the daemon launcher and the job runner as well as
-  // `node --check` and `java -version`.
+  // STATIC and transitive, for the same reason the driver's is. The CLI reaches
+  // `js/web/server.mjs` through its `web` row's lazy thunk, so this equality covers the daemon
+  // launcher and the job runner as well as `node --check` and `java -version`.
   const closure = importClosure(path.join(ROOT, ...CLI.split('/')));
   assert.ok(closure.size > 2, 'the import walk found almost nothing, so it proves nothing');
   const importers = [];

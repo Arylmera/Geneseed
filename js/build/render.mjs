@@ -34,7 +34,7 @@ import { readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
-import { PACK_ORDER } from './source.mjs';
+import { PACK_ORDER, readPackText } from './source.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
 export const STRUCTURE = {
@@ -69,6 +69,16 @@ const TOKEN_RE = /\{\{([A-Z_][A-Z0-9_]*)\}\}/g;
 const INCLUDE_RE = /^[ \t]*<!--[ \t]*INCLUDE:[ \t]*(?<path>[^ \t]+)[ \t]*-->[ \t]*$/gm;
 const CATALOG_BLOCK_RE =
   /[ \t]*<!-- CATALOG:begin -->\n(?<table>[\s\S]*?)[ \t]*<!-- CATALOG:else -->\n(?<pointer>[\s\S]*?)[ \t]*<!-- CATALOG:end -->\n/g;
+// The footprint twin of CATALOG. Before it existed, `lean` could only reach the two
+// include-driven corpora (`laws/universal.md` and the doctrine packs, both truncated
+// mechanically to heading + first sentence); every other section of the root template was
+// byte-identical across footprints, which is how ~1.5k tokens of §-level prose rode into
+// every lean install. A LEAN block ships a HAND-WRITTEN condensation instead of a
+// truncation — the objection `docs/token-footprint.md` raised against terse-ing the
+// Ontology ("four orphan sentences") is answered by authoring the short form, not
+// generating it. Same marker grammar as CATALOG so the two stay learnable as one idea.
+const LEAN_BLOCK_RE =
+  /[ \t]*<!-- LEAN:begin -->\n(?<full>[\s\S]*?)[ \t]*<!-- LEAN:else -->\n(?<lean>[\s\S]*?)[ \t]*<!-- LEAN:end -->\n/g;
 
 /**
  * `PurePath.suffix`. Not `path.extname`: Python returns '' for a name whose only dot is
@@ -145,6 +155,11 @@ export function substitute(text, theme) {
 /** `_build_render._resolve_catalogs`. */
 function resolveCatalogs(text, nativeCatalog) {
   return text.replace(CATALOG_BLOCK_RE, (_m, table, pointer) => (nativeCatalog ? pointer : table));
+}
+
+/** LEAN blocks — full text or the hand-written condensation, by footprint. */
+function resolveLean(text, footprint) {
+  return text.replace(LEAN_BLOCK_RE, (_m, full, lean) => (footprint === 'lean' ? lean : full));
 }
 
 /**
@@ -231,6 +246,7 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
   });
 
   text = resolveCatalogs(text, nativeCatalog);
+  text = resolveLean(text, footprint);
   return substitute(text, theme);
 }
 
@@ -291,7 +307,7 @@ function activeDoctrines(cfg) {
   // `Active packs:` marker a later reader parses back — agrees with what was rendered.
   const excluded = new Set(cfg.excludeRules ?? []);
   const survives = (pack) => {
-    const ids = [...readText(path.join(dir, `${pack}.md`))
+    const ids = [...readPackText(path.join(dir, `${pack}.md`))
       .matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)]
       .map((m) => `${m[1]}.${Number(m[2])}`);
     return ids.some((id) => !excluded.has(id));
@@ -340,7 +356,7 @@ function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
   if (!active.length) return '';
   const excluded = new Set(cfg.excludeRules ?? []);
   const parts = active.map((name) => {
-    const raw = dropExcludedRules(readText(path.join(cfg.src, 'doctrines', `${name}.md`)),
+    const raw = dropExcludedRules(readPackText(path.join(cfg.src, 'doctrines', `${name}.md`)),
       name, excluded);
     const body = substitute(raw, theme).trim();
     return footprint === 'lean' ? terseBlocks(body) : body;
