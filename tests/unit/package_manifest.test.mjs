@@ -5,7 +5,7 @@
 //
 // `package.json` is the first file in this repo whose CONTENT IS A DECISION ABOUT
 // DISTRIBUTION rather than about behaviour, and the first one no other test could catch
-// drifting. Every other partition in this port (`NOT_PORTED_POST`, `NOT_PORTED_KINDS`,
+// drifting. Every other declared surface in this repo (the web route tables,
 // `_ALLOWED_SPAWNS`) declares a set and proves the declaration against the running thing.
 // This does the same for the package: it runs the real `npm pack`, INSTALLS the tarball
 // into a throwaway consumer, and compares all three views of the file list — npm's report,

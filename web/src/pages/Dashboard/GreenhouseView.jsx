@@ -2,6 +2,7 @@ import React from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { editCount } from '../../lib/format.js'
 import { bucketJobsByDay } from '../../lib/jobBuckets.js'
+import { headlineFor } from '../../lib/headlines.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
 
 // Recent-activity panel: how many jobs to list, and how much of each job's first
@@ -154,25 +155,6 @@ function BTile({ label, value, sub, color, icon }) {
   )
 }
 
-// Voice-flavoured headline copy. Same lookup as Cultivar's StatusView so the
-// hero feels coherent across flavours — only the wrapping changes.
-const HEADLINES = {
-  neutral: 'Loaded & ready',
-  imperial: 'The Codex in force',
-  military: 'The unit stands ready',
-  cyberpunk: 'Jacked in',
-  wizard: 'Wards in place',
-  pirate: 'The crew stands ready',
-  gamer: 'Game loaded',
-  sports: 'The squad takes the field',
-  biker: 'The crew rolls out',
-  commentator: 'Lights out, away we go',
-  verstappen: "Setup's in",
-  joker: 'Mic check',
-  mean: 'Rules are up',
-  marvin: 'Online. Reluctantly.',
-}
-
 // Greenhouse Status lens — warm, organic, friendly. Hero ring + 4 tiles,
 // capability donut + recent-runs trend, activity timeline. Uses real data:
 // overview counts, doctor groups (for ring + checks), job log (for the trend
@@ -183,9 +165,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
   const loaded = checks.length > 0
   const pass = checks.filter((g) => g.problems.length === 0).length
   const total = checks.length || 1
-  const headline = overview.deployed
-    ? HEADLINES[overview.theme] || 'Loaded & ready'
-    : 'Not deployed'
+  const headline = headlineFor(overview)
   const edits = editCount(overview.diff)
 
   const mix = SECTION_ORDER.filter((k) => (c[k] || 0) > 0).map((k, i) => ({

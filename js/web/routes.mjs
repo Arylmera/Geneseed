@@ -1,10 +1,15 @@
 /**
  * WHAT THE WEB API ANSWERS — as a declaration, separate from the dispatcher that honours it.
  *
- * Eight exported sets and one map. They are not documentation: `tests/unit/web_server.mjs` reads
- * them as a TWO-SIDED PARTITION and probes the real handler against them, because a declaration is
- * not a dispatcher — a route can be declared in one and missing from the other, and nothing but
- * a probe notices.
+ * Two tables and two inline lists. They are not documentation: `tests/unit/web_server.test.mjs`
+ * holds their union against a surface list written out in the test, and probes the real handler,
+ * because a declaration is not a dispatcher — a route can be declared here and missing from the
+ * dispatch, and nothing but a probe notices.
+ *
+ * This file used to also carry the Python→Node port's NOT_PORTED / DECLINED partition — five
+ * sets, all empty once the port finished. They were deleted when the port bookkeeping retired
+ * (see git history); an unmatched GET falls through to `serveStatic`'s SPA fallback and an
+ * unmatched POST answers 404, which is what the empty sets already produced.
  *
  * Split out of `server.mjs` because it is the half a reader consults to answer "does the console
  * expose X?", which has nothing to do with sockets, daemons or gzip.
@@ -12,43 +17,6 @@
 import { formatValue, isTruthy, parseJson } from '../lib/json.mjs';
 import { apiExcludesMutate, apiInstallToggle, apiMcpToggle, apiMemoryDelete, apiProfileSave, apiRulesMutate, apiRulesPromote, apiSelectView } from './actions.mjs';
 import { apiActivityToggle } from './activity.mjs';
-
-/**
- * The API paths this daemon does not answer — currently empty, but the DECLARATION STAYS:
- * without it, an unmatched GET falls through to `serveStatic`'s SPA fallback (200 +
- * index.html) instead of a clear failure. Half of a partition test, so an empty set still
- * asserts there is nothing left to declare.
- *
- * Declared separately from the POST sets below because five paths — `/api/mcp`,
- * `/api/excludes`, `/api/rules`, `/api/profile`, `/api/activity` — answer both verbs with
- * different bodies, so one set keyed on path alone could not track GET and POST status
- * independently.
- */
-export const NOT_PORTED = new Set([]);
-export const NOT_PORTED_PREFIXES = [];
-
-/**
- * The POSTs that have not crossed yet — currently empty, for the same reason the GET pair
- * above stays declared: deleting it would let an unrouted POST fall through to a
- * plausible-looking 404 instead of the 501 this set exists to produce.
- */
-export const NOT_PORTED_POST = new Set([]);
-export const NOT_PORTED_POST_PREFIXES = [];
-
-/**
- * The POSTs that will NEVER cross, which is a different claim from the set above — currently
- * EMPTY. `/api/pick-folder` was its one member (an OS-native folder chooser, "declined rather
- * than deferred" because there was no Node twin that was not a new GUI dependency) until the
- * user overrode that decision 2026-08-27; it now dispatches inline from `js/web/handler.mjs`'s
- * `doPost` — see `apiPickFolder` in `js/web/actions.mjs`.
- *
- * KEPT DECLARED AND EMPTY FOR THE SAME REASON `NOT_PORTED_POST` STAYS DECLARED WHEN IT EMPTIES
- * (see that set, just above): an empty set here is the partition asserting there is nothing
- * PERMANENTLY refused, not an omission a later reader has to double-check. `notPortedPost`
- * below still consults it, so a genuinely permanent decline — if one is ever added again —
- * needs no dispatcher change, only a member here.
- */
-export const DECLINED_POST = new Set([]);
 
 /**
  * The POSTs this daemon answers — and this table IS the dispatch, not a declaration beside
@@ -79,8 +47,6 @@ export const POST_ROUTES = new Map([
   ['/api/profile', [apiProfileSave, true]],
 ]);
 
-export const PORTED_POST = [...POST_ROUTES.keys()];
-
 /**
  * The 409 column, exported so a test can assert it directly. Giving `/api/activity` the 409
  * treatment is the invisible mutation: nothing in normal use can force the `ok: false` arm
@@ -92,59 +58,27 @@ export const POST_ROUTES_CONVENTION = Object.fromEntries(
 );
 
 /**
- * The GET paths answered OUTSIDE the two tables, declared so the partition cross-check can
+ * The GET paths answered OUTSIDE the two tables, declared so the surface cross-check can
  * see them: `/api/ping` is the shell's own, and the two Docs routes take the `?harness=`
  * query param, which a `(state)` table entry has no way to receive. A probe checks all
  * three against the running handler too, not merely against this list.
  */
-export const PORTED_INLINE = ['/api/ping', '/api/docs', '/api/docs/page/',
+export const GET_INLINE = ['/api/ping', '/api/docs', '/api/docs/page/',
   '/api/jobs', '/api/jobs/'];
 
 /**
  * The POSTs that answer outside `POST_ROUTES`, because they don't fit its shape:
  * `/api/jobs/<id>/cancel` answers 200 or 404 on a lookup, not an `ok` field, and
- * `/api/actions/<x>` spans six statuses (202, 409, 404, 501, 400, 200) over one prefix, none
+ * `/api/actions/<x>` spans five statuses (202, 409, 404, 400, 200) over one prefix, none
  * read off `ok`. Bending the 409 column to fit either would make it lie about the routes it
- * already describes correctly.
- *
- * `/api/pick-folder` joined 2026-08-27 for a THIRD reason: `POST_ROUTES`'s `fn(state, body)
- * -> object` shape answers the instant `fn` returns, and this endpoint cannot — it spawns a
- * native folder dialog and answers only once a human (or a timeout) closes it. See
+ * already describes correctly. `/api/reveal` answers 200/404 on an allowlist lookup, and
+ * `/api/pick-folder` cannot fit the table's `fn(state, body) -> object` shape at all: it
+ * spawns a native folder dialog and answers only once a human (or a timeout) closes it. See
  * `apiPickFolder` in `js/web/actions.mjs`, dispatched inline from `js/web/handler.mjs`'s
- * `doPost` the same way the other three rows here are.
+ * `doPost` the same way the other rows here are.
  */
-export const PORTED_POST_INLINE = ['/api/shutdown', '/api/restart', '/api/jobs/',
-  '/api/actions/', '/api/pick-folder'];
-
-/**
- * POST routes added after the ported reference surface was frozen. Kept separate from
- * `NOT_PORTED_POST` so that frozen record stays honest, while a new route is still
- * enumerated rather than appearing unchecked. Belongs here only once dispatched below — a
- * probe, not just this declaration, is what keeps that true.
- */
-export const POST_BEYOND_REF = new Set([
-  '/api/reveal',
-]);
-
-/**
- * GET routes added after the ported reference surface was frozen — the same reason
- * `POST_BEYOND_REF` above exists, one verb over. `/api/recent` is a genuine gap: no catalog
- * row carries a date and a browser cannot stat the `source` path it is handed, so "what
- * changed lately" needed a server that looks. See `apiRecent` in `api.mjs` for what it will
- * and will not date.
- */
-export const GET_BEYOND_REF = new Set([
-  '/api/recent',
-]);
-
-export function notPorted(path) {
-  return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));
-}
-
-export function notPortedPost(path) {
-  return NOT_PORTED_POST.has(path) || DECLINED_POST.has(path)
-    || NOT_PORTED_POST_PREFIXES.some((p) => path.startsWith(p));
-}
+export const POST_INLINE = ['/api/shutdown', '/api/restart', '/api/jobs/',
+  '/api/actions/', '/api/pick-folder', '/api/reveal'];
 
 /**
  * The drained request body as a plain object, `{}` for ANYTHING else — never a raise, so a

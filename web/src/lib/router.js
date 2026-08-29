@@ -11,7 +11,6 @@ const FLAT_VIEWS = new Set([
   'harnesses',
   'doctor',
   'themes',
-  'graph',
   'library',
   'laws',
   'rules',

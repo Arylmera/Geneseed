@@ -33,8 +33,8 @@
  *
  * ALSO HERE, SINCE P8b: `syncSelf`/`cmdSyncSelf` and the bootstrap step runner
  * (`cmdBootstrap`, `bootstrapPlain`) at the bottom of this file. Still NOT here: `main`, the
- * launchers' self-heal entry. `NOT_PORTED_ACTIONS` in `js/web/jobs.mjs` is empty now — every
- * action row crosses. `parseOrigin` is ported in full here even though only `upgrade`
+ * launchers' self-heal entry. Every web action row crosses — see `js/web/jobs.mjs`.
+ * `parseOrigin` is ported in full here even though only `upgrade`
  * needs its fallback, because P8c's docs `about` kind needs the slug half and splitting one
  * pure function across two phases is how a second classifier gets written.
  */

@@ -5,12 +5,10 @@ import { describe, it, expect, vi } from 'vitest'
 // `setup` and job history (`runs`) are no longer fetched here: App owns the one copy of
 // each (the rail's germination ring reads the same two setup fingerprints, and the
 // console owns the one job poll) and hands both down as props, so the mock lost its
-// `setup` and `jobs` arms — every render below passes a `runs` snapshot instead, and
-// `graph` stays mocked because Lineage still fetches it lazily on first visit.
+// `setup` and `jobs` arms — every render below passes a `runs` snapshot instead. The
+// default (cultivar) lens fetches nothing supplementary, so the mock is empty.
 vi.mock('../api/index.js', () => ({
-  api: {
-    graph: () => Promise.resolve({ nodes: [], edges: [] }),
-  },
+  api: {},
 }))
 
 import Dashboard from '../pages/Dashboard/index.jsx'

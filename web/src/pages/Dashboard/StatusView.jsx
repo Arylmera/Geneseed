@@ -2,34 +2,15 @@ import React from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { SECTION_ORDER } from '../../lib/sections.js'
 import { readiness } from '../../lib/format.js'
+import { headlineFor } from '../../lib/headlines.js'
 import Ring from './Ring.jsx'
 import KpiStrip from './KpiStrip.jsx'
 import Genome from './Genome.jsx'
 import ActivityFeed from './ActivityFeed.jsx'
 
-// Voice-flavoured hero headline per theme — UI copy, not server data.
-const HEADLINES = {
-  neutral: 'Loaded & ready',
-  imperial: 'The Codex in force',
-  military: 'The unit stands ready',
-  cyberpunk: 'Jacked in',
-  wizard: 'Wards in place',
-  pirate: 'The crew stands ready',
-  gamer: 'Game loaded',
-  sports: 'The squad takes the field',
-  biker: 'The crew rolls out',
-  commentator: 'Lights out, away we go',
-  verstappen: "Setup's in",
-  joker: 'Mic check',
-  mean: 'Rules are up',
-  marvin: 'Online. Reluctantly.',
-}
-
 // Direction A · Status — the hero readiness ring, KPIs, genome, and activity.
 export default function StatusView({ overview, sigil, setup, jobs, onAction }) {
-  const headline = overview.deployed
-    ? HEADLINES[overview.theme] || 'Loaded & ready'
-    : 'Not deployed'
+  const headline = headlineFor(overview)
   const rv = readiness(overview, setup)
 
   return (

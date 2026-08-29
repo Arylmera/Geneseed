@@ -1,7 +1,6 @@
 /**
  * The web daemon at the HTTP level — keep-alive, compression, caching, the body-drain keep-alive
- * makes load-bearing — and the route PARTITION that the 114 recorded cells are structurally blind
- * to.
+ * makes load-bearing — and the route SURFACE the dispatch tables declare.
  *
  * SUCCESSOR TO `tests/test_web_server.py`. Two halves, and they fail for different reasons.
  *
@@ -12,25 +11,16 @@
  * is stronger than the reference's "the second request also answered 200" — a server that closed
  * and a client that silently redialled would satisfy that.
  *
- * THE PARTITION HALF read the reference's routes with `ast` on the argument that "the table has
- * to come from the thing under test", and it was right: a hand-kept list in the test would be a
- * second answer to the same question. The thing under test is now the only implementation, so a
- * gate scraped from it would agree with any drift — the same wall `test_node_cli_parity.py`'s
- * help-flag scrape hit, and the same answer. THE FROZEN SETS BELOW WERE READ OUT OF THE REFERENCE
- * ON 2026-08-16 with its own `ast` readers, and the test is the second party now.
- *
- * ⚠ LIMITS ROW 3 LIVES IN THIS FILE, in `the declared partition is the one the dispatcher
- * uses`. It exists because a declaration is not a dispatcher: collapsing the POST sets back
- * into `NOT_PORTED` leaves every declaration exactly as written and every set-reading test
- * green, while quietly changing what the real dispatcher does. It used to be PROVED with
- * `/api/pick-folder` (DECLINED, so POST had to answer 501 and GET had to fall through to the
- * SPA) — `DECLINED_POST` is EMPTY now (pick-folder crossed 2026-08-27, a user override; see
- * `js/web/routes.mjs`), so there is no member left to probe that way here. Hitting the live
- * route would no longer prove the same thing anyway: it now spawns a REAL OS folder dialog on
- * the daemon host, which this suite must not pop on the developer's own screen (the same
- * reason `/api/restart` and `/api/reveal`'s success arm are never driven, two probes below) —
- * its dispatch (and the non-desktop error path) is covered instead by a dedicated unit test
- * that overrides `process.platform` rather than hitting a live server.
+ * THE SURFACE HALF holds the dispatch tables against lists WRITTEN OUT below — a second party,
+ * because a gate scraped from the thing under test would agree with any drift. Growing or
+ * shrinking the API means editing the list here in the same commit, with the reason in the
+ * message. (This half descended from the Python→Node port's two-sided partition, whose
+ * NOT_PORTED / DECLINED sets all emptied when the port finished and were then deleted — see git
+ * history for that machinery.) A declaration is not a dispatcher, so the probe test drives the
+ * REAL handler as well: one request per branch, each naming the status the dispatcher must
+ * produce. `/api/restart`, `/api/pick-folder` and `/api/reveal`'s success arm are never driven
+ * live — they would bounce a daemon or pop a real OS dialog/file-manager on the developer's own
+ * screen; their dispatch is covered by dedicated unit tests instead.
  */
 import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
@@ -41,10 +31,10 @@ import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { PREFIX_ROUTES, STATE_ROUTES, webState } from '../../js/web/api.mjs';
-import { NOT_PORTED_KINDS, PORTED_KINDS } from '../../js/web/docs.mjs';
+import { KINDS } from '../../js/web/docs.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
 import { makeHandler } from '../../js/web/handler.mjs';
-import { DECLINED_POST, GET_BEYOND_REF, NOT_PORTED, NOT_PORTED_POST, NOT_PORTED_POST_PREFIXES, NOT_PORTED_PREFIXES, PORTED_INLINE, PORTED_POST, PORTED_POST_INLINE, POST_BEYOND_REF, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
+import { GET_INLINE, POST_INLINE, POST_ROUTES, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
 import { webFixture, webFixtureTeardown } from '../helpers/web_fixture.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -52,38 +42,39 @@ const DIST = path.join(ROOT, 'web', 'dist');
 const TOKEN = 'test-token';
 
 // ---------------------------------------------------------------------------------------------
-// THE REFERENCE'S OWN ANSWERS, MEASURED WHILE IT EXISTED (2026-08-16), with the `ast` readers
-// `tests/test_web_server.py` carried. Frozen rather than re-derived: `_web_server.py` is deleted
-// by P4, and reading the same sets out of `js/web/` would make each assertion below a comparison
-// of a value with itself. A new route added to the port and to neither of these lists is the
-// failure these freeze — it would otherwise answer with the SPA's index.html at a 200, where the
-// client expects JSON.
+// THE DECLARED SURFACE, WRITTEN OUT. A second party to the dispatch tables: reading the same
+// lists out of `js/web/` would make each assertion below a comparison of a value with itself.
+// A route added to the daemon and not to these lists is the failure they freeze — a GET would
+// otherwise answer with the SPA's index.html at a 200, where the client expects JSON. Editing
+// the API means editing the matching list here, in the same commit, with the reason in the
+// message. (`/api/graph` left this list when the web graph pages were retired — the last
+// endpoint to leave it.)
 
-/** Every path `do_GET` + `STATE_ROUTES` answered — 20. */
-const REF_GET = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
-  '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/graph', '/api/installs', '/api/item/',
+/** Every GET path the daemon answers — 20. Trailing `/` marks a prefix route. */
+const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
+  '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/installs', '/api/item/',
   '/api/jobs', '/api/jobs/', '/api/mcp', '/api/overview', '/api/ping', '/api/profile',
-  '/api/rules', '/api/setup', '/api/themes'];
+  '/api/rules', '/api/setup', '/api/themes', '/api/recent'];
 
-/** Every path `_post_routes` answered — 14. */
-const REF_POST = ['/api/actions/', '/api/activity', '/api/excludes', '/api/install', '/api/jobs/',
-  '/api/mcp', '/api/memory/delete', '/api/pick-folder', '/api/profile', '/api/restart',
-  '/api/rules', '/api/rules/promote', '/api/shutdown', '/api/view'];
+/** Every POST path the daemon answers — 15. */
+const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/install',
+  '/api/jobs/', '/api/mcp', '/api/memory/delete', '/api/pick-folder', '/api/profile',
+  '/api/restart', '/api/reveal', '/api/rules', '/api/rules/promote', '/api/shutdown',
+  '/api/view'];
 
 /**
- * The POST paths whose send carried a `200 if … else 409` conditional.
+ * The POST paths whose send carries a `200 if … else 409` conditional.
  *
  * `/api/activity` and `/api/memory/delete` are deliberately NOT here: their write is sent at 200
- * whatever `ok` says. A port that unified the rule is caught by four recorded cells — but only in
- * one direction. The reverse mutation, giving `/api/activity` the 409 treatment, is INVISIBLE to
- * every cell: each toggle a cell can perform SUCCEEDS, and the failing arm needs the flag write
- * to raise, which the two runtimes word differently and no byte comparison can hold.
+ * whatever `ok` says. Giving `/api/activity` the 409 treatment is the INVISIBLE mutation: each
+ * toggle a behavioural test can perform SUCCEEDS, and the failing arm needs the flag write to
+ * raise — so the column has to be checked as a column, below.
  */
-const REF_409 = ['/api/excludes', '/api/install', '/api/mcp', '/api/profile', '/api/rules',
+const EXPECT_409 = ['/api/excludes', '/api/install', '/api/mcp', '/api/profile', '/api/rules',
   '/api/rules/promote', '/api/view'];
 
-/** Every kind `api_docs_page` dispatched on — 5. */
-const REF_KINDS = ['about', 'cli', 'concept', 'glossary', 'markdown'];
+/** Every kind `apiDocsPage` dispatches on — 5. */
+const EXPECT_KINDS = ['about', 'cli', 'concept', 'glossary', 'markdown'];
 
 const sorted = (xs) => [...xs].sort();
 
@@ -288,83 +279,31 @@ test('a foreign Host is refused', async () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// THE PARTITION HALF
+// THE SURFACE HALF
 
 const nodeGet = () => [...Object.keys(STATE_ROUTES), ...PREFIX_ROUTES.map((r) => r[0]),
-  ...PORTED_INLINE];
-const nodeUnportedGet = () => [...NOT_PORTED, ...NOT_PORTED_PREFIXES];
-const nodeUnportedPost = () => [...NOT_PORTED_POST, ...NOT_PORTED_POST_PREFIXES];
+  ...GET_INLINE];
 
-test('every GET route is either ported or declared unported', () => {
-  // THREE PARTS, and the third is `GET_BEYOND_REF` — the GET half of the argument
-  // `POST_BEYOND_REF` makes below. `REF_GET` is a RECORD of what the Python daemon answered,
-  // so it is not the thing to widen when this daemon grows a route; widening it would forge
-  // the record, and leaving the equality unqualified would say this daemon may never grow a
-  // GET at all. The comparison is therefore against the reference's surface PLUS the declared
-  // additions: the reference's routes stay pinned exactly, and anything past them has to be
-  // enumerated rather than merely appear.
-  const covered = new Set([...nodeGet(), ...nodeUnportedGet()]);
-  assert.deepEqual(REF_GET.filter((p) => !covered.has(p)), [],
-    'the reference answered GET paths the daemon neither ports nor declares unported — each '
+test('the GET surface is exactly the declared one', () => {
+  // Set equality against the written-out list: a route added to a dispatch table and not to
+  // `GET_SURFACE` fails here, and so does one deleted from a table but left on the list —
+  // growing or shrinking the API is a deliberate edit in both places or it is a bug.
+  assert.deepEqual(sorted(new Set(nodeGet())), sorted(GET_SURFACE),
+    'the GET dispatch tables and the declared surface have drifted apart — an undeclared GET '
     + 'falls through to the SPA and answers HTML at a 200 where the client expects JSON');
-  assert.deepEqual(sorted([...covered].filter((p) => !REF_GET.includes(p)
-    && !GET_BEYOND_REF.has(p))), [],
-  'the daemon claims GET paths the reference did not answer and does not declare as additions');
-  // AND NO ADDITION MAY HIDE A REFERENCE ROUTE — the same guard the POST side carries. Moving a
-  // path the reference really did answer into `GET_BEYOND_REF` would keep the check above green
-  // while quietly deleting the claim that the path is ported; the set is for routes with NO
-  // reference, only.
-  assert.deepEqual(sorted([...GET_BEYOND_REF].filter((p) => REF_GET.includes(p))), [],
-    'a route the reference answered was declared as a post-port addition');
-  // Every declared addition must actually be dispatched — a declaration is not a dispatcher.
-  assert.deepEqual(sorted([...GET_BEYOND_REF].filter((p) => !covered.has(p))), [],
-    'a GET declared beyond the reference is not in any dispatch table');
 });
 
-test('every POST route is either ported or declared unported', () => {
-  // FOUR PARTS, NOT TWO, and the third is the point: `DECLINED_POST` is a route that will never
-  // cross, which is a different claim from `NOT_PORTED_POST`'s "not yet". Folding them would make
-  // the to-do list wrong in the one direction nobody checks — a later phase emptying it would
-  // have to either port a GUI folder dialog or quietly delete a row.
-  //
-  // The FIFTH is `PORTED_POST_INLINE`, a declaration rather than a hardcoded set: three POST
-  // routes dispatch outside `POST_ROUTES` because that table's second column is the 409
-  // convention and none of them answers on `ok` — the shell's own `/api/shutdown` and
-  // `/api/restart`, and the job prefixes, which answer 202/409/404/501/400/200.
-  // The SIXTH is `POST_BEYOND_REF` — routes that never existed on the reference. `REF_POST` is a
-  // RECORD of what the Python daemon answered, so it is not the thing to widen when this daemon
-  // grows a route; widening it would forge the record. The equality below therefore compares the
-  // covered set against the reference's surface PLUS the declared additions, which keeps both
-  // halves checkable: the reference's routes stay pinned exactly, and anything past them has to
-  // be enumerated rather than merely appear.
-  const covered = new Set([...PORTED_POST_INLINE, ...PORTED_POST, ...DECLINED_POST,
-    ...POST_BEYOND_REF, ...nodeUnportedPost()]);
-  assert.deepEqual(sorted(covered), sorted([...REF_POST, ...POST_BEYOND_REF]),
-    'the POST partition has drifted from the routes the reference answered plus the declared '
-    + 'post-port additions');
-  // AND NO ADDITION MAY HIDE A REFERENCE ROUTE. Without this, moving a path the reference really
-  // did answer into `POST_BEYOND_REF` would keep the equality above green while quietly deleting
-  // the claim that the path is ported — the set is for routes with NO reference, only.
-  assert.deepEqual(sorted([...POST_BEYOND_REF].filter((p) => REF_POST.includes(p))), [],
-    'a route the reference answered was declared as a post-port addition');
-  const inter = (a, b) => sorted([...a].filter((p) => [...b].includes(p)));
-  assert.deepEqual(inter(PORTED_POST, nodeUnportedPost()), []);
-  assert.deepEqual(inter(PORTED_POST, DECLINED_POST), []);
-  assert.deepEqual(inter(nodeUnportedPost(), DECLINED_POST), []);
-  assert.deepEqual(inter(POST_BEYOND_REF, DECLINED_POST), []);
-  assert.deepEqual(inter(POST_BEYOND_REF, nodeUnportedPost()), []);
+test('the POST surface is exactly the declared one', () => {
+  assert.deepEqual(sorted(new Set([...POST_ROUTES.keys(), ...POST_INLINE])),
+    sorted(POST_SURFACE),
+    'the POST dispatch (table + inline list) and the declared surface have drifted apart');
 });
 
-test('the declared partition is the one the dispatcher uses', async () => {
-  // ⚠ LIMITS ROW 3. THE ASSERTION THE TWO TESTS ABOVE CANNOT MAKE, and a mutation is why it
-  // exists. Both of them read the exported SETS. Collapsing `NOT_PORTED_POST` back into
-  // `NOT_PORTED` — one line, and the whole reason two lists exist — leaves every set exactly as
-  // declared and both tests green, while a GET to a POST-only declaration starts answering 501
-  // instead of falling through to the SPA. A gate on a declaration cannot see it.
-  //
-  // So this drives the REAL handler: one probe per branch, each naming the status the dispatcher
-  // must actually produce. No recorded cell can ask it — a cell compares two implementations, and
-  // none may hold a 501 against the reference's real body.
+test('the declared surface is the one the dispatcher uses', async () => {
+  // THE ASSERTION THE TWO TESTS ABOVE CANNOT MAKE. Both of them read the exported tables — and
+  // a declaration is not a dispatcher: a route can sit in a table the dispatch stopped
+  // consulting and both stay green. So this drives the REAL handler: one probe per branch,
+  // each naming the status the dispatcher must actually produce.
   //
   // ITS OWN SERVER, because the last probe stops the listener. And `GIT_DIR` is pointed at a path
   // that does not exist FIRST: `preflight()` reads the developer's own checkout, and on a clean
@@ -386,70 +325,48 @@ test('the declared partition is the one the dispatcher uses', async () => {
     body: method === 'POST' ? (body ?? '{}') : undefined })).status;
   try {
     assert.equal(await hit('GET', '/api/profile'), 200,
-      'a ported GET must answer — the control, without which every refusal below is vacuous');
-    // `NOT_PORTED` is empty since P6g crossed `/api/jobs`, so there is no unported GET left to
-    // ask for a 501. The set stays declared and the partition test above keeps it honest.
-    assert.equal(await hit('GET', '/api/jobs'), 200, 'GET /api/jobs crossed in P6g');
-    // THE `GET_BEYOND_REF` PROBE. `/api/recent` has no reference body to be held to, so this
-    // dispatch check is the only gate that it is wired at all: a 200 means the declaration and
-    // the table agree, and anything else — an HTML 200 from the SPA fallback included — means
-    // the route is declared and not dispatched. (The SPA fallback cannot answer 200 here: this
-    // probe's dist root is 'nowhere', so a fall-through is a 404.)
+      'a table GET must answer — the control, without which every refusal below is vacuous');
+    assert.equal(await hit('GET', '/api/jobs'), 200, 'an inline GET must answer too');
+    // A 200 means the declaration and the table agree; anything else — an HTML 200 from the
+    // SPA fallback included — means the route is declared and not dispatched. (The SPA fallback
+    // cannot answer 200 here: this probe's dist root is 'nowhere', so a fall-through is a 404.)
     assert.equal(await hit('GET', '/api/recent'), 200,
-      'GET /api/recent must answer — GET_BEYOND_REF declares it, so a 404 means the '
-      + 'declaration is not dispatched on');
+      'GET /api/recent must answer — a 404 means the declaration is not dispatched on');
     assert.equal(await hit('POST', '/api/excludes', 'tok'), 409,
-      'a ported POST must answer, and an empty body is the 409 arm of the convention — the '
+      'a table POST must answer, and an empty body is the 409 arm of the convention — the '
       + 'control for the refusals below');
-    // `NOT_PORTED_POST` is empty too. What replaces its probe is the OPPOSITE assertion over the
-    // same path: an empty body reaches the endpoint, misses the (host, path) allowlist and raises
-    // NotFound, which the outer catch answers 404. A 501 here means the row went back.
+    // An empty body reaches the endpoint, misses the (host, path) allowlist and raises
+    // NotFound, which the outer catch answers 404 — proof the route reaches its endpoint.
     assert.equal(await hit('POST', '/api/install', 'tok'), 404,
-      'POST /api/install crossed: an empty body names no install, so it must reach the endpoint '
-      + 'and raise NotFound — a 501 means the row is declared unported again');
-    // THE ROW-3 PAIR used to live here, against `/api/pick-folder` while `DECLINED_POST` still
-    // had a member. It crossed 2026-08-27 (a user override — see `js/web/routes.mjs`) and
-    // `DECLINED_POST` is empty now, so there is nothing left in this partition to probe that
-    // way. It is not replaced with a live hit on `/api/pick-folder` either: unlike
-    // `/api/install` above (which safely 404s on an empty body), pick-folder takes NO client
-    // input at all and spawns a REAL OS folder dialog on every hit regardless of body — the
-    // same reason `/api/restart` and `/api/reveal`'s success arm below are never driven. Its
-    // dispatch and non-desktop error path are covered by a dedicated unit test instead, one
-    // that overrides `process.platform` rather than hitting a live server.
-    // THE `POST_BEYOND_REF` PAIR. `/api/reveal` is the first route with no reference at all, so
-    // there is no recorded body to hold it to and this dispatch probe is the only gate on it.
-    //
-    // ONLY THE REFUSAL ARM IS PROBED, for `/api/restart`'s reason one door over: the success arm
-    // calls `openUrl`, which asks the DESKTOP to open a folder, and a suite that took it would
-    // pop a file-manager window on the developer's machine (and on a CI runner, spawn an opener
-    // that is not there). An empty body names no path, so it misses the allowlist and must 404 —
-    // which is the interesting half anyway: 501 means the route is declared but not dispatched,
-    // and 200 would mean the allowlist is not consulted before something is opened.
+      'POST /api/install: an empty body names no install, so it must reach the endpoint '
+      + 'and raise NotFound');
+    // ONLY `/api/reveal`'s REFUSAL ARM IS PROBED: the success arm calls `openUrl`, which asks
+    // the DESKTOP to open a folder, and a suite that took it would pop a file-manager window on
+    // the developer's machine (and on a CI runner, spawn an opener that is not there). An empty
+    // body names no path, so it misses the allowlist and must 404 — which is the interesting
+    // half anyway: 200 would mean the allowlist is not consulted before something is opened.
     assert.equal(await hit('POST', '/api/reveal', 'tok'), 404,
-      'POST /api/reveal must reach its allowlist and refuse — 501 means POST_BEYOND_REF is '
-      + 'declared but not dispatched, 200 means nothing checks the path before opening it');
+      'POST /api/reveal must reach its allowlist and refuse — 200 means nothing checks the '
+      + 'path before opening it');
     assert.notEqual(await hit('GET', '/api/reveal'), 501,
       'GET /api/reveal must fall through to the SPA, like every other POST-only declaration');
-    // A REAL action and an INVENTED one. With `NOT_PORTED_ACTIONS` empty, "no real action gets
-    // the 404 a typo gets" is a statement about the whole table, and
-    // `tests/unit/web_jobs.test.mjs` is what proves it for every row at once.
+    // A REAL action and an INVENTED one. "No real action gets the 404 a typo gets" is a
+    // statement about the whole table, and `tests/unit/web_jobs.test.mjs` is what proves it
+    // for every row at once.
     assert.equal(await hit('POST', '/api/actions/update', 'tok'), 422,
-      'POST /api/actions/update is gated on preflight: 501 means it is declared unported again, '
-      + '404 means it fell through to the table, and 202 means the preflight was SKIPPED and a '
-      + 'real git pull just started');
+      'POST /api/actions/update is gated on preflight: 404 means it fell through to the table, '
+      + 'and 202 means the preflight was SKIPPED and a real git pull just started');
     assert.equal(await hit('POST', '/api/actions/nope', 'tok'), 404,
-      'an action the table does not name gets the reference\'s own 404');
+      'an action the table does not name answers 404');
     assert.equal(await hit('POST', '/api/actions/restore', 'tok', '{"files": []}'), 200,
       'POST /api/actions/restore is synchronous and answers 200 — the control for the refusals');
     assert.equal(await hit('GET', '/api/docs'), 200);
     assert.equal(await hit('GET', '/api/docs/page/glossary'), 200);
     assert.equal(await hit('GET', '/api/docs/page/cli'), 200,
-      'the `cli` kind crossed in P10c — 501 means it is back in NOT_PORTED_KINDS, 404 means '
-      + 'KIND_ROUTES has no row for it');
+      '404 means KIND_ROUTES has no row for the `cli` kind');
     assert.equal(await hit('GET', '/api/docs/page/about'), 200,
-      'the `about` kind crossed in P8c — it runs `git remote get-url` through originDisplay(), '
-      + 'so this is also the probe that says the docs tree may reach the module the spawn '
-      + 'allow-list declares');
+      'the `about` kind runs `git remote get-url` through originDisplay(), so this is also the '
+      + 'probe that says the docs tree may reach the module the spawn allow-list declares');
     // LAST, always: this one stops the server, and every probe after it would fail with an
     // ECONNRESET that reads like a routing bug.
     assert.equal(await hit('POST', '/api/shutdown', 'tok'), 200, 'the shell\'s own POST answers');
@@ -462,35 +379,24 @@ test('the declared partition is the one the dispatcher uses', async () => {
 });
 
 test('the 409 convention is per route', () => {
-  // THE COLUMN NO CELL CAN GATE. `POST_ROUTES` is the DISPATCH, so this is not a gate on a
-  // declaration — it is a gate on the table `doPost` looks up. See `REF_409` for why the reverse
-  // mutation is the invisible one.
-  assert.deepEqual(sorted(Object.keys(POST_ROUTES_CONVENTION)), sorted(PORTED_POST),
-    'the convention column must name every ported POST and no other');
+  // THE COLUMN NO BEHAVIOURAL TEST CAN GATE. `POST_ROUTES` is the DISPATCH, so this is not a
+  // gate on a declaration — it is a gate on the table `doPost` looks up. See `EXPECT_409` for
+  // why the reverse mutation is the invisible one.
+  assert.deepEqual(sorted(Object.keys(POST_ROUTES_CONVENTION)), sorted([...POST_ROUTES.keys()]),
+    'the convention column must name every table POST and no other');
   assert.deepEqual(sorted(Object.entries(POST_ROUTES_CONVENTION)
     .filter(([, on]) => on).map(([p]) => p)),
-  sorted(REF_409.filter((p) => PORTED_POST.includes(p))),
-  'the 409 column has drifted from the reference\'s own conditionals — /api/activity and '
-    + '/api/memory/delete answer 200 whatever `ok` says and the others do not, and no cell can '
-    + 'gate the difference');
+  sorted(EXPECT_409),
+  'the 409 column has drifted from the declared conditionals — /api/activity and '
+    + '/api/memory/delete answer 200 whatever `ok` says and the others do not, and no '
+    + 'behavioural test can gate the difference');
 });
 
-test('every docs kind is either ported or declared unported', () => {
-  // The route partition, one level in. `NOT_PORTED_KINDS` is empty since P10c crossed `cli`, so
-  // this says every kind the reference dispatched on is answered — and a SIXTH kind added to the
-  // port still cannot quietly answer "page not found".
-  assert.deepEqual(sorted([...PORTED_KINDS, ...NOT_PORTED_KINDS]), sorted(REF_KINDS),
-    'the docs kinds have drifted from the five the reference dispatched on');
-  assert.deepEqual(PORTED_KINDS.filter((k) => [...NOT_PORTED_KINDS].includes(k)), []);
-});
-
-test('a ported route is never also declared unported', () => {
-  assert.deepEqual(nodeGet().filter((p) => nodeUnportedGet().includes(p)), []);
-  // The direction the GET partition cannot give: a POST-only declaration must never appear in the
-  // GET table, or the GET dispatcher would 501 a path the SPA owns.
-  assert.deepEqual(
-    sorted([...nodeUnportedPost(), ...DECLINED_POST].filter((p) => nodeGet().includes(p))), [],
-    'a POST declaration has leaked into the ported GET table');
+test('the docs kinds are exactly the declared ones', () => {
+  // The route surface, one level in: a SIXTH kind added to `KIND_ROUTES` cannot quietly
+  // answer "page not found" — it has to be enumerated here.
+  assert.deepEqual(sorted(KINDS), sorted(EXPECT_KINDS),
+    'the docs kinds have drifted from the five declared');
 });
 
 test('the setup snapshot\'s missing interpreter field is gated where the snapshot is', () => {

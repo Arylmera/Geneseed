@@ -41,10 +41,10 @@ test('POST /api/pick-folder dispatches, and a platform with no dialog branch ans
       headers: { 'X-Geneseed-Token': 'tok', 'Content-Type': 'application/json' },
       body: '{}',
     });
-    // 501 here would mean the route is still `DECLINED_POST` and never crossed; 404 would mean
-    // it fell through to `POST_ROUTES`'s miss arm instead of the inline branch in `doPost`; 500
-    // would mean the platform check raised instead of answering. 200 + this exact body is the
-    // whole contract `web/src/api/installs.js`'s `pickFolder()` relies on for its `{error}` arm.
+    // 404 here would mean the route fell through to `POST_ROUTES`'s miss arm instead of the
+    // inline branch in `doPost`; 500 would mean the platform check raised instead of
+    // answering. 200 + this exact body is the whole contract the client's `pickFolder()` (in
+    // `web/src/api/index.js`) relies on for its `{error}` arm.
     assert.equal(r.status, 200);
     assert.deepEqual(await r.json(), { error: 'no native folder dialog on this platform' });
   } finally {

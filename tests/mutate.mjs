@@ -422,28 +422,12 @@ export const MUTATIONS = [
       + 'comparison could hold. The convention column is the table `doPost` looks up, so the gate '
       + 'is on the dispatch and not on a declaration.',
   },
-  {
-    id: 'M23',
-    name: 'consult the POST declarations on a GET',
-    file: 'js/web/routes.mjs',
-    find: '  return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
-    replace: '  return NOT_PORTED.has(path) || DECLINED_POST.has(path)\n'
-      + '    || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
-    gate: null,
-    why: 'UNGATED AS OF THE `/api/pick-folder` PORT (bf40ddf). This used to be LIMITS ROW 3, '
-      + 'AS A DEFECT: the one-line collapse the split into separate GET and POST declarations '
-      + 'exists to prevent, catchable only by a probe of the running dispatcher because a GET '
-      + 'to `/api/pick-folder` answered 501 instead of falling through to the SPA that owns the '
-      + 'path — while every set-reading partition test stayed green. `/api/pick-folder` crossed '
-      + '(the user overrode the earlier permanent decline) and `DECLINED_POST` is now '
-      + 'PERMANENTLY EMPTY, dispatched inline instead. `DECLINED_POST.has(path)` therefore '
-      + 'evaluates false for every path this mutant or the original could ever receive, so the '
-      + 'two are behaviourally IDENTICAL for any GET — the defect class this row plants has no '
-      + 'live member and no probe left that could tell them apart. Stays declared and ungated, '
-      + 'not deleted, the same reason an empty set stays declared: a future permanent decline '
-      + 'reopens the class, and `tests/unit/web_server.test.mjs`\'s dispatcher probe is the gate '
-      + 'to re-aim this row at when one lands.',
-  },
+  // M23 ('consult the POST declarations on a GET') LEFT WITH ITS TARGET: it anchored on
+  // `notPorted()`, deleted when the port's NOT_PORTED / DECLINED partition retired (every set
+  // had been empty since bf40ddf, and the row was already ungated then — see git history for
+  // its full account). The defect class needs a declaration-vs-dispatch split to exist, and
+  // the surface test in `tests/unit/web_server.test.mjs` now holds both sides against a
+  // written-out list instead.
   // ------------------------------------------------------------------------------------------
   // P3 T7, with `tests/unit/web_daemon.test.mjs`. Both defects are real and both are invisible
   // to every other gate in the repo, for the same reason: the arms they break are the ones no

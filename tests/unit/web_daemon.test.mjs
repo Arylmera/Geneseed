@@ -35,7 +35,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { cliSpec } from '../../js/ui/cli.mjs';
-import { NOT_PORTED_POST, PORTED_POST_INLINE } from '../../js/web/routes.mjs';
+import { POST_INLINE } from '../../js/web/routes.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -130,20 +130,10 @@ test('a non-integer port is refused rather than defaulted', () => {
   }
 });
 
-test('the restart route is dispatched, not declared unported', () => {
-  // THE PARTITION HALF `tests/unit/web_server.test.mjs` CHECKS AS A UNION AND SO CANNOT SEE: a
-  // route moved out of `NOT_PORTED_POST` and into nothing at all keeps the union intact and
-  // starts answering `{"error": "not found"}` at 404.
-  assert.ok(![...NOT_PORTED_POST].includes('/api/restart'));
-  assert.ok(PORTED_POST_INLINE.includes('/api/restart'),
-    '/api/restart is neither declared unported nor declared as an inline dispatch — it would '
-    + 'fall through to the shell\'s own 404');
-  // EMPTY AND STILL DECLARED. Asserting the emptiness is what stops the declaration from being
-  // quietly deleted, which is the one way an empty partition half stops being an assertion and
-  // becomes an omission.
-  assert.deepEqual([...NOT_PORTED_POST], [],
-    'NOT_PORTED_POST is empty since P6i and must STAY DECLARED — an empty half of a partition is '
-    + 'the partition asserting there is nothing left to declare');
+test('the restart route is declared as an inline dispatch', () => {
+  assert.ok(POST_INLINE.includes('/api/restart'),
+    '/api/restart is not declared as an inline dispatch — it would fall through to the '
+    + 'shell\'s own 404');
 });
 
 test('the restart dispatch is read from source, because probing it costs a daemon', () => {

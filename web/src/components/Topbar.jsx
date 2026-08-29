@@ -10,7 +10,6 @@ const TAB_FLAG = {
   diff: 'diff',
   doctor: 'doctor',
   harness: 'harness',
-  graph: 'graph',
   settings: 'settings',
 }
 

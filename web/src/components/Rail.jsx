@@ -111,7 +111,6 @@ const NAV = [
     icon: 'docs',
     match: (r) => r.view === 'docs',
   },
-  { hash: '#/graph', id: 'graph', label: 'Graph', icon: 'graph', match: (r) => r.view === 'graph' },
   { group: 'Care' },
   {
     hash: '#/activity',

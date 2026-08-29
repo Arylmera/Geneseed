@@ -19,8 +19,8 @@ import { apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildOverride, 
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES } from './api.mjs';
 import { openUrl, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
-import { NOT_PORTED_ACTIONS, actionCommands } from './jobs.mjs';
-import { POST_ROUTES, notPorted, notPortedPost, readJsonBody } from './routes.mjs';
+import { actionCommands } from './jobs.mjs';
+import { POST_ROUTES, readJsonBody } from './routes.mjs';
 import { isFile } from '../lib/fs.mjs';
 import { readFileSync } from 'node:fs';
 import { basename, dirname, extname, join, sep } from 'node:path';
@@ -120,14 +120,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     }
     if (path.startsWith('/api/docs/page/')) {
       const pid = percentDecode(path.slice('/api/docs/page/'.length));
-      try {
-        return sendJson(res, apiDocsPage(state, pid, harnessParam(req.url)), 200, ae);
-      } catch (e) {
-        // An unimplemented doc kind says so explicitly (501), rather than falling through
-        // to the `NotFound` at the bottom of `apiDocsPage` and claiming the page is missing.
-        if (e && e.notPorted) return sendJson(res, { error: e.message }, 501, ae);
-        throw e;
-      }
+      return sendJson(res, apiDocsPage(state, pid, harnessParam(req.url)), 200, ae);
     }
     if (path === '/api/jobs') return sendJson(res, { jobs: jm.recent() }, 200, ae);
     if (path.startsWith('/api/jobs/')) {
@@ -136,9 +129,6 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       const j = jm.get(path.slice(path.lastIndexOf('/') + 1));
       return j ? sendJson(res, j, 200, ae)
         : sendJson(res, { error: 'no such job' }, 404, ae);
-    }
-    if (notPorted(path)) {
-      return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
     }
     return serveStatic(res, path, ae);
   }
@@ -230,9 +220,6 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     if (path.startsWith('/api/actions/')) {
       return doAction(res, path.slice(path.lastIndexOf('/') + 1), readJsonBody(body), ae);
     }
-    if (notPortedPost(path)) {
-      return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
-    }
     return sendJson(res, { error: 'not found' }, 404, ae);
   }
 
@@ -253,9 +240,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
    * it succeeded: a failed update changed nothing worth reloading and bouncing would disconnect
    * the PWA for no reason.
    *
-   * THEN the unported rows, and only then the table. Order matters: `link`/`unlink` are REAL
-   * actions whose verb has not crossed, and letting them fall through to `actionCommands` would
-   * answer `{"error": "unknown action link"}` — the same thing a typo gets.
+   * THEN the table, which answers a 404 for any action it does not name.
    */
   function doAction(res, action, body, ae) {
     if (action === 'restore') {
@@ -283,9 +268,6 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       });
       if (jid === null) return sendJson(res, { error: 'busy' }, 409, ae);
       return sendJson(res, { job_id: jid }, 202, ae);
-    }
-    if (NOT_PORTED_ACTIONS.has(action)) {
-      return sendJson(res, { error: `not ported yet: /api/actions/${action}` }, 501, ae);
     }
     // Build can be re-themed/re-targeted from the UI picker; the other actions self-resolve
     // the deployed theme downstream. Footprint, posture and mode always follow the current
