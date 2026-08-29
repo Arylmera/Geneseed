@@ -160,9 +160,10 @@ test('with no store anywhere the verb refuses and says how to point it at one', 
 
 test('the entry dispatches `memory` at this module, with the actions the table declares', () => {
   const src = readFileSync(ENTRY, 'utf8');
-  // The row is `memory: cmdMemory,` since Task 5 flattened the VERBS table (it was
-  // `memory: { fn: cmdMemory, },` before).
-  assert.match(src, /\n {2}memory: cmdMemory,/,
+  // The row is a lazy loader since the CLI slim pass (`memory: cmdMemory,` after Task 5
+  // flattened the table, `memory: { fn: cmdMemory, },` before that) — the claim is
+  // unchanged: the verb routes to THIS module's cmdMemory and no other.
+  assert.match(src, /\n {2}memory: \(\) => import\('\.\.\/js\/maintain\/memory\.mjs'\)\.then\(\(m\) => m\.cmdMemory\),/,
     "bin/geneseed-cli.mjs's VERBS table no longer routes `memory` to cmdMemory");
   const table = JSON.parse(readFileSync(path.join(ROOT, 'js', 'cli-table.json'), 'utf8'));
   const cmd = table.commands.find((c) => c.name === 'memory');
