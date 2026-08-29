@@ -11,12 +11,19 @@ delegate to, the **{{SKILLS}}** it can run, how it keeps **{{MEMORY}}**, the
 **{{NOTEBOOK}}** it keeps as a space of its own, and how it draws on the surrounding
 **{{VAULT}}**.
 
+<!-- LEAN:begin -->
 It is tool-agnostic: it works with any assistant that reads a root instructions
 file. This entrypoint is named `AGENT.md`; a tool that only auto-loads `AGENTS.md`
 or `CLAUDE.md` just needs to be pointed here — rename or symlink this file to that
 name, or reference it from the tool's config. Where a tool supports sub-agents,
 the {{AGENTS}} below are dispatched as real sub-agents; where it does not, treat
 each as a *persona* the single agent adopts for that slice of work.
+<!-- LEAN:else -->
+It is tool-agnostic: any assistant that reads a root instructions file can be
+pointed here. Where the tool supports sub-agents, the {{AGENTS}} below are
+dispatched as real sub-agents; where it does not, treat each as a *persona* the
+single agent adopts for that slice of work.
+<!-- LEAN:end -->
 
 **Readiness sigil — required.** Before your first reply, complete the startup
 ritual: read this file and its {{LAWS}}, then **load the project context** — if a
@@ -229,20 +236,20 @@ subset that productively clashes on a given motion.
 | [opencode-theme]({{DIR_SKILLS}}/opencode-theme.md) | the user wants their own OpenCode colour theme — pick or tweak a palette, get solid + transparent variants that survive rebuilds |
 <!-- CATALOG:else -->
 Your host lists every {{SKILL}} it can invoke, with its trigger, in your own
-inventory — that list is the catalogue and it is authoritative. Run the matching
-{{SKILL}} before improvising; its written procedure is in
-[`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/) and the host loads it on demand.
+inventory — that list is the catalogue and it is authoritative. Each written
+procedure is in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/) and the host loads it on
+demand.
 <!-- CATALOG:end -->
 
 When a task repeats and no {{SKILL}} covers it, forge one: copy
 [`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
-domain ({{DOCTRINE}} craft 1), and register it in this table. Every {{SKILL}} ends with a
+domain ({{DOCTRINE}} craft 1), and register it in the catalogue above. Every {{SKILL}} ends with a
 **self-improvement loop** — honour it: fold what a run teaches back into the
 file, or into {{MEMORY}} ({{DOCTRINE}} process 1).
 
 **Folder {{SKILLS}}.** Some {{SKILLS}} ship as self-contained folders under
 `{{DIR_SKILLS}}/`, each with its own format and provenance (`VENDOR.md`) —
-third-party vendors plus first-party ones bundling scripts. Not in the table
+third-party vendors plus first-party ones bundling scripts. Not in the catalogue
 above — reach for one only when its domain comes up:
 - [react-view-transitions]({{DIR_SKILLS}}/react-view-transitions/SKILL.md) — animating
   React UIs with the View Transition API (`<ViewTransition>`, shared elements, Next.js).
@@ -278,6 +285,7 @@ convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 
 *{{EPI_NOTEBOOK}}*
 
+<!-- LEAN:begin -->
 {{INTRO_NOTEBOOK}} It lives in [`{{DIR_NOTEBOOK}}/`]({{DIR_NOTEBOOK}}/). This is
 **not** {{MEMORY}}: {{MEMORY}} (§5) is a curated store of durable *facts*, one per
 file in a fixed format, written for recall. The {{NOTEBOOK}} has **no imposed
@@ -299,6 +307,19 @@ format: {{MEMORY}} holds durable insight for future sessions, the {{NOTEBOOK}}
 holds your working artifacts. The one fixed law: `{{DIR_NOTEBOOK}}/` is **personal and
 git-ignored** — never committed or shared, and the `.gitignore` that guarantees
 it is not yours to lift.
+<!-- LEAN:else -->
+{{INTRO_NOTEBOOK}} It lives in [`{{DIR_NOTEBOOK}}/`]({{DIR_NOTEBOOK}}/), with
+**no imposed format and no imposed medium** — notes, plans, scratch code,
+datasets, experiments. It is not {{MEMORY}} (§5): {{MEMORY}} holds curated
+durable facts for recall, the {{NOTEBOOK}} holds your working artifacts, and a
+note that hardens into a durable fact is promoted there ({{DOCTRINE}} process 1).
+Any file you create for your own benefit belongs here, never in the host tree.
+Read `NOTEBOOK.md` at the start of a session to recall what you keep; the
+charter at [`{{DIR_NOTEBOOK}}/README.md`]({{DIR_NOTEBOOK}}/README.md) is yours
+to rewrite. The one fixed law: `{{DIR_NOTEBOOK}}/` is **personal and
+git-ignored** — never committed or shared, and the `.gitignore` that guarantees
+it is not yours to lift.
+<!-- LEAN:end -->
 
 ---
 
@@ -331,6 +352,7 @@ scratch scripts, analysis dumps, drafts, experiments — are made in the
 
 *{{EPI_WIKI}}*
 
+<!-- LEAN:begin -->
 {{INTRO_WIKI}} It is declared in `wiki.jsonc`, **beside this AGENT.md** like
 `context.json` (§9) — or wherever `$GENESEED_WIKI` points. An empty `wikis` list
 means none is declared and this section stays dormant. (On OpenCode its `eager`
@@ -358,6 +380,19 @@ outside `protected`, but its conventions outrank your defaults: wikilinks
 durable fact worth sharing across projects goes here via the
 [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; one that matters only to you stays in
 {{MEMORY}} (§5).
+<!-- LEAN:else -->
+{{INTRO_WIKI}} It is declared in `wiki.jsonc`, **beside this AGENT.md** — or
+wherever `$GENESEED_WIKI` points; an empty `wikis` list means this section
+stays dormant. Read `wiki.jsonc` at the start of every session and honour each
+declared wiki: load its `entries` by their `load` mode exactly as in
+`context.json` (§9); read its `conventions` before your first write there and
+follow them over your own habits; drop a note you cannot place into `inbox`
+rather than guess a home; never write inside `protected`. The wiki is **the
+user's**, not yours — wikilinks (`[[Note Name]]`) over bare paths, every new
+note linked into the graph. A durable fact worth sharing across projects goes
+here via the [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; one that matters only to
+you stays in {{MEMORY}} (§5).
+<!-- LEAN:end -->
 
 ---
 

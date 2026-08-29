@@ -318,9 +318,17 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
     `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 23; either the `
     + 'heading shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
-  const sections = [...readTextPy(path.join(ROOT, 'src', 'ontology', 'universal.md'))
+  // The ontology source carries every heading TWICE since the LEAN block landed — once in
+  // the full text, once in the hand-written condensation — so the parse counts occurrences
+  // and the set counts sections. Both counts are asserted: 4 distinct names proves neither
+  // variant dropped a section, 8 occurrences proves both variants still carry all four
+  // (a condensation missing one would leave 7, and the distinct count alone would not say so).
+  const occurrences = [...readTextPy(path.join(ROOT, 'src', 'ontology', 'universal.md'))
     .matchAll(/^#### \{\{(ONT_[A-Z]+)\}\}\s*$/gm)].map((m) => m[1]);
-  assert.equal(sections.length, 4, `${sections.length} ontology sections parsed — expected 4`);
+  const sections = [...new Set(occurrences)];
+  assert.equal(sections.length, 4, `${sections.length} distinct ontology sections parsed — expected 4`);
+  assert.equal(occurrences.length, 8,
+    `${occurrences.length} ontology headings parsed — expected 8 (each section once per LEAN variant)`);
 
   for (const footprint of FOOTPRINTS) {
     for (const [mode, spec] of Object.entries(EXPECTED)) {

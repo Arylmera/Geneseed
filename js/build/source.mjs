@@ -24,8 +24,28 @@
  * over 259 cells and compares the tree byte-for-byte, and every one of them builds a cfg
  * from these paths. A depth error or a renamed key fails 259 cells, not zero.
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+
+/**
+ * One doctrine pack file used to be read three times per render — the survives gate and the
+ * body in `js/build/render.mjs`, plus `knownRuleIds` below — and the golden matrix multiplies
+ * that by 261 cells. Keyed on mtime, not just path, because the one long-lived process (the
+ * web daemon) renders previews of a `src/` the user may be editing between requests; a
+ * path-only memo would serve yesterday's pack forever. Newlines come back folded to LF, the
+ * same normalisation `readText` gave the render callers — `knownRuleIds` matched identically
+ * on raw or folded text, so one behaviour serves both.
+ */
+const _packTexts = new Map();
+export function readPackText(file) {
+  const key = path.resolve(file);
+  const mtime = statSync(file).mtimeMs;
+  const hit = _packTexts.get(key);
+  if (hit && hit.mtime === mtime) return hit.text;
+  const text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
+  _packTexts.set(key, { mtime, text });
+  return text;
+}
 
 /**
  * `_build_core.ROOT` — the checkout, from this file's own location (`js/..`).
@@ -104,7 +124,7 @@ export function knownRuleIds() {
   for (const pack of PACK_ORDER) {
     const file = path.join(SRC, 'doctrines', `${pack}.md`);
     let text = '';
-    try { text = readFileSync(file, 'utf8'); } catch { continue; }
+    try { text = readPackText(file); } catch { continue; }
     for (const m of text.matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)) {
       if (m[1] === pack) out.push(`${pack}.${Number(m[2])}`);
     }
