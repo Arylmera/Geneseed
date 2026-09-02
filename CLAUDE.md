@@ -85,8 +85,10 @@ the SHIPS or WITHHELD partition of `tests/unit/package_manifest.test.mjs`.
 **Never insert a law — append.** Nothing resolves a `{{LAW}} <roman>` cross-reference against the
 canon, and ~153 of them live across `src/`. Renumbering silently rewires every one.
 
-**`--footprint` defaults to `lean`, and lean keeps only a rule's heading plus its first sentence.**
-A clause added to the second paragraph of a law does not exist for most installs.
+**`--footprint` defaults to `lean`.** A law's lean text is the authored `LEAN:else` half of its
+block in `src/laws/universal.md` — amend both halves, or the amendment does not exist for most
+installs. A doctrine rule at lean is still machine-cut to its heading plus first sentence, so a
+doctrine clause added to a second paragraph is invisible in the default build.
 
 **Counts are computed — never type one.** `{N_*}` tokens substitute at request time, and only on
 `kind: "concept"` pages. README badges and `SHIPPED.md` are the hand-written exceptions, each with

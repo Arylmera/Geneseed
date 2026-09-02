@@ -37,10 +37,10 @@ every host the same way instead of one silently falling behind.
 - **The root file is ~65% of the bill**, and the constitution inside it is the
   bulk of that — no longer one section but three: the Ontology, the nine Rules,
   and the doctrine packs this install built in. **Two** levers move it, not one.
-  The [footprint dial](#/docs/footprint) (`lean`, the default, keeps each Rule
-  and each doctrine rule as its heading plus first line, and swaps the Ontology
-  and the longest prose sections — the preamble, §6 Notebook, §8 Wiki — for
-  hand-written condensations; `full` inlines every rationale). And the
+  The [footprint dial](#/docs/footprint) (`lean`, the default, swaps each Rule,
+  the Ontology and the longest prose sections — the preamble, §6 Notebook, §8
+  Wiki — for their hand-written condensations, and cuts each doctrine rule to its
+  heading plus first line; `full` inlines every rationale). And the
   [doctrine packs](#/docs/setup-choices) — `geneseed-build --doctrines craft,rigor`
   drops whole blocks of §2 at build time, which removes far more than the
   footprint dial trims. Anything else is noise.

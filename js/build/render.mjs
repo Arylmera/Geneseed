@@ -183,15 +183,15 @@ function splitAtLawHeadings(text) {
 }
 
 /**
- * `_terse_laws` minus its pointer paragraph — heading + first sentence, per `### ` block.
+ * Heading + first sentence, per `### ` block. DOCTRINES ONLY, now.
  *
- * Split out rather than parameterised. The pointer was baked into the function body, and
- * the doctrines axis needs the same truncation under a DIFFERENT closing paragraph (one
- * that names the pack catalogue, not `laws/universal.md`, and drops the
- * secrets/deletion/git-history clause, which is the invariants' domain and not a pack's).
- * An extraction leaves `terseLaws` byte-identical for the laws path — the recorded lean
- * AGENT.md does not move — where a fourth parameter would have put a branch inside the one
- * function every frozen lean render already goes through.
+ * The laws used to go through this too, and it made a law's lean footprint a function of its
+ * punctuation: Law II shipped as one 36-character sentence and lost its stop-and-ask
+ * mechanism, while a law written as one colon-chained run-on shipped nearly whole. The laws
+ * now carry authored LEAN blocks in `src/laws/universal.md`, the way the ontology already did,
+ * and `resolveLean` picks the half. Doctrine rules stay machine-cut: there are ~23 of them
+ * across four packs, and a pack is a practice catalogue whose first sentence is written to
+ * stand alone.
  */
 function terseBlocks(text) {
   const blocks = splitAtLawHeadings(text);
@@ -212,16 +212,14 @@ function terseBlocks(text) {
   return out.join('\n\n');
 }
 
-/** `_build_render._terse_laws`. */
-export function terseLaws(text, theme, lawsPrefix = '') {
+/** The pointer under §1 at lean. The laws' lean text itself is authored in LEAN blocks. */
+export function lawsPointer(theme, lawsPrefix = '') {
   const law = theme.LAW ?? 'Law';
   const lawsDir = theme.DIR_LAWS ?? 'laws';
-  const pointer =
-    `> Each ${law} above is given in brief — the rule, not its reasoning. The `
+  return `> Each ${law} above is given in brief — the rule, not its reasoning. The `
     + `complete, binding text of every ${law} is in \`${lawsPrefix}${lawsDir}/universal.md\`; `
     + `read it whenever a ${law}'s application is unclear, and before any act touching `
-    + `secrets, deletion, git history, scope, or untrusted content.`;
-  return terseBlocks(text) + '\n\n' + pointer;
+    + 'secrets, deletion, git history, scope, or untrusted content.';
 }
 
 /** `_build_render.render_file`. */
@@ -240,7 +238,7 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
                           new Set(visiting).add(normcase(here)), nativeCatalog)
       .replace(/\n+$/, '');                              // `.rstrip("\n")`
     if (footprint === 'lean' && rel === 'laws/universal.md') {
-      inner = terseLaws(inner, theme, lawsPrefix);
+      inner = `${inner}\n\n${lawsPointer(theme, lawsPrefix)}`;
     }
     return inner;
   });
@@ -456,8 +454,12 @@ export function renderAll(cfg, themeName, {
   for (const file of sortedSourceFiles(cfg.src)) {
     const rel = path.relative(cfg.src, file);
     const outRel = destRel(themedRel(rel, theme)).split(path.sep).join('/');  // as_posix()
+    // The on-disk `laws/` and `ontology/` are the "complete, binding text" the lean pointer
+    // promises. They render at full whatever the footprint; only what AGENT.md INLINES leans.
+    // Keyed on the SOURCE rel, not the themed one, so a DIR_* rename cannot un-exempt them.
+    const fp = /^(?:laws|ontology)[\\/]/.test(rel) ? 'full' : footprint;
     items.push(TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
-      ? { rel: outRel, text: renderFile(cfg, file, theme, footprint, lawsPrefix, new Set(), nativeCatalog), src: file }
+      ? { rel: outRel, text: renderFile(cfg, file, theme, fp, lawsPrefix, new Set(), nativeCatalog), src: file }
       : { rel: outRel, text: null, src: file });
   }
   return { theme, items };
