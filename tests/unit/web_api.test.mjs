@@ -163,7 +163,7 @@ test('the laws section carries all three tiers, in constitutional order', () => 
   const by = (t) => items.filter((i) => i.tier === t);
   assert.equal(by('ontology').length, 4);
   assert.equal(by('invariant').length, 11);
-  assert.equal(by('doctrine').length, 23);
+  assert.equal(by('doctrine').length, 24);
   // ⚠ THE THREE ADDRESS SHAPES MUST NOT COLLIDE — they share one `type=law` route, so a
   // duplicate name makes one item unreachable.
   assert.equal(new Set(items.map((i) => i.name)).size, items.length, 'two items share a name');
@@ -207,7 +207,7 @@ test('an inactive pack stays in the payload and says so', () => {
   // other getter into a plain value and leaves the rest of the state intact.
   const st = { ...neutral(), inventory: tuiInventory('neutral', ['craft']) };
   const doctrine = apiCatalog(st, 'laws').items.filter((i) => i.tier === 'doctrine');
-  assert.equal(doctrine.length, 23, 'a narrowed install lost rows instead of marking them');
+  assert.equal(doctrine.length, 24, 'a narrowed install lost rows instead of marking them');
   assert.equal(doctrine.filter((i) => i.active).length, 6);
   assert.ok(doctrine.every((i) => (i.pack === 'craft') === i.active),
     'the active flag does not follow the selection');
@@ -228,7 +228,7 @@ test('the doc tokens count each tier separately, and a pack toggle moves only tw
     '{N_ONTOLOGY}': 4,
     '{N_PACKS}': 4,
     '{N_PACKS_ACTIVE}': 4,
-    '{N_DOCTRINE_RULES}': 23,
+    '{N_DOCTRINE_RULES}': 24,
   });
   // A narrowed install moves the two tokens that describe THIS install and none of the three
   // that describe the catalogue. `{N_PACKS}` is what ships; `{N_PACKS_ACTIVE}` is what binds.
@@ -271,11 +271,11 @@ test('the overview counts the tiers without moving the laws badge', () => {
   // the four cannot be re-blessed.
   assert.equal(o.counts.laws, 11);
   assert.equal(o.counts.ontology, 4);
-  assert.deepEqual(o.counts.doctrines, { active: 4, total: 4, rules: 23 });
+  assert.deepEqual(o.counts.doctrines, { active: 4, total: 4, rules: 24 });
   const narrowed = apiOverview({ ...neutral(), inventory: tuiInventory('neutral', ['craft', 'rigor']) });
   assert.equal(narrowed.counts.laws, 11, 'a pack toggle moved the invariant count');
-  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 4, rules: 10 },
-    'the summary counts rules this install did not build in');
+  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 4, rules: 11 },
+    'the summary counts rules this install did not build in (craft 6 + rigor 5, rigor 5 being retired Law IX)');
 });
 
 // A skill the lifecycle registry never heard of — dropped into the install by hand — must be

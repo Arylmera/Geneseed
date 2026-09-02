@@ -100,6 +100,7 @@
   "DOC_RIGOR_2": "Test the Gameplay, Not the Code Guts · Honest Tests",
   "DOC_RIGOR_3": "Clear It Green · Cover and Verify",
   "DOC_RIGOR_4": "A Boss You Can't Lose To Isn't a Boss · Prove the Gate",
+  "DOC_RIGOR_5": "The Gate Isn't Yours to Open · External Gate",
   "DOC_OPS_1": "Check Your Loadout · Tool Discovery",
   "DOC_OPS_2": "No Command Stuck on Loading · Commands Must Return",
   "DOC_OPS_3": "Edit the Save, Not the Screen · Edit the Source, Not the Surface",

@@ -100,6 +100,7 @@
   "DOC_RIGOR_2": "Test the Ride, Not the Wiring · Honest Tests",
   "DOC_RIGOR_3": "Ride It Before You Park It · Cover and Verify",
   "DOC_RIGOR_4": "A Bolt You Never Torqued Ain't Tight · Prove the Gate",
+  "DOC_RIGOR_5": "Someone Else Holds the Key · External Gate",
   "DOC_OPS_1": "Check Your Gear · Tool Discovery",
   "DOC_OPS_2": "No Engine Left Idling · Commands Must Return",
   "DOC_OPS_3": "Wrench the Engine, Not the Paint · Edit the Source, Not the Surface",

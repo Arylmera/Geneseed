@@ -42,15 +42,12 @@ const LAW_META = {
   ],
   7: ['security', 'Take only the tools, scope, and credentials the task needs.'],
   8: ['craft', 'Fix the root cause; never hide a failure to fake green.'],
-  9: ['security', "Enforce permission at the boundary, never in the agent's own prompt."],
+  9: ['security', 'Retired in place — now doctrine rigor 5. Number kept so references resolve.'],
   10: [
     'verify',
     'Echo an inferred or ambiguous goal back and get agreement before building on it.',
   ],
-  11: [
-    'verify',
-    'An empty or truncated answer is a claim to interrogate, not evidence of absence.',
-  ],
+  11: ['verify', 'Retired in place — folded into Law III. Number kept so references resolve.'],
 }
 
 // The same thing for the doctrine packs, keyed `<pack>.<n>` — the address the API publishes and
@@ -74,6 +71,8 @@ const DOCTRINE_META = {
     'rigor',
     'Perturb what a gate guards and require it to turn red; never re-bless it green.',
   ],
+  // Law IX's principle, moved here with the rule (retired in place, see LAW_META 9).
+  'rigor.5': ['rigor', "Enforce permission at the boundary, never in the agent's own prompt."],
   'ops.1': ['ops', "Discover the host's real tools before deciding one is missing."],
   'ops.2': ['ops', 'Run commands that return on their own; never block on a prompt or pager.'],
   'ops.3': ['ops', 'Edit the authoritative source layer, not the rendered output.'],

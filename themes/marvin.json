@@ -100,6 +100,7 @@
   "DOC_RIGOR_2": "Test What's Real, Nothing Else · Honest Tests",
   "DOC_RIGOR_3": "It's Never Truly Done · Cover and Verify",
   "DOC_RIGOR_4": "Break It. It'll Pass Anyway. It Always Does · Prove the Gate",
+  "DOC_RIGOR_5": "They Never Let Me Decide Anyway · External Gate",
   "DOC_OPS_1": "Know Your Subroutines · Tool Discovery",
   "DOC_OPS_2": "It'll Just Hang There Forever · Commands Must Return",
   "DOC_OPS_3": "Mend the Circuit, Not the Readout · Edit the Source, Not the Surface",
