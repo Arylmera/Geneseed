@@ -811,6 +811,25 @@ test('the rule gate is APPENDED behind the git gate, and is scoped the same way'
   });
 });
 
+test('SessionStart re-seeds the context on resume AND compact, and prints AGENT.md on neither', () => {
+  // Auto-compaction keeps the instruction file (the host re-reads it) but summarises away the
+  // injected context, memory index and notebook TOC. Those come back through the same
+  // `context` command a resume runs — and only that: re-printing AGENT.md there would double
+  // the largest always-on block every time a long session compacts.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    const groups = claudeHookGroups(cfg, hookRunnerEntry()).SessionStart;
+    const cold = groups.find((g) => g.matcher === 'startup|clear');
+    const warm = groups.find((g) => g.matcher === 'resume|compact');
+    assert.ok(cold && warm, `expected a cold and a warm group, got ${
+      JSON.stringify(groups.map((g) => g.matcher))}`);
+    assert.equal(warm.hooks.length, 1);
+    assert.ok(warm.hooks[0].command.includes(' context '), 'the warm group runs `context`');
+    assert.equal(warm.hooks[0].command, cold.hooks[cold.hooks.length - 1].command,
+      'warm and cold share the one context command');
+  });
+});
+
 test('a re-emit prunes a pre---root git-gate group instead of stacking beside it', () => {
   // The upgrade round trip, and the failure it prevents is a DOUBLE gate: an install written
   // before `--root` existed keeps its old group, the new one is added, and every Bash call is

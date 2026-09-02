@@ -18,7 +18,7 @@
 //   * The three `sovereignBypass` groups PASS. The code reads correctly for all of them — the
 //     prefix trap is guarded by `cwd.startsWith(base + path.sep)` rather than a bare prefix
 //     test, and the non-list case by `Array.isArray(data.excludes)`.
-//   * `git-gate` PASSES: `sovereignBypass` is the literal first line of `cmdGitGate`.
+//   * `git-gate` PASSES: `sovereignBypass` is the literal first line of `gitGate` (the body `cmdGitGate` guards).
 //   * `context` UNKNOWN — the bypass is not obviously first, and the verb has several other
 //     ways to say nothing, so a silent pass here could be silent for the wrong reason.
 //   * The eight `exclude add|remove|list` claims UNKNOWN. They are the ones that have never

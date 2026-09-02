@@ -687,7 +687,10 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [])
     ],
     SessionStart: [
       { matcher: 'startup|clear', hooks: [{ type: 'command', command: context }] },
-      { matcher: 'resume', hooks: [{ type: 'command', command: context }] },
+      // `compact` too: auto-compaction keeps the instruction file (the host re-reads it) but
+      // summarises away the eagerly injected context, memory index and notebook TOC. Re-seed
+      // them the way a resume does — the static AGENT.md is NOT re-printed.
+      { matcher: 'resume|compact', hooks: [{ type: 'command', command: context }] },
     ],
     // `|| exit 0` (not `|| true`): hooks run under cmd.exe on native Windows, where `true`
     // is not a command and the swallow-failures intent would invert into a 9009 error.

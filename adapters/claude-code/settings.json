@@ -23,7 +23,7 @@
         ]
       },
       {
-        "matcher": "resume",
+        "matcher": "resume|compact",
         "hooks": [
           { "type": "command", "command": "node bin/geneseed-hook.mjs context" }
         ]

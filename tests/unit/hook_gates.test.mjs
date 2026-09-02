@@ -81,10 +81,43 @@ test('non-git and read-only git commands defer', () => {
   }
 });
 
-test('an unreadable or empty payload defers silently', () => {
-  for (const payload of ['', 'not json', '{}', '{"tool_input": null}']) {
+test('a well-formed ABSENCE defers silently', () => {
+  // Empty stdin, an empty object, a null tool_input: nothing to evaluate. A hand-run
+  // `geneseed-hook git-gate` at a terminal must not ask, or the user allow-lists the gate.
+  for (const payload of ['', '{}', '{"tool_input": null}']) {
     assertDefers(hookRun('git-gate', { stdin: payload }), JSON.stringify(payload));
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// FAIL CLOSED. Both gates exit 0 and signal on stdout, so a gate that crashed and a gate that
+// found nothing are the same observation to the host — an allow. `guardGate` turns any throw
+// into an ask that names the error. The one failure a child process can be handed from outside
+// is a payload that is not JSON; the in-process cell below covers every other throw.
+
+test('a payload that is not JSON ASKS, naming the error, on both gates', () => {
+  for (const verb of ['git-gate', 'rule-gate']) {
+    const dec = askDecision(hookRun(verb, { stdin: 'not json' }), `${verb} on not-json`);
+    assert.match(dec.permissionDecisionReason, /gate error/);
+    assert.match(dec.permissionDecisionReason, /not JSON/);
+  }
+});
+
+test('guardGate: a throwing gate asks with the message and still exits 0', async () => {
+  const { guardGate } = await import('../../js/hosts/hooks.mjs');
+  const chunks = [];
+  const realWrite = process.stdout.write;
+  process.stdout.write = (s) => { chunks.push(String(s)); return true; };
+  let rc;
+  try {
+    rc = guardGate(() => { throw new Error('resolvePath refused ~user'); })({ root: null });
+  } finally {
+    process.stdout.write = realWrite;
+  }
+  assert.equal(rc, 0, 'a guarded gate must never exit non-zero');
+  const dec = JSON.parse(chunks.join('')).hookSpecificOutput;
+  assert.equal(dec.permissionDecision, 'ask');
+  assert.match(dec.permissionDecisionReason, /gate error — resolvePath refused ~user/);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -149,9 +182,11 @@ test('the memory match needs a root, and the coined names still do not', () => {
   ruleAsks('/home/me/.claude/user-rules.md');
 });
 
-test('the alternate path key is read, and bad payloads defer', () => {
+test('the alternate path key is read, and a well-formed but empty path defers', () => {
+  // `not json` moved out of this row: an unreadable payload now ASKS (see the fail-closed
+  // cells above). An empty or non-string path is a well-formed absence and still defers.
   ruleAsks('/home/me/.claude/user-rules.md', { key: 'path' });
-  for (const bad of ['not json', writePayload(''), writePayload(42)]) {
+  for (const bad of [writePayload(''), writePayload(42)]) {
     assertDefers(hookRun('rule-gate', { stdin: bad }), JSON.stringify(bad).slice(0, 60));
   }
 });
