@@ -72,10 +72,12 @@ const ROOT = path.resolve(import.meta.dirname, '../..');
 // an adjudicated product decision (`TheTildeUserFormIsADeliberateDivergence`) that the hook
 // was quietly exempt from because it had a private copy. It now imports the owner. The
 // refusal throws, so `sovereignBypass` and `cmdContext` below contain it per entry / per
-// call: a hook that CRASHES reports success, because these gates exit 0 and signal on
-// stdout, so "the gate blew up" and "the gate found nothing" are the same observation to
-// Claude. `resolvePath` just below is the THIRD copy of a primitive `js/hosts/hosts.mjs` also
-// exports, and is the next item in this series.
+// call. For the two GATES that containment is not enough, and `guardGate` below is the
+// contract: these verbs exit 0 and signal on stdout, so "the gate blew up" and "the gate
+// found nothing" would be the SAME observation to Claude — a crash would be a silent allow.
+// A gate that cannot evaluate a call therefore asks, and says why. `resolvePath` just below
+// is the THIRD copy of a primitive `js/hosts/hosts.mjs` also exports, and is the next item
+// in this series.
 
 /**
  * `Path(p).resolve()` — absolute, symlinks followed, and the filesystem's OWN casing.
@@ -557,15 +559,44 @@ function askDecision(reason) {
   })}\n`;
 }
 
-export function cmdGitGate(args) {
-  if (sovereignBypass(args.root)) return 0;
-  let command;
+/**
+ * FAIL CLOSED. Wraps a gate verb so that any throw — a payload that is not JSON, a path
+ * primitive refusing a form, a bug — becomes an `ask` carrying the error, never a silent
+ * allow. The host reads exit 0 + empty stdout as "the gate deferred", which is exactly what a
+ * crashed gate would otherwise look like. A well-formed ABSENCE (empty stdin, `{}`, a null
+ * `tool_input`) is still a defer: there is nothing to evaluate, and asking on every
+ * hand-run invocation would teach the user to allow-list the gate.
+ */
+export function guardGate(fn) {
+  return (args) => {
+    try {
+      return fn(args);
+    } catch (e) {
+      const why = e && e.message ? e.message : String(e);
+      out(askDecision(`Geneseed gate error — ${why}. The gate could not evaluate this `
+        + 'call, so it asks instead of deferring.'));
+      return 0;
+    }
+  };
+}
+
+/** The hook payload on stdin, or null for a well-formed absence. Not-JSON THROWS. */
+function readPayload() {
+  const raw = readStdin();
+  if (!raw.trim()) return null;
+  let payload;
   try {
-    const payload = JSON.parse(readStdin() || '{}');
-    command = ((payload && payload.tool_input) || {}).command;
+    payload = JSON.parse(raw);
   } catch {
-    return 0;
+    throw new Error('the hook payload on stdin is not JSON');
   }
+  return payload && typeof payload === 'object' ? payload : null;
+}
+
+function gitGate(args) {
+  if (sovereignBypass(args.root)) return 0;
+  const payload = readPayload();
+  const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
   if (DESTRUCTIVE_GIT_RE.test(command)) {
     out(askDecision('Geneseed Law IV \u2014 a history-rewriting or discarding git act needs '
@@ -577,6 +608,7 @@ export function cmdGitGate(args) {
     + 'approval'));
   return 0;
 }
+export const cmdGitGate = guardGate(gitGate);
 
 // ======================================================================================
 // rule-gate — Doctrine process 1's tool-boundary backstop
@@ -617,17 +649,11 @@ const SECRET_RE =
   /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
 
-export function cmdRuleGate(args) {
+function ruleGate(args) {
   if (sovereignBypass(args.root)) return 0;
-  let p;
-  let ti = {};
-  try {
-    const payload = JSON.parse(readStdin() || '{}');
-    ti = (payload && payload.tool_input) || {};
-    p = ti.file_path || ti.path || '';
-  } catch {
-    return 0;
-  }
+  const payload = readPayload();
+  const ti = (payload && payload.tool_input) || {};
+  const p = ti.file_path || ti.path || '';
   if (typeof p !== 'string' || !p) return 0;
   // Write carries `content`, Edit carries `new_string`; either can plant a credential.
   const body = typeof ti.content === 'string' ? ti.content
@@ -643,6 +669,7 @@ export function cmdRuleGate(args) {
     + "fact to remember? That choice is the user's. Run the rule skill first."));
   return 0;
 }
+export const cmdRuleGate = guardGate(ruleGate);
 
 // ======================================================================================
 // learn — distil notes/transcripts into deduped memory entries

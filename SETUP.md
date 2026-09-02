@@ -174,8 +174,9 @@ It wires:
   the gate is keyed on the rule, not on its pack.
 - **SessionStart** (`startup`/`clear`) — prints `AGENT.md` and injects the project
   context (`harness context`, which auto-discovers the repo's docs);
-- **SessionStart** (`resume`) — refreshes the project context only, without re-printing
-  the static `AGENT.md`;
+- **SessionStart** (`resume`/`compact`) — refreshes the project context only, without
+  re-printing the static `AGENT.md`. `compact` matters: auto-compaction summarises away the
+  injected context, memory index and notebook TOC, and this re-seeds them;
 - **Stop** — runs `harness learn` to capture durable memory. Opt in by setting
   `GENESEED_LLM` (e.g. `claude -p`); unset, it's a harmless no-op. Geneseed never
   embeds an API key.
