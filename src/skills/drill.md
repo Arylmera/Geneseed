@@ -1,6 +1,7 @@
 # {{SKILL}}: drill
 
 > {{DESC_DRILL}}
+<!-- invocation: user -->
 
 **Trigger:** the user wants to *practise* a concept until it is reflex rather than have it explained — "drill me on X", "quiz me until it sticks", "don't explain it, make me use it". For a from-zero overview use [crash-course](crash-course.md); for making confusing material click in the first place use [decode](decode.md).
 

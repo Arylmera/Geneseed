@@ -178,6 +178,23 @@ test('a skill is byte-identical across the Claude and OpenCode global emits', ()
   });
 });
 
+test('a user-only skill renders disable-model-invocation; an ordinary one does not', () => {
+  // The marker is `<!-- invocation: user -->` in the source spec. `drill` carries it — a
+  // teaching drill a human runs on themselves, which the model must never self-trigger —
+  // and `tdd` does not. Asserted on the emitted SKILL.md, the artifact the host reads.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    globalEmit('claude', path.join(d, 'b-claude'), cfg);
+    const drill = read(cfg, 'skills', 'drill', 'SKILL.md');
+    const tdd = read(cfg, 'skills', 'tdd', 'SKILL.md');
+    // The key sits inside the frontmatter (the text between the first two `---` fences),
+    // not the body. Split on either line ending: the writer uses the platform's.
+    const fm = drill.split(/^---\r?\n/m)[1];
+    assert.match(fm, /^disable-model-invocation: true\r?$/m);
+    assert.doesNotMatch(tdd, /disable-model-invocation/);
+  });
+});
+
 test('a re-emit prunes what it owns and stacks nothing it does not', () => {
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');

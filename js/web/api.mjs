@@ -341,7 +341,7 @@ export const WIKI_FILE_CAP = 5000;
  * (`js/hosts/hosts.mjs`'s docblock). None of them may let that escape: `js/web/handler.mjs`
  * wraps the whole GET in a blanket `catch` → a JSON 500, so an unguarded refusal would turn
  * ONE bad line in a file the user hand-edits into a dead Knowledge section. That is the same
- * argument `sovereignBypass` makes in `js/hosts/hooks.mjs` — contain the refusal per entry
+ * argument `sovereignBypass` makes in `js/hosts/hosts.mjs` — contain the refusal per entry
  * and take the site's OWN degrade — and each of the three already has one: `[]`, `continue`,
  * `continue`-into-404.
  *

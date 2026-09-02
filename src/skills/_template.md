@@ -5,7 +5,11 @@
   2. Copy this file to skills/<name>.md and fill in the purpose line, trigger,
      procedure, and done-when. In an installed harness the purpose line is plain
      prose; in the Geneseed source repo it is the DESC_<NAME> token with the prose
-     defined per theme.
+     defined per theme. If only the USER should ever open the skill (a teaching drill,
+     a tool gated on an environment the model cannot see), put `<!-- invocation: user -->`
+     on the line after the purpose blockquote: it renders to
+     `disable-model-invocation: true`, so `/name` still works but the model never
+     self-triggers it and its description leaves the always-on catalogue.
   3. Add a row for it to the skills table in AGENT.md (the table is hand-authored;
      the skill files themselves auto-render). doctor fails if the table and the skill
      files disagree, so neither can silently drift.
