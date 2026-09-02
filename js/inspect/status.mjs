@@ -54,7 +54,7 @@
  * is inside the sandbox. It is reachable now; no cell seeds a manifest without an emit
  * marker, so it is still gated only by the corpus, and that is a gap rather than a wall.
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { THEMES, ROOT, makeCfg } from '../build/source.mjs';
@@ -62,7 +62,7 @@ import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, copilotConfigDir, opencodeConfigDir, resolvePath,
-  resolveMemoryDir,
+  resolveMemoryDir, sovereignBypass,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
@@ -175,6 +175,41 @@ export function accentFor(theme) {
 
 // ---- the panel ----------------------------------------------------------------------------
 
+/**
+ * The gates, as seen from THIS cwd across every install on the machine.
+ *
+ * Two facts the panel could not show before. `standing_down` names each install whose
+ * `excludes.json` silences all three gates for the current directory — a bypass that until
+ * now had no visible surface anywhere, so a user could not tell an armed gate from one they
+ * had switched off months ago. `asks` counts the gate ledger (`notebook/gates.jsonl`, written
+ * by `js/hosts/hooks.mjs` on every ask) by rule; it is the only evidence of whether the gates
+ * do anything, and the input to the decision of whether to build more of them. Unreadable
+ * ledgers and malformed lines are skipped, not reported: this is a display read.
+ */
+export function gateSummary(cfgDirs) {
+  const standingDown = [];
+  const asks = {};
+  let total = 0;
+  for (const cfg of cfgDirs) {
+    if (sovereignBypass(cfg)) standingDown.push(String(cfg));
+    let raw;
+    try {
+      raw = readFileSync(path.join(cfg, 'notebook', 'gates.jsonl'), 'utf8');
+    } catch {
+      continue;
+    }
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      let entry;
+      try { entry = JSON.parse(line); } catch { continue; }
+      const rule = entry && typeof entry.rule === 'string' ? entry.rule : 'unknown';
+      asks[rule] = (asks[rule] || 0) + 1;
+      total += 1;
+    }
+  }
+  return { standing_down: standingDown, asks, total };
+}
+
 /** `_harness_status._status_data`. */
 export function statusData() {
   const inst = installedDefaults();
@@ -226,6 +261,7 @@ export function statusData() {
     version_verdict: versionVerdict(installedFp, sourceFp),
     agent_md: agentMd ? String(agentMd) : null,
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
+    gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
   };
 }
 
@@ -294,6 +330,18 @@ export function statusLines(d, color = false) {
   if (d.agent_md) {
     rows.push(['AGENT.md',
       `${d.agent_md}  (${d.agent_md_present ? 'present' : 'MISSING'})`]);
+  }
+  // Conditional for the same recording reason as `constitution` above: the 30 recorded
+  // panels carry no `gates` key and must render unchanged.
+  if (d.gates) {
+    const g = d.gates;
+    const armed = g.standing_down.length
+      ? `STANDING DOWN for this cwd (excludes.json in ${g.standing_down.join(', ')})`
+      : 'armed';
+    const byRule = Object.entries(g.asks).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, v]) => `${k} ${v}`).join(', ');
+    rows.push(['gates', `${armed}  ${DOT}  ${g.total} ask${g.total === 1 ? '' : 's'}`
+      + (byRule ? ` (${byRule})` : '')]);
   }
 
   const labelW = Math.max(...rows.map(([k]) => codePointLength(k)));

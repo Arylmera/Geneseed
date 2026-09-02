@@ -103,6 +103,48 @@ test('a payload that is not JSON ASKS, naming the error, on both gates', () => {
   }
 });
 
+// ---------------------------------------------------------------------------------------------
+// THE GATE LEDGER. One JSON line per ask into `<root>/notebook/gates.jsonl`, carrying the rule
+// and never the command: the only evidence of whether the gates fire. Nothing on a defer, so
+// the common path costs nothing and the file stays a list of events, not of tool calls.
+
+function withLedgerRoot(fn) {
+  const sb = makeSandbox();
+  try {
+    fs.mkdirSync(path.join(sb.path, 'notebook'));
+    return fn(sb.path, path.join(sb.path, 'notebook', 'gates.jsonl'));
+  } finally { sb.cleanup(); }
+}
+
+test('an ask writes one ledger line naming the rule; a defer writes nothing', () => {
+  withLedgerRoot((root, ledger) => {
+    assertDefers(hookRun('git-gate', { root, stdin: bashPayload('git status') }), 'status');
+    assert.ok(!fs.existsSync(ledger), 'a defer must not touch the ledger');
+    askDecision(hookRun('git-gate', { root, stdin: bashPayload('git push --force') }), 'force');
+    askDecision(hookRun('git-gate', { root, stdin: bashPayload('git commit -m x') }), 'commit');
+    askDecision(hookRun('rule-gate', { root, stdin: 'not json' }), 'not-json');
+    const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(lines.map((l) => [l.verb, l.rule]),
+      [['git-gate', 'law-4'], ['git-gate', 'process-5'], ['rule-gate', 'gate-error']]);
+    for (const l of lines) {
+      assert.match(l.ts, /^\d{4}-\d{2}-\d{2}T/);
+      assert.equal(typeof l.cwd, 'string');
+      // The rule, never the payload: a ledger that stored what Law I caught would be a
+      // place a secret lands.
+      assert.ok(!('command' in l) && !('content' in l), JSON.stringify(l));
+    }
+  });
+});
+
+test('a ledger that cannot be written never changes the decision', () => {
+  // No notebook dir under root: the append fails with ENOENT, the ask still goes out.
+  const sb = makeSandbox();
+  try {
+    askDecision(hookRun('git-gate', { root: sb.path, stdin: bashPayload('git push') }), 'push');
+    assert.ok(!fs.existsSync(path.join(sb.path, 'notebook')), 'the hook must not mkdir');
+  } finally { sb.cleanup(); }
+});
+
 test('guardGate: a throwing gate asks with the message and still exits 0', async () => {
   const { guardGate } = await import('../../js/hosts/hooks.mjs');
   const chunks = [];

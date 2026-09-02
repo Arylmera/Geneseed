@@ -17,11 +17,65 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { printErr, withDiscardableStderr, isDir } from '../lib/fs.mjs';
-import { toPlatformPath } from '../lib/paths.mjs';
+import { printErr, withDiscardableStderr, isDir, readText } from '../lib/fs.mjs';
+import { toPlatformPath, normcase } from '../lib/paths.mjs';
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
+
+/** The user's own per-install exclusion list; `js/build/stubs.mjs` seeds it, this file reads it. */
+export const EXCLUDES_FILE = 'excludes.json';
+
+/**
+ * `sovereign_bypass` — the user's own excludes.json, read on EVERY hook call so an edit
+ * takes effect without a re-emit. Every failure mode degrades to false: a hook must never
+ * fail or block on a file the user owns.
+ *
+ * LIVES HERE, NOT IN `hooks.mjs`, because two readers need it and only one of them may pay
+ * for the other: the hook (hot path, already imports this module) and `status` (the CLI,
+ * under the transitive `child_process` ban that `hooks.mjs`'s `learn` verb breaks). A
+ * second copy in `js/inspect/` was the alternative, and a copy is what let the `~user`
+ * refusal diverge between the two CLIs once already (see `hooks.mjs`'s header).
+ */
+export function sovereignBypass(root) {
+  if (!root) return false;
+  let entries;
+  try {
+    const data = JSON.parse(readText(path.join(root, EXCLUDES_FILE)));
+    entries = Array.isArray(data && data.excludes) ? data.excludes : [];
+  } catch {
+    return false;
+  }
+  let cwd;
+  try {
+    cwd = normcase(resolvePath(process.cwd()));
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    const raw = (entry && typeof entry === 'object' ? entry.path : entry) || '';
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+    let base;
+    try {
+      // `.rstrip("\\/")` AFTER normcase, exactly as the Python orders it, so the separator
+      // test below cannot be fooled by a trailing slash in the user's file.
+      //
+      // `withDiscardableStderr` because `expanduser` writes its refusal at the RAISE SITE
+      // and this caller catches: the reference prints nothing here, so replaying the
+      // message would be a stderr divergence on every hook call for one bad entry.
+      base = withDiscardableStderr(
+        () => normcase(toPlatformPath(expanduser(raw.trim()))).replace(/[\\/]+$/, ''));
+    } catch {
+      // PER ENTRY, and the loop continues. One unusable line in a file the USER hand-edits
+      // must not decide the whole function — `expanduser` refuses a `~user` form, and the
+      // reference's `Path.expanduser()` raises RuntimeError on the same input on POSIX.
+      // Skipping errs toward the gate staying ACTIVE, which is the safe direction.
+      continue;
+    }
+    if (cwd === base || cwd.startsWith(base + path.sep)) return true;
+  }
+  return false;
+}
 
 /**
  * `_build_core.VERSION_MARKER`. Third caller, so it moves here — `js/build/version.mjs` and

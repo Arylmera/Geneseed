@@ -1,6 +1,7 @@
 # {{SKILL}}: decode
 
 > {{DESC_DECODE}}
+<!-- invocation: user -->
 
 **Trigger:** the user hands over content that confuses them and wants it to *click* — "this is confusing, help me understand it", "break this down for me", "explain this passage". For a from-zero overview of a whole skill use [crash-course](crash-course.md); for practising a concept until it is reflex use [drill](drill.md); to convert a PDF or web doc into readable form first use [ingest](ingest.md).
 

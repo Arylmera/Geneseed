@@ -1,7 +1,7 @@
 /**
  * The sovereign-repo exclusion WRITER.
  *
- * THE READER WAS ALREADY HERE. `js/hosts/hooks.mjs` has carried `sovereignBypass`, `EXCLUDES_FILE`
+ * THE READER WAS ALREADY HERE. `js/hosts/hosts.mjs` (since 2026-09; `hooks.mjs` before) has carried `sovereignBypass`, `EXCLUDES_FILE`
  * and `EXCLUDE_DIRS` since P5a: every hook call reads `excludes.json` and stands down when
  * cwd is under an excluded folder. This module is the other half — `harness exclude
  * add|remove|list`, which maintains that file across every global install and wires the

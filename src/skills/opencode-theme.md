@@ -1,6 +1,7 @@
 # {{SKILL}}: opencode-theme
 
 > {{DESC_THEME}}
+<!-- invocation: user -->
 
 **Trigger:** the user wants their own OpenCode colour theme — "make me a theme",
 "create a custom theme", "I want my own colours", "a theme that matches <brand>", "a

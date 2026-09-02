@@ -1,6 +1,7 @@
 # {{SKILL}}: crash-course
 
 > {{DESC_CRASH_COURSE}}
+<!-- invocation: user -->
 
 **Trigger:** the user wants to go from zero to *functional* in a skill fast — "teach me X", "get me up to speed on X", "I have limited time to learn X". For practising a concept until it's reflex use [drill](drill.md); for making confusing material click use [decode](decode.md); for gathering facts from the web use [research](research.md).
 

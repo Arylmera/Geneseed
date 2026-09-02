@@ -1,6 +1,7 @@
 # {{SKILL}}: feynman
 
 > {{DESC_FEYNMAN}}
+<!-- invocation: user -->
 
 **Trigger:** the user just studied something and wants to find out whether it actually stuck by explaining it back — "let me explain X to you", "check my understanding of X", "I just learned X, did it land?". For routing toward a goal use [learning-path](learning-path.md); for stress-testing a mastery the user already claims, use [gap-detector](gap-detector.md).
 

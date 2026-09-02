@@ -1,6 +1,7 @@
 # {{SKILL}}: learning-path
 
 > {{DESC_LEARNING_PATH}}
+<!-- invocation: user -->
 
 **Trigger:** the user wants to learn a skill toward a *specific* result by a deadline and asks for a plan or route — "build me a learning path", "how do I get to X in N days", "I need to be able to do Y by [date]". For pressure-testing a mastery the user already claims, use [gap-detector](gap-detector.md); for checking whether something just-studied stuck, use [feynman](feynman.md).
 

@@ -25,7 +25,7 @@ import { spawnSync } from 'node:child_process';
 
 import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/build/version.mjs';
 import { sourceReleaseVersion } from '../../js/hosts/opencode.mjs';
-import { versionVerdict, statusData, statusLines } from '../../js/inspect/status.mjs';
+import { versionVerdict, statusData, statusLines, gateSummary } from '../../js/inspect/status.mjs';
 import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
   projectQualifies,
@@ -250,6 +250,49 @@ test('status reports derived counts, a well-formed version and every structural 
   for (const k of ['theme', 'accent', 'emit', 'memory_dir', 'facts', 'installed_fp',
     'agent_md', 'agent_md_present']) {
     assert.ok(k in d, `the status payload has no '${k}' — the panel reads it`);
+  }
+});
+
+test('status carries the gates: bypass visibility and the ledger counted by rule', () => {
+  // `gates` is the one panel key that did not exist before the 2026-09 harness review, and
+  // the two things it shows had no surface at all: an `excludes.json` entry silencing every
+  // gate for this cwd, and whether the gates have ever fired. Exercised on a made-up install
+  // dir so the machine's real installs do not decide the answer.
+  const d = statusData();
+  for (const k of ['standing_down', 'asks', 'total']) assert.ok(k in d.gates, k);
+
+  const sb = makeSandbox();
+  const dir = sb.path;
+  try {
+    fs.mkdirSync(path.join(dir, 'notebook'));
+    fs.writeFileSync(path.join(dir, 'notebook', 'gates.jsonl'), [
+      JSON.stringify({ ts: 't', verb: 'git-gate', rule: 'process-5', cwd: 'x' }),
+      JSON.stringify({ ts: 't', verb: 'git-gate', rule: 'law-4', cwd: 'x' }),
+      JSON.stringify({ ts: 't', verb: 'git-gate', rule: 'process-5', cwd: 'x' }),
+      'not json — skipped, not reported: this is a display read',
+      '',
+    ].join('\n'));
+    let g = gateSummary([dir]);
+    assert.deepEqual(g, { standing_down: [], asks: { 'law-4': 1, 'process-5': 2 }, total: 3 });
+
+    // The bypass: an excludes entry covering cwd names the install as standing down.
+    fs.writeFileSync(path.join(dir, 'excludes.json'),
+      JSON.stringify({ excludes: [process.cwd()] }));
+    g = gateSummary([dir]);
+    assert.deepEqual(g.standing_down, [dir]);
+
+    // And the row renders both, without disturbing the frame.
+    const lines = statusLines({ ...d, gates: g }, false);
+    const row = lines.find((l) => l.includes('gates'));
+    assert.ok(row, 'no gates row');
+    assert.match(row, /STANDING DOWN for this cwd/);
+    assert.match(row, /3 asks \(law-4 1, process-5 2\)/);
+    assert.equal(new Set(lines.map((l) => l.length)).size, 1, 'the gates row broke the frame');
+    // A recorded-shape payload (no `gates`) renders no row — the 30 recordings stay valid.
+    const { gates: _omit, ...legacy } = d;
+    assert.ok(!statusLines(legacy, false).some((l) => l.includes('gates')));
+  } finally {
+    sb.cleanup();
   }
 });
 

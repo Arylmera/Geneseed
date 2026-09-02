@@ -2,6 +2,7 @@
 # {{SKILL}}: herdr
 
 > {{DESC_HERDR}}
+<!-- invocation: user -->
 
 **Trigger:** you are running inside a herdr-managed pane (`HERDR_ENV=1`) and a task would benefit from another pane — splitting off a server, watching a long-running build, spawning a sibling agent, or reading what a neighbour is doing. If `HERDR_ENV` is unset or not `1`, you are not inside herdr — stop and do not try to control panes from outside.
 

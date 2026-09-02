@@ -31,7 +31,8 @@
  * and every file left behind. Absolute rather than compared is what let it survive the deletion
  * of the implementation it was once compared against.
  */
-import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSync }
+import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSync,
+  appendFileSync }
   from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -43,7 +44,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
 // spawns. So the resolver has one owner in `js/hosts/hosts.mjs` rather than a second copy — and
 // with it went this file's private `opencodeConfigDir`, whose only caller it was.
-import { resolveMemoryDir, expanduser } from './hosts.mjs';
+import { resolveMemoryDir, expanduser, sovereignBypass } from './hosts.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
@@ -231,7 +232,6 @@ const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor',
 
 const CLAUDE_MARKERS = ['.claude', '.bob'];
 const GENESEED_MANIFEST = '.geneseed-manifest.json';
-const EXCLUDES_FILE = 'excludes.json';
 
 /**
  * `_global_hook_standing_down` — project-bypasses-global.
@@ -254,52 +254,10 @@ export function globalHookStandingDown(hookRoot, cwd) {
   return false;
 }
 
-/**
- * `sovereign_bypass` — the user's own excludes.json, read on EVERY hook call so an edit
- * takes effect without a re-emit. Every failure mode degrades to false: a hook must never
- * fail or block on a file the user owns.
- */
-export function sovereignBypass(root) {
-  if (!root) return false;
-  let entries;
-  try {
-    const data = JSON.parse(readText(path.join(root, EXCLUDES_FILE)));
-    entries = Array.isArray(data && data.excludes) ? data.excludes : [];
-  } catch {
-    return false;
-  }
-  let cwd;
-  try {
-    cwd = normcase(resolvePath(process.cwd()));
-  } catch {
-    return false;
-  }
-  for (const entry of entries) {
-    const raw = (entry && typeof entry === 'object' ? entry.path : entry) || '';
-    if (typeof raw !== 'string' || !raw.trim()) continue;
-    let base;
-    try {
-      // `.rstrip("\\/")` AFTER normcase, exactly as the Python orders it, so the separator
-      // test below cannot be fooled by a trailing slash in the user's file.
-      //
-      // `withDiscardableStderr` because `expanduser` writes its refusal at the RAISE SITE
-      // and this caller catches: the reference prints nothing here, so replaying the
-      // message would be a stderr divergence on every hook call for one bad entry.
-      base = withDiscardableStderr(
-        () => normcase(toPlatformPath(expanduser(raw.trim()))).replace(/[\\/]+$/, ''));
-    } catch {
-      // PER ENTRY, and the loop continues. One unusable line in a file the USER hand-edits
-      // must not decide the whole function — `expanduser` refuses a `~user` form, and the
-      // reference's `Path.expanduser()` raises RuntimeError on the same input on POSIX.
-      // Skipping errs toward the gate staying ACTIVE, which is the safe direction: this
-      // feeds `git-gate`/`rule-gate`, which exit 0 and signal on stdout, so a crash here
-      // would read as a clean pass while gating nothing.
-      continue;
-    }
-    if (cwd === base || cwd.startsWith(base + path.sep)) return true;
-  }
-  return false;
-}
+// `sovereignBypass` moved to `./hosts.mjs` so `status` can read it without importing this
+// module's `child_process` binding; re-exported because the tests and the excludes writer's
+// docblock name it here.
+export { sovereignBypass };
 
 /** `_disp` — relative to the repo root when it sits under it, else verbatim. */
 function disp(pathStr, root) {
@@ -559,6 +517,38 @@ function askDecision(reason) {
   })}\n`;
 }
 
+/** Where the gate ledger lives inside an install: the notebook is the agent's own, gitignored space. */
+export const GATE_LEDGER = path.join('notebook', 'gates.jsonl');
+
+/**
+ * THE GATE LEDGER — one JSON line per ask, nothing per defer.
+ *
+ * The gates are the only mechanical enforcement the harness has, and until this line
+ * nothing recorded whether they ever fired: no way to tell whether Law I has caught a secret
+ * this year, or whether the process 5 prompt is signal or noise. `status` counts these by
+ * rule. It records the RULE, never the command or the content that tripped it — a ledger
+ * that stored the string Law I caught would itself be a place a secret lands. And it records
+ * only `asked`: the host never tells a hook how the user answered, so a `decided` column
+ * would be a claim the hook cannot make. Written only on the ask path, which is the rare
+ * one; the defer path — every other tool call — pays nothing. A ledger that cannot be
+ * written must never change the decision, hence the swallow.
+ */
+function ledger(root, verb, rule) {
+  if (!root) return;
+  try {
+    appendFileSync(path.join(root, GATE_LEDGER), `${JSON.stringify({
+      ts: new Date().toISOString(), verb, rule, cwd: process.cwd(),
+    })}\n`);
+  } catch { /* see above: the ledger never decides */ }
+}
+
+/** Ask, and record that we asked. Every ask site goes through here so none can skip the ledger. */
+function ask(args, verb, rule, reason) {
+  ledger(args && args.root, verb, rule);
+  out(askDecision(reason));
+  return 0;
+}
+
 /**
  * FAIL CLOSED. Wraps a gate verb so that any throw — a payload that is not JSON, a path
  * primitive refusing a form, a bug — becomes an `ask` carrying the error, never a silent
@@ -567,15 +557,14 @@ function askDecision(reason) {
  * `tool_input`) is still a defer: there is nothing to evaluate, and asking on every
  * hand-run invocation would teach the user to allow-list the gate.
  */
-export function guardGate(fn) {
+export function guardGate(fn, verb = 'gate') {
   return (args) => {
     try {
       return fn(args);
     } catch (e) {
       const why = e && e.message ? e.message : String(e);
-      out(askDecision(`Geneseed gate error — ${why}. The gate could not evaluate this `
-        + 'call, so it asks instead of deferring.'));
-      return 0;
+      return ask(args, verb, 'gate-error', `Geneseed gate error — ${why}. The gate could `
+        + 'not evaluate this call, so it asks instead of deferring.');
     }
   };
 }
@@ -599,16 +588,14 @@ function gitGate(args) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
   if (DESTRUCTIVE_GIT_RE.test(command)) {
-    out(askDecision('Geneseed Law IV \u2014 a history-rewriting or discarding git act needs '
-      + 'confirmation bound to this specific command'));
-    return 0;
+    return ask(args, 'git-gate', 'law-4', 'Geneseed Law IV \u2014 a history-rewriting or '
+      + 'discarding git act needs confirmation bound to this specific command');
   }
   if (!GIT_GATE_RE.test(command)) return 0;
-  out(askDecision('Geneseed Doctrine process 5 \u2014 every git commit/push needs explicit '
-    + 'approval'));
-  return 0;
+  return ask(args, 'git-gate', 'process-5', 'Geneseed Doctrine process 5 \u2014 every git '
+    + 'commit/push needs explicit approval');
 }
-export const cmdGitGate = guardGate(gitGate);
+export const cmdGitGate = guardGate(gitGate, 'git-gate');
 
 // ======================================================================================
 // rule-gate — Doctrine process 1's tool-boundary backstop
@@ -659,17 +646,17 @@ function ruleGate(args) {
   const body = typeof ti.content === 'string' ? ti.content
     : typeof ti.new_string === 'string' ? ti.new_string : '';
   if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
-    out(askDecision(`Geneseed Law I — ${p} would carry a credential-shaped string. `
-      + 'Secrets live in .env or a secret manager, never in a tracked file.'));
-    return 0;
+    return ask(args, 'rule-gate', 'law-1', `Geneseed Law I — ${p} would carry a `
+      + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
+      + 'tracked file.');
   }
   const target = ruleGateTarget(p, args.root);
   if (!target) return 0;
-  out(askDecision(`Geneseed Doctrine process 1 \u2014 writing to ${target}: a standing rule, or a `
-    + "fact to remember? That choice is the user's. Run the rule skill first."));
-  return 0;
+  return ask(args, 'rule-gate', 'process-1', `Geneseed Doctrine process 1 \u2014 writing to `
+    + `${target}: a standing rule, or a fact to remember? That choice is the user's. Run the `
+    + 'rule skill first.');
 }
-export const cmdRuleGate = guardGate(ruleGate);
+export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 
 // ======================================================================================
 // learn — distil notes/transcripts into deduped memory entries

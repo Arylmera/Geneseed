@@ -149,6 +149,20 @@ function isReadonly(text) {
   return text.includes('Read-only');
 }
 
+/**
+ * A skill only the USER may open. The marker is an HTML comment in the source spec
+ * (`<!-- invocation: user -->`, placed under the purpose blockquote), and it renders to
+ * Claude Code's `disable-model-invocation: true`: the skill still answers `/name`, but its
+ * description leaves the model's always-on catalogue and the model never self-triggers it.
+ * Same precedent as `isReadonly` — a phrase in the spec, not a second manifest to keep in
+ * step. Which skills carry it is an authoring decision: the teaching skills a human runs on
+ * themselves, and the ones gated on an environment the model cannot see (a herdr pane).
+ */
+const USER_INVOKED_RE = /<!--\s*invocation:\s*user\s*-->/;
+export function isUserInvokedOnly(text) {
+  return USER_INVOKED_RE.test(text);
+}
+
 /** `_build_emit._strip_skill_body_links`. */
 export function stripSkillBodyLinks(body) {
   return body.replace(SKILL_BODY_LINK_RE, '$1');
@@ -419,7 +433,10 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       kind = 'agent';
     } else {
       // Skills are BYTE-IDENTICAL across hosts: name + description, body link-stripped.
+      // The user-only key is emitted for every host too — Claude Code and Bob honour it,
+      // OpenCode and Copilot ignore an unknown key — so the identity holds.
       fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
+      if (isUserInvokedOnly(text)) fm.push('disable-model-invocation: true');
       body = stripSkillBodyLinks(body);
       dest = path.join(skillsDir, stem, 'SKILL.md');
       kind = 'skill';

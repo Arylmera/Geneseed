@@ -55,6 +55,11 @@ every host the same way instead of one silently falling behind.
   loaded only when invoked. A typical skill costs ≤3k per invocation; the
   heaviest (`react-view-transitions`, ~17.5k with its reference files) loads
   its references progressively.
+- **User-only skills leave the catalogue.** A skill whose source carries
+  `<!-- invocation: user -->` renders `disable-model-invocation: true`; Claude
+  Code and Bob then drop its description from the always-on skill metadata and
+  only `/name` opens it. Seven skills carry it today (the five teaching drills,
+  `herdr`, `opencode-theme`), roughly a seventh of the ~1.7k skill-metadata line.
 - Plugin JavaScript (OpenCode, ~26k on disk) runs in the host runtime and
   never enters the context window.
 
