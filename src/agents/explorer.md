@@ -32,7 +32,7 @@
   it, and any open questions. Never the full contents of what was read.
 - If the search comes up empty, report what was searched and where, and answer
   not-found — a confident wrong location costs more than an honest blank
-  ({{LAW}} XI).
+  ({{LAW}} III).
 
 ## Pipeline role
 

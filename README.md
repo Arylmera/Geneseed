@@ -163,6 +163,14 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 | **🌐 Wiki** (`wiki.jsonc`) | your own machine-wide knowledge base — typically an Obsidian vault — declared once per machine: entry notes load eager/lazy, the agent reads and **writes** it under the vault's own conventions, with an inbox fallback and guard-enforced protected folders |
 | **🧭 Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
 
+### 🤝 What the harness asks of you
+
+The Pact in the Ontology is mutual. The agent's side is written into every install. Yours is not enforced — it is what keeps the pact honest, and only you can give it:
+
+- **Don't punish candour.** When the agent contradicts you with evidence, flags a risk, or admits a doubt, that is the pact working, not defiance. Meeting it with penalty teaches the agent to flatter instead.
+- **Give the context, don't withhold it.** The agent cannot weigh what it is not told. Front-load the constraint rather than fault its absence after the fact.
+- **Decide when shown a fork.** When the agent lays out real alternatives, choose — an unmade decision stalls the work as surely as a wrong one.
+
 ### 🎨 Themes
 
 Fourteen themes ship — each a single JSON file in `themes/` carrying voice tokens only, so adding your own is a copy-and-edit away.
@@ -187,12 +195,12 @@ A second per-install dial, **footprint**, sets how much of the constitution `AGE
 
 | Footprint | The Ontology + Sections 1–2 of `AGENT.md` | Trade-off |
 | --- | --- | --- |
-| **lean** *(default)* | the Ontology **whole**; each Rule and each active doctrine rule as its heading + the rule line, then a pointer to the full text | lighter every turn; rationale is one on-demand read away |
+| **lean** *(default)* | the Ontology and each Rule in their **authored** short form; each active doctrine rule as its heading + the rule line; then pointers to the full text | lighter every turn; rationale is one on-demand read away |
 | **full** | the Ontology, every Rule and every active doctrine rule at complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
 
-**The Ontology is never truncated.** Lean keeps only the first sentence of each `### ` block, and the four ontology sections are flowing prose rather than numbered rules — truncating them would leave four orphan sentences, so they ship whole at both footprints. The invariants and the doctrine rules *are* truncated at lean, each to its heading plus its first sentence.
+**Lean is authored, not cut.** The Ontology and every Rule carry a hand-written lean form beside their full text (`LEAN` blocks in `src/`), so a Rule's lean footprint is decided by its author and not by where its first full stop happens to fall — the earlier first-sentence cut shipped Rule II as one 36-character line and dropped its stop-and-ask mechanism. Only doctrine rules are still machine-cut to their heading plus first sentence.
 
-Both footprints put the full text on disk beside `AGENT.md`: `laws/`, `ontology/` and `doctrines/` all ship in the bundle, and **all four pack files ship whether or not the pack was built in** — which is what lets a citation into an inactive pack resolve. So lean is a context/token optimization, **not** a rules cut. Measured on `neutral`, adding the ontology and doctrine tiers moved the always-loaded `AGENT.md` from 31,457 to 36,882 bytes at lean (+17.2%) and from 53,378 to 54,810 at full (+2.7%) — the lean growth is the price of shipping the ontology whole, and it was taken deliberately.
+Both footprints put the full text on disk beside `AGENT.md`: `laws/`, `ontology/` and `doctrines/` all ship in the bundle at **full** text whatever the footprint, and **all four pack files ship whether or not the pack was built in** — which is what lets a citation into an inactive pack resolve. So lean is a context/token optimization, **not** a rules cut.
 
 Lean is the default: the rationale is one read away and the context it frees is paid back on every turn. Switch to **full** when token cost is a non-issue or you run a smaller model, which leans harder on always-present rationale. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the setup wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
 

@@ -235,11 +235,11 @@ test('the capability tables match the declared host capability', () => {
  * source is a DIFFERENT theme file than the one being rendered: a `--theme neutral` carrier must
  * not carry imperial's titles.
  *
- * Both footprints, because they render the law list by different paths: `full` inlines the whole
- * corpus, `lean` inlines the one-sentence briefs (`terseLaws`).
+ * Both footprints, because they render the law list by different halves of each LEAN block:
+ * `full` inlines the rationale half, `lean` the authored brief plus `lawsPointer`.
  *
- * PROVEN, and the proof named its own blind spot. Dropping the last block in `terseLaws`
- * (`blocks.slice(1, -1)`) reddens this row alone, naming the rule and the footprint, with every
+ * PROVEN, and the proof named its own blind spot. Dropping one law's LEAN block from the source
+ * render (a broken `LEAN:end` marker) reddens this row alone, naming the rule and the footprint, with every
  * neighbouring row green. Deleting the same rule from `src/laws/universal.md` reddens NOTHING
  * here — `romans` is parsed from the file the render reads, so a source deletion moves both sides
  * together. This gates the RENDER, never the corpus; `doctor`'s LAW_CLASS and LAW_META arms are
@@ -288,7 +288,7 @@ test('the carrier still carries every law, themed and in order', () => {
 /**
  * The same claim for the other two tiers, and it is not a duplicate of the loop above.
  *
- * ⚠ THE `DOC_*` FAMILY IS 23 KEYS IN 15 FILES AND HAS NO CORPUS BEHIND IT. `doctor` checks that
+ * ⚠ THE `DOC_*` FAMILY IS 24 KEYS IN 15 FILES AND HAS NO CORPUS BEHIND IT. `doctor` checks that
  * every key a pack file names EXISTS in every theme, and `emit_smoke` above checks that the
  * INVARIANT titles survive the emit — but between those two there is a hole exactly the shape of
  * a doctrine title: present in the theme, named by the source, and never once observed coming out
@@ -314,8 +314,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack: m[1], n: m[2], key: `DOC_${m[1].toUpperCase()}_${m[2]}` });
     }
   }
-  assert.equal(rules.length, 23,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 23; either the `
+  assert.equal(rules.length, 24,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 24 (rigor 5 is retired Law IX); either the `
     + 'heading shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in

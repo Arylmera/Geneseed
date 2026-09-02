@@ -413,8 +413,10 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
       `${p.pack} has a rule with no title, no body, or a class that is not its pack`);
     assert.ok(p.title && p.desc, `${p.pack} has no themed name or blurb`);
   }
-  // 11 + 23 + the four absorbed-into-prose sections is the whole constitution.
-  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 23);
+  // 11 + 24 + the four absorbed-into-prose sections is the whole constitution. The 24th is
+  // rigor 5 — Law IX retired in place and moved into the rigor pack (2026-09), so the law count
+  // stays 11 (its heading is kept) while the doctrine count grows by one.
+  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 24);
 });
 
 test('every theme parses to the same three tiers, whatever it calls them', () => {
@@ -425,7 +427,7 @@ test('every theme parses to the same three tiers, whatever it calls them', () =>
   const counts = (inv) => [inv.laws.length, inv.ontology.length, inv.doctrines.length,
     inv.doctrines.reduce((n, p) => n + p.rules.length, 0)];
   const base = counts(tuiInventory('neutral'));
-  assert.deepEqual(base, [11, 4, 4, 23]);
+  assert.deepEqual(base, [11, 4, 4, 24]);
   for (const t of themeNames()) {
     const inv = tuiInventory(t);
     assert.deepEqual(counts(inv), base, `${t} parses to a different constitution`);
@@ -500,9 +502,9 @@ test('a pack that is not built in is listed and MARKED, never quietly dropped', 
   // reader cannot infer from the text.
   const rows = tuiEntries(tuiInventory('neutral', ['craft']));
   const doctrine = rows.filter(([k]) => k === 'doctrine');
-  assert.equal(doctrine.length, 23, 'a narrowed install lost rows instead of marking them');
+  assert.equal(doctrine.length, 24, 'a narrowed install lost rows instead of marking them');
   const off = doctrine.filter(([, , d]) => d.active === false);
-  assert.equal(off.length, 17, 'the inactive packs are not marked inactive');
+  assert.equal(off.length, 18, 'the inactive packs are not marked inactive (24 rules - craft 6)');
   assert.ok(doctrine.every(([, , d]) => (d.pack === 'craft') === (d.active === true)),
     'the active flag does not follow the selection');
   const head = rows.filter(([k]) => k === 'head').find((h) => h[1].startsWith('DOCTRINES'));

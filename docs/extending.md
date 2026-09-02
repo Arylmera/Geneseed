@@ -215,11 +215,12 @@ a defect.
 
 Steps 1 and 9 of §2c, plus `LAW_META` if the Principle line moved. Two cautions:
 
-- `--footprint` defaults to **lean**, and lean keeps only the heading plus the first sentence
-  (`terseBlocks` in `js/build/render.mjs`). A clause added to the second paragraph is invisible in the
-  default build. Amend the first sentence, or the amendment does not exist for most installs. The
-  same is true of a doctrine rule; it is **not** true of the ontology, which ships whole at both
-  footprints.
+- `--footprint` defaults to **lean**, and a law's lean text is the authored `LEAN:else` half of
+  its block in `src/laws/universal.md` (`resolveLean` in `js/build/render.mjs`). Amend **both**
+  halves, or the amendment does not exist for most installs. A doctrine rule is different: it is
+  still machine-cut to its heading plus first sentence (`terseBlocks`), so a clause in its second
+  paragraph is invisible in the default build. The on-disk `laws/` and `ontology/` copies always
+  render at full, whatever the footprint.
 
 ### 2c — Adding an INVARIANT
 

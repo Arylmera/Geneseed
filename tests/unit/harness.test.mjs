@@ -714,7 +714,8 @@ const doctrineAddrs = () => ['craft', 'rigor', 'ops', 'process'].flatMap((p) =>
 
 test('every doctrine rule carries a DOCTRINE_META principle', () => {
   const addrs = doctrineAddrs();
-  assert.equal(addrs.length, 23, `${addrs.length} rules parsed — expected 23`);
+  // 24 since 2026-09: Law IX retired in place into rigor 5, so the doctrine roll grew by one.
+  assert.equal(addrs.length, 24, `${addrs.length} rules parsed — expected 24`);
   assert.deepEqual(doctrineMetaProblems(addrs), []);
 });
 

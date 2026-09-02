@@ -537,6 +537,15 @@ export function cmdContext(args) {
 // one line and a `commit` on the next are two commands, not one.
 const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 
+// Law IV's boundary half: the git verbs that rewrite or discard history. Law IX (now rigor 5)
+// says a rule in a prompt is a request and a rule at a boundary is a constraint; before this
+// regex the harness enforced one doctrine rule and no law. `checkout --` is listed because it
+// reverts to the INDEX and eats unstaged work; `checkout <branch>` is not. `clean -f` matches
+// any flag cluster carrying `f` (`-fd`, `-xf`) and never `-n`. `push --force*` trips this gate
+// rather than process 5's so the stronger reason is the one the user reads.
+const DESTRUCTIVE_GIT_RE =
+  /\bgit\b[^\n]*\b(?:reset\s+--hard|clean\s+-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\s+[^\n]*--force)/;
+
 /** The `permissionDecision: "ask"` document, in Python's compact `json.dumps` spelling. */
 function askDecision(reason) {
   return `${jsonDumpsCompact({
@@ -557,7 +566,13 @@ export function cmdGitGate(args) {
   } catch {
     return 0;
   }
-  if (typeof command !== 'string' || !GIT_GATE_RE.test(command)) return 0;
+  if (typeof command !== 'string') return 0;
+  if (DESTRUCTIVE_GIT_RE.test(command)) {
+    out(askDecision('Geneseed Law IV \u2014 a history-rewriting or discarding git act needs '
+      + 'confirmation bound to this specific command'));
+    return 0;
+  }
+  if (!GIT_GATE_RE.test(command)) return 0;
   out(askDecision('Geneseed Doctrine process 5 \u2014 every git commit/push needs explicit '
     + 'approval'));
   return 0;
@@ -595,17 +610,33 @@ function ruleGateTarget(p, root) {
   }
 }
 
+// Law I's boundary half. High-precision vendor prefixes only — a generic "looks like entropy"
+// scan would fire on every hash and lockfile, and a gate that cries wolf gets allow-listed.
+// `.env*` is exempt because Law I names it as the place a secret may live.
+const SECRET_RE =
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
+
 export function cmdRuleGate(args) {
   if (sovereignBypass(args.root)) return 0;
   let p;
+  let ti = {};
   try {
     const payload = JSON.parse(readStdin() || '{}');
-    const ti = (payload && payload.tool_input) || {};
+    ti = (payload && payload.tool_input) || {};
     p = ti.file_path || ti.path || '';
   } catch {
     return 0;
   }
   if (typeof p !== 'string' || !p) return 0;
+  // Write carries `content`, Edit carries `new_string`; either can plant a credential.
+  const body = typeof ti.content === 'string' ? ti.content
+    : typeof ti.new_string === 'string' ? ti.new_string : '';
+  if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
+    out(askDecision(`Geneseed Law I — ${p} would carry a credential-shaped string. `
+      + 'Secrets live in .env or a secret manager, never in a tracked file.'));
+    return 0;
+  }
   const target = ruleGateTarget(p, args.root);
   if (!target) return 0;
   out(askDecision(`Geneseed Doctrine process 1 \u2014 writing to ${target}: a standing rule, or a `

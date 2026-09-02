@@ -100,6 +100,7 @@
   "DOC_RIGOR_2": "Test the Laugh, Not the Setup · Honest Tests",
   "DOC_RIGOR_3": "Cover the Bit, Then Watch It Land · Cover and Verify",
   "DOC_RIGOR_4": "A Joke Nobody Can Boo Isn't Funny · Prove the Gate",
+  "DOC_RIGOR_5": "Someone Else Holds the Punchline · External Gate",
   "DOC_OPS_1": "Check Your Props · Tool Discovery",
   "DOC_OPS_2": "No Punchline Left Hanging · Commands Must Return",
   "DOC_OPS_3": "Rework the Material, Not the Recording · Edit the Source, Not the Surface",

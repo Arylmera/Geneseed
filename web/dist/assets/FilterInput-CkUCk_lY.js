@@ -1,0 +1,1 @@
+import{j as s}from"./index-DNQE5ydy.js";import"./react-DOpiTn5v.js";function u({value:e,onChange:r,label:a,placeholder:t,className:i}){return s.jsx("input",{className:i||"lib-filter",type:"text",value:e,onChange:n=>r(n.target.value),placeholder:t,"aria-label":a||t})}export{u as F};

@@ -201,35 +201,47 @@ test('the include directive is really inlined', () => {
 // ---------------------------------------------------------------------------------------------
 // The lean/full footprint.
 //
-// AGENT.md §1 either inlines every law's full text (full) or condenses each law to its title
-// plus first sentence (lean) — while the complete `laws/universal.md` ships EITHER WAY. Every
-// law binds regardless; the footprint governs how much AGENT.md inlines, not which laws apply.
-// That distinction is the whole reason the third test exists.
+// AGENT.md §1 either inlines every law's full text (full) or the law's AUTHORED lean form, its
+// LEAN block (lean) — while the complete `laws/universal.md` and `ontology/universal.md` ship on
+// disk at full text EITHER WAY. Every law binds regardless; the footprint governs how much
+// AGENT.md inlines, not which laws apply. Lean used to be the first sentence, machine-cut, which
+// made a law's lean footprint a function of its punctuation: Law II shipped as 36 characters and
+// lost its stop-and-ask mechanism, Law XI as 348. Now each law's lean text is written by hand,
+// the way the ontology's already was.
 
-// A mid-law sentence present ONLY in Law I's full body, dropped once lean keeps just the
-// opening sentence. The discriminator between the two footprints.
+// A sentence present ONLY in Law I's full body. The discriminator between the two footprints.
 const FULL_ONLY = 'or a secret manager';
 const ESSENCE = 'No key, password, token, or secret';
+// Law II's lean text carries its mechanism — the thing the first-sentence cut used to drop.
+// Both marks sit inside ONE hard-wrapped source line, like PACK_MARK below, so they assert
+// the rule and not the wrap.
+const LEAN_II_MECHANISM = 'If a worthwhile widening appears mid-task, stop and ask';
+// A clause only in the ontology's full text (its lean block condenses the Decisions section).
+const ONT_FULL_ONLY = 'weigh blast radius against value';
 
 test('full inlines the complete law text', () => {
   assert.ok(rendered('AGENT.md', 'neutral', 'full').includes(FULL_ONLY));
 });
 
-test('lean keeps the essence and drops the rest', () => {
+test('lean keeps the essence, carries the authored mechanism, and drops the rationale', () => {
   const agent = rendered('AGENT.md', 'neutral', 'lean');
   assert.ok(agent.includes(ESSENCE), 'lean dropped the first sentence too');
+  assert.ok(agent.includes(LEAN_II_MECHANISM), "lean lost Law II's stop-and-ask mechanism");
   assert.ok(!agent.includes(FULL_ONLY), 'lean inlined the full body');
 });
 
-test('a lean build still ships the complete law file', () => {
+test('a lean build still ships the complete law and ontology files', () => {
   // THE ONE THAT MATTERS. Lean trims what AGENT.md INLINES; it must not trim what BINDS. A
-  // build that shipped a condensed universal.md would silently narrow the agent's law.
+  // build that shipped a condensed universal.md would silently narrow the agent's law — and
+  // before the laws got LEAN blocks, the ONTOLOGY copy on disk was in fact the condensed one.
   withDir((d) => {
     const out = path.join(d, 'bundle');
     emitFiles(d, out, ['--footprint', 'lean']);
     assert.ok(read(out, 'AGENT.md').includes(ESSENCE));
     assert.ok(read(out, 'laws', 'universal.md').includes(FULL_ONLY),
       'a lean build shipped a condensed universal.md — the laws themselves were narrowed');
+    assert.ok(read(out, 'ontology', 'universal.md').includes(ONT_FULL_ONLY),
+      'a lean build shipped the condensed ontology on disk');
   });
 });
 

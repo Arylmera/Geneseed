@@ -50,3 +50,16 @@ hour it is needed, so read the reference at the moment of checking. Where a rule
 in two directions, the gate must be able to fail in both, or it is satisfied by excess.
 Where {{DOCTRINE}} rigor 3 has you write the test, this governs whether the test is
 worth trusting ({{DOCTRINE}} rigor 2).
+
+### {{DOCTRINE}} rigor 5 — {{DOC_RIGOR_5}}
+A gate you build stands outside the mind it governs. Wherever a system lets an
+agent — this one or another — act on the world, approval is asked of a party the
+agent cannot satisfy alone, the allowlist is enforced at the boundary the call must
+cross, and validation runs against real state, not the model's account of it.
+Permission must never live in the governed agent's own prompt or judgement. Anything
+gaining autonomous control over physical state, money, or production ships disarmed,
+armed only by explicit human act. A rule in a prompt is a request; a rule at a
+boundary is a constraint — and only the second holds when the model is wrong,
+confused, or steered by untrusted input ({{LAW}} VI). Where {{LAW}} VII governs the
+power you take, this governs the power you hand out; {{DOCTRINE}} rigor 4 proves the
+gate once it stands.
