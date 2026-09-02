@@ -155,3 +155,63 @@ test('the alternate path key is read, and bad payloads defer', () => {
     assertDefers(hookRun('rule-gate', { stdin: bad }), JSON.stringify(bad).slice(0, 60));
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// Law IV at the boundary: a history-destroying git verb asks even when no commit/push is
+// present. `git checkout -- <path>` is included because it reverts to the INDEX and eats
+// unstaged work — the mistake this repo's own memory records. `push --force` trips this gate
+// rather than process 5's, because the stronger reason is the one the user should read.
+
+test('a destructive git verb asks under Law IV', () => {
+  for (const cmd of ['git reset --hard HEAD~1',
+    'git clean -fd',
+    'git branch -D feature',
+    'git checkout -- src/',
+    'git push --force-with-lease',
+    'cd /repo && git reset --hard origin/main']) {
+    const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
+    assert.ok(dec.permissionDecisionReason.includes('Law IV'), dec.permissionDecisionReason);
+  }
+});
+
+test('a soft reset, a -d branch delete, a plain checkout and a dry-run clean defer', () => {
+  for (const cmd of ['git reset --soft HEAD~1', 'git branch -d merged', 'git checkout main',
+    'git clean -n']) {
+    assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Law I at the boundary: a Write/Edit whose content carries a high-precision credential shape
+// asks, unless the target is a dotenv file — the one place Law I says a secret may live. The
+// shapes are vendor prefixes, not entropy heuristics, so a hash or a lockfile never trips it.
+
+const contentPayload = (file_path, content, key = 'content') =>
+  JSON.stringify({ tool_name: 'Write', tool_input: { file_path, [key]: content } });
+
+test('a credential-shaped write asks under Law I', () => {
+  const shapes = ['AKIAIOSFODNN7EXAMPLE',
+    'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef012345',
+    'github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123',
+    'sk-ant-api03-abcdefghijklmnopqrstuvwxyz',
+    'xoxb-1234567890-abcdefghij',
+    '-----BEGIN RSA PRIVATE KEY-----'];
+  for (const s of shapes) {
+    const dec = askDecision(hookRun('rule-gate',
+      { stdin: contentPayload('src/config.js', `const k = "${s}";`) }), s);
+    assert.ok(dec.permissionDecisionReason.includes('Law I'), dec.permissionDecisionReason);
+  }
+  // Edit sends `new_string`, not `content`.
+  askDecision(hookRun('rule-gate',
+    { stdin: contentPayload('src/a.py', 'AKIAIOSFODNN7EXAMPLE', 'new_string') }), 'new_string');
+});
+
+test('a dotenv target and ordinary content defer', () => {
+  assertDefers(hookRun('rule-gate',
+    { stdin: contentPayload('.env', 'AWS_KEY=AKIAIOSFODNN7EXAMPLE') }), '.env');
+  assertDefers(hookRun('rule-gate',
+    { stdin: contentPayload('/p/.env.local', 'GH=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef012345') }),
+  '.env.local');
+  assertDefers(hookRun('rule-gate',
+    { stdin: contentPayload('src/a.js', 'const sk = "skeleton-key";') }), 'ordinary');
+});
