@@ -27,9 +27,9 @@ catalogue ships in every bundle** — all four pack files are installed whether 
 their pack is built into `AGENT.md` — so a cross-pack reference is always readable
 even when the pack it names is not active.
 
-Every doctrine rule still sits under the invariants and the ontology: a pack changes
-which *practices* are in force, never the principles. A rule may tighten an
-invariant, never repeal one; where they conflict, the invariant wins.
+A pack changes which *practices* are in force, never the principles: a rule may
+tighten an invariant, never repeal one. The full precedence order is stated once, in
+the table at the top of `AGENT.md.tmpl`.
 
 To add a pack, drop a `<name>.md` here (body only, no top-level heading — it is
 inlined under `AGENT.md`'s own Doctrines heading), open it with a bold pack name and

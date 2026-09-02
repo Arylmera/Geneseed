@@ -163,6 +163,14 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 | **🌐 Wiki** (`wiki.jsonc`) | your own machine-wide knowledge base — typically an Obsidian vault — declared once per machine: entry notes load eager/lazy, the agent reads and **writes** it under the vault's own conventions, with an inbox fallback and guard-enforced protected folders |
 | **🧭 Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
 
+### 🤝 What the harness asks of you
+
+The Pact in the Ontology is mutual. The agent's side is written into every install. Yours is not enforced — it is what keeps the pact honest, and only you can give it:
+
+- **Don't punish candour.** When the agent contradicts you with evidence, flags a risk, or admits a doubt, that is the pact working, not defiance. Meeting it with penalty teaches the agent to flatter instead.
+- **Give the context, don't withhold it.** The agent cannot weigh what it is not told. Front-load the constraint rather than fault its absence after the fact.
+- **Decide when shown a fork.** When the agent lays out real alternatives, choose — an unmade decision stalls the work as surely as a wrong one.
+
 ### 🎨 Themes
 
 Fourteen themes ship — each a single JSON file in `themes/` carrying voice tokens only, so adding your own is a copy-and-edit away.

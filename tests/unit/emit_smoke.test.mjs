@@ -288,7 +288,7 @@ test('the carrier still carries every law, themed and in order', () => {
 /**
  * The same claim for the other two tiers, and it is not a duplicate of the loop above.
  *
- * ⚠ THE `DOC_*` FAMILY IS 23 KEYS IN 15 FILES AND HAS NO CORPUS BEHIND IT. `doctor` checks that
+ * ⚠ THE `DOC_*` FAMILY IS 24 KEYS IN 15 FILES AND HAS NO CORPUS BEHIND IT. `doctor` checks that
  * every key a pack file names EXISTS in every theme, and `emit_smoke` above checks that the
  * INVARIANT titles survive the emit — but between those two there is a hole exactly the shape of
  * a doctrine title: present in the theme, named by the source, and never once observed coming out
@@ -314,8 +314,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack: m[1], n: m[2], key: `DOC_${m[1].toUpperCase()}_${m[2]}` });
     }
   }
-  assert.equal(rules.length, 23,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 23; either the `
+  assert.equal(rules.length, 24,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 24 (rigor 5 is retired Law IX); either the `
     + 'heading shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in

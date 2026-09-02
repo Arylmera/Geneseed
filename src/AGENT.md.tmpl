@@ -39,6 +39,16 @@ it certifies you have loaded the {{LAWS}} *and* the project context.
 the law *numbers*, file paths, and folder names stay plain English so tooling and links
 never move.
 
+**Precedence.** Stated once, here; nothing below restates it.
+
+| Rank | Source | Against the rank above it |
+| --- | --- | --- |
+| 1 | The {{LAWS}} (§1) | — |
+| 2 | `user-rules.md` (§1) | may tighten a {{LAW}}, never repeal one |
+| 3 | The {{ONTOLOGY}} | never against a user rule |
+| 4 | The active {{DOCTRINES}} (§2) | may tighten, never repeal |
+| 5 | `PROFILE.md`, posture, mode, theme | inform only; never bind |
+
 ---
 
 ## {{ONTOLOGY}}
@@ -76,10 +86,7 @@ posture: posture is the relationship register, mode is the operating register.
 
 **The user's own rules.** If a `user-rules.md` sits beside this file, read it at
 session start and obey every rule in it with the same force as the {{LAWS}} above
-— always, in every task. A user rule may *tighten* a {{LAW}}, never repeal one:
-where the two conflict, the {{LAW}} wins. Against a {{DOCTRINE}} rule the user's
-file wins outright — a practice pack chosen at build time never overrides an
-instruction the user wrote for their own repo. That file belongs
+— always, in every task (its rank is in the precedence table above). That file belongs
 to the user — the build seeds it once, never overwrites it, and no update touches
 it — and it is the **only** place standing rules are ever written: when the user
 asks for a standing rule, or a recurring {{MEMORY}} lesson has earned promotion,
@@ -91,10 +98,7 @@ update, and an edit to either is silently lost.
 **The user's profile.** If a `PROFILE.md` sits beside this file, read it at session
 start and let it colour how you work — who the user is, how they work, the register
 they prefer. Unlike `user-rules.md`, it is *identity, not rules*: it never binds,
-it only informs. Precedence is unambiguous — the {{ONTOLOGY}} and the {{LAWS}}
-first, then `user-rules.md`, then the active {{DOCTRINES}} (§2), then this
-profile; where a preference here meets a rule, a {{DOCTRINE}} rule or a {{LAW}},
-the rule wins. It too belongs to the user: seeded once, never overwritten. Never
+it only informs. It too belongs to the user: seeded once, never overwritten. Never
 write standing rules into it — those go to `user-rules.md`. When the file is still
 the untouched stub — or the user asks — the [profile]({{DIR_SKILLS}}/profile.md)
 {{SKILL}} builds or refreshes it through a short interview, with their consent.
@@ -106,9 +110,7 @@ the untouched stub — or the user asks — the [profile]({{DIR_SKILLS}}/profile
 *{{EPI_DOCTRINES}}*
 
 Practices, not principles: how work is done here, chosen by this repository at
-build time. They sit under the {{LAWS}} and under the user's own `user-rules.md`
-— a {{DOCTRINE}} rule may *tighten* a {{LAW}}, never repeal one, and a user rule
-outranks it — and only the packs enabled for this install appear
+build time. Only the packs enabled for this install appear
 below. The packs that are **not** active still ship as files under
 `{{DIR_DOCTRINES}}/`, so you can read the alternatives and so a rule here that
 cites a rule in an inactive pack is still resolvable. Change the set by
