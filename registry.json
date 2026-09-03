@@ -127,6 +127,20 @@
       "added": "2026-06-03",
       "last_verified": ""
     },
+    "skills/bruno-collection-generator": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-03",
+      "last_verified": ""
+    },
+    "skills/bruno-test-writer": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-03",
+      "last_verified": ""
+    },
     "skills/clarify": {
       "status": "approved",
       "version": "1.0.0",
