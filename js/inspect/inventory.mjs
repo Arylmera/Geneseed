@@ -96,7 +96,7 @@ export const SKILL_CLASS = {
   tickets: 'design',
   tdd: 'build', develop: 'build', refactor: 'build', debug: 'build', migrate: 'build',
   'frontend-design': 'build', 'opencode-theme': 'build', prototype: 'build',
-  'forge-mcp': 'build',
+  'forge-mcp': 'build', 'bruno-collection-generator': 'build', 'bruno-test-writer': 'build',
   'geneseed-code-review': 'review', 'fresh-eyes': 'review', 'gap-detector': 'review',
   'roast-me': 'review', 'review-response': 'review', ponytail: 'review',
   commit: 'ship', ship: 'ship', release: 'ship', handoff: 'ship', 'git-rescue': 'ship',

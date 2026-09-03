@@ -6,6 +6,20 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
+## [Unreleased]
+
+### Added
+
+- **Two Bruno skills — `bruno-collection-generator` and `bruno-test-writer`.** Native
+  flat specs, written in the harness voice after the procedures Bruno published in
+  [bruno-agent-skills](https://github.com/bruno-collections/bruno-agent-skills): the first
+  builds a collection (requests, environments, request docs) from routes, an OpenAPI
+  snippet, curl, or an endpoint list; the second writes assertions, scripts, and chaining
+  for a request or collection without leaking a secret or asserting on a value the
+  evidence does not support. Authored rather than vendored because the upstream folders
+  carry no license and lean on Python helpers, and every bundle ships with no interpreter
+  but Node. Skill count 47 → 49.
+
 ## [3.2.0] — 2026-08-27
 
 ### Added

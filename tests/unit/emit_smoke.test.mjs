@@ -113,9 +113,10 @@ const EXPECTED = {
 
 // The native layer is generated from the same source tree for every host, so the counts are
 // host-independent. A mismatch means the emit dropped or duplicated specs — the failure mode a
-// bare "exit 0" smoke test cannot see.
+// bare "exit 0" smoke test cannot see. Skills are the flat specs under `src/skills/` plus the
+// three vendored folders, so the count moves with `SKILL_CLASS` and `VENDORED_SKILL_DIRS`.
 const N_AGENTS = 18;
-const N_SKILLS = 50;
+const N_SKILLS = 52;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
 // translates `\n` to `os.linesep`, so on Windows the file really is CRLF on disk (gated as M1).
