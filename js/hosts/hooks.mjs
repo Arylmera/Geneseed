@@ -3,7 +3,8 @@
  *
  * These are the commands the emitted `settings.json` actually invokes on a user's machine,
  * every session: a SessionStart injector, two PreToolUse gates (and `tool-gate`, the two
- * fused for a host that runs ONE command per event), and a Stop/SubagentStop distiller.
+ * fused for a host that runs ONE command per event), and a Stop/SubagentStop/PreCompact
+ * distiller.
  *
  * ONE VERB, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a

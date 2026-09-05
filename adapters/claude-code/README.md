@@ -51,6 +51,11 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   the payload does not name the subagent, the step is a silent no-op — never a
   crash, never a wrong write. This is the parity twin of the OpenCode learn plugin's
   child-session branch.
+- on **PreCompact**, runs the same `harness learn` once more. `learn` distils the
+  *tail* of the transcript, so per-turn Stop is a sliding window over the session —
+  and auto-compaction is the moment that window is about to be summarised away.
+  This captures memory *before* the summary; the SessionStart `compact` matcher
+  re-seeds context *after* it.
 
   This step is **opt-in on a model CLI**: set `GENESEED_LLM` (e.g. `claude -p`,
   `llm`, `ollama run …`) for `learn` to actually distil. With it unset the hook is

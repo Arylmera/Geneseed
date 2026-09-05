@@ -42,6 +42,13 @@
           { "type": "command", "command": "node bin/geneseed-hook.mjs learn || exit 0" }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node bin/geneseed-hook.mjs learn || exit 0" }
+        ]
+      }
     ]
   }
 }

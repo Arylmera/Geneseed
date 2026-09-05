@@ -100,6 +100,23 @@ test('every non-gate hook ends with || exit 0', () => {
   });
 });
 
+// THE THREE DISTILLER EVENTS run the SAME learn command. Stop is the per-turn sliding window,
+// SubagentStop the per-agent lesson, PreCompact the last look at the transcript tail before
+// auto-compaction summarises it. One command, because `learn` routes on the payload's
+// `hook_event_name` and a second spelling would be a second thing to keep in step.
+test('Stop, SubagentStop and PreCompact all run one and the same learn command', () => {
+  withHome((home) => {
+    const groups = claudeHookGroups(path.join(home, 'cfg'), HOOK_OPTS());
+    const cmds = ['Stop', 'SubagentStop', 'PreCompact'].map((ev) => {
+      assert.equal((groups[ev] ?? []).length, 1, `${ev} is not exactly one group`);
+      return groups[ev][0].hooks[0].command;
+    });
+    assert.ok(cmds[0].includes(' learn '), cmds[0]);
+    assert.equal(cmds[1], cmds[0]);
+    assert.equal(cmds[2], cmds[0]);
+  });
+});
+
 test('every gate hook is emitted, and none of them ends with || exit 0', () => {
   // THE OTHER HALF, AND THE REFERENCE ONLY HAD THE FIRST. It asserted each named gate SHIPS, so
   // that the exemption is not silently protecting nothing. It never asserted that the exempt
