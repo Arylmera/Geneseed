@@ -234,9 +234,16 @@ the preamble rides a file Copilot auto-loads: the repo-root `AGENTS.md` (CLI, co
 agent, and VS Code agent mode) or the personal `~/.copilot/copilot-instructions.md`
 (CLI). Two differences from the Claude paths:
 
-- **No hooks.** Copilot has no settings.json or hook mechanism, so there is no
-  eager context injection and no `harness learn` Stop-hook — the memory convention
-  still applies, driven by the preamble's instructions alone.
+- **Hooks at global scope only, block-or-warn.** The global emit wires two hooks
+  into `~/.copilot/settings.json`: `sessionStart` (eager project-context injection,
+  as on Claude Code) and `toolCall` (both gates behind one command, because Copilot
+  takes one command per event). Copilot's `toolCall` has no "ask the user" tier, so
+  Laws I and IV **block** and the two consent rules (process 1, process 5) **warn**
+  on stderr instead of prompting. No `learn` hook — Copilot's `sessionEnd`/`agentStop`
+  payloads carry no transcript — so the memory convention rides the preamble's
+  instructions. The per-repo emit wires nothing: Copilot reads hooks from the
+  personal settings file only, and a machine-absolute command in a shared
+  `.github/` would fail on every teammate's machine.
 - **The per-repo layer lives in the shared `.github/`** (Copilot's repo config
   surface). Safe by construction: the ownership manifest + claim-on-create never
   touch files Geneseed didn't write — your workflows and same-named agents/skills

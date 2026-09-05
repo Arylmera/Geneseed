@@ -702,6 +702,142 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [])
 }
 
 /**
+ * Geneseed's Copilot hooks, keyed by Copilot's event names.
+ *
+ * COPILOT'S SETTINGS ARE NOT CLAUDE'S. `~/.copilot/settings.json` carries `hooks` as a map of
+ * event → ONE `{command, shell?, timeout?}` object, not event → list of matcher groups, so
+ * nothing in `claudeHookGroups`/`mergeClaudeSettings` can be reused for it: there is no
+ * array to append to, and a second Geneseed group per event is not expressible. Two hooks:
+ *
+ *   * `sessionStart` → `context --host copilot`: the same project-context injection Claude
+ *     gets, in Copilot's `{"additionalContext"}` envelope.
+ *   * `toolCall` → `tool-gate --host copilot`: both gates behind the one command the event
+ *     allows, block-only for Laws I/IV, warn for the rest (js/hosts/hooks.mjs's header).
+ *
+ * No `sessionEnd`/`agentStop` → `learn`: Copilot's payloads for those carry no
+ * `transcript_path`, so `learn` would have nothing to distil. The memory write-back stays on
+ * the preamble for this host, as before.
+ *
+ * `|| exit 0` on the non-gate, as in `claudeHookGroups` and for the same reason.
+ */
+export function copilotHooks(cfg, hookOpts) {
+  const run = hookPrefix(hookOpts);
+  return {
+    sessionStart: { command: `${run} context --root "${cfg}" --host copilot || exit 0` },
+    toolCall: { command: `${run} tool-gate --root "${cfg}" --host copilot` },
+  };
+}
+
+/**
+ * Wire Copilot's hooks into `p` — returns the complete current claim set, `[{event, hook}]`.
+ *
+ * ONE SLOT PER EVENT MEANS A FOREIGN HOOK CANNOT BE JOINED, ONLY DISPLACED — and displacing
+ * a hook the user wrote is not Geneseed's to do. A slot is taken when it holds a hook that
+ * is neither canonical nor a claim recorded by a previous emit; that event is skipped with a
+ * warning and never claimed. A recorded stale claim (a moved shim) is replaced, as the Claude
+ * merge prunes stale groups. Comments in the file mean it is not rewritten, as everywhere.
+ */
+export function mergeCopilotSettings(p, priorHooks = null, hookOpts = {}) {
+  const prior = (priorHooks || []).filter(isDict);
+  let config = {};
+  let hadComments = false;
+  if (existsSync(p)) {
+    try {
+      const [loaded, hc] = readJsonc(readText(p));
+      hadComments = hc;
+      if (isDict(loaded)) config = loaded;
+    } catch (e) {
+      if (!isOsError(e)) throw e;
+    }
+  }
+  let hooks = get(config, 'hooks');
+  if (!isDict(hooks)) hooks = {};
+  const canonical = copilotHooks(path.dirname(p), hookOpts);
+  const claims = [];
+  let changed = false;
+  for (const [event, hook] of Object.entries(canonical)) {
+    const cur = get(hooks, event);
+    const recorded = prior.find((r) => get(r, 'event') === event);
+    if (isDict(cur) && deepEquals(cur, hook)) { claims.push({ event, hook }); continue; }
+    if (isDict(cur) && !(recorded && deepEquals(recorded.hook, cur))) {
+      process.stderr.write(`[geneseed] ${path.basename(p)}: hooks.${event} is already set and `
+        + 'is not Geneseed\'s — left alone, so this event is not wired.\n');
+      continue;
+    }
+    hooks[event] = hook;
+    claims.push({ event, hook });
+    changed = true;
+  }
+  // A recorded claim whose event is no longer canonical: unwire it, or it fires forever.
+  for (const rec of prior) {
+    const event = get(rec, 'event');
+    if (event in canonical) continue;
+    if (deepEquals(get(hooks, event), get(rec, 'hook'))) { delete hooks[event]; changed = true; }
+  }
+  if (!changed) return [p, claims];
+  if (hadComments) {
+    process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
+      + "(your edits are kept). Add Geneseed's hooks by hand from adapters/copilot/README.md.\n");
+    return [p, prior];
+  }
+  if (Object.keys(hooks).length) config.hooks = hooks;
+  else delete config.hooks;
+  atomicWriteJson(p, config);
+  return [p, claims];
+}
+
+/** Remove exactly the recorded Copilot hooks from `p`. True when the file was rewritten. */
+export function unwireCopilotSettings(p, recorded) {
+  if (!existsSync(p) || !recorded || !recorded.length) return false;
+  let loaded;
+  let hadComments;
+  try {
+    [loaded, hadComments] = readJsonc(readText(p));
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+    return false;
+  }
+  if (hadComments || !isDict(loaded)) return false;
+  const hooks = get(loaded, 'hooks');
+  if (!isDict(hooks)) return false;
+  for (const rec of recorded) {
+    const event = get(rec, 'event');
+    if (deepEquals(get(hooks, event), get(rec, 'hook'))) delete hooks[event];
+  }
+  if (!Object.keys(hooks).length) delete loaded.hooks;
+  try {
+    atomicWriteJson(p, loaded);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * The Copilot twin of `settingsIntegrityCheck`: every recorded hook present (or absent) in
+ * the file it was claimed against. Same contract — problems as strings, each also WARNed on
+ * stderr, empty when clean — so a merge that did not stick is loud at emit time rather than
+ * a hook that quietly never fires.
+ */
+export function copilotIntegrityCheck(p, recorded, expect = 'present') {
+  const problems = [];
+  const hooks = existsSync(p) ? (() => {
+    try { return get(readJsonc(readText(p))[0], 'hooks'); } catch { return null; }
+  })() : null;
+  for (const rec of (recorded || []).filter(isDict)) {
+    const hit = deepEquals(get(hooks, rec.event), rec.hook);
+    if (expect === 'present' && !hit) {
+      problems.push(`${p}: recorded Copilot hook missing — event=${rec.event}`);
+    } else if (expect === 'absent' && hit) {
+      problems.push(`${p}: recorded Copilot hook still present after unwire — event=${rec.event}`);
+    }
+  }
+  for (const x of problems) process.stderr.write(`[geneseed] WARN: ${x}\n`);
+  return problems;
+}
+
+/**
  * `_build_settings._merge_claude_settings` — returns `[target, managed]`.
  *
  * Surgical: every other key and the user's own hook entries survive. `priorHooks` is the

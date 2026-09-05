@@ -22,7 +22,7 @@ import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 /** `bin/geneseed-hook.mjs <verb> [--root R]` with `stdin` on fd 0. */
-function hookRun(verb, { root = null, stdin = '' } = {}) {
+function hookRun(verb, { root = null, stdin = '', host = null } = {}) {
   const sb = makeSandbox();
   try {
     const inFile = path.join(sb.path, 'stdin.json');
@@ -31,6 +31,7 @@ function hookRun(verb, { root = null, stdin = '' } = {}) {
     try {
       const argv = [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), verb];
       if (root !== null) argv.push('--root', root);
+      if (host !== null) argv.push('--host', host);
       const proc = spawnSync(process.execPath, argv,
         { encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'] });
       return { rc: proc.status, out: proc.stdout, err: proc.stderr };
@@ -295,6 +296,68 @@ test('a credential-shaped write asks under Law I', () => {
   // Edit sends `new_string`, not `content`.
   askDecision(hookRun('rule-gate',
     { stdin: contentPayload('src/a.py', 'AKIAIOSFODNN7EXAMPLE', 'new_string') }), 'new_string');
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE COPILOT DIALECT. `--host copilot` changes what a verdict LOOKS like, never what trips it:
+// Copilot's `toolCall` hook has no ask tier, so Laws I and IV — wrong in every context — become
+// `{"block": true}` and the two process rules, which are the user's own calls, become a warning
+// on stderr and an allow. A gate that blocked every commit would be a lockout, not consent.
+// `tool-gate` is the two gates behind one command, dispatched on the payload's shape, because
+// Copilot's settings carry one command per event and no matcher.
+
+const copilotPayload = (toolName, toolInput, phase = 'before') =>
+  JSON.stringify({ event: 'toolCall', phase, toolName, toolInput });
+
+function blockDecision(r, what) {
+  assert.equal(r.rc, 0, `${what}: exited ${r.rc}`);
+  const dec = JSON.parse(r.out);
+  assert.equal(dec.block, true, `${what}: expected a block, got ${r.out}`);
+  return dec;
+}
+
+test('copilot: Laws I and IV block, in Copilot\'s envelope', () => {
+  const law4 = blockDecision(hookRun('tool-gate',
+    { stdin: copilotPayload('bash', { command: 'git push --force' }), host: 'copilot' }), 'force');
+  assert.match(law4.reason, /Law IV/);
+  const law1 = blockDecision(hookRun('tool-gate',
+    { stdin: copilotPayload('edit', { path: 'src/a.js', content: 'k = "AKIAIOSFODNN7EXAMPLE"' }),
+      host: 'copilot' }), 'secret');
+  assert.match(law1.reason, /Law I/);
+});
+
+test('copilot: the process rules and a gate error WARN and allow', () => {
+  for (const [stdin, what] of [
+    [copilotPayload('bash', { command: 'git commit -m x' }), 'commit'],
+    [copilotPayload('edit', { path: '/x/user-rules.md', content: 'rule' }), 'user-rules'],
+    ['not json', 'not-json']]) {
+    const r = hookRun('tool-gate', { stdin, host: 'copilot' });
+    assertDefers(r, what);
+    assert.match(r.err, /\[geneseed\] Geneseed/, `${what}: no warning on stderr`);
+  }
+});
+
+test('copilot: the after phase and a non-tool payload defer silently', () => {
+  assertDefers(hookRun('tool-gate',
+    { stdin: copilotPayload('bash', { command: 'git push --force' }, 'after'), host: 'copilot' }),
+  'after');
+  assertDefers(hookRun('tool-gate', { stdin: '{"event":"toolCall"}', host: 'copilot' }), 'bare');
+});
+
+test('copilot: a block is ledgered, a warning is not', () => {
+  withLedgerRoot((root, ledger) => {
+    hookRun('tool-gate', { root, host: 'copilot', stdin: copilotPayload('bash', { command: 'git commit -m x' }) });
+    assert.ok(!fs.existsSync(ledger), 'a warning asked nothing and must not be recorded as an ask');
+    hookRun('tool-gate', { root, host: 'copilot', stdin: copilotPayload('bash', { command: 'git reset --hard' }) });
+    const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(lines.map((l) => [l.verb, l.rule]), [['git-gate', 'law-4']]);
+  });
+});
+
+test('the Claude dialect is unchanged when --host is absent, and tool-gate speaks it too', () => {
+  askDecision(hookRun('tool-gate', { stdin: bashPayload('git push') }), 'tool-gate/claude');
+  askDecision(hookRun('tool-gate',
+    { stdin: contentPayload('src/a.js', 'AKIAIOSFODNN7EXAMPLE') }), 'tool-gate/claude/secret');
 });
 
 test('a dotenv target and ordinary content defer', () => {

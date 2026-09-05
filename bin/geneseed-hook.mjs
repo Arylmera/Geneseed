@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * The hook entry point — a Node twin of `rituals/harness.py` for the four verbs the
- * emitted `settings.json` actually invokes.
+ * The hook entry point — a Node twin of `rituals/harness.py` for the verbs the emitted
+ * `settings.json` actually invokes (four from the reference, plus `tool-gate` for Copilot).
  *
  * WHY IT IS A SECOND BINARY AND NOT A SUBCOMMAND OF `bin/build-driver.mjs`. Three reasons,
  * and each alone would be enough:
@@ -37,15 +37,20 @@
  * every Geneseed hook returns 0 and signals through stdout — so "did nothing" and "worked"
  * are the same observation.
  */
-import { cmdContext, cmdGitGate, cmdRuleGate, cmdLearn } from '../js/hosts/hooks.mjs';
+import { cmdContext, cmdGitGate, cmdRuleGate, cmdToolGate, cmdLearn } from '../js/hosts/hooks.mjs';
 // Not a new module on the hot path: `js/hosts/hooks.mjs` above already imports
 // `js/lib/fs.mjs`, so this edge names a file the process has already loaded.
 import { printErr } from '../js/lib/fs.mjs';
 
+// `--host` selects the verdict dialect (see js/hosts/hooks.mjs's header); the emitter bakes
+// it into the command for every host that is not Claude Code, so the hook never has to guess
+// its reader from the payload's shape.
+const HOSTED = { '--root': 'root', '--host': 'host' };
 const VERBS = {
-  context: { fn: cmdContext, flags: { '--root': 'root' } },
-  'git-gate': { fn: cmdGitGate, flags: { '--root': 'root' } },
-  'rule-gate': { fn: cmdRuleGate, flags: { '--root': 'root' } },
+  context: { fn: cmdContext, flags: HOSTED },
+  'git-gate': { fn: cmdGitGate, flags: HOSTED },
+  'rule-gate': { fn: cmdRuleGate, flags: HOSTED },
+  'tool-gate': { fn: cmdToolGate, flags: HOSTED },
   learn: {
     fn: cmdLearn,
     flags: { '--memory': 'memory' },
@@ -62,12 +67,12 @@ function die(code, msg) {
 }
 
 /**
- * `argparse`'s surface for these four verbs, and only theirs: `--flag VALUE`, the
+ * `argparse`'s surface for these verbs, and only theirs: `--flag VALUE`, the
  * `--flag=VALUE` spelling it also accepts, store_true switches, and one optional
  * positional.
  */
 function parse(spec, argv) {
-  const args = { root: null, memory: null, consolidate: false, file: null };
+  const args = { root: null, host: null, memory: null, consolidate: false, file: null };
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];
     const eq = tok.indexOf('=');
@@ -110,7 +115,7 @@ async function main(argv) {
     // The COMMAND is not a table: `geneseed` is this package's `bin` entry for the CLI
     // (package.json), it answers every non-hook verb, and it survives the deletion of the
     // interpreter-plus-script invocation this line used to print.
-    return die(2, `invalid choice: '${verb}'. This entry point carries only the four HOOK `
+    return die(2, `invalid choice: '${verb}'. This entry point carries only the HOOK `
       + `verbs (${Object.keys(VERBS).join(', ')}); every other harness subcommand lives `
       + 'elsewhere — run `geneseed ' + verb + '`.');
   }

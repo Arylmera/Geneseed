@@ -50,8 +50,11 @@ function block(text, start, end, where) {
  * hook entry has to satisfy, read out of the emitter.
  */
 function wiredHookVerbs() {
-  const body = block(read('js', 'hosts', 'settings.mjs'), 'export function claudeHookGroups', '\n}\n',
-    'js/hosts/settings.mjs');
+  // Two emitters, two shapes: Claude's matcher groups and Copilot's one-command-per-event map.
+  // Both bake `${run} <verb>`, so the same scan reads each.
+  const src = read('js', 'hosts', 'settings.mjs');
+  const body = block(src, 'export function claudeHookGroups', '\n}\n', 'js/hosts/settings.mjs')
+    + block(src, 'export function copilotHooks', '\n}\n', 'js/hosts/settings.mjs');
   return new Set([...body.matchAll(/\$\{run\}\s+([a-z][a-z-]*)/g)].map((m) => m[1]));
 }
 
@@ -90,7 +93,7 @@ const sorted = (s) => [...s].sort();
 
 test('the hook entry carries exactly the verbs the emitter wires', () => {
   const wired = wiredHookVerbs();
-  assert.deepEqual(sorted(wired), ['context', 'git-gate', 'learn', 'rule-gate'],
+  assert.deepEqual(sorted(wired), ['context', 'git-gate', 'learn', 'rule-gate', 'tool-gate'],
     'js/hosts/settings.mjs wires a different set of hook commands than this gate was written for — '
     + 'read the new one before deciding what it needs');
   assert.deepEqual(sorted(verbsOf(HOOK)), sorted(wired),
@@ -181,7 +184,9 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
  * below refuses an exemption for a verb neither entry point carries — so the next new verb still
  * has to be written down deliberately rather than slipping through a containment.
  */
-const NATIVE = ['catalog', 'mcp', 'memory'];
+// `tool-gate` is the hook side's one native verb: born for Copilot after the reference was
+// gone, so no cell was ever recorded for it. Its absolute gate is tests/unit/hook_gates.test.mjs.
+const NATIVE = ['catalog', 'mcp', 'memory', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the
