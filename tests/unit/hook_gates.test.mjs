@@ -136,6 +136,20 @@ test('an ask writes one ledger line naming the rule; a defer writes nothing', ()
   });
 });
 
+// The cap. 1000 lines is the ceiling; the 1001st ask drops the OLDEST line, never the newest,
+// so `status` keeps counting the asks that still describe how this install is being used.
+test('the ledger keeps the newest 1000 lines and drops the oldest on the next ask', () => {
+  withLedgerRoot((root, ledger) => {
+    const seed = Array.from({ length: 1000 }, (_, i) => JSON.stringify({ ts: 't', verb: 'seed', rule: `r${i}`, cwd: '.' }));
+    fs.writeFileSync(ledger, `${seed.join('\n')}\n`);
+    askDecision(hookRun('git-gate', { root, stdin: bashPayload('git push') }), 'push');
+    const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.equal(lines.length, 1000);
+    assert.equal(lines[0].rule, 'r1', 'the oldest line is the one that goes');
+    assert.equal(lines.at(-1).rule, 'process-5', 'the newest ask survives the trim');
+  });
+});
+
 test('a ledger that cannot be written never changes the decision', () => {
   // No notebook dir under root: the append fails with ENOENT, the ask still goes out.
   const sb = makeSandbox();
