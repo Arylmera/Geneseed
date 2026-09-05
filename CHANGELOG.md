@@ -10,6 +10,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Added
 
+- **Copilot gets hooks.** The Copilot CLI reads lifecycle hooks from
+  `~/.copilot/settings.json` — one command per event, no matcher groups — and the global
+  emit now wires two: `sessionStart` runs `context` (eager project-context injection, in
+  Copilot's `additionalContext` envelope) and `toolCall` runs the new `tool-gate` verb, the
+  git and rule gates fused behind the one command the event allows. Copilot's `toolCall` has
+  no ask tier, so `--host copilot` makes Laws I and IV block and the two consent rules
+  (process 1, process 5) warn on stderr — the stance the OpenCode guard already takes. No
+  learn hook: Copilot's end-of-session payloads carry no transcript. A hook the user already
+  set on an event is left alone and the event is not claimed; uninstall removes exactly the
+  claimed hooks. The per-repo emit wires nothing. Hook verbs 4 → 5; `--host` on the
+  gates and on `context`.
+
 - **Two Bruno skills — `bruno-collection-generator` and `bruno-test-writer`.** Native
   flat specs, written in the harness voice after the procedures Bruno published in
   [bruno-agent-skills](https://github.com/bruno-collections/bruno-agent-skills): the first

@@ -214,7 +214,7 @@ export const MUTATIONS = [
     id: 'M8',
     name: 'remove a verb from the hook binary\'s table',
     file: 'bin/geneseed-hook.mjs',
-    find: "  context: { fn: cmdContext, flags: { '--root': 'root' } },\n",
+    find: '  context: { fn: cmdContext, flags: HOSTED },\n',
     replace: '',
     gate: UNIT_HOOK_CLI,
     why: 'The hook table is what an emitted settings.json invokes. A verb missing from it is a '

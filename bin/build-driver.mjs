@@ -42,7 +42,7 @@ import { parseArgs as nodeParseArgs } from 'node:util';
 import { build, phaseLog } from '../js/build/bundle.mjs';
 import { emitClaudeRender } from '../js/build/emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from '../js/build/emit-opencode.mjs';
-import { settingsIntegrityCheck } from '../js/hosts/settings.mjs';
+import { copilotIntegrityCheck, settingsIntegrityCheck } from '../js/hosts/settings.mjs';
 import { writeText, withPlatformNewlines, isFile } from '../js/lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../js/lib/json.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
@@ -848,8 +848,8 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // VERIFY — re-read the settings file just written and match it against the claims just
   // recorded, so a merge that silently did not stick (a commented file, a mid-flight
   // external edit, a bug in the merge) is loud now instead of surfacing as hooks that
-  // quietly never fire. Skipped for Copilot, which writes no settings file at all
-  // (`_emit_claude_core:827`) — the other half of why Copilot could cross first.
+  // quietly never fire. Copilot's settings have their own shape and their own check; a
+  // Copilot PROJECT emit records no hooks and so checks nothing.
   //
   // On the Python driver this stage runs in Python AFTER a Node child did the wiring, which
   // makes it a live cross-implementation check on every build. Here both halves are Node, so
@@ -860,15 +860,17 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // SILENT ON SUCCESS, which is its own coverage hazard: a clean emit prints nothing, so
   // deleting this call is byte-identical in all 259 cells. `test_verify_reports_an_orphaned
   // _geneseed_hook` plants the fault that makes it speak.
+  phaseLog('VERIFY');
   if (!isCopilot) {
-    phaseLog('VERIFY');
     settingsIntegrityCheck(
       path.join(cfgDir, managed.settings_file || 'settings.json'), managed, 'present');
+  } else if (managed.copilot_hooks) {
+    copilotIntegrityCheck(path.join(cfgDir, 'settings.json'), managed.copilot_hooks, 'present');
   }
   return {
     nAgents: stats.nAgents,
     nSkills: stats.nSkills,
-    nHooks: (managed.settings_hooks || []).length,
+    nHooks: (managed.settings_hooks || managed.copilot_hooks || []).length,
     memStatus,
     nbStatus,
   };
@@ -883,7 +885,8 @@ function emitCopilot(cfg, args, out) {
   });
   process.stdout.write(`[geneseed] copilot (folder) -> ${root}: AGENTS.md + .github/ `
     + `(${r.nAgents} agents (.agent.md), ${r.nSkills} skills), ${r.memStatus}, `
-    + `${r.nbStatus}. No settings.json/hooks (Copilot has none).\n`);
+    + `${r.nbStatus}. No hooks at project scope (Copilot reads hooks from `
+    + '~/.copilot/settings.json only — the global emit wires them).\n');
   return cfgDir;
 }
 
@@ -891,14 +894,17 @@ function emitCopilot(cfg, args, out) {
 function emitCopilotGlobal(cfg, args, out) {
   const cfgDir = args.cfgDir ?? copilotConfigDir();
   warnCopilotGlobalOverProject();
+  // The hook runner pair, as for Claude and Bob: the global emit is the one Copilot scope
+  // that wires hooks (`~/.copilot/settings.json`), and the shim it bakes is machine-wide.
+  const hookOpts = hookRunnerEntry();
   const r = emitClaudeCore(cfg, args, {
     cfgDir, claudeMd: path.join(cfgDir, 'copilot-instructions.md'),
-    scope: 'global', host: 'copilot', out,
+    scope: 'global', host: 'copilot', out, hookOpts,
   });
   process.stdout.write(`[geneseed] copilot-global -> ${cfgDir}: ${r.nAgents} agents (.agent.md), `
-    + `${r.nSkills} skills, copilot-instructions.md, ${r.memStatus}, ${r.nbStatus}. `
-    + 'No settings.json/hooks (Copilot has no hook mechanism — memory rides the '
-    + "preamble's instructions); MCP servers go in mcp-config.json.\n");
+    + `${r.nSkills} skills, copilot-instructions.md, ${r.memStatus}, ${r.nbStatus}, `
+    + `${r.nHooks} hooks (settings.json: sessionStart context, toolCall gate). Memory `
+    + "write-back rides the preamble's instructions; MCP servers go in mcp-config.json.\n");
   return cfgDir;
 }
 

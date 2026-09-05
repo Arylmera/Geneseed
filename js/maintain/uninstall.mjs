@@ -59,9 +59,10 @@ import {
 } from '../hosts/hosts.mjs';
 import { mcpCommented } from '../hosts/mcp.mjs';
 import {
-  managedBlockRead, managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
-  opencodeTarget, readJsonc, settingsIntegrityCheck, wireClaudeExcludes,
-  unwireClaudeExcludes, unwireClaudeSettings,
+  copilotIntegrityCheck, managedBlockRead, managedBlockRemove, managedBlockWrite,
+  mergeClaudeSettings, mergeCopilotSettings, opencodeTarget, readJsonc,
+  settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes, unwireClaudeSettings,
+  unwireCopilotSettings,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, jsonDumps, jsonDumpsIndent, deepEquals } from '../lib/json.mjs';
@@ -294,8 +295,12 @@ export function claudeUninstall(cfg, archiveMemory) {
   if (failed.length) warnSurvivors(failed);
   const hooks = managed.settings_hooks || [];
   const sf = settingsFile(cfg, managed);
-  const unwired = unwireClaudeSettings(sf, hooks);
+  // Two shapes, two unwires: a Copilot install records `copilot_hooks` (event → one hook)
+  // and never `settings_hooks`, so exactly one of these does anything.
+  const unwired = unwireClaudeSettings(sf, hooks)
+    | unwireCopilotSettings(sf, managed.copilot_hooks || []);
   unwireClaudeExcludes(sf, managed.settings_excludes || []);
+  copilotIntegrityCheck(sf, managed.copilot_hooks || [], 'absent');
   // The unwire is VERIFIED, not assumed: a commented settings file is never rewritten, so a
   // supposedly-uninstalled repo could keep firing Geneseed's hooks. Loud, never fatal.
   settingsIntegrityCheck(sf, managed, 'absent');
@@ -692,9 +697,10 @@ export function cmdUninstall(args) {
   const stores = ['memory', 'notebook'].filter((n) => isDir(path.join(data, n)));
   printOut(`[uninstall] target: ${root} (${host}:${scope})\n`);
   if (host === 'copilot') {
-    printOut('[uninstall] removes: agents/, skills/, markers, and the '
-      + `${hostSpec(host).agentFile} managed block (Copilot has no `
-      + 'settings.json/hooks to unwire; your own .github files are kept).\n');
+    printOut('[uninstall] removes: agents/, skills/, markers, the '
+      + `${hostSpec(host).agentFile} managed block, and Geneseed's `
+      + '~/.copilot/settings.json hooks on a global install (your own keys/hooks and '
+      + '.github files are kept).\n');
   } else if (host === 'claude' || host === 'bob') {
     printOut('[uninstall] removes: agents/, skills/, markers, the '
       + `${hostSpec(host).agentFile} managed block, and Geneseed's `
@@ -1052,6 +1058,24 @@ function cleanHostStash(cfg, host = 'claude') {
 function remergeClaudeHooks(cfg, root = cfg) {
   const data = claudeReadManifest(cfg);
   const managed = managedOf(data);
+  // A Copilot install: its own merge, its own claim key, and none of the pack/exclude axes
+  // below — the Copilot gate is not pack-conditional (see `copilotHooks`). Without this
+  // branch a Copilot reactivate would write CLAUDE-shaped hook groups into
+  // ~/.copilot/settings.json, which Copilot cannot read.
+  if (Array.isArray(managed.copilot_hooks)) {
+    const [, claims] = mergeCopilotSettings(settingsFile(cfg, managed), managed.copilot_hooks,
+      hookRunnerEntry());
+    if (!deepEquals(claims, managed.copilot_hooks) && Object.keys(data).length > 0) {
+      managed.copilot_hooks = claims;
+      data.managed = managed;
+      const tmp = path.join(cfg, `${GLOBAL_MANIFEST}.tmp`);
+      try {
+        writeText(tmp, `${jsonDumpsIndent(data)}\n`);
+        renameSync(tmp, path.join(cfg, GLOBAL_MANIFEST));
+      } catch { /* except OSError: pass */ }
+    }
+    return;
+  }
   // `hookOpts` is the one argument `mergeClaudeSettings` will not default, and it is right
   // not to: there is no computable fallback for the runner/entry the shim bakes. The
   // emitter's own originator is imported rather than restated — a reactivate that wired a
@@ -1107,10 +1131,12 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
     return { ok: false, failed, rolled_back: done.length };
   }
   unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || []);
+  unwireCopilotSettings(settingsFile(cfg, managed), managed.copilot_hooks || []);
   unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
   // The same integrity check the uninstall path runs: a deactivate that silently failed to
   // unwire would leave hooks firing in a repo the user believes is off.
   settingsIntegrityCheck(settingsFile(cfg, managed), managed, 'absent');
+  copilotIntegrityCheck(settingsFile(cfg, managed), managed.copilot_hooks || [], 'absent');
   const cm = claudeMdPath(cfg, managed);
   const block = managedBlockRead(cm);
   mkdirSync(stash, { recursive: true });   // presence == disabled, even if nothing moved

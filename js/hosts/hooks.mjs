@@ -1,9 +1,17 @@
 /**
- * The four HOOK verbs — `context`, `git-gate`, `rule-gate`, `learn` — in Node.
+ * The five HOOK verbs — `context`, `git-gate`, `rule-gate`, `tool-gate`, `learn` — in Node.
  *
  * These are the commands the emitted `settings.json` actually invokes on a user's machine,
- * every session: a SessionStart injector, two PreToolUse gates, and a Stop/SubagentStop
- * distiller. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
+ * every session: a SessionStart injector, two PreToolUse gates (and `tool-gate`, the two
+ * fused for a host that runs ONE command per event), and a Stop/SubagentStop distiller.
+ *
+ * ONE VERB, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
+ * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
+ * prompt. GitHub Copilot's `toolCall` hook has no ask tier — its stdout contract is
+ * `{"block": true|false}` — so on `--host copilot` the two Laws that admit no judgement call
+ * (I, IV) BLOCK and everything that was an ask (process 1, process 5, a gate error) is a
+ * warning on stderr, which Copilot logs. The same stance the OpenCode guard plugin takes
+ * where its `tool.execute.before` can only allow or throw. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
  * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
  * driver emits has no Python in its hook path at all — which is what let the interpreter
  * discovery and its exit-4 refusal be deleted rather than merely bypassed.
@@ -429,6 +437,7 @@ export function resolveContextSets(root) {
 }
 
 export function cmdContext(args) {
+  setHost(args);
   // Discovery runs against the project root the hook was launched from — Claude runs
   // SessionStart hooks with cwd = repo root — not the harness package dir.
   // The only two `resolvePath` calls in this file whose argument can be a `~user` path the
@@ -483,7 +492,11 @@ export function cmdContext(args) {
     lines.push('');
   }
 
-  out(`${lines.join('\n')}\n`);
+  // Claude Code takes a SessionStart hook's plain stdout as context. Copilot's `sessionStart`
+  // wants a JSON document and reads `additionalContext` out of it; plain text there would be
+  // parsed as nothing and silently dropped.
+  const text = `${lines.join('\n')}\n`;
+  out(HOST === 'copilot' ? `${jsonDumpsCompact({ additionalContext: text })}\n` : text);
   return 0;
 }
 
@@ -516,6 +529,30 @@ function askDecision(reason) {
     },
   })}\n`;
 }
+
+/**
+ * The host reading this process's verdict — `--host` on the emitted command, `claude` when
+ * absent. Module state rather than a parameter because a hook process answers exactly one
+ * call: set once at the verb's entry (`guardGate`, `cmdContext`), read where the output
+ * dialect is chosen.
+ */
+let HOST = 'claude';
+const setHost = (args) => { HOST = (args && args.host) || 'claude'; };
+
+/** Copilot's `toolCall` verdict: `{"block": true}` plus the reason it displays. */
+function blockDecision(reason) {
+  return `${jsonDumpsCompact({ block: true, reason })}\n`;
+}
+
+/**
+ * On a host with no ask tier, which rules are worth a hard block. Laws I and IV: a
+ * credential in a tracked file and a history-discarding git act are wrong in every context,
+ * so refusing them costs nothing. Process 1 and process 5 are the USER's calls — a hard
+ * block would make Copilot unable to commit at all — so they become a warning the host
+ * logs. `gate-error` is a warning too: a crashed gate that blocked every tool call would be
+ * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
+ */
+const BLOCK_RULES = new Set(['law-1', 'law-4']);
 
 /** Where the gate ledger lives inside an install: the notebook is the agent's own, gitignored space. */
 export const GATE_LEDGER = path.join('notebook', 'gates.jsonl');
@@ -552,8 +589,21 @@ function ledger(root, verb, rule) {
   } catch { /* see above: the ledger never decides */ }
 }
 
-/** Ask, and record that we asked. Every ask site goes through here so none can skip the ledger. */
+/**
+ * Ask, and record that we asked. Every ask site goes through here so none can skip the
+ * ledger. On `--host copilot` the ask becomes a block or a warning (see `BLOCK_RULES`); the
+ * ledger records the block, never the warning — a warning asked nothing of anyone.
+ */
 function ask(args, verb, rule, reason) {
+  if (HOST === 'copilot') {
+    if (!BLOCK_RULES.has(rule)) {
+      err(`[geneseed] ${reason}\n`);
+      return 0;
+    }
+    ledger(args && args.root, verb, rule);
+    out(blockDecision(reason));
+    return 0;
+  }
   ledger(args && args.root, verb, rule);
   out(askDecision(reason));
   return 0;
@@ -569,17 +619,25 @@ function ask(args, verb, rule, reason) {
  */
 export function guardGate(fn, verb = 'gate') {
   return (args) => {
+    setHost(args);
     try {
       return fn(args);
     } catch (e) {
       const why = e && e.message ? e.message : String(e);
       return ask(args, verb, 'gate-error', `Geneseed gate error — ${why}. The gate could `
-        + 'not evaluate this call, so it asks instead of deferring.');
+        + 'not evaluate this call, so it does not defer.');
     }
   };
 }
 
-/** The hook payload on stdin, or null for a well-formed absence. Not-JSON THROWS. */
+/**
+ * The hook payload on stdin, or null for a well-formed absence. Not-JSON THROWS.
+ *
+ * Copilot spells the same payload in camelCase — `toolName`/`toolInput` where Claude sends
+ * `tool_name`/`tool_input` — and fires `toolCall` both before AND after the tool runs
+ * (`phase`). The field names are folded to Claude's so every gate reads one shape; the
+ * `after` phase is a well-formed absence, since there is nothing left to gate.
+ */
 function readPayload() {
   const raw = readStdin();
   if (!raw.trim()) return null;
@@ -589,12 +647,20 @@ function readPayload() {
   } catch {
     throw new Error('the hook payload on stdin is not JSON');
   }
-  return payload && typeof payload === 'object' ? payload : null;
+  if (!payload || typeof payload !== 'object') return null;
+  if (payload.phase === 'after') return null;
+  if (payload.tool_input === undefined && payload.toolInput !== undefined) {
+    payload.tool_input = payload.toolInput;
+  }
+  return payload;
 }
 
 function gitGate(args) {
   if (sovereignBypass(args.root)) return 0;
-  const payload = readPayload();
+  return gitDecide(args, readPayload());
+}
+
+function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
   if (DESTRUCTIVE_GIT_RE.test(command)) {
@@ -648,7 +714,10 @@ const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
 
 function ruleGate(args) {
   if (sovereignBypass(args.root)) return 0;
-  const payload = readPayload();
+  return ruleDecide(args, readPayload());
+}
+
+function ruleDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   const p = ti.file_path || ti.path || '';
   if (typeof p !== 'string' || !p) return 0;
@@ -667,6 +736,26 @@ function ruleGate(args) {
     + 'rule skill first.');
 }
 export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
+
+// ======================================================================================
+// tool-gate — both gates behind one command
+// ======================================================================================
+
+/**
+ * Copilot's settings carry ONE command per hook event, not a list of matcher groups, so
+ * its `toolCall` hook cannot name `git-gate` for Bash and `rule-gate` for Write the way
+ * Claude's `PreToolUse` does. This verb is the two fused, dispatched on the payload rather
+ * than on a matcher: a `command` field is a shell call and gets the git checks, a path
+ * field is a write and gets the rule checks. Nothing here decides anything the two named
+ * gates do not — it only removes the need for a matcher the host does not have.
+ */
+function toolGate(args) {
+  if (sovereignBypass(args.root)) return 0;
+  const payload = readPayload();
+  const ti = (payload && payload.tool_input) || {};
+  return typeof ti.command === 'string' ? gitDecide(args, payload) : ruleDecide(args, payload);
+}
+export const cmdToolGate = guardGate(toolGate, 'tool-gate');
 
 // ======================================================================================
 // learn — distil notes/transcripts into deduped memory entries

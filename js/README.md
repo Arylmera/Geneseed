@@ -13,7 +13,7 @@ a module that does not exist, is a test failure. `geneseed doctor` reports the s
 
 ```
 bin/geneseed-cli.mjs     the `geneseed` CLI — 20+ verbs, may NOT spawn
-bin/geneseed-hook.mjs    the hook entry — 4 verbs, loads on EVERY tool call (~14 ms)
+bin/geneseed-hook.mjs    the hook entry — 5 verbs, loads on EVERY tool call (~14 ms)
 bin/build-driver.mjs     `geneseed-build` — the generator's flags and emit targets
 
 js/build/     src/ + themes/  →  rendered text  →  a bundle  →  a per-host install
@@ -66,7 +66,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | module | owns |
 |---|---|
 | `hosts.mjs` | The four host config dirs (opencode/claude/bob/copilot), plus `resolvePath`/`expanduser` |
-| `hooks.mjs` | The verbs the emitted hooks run every session: `context`, `git-gate`, `rule-gate`, `learn` |
+| `hooks.mjs` | The verbs the emitted hooks run every session: `context`, `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Copilot), `learn`. `--host` picks the verdict dialect |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json`; owns the hook shim and the managed blocks |
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |

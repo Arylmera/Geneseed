@@ -10,8 +10,8 @@ import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub } from '../hosts/opencode.mjs';
 import {
-  managedBlockRemove, managedBlockWrite, mergeClaudeSettings, unwireClaudeExcludes,
-  unwireClaudeSettings, wireClaudeExcludes,
+  managedBlockRemove, managedBlockWrite, mergeClaudeSettings, mergeCopilotSettings,
+  unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes,
 } from '../hosts/settings.mjs';
 import { writeText } from '../lib/fs.mjs';
 import { isTruthy } from '../lib/json.mjs';
@@ -225,9 +225,10 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   // settings.local.json — the personal, untracked file — never the team-shared
   // settings.json, which would hand every teammate failing hooks pointing at this machine's
   // node and this machine's checkout. (Bob documents no local variant, so it keeps
-  // settings.json.) Copilot has NO
-  // settings.json and no hook mechanism at all, so the whole stage is skipped: nothing
-  // written, no settings_* keys recorded for the lifecycle to unwire.
+  // settings.json.) Copilot's settings are a different shape entirely (one command per
+  // event, no matcher groups) and take the `else` branch below; its PROJECT scope wires
+  // nothing, because the CLI documents hooks in `~/.copilot/settings.json` only and a
+  // machine-absolute hook committed into `.github/` would fail on every teammate's machine.
   if (!isCopilot) {
     const settingsName = scope === 'project' && !isBob ? 'settings.local.json' : 'settings.json';
     const settingsPath = path.join(cfgDir, settingsName);
@@ -280,6 +281,14 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     } else if (priorExcl.length) {
       managed.settings_excludes = priorExcl;
     }
+  } else if (scope === 'global') {
+    // `copilot_hooks`, not `settings_hooks`: a distinct key so the Claude-shaped unwire and
+    // integrity code, which walks `settings_hooks` as event→group arrays, never sees a
+    // Copilot record it would misread.
+    const settingsPath = path.join(cfgDir, 'settings.json');
+    managed.settings_file = 'settings.json';
+    const [, claims] = mergeCopilotSettings(settingsPath, get(old, 'copilot_hooks'), hookOpts);
+    managed.copilot_hooks = claims;
   }
   return managed;
 }

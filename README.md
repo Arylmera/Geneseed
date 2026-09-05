@@ -228,22 +228,24 @@ is **identical on every host**. What differs is how much of it the host can
 | **Agents** (capability specialists) | ✅ native | ✅ | ✅ | ✅ `.agent.md` |
 | **Skills** (byte-identical) | ✅ | ✅ | ✅ | ✅ |
 | **Memory & Notebook** | ✅ | ✅ | ✅ | ✅ |
-| **Context injection** | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Context injection** | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook³ |
 | **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
-| **Git-gate consent** (process 5) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
-| **Rule-gate consent** (process 1) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Git-gate consent** (process 5) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook³ (warn) |
+| **Rule-gate consent** (process 1) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ | 🪝 hook³ (warn) |
+| **Laws I / IV at the boundary** | ⚙️ plugin (block) | 🪝 hook (ask) | 🪝 hook¹ | 🪝 hook³ (block) |
 | **Sovereign-repo excludes** | ⚙️ plugin | ✅ `claudeMdExcludes` | ✅ rules-shadow | ➖ none |
 | **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcpServers` | ✅ `mcp-config.json` |
 | **Colour themes** | ✅ full palette | ➖ | ➖ | ➖ |
 | **LSP · workflow runner · primary-agent · `/`-commands** | ✅ | ➖ | ➖ | ➖ |
 
-<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob honours Claude-dialect hooks best-effort — inert if unsupported, harness still holds via the preamble. · ² OpenCode's `tool.execute.before` can only allow or throw, with no "ask the user" tier, so the rule gate is a one-shot speed bump there rather than a prompt.</sub>
+<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob honours Claude-dialect hooks best-effort — inert if unsupported, harness still holds via the preamble. · ² OpenCode's `tool.execute.before` can only allow or throw, with no "ask the user" tier, so the rule gate is a one-shot speed bump there rather than a prompt. · ³ Copilot's `~/.copilot/settings.json` hooks (`sessionStart`, `toolCall`) wired by the **global** emit only; `toolCall` has no ask tier either, so Laws I/IV block and the two process rules warn on stderr. No learn: Copilot's end-of-session payloads carry no transcript.</sub>
 
 **Reading the matrix.** Everything above the divider is at full parity — no host
 drops an Agent, Skill, or the memory convention. The asymmetry is entirely in
-*automation mechanism*: OpenCode's plugin surface and Claude/Bob's hook surface
-enforce a few Rules for you, where **Copilot** (no hook mechanism) enforces them
-through preamble discipline instead. The OpenCode-only extras (themes, LSP,
+*automation mechanism*: OpenCode's plugin surface and the Claude/Bob/Copilot hook
+surfaces enforce a few Rules for you, each in the tier its host offers (a prompt on
+Claude Code, a hard block or a logged warning where the host has no prompt to
+give), and what no host can automate rides the preamble. The OpenCode-only extras (themes, LSP,
 workflow runner, primary-agent) have no analogue on a Claude-shaped host.
 
 Per-host wiring in depth: **[OpenCode](adapters/opencode/README.md)** ·

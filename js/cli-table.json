@@ -155,6 +155,21 @@
           "is_flag": false,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--host"
+          ],
+          "dest": "host",
+          "metavar": null,
+          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) asks; 'copilot' has no ask tier, so Laws I/IV block and everything else is a stderr warning",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -349,6 +364,21 @@
           "dest": "root",
           "metavar": null,
           "help": "the install's own dir (set by the emitted hook); enables the sovereign-repo bypass from <root>/excludes.json",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--host"
+          ],
+          "dest": "host",
+          "metavar": null,
+          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) asks; 'copilot' has no ask tier, so Laws I/IV block and everything else is a stderr warning",
           "choices": null,
           "default": null,
           "required": false,
@@ -604,6 +634,21 @@
           "is_flag": false,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--host"
+          ],
+          "dest": "host",
+          "metavar": null,
+          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) asks; 'copilot' has no ask tier, so Laws I/IV block and everything else is a stderr warning",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -763,6 +808,45 @@
           "--transparent-only"
         ]
       ]
+    },
+    {
+      "name": "tool-gate",
+      "help": "toolCall hook (Copilot): git-gate and rule-gate fused behind one command, dispatched on the payload",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--root"
+          ],
+          "dest": "root",
+          "metavar": null,
+          "help": "the install's own dir (set by the emitted hook); enables the sovereign-repo bypass from <root>/excludes.json",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--host"
+          ],
+          "dest": "host",
+          "metavar": null,
+          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) asks; 'copilot' has no ask tier, so Laws I/IV block and everything else is a stderr warning",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
     },
     {
       "name": "tui",

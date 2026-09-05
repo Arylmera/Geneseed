@@ -673,7 +673,7 @@ test('a genuine per-repo marker is still reported as a project', () => {
 // workaround, an `.agent.md` dialect with a tools ALLOWLIST instead of Claude's denylist, and NO
 // hook mechanism at all — so no settings file and no settings claims for the lifecycle to unwire.
 
-test('the Copilot global emit writes the Copilot layout and no hook surface', () => {
+test('the Copilot global emit writes the Copilot layout and its own hook surface', () => {
   withDir((d) => {
     const cfg = path.join(d, 'dotcopilot');
     globalEmit('copilot', path.join(d, 'bundle'), cfg);
@@ -694,14 +694,24 @@ test('the Copilot global emit writes the Copilot layout and no hook surface', ()
       'the Claude-dialect filename was written beside the Copilot one');
     assert.match(read(cfg, 'agents', 'explorer.agent.md'), /tools: \[read, search, todo, agent/);
 
-    // NO hooks, and the manifest must SAY so: an unwire that found a settings claim here would
-    // be looking for a file the host never had.
-    assert.ok(!fs.existsSync(path.join(cfg, 'settings.json')));
+    // COPILOT'S HOOKS, IN COPILOT'S SHAPE: `hooks` is event → ONE {command} object, not
+    // event → matcher groups. Two events — `sessionStart` runs `context`, `toolCall` runs
+    // `tool-gate` — both carrying `--host copilot` so the verdict is spoken in Copilot's
+    // dialect, and `|| exit 0` on the non-gate only. No `sessionEnd`/`agentStop` learn: those
+    // payloads carry no transcript, so there would be nothing to distil.
+    const settings = readJson(cfg, 'settings.json');
+    assert.deepEqual(Object.keys(settings.hooks).sort(), ['sessionStart', 'toolCall']);
+    assert.match(settings.hooks.sessionStart.command, / context --root ".*" --host copilot \|\| exit 0$/);
+    assert.match(settings.hooks.toolCall.command, / tool-gate --root ".*" --host copilot$/);
     assert.ok(!fs.existsSync(path.join(cfg, 'settings.local.json')));
+    // The manifest records the claim under its OWN key, so the Claude-shaped unwire never
+    // walks a Copilot record.
     const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
     assert.ok('claude_md' in managed);
-    assert.ok(!('settings_file' in managed), 'a settings claim was recorded for a host with none');
-    assert.ok(!('settings_hooks' in managed));
+    assert.equal(managed.settings_file, 'settings.json');
+    assert.ok(!('settings_hooks' in managed), 'a Claude-shaped hook claim on a Copilot install');
+    assert.deepEqual(managed.copilot_hooks.map((r) => r.event), ['sessionStart', 'toolCall']);
+    assert.deepEqual(managed.copilot_hooks.map((r) => r.hook), Object.values(settings.hooks));
     // …and it still reads as Claude-STYLE, which is what routes the uninstall to the manifest
     // reversal rather than to OpenCode's opencode.json unmerge.
     assert.equal(manifestIsClaude(cfg), true);
@@ -789,9 +799,51 @@ test('a Copilot re-emit is idempotent', () => {
     const cfg = path.join(d, 'dotcopilot2');
     globalEmit('copilot', path.join(d, 'b1'), cfg);
     const before = read(cfg, 'copilot-instructions.md');
+    const settingsBefore = read(cfg, 'settings.json');
     globalEmit('copilot', path.join(d, 'b2'), cfg);
     assert.equal(read(cfg, 'copilot-instructions.md'), before, 'the managed block stacked');
     assert.equal(before.split('<!-- BEGIN GENESEED -->').length - 1, 1);
+    assert.equal(read(cfg, 'settings.json'), settingsBefore, 'the settings file was rewritten');
+  });
+});
+
+test('a Copilot emit never displaces a hook the user wrote, and uninstall leaves it standing', () => {
+  // ONE SLOT PER EVENT. Claude's merge appends a group beside the user's; Copilot's shape has no
+  // beside, so the only honest move is to leave the user's hook and skip the event. The other
+  // event is still wired, the skipped one is NOT claimed, and uninstall removes exactly the claim.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotcopilot3');
+    fs.mkdirSync(cfg, { recursive: true });
+    const mine = { command: 'echo mine', shell: 'bash' };
+    fs.writeFileSync(path.join(cfg, 'settings.json'),
+      JSON.stringify({ model: 'x', hooks: { toolCall: mine, sessionEnd: mine } }));
+    globalEmit('copilot', path.join(d, 'b'), cfg);
+    const s = readJson(cfg, 'settings.json');
+    assert.equal(s.model, 'x', 'a foreign top-level key was lost');
+    assert.deepEqual(s.hooks.toolCall, mine, "the user's toolCall hook was displaced");
+    assert.deepEqual(s.hooks.sessionEnd, mine);
+    assert.match(s.hooks.sessionStart.command, /--host copilot/);
+    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.copilot_hooks.map((r) => r.event),
+      ['sessionStart'], 'the skipped event was claimed anyway');
+
+    captured(() => installUninstall(cfg, 'copilot', 'global', 'keep'));
+    const after = readJson(cfg, 'settings.json');
+    assert.deepEqual(after, { model: 'x', hooks: { toolCall: mine, sessionEnd: mine } },
+      `uninstall did not remove exactly Geneseed's hook: ${JSON.stringify(after)}`);
+  });
+});
+
+test('a Copilot PROJECT emit wires no hooks', () => {
+  // Copilot reads hooks from ~/.copilot/settings.json only, and a machine-absolute command
+  // committed into a shared .github/ would fail on every other machine that clones the repo.
+  withDir((d) => {
+    const root = path.join(d, 'repo');
+    fs.mkdirSync(root, { recursive: true });
+    projectEmit('copilot', path.join(d, 'b'), root);
+    assert.ok(!fs.existsSync(path.join(root, '.github', 'settings.json')));
+    const managed = readJson(root, '.github', GLOBAL_MANIFEST).managed;
+    assert.ok(!('copilot_hooks' in managed) && !('settings_file' in managed),
+      `a project emit recorded a hook claim: ${JSON.stringify(managed)}`);
   });
 });
 
