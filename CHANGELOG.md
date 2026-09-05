@@ -19,6 +19,54 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   evidence does not support. Authored rather than vendored because the upstream folders
   carry no license and lean on Python helpers, and every bundle ships with no interpreter
   but Node. Skill count 47 → 49.
+- **The gates fail closed.** `git-gate` and `rule-gate` signal on stdout and exit 0, so a
+  gate that threw and a gate that found nothing were the same observation to the host: a
+  silent allow. Any throw — a stdin that is not JSON, a path primitive refusing a form, a
+  bug — now becomes a `permissionDecision: "ask"` carrying the error. A well-formed absence
+  (empty stdin, `{}`, a null `tool_input`) still defers, so a hand-run gate never nags.
+- **Laws I and IV are gated at the boundary.** `reset --hard`, `clean -f`, `branch -D`,
+  `checkout --` and `push --force*` ask under Law IV; a Write or Edit carrying a
+  vendor-prefixed credential asks under Law I unless the target is `.env*`. Before this the
+  hooks enforced one doctrine rule and no law.
+- **The gate ledger.** Every ask appends one JSON line — `{ts, verb, rule, cwd}` — to
+  `<install>/notebook/gates.jsonl`, capped at the newest 1000. The rule, never the command:
+  a ledger storing what Law I caught would itself be a place a secret lands. `geneseed
+  status` gains a `gates` row counting asks by rule, and says so when `excludes.json` has
+  the gates standing down for this cwd — until now that bypass had no visible surface.
+- **User-only skills.** `<!-- invocation: user -->` under a skill's purpose renders
+  `disable-model-invocation: true` in its SKILL.md: `/name` still works, the model never
+  self-triggers it. Seven carry it (`crash-course`, `decode`, `drill`, `feynman`,
+  `learning-path`, `herdr`, `opencode-theme`). OpenCode and Copilot ignore the key.
+- **SessionStart re-seeds after compaction.** Auto-compaction keeps the instruction file
+  but summarises away the injected `context.json`, `MEMORY.md` index and `NOTEBOOK.md`.
+  The warm matcher is now `resume|compact`, same `context` command, AGENT.md not re-printed.
+- **Authored LEAN blocks** (`<!-- LEAN:begin/else/end -->`) for every law, the Ontology,
+  the preamble, §6 Notebook and §8 Wiki, replacing first-sentence truncation. Lean root
+  file 29,966 → 25,614 bytes, about 1.1k tokens per session on every install. Fixes a
+  latent bug where `ontology/universal.md` on disk carried the condensed text; `laws/` and
+  `ontology/` now always render at full on disk.
+- **Web:** daemon static cache keyed on mtime (a rebuild no longer needs `web restart`),
+  drawer focus management, skeleton loading states, a shared filter input on Laws / Skills /
+  Library, pollers paused while the tab is hidden, gzip computed once per asset, heavy
+  dashboard subviews lazy-loaded (eager chunk 80 KB → 59 KB).
+
+### Changed
+
+- **Laws IX and XI retired in place.** XI folds back into III and IX becomes rigor 5; the
+  headings stay with a one-line retirement body so the ~166 `{{LAW}}` cross-references
+  still resolve. Doctrine count 23 → 24. Law count stays at 11 numerals.
+- **One precedence table** at the top of AGENT.md; five restatements deleted. A new README
+  section, "What the harness asks of you", carries what the user owes the harness.
+- Doctrine pack files are read once per process (mtime-keyed cache); the hook imports its
+  help text lazily, about 3 ms off every tool call.
+
+### Removed
+
+- **The web Graph page**, the Lineage lens's MiniGraph card, `/api/graph` and
+  `js/web/graph.mjs` (~1,100 lines). The Journal lens's ConstitutionMap stays. Old
+  `#/graph` links land on the dashboard. The `web/src/api/` domain files merged into one
+  `api/index.js`; the Python-port bookkeeping (`NOT_PORTED*` sets, unreachable 501 guards)
+  retired with observable behaviour identical.
 
 ## [3.2.0] — 2026-08-27
 

@@ -32,7 +32,7 @@
  * of the implementation it was once compared against.
  */
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSync,
-  appendFileSync }
+  appendFileSync, writeFileSync }
   from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -532,13 +532,23 @@ export const GATE_LEDGER = path.join('notebook', 'gates.jsonl');
  * would be a claim the hook cannot make. Written only on the ask path, which is the rare
  * one; the defer path — every other tool call — pays nothing. A ledger that cannot be
  * written must never change the decision, hence the swallow.
+ *
+ * Capped at the newest MAX_LEDGER_LINES, like the agent lessons and the notes beside it: an
+ * install lives for months and `status` only ever counts, so the oldest asks carry no
+ * information a trimmed file loses. The re-read happens on the ask path only.
  */
+const MAX_LEDGER_LINES = 1000;
 function ledger(root, verb, rule) {
   if (!root) return;
   try {
-    appendFileSync(path.join(root, GATE_LEDGER), `${JSON.stringify({
+    const file = path.join(root, GATE_LEDGER);
+    appendFileSync(file, `${JSON.stringify({
       ts: new Date().toISOString(), verb, rule, cwd: process.cwd(),
     })}\n`);
+    const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean);
+    if (lines.length > MAX_LEDGER_LINES) {
+      writeFileSync(file, `${lines.slice(-MAX_LEDGER_LINES).join('\n')}\n`);
+    }
   } catch { /* see above: the ledger never decides */ }
 }
 
