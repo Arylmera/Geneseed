@@ -48,15 +48,22 @@ after(restoreProcessHome);
 /** The subcommands whose whole purpose is to stand between the agent and an act needing the
  * user's word. A NAMED LIST, not a wildcard, so a new hook cannot join the exemption by
  * accident — and `every named gate is actually emitted` is what stops it protecting nothing. */
-const GATES = ['git-gate', 'rule-gate'];
+const GATES = ['git-gate', 'rule-gate', 'tool-gate'];
 
 const HOOK_OPTS = () => hookRunnerEntry();
 
-/** Every (event, command) pair a Claude emit would wire, for a config dir under `dir`. */
+/**
+ * Every (event, command) pair a Claude OR a Bob emit would wire, for a config dir under
+ * `dir`. Both dialects, because the fail-open/fail-closed partition below is about the
+ * COMMAND's tail and Bob's Gemini-named groups carry the same commands under other events.
+ */
 function allCommands(dir) {
   const out = [];
-  for (const [event, groups] of Object.entries(claudeHookGroups(dir, HOOK_OPTS()))) {
-    for (const g of groups) for (const h of g.hooks ?? []) out.push([event, h.command ?? '']);
+  for (const host of ['claude', 'bob']) {
+    const groups = claudeHookGroups(dir, HOOK_OPTS(), null, [], host);
+    for (const [event, gs] of Object.entries(groups)) {
+      for (const g of gs) for (const h of g.hooks ?? []) out.push([`${host}:${event}`, h.command ?? '']);
+    }
   }
   return out;
 }

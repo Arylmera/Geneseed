@@ -21,6 +21,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   set on an event is left alone and the event is not claimed; uninstall removes exactly the
   claimed hooks. The per-repo emit wires nothing. Hook verbs 4 → 5; `--host` on the
   gates and on `context`.
+- **Bob's hooks speak Bob.** Bob documents five hook events with Claude's names but its own
+  protocol: the global file is the nested `~/.bob/settings/settings.json`, and on `PreToolUse`
+  stdout is ignored — a refusal is exit code 2. The Bob emit wrote Claude's whole set to the
+  flat file with stdout verdicts, so its gates were permissive on every call and
+  `SubagentStop`/`PreCompact` named events Bob does not have (the 2026-09-04 review). The
+  emit now writes three groups to the nested file — `SessionStart` context (plain stdout),
+  one matcher-less `PreToolUse` `tool-gate`, `Stop` learn — and `--host bob` makes Laws I/IV
+  exit 2 with the reason on stderr while the consent rules warn and allow. A re-emit unwires
+  the old flat file and migrates; `geneseed mcp` targets the nested file. Unverified live.
 - **Candidate hosts costed.** `docs/candidate-hosts.md` records what
   Codex CLI, Cursor and Gemini CLI offer for the three surfaces Geneseed emits, from their
   own docs: all three read `AGENTS.md` (Gemini via `context.fileName`) and load skills from

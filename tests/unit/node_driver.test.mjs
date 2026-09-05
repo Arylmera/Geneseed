@@ -541,13 +541,19 @@ test('a hook-writing emit needs no python at all', (t) => {
         `--emit ${emit} with no python on PATH must succeed, got ${r.status}. `
         + `stderr: ${(r.stderr || r.stdout).trim().slice(0, 300)}`);
 
-      const command = emittedHookCommand(sb.path, ' git-gate ');
+      // Bob wires the two gates as ONE `tool-gate` group; Claude wires `git-gate` by matcher.
+      const bob = emit.startsWith('bob');
+      const command = emittedHookCommand(sb.path, bob ? ' tool-gate ' : ' git-gate ');
       const proc = runHook(command, sb.path, env, JSON.stringify(
         { tool_name: 'Bash', tool_input: { command: 'git commit -m x' } }));
       assert.equal(proc.status, 0,
         `the hook ${emit} emitted failed to run with no python on PATH:\n  ${command}\n`
         + `  stderr: ${(proc.stderr ?? '').trim().slice(0, 300)}`);
-      assert.match(proc.stdout ?? '', /"permissionDecision"/,
+      // The verdict is spoken in the host's dialect: Claude's `permissionDecision: "ask"` on
+      // stdout; Bob's consent nudge is a stderr line (its PreToolUse never reads stdout).
+      // Either is a hook that RAN.
+      assert.match(bob ? (proc.stderr ?? '') : (proc.stdout ?? ''),
+        bob ? /process 5/ : /"permissionDecision"/,
         `the hook ${emit} emitted ran with no python on PATH but produced no verdict — it is `
         + `disabled, and nothing else reports that:\n  ${command}\n`
         + `  stdout: ${(proc.stdout ?? '').slice(0, 300)}`);

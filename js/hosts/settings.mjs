@@ -667,11 +667,34 @@ export function hookPrefix({ runner, entry, platform = process.platform } = {}) 
  * belongs in — the user's call — not how work is run, so it is not the process pack's to
  * remove. `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
  */
-export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = []) {
+export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude') {
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a project
   // install of the same host sits at/above cwd (project-bypasses-global).
+  if (host === 'bob') {
+    // BOB'S OWN HOOK CONTRACT, per its hooks doc and 2.0.2 changelog (docs/reviews/
+    // bob-global-injection-2026-09.md): FIVE events — SessionStart, UserPromptSubmit,
+    // PreToolUse, PostToolUse, Stop — Claude's names, but NOT Claude's protocol. stdout is
+    // read as context on SessionStart only; on PreToolUse it is ignored and the one way to
+    // refuse a call is EXIT CODE 2. The groups this emit wrote before were Claude's whole
+    // set: `SubagentStop`/`PreCompact` are not Bob events, and the gates answered with a
+    // stdout JSON Bob never reads — permissive on every call. `--host bob` makes the gates
+    // speak exit codes (js/hosts/hooks.mjs). No matcher on PreToolUse: Bob's tool names
+    // are undocumented (its IDE and Shell differ), so `tool-gate` reads the payload's shape
+    // instead. Which tool payload fields Bob sends is equally undocumented; the gates read
+    // Claude's (`command`, `file_path`/`path`, `content`/`new_string`) and defer on anything
+    // else. Unverified live: no Bob install on the authoring machine.
+    const b = ' --host bob';
+    return {
+      SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
+      // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
+      // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
+      // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries.
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
+      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem} || exit 0` }] }],
+    };
+  }
   const context = `${run} context --root "${cfg}" || exit 0`;
   const gate = `${run} git-gate --root "${cfg}"`;
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
@@ -855,7 +878,7 @@ export function copilotIntegrityCheck(p, recorded, expect = 'present') {
  * `scope` is accepted and unused, exactly as in the Python.
  */
 export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hookOpts = {},
-  doctrines = null, excluded = []) {
+  doctrines = null, excluded = [], host = 'claude') {
   const prior = (priorHooks || []).filter(isDict);
   let config = {};
   let hadComments = false;
@@ -875,7 +898,7 @@ export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hoo
   }
   let hooks = get(config, 'hooks');
   if (!isDict(hooks)) hooks = {};
-  const canonical = claudeHookGroups(path.dirname(p), hookOpts, doctrines, excluded);
+  const canonical = claudeHookGroups(path.dirname(p), hookOpts, doctrines, excluded, host);
   const canonFlat = [];
   for (const [event, groups] of Object.entries(canonical)) {
     for (const g of groups) canonFlat.push({ event, group: g });
@@ -916,7 +939,7 @@ export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hoo
     return [p, prior];
   }
   // The `else` is DEAD on both sides and reproduced rather than dropped: `canonical` always
-  // carries five events, so by the time control reaches here `hooks` is never empty. A
+  // carries at least three events, so by the time control reaches here `hooks` is never empty. A
   // mutation keeping the empty block instead of deleting it is the one of thirty-three that
   // stays green, and it stays green because there is nothing to detect — recorded the way
   // `themed_rel` is, so "the gate cannot see it" and "there is nothing to see" keep their

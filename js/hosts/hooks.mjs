@@ -12,7 +12,10 @@
  * `{"block": true|false}` — so on `--host copilot` the two Laws that admit no judgement call
  * (I, IV) BLOCK and everything that was an ask (process 1, process 5, a gate error) is a
  * warning on stderr, which Copilot logs. The same stance the OpenCode guard plugin takes
- * where its `tool.execute.before` can only allow or throw. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
+ * where its `tool.execute.before` can only allow or throw. `--host bob` is Bob's own
+ * protocol: PreToolUse ignores stdout and refuses only on EXIT CODE 2, so the two Laws
+ * exit 2 with the reason on stderr and the rest is a stderr line with exit 0; SessionStart
+ * context is plain stdout, as on Claude. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
  * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
  * driver emits has no Python in its hook path at all — which is what let the interpreter
  * discovery and its exit-4 refusal be deleted rather than merely bypassed.
@@ -496,6 +499,7 @@ export function cmdContext(args) {
   // Claude Code takes a SessionStart hook's plain stdout as context. Copilot's `sessionStart`
   // wants a JSON document and reads `additionalContext` out of it; plain text there would be
   // parsed as nothing and silently dropped.
+  // Bob reads a SessionStart hook's stdout as context exactly as Claude does.
   const text = `${lines.join('\n')}\n`;
   out(HOST === 'copilot' ? `${jsonDumpsCompact({ additionalContext: text })}\n` : text);
   return 0;
@@ -544,6 +548,13 @@ const setHost = (args) => { HOST = (args && args.host) || 'claude'; };
 function blockDecision(reason) {
   return `${jsonDumpsCompact({ block: true, reason })}\n`;
 }
+
+/**
+ * Bob's PreToolUse protocol: stdout is ignored and EXIT CODE 2 is the one refusal. The
+ * single exception to "every gate exits 0" in this file, confined to `--host bob` — on
+ * Claude Code a non-zero exit is a broken hook, on Bob it is the verdict.
+ */
+const BOB_DENY_EXIT = 2;
 
 /**
  * On a host with no ask tier, which rules are worth a hard block. Laws I and IV: a
@@ -596,12 +607,18 @@ function ledger(root, verb, rule) {
  * ledger records the block, never the warning — a warning asked nothing of anyone.
  */
 function ask(args, verb, rule, reason) {
-  if (HOST === 'copilot') {
+  if (HOST === 'copilot' || HOST === 'bob') {
     if (!BLOCK_RULES.has(rule)) {
+      // Neither host has an ask tier; a stderr line is the nudge, and the call goes through.
       err(`[geneseed] ${reason}\n`);
       return 0;
     }
     ledger(args && args.root, verb, rule);
+    if (HOST === 'bob') {
+      // stdout is not read on Bob's PreToolUse; the reason goes where Bob's hook log looks.
+      err(`[geneseed] BLOCKED: ${reason}\n`);
+      return BOB_DENY_EXIT;
+    }
     out(blockDecision(reason));
     return 0;
   }

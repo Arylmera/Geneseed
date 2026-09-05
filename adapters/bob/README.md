@@ -62,16 +62,46 @@ never gets one; the `rules/geneseed.md` shadow above covers the same
 project-bypasses-global need. An older Bob install that wrote a stale exclude is
 **self-healed** (the entry is removed) on the next emit.
 
-## Hooks — best-effort
+## Hooks — Bob's own protocol
 
-The `settings.json` hooks use the **Claude dialect** (a `PreToolUse:Bash`
-git-gate for Doctrine process 5 consent — present only when the `process` pack is
-built in — `SessionStart` context injection, and `Stop`/`SubagentStop` learn/memory
-capture, the same `geneseed-hook` subcommands the OpenCode plugins drive). Bob's hook execution is **unverified**:
-if Bob honours Claude-shaped hooks they fire; if not, they are inert and the
-harness still works fully through the `AGENTS.md`/`rules` preamble prose. This is
-the same behaviour-contract parity every non-OpenCode host gets — the mechanism
-differs, the discipline does not.
+Bob documents lifecycle hooks (its hooks page and the 2.0.2 changelog; see
+`docs/reviews/bob-global-injection-2026-09.md` for the reading): **five events** —
+`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop` — with Claude's
+names but **not Claude's protocol**, and the global file at the **nested**
+`~/.bob/settings/settings.json`. Two differences decide the emit:
+
+- **stdout is read as context on `SessionStart` only.** On `PreToolUse` it is ignored
+  and the one way to refuse a call is **exit code 2**. Claude's `permissionDecision:
+  "ask"` on stdout is therefore invisible to Bob — the groups earlier versions wrote were
+  permissive on every call.
+- **`SubagentStop` and `PreCompact` are not Bob events**, so they are not written.
+
+What the global emit writes into `~/.bob/settings/settings.json`:
+
+| event | verb | how the verdict travels |
+| --- | --- | --- |
+| `SessionStart` | `context --host bob` | plain stdout, as on Claude |
+| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV: **exit 2**, reason on stderr; process 1/5: a stderr line, exit 0 |
+| `Stop` | `learn` | never a verdict |
+
+No matcher on `PreToolUse` because Bob's tool names are undocumented (its IDE and its
+Shell differ); `tool-gate` reads the payload's shape instead — a `command` field gets
+the git checks, a path gets the rule checks — and defers on anything it does not
+recognise. Bob has **no "ask the user" tier**, so the two Laws that admit no judgement
+call are refused outright and the two consent rules become a warning. Because that
+warning is all process 5 can be here, the `process` pack toggle changes nothing in
+Bob's hooks: the one group only ever exits 2 for Laws I and IV, which every build carries.
+
+**Migration.** A re-emit over an older install unwires Geneseed's groups from the flat
+`~/.bob/settings.json` (your own keys there are kept) and writes the new set to the
+nested file. `geneseed mcp` targets the nested file too.
+
+**Unverified live.** There is no Bob install on the authoring machine; this is Bob's
+documented contract, with the payload field names assumed to be Claude's. If a field
+name differs the gate defers rather than misfires, and the harness still holds through
+the `rules/geneseed.md` preamble — the same behaviour-contract parity every
+non-OpenCode host gets. `/hooks` in Bob Shell 2.0.2+ lists the hooks it loaded and
+from which file; if Geneseed's are absent there, the path is wrong.
 
 ### ⚠️ Shared-repo caveat
 

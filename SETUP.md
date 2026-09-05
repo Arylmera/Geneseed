@@ -384,7 +384,7 @@ configuration you chose rather than a defect.
 
 ⚠ **Turning `process` off also removes the commit/push consent gate.** Doctrine `process 5`
 (*Consent Before Push*) is enforced twice: as prose in `AGENT.md`, and at the tool boundary —
-the `git-gate` PreToolUse hook on Claude Code and Bob, and the `git commit*` / `git push*`
+the `PreToolUse` gate hook on Claude Code and Bob, and the `git commit*` / `git push*`
 permission entries on OpenCode. A build without the `process` pack wires neither, and
 rebuilding an install that had them takes the Claude hook back out of `settings.json`. That is
 deliberate and it is the rule the tiering rests on: **prompt and boundary must never

@@ -244,8 +244,10 @@ export function mcpConfigFor(host, scope, root) {
       : resolvePath(path.join(os.homedir(), '.claude.json'));
   }
   if (host === 'bob') {
+    // Nested at global scope, as Bob's hooks doc places the global file (and as the emit
+    // now writes it); the project file is flat.
     return scope === 'project' ? path.join(root, '.bob', 'settings.json')
-      : path.join(bobConfigDir(), 'settings.json');
+      : path.join(bobConfigDir(), 'settings', 'settings.json');
   }
   if (host === 'copilot') {
     // The Copilot CLI reads MCP servers from ~/.copilot/mcp-config.json only — no per-repo
