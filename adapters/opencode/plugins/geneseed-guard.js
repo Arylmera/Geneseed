@@ -60,6 +60,36 @@ const WARN_ONLY = MODE === "warn"
 
 function log(msg) { console.error(`[geneseed-guard] ${msg}`) }
 
+// ---- the gate ledger ------------------------------------------------------------
+// The twin of `ledger()` in js/hosts/hooks.mjs: one JSON line per BLOCK into
+// `<cfg>/notebook/gates.jsonl`, the rule and never the content, so `geneseed status` can
+// count what the boundary actually caught on an OpenCode install too. Until this the
+// recommended install was the one with no gate evidence at all. A warning is not recorded
+// (nothing was refused) and neither is `GENESEED_GUARD=warn`. `notebook/` is never created
+// here — an install without one (or a test importing this file) records nothing. Capped
+// at the newest MAX_LEDGER_LINES like the hook's; never throws, never decides.
+const MAX_LEDGER_LINES = 1000
+async function ledger(rule) {
+  try {
+    const bases = []
+    if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
+    bases.push(path.dirname(PLUGIN_DIR))
+    for (const base of bases) {
+      const dir = path.join(base, "notebook")
+      if (!(await isDir(dir))) continue
+      const file = path.join(dir, "gates.jsonl")
+      await fs.appendFile(file, `${JSON.stringify({
+        ts: new Date().toISOString(), verb: "guard", rule, cwd: process.cwd(),
+      })}\n`)
+      const lines = (await fs.readFile(file, "utf8")).split("\n").filter(Boolean)
+      if (lines.length > MAX_LEDGER_LINES) {
+        await fs.writeFile(file, `${lines.slice(-MAX_LEDGER_LINES).join("\n")}\n`)
+      }
+      return
+    }
+  } catch { /* the ledger never decides */ }
+}
+
 // Files the agent must not write (secrets / private keys) → BLOCK.
 const SECRET_RE = [
   /(^|\/)id_(rsa|ed25519|ecdsa|dsa)(\.pub)?$/i,
@@ -119,6 +149,7 @@ const hasAny = (name, parts) => parts.some((s) => name.includes(s))
 // per wiki. Mutating anything under one is denied. Same resolution chain as the
 // context plugin: $GENESEED_WIKI -> $GENESEED_HARNESS/wiki.jsonc -> beside the install.
 async function isFile(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
+async function isDir(p) { try { return (await fs.stat(p)).isDirectory() } catch { return false } }
 
 // wiki.jsonc is JSONC (the seeded stub carries a commented example): strip // and
 // /* */ comments plus trailing commas before parsing — string-aware, so quoted
@@ -243,22 +274,25 @@ export const GeneseedGuard = async () => {
       if (await sovereignBypass(process.cwd())) return
       const tool = (input?.tool || input?.name || "").toLowerCase()
       const args = output?.args || input?.args || {}
-      const deny = (why) => {
+      // `rule` is the ledger key, spelled as js/hosts/hooks.mjs spells it (`law-1`,
+      // `law-4`, `process-1`) plus `wiki`, so status counts one vocabulary across hosts.
+      const deny = async (why, rule) => {
         if (WARN_ONLY) { log(`WARN (would block): ${why}`); return false }
         log(`BLOCKED: ${why}`)
+        await ledger(rule)
         throw new Error(`[geneseed-guard] blocked: ${why} — set GENESEED_GUARD=off to allow`)
       }
       try {
         if (hasAny(tool, WRITE_TOOLS)) {
           const p = pickPath(args)
-          if (p && SECRET_RE.some((re) => re.test(p))) { deny(`write to secret/key file ${p} (Law I)`); return }
+          if (p && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Law I)`, "law-1"); return }
           if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Law I)`)
           const store = p && ruleStoreTarget(p)
           if (store && !RULE_STORE_BUMPED.has(p)) {
             RULE_STORE_BUMPED.add(p)
-            deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
+            await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
                  `choice is the user's (Doctrine process 1). Settle it through the rule skill, ` +
-                 `then re-issue this write`)
+                 `then re-issue this write`, "process-1")
             return
           }
         }
@@ -268,14 +302,14 @@ export const GeneseedGuard = async () => {
             const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/").toLowerCase()
             const hit = (await protectedPrefixes()).find(
               (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
-            if (hit) { deny(`mutation in protected wiki folder — ${hit.label} (AGENT.md §8)`); return }
+            if (hit) { await deny(`mutation in protected wiki folder — ${hit.label} (AGENT.md §8)`, "wiki"); return }
           }
         }
         // NOT else-if: a compound tool name (e.g. exec_and_save) can match both
         // classes, and the shell check must still run after the write check.
         if (hasAny(tool, SHELL_TOOLS)) {
           const c = pickCommand(args)
-          if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { deny(`catastrophic command (Law IV): ${c.slice(0, 80)}`); return }
+          if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { await deny(`catastrophic command (Law IV): ${c.slice(0, 80)}`, "law-4"); return }
           if (c && SHELL_WARN_RE.some((re) => re.test(c))) log(`WARN: irreversible op — confirm intent (Law IV): ${c.slice(0, 80)}`)
         }
       } catch (err) {

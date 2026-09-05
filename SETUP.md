@@ -180,7 +180,8 @@ It wires:
 - Every gate **ask** appends one line to `notebook/gates.jsonl` in the install (rule and
   timestamp, never the command); `geneseed status` counts them by rule and says when an
   `excludes.json` entry has the gates standing down for the current directory. A defer
-  writes nothing.
+  writes nothing. The OpenCode guard plugin writes the same file on every **block**, so
+  the count spans every host.
 - **Stop** — runs `harness learn` to capture durable memory. Opt in by setting
   `GENESEED_LLM` (e.g. `claude -p`); unset, it's a harmless no-op. Geneseed never
   embeds an API key.

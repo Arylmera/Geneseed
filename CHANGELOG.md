@@ -21,6 +21,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   set on an event is left alone and the event is not claimed; uninstall removes exactly the
   claimed hooks. The per-repo emit wires nothing. Hook verbs 4 → 5; `--host` on the
   gates and on `context`.
+- **The OpenCode guard writes the gate ledger.** Every block by `geneseed-guard.js` now
+  appends one line to the install's `notebook/gates.jsonl` — rule (`law-1`, `law-4`,
+  `process-1`, `wiki`) and timestamp, never the path or command — the same file and
+  vocabulary the Claude-family hooks write, so `geneseed status` counts the boundary's
+  catches on the recommended install too, which until now had no gate evidence at all.
+  Warnings and `GENESEED_GUARD=warn` are not recorded; an install with no `notebook/`
+  records nothing and creates nothing.
 - **Claude Code: `learn` on PreCompact.** `learn` distils the tail of the transcript, so
   the per-turn Stop hook is a sliding window over the session — and auto-compaction is the
   one moment that window is summarised away for good. A `PreCompact` group now runs the same
