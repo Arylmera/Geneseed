@@ -21,6 +21,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   set on an event is left alone and the event is not claimed; uninstall removes exactly the
   claimed hooks. The per-repo emit wires nothing. Hook verbs 4 → 5; `--host` on the
   gates and on `context`.
+- **Candidate hosts costed.** `docs/candidate-hosts.md` records what
+  Codex CLI, Cursor and Gemini CLI offer for the three surfaces Geneseed emits, from their
+  own docs: all three read `AGENTS.md` (Gemini via `context.fileName`) and load skills from
+  the shared `.agents/skills/` convention; Codex's hooks are Claude-shaped with an ask tier,
+  Gemini's are the Bob Shell shape, Cursor's a third verdict spelling. SETUP path D points
+  each tool at what it can already use.
 - **The OpenCode guard writes the gate ledger.** Every block by `geneseed-guard.js` now
   appends one line to the install's `notebook/gates.jsonl` — rule (`law-1`, `law-4`,
   `process-1`, `wiki`) and timestamp, never the path or command — the same file and

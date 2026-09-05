@@ -269,6 +269,21 @@ auto-loads a specific name, rename or symlink (`AGENT.md` → `AGENTS.md` / `CLA
 The rules work on agent self-discipline alone; the plugins (context, memory) are an
 OpenCode convenience.
 
+Three tools on this path read more than the instructions file, by their own docs:
+
+- **Codex CLI** auto-loads a repo-root `AGENTS.md` and `~/.codex/AGENTS.md`, and
+  discovers skills in `~/.codex/skills` or `.agents/skills`.
+- **Cursor** auto-loads `AGENTS.md` (root and nested) and skills from `.cursor/skills`,
+  `.agents/skills` — and, for compatibility, `.claude/skills`, so a Claude project
+  install already gives Cursor the skill catalogue.
+- **Gemini CLI** reads `GEMINI.md` by default; set `context.fileName` in its
+  `settings.json` to include `AGENTS.md`. Skills load from `.gemini/skills` or
+  `.agents/skills`.
+
+Copy or symlink the bundle's `skills/` to `.agents/skills/` and all three see it. None
+of these is a wired host yet — what each would take is costed in
+[`docs/candidate-hosts.md`](docs/candidate-hosts.md).
+
 ### Path E — No runtime on the target at all
 
 A maintainer runs it once, on a machine that can run Node:
