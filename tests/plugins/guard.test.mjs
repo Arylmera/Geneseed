@@ -110,3 +110,51 @@ test("does NOT block a write outside any wiki", async () => {
 test("a non-mutating tool ignores protected paths", async () => {
   assert.equal(await blocked("read", { filePath: path.join(vault, "Codex", "law.md") }), false)
 })
+
+// ---- the gate ledger ------------------------------------------------------------------
+// One JSON line per BLOCK into `<harness>/notebook/gates.jsonl`, the rule and never the
+// content — the same file and vocabulary the Claude-family hook writes, so `geneseed status`
+// counts one thing across hosts. An allowed call writes nothing; without a notebook/ dir
+// nothing is written and nothing is created (this test file imports the plugin from the
+// checkout, whose parent has no notebook/ — that silence is what keeps the repo clean).
+
+test("a block is ledgered under the rule it tripped; an allow writes nothing", async () => {
+  const harness = path.join(tmp, "harness")
+  await fs.mkdir(path.join(harness, "notebook"), { recursive: true })
+  const saved = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = harness
+  try {
+    const ledger = path.join(harness, "notebook", "gates.jsonl")
+    assert.equal(await blocked("write", { filePath: "src/ok.js" }), false)
+    assert.equal(await isFileAt(ledger), false, "an allow must not touch the ledger")
+    assert.equal(await blocked("write", { filePath: "/home/me/.ssh/id_rsa" }), true)
+    assert.equal(await blocked("bash", { command: "rm -rf /" }), true)
+    assert.equal(await blocked("write", { filePath: path.join(vault, "Codex", "x.md") }), true)
+    const lines = (await fs.readFile(ledger, "utf8")).trim().split("\n").map((l) => JSON.parse(l))
+    assert.deepEqual(lines.map((l) => [l.verb, l.rule]),
+      [["guard", "law-1"], ["guard", "law-4"], ["guard", "wiki"]])
+    for (const l of lines) {
+      assert.match(l.ts, /^\d{4}-\d{2}-\d{2}T/)
+      assert.ok(!("command" in l) && !("path" in l), JSON.stringify(l))
+    }
+  } finally {
+    if (saved === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = saved
+  }
+})
+
+test("no notebook/ dir means no ledger and no mkdir", async () => {
+  const harness = path.join(tmp, "bare")
+  await fs.mkdir(harness, { recursive: true })
+  const saved = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = harness
+  try {
+    assert.equal(await blocked("bash", { command: "rm -rf /" }), true)
+    assert.equal(await isFileAt(path.join(harness, "notebook", "gates.jsonl")), false)
+  } finally {
+    if (saved === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = saved
+  }
+})
+
+async function isFileAt(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }

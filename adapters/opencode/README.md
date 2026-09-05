@@ -383,7 +383,11 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   files (Law I), catastrophic shell like `rm -rf /` (Law IV), and any mutation under
   a declared wiki's `protected` folders (AGENT.md §8, from `wiki.jsonc`); **warns** on
   `.env` writes and force-push. `GENESEED_GUARD=off` disables it, `=warn` downgrades
-  blocks to warnings.
+  blocks to warnings. Every **block** appends one line to the install's
+  `notebook/gates.jsonl` (rule `law-1` / `law-4` / `process-1` / `wiki`, a timestamp,
+  never the path or command) — the same ledger the Claude-family hooks write, so
+  `geneseed status` counts what the boundary caught on every host. Warnings are not
+  recorded.
 - **Invisible context injection** (the default). The context plugin delivers via
   `experimental.chat.messages.transform`, so the PROJECT CONTEXT block never appears in
   the conversation and survives compaction inherently; on a build without the hook it
