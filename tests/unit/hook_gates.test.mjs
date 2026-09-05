@@ -354,6 +354,38 @@ test('copilot: a block is ledgered, a warning is not', () => {
   });
 });
 
+// THE BOB DIALECT. Bob's PreToolUse ignores stdout and refuses only on EXIT CODE 2 — the one
+// place in this file where a gate exits non-zero on purpose. Laws I and IV exit 2 with the
+// reason on stderr; the consent rules are a stderr line with exit 0 (no ask tier); stdout stays
+// EMPTY on every path, because Bob would not read it. Same payload field names as Claude.
+
+test('bob: Laws I and IV exit 2 with the reason on stderr; consent rules warn and exit 0', () => {
+  for (const [verb, stdin, what] of [
+    ['tool-gate', bashPayload('git reset --hard'), 'Law IV'],
+    ['tool-gate', contentPayload('src/a.js', 'AKIAIOSFODNN7EXAMPLE'), 'Law I'],
+    ['git-gate', bashPayload('git push --force'), 'Law IV']]) {
+    const r = hookRun(verb, { stdin, host: 'bob' });
+    assert.equal(r.rc, 2, `${what}: expected exit 2, got ${r.rc}`);
+    assert.equal(r.out, '', `${what}: Bob ignores stdout, nothing should be there: ${r.out}`);
+    assert.match(r.err, /BLOCKED: Geneseed/);
+    assert.ok(r.err.includes(what), r.err);
+  }
+  const commit = hookRun('tool-gate', { stdin: bashPayload('git commit -m x'), host: 'bob' });
+  assertDefers(commit, 'commit');
+  assert.match(commit.err, /process 5/);
+  assertDefers(hookRun('tool-gate', { stdin: bashPayload('git status'), host: 'bob' }), 'status');
+});
+
+test('bob: a deny is ledgered, a warning is not', () => {
+  withLedgerRoot((root, ledger) => {
+    hookRun('tool-gate', { root, host: 'bob', stdin: bashPayload('git commit -m x') });
+    assert.ok(!fs.existsSync(ledger));
+    hookRun('tool-gate', { root, host: 'bob', stdin: bashPayload('git push --force') });
+    const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(lines.map((l) => l.rule), ['law-4']);
+  });
+});
+
 test('the Claude dialect is unchanged when --host is absent, and tool-gate speaks it too', () => {
   askDecision(hookRun('tool-gate', { stdin: bashPayload('git push') }), 'tool-gate/claude');
   askDecision(hookRun('tool-gate',

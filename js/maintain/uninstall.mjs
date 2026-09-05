@@ -1055,7 +1055,7 @@ function cleanHostStash(cfg, host = 'claude') {
  * file and swallows its own OSError, exactly as the reference does — a failed bookkeeping
  * write must not fail the reactivate that has already moved every file back.
  */
-function remergeClaudeHooks(cfg, root = cfg) {
+function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   const data = claudeReadManifest(cfg);
   const managed = managedOf(data);
   // A Copilot install: its own merge, its own claim key, and none of the pack/exclude axes
@@ -1096,8 +1096,9 @@ function remergeClaudeHooks(cfg, root = cfg) {
   // NOTHING excluded, so a reactivate can only ever restore a gate, never remove one.
   const excluded = excludedRulesOfDir(root).length ? excludedRulesOfDir(root)
     : excludedRulesOfDir(cfg);
+  // `host` reaches the group builder: a Bob reactivate must re-wire Gemini-named groups.
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed), 'global',
-    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded);
+    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host);
   // `and data` — a manifest that did not parse is not one to write back.
   if (!deepEquals(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
     managed.settings_hooks = claims;
@@ -1173,7 +1174,7 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
       && isFile(path.join(cfg, 'rules', 'geneseed.md'));
   }
   if (relive) {
-    remergeClaudeHooks(cfg, root);   // ensure the hooks are present (and the claims exact)
+    remergeClaudeHooks(cfg, root, host);   // ensure the hooks are present (and the claims exact)
     cleanHostStash(cfg, host);
     return { ok: true,
       note: 'install was re-created while disabled; discarded the stashed snapshot' };
@@ -1191,7 +1192,7 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
   if (existsSync(blockFile)) {
     managedBlockWrite(claudeMdPath(cfg, managed), readText(blockFile));
   }
-  remergeClaudeHooks(cfg, root);
+  remergeClaudeHooks(cfg, root, host);
   wireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
   cleanHostStash(cfg, host);
   return { ok: true, kind: host, moved };

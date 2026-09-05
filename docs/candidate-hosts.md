@@ -41,12 +41,15 @@ current host gets. Skills are the largest surface by file count and they cost no
   table) and the config-dir resolver (`~/.codex`, `$CODEX_HOME`). Roughly the Copilot
   port minus the dialect work.
 
-- **Gemini CLI — the Bob dialect, reused.** Bob Shell's `settings.json` is Gemini's shape
-  (`context.fileName`, `tools.allowed: ["run_shell_command(git)"]`, `checkpointing`), so
-  whatever Geneseed does for Bob's hooks (item 3 of this review) is the Gemini hook
-  emit. Instructions need one settings key (`context.fileName` to include `AGENTS.md`)
-  or a `GEMINI.md` carrier; skills go to `.agents/skills`. No ask tier: Laws I/IV deny,
-  the consent rules become a `systemMessage`.
+- **Gemini CLI — Claude's groups, Gemini's names.** The hook groups are Claude's
+  `event → [{matcher, hooks}]` and the payload fields are Claude's, but the events are
+  `BeforeTool`/`AfterAgent` and the verdict is `decision: "deny"` or a `systemMessage`.
+  Bob Shell shares Gemini's *config* shape (`context.fileName`, `tools.allowed:
+  ["run_shell_command(git)"]`), but Bob's documented *hook* protocol is its own —
+  Claude's event names, refusal by exit code 2; see `adapters/bob/README.md` — so the two
+  are not one dialect. Instructions need one settings key (`context.fileName` to include
+  `AGENTS.md`) or a `GEMINI.md` carrier; skills go to `.agents/skills`. No ask tier: Laws
+  I/IV deny, the consent rules become a `systemMessage`.
 
 - **Cursor — a third verdict dialect.** `AGENTS.md` and `.agents/skills` are free; hooks
   are `hooks.json` with a `{command}` list per event and a `permission: allow|deny`
@@ -61,8 +64,8 @@ If a fifth host is wanted, Codex first: it reuses the most and it is the only ca
 where the gates can *ask* rather than block. Before any of them, a `--emit agents` for
 the shared `.agents/skills/` folder would give Codex, Cursor and Gemini users the whole
 skill catalogue for the price of one directory name, with no host-specific code at all.
-Bob's hook dialect (item 3) should be built as the Gemini dialect it is, so that a Gemini
-host later costs a resolver and a carrier, not a new verdict spelling.
+A Gemini host would be the fourth verdict spelling in `js/hosts/hooks.mjs` (after Claude's
+ask, Copilot's block, Bob's exit code 2), plus a resolver and a carrier.
 
 ## Not verified
 

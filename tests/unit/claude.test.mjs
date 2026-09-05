@@ -1218,7 +1218,51 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
     assert.ok(!('claude_md' in managed));
     assert.equal(manifestIsClaude(cfg), true);
-    assert.ok(!('claudeMdExcludes' in readJson(cfg, 'settings.json')));
+    // BOB'S OWN CONTRACT (docs/reviews/bob-global-injection-2026-09.md): the global hooks
+    // file is the NESTED `settings/settings.json`; Bob has five events and Geneseed uses three
+    // — SessionStart (context, plain stdout), PreToolUse (ONE `tool-gate` group, no matcher,
+    // `--host bob` so a refusal is exit 2), Stop (learn). `SubagentStop`/`PreCompact` are not
+    // Bob events and must not be written; a flat `settings.json` must not exist either.
+    assert.ok(!fs.existsSync(path.join(cfg, 'settings.json')), 'the flat settings.json is the OLD path');
+    const settings = readJson(cfg, 'settings', 'settings.json');
+    assert.ok(!('claudeMdExcludes' in settings));
+    assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreToolUse', 'SessionStart', 'Stop']);
+    assert.equal(settings.hooks.PreToolUse.length, 1);
+    assert.ok(!('matcher' in settings.hooks.PreToolUse[0]));
+    assert.match(settings.hooks.PreToolUse[0].hooks[0].command, / tool-gate --root ".*" --host bob$/);
+    assert.match(settings.hooks.SessionStart[0].hooks[0].command, / context --root ".*" --host bob \|\| exit 0$/);
+    assert.match(settings.hooks.Stop[0].hooks[0].command, / learn .*\|\| exit 0$/);
+    assert.equal(managed.settings_file, path.join('settings', 'settings.json'));
+  }));
+});
+
+test('a Bob re-emit migrates the hooks out of the flat settings.json an older emit wrote', () => {
+  // Every existing Bob install: Claude-named groups in `~/.bob/settings.json`, recorded in the
+  // manifest under `settings_file: "settings.json"`. The `oldSf !== settingsName` branch unwires
+  // the recorded groups from the old file and the merge writes the new set to the nested one;
+  // the user's own keys in the old file stay.
+  withoutStackGlobal(() => withDir((d) => {
+    const cfg = path.join(d, 'dotbob-old');
+    globalEmit('bob', path.join(d, 'b1'), cfg);
+    const man = readJson(cfg, GLOBAL_MANIFEST);
+    const nested = readJson(cfg, 'settings', 'settings.json');
+    // Forge the old install: the flat file carries the (then-canonical) groups + a user key,
+    // the manifest claims them there, and the nested file does not exist.
+    const oldGroups = man.managed.settings_hooks.map((r) => r.group);
+    fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({
+      mine: true, hooks: { SubagentStop: [oldGroups[0]], Stop: [oldGroups[oldGroups.length - 1]] },
+    }));
+    man.managed.settings_file = 'settings.json';
+    man.managed.settings_hooks = [
+      { event: 'SubagentStop', group: oldGroups[0] }, { event: 'Stop', group: oldGroups[oldGroups.length - 1] }];
+    fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST), JSON.stringify(man));
+    fs.rmSync(path.join(cfg, 'settings'), { recursive: true });
+
+    globalEmit('bob', path.join(d, 'b2'), cfg);
+    assert.deepEqual(readJson(cfg, 'settings.json'), { mine: true },
+      'the old file should keep only the user\'s key once Geneseed\'s groups are unwired');
+    assert.deepEqual(readJson(cfg, 'settings', 'settings.json'), nested);
+    assert.equal(readJson(cfg, GLOBAL_MANIFEST).managed.settings_file, path.join('settings', 'settings.json'));
   }));
 });
 

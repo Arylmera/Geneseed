@@ -230,8 +230,14 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   // nothing, because the CLI documents hooks in `~/.copilot/settings.json` only and a
   // machine-absolute hook committed into `.github/` would fail on every teammate's machine.
   if (!isCopilot) {
-    const settingsName = scope === 'project' && !isBob ? 'settings.local.json' : 'settings.json';
+    // Bob GLOBAL: its hooks doc puts the global file at `~/.bob/settings/settings.json`
+    // (nested), where an older emit wrote `~/.bob/settings.json`; the `oldSf !==
+    // settingsName` branch below unwires the old file, so a re-emit migrates. Bob's project
+    // file stays `.bob/settings.json`.
+    const settingsName = scope === 'project' && !isBob ? 'settings.local.json'
+      : isBob && scope === 'global' ? path.join('settings', 'settings.json') : 'settings.json';
     const settingsPath = path.join(cfgDir, settingsName);
+    mkdirSync(path.dirname(settingsPath), { recursive: true });
     managed.settings_file = settingsName;
     // Migration: an older install wired hooks/excludes into a different file — unwire the
     // recorded claims there, or they linger (and run) forever.
@@ -248,7 +254,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     // DECIDES the install's packs, so the marker on disk is still the previous build's.
     const [, managedHooks] = mergeClaudeSettings(
       settingsPath, scope, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
-      doctrines, excludeRules,
+      doctrines, excludeRules, host,
     );
     managed.settings_hooks = managedHooks;
 
