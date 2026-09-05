@@ -184,8 +184,11 @@ It wires:
 - **Stop** — runs `harness learn` to capture durable memory. Opt in by setting
   `GENESEED_LLM` (e.g. `claude -p`); unset, it's a harmless no-op. Geneseed never
   embeds an API key.
+- **PreCompact** — runs `harness learn` once more, right before auto-compaction
+  summarises the transcript tail that `learn` distils from. Memory is captured before
+  the summary; the SessionStart `compact` matcher re-seeds context after it.
 
-All four hooks are emitted as one stable path — the **hook shim** at
+All the hooks are emitted as one stable path — the **hook shim** at
 `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows) — instead of writing
 this machine's runtime and this checkout into your `settings.json`. The shim
 carries those two volatile paths itself, so moving or replacing the clone no longer

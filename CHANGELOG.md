@@ -21,6 +21,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   set on an event is left alone and the event is not claimed; uninstall removes exactly the
   claimed hooks. The per-repo emit wires nothing. Hook verbs 4 → 5; `--host` on the
   gates and on `context`.
+- **Claude Code: `learn` on PreCompact.** `learn` distils the tail of the transcript, so
+  the per-turn Stop hook is a sliding window over the session — and auto-compaction is the
+  one moment that window is summarised away for good. A `PreCompact` group now runs the same
+  command before the summary; the SessionStart `compact` matcher (3.2.x) re-seeds context
+  after it. Existing installs pick the group up on their next re-emit.
 
 - **Two Bruno skills — `bruno-collection-generator` and `bruno-test-writer`.** Native
   flat specs, written in the harness voice after the procedures Bruno published in

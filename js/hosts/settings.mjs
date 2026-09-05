@@ -698,6 +698,12 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [])
     // Same command as Stop: `learn` reads the payload's hook_event_name and routes a
     // SubagentStop to the per-agent lesson path.
     SubagentStop: [{ hooks: [{ type: 'command', command: learn }] }],
+    // And once more BEFORE compaction. `learn` distils the tail of the transcript (the newest
+    // MAX_NOTES_CHARS), so per-turn Stop is a sliding window over the session — and
+    // compaction is the one moment that window is about to be summarised away for good.
+    // The payload carries `transcript_path` like Stop's; the SessionStart `compact` matcher
+    // re-seeds context AFTER, this captures memory BEFORE. Same `|| exit 0`: never block.
+    PreCompact: [{ hooks: [{ type: 'command', command: learn }] }],
   };
 }
 
@@ -910,7 +916,7 @@ export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hoo
     return [p, prior];
   }
   // The `else` is DEAD on both sides and reproduced rather than dropped: `canonical` always
-  // carries four events, so by the time control reaches here `hooks` is never empty. A
+  // carries five events, so by the time control reaches here `hooks` is never empty. A
   // mutation keeping the empty block instead of deleting it is the one of thirty-three that
   // stays green, and it stays green because there is nothing to detect — recorded the way
   // `themed_rel` is, so "the gate cannot see it" and "there is nothing to see" keep their
