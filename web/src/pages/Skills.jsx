@@ -31,7 +31,16 @@ const SKILL_CATS = {
   harness: { label: 'Harness', c: 'oklch(0.76 0.07 250)' },
   personal: { label: 'Personal', c: 'oklch(0.72 0.025 250)' },
 }
-const SKILL_CAT_ORDER = ['design', 'build', 'review', 'ship', 'understand', 'learn', 'harness', 'personal']
+const SKILL_CAT_ORDER = [
+  'design',
+  'build',
+  'review',
+  'ship',
+  'understand',
+  'learn',
+  'harness',
+  'personal',
+]
 
 // One expandable row, via CatalogRow (shared with LawRow) — see that component for the
 // lazy-load/expand-panel machinery. Mirrors LawRow, minus the numeral column — skills
