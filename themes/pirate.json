@@ -23,6 +23,7 @@
   "DESC_DOCS": "Keeps the ship's log and the charts once the work is done.",
   "DESC_SECURITY": "Watches for boarders — audits anything touching the security deck.",
   "DESC_EXPLORER": "Sends the lookout — sweeps wide from a throwaway crow's nest, returns only the sighting.",
+  "DESC_RESEARCHER": "Sails past the harbour mouth — reads the foreign charts, checks each bearing twice, returns only the fix.",
   "DESC_ADVOCATE": "Argues to set sail — the prize in the offing, the opening, the cost of staying in port.",
   "DESC_SKEPTIC": "Plays the doubter — assails the plan for the leaks, the reefs, and the assumptions no one sounded.",
   "DESC_PRAGMATIST": "Weighs the stores — the cost, the toil, the tangle, and whether the haul is worth the voyage.",

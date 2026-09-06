@@ -78,6 +78,20 @@ const AGENT_OVERRIDES_STUB = {
     + 'Host-specific; git-ignored. A future TUI screen edits this — rebuild to apply.'
   ),
   agents: {},
+  // Inert: `loadAgentOverrides` reads `agents` only. This is the starting point the README
+  // used to describe in prose — the seats whose work is read-and-summarise, where a smaller
+  // model loses little and a council convenes 3–6 of them at once.
+  _recommended: {
+    _comment: (
+      'Cheap-tier seats: copy the ones you want into "agents" with your host\'s cheap '
+      + 'model id (OpenCode: "anthropic/claude-haiku-4-5"; Claude Code / Copilot: "haiku"). '
+      + 'Read-and-summarise work — a council convenes several at once, so this is where '
+      + 'the savings compound. Nothing applies until you copy it.'
+    ),
+    'cheap-tier': ['explorer', 'researcher', 'tester', 'advocate', 'skeptic', 'pragmatist',
+      'steward', 'visionary', 'user-advocate', 'framer', 'empiricist', 'operator',
+      'historian'],
+  },
 };
 
 /** Mirrors `_build_emit.COMMAND_SET` — the hot skills worth a one-keystroke trigger. */

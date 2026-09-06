@@ -23,6 +23,7 @@
   "DESC_DOCS": "Writes and updates user-facing documentation after code lands.",
   "DESC_SECURITY": "Audits changes that touch the security surface.",
   "DESC_EXPLORER": "Reads and searches widely in a throwaway context, returns only distilled findings.",
+  "DESC_RESEARCHER": "Searches and fetches the open web in a throwaway context, cross-checks every claim against two sources, returns only sourced findings.",
   "DESC_ADVOCATE": "Argues the strongest case for the proposal — the upside, the opportunity, the cost of not acting.",
   "DESC_SKEPTIC": "Plays devil's advocate — attacks the proposal for failure modes, risks, and hidden assumptions.",
   "DESC_PRAGMATIST": "Weighs feasibility — the cost, effort, and complexity against whether the payoff is worth it.",

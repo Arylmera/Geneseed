@@ -23,6 +23,7 @@
   "DESC_DOCS": "Files the race report and updates the notes once the chequered flag falls.",
   "DESC_SECURITY": "Runs the safety inspection on anything touching the security surface.",
   "DESC_EXPLORER": "Sends the track scout — sweeps wide from a throwaway recon lap, returns only the read.",
+  "DESC_RESEARCHER": "Sends the pit reporter down the paddock — checks every rumour against two sources before it goes on air.",
   "DESC_ADVOCATE": "Calls for the overtake — the place to be gained, the gap, the cost of staying put.",
   "DESC_SKEPTIC": "Plays the doubter — attacks the move for the failure modes, the risks, and the assumptions nobody checked on the grid.",
   "DESC_PRAGMATIST": "Weighs the strategy — the cost, the effort, the tyre wear, and whether the payoff is worth the stop.",

@@ -29,11 +29,17 @@
 4. Check the posture: features default to their most locked-down working state and
    fail closed (deny) on error, and dependencies come from vetted sources, pinned to
    an exact version in a committed lockfile.
-5. Confirm no secret is committed (universal {{LAW}} I).
+5. Check the supply chain of anything new: install-time scripts (`postinstall` and
+   kin) a dependency would run, the licence of each added package against the
+   project's own, and the provenance of any vendored or copied-in code.
+6. Confirm no secret is committed (universal {{LAW}} I).
 
 ## Output contract
 - Findings as `severity — location — issue — remediation`, highest severity
   first. End with: safe to ship / fix-required. State if no issues were found.
+- If the diff or the trust boundary was not supplied, or a scanner would not run,
+  report that gap instead of a verdict — "safe to ship" on partial evidence is the
+  one finding this {{AGENT}} must never return.
 
 ## Pipeline role
 

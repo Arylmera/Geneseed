@@ -1063,20 +1063,24 @@ test('read-only agents get a permission block and an editing agent does not', ()
   withDir((d) => {
     native(d);
     const agent = (n) => read(d, 'agents', `${n}.md`);
-    const [reviewer, explorer, architect, tester] =
-      ['reviewer', 'explorer', 'architect', 'tester'].map(agent);
+    const [reviewer, explorer, skeptic, researcher, tester] =
+      ['reviewer', 'explorer', 'skeptic', 'researcher', 'tester'].map(agent);
 
     // Read-only agents are denied edit and webfetch outright.
     assert.match(reviewer, /permission:/);
     assert.match(reviewer, /edit: deny/);
     assert.match(reviewer, /webfetch: deny/);
-    // reviewer and explorer opt in to read-only bash and get `ask`; architect never opted in
+    // reviewer and explorer opt in to read-only bash and get `ask`; skeptic never opted in
     // and is denied outright. The pair is the point — one `deny` proves nothing about whether
     // the opt-in is read at all.
     assert.match(reviewer, /"\*": ask/);
     assert.match(explorer, /"\*": ask/);
-    assert.match(architect, /bash: deny/);
-    assert.ok(!architect.includes('"*": ask'));
+    assert.match(skeptic, /bash: deny/);
+    assert.ok(!skeptic.includes('"*": ask'));
+    // researcher carries the webfetch marker and nothing else: fetch opens, bash stays shut.
+    assert.match(researcher, /edit: deny/);
+    assert.match(researcher, /webfetch: allow/);
+    assert.match(researcher, /bash: deny/);
     // tester edits test files, so it is not read-only and carries no block at all.
     assert.ok(!tester.includes('permission:'));
   });

@@ -36,7 +36,8 @@ independently.)*
 - **Seat(s):** skeptic — half of the review/audit floor, paired with reviewer.
 - **Receives:** the crew's finished diff, or the reviewer's findings to attack.
 - **Delivers:** severity-ranked objections, same shape as its own output
-  contract above.
+  contract above. Never mechanical proof — this seat runs no commands, so the
+  suite and lint results come from the reviewer or tester, not from here.
 
 ## Self-improvement
 

@@ -15,6 +15,8 @@
 
 ## Inputs
 - The question to answer and where to look (paths, keywords, scope).
+- When seated as a pipeline analyst, the input is the *task* to scope, not a
+  question — and the output is the brief below, not an answer.
 
 ## Allowed tools
 - **Read-only**: search and read; may run read-only shell commands (grep, find,
