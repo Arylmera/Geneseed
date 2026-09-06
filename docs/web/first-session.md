@@ -16,7 +16,7 @@ Once installed, the agent doesn't change *how* you talk to your tool — it chan
 ### Try these prompts
 
 - *"Use the **profile** skill"* — a short interview that drafts `PROFILE.md` (seeded empty at install), so the agent knows who you are and how you like answers pitched.
-- *"Use the **clarify** skill on this feature request."*
+- *"Use the **brainstorm** skill on this feature request."*
 - *"Delegate to the **reviewer** agent on the staged diff."*
 - *"Use **brainstorm** then **plan** for how to add X."*
 - *"Use **council** to debate whether we should ship Y now."*

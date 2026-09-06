@@ -8,7 +8,43 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **Six skills.** `security-audit` (the `security` agent finally has a caller — trust
+  boundaries, the classic classes, secrets, the supply chain, a ship / fix / block verdict),
+  `skill-forge` (author, sharpen, merge or retire a skill, with every satellite the host or
+  the source repo demands), `worktree` (isolate a task in its own tree from a clean base —
+  the first move when `git status` shows changes you did not make), `ci-fix` (a red CI run
+  reproduced under CI's conditions and fixed at the cause), `deps-audit` (a risk-ordered
+  upgrade plan for `migrate` to execute, installing nothing) and `consolidate-memory`
+  (the memory set verified against the live repo, merged, retired, re-indexed).
+- **A `harness` skill class** for the skills about the agent's own apparatus — wiki,
+  geneseed, rule, profile, herdr, skill-forge, consolidate-memory — which sat under
+  `understand` before and made that class a grab-bag. The web console's Skills view
+  grows the chip.
+
+### Changed
+
+- **A skill's emitted `description:` is now purpose + trigger.** Claude Code and Bob
+  match a task against that one line before loading a skill; it used to carry only what
+  the skill does, never when. `skillDescription()` appends `Use when: <the Trigger
+  paragraph>`, links reduced to text, capped at 900 chars at a sentence boundary.
+- **The Self-improvement footer is one file.** `src/skills/_self-improvement.md` is
+  INCLUDEd by every flat skill and the template, with a four-line LEAN half; fifty
+  byte-identical copies are gone.
+- **Merges, keeping the best of each:** `tdd` folded into `develop` (seams first, the
+  failing test seen to fail for the right reason, an explicit exit to ship or handoff);
+  `clarify` folded into `brainstorm` (charitable reading, the key-decision ledger echoed
+  back under Law X, then design only when there is something to design, and a routed
+  exit); the six learning skills folded into `teach` (crash course, decode, path) and
+  `quiz` (drill, feynman, gap check), both user-only. The skill count stays at 49.
+- **`workflow` refined per host:** OpenCode's saved scripts versus Claude Code's native
+  tool (inline or `.claude/workflows/`, and only once the user has opted in), Bob and
+  Copilot falling back to `parallel-agents`; pick saved over inline, pass the task as
+  `args` so a run stays a pure function of its inputs, resume a failed run rather than
+  rerun it, and carry the conclusion yourself.
+- **`registry.json`** stamps `last_verified: 2026-09-06` on every approved skill; the six
+  new ones enter as `experimental`.
 
 ## [3.3.0] — 2026-09-06
 

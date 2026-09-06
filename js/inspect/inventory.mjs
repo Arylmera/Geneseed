@@ -90,21 +90,26 @@ export const LAW_CLASSES = ['security', 'process', 'verify', 'craft', 'context',
 
 /** `_harness_tui.SKILL_CLASS` — each skill's category, keyed by file stem. */
 export const SKILL_CLASS = {
-  brainstorm: 'design', clarify: 'design', plan: 'design', council: 'design',
+  brainstorm: 'design', plan: 'design', council: 'design',
   workflow: 'design', 'parallel-agents': 'design', pipeline: 'design',
   'codebase-design': 'design', 'domain-modeling': 'design', wayfinder: 'design',
   tickets: 'design',
-  tdd: 'build', develop: 'build', refactor: 'build', debug: 'build', migrate: 'build',
+  develop: 'build', refactor: 'build', debug: 'build', migrate: 'build',
   'frontend-design': 'build', 'opencode-theme': 'build', prototype: 'build',
   'forge-mcp': 'build', 'bruno-collection-generator': 'build', 'bruno-test-writer': 'build',
-  'geneseed-code-review': 'review', 'fresh-eyes': 'review', 'gap-detector': 'review',
+  worktree: 'build', 'ci-fix': 'build', 'deps-audit': 'build',
+  'geneseed-code-review': 'review', 'fresh-eyes': 'review', 'security-audit': 'review',
   'roast-me': 'review', 'review-response': 'review', ponytail: 'review',
   commit: 'ship', ship: 'ship', release: 'ship', handoff: 'ship', 'git-rescue': 'ship',
-  'repo-map': 'understand', 'git-archaeology': 'understand', decode: 'understand',
+  'repo-map': 'understand', 'git-archaeology': 'understand',
   research: 'understand', ingest: 'understand', 'document-project': 'understand',
-  wiki: 'understand', prose: 'understand', geneseed: 'understand', rule: 'understand',
-  profile: 'understand', herdr: 'understand',
-  'crash-course': 'learn', drill: 'learn', feynman: 'learn', 'learning-path': 'learn',
+  prose: 'understand',
+  // `harness` — skills about the agent's own apparatus (its harness, memory, rules,
+  // knowledge base, terminal) rather than about the user's code. They sat under
+  // `understand` before, which made that class a grab-bag.
+  wiki: 'harness', geneseed: 'harness', rule: 'harness', profile: 'harness',
+  herdr: 'harness', 'skill-forge': 'harness', 'consolidate-memory': 'harness',
+  teach: 'learn', quiz: 'learn',
 };
 
 /** `k in dict` — own keys only, where `k in obj` also finds `Object.prototype` members. */

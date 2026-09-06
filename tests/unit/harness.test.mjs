@@ -1373,14 +1373,14 @@ test('a portable bundle keeps its links and a native global strips them', () => 
     const cfg = path.join(d, 'cfg');
     fs.mkdirSync(cfg, { recursive: true });
     generate(['--emit', 'files', '--theme', 'neutral', '--out', files], home);
-    assert.match(fs.readFileSync(path.join(files, 'skills', 'tdd.md'), 'utf8'), REL_MD,
-      'the portable bundle lost its in-body links — tdd links refactor.md and commit.md');
+    assert.match(fs.readFileSync(path.join(files, 'skills', 'develop.md'), 'utf8'), REL_MD,
+      'the portable bundle lost its in-body links — develop links refactor.md and commit.md');
     assert.match(fs.readFileSync(path.join(files, 'AGENT.md'), 'utf8'), PER_ROW,
       'the portable AGENT.md lost its per-row capability links');
 
     generate(['--emit', 'opencode-global', '--theme', 'neutral'], home,
       { OPENCODE_CONFIG_DIR: cfg });
-    const native = fs.readFileSync(path.join(cfg, 'skills', 'tdd', 'SKILL.md'), 'utf8');
+    const native = fs.readFileSync(path.join(cfg, 'skills', 'develop', 'SKILL.md'), 'utf8');
     assert.ok(!REL_MD.test(native), `the native skill kept a relative link:\n${native}`);
     assert.ok(native.includes('refactor'),
       'the link was removed along with the words around it');
