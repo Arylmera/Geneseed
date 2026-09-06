@@ -8,6 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.3.0] — 2026-09-06
+
+The host-gap release: every host now gets the hook surface its runtime actually
+offers, in that runtime's own dialect. Bob's hooks are **unverified live** — no Bob
+install existed on the authoring machine; the emit follows Bob's documented contract
+and a re-emit migrates an older install's flat `settings.json` automatically.
+
 ### Added
 
 - **Copilot gets hooks.** The Copilot CLI reads lifecycle hooks from
