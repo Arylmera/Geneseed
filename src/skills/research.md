@@ -11,7 +11,10 @@ stop and report it ({{LAW}} V); never substitute recall for verified research.
 
 ## Procedure
 1. State the question and what a complete answer must contain. Break a broad question
-   into specific sub-questions.
+   into specific sub-questions. Where the host runs subagents, hand the sub-questions
+   to the [researcher {{AGENT}}](../{{DIR_AGENTS}}/researcher.md) — it runs steps 2–5
+   in its own context and returns only the sourced findings ({{DOCTRINE}} process 3);
+   otherwise carry on here.
 2. Search the web — use the host's web-search tool or a connected search provider
    ({{DOCTRINE}} ops 1). Query from several angles; one search is not research,
    and one empty result is not absence ({{LAW}} III). If the host

@@ -23,6 +23,7 @@
   "DESC_DOCS": "Writes the user-facing data once the code goes live.",
   "DESC_SECURITY": "Breaks and checks ICE — audits anything on the security surface.",
   "DESC_EXPLORER": "Scouts the net — sweeps wide in a throwaway shell, returns only the intel.",
+  "DESC_RESEARCHER": "Jacks into the open net — pulls the intel, cross-checks it against two nodes, returns only what verified.",
   "DESC_ADVOCATE": "Pushes the build — the upside, the opening, the cost of sitting on it.",
   "DESC_SKEPTIC": "Runs devil's advocate — stress-tests the build for failure modes, risks, and buried assumptions.",
   "DESC_PRAGMATIST": "Weighs the spec — the cost, the effort, the complexity, and whether the payoff clears.",

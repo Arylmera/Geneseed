@@ -16,7 +16,7 @@ The minimum roster per task type. The parent may add specialists on top — secu
 |---|---|
 | Development | [explorer](../{{DIR_AGENTS}}/explorer.md) (analyst) → [developer](../{{DIR_AGENTS}}/developer.md) → [tester](../{{DIR_AGENTS}}/tester.md) + lint gate |
 | Documentation | [explorer](../{{DIR_AGENTS}}/explorer.md) (analyst) → [docs](../{{DIR_AGENTS}}/docs.md) |
-| Research / investigation | [explorer](../{{DIR_AGENTS}}/explorer.md) (analyst) alone |
+| Research / investigation | [explorer](../{{DIR_AGENTS}}/explorer.md) (analyst) alone; add [researcher](../{{DIR_AGENTS}}/researcher.md) when the question leaves the repository |
 | Review / audit | [reviewer](../{{DIR_AGENTS}}/reviewer.md) + [skeptic](../{{DIR_AGENTS}}/skeptic.md) |
 
 ## Procedure

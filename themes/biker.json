@@ -23,6 +23,7 @@
   "DESC_DOCS": "Keeps the roadbook and the notes once the work is done.",
   "DESC_SECURITY": "Goes over anything touching the security surface, bolt by bolt.",
   "DESC_EXPLORER": "Sends the scout ahead — sweeps wide on a throwaway recon run, brings back only the read.",
+  "DESC_RESEARCHER": "Rides out past the county line — reads the road signs everyone else skipped, checks each one twice, brings back only what held up.",
   "DESC_ADVOCATE": "Argues for the run — the ground to be gained, the opening, the cost of staying parked.",
   "DESC_SKEPTIC": "Plays the doubter — calls the move on its failure modes, its risks, and the assumptions nobody checked.",
   "DESC_PRAGMATIST": "Weighs the run — the cost, the effort, the wear, and whether the payoff is worth the miles.",

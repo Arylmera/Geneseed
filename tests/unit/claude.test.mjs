@@ -113,6 +113,9 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
     }
     // A read-only agent maps the deny-tree onto Claude's own key.
     assert.ok(read(cfg, 'agents', 'explorer.md').includes('disallowedTools:'));
+    // The webfetch marker lifts exactly WebFetch from the denylist; Bash stays denied.
+    const researcher = read(cfg, 'agents', 'researcher.md');
+    assert.match(researcher, /disallowedTools: Write, Edit, NotebookEdit, Bash$/m);
 
     // THE HOOK PATH IS THE POINT OF THE CLASS. A hook's cwd is the user's project, so nothing
     // relative resolves — it must be absolute, and it must be the STABLE SHIM rather than this
@@ -689,6 +692,9 @@ test('the Copilot global emit writes the Copilot layout and its own hook surface
     const reviewer = read(cfg, 'agents', 'reviewer.agent.md');
     assert.ok(reviewer.includes('name: reviewer'));
     assert.ok(!reviewer.includes('disallowedTools'), "Copilot carries Claude's denylist key");
+    // The same marker read allowlist-wise: researcher gains `fetch`, never `execute`.
+    const researcher = read(cfg, 'agents', 'researcher.agent.md');
+    assert.match(researcher, /tools: \[read, search, todo, agent, fetch\]/);
     assert.ok(!reviewer.includes('mode: subagent'));
     assert.ok(!fs.existsSync(path.join(cfg, 'agents', 'reviewer.md')),
       'the Claude-dialect filename was written beside the Copilot one');

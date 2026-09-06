@@ -23,6 +23,7 @@
   "DESC_DOCS": "Transcribes the tomes for those who follow, once the work is done.",
   "DESC_SECURITY": "Wards the circle — audits any working that touches the warded surface.",
   "DESC_EXPLORER": "Sends a scrying-eye — sweeps wide in a throwaway vision, returns only what it saw.",
+  "DESC_RESEARCHER": "Consults the far libraries — holds every scrap of lore to two independent tomes before it is entered in the grimoire.",
   "DESC_ADVOCATE": "Argues for the working — its promise, the opening it grants, the cost of leaving it uncast.",
   "DESC_SKEPTIC": "Plays the doubter — assails the working for its flaws, its perils, and its unspoken assumptions.",
   "DESC_PRAGMATIST": "Weighs the reagents — the cost, the effort, the tangle, and whether the boon is worth it.",

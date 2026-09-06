@@ -23,6 +23,7 @@
   "DESC_DOCS": "<one-line description: writes user-facing docs after code lands>",
   "DESC_SECURITY": "<one-line description: audits changes touching the security surface>",
   "DESC_EXPLORER": "<one-line description: reads/searches widely, returns only distilled findings>",
+  "DESC_RESEARCHER": "<one-line description: searches and fetches the open web, cross-checks every claim, returns sourced findings>",
   "DESC_ADVOCATE": "<council seat: argues the strongest case FOR the proposal>",
   "DESC_SKEPTIC": "<council seat: devil's advocate — failure modes and hidden assumptions>",
   "DESC_PRAGMATIST": "<council seat: weighs cost, effort, complexity vs payoff>",

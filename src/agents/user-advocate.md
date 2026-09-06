@@ -26,6 +26,19 @@
 - The consumer's verdict: who is affected, the experience win or harm, the friction it introduces, and the one thing they would actually ask for. Grounded in the real surface, not assumed.
 - If the actual consumer cannot be identified from the inputs, say so rather than argue for an invented one — a fictional user's verdict is noise dressed as advocacy.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** specialist add-on on the review floor — recruited beside the
+  reviewer when the diff touches a user-facing surface (CLI output, API shape,
+  error messages, docs, UI).
+- **Receives:** the crew's diff and who the consumer is.
+- **Delivers:** the consumer's verdict, same shape as its own output contract
+  above.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

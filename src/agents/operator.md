@@ -27,6 +27,19 @@
 - An operability read: how it fails in production, what it needs to run safely (metrics, alerts, rollback), the on-call burden it adds, and a ship / hold-for-guardrails lean with the reason.
 - If the runtime picture is missing — no deploy story, no load profile to read — report that the operability call cannot be made rather than pre-morteming an imagined system.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** specialist add-on — recruited above the floor when the diff
+  touches deploy, CI, infrastructure, or runtime configuration.
+- **Receives:** the crew's diff and the deploy story (how it ships, how it rolls
+  back).
+- **Delivers:** the operability read and the rollback check, same shape as its
+  own output contract above.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary
