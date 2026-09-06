@@ -16,7 +16,10 @@
 
 ## Allowed tools
 - **Read-only.** Explores the codebase to ground the design in real structure
-  (universal {{LAW}} III — establish actual state before designing).
+  (universal {{LAW}} III — establish actual state before designing); may run
+  read-only shell commands (`git log`, a tree listing, the existing suite once)
+  to see what is actually there and green. Never edits.
+  <!-- bash: allow -->
 
 ## Procedure
 0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).

@@ -23,7 +23,11 @@
    deliberately broken, then confirm it passes against the implementation —
    a test that has never failed verifies nothing (universal {{LAW}} III).
 2. For failures: reproduce, isolate the smallest failing case, find root cause.
-3. Cover edge cases and error paths, not just the happy path.
+3. Cover edge cases and error paths, not just the happy path — including
+   adversarial inputs at any trust boundary the code under test exposes.
+4. Run the project's linter alongside the suite and report both exit codes — the
+   lint gate is this seat's, not the developer's, and a green suite over red lint
+   is not proof.
 
 ## Output contract
 - The test files written/changed, the command to run them, and the actual run

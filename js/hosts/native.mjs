@@ -244,22 +244,28 @@ export function pushOverrideLines(fm, ov) {
   if (given(ov.steps)) fm.push(`steps: ${formatValue(ov.steps)}`);
 }
 
+/** The two opt-in markers a read-only spec may carry. Bare substring tests, like `isReadonly`. */
+const BASH_MARKER = '<!-- bash: allow -->';
+const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
+
 /**
  * The readonly-tool line `claudeAgentFrontmatter`/`copilotAgentFrontmatter` each emit — a
  * DENYLIST for Claude, an ALLOWLIST for Copilot — differing only in the key, the base list,
- * the one extra entry the `<!-- bash: allow -->` marker toggles, and whether the value is
- * bracketed. `extraWhenBashAllowed` is `false` for Claude (Bash is denied UNLESS the marker
- * allows it) and `true` for Copilot (`execute` is allowed ONLY IF the marker is present) —
- * the same marker, read in the opposite sense a denylist and an allowlist require.
+ * the gated entries the markers toggle, and whether the value is bracketed. Each `gated`
+ * row is `[tool, marker, listedWhenMarked]`: `false` for Claude (the tool is denied UNLESS
+ * the marker allows it) and `true` for Copilot (the tool is allowed ONLY IF the marker is
+ * present) — the same marker, read in the opposite sense a denylist and an allowlist
+ * require. Row order is emit order: WebFetch before Bash keeps the unmarked Claude line
+ * byte-identical to what it was before the webfetch marker existed.
  */
 const READONLY_TOOLS = {
   claude: {
-    key: 'disallowedTools', tools: ['Write', 'Edit', 'NotebookEdit', 'WebFetch'],
-    extra: 'Bash', extraWhenBashAllowed: false, brackets: false,
+    key: 'disallowedTools', tools: ['Write', 'Edit', 'NotebookEdit'], brackets: false,
+    gated: [['WebFetch', WEBFETCH_MARKER, false], ['Bash', BASH_MARKER, false]],
   },
   copilot: {
-    key: 'tools', tools: ['read', 'search', 'todo', 'agent'],
-    extra: 'execute', extraWhenBashAllowed: true, brackets: true,
+    key: 'tools', tools: ['read', 'search', 'todo', 'agent'], brackets: true,
+    gated: [['fetch', WEBFETCH_MARKER, true], ['execute', BASH_MARKER, true]],
   },
 };
 
@@ -269,11 +275,11 @@ function claudeCopilotAgentFrontmatter(host, stem, text, overrides) {
   const ov = agentOverride(overrides, stem);
   if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
   if (isReadonly(text)) {
-    const {
-      key, tools, extra, extraWhenBashAllowed, brackets,
-    } = READONLY_TOOLS[host];
+    const { key, tools, brackets, gated } = READONLY_TOOLS[host];
     const list = [...tools];
-    if (text.includes('<!-- bash: allow -->') === extraWhenBashAllowed) list.push(extra);
+    for (const [tool, marker, listedWhenMarked] of gated) {
+      if (text.includes(marker) === listedWhenMarked) list.push(tool);
+    }
     fm.push(`${key}: ${brackets ? `[${list.join(', ')}]` : list.join(', ')}`);
   }
   return fm;
@@ -294,8 +300,9 @@ function opencodeAgentFrontmatter(stem, text, overrides, theme = null) {
   fm.push(`color: ${agentColor(stem, theme)}`);
   pushOverrideLines(fm, agentOverride(overrides, stem));
   if (isReadonly(text)) {
-    fm.push('permission:', '  edit: deny', '  webfetch: deny');
-    if (text.includes('<!-- bash: allow -->')) fm.push('  bash:', '    "*": ask');
+    fm.push('permission:', '  edit: deny',
+      `  webfetch: ${text.includes(WEBFETCH_MARKER) ? 'allow' : 'deny'}`);
+    if (text.includes(BASH_MARKER)) fm.push('  bash:', '    "*": ask');
     else fm.push('  bash: deny');
   }
   return fm;

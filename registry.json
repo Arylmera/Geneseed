@@ -71,6 +71,13 @@
       "added": "2026-06-08",
       "last_verified": ""
     },
+    "agents/researcher": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-06",
+      "last_verified": ""
+    },
     "agents/reviewer": {
       "status": "approved",
       "version": "1.0.0",

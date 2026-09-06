@@ -23,7 +23,8 @@ no "ask the user" tier, so this page is mostly about what those hooks *can* and
   - `agents/<name>.agent.md` — Copilot's **custom-agent dialect** (`.agent.md`
     extension; a `tools:` **allowlist**, not Claude's denylist — a read-only
     agent lists the tool ids it keeps: `read, search, todo, agent`, plus
-    `execute` only when the spec opts in with `<!-- bash: allow -->`). Sibling
+    `execute` only when the spec opts in with `<!-- bash: allow -->`, `fetch` only
+    with `<!-- webfetch: allow -->`). Sibling
     agent links are rewritten to the `.agent.md` filename.
   - `skills/<name>/SKILL.md` — **byte-identical** to every other host.
 

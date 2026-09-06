@@ -57,7 +57,8 @@ your-repo/
 - Read-only agents (their spec says *Read-only*) get an OpenCode `permission` block
   — `edit: deny`, `webfetch: deny`, and `bash: deny`, so a read-only agent can't
   mutate via the shell either. One that must run read-only commands (tests, linters,
-  scanners) declares `<!-- bash: allow -->` in its spec, which gates bash to `ask`
+  scanners) declares `<!-- bash: allow -->` in its spec, which gates bash to `ask`;
+  `<!-- webfetch: allow -->` (the researcher) re-opens web fetch the same way
   instead. The rest keep edit access.
 - OpenCode invokes a subagent via the task tool, e.g. `subagent_type: "reviewer"`.
 - **Skills are native, not slash commands** — model-invoked via the `skill` tool
@@ -357,7 +358,10 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   { "agents": { "reviewer": { "model": "anthropic/claude-haiku-4-5", "temperature": 0.1, "variant": "high", "steps": 20 } } }
   ```
   Re-emit to apply. (A future TUI screen will edit this map.) Unlisted keys are omitted,
-  so the agent inherits OpenCode's defaults.
+  so the agent inherits OpenCode's defaults. The stub also carries an inert
+  `_recommended.cheap-tier` list — the read-and-summarise seats (explorer, researcher,
+  tester, and the council bench) worth routing to a cheaper model; copy the names you
+  want into `agents`, nothing applies by itself.
 - **Agent colours.** Each capability agent is emitted with a `color:` set to an OpenCode
   *named theme slot*, sourced from the active harness theme's `AGENT_COLORS` map
   (`themes/_TEMPLATE.json`; the shipped default — architect=`primary`, reviewer=`warning`,

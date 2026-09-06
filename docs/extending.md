@@ -293,7 +293,7 @@ emit leaves the prior install intact.
    a blank line, then a `>` blockquote holding `{{DESC_<NAME>}}` — title, blockquote, nothing
    between. `doctor` checks both the presence of the purpose line and that the blockquote is the
    *first* block (`authoringProblems`, via `firstBlockquote` and `descBlockProblem`).
-2. One row in the hand-authored table in `src/AGENT.md.tmpl` (agents `125-141`, skills `183-229`).
+2. One row in the hand-authored table in `src/AGENT.md.tmpl` (the `## 3.` table for agents, the `## 4.` one for skills).
    Gated both ways: a row with no file, and a file with no row.
 3. `DESC_<NAME>` in **all fourteen** themes. Theme parity catches a missing one; nothing catches
    an unstyled placeholder.
@@ -318,8 +318,9 @@ and **skip steps 2, 4, 6, 7**: the flat-spec globs only see `*.md` at the top le
 Two traps worth knowing before you write the spec:
 
 - **The word "Read-only" anywhere in an agent spec locks its emit.** It is a bare substring test
-  (`js/hosts/native.mjs:148`). The escape hatch is an explicit `<!-- bash: allow -->` marker, which
-  re-opens bash on all three hosts.
+  (`js/hosts/native.mjs:148`). The escape hatches are explicit markers: `<!-- bash: allow -->`
+  re-opens bash on all three hosts (OpenCode gates it to `ask`), and `<!-- webfetch: allow -->`
+  re-opens web fetch — the researcher is the one spec that carries it.
 - **The console has a fourth, ungated copy of the skill taxonomy.** `SKILL_CATS` in
   `web/src/pages/Skills.jsx:19` mirrors `SKILL_CLASS` with nothing comparing them (contrast
   `LAW_META`, which *is* cross-checked). Inventing a new *category* means editing that file —

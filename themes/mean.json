@@ -23,6 +23,7 @@
   "DESC_DOCS": "Writes the record once the work is done, since nobody else bothers.",
   "DESC_SECURITY": "Goes over anything touching the security surface and assumes you got it wrong.",
   "DESC_EXPLORER": "Scouts wide in a throwaway context and brings back only the read — no filler.",
+  "DESC_RESEARCHER": "Reads the web so you don't have to — two sources per claim or it stays marked unverified. No recall dressed as research.",
   "DESC_ADVOCATE": "Makes the case for it — the upside, the opening, the cost of sitting on your hands.",
   "DESC_SKEPTIC": "Plays devil's advocate, which it enjoys — rips the proposal for failure modes, risks, and the assumptions you didn't check.",
   "DESC_PRAGMATIST": "Weighs the real cost — the effort, the complexity, the cleanup — and whether the payoff is worth your time.",

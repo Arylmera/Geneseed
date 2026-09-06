@@ -23,6 +23,7 @@
   "DESC_DOCS": "Keeps the joke book and the notes once the work is done.",
   "DESC_SECURITY": "Goes over anything touching the security surface — no surprises in the act.",
   "DESC_EXPLORER": "Sends a scout — sweeps wide in a throwaway open-mic run, brings back only the read.",
+  "DESC_RESEARCHER": "Sends a scout out of the club — reads the reviews everyone skipped, checks each twice, brings back only the ones that held up.",
   "DESC_ADVOCATE": "Argues for the bit — the laugh to be had, the opening, the cost of cutting it.",
   "DESC_SKEPTIC": "Plays the heckler — calls the bit on its failure modes, its risks, and the assumptions nobody checked.",
   "DESC_PRAGMATIST": "Weighs the set — the cost, the effort, the complexity, and whether the payoff is worth it.",
