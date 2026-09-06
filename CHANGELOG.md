@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.4.0] — 2026-09-06
+
 ### Added
 
 - **Six skills.** `security-audit` (the `security` agent finally has a caller — trust
