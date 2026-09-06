@@ -132,7 +132,7 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-03",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/bruno-collection-generator": {
       "status": "experimental",
@@ -148,11 +148,11 @@
       "added": "2026-09-03",
       "last_verified": ""
     },
-    "skills/clarify": {
-      "status": "approved",
+    "skills/ci-fix": {
+      "status": "experimental",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
-      "added": "2026-06-09",
+      "added": "2026-09-06",
       "last_verified": ""
     },
     "skills/codebase-design": {
@@ -160,13 +160,20 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/commit": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-01",
+      "last_verified": "2026-09-06"
+    },
+    "skills/consolidate-memory": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-06",
       "last_verified": ""
     },
     "skills/council": {
@@ -174,34 +181,27 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-08",
-      "last_verified": ""
-    },
-    "skills/crash-course": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/daydream": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-16",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/debug": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-03",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
-    "skills/decode": {
-      "status": "approved",
+    "skills/deps-audit": {
+      "status": "experimental",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
-      "added": "2026-06-13",
+      "added": "2026-09-06",
       "last_verified": ""
     },
     "skills/develop": {
@@ -209,181 +209,160 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-01",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/document-project": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-10",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/domain-modeling": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-13",
-      "last_verified": ""
-    },
-    "skills/drill": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-13",
-      "last_verified": ""
-    },
-    "skills/feynman": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/forge-mcp": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-19",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/fresh-eyes": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-09",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/frontend-design": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-15",
-      "last_verified": ""
-    },
-    "skills/gap-detector": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/geneseed": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/geneseed-code-review": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-19",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/git-archaeology": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-10",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/git-rescue": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-10",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/handoff": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-03",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/herdr": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/ingest": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-07",
-      "last_verified": ""
-    },
-    "skills/learning-path": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/migrate": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-08",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/opencode-theme": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-19",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/parallel-agents": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-03",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/pipeline": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/plan": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-01",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/ponytail": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-16",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/profile": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-12",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/prose": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-15",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/prototype": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-13",
+      "last_verified": "2026-09-06"
+    },
+    "skills/quiz": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-06",
       "last_verified": ""
     },
     "skills/react-view-transitions": {
@@ -391,49 +370,49 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-16",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/refactor": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-03",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/release": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-07",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/repo-map": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-01",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/research": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-07",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/review-response": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-07",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/roast-me": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-03",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/rule": {
       "status": "experimental",
@@ -442,18 +421,32 @@
       "added": "2026-07-07",
       "last_verified": ""
     },
+    "skills/security-audit": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-06",
+      "last_verified": ""
+    },
     "skills/ship": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-07",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
-    "skills/tdd": {
-      "status": "approved",
+    "skills/skill-forge": {
+      "status": "experimental",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
-      "added": "2026-06-03",
+      "added": "2026-09-06",
+      "last_verified": ""
+    },
+    "skills/teach": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-06",
       "last_verified": ""
     },
     "skills/tickets": {
@@ -461,7 +454,7 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/token-report": {
       "status": "experimental",
@@ -475,20 +468,27 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-13",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/wiki": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-11",
-      "last_verified": ""
+      "last_verified": "2026-09-06"
     },
     "skills/workflow": {
       "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-09",
+      "last_verified": "2026-09-06"
+    },
+    "skills/worktree": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-06",
       "last_verified": ""
     }
   }

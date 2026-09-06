@@ -112,6 +112,53 @@ export function descOf(text) {
   return firstBlockquote(text);
 }
 
+/**
+ * The `**Trigger:**` paragraph of a skill, flattened to one line — markdown links reduced
+ * to their text, HTML comments dropped, whitespace collapsed. '' when the skill has none.
+ *
+ * Why it exists: on Claude Code (and Bob) the frontmatter `description:` is the ONLY text
+ * the model matches a task against before deciding to load a skill. The purpose line says
+ * what a skill does; the trigger says WHEN — and a catalogue of purposes alone left the
+ * model choosing `tdd` from "Drive implementation with tests" without ever seeing "before
+ * writing implementation code". The AGENT.md §4 table carried the triggers, but native
+ * hosts collapse that table to a pointer (`hostCatalogsNatively`), so the trigger reached
+ * no host at all. `skillDescription` below concatenates the two.
+ */
+export function triggerOf(text) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((ln) => /^\*\*Trigger:\*\*/.test(ln.trim()));
+  if (start < 0) return '';
+  const para = [];
+  for (let i = start; i < lines.length; i += 1) {
+    const s = lines[i].trim();
+    if (i > start && (s === '' || s.startsWith('#') || s.startsWith('**'))) break;
+    para.push(s);
+  }
+  return para.join(' ')
+    .replace(/^\*\*Trigger:\*\*\s*/, '')
+    .replace(HTML_COMMENT_RE, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Purpose + trigger, the emitted `description:` of a skill. Capped so a long trigger (a
+ * few carry three sentences of disambiguation) cannot blow past what hosts display —
+ * cut at the last sentence end inside the cap, never mid-word.
+ */
+const DESCRIPTION_CAP = 900;
+export function skillDescription(text) {
+  const desc = descOf(text);
+  const trig = triggerOf(text);
+  if (!trig) return desc;
+  const full = `${desc} Use when: ${trig}`;
+  if (full.length <= DESCRIPTION_CAP) return full;
+  const cut = full.slice(0, DESCRIPTION_CAP);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('; '));
+  return end > desc.length ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, '') + '…';
+}
+
 /** `_build_render._HTML_COMMENT_RE`. */
 const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
 
@@ -442,7 +489,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       // Skills are BYTE-IDENTICAL across hosts: name + description, body link-stripped.
       // The user-only key is emitted for every host too — Claude Code and Bob honour it,
       // OpenCode and Copilot ignore an unknown key — so the identity holds.
-      fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
+      fm = [`name: ${stem}`, `description: ${jsonDumps(skillDescription(text))}`];
       if (isUserInvokedOnly(text)) fm.push('disable-model-invocation: true');
       body = stripSkillBodyLinks(body);
       dest = path.join(skillsDir, stem, 'SKILL.md');

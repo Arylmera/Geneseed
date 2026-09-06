@@ -75,19 +75,22 @@ describe('Skills lifecycle statuses', () => {
     expect(container.querySelector('.law-readout').textContent).toContain('1 experimental')
   })
 
+  // The taxonomy is seven classes — design, build, review, ship, understand, learn, and
+  // harness (the skills about the agent's own apparatus) — so the readout says 7 with no
+  // Personal skill present and 8 once one earns the chip.
   it('hides the Personal chip when every skill is one Geneseed ships', async () => {
     const { container } = render(<Skills />)
     await waitFor(() => expect(screen.getByText('commit')).toBeTruthy())
     expect(chips(container)).not.toContain('Personal')
-    expect(container.querySelector('.law-readout').textContent).toContain('6 classes')
+    expect(container.querySelector('.law-readout').textContent).toContain('7 classes')
   })
 
-  it('gives skills of your own their own chip, outside the six classes', async () => {
+  it('gives skills of your own their own chip, outside the seven classes', async () => {
     box.items = [...SHIPPED, MINE]
     const { container } = render(<Skills />)
     await waitFor(() => expect(screen.getByText('scribe-readme')).toBeTruthy())
     expect(chips(container)).toContain('Personal')
-    expect(container.querySelector('.law-readout').textContent).toContain('7 classes')
+    expect(container.querySelector('.law-readout').textContent).toContain('8 classes')
     // Its row is classed Personal, not swept into the Build fallback.
     const row = [...container.querySelectorAll('.skill-row')].find((r) =>
       r.textContent.includes('scribe-readme'),

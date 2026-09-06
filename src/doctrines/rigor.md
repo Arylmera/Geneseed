@@ -26,7 +26,7 @@ deterministic unit layer.
 ### {{DOCTRINE}} rigor 3 — {{DOC_RIGOR_3}}
 Code you author is not done until its behaviour is covered by a test you wrote
 and the affected tests run green. New behaviour ships with the test that pins it,
-a bug fix with the test that reproduces it first (the tdd {{SKILL}} drives this).
+a bug fix with the test that reproduces it first (the develop {{SKILL}} drives this).
 After each change run the tests that change could affect — the ones you touched,
 not the whole suite ({{DOCTRINE}} process 3) — and read the output before moving on.
 Verify against the project's real runner and show the result as evidence ({{LAW}} III);

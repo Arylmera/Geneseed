@@ -146,7 +146,7 @@ test('the project CLAUDE.md carries no dead per-row skill link', () => {
     projectEmit('claude', path.join(d, 'Harness'), d);
     const cm = read(d, 'CLAUDE.md');
     assert.doesNotMatch(cm, /\]\([^)]*(?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/);
-    assert.ok(!cm.includes('| clarify |'), 'Claude grew a capability table again');
+    assert.ok(!cm.includes('| brainstorm |'), 'Claude grew a capability table again');
     assert.ok(cm.includes('that list is the catalogue'),
       'the native-catalog pointer is gone, so the absent table above proves nothing');
   });
@@ -161,7 +161,7 @@ test("Bob's AGENTS.md carries no dead skill link, and still carries the rows", (
     projectEmit('bob', path.join(d, 'Harness'), d);
     const am = read(d, 'AGENTS.md');
     assert.doesNotMatch(am, /\]\([^)]*(?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/);
-    assert.ok(am.includes('| clarify |'), 'Bob lost its capability rows');
+    assert.ok(am.includes('| brainstorm |'), 'Bob lost its capability rows');
     assert.ok(am.includes('| council |'));
   });
 });
@@ -174,27 +174,27 @@ test('a skill is byte-identical across the Claude and OpenCode global emits', ()
     const openCfg = path.join(d, 'dotopencode');
     globalEmit('claude', path.join(d, 'b-claude'), claudeCfg);
     globalEmit('opencode', path.join(d, 'b-opencode'), openCfg);
-    const a = path.join(claudeCfg, 'skills', 'tdd', 'SKILL.md');
-    const b = path.join(openCfg, 'skills', 'tdd', 'SKILL.md');
+    const a = path.join(claudeCfg, 'skills', 'develop', 'SKILL.md');
+    const b = path.join(openCfg, 'skills', 'develop', 'SKILL.md');
     assert.ok(fs.existsSync(a) && fs.existsSync(b), 'one of the two hosts never wrote the skill');
     assert.equal(fs.readFileSync(a, 'utf8'), fs.readFileSync(b, 'utf8'));
   });
 });
 
 test('a user-only skill renders disable-model-invocation; an ordinary one does not', () => {
-  // The marker is `<!-- invocation: user -->` in the source spec. `drill` carries it — a
+  // The marker is `<!-- invocation: user -->` in the source spec. `quiz` carries it — a
   // teaching drill a human runs on themselves, which the model must never self-trigger —
-  // and `tdd` does not. Asserted on the emitted SKILL.md, the artifact the host reads.
+  // and `develop` does not. Asserted on the emitted SKILL.md, the artifact the host reads.
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');
     globalEmit('claude', path.join(d, 'b-claude'), cfg);
-    const drill = read(cfg, 'skills', 'drill', 'SKILL.md');
-    const tdd = read(cfg, 'skills', 'tdd', 'SKILL.md');
+    const quiz = read(cfg, 'skills', 'quiz', 'SKILL.md');
+    const develop = read(cfg, 'skills', 'develop', 'SKILL.md');
     // The key sits inside the frontmatter (the text between the first two `---` fences),
     // not the body. Split on either line ending: the writer uses the platform's.
-    const fm = drill.split(/^---\r?\n/m)[1];
+    const fm = quiz.split(/^---\r?\n/m)[1];
     assert.match(fm, /^disable-model-invocation: true\r?$/m);
-    assert.doesNotMatch(tdd, /disable-model-invocation/);
+    assert.doesNotMatch(develop, /disable-model-invocation/);
   });
 });
 
@@ -562,14 +562,14 @@ test('a re-emit prunes a managed hook group that is no longer canonical', () => 
 
 test('deactivating leaves no empty skill folders behind', () => {
   // Skills are emitted as FOLDERS, so stashing the file leaves a husk unless the walk climbs.
-  // A husk is not cosmetic: `skills/tdd/` with nothing in it is what a host lists as an
+  // A husk is not cosmetic: `skills/develop/` with nothing in it is what a host lists as an
   // installed-but-broken skill.
   withDir((d) => {
     const cfg = activatedCfg(d);
-    assert.ok(fs.existsSync(path.join(cfg, 'skills', 'tdd', 'SKILL.md')),
+    assert.ok(fs.existsSync(path.join(cfg, 'skills', 'develop', 'SKILL.md')),
       'the emit wrote no skill, so nothing below is being tested');
     captured(() => installDeactivate(cfg, 'claude', 'global'));
-    assert.ok(!fs.existsSync(path.join(cfg, 'skills', 'tdd')), 'an empty skill folder was left');
+    assert.ok(!fs.existsSync(path.join(cfg, 'skills', 'develop')), 'an empty skill folder was left');
     assert.ok(!fs.existsSync(path.join(cfg, 'skills')), 'an empty skills/ was left');
   });
 });
@@ -730,8 +730,8 @@ test('a skill is byte-identical across the Copilot and OpenCode global emits', (
     const oc = path.join(d, 'dotopencode');
     globalEmit('copilot', path.join(d, 'b1'), cfg);
     globalEmit('opencode', path.join(d, 'b2'), oc);
-    const a = path.join(cfg, 'skills', 'tdd', 'SKILL.md');
-    const b = path.join(oc, 'skills', 'tdd', 'SKILL.md');
+    const a = path.join(cfg, 'skills', 'develop', 'SKILL.md');
+    const b = path.join(oc, 'skills', 'develop', 'SKILL.md');
     assert.ok(fs.existsSync(a) && fs.existsSync(b));
     assert.equal(fs.readFileSync(a, 'utf8'), fs.readFileSync(b, 'utf8'));
   });
@@ -748,7 +748,7 @@ test('the Copilot project layer lands under .github, with the pointers prefixed'
     assert.ok(am.includes('.github/memory'), 'a bare memory/ pointer names a store nothing writes');
 
     assert.ok(fs.existsSync(path.join(repo, '.github', 'agents', 'reviewer.agent.md')));
-    assert.ok(fs.existsSync(path.join(repo, '.github', 'skills', 'tdd', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(repo, '.github', 'skills', 'develop', 'SKILL.md')));
     for (const absent of ['settings.json', 'settings.local.json', 'rules']) {
       assert.ok(!fs.existsSync(path.join(repo, '.github', absent)), `.github/${absent} was written`);
     }
@@ -795,7 +795,7 @@ test("Copilot's AGENTS.md carries no dead skill link, and still carries the rows
     projectEmit('copilot', path.join(d, 'Harness'), d);
     const am = read(d, 'AGENTS.md');
     assert.doesNotMatch(am, /\]\([^)]*(?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/);
-    assert.ok(am.includes('| clarify |'), 'Copilot lost its capability rows');
+    assert.ok(am.includes('| brainstorm |'), 'Copilot lost its capability rows');
     assert.ok(am.includes('| council |'));
   });
 });

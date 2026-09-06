@@ -10,11 +10,12 @@ import CatalogRow from '../components/CatalogRow.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { CAT_HUES } from '../lib/lawCats.js'
 
-// Six-class taxonomy mirroring the Laws view. The class itself comes from the server
+// Seven-class taxonomy mirroring the Laws view. The class itself comes from the server
 // (SKILL_CLASS, shipped as `klass`); this map only holds the chip label and reuses
 // LAW_CATS' own hues (CAT_HUES) so the two ledgers read as one family — Design ==
 // Context's hue, Build == Craft's, Review == Security's, Ship == Process's, Understand
-// == Verification's, Learn == Communication's. Order is the chip-bar order.
+// == Verification's, Learn == Communication's. Harness (skills about the agent's own
+// apparatus) takes a slate of its own, outside the law family. Order is the chip-bar order.
 //
 // `personal` is the exception: a skill the lifecycle registry has never heard of —
 // your own, living in this install only. Deliberately near-grey rather than a
@@ -27,9 +28,19 @@ const SKILL_CATS = {
   ship: { label: 'Ship', c: CAT_HUES.process },
   understand: { label: 'Understand', c: CAT_HUES.verify },
   learn: { label: 'Learn', c: CAT_HUES.comms },
+  harness: { label: 'Harness', c: 'oklch(0.76 0.07 250)' },
   personal: { label: 'Personal', c: 'oklch(0.72 0.025 250)' },
 }
-const SKILL_CAT_ORDER = ['design', 'build', 'review', 'ship', 'understand', 'learn', 'personal']
+const SKILL_CAT_ORDER = [
+  'design',
+  'build',
+  'review',
+  'ship',
+  'understand',
+  'learn',
+  'harness',
+  'personal',
+]
 
 // One expandable row, via CatalogRow (shared with LawRow) — see that component for the
 // lazy-load/expand-panel machinery. Mirrors LawRow, minus the numeral column — skills
