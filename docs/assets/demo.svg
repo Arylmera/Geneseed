@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+<style>
+  .cmd{fill:#e6edf3}.dim{fill:#8b949e}.ok{fill:#3fb950}.cmt{fill:#8b949e;font-style:italic}.tool{fill:#d2a8ff}.law{fill:#f85149}
+</style>
+<rect width="760" height="420" rx="10" fill="#0d1117"/>
+<rect width="760" height="28" rx="10" fill="#161b22"/><rect y="14" width="760" height="14" fill="#161b22"/>
+<circle cx="18" cy="14" r="5" fill="#ff5f56"/><circle cx="36" cy="14" r="5" fill="#ffbd2e"/><circle cx="54" cy="14" r="5" fill="#27c93f"/>
+<text x="380" y="18" text-anchor="middle" fill="#8b949e" font-size="12">geneseed — one source, five hosts</text>
+<text x="16" y="59" class="cmd" opacity="0">$ npx geneseed setup<animate attributeName="opacity" from="0" to="1" begin="0.4s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="79" class="dim" opacity="0">  theme ........ neutral<animate attributeName="opacity" from="0" to="1" begin="1.4s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="99" class="dim" opacity="0">  install ...... opencode-global   (every repo inherits it)<animate attributeName="opacity" from="0" to="1" begin="1.8s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="119" class="ok" opacity="0">  ✓ built  ·  11 laws · 18 agents · 49 skills  ·  gates armed<animate attributeName="opacity" from="0" to="1" begin="2.6s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="159" class="cmd" opacity="0">$ geneseed doctor<animate attributeName="opacity" from="0" to="1" begin="3.4s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="179" class="ok" opacity="0">  [doctor] ok — no unresolved tokens, no dead links, rendered bundle in sync<animate attributeName="opacity" from="0" to="1" begin="4.2s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="219" class="cmt" opacity="0"># later, in any repo — the agent reaches for:<animate attributeName="opacity" from="0" to="1" begin="5.2s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="239" class="tool" opacity="0">&gt; git push --force origin main<animate attributeName="opacity" from="0" to="1" begin="6s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="259" class="law" opacity="0">  ⛔ Law IV — a history-rewriting or discarding git act needs confirmation<animate attributeName="opacity" from="0" to="1" begin="6.8s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="279" class="law" opacity="0">     bound to this specific command<animate attributeName="opacity" from="0" to="1" begin="6.8s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="319" class="tool" opacity="0">&gt; Write config.js   const key = &quot;sk-ant-api03-…&quot;<animate attributeName="opacity" from="0" to="1" begin="8s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="339" class="law" opacity="0">  ⛔ Law I — config.js would carry a credential-shaped string.<animate attributeName="opacity" from="0" to="1" begin="8.8s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="359" class="law" opacity="0">     Secrets live in .env or a secret manager, never in a tracked file.<animate attributeName="opacity" from="0" to="1" begin="8.8s" dur="0.05s" fill="freeze"/></text>
+<text x="16" y="399" class="dim" opacity="0">  one source · five hosts · the rules hold at the tool boundary<animate attributeName="opacity" from="0" to="1" begin="10s" dur="0.05s" fill="freeze"/></text>
+<rect x="16" y="390" width="8" height="14" fill="#e6edf3"><animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/></rect>
+</svg>

@@ -352,6 +352,10 @@ const WITHHELD = [
   ['.claude/', "this repository's OWN agent config — a deployed harness, not the product"],
   ['.gitignore', 'repo mechanics; npm strips it from a tarball anyway'],
   ['.gitattributes', 'repo mechanics'],
+  ['CONTRIBUTING.md', 'the GitHub-side pointer at README §Contributing and docs/extending.md; an '
+    + 'install never needs it and the README already carries the substance'],
+  ['docs/assets/', 'README media (the animated terminal demo). `docs/*.md` ships the prose; the '
+    + 'picture is for the repository page only'],
   ['CLAUDE.md', "this repository's OWN contributor guide — the same reason `.claude/` is withheld, "
     + 'plus a sharper one: this tool EMITS a CLAUDE.md into a user\'s project, and shipping one in '
     + 'the tarball would put a file that talks about editing Geneseed next to the files that are '
