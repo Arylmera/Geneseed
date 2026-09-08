@@ -22,7 +22,24 @@
 
 ---
 
-Geneseed distils an agent operating system into a generic harness built around a single `AGENT.md`. Point your tool at it and the agent inherits a set of operating **rules**, a roster of capability **agents**, native **skills**, a **memory** convention, and — on OpenCode — 7 **plugins** that auto-load your project's docs, capture durable memory, enforce the safety laws, run saved workflows, ping you when a long run finishes, hold a minimal-code mode when you ask for one, and stream what each session is doing to the web console. One source builds it; it follows you into every repo.
+<p align="center"><img src="docs/assets/demo.svg" alt="geneseed setup, then two laws catching a force-push and a credential at the tool boundary" width="760"></p>
+
+**Geneseed compiles your agent's rules instead of asking you to write them.** One source in `src/` renders into a ready-made harness for OpenCode, Claude Code, Bob, Copilot, or any `AGENT.md` tool: a constitution of laws and doctrines, a roster of capability agents, native skills, a memory convention — and, wherever the host has a hook surface, gates that *enforce* the laws at the tool boundary instead of hoping the model remembers them.
+
+```bash
+npx geneseed setup
+```
+
+Want to read what it leaves behind before installing anything? [**geneseed-demo**](https://github.com/Arylmera/geneseed-demo) is a repository exactly as the plain bundle emits it — nothing hand-written.
+
+### Why not just a CLAUDE.md?
+
+A hand-written instructions file is prose the model may or may not honour, copied into every repo and drifting in each one. Geneseed is a build, and that changes four things:
+
+- **Laws are enforced, not suggested.** A force-push, a `reset --hard`, or a credential written into a tracked file is caught by a hook *before* the tool runs, in the host's own dialect — a prompt on Claude Code, a hard block on OpenCode and Copilot, exit 2 on Bob. The gates fail closed, and every catch is one line in a ledger that `geneseed status` counts.
+- **One source, five targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 261 emit configurations, and a second emit into the same tree must change nothing.
+- **Costs are measured, not guessed.** Zero runtime dependencies. The hook path loads in about 14 ms per tool call. The default *lean* footprint keeps the always-on context small and puts the full rationale one read away — the numbers are in [docs/token-footprint.md](docs/token-footprint.md).
+- **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
 
 This page is the overview. Four parts: **why** it exists, how to **set it up**, the two ways to **drive it** (web console & command line), and **what you get**. For every install path, configuration knob, and troubleshooting step, read the full [Setup guide](SETUP.md).
 
