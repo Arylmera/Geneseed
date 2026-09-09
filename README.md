@@ -212,10 +212,10 @@ A second per-install dial, **footprint**, sets how much of the constitution `AGE
 
 | Footprint | The Ontology + Sections 1–2 of `AGENT.md` | Trade-off |
 | --- | --- | --- |
-| **lean** *(default)* | the Ontology and each Rule in their **authored** short form; each active doctrine rule as its heading + the rule line; then pointers to the full text | lighter every turn; rationale is one on-demand read away |
+| **lean** *(default)* | the Ontology, each Rule and each active doctrine rule in their **authored** short form; then pointers to the full text | lighter every turn; rationale is one on-demand read away |
 | **full** | the Ontology, every Rule and every active doctrine rule at complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
 
-**Lean is authored, not cut.** The Ontology and every Rule carry a hand-written lean form beside their full text (`LEAN` blocks in `src/`), so a Rule's lean footprint is decided by its author and not by where its first full stop happens to fall — the earlier first-sentence cut shipped Rule II as one 36-character line and dropped its stop-and-ask mechanism. Only doctrine rules are still machine-cut to their heading plus first sentence.
+**Lean is authored, not cut.** The Ontology, every Rule and every doctrine rule carry a hand-written lean form beside their full text (`LEAN` blocks in `src/`), so a rule's lean footprint is decided by its author and not by where its first full stop happens to fall — the earlier first-sentence cut shipped Rule II as one 36-character line and dropped its stop-and-ask mechanism, and shipped a doctrine rule like *Change as little as the task requires.* as six words with no verb to act on.
 
 Both footprints put the full text on disk beside `AGENT.md`: `laws/`, `ontology/` and `doctrines/` all ship in the bundle at **full** text whatever the footprint, and **all four pack files ship whether or not the pack was built in** — which is what lets a citation into an inactive pack resolve. So lean is a context/token optimization, **not** a rules cut.
 

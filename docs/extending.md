@@ -166,7 +166,11 @@ Five files, none of them a count. This is the slot most new material belongs in,
 on purpose so that the invariant slot stays scarce.
 
 1. `src/doctrines/<pack>.md` — **append** `### {{DOCTRINE}} <pack> <n> — {{DOC_<PACK>_<n>}}` plus
-   the body. Two gates in `constitutionProblems` (`js/inspect/doctor.mjs`) sit on this: the pack named in
+   the body, wrapped in a `LEAN` block with **both halves authored** — the heading stays outside the
+   block, the full text goes in `LEAN:begin`, and the lean half is the rule *and its mechanism*, no
+   maxims (the style rule is in `src/doctrines/README.md`, and `leanBlockProblems` refuses a rule
+   with no block or an empty half). Two gates in `constitutionProblems`
+   (`js/inspect/checks-authoring.mjs`) sit on this too: the pack named in
    the *heading* is what addresses the rule (not the filename, so a rule filed in the wrong file is
    reported rather than silently renamed), and ids must run **contiguously from 1**, so appending
    at the end is the only place `n` is free. Packs are numbered independently — nothing outside
@@ -217,10 +221,9 @@ Steps 1 and 9 of §2c, plus `LAW_META` if the Principle line moved. Two cautions
 
 - `--footprint` defaults to **lean**, and a law's lean text is the authored `LEAN:else` half of
   its block in `src/laws/universal.md` (`resolveLean` in `js/build/render.mjs`). Amend **both**
-  halves, or the amendment does not exist for most installs. A doctrine rule is different: it is
-  still machine-cut to its heading plus first sentence (`terseBlocks`), so a clause in its second
-  paragraph is invisible in the default build. The on-disk `laws/` and `ontology/` copies always
-  render at full, whatever the footprint.
+  halves, or the amendment does not exist for most installs — and a doctrine rule is no different,
+  since its rules got the same block. The on-disk `laws/`, `ontology/` and `doctrines/` copies
+  always render at full, whatever the footprint.
 
 ### 2c — Adding an INVARIANT
 

@@ -406,19 +406,19 @@ the agent reads — which is why the wizard's blurb for it says so.
 **Footprint** sets how much of the constitution `AGENT.md` carries *inline* on every turn — a
 token-cost dial, not a change to which Rules apply. Both states keep all Rules in force:
 
-- **lean** (default) — Sections 1–2 carry the heading and rule line of each Rule and each
-  active doctrine rule, then a pointer to the full text. Lighter every turn; the complete
+- **lean** (default) — Sections 1–2 carry the heading and the authored short form of each Rule
+  and each active doctrine rule, then a pointer to the full text. Lighter every turn; the complete
   `laws/universal.md`, `ontology/` and `doctrines/` still ship beside `AGENT.md` and the agent
   reads them on demand (and is told to before acting on secrets, deletion, git history, scope,
   or untrusted content).
 - **full** — Sections 1–2 inline every Rule's and every active doctrine rule's complete text
   *and* rationale. Maximum guidance density; the largest always-loaded block in the harness.
 
-**The Ontology is never truncated.** Lean keeps only the first sentence of each `### ` block,
-and the four ontology sections are flowing prose rather than numbered rules — cutting them
-would leave four orphan sentences, so they ship whole at both footprints. That is why adding
-the ontology tier grew the lean carrier proportionally more than the full one; it was taken as
-a deliberate cost.
+**Nothing at lean is truncated — it is written.** Every tier carries a hand-authored short form
+beside its full text: the Ontology (whose four flowing sections would have read as four orphan
+sentences if cut), each Rule, and each doctrine rule. What lean ships is decided by an author
+rather than by where a sentence happens to end — so a short form is judged on whether an agent
+can act on it, which is something a reviewer can see.
 
 **Why:** context is scarce and metered. Lean reclaims that budget — and the tokens you
 pay for it — for the task, moving the *rationale* one read away while keeping the rules

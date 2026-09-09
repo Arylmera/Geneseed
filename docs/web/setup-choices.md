@@ -56,7 +56,7 @@ The switches are on the **Constitution** page, one per rule, staged locally and 
 
 How much of the constitution `AGENT.md` carries inline every turn. A token-cost dial, not a rules cut — whatever this install adopted always applies:
 
-- **lean** *(default)* — the Ontology whole, then each Rule and each doctrine rule as its heading plus its first line, with a pointer to the complete text shipped beside `AGENT.md` and read on demand.
+- **lean** *(default)* — the Ontology, each Rule and each doctrine rule in an authored short form — the rule and its mechanism, hand-written beside the full text — with a pointer to the complete text shipped beside `AGENT.md` and read on demand.
 - **full** — every Rule's and every active doctrine rule's complete text *and* rationale inline. Best when token cost is a non-issue or you run a smaller model, which applies a rule's nuance more reliably with the *why* eagerly in context.
 
 ---

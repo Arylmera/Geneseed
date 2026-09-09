@@ -8,7 +8,29 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- **Doctrine rules inline an authored lean form.** All 24 rules across the four packs now
+  carry a `LEAN` block with both halves written by hand, the way the invariants and the
+  Ontology already did; `doctrinesBody` picks the half through `resolveLean` and the
+  first-sentence cut (`terseBlocks`) is gone. It was cutting eleven of the 24 rules down to a
+  maxim with no verb an agent could act on — *Make actions safe to run twice.*, *Change as
+  little as the task requires.*, and eight words of process 5's 213-word consent protocol.
+  The Doctrines section grows 4,096 → 9,635 characters at `lean` on neutral, which is the
+  point of the change rather than a cost of it; `CEILING.lean` moves 37,500 → 41,300 and
+  `CEILING.full` does not move, because not one full half was edited.
+- **`doctrines/` ships at full text under both footprints,** joining `laws/` and `ontology/`
+  in `renderAll`'s on-disk exemption. It shipped whole before only because a pack file had no
+  markers for `resolveLean` to act on — by accident, where the Doctrines section's own pointer
+  promises it by contract.
+
+### Added
+
+- **A `leanBlockProblems` doctor arm** over `src/laws/universal.md` and every pack: exactly one
+  `LEAN` block per rule, neither half blank. `resolveLean` is a replace over a marker pair and
+  therefore a no-op on markerless text, so a rule that lost its block would inline its full
+  body at the default footprint in silence, with every other gate in the tree green. Nothing
+  in `js/inspect/` read a LEAN marker before this — not for the packs, and not for the laws.
 
 ## [3.4.0] — 2026-09-06
 
