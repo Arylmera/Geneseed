@@ -202,12 +202,13 @@ test('the include directive is really inlined', () => {
 // The lean/full footprint.
 //
 // AGENT.md §1 either inlines every law's full text (full) or the law's AUTHORED lean form, its
-// LEAN block (lean) — while the complete `laws/universal.md` and `ontology/universal.md` ship on
-// disk at full text EITHER WAY. Every law binds regardless; the footprint governs how much
+// LEAN block (lean) — while the complete `laws/universal.md`, `ontology/universal.md` and
+// `doctrines/*.md` ship on disk at full text EITHER WAY. Every law binds regardless; the footprint governs how much
 // AGENT.md inlines, not which laws apply. Lean used to be the first sentence, machine-cut, which
 // made a law's lean footprint a function of its punctuation: Law II shipped as 36 characters and
 // lost its stop-and-ask mechanism, Law XI as 348. Now each law's lean text is written by hand,
-// the way the ontology's already was.
+// the way the ontology's already was — and so is each doctrine rule's, which was the last tier
+// still being cut at the first full stop.
 
 // A sentence present ONLY in Law I's full body. The discriminator between the two footprints.
 const FULL_ONLY = 'or a secret manager';
@@ -218,6 +219,17 @@ const ESSENCE = 'No key, password, token, or secret';
 const LEAN_II_MECHANISM = 'If a worthwhile widening appears mid-task, stop and ask';
 // A clause only in the ontology's full text (its lean block condenses the Decisions section).
 const ONT_FULL_ONLY = 'weigh blast radius against value';
+// A doctrine rule's lean text is its authored `LEAN:else` half too, not its first sentence. craft
+// 6's full body opens "Change as little as the task requires." — six words with no verb an agent
+// can execute — so the mechanism has to be WRITTEN into the lean half rather than measured out of
+// the prose; craft 5's closing aphorism must not ride along. Both marks sit inside ONE
+// hard-wrapped source line, for the reason the two above give.
+const DOC_LEAN_MECHANISM = 'do not rewrite a whole file when a few lines suffice';
+// The tail of craft 5's closing aphorism, and a fragment on purpose: the whole of
+// "Consistency outranks personal preference." straddles a wrap in `src/doctrines/craft.md`, and
+// the first draft of this constant asserted the wrap — which is the failure the paragraph above
+// exists to warn about, reproduced by the person who wrote the warning.
+const DOC_FULL_ONLY = 'outranks personal preference';
 
 test('full inlines the complete law text', () => {
   assert.ok(rendered('AGENT.md', 'neutral', 'full').includes(FULL_ONLY));
@@ -230,10 +242,25 @@ test('lean keeps the essence, carries the authored mechanism, and drops the rati
   assert.ok(!agent.includes(FULL_ONLY), 'lean inlined the full body');
 });
 
-test('a lean build still ships the complete law and ontology files', () => {
+test("lean inlines each doctrine rule's authored brief", () => {
+  const lean = rendered('AGENT.md', 'neutral', 'lean');
+  assert.ok(lean.includes(DOC_LEAN_MECHANISM),
+    "lean lost craft 6's minimal-diff mechanism — the rule shipped as its opening maxim");
+  assert.ok(!lean.includes(DOC_FULL_ONLY), "lean inlined a doctrine rule's full body");
+  // The full footprint is the control: both marks are in the same rule bodies either way, so a
+  // lean half that merely deleted craft 5 would satisfy the line above and fail here.
+  const full = rendered('AGENT.md', 'neutral', 'full');
+  assert.ok(full.includes(DOC_LEAN_MECHANISM), 'full lost the mechanism the lean half quotes');
+  assert.ok(full.includes(DOC_FULL_ONLY), 'full no longer carries the complete doctrine text');
+});
+
+test('a lean build still ships the complete law, ontology and doctrine files', () => {
   // THE ONE THAT MATTERS. Lean trims what AGENT.md INLINES; it must not trim what BINDS. A
   // build that shipped a condensed universal.md would silently narrow the agent's law — and
   // before the laws got LEAN blocks, the ONTOLOGY copy on disk was in fact the condensed one.
+  // The doctrine packs joined the exemption when their rules got LEAN blocks: the section
+  // pointer sends a reader to `doctrines/` for the text AGENT.md left out, so a lean bundle
+  // whose pack files carried only the brief would point at nothing.
   withDir((d) => {
     const out = path.join(d, 'bundle');
     emitFiles(d, out, ['--footprint', 'lean']);
@@ -242,6 +269,9 @@ test('a lean build still ships the complete law and ontology files', () => {
       'a lean build shipped a condensed universal.md — the laws themselves were narrowed');
     assert.ok(read(out, 'ontology', 'universal.md').includes(ONT_FULL_ONLY),
       'a lean build shipped the condensed ontology on disk');
+    assert.ok(read(out, 'doctrines', 'craft.md').includes(DOC_FULL_ONLY),
+      'a lean build shipped a condensed doctrines/craft.md — the section pointer promises the '
+      + 'complete text of every pack, active or not');
   });
 });
 

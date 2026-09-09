@@ -589,6 +589,20 @@ export const MUTATIONS = [
       + 'has no FILE. Survivable in every other configuration, so only an all-of-one-pack '
       + 'exclusion reaches it.',
   },
+  {
+    id: 'M34',
+    name: 'render every doctrine rule at full, whatever the footprint',
+    file: 'js/build/render.mjs',
+    find: 'resolveLean(raw, footprint)',
+    replace: "resolveLean(raw, 'full')",
+    gate: UNIT,
+    why: 'THE DIRECTION A SIZE CEILING CANNOT SEE FROM BELOW. A lean build that inlined every '
+      + "rule's full body is bigger, not smaller, so it walks past `emit_smoke`'s floor and lands "
+      + 'on the ceiling only while the ceiling happens to be tight — a number that moves with '
+      + 'every content wave. The claim that survives that is a phrase one: a mark from craft 5\'s '
+      + 'full half must be ABSENT at lean, which is what `generate.test.mjs` asserts and what this '
+      + 'row exists to prove is load-bearing.',
+  },
 ];
 
 function run(argv) {

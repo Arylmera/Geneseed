@@ -176,8 +176,8 @@ export function globalNotebook(cfgDir, items, legacy, srcRoot) {
  *
  * NO LONGER LEAN-ONLY, and the name is kept because the lean case is still the whole reason
  * it exists. `doctrines` ships at BOTH footprints, because the two footprints lose different
- * things: lean loses text (every rule is truncated to its first sentence, so the full text has
- * to be on disk), while FULL loses whole packs (only the active ones are inlined, so the
+ * things: lean loses text (each rule inlines its authored brief, so the full text has to be on
+ * disk), while FULL loses whole packs (only the active ones are inlined, so the
  * inactive ones have to be on disk). AGENT.md tells the agent it may read a rule in a pack
  * that is not active, and `src/doctrines/README.md` rests cross-pack citations on exactly
  * that — a claim the emit has to make true, not merely the `files` bundle.

@@ -323,6 +323,62 @@ test('the gate flags a pack whose rule ids skip, and one filed under the wrong p
     `no wrong-pack problem in ${JSON.stringify(wrong)}`);
 });
 
+// ---------------------------------------------------------------------------------------------
+// The LEAN-block gate. `resolveLean` is a REPLACE over a marker pair, so it is a no-op on text
+// that carries no markers: a rule whose block was dropped ships its full body at the default
+// footprint, silently, and every other gate in the tree stays green. Nothing else in
+// `js/inspect/` reads a LEAN marker — not for the doctrine packs, and not for the laws either.
+
+/** The block grammar, duplicated here for the same reason the check duplicates it: locality. */
+const LEAN_BLOCK_G =
+  /<!-- LEAN:begin -->\n([\s\S]*?)<!-- LEAN:else -->\n([\s\S]*?)<!-- LEAN:end -->\n/g;
+
+/** Rewrite the `n`-th LEAN block of a source file and leave every other one alone. */
+function nthLeanBlock(text, n, rewrite) {
+  let i = 0;
+  const out = text.replace(LEAN_BLOCK_G,
+    (whole, full, lean) => (i++ === n ? rewrite(full, lean) : whole));
+  assert.ok(i > n, `the fixture holds ${i} LEAN blocks — block ${n} was never planted, so this `
+    + 'row would be asserting against an unmodified file');
+  return out;
+}
+
+test('the gate flags a rule whose LEAN block is missing, and one whose lean half is blank', () => {
+  const craft = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
+  // Markers gone, body intact — the shape an author leaves behind by writing a new rule the way
+  // the old ones were written. It reads as complete, and at full it renders as complete.
+  const none = withFault({ 'src/doctrines/craft.md': nthLeanBlock(craft, 0, (full) => full) },
+    (root) => gate(root, 'm.leanBlockProblems()'));
+  assert.ok(none.some((p) => p.includes('craft 1') && p.includes('craft.md')),
+    `no missing-block problem in ${JSON.stringify(none)}`);
+  // The other direction, and the more dangerous one: the markers ARE there, so a reader skims
+  // past them, and the rule renders as a heading over nothing at the footprint most installs use.
+  const blank = withFault({ 'src/doctrines/craft.md': nthLeanBlock(craft, 0,
+    (full) => `<!-- LEAN:begin -->\n${full}<!-- LEAN:else -->\n\n<!-- LEAN:end -->\n`) },
+  (root) => gate(root, 'm.leanBlockProblems()'));
+  assert.ok(blank.some((p) => p.includes('craft 1') && p.includes('lean half')),
+    `no empty-half problem in ${JSON.stringify(blank)}`);
+});
+
+test('the LEAN gate walks the laws too, not only the packs', () => {
+  // BOTH DIRECTORIES, because they are two arms of one walk and an arm wired to the packs alone
+  // satisfies the row above while leaving the invariants — the tier that can never be switched
+  // off — ungated. Block 1 is {{LAW}} II; block 0 would redden too, and would prove less.
+  const laws = fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8');
+  const problems = withFault(
+    { 'src/laws/universal.md': nthLeanBlock(laws, 1, (full) => full) },
+    (root) => gate(root, 'm.leanBlockProblems()'));
+  assert.equal(problems.length, 1, `expected exactly one problem, got ${JSON.stringify(problems)}`);
+  assert.ok(problems[0].includes('universal.md') && problems[0].includes('{{LAW}} II'),
+    `the law was not named in ${JSON.stringify(problems)}`);
+});
+
+test('the LEAN gate is green on the tree as it stands', () => {
+  // The control the three rows above rest on — a planted fault proves nothing about a gate that
+  // was already red, and this arm walks two directories that are edited by hand.
+  assert.deepEqual(gate(fixture(), 'm.leanBlockProblems()'), []);
+});
+
 test('the gate flags a theme missing a doctrine title, and a dead one it still carries', () => {
   // ⚠ THE ARM `themeParityProblems` CANNOT HAVE. Parity is presence-only and SYMMETRIC over the
   // union of every theme's keys, so a key missing from ALL of them is in perfect parity — and
