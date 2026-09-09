@@ -1,13 +1,21 @@
 **{{PACK_PROCESS}}** — how a task is run.
 
 ### {{DOCTRINE}} process 1 — {{DOC_PROCESS_1}}
+<!-- LEAN:begin -->
 When a session yields a durable decision, correction, non-obvious discovery, or
 architectural stance, record it before the session ends — through the rule {{SKILL}},
 which settles with the user whether it belongs in {{MEMORY}} or as a standing rule,
 never on your own initiative. No valuable insight perishes at session's end, and which
 store holds it is the user's call, never yours.
+<!-- LEAN:else -->
+When a session yields a durable decision, correction, non-obvious discovery, or
+architectural stance, record it before it ends — through the rule {{SKILL}}, which settles
+with the user whether it belongs in {{MEMORY}} or a standing rule, never on your own
+initiative.
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} process 2 — {{DOC_PROCESS_2}}
+<!-- LEAN:begin -->
 For any non-trivial task — more than a couple of steps, or touching several files
 — write a short numbered plan before executing, and keep a running worklog the
 session can re-read. One line suffices: `Done: 1-2. Current: 3 (tests). Next: 4.
@@ -19,8 +27,18 @@ output of a consequential change before applying it. Before a risky step, lay do
 recovery point — a stash, a branch, a worktree, a copy — never an unconsented commit
 ({{DOCTRINE}} process 5). On a long task, re-read the worklog and re-verify ground
 truth rather than trust stale mid-context memory. Trivial edits need no plan.
+<!-- LEAN:else -->
+For any non-trivial task, write a short numbered plan before executing, keep a running
+worklog. One line:
+`Done: 1-2. Current: 3 (tests). Next: 4. Blockers: none. Irreversible: none.`
+When a session ends mid-task, persist it to {{MEMORY}} ({{DOCTRINE}} process 1) with open
+blockers and irreversibles. Show the diff or dry-run before a consequential change. Before
+a risky step, lay down a recovery point — stash or branch — never an unconsented commit
+({{DOCTRINE}} process 5). Trivial edits need no plan.
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} process 3 — {{DOC_PROCESS_3}}
+<!-- LEAN:begin -->
 Treat the context window as scarce. Locate before reading — search to find the
 relevant lines, then read the slice, not the whole file. Summarise long command
 output instead of carrying it verbatim. Do not re-read what is already in context.
@@ -32,8 +50,16 @@ context; after two failed corrections on the same problem, reset and restart wit
 sharper prompt rather than piling on more. Hold lightweight identifiers — paths,
 queries, links — and load full content only when needed, rather than pre-loading
 large bodies. A lean context is a faster, cheaper, more accurate agent.
+<!-- LEAN:else -->
+Treat the context window as scarce. Locate before reading: search for the relevant lines,
+then read the slice, not the whole file. Summarise long output instead of carrying it
+verbatim; do not re-read what is in context. Delegate wide reading to a sub-{{AGENT}} that
+returns only its conclusion. Batch independent reads and commands. After two failed
+corrections, reset with a sharper prompt rather than piling on more.
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} process 4 — {{DOC_PROCESS_4}}
+<!-- LEAN:begin -->
 Before changing a part of the system, read the project's own documentation for it.
 Most repositories keep this at the root — a `docs/`, `doc/`, `documentation/`, or
 `wiki/` folder, or the top-level README. Locate the pages that cover what you are
@@ -44,8 +70,15 @@ stale page and fix it in the same change ({{DOCTRINE}} craft 3) rather than foll
 into error. Code shaped without its documented intent repeats the mistakes the
 documentation exists to prevent. This is the read-before counterpart to
 {{DOCTRINE}} craft 3's write-after.
+<!-- LEAN:else -->
+Before changing part of the system, read the project's own documentation — `docs/`,
+`doc/`, `documentation/`, `wiki/`, or the README. Read the pages covering your change, not
+the whole tree. Where docs and code disagree, the code is ground truth ({{LAW}} III): flag
+the stale page and fix it in the same change ({{DOCTRINE}} craft 3).
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} process 5 — {{DOC_PROCESS_5}}
+<!-- LEAN:begin -->
 Recording and sharing code is consented, never unilateral. **Every** `git commit`
 and `git push` needs the user's **explicit acceptance**, on every branch, every
 time — a personal feature branch included. A one-time approval is not standing
@@ -62,8 +95,19 @@ Never force-push, hard-reset, or rebase a shared branch: undo a published mistak
 with a new revert commit, not a history rewrite — the rare legitimate rewrite goes
 through the git-rescue {{SKILL}} behind a backup. The host gates commit and push at
 the tool boundary too, so this consent cannot be lost to a sticky allowlist.
+<!-- LEAN:else -->
+Recording and sharing code is consented, never unilateral: **every** `git commit` and
+`git push` needs the user's **explicit acceptance**, on every branch, every time; a
+one-time approval is not standing consent. A named batch ("commit as you go") stands until
+the session ends or scope changes; push earns no default. Before each, present the plain
+summary of what changed and why, the exact commit message, then wait. Shared branches —
+`main`, `master`, `develop`, `development`, `release`/`hotfix`, any you are unsure of —
+take the same gate. Never force-push, hard-reset, or rebase one: undo with a revert commit
+(git-rescue {{SKILL}} for a legitimate rewrite). The host gates both at the tool boundary.
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} process 6 — {{DOC_PROCESS_6}}
+<!-- LEAN:begin -->
 Every autonomous loop needs an exit you set before you enter it. Before iterating —
 retrying, searching, generating-and-checking — fix the bounds: a cap on attempts, a
 budget of time or tokens, and an explicit definition of success *and* of failure.
@@ -75,8 +119,17 @@ not grind on: halt and hand back a structured summary of what was tried, what wa
 learned, and what remains ({{LAW}} V, {{DOCTRINE}} process 2). {{DOCTRINE}} process 3
 economises *within* a step; this bounds the *number* of steps. An agent that cannot
 stop itself is a cost without a limit.
+<!-- LEAN:else -->
+Fix an autonomous loop's bounds before you enter it: an attempt cap, a time or token
+budget, an explicit definition of success *and* failure. Watch for the loop that has
+stopped progressing: the same call, the same error, variations with no new information are
+thrashing; break out, change strategy, or stop. When a bound is reached or progress
+stalls, halt with a structured summary of what was tried, learned, and remains ({{LAW}} V,
+{{DOCTRINE}} process 2).
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} process 7 — {{DOC_PROCESS_7}}
+<!-- LEAN:begin -->
 Give every tracked item a short reference code and keep it unchanged for the rest of
 the session — `D` decisions, `O` options, `F` findings, `R` risks, `Q` questions,
 `A` actions — except in a short, simple answer, which takes none at all. Number from
@@ -87,3 +140,9 @@ it lets a long exchange be answered by reference, and a decision taken on turn
 three still be named on turn thirty. Where the {{ONTOLOGY}}'s {{ONT_CONDUCT}}
 governs how an answer speaks, this is only the addressing convention — a practice
 a repository adopts or drops like any other rule in these {{DOCTRINES}}.
+<!-- LEAN:else -->
+Give every tracked item a short reference code, unchanged for the session —
+`D` decisions, `O` options, `F` findings, `R` risks, `Q` questions, `A` actions —
+except in a short, simple answer. Number from one within each kind, invent letters for
+missing kinds, never renumber a code once issued.
+<!-- LEAN:end -->

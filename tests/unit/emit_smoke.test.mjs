@@ -78,17 +78,34 @@ const FOOTPRINTS = ['full', 'lean'];
  * so a narrowed build cannot breach it — but it can drop under the half-ceiling floor, which
  * is why every build in this file leaves `--doctrines` at its default.
  *
- * RE-MEASURED AND DELIBERATELY NOT MOVED. All eighteen builds, today: full largest `files`
- * 53_278, smallest `opencode-global` 45_723; lean largest `files` 35_706, smallest
- * `opencode-global` 28_151. The figures above were taken before the Law III restoration and the
- * precedence rewrite put ~600 characters back, so the headroom is now 1_522 (2.8%) at full and
- * 1_794 (4.8%) at lean rather than the +2_000 this docblock describes. Restoring the +2_000 by
- * RAISING the ceiling would be loosening a guard to fit a number nobody complained about; 1_522
- * is still far more than the next silent regrowth would need to be caught by. So the numbers are
- * corrected and the constant is left where it is — this note is the "reason stated in the commit
- * message" that the first paragraph asks for, kept where a reader of the constant will find it.
+ * RE-MEASURED AND DELIBERATELY NOT MOVED, once. The eighteen builds then read: full largest
+ * `files` 53_278, smallest `opencode-global` 45_723; lean largest `files` 35_706, smallest
+ * `opencode-global` 28_151. Every one of those four was stale by the time it was written down —
+ * the paragraphs above describe headroom of +2_000 that two content waves had already spent —
+ * which is the standing argument for re-measuring all eighteen rather than scaling one.
+ *
+ * LEAN RAISED, FULL UNTOUCHED — 2026-09-09, when the doctrine packs stopped being machine-cut.
+ * Each of the 24 rules now inlines an authored `LEAN:else` half instead of its heading plus
+ * first sentence, because for eleven of them that sentence was a maxim with no verb an agent
+ * could act on (`Make actions safe to run twice.`, `Change as little as the task requires.`).
+ * THIS CHANGE DELIBERATELY BUYS TEXT AT LEAN: the Doctrines section grows 4_096 → 9_635
+ * characters on neutral, and the lean carrier grows with it. All eighteen builds, measured
+ * today: full largest `files` 54_685, smallest `opencode` / `opencode-global` 46_207; lean
+ * largest `files` 39_800, smallest `opencode` / `opencode-global` 31_322.
+ *
+ * So `lean` moves 37_500 → 41_300, which is the measured maximum plus ~1_500 of headroom, and
+ * `full` does not move at all: not one full half was edited, and the measured full maximum is
+ * the same 54_685 it was before. That equality is the load-bearing part of this note — it is
+ * what says the growth is confined to the half this change was allowed to touch. It held only
+ * on the second measurement: the first shipped a three-line `Amend BOTH` authoring comment at
+ * the top of each pack file, and NOTHING STRIPS AN HTML COMMENT ON THE WAY TO `AGENT.md`, so
+ * four notes to maintainers were riding into every reader's context at both footprints, +1_112
+ * characters, breaching a full ceiling that had 115 characters of room. The comments were
+ * dropped and the instruction lives in `src/doctrines/README.md`, which ships to nobody's
+ * context. (`src/laws/universal.md` still carries its own copy, ~278 characters, and that is
+ * pre-existing — worth a separate look, not worth widening this change for.)
  */
-const CEILING = { full: 54_800, lean: 37_500 };
+const CEILING = { full: 54_800, lean: 41_300 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -304,6 +321,9 @@ test('the carrier still carries every law, themed and in order', () => {
  * Every build in this file leaves `--doctrines` at its default, so all four packs are active and
  * every rule must appear. The pack-OFF direction is proved in `tests/unit/generate.test.mjs`,
  * against the bundle rather than against nine emit modes.
+ *
+ * The leaked-marker assertion rides along here because this is the only loop that opens every
+ * carrier at both footprints — see its own comment for why no doctor arm can replace it.
  */
 test('the carrier carries every doctrine rule and every ontology section', () => {
   const theme = JSON.parse(readTextPy(path.join(ROOT, 'themes', 'neutral.json')));
@@ -335,6 +355,13 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
   for (const footprint of FOOTPRINTS) {
     for (const [mode, spec] of Object.entries(EXPECTED)) {
       const text = readTextPy(carrierOf(ok(mode, footprint), spec));
+      // D3 — AND `doctor` STRUCTURALLY CANNOT MAKE THIS CLAIM. `js/inspect/scan.mjs` strips HTML
+      // comments before its unresolved-token sweep, so a LEAN marker that survived the render
+      // reaches AGENT.md invisible to every build check. One `includes` here is the whole guard,
+      // and it covers the laws and the ontology as much as the doctrine rules.
+      assert.ok(!text.includes('<!-- LEAN:'),
+        `--emit ${mode} --footprint ${footprint}: a LEAN marker leaked into the carrier — the `
+        + 'block was not resolved, and the reader is handed the authoring scaffold');
       let at = -1;
       for (const r of rules) {
         const heading = `### ${theme.DOCTRINE} ${r.pack} ${r.n} — ${theme[r.key]}`;
@@ -381,14 +408,15 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (27_400 / 18_750) is below the SMALLEST measured carrier
-      // (`opencode-global`, at 45_723 / 28_151) and far above any plausible stub.
+      // the ceiling (27_400 / 20_650) is below the SMALLEST measured carrier (`opencode` and
+      // `opencode-global`, tied at 46_207 / 31_322) and far above any plausible stub.
       //
-      // ⚠ BOTH PARENTHETICALS WERE STALE UNTIL RE-MEASURED. They carried 16_300 / 13_950 and
-      // 23_038 / 18_320 — figures from two revisions of the ceiling ago, describing a corpus
-      // that no longer exists. The arithmetic still held, so nothing was ever red, and a
-      // comment that is only wrong never announces itself. Re-derive both whenever the
-      // constant above moves.
+      // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
+      // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
+      // each set describing a corpus that had already moved. The arithmetic held every time, so
+      // nothing was ever red, and a comment that is only wrong never announces itself.
+      // Re-derive both whenever the constant above moves; the lean half of that constant moved
+      // on 2026-09-09 and these figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `
         + 'satisfied by a render that collapsed, so the floor is what says it did not');
