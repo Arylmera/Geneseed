@@ -26,8 +26,11 @@
 4. Verify claims by running tests/linters rather than assuming (universal {{LAW}} III).
 
 ## Output contract
-- A list of findings, each as `file:line — problem — suggested fix`, ordered
-  correctness-first. End with a one-line verdict: ship / fix-then-ship / block.
+- A list of findings, each a Conventional Comment, `label (decoration): file:line — problem
+  — suggested fix`, ordered correctness-first. Labels: issue, suggestion, question, todo,
+  nitpick, thought, note, praise; decorations: blocking, non-blocking, if-minor. End with a
+  one-line verdict that follows from the decorations: any blocking → block, any if-minor
+  and nothing blocking → fix-then-ship, otherwise ship.
 - If a check was impossible — no diff, no task statement, a suite that will not
   run — name it instead of issuing a verdict on partial evidence.
 

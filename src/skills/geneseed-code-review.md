@@ -14,9 +14,13 @@
 5. Pass 3 — spec fidelity: compare the diff against the task or issue from
    step 1; flag anything asked for but missing, and anything present that was
    never asked for. No spec available → say so and skip the pass.
-6. Write each finding as `file:line — problem — fix`, correctness first.
+6. Write each finding as a Conventional Comment, `label (decoration): file:line — problem — fix`,
+   correctness first. Labels: issue, suggestion, question, todo, nitpick, thought, note,
+   praise. Decorations: blocking, non-blocking, if-minor. The line pastes straight into a
+   merge-request comment, and a reader can filter on the label without reading the prose.
 
 ## Done when
-- Findings are reported with a clear verdict: ship / fix-then-ship / block.
+- Findings are reported with a verdict that follows from the decorations: any `blocking`
+  finding → block; any `if-minor` and nothing blocking → fix-then-ship; otherwise ship.
 
 <!-- INCLUDE: skills/_self-improvement.md -->
