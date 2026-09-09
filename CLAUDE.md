@@ -87,8 +87,8 @@ canon, and ~153 of them live across `src/`. Renumbering silently rewires every o
 
 **`--footprint` defaults to `lean`.** A law's lean text is the authored `LEAN:else` half of its
 block in `src/laws/universal.md` — amend both halves, or the amendment does not exist for most
-installs. A doctrine rule at lean is still machine-cut to its heading plus first sentence, so a
-doctrine clause added to a second paragraph is invisible in the default build.
+installs. A doctrine rule carries the same block in `src/doctrines/<pack>.md` — amend both
+halves there too, or the amendment does not exist for most installs either.
 
 **Counts are computed — never type one.** `{N_*}` tokens substitute at request time, and only on
 `kind: "concept"` pages. README badges and `SHIPPED.md` are the hand-written exceptions, each with

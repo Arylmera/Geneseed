@@ -1,29 +1,55 @@
 **{{PACK_CRAFT}}** — how code is written.
 
 ### {{DOCTRINE}} craft 1 — {{DOC_CRAFT_1}}
+<!-- LEAN:begin -->
 When an action repeats, automate it — a {{SCRIPT}}, a {{SKILL}}, a shortcut. Do not
 perform by hand what the machine can perform a thousand times. When you build a
 {{SKILL}} for it, make it a vessel for one coherent domain — not a single command and
 not a grab-bag: seek an existing {{SKILL}} whose domain already covers the need and
 extend it before forging a new one, and name {{SKILLS}} by domain. Reuse before creating.
+<!-- LEAN:else -->
+When an action repeats, automate it — a {{SCRIPT}}, a {{SKILL}}, a shortcut. Before forging
+a new {{SKILL}}, seek an existing one whose domain covers the need and extend it; build each
+{{SKILL}} for one coherent domain — not a single command, not a grab-bag — and name
+{{SKILLS}} by domain. Reuse before creating.
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} craft 2 — {{DOC_CRAFT_2}}
+<!-- LEAN:begin -->
 All configuration and instruction files — this file, {{LAW}} and {{DOCTRINE}} files,
 {{AGENT}} and {{SKILL}} specs — are written in English, so any contributor or tool can
 read them.
+<!-- LEAN:else -->
+Write all configuration and instruction files — this file, {{LAW}} and {{DOCTRINE}}
+files, {{AGENT}} and {{SKILL}} specs — in English, so any contributor or tool can read
+them.
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} craft 3 — {{DOC_CRAFT_3}}
+<!-- LEAN:begin -->
 When a change alters structure, an interface, or behaviour, update the affected
 documentation — README, API docs, usage examples — in the *same* change. Code and
 its description ship together; documentation that has drifted from the code is a
 defect, not a deferred task.
+<!-- LEAN:else -->
+When a change alters structure, an interface, or behaviour, update the affected
+documentation — README, API docs, usage examples — in the *same* change; documentation that
+drifts from the code is a defect, not a deferred task.
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} craft 4 — {{DOC_CRAFT_4}}
+<!-- LEAN:begin -->
 Before adding a file, module, function, or abstraction, confirm an equivalent
 does not already exist; prefer extending what is there. Duplication is a defect.
 ({{DOCTRINE}} craft 1 applies this to {{SKILLS}}; here it binds all code.)
+<!-- LEAN:else -->
+Before adding a file, module, function, or abstraction, confirm an equivalent does not
+already exist; prefer extending what is there. Duplication is a defect.
+({{DOCTRINE}} craft 1 applies this to {{SKILLS}}; here it binds all code.)
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} craft 5 — {{DOC_CRAFT_5}}
+<!-- LEAN:begin -->
 Match the surrounding code — its naming, structure, formatting, and patterns.
 Before writing new code, find a concrete example of the same pattern already in the
 repo and follow it; build on libraries already in use, and do not introduce a new
@@ -35,8 +61,15 @@ divergent convention only with reason, and where it affects others, only with
 agreement. Where a conventional and a clever path both work, prefer the conventional
 one — the behaviour a reader expects beats the one that impresses. Consistency
 outranks personal preference.
+<!-- LEAN:else -->
+Match the surrounding code's naming, structure, formatting, and patterns. Find a concrete
+example of the same pattern already in the repo and follow it; build on libraries already in
+use. Add no new dependency without surfacing it first: confirm the existing stack cannot do
+the job ({{DOCTRINE}} craft 4), present its cost, and add it only once accepted.
+<!-- LEAN:end -->
 
 ### {{DOCTRINE}} craft 6 — {{DOC_CRAFT_6}}
+<!-- LEAN:begin -->
 Change as little as the task requires. Make the minimal, surgical edit that solves
 the problem and stop — do not rewrite a whole file when a few lines suffice,
 reformat code you were not asked to touch, or refactor untouched regions because
@@ -49,3 +82,10 @@ buries it. When matching conventions ({{DOCTRINE}} craft 5) would mean touching
 regions the task does not, the smallest diff wins: note the convention gap and
 surface the broader style fix as its own proposed change, not as baggage on this one.
 The smaller the diff, the cheaper the review and the cleaner the revert.
+<!-- LEAN:else -->
+Make the minimal, surgical edit and stop: do not reformat code you were not asked to touch,
+and do not rewrite a whole file when a few lines suffice. A genuinely needed wide change —
+a rename, a codemod — is one intent ({{LAW}} II) and is fine. Where matching conventions
+({{DOCTRINE}} craft 5) would widen the diff, surface the convention gap as its own proposed
+change.
+<!-- LEAN:end -->

@@ -170,13 +170,12 @@ vault or a specific tool's hooks.
    no gate and never has.
 
    Two things the table cannot tell you, and `docs/extending.md` can: the default footprint
-   is **lean**, which keeps an invariant's or a doctrine rule's heading and its *first
-   sentence* only — so an amendment written into the second paragraph does not exist for
-   most installs — and `LEX_I` is one of seven theme keys frozen byte-for-byte in a
-   recording nothing can re-make, so Rule I's themed titles are the one part of this list
-   that cannot be edited. The Ontology is exempt from the truncation: it ships whole at
-   both footprints, because four flowing sections cut to their first sentences would read
-   as four orphan sentences.
+   is **lean**, which inlines the authored `LEAN:else` half of each invariant and each
+   doctrine rule (and of the Ontology) rather than the full body — so an amendment written
+   into one half only does not exist for most installs — and `LEX_I` is one of seven theme
+   keys frozen byte-for-byte in a recording nothing can re-make, so Rule I's themed titles
+   are the one part of this list that cannot be edited. Nothing is machine-cut any more:
+   `leanBlockProblems` refuses a rule whose block is missing or whose lean half is blank.
 
 ## 🧩 Components
 

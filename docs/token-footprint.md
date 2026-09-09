@@ -38,9 +38,9 @@ every host the same way instead of one silently falling behind.
   bulk of that — no longer one section but three: the Ontology, the nine Rules,
   and the doctrine packs this install built in. **Two** levers move it, not one.
   The [footprint dial](#/docs/footprint) (`lean`, the default, swaps each Rule,
-  the Ontology and the longest prose sections — the preamble, §6 Notebook, §8
-  Wiki — for their hand-written condensations, and cuts each doctrine rule to its
-  heading plus first line; `full` inlines every rationale). And the
+  each doctrine rule, the Ontology and the longest prose sections — the preamble,
+  §6 Notebook, §8 Wiki — for their hand-written condensations; `full` inlines
+  every rationale). And the
   [doctrine packs](#/docs/setup-choices) — `geneseed-build --doctrines craft,rigor`
   drops whole blocks of §2 at build time, which removes far more than the
   footprint dial trims. Anything else is noise.
@@ -48,9 +48,13 @@ every host the same way instead of one silently falling behind.
   The lean condensations are authored, not generated. An earlier design shipped
   the Ontology *whole* under `lean` on the grounds that truncating four flowing
   sections to four orphan sentences would ship a worldview nobody could read —
-  the `LEAN:` blocks answer that by hand-writing the short form instead
-  (measured on `neutral`, the root file at `lean` went from 29,966 bytes to
-  25,614 with them).
+  the `LEAN:` blocks answer that by hand-writing the short form instead. The
+  doctrine packs were the last tier still cut at the first full stop, and they
+  now author their halves too — which *adds* text at `lean` rather than removing
+  it, deliberately: eleven of the twenty-four rules were shipping a slogan with
+  no verb an agent could act on. Read the carrier size off the ceiling in
+  `tests/unit/emit_smoke.test.mjs` rather than a byte count quoted here; the
+  figure moved twice while this paragraph went on stating the old one.
 - **Skill bodies (~53k) and agent bodies (~10k) are lazy** on every host —
   loaded only when invoked. A typical skill costs ≤3k per invocation; the
   heaviest (`react-view-transitions`, ~17.5k with its reference files) loads

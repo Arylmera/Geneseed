@@ -71,7 +71,9 @@ const CATALOG_BLOCK_RE =
   /[ \t]*<!-- CATALOG:begin -->\n(?<table>[\s\S]*?)[ \t]*<!-- CATALOG:else -->\n(?<pointer>[\s\S]*?)[ \t]*<!-- CATALOG:end -->\n/g;
 // The footprint twin of CATALOG. Before it existed, `lean` could only reach the two
 // include-driven corpora (`laws/universal.md` and the doctrine packs, both truncated
-// mechanically to heading + first sentence); every other section of the root template was
+// mechanically to heading + first sentence — neither is, now: the laws, the ontology and every
+// doctrine rule reach lean through an authored half of this block); every other section of the
+// root template was
 // byte-identical across footprints, which is how ~1.5k tokens of §-level prose rode into
 // every lean install. A LEAN block ships a HAND-WRITTEN condensation instead of a
 // truncation — the objection `docs/token-footprint.md` raised against terse-ing the
@@ -157,7 +159,11 @@ function resolveCatalogs(text, nativeCatalog) {
   return text.replace(CATALOG_BLOCK_RE, (_m, table, pointer) => (nativeCatalog ? pointer : table));
 }
 
-/** LEAN blocks — full text or the hand-written condensation, by footprint. */
+/**
+ * LEAN blocks — full text or the hand-written condensation, by footprint. Laws, ontology,
+ * doctrine rules: every tier of the constitution authors its own lean form, and this is the
+ * one function that chooses between the halves.
+ */
 function resolveLean(text, footprint) {
   return text.replace(LEAN_BLOCK_RE, (_m, full, lean) => (footprint === 'lean' ? lean : full));
 }
@@ -180,36 +186,6 @@ function splitAtLawHeadings(text) {
   }
   out.push(text.slice(start));
   return out;
-}
-
-/**
- * Heading + first sentence, per `### ` block. DOCTRINES ONLY, now.
- *
- * The laws used to go through this too, and it made a law's lean footprint a function of its
- * punctuation: Law II shipped as one 36-character sentence and lost its stop-and-ask
- * mechanism, while a law written as one colon-chained run-on shipped nearly whole. The laws
- * now carry authored LEAN blocks in `src/laws/universal.md`, the way the ontology already did,
- * and `resolveLean` picks the half. Doctrine rules stay machine-cut: there are ~23 of them
- * across four packs, and a pack is a practice catalogue whose first sentence is written to
- * stand alone.
- */
-function terseBlocks(text) {
-  const blocks = splitAtLawHeadings(text);
-  const out = [blocks[0].trimEnd()];
-  for (const b of blocks.slice(1)) {
-    // Python's `splitlines()` also breaks on VT, FF, FS-RS, NEL, LINE SEPARATOR and
-    // PARAGRAPH SEPARATOR, where `split('\n')` does not. The law corpus is plain
-    // markdown and readText has already folded CRLF and CR to LF, so the sets coincide.
-    // (Spelling those out by name rather than by literal is not fussiness: the first
-    // draft of this comment contained the actual LINE/PARAGRAPH SEPARATOR characters,
-    // which are JS line terminators, and they ended the comment mid-sentence.)
-    const lines = b.split('\n');
-    const heading = lines[0].trimEnd();
-    const body = lines.slice(1).map((l) => l.trim()).join(' ').trim();
-    const m = /^([\s\S]+?[.!?])(?:\s|$)/.exec(body);
-    out.push(`${heading}\n${m ? m[1].trim() : body}`);
-  }
-  return out.join('\n\n');
 }
 
 /** The pointer under §1 at lean. The laws' lean text itself is authored in LEAN blocks. */
@@ -318,10 +294,10 @@ function activeDoctrines(cfg) {
  * `registerBody`'s single-select one.
  *
  * `registerBody` reads ONE file because a posture and a mode are scalars; a doctrine set is
- * 0-4 files, so this loops instead of wrapping it. Under `lean` each pack gets the same
- * heading + first-sentence treatment the invariants get, and the whole section — not each
- * pack — closes with one pointer at the full catalogue, which ships in every bundle whether
- * or not a pack is active.
+ * 0-4 files, so this loops instead of wrapping it. Under `lean` each rule ships the authored
+ * `LEAN:else` half of its block — `resolveLean`, the same picker the invariants go through,
+ * the first-sentence cut gone — and the whole section, not each pack, closes with one pointer
+ * at the full catalogue, which ships in every bundle whether or not a pack is active.
  */
 /** `### {{DOCTRINE}} <pack> <n> —` in the UNRENDERED source, which is where the address is. */
 const SRC_RULE_HEADING_RE = /^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/;
@@ -356,8 +332,11 @@ function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
   const parts = active.map((name) => {
     const raw = dropExcludedRules(readPackText(path.join(cfg.src, 'doctrines', `${name}.md`)),
       name, excluded);
-    const body = substitute(raw, theme).trim();
-    return footprint === 'lean' ? terseBlocks(body) : body;
+    // The same picker `renderFile` runs over every other file: the authored half first, the
+    // voice second. THE ORDER IS LOAD-BEARING — `resolveLean` reads HTML markers, and
+    // substituting first would hand it prose in fourteen voices. The first-sentence cut is gone;
+    // a rule's lean text is written in `src/doctrines/<pack>.md`, not measured out of its prose.
+    return substitute(resolveLean(raw, footprint), theme).trim();
   });
   if (footprint === 'lean') {
     const doctrine = theme.DOCTRINE ?? 'Doctrine';
@@ -454,10 +433,13 @@ export function renderAll(cfg, themeName, {
   for (const file of sortedSourceFiles(cfg.src)) {
     const rel = path.relative(cfg.src, file);
     const outRel = destRel(themedRel(rel, theme)).split(path.sep).join('/');  // as_posix()
-    // The on-disk `laws/` and `ontology/` are the "complete, binding text" the lean pointer
-    // promises. They render at full whatever the footprint; only what AGENT.md INLINES leans.
+    // The on-disk `laws/`, `ontology/` and `doctrines/` are the "complete text" the two lean
+    // pointers promise — §1's and the Doctrines section's. They render at full whatever the
+    // footprint; only what AGENT.md INLINES leans. `doctrines/` joined them when its rules got
+    // authored LEAN blocks: before that a pack file carried no markers and shipped whole by
+    // accident, which is a different thing from shipping whole by contract.
     // Keyed on the SOURCE rel, not the themed one, so a DIR_* rename cannot un-exempt them.
-    const fp = /^(?:laws|ontology)[\\/]/.test(rel) ? 'full' : footprint;
+    const fp = /^(?:laws|ontology|doctrines)[\\/]/.test(rel) ? 'full' : footprint;
     items.push(TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
       ? { rel: outRel, text: renderFile(cfg, file, theme, fp, lawsPrefix, new Set(), nativeCatalog), src: file }
       : { rel: outRel, text: null, src: file });

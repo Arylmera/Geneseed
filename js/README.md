@@ -181,8 +181,8 @@ and inline lists are held against a surface list written out in
 
 | I want to | open first | then |
 |---|---|---|
-| a doctrine rule | `src/doctrines/<pack>.md` — APPEND, ids run contiguously | `docs/extending.md` §2a — five files, `--sync-themes`, restyle 14 voices by hand |
-| a law (invariant) | `src/laws/universal.md` — **APPEND, never insert** | `docs/extending.md` §2c. Amend the FIRST sentence: lean footprint keeps nothing else |
+| a doctrine rule | `src/doctrines/<pack>.md` — APPEND, ids run contiguously | `docs/extending.md` §2a — five files, `--sync-themes`, restyle 14 voices by hand. Author BOTH LEAN halves |
+| a law (invariant) | `src/laws/universal.md` — **APPEND, never insert** | `docs/extending.md` §2c. Author both LEAN halves: the lean footprint ships nothing else |
 | a skill or an agent | `src/skills/<name>.md` or `src/agents/<name>.md` | `docs/extending.md` §3 — eight steps. Write the FILE before the table row or the build aborts |
 | a doctor check | `js/inspect/checks-{build,repo,authoring}.mjs` | register with `ran(...)` in `doctor.mjs`, then a PLANTED FAULT in `tests/unit/harness.test.mjs` |
 | a web endpoint | GET → `js/web/api.mjs`; POST → `js/web/actions.mjs` | declare it in `js/web/routes.mjs`; the partition test probes the real handler |

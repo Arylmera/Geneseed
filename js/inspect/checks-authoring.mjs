@@ -280,6 +280,91 @@ const DOCTRINE_TOKEN_RE = /\{\{DOCTRINE\}\}/;
 const DOC_TOKEN_RE = /\{\{(DOC_[A-Z0-9_]+)\}\}/g;
 
 /**
+ * The LEAN block grammar, and the heading split, both duplicated from `js/build/render.mjs`.
+ *
+ * Deliberately duplicated, the way `DOCTRINE_HEADING_RE` above is: both are module-private
+ * there, and exporting them so one gate could borrow them would widen the renderer's surface
+ * for a reader that only needs to know the shape. Two literals, one paragraph apart from the
+ * rule they encode, is cheaper than a seam.
+ */
+const LEAN_BLOCK_RE =
+  /[ \t]*<!-- LEAN:begin -->\n([\s\S]*?)[ \t]*<!-- LEAN:else -->\n([\s\S]*?)[ \t]*<!-- LEAN:end -->\n/g;
+
+/** `### ` at line start — the same cut `splitAtLawHeadings` makes, and for the same addresses. */
+function leanRuleBlocks(text) {
+  const out = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if ((i === 0 || text[i - 1] === '\n') && text.startsWith('### ', i)) {
+      out.push(text.slice(start, i));
+      start = i;
+    }
+  }
+  out.push(text.slice(start));
+  return out.slice(1);                        // drop the lead chunk: the file's preamble
+}
+
+/**
+ * Every authored rule carries exactly one LEAN block, and both halves say something.
+ *
+ * ⚠ `resolveLean` IS A REPLACE OVER A MARKER PAIR, WHICH MAKES IT A NO-OP ON MARKERLESS TEXT.
+ * A rule whose block was never written, or lost to an edit, therefore ships its FULL body at
+ * the default footprint — silently, in every install, with every other gate in the tree green.
+ * That is the failure this arm exists for, and before it there was no LEAN gate anywhere in
+ * `js/inspect/`: not for the doctrine packs, and not for the invariants either.
+ *
+ * The other two shapes are cheaper to state than to debug. An empty lean half renders a
+ * heading over nothing at the footprint most installs use. Two blocks in one rule are
+ * ambiguous by construction — `LEAN_BLOCK_RE` is global, so both would resolve, and which
+ * text the reader gets would be a fact about the order they were written in.
+ *
+ * The ontology is exempt on purpose: it carries ONE file-wide block whose halves each repeat
+ * the four `####` section headings, which is a different shape with its own gate in
+ * `tests/unit/emit_smoke.test.mjs` (four distinct names, eight occurrences).
+ */
+export function leanBlockProblems() {
+  const problems = [];
+  const files = [['laws', path.join(SRC, 'laws', 'universal.md')]];
+  for (const pack of PACK_ORDER) files.push(['doctrines', path.join(SRC, 'doctrines', `${pack}.md`)]);
+
+  for (const [dir, file] of files) {
+    const rel = `${dir}/${path.basename(file)}`;
+    let text;
+    try { text = readText(file); } catch (e) {
+      problems.push(`[authoring] ${rel} unreadable: ${e.message} — every rule in it would ship `
+        + 'its full body at the lean footprint, unannounced');
+      continue;
+    }
+    for (const block of leanRuleBlocks(text)) {
+      // The address as the SOURCE spells it — `{{LAW}} II`, `{{DOCTRINE}} craft 1` — because
+      // that is the string an author greps for, and the rendered spelling is fourteen strings.
+      const heading = block.slice(0, block.indexOf('\n') === -1 ? undefined : block.indexOf('\n'));
+      const addr = heading.replace(/^###\s+/, '').split(/\s+[—-]\s+/)[0].trim();
+      const found = [...block.matchAll(LEAN_BLOCK_RE)];
+      if (found.length === 0) {
+        problems.push(`[authoring] ${rel}: ${addr} has no LEAN block — resolveLean is a no-op on `
+          + 'markerless text, so the rule would inline its FULL body at the default footprint');
+        continue;
+      }
+      if (found.length > 1) {
+        problems.push(`[authoring] ${rel}: ${addr} has ${found.length} LEAN blocks — both resolve, `
+          + 'so which text a reader is handed is a fact about the order they were written in');
+      }
+      const [, full, lean] = found[0];
+      if (!full.trim()) {
+        problems.push(`[authoring] ${rel}: ${addr} has an empty full half — the rule would vanish `
+          + 'from a full build and from its own on-disk file');
+      }
+      if (!lean.trim()) {
+        problems.push(`[authoring] ${rel}: ${addr} has an empty lean half — the rule would render `
+          + 'as a heading over nothing at the footprint most installs use');
+      }
+    }
+  }
+  return problems;
+}
+
+/**
  * The three-tier constitution's own authoring gates — the doctrine twin of the `LAW_CLASS` /
  * `LAW_META` family, plus the two purity rules the tiering rests on.
  *
@@ -756,6 +841,7 @@ export function authoringProblems() {
   problems.push(...secretProblems());
   problems.push(...vendorPinProblems());
   problems.push(...constitutionProblems());
+  problems.push(...leanBlockProblems());
   problems.push(...countTableProblems());
   return problems;
 }

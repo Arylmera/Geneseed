@@ -10,7 +10,7 @@ link: {"hash": "#/settings", "label": "Toggle it in Settings →"}
 ### The difference
 
 - **Full** — `AGENT.md` inlines the Ontology, every Rule and every rule of the **active** doctrine packs, complete text and reasoning included, on every single turn.
-- **Lean** — each Rule and each doctrine rule is carried as its **heading + the rule itself** (one line), each tier closing with a pointer to its complete text shipped beside `AGENT.md` — the agent reads the reasoning on demand when a rule's application is unclear. The **Ontology ships whole even at lean**: it is flowing prose, not numbered blocks, and truncating it to first sentences would leave orphan fragments rather than a shorter argument.
+- **Lean** — each Rule and each doctrine rule is carried as its **heading + an authored short form** — the rule and its mechanism, written by hand rather than cut at the first full stop — each tier closing with a pointer to its complete text shipped beside `AGENT.md` — the agent reads the reasoning on demand when a rule's application is unclear. The Ontology is condensed the same way, as **one authored short form for the whole tier**: it is flowing prose rather than numbered blocks, so cutting it section by section would have left orphan fragments instead of a shorter argument.
 
 ### What ships on disk either way
 
