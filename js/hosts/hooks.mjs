@@ -242,6 +242,19 @@ const LAZY_DIRS = ['docs', 'doc', 'documentation', 'architecture', 'adr', 'ADR']
 const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.next',
   'target', '.venv', '__pycache__', '.opencode', '.harness']);
 
+// The root instruction file a host already loads by itself. Injecting it again pays the
+// whole harness twice per session — and was doing exactly that until 2026-09: every hooked
+// host had its own root in EAGER_ROOT. Other tools' roots stay eager (a repo carrying a
+// hand-written AGENTS.md is worth showing Claude Code); only the host's OWN is dropped.
+// The OpenCode context plugin carries the same rule for AGENT.md/AGENTS.md/CLAUDE.md.
+const NATIVE_ROOT = { claude: ['CLAUDE.md'], bob: ['AGENTS.md'], copilot: ['AGENTS.md'] };
+
+// Eager injection budget: a root README of 40k chars was going out whole, every session and
+// every compaction, and cost more than the harness itself. Per-file cut at the last line
+// break under the cap; files that would push the total over the budget are listed lazy.
+const EAGER_FILE_BYTES = 16 * 1024;
+const EAGER_TOTAL_BYTES = 48 * 1024;
+
 const CLAUDE_MARKERS = ['.claude', '.bob'];
 const GENESEED_MANIFEST = '.geneseed-manifest.json';
 
@@ -310,12 +323,14 @@ function rglobMd(dir, acc = []) {
  * Root entry docs are eager; other root markdown, the doc trees and monorepo package
  * READMEs are lazy.
  */
-export function discoverContext(root) {
+export function discoverContext(root, host = HOST) {
   const eager = new Map();
   const lazy = new Map();
+  const native = NATIVE_ROOT[host] || [];
   for (const full of sortPaths(listDir(root).map((n) => path.join(root, n)))) {
     if (!isFile(full)) continue;
     const name = path.basename(full);
+    if (native.includes(name)) continue;
     if (EAGER_ROOT.includes(name)) eager.set(full, null);
     else if (path.extname(name).toLowerCase() === '.md') lazy.set(full, null);
   }
@@ -473,25 +488,42 @@ export function cmdContext(args) {
     `=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`,
     '',
   ];
+  let spent = 0;
+  const demoted = [];
   for (const entry of eager) {
     const p = entry.path === undefined ? '' : entry.path;
     const desc = entry.description === undefined ? '' : entry.description;
     const target = path.isAbsolute(p) ? p : path.join(root, p);
-    lines.push(`----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`);
+    let text;
     try {
-      lines.push(readText(target).replace(/\n+$/, ''));
+      text = readText(target).replace(/\n+$/, '');
     } catch (e) {
-      lines.push(`[context] MISSING eager file: ${asOsError(e, target)}`);
+      lines.push(`----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`,
+        `[context] MISSING eager file: ${asOsError(e, target)}`, '');
+      continue;
     }
-    lines.push('');
+    if (text.length > EAGER_FILE_BYTES) {
+      const nl = text.lastIndexOf('\n', EAGER_FILE_BYTES);
+      text = `${text.slice(0, nl > 0 ? nl : EAGER_FILE_BYTES)}\n`
+        + `[context] truncated at ${EAGER_FILE_BYTES / 1024} KB \u2014 read ${disp(p, root)} `
+        + 'on demand for the rest';
+    }
+    if (spent + text.length > EAGER_TOTAL_BYTES) {
+      demoted.push(entry);
+      continue;
+    }
+    spent += text.length;
+    lines.push(`----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`, text, '');
   }
 
-  if (lazy.length) {
+  if (lazy.length || demoted.length) {
     lines.push('--- Lazy entries (load only when the task needs them) ---');
-    for (const entry of lazy) {
+    for (const entry of [...lazy, ...demoted]) {
       const p = entry.path === undefined ? '' : entry.path;
       const desc = entry.description === undefined ? '' : entry.description;
-      lines.push(`  - ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''}`);
+      const over = demoted.includes(entry)
+        ? ` (eager, but over the ${EAGER_TOTAL_BYTES / 1024} KB session budget \u2014 read on demand)` : '';
+      lines.push(`  - ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''}${over}`);
     }
     lines.push('');
   }

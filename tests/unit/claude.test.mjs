@@ -1462,6 +1462,9 @@ test('the context verb is silent when it stands down, and the opt-out un-silence
     const repo = path.join(d, 'repo');
     fs.mkdirSync(repo);
     projectEmit('claude', repo, undefined);          // a real project install + repo/CLAUDE.md
+    // The emitted CLAUDE.md is Claude's own native root and is no longer injected (the host
+    // already has it), so the repo needs a doc of its own for the project hook to say anything.
+    fs.writeFileSync(path.join(repo, 'README.md'), '# repo\n', 'utf8');
     const gcfg = mkInstall(path.join(d, 'home'));     // a foreign global install
     process.env.GENESEED_ROOT = repo;
 
@@ -1482,4 +1485,36 @@ test('the context verb is silent when it stands down, and the opt-out un-silence
     const [, stacked] = capturedOut(() => cmdContext({ root: gcfg }));
     assert.ok(stacked.includes('PROJECT CONTEXT'), `the opt-out was ignored:\n${stacked}`);
   }));
+});
+
+test('an eager file is cut at 16 KB and the session budget demotes the rest to lazy', () => {
+  // Written out, not recorded: a 40k-char README was leaving whole on every session. The cut
+  // lands on a line break under the cap and says so; a file that would push the session over
+  // 48 KB is listed under the lazy entries with the reason, never silently dropped.
+  withDir((d) => {
+    const line = 'x'.repeat(99) + '\n';
+    // Four 20 000-B eager files (AGENTS.md is another tool's root, so it stays eager under
+    // claude). Each is cut to ≤16 384 B plus a one-line marker, ~16.4 KB. Discovery order is
+    // case-folded: AGENTS, CONTRIBUTING, PROFILE, README, user-rules — three cut files plus the
+    // tiny PROFILE.md total ~49.1 KB, just under the 49 152-B budget, and the fourth does not fit.
+    for (const n of ['AGENTS.md', 'README.md', 'CONTRIBUTING.md', 'user-rules.md']) {
+      fs.writeFileSync(path.join(d, n), line.repeat(200), 'utf8');
+    }
+    fs.writeFileSync(path.join(d, 'PROFILE.md'), '# p\n', 'utf8');
+    const prev = process.env.GENESEED_ROOT;
+    process.env.GENESEED_ROOT = d;
+    try {
+      const [rc, out] = capturedOut(() => cmdContext({}));
+      assert.equal(rc, 0);
+      const cuts = out.match(/\[context\] truncated at 16 KB/g) || [];
+      assert.equal(cuts.length, 3, `expected three cut files, got ${cuts.length}`);
+      assert.ok(/- user-rules\.md \(eager, but over the 48 KB session budget/.test(out),
+        'the over-budget file should be listed lazy with the reason');
+      assert.ok(out.includes('----- PROFILE.md -----'), 'the small file still fits');
+      assert.ok(!out.includes('----- user-rules.md -----'), 'the demoted file was injected anyway');
+      assert.ok(out.length < 48 * 1024 + 2048, `payload ${out.length} B is over budget`);
+    } finally {
+      if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
+    }
+  });
 });

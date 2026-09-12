@@ -105,7 +105,12 @@ const FOOTPRINTS = ['full', 'lean'];
  * context. (`src/laws/universal.md` still carries its own copy, ~278 characters, and that is
  * pre-existing — worth a separate look, not worth widening this change for.)
  */
-const CEILING = { full: 54_800, lean: 41_300 };
+/*
+ * LOWERED 2026-09 (footprint pass): §5–§10 gained authored LEAN halves and the lean `files`
+ * carrier fell 40_460 → 37_850 characters. Re-measured, ~4% headroom kept; full untouched —
+ * its LEAN:begin halves did not change.
+ */
+const CEILING = { full: 54_800, lean: 39_400 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the

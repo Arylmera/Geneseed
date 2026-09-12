@@ -912,6 +912,30 @@ test('discovery sorts convention files eager and the rest lazy', () => {
   });
 });
 
+test("discovery drops the host's own native root, and only that one", () => {
+  // Claude Code loads CLAUDE.md by itself; Bob and Copilot load AGENTS.md. Until 2026-09 the
+  // hook injected that same file a second time — the whole harness paid twice per session.
+  withDir((d) => {
+    contextFixture(d);
+    for (const n of ['CLAUDE.md', 'AGENTS.md', 'AGENT.md']) {
+      fs.writeFileSync(path.join(d, n), `# ${n}`, 'utf8');
+    }
+    const rows = [
+      ['claude', 'CLAUDE.md', ['AGENTS.md', 'AGENT.md']],
+      ['bob', 'AGENTS.md', ['CLAUDE.md', 'AGENT.md']],
+      ['copilot', 'AGENTS.md', ['CLAUDE.md', 'AGENT.md']],
+    ];
+    for (const [host, dropped, kept] of rows) {
+      const [eager, lazy] = discoverContext(d, host);
+      const en = baseNames(eager);
+      assert.ok(!en.has(dropped), `${host}: its native ${dropped} was injected again`);
+      assert.ok(!baseNames(lazy).has(dropped), `${host}: ${dropped} leaked into the lazy list`);
+      for (const k of kept) assert.ok(en.has(k), `${host}: another tool's ${k} should stay eager`);
+      assert.ok(en.has('README.md'), `${host}: README.md should stay eager`);
+    }
+  });
+});
+
 test('an empty manifest falls back to discovery', () => {
   withDir((d) => {
     contextFixture(d);

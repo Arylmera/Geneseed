@@ -3,9 +3,10 @@
 What a deployed harness costs in context-window tokens, per host. Token counts are
 chars/4 estimates and shift a little with theme and version.
 
-**Treat every number below as a floor, not a reading.** They were measured on a
-`--footprint lean` build (the default) of the neutral theme when the tree carried
-47 skills and 17 agents, and nothing re-measures this page automatically. For a
+**Treat every number below as a floor, not a reading.** They were measured on
+2026-09-12 on a `--footprint lean` build (the default) of the neutral theme with
+four doctrine packs, 54 skills and 19 agents, and nothing re-measures this page
+automatically. For a
 live figure on your own install, ask the agent for the `token-report` skill —
 that is what it is for. A `--footprint full` build runs roughly 5k tokens
 heavier on the root file.
@@ -16,21 +17,29 @@ The context every host injects at session start, before you type anything:
 
 | Component | Claude Code | OpenCode | Bob | Copilot |
 |---|---|---|---|---|
-| Root instruction file | ~6.4k (`CLAUDE.md`) | ~6.4k (`AGENT.md`) | ~8.3k (`AGENTS.md`) | ~8.3k (`AGENTS.md`) |
-| Skill metadata (name + description) | ~1.7k | ~1.7k | ~1.7k | ~1.7k |
-| Agent metadata | ~0.5k | ~0.55k | ~0.5k | ~0.5k |
-| Eager memory/notebook injection | ~1.2k (SessionStart hook) | ~1.2k (context plugin) | ~1.2k (SessionStart hook) | — (no hooks; read on demand) |
-| **Total** | **~9.8k** | **~9.9k** | **~11.7k** | **~10.5k** |
+| Root instruction file | ~7.4k (`CLAUDE.md`) | ~7.4k (`AGENT.md`) | ~9.1k (`AGENTS.md`) | ~9.1k (`AGENTS.md`) |
+| Skill metadata (name + description) | ~4.1k | ~4.1k | ~4.1k (native) + §4 table | ~4.1k (native) + §4 table |
+| Agent metadata | ~0.5k | ~0.5k | — (§3 table, inline) | — (§3 table, inline) |
+| Eager memory/notebook injection | ~1.2k (SessionStart hook) | ~1.2k (context plugin) | ~1.2k (SessionStart hook) | ~1.2k (sessionStart hook) |
+| **Total** | **~13k** | **~13k** | **~15k** | **~15k** |
 
-The emits are at parity by design: ~10–12k tokens, about 5–6% of a 200k
-window. Bob and Copilot carry the §3/§4 catalogue tables inline because their
+The emits are at parity by design: ~13–15k tokens, about 7% of a 200k
+window. Before the 2026-09 footprint pass every hooked host paid roughly double
+this: the context hook re-injected the root file the host had already loaded
+natively, and skill descriptions ran to 900 characters each — see the
+"Where the tokens go" list below for what changed. Bob and Copilot carry the §3/§4 catalogue tables inline because their
 hosts expose no native skill/agent inventory; Claude Code and OpenCode ship a
 pointer to the host's own inventory instead, ~1.9k tokens lighter. Copilot also
 runs without eager injection — it has no hook mechanism, so the
 memory/notebook indexes load when the agent reads them, not eagerly. The
-eager-injection path is budget-capped identically everywhere
-(16 KB per file, 48 KB total ≈ 12k tokens ceiling), so growing Memory degrades
-every host the same way instead of one silently falling behind.
+eager-injection path is budget-capped identically everywhere — 16 KB per file
+(cut at a line break, with a marker saying so) and 48 KB per session (files past
+the budget are listed lazy with the reason) — so a 40k-character README no
+longer leaves whole every session, and growing Memory degrades every host the
+same way instead of one silently falling behind. The hook also **never injects
+the root file the host loads by itself** (`CLAUDE.md` on Claude Code,
+`AGENTS.md` on Bob and Copilot, `AGENT.md`/`AGENTS.md`/`CLAUDE.md` on OpenCode):
+until 2026-09 it did, and the whole harness was paid twice per session.
 
 ## Where the tokens go
 
@@ -55,6 +64,15 @@ every host the same way instead of one silently falling behind.
   no verb an agent could act on. Read the carrier size off the ceiling in
   `tests/unit/emit_smoke.test.mjs` rather than a byte count quoted here; the
   figure moved twice while this paragraph went on stating the old one.
+- **Skill descriptions are the second bill** on a host that catalogues natively.
+  Each is the skill's purpose line plus the *first sentence* of its trigger,
+  capped at 320 characters (`skillDescription` in `js/hosts/native.mjs`); at
+  the earlier 900-character cap the catalogue weighed ~5.6k tokens. The later
+  trigger sentences still live in the body, read as soon as the skill is chosen.
+- **§5–§10 carry authored lean halves too** (Memory, Notebook, Workspace, Wiki,
+  Context, Scripts): each keeps its obligations — read `MEMORY.md`, read
+  `context.json` before the first reply, the git-ignored folders — and points at
+  the on-disk README or config file for the rest.
 - **Skill bodies (~53k) and agent bodies (~10k) are lazy** on every host —
   loaded only when invoked. A typical skill costs ≤3k per invocation; the
   heaviest (`react-view-transitions`, ~17.5k with its reference files) loads
