@@ -67,8 +67,10 @@ const TEXT_SUFFIXES = new Set(['.md', '.tmpl', '.json', '.txt', '.yml', '.yaml']
 // silently never substitutes. A leading digit stays illegal, so `{{1}}` is still not a token.
 const TOKEN_RE = /\{\{([A-Z_][A-Z0-9_]*)\}\}/g;
 const INCLUDE_RE = /^[ \t]*<!--[ \t]*INCLUDE:[ \t]*(?<path>[^ \t]+)[ \t]*-->[ \t]*$/gm;
+// Each block names its kind (`agents` | `skills`) so a host that catalogues one natively and
+// not the other — Bob — keeps exactly the table it still needs.
 const CATALOG_BLOCK_RE =
-  /[ \t]*<!-- CATALOG:begin -->\n(?<table>[\s\S]*?)[ \t]*<!-- CATALOG:else -->\n(?<pointer>[\s\S]*?)[ \t]*<!-- CATALOG:end -->\n/g;
+  /[ \t]*<!-- CATALOG:begin (?<kind>agents|skills) -->\n(?<table>[\s\S]*?)[ \t]*<!-- CATALOG:else -->\n(?<pointer>[\s\S]*?)[ \t]*<!-- CATALOG:end -->\n/g;
 // The footprint twin of CATALOG. Before it existed, `lean` could only reach the two
 // include-driven corpora (`laws/universal.md` and the doctrine packs, both truncated
 // mechanically to heading + first sentence — neither is, now: the laws, the ontology and every
@@ -156,7 +158,9 @@ export function substitute(text, theme) {
 
 /** `_build_render._resolve_catalogs`. */
 function resolveCatalogs(text, nativeCatalog) {
-  return text.replace(CATALOG_BLOCK_RE, (_m, table, pointer) => (nativeCatalog ? pointer : table));
+  // `true`/`false` still mean "both kinds", for the plain-bundle callers that pass a boolean.
+  const nat = nativeCatalog === true ? { skills: true, agents: true } : (nativeCatalog || {});
+  return text.replace(CATALOG_BLOCK_RE, (_m, kind, table, pointer) => (nat[kind] ? pointer : table));
 }
 
 /**

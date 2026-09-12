@@ -94,7 +94,13 @@ const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orc
  * `true`, where the plain `files` bundle passes `false`. Getting this wrong collapses (or
  * fails to collapse) AGENT.md's capability tables in every cell.
  */
-const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: false };
+// Per kind, mirroring `js/hosts/hosts.mjs` — see its docblock for why Bob is split.
+const NATIVE_CATALOG = {
+  opencode: { skills: true, agents: true },
+  claude: { skills: true, agents: true },
+  bob: { skills: true, agents: false },
+  copilot: { skills: false, agents: false },
+};
 
 /** `_build_render.resolve_out` — absolute, or relative to the CURRENT WORKING DIRECTORY
  *  (not to ROOT), so the harness renders straight into any repository.

@@ -106,11 +106,11 @@ const FOOTPRINTS = ['full', 'lean'];
  * pre-existing — worth a separate look, not worth widening this change for.)
  */
 /*
- * LOWERED 2026-09 (footprint pass): §5–§10 gained authored LEAN halves and the lean `files`
- * carrier fell 40_460 → 37_850 characters. Re-measured, ~4% headroom kept; full untouched —
- * its LEAN:begin halves did not change.
+ * LOWERED 2026-09 (footprint pass): §5–§10 and the preamble gained authored LEAN halves and
+ * the lean `files` carrier fell 40_460 → 37_410 characters. Re-measured, ~4% headroom kept;
+ * full untouched — its LEAN:begin halves did not change.
  */
-const CEILING = { full: 54_800, lean: 39_400 };
+const CEILING = { full: 54_800, lean: 38_900 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -221,25 +221,35 @@ test('the capability tables match the declared host capability', () => {
   // declared that loses them has lost its only discovery mechanism. Read from the HOSTS registry
   // rather than hardcoded, so the test follows the declared capability instead of carrying a
   // second, driftable copy of it.
+  // PER KIND since 2026-09: Bob catalogues skills natively and agents not at all, so the two
+  // tables are gated separately and a split host must land on both sides in one carrier.
+  const TABLES = { skills: '| Skill | Trigger |', agents: '| Agent | Use it when' };
   let natively = 0;
+  let split = 0;
   for (const [mode, spec] of Object.entries(EXPECTED)) {
     const text = readTextPy(carrierOf(ok(mode, 'full'), spec));
-    const hasTables = text.includes('| Skill | Trigger |');
-    if (spec.host !== null && hostCatalogsNatively(spec.host)) {
-      natively += 1;
-      assert.ok(!hasTables, `--emit ${mode}: host '${spec.host}' declares native_catalog but the `
-        + 'carrier still ships the Skills table');
-    } else {
-      assert.ok(hasTables, `--emit ${mode}: host '${spec.host}' does not catalogue natively, so `
-        + 'the Skills table is its only discovery path — it must not be stripped');
+    const nat = spec.host === null ? false : hostCatalogsNatively(spec.host);
+    if (nat && nat.skills !== nat.agents) split += 1;
+    for (const [kind, marker] of Object.entries(TABLES)) {
+      const hasTable = text.includes(marker);
+      if (nat && nat[kind]) {
+        natively += 1;
+        assert.ok(!hasTable, `--emit ${mode}: host '${spec.host}' catalogues ${kind} natively `
+          + `but the carrier still ships the ${kind} table`);
+      } else {
+        assert.ok(hasTable, `--emit ${mode}: host '${spec.host}' does not catalogue ${kind} `
+          + `natively, so the ${kind} table is its only discovery path — it must not be stripped`);
+      }
     }
   }
   // BOTH SIDES OF THE PARTITION HAVE TO BE EXERCISED, which the reference left to chance: with
   // no host declaring `native_catalog`, every row takes the else branch and the whole strip is
-  // untested while the test stays green.
+  // untested while the test stays green. And the split itself: one host keeping one table and
+  // losing the other is the case a single boolean could never express.
   assert.ok(natively > 0,
     'no host in the table declares native_catalog, so the strip half of this partition ran zero '
     + 'times and only the keep half is gated');
+  assert.ok(split > 0, 'no host splits skills from agents, so the per-kind gate is untested');
 });
 
 /**

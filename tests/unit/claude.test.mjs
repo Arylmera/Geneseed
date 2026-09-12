@@ -152,17 +152,20 @@ test('the project CLAUDE.md carries no dead per-row skill link', () => {
   });
 });
 
-test("Bob's AGENTS.md carries no dead skill link, and still carries the rows", () => {
-  // The same link rule against the `.bob/skills/…` prefixed form — and the counterpart that
-  // gives the test above its meaning. Bob does NOT declare a native catalogue, so its tables are
-  // still written: an emit that had simply stopped writing capability tables would satisfy
-  // "no dead link" everywhere and be caught only here.
+test("Bob's AGENTS.md carries no dead link, keeps the Agents rows and drops the Skills rows", () => {
+  // The same link rule against the `.bob/…` prefixed form — and the counterpart that gives the
+  // test above its meaning. Bob's catalogue flag is SPLIT: it reads `.bob/skills` natively (the
+  // §4 table would be a second copy of a catalogue it already has) but has no agents directory,
+  // so the §3 table is its only agent catalogue and must still be written. An emit that had
+  // simply stopped writing capability tables would satisfy "no dead link" everywhere and be
+  // caught only here, on the agents rows.
   withDir((d) => {
     projectEmit('bob', path.join(d, 'Harness'), d);
     const am = read(d, 'AGENTS.md');
     assert.doesNotMatch(am, /\]\([^)]*(?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/);
-    assert.ok(am.includes('| brainstorm |'), 'Bob lost its capability rows');
-    assert.ok(am.includes('| council |'));
+    assert.ok(am.includes('| reviewer |'), 'Bob lost its Agents rows — its only agent catalogue');
+    assert.ok(!am.includes('| brainstorm |'), 'Bob ships the Skills table on top of its native catalogue');
+    assert.ok(am.includes('that list is the catalogue'), 'the Skills pointer is missing');
   });
 });
 

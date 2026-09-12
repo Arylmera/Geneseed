@@ -248,11 +248,25 @@ export const HOSTS = [
  * Unknown host -> false, which is the shape that KEEPS the tables. The value arrives from a
  * user-editable `.geneseed-emit` marker, so an unrecognised one must degrade to the portable
  * bundle rather than raise.
+ *
+ * SPLIT PER KIND (2026-09): Bob reads `.bob/skills/<name>/SKILL.md` natively — verified
+ * against its docs in the Bob injection review — but has no markdown agents directory, so a
+ * single boolean was wrong both ways: `false` shipped the §4 Skills table on top of a
+ * catalogue Bob already had (~1.7k tokens twice), `true` would have stripped the §3 Agents
+ * table that is Bob's ONLY agent catalogue. Each CATALOG block in AGENT.md names its kind and
+ * resolves against its own flag. Copilot stays unverified and keeps both tables. Mirrored in
+ * `bin/build-driver.mjs` (which cannot import this module's spawning neighbours).
  */
-const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: false };
+const NATIVE_CATALOG = {
+  opencode: { skills: true, agents: true },
+  claude: { skills: true, agents: true },
+  bob: { skills: true, agents: false },
+  copilot: { skills: false, agents: false },
+};
 
+/** `{ skills, agents }` for a known host, `false` for an unknown one. */
 export function hostCatalogsNatively(host) {
-  return Boolean(NATIVE_CATALOG[host]);
+  return NATIVE_CATALOG[host] || false;
 }
 
 /** `_harness_learn.MEMORY_DIR_NAMES` — the neutral name and the imperial theme's. */

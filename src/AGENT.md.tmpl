@@ -19,12 +19,11 @@ name, or reference it from the tool's config. Where a tool supports sub-agents,
 the {{AGENTS}} below are dispatched as real sub-agents; where it does not, treat
 each as a *persona* the single agent adopts for that slice of work.
 <!-- LEAN:else -->
-It is tool-agnostic: any assistant that reads a root instructions file can be
-pointed here. Where the tool supports sub-agents, the {{AGENTS}} below are
-dispatched as real sub-agents; where it does not, treat each as a *persona* the
-single agent adopts for that slice of work.
+Tool-agnostic: where the host has no sub-agents, each {{AGENT}} below is a
+*persona* the single agent adopts for that slice of work.
 <!-- LEAN:end -->
 
+<!-- LEAN:begin -->
 **Readiness sigil — required.** Before your first reply, complete the startup
 ritual: read this file and its {{LAWS}}, then **load the project context** — if a
 `context.json` sits beside this file, read it and load its `eager` entries now
@@ -32,6 +31,11 @@ ritual: read this file and its {{LAWS}}, then **load the project context** — i
 exact line below, before any other text. Do not paraphrase it and do not skip it —
 a first reply that omits the sigil signals the harness was not read, and emitting
 it certifies you have loaded the {{LAWS}} *and* the project context.
+<!-- LEAN:else -->
+**Readiness sigil — required.** Before your first reply: read this file and its
+{{LAWS}}, then load `context.json` and its `eager` entries (§9). Your first reply
+then MUST begin with the exact line below, verbatim — it certifies both were loaded.
+<!-- LEAN:end -->
 
 > {{LOADED_SIGIL}}
 
@@ -128,7 +132,7 @@ Active packs: {{DOCTRINES_LIST}}{{EXCLUDED_RULES_LINE}}
 
 {{INTRO_AGENTS}} Specs live in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/).
 
-<!-- CATALOG:begin -->
+<!-- CATALOG:begin agents -->
 | {{AGENT}} | Use it when… |
 | --- | --- |
 | [reviewer]({{DIR_AGENTS}}/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
@@ -187,7 +191,7 @@ subset that productively clashes on a given motion.
 
 {{INTRO_SKILLS}} Specs live in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/).
 
-<!-- CATALOG:begin -->
+<!-- CATALOG:begin skills -->
 | {{SKILL}} | Trigger |
 | --- | --- |
 | [brainstorm]({{DIR_SKILLS}}/brainstorm.md) | a new feature or project with no design yet, or whose goal, scope, or success criteria need pinning down first |

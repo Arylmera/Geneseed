@@ -17,14 +17,16 @@ The context every host injects at session start, before you type anything:
 
 | Component | Claude Code | OpenCode | Bob | Copilot |
 |---|---|---|---|---|
-| Root instruction file | ~7.4k (`CLAUDE.md`) | ~7.4k (`AGENT.md`) | ~9.1k (`AGENTS.md`) | ~9.1k (`AGENTS.md`) |
-| Skill metadata (name + description) | ~4.1k | ~4.1k | ~4.1k (native) + §4 table | ~4.1k (native) + §4 table |
-| Agent metadata | ~0.5k | ~0.5k | — (§3 table, inline) | — (§3 table, inline) |
+| Root instruction file | ~7.3k (`CLAUDE.md`) | ~7.3k (`AGENT.md`) | ~7.7k (`AGENTS.md`, §3 table inline) | ~9.0k (`AGENTS.md`, §3+§4 tables inline) |
+| Skill metadata (name + description) | ~4.1k | ~4.1k | ~4.1k (native) | — (§4 table; native catalogue unverified) |
+| Agent metadata | ~0.5k | ~0.5k | — (no agents directory) | — (§3 table) |
 | Eager memory/notebook injection | ~1.2k (SessionStart hook) | ~1.2k (context plugin) | ~1.2k (SessionStart hook) | ~1.2k (sessionStart hook) |
-| **Total** | **~13k** | **~13k** | **~15k** | **~15k** |
+| **Total** | **~13k** | **~13k** | **~13k** | **~10k** |
 
-The emits are at parity by design: ~13–15k tokens, about 7% of a 200k
-window. Before the 2026-09 footprint pass every hooked host paid roughly double
+The emits are at parity by design: ~10–13k tokens, about 6% of a 200k
+window. Bob catalogues skills natively but has no agents directory, so its
+root keeps the §3 Agents table and drops the §4 Skills table — the catalogue
+flag is per kind (`hostCatalogsNatively`), not one boolean. Before the 2026-09 footprint pass every hooked host paid roughly double
 this: the context hook re-injected the root file the host had already loaded
 natively, and skill descriptions ran to 900 characters each — see the
 "Where the tokens go" list below for what changed. Bob and Copilot carry the §3/§4 catalogue tables inline because their
