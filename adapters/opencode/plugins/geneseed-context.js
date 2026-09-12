@@ -138,10 +138,12 @@ let fallbackVisible = false
 function log(msg) { if (DEBUG) console.error(`[geneseed-context] ${msg}`) }
 
 // ---- convention --------------------------------------------------------------
-// Root-level files injected in full. Agent-directed rules + canonical entry docs.
+// Root-level files injected in full. Canonical entry docs + agent-directed rules OpenCode
+// does not read by itself. AGENT.md (opencode.json `instructions`), AGENTS.md and CLAUDE.md
+// (OpenCode's own native roots) are deliberately absent: OpenCode already has them, and
+// injecting them again re-sent the whole harness on every request until 2026-09.
 const EAGER_ROOT = new Set([
-  "AGENTS.md", "AGENT.md", "CLAUDE.md", ".cursorrules",
-  "README.md", "CONTRIBUTING.md", "user-rules.md", "PROFILE.md",
+  ".cursorrules", "README.md", "CONTRIBUTING.md", "user-rules.md", "PROFILE.md",
 ])
 // Doc trees walked recursively; everything found is lazy (listed, not injected).
 const LAZY_DIRS = ["docs", "doc", "documentation", "architecture", "adr", "ADR"]

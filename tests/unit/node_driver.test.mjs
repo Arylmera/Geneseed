@@ -492,6 +492,9 @@ test('an emitted hook command actually runs, and is silent where it should be', 
     const r = runDriver(['--theme', 'neutral', '--emit', 'claude', '--footprint', 'lean',
       '--out', out], env);
     assert.equal(r.status, 0, `claude emit failed: ${(r.stderr || r.stdout).slice(0, 400)}`);
+    // The emitted CLAUDE.md is Claude's own native root and is not re-injected; give the
+    // install a README so the context verb has something to print.
+    writeFileSync(path.join(out, 'README.md'), '# out\n', 'utf8');
 
     // The SessionStart/`context` one: it reads the install and prints its verdict, the fullest of
     // the four paths, and it needs no tool payload on stdin.

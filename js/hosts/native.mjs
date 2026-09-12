@@ -143,16 +143,20 @@ export function triggerOf(text) {
 }
 
 /**
- * Purpose + trigger, the emitted `description:` of a skill. Capped so a long trigger (a
- * few carry three sentences of disambiguation) cannot blow past what hosts display —
- * cut at the last sentence end inside the cap, never mid-word.
+ * Purpose + the trigger's FIRST sentence, the emitted `description:` of a skill. Every
+ * description is always-on context on a host that catalogues natively: at the earlier
+ * 900-char cap the catalogue weighed 22k chars (~5.6k tokens) across 51 skills, three times
+ * the figure the footprint page quoted. The first sentence says WHEN; the later sentences
+ * disambiguate, and the body — read as soon as the skill is chosen — still carries them.
+ * Cut at the last sentence end inside the cap, never mid-word.
  */
-const DESCRIPTION_CAP = 900;
+const DESCRIPTION_CAP = 320;
 export function skillDescription(text) {
   const desc = descOf(text);
   const trig = triggerOf(text);
   if (!trig) return desc;
-  const full = `${desc} Use when: ${trig}`;
+  const first = trig.match(/^.*?[.;](?=\s|$)/);
+  const full = `${desc} Use when: ${first ? first[0] : trig}`;
   if (full.length <= DESCRIPTION_CAP) return full;
   const cut = full.slice(0, DESCRIPTION_CAP);
   const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('; '));

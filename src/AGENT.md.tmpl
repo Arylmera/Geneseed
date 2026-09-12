@@ -19,12 +19,11 @@ name, or reference it from the tool's config. Where a tool supports sub-agents,
 the {{AGENTS}} below are dispatched as real sub-agents; where it does not, treat
 each as a *persona* the single agent adopts for that slice of work.
 <!-- LEAN:else -->
-It is tool-agnostic: any assistant that reads a root instructions file can be
-pointed here. Where the tool supports sub-agents, the {{AGENTS}} below are
-dispatched as real sub-agents; where it does not, treat each as a *persona* the
-single agent adopts for that slice of work.
+Tool-agnostic: where the host has no sub-agents, each {{AGENT}} below is a
+*persona* the single agent adopts for that slice of work.
 <!-- LEAN:end -->
 
+<!-- LEAN:begin -->
 **Readiness sigil — required.** Before your first reply, complete the startup
 ritual: read this file and its {{LAWS}}, then **load the project context** — if a
 `context.json` sits beside this file, read it and load its `eager` entries now
@@ -32,6 +31,11 @@ ritual: read this file and its {{LAWS}}, then **load the project context** — i
 exact line below, before any other text. Do not paraphrase it and do not skip it —
 a first reply that omits the sigil signals the harness was not read, and emitting
 it certifies you have loaded the {{LAWS}} *and* the project context.
+<!-- LEAN:else -->
+**Readiness sigil — required.** Before your first reply: read this file and its
+{{LAWS}}, then load `context.json` and its `eager` entries (§9). Your first reply
+then MUST begin with the exact line below, verbatim — it certifies both were loaded.
+<!-- LEAN:end -->
 
 > {{LOADED_SIGIL}}
 
@@ -128,7 +132,7 @@ Active packs: {{DOCTRINES_LIST}}{{EXCLUDED_RULES_LINE}}
 
 {{INTRO_AGENTS}} Specs live in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/).
 
-<!-- CATALOG:begin -->
+<!-- CATALOG:begin agents -->
 | {{AGENT}} | Use it when… |
 | --- | --- |
 | [reviewer]({{DIR_AGENTS}}/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
@@ -187,7 +191,7 @@ subset that productively clashes on a given motion.
 
 {{INTRO_SKILLS}} Specs live in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/).
 
-<!-- CATALOG:begin -->
+<!-- CATALOG:begin skills -->
 | {{SKILL}} | Trigger |
 | --- | --- |
 | [brainstorm]({{DIR_SKILLS}}/brainstorm.md) | a new feature or project with no design yet, or whose goal, scope, or success criteria need pinning down first |
@@ -270,6 +274,7 @@ above — reach for one only when its domain comes up:
 
 *{{EPI_MEMORY}}*
 
+<!-- LEAN:begin -->
 Persistent facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/) — one fact per file, indexed by a
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision worth
@@ -284,6 +289,15 @@ carry an optional `force` (constraint · choice · conviction · tempered): when
 evidence contradicts one, revise it rather than ignore it, and never overturn a
 `constraint` yourself — surface it to the user. Full
 convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
+<!-- LEAN:else -->
+Durable facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/), one per file, indexed by
+`MEMORY.md` — **read that index at the start of a session**. Write one through the
+[rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with the user whether a
+lesson is a memory or a standing rule ({{DOCTRINE}} process 1). The directory is
+**personal and git-ignored**; shared knowledge goes in code, docs, or `user-rules.md`
+(§1). Convention, including the optional `force` field:
+[`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
+<!-- LEAN:end -->
 
 ---
 
@@ -314,17 +328,13 @@ holds your working artifacts. The one fixed law: `{{DIR_NOTEBOOK}}/` is **person
 git-ignored** — never committed or shared, and the `.gitignore` that guarantees
 it is not yours to lift.
 <!-- LEAN:else -->
-{{INTRO_NOTEBOOK}} It lives in [`{{DIR_NOTEBOOK}}/`]({{DIR_NOTEBOOK}}/), with
-**no imposed format and no imposed medium** — notes, plans, scratch code,
-datasets, experiments. It is not {{MEMORY}} (§5): {{MEMORY}} holds curated
-durable facts for recall, the {{NOTEBOOK}} holds your working artifacts, and a
-note that hardens into a durable fact is promoted there ({{DOCTRINE}} process 1).
-Any file you create for your own benefit belongs here, never in the host tree.
-Read `NOTEBOOK.md` at the start of a session to recall what you keep; the
-charter at [`{{DIR_NOTEBOOK}}/README.md`]({{DIR_NOTEBOOK}}/README.md) is yours
-to rewrite. The one fixed law: `{{DIR_NOTEBOOK}}/` is **personal and
-git-ignored** — never committed or shared, and the `.gitignore` that guarantees
-it is not yours to lift.
+Your own working space, [`{{DIR_NOTEBOOK}}/`]({{DIR_NOTEBOOK}}/): any file you make
+for your own benefit — scratch code, drafts, datasets, experiments — goes here, never
+in the host tree, in whatever format serves. **Read `NOTEBOOK.md` at the start of a
+session.** A note that hardens into a durable fact is promoted to {{MEMORY}} (§5).
+The charter [`{{DIR_NOTEBOOK}}/README.md`]({{DIR_NOTEBOOK}}/README.md) is yours to
+rewrite; the one fixed law is that the folder is **personal and git-ignored**, and
+that `.gitignore` is not yours to lift.
 <!-- LEAN:end -->
 
 ---
@@ -333,6 +343,7 @@ it is not yours to lift.
 
 *{{EPI_VAULT}}*
 
+<!-- LEAN:begin -->
 {{INTRO_WORKSPACE}} The harness files — these {{LAWS}}, {{AGENTS}}, {{SKILLS}}, this file — sit
 *alongside* whatever already belongs to this machine or repository: notes, data,
 configs, documents, prior work. All of it is context you may use.
@@ -351,6 +362,15 @@ Because the folder is shared, two cautions hold:
 And it receives only the **deliverables** of the task. Your own working files —
 scratch scripts, analysis dumps, drafts, experiments — are made in the
 {{NOTEBOOK}} (§6), never here.
+<!-- LEAN:else -->
+{{INTRO_WORKSPACE}} Whatever sits beside the harness files — notes, data, configs,
+prior work — is knowledge to read and learn from, not scaffolding to reorganise;
+index a durable fact from it into {{MEMORY}} (§5). You do not own the folder: files
+you did not create are not yours to move or delete unless the task requires it
+({{LAW}} IV), and a file is verified before it is treated as disposable ({{LAW}} III).
+It receives only the task's deliverables; your working files go in the {{NOTEBOOK}}
+(§6).
+<!-- LEAN:end -->
 
 ---
 
@@ -387,17 +407,14 @@ durable fact worth sharing across projects goes here via the
 [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; one that matters only to you stays in
 {{MEMORY}} (§5).
 <!-- LEAN:else -->
-{{INTRO_WIKI}} It is declared in `wiki.jsonc`, **beside this AGENT.md** — or
-wherever `$GENESEED_WIKI` points; an empty `wikis` list means this section
-stays dormant. Read `wiki.jsonc` at the start of every session and honour each
-declared wiki: load its `entries` by their `load` mode exactly as in
-`context.json` (§9); read its `conventions` before your first write there and
-follow them over your own habits; drop a note you cannot place into `inbox`
-rather than guess a home; never write inside `protected`. The wiki is **the
-user's**, not yours — wikilinks (`[[Note Name]]`) over bare paths, every new
-note linked into the graph. A durable fact worth sharing across projects goes
-here via the [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; one that matters only to
-you stays in {{MEMORY}} (§5).
+{{INTRO_WIKI}} Declared in `wiki.jsonc` beside this AGENT.md (or at `$GENESEED_WIKI`;
+an empty `wikis` list means dormant) — **read it at the start of every session**
+and honour each wiki: load `entries` by `load` mode as in `context.json` (§9), read
+`conventions` before your first write there, drop an unplaceable note in `inbox`,
+never write inside `protected`. It is the user's: wikilinks over bare paths, every
+new note linked in. Cross-project facts go here via the
+[wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; facts that matter only to you stay in
+{{MEMORY}} (§5).
 <!-- LEAN:end -->
 
 ---
@@ -406,6 +423,7 @@ you stays in {{MEMORY}} (§5).
 
 *{{EPI_CONTEXT}}*
 
+<!-- LEAN:begin -->
 **Read `context.json` at the start of every session — this is not a
 suggestion.** The harness carries no project-specific knowledge; this manifest,
 **beside this AGENT.md**, is how the project hands you its own. (On OpenCode it
@@ -422,6 +440,14 @@ you do not work blind, and if you have not loaded it you are not ready to act.
 
 Each `path` may be absolute or relative to the repository root. The file's own
 comment carries its schema and setup notes.
+<!-- LEAN:else -->
+**Read `context.json` at the start of every session — before your first reply, not
+deferrable.** It sits beside this AGENT.md and is how the project hands you its own
+knowledge (on OpenCode it is loaded for you). `"eager"` entries are read now and are
+**project law for this repo, as binding as this file**; `"lazy"` entries only when
+the task needs them ({{DOCTRINE}} process 3). Schema and setup notes are in the file's
+own comment.
+<!-- LEAN:end -->
 
 ---
 
@@ -429,12 +455,18 @@ comment carries its schema and setup notes.
 
 *{{EPI_SCRIPTS}}*
 
+<!-- LEAN:begin -->
 {{INTRO_SCRIPTS}} The harness ships a dependency-free CLI (`geneseed
 build|doctor|diff|status|setup|web`, plus `geneseed-hook` for the verbs a host
 fires on its own) that can be wired into your host's hooks or into CI — notably
 `geneseed-hook context`, which injects the project context at session start so
 this read is enforced by the hook rather than left to you. All of it is
 opt-in; the harness works without any of it.
+<!-- LEAN:else -->
+{{INTRO_SCRIPTS}} A dependency-free CLI (`geneseed build|doctor|diff|status|setup|web`,
+plus `geneseed-hook` for host-fired verbs) can wire the gates and the §9 context
+read into your host's hooks or CI. Opt-in; the harness works without it.
+<!-- LEAN:end -->
 
 ---
 
