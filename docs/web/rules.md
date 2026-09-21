@@ -7,9 +7,9 @@ link: {"hash": "#/laws", "label": "Browse the constitution →"}
 ---
 The agent's standing rules come in **three tiers**, and the tier decides how a rule binds and whether this install carries it at all. All three are authored under `src/` and rendered into `AGENT.md`; the console shows them as three bands under **Constitution**.
 
-### Ontology — always on
+### Ethos — always on
 
-{N_ONTOLOGY} sections of flowing prose in `src/ontology/universal.md`: what the agent is for, how it grades evidence, how it decides, how it conducts itself. It is the mind the other tiers govern — never numbered, never toggleable, and it is where the **Pact** (the mutual contract between you and the agent) is stated. Cited by section name, `Ontology: Decisions`, and its section names are theme-independent so a citation and its heading can never drift apart.
+{N_ONTOLOGY} sections of flowing prose in `src/ontology/universal.md`: what the agent is for, how it grades evidence, how it decides, how it conducts itself. It is the mind the other tiers govern — never numbered, never toggleable, and it is where the **Pact** (the mutual contract between you and the agent) is stated. Cited by section name, `Ethos: Decisions`, and its section names are theme-independent so a citation and its heading can never drift apart.
 
 ### Invariants — always on
 
@@ -25,6 +25,6 @@ Rules toggle **individually** too — `geneseed-build --exclude-rules "process 7
 
 ### Which outranks which
 
-Ontology and Invariants first, then your own `user-rules.md`, then the active Doctrines, then `PROFILE.md`. A rule you write in `user-rules.md` **outranks a doctrine rule** — a practice pack chosen at build time never overrides an instruction you wrote for your own repo — and nothing outranks an invariant: a user rule or a doctrine rule may tighten one, never repeal it.
+Ethos and Invariants first, then your own `user-rules.md`, then the active Doctrines, then `PROFILE.md`. A rule you write in `user-rules.md` **outranks a doctrine rule** — a practice pack chosen at build time never overrides an instruction you wrote for your own repo — and nothing outranks an invariant: a user rule or a doctrine rule may tighten one, never repeal it.
 
 Themes rename the nouns, never the structure: an imperial deploy reads the invariants as *Dictates*, a neutral deploy as *Rules*. The tier, the address and the rule itself do not move.

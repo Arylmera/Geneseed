@@ -156,8 +156,10 @@ function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
   )
 }
 
-// An ontology section: prose, not a rule row. No class chip and no number — it is a worldview,
-// and numbering it would invite the citation-by-numeral the tier deliberately does not have.
+// An Ethos section: prose, not a rule row. THE IDENTIFIER STAYS `OntologyCard` — the rename
+// was of the noun a reader sees, not of the address, which is still `ontology/universal.md`.
+// No class chip and no number — it is a worldview, and numbering it would invite the
+// citation-by-numeral the tier deliberately does not have.
 function OntologyCard({ sec, isOpen, onToggle }) {
   const { data: detail } = useAsync(
     () => (isOpen ? api.item('law', sec.addr) : Promise.resolve(null)),
@@ -386,7 +388,7 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
           <div className="eyebrow">governance</div>
           <h1 className="h">Constitution</h1>
           <p className="sub">
-            Three tiers, read top to bottom: the <b>Ontology</b> the agent thinks with, the{' '}
+            Three tiers, read top to bottom: the <b>Ethos</b> the agent thinks with, the{' '}
             <b>Invariants</b> it never breaks, and the <b>Doctrines</b> — practice packs this
             install chose at build time. Open any entry to read its canonical text.
           </p>
@@ -394,7 +396,7 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
       </div>
 
       <div className="tier-head">
-        <h2 className="tier-h">Ontology</h2>
+        <h2 className="tier-h">Ethos</h2>
         <span className="law-readout">
           <b>{ontology.length}</b> sections · always in force · source <b>ontology/universal.md</b>
         </span>

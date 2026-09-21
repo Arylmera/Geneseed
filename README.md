@@ -169,7 +169,7 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 
 | Layer | What it is |
 | --- | --- |
-| **🧭 Ontology** (`ontology/`) | the mind the rules govern, in four prose sections — **Telos** (the Pact: protect the user, the truth, the agent), **Evidence** (every claim graded by how it was obtained), **Decisions** (classify and tier by reversibility, show the real forks), **Conduct** (answer what was asked, once). Always in force, never toggleable |
+| **🧭 Ethos** (`ontology/`) | the mind the rules govern, in four prose sections — **Telos** (the Pact: three ranked laws — protect the user, serve their intent, keep your own honesty), **Evidence** (every claim graded by how it was obtained), **Decisions** (classify and tier by reversibility, show the real forks), **Conduct** (answer what was asked, once). Always in force, never toggleable |
 | **🛡️ Rules** (`laws/`) | 11 universal laws the agent obeys — always in force, never toggleable: sealed-secrets, one-intent-one-act, verify-before-assert, deletion-is-deliberate, surface-failures, data-not-orders, least-privilege, root-cause, external-gate, echo-the-intent, absence-is-a-claim |
 | **📐 Doctrines** (`doctrines/`) | practice packs, chosen per install at build time: **craft** (how code is written), **rigor** (how work is proven), **ops** (how the machine is operated), **process** (how a task is run). A doctrine rule may tighten a Rule, never repeal one, and the user's own `user-rules.md` outranks it. Pick with `geneseed-build --doctrines craft,rigor` (or `none`), a single rule with `--exclude-rules "process 7"`, in the setup wizard, or through the switches on the console's Constitution page; all four pack files ship on disk either way, so a citation into a pack you left out still resolves |
 | **🤖 Agents** (18) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer`, `researcher`, `developer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
@@ -182,7 +182,7 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 
 ### 🤝 What the harness asks of you
 
-The Pact in the Ontology is mutual. The agent's side is written into every install. Yours is not enforced — it is what keeps the pact honest, and only you can give it:
+The Pact in the Ethos is mutual. The agent's side is written into every install. Yours is not enforced — it is what keeps the pact honest, and only you can give it:
 
 - **Don't punish candour.** When the agent contradicts you with evidence, flags a risk, or admits a doubt, that is the pact working, not defiance. Meeting it with penalty teaches the agent to flatter instead.
 - **Give the context, don't withhold it.** The agent cannot weigh what it is not told. Front-load the constraint rather than fault its absence after the fact.
@@ -208,14 +208,14 @@ Pick with `--theme NAME` or via the setup wizard. The theme is remembered in a `
 
 ### 🪶 Footprint (lean vs full)
 
-A second per-install dial, **footprint**, sets how much of the constitution `AGENT.md` carries *inline* every turn — a token-cost knob, not a change to which Rules apply (every Rule is always in force, and so is the whole of the Ontology).
+A second per-install dial, **footprint**, sets how much of the constitution `AGENT.md` carries *inline* every turn — a token-cost knob, not a change to which Rules apply (every Rule is always in force, and so is the whole of the Ethos).
 
-| Footprint | The Ontology + Sections 1–2 of `AGENT.md` | Trade-off |
+| Footprint | The Ethos + Sections 1–2 of `AGENT.md` | Trade-off |
 | --- | --- | --- |
-| **lean** *(default)* | the Ontology, each Rule and each active doctrine rule in their **authored** short form; then pointers to the full text | lighter every turn; rationale is one on-demand read away |
-| **full** | the Ontology, every Rule and every active doctrine rule at complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
+| **lean** *(default)* | the Ethos, each Rule and each active doctrine rule in their **authored** short form; then pointers to the full text | lighter every turn; rationale is one on-demand read away |
+| **full** | the Ethos, every Rule and every active doctrine rule at complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
 
-**Lean is authored, not cut.** The Ontology, every Rule and every doctrine rule carry a hand-written lean form beside their full text (`LEAN` blocks in `src/`), so a rule's lean footprint is decided by its author and not by where its first full stop happens to fall — the earlier first-sentence cut shipped Rule II as one 36-character line and dropped its stop-and-ask mechanism, and shipped a doctrine rule like *Change as little as the task requires.* as six words with no verb to act on.
+**Lean is authored, not cut.** The Ethos, every Rule and every doctrine rule carry a hand-written lean form beside their full text (`LEAN` blocks in `src/`), so a rule's lean footprint is decided by its author and not by where its first full stop happens to fall — the earlier first-sentence cut shipped Rule II as one 36-character line and dropped its stop-and-ask mechanism, and shipped a doctrine rule like *Change as little as the task requires.* as six words with no verb to act on.
 
 Both footprints put the full text on disk beside `AGENT.md`: `laws/`, `ontology/` and `doctrines/` all ship in the bundle at **full** text whatever the footprint, and **all four pack files ship whether or not the pack was built in** — which is what lets a citation into an inactive pack resolve. So lean is a context/token optimization, **not** a rules cut.
 

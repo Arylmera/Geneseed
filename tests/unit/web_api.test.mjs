@@ -250,17 +250,21 @@ test('the glossary names all three tiers, and the Pact says where it now lives',
   // every citation the agent prints.
   const rows = apiDocsPage(neutral(), 'glossary').rows;
   const labels = rows.map((r) => r.label);
-  for (const label of ['Ontology', 'Rule (Law)', 'Doctrine', 'Doctrines', 'Pact']) {
+  // `Ethos (Ontology)` and `Rule (Law)` carry their old name in the parenthesis because the
+  // neutral theme renamed the NOUN a reader sees while the address — `src/ontology/`, the
+  // `ONTOLOGY` key, every identifier — did not move. A row that dropped the parenthesis would
+  // leave a reader holding a path no glossary entry names.
+  for (const label of ['Ethos (Ontology)', 'Rule (Law)', 'Doctrine', 'Doctrines', 'Pact']) {
     assert.ok(labels.includes(label), `the glossary has no ${label} row: ${labels.join(', ')}`);
   }
   // The three tier nouns are THEMED, so each must resolve to its voice rather than print the
   // token — that is what the `neutral`/`themed` columns are for.
-  for (const label of ['Ontology', 'Doctrine', 'Doctrines']) {
+  for (const label of ['Ethos (Ontology)', 'Doctrine', 'Doctrines']) {
     const row = rows.find((r) => r.label === label);
     assert.ok(row.themed && !row.themed.includes('{'), `${label} did not resolve: ${row.themed}`);
   }
   assert.match(rows.find((r) => r.label === 'Pact').desc, /Telos/,
-    'the Pact still reads as a peer of the Rules — it is a concept inside the Ontology now');
+    'the Pact still reads as a peer of the Rules — it is a concept inside the Ethos now');
 });
 
 test('the overview counts the tiers without moving the laws badge', () => {

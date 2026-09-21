@@ -136,7 +136,7 @@ export default function ConstitutionMap({ overview }) {
     y: 95,
     r: fitRadius(
       [
-        { t: 'Ontology', size: 12.5, dy: -7 },
+        { t: 'Ethos', size: 12.5, dy: -7 },
         { t: `${counts.ontology ?? 0} sections`, size: 10, dy: 10 },
       ],
       11,
@@ -249,10 +249,10 @@ export default function ConstitutionMap({ overview }) {
         </text>
       </Node>
 
-      <Node hash="#/laws" label={`Ontology: ${counts.ontology ?? 0} sections`}>
+      <Node hash="#/laws" label={`Ethos: ${counts.ontology ?? 0} sections`}>
         <circle cx={ontology.x} cy={ontology.y} r={ontology.r} className="cm-sat-disc" />
         <text x={ontology.x} y={ontology.y - 7} textAnchor="middle" className="cm-sat-name">
-          Ontology
+          Ethos
         </text>
         <text x={ontology.x} y={ontology.y + 10} textAnchor="middle" className="cm-sat-num">
           {counts.ontology ?? 0} sections

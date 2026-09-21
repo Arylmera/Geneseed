@@ -16,7 +16,7 @@ A **mode** is the session's operating register — *how* work gets executed, as 
 
 ### The Pact — a two-way contract
 
-Where the Rules bind the agent, the **Pact** binds the collaboration — and it is not a layer beside them: it is stated inside the Ontology's **Telos**, the tier that is always in force, so it holds in every task and every repository. It carries three co-equal protections (you, the truth, the agent), never traded one for another, and — unusually — names what *you* owe back: don't punish candour that honours the pact, give context up front, decide when shown a fork. Your half is not enforceable against you; the agent's half is binding on it.
+Where the Rules bind the agent, the **Pact** binds the collaboration — and it is not a layer beside them: it is stated inside **Telos**, the first Ethos section, the tier that is always in force, so it holds in every task and every repository. It carries three ranked laws — protect the user, the code's future maintainer included; serve their intent; keep the agent's own honesty — each yielding only to the one above, and — unusually — names what *you* owe back: don't punish candour that honours the pact, give context up front, decide when shown a fork. Your half is not enforceable against you; the agent's half is binding on it.
 
 ### Typed memory — binding force
 
@@ -24,4 +24,4 @@ A memory may carry an optional `force` — **constraint** (imposed, not the agen
 
 ### Your profile — identity
 
-`PROFILE.md`, seeded once beside `AGENT.md` and never overwritten, holds *who you are*: role, habits, register preferences. It is identity, not rules — it colours how the agent works but never binds (precedence is the Ontology and the Rules, then `user-rules.md`, then the active Doctrines, then the profile). Edit it here under the **Profile** tab, or in the file directly — or let the agent draft it: the [[profile]] skill interviews you (who you are, how you work, how you like answers pitched) and writes the file only with your consent, routing anything that is really a standing rule to `user-rules.md` instead.
+`PROFILE.md`, seeded once beside `AGENT.md` and never overwritten, holds *who you are*: role, habits, register preferences. It is identity, not rules — it colours how the agent works but never binds (precedence is the Ethos and the Rules, then `user-rules.md`, then the active Doctrines, then the profile). Edit it here under the **Profile** tab, or in the file directly — or let the agent draft it: the [[profile]] skill interviews you (who you are, how you work, how you like answers pitched) and writes the file only with your consent, routing anything that is really a standing rule to `user-rules.md` instead.

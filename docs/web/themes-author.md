@@ -15,6 +15,6 @@ Every rule in the constitution gets its title from a theme key, and a theme that
 - `DOC_*` — one title per doctrine rule, named after its address (`DOC_CRAFT_1`, `DOC_PROCESS_5`, …). `doctor` reads the pack files under `src/doctrines/` and requires exactly the set they name — a missing one is a blank heading, an extra one is a dead key.
 - `PACK_*` — one name per pack (`PACK_CRAFT`, `PACK_RIGOR`, `PACK_OPS`, `PACK_PROCESS`), used for the pack's own sub-heading.
 
-The Ontology's section names are **not** theme keys: a citation reads `({{ONTOLOGY}}: {{ONT_TELOS}})`, token on both sides, so heading and reference always move together. They live in the build's fixed structure table and you neither declare nor rename them.
+The Ethos section names are **not** theme keys: a citation reads `({{ONTOLOGY}}: {{ONT_TELOS}})`, token on both sides, so heading and reference always move together. They live in the build's fixed structure table and you neither declare nor rename them.
 
 > ⚠ `LAW` and `DOCTRINE` must each be a **single word**. Both heading parsers match the tier noun with `\S+`, so a two-word value does not error — the heading simply stops matching and the whole tier parses to nothing, in silence. `doctor` gates this for every real voice (`_TEMPLATE.json` is exempt; its values are placeholders).

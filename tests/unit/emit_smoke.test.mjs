@@ -109,8 +109,15 @@ const FOOTPRINTS = ['full', 'lean'];
  * LOWERED 2026-09 (footprint pass): §5–§10 and the preamble gained authored LEAN halves and
  * the lean `files` carrier fell 40_460 → 37_410 characters. Re-measured, ~4% headroom kept;
  * full untouched — its LEAN:begin halves did not change.
+ *
+ * FULL RAISED 2026-09, for the ontology's coding rewrite: the graded Evidence ladder
+ * (f9c4913) spent what was left of the old headroom without breaching it, and the named
+ * irreversible set added to Decisions is the edit that crossed the line, so `full` moves
+ * 54_800 → 55_500 — the measured `files` carrier of 55_103 rounded up to the next 500. Lean
+ * untouched: the lean halves were re-cut to the 275-word budget (7ddca47) and the lean
+ * carrier stayed under 38_900.
  */
-const CEILING = { full: 54_800, lean: 38_900 };
+const CEILING = { full: 55_500, lean: 38_900 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the

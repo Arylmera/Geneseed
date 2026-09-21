@@ -6,7 +6,7 @@ kind: "concept"
 ---
 One source, **five emit targets** — each with a per-repo and a global (`-global`) variant, plus a portable `files` bundle any `AGENT.md`-aware tool can read. **OpenCode** runs its own engine (JS plugins, colour themes, LSP); **Claude Code**, **Bob**, and **Copilot** share one Claude-shaped engine that diverges only by host dialect.
 
-The harness *content* — the constitution (Ontology, Rules, Doctrines), Agents, Skills, Memory, and the preamble voice — is **identical on every host**: one build renders the same text for all five targets. What differs is how much of it the host can *automate* (via plugins or hooks) versus carry as preamble discipline.
+The harness *content* — the constitution (Ethos, Rules, Doctrines), Agents, Skills, Memory, and the preamble voice — is **identical on every host**: one build renders the same text for all five targets. What differs is how much of it the host can *automate* (via plugins or hooks) versus carry as preamble discipline.
 
 | Capability | OpenCode | Claude | Bob | Copilot |
 | --- | :---: | :---: | :---: | :---: |
