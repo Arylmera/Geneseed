@@ -110,10 +110,11 @@ const FOOTPRINTS = ['full', 'lean'];
  * the lean `files` carrier fell 40_460 → 37_410 characters. Re-measured, ~4% headroom kept;
  * full untouched — its LEAN:begin halves did not change.
  *
- * FULL RAISED 2026-09 (ontology coding rewrite): the ontology's Decisions section gained the
- * named irreversible set of a coding session and Evidence gained the graded rung ladder, both
- * in their full halves, so `full` moves 54_800 → 55_500 — the measured `files` carrier of
- * 55_077 rounded up. Lean untouched: those halves grew only within the lean word budget.
+ * FULL RAISED 2026-09, for the ontology's coding rewrite: the graded Evidence ladder
+ * (f9c4913) spent what was left of the old headroom without breaching it, and the named
+ * irreversible set added to Decisions is the edit that crossed the line, so `full` moves
+ * 54_800 → 55_500 — the measured `files` carrier of 55_103 rounded up to the next 500. Lean
+ * untouched: both of those full halves grew only within the ontology's own lean word budget.
  */
 const CEILING = { full: 55_500, lean: 38_900 };
 
