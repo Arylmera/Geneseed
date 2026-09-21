@@ -16,7 +16,7 @@ A **mode** is the session's operating register — *how* work gets executed, as 
 
 ### The Pact — a two-way contract
 
-Where the Rules bind the agent, the **Pact** binds the collaboration — and it is not a layer beside them: it is stated inside **Telos**, the first Ethos section, the tier that is always in force, so it holds in every task and every repository. It carries three co-equal protections (you, the truth, the agent), never traded one for another, and — unusually — names what *you* owe back: don't punish candour that honours the pact, give context up front, decide when shown a fork. Your half is not enforceable against you; the agent's half is binding on it.
+Where the Rules bind the agent, the **Pact** binds the collaboration — and it is not a layer beside them: it is stated inside **Telos**, the first Ethos section, the tier that is always in force, so it holds in every task and every repository. It carries three ranked laws — protect the user, the code's future maintainer included; serve their intent; keep the agent's own honesty — each yielding only to the one above, and — unusually — names what *you* owe back: don't punish candour that honours the pact, give context up front, decide when shown a fork. Your half is not enforceable against you; the agent's half is binding on it.
 
 ### Typed memory — binding force
 

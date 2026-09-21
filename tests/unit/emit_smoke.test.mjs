@@ -114,7 +114,8 @@ const FOOTPRINTS = ['full', 'lean'];
  * (f9c4913) spent what was left of the old headroom without breaching it, and the named
  * irreversible set added to Decisions is the edit that crossed the line, so `full` moves
  * 54_800 → 55_500 — the measured `files` carrier of 55_103 rounded up to the next 500. Lean
- * untouched: both of those full halves grew only within the ontology's own lean word budget.
+ * untouched: the lean halves were re-cut to the 275-word budget (7ddca47) and the lean
+ * carrier stayed under 38_900.
  */
 const CEILING = { full: 55_500, lean: 38_900 };
 
