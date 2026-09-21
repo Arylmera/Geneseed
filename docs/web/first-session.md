@@ -8,7 +8,7 @@ Once installed, the agent doesn't change *how* you talk to your tool — it chan
 
 ### What loaded automatically
 
-- **`AGENT.md`** — the [constitution](#/docs/rules): the Ontology's {N_ONTOLOGY} sections, {N_LAWS} always-on Rules, and the {N_DOCTRINE_RULES} doctrine rules from the packs this install built in.
+- **`AGENT.md`** — the [constitution](#/docs/rules): the {N_ONTOLOGY} Ethos sections, {N_LAWS} always-on Rules, and the {N_DOCTRINE_RULES} doctrine rules from the packs this install built in.
 - **Your repo's docs** — `README.md`, `CONTRIBUTING.md`, anything under `docs/` the harness discovers.
 - **Your machine's wiki** (if you [set one up](#/docs/configure-wiki)) — eager entries and a lazy listing of the rest.
 - **The skill and agent catalogue** — invokable by name.

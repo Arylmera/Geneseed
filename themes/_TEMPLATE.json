@@ -121,7 +121,7 @@
   "INTRO_WORKSPACE": "<themed intro to the Workspace section — the install dir is shared>",
   "INTRO_SCRIPTS": "<themed intro to the Scripts section — everything above works on self-discipline alone>",
   "BANNER": "<multi-line ASCII banner shown at the top of AGENT.md; use \\n for line breaks>",
-  "ONTOLOGY": "<noun for the always-on worldview tier, e.g. Ontology — a bare noun with no leading article, since it is read inline mid-sentence>",
+  "ONTOLOGY": "<noun for the always-on worldview tier, e.g. Ethos — a bare noun with no leading article, since it is read inline mid-sentence>",
   "LAW": "<singular noun for a rule in this theme, e.g. Rule / Dictate / Law>",
   "LAWS": "<plural of LAW>",
   "DOCTRINE": "<SINGLE-WORD singular noun for one optional doctrine rule, e.g. Doctrine — a space in this value breaks the heading parser silently>",

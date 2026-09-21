@@ -92,7 +92,7 @@ streams the output of background jobs and keeps their history across reloads.
   content the page last read — if an agent session edited the file meanwhile, the save
   409s and the page reloads instead of clobbering it.
 - **Constitution** (`#/laws`) — the whole governance surface on one page, in three bands:
-  the **Ontology** (four prose sections), the **Invariants** (the nine numbered Rules, with
+  the **Ethos** (four prose sections), the **Invariants** (the nine numbered Rules, with
   a class facet — only non-empty classes render, and two of the six have had no invariant
   since the split), and the **Doctrines** (one group per pack, each marked active or not for
   this install). Every row expands to its full body, lazily fetched. The rail entry is

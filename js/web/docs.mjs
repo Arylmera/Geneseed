@@ -109,8 +109,13 @@ export function docGroups() {
  */
 const GLOSSARY_KEYS = [
   // The three tiers, in constitutional order and before the entities — a reader who does not
-  // know what an Ontology is here cannot read the rest of the glossary's first rows.
-  ['Ontology', 'ONTOLOGY', 'the always-on worldview under the rules — telos, evidence, '
+  // know what an Ethos is here cannot read the rest of the glossary's first rows.
+  //
+  // `Ethos (Ontology)` for the same reason as `Rule (Law)` below: the neutral theme renamed
+  // what a reader SEES, while the address the reader will meet in `src/ontology/`, in the
+  // `ONTOLOGY` theme key and in every identifier did not move. The parenthesis is the bridge
+  // between the two, and the glossary is the one page that owes a reader that bridge.
+  ['Ethos (Ontology)', 'ONTOLOGY', 'the always-on worldview under the rules — telos, evidence, '
     + 'decisions, conduct; it holds the Pact'],
   ['Rule (Law)', 'LAW', 'one of the nine always-on invariants: what is never done'],
   ['Rules (Laws)', 'LAWS', 'the body of always-on invariants'],
@@ -126,8 +131,9 @@ const GLOSSARY_KEYS = [
   ['Wiki', 'WIKI', 'the machine-wide knowledge base'],
   // Still a token, still themed, but it names a CONCEPT INSIDE the ontology's Telos now
   // rather than a peer of the Rules — `src/postures/peer.md` cites it and the section that
-  // used to carry it is the Ontology.
-  ['Pact', 'PACT', "the two-way collaboration contract, stated in the Ontology's Telos"],
+  // used to carry it is the Ethos.
+  ['Pact', 'PACT', 'the two-way collaboration contract, stated in Telos, the first Ethos '
+    + 'section'],
   ['Posture', null, 'the relationship register the agent works in '
     + '(peer, mentor, expert, assistant, artisan)'],
   ['Mode', null, 'how work gets executed — direct (the agent works every '

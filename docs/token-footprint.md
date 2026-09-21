@@ -46,10 +46,10 @@ until 2026-09 it did, and the whole harness was paid twice per session.
 ## Where the tokens go
 
 - **The root file is ~65% of the bill**, and the constitution inside it is the
-  bulk of that — no longer one section but three: the Ontology, the nine Rules,
+  bulk of that — no longer one section but three: the Ethos, the nine Rules,
   and the doctrine packs this install built in. **Two** levers move it, not one.
   The [footprint dial](#/docs/footprint) (`lean`, the default, swaps each Rule,
-  each doctrine rule, the Ontology and the longest prose sections — the preamble,
+  each doctrine rule, the Ethos and the longest prose sections — the preamble,
   §6 Notebook, §8 Wiki — for their hand-written condensations; `full` inlines
   every rationale). And the
   [doctrine packs](#/docs/setup-choices) — `geneseed-build --doctrines craft,rigor`
@@ -57,7 +57,7 @@ until 2026-09 it did, and the whole harness was paid twice per session.
   footprint dial trims. Anything else is noise.
 
   The lean condensations are authored, not generated. An earlier design shipped
-  the Ontology *whole* under `lean` on the grounds that truncating four flowing
+  the Ethos *whole* under `lean` on the grounds that truncating four flowing
   sections to four orphan sentences would ship a worldview nobody could read —
   the `LEAN:` blocks answer that by hand-writing the short form instead. The
   doctrine packs were the last tier still cut at the first full stop, and they

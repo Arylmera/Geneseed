@@ -103,12 +103,16 @@ beforeEach(() => {
 describe('Constitution page', () => {
   it('renders all three tier bands, in constitutional order', async () => {
     // Queried by HEADING and not by text: the three nouns also appear in the page's subtitle,
-    // so `getByText('Ontology')` matches two nodes and says so. The order is the claim anyway —
+    // so `getByText('Ethos')` matches two nodes and says so. The order is the claim anyway —
     // this page exists to be read top to bottom.
+    //
+    // THE FIRST BAND READS `Ethos`, NOT `Ontology`. The tier is a character rather than a
+    // taxonomy, so the noun a reader sees was renamed; the address under it — the route, the
+    // `ontology/universal.md` source line, `counts.ontology` — did not move.
     const { container } = render(<Laws />)
     await waitFor(() => expect(container.querySelector('.tier-h')).toBeTruthy())
     expect([...container.querySelectorAll('.tier-h')].map((h) => h.textContent)).toEqual([
-      'Ontology',
+      'Ethos',
       'Invariants',
       'Doctrines',
     ])

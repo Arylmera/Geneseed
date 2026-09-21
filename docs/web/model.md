@@ -4,7 +4,7 @@ order: 0
 title: "The harness model"
 kind: "concept"
 ---
-Geneseed assembles its runtime pieces around a single `AGENT.md` entrypoint: an **Ontology** (how the agent thinks, decides and speaks — always on), **Rules** (the always-on invariants it never breaks), **Doctrines** (practice packs this repository chose at build time), **Agents** (capability specialists you delegate to), **Skills** (repeatable workflows the agent can invoke), **Memory** (one-fact-per-file durable knowledge), and a **Notebook** (the agent's own sovereign space). The first three are the [constitution](#/docs/rules), in that order of precedence — with your own `user-rules.md` sitting between the Rules and the Doctrines.
+Geneseed assembles its runtime pieces around a single `AGENT.md` entrypoint: an **Ethos** (how the agent thinks, decides and speaks — always on), **Rules** (the always-on invariants it never breaks), **Doctrines** (practice packs this repository chose at build time), **Agents** (capability specialists you delegate to), **Skills** (repeatable workflows the agent can invoke), **Memory** (one-fact-per-file durable knowledge), and a **Notebook** (the agent's own sovereign space). The first three are the [constitution](#/docs/rules), in that order of precedence — with your own `user-rules.md` sitting between the Rules and the Doctrines.
 <!--harness:opencode-->
 On OpenCode, {N_PLUGINS} **Plugins** bind the pieces to the host: context injection, learn-at-session-end, the safety guard, the saved workflow runner, end-of-run notifications, a live-activity feed for this console, and an opt-in minimal-code mode.
 <!--/harness-->

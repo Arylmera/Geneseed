@@ -29,7 +29,7 @@ Pick **direct** unless you want the session managing a crew for you. Switch back
 
 ### Doctrine packs — which practices bind
 
-Which practice rules this install adopts, fixed at build time. Unlike the dials above this one really does change *which rules apply*: the [Ontology and the Rules](#/docs/rules) are always on, the doctrines are yours to pick. All four ship enabled, and leaving one out is a deliberate choice, not a default:
+Which practice rules this install adopts, fixed at build time. Unlike the dials above this one really does change *which rules apply*: the [Ethos and the Rules](#/docs/rules) are always on, the doctrines are yours to pick. All four ship enabled, and leaving one out is a deliberate choice, not a default:
 
 - **craft** — how code is written: reuse first, house conventions, docs in step, the smallest diff.
 - **rigor** — how work is proven: idempotence, honest tests, coverage, gates that can actually fail.
@@ -56,7 +56,7 @@ The switches are on the **Constitution** page, one per rule, staged locally and 
 
 How much of the constitution `AGENT.md` carries inline every turn. A token-cost dial, not a rules cut — whatever this install adopted always applies:
 
-- **lean** *(default)* — the Ontology, each Rule and each doctrine rule in an authored short form — the rule and its mechanism, hand-written beside the full text — with a pointer to the complete text shipped beside `AGENT.md` and read on demand.
+- **lean** *(default)* — the Ethos, each Rule and each doctrine rule in an authored short form — the rule and its mechanism, hand-written beside the full text — with a pointer to the complete text shipped beside `AGENT.md` and read on demand.
 - **full** — every Rule's and every active doctrine rule's complete text *and* rationale inline. Best when token cost is a non-issue or you run a smaller model, which applies a rule's nuance more reliably with the *why* eagerly in context.
 
 ---
