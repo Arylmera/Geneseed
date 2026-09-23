@@ -78,7 +78,7 @@ export function useJobs({ onFinish, onError } = {}) {
           // Every action re-emits the harness (never the served web assets), so a soft
           // refresh is enough — onFinish refetches the overview + the install/MCP panels.
           // No full page reload, so nothing flashes.
-          onFinish?.()
+          onFinish?.(j.status)
         }
       } catch {
         clearInterval(t)

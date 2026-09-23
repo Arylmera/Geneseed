@@ -3,8 +3,20 @@ import { Icon } from './Icon.jsx'
 
 // Bottom console drawer. Every action triggered from the UI streams here live;
 // history is hydrated from the server so it survives reload and restart.
-export default function Console({ runs, open, onToggle, onClear, onCancel, busy }) {
+export default function Console({ runs, open, onToggle, onClear, onCancel, busy, finish }) {
   const bodyRef = useRef(null)
+  const headRef = useRef(null)
+  // The end of a watched run flashes the head once, green or red — the console is usually
+  // collapsed to its 42px strip, and a dot that merely stops pulsing is easy to miss.
+  // A class toggle, not state: restarting a CSS animation needs the class off, a reflow,
+  // and the class back on, which a re-render cannot express.
+  useEffect(() => {
+    const el = headRef.current
+    if (!finish || !el) return
+    el.classList.remove('flash-ok', 'flash-bad')
+    void el.offsetWidth
+    el.classList.add(finish.status === 'done' ? 'flash-ok' : 'flash-bad')
+  }, [finish])
   const lastLen = runs.length ? runs[runs.length - 1].output.length : 0
   useEffect(() => {
     const el = bodyRef.current
@@ -19,7 +31,17 @@ export default function Console({ runs, open, onToggle, onClear, onCancel, busy 
         transform: open ? 'none' : 'translateY(calc(42vh - 42px))',
       }}
     >
-      <div className="console-head" onClick={onToggle}>
+      <div
+        className="console-head"
+        ref={headRef}
+        onClick={onToggle}
+        onAnimationEnd={(e) => {
+          if (e.target === e.currentTarget)
+            e.currentTarget.classList.remove('flash-ok', 'flash-bad')
+        }}
+      >
+        {/* indeterminate: a job reports no percentage, only that it is still going */}
+        {busy && <span className="console-progress" aria-hidden="true" />}
         <span className="ttl">
           <span className={`live ${busy ? 'on' : ''}`} />
           terminal

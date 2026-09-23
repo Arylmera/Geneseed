@@ -5,6 +5,7 @@ import { FLAVOURS } from '../../hooks/useFlavour.js'
 import { ACCENT_MODES } from '../../hooks/useAccentMode.js'
 import { LAYOUTS, defaultLayoutFor } from '../../hooks/useLayout.js'
 import ServerControl from './ServerControl.jsx'
+import Seg from '../../components/Seg.jsx'
 
 // The repo the install actually updates from (its git origin). Falls back to the canonical
 // upstream when the About payload can't be fetched. The github-shaped deep links (/issues,
@@ -153,7 +154,7 @@ export default function Settings({
               <span className="tick" id="dir-accent-label">
                 Accent
               </span>
-              <div className="seg" role="group" aria-labelledby="dir-accent-label">
+              <Seg aria-labelledby="dir-accent-label">
                 {ACCENT_MODES.map((m) => (
                   <button
                     key={m.id}
@@ -165,7 +166,7 @@ export default function Settings({
                     {m.short}
                   </button>
                 ))}
-              </div>
+              </Seg>
               <span className="dir-layout-note sub" role="status" aria-live="polite">
                 {ACCENT_MODES.find((m) => m.id === accentMode)?.tagline ?? ''}
               </span>
@@ -180,7 +181,7 @@ export default function Settings({
               <span className="tick" id="dir-layout-label">
                 Dashboard layout
               </span>
-              <div className="seg" role="group" aria-labelledby="dir-layout-label">
+              <Seg aria-labelledby="dir-layout-label">
                 {LAYOUTS.map((l) => (
                   <button
                     key={l.id}
@@ -192,7 +193,7 @@ export default function Settings({
                     {l.short}
                   </button>
                 ))}
-              </div>
+              </Seg>
               <span className="dir-layout-note sub" role="status" aria-live="polite">
                 {layout === 'auto'
                   ? `Following the theme: ${
@@ -252,7 +253,7 @@ export default function Settings({
             <span className="tick" id="footprint-label">
               Footprint
             </span>
-            <div className="seg" role="group" aria-labelledby="footprint-label">
+            <Seg aria-labelledby="footprint-label">
               {['full', 'lean'].map((fp) => (
                 <button
                   key={fp}
@@ -263,7 +264,7 @@ export default function Settings({
                   {fp}
                 </button>
               ))}
-            </div>
+            </Seg>
             <span className="dir-layout-note sub" role="status" aria-live="polite">
               {footprint === 'lean'
                 ? 'Lean: terse rule lines + a pointer to the full law file (~40% smaller, lighter context per turn).'

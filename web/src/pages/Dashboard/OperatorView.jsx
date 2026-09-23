@@ -75,7 +75,7 @@ export default function OperatorView({ overview, setup, jobs }) {
       </div>
 
       <div className="grid split-operator">
-        <div className="card rise" style={{ animationDelay: '60ms' }}>
+        <div className="card rise" style={{ '--i': 1 }}>
           <div className="card-head pad-lg" style={{ padding: '18px 20px 0', marginBottom: 14 }}>
             <h3>Sections</h3>
             <div className="right">
@@ -115,7 +115,7 @@ export default function OperatorView({ overview, setup, jobs }) {
             </tbody>
           </table>
         </div>
-        <div className="card pad-lg rise" style={{ animationDelay: '120ms' }}>
+        <div className="card pad-lg rise" style={{ '--i': 2 }}>
           <div className="card-head">
             <h3>Run log</h3>
           </div>

@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { animate, stagger } from 'animejs'
 import { go } from '../lib/router.js'
+import { motionOK, settle } from '../lib/motion.js'
 
 const MAX_RESULTS = 24
 
@@ -26,9 +28,41 @@ function filterAndRank(index, query) {
   return hits.slice(0, MAX_RESULTS).map((h) => h.e)
 }
 
+// The matched run of the title, marked — the reason a row is in the list, visible without
+// reading it. The whole query, case-insensitively, first occurrence only: that is exactly
+// what `score` ranked the row on, so the mark never claims a match the ranking did not use.
+function marked(title, query) {
+  const q = query.trim().toLowerCase()
+  const at = q ? title.toLowerCase().indexOf(q) : -1
+  if (at < 0) return title
+  return (
+    <>
+      {title.slice(0, at)}
+      <mark className="spot-hit">{title.slice(at, at + q.length)}</mark>
+      {title.slice(at + q.length)}
+    </>
+  )
+}
+
 export default function Spotlight({ query, index, loading, error, active, onActive, onClose }) {
   const results = useMemo(() => filterAndRank(index, query), [index, query])
   const containerRef = useRef(null)
+
+  // The rows cascade in when the list first HAS rows — not on every keystroke, which
+  // re-ranks and would re-deal the whole list under the user's typing.
+  const hasRows = results.length > 0
+  useLayoutEffect(() => {
+    const rows = containerRef.current?.querySelectorAll('[data-spot-row]')
+    if (!hasRows || !rows?.length || !motionOK()) return
+    const anim = animate(rows, {
+      opacity: [0, 1],
+      translateY: [-4, 0],
+      duration: 220,
+      delay: stagger(18),
+      ease: 'outQuart',
+    })
+    return settle(anim, 220 + 18 * rows.length)
+  }, [hasRows])
 
   // Reset selection when results change so we never land on an out-of-range row.
   useEffect(() => {
@@ -113,7 +147,7 @@ export default function Spotlight({ query, index, loading, error, active, onActi
               }}
               onMouseEnter={() => onActive(i)}
             >
-              <div className="spot-title">{entry.title}</div>
+              <div className="spot-title">{marked(entry.title, query)}</div>
               {entry.desc ? <div className="spot-desc">{entry.desc}</div> : null}
             </div>
           ))}

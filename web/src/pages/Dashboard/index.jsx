@@ -7,6 +7,7 @@ import Onboarding from './Onboarding.jsx'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import { resolveLayout } from '../../hooks/useLayout.js'
+import Seg from '../../components/Seg.jsx'
 
 // Dashboard ships in the eager shell chunk (it is the landing route), so only
 // the DEFAULT lens rides along. The alternative lenses are behind the layout
@@ -106,7 +107,7 @@ export default function Dashboard({
             drift from source.
           </p>
         </div>
-        <div className="seg" role="group" aria-label="Dashboard view">
+        <Seg aria-label="Dashboard view">
           {[
             ['status', 'Status'],
             ['lineage', 'Lineage'],
@@ -121,37 +122,41 @@ export default function Dashboard({
               {l}
             </button>
           ))}
-        </div>
+        </Seg>
       </div>
-      {dir === 'status' && lens === 'cultivar' && (
-        <StatusView
-          overview={overview}
-          sigil={sigil}
-          setup={setup}
-          jobs={jobs}
-          onAction={onAction}
-        />
-      )}
-      {dir === 'status' && lens === 'greenhouse' && (
-        <Suspense fallback={<Loading />}>
-          <GreenhouseView
+      {/* keyed by the direction, so switching tabs remounts this and replays .view-in: the
+          new view settles in rather than replacing the old one in a single frame */}
+      <div key={dir} className="view-in">
+        {dir === 'status' && lens === 'cultivar' && (
+          <StatusView
             overview={overview}
             sigil={sigil}
+            setup={setup}
             jobs={jobs}
-            doctor={doctor}
             onAction={onAction}
           />
-        </Suspense>
-      )}
-      {dir === 'status' && lens === 'operator' && (
-        <Suspense fallback={<Loading />}>
-          <OperatorHudView overview={overview} jobs={jobs} doctor={doctor} onAction={onAction} />
-        </Suspense>
-      )}
-      {dir === 'lineage' && (
-        <LineageView overview={overview} sigil={sigil} setup={setup} jobs={jobs} />
-      )}
-      {dir === 'operator' && <OperatorView overview={overview} setup={setup} jobs={jobs} />}
+        )}
+        {dir === 'status' && lens === 'greenhouse' && (
+          <Suspense fallback={<Loading />}>
+            <GreenhouseView
+              overview={overview}
+              sigil={sigil}
+              jobs={jobs}
+              doctor={doctor}
+              onAction={onAction}
+            />
+          </Suspense>
+        )}
+        {dir === 'status' && lens === 'operator' && (
+          <Suspense fallback={<Loading />}>
+            <OperatorHudView overview={overview} jobs={jobs} doctor={doctor} onAction={onAction} />
+          </Suspense>
+        )}
+        {dir === 'lineage' && (
+          <LineageView overview={overview} sigil={sigil} setup={setup} jobs={jobs} />
+        )}
+        {dir === 'operator' && <OperatorView overview={overview} setup={setup} jobs={jobs} />}
+      </div>
     </>
   )
 }

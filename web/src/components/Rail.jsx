@@ -1,7 +1,9 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { animate } from 'animejs'
 import { go } from '../lib/router.js'
 import { editCount, readiness, relTime } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
+import { motionOK, settle, useGlide } from '../lib/motion.js'
 
 // Left navigation rail, grouped like the design: the Dashboard on its own, then
 // Codex (what the harness knows and is bound by), Care (what needs attention)
@@ -241,11 +243,35 @@ function RailVitals({ overview, setup }) {
   )
 }
 
-export default function Rail({ route, overview, setup, onOpenVoice, onNavigate }) {
+// A successful build is the harness growing, and the sprout says so with one sway. Only for
+// a run that finished while the page was watching (App hands over the finish EVENT) — a
+// done run hydrated from the history on load is old news. The sway lives on a wrapper
+// span: the sprout itself carries a CSS transform transition for its hover tilt, which
+// would smear every animation frame and then lose to the inline transform left behind.
+function useSway(finish) {
+  const ref = React.useRef(null)
+  useEffect(() => {
+    if (finish?.status !== 'done' || !ref.current || !motionOK()) return
+    const anim = animate(ref.current, {
+      rotate: [{ to: -14 }, { to: 10 }, { to: -5 }, { to: 0 }],
+      scale: [{ to: 1.14 }, { to: 1 }],
+      duration: 1100,
+      ease: 'inOutSine',
+    })
+    return settle(anim, 1100)
+  }, [finish])
+  return ref
+}
+
+export default function Rail({ route, overview, setup, onOpenVoice, onNavigate, finish }) {
+  const railRef = useGlide('.rail-item.active')
+  const sway = useSway(finish)
   return (
     // A <nav> landmark, not <aside>: this IS the app's primary navigation, and
     // tabIndex -1 lets the drawer focus-management in App.jsx move focus here.
-    <nav className="rail" id="rail-nav" aria-label="Harness navigation" tabIndex={-1}>
+    <nav className="rail" id="rail-nav" aria-label="Harness navigation" tabIndex={-1} ref={railRef}>
+      {/* the active-page highlight, one element gliding between rows (lib/motion.js) */}
+      <span className="glide" aria-hidden="true" />
       <button
         className="rail-brand"
         onClick={() => {
@@ -254,7 +280,9 @@ export default function Rail({ route, overview, setup, onOpenVoice, onNavigate }
         }}
         title="Dashboard"
       >
-        <Sprout />
+        <span className="sprout-sway" ref={sway}>
+          <Sprout />
+        </span>
         <div className="brand-text">
           <span className="brand-name">
             Gene<b>seed</b>

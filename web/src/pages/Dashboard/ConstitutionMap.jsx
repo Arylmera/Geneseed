@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { animate, createTimeline, stagger, svg, utils } from 'animejs'
 import { api } from '../../api/index.js'
 import { go } from '../../lib/router.js'
 import { packColor } from '../../lib/lawCats.js'
 import { rulesInForce } from '../../lib/format.js'
+import { motionOK, settle } from '../../lib/motion.js'
 
 // THE CONSTITUTION, DRAWN AS WHAT IT IS: a hub of rules in force, its three tiers around
 // it, and dashed lines out to the four things those rules govern. The dashboard used to
@@ -65,12 +67,22 @@ function edgePath(a, b, bow = 0) {
   )
 }
 
+// THE ENTRANCE TELLS THE SAME STORY AS THE LAYOUT: the hub first, the three tiers spoked
+// out of it, then the dashed reach to what they govern. Once per page load — a dashboard
+// that re-choreographs itself on every return visit is a dashboard in the user's way.
+// The pack discs come from a second fetch and may land after the entrance has finished,
+// so they carry their own small stagger rather than holding the whole map hostage.
+let mapPlayed = false
+let packsPlayed = false
+const ENTRANCE_MS = 850
+
 // A tappable node: the group carries the click, and a focusable rect-free <g> is not
 // keyboard-reachable, so each is a real button in the SVG's tab order.
-function Node({ hash, label, children }) {
+function Node({ hash, label, part, children }) {
   return (
     <g
       className="cm-node"
+      data-cm={part}
       role="button"
       tabIndex={0}
       aria-label={label}
@@ -101,6 +113,66 @@ export default function ConstitutionMap({ overview }) {
       .catch(() => {})
     return () => {
       alive = false
+    }
+  }, [])
+
+  const root = useRef(null)
+  // The pack discs may arrive before the map has scrolled into view; they then wait for
+  // the entrance instead of popping in alone above an empty map.
+  // `started` is true unless THIS map is holding an entrance back for the scroll.
+  const started = useRef(true)
+  const pendingPacks = useRef(null)
+  useLayoutEffect(() => {
+    const el = root.current
+    if (!el || mapPlayed || !motionOK()) return
+    mapPlayed = true
+    const q = (sel) => [...el.querySelectorAll(sel)]
+    const hub = q('[data-cm="hub"]')
+    const sats = q('[data-cm="sat"]')
+    const gov = q('[data-cm="gov"]')
+    const govEdges = q('.cm-edge-gov')
+    const notes = q('.cm-note, .cm-govern-label')
+    const spokes = svg.createDrawable(q('.cm-edge'))
+    // The from-states go on BEFORE paint (layout effect), so the finished map never
+    // flashes for a frame ahead of its own entrance.
+    utils.set([...hub, ...sats, ...gov], { opacity: 0, scale: 0.7 })
+    utils.set([...govEdges, ...notes], { opacity: 0 })
+    utils.set(spokes, { draw: '0 0' })
+    const tl = createTimeline({ autoplay: false, defaults: { ease: 'outExpo' } })
+      .add(hub, { opacity: 1, scale: 1, duration: 450 }, 0)
+      .add(spokes, { draw: '0 1', duration: 380, delay: stagger(70) }, 140)
+      .add(sats, { opacity: 1, scale: 1, duration: 420, delay: stagger(70) }, 260)
+      .add(govEdges, { opacity: 1, duration: 300, delay: stagger(50) }, 420)
+      .add(gov, { opacity: 1, scale: 1, duration: 380, delay: stagger(50) }, 470)
+      .add(notes, { opacity: 1, duration: 300 }, 520)
+    // The map sits below the fold in the Journal lens, so an entrance on mount would play
+    // to nobody. It waits until a third of the map is on screen; the settle timer starts
+    // with the play, so a map nobody scrolls to simply stays waiting — unseen either way.
+    started.current = false
+    let stop = () => tl.complete()
+    const start = () => {
+      tl.play()
+      stop = settle(tl, ENTRANCE_MS)
+      started.current = true
+      pendingPacks.current?.()
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      start()
+      return () => stop()
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return
+        io.disconnect()
+        start()
+      },
+      { threshold: 0.33 },
+    )
+    io.observe(el)
+    return () => {
+      io.disconnect()
+      started.current = true
+      stop()
     }
   }, [])
 
@@ -218,12 +290,46 @@ export default function ConstitutionMap({ overview }) {
     }
   })
 
+  const packCount = packNodes.length
+  useLayoutEffect(() => {
+    const el = root.current
+    if (!el || !packCount || packsPlayed || !motionOK()) return
+    packsPlayed = true
+    const discs = [...el.querySelectorAll('.cm-mini > g')]
+    utils.set(discs, { opacity: 0, scale: 0.5 })
+    let stop = () => utils.set(discs, { opacity: 1, scale: 1 })
+    const play = () => {
+      pendingPacks.current = null
+      const anim = animate(discs, {
+        opacity: 1,
+        scale: 1,
+        duration: 380,
+        // after the doctrine satellite they orbit, when the map is entering with them
+        delay: stagger(45, { start: 420 }),
+        ease: 'outExpo',
+      })
+      stop = settle(anim, 420 + 45 * packCount + 380)
+    }
+    if (started.current) play()
+    else pendingPacks.current = play
+    return () => {
+      pendingPacks.current = null
+      stop()
+    }
+  }, [packCount])
+
   // role="group", NOT role="img". An `img` role makes the whole subtree presentational,
   // which prunes every one of the focusable role="button" nodes below out of the
   // accessibility tree — leaving a screen-reader user with silent tab stops inside a
   // graphic that announces one alt text. `group` keeps the name AND the children.
   return (
-    <svg className="cmap" viewBox="0 0 940 350" role="group" aria-label="The constitution map">
+    <svg
+      ref={root}
+      className="cmap"
+      viewBox="0 0 940 350"
+      role="group"
+      aria-label="The constitution map"
+    >
       {/* Hub → satellite: the constitution IS these three tiers. Solid, and bowed so the
           three spokes fan apart instead of leaving the hub as one thick line. */}
       <path d={edgePath(hub, ontology, 0.05)} className="cm-edge" />
@@ -235,7 +341,7 @@ export default function ConstitutionMap({ overview }) {
         <path key={`e-${g.label}`} d={edgePath(g.from, g, 0.03)} className="cm-edge-gov" />
       ))}
 
-      <Node hash="#/laws" label={`Constitution: ${inForce} rules in force`}>
+      <Node hash="#/laws" part="hub" label={`Constitution: ${inForce} rules in force`}>
         <circle cx={hub.x} cy={hub.y} r={hub.r} className="cm-hub-disc" />
         <text x={hub.x} y={hub.y - 12} textAnchor="middle" className="cm-hub-name">
           Constitution
@@ -248,7 +354,7 @@ export default function ConstitutionMap({ overview }) {
         </text>
       </Node>
 
-      <Node hash="#/laws" label={`Ethos: ${counts.ontology ?? 0} sections`}>
+      <Node hash="#/laws" part="sat" label={`Ethos: ${counts.ontology ?? 0} sections`}>
         <circle cx={ontology.x} cy={ontology.y} r={ontology.r} className="cm-sat-disc" />
         <text x={ontology.x} y={ontology.y - 7} textAnchor="middle" className="cm-sat-name">
           Ethos
@@ -261,7 +367,7 @@ export default function ConstitutionMap({ overview }) {
         how it thinks, not a rule
       </text>
 
-      <Node hash="#/laws" label={`Invariants: ${counts.laws ?? 0}, never broken`}>
+      <Node hash="#/laws" part="sat" label={`Invariants: ${counts.laws ?? 0}, never broken`}>
         <circle cx={invariants.x} cy={invariants.y} r={invariants.r} className="cm-sat-disc" />
         <text x={invariants.x} y={invariants.y - 6} textAnchor="middle" className="cm-sat-name">
           Invariants
@@ -281,6 +387,7 @@ export default function ConstitutionMap({ overview }) {
 
       <Node
         hash="#/laws"
+        part="sat"
         label={`Doctrines: ${counts.doctrines?.rules ?? 0} rules chosen at build`}
       >
         <circle cx={doctrines.x} cy={doctrines.y} r={doctrines.r} className="cm-sat-disc" />
@@ -323,7 +430,7 @@ export default function ConstitutionMap({ overview }) {
         GOVERNS THE HARNESS
       </text>
       {governed.map((g) => (
-        <Node key={g.label} hash={g.hash} label={`${g.label}: ${g.count}`}>
+        <Node key={g.label} hash={g.hash} part="gov" label={`${g.label}: ${g.count}`}>
           <circle cx={g.x} cy={g.y} r={g.r} className="cm-gov-disc" />
           <text x={g.x} y={g.y - 2} textAnchor="middle" className="cm-gov-name">
             {g.label}
