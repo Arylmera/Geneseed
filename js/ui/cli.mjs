@@ -441,6 +441,25 @@ export function cliCommand(verb) {
  * CRLF ON WINDOWS for `die`'s reason: argparse writes through a Python text stream, which
  * translates, and this text lands in the same terminals and the same pipes as that one.
  */
+/**
+ * `geneseed --help` — every verb with its one-line help, from the same table the per-verb help
+ * reads. `verbs` is the entry's own dispatch list, so the listing can name nothing the entry
+ * would refuse; a verb the table does not describe still appears, with no help line.
+ */
+export function printVerbList(prog, verbs, extra = {}) {
+  const helpOf = new Map([...Object.entries(extra),
+    ...cliReference().commands.filter((c) => c.help).map((c) => [c.name, c.help])]);
+  const names = [...verbs].sort();
+  const pad = Math.max(...names.map((n) => n.length)) + 2;
+  const lines = [`usage: ${prog} <command> [options]`, '',
+    `A bare \`${prog}\` runs \`home\`. \`${prog} <command> --help\` describes one command.`, '',
+    'commands:'];
+  for (const n of names) lines.push(`  ${n.padEnd(pad)}${helpOf.get(n) || ''}`.trimEnd());
+  const text = `${lines.join('\n')}\n`;
+  process.stdout.write(process.platform === 'win32' ? text.replaceAll('\n', '\r\n') : text);
+  return 0;
+}
+
 export function printHelp(prog, verb) {
   const cmd = cliCommand(verb);
   if (cmd === null) return null;

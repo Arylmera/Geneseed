@@ -24,9 +24,9 @@
  * `1` on the way back out. `readJsonc` already learned this; the strict-JSON fork has to
  * learn it separately, because it does not go through `readJsonc` at all.
  *
- * A JsonNumber IS AN OBJECT TO `typeof`, which is why `isDict` is spelled out rather than
- * written as `typeof v === 'object'`. Python's `isinstance(x, dict)` is false for a float;
- * the JS twin has to be false for its wrapper.
+ * A JsonNumber IS AN OBJECT TO `typeof`, which is why `isDict` (js/lib/json.mjs) excludes
+ * the wrapper rather than testing `typeof v === 'object'`. Python's `isinstance(x, dict)` is
+ * false for a float; the JS twin has to be false for its wrapper.
  */
 import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import os from 'node:os';
@@ -35,20 +35,10 @@ import path from 'node:path';
 import { bobConfigDir, copilotConfigDir, resolvePath } from './hosts.mjs';
 import { installState, installTargets } from './installs.mjs';
 import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
-import { jsonDumpsIndent, parseJson } from '../lib/json.mjs';
+import { isDict, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
 import { padEndToWidth } from '../lib/text.mjs';
 import { opencodeTarget, readJsonc } from './settings.mjs';
 
-/**
- * `isinstance(x, dict)` for a value that came out of `json.loads`.
- *
- * A JSON value is null, a boolean, a string, a NUMBER, an array or an object — and
- * `parseJson` hands numbers back wrapped, so `typeof v === 'object'` says yes to a float.
- * `constructor === Object` is the plain-object test, and every object `JSON.parse` builds
- * is one.
- */
-const isDict = (v) => v !== null && v !== undefined && typeof v === 'object'
-  && v.constructor === Object;
 
 /** `dict.get(key, default)`. */
 const dget = (obj, key, dflt) => (isDict(obj) && Object.hasOwn(obj, key) ? obj[key] : dflt);

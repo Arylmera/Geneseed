@@ -248,8 +248,14 @@ export function has(obj, key) {
   return Object.hasOwn(obj, key);
 }
 
+/**
+ * `isinstance(x, dict)` for a value that came out of `parseJson`. Numbers come back WRAPPED
+ * (`JsonNumber`), so `typeof v === 'object'` alone says yes to every number — and a settings
+ * file with `"permission": 5` then read as a dict the merge could write into, silently
+ * skipping the git gate. The one exclusion is the wrapper; everything else is unchanged.
+ */
 export function isDict(v) {
-  return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+  return Boolean(v) && typeof v === 'object' && !Array.isArray(v) && !(v instanceof JsonNumber);
 }
 
 /**

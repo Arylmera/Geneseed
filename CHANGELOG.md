@@ -31,6 +31,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **`agents/_template.md` no longer ships** into an install's agents folder, where hosts
   loaded it as a phantom `_template` agent. A Bob project emit's `.bob/.gitignore` now lists
   the machine-specific `settings.json`.
+- **`isDict` no longer says yes to a number.** `parseJson` wraps numbers, and the wrapper passed
+  the object check — `"permission": 5` in an `opencode.json` read as a dict the merge wrote its
+  git gate into, then serialised back as `5`. `mcp.mjs` and `native.mjs` drop their own copies.
+- **One malformed `wiki.jsonc` no longer fails `/api/status`**: an `entries` that is not a list
+  is skipped instead of throwing.
+- **`geneseed --help` lists the commands** (it died asking for a verb), and a bare `geneseed`
+  from an npm install runs `home` as both launchers already did.
+- **`.gitignore`**: `notebook/` is anchored to the root — unanchored, it also ignored new files
+  under `src/notebook/`. `.claude/worktrees/` and `.claude/settings.local.json` are ignored for
+  every clone, not only through the maintainer's global excludes.
 
 ### Changed
 

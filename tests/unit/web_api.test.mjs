@@ -23,7 +23,7 @@ import { localHost, makeHandler } from '../../js/web/handler.mjs';
 import { buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
-  apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg,
+  apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg, wikiItems,
 } from '../../js/web/api.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -2690,4 +2690,31 @@ test('promote rejects traversal and index names', () => {
         `${JSON.stringify(bad)} resolved instead of 404ing`);
     }
   });
+});
+
+test('a wiki manifest whose entries is not a list is skipped, not a crash', () => {
+  // `wikiItems` feeds `/api/status`; `(entries || []).filter` threw on `{"x": 1}`, so one
+  // hand-edited wiki.jsonc failed the whole dashboard. The malformed vault lists nothing; the
+  // well-formed one beside it still lists its note.
+  const sb = makeSandbox();
+  const prev = process.env.GENESEED_WIKI;
+  try {
+    const bad = path.join(sb.path, 'bad');
+    const good = path.join(sb.path, 'good');
+    fs.mkdirSync(bad, { recursive: true });
+    fs.mkdirSync(good, { recursive: true });
+    fs.writeFileSync(path.join(good, 'note.md'), '# n\n');
+    const manifest = path.join(sb.path, 'wiki.jsonc');
+    fs.writeFileSync(manifest, JSON.stringify({ wikis: [
+      { name: 'bad', path: bad, entries: { x: 1 } },
+      { name: 'good', path: good, entries: [{ path: '', load: 'lazy' }] },
+    ] }));
+    process.env.GENESEED_WIKI = manifest;
+    const items = wikiItems({ target: sb.path });
+    assert.ok(Array.isArray(items));
+    assert.ok(!items.some((i) => JSON.stringify(i).includes(`${path.sep}bad`)), JSON.stringify(items));
+  } finally {
+    if (prev === undefined) delete process.env.GENESEED_WIKI; else process.env.GENESEED_WIKI = prev;
+    sb.cleanup();
+  }
 });
