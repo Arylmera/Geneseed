@@ -35,7 +35,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { parseDriverArgs } from '../../bin/build-driver.mjs';
+import { parseDriverArgs } from '../../js/build/driver.mjs';
 import { GENESEED_HOOK_SNIFF, SHIM_MARK } from '../../js/hosts/settings.mjs';
 import { walkFiles } from '../helpers/golden.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
@@ -189,24 +189,15 @@ test('the static half of the refutation is gated by the walk that superseded it'
 // THE DRIVER'S SURFACE
 
 test('the driver classifies every emit', () => {
-  // The partition, re-derived from the source. `PORTED` had two spellings across the port — a
-  // literal subset while it was partial, `new Set(EMITS)` now that all nine have crossed — and
-  // following the alias is what keeps this honest.
-  const text = read('bin', 'build-driver.mjs');
+  // The --emit choices, re-derived from the source. (A `PORTED` subset once partitioned them into
+  // "crossed" and "refused with exit 3"; all nine crossed, the set equalled `EMITS`, and the
+  // refusal it guarded was unreachable — so both went.) An unknown value is refused one layer up,
+  // by the parser's choice check, and that IS exercised below.
+  const text = read('js', 'build', 'driver.mjs');
   const listed = jsStringList(text, 'const EMITS = [');
   assert.deepEqual([...listed].sort(), [...EMITS].sort(),
-    'bin/build-driver.mjs offers a different set of --emit choices than this file freezes; a tenth '
+    'js/build/driver.mjs offers a different set of --emit choices than this file freezes; a tenth '
     + 'emit needs a row here and a cell of its own somewhere');
-  const ported = text.includes('const PORTED = new Set(EMITS)')
-    ? listed : jsStringList(text, 'const PORTED = new Set([');
-  assert.deepEqual([...ported].sort(), [...EMITS].sort(),
-    `--emit ${[...EMITS].filter((e) => !ported.has(e)).join(', ')} has not crossed; each must `
-    + 'refuse with exit 3 and this file needs the cell the reference carried for exactly that');
-
-  // WHAT THIS CANNOT REACH, STATED RATHER THAN LEFT AS A GREEN. With `PORTED` equal to `EMITS`,
-  // the driver's `if (!PORTED.has(args.emit)) die(3, …)` is unreachable for any value that got
-  // past `choice`, so the reference's exit-3 loop ran zero times too. The reachable neighbour is
-  // the choice refusal one layer up, and that IS exercised — a value in neither list.
   const r = runDriver(['--emit', 'no-such-host', '--out', 'X']);
   assert.equal(r.status, 2, `--emit no-such-host was not refused: ${r.stdout.slice(0, 200)}`);
   assert.match(r.stderr, /argument --emit: invalid choice: 'no-such-host'/);
@@ -215,7 +206,7 @@ test('the driver classifies every emit', () => {
 /** The quoted tokens of a JS array literal opened by `marker`. */
 function jsStringList(text, marker) {
   const i = text.indexOf(marker);
-  assert.notEqual(i, -1, `bin/build-driver.mjs no longer contains ${JSON.stringify(marker)}`);
+  assert.notEqual(i, -1, `js/build/driver.mjs no longer contains ${JSON.stringify(marker)}`);
   const body = text.slice(i + marker.length, text.indexOf(']', i));
   return new Set([...body.matchAll(/'([^']+)'/g)].map((m) => m[1]));
 }
@@ -679,13 +670,13 @@ test('--help names every flag the parser takes', () => {
   // gave the reference the flag for free, and this hand-rolled parser fell through to
   // `unrecognized arguments: --help` and exit 2. A gate that only ever runs inputs both
   // implementations were built for cannot see a flag one of them does not have.
-  const text = read('bin', 'build-driver.mjs');
+  const text = read('js', 'build', 'driver.mjs');
   assert.deepEqual(objectKeys(text, 'const VALUED = {'), VALUED_FLAGS.map((f) => f[0]),
-    'bin/build-driver.mjs\'s VALUED table and this file\'s frozen list disagree — the help text '
+    'js/build/driver.mjs\'s VALUED table and this file\'s frozen list disagree — the help text '
     + 'renders straight out of that table, so a flag missing from BOTH would otherwise be '
     + 'invisible to every gate in the repo');
   assert.deepEqual(objectKeys(text, 'const FLAGS = {'), BARE_FLAGS.map((f) => f[0]),
-    'bin/build-driver.mjs\'s FLAGS table and this file\'s frozen list disagree');
+    'js/build/driver.mjs\'s FLAGS table and this file\'s frozen list disagree');
 
   const said = help('--help').stdout;
   for (const [flag, dest, value, parsed = value] of VALUED_FLAGS) {
@@ -713,7 +704,7 @@ test('--help names every flag the parser takes', () => {
 /** The quoted keys of a JS object literal opened by `decl`, in source order. */
 function objectKeys(text, decl) {
   const at = text.indexOf(decl);
-  assert.notEqual(at, -1, `bin/build-driver.mjs no longer contains ${JSON.stringify(decl)}`);
+  assert.notEqual(at, -1, `js/build/driver.mjs no longer contains ${JSON.stringify(decl)}`);
   const body = text.slice(at + decl.length, text.indexOf('};', at));
   return [...body.matchAll(/'(-{1,2}[a-z-]+)'\s*:/g)].map((m) => m[1]);
 }

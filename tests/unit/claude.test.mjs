@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../bin/build-driver.mjs';
+import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../js/build/driver.mjs';
 import { cmdRebuildAll } from '../../js/build/generate.mjs';
 import { globalHookStandingDown, cmdContext } from '../../js/hosts/hooks.mjs';
 import {

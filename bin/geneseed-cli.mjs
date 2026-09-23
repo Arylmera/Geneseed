@@ -307,7 +307,7 @@ async function main(argv) {
     // Lazy for the same reason the table rows are — `parseDriverArgs` alone drags the whole
     // generator driver in, and every OTHER verb was paying for it.
     const [{ cmdValidate }, { parseDriverArgs }] = await Promise.all([
-      import('../js/inspect/validate.mjs'), import('./build-driver.mjs'),
+      import('../js/inspect/validate.mjs'), import('../js/build/driver.mjs'),
     ]);
     try {
       return cmdValidate(parseDriverArgs(argv.slice(1)));

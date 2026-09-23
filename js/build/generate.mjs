@@ -32,7 +32,7 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { main as driverMain } from '../../bin/build-driver.mjs';
+import { main as driverMain } from './driver.mjs';
 import { makeCfg, PACK_ORDER } from './source.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {

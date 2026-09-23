@@ -282,7 +282,7 @@ const SHIPS = [
   ['js/', 'the port'],
   ['src/', 'the product: what a bundle is rendered from'],
   ['themes/', 'render.loadTheme reads these; a themeless install renders nothing'],
-  ['adapters/', 'bin/build-driver.mjs, js/hosts/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
+  ['adapters/', 'js/build/driver.mjs, js/hosts/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
   ['docs/web/', "js/web/docs.mjs serves ROOT/docs; the console's Docs pages ARE these files"],
   // ONE ROW FOR THE NON-WEB PAGES, not one per page, and the reason is that every per-file row
   // this replaced gave the SAME reason — the literal string `docs/*.md`, seven times. The

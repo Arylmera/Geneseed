@@ -1,6 +1,6 @@
 # `js/` — the module map
 
-Fifty-six modules in seven folders. This page is the address book: **what each one owns**, and
+Fifty-seven modules in seven folders. This page is the address book: **what each one owns**, and
 **which file to open first** for a given task. It is not documentation of behaviour — every module
 has a docblock for that, and the docblock is the thing to read before editing.
 
@@ -14,7 +14,7 @@ a module that does not exist, is a test failure. `geneseed doctor` reports the s
 ```
 bin/geneseed-cli.mjs     the `geneseed` CLI — 20+ verbs, may NOT spawn
 bin/geneseed-hook.mjs    the hook entry — 5 verbs, loads on EVERY tool call (~14 ms)
-bin/build-driver.mjs     `geneseed-build` — the generator's flags and emit targets
+bin/build-driver.mjs     `geneseed-build` — a thin entry over js/build/driver.mjs
 
 js/build/     src/ + themes/  →  rendered text  →  a bundle  →  a per-host install
 js/hosts/     where it stops being a renderer and touches the machine
@@ -45,7 +45,8 @@ as a per-host install at project or global scope.
 | `emit-common.mjs` | Constants, tree walkers, and the three writers BOTH global emits share. Decides no host |
 | `stubs.mjs` | Write-once seed files: context, wiki, rules, excludes, profile, `.gitignore`, memory/notebook indexes |
 | `version.mjs` | The release marker: fingerprint the sources, read/compare/write an install's version, warn on downgrade |
-| `generate.mjs` | CLI verbs `build`, `prompt`, `theme`, `rebuild-all` — the thin face over `bin/build-driver.mjs` |
+| `driver.mjs` | The generator driver: `--emit`/`--theme`/`--footprint` flag parsing, the nine emit targets, per-host emit orchestration, the prune and the manifest. `bin/build-driver.mjs` is only its entry |
+| `generate.mjs` | CLI verbs `build`, `prompt`, `theme`, `rebuild-all` — the thin face over `driver.mjs` |
 | `catalog.mjs` | `geneseed catalog` — prints the shipped roster. Classifies nothing itself |
 | `themes.mjs` | Maintainer-only `--sync-themes`: inserts `_TEMPLATE.json`'s missing keys into the committed themes |
 

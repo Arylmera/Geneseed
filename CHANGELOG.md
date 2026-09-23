@@ -8,6 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed — architecture
+
+- **The generator driver lives in `js/build/driver.mjs`.** Flag parsing, the nine emit targets
+  and the per-host emit orchestration were in `bin/build-driver.mjs`, so nine `js/` modules
+  (setup, migrate, doctor, diff, validate, uninstall, generate, the web actions) imported upward
+  from a binary. `bin/build-driver.mjs` is now a three-line entry. The unreachable `PORTED`
+  refusal (it equalled `EMITS`, which the parser already enforces) is gone, and the driver asks
+  `hostCatalogsNatively` instead of keeping its own copy of that table.
+
 ### Changed — code cleanup
 
 - 24 exports nothing imported are module-private now; `GATE_LEDGER` has one owner

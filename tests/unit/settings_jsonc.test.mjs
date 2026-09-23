@@ -17,7 +17,7 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { hookRunnerEntry } from '../../bin/build-driver.mjs';
+import { hookRunnerEntry } from '../../js/build/driver.mjs';
 import { GENESEED_HOOK_SNIFF, mergeClaudeSettings, readJsonc } from '../../js/hosts/settings.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 import { jsonDumpsCompact } from '../../js/lib/json.mjs';

@@ -141,7 +141,7 @@ export const MUTATIONS = [
     // and tests/unit/resolve_out.test.mjs is the gate written to close it.
     id: 'M12',
     name: 'let resolveOut normalise instead of canonicalise (a REAL historical defect)',
-    file: 'bin/build-driver.mjs',
+    file: 'js/build/driver.mjs',
     find: '  return resolvePath(path.resolve(process.cwd(), raw));',
     replace: '  return path.resolve(process.cwd(), raw);',
     gate: UNIT,
@@ -309,7 +309,7 @@ export const MUTATIONS = [
   {
     id: 'M16',
     name: 'drop the --root prefix from the recorded instruction path',
-    file: 'bin/build-driver.mjs',
+    file: 'js/build/driver.mjs',
     find: "  const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';",
     replace: "  const agentPath = 'AGENT.md';",
     gate: UNIT,

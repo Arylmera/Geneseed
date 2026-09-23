@@ -33,7 +33,7 @@ import { doctrinesOfDir, excludedRulesOfDir, themeFiles } from '../../js/hosts/i
 import {
   ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER,
 } from '../../js/build/source.mjs';
-import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../bin/build-driver.mjs';
+import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';

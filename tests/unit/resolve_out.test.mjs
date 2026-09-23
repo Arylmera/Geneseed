@@ -21,7 +21,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { resolveOut } from '../../bin/build-driver.mjs';
+import { resolveOut } from '../../js/build/driver.mjs';
 import { ALIAS_SKIP, aliasedTemp } from '../helpers/alias.mjs';
 
 test('resolveOut expands a non-canonical path, it does not merely normalise it', (t) => {
