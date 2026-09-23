@@ -162,8 +162,8 @@ why the commands are here and the answers are not load-bearing.
 
 ### 2a — Adding a DOCTRINE RULE (the common case)
 
-Five files, none of them a count. This is the slot most new material belongs in, and it is cheap
-on purpose so that the invariant slot stays scarce.
+Five files, plus the written-out rule totals in four test files. This is the slot most new
+material belongs in, and it is cheap on purpose so that the invariant slot stays scarce.
 
 1. `src/doctrines/<pack>.md` — **append** `### {{DOCTRINE}} <pack> <n> — {{DOC_<PACK>_<n>}}` plus
    the body, wrapped in a `LEAN` block with **both halves authored** — the heading stays outside the
@@ -202,9 +202,14 @@ on purpose so that the invariant slot stays scarce.
 
 - **No class entry.** There is no `LAW_CLASS` analogue: a doctrine rule's class *is* its pack, and
   there is no second taxonomy over it.
-- **No count, anywhere.** No badge, no `SHIPPED.md` triple, no prose mirror. The console spends
+- **No count in the product.** No badge, no `SHIPPED.md` triple, no prose mirror. The console spends
   `{N_PACKS}` / `{N_PACKS_ACTIVE}` / `{N_DOCTRINE_RULES}`, all computed at request time.
-- **No test fixture to bump**, and no renumber risk.
+- **No renumber risk.** But there *are* written-out rule totals to bump — expected values are
+  written out, never recorded — in `tests/unit/emit_smoke.test.mjs`, `harness.test.mjs`,
+  `setup.test.mjs` and `web_api.test.mjs`. Each fails loudly with the new count; change the
+  number *and* the comment that explains it. A rule long enough to matter can also breach the
+  `full` carrier ceiling in `emit_smoke` — raise it with a dated note there, as every earlier
+  move did.
 
 ⚠ **Cite only downward.** An always-on tier may never reference a toggleable one:
 `constitutionProblems` refuses a `{{DOCTRINE}}` token anywhere under `src/ontology/` or

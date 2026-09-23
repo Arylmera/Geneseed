@@ -114,6 +114,7 @@
   "DOC_PROCESS_5": "Authorize the Upload · Consent Before Push",
   "DOC_PROCESS_6": "Set the Kill-Switch Before the Loop · Bound the Loop",
   "DOC_PROCESS_7": "Every Node Keeps Its Handle · Codes That Persist",
+  "DOC_PROCESS_8": "One Deck Per Node · One Writer Per File",
   "INTRO_DOC": "This file is the boot sequence a coding daemon reads when it jacks into this repository.",
   "INTRO_AGENTS": "Spin the right daemon for focused work instead of running the whole job on one thread; each has one function and returns a clean log of what it changed.",
   "INTRO_SKILLS": "A Skill is a proven routine for a recurring task. Run the matching routine before you freestyle.",

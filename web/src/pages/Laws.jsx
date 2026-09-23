@@ -89,6 +89,10 @@ const DOCTRINE_META = {
   'process.5': ['process', 'Every commit and push needs explicit, repeated consent.'],
   'process.6': ['process', "Set a loop's exit before entering it; break out of thrashing."],
   'process.7': ['process', 'Give tracked items stable reference codes; never renumber one.'],
+  'process.8': [
+    'process',
+    'One writer per file: give each agent a write set, never overwrite a change you did not make.',
+  ],
 }
 
 // Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.

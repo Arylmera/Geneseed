@@ -8,6 +8,22 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added — constitution
+
+- **Process 8, one writer per file.** When several agents share code — sub-agents, a pipeline
+  crew, a workflow fan-out, another session in the same checkout — each file has one writer at a
+  time: every unit gets a write set, overlaps run in sequence or get one owner, shared append
+  files (registries, lockfiles, generated bundles) stay with the integrator, reviewers never edit,
+  and a change you did not make is merged or stops you, never overwritten. Borrowed from Orca's
+  task-spec contract (ownership + acceptance) and Claude Workflow's per-agent worktree isolation.
+  `parallel-agents`, `pipeline` and `workflow` carry the write set in their handoff envelopes and
+  check changed files against it on the way back; `workflow` lists Orca as a coordination host.
+  The `full` carrier ceiling moves 55_500 → 57_000 for the rule's text; `lean` does not move.
+- **OpenCode workflows take `isolation: "worktree"`**, like Claude Code's Workflow: each such
+  agent runs on its own branch and worktree; an unchanged one is released, a changed one is kept,
+  and the summary names every kept branch and every file two agents changed (`rt.overlaps()`).
+  Nothing is merged for you, and without git the agent fails rather than run in the shared tree.
+
 ### Changed — toolchain
 
 - **Web console toolchain on current majors** (dev-only; React stays 18): vite 5 → 8, vitest

@@ -146,3 +146,24 @@ Give every tracked item a short reference code, unchanged for the session —
 except in a short, simple answer. Number from one within each kind, invent letters for
 missing kinds, never renumber a code once issued.
 <!-- LEAN:end -->
+
+### {{DOCTRINE}} process 8 — {{DOC_PROCESS_8}}
+<!-- LEAN:begin -->
+When several {{AGENTS}} work on the same code — sub-{{AGENTS}}, a pipeline crew, a
+workflow fan-out, another session or tool in this checkout — each file has one writer at
+a time. Before dispatch, give every unit a **write set** (the files or globs it may
+change) and intersect them: overlapping units run in sequence or the overlap gets one
+owner. Files every unit would append to — a registry, an index table, a lockfile, a
+generated bundle — stay with the integrator; workers return the rows. Parallel editors
+get their own worktree where the host offers one. One authoritative attempt per task:
+no second editor until the first is proven stopped, and a reviewer reports, never edits.
+With another writer live, re-read a file just before writing it; a change you did not
+make is merged or stops you, never overwritten. Hand work back rebased on the current
+base, naming the files changed, so a conflict resolves on the worker's branch.
+<!-- LEAN:else -->
+When several {{AGENTS}} share code, each file has one writer at a time. Give every unit a
+write set and intersect them before dispatch: overlaps run in sequence or get one owner.
+Shared append files (registries, lockfiles, generated bundles) stay with the integrator.
+Parallel editors get a worktree. Reviewers never edit. With another writer live, re-read
+before writing; never overwrite a change you did not make. Hand back rebased, naming files.
+<!-- LEAN:end -->
