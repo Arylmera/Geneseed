@@ -27,7 +27,9 @@ should print `ok`.
 
 ## 3 · Optional niceties
 
-- **Browse it:** `npx geneseed web` opens the local web console.
+- **Browse it:** `npx geneseed web` opens the local web console — and once installed,
+  bare `geneseed` does the same when it can (else it prints the command list).
+  `geneseed --help` lists every command.
 - **No full-screen TUI:** `tui` and `menu` are verbs that say the panel is not here and
   print the command list instead. The web console is the visual front end.
 

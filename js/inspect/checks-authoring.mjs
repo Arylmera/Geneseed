@@ -688,9 +688,17 @@ export function countTableProblems() {
   }
   problems.push(...lawMetaProblems(lawNums, LAW_CLASS, LAW_CLASSES));
 
+  // WHAT SHIPS, NOT WHAT IS FLAT. A folder skill (`src/skills/<name>/SKILL.md`, vendored with
+  // its scripts or references) ships exactly like a flat one, so the badge, the README list and
+  // the SHIPPED.md triple count it. It is added HERE rather than in `srcStems`, whose other
+  // readers above — the AGENT.md table links and SKILL_CLASS — are about flat specs only.
+  const skillsDir = path.join(SRC, 'skills');
+  const shippedSkills = new Set([...skillFiles, ...(isDir(skillsDir) ? readdirSync(skillsDir) : [])
+    .filter((d) => !d.startsWith('_') && isFile(path.join(skillsDir, d, 'SKILL.md')))]);
+
   const counts = {
     agents: srcStems('agents').size,
-    skills: srcStems('skills').size,
+    skills: shippedSkills.size,
     laws: lawNums.length,
     themes: themeFiles().length,
     // Last on purpose: the badge loop below walks this object in insertion order and the
@@ -761,7 +769,7 @@ export function countTableProblems() {
     problems.push('[authoring] SHIPPED.md carries no \'N laws, N agents, N skills\' line — '
       + 'deleting it is how that gate goes green while the count drifts');
   }
-  problems.push(...proseMirrorProblems(readme, web, counts, skillFiles, shipped));
+  problems.push(...proseMirrorProblems(readme, web, counts, shippedSkills, shipped));
   return problems;
 }
 

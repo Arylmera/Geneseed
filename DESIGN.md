@@ -201,7 +201,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Generator | `bin/build-driver.mjs` (`geneseed-build`) | — | substitution + `<!-- INCLUDE: -->` inlining, and the nine `--emit` targets |
 | CLI, as data | `js/cli-table.json` | — | the owned document the entry point parses its own argv from |
 | Automation | `bin/geneseed-cli.mjs` (`geneseed`) | — | 25 verbs — `build` / `doctor` / `status` / `prompt` / `diff` / `setup` / `web` / `upgrade` / … |
-| Hooks | `bin/geneseed-hook.mjs` (`geneseed-hook`) | — | the four verbs an emitted `settings.json` invokes: `context` / `git-gate` / `rule-gate` / `learn` |
+| Hooks | `bin/geneseed-hook.mjs` (`geneseed-hook`) | — | the five verbs an emitted hook config invokes: `context` / `git-gate` / `rule-gate` / `tool-gate` / `learn` |
 | Adapters | `adapters/` | — | optional per-tool glue (hooks, OpenCode plugins) |
 
 ## ⚙️ Generator contract
@@ -246,8 +246,7 @@ caught, and the reasoning behind every deliberate divergence — lives in
 this project had two implementations and every byte either one wrote was compared. Read it to
 understand *why* a seam is where it is; read the contract above to know *what* it is today.
 
-See also [docs/extending.md](docs/extending.md) — what one addition costs, and which gate says
-so — and [docs/limits.md](docs/limits.md) — what this tool does not prove about itself.
+See also [docs/extending.md](docs/extending.md) — what one addition costs, and which gate says so.
 ## 🚫 Explicitly out of scope
 
 Graph/index generation, web-clipping pipelines, session-classification capture,

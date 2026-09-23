@@ -36,7 +36,7 @@ current host gets. Skills are the largest surface by file count and they cost no
 - **Codex CLI — cheapest, and the only one with an ask tier.** Its hook schema is
   Claude's with `hooks.json`/`config.toml` as the carrier, its payload field names are
   Claude's, and `permissionDecision: "ask"` exists. The Claude engine with `host: "codex"`
-  covers instructions (`AGENTS.md`), skills (`.agents/skills`) and the four hook verbs
+  covers instructions (`AGENTS.md`), skills (`.agents/skills`) and the hook verbs
   unchanged; the only new code is the carrier writer (a `hooks.json` merge or a TOML
   table) and the config-dir resolver (`~/.codex`, `$CODEX_HOME`). Roughly the Copilot
   port minus the dialect work.

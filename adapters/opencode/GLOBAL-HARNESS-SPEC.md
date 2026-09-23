@@ -185,7 +185,7 @@ repo's layout defeats the convention.
 
 ### 3.5 Injection block format (mirror `harness.py cmd_context`)
 
-Byte-identical structure to [harness.py:237-263](../../rituals/harness.py) so both
+Byte-identical structure to the retired Python `harness.py` (lines 237-263) so both
 enforcement paths read the same. Adds a machine marker (first line) for §4.
 
 ```
