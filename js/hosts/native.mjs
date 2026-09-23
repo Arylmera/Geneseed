@@ -461,6 +461,12 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     if (targetDir === undefined) continue;
 
     if (fname.startsWith('_')) {
+      // NOT the agent template: every host loads each `.md` in its agents dir as an agent,
+      // so shipping it there registered a phantom `_template` agent, and its authoring steps
+      // (theme tokens, README badge) are the source repo's, not an install's. Nothing in an
+      // installed harness points at it; the skill template, which AGENT.md and skill-forge
+      // do point at, still ships.
+      if (folder === 'agents') continue;
       // Authoring templates are shipped verbatim and FLAT — not wrapped as a native
       // skill — so an author following the `_template.md` note has the scaffold on disk.
       const dest = path.join(targetDir, fname);

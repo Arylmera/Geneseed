@@ -90,18 +90,22 @@ const consentRuleOn = (d, excluded = []) =>
  * doctrine section — and a boundary that keeps asking for a rule the install did not adopt is
  * the one disagreement the tiering is not allowed to produce. (It does NOT follow that the
  * string is gone from the bundle; see `claudeHookGroups` for what D5 ships anyway and why.)
- * `rm -rf *`, `git push --force*` and `git push -f*` stay in EVERY build: they are
- * Law IV's territory — an always-on invariant — not the process pack's, and the guard
- * plugin's own force-push arm is unconditional for the same reason.
+ * `rm -rf *`, the force pushes and the history-discarding git verbs (`reset --hard`,
+ * `clean -f`, `branch -D`, `checkout --`) stay in EVERY build: they are Law IV's territory —
+ * an always-on invariant — not the process pack's. They mirror `DESTRUCTIVE_GIT_RE` in
+ * js/hosts/hooks.mjs, so Claude's git-gate and OpenCode's permission ask about the same acts;
+ * before, OpenCode only logged the last four.
  */
+const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git reset --hard*', 'git clean -f*',
+  'git branch -D*', 'git checkout -- *'];
+
 function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
   if (consentRuleOn(doctrines, excluded)) {
     bash['git commit*'] = 'ask';
     bash['git push*'] = 'ask';
   }
-  bash['git push --force*'] = 'ask';
-  bash['git push -f*'] = 'ask';
+  for (const k of LAW_IV_BASH) bash[k] = 'ask';
   return { bash };
 }
 
@@ -112,7 +116,7 @@ function defaultPermission(doctrines = null, excluded = []) {
  * has to be able to recognise a key that is Geneseed's business at all — to add it back when
  * the pack returns, and to name it when this build no longer wants it but will not remove it.
  */
-const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', 'git push --force*', 'git push -f*'];
+const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', ...LAW_IV_BASH];
 
 /**
  * Bring an ALREADY-WRITTEN `permission` block back into line with the pack selection, and
@@ -639,15 +643,16 @@ export function hookPrefix({ runner, entry, platform = process.platform } = {}) 
 /**
  * `_build_settings._claude_hook_groups` — Geneseed's Claude hooks, keyed by event.
  *
- * ⚠ `doctrines` IS WHERE PROMPT AND BOUNDARY ARE KEPT IN AGREEMENT. The `git-gate` group is
- * the tool-boundary half of doctrine process 5. With the process pack off, that rule is no
- * longer BINDING — `src/doctrines/process.md` is not rendered into the carrier's doctrine
- * section and nothing in the constitution obliges the agent to it — so a gate that stopped
- * every Bash call to ask for consent to a rule the install did not adopt is the disagreement
- * the three-tier split forbids. Omitting the group here is also what UNWIRES it from an
- * install that had it: `mergeClaudeSettings` prunes every previously-managed group that is not
- * in this return value, so flipping the pack off and rebuilding takes the hook out of
- * settings.json rather than leaving it orphaned.
+ * ⚠ `doctrines` IS WHERE PROMPT AND BOUNDARY ARE KEPT IN AGREEMENT. The `git-gate` group
+ * carries TWO rules: Law IV (destructive git — universal, every build) and doctrine process 5
+ * (consent before commit/push). With the process pack off, or process 5 excluded, that second
+ * rule is no longer BINDING — so a gate that stopped every commit to ask for consent to a rule
+ * the install did not adopt is the disagreement the three-tier split forbids. The group stays
+ * and gains `--no-consent`, which skips only the process-5 branch. It once DROPPED the whole
+ * group instead, and Law IV went with it — on Claude only, since Bob and Copilot carry it
+ * through `tool-gate`. The command changing is also what re-wires an existing install:
+ * `mergeClaudeSettings` prunes every previously-managed group that is not in this return
+ * value.
  *
  * ⚠ WHAT THIS DOES **NOT** CLAIM, because it was written here once and it was false: that the
  * string `process 5` is absent from a pack-off bundle. It is not — 18 emitted files still cite
@@ -695,14 +700,29 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem} || exit 0` }] }],
     };
   }
+  if (host === 'copilot') {
+    // COPILOT'S OWN SCHEMA (docs.github.com/en/copilot/reference/hooks-configuration): camelCase
+    // events, each an ARRAY of `{type: "command", command}` entries — no matcher groups, so the
+    // array elements ARE the groups this merge appends and prunes. `preToolUse` answers with
+    // a top-level `permissionDecision` (`--host copilot`), and `agentStop`/`preCompact` carry
+    // `transcriptPath`, so `learn` runs here as on Claude. No matcher, so `tool-gate` reads
+    // the payload's shape. Unverified live: no Copilot CLI on the authoring machine.
+    const c = ' --host copilot';
+    const entry = (command) => [{ type: 'command', command }];
+    return {
+      sessionStart: entry(`${run} context --root "${cfg}"${c} || exit 0`),
+      preToolUse: entry(`${run} tool-gate --root "${cfg}"${c}`),
+      agentStop: entry(`${run} learn ${mem} || exit 0`),
+      preCompact: entry(`${run} learn ${mem} || exit 0`),
+    };
+  }
   const context = `${run} context --root "${cfg}" || exit 0`;
-  const gate = `${run} git-gate --root "${cfg}"`;
+  const gate = `${run} git-gate --root "${cfg}"${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
   const learn = `${run} learn ${mem} || exit 0`;
   return {
     PreToolUse: [
-      ...(consentRuleOn(doctrines, excluded)
-        ? [{ matcher: 'Bash', hooks: [{ type: 'command', command: gate }] }] : []),
+      { matcher: 'Bash', hooks: [{ type: 'command', command: gate }] },
       {
         matcher: 'Write|Edit|MultiEdit|NotebookEdit',
         hooks: [{ type: 'command', command: ruleGate }],
@@ -731,90 +751,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
 }
 
 /**
- * Geneseed's Copilot hooks, keyed by Copilot's event names.
- *
- * COPILOT'S SETTINGS ARE NOT CLAUDE'S. `~/.copilot/settings.json` carries `hooks` as a map of
- * event → ONE `{command, shell?, timeout?}` object, not event → list of matcher groups, so
- * nothing in `claudeHookGroups`/`mergeClaudeSettings` can be reused for it: there is no
- * array to append to, and a second Geneseed group per event is not expressible. Two hooks:
- *
- *   * `sessionStart` → `context --host copilot`: the same project-context injection Claude
- *     gets, in Copilot's `{"additionalContext"}` envelope.
- *   * `toolCall` → `tool-gate --host copilot`: both gates behind the one command the event
- *     allows, block-only for Laws I/IV, warn for the rest (js/hosts/hooks.mjs's header).
- *
- * No `sessionEnd`/`agentStop` → `learn`: Copilot's payloads for those carry no
- * `transcript_path`, so `learn` would have nothing to distil. The memory write-back stays on
- * the preamble for this host, as before.
- *
- * `|| exit 0` on the non-gate, as in `claudeHookGroups` and for the same reason.
+ * LEGACY: the single-slot Copilot shape (`hooks.<event>` = ONE object, events `sessionStart` /
+ * `toolCall`) an emit wrote before Copilot's hooks became event → array. Copilot has no
+ * `toolCall` event any more, so those gates never ran. Nothing writes this shape now; these
+ * two only take an older install's recorded `copilot_hooks` claims back out.
  */
-export function copilotHooks(cfg, hookOpts) {
-  const run = hookPrefix(hookOpts);
-  return {
-    sessionStart: { command: `${run} context --root "${cfg}" --host copilot || exit 0` },
-    toolCall: { command: `${run} tool-gate --root "${cfg}" --host copilot` },
-  };
-}
-
-/**
- * Wire Copilot's hooks into `p` — returns the complete current claim set, `[{event, hook}]`.
- *
- * ONE SLOT PER EVENT MEANS A FOREIGN HOOK CANNOT BE JOINED, ONLY DISPLACED — and displacing
- * a hook the user wrote is not Geneseed's to do. A slot is taken when it holds a hook that
- * is neither canonical nor a claim recorded by a previous emit; that event is skipped with a
- * warning and never claimed. A recorded stale claim (a moved shim) is replaced, as the Claude
- * merge prunes stale groups. Comments in the file mean it is not rewritten, as everywhere.
- */
-export function mergeCopilotSettings(p, priorHooks = null, hookOpts = {}) {
-  const prior = (priorHooks || []).filter(isDict);
-  let config = {};
-  let hadComments = false;
-  if (existsSync(p)) {
-    try {
-      const [loaded, hc] = readJsonc(readText(p));
-      hadComments = hc;
-      if (isDict(loaded)) config = loaded;
-    } catch (e) {
-      if (!isOsError(e)) throw e;
-    }
-  }
-  let hooks = get(config, 'hooks');
-  if (!isDict(hooks)) hooks = {};
-  const canonical = copilotHooks(path.dirname(p), hookOpts);
-  const claims = [];
-  let changed = false;
-  for (const [event, hook] of Object.entries(canonical)) {
-    const cur = get(hooks, event);
-    const recorded = prior.find((r) => get(r, 'event') === event);
-    if (isDict(cur) && deepEquals(cur, hook)) { claims.push({ event, hook }); continue; }
-    if (isDict(cur) && !(recorded && deepEquals(recorded.hook, cur))) {
-      process.stderr.write(`[geneseed] ${path.basename(p)}: hooks.${event} is already set and `
-        + 'is not Geneseed\'s — left alone, so this event is not wired.\n');
-      continue;
-    }
-    hooks[event] = hook;
-    claims.push({ event, hook });
-    changed = true;
-  }
-  // A recorded claim whose event is no longer canonical: unwire it, or it fires forever.
-  for (const rec of prior) {
-    const event = get(rec, 'event');
-    if (event in canonical) continue;
-    if (deepEquals(get(hooks, event), get(rec, 'hook'))) { delete hooks[event]; changed = true; }
-  }
-  if (!changed) return [p, claims];
-  if (hadComments) {
-    process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
-      + "(your edits are kept). Add Geneseed's hooks by hand from adapters/copilot/README.md.\n");
-    return [p, prior];
-  }
-  if (Object.keys(hooks).length) config.hooks = hooks;
-  else delete config.hooks;
-  atomicWriteJson(p, config);
-  return [p, claims];
-}
-
 /** Remove exactly the recorded Copilot hooks from `p`. True when the file was rewritten. */
 export function unwireCopilotSettings(p, recorded) {
   if (!existsSync(p) || !recorded || !recorded.length) return false;
@@ -876,9 +817,15 @@ export function copilotIntegrityCheck(p, recorded, expect = 'present') {
  * `managed` is the complete current claim set, so unwire removes exactly those.
  *
  * `scope` is accepted and unused, exactly as in the Python.
+ *
+ * `cfgDir` is the install's own dir — what the hooks carry as `--root` and under which
+ * `memory/` lives. It is NOT always `dirname(p)`: Bob's global settings file is nested
+ * (`~/.bob/settings/settings.json`), and deriving the root from it pointed every global Bob
+ * hook at `~/.bob/settings` — memory learned where nothing reads it, excludes missed, and a
+ * global that never stood down for a project install.
  */
 export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hookOpts = {},
-  doctrines = null, excluded = [], host = 'claude') {
+  doctrines = null, excluded = [], host = 'claude', cfgDir = path.dirname(p)) {
   const prior = (priorHooks || []).filter(isDict);
   let config = {};
   let hadComments = false;
@@ -898,7 +845,7 @@ export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hoo
   }
   let hooks = get(config, 'hooks');
   if (!isDict(hooks)) hooks = {};
-  const canonical = claudeHookGroups(path.dirname(p), hookOpts, doctrines, excluded, host);
+  const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host);
   const canonFlat = [];
   for (const [event, groups] of Object.entries(canonical)) {
     for (const g of groups) canonFlat.push({ event, group: g });
@@ -1231,7 +1178,8 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
   for (const [event, group] of presentGroups) {
     const key = `${formatRepr(event)}\u0000${jsonDumpsCompact(group, { sortKeys: true })}`;
     if (recordedSet.has(key)) continue;
-    const cmds = (get(group, 'hooks') || []).filter(isDict)
+    // A Claude group nests its commands under `hooks`; a Copilot entry IS the command.
+    const cmds = [...(get(group, 'hooks') || []).filter(isDict), group]
       .map((h) => (has(h, 'command') ? h.command : ''));
     if (cmds.some((c) => typeof c === 'string'
       && GENESEED_HOOK_SNIFF.some((mk) => c.includes(mk)))) {

@@ -8,11 +8,9 @@
  *
  * ONE VERB, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
- * prompt. GitHub Copilot's `toolCall` hook has no ask tier — its stdout contract is
- * `{"block": true|false}` — so on `--host copilot` the two Laws that admit no judgement call
- * (I, IV) BLOCK and everything that was an ask (process 1, process 5, a gate error) is a
- * warning on stderr, which Copilot logs. The same stance the OpenCode guard plugin takes
- * where its `tool.execute.before` can only allow or throw. `--host bob` is Bob's own
+ * prompt. GitHub Copilot's `preToolUse` reads the same decision TOP-LEVEL —
+ * `{"permissionDecision": "ask", "permissionDecisionReason": …}` — so `--host copilot` asks
+ * exactly where Claude asks, in Copilot's envelope. `--host bob` is Bob's own
  * protocol: PreToolUse ignores stdout and refuses only on EXIT CODE 2, so the two Laws
  * exit 2 with the reason on stderr and the rest is a stderr line with exit 0; SessionStart
  * context is plain stdout, as on Claude. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
@@ -576,9 +574,14 @@ function askDecision(reason) {
 let HOST = 'claude';
 const setHost = (args) => { HOST = (args && args.host) || 'claude'; };
 
-/** Copilot's `toolCall` verdict: `{"block": true}` plus the reason it displays. */
-function blockDecision(reason) {
-  return `${jsonDumpsCompact({ block: true, reason })}\n`;
+/**
+ * Copilot's `preToolUse` verdict: the same `ask` Claude reads, but top-level rather than under
+ * `hookSpecificOutput` (docs.github.com/en/copilot/reference/hooks-configuration). An older
+ * emit wired a `toolCall` event answered with `{"block": true}`; Copilot no longer has that
+ * event, so those gates never ran.
+ */
+function copilotAskDecision(reason) {
+  return `${jsonDumpsCompact({ permissionDecision: 'ask', permissionDecisionReason: reason })}\n`;
 }
 
 /**
@@ -589,10 +592,10 @@ function blockDecision(reason) {
 const BOB_DENY_EXIT = 2;
 
 /**
- * On a host with no ask tier, which rules are worth a hard block. Laws I and IV: a
+ * On Bob, which has no ask tier, which rules are worth a hard block. Laws I and IV: a
  * credential in a tracked file and a history-discarding git act are wrong in every context,
  * so refusing them costs nothing. Process 1 and process 5 are the USER's calls — a hard
- * block would make Copilot unable to commit at all — so they become a warning the host
+ * block would make Bob unable to commit at all — so they become a warning the host
  * logs. `gate-error` is a warning too: a crashed gate that blocked every tool call would be
  * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
  */
@@ -635,27 +638,23 @@ function ledger(root, verb, rule) {
 
 /**
  * Ask, and record that we asked. Every ask site goes through here so none can skip the
- * ledger. On `--host copilot` the ask becomes a block or a warning (see `BLOCK_RULES`); the
+ * ledger. On `--host bob` the ask becomes a block or a warning (see `BLOCK_RULES`); the
  * ledger records the block, never the warning — a warning asked nothing of anyone.
  */
 function ask(args, verb, rule, reason) {
-  if (HOST === 'copilot' || HOST === 'bob') {
+  if (HOST === 'bob') {
     if (!BLOCK_RULES.has(rule)) {
-      // Neither host has an ask tier; a stderr line is the nudge, and the call goes through.
+      // No ask tier; a stderr line is the nudge, and the call goes through.
       err(`[geneseed] ${reason}\n`);
       return 0;
     }
     ledger(args && args.root, verb, rule);
-    if (HOST === 'bob') {
-      // stdout is not read on Bob's PreToolUse; the reason goes where Bob's hook log looks.
-      err(`[geneseed] BLOCKED: ${reason}\n`);
-      return BOB_DENY_EXIT;
-    }
-    out(blockDecision(reason));
-    return 0;
+    // stdout is not read on Bob's PreToolUse; the reason goes where Bob's hook log looks.
+    err(`[geneseed] BLOCKED: ${reason}\n`);
+    return BOB_DENY_EXIT;
   }
   ledger(args && args.root, verb, rule);
-  out(askDecision(reason));
+  out(HOST === 'copilot' ? copilotAskDecision(reason) : askDecision(reason));
   return 0;
 }
 
@@ -683,10 +682,11 @@ export function guardGate(fn, verb = 'gate') {
 /**
  * The hook payload on stdin, or null for a well-formed absence. Not-JSON THROWS.
  *
- * Copilot spells the same payload in camelCase — `toolName`/`toolInput` where Claude sends
- * `tool_name`/`tool_input` — and fires `toolCall` both before AND after the tool runs
- * (`phase`). The field names are folded to Claude's so every gate reads one shape; the
- * `after` phase is a well-formed absence, since there is nothing left to gate.
+ * Copilot spells the same payload in camelCase — `toolName`/`toolArgs` where Claude sends
+ * `tool_name`/`tool_input` — and `toolArgs` may arrive as a JSON STRING rather than an object.
+ * Both are folded to Claude's shape so every gate reads one. (`toolInput` and the `after`
+ * phase are the retired `toolCall` event's spelling, kept so an install not yet re-emitted
+ * still reads right.) A `toolArgs` string that is not JSON throws: fail closed.
  */
 function readPayload() {
   const raw = readStdin();
@@ -699,8 +699,12 @@ function readPayload() {
   }
   if (!payload || typeof payload !== 'object') return null;
   if (payload.phase === 'after') return null;
-  if (payload.tool_input === undefined && payload.toolInput !== undefined) {
-    payload.tool_input = payload.toolInput;
+  if (payload.tool_input === undefined) {
+    let ta = payload.toolArgs !== undefined ? payload.toolArgs : payload.toolInput;
+    if (typeof ta === 'string') {
+      try { ta = JSON.parse(ta); } catch { throw new Error('the payload\'s toolArgs is not JSON'); }
+    }
+    if (ta !== undefined) payload.tool_input = ta;
   }
   return payload;
 }
@@ -717,7 +721,9 @@ function gitDecide(args, payload) {
     return ask(args, 'git-gate', 'law-4', 'Geneseed Law IV \u2014 a history-rewriting or '
       + 'discarding git act needs confirmation bound to this specific command');
   }
-  if (!GIT_GATE_RE.test(command)) return 0;
+  // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
+  // no rule behind it — but Law IV above is universal and has already run.
+  if (args.noConsent || !GIT_GATE_RE.test(command)) return 0;
   return ask(args, 'git-gate', 'process-5', 'Geneseed Doctrine process 5 \u2014 every git '
     + 'commit/push needs explicit approval');
 }
@@ -771,9 +777,10 @@ function ruleDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   const p = ti.file_path || ti.path || '';
   if (typeof p !== 'string' || !p) return 0;
-  // Write carries `content`, Edit carries `new_string`; either can plant a credential.
-  const body = typeof ti.content === 'string' ? ti.content
-    : typeof ti.new_string === 'string' ? ti.new_string : '';
+  // Write carries `content`, Edit carries `new_string` (Copilot: `file_text`, `new_str`);
+  // any of them can plant a credential.
+  const body = [ti.content, ti.new_string, ti.file_text, ti.new_str]
+    .find((v) => typeof v === 'string') || '';
   if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
     return ask(args, 'rule-gate', 'law-1', `Geneseed Law I — ${p} would carry a `
       + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
@@ -792,9 +799,9 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 // ======================================================================================
 
 /**
- * Copilot's settings carry ONE command per hook event, not a list of matcher groups, so
- * its `toolCall` hook cannot name `git-gate` for Bash and `rule-gate` for Write the way
- * Claude's `PreToolUse` does. This verb is the two fused, dispatched on the payload rather
+ * Copilot's and Bob's PreToolUse entries carry no matcher over documented tool names, so
+ * neither can name `git-gate` for Bash and `rule-gate` for Write the way Claude's
+ * `PreToolUse` does. This verb is the two fused, dispatched on the payload rather
  * than on a matcher: a `command` field is a shell call and gets the git checks, a path
  * field is a write and gets the rule checks. Nothing here decides anything the two named
  * gates do not — it only removes the need for a matcher the host does not have.
@@ -937,7 +944,8 @@ export function readNotes(raw) {
   if (s[0] === '{') {
     let payload;
     try { payload = JSON.parse(s); } catch { return raw; }
-    const tp = payload && payload.transcript_path;
+    // Copilot's agentStop/preCompact spell it `transcriptPath`.
+    const tp = payload && (payload.transcript_path || payload.transcriptPath);
     if (tp) return flattenTranscript(tp);
     return raw;
   }

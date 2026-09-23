@@ -8,6 +8,30 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Copilot's hooks match Copilot's current schema.** The global emit wired a single-object
+  `toolCall` hook answered with `{"block": true}`; Copilot no longer has that event, so no
+  Copilot gate ever ran. It now adds array entries to `sessionStart`, `preToolUse`
+  (`tool-gate --host copilot`, answering a top-level `permissionDecision: "ask"` — every rule
+  asks, as on Claude Code), and `agentStop` + `preCompact` (`learn`, from `transcriptPath`).
+  `toolArgs` is read as an object or a JSON string. The claim moves to `settings_hooks`, so one
+  merge serves Claude, Bob and Copilot; a re-emit (or reactivate) unwires the legacy claims.
+- **Bob global hooks name the install, not the settings folder.** `--root`/`--memory` came from
+  the nested settings file's parent (`~/.bob/settings`): memory was learned where nothing read
+  it, excludes were missed, and a global install never stood down for a project one.
+- **Claude keeps Law IV with process 5 off.** `--doctrines` without `process` (or
+  `--exclude-rules process.5`) dropped the whole git-gate group, and the destructive-git check
+  went with it — on Claude only. The group now stays with `--no-consent`, which skips only the
+  commit/push ask.
+- **Bob MCP servers go where Bob reads them**: `.bob/mcp.json` / `~/.bob/settings/mcp.json`,
+  not `settings.json`.
+- **OpenCode asks on the same destructive git verbs as the other hosts** (`reset --hard`,
+  `clean -f`, `branch -D`, `checkout --`), which it only logged before.
+- **`agents/_template.md` no longer ships** into an install's agents folder, where hosts
+  loaded it as a phantom `_template` agent. A Bob project emit's `.bob/.gitignore` now lists
+  the machine-specific `settings.json`.
+
 ### Changed
 
 - **Doctrine rules inline an authored lean form.** All 24 rules across the four packs now

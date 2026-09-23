@@ -48,7 +48,7 @@ import { printErr } from '../js/lib/fs.mjs';
 const HOSTED = { '--root': 'root', '--host': 'host' };
 const VERBS = {
   context: { fn: cmdContext, flags: HOSTED },
-  'git-gate': { fn: cmdGitGate, flags: HOSTED },
+  'git-gate': { fn: cmdGitGate, flags: HOSTED, switches: { '--no-consent': 'noConsent' } },
   'rule-gate': { fn: cmdRuleGate, flags: HOSTED },
   'tool-gate': { fn: cmdToolGate, flags: HOSTED },
   learn: {
@@ -72,7 +72,9 @@ function die(code, msg) {
  * positional.
  */
 function parse(spec, argv) {
-  const args = { root: null, host: null, memory: null, consolidate: false, file: null };
+  const args = {
+    root: null, host: null, memory: null, consolidate: false, noConsent: false, file: null,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];
     const eq = tok.indexOf('=');

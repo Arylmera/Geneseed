@@ -4,7 +4,7 @@
 
 [IBM Bob](https://bob.ibm.com) is **Claude-Code-shaped**: a project `.bob/`
 layer, an `AGENTS.md` instructions file, `SKILL.md` skills, subagents, and a
-`settings.json` that also carries `mcpServers`. So the Bob emit **reuses the
+`settings.json` for hooks. So the Bob emit **reuses the
 Claude engine** verbatim — only the marker dir (`.bob`) and the instructions
 filename (`AGENTS.md`) change. There is nothing to install by hand: `geneseed
 setup` (or `geneseed build --emit bob` / `--emit bob-global`) writes everything.
@@ -25,7 +25,9 @@ limitation to be aware of on a shared repo.
   - `skills/<name>/SKILL.md` — **byte-identical** to every other host; skills
     are model-invoked via the `skill` tool.
   - `rules/geneseed.md` — a **slim shadow stub** (see *Bob-ism 1* below).
-  - `settings.json` — Geneseed's lifecycle hooks + any `mcpServers` you wire.
+  - `settings.json` — Geneseed's lifecycle hooks (gitignored by the emit's
+    `.bob/.gitignore`, see the caveat below).
+  - `mcp.json` — any MCP servers you wire with `geneseed mcp` / the web console.
   - `memory/`, `notebook/` stores + their indices.
 
 ### Global (`--emit bob-global` → `~/.bob`, or `$BOB_CONFIG_DIR`)
@@ -94,7 +96,7 @@ Bob's hooks: the one group only ever exits 2 for Laws I and IV, which every buil
 
 **Migration.** A re-emit over an older install unwires Geneseed's groups from the flat
 `~/.bob/settings.json` (your own keys there are kept) and writes the new set to the
-nested file. `geneseed mcp` targets the nested file too.
+nested file.
 
 **Unverified live.** There is no Bob install on the authoring machine; this is Bob's
 documented contract, with the payload field names assumed to be Claude's. If a field
@@ -111,15 +113,16 @@ out of shared git). Those hook commands name the **per-user hook shim**
 (`~/.geneseed/bin/geneseed-hook`) — no longer this machine's interpreter and
 checkout, but still a path under *your* home, and now also OS-specific (`.cmd` on
 Windows, extensionless elsewhere). If you commit `.bob/settings.json`, a teammate
-still inherits hooks pointing at a path they do not have. **Add
-`.bob/settings.json` to `.gitignore`** on a team repo, or keep the Bob install
-personal/global.
+still inherits hooks pointing at a path they do not have. A fresh emit writes
+`.bob/.gitignore` listing `settings.json`; if you already had a `.bob/.gitignore`,
+add the line yourself.
 
 ## MCP
 
-MCP servers are wired at runtime by `geneseed mcp` into the `mcpServers` key of
-the relevant `settings.json` (`.bob/settings.json` per-repo, `~/.bob/settings.json`
-global) — see [`geneseed mcp`](../../README.md) and `rituals/_harness_mcp.py`.
+MCP servers are wired at runtime (web console, listed by `geneseed mcp`) into the
+`mcpServers` key of Bob's own MCP file — `.bob/mcp.json` per-repo,
+`~/.bob/settings/mcp.json` global — never `settings.json`, which Bob does not read
+servers from ([Bob docs](https://bob.ibm.com/docs/ide/configuration/mcp/mcp-in-bob)).
 
 ## What Bob does not get
 

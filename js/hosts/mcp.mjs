@@ -244,10 +244,12 @@ export function mcpConfigFor(host, scope, root) {
       : resolvePath(path.join(os.homedir(), '.claude.json'));
   }
   if (host === 'bob') {
-    // Nested at global scope, as Bob's hooks doc places the global file (and as the emit
-    // now writes it); the project file is flat.
-    return scope === 'project' ? path.join(root, '.bob', 'settings.json')
-      : path.join(bobConfigDir(), 'settings', 'settings.json');
+    // Bob reads MCP servers from their OWN file, never from settings.json: `.bob/mcp.json` in
+    // the project, `~/.bob/settings/mcp.json` globally, each `{"mcpServers": …}`
+    // (bob.ibm.com/docs/ide/configuration/mcp/mcp-in-bob). Servers written into settings.json,
+    // as an older version did, never loaded.
+    return scope === 'project' ? path.join(root, '.bob', 'mcp.json')
+      : path.join(bobConfigDir(), 'settings', 'mcp.json');
   }
   if (host === 'copilot') {
     // The Copilot CLI reads MCP servers from ~/.copilot/mcp-config.json only — no per-repo

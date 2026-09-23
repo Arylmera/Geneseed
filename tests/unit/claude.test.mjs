@@ -95,6 +95,9 @@ const geneseedCmds = (settings) => hookCmds(settings)
 // ---------------------------------------------------------------------------------------------
 // `ClaudeEmitTests`
 
+/** The git gate WITH its process-5 consent branch — `--no-consent` leaves only Law IV. */
+const consentGate = (c) => c.includes('git-gate') && !c.includes('--no-consent');
+
 test('the global emit writes the Claude layout, and its hooks name the shim not this checkout', () => {
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');
@@ -472,8 +475,8 @@ test('a PROJECT reactivate reads the pack selection off the repo root, not the c
     // the config dir. Without this the assertion below could pass for the wrong reason.
     assert.deepEqual(doctrinesOfDir(repo), ['craft'], 'the emit did not narrow the packs');
     assert.equal(doctrinesOfDir(cfg), null, 'the config dir is not where the carrier lives');
-    assert.deepEqual(geneseedCmds(readJson(cfg, 'settings.local.json')).filter((c) => c.includes('git-gate')),
-      [], 'the emit itself wired a gate the pack selection had turned off');
+    assert.deepEqual(geneseedCmds(readJson(cfg, 'settings.local.json')).filter(consentGate),
+      [], 'the emit itself wired a consent gate the pack selection had turned off');
 
     captured(() => installDeactivate(repo, 'claude', 'project'));
     assert.equal(installState(repo, 'claude', 'project'), 'disabled');
@@ -482,8 +485,10 @@ test('a PROJECT reactivate reads the pack selection off the repo root, not the c
 
     const back = geneseedCmds(readJson(cfg, 'settings.local.json'));
     assert.ok(back.length > 0, 'the reactivate wired no hooks at all');
-    assert.deepEqual(back.filter((c) => c.includes('git-gate')), [],
+    assert.deepEqual(back.filter(consentGate), [],
       'the reactivate put the consent gate back into an install whose owner had removed it');
+    assert.ok(back.some((c) => c.includes('git-gate --root') && c.endsWith(' --no-consent')),
+      `the reactivate dropped Law IV's git gate along with the consent: ${back.join(' | ')}`);
   });
 });
 
@@ -676,8 +681,8 @@ test('a genuine per-repo marker is still reported as a project', () => {
 //
 // Copilot shares the manifest, the claim-on-create and the managed block, and differs in three
 // ways that each have their own failure: a `copilot-instructions.md` carrier instead of a rules/
-// workaround, an `.agent.md` dialect with a tools ALLOWLIST instead of Claude's denylist, and NO
-// hook mechanism at all — so no settings file and no settings claims for the lifecycle to unwire.
+// workaround, an `.agent.md` dialect with a tools ALLOWLIST instead of Claude's denylist, and its
+// own hook schema — camelCase events, each an array of bare `{type, command}` entries.
 
 test('the Copilot global emit writes the Copilot layout and its own hook surface', () => {
   withDir((d) => {
@@ -703,24 +708,34 @@ test('the Copilot global emit writes the Copilot layout and its own hook surface
       'the Claude-dialect filename was written beside the Copilot one');
     assert.match(read(cfg, 'agents', 'explorer.agent.md'), /tools: \[read, search, todo, agent/);
 
-    // COPILOT'S HOOKS, IN COPILOT'S SHAPE: `hooks` is event → ONE {command} object, not
-    // event → matcher groups. Two events — `sessionStart` runs `context`, `toolCall` runs
-    // `tool-gate` — both carrying `--host copilot` so the verdict is spoken in Copilot's
-    // dialect, and `|| exit 0` on the non-gate only. No `sessionEnd`/`agentStop` learn: those
-    // payloads carry no transcript, so there would be nothing to distil.
+    // COPILOT'S HOOKS, IN COPILOT'S SHAPE (docs.github.com/en/copilot/reference/
+    // hooks-configuration): `hooks` is event → ARRAY of bare `{type, command}` entries, no
+    // matcher groups. `sessionStart` runs `context`, `preToolUse` runs `tool-gate`, and
+    // `agentStop`/`preCompact` run `learn` (both payloads carry `transcriptPath`). Every
+    // command names THIS install as `--root`; `|| exit 0` on everything but the gate. The
+    // retired `toolCall` event must not be written: Copilot no longer fires it.
     const settings = readJson(cfg, 'settings.json');
-    assert.deepEqual(Object.keys(settings.hooks).sort(), ['sessionStart', 'toolCall']);
-    assert.match(settings.hooks.sessionStart.command, / context --root ".*" --host copilot \|\| exit 0$/);
-    assert.match(settings.hooks.toolCall.command, / tool-gate --root ".*" --host copilot$/);
+    assert.deepEqual(Object.keys(settings.hooks).sort(),
+      ['agentStop', 'preCompact', 'preToolUse', 'sessionStart']);
+    const only = (ev) => {
+      assert.equal(settings.hooks[ev].length, 1, `${ev} carries more than Geneseed's entry`);
+      assert.equal(settings.hooks[ev][0].type, 'command');
+      return settings.hooks[ev][0].command;
+    };
+    assert.ok(only('sessionStart').endsWith(` context --root "${cfg}" --host copilot || exit 0`));
+    assert.ok(only('preToolUse').endsWith(` tool-gate --root "${cfg}" --host copilot`));
+    for (const ev of ['agentStop', 'preCompact']) {
+      assert.ok(only(ev).endsWith(` learn --memory "${path.join(cfg, 'memory')}" || exit 0`), ev);
+    }
     assert.ok(!fs.existsSync(path.join(cfg, 'settings.local.json')));
-    // The manifest records the claim under its OWN key, so the Claude-shaped unwire never
-    // walks a Copilot record.
+    // The claim is recorded under `settings_hooks`, like Claude's — the array shape is what lets
+    // the one merge serve both — and never under the legacy single-slot `copilot_hooks` key.
     const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
     assert.ok('claude_md' in managed);
     assert.equal(managed.settings_file, 'settings.json');
-    assert.ok(!('settings_hooks' in managed), 'a Claude-shaped hook claim on a Copilot install');
-    assert.deepEqual(managed.copilot_hooks.map((r) => r.event), ['sessionStart', 'toolCall']);
-    assert.deepEqual(managed.copilot_hooks.map((r) => r.hook), Object.values(settings.hooks));
+    assert.ok(!('copilot_hooks' in managed), 'the legacy single-slot claim key was written');
+    assert.deepEqual(managed.settings_hooks.map((r) => r.event),
+      ['sessionStart', 'preToolUse', 'agentStop', 'preCompact']);
     // …and it still reads as Claude-STYLE, which is what routes the uninstall to the manifest
     // reversal rather than to OpenCode's opencode.json unmerge.
     assert.equal(manifestIsClaude(cfg), true);
@@ -816,29 +831,58 @@ test('a Copilot re-emit is idempotent', () => {
   });
 });
 
-test('a Copilot emit never displaces a hook the user wrote, and uninstall leaves it standing', () => {
-  // ONE SLOT PER EVENT. Claude's merge appends a group beside the user's; Copilot's shape has no
-  // beside, so the only honest move is to leave the user's hook and skip the event. The other
-  // event is still wired, the skipped one is NOT claimed, and uninstall removes exactly the claim.
+test('a Copilot emit joins the hooks the user wrote, and uninstall leaves them standing', () => {
+  // Copilot's events are ARRAYS now, so Geneseed's entry goes BESIDE the user's — first-come
+  // order, never displacing — and uninstall removes exactly the claim.
   withDir((d) => {
     const cfg = path.join(d, 'dotcopilot3');
     fs.mkdirSync(cfg, { recursive: true });
-    const mine = { command: 'echo mine', shell: 'bash' };
+    const mine = { type: 'command', command: 'echo mine' };
     fs.writeFileSync(path.join(cfg, 'settings.json'),
-      JSON.stringify({ model: 'x', hooks: { toolCall: mine, sessionEnd: mine } }));
+      JSON.stringify({ model: 'x', hooks: { preToolUse: [mine], sessionEnd: [mine] } }));
     globalEmit('copilot', path.join(d, 'b'), cfg);
     const s = readJson(cfg, 'settings.json');
     assert.equal(s.model, 'x', 'a foreign top-level key was lost');
-    assert.deepEqual(s.hooks.toolCall, mine, "the user's toolCall hook was displaced");
-    assert.deepEqual(s.hooks.sessionEnd, mine);
-    assert.match(s.hooks.sessionStart.command, /--host copilot/);
-    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.copilot_hooks.map((r) => r.event),
-      ['sessionStart'], 'the skipped event was claimed anyway');
+    assert.deepEqual(s.hooks.preToolUse[0], mine, "the user's preToolUse hook was displaced");
+    assert.match(s.hooks.preToolUse[1].command, / tool-gate .* --host copilot$/);
+    assert.deepEqual(s.hooks.sessionEnd, [mine]);
 
     captured(() => installUninstall(cfg, 'copilot', 'global', 'keep'));
     const after = readJson(cfg, 'settings.json');
-    assert.deepEqual(after, { model: 'x', hooks: { toolCall: mine, sessionEnd: mine } },
-      `uninstall did not remove exactly Geneseed's hook: ${JSON.stringify(after)}`);
+    assert.deepEqual(after, { model: 'x', hooks: { preToolUse: [mine], sessionEnd: [mine] } },
+      `uninstall did not remove exactly Geneseed's hooks: ${JSON.stringify(after)}`);
+  });
+});
+
+test('a Copilot re-emit migrates a legacy single-slot install off the dead toolCall event', () => {
+  // Every Copilot install before this change: `hooks.sessionStart` / `hooks.toolCall` as ONE
+  // object each, recorded under `copilot_hooks`. Copilot no longer fires `toolCall`, so those
+  // gates never ran. The re-emit unwires exactly the recorded legacy claims — the user's own
+  // keys stay — and wires the array shape under `settings_hooks`.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotcopilot-old');
+    globalEmit('copilot', path.join(d, 'b1'), cfg);
+    const man = readJson(cfg, GLOBAL_MANIFEST);
+    const legacy = [
+      { event: 'sessionStart', hook: { command: 'geneseed-hook context --host copilot || exit 0' } },
+      { event: 'toolCall', hook: { command: 'geneseed-hook tool-gate --host copilot' } },
+    ];
+    fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({
+      mine: true, hooks: Object.fromEntries(legacy.map((r) => [r.event, r.hook])),
+    }));
+    delete man.managed.settings_hooks;
+    man.managed.copilot_hooks = legacy;
+    fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST), JSON.stringify(man));
+
+    globalEmit('copilot', path.join(d, 'b2'), cfg);
+    const s = readJson(cfg, 'settings.json');
+    assert.equal(s.mine, true, "the user's key was lost in the migration");
+    assert.ok(!('toolCall' in s.hooks), 'the dead toolCall hook was left behind');
+    assert.ok(Array.isArray(s.hooks.sessionStart) && s.hooks.sessionStart.length === 1,
+      `the legacy sessionStart object survived beside the new entry: ${JSON.stringify(s.hooks)}`);
+    const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
+    assert.ok(!('copilot_hooks' in managed));
+    assert.equal(managed.settings_hooks.length, 4);
   });
 });
 
@@ -851,7 +895,7 @@ test('a Copilot PROJECT emit wires no hooks', () => {
     projectEmit('copilot', path.join(d, 'b'), root);
     assert.ok(!fs.existsSync(path.join(root, '.github', 'settings.json')));
     const managed = readJson(root, '.github', GLOBAL_MANIFEST).managed;
-    assert.ok(!('copilot_hooks' in managed) && !('settings_file' in managed),
+    assert.ok(!('settings_hooks' in managed) && !('settings_file' in managed),
       `a project emit recorded a hook claim: ${JSON.stringify(managed)}`);
   });
 });
@@ -952,15 +996,19 @@ test('a re-emit prunes a pre---root git-gate group instead of stacking beside it
 const hookCommands = (groups) => Object.values(groups)
   .flatMap((gs) => gs.flatMap((g) => g.hooks.map((h) => h.command)));
 
-test('the process pack off drops the git gate and keeps every other hook', () => {
+test('the process pack off drops the consent half of the git gate and keeps Law IV', () => {
+  // The git-gate carries Law IV (universal) AND process 5 (the pack's). Pack off ⇒ the same
+  // group, with `--no-consent`: dropping the whole group once took Law IV off Claude with it.
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');
     const on = hookCommands(claudeHookGroups(cfg, hookRunnerEntry(), ['craft', 'process']));
     const off = hookCommands(claudeHookGroups(cfg, hookRunnerEntry(), ['craft']));
 
-    assert.ok(on.some((c) => c.includes('git-gate')), 'the gate is missing with the pack ON');
-    assert.ok(!off.some((c) => c.includes('git-gate')),
-      `the git gate survived --doctrines craft: ${off.join(' | ')}`);
+    assert.ok(on.some(consentGate), 'the consent gate is missing with the pack ON');
+    assert.ok(!off.some(consentGate),
+      `the consent gate survived --doctrines craft: ${off.join(' | ')}`);
+    assert.ok(off.some((c) => c.includes('git-gate') && c.endsWith(' --no-consent')),
+      `Law IV's git gate went with the process pack: ${off.join(' | ')}`);
     // NOT a blanket removal. The rule gate answers "standing rule or durable fact?", which is the
     // user's call rather than a way of running work, and the two SessionStart/learn pairs are not
     // the process pack's either. Asserting the survivors is what stops this from going green on a
@@ -968,7 +1016,7 @@ test('the process pack off drops the git gate and keeps every other hook', () =>
     for (const verb of ['rule-gate', 'context', 'learn']) {
       assert.ok(off.some((c) => c.includes(verb)), `${verb} went with the process pack: ${off}`);
     }
-    assert.equal(off.length, on.length - 1, `exactly one hook should have gone: ${off}`);
+    assert.equal(off.length, on.length, `no hook should have gone, only a flag changed: ${off}`);
   });
 });
 
@@ -983,7 +1031,7 @@ test('an install with NO Active packs: marker keeps the consent gate (B6, fail c
 
     const cmds = hookCommands(claudeHookGroups(path.join(d, 'dotclaude'), hookRunnerEntry(),
       doctrinesOfDir(d)));
-    assert.ok(cmds.some((c) => c.includes('git-gate')),
+    assert.ok(cmds.some(consentGate),
       'the consent gate was stripped from an install that never said it did not want it');
   });
 });
@@ -996,15 +1044,15 @@ test('an install whose marker reads `none` loses the consent gate (B6, the other
 
     const cmds = hookCommands(claudeHookGroups(path.join(d, 'dotclaude'), hookRunnerEntry(),
       doctrinesOfDir(d)));
-    assert.ok(!cmds.some((c) => c.includes('git-gate')),
-      `an explicit \`none\` left the gate wired: ${cmds.join(' | ')}`);
+    assert.ok(!cmds.some(consentGate),
+      `an explicit \`none\` left the consent gate wired: ${cmds.join(' | ')}`);
   });
 });
 
-test('a re-emit with the process pack off UNWIRES the git gate it previously managed', () => {
-  // The upgrade round trip, and the half that makes the toggle two-way: dropping the group from
-  // `claudeHookGroups` only stops it being ADDED. `mergeClaudeSettings` prunes every recorded
-  // group that is no longer canonical, which is what takes it back out of a user's settings.json.
+test('a re-emit with the process pack off UNWIRES the consent gate it previously managed', () => {
+  // The upgrade round trip, and the half that makes the toggle two-way: changing the group in
+  // `claudeHookGroups` only stops the old one being ADDED. `mergeClaudeSettings` prunes every
+  // recorded group that is no longer canonical, which is what takes it back out of settings.json.
   withDir((d) => {
     const cfg = path.join(d, 'settings_test');
     fs.mkdirSync(cfg);
@@ -1015,13 +1063,15 @@ test('a re-emit with the process pack off UNWIRES the git gate it previously man
       hookRunnerEntry(), ['craft', 'process']));
     const wired = readJson(settings).hooks.PreToolUse
       .flatMap((g) => g.hooks.map((h) => h.command));
-    assert.ok(wired.some((c) => c.includes('git-gate')), `the first emit wired no gate: ${wired}`);
+    assert.ok(wired.some(consentGate), `the first emit wired no consent gate: ${wired}`);
 
     captured(() => mergeClaudeSettings(settings, 'global', claimed, hookRunnerEntry(), ['craft']));
     const after = readJson(settings).hooks.PreToolUse
       .flatMap((g) => g.hooks.map((h) => h.command));
-    assert.ok(!after.some((c) => c.includes('git-gate')),
-      `the gate was left orphaned in settings.json: ${after.join(' | ')}`);
+    assert.ok(!after.some(consentGate),
+      `the consent gate was left orphaned in settings.json: ${after.join(' | ')}`);
+    assert.equal(after.filter((c) => c.includes('git-gate')).length, 1,
+      `exactly one git gate (Law IV, --no-consent) should remain: ${after.join(' | ')}`);
     assert.ok(after.some((c) => c.includes('rule-gate')), `the prune took too much: ${after}`);
   });
 });
@@ -1238,9 +1288,12 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreToolUse', 'SessionStart', 'Stop']);
     assert.equal(settings.hooks.PreToolUse.length, 1);
     assert.ok(!('matcher' in settings.hooks.PreToolUse[0]));
-    assert.match(settings.hooks.PreToolUse[0].hooks[0].command, / tool-gate --root ".*" --host bob$/);
-    assert.match(settings.hooks.SessionStart[0].hooks[0].command, / context --root ".*" --host bob \|\| exit 0$/);
-    assert.match(settings.hooks.Stop[0].hooks[0].command, / learn .*\|\| exit 0$/);
+    // `--root` and `--memory` name the INSTALL dir, not the nested file's parent: derived from
+    // the settings path they once said `<cfg>/settings`, where nothing reads memory.
+    const cmdOf = (ev) => settings.hooks[ev][0].hooks[0].command;
+    assert.ok(cmdOf('PreToolUse').endsWith(` tool-gate --root "${cfg}" --host bob`), cmdOf('PreToolUse'));
+    assert.ok(cmdOf('SessionStart').endsWith(` context --root "${cfg}" --host bob || exit 0`), cmdOf('SessionStart'));
+    assert.ok(cmdOf('Stop').endsWith(` learn --memory "${path.join(cfg, 'memory')}" || exit 0`), cmdOf('Stop'));
     assert.equal(managed.settings_file, path.join('settings', 'settings.json'));
   }));
 });

@@ -42,7 +42,7 @@ import { parseArgs as nodeParseArgs } from 'node:util';
 import { build, phaseLog } from '../js/build/bundle.mjs';
 import { emitClaudeRender } from '../js/build/emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from '../js/build/emit-opencode.mjs';
-import { copilotIntegrityCheck, settingsIntegrityCheck } from '../js/hosts/settings.mjs';
+import { settingsIntegrityCheck } from '../js/hosts/settings.mjs';
 import { writeText, withPlatformNewlines, isFile } from '../js/lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../js/lib/json.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
@@ -867,16 +867,14 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // deleting this call is byte-identical in all 259 cells. `test_verify_reports_an_orphaned
   // _geneseed_hook` plants the fault that makes it speak.
   phaseLog('VERIFY');
-  if (!isCopilot) {
+  if (!isCopilot || managed.settings_hooks) {
     settingsIntegrityCheck(
       path.join(cfgDir, managed.settings_file || 'settings.json'), managed, 'present');
-  } else if (managed.copilot_hooks) {
-    copilotIntegrityCheck(path.join(cfgDir, 'settings.json'), managed.copilot_hooks, 'present');
   }
   return {
     nAgents: stats.nAgents,
     nSkills: stats.nSkills,
-    nHooks: (managed.settings_hooks || managed.copilot_hooks || []).length,
+    nHooks: (managed.settings_hooks || []).length,
     memStatus,
     nbStatus,
   };
@@ -909,8 +907,8 @@ function emitCopilotGlobal(cfg, args, out) {
   });
   process.stdout.write(`[geneseed] copilot-global -> ${cfgDir}: ${r.nAgents} agents (.agent.md), `
     + `${r.nSkills} skills, copilot-instructions.md, ${r.memStatus}, ${r.nbStatus}, `
-    + `${r.nHooks} hooks (settings.json: sessionStart context, toolCall gate). Memory `
-    + "write-back rides the preamble's instructions; MCP servers go in mcp-config.json.\n");
+    + `${r.nHooks} hooks (settings.json: sessionStart context, preToolUse gate, agentStop + `
+    + 'preCompact learn); MCP servers go in mcp-config.json.\n');
   return cfgDir;
 }
 

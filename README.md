@@ -246,16 +246,16 @@ is **identical on every host**. What differs is how much of it the host can
 | **Skills** (byte-identical) | ✅ | ✅ | ✅ | ✅ |
 | **Memory & Notebook** | ✅ | ✅ | ✅ | ✅ |
 | **Context injection** | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook³ |
-| **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
-| **Git-gate consent** (process 5) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ (warn) | 🪝 hook³ (warn) |
-| **Rule-gate consent** (process 1) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ (warn) | 🪝 hook³ (warn) |
-| **Laws I / IV at the boundary** | ⚙️ plugin (block) | 🪝 hook (ask) | 🪝 hook¹ (exit 2) | 🪝 hook³ (block) |
+| **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook³ |
+| **Git-gate consent** (process 5) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ (warn) | 🪝 hook³ |
+| **Rule-gate consent** (process 1) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ (warn) | 🪝 hook³ |
+| **Laws I / IV at the boundary** | ⚙️ plugin (block) | 🪝 hook (ask) | 🪝 hook¹ (exit 2) | 🪝 hook³ (ask) |
 | **Sovereign-repo excludes** | ⚙️ plugin | ✅ `claudeMdExcludes` | ✅ rules-shadow | ➖ none |
-| **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcpServers` | ✅ `mcp-config.json` |
+| **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcp.json` | ✅ `mcp-config.json` |
 | **Colour themes** | ✅ full palette | ➖ | ➖ | ➖ |
 | **LSP · workflow runner · primary-agent · `/`-commands** | ✅ | ➖ | ➖ | ➖ |
 
-<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob's own hook contract: global hooks in `~/.bob/settings/settings.json`, Claude's event names but stdout ignored on `PreToolUse` — a refusal is **exit code 2**. So Laws I/IV exit 2, the consent rules are a stderr line, `SessionStart` context is plain stdout, `Stop` runs learn; `SubagentStop`/`PreCompact` are not Bob events and are not written. Unverified live (no Bob install on the authoring machine); the harness still holds via the rules preamble. · ² OpenCode's `tool.execute.before` can only allow or throw, with no "ask the user" tier, so the rule gate is a one-shot speed bump there rather than a prompt. · ³ Copilot's `~/.copilot/settings.json` hooks (`sessionStart`, `toolCall`) wired by the **global** emit only; `toolCall` has no ask tier either, so Laws I/IV block and the two process rules warn on stderr. No learn: Copilot's end-of-session payloads carry no transcript.</sub>
+<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob's own hook contract: global hooks in `~/.bob/settings/settings.json`, Claude's event names but stdout ignored on `PreToolUse` — a refusal is **exit code 2**. So Laws I/IV exit 2, the consent rules are a stderr line, `SessionStart` context is plain stdout, `Stop` runs learn; `SubagentStop`/`PreCompact` are not Bob events and are not written. Unverified live (no Bob install on the authoring machine); the harness still holds via the rules preamble. · ² OpenCode's `tool.execute.before` can only allow or throw, with no "ask the user" tier, so the rule gate is a one-shot speed bump there rather than a prompt. · ³ Copilot's `~/.copilot/settings.json` hooks (`sessionStart`, `preToolUse`, `agentStop`, `preCompact`) wired by the **global** emit only; `preToolUse` has an ask tier, so every rule asks as on Claude Code. Unverified live (no Copilot CLI on the authoring machine).</sub>
 
 **Reading the matrix.** Everything above the divider is at full parity — no host
 drops an Agent, Skill, or the memory convention. The asymmetry is entirely in
