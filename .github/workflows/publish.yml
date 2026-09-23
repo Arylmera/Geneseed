@@ -92,14 +92,18 @@ on:
 
 permissions:
   contents: read
+  checks: read # the "CI was green for this commit" gate below
   id-token: write # mints the OIDC token npm exchanges for the publish grant
 
 jobs:
   publish:
+    # main or a release tag only. A dispatch can name ANY ref, and a published version cannot be
+    # taken back after 72 hours — a feature branch is never what a release should be cut from.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           # Trusted publishing needs Node >= 22.14.0. `engines` in package.json says
           # >=22.3.0 and that is a DIFFERENT number on purpose: it is the floor for
@@ -108,8 +112,28 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       # The npm bundled with a setup-node image can predate 11.5.1, which is where
       # trusted publishing landed. Pin the floor rather than hope for it.
+      # npm@11, not @latest: trusted publishing needs >= 11.5.1, and a floating major is how the
+      # npm 12 `pack --json` change reached this job first. The CI workflow's packaging step
+      # runs the same major, so the release's npm is one CI has exercised.
       - name: npm new enough for trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
+
+      # THE COMMIT MUST HAVE PASSED CI. The gates below re-run the tree checks, but not lint, the
+      # golden self-comparisons, the Windows jobs or the no-interpreter package job — those are
+      # CI's alone. Read off the commit's check runs by JOB name (this file may name no workflow
+      # file but its own — see the trusted-publisher note above), ignoring this run's own job.
+      - name: CI passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          runs="$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name != "publish")]')"
+          bad="$(jq -r '[.[] | select(.status != "completed" or (.conclusion | IN("success","skipped","neutral") | not)) | .name] | join(", ")' <<<"$runs")"
+          ok="$(jq '[.[] | select(.name | startswith("validate (")) | select(.conclusion == "success")] | length' <<<"$runs")"
+          echo "validate jobs green: $ok"
+          if [ -n "$bad" ]; then echo "not green for ${{ github.sha }}: $bad"; exit 1; fi
+          if [ "$ok" -lt 1 ]; then echo "no green validate job ran on ${{ github.sha }} — push it through CI first"; exit 1; fi
 
       # `workflow_dispatch` can run against any ref, including one CI never saw, and a
       # published version cannot be taken back after 72 hours. Re-run the two gates that
@@ -142,9 +166,14 @@ jobs:
           log="$(mktemp)"
           node --test --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
           n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
-          echo "the suite reported $n tests"
-          if [ "$n" -lt 500 ]; then
-            echo "only $n tests were discovered — the glob has stopped matching the suite"
+          # The floor is COMPUTED: 90% of the `test(`/`it(` calls written in the tracked test
+          # files. A fixed 500 let the suite lose half itself (a directory rename) and stay green;
+          # a computed one needs nobody to maintain it and still ignores small churn.
+          written="$(git ls-files 'tests/*.test.mjs' 'tests/**/*.test.mjs' | xargs grep -hcE '^\s*(test|it)\(' | awk '{s+=$1} END{print s+0}')"
+          floor=$(( written * 9 / 10 ))
+          echo "the suite reported $n tests (floor $floor, from $written written)"
+          if [ "$n" -lt "$floor" ]; then
+            echo "only $n tests ran — the glob has stopped matching part of the suite"
             exit 1
           fi
 

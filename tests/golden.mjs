@@ -10,6 +10,12 @@
 //     A generator that grows a file by two bytes on every rebuild is invisible to a single emit.
 //   * `--deletion` — emit configuration A, then B, and require the result to equal a fresh B.
 //     This is the prune phase: what A left behind must be gone, not merely overwritten.
+//   * `--cli` — the CLI/hook matrix (`helpers/matrix/cli.<platform>.json`): each cell runs in its
+//     own sandbox and must meet the expectations WRITTEN IN THE CELL (`expect`, `expect_absent`,
+//     `expect_re`, `expect_silent`, `expect_files`, `expect_absent_files`). Only that absolute
+//     tier: the byte recordings it once also compared against came from the deleted Python
+//     reference and were retired with their replayer (28415c8) — the written expectations were
+//     kept, and until this mode nothing ran them.
 //
 // A SEPARATE SCRIPT RATHER THAN A `*.test.mjs`, because 261 cells is minutes of wall clock and
 // `node --test "tests/**/*.test.mjs"` runs on every push on two operating systems. The pure
@@ -21,16 +27,45 @@
 //   node tests/golden.mjs --idempotent
 //   node tests/golden.mjs --deletion
 //   ... --gen "node bin/build-driver.mjs" --only neutral/claude --jobs 8 --limit 5
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { fileURLToPath } from 'node:url';
 
-import { VERBATIM_CELLS, cellId, runCell } from './helpers/golden.mjs';
+import { ROOT, VERBATIM_CELLS, cellId, runCell } from './helpers/golden.mjs';
+import { checkExpectations, runCell as runCliCell } from './helpers/cli_golden.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MATRIX = path.join(HERE, 'helpers', 'matrix');
+
+const HERE_PLATFORM = process.platform === 'win32' ? 'win32' : 'posix';
+
+function loadCliMatrix() {
+  const f = path.join(MATRIX, `cli.${HERE_PLATFORM}.json`);
+  if (!fs.existsSync(f)) {
+    throw new Error(`no CLI matrix at ${f} — it is frozen data; restore it from version control`);
+  }
+  return JSON.parse(fs.readFileSync(f, 'utf8'));
+}
+
+/**
+ * An interpreter plus an ABSOLUTE script path: every step runs with `cwd` inside the sandbox,
+ * where a relative `bin/…` names nothing, and several cells replace `PATH`, where a bare `node`
+ * cannot be found. `process.execPath` is outside ROOT, so a checkout cell's `repoint` still
+ * re-aims only the script at its copy.
+ */
+const CLI_BINS = {
+  cli: [process.execPath, path.join(ROOT, 'bin', 'geneseed-cli.mjs')],
+  hook: [process.execPath, path.join(ROOT, 'bin', 'geneseed-hook.mjs')],
+};
+
+function cliCheck(cell) {
+  const snap = runCliCell(CLI_BINS[cell.bin || 'hook'], cell);
+  if (typeof snap === 'string') return [`    RAN BADLY: ${snap}`];
+  return checkExpectations(cell, snap, 'the CLI').map((p) => `    ${p}`);
+}
 
 function loadMatrix() {
   // The two halves were MEASURED to be byte-identical, by a gate that ran while both
@@ -60,16 +95,28 @@ function parseArgs(argv) {
     else if (k === '--quick') a.quick = true;
     else if (k === '--idempotent') a.idempotent = true;
     else if (k === '--deletion') a.deletion = true;
+    else if (k === '--cli') a.cli = true;
     else if (k === '--shard') a.shard = argv[++i];
     else throw new Error(`unknown flag ${k}`);
   }
   if (!(a.jobs > 0)) throw new Error('--jobs must be positive');
-  if (a.idempotent && a.deletion) throw new Error('--idempotent and --deletion are exclusive');
+  if ([a.idempotent, a.deletion, a.cli].filter(Boolean).length > 1) {
+    throw new Error('--idempotent, --deletion and --cli are exclusive');
+  }
   return a;
 }
 
 function selectCells(doc, a) {
   let cells = a.deletion ? doc.deletion_cells : doc.cells;
+  if (a.cli) {
+    // `--only` is an id prefix here (`git-gate/`); the emit filters below do not apply.
+    if (a.only) cells = cells.filter((c) => c.id.startsWith(a.only));
+    if (a.shard) {
+      const [i, n] = a.shard.split('/').map(Number);
+      cells = cells.filter((_, idx) => idx % n === i);
+    }
+    return a.limit ? cells.slice(0, a.limit) : cells;
+  }
   if (a.quick) cells = cells.filter((c) => c.theme === 'neutral');
   if (a.emits) {
     const want = new Set(a.emits.split(','));
@@ -84,22 +131,50 @@ function selectCells(doc, a) {
   return cells;
 }
 
+/**
+ * `--jobs N` FANS OUT over the existing `--shard i/n` selection: N children of this same script,
+ * one shard each, `--jobs 1` so none fans out again. The flag was parsed and validated for months
+ * and then ignored — every run was serial (~74 s for 261 cells). Cells share nothing (each emits
+ * into its own sandbox), so the shards are independent; the run fails if any child does.
+ * `--limit` and an explicit `--shard` keep the serial path: both already name the exact slice.
+ */
+function fanOut(argv, jobs) {
+  const self = fileURLToPath(import.meta.url);
+  const children = Array.from({ length: jobs }, (_, i) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [self, ...argv, '--jobs', '1', '--shard', `${i}/${jobs}`],
+      { stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
+    child.on('close', (code) => resolve(code ?? 1));
+    child.on('error', () => resolve(1));
+  }));
+  return Promise.all(children).then((codes) => {
+    const bad = codes.filter((c) => c !== 0).length;
+    console.log(bad ? `[golden] ${bad} of ${jobs} shards FAILED` : `[golden] ${jobs} shards ... ok`);
+    return bad ? 1 : 0;
+  });
+}
+
 function main(argv) {
   const a = parseArgs(argv);
   const gen = a.gen.split(' ').filter(Boolean);
-  const doc = loadMatrix();
+  const doc = a.cli ? loadCliMatrix() : loadMatrix();
   const cells = selectCells(doc, a);
   if (cells.length === 0) throw new Error('the selection is empty — nothing would be checked');
+  if (a.jobs > 1 && !a.shard && !a.limit && cells.length > a.jobs) {
+    const rest = argv.filter((t, i) => t !== '--jobs' && argv[i - 1] !== '--jobs');
+    return fanOut(rest, a.jobs);
+  }
 
-  const mode = a.idempotent ? 'idempotent' : (a.deletion ? 'deletion' : 'run only');
+  const mode = a.cli ? 'cli expectations'
+    : a.idempotent ? 'idempotent' : (a.deletion ? 'deletion' : 'run only');
   console.log(`[golden] ${cells.length} cells, ${mode}, gen=${a.gen}`);
 
   const failures = [];
   let done = 0;
   for (const cell of cells) {
-    const cid = cellId(cell);
-    const problems = a.idempotent ? idempotent(gen, cell)
-      : (a.deletion ? deletion(gen, cell) : justRun(gen, cell));
+    const cid = a.cli ? cell.id : cellId(cell);
+    const problems = a.cli ? cliCheck(cell)
+      : a.idempotent ? idempotent(gen, cell)
+        : (a.deletion ? deletion(gen, cell) : justRun(gen, cell));
     if (problems.length) failures.push(`  ${cid}\n${problems.join('\n')}`);
     done += 1;
     if (done % 25 === 0) console.log(`[golden] ${done}/${cells.length}`);
@@ -185,14 +260,15 @@ function diffMaps(a, b, aName, bName) {
 
 // Kept exported so `tests/unit/golden_flags.test.mjs` can drive the argument layer without
 // spawning 259 emits — the same split the reference's own flag-wiring tests relied on.
-export { parseArgs, selectCells, loadMatrix, VERBATIM_CELLS };
+export { parseArgs, selectCells, loadMatrix, loadCliMatrix, VERBATIM_CELLS };
 
 if (import.meta.url === `file://${process.argv[1].split(path.sep).join('/')}`
   || process.argv[1] === fileURLToPath(import.meta.url)) {
-  try {
-    process.exit(main(process.argv.slice(2)));
-  } catch (e) {
-    console.error(`[golden] ${e.message}`);
-    process.exit(2);
-  }
+  Promise.resolve()
+    .then(() => main(process.argv.slice(2)))
+    .then((code) => process.exit(code))
+    .catch((e) => {
+      console.error(`[golden] ${e.message}`);
+      process.exit(2);
+    });
 }

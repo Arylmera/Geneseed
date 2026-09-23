@@ -58,7 +58,21 @@ const BUNDLE = 'files';
  * is about, and only the driver reaches it. Every `*_CONFIG_DIR` is redirected into the sandbox
  * by `cellEnv`, so a global emit cannot touch the developer's real install.
  */
+const SEEN = new Map();
+
+/**
+ * Memoised when there is nothing to inspect: three tests read the same sequence for all nine
+ * emits, and each read is a full driver run — 27 where 9 answer every one of them.
+ */
 function phasesOf(emit, inspect = null) {
+  if (inspect === null) {
+    if (!SEEN.has(emit)) SEEN.set(emit, runPhases(emit, null));
+    return SEEN.get(emit);
+  }
+  return runPhases(emit, inspect);
+}
+
+function runPhases(emit, inspect) {
   const sb = makeSandbox('phase-');
   try {
     const home = path.join(sb.path, 'home');

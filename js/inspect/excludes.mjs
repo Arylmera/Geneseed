@@ -244,7 +244,7 @@ export function cmdExclude(args) {
     for (const rec of snap.excludes) {
       const missing = [...allHosts].filter((h) => !rec.hosts.includes(h)).sort();
       const flag = missing.length
-        ? `  (MISSING from: ${missing.join(', ')} — re-run \`harness exclude add\`)` : '';
+        ? `  (MISSING from: ${missing.join(', ')} — re-run \`geneseed exclude add\`)` : '';
       printOut(`  ${rec.path}  [${rec.hosts.slice().sort().join(', ')}]${flag}\n`);
     }
     return 0;
