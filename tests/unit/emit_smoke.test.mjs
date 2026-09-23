@@ -116,8 +116,14 @@ const FOOTPRINTS = ['full', 'lean'];
  * 54_800 → 55_500 — the measured `files` carrier of 55_103 rounded up to the next 500. Lean
  * untouched: the lean halves were re-cut to the 275-word budget (7ddca47) and the lean
  * carrier stayed under 38_900.
+ *
+ * FULL RAISED 2026-09-23, for craft 1's vessel rule: the doctrine now says HOW to pick the
+ * automation vessel (throwaway script / markdown rule in a skill or agent spec / kept code),
+ * not only THAT repetition must be automated. Its full half grew by ~620 characters, so
+ * `full` moves 55_500 → 56_500 — the measured `files` carrier of 56_113 rounded up to the
+ * next 500. Lean untouched: the lean half grew too and still sits under 38_900.
  */
-const CEILING = { full: 55_500, lean: 38_900 };
+const CEILING = { full: 56_500, lean: 38_900 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
