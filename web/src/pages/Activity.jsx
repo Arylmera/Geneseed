@@ -6,6 +6,7 @@ import { relTime } from '../lib/format.js'
 import { STATUS, ELLIPSIS, baseName, compact, Elapsed, TodoStrip } from '../lib/activity.jsx'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import { useFlip } from '../lib/motion.js'
 
 function SessionCard({ s }) {
   const st = STATUS[s.status] || STATUS.idle
@@ -154,6 +155,7 @@ export default function Activity() {
   // Default on when the field is absent (older server / first paint).
   const enabled = data ? data.enabled !== false : true
   const sessions = data?.activity || []
+  const flipRef = useFlip()
 
   const toggle = async () => {
     const next = !enabled
@@ -215,9 +217,12 @@ export default function Activity() {
           Run <code>opencode</code> and the sessions it spins up appear here.
         </div>
       ) : (
-        <div className="stack gap-12">
+        // A poll that adds or drops a session slides the list instead of re-dealing it.
+        <div className="stack gap-12" ref={flipRef}>
           {sessions.map((s) => (
-            <SessionCard key={s.session_id} s={s} />
+            <div key={s.session_id} data-flip={s.session_id}>
+              <SessionCard s={s} />
+            </div>
           ))}
         </div>
       )}

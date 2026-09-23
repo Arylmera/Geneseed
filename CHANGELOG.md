@@ -19,6 +19,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   per page load and only when scrolled into view. The toast and confirm dialog enter via CSS
   `@starting-style`. Every JS animation checks `prefers-reduced-motion` (the global CSS rule cannot
   reach inline styles) and completes on a timer where rAF never fires. Shell bundle +13 KB gzip.
+- **Motion as feedback across the console.** The console strip carries a scanning bar while a
+  job runs and flashes green or red when a watched job ends; a successful build sways the rail's
+  sprout. The rail's active-page highlight and every segmented control's pill are now one element
+  that glides to the new selection. Dashboard tabs settle in; Doctor's checks rise in one after
+  another with their status dots popping; law, rule, check, manifest and MCP panels grow open;
+  live Activity sessions slide into place on each poll (FLIP); search results cascade in once and
+  mark the matched text. A flavour swap crossfades through the View Transitions API.
 
 ### Changed — toolchain
 

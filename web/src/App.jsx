@@ -1,5 +1,7 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { api } from './api/index.js'
+import { motionOK } from './lib/motion.js'
 import { useRoute } from './lib/router.js'
 import { applyAccent, applyCuratedAccent } from './lib/accents.js'
 import { TYPE_TO_SECTION } from './lib/sections.js'
@@ -75,6 +77,14 @@ export default function App() {
   const [stopped, setStopped] = useState(false)
   const [mode, toggleMode] = useColorMode()
   const [flavour, setFlavour] = useFlavour()
+  // A flavour swap re-skins the whole console at once — fonts, surfaces, layout lens — so
+  // it crossfades as one picture (View Transitions) instead of snapping. flushSync makes
+  // the new skin land INSIDE the transition's callback, which is the snapshot it fades to.
+  // No API (Firefox before 144) or reduced motion: the plain swap, exactly as before.
+  const switchFlavour = (f) => {
+    if (!document.startViewTransition || !motionOK()) return setFlavour(f)
+    document.startViewTransition(() => flushSync(() => setFlavour(f)))
+  }
   const [accentMode, setAccentMode] = useAccentMode()
   const [layout, setLayout] = useLayout()
   // The splash plays on the first load of a browser session only; reloads and
@@ -130,8 +140,15 @@ export default function App() {
     reload()
     setDataRev((v) => v + 1)
   }
+  // The moment a job the page was WATCHING ends, as an event ({ status, at }) rather than a
+  // derived "last run" — the console flash and the sprout's sway fire on this, and a run
+  // hydrated from the history on load must not look like one that just finished.
+  const [finish, setFinish] = useState(null)
   const { runs, activeId, consoleOpen, setConsoleOpen, runAction, cancelJob, clearRuns } = useJobs({
-    onFinish: refresh,
+    onFinish: (status) => {
+      refresh()
+      setFinish({ status, at: Date.now() })
+    },
     onError,
   })
 
@@ -219,6 +236,7 @@ export default function App() {
         setup={setup}
         onOpenVoice={() => setVoiceOpen((v) => !v)}
         onNavigate={() => setNavOpen(false)}
+        finish={finish}
       />
       {voiceOpen && (
         <VoicePopover
@@ -303,7 +321,7 @@ export default function App() {
                   overview={overview}
                   onAction={runAction}
                   flavour={flavour}
-                  onFlavour={setFlavour}
+                  onFlavour={switchFlavour}
                   accentMode={accentMode}
                   onAccentMode={setAccentMode}
                   layout={layout}
@@ -330,6 +348,7 @@ export default function App() {
           runs={runs}
           open={consoleOpen}
           busy={!!activeId}
+          finish={finish}
           onToggle={() => setConsoleOpen((v) => !v)}
           onClear={clearRuns}
           onCancel={cancelJob}

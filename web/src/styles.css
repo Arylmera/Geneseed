@@ -3597,3 +3597,74 @@ a.rail-item.active { color: var(--text); }
    which is the right answer rather than an unreadable sliver. */
 .pad:has(> .jr-head) .cmap { flex: 1; min-height: 240px; height: auto; }
 .pad:has(> .jr-head) .jr-others { flex: none; }
+
+/* ============================ MOTION (lib/motion.js) ================== */
+/* One easing for everything that moves in this block: ease-out-quint, a decisive stop. */
+:root { --ease-out: cubic-bezier(.22,1,.36,1); }
+
+/* THE GLIDE — one highlight per container that slides to the current child (useGlide).
+   Wherever a .glide is present the per-item highlight stands down, so a container
+   without one keeps its old look untouched. Positioned at 0,0 and moved by transform. */
+.glide { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; opacity: 0; }
+.rail > .glide { border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--accent-soft), transparent 88%); }
+.rail > .glide::before { content: ''; position: absolute; left: 0; top: 50%;
+  transform: translateY(-50%); width: 3px; height: 18px; border-radius: 3px;
+  background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.rail:has(> .glide) .rail-item.active { background: transparent; }
+.rail:has(> .glide) .rail-item.active::before { opacity: 0; }
+.fl-atlas .rail > .glide { background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.fl-atlas .rail:has(> .glide) .rail-item.active { border-color: transparent; }
+.seg:has(> .glide) { position: relative; }
+.seg > .glide { background: var(--accent); border-radius: 5px; }
+.fl-operator .seg > .glide { border-radius: 0; }
+.seg:has(> .glide) button { position: relative; }
+.seg:has(> .glide) button.on { background: transparent; }
+
+/* dashboard tab switch: the new view settles in. Never from opacity 0 — a paused frame
+   must still show the content (see .rise) */
+@keyframes viewIn { from { opacity: .4; transform: translateY(5px); } }
+.view-in { animation: viewIn .22s var(--ease-out); }
+
+/* CONSOLE — an indeterminate bar while a job runs, and one flash when a watched job ends */
+.console-head { position: relative; }
+.console-progress { position: absolute; left: 0; right: 0; top: -1px; height: 2px; overflow: hidden; }
+.console-progress::after { content: ''; position: absolute; inset: 0; width: 30%;
+  background: linear-gradient(90deg, transparent, var(--warn), transparent);
+  animation: consoleScan 1.3s cubic-bezier(.45,0,.55,1) infinite; }
+@keyframes consoleScan { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.console-head.flash-ok { animation: flashOk .9s ease-out; }
+.console-head.flash-bad { animation: flashBad .9s ease-out; }
+@keyframes flashOk { from { background: color-mix(in srgb, var(--good) 28%, transparent); } }
+@keyframes flashBad { from { background: color-mix(in srgb, var(--bad) 28%, transparent); } }
+
+/* DOCTOR — each card's status dot pops as its card rises in (same --i as .rise) */
+@keyframes dotPop { from { transform: scale(.2); } 60% { transform: scale(1.35); } }
+.check.rise .feed-dot { animation: dotPop .4s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 50ms + 140ms); }
+
+/* EXPANDERS — a panel that opens grows from nothing instead of appearing whole.
+   interpolate-size lets `height: auto` be a transition endpoint (Chromium 129+); where it
+   is unsupported the panel just fades, which is the right fallback. Opening only: the
+   panels unmount on close, and there is nothing left to animate. */
+:root { interpolate-size: allow-keywords; }
+.law-expand, .rule-expand, .check-body, .mf-raw-pre, .h-detail > * {
+  overflow: clip;
+  transition: height .28s var(--ease-out), opacity .2s ease-out,
+    padding-top .28s var(--ease-out), margin-top .28s var(--ease-out); }
+@starting-style {
+  .law-expand, .rule-expand, .mf-raw-pre, .h-detail > * { height: 0; opacity: 0; }
+  .check-body { height: 0; opacity: 0; padding-top: 0; margin-top: 0; }
+}
+
+/* SEARCH — the matched run of each title */
+.spot-hit { background: color-mix(in srgb, var(--accent) 26%, transparent); color: inherit;
+  border-radius: 2px; padding: 0 1px; animation: hitIn .5s ease-out; }
+@keyframes hitIn { from { background: color-mix(in srgb, var(--accent) 55%, transparent); } }
+
+/* SPROUT — the sway after a successful build rides this wrapper (Rail.jsx says why) */
+.sprout-sway { display: inline-flex; flex: none; transform-origin: 50% 88%; }
+
+/* FLAVOUR SWAP — the View Transition's crossfade, on the console's own curve */
+::view-transition-old(root), ::view-transition-new(root) {
+  animation-duration: .32s; animation-timing-function: var(--ease-out); }

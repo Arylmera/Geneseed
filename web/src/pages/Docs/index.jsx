@@ -9,6 +9,7 @@ import MarkdownPage from './MarkdownPage.jsx'
 import CliPage from './CliPage.jsx'
 import Glossary from './Glossary.jsx'
 import About from './About.jsx'
+import Seg from '../../components/Seg.jsx'
 
 // Resolve a router page id to a default — empty hash lands on the first page
 // of the first group so the right pane is never blank.
@@ -119,7 +120,7 @@ export default function Docs({ page, query, overview, onAction }) {
         {/* Harness selector — filters the menu and per-page config to the chosen
             host (OpenCode vs Claude Code). Persists across reloads. Same .seg
             control the Dashboard uses, so the two surfaces feel coherent. */}
-        <div className="seg" role="group" aria-label="Harness">
+        <Seg aria-label="Harness">
           {HARNESSES.map((h) => (
             <button
               key={h.id}
@@ -130,7 +131,7 @@ export default function Docs({ page, query, overview, onAction }) {
               {h.label}
             </button>
           ))}
-        </div>
+        </Seg>
       </div>
       {/* Horizontal group chip-bar — same pattern as Library's section bar so
           the two surfaces feel coherent. Active chip = group of the current

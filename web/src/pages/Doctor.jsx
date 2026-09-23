@@ -5,11 +5,16 @@ import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 
-function CheckCard({ group }) {
+// `i` staggers the cards in as the result lands, and each status dot pops as its card
+// arrives: the checks read as having been run one after another, which is what happened.
+function CheckCard({ group, i }) {
   const clean = group.problems.length === 0
   const [open, setOpen] = useState(!clean)
   return (
-    <div className={`card check ${clean ? '' : 'bad'} ${open ? 'open' : ''}`}>
+    <div
+      className={`card check rise ${clean ? '' : 'bad'} ${open ? 'open' : ''}`}
+      style={{ '--i': i * 0.6 }}
+    >
       <button
         className="check-head"
         onClick={() => setOpen((v) => !v)}
@@ -98,8 +103,8 @@ export default function Doctor() {
             </div>
           </div>
           <div className="stack gap-12">
-            {data.groups.map((g) => (
-              <CheckCard key={g.label} group={g} />
+            {data.groups.map((g, i) => (
+              <CheckCard key={g.label} group={g} i={i} />
             ))}
           </div>
         </>

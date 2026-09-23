@@ -4,6 +4,7 @@ import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import Markdown from '../components/Markdown.jsx'
+import Seg from '../components/Seg.jsx'
 
 // Profile — the user's identity (PROFILE.md beside the deployed AGENT.md). Sibling
 // to Rules: Rules are what the agent must do, the Profile is who you are — role,
@@ -93,7 +94,7 @@ export default function Profile() {
           </p>
         </div>
         <div className="row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div className="seg" role="group" aria-label="Profile mode">
+          <Seg aria-label="Profile mode">
             {[
               ['view', 'View'],
               ['edit', 'Edit'],
@@ -102,7 +103,7 @@ export default function Profile() {
                 {l}
               </button>
             ))}
-          </div>
+          </Seg>
           {mode === 'edit' && (
             <button className="btn" disabled={!dirty || busy} onClick={save}>
               {busy ? 'Saving…' : 'Save'}
