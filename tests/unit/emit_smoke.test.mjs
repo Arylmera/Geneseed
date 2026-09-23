@@ -128,8 +128,16 @@ const FOOTPRINTS = ['full', 'lean'];
  * process 8 already in, the measured `files` carrier is 57_090, so `full` moves
  * 57_000 → 57_500, the next 500 up. Lean untouched: the lean half grew too and still sits
  * under 38_900.
+ *
+ * BOTH RAISED 2026-09-23, for craft 7 (one writer per value) and ops 7 (serialize against a
+ * rationed resource) — two new doctrine rules, so the growth is the rules themselves, headings
+ * and themed titles included. Measured `files` carrier before: full 57_090, lean 38_234
+ * (headroom 410 / 666). After: full 59_001, lean 39_121 — the lean halves are rule and
+ * mechanism only, yet two headings plus ~330 characters each still outrun 666, so lean breaches
+ * too. `full` moves 57_500 → 59_500 and `lean` 38_900 → 39_500, each the next 500 up
+ * (headroom 499 / 379).
  */
-const CEILING = { full: 57_500, lean: 38_900 };
+const CEILING = { full: 59_500, lean: 39_500 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -342,7 +350,7 @@ test('the carrier still carries every law, themed and in order', () => {
 /**
  * The same claim for the other two tiers, and it is not a duplicate of the loop above.
  *
- * ⚠ THE `DOC_*` FAMILY IS 25 KEYS IN 15 FILES AND HAS NO CORPUS BEHIND IT. `doctor` checks that
+ * ⚠ THE `DOC_*` FAMILY IS 27 KEYS IN 15 FILES AND HAS NO CORPUS BEHIND IT. `doctor` checks that
  * every key a pack file names EXISTS in every theme, and `emit_smoke` above checks that the
  * INVARIANT titles survive the emit — but between those two there is a hole exactly the shape of
  * a doctrine title: present in the theme, named by the source, and never once observed coming out
@@ -371,8 +379,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack: m[1], n: m[2], key: `DOC_${m[1].toUpperCase()}_${m[2]}` });
     }
   }
-  assert.equal(rules.length, 25,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 25 (rigor 5 is retired Law IX; process 8, one writer per file, joined 2026-09); either the `
+  assert.equal(rules.length, 27,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 27 (rigor 5 is retired Law IX; process 8, one writer per file, joined 2026-09; craft 7 and ops 7 joined 2026-09-23); either the `
     + 'heading shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in

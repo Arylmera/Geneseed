@@ -1856,13 +1856,13 @@ test('excluding a rule removes that rule and nothing else', () => {
 });
 
 test('a pack whose every rule is excluded leaves the marker', () => {
-  // The two axes are not independent. A pack kept in `--doctrines` with all six rules dropped
+  // The two axes are not independent. A pack kept in `--doctrines` with all seven rules dropped
   // would render a pack header with nothing under it, and the marker would attest to a pack
   // the file no longer states — the same lie `a selected pack with no file` refuses.
   withDir((d) => {
     const out = path.join(d, 'bundle');
     buildInto(out, { excludeRules: ['craft.1', 'craft.2', 'craft.3', 'craft.4', 'craft.5',
-      'craft.6'] });
+      'craft.6', 'craft.7'] });
     const agent = agentText(out);
 
     assert.ok(agent.split('\n').includes('Active packs: rigor, ops, process'),

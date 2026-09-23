@@ -545,7 +545,7 @@ only, at best, on its presence.
 |---|---|---|
 | `§N` cross-references into `AGENT.md`'s anatomy | `src/skills/*`, `src/agents/*`, `adapters/**` | **range only.** `constitutionProblems` refuses a `§N` the template declares no section for — which catches a pointer past the end, the shape *removing* a section leaves. It cannot catch one that still resolves and now means something else, which is the shape *inserting* a section leaves, and is what actually happened when `## 2. Doctrines` pushed every later section down one. **Renumbering the anatomy means `grep -rn '§' src/ adapters/` and reading every hit.** Four satellites and a live OpenCode deny message shipped stale because the sweep stopped at `AGENT.md.tmpl` |
 | Per-law Principle lines | `web/src/pages/Laws.jsx` | presence and class only, never accuracy |
-| 504 themed constitution titles (36 keys × 14 voices) — `LEX_I..LEX_IX` (9), `DOC_<PACK>_<n>` (23), `PACK_<NAME>` (4) | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
+| 588 themed constitution titles (42 keys × 14 voices) — `LEX_I..LEX_XI` (11), `DOC_<PACK>_<n>` (27), `PACK_<NAME>` (4) | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
 | The README keyword enumerations | `README.md`, `docs/web/rules.md` | nothing |
 | The plugin capability enumeration | `docs/web/model.md` | nothing (the number substitutes; the list does not) |
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |
