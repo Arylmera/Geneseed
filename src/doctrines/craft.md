@@ -2,16 +2,29 @@
 
 ### {{DOCTRINE}} craft 1 — {{DOC_CRAFT_1}}
 <!-- LEAN:begin -->
-When an action repeats, automate it — a {{SCRIPT}}, a {{SKILL}}, a shortcut. Do not
-perform by hand what the machine can perform a thousand times. When you build a
-{{SKILL}} for it, make it a vessel for one coherent domain — not a single command and
-not a grab-bag: seek an existing {{SKILL}} whose domain already covers the need and
-extend it before forging a new one, and name {{SKILLS}} by domain. Reuse before creating.
+When an action repeats, automate it — and choose the vessel by the nature of the task,
+not by how many similar steps one session needs. Do not
+perform by hand what the machine can perform a thousand times.
+- a one-off repetitive batch → a throwaway {{SCRIPT}} in a scratch location outside the
+  repository, never kept;
+- a recurring procedure that needs judgement (sort, classify, audit, decide) → a
+  markdown rule folded into the existing domain {{SKILL}} or the relevant {{AGENT}} spec,
+  so another {{AGENT}} can carry it out;
+- a recurring, deterministic, exact operation (parsing, counting, API calls, anything
+  run unattended or where a model would err) → kept, versioned code.
+Markdown is the default for what recurs; code is kept only where exactness or unattended
+automation demands it. When you build a {{SKILL}}, make it a vessel for one coherent
+domain — not a single command and not a grab-bag: seek an existing {{SKILL}} whose domain
+already covers the need and extend it before forging a new one, and name {{SKILLS}} by
+domain. Reuse before creating.
 <!-- LEAN:else -->
-When an action repeats, automate it — a {{SCRIPT}}, a {{SKILL}}, a shortcut. Before forging
-a new {{SKILL}}, seek an existing one whose domain covers the need and extend it; build each
-{{SKILL}} for one coherent domain — not a single command, not a grab-bag — and name
-{{SKILLS}} by domain. Reuse before creating.
+When an action repeats, automate it — choosing the vessel by the task, not the step
+count: a one-off batch gets a throwaway {{SCRIPT}} outside the repository, never kept; a
+recurring judgement procedure gets a markdown rule in the domain {{SKILL}} or {{AGENT}}
+spec; a recurring exact or unattended operation gets kept, versioned code. Markdown is
+the default for what recurs. Before forging a new {{SKILL}}, seek an existing one whose
+domain covers the need and extend it; build each {{SKILL}} for one coherent domain — not
+a single command, not a grab-bag — and name {{SKILLS}} by domain. Reuse before creating.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE}} craft 2 — {{DOC_CRAFT_2}}
