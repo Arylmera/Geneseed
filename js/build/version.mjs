@@ -28,6 +28,18 @@ import { readFileSync } from 'node:fs';
  * in the output; reproducing the wrong one changes the fingerprint of every install.
  */
 export function sourceFingerprint(cfg) {
+  // Once per `cfg` — the source cannot change under one operation, and every emit (84 of them
+  // in `doctor --all`) hashed the whole tree again. Per cfg OBJECT, not per process, for the
+  // same reason as render.mjs's source cache: the web daemon is long-lived.
+  if (FINGERPRINT.has(cfg)) return FINGERPRINT.get(cfg);
+  const fp = hashSource(cfg);
+  FINGERPRINT.set(cfg, fp);
+  return fp;
+}
+
+const FINGERPRINT = new WeakMap();
+
+function hashSource(cfg) {
   const h = createHash('sha256');
   const files = [];
   for (const r of [cfg.src, cfg.themes, cfg.pluginSrc, cfg.workflowSrc]) {

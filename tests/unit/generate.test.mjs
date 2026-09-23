@@ -1972,3 +1972,23 @@ test('knownRuleIds is every rule this checkout ships, in render order', () => {
       'excluding every enumerated rule left a pack standing — the two lists disagree');
   });
 });
+
+test('a render reads each source file once per cfg, and a new cfg sees an edit', () => {
+  // The source cache is keyed on the cfg OBJECT: one operation (an emit, a doctor pass) reads
+  // a partial once however many specs include it — but the web daemon renders in-process for
+  // days, so a fresh `makeCfg()` must see today's file. Both halves, or a process-wide cache
+  // (the obvious spelling) would pass the first and serve stale source forever.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    fs.mkdirSync(src, { recursive: true });
+    const f = path.join(src, 'x.md');
+    fs.writeFileSync(f, 'first\n');
+    const cfg = { ...makeCfg(), src };
+    assert.equal(renderFile(cfg, f, {}).trim(), 'first');
+    fs.writeFileSync(f, 'second\n');
+    assert.equal(renderFile(cfg, f, {}).trim(), 'first', 'the same cfg re-read its source');
+    assert.equal(renderFile({ ...makeCfg(), src }, f, {}).trim(), 'second',
+      'a new cfg was served the old text');
+  });
+});
+
