@@ -32,7 +32,8 @@ will, in whatever structure serves you.
   the host tree. The host tree receives only the
   deliverables of the task.
 - **Promote what hardens.** When something here crystallises into a durable
-  fact worth recalling verbatim, copy it into {{MEMORY}} ({{DOCTRINE}} process 1).
+  fact worth recalling verbatim, propose it for {{MEMORY}} through the rule {{SKILL}}
+  ({{DOCTRINE}} process 1).
 - **It is not the repo's.** Do not keep here what the repository already
   records (code, git history, the {{LAWS}}, `user-rules.md`). Keep what is
   *yours*.

@@ -8,8 +8,10 @@
 
 Durable knowledge that must survive across sessions lives here as **one fact per
 file**. An agent reads `MEMORY.md` (the local index it creates) at the start of a
-session and writes a new file whenever a session yields something worth keeping
-({{DOCTRINE}} process 1).
+session. A new fact is written through the rule {{SKILL}}, which settles with the user
+whether it is a fact for here or a standing rule ({{DOCTRINE}} process 1) — never on the
+agent's own initiative. The one automatic writer is the `learn` hook, where the host
+runs it: a distiller the user opted into at install, not an agent's judgement call.
 
 This store is for **curated facts**, written for recall. For freeform working space
 the agent shapes for itself — plans, scratch designs, working theories, with no

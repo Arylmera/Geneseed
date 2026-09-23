@@ -23,8 +23,8 @@
 - **Read + write to the assigned worktree.** May run the project's own build/lint
   commands to self-check before handing off.
   <!-- bash: allow -->
-- Never commits or pushes ({{DOCTRINE}} process 5) — that stays with the tester's proof step
-  and the parent's merge decision.
+- Never commits or pushes ({{DOCTRINE}} process 5) — the parent re-runs the proof and
+  commits once the user accepts.
 
 ## Procedure
 0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).

@@ -28,14 +28,14 @@ The minimum roster per task type. The parent may add specialists on top — secu
 5. **Two execution shapes**, chosen by host capability (same pattern as the [workflow {{SKILL}}](workflow.md)):
    - *Deterministic:* where the host exposes a `workflow` tool, run a saved script encoding analyst → developer → (tester ⇄ developer)×≤5 → proof.
    - *Model-driven fallback:* everywhere else, run the same stages via the [parallel-agents {{SKILL}}](parallel-agents.md) or sequential personas, with the same handoff envelopes and the same delivery contract.
-6. On success, attach the mechanical proof to the branch (test + lint output, exit codes) and hand the result back to the parent for the merge decision — the pipeline never commits, pushes, or merges on its own ({{DOCTRINE}} process 5).
+6. On success, hand the worktree back to the parent uncommitted, with the mechanical proof (test + lint output, exit codes) in the result envelope. The pipeline never commits, pushes, or merges ({{DOCTRINE}} process 5): the parent re-runs the proof commands itself, shows the user the diff and the output, and commits and merges once the user accepts.
 
 ## Delivery contract
 
-A branch/worktree containing the work **plus** the mechanical proof: test and lint output with exit codes, either committed alongside the run's notes or handed back in the result envelope. Anything without green proof is surfaced, never merged — merging on proof (not re-verification) is only sound because every {{AGENT}} in the crew inherits all {{LAWS}} through the handoff envelope.
+A worktree containing the work, uncommitted, **plus** the mechanical proof in the result envelope: test and lint output with exit codes. Anything without green proof is surfaced, never merged. The crew's proof is what the parent re-runs, not what it trusts: a log is an account of the state, and the gate that decides the merge runs against the state itself.
 
 ## Done when
 
-- Green proof: the crew delivered a branch with passing tests and lint, and the parent merged it — or the loop cap was exhausted and the failure was reported with the branch left in place.
+- Green proof: the crew delivered a worktree whose tests and lint the parent re-ran green, and the user accepted the commit and merge — or the loop cap was exhausted and the failure was reported with the branch left in place.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

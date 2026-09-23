@@ -8,6 +8,32 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed — the constitution
+
+- **Law IV**: a durable authorization the user gave counts, alongside per-act confirmation (the
+  full text said "never a standing yes, unless already durably authorized", the lean text
+  dropped the exception). And "deletion" narrows to *deletion of what version control cannot
+  restore*, matching the Ontology's named irreversible set (#130): an edit or delete git can
+  undo runs freely.
+- **Law V**: inside a loop with a stated bound (fix until green, at most N rounds), the expected
+  failure is the loop's input and the bound is the stop — a red test in a debug loop no longer
+  reads as a violation.
+- **Law X**: echo the inferred goal back when a request admits readings that would lead to
+  different work — not for every request, which contradicted the Expert and Peer postures.
+- **Law I (lean)** keeps secrets out of logs and output again; **rigor 3 (lean)** keeps "stop
+  rather than ship untested behaviour in silence (Law VIII)".
+- **Memory is written through the rule skill** (process 1) everywhere — AGENT.md §6 and §7, the
+  memory and notebook READMEs told the agent to write it on its own. The `learn` hook is the
+  one automatic writer, named as such.
+- **Pipelines: the parent owns the commit.** A crew hands back its worktree uncommitted with its
+  proof; the parent re-runs the proof itself, shows the user, and commits and merges once the
+  user accepts. Foreman merged on the crew's own logs, and the developer spec named a tester
+  commit that never happened.
+- The bruno skills cited retired Laws IX and XI (now IV and III); **doctor now refuses a
+  citation of any retired law**, read off the canon. Themes title IX and XI "(retired)"; the
+  dead `EPI_PACT` key is gone. Prose outside the catalogue blocks no longer points at a table
+  the Claude emit does not render.
+
 ### Fixed
 
 - **Copilot's hooks match Copilot's current schema.** The global emit wired a single-object

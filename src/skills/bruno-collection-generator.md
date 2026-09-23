@@ -21,7 +21,7 @@ files or OpenCollection YAML.
    params, body shape, auth, expected status codes, tags, feature area. Group by
    resource or domain (`auth`, `users`, `billing`). Where the source is incomplete,
    generate only what it supports and label the unknowns — do not invent fields,
-   routes, or hosts ({{LAW}} XI).
+   routes, or hosts ({{LAW}} III).
 4. Normalise names and variables. Requests read action-first in sentence case
    (`Get User by ID`); folders are plural resources or product domains; every host,
    token, tenant ID and API key becomes an interpolated environment variable. A real-looking secret in the
