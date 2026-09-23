@@ -2307,12 +2307,20 @@ for (const host of ['bob', 'copilot']) {
   });
 }
 
-test('bob is a flagless MCP host and its config lives under the project marker', () => {
+test('bob is a flagless MCP host and its config is its own mcp.json, never settings.json', () => {
+  // bob.ibm.com/docs/ide/configuration/mcp/mcp-in-bob: `.bob/mcp.json` in the project,
+  // `~/.bob/settings/mcp.json` globally. Servers in settings.json never load.
   const sb = makeSandbox();
+  const prev = process.env.BOB_CONFIG_DIR;
   try {
-    assert.equal(mcpConfigFor('bob', 'project', sb.path),
-      path.join(sb.path, '.bob', 'settings.json'));
-  } finally { sb.cleanup(); }
+    assert.equal(mcpConfigFor('bob', 'project', sb.path), path.join(sb.path, '.bob', 'mcp.json'));
+    process.env.BOB_CONFIG_DIR = path.join(sb.path, 'dotbob');
+    assert.equal(mcpConfigFor('bob', 'global', sb.path),
+      path.join(sb.path, 'dotbob', 'settings', 'mcp.json'));
+  } finally {
+    if (prev === undefined) delete process.env.BOB_CONFIG_DIR; else process.env.BOB_CONFIG_DIR = prev;
+    sb.cleanup();
+  }
 });
 
 // A bob PROJECT install's data lives under `<repo>/.bob`, not at the bare root, and a restore

@@ -1198,12 +1198,14 @@ test('an EXISTING opencode.json has its git gate re-wired when the pack comes ba
     const bashOf = () => JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
 
     // A file that already has a `permission` block, wired with the process pack OFF: the two
-    // process keys are absent and the three Law IV keys are not.
+    // process keys are absent and the Law IV keys are not — `rm -rf` plus the same destructive
+    // git verbs Claude's git-gate asks on (DESTRUCTIVE_GIT_RE).
     mergeOpencodeJson(p, 'AGENT.md', ['craft']);
     for (const k of ['git commit*', 'git push*']) {
       assert.ok(!(k in bashOf()), `${k} was wired into a build whose process pack is off`);
     }
-    for (const k of ['rm -rf *', 'git push --force*', 'git push -f*']) {
+    for (const k of ['rm -rf *', 'git push --force*', 'git push -f*', 'git reset --hard*',
+      'git clean -f*', 'git branch -D*', 'git checkout -- *']) {
       assert.equal(bashOf()[k], 'ask', `${k} is Law IV's and rides no pack toggle`);
     }
 

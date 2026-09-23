@@ -9,8 +9,9 @@ Agent Skills), custom agents are markdown-with-frontmatter, and the repo-root
 a `host="copilot"` flag. Nothing to install by hand: `geneseed setup` (or
 `geneseed build --emit copilot` / `--emit copilot-global`) writes everything.
 
-Copilot is a **reduced host**: it has lifecycle hooks, but one command per event and
-no "ask the user" tier, so this page is mostly about what those hooks *can* and
+Copilot is a **reduced host** at project scope (no hooks there) and close to Claude
+Code at global scope: its lifecycle hooks have an "ask the user" tier, so the gates
+prompt as they do on Claude. This page is mostly about what those hooks *can* and
 *cannot* automate and why the harness still holds where they cannot.
 
 ## What the emit writes
@@ -39,42 +40,42 @@ no "ask the user" tier, so this page is mostly about what those hooks *can* and
   the preamble rides it as a managed block. (Unlike Bob, Copilot *has* a real
   personal instructions carrier, so no rules-folder workaround is needed.)
 - `agents/<name>.agent.md` + `skills/` under `~/.copilot`.
-- **`settings.json` hooks** — two entries under `hooks`, see below.
+- **`settings.json` hooks** — four entries under `hooks`, see below.
 
-## Hooks — one command per event, block or warn
+## Hooks — ask, as on Claude Code
 
 The Copilot CLI reads lifecycle hooks from **`~/.copilot/settings.json`** as a map of
-event → one `{command}` object (no matcher groups, no list). The global emit wires
-two of them, each calling the machine-wide `geneseed-hook` shim with `--host copilot`
-so the verdict is spoken in Copilot's dialect:
+event → **array** of `{type: "command", command}` entries
+([reference](https://docs.github.com/en/copilot/reference/hooks-configuration)). The
+global emit adds one entry to each of four events, each calling the machine-wide
+`geneseed-hook` shim:
 
 | event | verb | what it does |
 | --- | --- | --- |
 | `sessionStart` | `context` | eager project-context injection, as on Claude Code, returned as `{"additionalContext": …}` |
-| `toolCall` | `tool-gate` | the git gate and the rule gate **fused** — one command is all the event allows — dispatched on the payload: a `command` gets the git checks, a path gets the rule checks; the `after` phase is ignored |
+| `preToolUse` | `tool-gate --host copilot` | the git gate and the rule gate **fused** — entries carry no matcher — dispatched on the payload: a `command` gets the git checks, a path gets the rule checks |
+| `agentStop` | `learn` | distils the session transcript (`transcriptPath`) into memory, as Claude's `Stop` |
+| `preCompact` | `learn` | the same, once more before compaction summarises the window away |
 
-Copilot's `toolCall` has **no "ask the user" tier** — its stdout contract is
-`{"block": true|false}` — so the verdict tiers are:
+`preToolUse` has an ask tier, so every rule **asks** exactly where it asks on Claude
+Code — Laws I and IV, process 1 and process 5 — answered top-level as
+`{"permissionDecision": "ask", "permissionDecisionReason": …}`. A gate error asks
+too (fail closed). `toolArgs` is read whether Copilot sends it as an object or as a
+JSON string.
 
-- **Laws I and IV block.** A credential-shaped string headed for a tracked file, or
-  a history-discarding git act (`reset --hard`, `clean -f`, `branch -D`,
-  `checkout --`, `push --force`), is refused outright with the reason. Same stance
-  as the OpenCode guard plugin, whose `tool.execute.before` can only allow or throw.
-- **Process 1 and process 5 warn.** The two consent rules are the *user's* calls; a
-  hard block would make Copilot unable to commit at all. They log a `[geneseed] …`
-  line on stderr (which Copilot records) and allow. A gate error warns the same way
-  rather than locking every tool call behind a block nobody can clear.
+**Your own hooks on those events stay**: Geneseed's entry goes beside them in the
+array, and uninstall removes exactly the entries it claimed. Comments in the file
+mean it is never rewritten.
 
-**A hook you already set on one of those events is left alone**, and that event is
-not claimed — one slot per event means Geneseed could only displace it. Uninstall
-removes exactly the hooks it claimed. Comments in the file mean it is never
-rewritten.
+**Migration.** Before this, the emit wired a single-object `toolCall` hook — an event
+Copilot no longer fires, so the gates never ran. A re-emit removes those recorded
+entries (your own keys stay) and writes the array shape.
+
+**Unverified live.** No Copilot CLI on the authoring machine; this is the documented
+contract.
 
 **What is not wired, and why:**
 
-- **no `learn`** — Copilot's `sessionEnd` and `agentStop` payloads carry no
-  `transcript_path`, so a distiller would have nothing to read. The memory
-  convention rides the preamble's instructions (the agent writes its own memories);
 - **no hooks at project scope** — the CLI documents hooks in the personal settings
   file only, and a machine-absolute command committed into a shared `.github/`
   would fail on every teammate's machine;

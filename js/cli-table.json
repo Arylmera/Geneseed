@@ -162,7 +162,7 @@
           ],
           "dest": "host",
           "metavar": null,
-          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) asks; 'copilot' has no ask tier, so Laws I/IV block and everything else is a stderr warning",
+          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) and 'copilot' ask, each in its own envelope; 'bob' has no ask tier, so Laws I/IV exit 2 and everything else is a stderr warning",
           "choices": null,
           "default": null,
           "required": false,
@@ -353,7 +353,7 @@
     },
     {
       "name": "git-gate",
-      "help": "PreToolUse hook: force an ASK before every git commit/push (process 5 backstop)",
+      "help": "PreToolUse hook: ASK before a history-discarding git act (Law IV) and before every git commit/push (process 5 backstop)",
       "description": "",
       "positionals": [],
       "options": [
@@ -378,12 +378,27 @@
           ],
           "dest": "host",
           "metavar": null,
-          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) asks; 'copilot' has no ask tier, so Laws I/IV block and everything else is a stderr warning",
+          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) and 'copilot' ask, each in its own envelope; 'bob' has no ask tier, so Laws I/IV exit 2 and everything else is a stderr warning",
           "choices": null,
           "default": null,
           "required": false,
           "nargs": null,
           "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-consent"
+          ],
+          "dest": "no_consent",
+          "metavar": null,
+          "help": "skip the process-5 commit/push ask (set by the emit when the process pack or process 5 is off); Law IV still asks",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
           "type": null,
           "hidden": false
         }
@@ -641,7 +656,7 @@
           ],
           "dest": "host",
           "metavar": null,
-          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) asks; 'copilot' has no ask tier, so Laws I/IV block and everything else is a stderr warning",
+          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) and 'copilot' ask, each in its own envelope; 'bob' has no ask tier, so Laws I/IV exit 2 and everything else is a stderr warning",
           "choices": null,
           "default": null,
           "required": false,
@@ -811,7 +826,7 @@
     },
     {
       "name": "tool-gate",
-      "help": "toolCall hook (Copilot): git-gate and rule-gate fused behind one command, dispatched on the payload",
+      "help": "PreToolUse hook for hosts with no tool matcher (Copilot, Bob): git-gate and rule-gate fused behind one command, dispatched on the payload",
       "description": "",
       "positionals": [],
       "options": [
@@ -836,7 +851,7 @@
           ],
           "dest": "host",
           "metavar": null,
-          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) asks; 'copilot' has no ask tier, so Laws I/IV block and everything else is a stderr warning",
+          "help": "the host that reads the verdict (set by the emitted hook): 'claude' (default) and 'copilot' ask, each in its own envelope; 'bob' has no ask tier, so Laws I/IV exit 2 and everything else is a stderr warning",
           "choices": null,
           "default": null,
           "required": false,

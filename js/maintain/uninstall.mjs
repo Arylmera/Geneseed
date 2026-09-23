@@ -60,7 +60,7 @@ import {
 import { mcpCommented } from '../hosts/mcp.mjs';
 import {
   copilotIntegrityCheck, managedBlockRead, managedBlockRemove, managedBlockWrite,
-  mergeClaudeSettings, mergeCopilotSettings, opencodeTarget, readJsonc,
+  mergeClaudeSettings, opencodeTarget, readJsonc,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes, unwireClaudeSettings,
   unwireCopilotSettings,
 } from '../hosts/settings.mjs';
@@ -1058,15 +1058,18 @@ function cleanHostStash(cfg, host = 'claude') {
 function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   const data = claudeReadManifest(cfg);
   const managed = managedOf(data);
-  // A Copilot install: its own merge, its own claim key, and none of the pack/exclude axes
-  // below — the Copilot gate is not pack-conditional (see `copilotHooks`). Without this
-  // branch a Copilot reactivate would write CLAUDE-shaped hook groups into
-  // ~/.copilot/settings.json, which Copilot cannot read.
+  // A LEGACY Copilot install (single-slot `copilot_hooks`, the dead `toolCall` event):
+  // reactivating it re-wires the CURRENT Copilot shape — event → array, recorded under
+  // `settings_hooks` — rather than restoring hooks Copilot no longer reads. None of the
+  // pack/exclude axes below apply: the Copilot gate is not pack-conditional.
   if (Array.isArray(managed.copilot_hooks)) {
-    const [, claims] = mergeCopilotSettings(settingsFile(cfg, managed), managed.copilot_hooks,
-      hookRunnerEntry());
-    if (!deepEquals(claims, managed.copilot_hooks) && Object.keys(data).length > 0) {
-      managed.copilot_hooks = claims;
+    const sf = settingsFile(cfg, managed);
+    unwireCopilotSettings(sf, managed.copilot_hooks);
+    const [, claims] = mergeClaudeSettings(sf, 'global', null, hookRunnerEntry(), null, [],
+      'copilot', cfg);
+    if (Object.keys(data).length > 0) {
+      delete managed.copilot_hooks;
+      managed.settings_hooks = claims;
       data.managed = managed;
       const tmp = path.join(cfg, `${GLOBAL_MANIFEST}.tmp`);
       try {
@@ -1098,7 +1101,7 @@ function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
     : excludedRulesOfDir(cfg);
   // `host` reaches the group builder: a Bob reactivate must re-wire Gemini-named groups.
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed), 'global',
-    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host);
+    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host, cfg);
   // `and data` — a manifest that did not parse is not one to write back.
   if (!deepEquals(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
     managed.settings_hooks = claims;

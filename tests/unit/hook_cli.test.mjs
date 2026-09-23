@@ -50,11 +50,10 @@ function block(text, start, end, where) {
  * hook entry has to satisfy, read out of the emitter.
  */
 function wiredHookVerbs() {
-  // Two emitters, two shapes: Claude's matcher groups and Copilot's one-command-per-event map.
-  // Both bake `${run} <verb>`, so the same scan reads each.
+  // One emitter for every hook host — Claude's matcher groups, Bob's, and Copilot's bare
+  // entries all come out of `claudeHookGroups`, each baking `${run} <verb>`.
   const src = read('js', 'hosts', 'settings.mjs');
-  const body = block(src, 'export function claudeHookGroups', '\n}\n', 'js/hosts/settings.mjs')
-    + block(src, 'export function copilotHooks', '\n}\n', 'js/hosts/settings.mjs');
+  const body = block(src, 'export function claudeHookGroups', '\n}\n', 'js/hosts/settings.mjs');
   return new Set([...body.matchAll(/\$\{run\}\s+([a-z][a-z-]*)/g)].map((m) => m[1]));
 }
 

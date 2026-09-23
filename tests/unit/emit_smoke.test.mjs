@@ -144,8 +144,9 @@ const EXPECTED = {
 // host-independent. A mismatch means the emit dropped or duplicated specs — the failure mode a
 // bare "exit 0" smoke test cannot see. Skills are the flat specs under `src/skills/` plus the
 // three vendored folders, so the count moves with `SKILL_CLASS` and `VENDORED_SKILL_DIRS`.
-// 18 specs plus `_template.md`, which the native layer copies like any other agent file.
-const N_AGENTS = 19;
+// 18 specs. `agents/_template.md` does NOT ship: every host loads each `.md` in its agents dir
+// as an agent, so it would register a phantom `_template` agent.
+const N_AGENTS = 18;
 const N_SKILLS = 52;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`

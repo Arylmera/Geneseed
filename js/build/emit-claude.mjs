@@ -10,8 +10,8 @@ import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub } from '../hosts/opencode.mjs';
 import {
-  managedBlockRemove, managedBlockWrite, mergeClaudeSettings, mergeCopilotSettings,
-  unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes,
+  managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
+  unwireClaudeExcludes, unwireClaudeSettings, unwireCopilotSettings, wireClaudeExcludes,
 } from '../hosts/settings.mjs';
 import { writeText } from '../lib/fs.mjs';
 import { isTruthy } from '../lib/json.mjs';
@@ -121,10 +121,13 @@ export function emitClaudeRender(cfg, job) {
   ensureExcludesStub(cfgDir);
 
   // Project hygiene, claim-on-create: an existing (possibly user-authored) .gitignore is
-  // never rewritten, but one we created stays owned across re-emits.
+  // never rewritten, but one we created stays owned across re-emits. The hook file is
+  // machine-specific (it names this user's hook shim): Claude's is the personal
+  // settings.local.json; Bob documents no local variant, so its settings.json is ignored.
   if (scope === 'project') {
     const gi = path.join(cfgDir, '.gitignore');
-    const giLines = (host === 'claude' ? ['settings.local.json'] : [])
+    const giLines = (host === 'claude' ? ['settings.local.json']
+      : host === 'bob' ? ['settings.json'] : [])
       .concat(['wiki.jsonc', 'agent-overrides.json']);
     if (!existsSync(gi)) {
       writeText(gi, `${giLines.join('\n')}\n`);
@@ -254,7 +257,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     // DECIDES the install's packs, so the marker on disk is still the previous build's.
     const [, managedHooks] = mergeClaudeSettings(
       settingsPath, scope, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
-      doctrines, excludeRules, host,
+      doctrines, excludeRules, host, cfgDir,
     );
     managed.settings_hooks = managedHooks;
 
@@ -288,13 +291,17 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
       managed.settings_excludes = priorExcl;
     }
   } else if (scope === 'global') {
-    // `copilot_hooks`, not `settings_hooks`: a distinct key so the Claude-shaped unwire and
-    // integrity code, which walks `settings_hooks` as event→group arrays, never sees a
-    // Copilot record it would misread.
+    // Copilot's hooks are event → array now, so the Claude merge (append/prune by deep
+    // equality) is the Copilot merge too, recorded under `settings_hooks`. An install from
+    // before that recorded single-slot `copilot_hooks` (the dead `toolCall` event): unwire
+    // those claims first, or they linger in the file forever.
     const settingsPath = path.join(cfgDir, 'settings.json');
     managed.settings_file = 'settings.json';
-    const [, claims] = mergeCopilotSettings(settingsPath, get(old, 'copilot_hooks'), hookOpts);
-    managed.copilot_hooks = claims;
+    const legacy = get(old, 'copilot_hooks');
+    if (Array.isArray(legacy) && legacy.length) unwireCopilotSettings(settingsPath, legacy);
+    const [, managedHooks] = mergeClaudeSettings(settingsPath, scope,
+      Array.isArray(legacy) ? null : get(old, 'settings_hooks'), hookOpts, null, [], host, cfgDir);
+    managed.settings_hooks = managedHooks;
   }
   return managed;
 }
