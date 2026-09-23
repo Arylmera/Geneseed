@@ -8,6 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed — performance
+
+- **Rendering reads each source file once per operation, and hashes the source tree once.**
+  `doctor` re-read the same partials again and again (91% of its reads were repeats) and every
+  emit re-hashed the whole tree for the fingerprint. Measured A/B under the same load: one emit
+  ~324 → ~222 ms, `doctor --theme neutral` ~2.45 → ~1.63 s, `doctor --all` (which gates every
+  `geneseed update`) roughly halved. Both caches live on the per-operation `cfg`, not the
+  process — the web daemon renders in-process for days and must see an edited source.
+
 ### Changed — tests and CI
 
 - **`golden.mjs --jobs` works.** It was parsed and ignored; cells now fan out over `--shard`

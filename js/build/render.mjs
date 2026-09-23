@@ -202,11 +202,29 @@ export function lawsPointer(theme, lawsPrefix = '') {
     + 'secrets, deletion, git history, scope, or untrusted content.';
 }
 
+/**
+ * SOURCE TEXT, READ ONCE PER `cfg`. One emit renders the same partials over and over — the
+ * self-improvement footer is included by ~50 specs — and `doctor --all` repeats that per theme:
+ * 91% of its file reads were repeats. Keyed on the `cfg` OBJECT, not the process: the web
+ * daemon renders in-process for days, and `makeCfg()` is called per operation, so each request
+ * sees today's source. Only files under `cfg.src` — the one tree nothing in a render writes to.
+ */
+const SRC_TEXT = new WeakMap();
+function readSource(cfg, p) {
+  const src = cfg && cfg.src ? normcase(path.resolve(cfg.src)) + path.sep : null;
+  if (!src || !normcase(p).startsWith(src)) return readText(p);
+  let seen = SRC_TEXT.get(cfg);
+  if (!seen) SRC_TEXT.set(cfg, (seen = new Map()));
+  let text = seen.get(p);
+  if (text === undefined) seen.set(p, (text = readText(p)));
+  return text;
+}
+
 /** `_build_render.render_file`. */
 export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix = '',
                            visiting = new Set(), nativeCatalog = false) {
   const here = path.resolve(filePath);
-  let text = readText(filePath);
+  let text = readSource(cfg, here);
 
   text = text.replace(INCLUDE_RE, (_whole, rel) => {
     const target = path.resolve(cfg.src, rel);
