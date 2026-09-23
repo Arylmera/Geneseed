@@ -24,6 +24,7 @@ work is worth a crew: a one-file tweak or a question never is.
 | OpenCode | `workflow` (the `geneseed-workflow` plugin) | **saved only** — `<name>.js` in `.opencode/workflows/` per repo or `<config>/workflows/` global (`GENESEED_WORKFLOWS_DIR` overrides); nothing inline is eval'd | none — call it when the shape fits |
 | Claude Code | `Workflow` (native) | a saved `.claude/workflows/<name>` by `name`, **or** an inline `script` you author | **required** — the tool refuses unless the user opted in for this task ("use a workflow", "ultracode", a skill that says so) |
 | Bob, Copilot | none | — | fall back to [parallel-agents](parallel-agents.md) / [council](council.md) |
+| any, under Orca | Orca orchestration (`orca skills get orchestration`) | tasks, not scripts — each task spec names its target, change, ownership and acceptance | the user asked to supervise or coordinate workers |
 
 Both runtimes speak the same primitives — `agent()`, `parallel()`, `pipeline()`,
 `phase()`, `args` — and every script opens with a literal `export const meta = { name,
@@ -58,20 +59,27 @@ carries the script API — load it before writing one).
    before; an inline one has not. Author inline only when no saved shape fits, keep it
    to the primitives, and hold to the host's size guideline unless the user asked for
    more.
-4. **Pass the task as `args`, never baked in** — target paths, the motion, the question,
+4. **Give every editing agent a write set, and isolate parallel editors** ({{DOCTRINE}}
+   process 8). Name in each editing `agent()` prompt the files it may change and have it
+   return the files it did change; overlapping sets run in sequence, not in one
+   `parallel()`. Pass `isolation: 'worktree'` to each agent that edits in parallel — both
+   runtimes take it; read-only agents need none. After the fan-out, compare the changed
+   files in plain script code (OpenCode hands them to you as `overlaps()`) — a file two
+   agents touched goes to one merge agent, never to whoever wrote last.
+5. **Pass the task as `args`, never baked in** — target paths, the motion, the question,
    any timestamp. Scripts stay deterministic: no wall clock, no randomness, nothing
    read from the environment that the next run would see differently, so a run is a
    pure function of (script, args, child replies) and can be replayed.
-5. **Run it and wait for the result, not the transcript.** The run is asynchronous on
+6. **Run it and wait for the result, not the transcript.** The run is asynchronous on
    Claude Code (a task notification arrives; `/workflows` watches it live) and
    synchronous on OpenCode. Read the returned summary; the full structured result and
    the phase-by-phase trace are in the run's progress file — point the user there for
    detail, do not paste it. Never fabricate a result for a run that has not returned.
-6. **On failure, resume — don't rerun.** A script that died mid-way keeps its completed
+7. **On failure, resume — don't rerun.** A script that died mid-way keeps its completed
    `agent()` results; fix the script or the args and resume from the run id where the
    host supports it, so finished stages are not paid twice. A stage that keeps failing
    is a finding about the task, not a reason to loop.
-7. **Exit — carry the conclusion yourself.** The workflow gathers and verifies;
+8. **Exit — carry the conclusion yourself.** The workflow gathers and verifies;
    committing, pushing, merging, or opening anything outward stays with you
    ({{DOCTRINE}} process 5, {{LAW}} IV). State what the run concluded, what you are
    doing with it, and where the trace lives.

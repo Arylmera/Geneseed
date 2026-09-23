@@ -17,6 +17,7 @@
 // hard sandbox guard. See docs/specs/2026-06-09-opencode-workflow-primitive.md.
 
 import * as os from "node:os"
+import * as path from "node:path"
 
 const DEBUG = !!process.env.GENESEED_DEBUG
 function dlog(m) { if (DEBUG) console.error(`[geneseed-workflow] ${m}`) }
@@ -150,13 +151,17 @@ function usageFrom(res) {
   return { input: Number(tok?.input ?? 0) || 0, output: Number(tok?.output ?? 0) || 0 }
 }
 
-async function runChildSession(client, { prompt, agent, model, title }) {
+async function runChildSession(client, { prompt, agent, model, title, directory }) {
   if (!client?.session?.create || !client?.session?.prompt) {
     throw new Error("OpenCode SDK session API unavailable")
   }
   let created
-  try { created = await client.session.create({ body: { title: title || "geneseed-workflow" } }) }
-  catch { created = await client.session.create() }
+  // `query.directory` routes the request to that directory's instance, and the session keeps
+  // it — so an isolated child runs in its worktree. Never retried without it: a child that
+  // asked for a worktree and silently ran in the shared tree is the failure isolation exists for.
+  const q = directory ? { query: { directory } } : {}
+  try { created = await client.session.create({ body: { title: title || "geneseed-workflow" }, ...q }) }
+  catch (e) { if (directory) throw e; created = await client.session.create() }
   const sid = sessionId(created)
   if (!sid) throw new Error("could not create child session")
   try {
@@ -164,7 +169,7 @@ async function runChildSession(client, { prompt, agent, model, title }) {
     if (agent) body.agent = agent
     if (model) body.model = model
     let res = null
-    try { res = await client.session.prompt({ path: { id: sid }, body }) }
+    try { res = await client.session.prompt({ path: { id: sid }, body, ...q }) }
     catch (e) { dlog(`prompt failed: ${e?.message || e}`) }
     const r = unwrap(res)
     let text = partsText(r?.parts ?? r?.info?.parts ?? [])
@@ -175,9 +180,52 @@ async function runChildSession(client, { prompt, agent, model, title }) {
   }
 }
 
+// ---- worktree isolation ------------------------------------------------------
+// `agent(prompt, { isolation: "worktree" })` — the same option Claude Code's Workflow
+// takes. Parallel editors in one tree lose each other's writes (process 8, one writer per
+// file), so each isolated agent gets its own branch + worktree off the root's HEAD, and
+// the files it changed are recorded for `overlaps()`. A worktree with no change is
+// removed with its branch; one with changes is KEPT for the parent to review and merge —
+// the runtime never merges, commits, or deletes work. `git(argv, cwd)` is injected by the
+// plugin so this file stays pure and testable. The worktree has no untracked files from
+// the root (no node_modules, no .env): an agent that must run the project installs first.
+const slug = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "agent"
+
+export async function isolate(git, root, name) {
+  if (typeof git !== "function") throw new Error("worktree isolation unavailable — no git executor")
+  if (!root) throw new Error("worktree isolation unavailable — unknown working dir")
+  const base = (await git(["rev-parse", "HEAD"], root)).trim()
+  const branch = `geneseed-wf/${name}`
+  const dir = path.join(os.tmpdir(), "geneseed-wf", name)
+  await git(["worktree", "add", "-b", branch, dir, base], root)
+  return { dir, branch, base }
+}
+
+export async function changedFiles(git, w) {
+  const lines = (out) => String(out).split("\n").map((l) => l.trim()).filter(Boolean)
+  const tracked = lines(await git(["diff", "--name-only", w.base], w.dir))
+  const untracked = lines(await git(["ls-files", "--others", "--exclude-standard"], w.dir))
+  return [...new Set([...tracked, ...untracked])].sort()
+}
+
+// Files more than one isolated agent changed — the conflicts a merge would otherwise
+// settle by whoever landed last. [{ file, labels }], sorted by file.
+export function overlaps(worktrees) {
+  const by = new Map()
+  for (const w of worktrees || []) for (const f of w.files || []) {
+    if (!by.has(f)) by.set(f, [])
+    by.get(f).push(w.label)
+  }
+  return [...by].filter(([, l]) => l.length > 1).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([file, labels]) => ({ file, labels }))
+}
+
 // ---- the runtime ------------------------------------------------------------
 export function createRuntime(ctx) {
-  const { client, directory, worktree, log: sink } = ctx
+  const { client, directory, worktree, log: sink, git } = ctx
+  const root = worktree || directory
+  const runTag = slug(ctx.runId || "run")
+  const worktrees = []
   const args = ctx.args || {}
   const cap = ctx.concurrency || concurrencyCap()
   const limit = createLimiter(cap)
@@ -202,7 +250,30 @@ export function createRuntime(ctx) {
   async function spawn(prompt, opts) {
     return limit(() => runChildSession(client, {
       prompt, agent: opts.agent, model: opts.model, title: `geneseed-wf:${opts.label}`,
+      directory: opts.directory,
     }))
+  }
+
+  // Git calls are serialised: concurrent `worktree add -b` calls contend for the same ref
+  // and worktree locks, and a lost lock fails an agent that did nothing wrong.
+  const gitQ = createLimiter(1)
+  const g = typeof git === "function" ? (argv, cwd) => gitQ(() => git(argv, cwd)) : undefined
+
+  // An isolated agent that changed nothing has its worktree and branch released; one that
+  // changed files is KEPT and recorded. A failed release is logged, never thrown.
+  async function settle(w, label) {
+    let files
+    try { files = await changedFiles(g, w) }
+    catch (e) { emit(`  ⚠ ${label}: could not list changes — worktree kept at ${w.dir}: ${e?.message || e}`); return }
+    if (files.length) {
+      worktrees.push({ label, dir: w.dir, branch: w.branch, base: w.base, files })
+      emit(`  ⎇ ${label}: ${files.length} file(s) changed — kept at ${w.dir} (branch ${w.branch})`)
+      return
+    }
+    try {
+      await g(["worktree", "remove", w.dir], root)
+      await g(["branch", "-D", w.branch], root)
+    } catch (e) { emit(`  ⚠ ${label}: could not release unchanged worktree — ${e?.message || e}`) }
   }
 
   async function agent(prompt, opts = {}) {
@@ -213,8 +284,21 @@ export function createRuntime(ctx) {
     agentCount++
     const label = opts.label || String(prompt).slice(0, 40)
     emit(`· agent: ${label}`)
+    if (opts.isolation !== "worktree") return runAgent(prompt, { ...opts, label })
+    // The worktree wraps EVERY attempt, schema retries included — a retry that ran in the
+    // shared tree would undo the isolation it was asked for.
+    let w
+    try { w = await isolate(g, root, `${runTag}-${agentCount}-${slug(label)}`) }
+    catch (e) { emit(`✗ agent failed: ${label} — ${e?.message || e}`); return null }
+    emit(`  ⎇ ${label}: worktree ${w.dir}`)
+    try { return await runAgent(prompt, { ...opts, label, directory: w.dir }) }
+    finally { await settle(w, label) }
+  }
+
+  async function runAgent(prompt, opts) {
+    const { label } = opts
     let out
-    try { out = await spawn(prompt, { ...opts, label }) }
+    try { out = await spawn(prompt, opts) }
     catch (e) { emit(`✗ agent failed: ${label} — ${e?.message || e}`); return null }
     spent += out.usage?.output || 0
     if (!opts.schema) return out.text
@@ -270,7 +354,13 @@ export function createRuntime(ctx) {
 
   return {
     agent, parallel, pipeline, phase, log, budget, args, directory, worktree,
-    _stats: () => ({ agentCount, spent, cap, phases: [...phases], trace: [...trace] }),
+    // Isolated agents that changed something, and the files two or more of them touched.
+    worktrees: () => worktrees.map((w) => ({ ...w, files: [...w.files] })),
+    overlaps: () => overlaps(worktrees),
+    _stats: () => ({
+      agentCount, spent, cap, phases: [...phases], trace: [...trace],
+      worktrees: worktrees.map((w) => ({ ...w, files: [...w.files] })), overlaps: overlaps(worktrees),
+    }),
   }
 }
 

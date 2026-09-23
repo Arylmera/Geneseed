@@ -17,6 +17,7 @@
 // Quiet by default; GENESEED_DEBUG=1 logs to stderr. GENESEED_WORKFLOWS_DIR overrides
 // where saved workflows are loaded from.
 
+import { execFile } from "node:child_process"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -63,6 +64,17 @@ function nowStamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
 }
 
+// The runtime's git executor, for `isolation: "worktree"`. argv only, never a shell string:
+// branch and directory names derive from agent labels a script author wrote.
+function git(argv, cwd) {
+  return new Promise((resolve, reject) => {
+    execFile("git", argv, { cwd, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(`git ${argv[0]}: ${String(stderr || err.message).trim()}`))
+      else resolve(String(stdout))
+    })
+  })
+}
+
 function safeJson(v) {
   try { return JSON.stringify(v, null, 2) } catch { return String(v) }
 }
@@ -73,7 +85,22 @@ function summarize(name, result, stats, tracePath) {
     (stats.phases.length ? `, phases: ${stats.phases.join(" → ")}` : "")
   let body = safeJson(result)
   if (body.length > 2000) body = body.slice(0, 2000) + `\n… (truncated — full result in ${tracePath})`
-  return `${head}\n\nResult:\n${body}\n\nTrace: ${tracePath}`
+  return `${head}\n\nResult:\n${body}${isolationReport(stats)}\n\nTrace: ${tracePath}`
+}
+
+// Kept worktrees are work awaiting review, and an overlap is a conflict awaiting ONE
+// merger (process 8) — both are said out loud, never left for the trace to hold.
+function isolationReport(stats) {
+  const kept = stats.worktrees || []
+  if (!kept.length) return ""
+  const lines = ["", "", `Worktrees kept (${kept.length}) — review and merge them yourself; nothing was merged:`]
+  for (const w of kept) lines.push(`- ${w.label}: ${w.branch} at ${w.dir} — ${w.files.length} file(s)`)
+  const over = stats.overlaps || []
+  if (over.length) {
+    lines.push(`CONFLICTS — ${over.length} file(s) changed by more than one agent; merge these by hand or through one merge agent:`)
+    for (const o of over) lines.push(`- ${o.file}: ${o.labels.join(", ")}`)
+  }
+  return lines.join("\n")
 }
 
 async function writeTrace(rootDir, runId, lines) {
@@ -142,7 +169,7 @@ export const GeneseedWorkflow = async (ctx) => {
     try { ({ createRuntime } = await import(pathToFileURL(path.join(WORKFLOWS_DIR, "_runtime.js")).href + "?t=" + Date.now())) }
     catch (e) { return `Workflow runtime unavailable: ${e?.message || e}` }
 
-    const rt = createRuntime({ client, directory, worktree, args: normalizeArgs(argv?.args), log: sink })
+    const rt = createRuntime({ client, directory, worktree, git, runId, args: normalizeArgs(argv?.args), log: sink })
     let result, failed = null
     try { result = await wf.run(rt) }
     catch (e) { failed = e; sink(`✗ workflow error: ${e?.stack || e?.message || e}`) }
@@ -152,7 +179,7 @@ export const GeneseedWorkflow = async (ctx) => {
     if (!failed) sink(`# result:\n${safeJson(result)}`)
     const tracePath = await writeTrace(rootDir, runId, lines)
 
-    if (failed) return `Workflow "${name}" failed: ${failed?.message || failed}\nTrace: ${tracePath}`
+    if (failed) return `Workflow "${name}" failed: ${failed?.message || failed}${isolationReport(stats)}\nTrace: ${tracePath}`
     return summarize(name, result, stats, tracePath)
   }
 
