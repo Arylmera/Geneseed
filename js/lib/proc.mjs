@@ -20,9 +20,11 @@
  * CAPTURING SPAWNS ONLY, and the asymmetry is deliberate. The rule was measured on Windows:
  * a process that sets `STARTF_USESTDHANDLES` only when a stream is redirected gives an
  * INHERITING child spawned with `CREATE_NO_WINDOW` a fresh hidden console and discards
- * everything it prints — `geneseed build > log.txt` wrote an empty file. libuv always passes
- * the handles explicitly, so the flag on an inheriting spawn would be harmless here; it stays
- * off anyway, because an inheriting child of a console-owning parent shows no window in the
- * first place, so it would buy nothing and re-open a failure mode already paid for once.
+ * everything it prints — `geneseed build > log.txt` wrote an empty file. That was Python's
+ * `CREATE_NO_WINDOW` creation flag. Node's `windowsHide` is a different mechanism, and libuv
+ * always passes the handles explicitly, so on an INHERITING spawn it is harmless: the child
+ * writes to the parent's handles. A few inheriting sites set it (`js/hosts/link.mjs`,
+ * `js/maintain/update.mjs`) and are correct — `tests/unit/spawn_hygiene.test.mjs` explains why
+ * it asserts no inverse rule.
  */
 export const NO_WINDOW = { windowsHide: process.platform === 'win32' };

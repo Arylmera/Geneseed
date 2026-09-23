@@ -17,8 +17,8 @@
 //      module lives at `js/<domain>/<name>.mjs` now, so a `js/<name>.mjs` mention is a pointer at
 //      nothing. This is the shape the audit found 173 of.
 //
-// THE HISTORICAL RECORDS ARE EXEMPT, and that is not a loophole: `CHANGELOG.md`,
-// `docs/design-history.md` and `tests/ported.json` are append-only accounts of changes that
+// THE HISTORICAL RECORDS ARE EXEMPT, and that is not a loophole: `CHANGELOG.md` and
+// `docs/design-history.md` are append-only accounts of changes that
 // happened, written with the names the code had at the time. Scrubbing a history to satisfy a
 // grep deletes the record OF the change. `tests/unit/no_python.test.mjs` spells the same
 // exemption for the same reason, and reached it independently.
@@ -33,7 +33,7 @@ import { moduleMapProblems } from '../../js/inspect/checks-repo.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
-const RECORDS = new Set(['CHANGELOG.md', 'docs/design-history.md', 'tests/ported.json']);
+const RECORDS = new Set(['CHANGELOG.md', 'docs/design-history.md']);
 
 /**
  * The frozen corpora, exempt for a HARDER reason than the records are.

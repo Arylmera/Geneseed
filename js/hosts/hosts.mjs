@@ -26,6 +26,9 @@ export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
 /** The user's own per-install exclusion list; `js/build/stubs.mjs` seeds it, this file reads it. */
 export const EXCLUDES_FILE = 'excludes.json';
 
+/** The gate ledger inside an install: the hooks append to it, `status` counts it. */
+export const GATE_LEDGER = path.join('notebook', 'gates.jsonl');
+
 /**
  * `sovereign_bypass` — the user's own excludes.json, read on EVERY hook call so an edit
  * takes effect without a re-emit. Every failure mode degrades to false: a hook must never

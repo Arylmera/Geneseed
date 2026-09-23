@@ -127,7 +127,7 @@ function bodyExcludeRules(body) {
 const splitWords = (s) => s.split(new RegExp(`[${WHITESPACE}]+`)).filter(Boolean);
 
 /** Today's date, LOCAL (not UTC) — this is a user-facing date, not a wire timestamp. */
-export function todayIso(d = new Date()) {
+function todayIso(d = new Date()) {
   const p2 = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
@@ -278,13 +278,13 @@ const rulesPath = (state) => path.join(state.target, RULES_FILE);
  * `max(ids) + 1`. Widening this to match would only move the gap one line down, to whatever
  * parses the captured digits back into a number.
  */
-export const RULE_HEAD_RE = new RegExp(
+const RULE_HEAD_RE = new RegExp(
   `^##[${WHITESPACE}]+R(\\d+)[${WHITESPACE}]*[—–-]+[${WHITESPACE}]*`
   + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
 );
 
 /** Advisory only; nothing blocks past it. */
-export const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
+const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
 
 const META_RE = new RegExp(`^\\((.+)\\)[${WHITESPACE}]*$`);
 

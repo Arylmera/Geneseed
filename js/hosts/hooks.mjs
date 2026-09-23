@@ -41,7 +41,7 @@
  * and every file left behind. Absolute rather than compared is what let it survive the deletion
  * of the implementation it was once compared against.
  */
-import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSync,
+import { existsSync, statSync, readFileSync, readdirSync, mkdirSync,
   appendFileSync, writeFileSync }
   from 'node:fs';
 import path from 'node:path';
@@ -54,7 +54,9 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
 // spawns. So the resolver has one owner in `js/hosts/hosts.mjs` rather than a second copy — and
 // with it went this file's private `opencodeConfigDir`, whose only caller it was.
-import { resolveMemoryDir, expanduser, sovereignBypass } from './hosts.mjs';
+import {
+  GATE_LEDGER, resolveMemoryDir, resolvePath, sovereignBypass,
+} from './hosts.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
@@ -86,32 +88,8 @@ const ROOT = path.resolve(import.meta.dirname, '../..');
 // call. For the two GATES that containment is not enough, and `guardGate` below is the
 // contract: these verbs exit 0 and signal on stdout, so "the gate blew up" and "the gate
 // found nothing" would be the SAME observation to Claude — a crash would be a silent allow.
-// A gate that cannot evaluate a call therefore asks, and says why. `resolvePath` just below
-// is the THIRD copy of a primitive `js/hosts/hosts.mjs` also exports, and is the next item
-// in this series.
-
-/**
- * `Path(p).resolve()` — absolute, symlinks followed, and the filesystem's OWN casing.
- *
- * `realpathSync` throws on a path that does not exist, which is routine here (an
- * `excludes.json` may name a folder that was deleted), so the existing prefix is
- * canonicalised and the rest appended verbatim — `resolve(strict=False)`'s behaviour.
- */
-function resolvePath(p) {
-  let cur = path.resolve(expanduser(p));
-  const tail = [];
-  for (;;) {
-    try {
-      return tail.length ? path.join(realpathSync.native(cur), ...tail)
-        : realpathSync.native(cur);
-    } catch {
-      const parent = path.dirname(cur);
-      if (parent === cur) return path.resolve(expanduser(p));
-      tail.unshift(path.basename(cur));
-      cur = parent;
-    }
-  }
-}
+// A gate that cannot evaluate a call therefore asks, and says why. `resolvePath` comes from
+// `js/hosts/hosts.mjs`, which this module already imports — it had kept a private copy.
 
 // NOT imported from `js/lib/fs.mjs` (the owner everywhere else) — hot path, no new import cost.
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -600,9 +578,6 @@ const BOB_DENY_EXIT = 2;
  * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
  */
 const BLOCK_RULES = new Set(['law-1', 'law-4']);
-
-/** Where the gate ledger lives inside an install: the notebook is the agent's own, gitignored space. */
-export const GATE_LEDGER = path.join('notebook', 'gates.jsonl');
 
 /**
  * THE GATE LEDGER — one JSON line per ask, nothing per defer.

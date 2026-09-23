@@ -11,7 +11,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { SRC } from '../build/source.mjs';
-import { comparePaths, normcase } from '../lib/paths.mjs';
+import { comparePaths, within } from '../lib/paths.mjs';
 import { isDir, isFile } from '../lib/fs.mjs';
 import { has } from '../lib/json.mjs';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
@@ -41,19 +41,8 @@ export function stripCode(text) {
   return text.replace(FENCE_RE, '').replace(COMMENT_RE, '').replace(INLINE_CODE_RE, '');
 }
 
-/**
- * `_harness_core._within` — `child.relative_to(parent)` without the exception.
- *
- * Segment-wise and through `normcase`, because that is what `PurePath` comparison does: a
- * bundle at `C:\Temp\X` contains `c:\temp\x\a.md` on Windows and does not on Linux. A
- * `startsWith` on the raw strings would additionally call `/tmp/bundle2` a child of
- * `/tmp/bundle`, which is the classic version of this bug.
- */
-export function within(child, parent) {
-  const c = normcase(child).split(/[\\/]/);
-  const p = normcase(parent).split(/[\\/]/);
-  return p.length <= c.length && p.every((seg, i) => c[i] === seg);
-}
+// `within` — owned by js/lib/paths.mjs; re-exported for this module's importers.
+export { within };
 
 /** `sorted(d.glob(pat))`, or `[]` for a directory that is not there. */
 export function globSorted(dir, filter) {

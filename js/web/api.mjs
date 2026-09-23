@@ -201,7 +201,7 @@ export function specDesc(fm, body) {
  * plumbing rather than prose, which is what makes a deployed entry the same shape as a
  * source-rendered one and every consumer indifferent to the origin.
  */
-export function specEntries(root, nested) {
+function specEntries(root, nested) {
   const out = [];
   if (!isDir(root)) return out;
   let names;
@@ -238,7 +238,7 @@ export function specEntries(root, nested) {
  * the walk. So the catalogue is always whole, and which packs this INSTALL built in comes from
  * its own carrier via `doctrinesForBuild`, which resolves "no marker" to every pack.
  */
-export function deployedInventory(state) {
+function deployedInventory(state) {
   const render = tuiInventory(state.theme, doctrinesForBuild(state.target),
     excludedRulesOfDir(state.target));
   const registry = loadRegistry();
@@ -259,7 +259,7 @@ export function deployedInventory(state) {
 }
 
 /** The deployed record when there is one, else the source render. */
-export function inventoryFor(state) {
+function inventoryFor(state) {
   return deployed(state) ? deployedInventory(state) : tuiInventory(state.theme);
 }
 
@@ -305,7 +305,7 @@ export function memoryItems(state) {
   });
 }
 
-export function notebookItems(state) {
+function notebookItems(state) {
   const d = notebookDir(state);
   if (!isDir(d)) return [];
   return globMd(d).map((n) => ({
@@ -319,7 +319,7 @@ const CONFIG_META = {
   'wiki.jsonc': ['Wiki manifest', 'your machine-wide knowledge base(s)'],
 };
 
-export function configItems(state) {
+function configItems(state) {
   const out = [];
   for (const fname of ['context.json', 'wiki.jsonc']) {
     const p = path.join(state.target, fname);
@@ -331,7 +331,7 @@ export function configItems(state) {
   return out;
 }
 
-export const WIKI_FILE_CAP = 5000;
+const WIKI_FILE_CAP = 5000;
 
 /**
  * `resolvePath` for a path that came out of a HAND-MAINTAINED manifest — `null`, never a throw.
@@ -453,7 +453,7 @@ export function wikiItems(state) {
 }
 
 /** One page by `<wiki>:<relpath>`, never outside the vault. */
-export function apiWikiItem(state, name) {
+function apiWikiItem(state, name) {
   const at = name.indexOf(':');
   const wname = at < 0 ? name : name.slice(0, at);
   const rel = (at < 0 ? '' : name.slice(at + 1))
@@ -500,7 +500,7 @@ function flatName(name) {
   }
 }
 
-export const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
+const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
 /**
  * `[[name]]` matched against known agent and skill names.
@@ -749,9 +749,9 @@ export function apiInstalls(state) {
 
 /** Beside the deployed AGENT.md. */
 export const PROFILE_FILE = 'PROFILE.md';
-export const profilePath = (state) => path.join(state.target, PROFILE_FILE);
+const profilePath = (state) => path.join(state.target, PROFILE_FILE);
 
-export function apiProfile(state) {
+function apiProfile(state) {
   const p = profilePath(state);
   if (!isFile(p)) return { exists: false, path: p, text: '', fingerprint: '' };
   const text = readMaybe(p) ?? '';

@@ -8,6 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed — code cleanup
+
+- 24 exports nothing imported are module-private now; `GATE_LEDGER` has one owner
+  (`js/hosts/hosts.mjs`) instead of a hard-coded copy in `status`; `hooks.mjs` imports
+  `resolvePath` instead of keeping a third copy; `within` has one owner (`js/lib/paths.mjs`).
+- Docblocks that contradicted the code are corrected: the hide-window rule for inheriting
+  spawns, the JSONC trailing-comma pass (it is string-aware), the deleted `emit.mjs`, and two
+  package-manifest reasons (a false "js/web/docs.mjs serves ROOT/docs", hand-typed sizes).
+
 ### Changed — performance
 
 - **Rendering reads each source file once per operation, and hashes the source tree once.**
