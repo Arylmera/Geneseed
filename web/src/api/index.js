@@ -54,7 +54,7 @@ async function action(name, opts) {
   try {
     return await post(`/api/actions/${name}`, opts || {})
   } catch (e) {
-    if (e.status === HTTP_CONFLICT) throw new Error('An action is already running.')
+    if (e.status === HTTP_CONFLICT) throw new Error('An action is already running.', { cause: e })
     throw e
   }
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
@@ -222,10 +222,13 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
   const deployedKey = deployedRules.join(',')
   const [picked, setPicked] = useState([])
   // Re-sync on the VALUE, never on the payload's identity: `data` is a fresh object on every
-  // refetch, so an identity dependency would discard a half-made selection.
-  useEffect(() => {
+  // refetch, so an identity dependency would discard a half-made selection. Adjusted during
+  // render against the last-synced key (React's "adjust state on prop change"), not in an effect.
+  const [syncedKey, setSyncedKey] = useState('')
+  if (syncedKey !== deployedKey) {
+    setSyncedKey(deployedKey)
     setPicked(deployedKey ? deployedKey.split(',') : [])
-  }, [deployedKey])
+  }
 
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />

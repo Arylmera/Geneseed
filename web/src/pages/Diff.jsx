@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { useAsync } from '../hooks/useAsync.js'
@@ -25,12 +25,15 @@ export default function Diff({ onMutated, dataRev }) {
   const [open, setOpen] = useState(() => new Set())
 
   // Seed the selection (none) and the expanded set (all files) whenever a fresh
-  // diff loads — including after a restore or export refetch.
-  useEffect(() => {
-    if (!data) return
+  // diff loads — including after a restore or export refetch. Adjusted during
+  // render against the last-seen payload rather than in an effect, so the fresh
+  // diff never paints once with the previous diff's selection.
+  const [seeded, setSeeded] = useState(null)
+  if (data && data !== seeded) {
+    setSeeded(data)
     setSel(new Set())
     setOpen(new Set(data.files.map((f) => f.rel)))
-  }, [data])
+  }
 
   const toggle = (rel) =>
     setSel((s) => {

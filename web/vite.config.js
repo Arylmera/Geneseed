@@ -36,12 +36,16 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         // React never changes between our builds, so give it its own hashed
         // chunk: it then stays in the immutable /assets/ cache across upgrades
         // instead of being re-downloaded inside the app chunk every time.
-        manualChunks: { react: ['react', 'react-dom', 'react-dom/client'] },
+        // Vite 8 (Rolldown) dropped the object form of `manualChunks`; `scheduler`
+        // is named because the object form used to pull react-dom's deps in too.
+        codeSplitting: {
+          groups: [{ name: 'react', test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/ }],
+        },
       },
     },
   },

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
@@ -24,19 +24,18 @@ export default function Profile() {
   // opens straight in the editor.
   const [mode, setMode] = useState(null)
   // Set by a refused save: the next load updates the fingerprint and leaves the text.
-  const keepDraft = useRef(false)
+  const [keepDraft, setKeepDraft] = useState(false)
 
-  // Sync the editor when a load (or reload) lands.
-  useEffect(() => {
-    if (!data) return
+  // Sync the editor when a load (or reload) lands — during render against the
+  // last-seen payload, not in an effect, so the editor never paints stale text.
+  const [seen, setSeen] = useState(null)
+  if (data && data !== seen) {
+    setSeen(data)
     setFingerprint(data.fingerprint || '')
-    if (keepDraft.current) {
-      keepDraft.current = false
-    } else {
-      setText(data.text || '')
-    }
+    if (keepDraft) setKeepDraft(false)
+    else setText(data.text || '')
     setMode((m) => m || ((data.text || '').trim() ? 'view' : 'edit'))
-  }, [data])
+  }
 
   const dirty = !!data && text !== (data.text || '')
   // Leaving with an unsaved edit asks first — the browser's own prompt.
@@ -64,7 +63,7 @@ export default function Profile() {
         setMode('view')
         reload()
       } else {
-        keepDraft.current = true
+        setKeepDraft(true)
         setNotice(
           `${res.detail || 'PROFILE.md changed on disk since you opened it.'} Your edit is ` +
             'kept — Save again to replace the newer version with it.',

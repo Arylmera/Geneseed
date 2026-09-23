@@ -33,19 +33,16 @@ export default function BootSplash({ ready, onDone }) {
   const [minElapsed, setMinElapsed] = useState(false)
   const [fading, setFading] = useState(false)
 
+  // A zero floor still goes through the timer: the flag is set from a callback,
+  // never synchronously inside the effect (react-hooks/set-state-in-effect).
   useEffect(() => {
-    const ms = minDisplayMs()
-    if (!ms) {
-      setMinElapsed(true)
-      return undefined
-    }
-    const t = setTimeout(() => setMinElapsed(true), ms)
+    const t = setTimeout(() => setMinElapsed(true), minDisplayMs())
     return () => clearTimeout(t)
   }, [])
 
-  useEffect(() => {
-    if (ready && minElapsed) setFading(true)
-  }, [ready, minElapsed])
+  // Latched during render, not in an effect: once fading, `ready` flickering back
+  // (an overview retry clearing its error) must not un-fade the splash.
+  if (ready && minElapsed && !fading) setFading(true)
 
   // Belt and braces: animationend is the normal dismissal, but it never fires
   // when animations are disabled (prefers-reduced-motion) or the tab is
