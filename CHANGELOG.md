@@ -8,6 +8,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed — toolchain
+
+- **Web console toolchain on current majors** (dev-only; React stays 18): vite 5 → 8, vitest
+  2 → 5, jsdom 24 → 29, `@vitejs/plugin-react` 4 → 6, eslint / `@eslint/js` 9 → 10 and globals
+  15 → 17 (the root's majors), `eslint-plugin-react-hooks` 5 → 7. `npm audit` in `web/`: 12
+  dev-only advisories (1 critical, in vitest 2) → 0. The React-Compiler rules that v7 brings
+  flagged setState-in-effect prop resets in five places; they now adjust state during render,
+  so a fresh payload never paints once with the previous one's selection. `web/dist` rebuilt
+  (gzip js+css ~144.6 → ~142.0 KB).
+- **Vendored skills carry their license text.** `daydream` now ships upstream's MIT `LICENSE`.
+  `react-view-transitions` has none to copy — upstream declares MIT in its README only, which
+  its `VENDOR.md` now says. Its upstream repo `README.md` is no longer copied into every install;
+  its `AGENTS.md` stays, because the skill's `SKILL.md` points the agent at it.
+
 ### Changed — architecture
 
 - **The generator driver lives in `js/build/driver.mjs`.** Flag parsing, the nine emit targets
