@@ -34,7 +34,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
-import { main as driverMain } from '../../bin/build-driver.mjs';
+import { main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,

@@ -32,7 +32,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
-import { emitGlobalInto } from '../../bin/build-driver.mjs';
+import { emitGlobalInto } from '../build/driver.mjs';
 import {
   ROOT, discoverNames, knownRuleIds, PACK_ORDER,
 } from '../build/source.mjs';

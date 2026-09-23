@@ -40,7 +40,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } fro
 import os from 'node:os';
 import path from 'node:path';
 
-import { emitGlobalInto } from '../../bin/build-driver.mjs';
+import { emitGlobalInto } from '../build/driver.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, footprintOfDir, modeOfDir, postureOfDir,

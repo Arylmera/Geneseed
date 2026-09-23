@@ -30,7 +30,7 @@
  * keep the Doctor page's per-check cards a parameter rather than a rewrite.
  */
 import path from 'node:path';
-import { emitGlobalInto, emitProjectInto, main as driverMain } from '../../bin/build-driver.mjs';
+import { emitGlobalInto, emitProjectInto, main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
 import { installedDefaults, themeFiles } from '../hosts/installs.mjs';

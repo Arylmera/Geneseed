@@ -7,7 +7,7 @@
  * reached — see its row in `tests/ported.json`.
  */
 import path from 'node:path';
-import { buildInto, emitGlobalInto, emitProjectInto } from '../../bin/build-driver.mjs';
+import { buildInto, emitGlobalInto, emitProjectInto } from '../build/driver.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut, printErr, readText } from '../lib/fs.mjs';
