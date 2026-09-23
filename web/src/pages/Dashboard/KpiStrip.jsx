@@ -1,6 +1,7 @@
 import React from 'react'
 import { go } from '../../lib/router.js'
 import { editCount } from '../../lib/format.js'
+import { CountUp } from '../../lib/motion.js'
 
 // One readout band instead of four identical metric cards. The three roster
 // counts are links into their ledgers; local edits — the only number that asks
@@ -21,7 +22,9 @@ export default function KpiStrip({ overview }) {
         const val = counts[s.key]
         return (
           <a className="kseg" key={s.key} href={s.hash} title={`Open ${s.label}`}>
-            <span className={'kseg-n' + (val === 0 ? ' zero' : '')}>{val ?? '—'}</span>
+            <span className={'kseg-n' + (val === 0 ? ' zero' : '')}>
+              {val == null ? '—' : <CountUp value={val} />}
+            </span>
             <span className="kseg-l">{s.label}</span>
           </a>
         )
@@ -32,7 +35,9 @@ export default function KpiStrip({ overview }) {
         onClick={() => go('#/diff')}
         title="Open changes"
       >
-        <span className={'kseg-n' + (edits === 0 ? ' zero' : '')}>{edits}</span>
+        <span className={'kseg-n' + (edits === 0 ? ' zero' : '')}>
+          <CountUp value={edits} />
+        </span>
         <span className="kseg-l">Local edits</span>
         {edits > 0 && <span className="delta up">&#9650;</span>}
       </button>

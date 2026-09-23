@@ -931,7 +931,8 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 /* fade/stagger entrance — transform-only so content is NEVER hidden at rest
    (a paused/offscreen iframe holds frame 0; opacity must stay visible there) */
 @keyframes rise { from { transform: translateY(9px); } to { transform: none; } }
-.rise { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
+.rise { animation: rise .5s cubic-bezier(.2,.7,.2,1) both;
+  animation-delay: calc(var(--i, 0) * 50ms); }
 
 /* Honour the OS "reduce motion" setting across the whole UI: near-instant
    animations + transitions (kept non-zero so animation/transition-end events still
@@ -1012,6 +1013,10 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .toast { position: fixed; right: 18px; bottom: 56px; z-index: 40; max-width: 380px;
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-pop); padding: 14px 16px; font-size: 13px; }
+/* enters from just below its resting place; @starting-style needs no JS and no library,
+   and the global reduced-motion rule already collapses the transition to nothing */
+.toast { transition: opacity .22s cubic-bezier(.22,1,.36,1), transform .22s cubic-bezier(.22,1,.36,1); }
+@starting-style { .toast { opacity: 0; transform: translateY(10px); } }
 .toast.err { border-color: color-mix(in srgb, var(--bad) 45%, var(--line-2)); }
 .toast.info { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); }
 
@@ -1059,6 +1064,12 @@ dialog.confirm { background: var(--surface); color: var(--text);
   border: 1px solid var(--line-2); border-radius: var(--r-lg);
   box-shadow: var(--shadow-pop); padding: 20px 22px; max-width: 400px; }
 dialog.confirm::backdrop { background: rgba(0,0,0,.55); }
+dialog.confirm[open] { transition: opacity .2s cubic-bezier(.22,1,.36,1), transform .2s cubic-bezier(.22,1,.36,1); }
+dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
+@starting-style {
+  dialog.confirm[open] { opacity: 0; transform: scale(.96) translateY(6px); }
+  dialog.confirm[open]::backdrop { opacity: 0; }
+}
 .confirm-title { margin: 0 0 8px; font-family: var(--font-display);
   font-weight: 600; font-size: 17px; }
 .confirm-body { color: var(--text-2); font-size: 13px; line-height: 1.5; }
@@ -3480,6 +3491,9 @@ a.rail-item.active { color: var(--text); }
 .cm-edge { fill: none; stroke: var(--line-3); stroke-width: 1.5; }
 .cm-edge-gov { fill: none; stroke: var(--line-2); stroke-width: 1.2; stroke-dasharray: 4 5; }
 .cm-node { cursor: pointer; }
+/* the map's entrance scales each node about its OWN centre (lib/motion.js drives it);
+   an SVG element's default origin is the canvas corner, which would fly them in from 0,0 */
+.cmap .cm-node, .cmap .cm-mini > g { transform-box: fill-box; transform-origin: center; }
 .cm-node:hover circle { stroke-width: 2.6; }
 .cm-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cm-hub-disc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }

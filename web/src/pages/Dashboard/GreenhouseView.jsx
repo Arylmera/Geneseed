@@ -1,9 +1,11 @@
-import React from 'react'
+import React, { useLayoutEffect, useRef } from 'react'
+import { animate, svg, utils } from 'animejs'
 import { Icon } from '../../components/Icon.jsx'
 import { editCount } from '../../lib/format.js'
 import { bucketJobsByDay } from '../../lib/jobBuckets.js'
 import { headlineFor } from '../../lib/headlines.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
+import { CountUp, motionOK, settle } from '../../lib/motion.js'
 
 // Recent-activity panel: how many jobs to list, and how much of each job's first
 // output line to show as a preview.
@@ -19,8 +21,35 @@ const B_CATS = ['#2BB673', '#16A6A6', '#E8A23B', '#E07A5F', '#8E7DBE', '#5BD08A'
 // total under a caption; legend reads alongside the chart. The caption is a
 // prop so the same donut serves both the capability mix and the doctor-checks
 // readiness ring without mislabelling one as the other.
+//
+// The arcs SWEEP in, one after another clockwise, each taking its share of the sweep's
+// time — so the chart reads as one ring being filled, not as slices popping in. Keyed on
+// the values, so the doctor ring (which arrives empty and fills when the checks land)
+// sweeps again when its numbers do.
+const DONUT_SWEEP_MS = 650
 function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) {
   const total = segments.reduce((s, x) => s + x.value, 0) || 1
+  const arcs = useRef(null)
+  const sig = segments.map((x) => x.value).join(',')
+  useLayoutEffect(() => {
+    const paths = arcs.current?.querySelectorAll('path')
+    if (!paths?.length || !motionOK()) return
+    const fr = segments.filter((x) => x.value > 0).map((x) => x.value / total)
+    const at = fr.map((_, i) => fr.slice(0, i).reduce((a, b) => a + b, 0))
+    const drawn = svg.createDrawable(paths)
+    // Hidden BEFORE paint (this is a layout effect), not on the first animation frame —
+    // otherwise the full ring flashes for one frame before the sweep starts.
+    utils.set(drawn, { draw: '0 0' })
+    const anim = animate(drawn, {
+      draw: ['0 0', '0 1'],
+      duration: (_, i) => Math.max(DONUT_SWEEP_MS * fr[i], 60),
+      delay: (_, i) => DONUT_SWEEP_MS * at[i],
+      ease: 'linear',
+    })
+    return settle(anim, DONUT_SWEEP_MS)
+    // `sig` IS the segments' identity here; the array itself is rebuilt every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig])
   const r = size / 2 - stroke / 2
   const cx = size / 2
   const cy = size / 2
@@ -35,33 +64,35 @@ function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={stroke} />
-      {segments.map((seg, i) => {
-        const frac = seg.value / total
-        if (frac <= 0) return null
-        const start = (starts[i] / total) * 2 * Math.PI - Math.PI / 2
-        const end = ((starts[i] + seg.value) / total) * 2 * Math.PI - Math.PI / 2
-        const x1 = cx + r * Math.cos(start)
-        const y1 = cy + r * Math.sin(start)
-        const x2 = cx + r * Math.cos(end)
-        const y2 = cy + r * Math.sin(end)
-        const large = end - start > Math.PI ? 1 : 0
-        return (
-          <path
-            key={i}
-            d={`M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth={stroke}
-            strokeLinecap="butt"
-          >
-            <title>
-              {seg.label}: {seg.value}
-            </title>
-          </path>
-        )
-      })}
+      <g ref={arcs}>
+        {segments.map((seg, i) => {
+          const frac = seg.value / total
+          if (frac <= 0) return null
+          const start = (starts[i] / total) * 2 * Math.PI - Math.PI / 2
+          const end = ((starts[i] + seg.value) / total) * 2 * Math.PI - Math.PI / 2
+          const x1 = cx + r * Math.cos(start)
+          const y1 = cy + r * Math.sin(start)
+          const x2 = cx + r * Math.cos(end)
+          const y2 = cy + r * Math.sin(end)
+          const large = end - start > Math.PI ? 1 : 0
+          return (
+            <path
+              key={i}
+              d={`M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={stroke}
+              strokeLinecap="butt"
+            >
+              <title>
+                {seg.label}: {seg.value}
+              </title>
+            </path>
+          )
+        })}
+      </g>
       <text x={cx} y={cy - 4} textAnchor="middle" className="donut-c-num">
-        {total}
+        <CountUp value={total} duration={DONUT_SWEEP_MS} />
       </text>
       <text x={cx} y={cy + 16} textAnchor="middle" className="donut-c-cap">
         {caption}
@@ -325,7 +356,9 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
             </div>
           </div>
           <div className="b-stat-lead">
-            <span className="b-stat-big">{runsTotal}</span>
+            <span className="b-stat-big">
+              <CountUp value={runsTotal} />
+            </span>
             <span className="b-stat-cap">
               runs in the last 10 days · {pass}/{total} checks pass now
             </span>

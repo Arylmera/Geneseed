@@ -8,6 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added — web console motion
+
+- **The dashboard moves where motion carries meaning** (anime.js 4, bundled into `web/dist` like
+  React; the Node package stays zero-dependency). The germination ring's arc, bezel ticks and
+  percentage now run off one tween instead of an arc transition under a number that had already
+  jumped. KPI, genome and run counters count up, and count from the old value on a refresh, so a
+  change is seen moving. The Greenhouse donuts sweep clockwise, each arc taking its share of the
+  time. The Journal lens's constitution map enters hub, spokes, tiers, then governed nodes, once
+  per page load and only when scrolled into view. The toast and confirm dialog enter via CSS
+  `@starting-style`. Every JS animation checks `prefers-reduced-motion` (the global CSS rule cannot
+  reach inline styles) and completes on a timer where rAF never fires. Shell bundle +13 KB gzip.
+
 ### Changed — toolchain
 
 - **Web console toolchain on current majors** (dev-only; React stays 18): vite 5 → 8, vitest
