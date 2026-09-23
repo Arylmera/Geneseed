@@ -2,7 +2,7 @@ import React, { useMemo, useEffect } from 'react'
 import { api } from '../../api/index.js'
 import { go } from '../../lib/router.js'
 import { useAsync } from '../../hooks/useAsync.js'
-import { useHarness, HARNESSES } from '../../hooks/useHarness.js'
+import { useHarness, HARNESSES, docsHostOf } from '../../hooks/useHarness.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
@@ -58,7 +58,7 @@ function groupOfPage(menu, pageId) {
 }
 
 export default function Docs({ page, query, overview, onAction }) {
-  const [harness, setHarness] = useHarness()
+  const [harness, setHarness] = useHarness(docsHostOf(overview?.emit))
   const { data: menu, error } = useAsync(() => api.docs(harness), [harness])
   const pageId = page || defaultPageId(menu)
 

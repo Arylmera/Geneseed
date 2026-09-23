@@ -64,7 +64,7 @@ export default function Topbar({
       </div>
       <div className="topbar-spacer" />
       <HarnessSelector dataRev={dataRev} onSwitch={onSwitch} />
-      <Search value={query} onChange={onQuery} />
+      <Search value={query} onChange={onQuery} dataRev={dataRev} />
       {/* Icon-only buttons: `title` is a hover hint sighted mouse users get, so each
           also carries an aria-label — the Icon SVGs are aria-hidden and name nothing. */}
       <button

@@ -84,3 +84,24 @@ describe('Dashboard', () => {
     expect(screen.getByText(/Loading/)).toBeTruthy()
   })
 })
+
+describe('Dashboard with no overview', () => {
+  it('shows the load error and a retry instead of loading forever', () => {
+    // A failed first overview used to leave "Loading…" up for good (and the boot splash
+    // over it). The error is now surfaced with a way to try again.
+    const onRetry = vi.fn()
+    render(
+      <Dashboard
+        overview={null}
+        overviewError="HTTP 500"
+        onRetry={onRetry}
+        themes={themes}
+        setup={setup}
+        runs={runs}
+      />,
+    )
+    expect(screen.getByText(/Could not load the harness overview: HTTP 500/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(onRetry).toHaveBeenCalled()
+  })
+})

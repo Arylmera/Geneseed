@@ -5,12 +5,13 @@ import LineageView from './LineageView.jsx'
 import OperatorView from './OperatorView.jsx'
 import Onboarding from './Onboarding.jsx'
 import Loading from '../../components/Loading.jsx'
+import ErrorState from '../../components/ErrorState.jsx'
 import { resolveLayout } from '../../hooks/useLayout.js'
 
 // Dashboard ships in the eager shell chunk (it is the landing route), so only
 // the DEFAULT lens rides along. The alternative lenses are behind the layout
 // toggle most sessions never flip — lazy chunks, fetched on first use. Journal
-// pulls the ConstitutionMap and with it d3-force, the heaviest of the three.
+// pulls the ConstitutionMap, the heaviest of the three.
 const GreenhouseView = lazy(() => import('./GreenhouseView.jsx'))
 const OperatorHudView = lazy(() => import('./OperatorHudView.jsx'))
 const JournalView = lazy(() => import('./JournalView.jsx'))
@@ -27,6 +28,8 @@ const JournalView = lazy(() => import('./JournalView.jsx'))
 // each — so they stay live while a job streams instead of showing a stale snapshot.
 export default function Dashboard({
   overview,
+  overviewError,
+  onRetry,
   themes,
   setup,
   runs: jobs,
@@ -65,7 +68,17 @@ export default function Dashboard({
     }
   }, [lens, dataRev])
 
-  if (!overview) return <div className="loading">Loading&#8230;</div>
+  if (!overview)
+    return overviewError ? (
+      <div>
+        <ErrorState error={`Could not load the harness overview: ${overviewError}`} />
+        <button className="btn" onClick={onRetry}>
+          Retry
+        </button>
+      </div>
+    ) : (
+      <Loading />
+    )
 
   // Nothing deployed yet → onboard the user into a first deploy instead of
   // showing an empty, read-only dashboard.

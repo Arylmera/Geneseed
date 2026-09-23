@@ -78,8 +78,16 @@ export default function App() {
   const [accentMode, setAccentMode] = useAccentMode()
   const [layout, setLayout] = useLayout()
   // The splash plays on the first load of a browser session only; reloads and
-  // route round-trips within the same tab skip straight to the dashboard.
-  const [booting, setBooting] = useState(() => !window.sessionStorage.getItem('gs-booted'))
+  // route round-trips within the same tab skip straight to the dashboard. Storage can
+  // throw (blocked site data): then the splash simply plays, rather than the app failing
+  // to mount.
+  const [booting, setBooting] = useState(() => {
+    try {
+      return !window.sessionStorage.getItem('gs-booted')
+    } catch {
+      return true
+    }
+  })
   // Phone-width navigation. Above 720px the rail is always on screen and this
   // stays false; below it the rail is an off-canvas drawer this opens.
   const [navOpen, setNavOpen] = useState(false)
@@ -114,7 +122,7 @@ export default function App() {
 
   const onError = (e) =>
     setToast({ kind: e?.body?.kind || 'err', msg: e?.body?.message || e.message })
-  const { overview, themes, reload } = useOverview(onError)
+  const { overview, error: overviewError, themes, reload } = useOverview(onError)
   const [dataRev, setDataRev] = useState(0)
   // Soft refresh after a mutation: refetch the overview (dashboard accent + counts) and
   // bump a revision the install/MCP panels depend on — no full page reload, so no flash.
@@ -244,6 +252,8 @@ export default function App() {
               {route.view === 'dashboard' && (
                 <Dashboard
                   overview={overview}
+                  overviewError={overviewError}
+                  onRetry={reload}
                   themes={themes}
                   setup={setup}
                   runs={runs}
@@ -337,9 +347,13 @@ export default function App() {
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
       {booting && (
         <BootSplash
-          ready={!!overview}
+          ready={!!overview || !!overviewError}
           onDone={() => {
-            window.sessionStorage.setItem('gs-booted', '1')
+            try {
+              window.sessionStorage.setItem('gs-booted', '1')
+            } catch {
+              /* storage blocked — the splash plays again next load, nothing worse */
+            }
             setBooting(false)
           }}
         />

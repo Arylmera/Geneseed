@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
@@ -10,8 +10,9 @@ import Markdown from '../components/Markdown.jsx'
 // habits, register preferences. It never binds (precedence is Laws, then user-rules,
 // then this). A set-up profile opens as a rendered document; Edit switches to a
 // whole-file editor — no per-block structure. The save carries the fingerprint we
-// loaded; a 409 means an agent session edited the file first, and we reload instead
-// of clobbering its write.
+// loaded; a refusal means an agent session edited the file first. We reload to learn
+// the new fingerprint but KEEP the user's draft on screen — reloading used to replace
+// the textarea with the disk copy, silently discarding the edit being saved.
 
 export default function Profile() {
   const { data, error, loading, reload } = useAsync(() => api.profile(), [])
@@ -22,21 +23,35 @@ export default function Profile() {
   // null until first load: an already-written profile opens rendered, an empty one
   // opens straight in the editor.
   const [mode, setMode] = useState(null)
+  // Set by a refused save: the next load updates the fingerprint and leaves the text.
+  const keepDraft = useRef(false)
 
-  // Sync the editor when a load (or reload) lands. Keyed on fingerprint so a save's
-  // own reload doesn't stomp on-screen text with identical content.
+  // Sync the editor when a load (or reload) lands.
   useEffect(() => {
-    if (data) {
+    if (!data) return
+    setFingerprint(data.fingerprint || '')
+    if (keepDraft.current) {
+      keepDraft.current = false
+    } else {
       setText(data.text || '')
-      setFingerprint(data.fingerprint || '')
-      setMode((m) => m || ((data.text || '').trim() ? 'view' : 'edit'))
     }
-  }, [data && data.fingerprint])
+    setMode((m) => m || ((data.text || '').trim() ? 'view' : 'edit'))
+  }, [data])
+
+  const dirty = !!data && text !== (data.text || '')
+  // Leaving with an unsaved edit asks first — the browser's own prompt.
+  useEffect(() => {
+    if (!dirty) return undefined
+    const onLeave = (e) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onLeave)
+    return () => window.removeEventListener('beforeunload', onLeave)
+  }, [dirty])
 
   if (loading && !data) return <Loading />
   if (error) return <ErrorState error={error} />
-
-  const dirty = data && text !== (data.text || '')
 
   const save = async () => {
     setBusy(true)
@@ -49,7 +64,11 @@ export default function Profile() {
         setMode('view')
         reload()
       } else {
-        setNotice(res.detail || 'Could not save — reloading.')
+        keepDraft.current = true
+        setNotice(
+          `${res.detail || 'PROFILE.md changed on disk since you opened it.'} Your edit is ` +
+            'kept — Save again to replace the newer version with it.',
+        )
         reload()
       }
     } catch (e) {

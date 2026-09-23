@@ -8,6 +8,25 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed — web console
+
+- **A failed first load no longer hangs on the splash.** The boot splash waited on the overview
+  and the error toast rendered beneath it; a failure now lifts the splash and the dashboard shows
+  the error with a Retry.
+- **Search stays current**: the Spotlight index is dropped on every data revision (a build, a
+  deleted fact, an install switch) and on a docs-host change. MCP results open the Harness page,
+  where MCP wiring lives, not Settings.
+- **A refused Profile save keeps your draft** (it was replaced by the disk copy), the next Save
+  carries the new fingerprint, and leaving with unsaved edits asks first.
+- Blocked `sessionStorage` no longer stops the app mounting.
+- **Contrast**: `--text-3` clears WCAG AA (4.5:1) against its background and surface in every
+  skin — 19 of them were below it, the default dark skin at 3.9:1.
+- **Keyboard**: voice picks are buttons (Esc closes the list), and the dashboard's section rows
+  carry a real link.
+- The Docs host follows the deployed install when nothing is stored (Bob and Copilot read the
+  Claude Code pages). The unused `d3-force` dependency is gone; `docs/web-ui.md` describes the
+  rail as it is (no Specs view).
+
 ### Changed — the constitution
 
 - **Law IV**: a durable authorization the user gave counts, alongside per-act confirmation (the

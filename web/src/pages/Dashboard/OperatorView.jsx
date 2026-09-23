@@ -97,7 +97,11 @@ export default function OperatorView({ overview, setup, jobs }) {
                   v = overview.counts?.[k] ?? 0
                 return (
                   <tr key={k} className="clickable" onClick={() => go('#/section/' + k)}>
-                    <td className="name">{m.label}</td>
+                    <td className="name">
+                      <a href={'#/section/' + k} onClick={(e) => e.stopPropagation()}>
+                        {m.label}
+                      </a>
+                    </td>
                     <td className="muted">{m.desc}</td>
                     <td>
                       <div className="hbar">
