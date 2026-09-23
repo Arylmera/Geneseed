@@ -62,7 +62,7 @@ import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, copilotConfigDir, opencodeConfigDir, resolvePath,
-  resolveMemoryDir, sovereignBypass,
+  resolveMemoryDir, sovereignBypass, GATE_LEDGER,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
@@ -194,7 +194,7 @@ export function gateSummary(cfgDirs) {
     if (sovereignBypass(cfg)) standingDown.push(String(cfg));
     let raw;
     try {
-      raw = readFileSync(path.join(cfg, 'notebook', 'gates.jsonl'), 'utf8');
+      raw = readFileSync(path.join(cfg, GATE_LEDGER), 'utf8');
     } catch {
       continue;
     }

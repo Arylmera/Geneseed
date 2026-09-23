@@ -124,7 +124,7 @@ export function descOf(text) {
  * hosts collapse that table to a pointer (`hostCatalogsNatively`), so the trigger reached
  * no host at all. `skillDescription` below concatenates the two.
  */
-export function triggerOf(text) {
+function triggerOf(text) {
   const lines = text.split('\n');
   const start = lines.findIndex((ln) => /^\*\*Trigger:\*\*/.test(ln.trim()));
   if (start < 0) return '';
@@ -151,7 +151,7 @@ export function triggerOf(text) {
  * Cut at the last sentence end inside the cap, never mid-word.
  */
 const DESCRIPTION_CAP = 320;
-export function skillDescription(text) {
+function skillDescription(text) {
   const desc = descOf(text);
   const trig = triggerOf(text);
   if (!trig) return desc;
@@ -210,7 +210,7 @@ function isReadonly(text) {
  * themselves, and the ones gated on an environment the model cannot see (a herdr pane).
  */
 const USER_INVOKED_RE = /<!--\s*invocation:\s*user\s*-->/;
-export function isUserInvokedOnly(text) {
+function isUserInvokedOnly(text) {
   return USER_INVOKED_RE.test(text);
 }
 

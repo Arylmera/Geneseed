@@ -295,12 +295,14 @@ const SHIPS = [
   // deleted. The two below keep their own rows because the suite cites them BY NAME (nine
   // callers for limits.md, two for declined.md), so deleting either breaks live citations and
   // is worth a red run. A page nothing cites is worth a glob.
-  ['docs/*.md', 'the non-web pages: js/web/docs.mjs serves ROOT/docs, same reader as docs/web/'],
+  ['docs/*.md', 'offline reading beside the package — the design history, the extension guide, '
+    + 'the host notes. No runtime code reads them (js/web/docs.mjs serves only docs/web/); '
+    + 'DESIGN.md and README.md link into them'],
   ['web/dist/', 'TRACKED and load-bearing: js/web/server.mjs serves it, and npmBuild is a '
     + 'first-run-from-a-partial-checkout path no cell reaches'],
   ['web/src/pages/Laws.jsx', "doctor's lawMetaProblems reads this ONE file out of web/src; "
-    + 'shipping the other 99 to satisfy it would be 700 kB of React sources nothing else in '
-    + 'the package opens'],
+    + 'shipping the rest of web/src to satisfy it would be hundreds of kB of React sources '
+    + 'nothing else in the package opens'],
   // THE REFERENCE'S ROWS STOOD HERE — the `rituals/` tree and the seven root modules of the
   // generator facade — and they are gone because the files are. That row had been re-argued
   // three times and was down to its last clause, the full-screen PANEL, which was Python for
@@ -343,7 +345,7 @@ const SHIPS = [
 ];
 
 const WITHHELD = [
-  ['tests/', '1.6 MB of developer gates. npm ships the tool, not its test rig — and the cell '
+  ['tests/', 'megabytes of developer gates. npm ships the tool, not its test rig — and the cell '
     + 'harnesses need a git checkout to run at all'],
   ['web/', 'the React sources, the vite config and package-lock. web/dist is TRACKED, so the '
     + 'console never needs building at install time; web/src/pages/Laws.jsx is carved back in '

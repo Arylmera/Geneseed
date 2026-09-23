@@ -7,9 +7,9 @@
 // to read the SOURCE, which is why `tests/mutate.mjs`'s M9 was carried as ungated until this
 // file existed.
 //
-// CAPTURING ONLY, and the rule is the reference's: a spawn that INHERITS its parent's streams
-// must not set the flag, because on an inherited-stream spawn the hide discards the child's
-// stdout outright — a live bug this project already shipped once.
+// CAPTURING SPAWNS MUST SET IT; inheriting ones MAY. The live bug this project once shipped — a
+// hide that discarded an inheriting child's stdout — was Python's `CREATE_NO_WINDOW`; Node's
+// `windowsHide` does not do that (see the note at the end of this file).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -130,8 +130,8 @@ test('the shared flag is actually set on Windows', async () => {
 // inherited-stream spawn discarded the child's stdout. So the draft asserted that no inheriting
 // spawn may set the flag.
 //
-// Three real call sites say otherwise — `js/hosts/link.mjs:136`, `js/maintain/update.mjs:890` and
-// `js/web/server.mjs:781` all inherit AND hide, and all three are correct. The finding the
+// Real call sites say otherwise — `js/hosts/link.mjs` and `js/maintain/update.mjs` inherit AND
+// hide, and both are correct. The finding the
 // assertion was built on is about Python's `CREATE_NO_WINDOW` CREATION FLAG, which suppresses
 // the console the child would have written through. Node's `windowsHide` is a different
 // mechanism (`STARTF_USESHOWWINDOW`/`SW_HIDE`), and with inherited stdio the child writes to the

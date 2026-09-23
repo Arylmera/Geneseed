@@ -83,7 +83,7 @@ export async function probe(url, timeout = 1.5) {
 }
 
 /** The token-carrying POST `geneseed web stop` and the in-page Stop button both send. */
-export async function postShutdown(url, token, timeout = 3.0) {
+async function postShutdown(url, token, timeout = 3.0) {
   try {
     const res = await fetch(`${url}/api/shutdown`, {
       method: 'POST',

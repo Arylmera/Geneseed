@@ -2,12 +2,12 @@
  * What every emit shares — the constants that name what this tool owns, the small readers it
  * walks a tree with, and the three writers both GLOBAL emits call.
  *
- * Split out of `emit.mjs` because each of `globalMemory`, `globalNotebook`, `shipLeanLaws`
+ * Split out of the old `emit.mjs` because each of `globalMemory`, `globalNotebook`, `shipLeanLaws`
  * and `stripCapabilityLinks` has two callers in two different host emits. A helper with two
  * hosts belongs to neither, and putting it in one of them is how a file grows to 1400 lines.
  *
  * Nothing here decides WHICH host is being emitted. `emit-opencode.mjs` and
- * `emit-claude.mjs` do that; `emit.mjs` renders the bundle they read from.
+ * `emit-claude.mjs` do that; `bundle.mjs` renders the bundle they read from.
  */
 import path from 'node:path';
 import { copyFile, writeText, isFile, isDir } from '../lib/fs.mjs';

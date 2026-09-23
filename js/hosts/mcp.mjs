@@ -174,8 +174,10 @@ export function mcpSetEnabled(config, name, enabled, host = 'opencode') {
  *
  * The host fork is the whole function. OpenCode is read comment-tolerantly because a
  * hand-maintained `opencode.jsonc` carries `//`; the other three are read STRICTLY, because
- * the comment stripper's trailing-comma pass is not string-aware and would silently drop a
- * comma from any string value containing `,]` — in a file that holds projects and history.
+ * their configs are plain JSON by contract, and a file that does not parse as such — for a
+ * Claude global install, one that holds projects and history — is not one to rewrite from a
+ * best-effort reading. (The comment stripper's trailing-comma pass IS string-aware; an older
+ * version of this note said otherwise, and `generate.test.mjs` pins the string-aware case.)
  */
 export function mcpLoad(p, host = 'opencode') {
   if (!existsSync(p)) return {};

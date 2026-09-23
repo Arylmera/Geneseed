@@ -24,7 +24,7 @@ import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { isFile } from '../lib/fs.mjs';
-import { normcase } from '../lib/paths.mjs';
+import { normcase, within } from '../lib/paths.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { statusData } from '../inspect/status.mjs';
 import { originDisplay } from '../maintain/update.mjs';
@@ -39,7 +39,7 @@ const DOC_DIR = path.join(ROOT, 'docs', 'web');
  * covers every key these pages use and parses with the standard library. A value that is
  * not valid JSON is kept as the raw string, which is how `title: Something` works.
  */
-export function docFrontmatter(text) {
+function docFrontmatter(text) {
   const marker = '---\n';
   if (!text.startsWith(marker)) return [{}, text];
   const rest = text.slice(marker.length);
@@ -361,12 +361,6 @@ function readDocSource(rel) {
   const target = resolvePath(path.join(ROOT, rel));
   if (!within(target, ROOT) || !isFile(target)) throw new NotFound(rel);
   return readMaybe(target) ?? '';
-}
-
-function within(child, parent) {
-  const c = normcase(child).split(/[\\/]/);
-  const p = normcase(parent).split(/[\\/]/);
-  return p.length <= c.length && p.every((seg, i) => c[i] === seg);
 }
 
 /** The deployed theme's words beside the neutral ones. */

@@ -48,7 +48,7 @@ import { NotFound, stemOf } from './api.mjs';
  * platform where the probe cannot tell. Generous on purpose: streaming bumps `updated_at`
  * constantly, so only a genuinely abandoned (process-still-alive) session ages out.
  */
-export const ACTIVITY_STALE_SECONDS = 1800;
+const ACTIVITY_STALE_SECONDS = 1800;
 
 const nowSeconds = () => Date.now() / 1000;
 
@@ -66,7 +66,7 @@ const activityFlag = (state) => path.join(state.target, '.geneseed-activity');
  * default every user who has never toggled is in. An undecodable flag file is not treated
  * specially: Node substitutes U+FFFD and reads on rather than raising.
  */
-export function activityEnabled(state) {
+function activityEnabled(state) {
   let raw;
   try {
     raw = readText(activityFlag(state));
@@ -97,7 +97,7 @@ function toIntOr(raw) {
 }
 
 /** Best-effort liveness for the writer process. See this file's header. */
-export function pidAlive(raw) {
+function pidAlive(raw) {
   const pid = toIntOr(raw);
   if (pid === null || pid <= 0) return false;
   try {
@@ -161,7 +161,7 @@ function isLive(entry, now) {
  * missing dir is `[]`, a garbage file is skipped (and kept — only a snapshot that PARSED and
  * failed the liveness test is unlinked), newest first.
  */
-export function activityEntries(state) {
+function activityEntries(state) {
   const d = activityDir(state);
   if (!isDir(d)) return [];
   const now = nowSeconds();

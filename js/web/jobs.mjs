@@ -98,7 +98,7 @@ import { jsonDumpsCompact, parseJson, isTruthy } from '../lib/json.mjs';
  * NEVER THROWS: it runs from `cancel()` and from the crash path in `_run`'s `catch`, and an
  * exception in either would leave the child alive with the manager believing it dead.
  */
-export function killJobTree(child) {
+function killJobTree(child) {
   try {
     if (process.platform === 'win32') {
       // The one machine primitive with no Node equivalent — see this module's header.

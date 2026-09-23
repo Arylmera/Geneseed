@@ -347,9 +347,8 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode') {
 /**
  * `_harness_mcp._mcp_load`, reduced to the OpenCode arm.
  *
- * The Claude arm (`.mcp.json`, `~/.claude.json`, parsed with STRICT `json.loads` because the
- * comment stripper's trailing-comma pass is not string-aware) belongs to the MCP catalog and
- * the TUI, and neither has crossed. `installAgentEntry` is this port's only caller and passes
+ * The Claude arm (`.mcp.json`, `~/.claude.json`, parsed STRICTLY — see `mcpLoad` in
+ * js/hosts/mcp.mjs for why) lives with the MCP catalog. `installAgentEntry` is this port's only caller and passes
  * no host, so porting the branch would ship an unreachable arm with no cell and no partition
  * to be part of — the criterion this port decides keep-vs-delete by.
  */
