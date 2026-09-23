@@ -18,6 +18,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseJson, jsonDumpsIndent, jsonDumpsCompact, isDict } from '../../js/lib/json.mjs';
+import { isDir, isFile } from '../../js/lib/fs.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
 // `isDict` over parsed JSON: an object is a dict; a NUMBER is not, although `parseJson` hands it
 // back as a wrapper object — before, `"permission": 5` passed as a dict and the OpenCode merge
@@ -148,4 +152,22 @@ test('numbers nested in containers keep their spelling too', () => {
   // objects and arrays.
   assert.equal(roundTrip('{"o": {"t": 1.0}, "a": [1.0, 2, 3.5]}'),
     '{"o": {"t": 1.0}, "a": [1.0, 2, 3.5]}');
+});
+
+// A path THROUGH a file is a definite "no", not an error. macOS/Linux report it as ENOTDIR (Windows
+// as ENOENT, which is why only the posix CI jobs can turn this red): the folder-skill count asked
+// `isFile(<skills>/brainstorm.md/SKILL.md)` and the web console's overview died on ENOTDIR.
+test('isFile and isDir answer false, not throw, for a path through a file', () => {
+  const sb = makeSandbox('gs-fs-');
+  const d = sb.path;
+  try {
+    const f = path.join(d, 'brainstorm.md');
+    fs.writeFileSync(f, 'x');
+    assert.equal(isFile(f), true);
+    assert.equal(isFile(path.join(f, 'SKILL.md')), false);
+    assert.equal(isDir(path.join(f, 'nested')), false);
+    assert.equal(isFile(path.join(d, 'absent.md')), false);
+  } finally {
+    sb.cleanup();
+  }
 });

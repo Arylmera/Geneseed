@@ -202,19 +202,34 @@ export function withPlatformNewlines(fn) {
  * it for its own existing callers rather than owning a copy itself. `js/hosts/hooks.mjs` is
  * the deliberate exception — the hot path keeps its own inline copy rather than pay an import.
  *
- * `statSync`'s Node default THROWS for a missing path; `throwIfNoEntry: false` (Node >= 15.3)
- * is the one option that turns ONLY that case into `undefined`, and still throws for anything
- * else — a permission failure, a path with a non-directory ancestor (`ENOTDIR`). Every copy
- * this replaces used a bare `try/catch` instead, which swallowed ALL of those alike into the
- * same `false`. That is a real, deliberate narrowing: a permission failure silently read as
- * "not there" was the wrong answer to preserve, not a byte worth keeping.
+ * WHICH ERRORS MEAN "NO", matching `pathlib`'s `_ignore_error`: `ENOENT` (nothing there),
+ * `ENOTDIR` (a path THROUGH a file — `skills/brainstorm.md/SKILL.md`), `ELOOP`, `EBADF`. Each is a
+ * definite answer that nothing of that kind is at the path. Anything else — a permission
+ * failure above all — still throws: read as "not there" it would be the wrong answer, silently.
+ * Every copy this replaced used a bare `try/catch` that swallowed everything alike.
+ *
+ * ⚠ `ENOTDIR` WAS ONCE LEFT TO THROW here, on the reading that it resembled an access error.
+ * It is not one, and Windows reports the same probe as `ENOENT` — so the difference only shows
+ * on macOS/Linux: the folder-skill count asked `isFile(<skills>/<flat>.md/SKILL.md)` and the
+ * web console's overview died with `ENOTDIR` there while every Windows run stayed green.
  */
+const NOT_THERE = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 'EBADF']);
+
+function statOrNull(p) {
+  try {
+    return statSync(p);
+  } catch (e) {
+    if (e && NOT_THERE.has(e.code)) return null;
+    throw e;
+  }
+}
+
 export function isFile(p) {
-  return statSync(p, { throwIfNoEntry: false })?.isFile() ?? false;
+  return statOrNull(p)?.isFile() ?? false;
 }
 
 export function isDir(p) {
-  return statSync(p, { throwIfNoEntry: false })?.isDirectory() ?? false;
+  return statOrNull(p)?.isDirectory() ?? false;
 }
 
 /**
