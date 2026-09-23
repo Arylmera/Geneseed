@@ -23,12 +23,12 @@ The minimum roster per task type. The parent may add specialists on top — secu
 
 1. Confirm the task is genuinely substantial — a trivial one-file tweak or a question does not warrant a crew; do it directly instead.
 2. Compose the crew from the floor above, adding specialists only where the task demands them.
-3. Isolate the crew's work in its own git worktree/branch (the SETUP.md worktree add-on). Where worktrees are unavailable, fall back to a single tree, one pipeline at a time, and say so.
+3. Isolate the crew's work in its own git worktree/branch (the SETUP.md worktree add-on). Where worktrees are unavailable, fall back to a single tree, one pipeline at a time, and say so. Give the crew a **write set** and check it against every other pipeline in flight ({{DOCTRINE}} process 8): two crews whose sets overlap do not run at once, and shared append files (registries, index tables, lockfiles, generated bundles) are the parent's to apply, never a crew's.
 4. **The dev↔tester loop:** the developer implements, the tester validates — runs the tests and lint, produces raw logs. On failure, the findings go back to the developer. Cap at **5** iterations; on exhaustion, stop, do not merge, and report the failure with the branch left in place for inspection.
 5. **Two execution shapes**, chosen by host capability (same pattern as the [workflow {{SKILL}}](workflow.md)):
    - *Deterministic:* where the host exposes a `workflow` tool, run a saved script encoding analyst → developer → (tester ⇄ developer)×≤5 → proof.
    - *Model-driven fallback:* everywhere else, run the same stages via the [parallel-agents {{SKILL}}](parallel-agents.md) or sequential personas, with the same handoff envelopes and the same delivery contract.
-6. On success, hand the worktree back to the parent uncommitted, with the mechanical proof (test + lint output, exit codes) in the result envelope. The pipeline never commits, pushes, or merges ({{DOCTRINE}} process 5): the parent re-runs the proof commands itself, shows the user the diff and the output, and commits and merges once the user accepts.
+6. On success, hand the worktree back to the parent uncommitted, with the mechanical proof (test + lint output, exit codes) and the list of files it changed in the result envelope, rebased on the current base so a conflict with a sibling resolves on the crew's branch. The pipeline never commits, pushes, or merges ({{DOCTRINE}} process 5): the parent re-runs the proof commands itself, shows the user the diff and the output, and commits and merges once the user accepts.
 
 ## Delivery contract
 

@@ -117,13 +117,19 @@ const FOOTPRINTS = ['full', 'lean'];
  * untouched: the lean halves were re-cut to the 275-word budget (7ddca47) and the lean
  * carrier stayed under 38_900.
  *
- * FULL RAISED 2026-09-23, for craft 1's vessel rule: the doctrine now says HOW to pick the
+ * FULL RAISED 2026-09, for process 8 (one writer per file) — a new doctrine rule, not a
+ * rewrite, so the growth is the rule itself: the measured `files` carrier went from under 55_500 to
+ * 56_453, and `full` moves 55_500 → 57_000, the next 500 up. Lean untouched: its half was
+ * cut to five lines and the lean carrier stayed under 38_900.
+ *
+ * FULL RAISED AGAIN 2026-09-23, for craft 1's vessel rule: the doctrine now says HOW to pick the
  * automation vessel (throwaway script / markdown rule in a skill or agent spec / kept code),
- * not only THAT repetition must be automated. Its full half grew by ~620 characters, so
- * `full` moves 55_500 → 56_500 — the measured `files` carrier of 56_113 rounded up to the
- * next 500. Lean untouched: the lean half grew too and still sits under 38_900.
+ * not only THAT repetition must be automated. Its full half grew by ~620 characters; with
+ * process 8 already in, the measured `files` carrier is 57_090, so `full` moves
+ * 57_000 → 57_500, the next 500 up. Lean untouched: the lean half grew too and still sits
+ * under 38_900.
  */
-const CEILING = { full: 56_500, lean: 38_900 };
+const CEILING = { full: 57_500, lean: 38_900 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -336,7 +342,7 @@ test('the carrier still carries every law, themed and in order', () => {
 /**
  * The same claim for the other two tiers, and it is not a duplicate of the loop above.
  *
- * ⚠ THE `DOC_*` FAMILY IS 24 KEYS IN 15 FILES AND HAS NO CORPUS BEHIND IT. `doctor` checks that
+ * ⚠ THE `DOC_*` FAMILY IS 25 KEYS IN 15 FILES AND HAS NO CORPUS BEHIND IT. `doctor` checks that
  * every key a pack file names EXISTS in every theme, and `emit_smoke` above checks that the
  * INVARIANT titles survive the emit — but between those two there is a hole exactly the shape of
  * a doctrine title: present in the theme, named by the source, and never once observed coming out
@@ -365,8 +371,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack: m[1], n: m[2], key: `DOC_${m[1].toUpperCase()}_${m[2]}` });
     }
   }
-  assert.equal(rules.length, 24,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 24 (rigor 5 is retired Law IX); either the `
+  assert.equal(rules.length, 25,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 25 (rigor 5 is retired Law IX; process 8, one writer per file, joined 2026-09); either the `
     + 'heading shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in

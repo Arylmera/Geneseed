@@ -9,6 +9,7 @@ Registers one custom tool, `workflow`, that runs saved, code-driven orchestratio
 - **Saved scripts only (v1):** the tool loads `<name>.js` from the sibling `workflows/` dir. No model-authored scripts are eval'd.
 - **Call shape:** `workflow({ name, args })` — call with no name to list what's available. Shipped: `council`, `review`, `research-plan-implement`.
 - **Runtime API:** scripts get `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()`, `budget`, `args`. Child work runs as real OpenCode sessions; concurrency is capped at `min(16, cores − 2)`.
+- **Worktree isolation:** `agent(prompt, { isolation: "worktree" })` runs that child on its own branch in its own git worktree (under the OS temp dir), the same option Claude Code's Workflow takes. A worktree with no change is removed with its branch; one with changes is kept, and the tool's summary lists every kept branch and every file more than one agent changed (`rt.worktrees()`, `rt.overlaps()` inside the script). Nothing is merged or committed for you. The worktree holds tracked files only — an agent that must build or test installs dependencies first. Without git the agent fails; it never falls back to the shared tree.
 
 ### Install
 

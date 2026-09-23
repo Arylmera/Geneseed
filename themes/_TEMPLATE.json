@@ -114,6 +114,7 @@
   "DOC_PROCESS_5": "<themed title for process doctrine 5 (Consent Before Push)>",
   "DOC_PROCESS_6": "<themed title for process doctrine 6 (Bound the Loop)>",
   "DOC_PROCESS_7": "<themed title for process doctrine 7 (Codes That Persist)>",
+  "DOC_PROCESS_8": "<themed title for process doctrine 8 (One Writer Per File)>",
   "INTRO_DOC": "<themed intro: this file is the entry point an AI agent reads in this repo>",
   "INTRO_AGENTS": "<themed intro to the Agents section — delegate focused work to a specialist>",
   "INTRO_SKILLS": "<themed intro to the Skills section — run the written procedure before improvising>",
