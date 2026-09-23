@@ -34,6 +34,13 @@ the reported *count*, not the exit code, because `node --test` over a glob that 
 prints `# tests 0` and exits 0. A gate that fails open.
 
 ```bash
+node tests/shim_intact.mjs
+```
+
+Right after the suite: the only check that no test left the machine-wide hook shim pointing at a
+deleted temp directory (which silently kills every hook on the machine).
+
+```bash
 node bin/geneseed-cli.mjs doctor --all
 ```
 
@@ -44,7 +51,9 @@ node tests/golden.mjs
 Runs all 261 emit configurations and requires each to render without crashing. Run it after
 anything that touches the emit path. Its `--idempotent` mode re-emits into the same tree and
 requires the second pass to change nothing; `--deletion` covers the prune phase. All three are
-self-comparisons — nothing is measured against a stored answer.
+self-comparisons — nothing is measured against a stored answer. `--cli` runs the ~320-cell
+CLI/hook matrix against the expectations written in each cell; run it after changing anything a
+verb prints. `--jobs N` (default: min(8, cores)) fans the cells out across processes.
 
 ```bash
 node tests/mutate.mjs --verify

@@ -8,6 +8,25 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed — tests and CI
+
+- **`golden.mjs --jobs` works.** It was parsed and ignored; cells now fan out over `--shard`
+  children — the 261-cell run goes from ~74 s to ~16 s.
+- **`golden.mjs --cli`** runs the CLI/hook matrix (317 cells) against the expectations written in
+  each cell, in CI. Nothing had run them since the corpus replayer was retired; 27 had drifted.
+  Six doctor cells planted months-old whole-file copies — re-based onto today's files, keeping
+  exactly their fault. The rest followed deliberate changes (the status box's wider label
+  column, `harness` → `geneseed`, gates that fail closed, the root file no longer re-injected),
+  and three messages still said `harness` — fixed.
+- **Release hardening**: actions pinned to commit SHAs; npm pinned to 11 (not `latest`) in both
+  the release and its CI mirror; publish runs from `main` or a `v*` tag only, and refuses a
+  commit CI has not passed. CI: read-only token, pushes to `main` only (PRs no longer run
+  twice), superseded runs cancelled, Node 24 on Linux beside 22, the test-count floor computed
+  from the written tests (it was a fixed 500 against 1100), and the no-interpreter package job
+  fails when the web daemon never reports ready. A weekly workflow runs the full mutation
+  matrix.
+- The 30-second fetch-timeout test has its own file, so it overlaps the rest of the suite.
+
 ### Fixed — web console
 
 - **A failed first load no longer hangs on the splash.** The boot splash waited on the overview

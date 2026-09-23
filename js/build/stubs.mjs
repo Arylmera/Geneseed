@@ -114,7 +114,7 @@ export const EXCLUDES_FILE = 'excludes.json';
  */
 export const EXCLUDES_STUB = `\
 {
-  "_comment": "Folders where this global Geneseed install goes dormant (hooks silent, preamble suppressed). Managed by \`harness exclude add|remove|list\`; safe to edit by hand. Paths are absolute.",
+  "_comment": "Folders where this global Geneseed install goes dormant (hooks silent, preamble suppressed). Managed by \`geneseed exclude add|remove|list\`; safe to edit by hand. Paths are absolute.",
   "excludes": []
 }
 `;

@@ -13,7 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  VERBATIM_CELLS, loadMatrix, parseArgs, selectCells,
+  VERBATIM_CELLS, loadCliMatrix, loadMatrix, parseArgs, selectCells,
 } from '../golden.mjs';
 import { cellId, argvFor } from '../helpers/golden.mjs';
 
@@ -76,8 +76,23 @@ test('jobs refuses zero', () => {
   assert.throws(() => parseArgs(['--jobs', '0']), /--jobs must be positive/);
 });
 
-test('the two self-comparison modes are mutually exclusive', () => {
+test('the three modes are mutually exclusive', () => {
   assert.throws(() => parseArgs(['--idempotent', '--deletion']), /exclusive/);
+  assert.throws(() => parseArgs(['--cli', '--idempotent']), /exclusive/);
+  assert.throws(() => parseArgs(['--cli', '--deletion']), /exclusive/);
+});
+
+test('--cli selects this platform\'s CLI matrix, and its narrowing flags narrow it', () => {
+  // The CLI matrix is its own document; `--cli` must read it rather than the emit matrix, and
+  // `--only`/`--shard`/`--limit` must apply to it (the emit-only flags do not).
+  const doc = loadCliMatrix();
+  const all = selectCells(doc, parseArgs(['--cli']));
+  assert.equal(all.length, doc.cells.length);
+  assert.ok(all.length > 300, `only ${all.length} CLI cells`);
+  for (const argv of [['--only', 'git-gate/'], ['--shard', '0/4'], ['--limit', '5']]) {
+    const got = selectCells(doc, parseArgs(['--cli', ...argv]));
+    assert.ok(got.length < all.length && got.length > 0, `${argv.join(' ')} selected ${got.length}`);
+  }
 });
 
 test('every narrowing flag selects fewer cells, and none selects none', () => {

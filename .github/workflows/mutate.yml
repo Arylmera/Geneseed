@@ -1,0 +1,25 @@
+name: mutate
+
+# THE MUTATION MATRIX, WEEKLY. `tests/mutate.mjs --all` applies each of its one-string product
+# edits in turn and requires a gate to go red for every one — the only check that the suite can
+# still SEE the faults it claims to catch. CI runs only `--verify` (the anchors resolve), because
+# the full run takes minutes and an interrupted local run leaves the tree mutated. A runner's
+# checkout is thrown away, so neither cost applies here.
+on:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: every mutation is caught
+        run: node tests/mutate.mjs --all

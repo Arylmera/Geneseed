@@ -645,7 +645,7 @@ function printSurvivingProjectInventory(removedRoot) {
 function printOtherHostHits(root, removedHost) {
   for (const spec of HOSTS) {
     if (spec.host !== removedHost && projectQualifies(root, spec.host)) {
-      printOut(`[uninstall] also found ${spec.host}:project here — run \`harness `
+      printOut(`[uninstall] also found ${spec.host}:project here — run \`geneseed `
         + 'uninstall` again to remove it.\n');
     }
   }

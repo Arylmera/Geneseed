@@ -6,12 +6,24 @@ name: ci
 # Dependency-free — no install step. Runs on Linux AND Windows so native-Windows
 # support stays green.
 on:
+  # Pushes to main only: a PR branch is covered by `pull_request`, and `push` on every branch
+  # ran the whole matrix twice per PR update.
   push:
+    branches: [main]
   pull_request:
   # Kept for manual re-runs. It used to exist for one dispatch-guarded job, `record-corpus`,
   # which recorded the corpora from the reference implementation; that job is gone and no job is
   # guarded to this trigger any more, so a dispatch now runs exactly what a push runs.
   workflow_dispatch:
+
+# Read-only token: nothing here writes to the repository.
+permissions:
+  contents: read
+
+# A newer push to the same ref makes the running one moot.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -19,12 +31,19 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        node: ["22"]
+        # Node 24 too, on Linux: it is what the release job runs, and until now the suite only
+        # met it at release time — the npm 12 `pack --json` break surfaced exactly there.
+        include:
+          - os: ubuntu-latest
+            node: "24"
     runs-on: ${{ matrix.os }}
+    name: validate (${{ matrix.os }}, node ${{ matrix.node }})
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: package-lock.json
       # THE FIRST LINT THIS HALF OF THE REPO HAS EVER HAD. `web/` has been linted since the UI
@@ -45,7 +64,7 @@ jobs:
       # exactly the shape that turns a red gate green without a diff.
       - name: doctor (every theme + parity + authoring gates)
         run: node bin/geneseed-cli.mjs doctor --all
-      # Auto-discover every tests/*.test.mjs (workflow runtime + plugins) — node
+      # Auto-discover every tests/**/*.test.mjs — node
       # expands the glob itself, so a new test file is picked up without editing this
       # workflow. Needs Node >= 21.
       #
@@ -63,15 +82,20 @@ jobs:
       # Fixed in both so the gate does not depend on which major a runner happens to bring,
       # and so the two files do not quietly diverge on the one line that decides whether the
       # suite is considered to have run at all.
-      - name: node test suites (workflow runtime + plugins)
+      - name: node test suites (every tests/**/*.test.mjs)
         shell: bash
         run: |
           log="$(mktemp)"
           node --test --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
           n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
-          echo "the suite reported $n tests"
-          if [ "$n" -lt 500 ]; then
-            echo "only $n tests were discovered — the glob has stopped matching the suite"
+          # The floor is COMPUTED: 90% of the `test(`/`it(` calls written in the tracked test
+          # files. A fixed 500 let the suite lose half itself (a directory rename) and stay green;
+          # a computed one needs nobody to maintain it and still ignores small churn.
+          written="$(git ls-files 'tests/*.test.mjs' 'tests/**/*.test.mjs' | xargs grep -hcE '^\s*(test|it)\(' | awk '{s+=$1} END{print s+0}')"
+          floor=$(( written * 9 / 10 ))
+          echo "the suite reported $n tests (floor $floor, from $written written)"
+          if [ "$n" -lt "$floor" ]; then
+            echo "only $n tests ran — the glob has stopped matching part of the suite"
             exit 1
           fi
 
@@ -90,9 +114,10 @@ jobs:
         run: node tests/shim_intact.mjs
 
       # THE MUTATION MATRIX'S ANCHORS, AND ONLY ITS ANCHORS. `tests/mutate.mjs` is not run here
-      # and should not be — it applies 31 one-string edits to the product tree and runs a gate per
-      # edit, which is minutes of wall clock and, if interrupted, leaves the tree mutated. But its
-      # rows are anchored to exact strings in 17 product files, and a refactor near an anchor makes
+      # and should not be — it applies 33 one-string edits to the product tree and runs a gate per
+      # edit, which is minutes of wall clock and, if interrupted, leaves the tree mutated (the
+      # weekly mutation workflow runs it on a throwaway checkout). But its rows are anchored to
+      # exact strings in product files, and a refactor near an anchor makes
       # the row unappliable. `withMutation` correctly counts that as a SURVIVOR — for whoever runs
       # the matrix by hand. Nothing did, so the one failure mode the file cannot see in itself was
       # also the one nothing else reported. `--verify` answers only "does every anchor still
@@ -101,9 +126,9 @@ jobs:
         run: node tests/mutate.mjs --verify
 
       # ⚠ THE PACKAGING SUITE AGAIN, UNDER THE npm THE RELEASE ACTUALLY USES. Everything above
-      # runs the npm bundled with Node 22 (npm 10). `publish.yml` deliberately installs
-      # `npm@latest` first, because trusted publishing needs a recent one — so the single workflow
-      # that gates a release runs an npm no CI job had ever exercised.
+      # runs the npm bundled with Node 22 (npm 10). `publish.yml` installs `npm@11` first,
+      # because trusted publishing needs >= 11.5.1 — and without this step the single workflow
+      # that gates a release would run an npm no CI job had ever exercised. Same major here.
       #
       # That is not hypothetical. `npm pack --json` changed container between majors — npm 10
       # returns `[ {...} ]` and npm 12 returns `{ "<name>": {...} }` — and the helper read `[0]`.
@@ -112,11 +137,11 @@ jobs:
       #
       # LAST IN THE JOB, deliberately: it replaces the runner's global npm, so nothing after it
       # would be testing the pinned version any more.
-      - name: the packaging suite under npm@latest (the release's npm)
-        if: runner.os == 'Linux'
+      - name: the packaging suite under npm@11 (the release's npm)
+        if: runner.os == 'Linux' && matrix.node == '22'
         shell: bash
         run: |
-          npm install -g npm@latest
+          npm install -g npm@11
           echo "now running the packaging gate under npm $(npm --version)"
           # This step gates on the EXIT CODE, so the reporter does not decide its verdict — the
           # flag is here so the rule in this file is "every `node --test` reports TAP" with no
@@ -143,8 +168,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
       # The two self-comparisons, which have no corpus and need none: they compare a run against
@@ -155,6 +180,12 @@ jobs:
         run: node tests/golden.mjs --idempotent
       - name: golden — the prune
         run: node tests/golden.mjs --deletion
+      # The CLI/hook matrix's WRITTEN expectations: ~320 cells, each in its own sandbox, each
+      # asserting what the verb must print (and must not). Only that absolute tier — the byte
+      # recordings it once also compared were retired with the Python reference. Nothing ran
+      # these for a month, and 27 had gone stale meanwhile.
+      - name: golden — CLI expectations
+        run: node tests/golden.mjs --cli
 
   # THE LINUX CORPUS RECORDER LIVED HERE, AND IT IS GONE ON PURPOSE.
   #
@@ -215,7 +246,7 @@ jobs:
           for p in python python3 py; do
             if command -v $p; then echo "FAIL: installing git dragged in $p"; exit 1; fi
           done
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # ⚠ `shell: bash` on every step that needs more than POSIX sh. A `container:` job defaults to
       # `sh -e`, where `set -o pipefail` is an ILLEGAL OPTION and the step dies before it reaches
       # anything worth testing — which is exactly how this gate first failed. Debian slim ships
@@ -250,12 +281,18 @@ jobs:
             geneseed-build --emit claude
             geneseed status
             geneseed catalog
-            geneseed web --daemon-internal --port 0 &
+            geneseed web --daemon-internal --port 0 --no-browser > /tmp/web.log 2>&1 &
             web_pid=$!
-            sleep 3
+            # Up to 30 s for the ready line. It was `sleep 3; kill || true`, which passed just as
+            # green when the daemon crashed on startup.
+            for _ in $(seq 30); do grep -q 'daemon ready' /tmp/web.log && break; sleep 1; done
+            cat /tmp/web.log
             kill "$web_pid" 2>/dev/null || true
             wait "$web_pid" 2>/dev/null || true
           } 2>&1 | tee /tmp/acceptance.log
+          if ! grep -q 'daemon ready' /tmp/web.log; then
+            echo "FAIL: the web daemon never reported ready"; exit 1
+          fi
           echo "--acceptance-done--" >> /tmp/acceptance.log
       - name: no ENOENT, and the word never appears
         shell: bash
@@ -279,8 +316,8 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
