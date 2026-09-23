@@ -463,6 +463,18 @@ export function constitutionProblems() {
   // The whole tree, not the template: a skill footer citing `process 9` is as broken as a
   // template one, and it is the shape 339 rewired citations could have left behind.
   const cited = new Map();                                    // 'process.5' -> [rel, …]
+  // ⚠ A RETIRED LAW KEEPS ITS NUMBER, SO A CITATION OF IT STILL RESOLVES — to "Retired". Laws
+  // are appended, never renumbered, which is what keeps ~150 cross-references stable; the price
+  // is that nothing else notices `{{LAW}} IX` in a skill that means "ask first" (it is rigor 5
+  // now) or `{{LAW}} XI` that means "verify" (folded into III). Read off the canon itself, so a
+  // law retired tomorrow is covered the same day.
+  const retired = new Set();
+  try {
+    for (const [, num] of readText(path.join(SRC, 'laws', 'universal.md'))
+      .matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+) —[^\n]*\n<!-- LEAN:begin -->\nRetired\b/gm)) {
+      retired.add(num);
+    }
+  } catch { /* an unreadable canon is reported elsewhere */ }
   for (const p of rglob(SRC)) {
     if (!isFile(p) || !(p.endsWith('.md') || p.endsWith('.tmpl'))) continue;
     let text;
@@ -476,6 +488,14 @@ export function constitutionProblems() {
       problems.push(`[authoring] ${rel} cites {{DOCTRINE}} — an always-on tier may never `
         + 'reference a toggleable one, or a pack-off build ships a rule pointing at text '
         + 'that is not there. State the point directly instead');
+    }
+    if (rel !== 'laws/universal.md') {
+      for (const [, num] of text.matchAll(/\{\{LAW\}\}\s+([IVXLCDM]+)\b/g)) {
+        if (retired.has(num)) {
+          problems.push(`[authoring] ${rel} cites {{LAW}} ${num}, which is retired — cite the `
+            + 'law or rule its text now lives in');
+        }
+      }
     }
     for (const [, pack, n] of text.matchAll(DOCTRINE_CITE_RE)) {
       const key = `${pack}.${Number(n)}`;

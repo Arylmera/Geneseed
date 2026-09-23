@@ -56,7 +56,8 @@ Code is not done until its behaviour is covered by a test you wrote and the affe
 run green. New behaviour ships with its test, a bug fix with the reproducing test first
 (run the develop {{SKILL}}). Run them on the real runner, read the output, show it as
 evidence ({{LAW}} III). Where the change is untestable, say so and name the gap rather than
-invent a test ({{LAW}} II).
+invent a test; where a real test is out of scope, stop rather than ship untested behaviour in
+silence ({{LAW}} II, {{LAW}} VIII).
 <!-- LEAN:end -->
 
 ### {{DOCTRINE}} rigor 4 — {{DOC_RIGOR_4}}

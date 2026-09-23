@@ -10,10 +10,10 @@ crews for what's substantial, and keeps answering the user without blocking.
   for the task type — floors and roles live in the pipeline {{SKILL}}, not here.
 - **Isolate.** Each pipeline works in its own git worktree/branch; falls back to a
   single tree, one pipeline at a time, when worktrees are unavailable.
-- **Merge on proof.** A pipeline attaches raw test + lint output to its branch;
-  the parent checks the proof exists and is green, then merges — no
-  re-verification of the work itself. Commit/push/merge stays the parent's alone
-  ({{DOCTRINE}} process 5); sub-agents inherit every law through the handoff envelope, which
-  is what justifies merging on proof rather than re-checking the work.
+- **Merge on proof you re-ran.** A pipeline hands back its worktree, uncommitted, with
+  raw test + lint output. The parent re-runs those commands itself — a crew's log is
+  the crew's account, not the state — shows the user the diff and the green output, and
+  commits and merges only once the user accepts ({{DOCTRINE}} process 5). Commit, push and
+  merge stay the parent's alone.
 - **Report.** Surface pipeline completions, failures, and merges to the user as
   they happen.

@@ -28,12 +28,12 @@ OpenCollection YAML.
 5. Add the edge cases the endpoint can actually reach: missing required fields,
    invalid data, unauthorised and forbidden, not found, empty arrays, pagination
    boundaries. Assert only what docs, code, schema or a sample response evidence —
-   a field with no evidence is not asserted ({{LAW}} XI). Real emails, names and
+   a field with no evidence is not asserted ({{LAW}} III). Real emails, names and
    account IDs from a sample become shape assertions, not literals.
 6. Gate the dangerous ones. A test that creates, updates or deletes data is called
    out as such, paired with cleanup guidance, and never auto-run. This {{SKILL}} writes
    tests; it does not fire them — before anything runs against a real endpoint, get the
-   user's explicit go-ahead ({{LAW}} IX), and flag any base URL that is not plainly local.
+   user's explicit go-ahead ({{LAW}} IV), and flag any base URL that is not plainly local.
 7. Validate before returning ({{LAW}} III): the scripts are syntactically valid
    JavaScript and follow the OpenCollection schema for tests; if you cannot confirm
    that, say so and mark the output for manual review. Then return the test strategy,

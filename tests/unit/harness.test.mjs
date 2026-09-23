@@ -281,6 +281,22 @@ test('the gate flags a citation into a doctrine rule that does not exist', () =>
     `no dangling-citation problem in ${JSON.stringify(problems)}`);
 });
 
+test('the gate flags a citation of a retired law number', () => {
+  // IX and XI keep their numbers so old references resolve — to the word "Retired". Two bruno
+  // skills cited them for "ask first" and "verify", which now live in IV and III; nothing noticed.
+  // The set is read off the canon, so the planted cite must be flagged for each retired number
+  // and a live one (III) must not be.
+  const skill = fs.readFileSync(path.join(SRC, 'skills', 'commit.md'), 'utf8');
+  const problems = withFault(
+    { 'src/skills/commit.md': `${skill}\n\nPer {{LAW}} IX and {{LAW}} XI, but {{LAW}} III.\n` },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  for (const num of ['IX', 'XI']) {
+    assert.ok(problems.some((p) => p.includes(`{{LAW}} ${num}, which is retired`)
+      && p.includes('skills/commit.md')), `${num}: ${JSON.stringify(problems)}`);
+  }
+  assert.ok(!problems.some((p) => p.includes('{{LAW}} III,')), JSON.stringify(problems));
+});
+
 test('the gate refuses a doctrine citation inside an always-on tier', () => {
   // ⚠ D2, AND IT IS A SAFETY RULE RATHER THAN A TIDINESS ONE. A `--doctrines craft` build
   // renders the invariants and the ontology whole and renders no rigor/ops/process rules; an
