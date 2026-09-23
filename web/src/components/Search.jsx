@@ -6,14 +6,14 @@ import Spotlight, { filterAndRank } from './Spotlight.jsx'
 
 // Topbar search. `/` focuses it from anywhere (except inside another input).
 // When the user types, a Spotlight dropdown shows global matches across the
-// Library catalog, MCP servers, Docs and Specs — the per-page filter on
-// Section/Docs/Specs still runs in parallel for in-context narrowing.
-export default function Search({ value, onChange }) {
+// Library catalog, MCP servers and Docs — the per-page filter on Section/Docs
+// still runs in parallel for in-context narrowing.
+export default function Search({ value, onChange, dataRev }) {
   const ref = useRef(null)
   const wrapRef = useRef(null)
   const [focused, setFocused] = useState(false)
   const [active, setActive] = useState(0)
-  const { index, error, prime } = useSearchIndex()
+  const { index, error, prime } = useSearchIndex(dataRev)
 
   // Two bindings, and the second is not a duplicate of the first. `/` is the fast one and
   // costs nothing to press — but it is only available when no field has focus, which is

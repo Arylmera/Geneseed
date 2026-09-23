@@ -61,7 +61,7 @@ It is hidden where the rail collapses to icons (≤960px) and returns with the p
 
 A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it (or
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, which also works from inside a text field), type
-to jump to any agent, skill, doc, spec, MCP server, or constitutional rule — the `laws`
+to jump to any agent, skill, doc, MCP server, or constitutional rule — the `laws`
 catalog it indexes is the whole constitution, so an ontology section, an invariant and a
 doctrine rule are all reachable by name; <kbd>↑</kbd>/<kbd>↓</kbd> to
 move, <kbd>Enter</kbd> to open, <kbd>Esc</kbd> to clear. A bottom **Console** drawer
@@ -69,7 +69,7 @@ streams the output of background jobs and keeps their history across reloads.
 
 ## Views
 
-### 🧬 Harness
+### Dashboard
 
 - **Dashboard** (`#/`) — a live readout of what's deployed. Three lenses: **Status**
   (readiness ring, a KPI band, a genome grid, recent activity), **Lineage** (the
@@ -84,6 +84,9 @@ streams the output of background jobs and keeps their history across reloads.
   puts an active-packs fraction under the tile (`3/4 packs · N rules`), and the Operator HUD
   gives it its own cell (`PACKS 3/4`). That is what makes a narrowed install *look* different
   from a full one at a glance.
+
+### 📖 Codex
+
 - **Rules** (`#/rules`) — your own standing rules, read from and written to the
   `user-rules.md` beside the deployed AGENT.md (the seed-once file no update ever
   touches). List with scope (user/project) and trial chips, add/edit/retire forms, a
@@ -108,17 +111,22 @@ streams the output of background jobs and keeps their history across reloads.
   **Promote to rule** control turns a recurring lesson into a trial rule in
   `user-rules.md` — provenance recorded, the source fact deleted so it isn't loaded
   twice — landing you on the Rules page.
-
-### 📚 Learn
-
+- **Profile** (`#/profile`) — `PROFILE.md` beside the deployed AGENT.md: who you are and
+  how you like to work. Opens rendered; **Edit** is a whole-file editor. The save carries
+  the fingerprint it loaded — if an agent session changed the file first, your edit stays
+  on screen and a second Save replaces the newer version.
+- **Skills** (`#/skills`) and **Agents** (`#/agents`) — the deployed catalogue, each entry
+  with its purpose line and full spec.
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
   reference (generated from the harness argument parser), and a glossary, grouped into
-  Get started / Core concepts / How-to / MCP servers / Plugins / Reference / Deeper.
-- **Specs** (`#/specs`) — the dated implementation specs from `docs/specs/`, each with its
-  purpose line, rendered with the same engine as Docs.
+  Get started / Core concepts / How-to / MCP servers / Plugins / Reference / Deeper. Filtered
+  for one host family (OpenCode, or Claude Code — which Bob and Copilot share); with no
+  choice stored it follows the deployed install.
 
-### 🔧 Maintain
+### 🩺 Care
 
+- **Activity** (`#/activity`) — the agent sessions on this machine: each one's status,
+  the files it touched and its todo progress; open one for its detail.
 - **Changes** (`#/diff`) — the diff between the deployed harness and the source: edited /
   added / missing files with per-file expansion and coloured unified-diff lines. Select
   files to **export an `improvements.md`** back-port, or **restore** them to source.

@@ -10,10 +10,9 @@ import { rulesInForce } from '../../lib/format.js'
 // about how they relate — that the invariants are never negotiable while the doctrines are
 // a build-time choice, or that either one reaches the skills and agents at all.
 //
-// NOTHING IS REUSED FROM MiniGraph, and that is not an oversight. MiniGraph force-relaxes an
-// arbitrary cross-link graph into a constellation; this is a FIXED composition — hub, three
-// satellites, four governed nodes — whose whole meaning is in the positions. A layout
-// algorithm would move them, and the picture would stop saying anything.
+// A FIXED composition — hub, three satellites, four governed nodes — whose whole meaning is
+// in the positions. No layout algorithm: one would move them, and the picture would stop
+// saying anything.
 //
 // ⚠ EVERY CIRCLE IS SIZED FROM ITS OWN TEXT, and the first version was not. It carried the
 // prototype's hand-drawn radii, which were fitted to the prototype's strings in the

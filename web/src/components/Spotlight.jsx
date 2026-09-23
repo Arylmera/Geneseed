@@ -5,7 +5,7 @@ const MAX_RESULTS = 24
 
 // Rank a hit: title-prefix beats title-includes beats desc/name-includes. A
 // lower score sorts first. We also break ties by the index entry's own sortKey
-// so Library sections come before MCP/Docs/Specs.
+// so Library sections come before MCP/Docs.
 function score(entry, q) {
   const t = entry.title.toLowerCase()
   if (t.startsWith(q)) return 0

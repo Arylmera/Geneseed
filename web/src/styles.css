@@ -73,7 +73,7 @@
 
   --text:   #EAEEF2;
   --text-2: #9AA6B2;
-  --text-3: #687481;
+  --text-3: #727F8E;
 
   /* accent — overwritten live to match the deployed theme. cyan default. */
   --accent:    #3AD4C4;
@@ -672,6 +672,8 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .strand { display: flex; align-items: center; justify-content: space-between;
   padding: 13px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .strand .strand-name { display: flex; align-items: center; gap: 12px; min-width: 150px; font-weight: 600; }
+.strand .strand-link { color: inherit; text-decoration: none; }
+.strand .strand-link:hover { text-decoration: underline; }
 .strand .strand-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
 .strand .hbar { flex: 1; margin: 0 16px; }
 .strand .strand-val { font-family: var(--font-mono); width: 34px; text-align: right; font-size: 14px; }
@@ -917,7 +919,9 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   box-shadow: var(--shadow-pop); padding: 8px; max-height: 60vh; overflow: auto;
 }
 .pop-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-sm);
-  cursor: pointer; font-size: 13px; }
+  cursor: pointer; font-size: 13px; width: 100%; border: 0; background: none; color: inherit;
+  font-family: inherit; text-align: left; }
+.pop-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pop-item:hover { background: var(--surface-3); }
 .pop-item .po { width: 11px; height: 11px; border-radius: 50%; flex: none; }
 .pop-item .pn { text-transform: capitalize; font-weight: 500; }
@@ -1456,7 +1460,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #4C5762;
   --text:      #EAEEF2;
   --text-2:    #9AA6B2;
-  --text-3:    #687481;
+  --text-3:    #758290;
   --good:      #4ED888;
   --warn:      #E8B53D;
   --bad:       #FF6B66;
@@ -1481,7 +1485,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #9DACAC;
   --text:      #0E1620;
   --text-2:    #46535F;
-  --text-3:    #69788A;
+  --text-3:    #616F80;
   --good:      #14855A;
   --warn:      #9E6410;
   --bad:       #CC3A44;
@@ -1527,7 +1531,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #5E7350;
   --text:      #F2EFE4;
   --text-2:    #B2BBA4;
-  --text-3:    #7C8A70;
+  --text-3:    #7D8B71;
   --good:      #74CE86;
   --warn:      #E8B53D;
   --bad:       #FF6F69;
@@ -1552,7 +1556,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #A79C82;
   --text:      #22271A;
   --text-2:    #575C45;
-  --text-3:    #82896E;
+  --text-3:    #6A705A;
   --good:      #1C8450;
   --warn:      #9C6A10;
   --bad:       #CC4A45;
@@ -1600,7 +1604,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #48535F;
   --text:      #D6DEE6;
   --text-2:    #92A0AE;
-  --text-3:    #657180;
+  --text-3:    #738091;
   --good:      #4FB37E;
   --warn:      #E8A23B;
   --bad:       #E8625A;
@@ -1625,7 +1629,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #97A0AA;
   --text:      #141A21;
   --text-2:    #47525E;
-  --text-3:    #6B7785;
+  --text-3:    #626D7A;
   --good:      #1A7A4D;
   --warn:      #8F5E10;
   --bad:       #C2403F;
@@ -1689,7 +1693,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #A99EBC;
   --text:      #1E1826;
   --text-2:    #574E63;
-  --text-3:    #837A90;
+  --text-3:    #746B80;
   --good:      #3C8B5E;
   --warn:      #B07914;
   --bad:       #C24452;
@@ -1745,7 +1749,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #33514C;
   --text:      #D2EBD9;
   --text-2:    #86A492;
-  --text-3:    #62806C;
+  --text-3:    #64836E;
   --good:      #2DD68A;
   --warn:      #D4A024;
   --bad:       #F2495B;
@@ -1770,7 +1774,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #86A793;
   --text:      #0A1410;
   --text-2:    #41564B;
-  --text-3:    #647A6D;
+  --text-3:    #5C7064;
   --good:      #117A4E;
   --warn:      #9A6410;
   --bad:       #C2403F;
@@ -1935,7 +1939,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #94A0AD;
   --text:      #11161D;
   --text-2:    #4A5563;
-  --text-3:    #717E8D;
+  --text-3:    #636F7C;
   --good:      #1F8A52;
   --warn:      #9A6A12;
   --bad:       #C2403C;
@@ -2002,7 +2006,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #3E4E74;
   --text:      #F2F5FB;
   --text-2:    #9BA6BE;
-  --text-3:    #717C92;
+  --text-3:    #747F94;
   --good:      #2BC48A;
   --warn:      #F5A524;
   --bad:       #F4516B;
@@ -2027,7 +2031,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #9BA6BC;
   --text:      #0F1729;
   --text-2:    #475067;
-  --text-3:    #6B7488;
+  --text-3:    #697285;
   --good:      #077A55;
   --warn:      #B45309;
   --bad:       #C7003D;
@@ -2112,7 +2116,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #6398BB;
   --text:      #082230;
   --text-2:    #335A72;
-  --text-3:    #5A7E94;
+  --text-3:    #507084;
   --good:      #0A7A57;
   --warn:      #B45309;
   --bad:       #C70036;
@@ -2179,7 +2183,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #A48FD0;
   --text:      #1C1233;
   --text-2:    #574A78;
-  --text-3:    #7A6E98;
+  --text-3:    #746892;
   --good:      #1F9466;
   --warn:      #9A6A12;
   --bad:       #C53060;
@@ -2236,7 +2240,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #383838;
   --text:      #EDEDED;
   --text-2:    #909090;
-  --text-3:    #6E6E6E;
+  --text-3:    #7B7B7B;
   --good:      #00CC88;
   --warn:      #FF8833;
   --bad:       #FF3355;
@@ -2261,7 +2265,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #A8A8B0;
   --text:      #161618;
   --text-2:    #56565C;
-  --text-3:    #76767E;
+  --text-3:    #707077;
   --good:      #00A371;
   --warn:      #C2410C;
   --bad:       #D7263D;
@@ -2347,7 +2351,7 @@ a.rail-item.active { color: var(--text); }
   --line-3:    #A2977C;
   --text:      #1F1D16;
   --text-2:    #56503F;
-  --text-3:    #837B66;
+  --text-3:    #736C5A;
   --good:      #1C8450;
   --warn:      #9C6A10;
   --bad:       #CC4A45;

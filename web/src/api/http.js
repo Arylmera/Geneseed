@@ -1,7 +1,6 @@
 // HTTP core for the API layer — the one place fetch, the CSRF token, and error
-// normalisation live. Domain modules (status, catalog, diff, jobs, mcp) build on
-// `get`/`post`; index.js composes them into the single `api` object. Mirrors how
-// _harness_core owns the shared primitives the topic modules import.
+// normalisation live. index.js builds every endpoint on `get`/`post` and exports
+// them as the single `api` object.
 
 // The server injects this into index.html as a CSRF guard for mutating calls.
 const TOKEN = typeof window !== 'undefined' ? window.__GENESEED_TOKEN__ : ''

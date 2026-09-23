@@ -1,16 +1,25 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { SECTIONS, SECTION_ORDER } from '../lib/sections.js'
+import { useHarness } from './useHarness.js'
 
 // Lazy-loaded global search index for the topbar spotlight. Pulls catalog
 // items from every Library section, MCP servers from each config target, and
-// the Docs/Specs menus into one flat list of {kind, title, desc, hay, route}.
+// the Docs menu into one flat list of {kind, title, desc, hay, route}.
 // `prime()` kicks the load on first focus — we don't want to pay this cost at
-// app boot for users who never search.
-export function useSearchIndex() {
+// app boot for users who never search. `rev` is the app's data revision: a build,
+// a memory delete or an install switch bumps it, and the index is dropped so the
+// next search re-reads instead of offering items (and routes) that no longer exist.
+export function useSearchIndex(rev = 0) {
   const [index, setIndex] = useState(null)
   const [error, setError] = useState('')
   const inflight = useRef(null)
+  const [harness] = useHarness()
+
+  useEffect(() => {
+    setIndex(null)
+    inflight.current = null
+  }, [rev, harness])
 
   const prime = useCallback(() => {
     if (index || inflight.current) return inflight.current
@@ -62,7 +71,8 @@ export function useSearchIndex() {
               title,
               desc: s.desc || '',
               hay: `${title} ${s.desc || ''} ${s.name || ''} mcp`.toLowerCase(),
-              route: '#/settings',
+              // MCP wiring lives on the Harness page, not Settings.
+              route: '#/harness',
             })
           }
         }
@@ -72,7 +82,7 @@ export function useSearchIndex() {
 
       // Docs pages.
       try {
-        const docs = await api.docs()
+        const docs = await api.docs(harness)
         for (const g of docs?.groups || []) {
           for (const p of g.pages || []) {
             entries.push({
@@ -99,7 +109,7 @@ export function useSearchIndex() {
     })
     inflight.current = job
     return job
-  }, [index])
+  }, [index, harness])
 
   return { index, error, prime }
 }
