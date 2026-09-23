@@ -6,11 +6,12 @@ kind: "concept"
 ---
 Claude Code has no `instructions` array and no JS plugin dir — the harness reaches it through **`settings.json` hooks** instead: the same capabilities the OpenCode plugins provide, each driven by a `geneseed-hook` subcommand. `CLAUDE.md` itself auto-loads by location, so it needs no hook at all.
 
-### The four hooks
+### The hooks
 
 - **Context injection** — `SessionStart` (startup, clear, resume) runs `geneseed-hook context`: auto-discovers the repo's docs by convention and injects them before your first turn, plus your machine wiki. It honours the same `GENESEED_CONTEXT` manifest as the OpenCode context plugin.
 - **Git gate** — `PreToolUse` on Bash runs `geneseed-hook git-gate`: a `git commit` or `git push` anywhere in the command line — a compound one-liner and a `-C <path>` form included — asks first, at the tool boundary and before the shell runs it (**Doctrine process 5**). It is the one hook that rides a doctrine pack: an install built without **process** never gets this group, because a boundary that keeps asking for a rule the install did not adopt is a gate arguing with its own harness.
 - **Rule gate** — `PreToolUse` on the write tools runs `geneseed-hook rule-gate`: a write to `user-rules.md` or to a memory file asks first, because whether something you want kept is a standing rule or a durable fact is *your* call, settled through the [rule skill](#/docs/skills) (**Doctrine process 1**). Ordinary edits are untouched.
+- **Tool gate** — `geneseed-hook tool-gate` is the git gate and the rule gate fused behind one command, for hosts whose hook config has no per-tool matcher (Copilot, Bob). Claude Code matches per tool, so its `settings.json` wires the two gates above instead.
 - **Learn** — `Stop` and `SubagentStop` run `geneseed-hook learn`: distils durable memories into the install's `memory/` store at session end; a subagent's stop routes to the per-agent lesson path (`memory/agents/<name>.md`).
 
 ### Where they live
@@ -19,7 +20,7 @@ The emit merges the hook groups surgically into your `settings.json` (global `~/
 
 ### The hook shim
 
-Hooks run with the project as their working directory, so every command has to be an absolute path. Rather than write the interpreter and this checkout into your `settings.json`, the emit points all four hooks at one stable file — the **hook shim**, at `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows). The shim holds the two volatile paths; the config holds none.
+Hooks run with the project as their working directory, so every command has to be an absolute path. Rather than write the interpreter and this checkout into your `settings.json`, the emit points every hook at one stable file — the **hook shim**, at `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows). The shim holds the two volatile paths; the config holds none.
 
 That indirection is what lets the checkout move. Before it, relocating or replacing the clone silently broke the gates in every install at once, and the only repair was re-emitting every config. Now a single build rewrites the shim and every install is live again. The shim is refreshed on **every** emit, so an ordinary `geneseed build` is the repair; `geneseed doctor` reports it if it was ever stale.
 

@@ -35,11 +35,11 @@ that matches your tool, then configure and verify. For the conceptual overview s
 Nothing in this guide needs a second interpreter. Three things are worth stating plainly,
 because each is a live constraint rather than a footnote:
 
-- **0 commands have no Node twin**: every command in this guide answers from the Node
-  entry points. There is no full-screen browse panel: `geneseed tui` and `geneseed menu`
-  are verbs that say the panel is not here and print the command list instead, and off a
-  terminal (which is how scripts and CI run them) the bytes and the exit code are the
-  recorded ones. `home` opens the web console, which is the visual front end.
+- **Every command runs on Node.** There is no full-screen browse panel: `geneseed tui`
+  and `geneseed menu` are verbs that say the panel is not here and print the command list
+  instead. Bare `geneseed` — from the launchers and from an npm install alike — runs
+  `home`, which opens the web console when it can and otherwise prints the command list;
+  `geneseed --help` lists every command.
 - **Nothing you install needs an interpreter.** The `token-report` skill is a script
   rather than prose, and it ships as `scripts/token_report.mjs`, run with `node`;
   `daydream` and `herdr` hand their inline code to `node -e`.
@@ -79,7 +79,7 @@ tagline, loaded-sigil, and voice — so you hear the flavour before you choose; 
 you pick, it speaks in that theme's accent through confirm and build, and the
 install ends on the theme's own **banner and benediction**.
 
-**Already installed?** Bare **`./geneseed`** (Windows: `.\geneseed.cmd`) opens the
+**Already installed?** Bare **`geneseed`** (a checkout: `./geneseed`, Windows: `.\geneseed.cmd`) opens the
 **web console**, which is where browsing, local edits, rebuilds, memory, status, MCP
 servers and uninstall all live — see [The web console](docs/web-ui.md). `GENESEED_NO_WEB=1`
 suppresses that and prints the command list instead. Uninstall from the CLI is
@@ -103,8 +103,8 @@ hand? Pick a path below.
 > `node bin/build-driver.mjs` with the same flags. Every commit re-emits with it across every
 > theme × host × footprint combination and checks the result with `doctor --all`, on Linux
 > and Windows both. Until 2026-08-17 that output was also compared byte for byte against
-> recordings taken from the Python implementation; those were retired, and `docs/limits.md`
-> says why and what it cost.
+> recordings taken from the Python implementation; those were retired (see the 2.0.0 entry
+> in [CHANGELOG.md](CHANGELOG.md)).
 
 ---
 
@@ -914,7 +914,8 @@ not connected, walk these in order:
 | `GENESEED_NO_ANIM` | install animation | disable the themed install animation |
 | `GENESEED_LOG` | `geneseed upgrade` | override the install/upgrade log path |
 | `GENESEED_NET_TIMEOUT` | `upgrade` | seconds before download attempts give up (default 20, floor 5) |
-| `GENESEED_NO_WEB` | launcher / menu | `1` disables the web-first default of bare `./geneseed` — falls back to the terminal menu |
+| `GENESEED_NO_WEB` | `home` | `1` disables the web-first default of bare `geneseed` — it prints the command list instead |
+| `GENESEED_STACK_GLOBAL` | context hook | `1` disables project-bypasses-global: a project install of the same host no longer makes the global install's hook stand down, so both inject |
 | `OPENCODE_CONFIG_DIR` / `XDG_CONFIG_HOME` | global emit | where the global install is written |
 | `OPENCODE_DISABLE_LSP_DOWNLOAD` | OpenCode (LSP) | `true` stops OpenCode auto-downloading built-in language servers (typescript, pyright, jdtls) — set it on air-gapped machines and pre-install each server yourself |
 
@@ -962,7 +963,7 @@ harness no matter where the shim itself lives — the same shape the Windows arm
 always used. Once it's on `PATH`, drop the `./`:
 
 ```
-geneseed            # the interactive main menu, from any directory
+geneseed            # the web console (else the command list), from any directory
 geneseed build      # …and every subcommand
 ```
 

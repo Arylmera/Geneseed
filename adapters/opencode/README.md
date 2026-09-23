@@ -380,8 +380,8 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   `tokyonight`, `rosepine`, `gruvbox`, `nord`, `everforest`, `kanagawa`, `dracula` — each
   in a **solid** (opaque) and a **transparent** (terminal-background-through) flavour.
   These are decoupled from the voice theme: any voice theme can run any colour theme.
-  Authored under `themes/opencode/` (see its README and
-  [the spec](../../docs/specs/2026-06-17-opencode-color-themes.md)).
+  Authored under `themes/opencode/` (see its README; the design record was the
+  `2026-06-17-opencode-color-themes` spec).
 - **Runtime guard plugin** (`geneseed-guard.js`, installed with the others). Enforces
   the safety Laws at the tool boundary: **blocks** writes to private-key/credential
   files (Law I), catastrophic shell like `rm -rf /` (Law IV), and any mutation under

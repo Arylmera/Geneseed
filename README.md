@@ -10,7 +10,7 @@
 [![Node >= 22.3](https://img.shields.io/badge/node-%3E%3D22.3-5fa04e)](package.json)
 [![zero dependencies](https://img.shields.io/badge/deps-zero-success)](package.json)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
-[![Skills](https://img.shields.io/badge/skills-49-blueviolet)](src/skills/)
+[![Skills](https://img.shields.io/badge/skills-52-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-18-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-11-critical)](src/laws/universal.md)
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
@@ -36,7 +36,7 @@ Want to read what it leaves behind before installing anything? [**geneseed-demo*
 
 A hand-written instructions file is prose the model may or may not honour, copied into every repo and drifting in each one. Geneseed is a build, and that changes four things:
 
-- **Laws are enforced, not suggested.** A force-push, a `reset --hard`, or a credential written into a tracked file is caught by a hook *before* the tool runs, in the host's own dialect — a prompt on Claude Code, a hard block on OpenCode and Copilot, exit 2 on Bob. The gates fail closed, and every catch is one line in a ledger that `geneseed status` counts.
+- **Laws are enforced, not suggested.** A force-push, a `reset --hard`, or a credential written into a tracked file is caught by a hook *before* the tool runs, in the host's own dialect — a prompt on Claude Code and Copilot, a hard block on OpenCode, exit 2 on Bob. The gates fail closed, and every catch is one line in a ledger that `geneseed status` counts.
 - **One source, five targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 261 emit configurations, and a second emit into the same tree must change nothing.
 - **Costs are measured, not guessed.** Zero runtime dependencies. The hook path loads in about 14 ms per tool call. The default *lean* footprint keeps the always-on context small and puts the full rationale one read away — the numbers are in [docs/token-footprint.md](docs/token-footprint.md).
 - **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
@@ -92,7 +92,7 @@ Cloning still works and is what you want if you intend to *change* the harness r
 ```bash
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
-./geneseed setup          # the wizard — or bare `./geneseed` for the main menu
+./geneseed setup          # the wizard — bare `./geneseed` opens the web console
 ```
 
 **Windows** — native, no bash, WSL, curl, or unzip; works from cmd or PowerShell:
@@ -100,7 +100,7 @@ cd Geneseed
 ```powershell
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
-.\geneseed.cmd setup      # the wizard — or bare .\geneseed.cmd for the main menu
+.\geneseed.cmd setup      # the wizard — bare .\geneseed.cmd opens the web console
 # PowerShell runs a .cmd directly, so this is the PowerShell spelling too
 ```
 
@@ -108,13 +108,7 @@ Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PA
 
 ### 🟩 One runtime — Node, and nothing else
 
-Node ≥ 22.3 is the entire dependency list. Every subcommand, all four hooks, every web-console endpoint and both generators run from it, and every commit runs the whole unit suite plus `doctor --all` across every theme × host × footprint, on Linux and Windows both. So an install needs no second interpreter — not for the harness, and not for anything it ships. (Until 2026-08-17 the generator's output was also replayed byte for byte against recordings taken from the Python implementation. Those were retired — see [`docs/limits.md`](docs/limits.md) for the measurement that licensed it and the coverage it cost.)
-
-- **One runtime, no second one to install**: every command and all four hook verbs answer from the Node entry points. `catalog`, `mcp` and `memory` are console-facing verbs the CLI table declares alongside them. There is no full-screen browse panel — `geneseed tui` and `geneseed menu` are verbs that refuse it by name and print the command list instead, off a terminal as well as on one.
-- **Nothing you install needs an interpreter.** The `token-report` skill is a script rather than prose, and it ships as `scripts/token_report.mjs`, run with `node`; `daydream` and `herdr` hand their inline code to `node -e`. So **every bundle carries** nothing that needs one: no Python file, and no skill that shells out to an interpreter, on any host, theme or footprint. Three tests freeze that — one scans every tracked file for inline code handed to an interpreter, one globs the bundle source, and one replays the report script over seeded transcripts for all four hosts and compares the bytes.
-- **`upgrade` / `update` / `sync-self` / `bootstrap` are for a git checkout.** They `git pull` the install's own origin. From an npm install they stop before touching anything and name `npm install -g geneseed@latest` as the update instead.
-
-One more honest edge, in the web console rather than the CLI: the **"browse…" folder picker** would open an OS-native dialog on the machine running the daemon, and this server declines to. The button reports that it is unavailable and the field beside it stays editable — type or paste the path.
+Node ≥ 22.3 is the entire dependency list — every command, all five hook verbs, the web console and both generators run from it, and nothing any bundle ships needs a second interpreter. The details, and the few honest edges, are in [SETUP.md → One runtime](SETUP.md#-one-runtime--node-and-nothing-else).
 
 ### ✅ After installing
 
@@ -145,21 +139,20 @@ geneseed web status          # is it running, and where
 
 The left rail mirrors the harness's own shape:
 
-| Group | What's there |
+| Group | Views |
 | --- | --- |
-| **🧬 Harness** | **Dashboard** — live readout of what's deployed (voice, capabilities, drift, recent jobs) · **Library** — browse Laws, Agents, Skills, Memory, Notebook · **Graph** — cross-link constellation across the whole harness |
-| **📚 Learn** | **Docs** — rendered markdown + concept pages + CLI reference + glossary, grouped into Get started / Core concepts / How-to / MCP servers / Plugins / Reference / Deeper · **Specs** — dated implementation specs with design rationale |
-| **🔧 Maintain** | **Changes** — diff between the deployed harness and the source, export an `improvements.md` back-port · **Doctor** — health check across themes, links, parity, and authoring gates |
-| **🎨 Configure** | **Themes** — preview and switch the deployed voice live · **Settings** — MCP servers, server controls |
-| **ℹ️ About** | project + creator credits, source link |
+| *(ungrouped)* | **Dashboard** — live readout of what's deployed (voice, capabilities, drift, recent jobs) |
+| **📖 Codex** | **Constitution** · **Rules** · **Profile** · **Skills** · **Agents** · **Library** (Memory, Notebook, the wiki) · **Docs** |
+| **🩺 Care** | **Activity** · **Changes** — diff against the source, export an `improvements.md` · **Doctor** — health check across themes, links, parity and authoring gates |
+| **🎨 Setup** | **Harness** — installs, theme, footprint · **Settings** — MCP servers, server controls |
 
-It binds to `127.0.0.1` only and runs entirely offline — no npm needed at runtime; the UI build ships in `web/dist/`. Mutating actions run in the background and report back as toasts (fire-and-notify), guarded by a per-session token so other sites can't trigger them. A global **Spotlight** search in the topbar jumps to any agent, skill, law, doc, or spec. Rebuild the UI after changing anything under `web/src/` with `cd web && npm install && npm run build`. If `web/dist/` is missing (fresh clone, never built), `geneseed web` offers to run that build for you — answer `Y` and it installs, builds, and starts the server; in non-interactive shells it prints the manual recipe instead.
+It binds to `127.0.0.1` only and runs entirely offline — no npm needed at runtime; the UI build ships in `web/dist/`. Mutating actions run in the background and report back as toasts (fire-and-notify), guarded by a per-session token so other sites can't trigger them. A global **Spotlight** search in the topbar jumps to any agent, skill, rule, doc, or MCP server. Rebuild the UI after changing anything under `web/src/` with `cd web && npm install && npm run build`. If `web/dist/` is missing (fresh clone, never built), `geneseed web` offers to run that build for you — answer `Y` and it installs, builds, and starts the server; in non-interactive shells it prints the manual recipe instead.
 
 Full reference — every view, the launch/daemon/PWA surface, the security model: **[docs/web-ui.md](docs/web-ui.md)**.
 
 ### ⌨️ Terminal — `geneseed`
 
-No browser? Every action the console offers is also a verb: `build`, `doctor`, `diff`, `rebuild-all`, `status`, `memory`, `catalog`, `exclude`, `mcp`, `link`/`unlink`, `uninstall` (global **or** per-repo). `geneseed setup` runs the install wizard — plain text prompts, every console, every OS; see [Setup](#-2--setup) above for the walkthrough. `geneseed --help` lists the rest. There is no full-screen panel: `tui` and `menu` are verbs that say so and print the command list.
+No browser? Every action the console offers is also a verb: `build`, `doctor`, `diff`, `rebuild-all`, `status`, `memory`, `catalog`, `exclude`, `mcp`, `link`/`unlink`, `uninstall` (global **or** per-repo). `geneseed setup` runs the install wizard — plain text prompts, every console, every OS; see [Setup](#-2--setup) above for the walkthrough. `geneseed --help` lists every command, and bare `geneseed` (or `./geneseed`) opens the web console when it can, else prints the command list. There is no full-screen panel: `tui` and `menu` are verbs that say so and print the command list.
 
 ---
 
@@ -170,10 +163,10 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 | Layer | What it is |
 | --- | --- |
 | **🧭 Ethos** (`ontology/`) | the mind the rules govern, in four prose sections — **Telos** (the Pact: three ranked laws — protect the user, serve their intent, keep your own honesty), **Evidence** (every claim graded by how it was obtained), **Decisions** (classify and tier by reversibility, show the real forks), **Conduct** (answer what was asked, once). Always in force, never toggleable |
-| **🛡️ Rules** (`laws/`) | 11 universal laws the agent obeys — always in force, never toggleable: sealed-secrets, one-intent-one-act, verify-before-assert, deletion-is-deliberate, surface-failures, data-not-orders, least-privilege, root-cause, external-gate, echo-the-intent, absence-is-a-claim |
+| **🛡️ Rules** (`laws/`) | 11 universal laws, nine of them in force — always, never toggleable: sealed-secrets, one-intent-one-act, verify-before-assert, deletion-is-deliberate, surface-failures, data-not-orders, least-privilege, root-cause, echo-the-intent. Laws IX and XI are retired, their numbers kept so old references resolve |
 | **📐 Doctrines** (`doctrines/`) | practice packs, chosen per install at build time: **craft** (how code is written), **rigor** (how work is proven), **ops** (how the machine is operated), **process** (how a task is run). A doctrine rule may tighten a Rule, never repeal one, and the user's own `user-rules.md` outranks it. Pick with `geneseed-build --doctrines craft,rigor` (or `none`), a single rule with `--exclude-rules "process 7"`, in the setup wizard, or through the switches on the console's Constitution page; all four pack files ship on disk either way, so a citation into a pack you left out still resolves |
 | **🤖 Agents** (18) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer`, `researcher`, `developer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
-| **🛠 Skills** (49) | repeatable workflows: brainstorm · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · **develop** · **worktree** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · **bruno-collection-generator** · **bruno-test-writer** · geneseed-code-review · **fresh-eyes** · **security-audit** · **ci-fix** · **deps-audit** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **teach** · **quiz** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **consolidate-memory** · **skill-forge** · **opencode-theme** · **herdr** · **pipeline** |
+| **🛠 Skills** (52) | repeatable workflows: brainstorm · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · **develop** · **worktree** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · **bruno-collection-generator** · **bruno-test-writer** · geneseed-code-review · **fresh-eyes** · **security-audit** · **ci-fix** · **deps-audit** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **teach** · **quiz** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **consolidate-memory** · **skill-forge** · **opencode-theme** · **herdr** · **pipeline** · **daydream** · **react-view-transitions** · **token-report** |
 | **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift; `geneseed-activity` streams what each session is doing to the web console's Activity view |
 | **🧠 Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **📓 Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |
@@ -276,11 +269,11 @@ Token cost per host: **[docs/token-footprint.md](docs/token-footprint.md)**.
 Geneseed/
 ├── package.json          the npm package: three commands, zero dependencies
 ├── bin/                  the Node entry points — geneseed-cli.mjs (the CLI), geneseed-hook.mjs
-│                         (the four hook verbs), geneseed.mjs (the generator driver)
+│                         (the five hook verbs), build-driver.mjs (the generator driver)
 ├── js/                   the Node harness — generator, hooks, web server, doctor, installs
-│                         (js/cli-table.json is the CLI as data; both runtimes read it)
+│                         (js/cli-table.json is the CLI as data; the CLI reads it)
 ├── geneseed              launcher (bash): a shim over bin/geneseed-cli.mjs — bare `./geneseed`
-│                         = interactive main menu; + every subcommand the CLI carries
+│                         = the web console (else the command list); + every subcommand
 │                         (`./geneseed link` puts it on PATH so `geneseed` runs from anywhere)
 ├── geneseed.cmd          the same shim for cmd.exe / PowerShell — no bash needed
 ├── harness.config.json   default theme + metadata (the one owner of the version)
@@ -297,8 +290,7 @@ Geneseed/
 │   └── notebook/         the agent's own freeform space — convention + index
 ├── themes/               voice token maps (14 themes shipped)
 ├── web/                  Vite + React UI source; the committed web/dist/ build is what ships
-├── tests/                Node test suites + the pure-function/help recordings they replay
-│                         (tests/__snapshots__/ — the emit/cli/web corpora retired 2026-08-17)
+├── tests/                Node test suites, golden.mjs (every emit config) and mutate.mjs
 ├── docs/                 guides (web-ui, wiki, …) + docs/web/ (the console's Docs pages);
 │                         specs/, reviews/, superpowers/ are local working docs — git-ignored
 ├── adapters/             per-host glue (opencode/, claude-code/, bob/, copilot/)
@@ -309,7 +301,7 @@ Geneseed/
 
 ```bash
 node bin/geneseed-cli.mjs doctor      # every theme + parity + authoring + drift
-node --test "tests/**/*.test.mjs"     # the test suites (node expands the glob)
+node --test --test-reporter=tap "tests/**/*.test.mjs"   # the suites (node expands the glob)
 ```
 
 `doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every push and PR, on both Linux and Windows. Publishing is a separate, manually-triggered workflow (`.github/workflows/publish.yml`) — see [Contributing](#-contributing).
@@ -352,7 +344,7 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 | ⤷ [HOW-OPENCODE-LOADS.md](adapters/opencode/HOW-OPENCODE-LOADS.md) | Why a file shows up twice; plugin loading |
 | **[adapters/claude-code/](adapters/claude-code/README.md)** | The Claude Code hook adapter |
 | **[adapters/bob/](adapters/bob/README.md)** | The IBM Bob adapter — Claude-shaped, rules-file preamble |
-| **[adapters/copilot/](adapters/copilot/README.md)** | The GitHub Copilot adapter — reduced host, no hooks |
+| **[adapters/copilot/](adapters/copilot/README.md)** | The GitHub Copilot adapter — global hooks (`sessionStart`, `preToolUse`, `agentStop`, `preCompact`) |
 | **[src/memory/README.md](src/memory/README.md)** | The memory convention |
 | **[src/notebook/README.md](src/notebook/README.md)** | The agent's own freeform-space convention |
 
@@ -362,7 +354,7 @@ Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Aryl
 
 Three things that bite when you don't know them:
 
-- **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. What holds it honest is `tests/unit/cli_table.test.mjs` plus the recorded help texts under `tests/__snapshots__/help/`, which every verb's `--help` is rendered against — so change a flag here and the fixture for that verb is what tells you. Those recordings are frozen and cannot be re-taken; a red one is a finding, not a re-bless.
+- **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. What holds it honest is `tests/unit/cli_table.test.mjs` — change a flag here and that suite is what tells you.
 - **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
 - **Publishing is deliberate and manual.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. It runs only from Actions → publish → Run workflow, and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
 

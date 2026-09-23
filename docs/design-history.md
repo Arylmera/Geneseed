@@ -4,7 +4,7 @@
 
 **The Node port, P2 → P10 (2026-06 → 2026-08). A record, not a spec.**
 
-[← Back to DESIGN.md](../DESIGN.md) · [What this tool does not prove](limits.md) · [What it costs to add one thing](extending.md)
+[← Back to DESIGN.md](../DESIGN.md) · [What it costs to add one thing](extending.md)
 
 </div>
 
@@ -31,7 +31,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
 ---
 
 ## ⚙️ Generator contract — the port narrative
-- **The render core has a Node twin: [`js/build/render.mjs`](js/build/render.mjs).** It is a
+- **The render core has a Node twin: [`js/build/render.mjs`](../js/build/render.mjs).** It is a
   translation of `_build_render.py`'s pure pipeline, byte-identical by test rather than by
   intent — `tests/test_render_parity.py` renders both over every theme × footprint ×
   catalog × laws-prefix × posture × mode and compares the written trees byte for byte,
@@ -39,7 +39,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   sort. `js/lib/fs.mjs` holds the primitives where the two runtimes disagree in silence;
   `Path.write_text`'s `\n` → `os.linesep` translation is the load-bearing one. Zero
   dependencies on that side too.
-- **The host-native layer has one too: [`js/hosts/native.mjs`](js/hosts/native.mjs)** — the point where
+- **The host-native layer has one too: [`js/hosts/native.mjs`](../js/hosts/native.mjs)** — the point where
   RENDER stops being a pure function of `src/`. Its output depends on your
   `agent-overrides.json`, on which files already exist in the target (claim-on-create never
   overwrites a file Geneseed did not write), and on which of the three host dialects is
@@ -49,7 +49,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   items and compares the written tree byte for byte, the returned ownership list *in order*,
   and the warning stream — and asserts the Node side printed nothing at all on stdout,
   because the emitted hook gates signal their verdict there and return 0 on every path.
-- **The OpenCode extras are ported too: [`js/hosts/opencode.mjs`](js/hosts/opencode.mjs)** — the
+- **The OpenCode extras are ported too: [`js/hosts/opencode.mjs`](../js/hosts/opencode.mjs)** — the
   branded and curated colour themes, the opt-in primary agent and slash-command layer, the
   always-on `/ponytail` switch, the verbatim plugin/workflow copies, and the
   `agent-overrides.json` stub with its staleness notice. Half of it sits behind
@@ -61,7 +61,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   streams** — the staleness notice goes to stdout where every native-layer warning goes to
   stderr, an asymmetry inherited from the Python rather than corrected.
 - **The seam is now a real process boundary: `build.py` spawns Node once per emit.**
-  [`js/build/emit.mjs`](js/build/emit.mjs) writes the bundle (`build`) and the OpenCode layer's RENDER
+  `js/build/emit.mjs` writes the bundle (`build`) and the OpenCode layer's RENDER
   stage; Python keeps WIRE, PRUNE, MANIFEST and VERIFY, and drives — so doctor, web deploy,
   setup and rebuild-all keep calling `build.emit_*` in-process with no call site changed.
   Node falls back to Python when `node` is missing, silently and by design: the whole claim
@@ -121,7 +121,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   (with the bundle in a subfolder, so `--out` and the target are not the same directory), a
   `.claude/` the user got to first, and every write-once file edited *between* two emits —
   the only way a byte comparison can tell "kept your store" from "re-seeded it".
-- **The wiring layer has a Node twin as well: [`js/hosts/settings.mjs`](js/hosts/settings.mjs)** — the
+- **The wiring layer has a Node twin as well: [`js/hosts/settings.mjs`](../js/hosts/settings.mjs)** — the
   JSONC reader, the `opencode.json` and `settings.json` merges, the hook shim, the
   managed-block machinery and the settings integrity check. It was proven before it was
   wired, the way every piece before it was; the emit now drives it. It was the last unit to
@@ -203,7 +203,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   writes — a write through the facade cannot be restored reliably, and a redirect that
   silently outlives its test poisons every later read. A bare `SRC` left in a submodule
   raises `NameError` rather than quietly reading a stale copy; that noise is the point.
-- **There is a second driver: [`bin/geneseed.mjs`](bin/geneseed.mjs), and it is ADDED beside
+- **There is a second driver: `bin/geneseed.mjs`, and it is ADDED beside
   `main()` rather than replacing it.** `build.py` is also the `import build` facade that 19
   `rituals/` modules read 55 distinct names from, and roughly eleven sites spawn it as a
   subprocess; none of them flip, because flipping them would make Node mandatory for the
@@ -336,7 +336,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
 - **The runtime port starts with the four HOOK verbs, and with a gate rather than with
   code.** `context`, `git-gate`, `rule-gate` and `learn` are the four commands an emitted
   `settings.json` actually invokes, and they now have a Node twin:
-  [`js/hosts/hooks.mjs`](js/hosts/hooks.mjs) behind [`bin/geneseed-hook.mjs`](bin/geneseed-hook.mjs), a
+  [`js/hosts/hooks.mjs`](../js/hosts/hooks.mjs) behind [`bin/geneseed-hook.mjs`](../bin/geneseed-hook.mjs), a
   **second binary** rather than a subcommand of the generator driver — `learn` must spawn
   whatever `$GENESEED_LLM` names, and `bin/geneseed.mjs` is under a hard `child_process`
   ban that is half the proof it is not a passthrough. The hook entry loads none of the
@@ -345,7 +345,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   to import `build` for the marker filenames they need.
   **A cell is not an emit here, and that is the phase's first design question.** A verb's
   observable surface is stdout, stderr, the **exit code** and whatever it wrote, so
-  [`tests/helpers/cli_golden.mjs`](tests/helpers/cli_golden.mjs) compares all four across 103 seeded
+  [`tests/helpers/cli_golden.mjs`](../tests/helpers/cli_golden.mjs) compares all four across 103 seeded
   worlds — reusing `golden.py`'s `cell_env`, `_normalise`, `_snapshot` and `_split` rather
   than growing a second set of rules about sandboxes and CRLF. `cwd` is an **input** to
   three of the four (discovery, the sovereign bypass, and learn's memory search all read
@@ -417,7 +417,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   transitive relative imports instead — the same assertion, one level out, added because of
   this phase.
 - **`status` and `version` cross, and the phase's method is a CORPUS beside the matrix.**
-  [`js/inspect/status.mjs`](js/inspect/status.mjs) answers both from `bin/geneseed-cli.mjs`. Two structural
+  [`js/inspect/status.mjs`](../js/inspect/status.mjs) answers both from `bin/geneseed-cli.mjs`. Two structural
   things came with them.
   **A closure walk counts what the callee COMPUTES; the caller consumes a fraction of it.**
   An `ast` walk puts `status` at 527 LOC across 7 modules — `_tui_inventory` returns every
@@ -441,7 +441,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   the handoff offered.** `_color_enabled()` is `sys.stdout.isatty()`, every harness captures
   through a pipe, so deleting every escape code would be byte-identical across the whole
   matrix — ship it ungated or drop it and regress a real terminal. `_status_lines` is
-  documented pure, so [`tests/snapshot/pure_snapshot.test.mjs`](tests/snapshot/pure_snapshot.test.mjs)
+  documented pure, so `tests/snapshot/pure_snapshot.test.mjs`
   calls it directly on both sides over a corpus of dashboards × colour × ASCII, and the tty
   question never arises. Three more cell-unreachable functions ride along for the same
   reason — `_version_verdict`'s up-to-date branch, `_manifest_is_claude` (only consulted for
@@ -459,8 +459,8 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   now has one owner for the primitive instead of two.
 - **The first NON-hook verb crosses, and it needed a third binary rather than a row in an
   existing table.** `harness exclude add|remove|list` — the sovereign-repo exclusions —
-  is now [`js/inspect/excludes.mjs`](js/inspect/excludes.mjs) behind
-  [`bin/geneseed-cli.mjs`](bin/geneseed-cli.mjs). The *reader* had been ported since P5a
+  is now [`js/inspect/excludes.mjs`](../js/inspect/excludes.mjs) behind
+  [`bin/geneseed-cli.mjs`](../bin/geneseed-cli.mjs). The *reader* had been ported since P5a
   (`sovereignBypass` runs on every hook call); this is the writer, which maintains
   `excludes.json` across every global install and wires each host's native per-repo
   suppression into the excluded repo.
@@ -492,7 +492,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   atomic (temp + rename) on both sides, so a concurrent pair loses an edit rather than
   tearing the file.
 - **`build`, `prompt` and `theme` cross — the generator's own CLI face —** as
-  [`js/build/generate.mjs`](js/build/generate.mjs). **Ten of the 24 subcommands are now Node.** Three
+  [`js/build/generate.mjs`](../js/build/generate.mjs). **Ten of the 24 subcommands are now Node.** Three
   things are worth recording, and the first is about measurement rather than code.
   **A closure walk cannot see through a `subprocess`, and `build` is nothing but one.**
   `cmd_build` measures three lines because the work is `run([sys.executable, BUILD])`. Its
@@ -524,7 +524,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   `test_the_fence_corpus_still_describes_the_real_tree` re-derives it and fails the day a
   source file grows a four-backtick run — at which point a cell becomes writable and should
   be written. The corpus file is renamed to
-  [`tests/snapshot/pure_snapshot.test.mjs`](tests/snapshot/pure_snapshot.test.mjs) with it: it was
+  `tests/snapshot/pure_snapshot.test.mjs` with it: it was
   named for the status panel when the panel was all it held.
   **Three of the six verbs the phase was scoped around did not cross, each for a measured
   reason.** `sync-self` is a five-line alias whose body is `_update.sync_self` → `upgrade()`,
@@ -536,16 +536,16 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   interpreter using the discovery the shim flip deleted; and a shim naming
   `bin/geneseed-cli.mjs` instead would answer three of the 24 verbs. The npm `bin` map is
   what replaces them, so they belong to the publish phase and not to this one.
-- **`diff` and `rebuild-all` cross** as [`js/inspect/diff.mjs`](js/inspect/diff.mjs) and `cmdRebuildAll` in
-  [`js/build/generate.mjs`](js/build/generate.mjs), with the install detectors extracted to
-  [`js/hosts/installs.mjs`](js/hosts/installs.mjs) and the registry to [`js/inspect/registry.mjs`](js/inspect/registry.mjs).
+- **`diff` and `rebuild-all` cross** as [`js/inspect/diff.mjs`](../js/inspect/diff.mjs) and `cmdRebuildAll` in
+  [`js/build/generate.mjs`](../js/build/generate.mjs), with the install detectors extracted to
+  [`js/hosts/installs.mjs`](../js/hosts/installs.mjs) and the registry to [`js/inspect/registry.mjs`](../js/inspect/registry.mjs).
   **Twelve of the 24 subcommands are now Node.**
   **A closure walk cannot see through the standard library either.** An `ast` walk puts
   `diff` at 252 LOC of marker and manifest reading, and the verb's *entire* user-visible
   payload is `difflib.unified_diff`, which the walk counts as zero because `difflib` is not in
   `rituals/`. There is no lazier answer than reproducing it: a generic JS diff produces a
   correct diff and a *different* one, and what the acceptance matrix compares is bytes. So
-  [`js/lib/udiff.mjs`](js/lib/udiff.mjs) is `SequenceMatcher` and `unified_diff`, including
+  [`js/lib/udiff.mjs`](../js/lib/udiff.mjs) is `SequenceMatcher` and `unified_diff`, including
   `autojunk` — the popular-line purge that engages at 200 elements and rewrites the hunks of
   every real harness file, and which no fixture is large enough to reach.
   **The rest of the diff is gated by cells and the algorithm by a corpus**, with the
@@ -582,10 +582,10 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   does not exist yet: copy the checkout into the sandbox, plant one fault, and run *both*
   binaries from the copy so their two `ROOT`s move together. That is the next phase's first
   design decision rather than a corner of this one.
-- **`doctor` crosses** as [`js/inspect/doctor.mjs`](js/inspect/doctor.mjs), and the fixture came first.
+- **`doctor` crosses** as [`js/inspect/doctor.mjs`](../js/inspect/doctor.mjs), and the fixture came first.
   **Thirteen of the 24 subcommands are now Node.**
   **The copy-the-checkout fixture, measured rather than feared.** `_copy_checkout` in
-  [`tests/helpers/cli_golden.mjs`](tests/helpers/cli_golden.mjs) gives each cell its own copy of the
+  [`tests/helpers/cli_golden.mjs`](../tests/helpers/cli_golden.mjs) gives each cell its own copy of the
   working tree (`git ls-files --cached --others --exclude-standard`), plants one fault in it,
   and runs *both* binaries from the copy so the two `ROOT`s move together. 511 files, 5.2 MB,
   **0.31 s** against a `doctor` run of ~2.1 s — a seventh of the cell, so it is one copy per
@@ -621,7 +621,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   indistinguishable), and one of the mutations is aimed at the FIXTURE: with `_copy_checkout`
   planting nothing, a planted-fault cell does not go red, it goes *vacuous* — which is the
   absolute half of a cell doing its job one layer further out than it ever has.
-- **`uninstall` crosses** as [`js/maintain/uninstall.mjs`](js/maintain/uninstall.mjs), and it is the first verb
+- **`uninstall` crosses** as [`js/maintain/uninstall.mjs`](../js/maintain/uninstall.mjs), and it is the first verb
   in the port that **deletes**. **Fourteen of the 24 subcommands are now Node**; of the ten
   left, `setup`/`menu`/`home` are P5's and the rest belong to P6–P10.
   **A deletion needs the gate to prove what SURVIVED.** Every cell before this one asserts
@@ -660,7 +660,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   question about the corpus of inputs before it is a question about the code. The control had to
   be re-chosen too; the first one shared mechanism with half the mutations and reported four
   over-reaches that were nothing of the kind.
-- **`setup` crosses** as [`js/maintain/setup.mjs`](js/maintain/setup.mjs), and it is the first **interactive**
+- **`setup` crosses** as [`js/maintain/setup.mjs`](../js/maintain/setup.mjs), and it is the first **interactive**
   verb in the port. **Fifteen of the 24 subcommands are now Node**, and P5 is done: the nine
   left belong to P6–P10.
   **`cmd_setup` is a dispatcher, and that is the phase's first finding.** It is 21 lines: a
@@ -717,7 +717,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
 - **The web console's HTTP shell crosses, and it needed a third acceptance harness.**
   `tests/golden.py` compares the tree a generator writes; `tests/harness_golden.py` compares
   one verb invocation on stdout/stderr/exit/files. An endpoint writes nothing and never
-  exits, so [`tests/helpers/web_fixture.mjs`](tests/helpers/web_fixture.mjs) asks a different question: one
+  exits, so [`tests/helpers/web_fixture.mjs`](../tests/helpers/web_fixture.mjs) asks a different question: one
   seeded world, one **sequence of requests** against a freshly started server, compared on
   the status line, the response body as bytes, the five headers the handler *chooses*, the
   daemon record, and the server's own streams. **Both sides are real processes**, started on
@@ -757,7 +757,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
 - **Eight web read endpoints cross, and six of them were a JSON face over work already
   done.** `/api/overview`, `/api/themes`, `/api/doctor`, `/api/diff`, `/api/installs`,
   `/api/excludes`, `/api/setup` and `/api/profile` now answer from
-  [`js/web/api.mjs`](js/web/api.mjs) as well as from `rituals/_web_*.py`. **No subcommand
+  [`js/web/api.mjs`](../js/web/api.mjs) as well as from `rituals/_web_*.py`. **No subcommand
   crosses here and the count stays fifteen** — `web` the verb is P6h's, and until then the
   only caller of this code is the acceptance harness. `api_setup` is `statusData()` plus
   four fields; `api_diff` is `diffCollect()` reshaped; `api_excludes` is
@@ -788,7 +788,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   seconds apart — so the harness normalises them, which means a twin formatting in UTC, or
   padding wrong, would compare equal in every web cell. The stamp is a pure function of an
   epoch second and the local zone, so it is gated in
-  [`tests/snapshot/pure_snapshot.test.mjs`](tests/snapshot/pure_snapshot.test.mjs) over five
+  `tests/snapshot/pure_snapshot.test.mjs` over five
   instants chosen for what they break: single-digit month/day/hour/minute, both sides of a
   UTC date rollover, a DST transition, and a fractional second.
   **Two gates, two findings, and neither came from review.** The harness's own self-check
@@ -821,8 +821,8 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   the control — without which every 501 in the list is vacuous.
 - **The catalog crosses, and the taxonomy it needed was already ported.**
   `/api/catalog/<section>`, `/api/item/<type>/<name>` and the wiki reader answer from
-  [`js/web/api.mjs`](js/web/api.mjs), over a new
-  [`js/inspect/inventory.mjs`](js/inspect/inventory.mjs) — `_harness_tui.py`'s catalog half. **Still
+  [`js/web/api.mjs`](../js/web/api.mjs), over a new
+  [`js/inspect/inventory.mjs`](../js/inspect/inventory.mjs) — `_harness_tui.py`'s catalog half. **Still
   fifteen subcommands; still no call site until P6h.**
   **The measurement is the finding.** `js/inspect/status.mjs` had said since P5d that "the ~111
   lines of TUI taxonomy" were P7's and not ported. `LAW_CLASS`, `SKILL_CLASS`,
@@ -858,7 +858,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   cell whose target does not exist proves nothing.** Closed by seeding files that ARE there
   and naming, in each cell, the content that must not come back.
 - **The Docs pages cross for 57 of 59, and the two that do not are declared rather than
-  discovered.** [`js/web/docs.mjs`](js/web/docs.mjs) answers `/api/docs` and
+  discovered.** [`js/web/docs.mjs`](../js/web/docs.mjs) answers `/api/docs` and
   `/api/docs/page/<id>` for the `markdown`, `concept` and `glossary` kinds — the harness-
   block stripping, the slug rules, the section slicing, the live-count substitution and the
   theme-aware glossary. **Still fifteen subcommands.** The measurement that scoped it is
@@ -878,7 +878,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   Python's `\s` on a `str` pattern is not JavaScript's, and the standing note read "differs
   only at U+FEFF". Measured: `python \s = js \s − U+FEFF + U+001C..U+001F + U+0085`. A
   heading carrying an information separator slugged differently on each side. `PY_SPACE`
-  in [`js/lib/fs.mjs`](js/lib/fs.mjs) is the measured set, and no cell could have found
+  in [`js/lib/fs.mjs`](../js/lib/fs.mjs) is the measured set, and no cell could have found
   it — nobody has written that heading.
   **Twelve mutations, eleven fire, six of them on the corpus rather than a cell** — which
   is what "a corpus phase" means in practice. The survivor is honest: dropping a blank
@@ -886,8 +886,8 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   the empty string and a missing value reach the same fallback. Indistinguishable through
   its one consumer, not unreachable, and kept for the reason the POST body drain was.
 - **The capability graph and the live-activity surface cross, and the spawn the plan warned
-  about was never there.** [`js/web/graph.mjs`](js/web/graph.mjs) and
-  [`js/web/activity.mjs`](js/web/activity.mjs) answer `/api/graph`, `/api/activity` (GET)
+  about was never there.** `js/web/graph.mjs` and
+  [`js/web/activity.mjs`](../js/web/activity.mjs) answer `/api/graph`, `/api/activity` (GET)
   and `/api/activity/<sid>` — **22 of 29 web paths, still fifteen subcommands.** The plan
   scored the pid probe as a `tasklist` spawn needing a sixth allow-list row; the source is
   `ctypes` over `OpenProcess`, so **neither implementation spawns anything** and
@@ -912,7 +912,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   **Eighteen mutations, eighteen fire, no survivors** — two of them visible only in the file
   snapshot, because the response body is byte-identical with the unlink removed.
 - **The web console starts WRITING, and the argv-in-a-response-body trap had a false
-  premise.** [`js/web/actions.mjs`](js/web/actions.mjs) and [`js/hosts/mcp.mjs`](js/hosts/mcp.mjs) answer
+  premise.** [`js/web/actions.mjs`](../js/web/actions.mjs) and [`js/hosts/mcp.mjs`](../js/hosts/mcp.mjs) answer
   the eight mutating POSTs that own their own path plus the `/api/rules` and `/api/mcp` GETs
   that had to cross with them — **27 of 29 web paths, still fifteen subcommands.** The plan
   called `api_install_cmd`'s `{"cmd": [sys.executable, "build.py", …]}` "a Python argv, as
@@ -941,7 +941,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   not be closed by any cell, so the 409 column itself became the thing under test, read out of
   the reference by `ast` and compared against the table `doPost` dispatches on.
 - **The console runs BACKGROUND JOBS, and the port's one sanctioned spawn is argued rather
-  than assumed.** [`js/web/jobs.mjs`](js/web/jobs.mjs) answers the last two web paths —
+  than assumed.** [`js/web/jobs.mjs`](../js/web/jobs.mjs) answers the last two web paths —
   **29 of 29, still fifteen subcommands** — and it is the only module in the port allowed to
   start a copy of *this program*. **Isolation is the discriminator and it is a property of the
   RUNTIME, not of the verb**: the reference's daemon is threaded, Node's server is
@@ -975,7 +975,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   get one writes a file whose NAME carries a clock. **A destamp that only reaches inside files
   leaves the filename as an ungateable axis.**
 - **The `web` VERB crosses — sixteen of 24 subcommands — and the TEARDOWN decided which cells
-  exist.** [`js/web/server.mjs`](js/web/server.mjs) grows the daemon lifecycle in one file, as
+  exist.** [`js/web/server.mjs`](../js/web/server.mjs) grows the daemon lifecycle in one file, as
   the reference keeps it: `_probe`, `_live_daemon`, `_spawn_detached`, `start|stop|status|
   restart`, `_build_plan`'s consumer, `_npm_build`, the browser open, `cmd_web`, and the last
   POST — `/api/restart`. `bin/geneseed-cli.mjs` finally imports the web tree, which is what
@@ -1009,7 +1009,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   every non-interactive run; the reference's `input()` raises there. The byte reader now
   reports that case as null, gated by a stdin-seeded corpus.
 - **The install TOGGLE crosses and the web console is whole — 29 of 29 paths ANSWER, still
-  sixteen subcommands.** [`js/maintain/uninstall.mjs`](js/maintain/uninstall.mjs) gains the reversible half it was
+  sixteen subcommands.** [`js/maintain/uninstall.mjs`](../js/maintain/uninstall.mjs) gains the reversible half it was
   written expecting: deactivate MOVES every owned artifact into a sibling stash and drops the
   wiring, reactivate moves the same bytes back, and the stash directory's PRESENCE is the
   disabled flag — no recorded state that could drift from the filesystem. `/api/pick-folder` is
@@ -1038,7 +1038,7 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   default the hook shim's runner and entry, so the Claude reactivate answered with that refusal
   on its first Node run instead of quietly wiring hooks at an invented path.
 - **`upgrade` crosses — seventeen of 24 — and the phase's real work was a fixture that could
-  WRITE.** [`js/maintain/update.mjs`](js/maintain/update.mjs) is `rituals/_update.py`'s upgrade half: the
+  WRITE.** [`js/maintain/update.mjs`](../js/maintain/update.mjs) is `rituals/_update.py`'s upgrade half: the
   preflight, the streamed fetch, the four upstream classifications, the fast-forward, the
   doctor gate with its exact rollback, and the two rebuilds. Every other verb in this port
   READS the checkout; this one rewrites it, so its cells needed a git repository they could

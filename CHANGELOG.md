@@ -17,6 +17,53 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   spawns, the JSONC trailing-comma pass (it is string-aware), the deleted `emit.mjs`, and two
   package-manifest reasons (a false "js/web/docs.mjs serves ROOT/docs", hand-typed sizes).
 
+### Changed — the Ethos (#130)
+
+- **The Pact is three ranked laws**, in Asimov's shape: protect the user first, serve their
+  intent second where it does not break the first, keep the agent's own honesty third. The
+  user now includes whoever maintains the code after the session — code its next reader cannot
+  follow is harm, like a false claim.
+- **A coding evidence ladder.** Evidence grades the rungs a coding agent stands on: a green test
+  is a claim about the test, a clean type check a claim about the types. The absence and
+  truncation passage moved out — Law III already carries it.
+- **The irreversible set is named.** Decisions lists the acts version control cannot undo — a
+  push to a shared branch, a schema or data migration, a deletion of data or history, a
+  published release, a secret, a call that reaches an external service or person; every other
+  edit runs freely.
+
+### Changed — footprint (#129)
+
+- **The root file is paid once.** The context hook and the OpenCode plugin no longer re-inject
+  the root file the host already loads natively (`CLAUDE.md`, `AGENTS.md`, `AGENT.md`) — about
+  8k tokens per session. The 16 KB/file, 48 KB/session eager budget the docs promised is now
+  enforced by the hook too, cutting at a line break with a marker.
+- **Shorter skill descriptions**: purpose plus the first trigger sentence, capped at 320
+  characters (was 900).
+- **Authored lean halves for AGENT.md §5–§10**, the tool-agnostic paragraph and the
+  readiness-sigil paragraph.
+- **The native-catalogue flag is per kind** (`{ skills, agents }`): Bob keeps the §3 Agents
+  table and drops the §4 Skills table it already catalogues natively.
+
+### Changed — review output (#127)
+
+- **Review findings are Conventional Comments** in `geneseed-code-review` and the `reviewer`
+  agent — `issue (blocking): file:line — …` — so a line pastes into an MR comment and the
+  verdict follows from the decorations. Process 7's D/O/F/R/Q/A codes are unchanged.
+
+### Changed — docs
+
+- **The README leads with the engineering pitch** — enforced laws, one source for five hosts,
+  measured costs — above an animated demo (`docs/assets/demo.svg`); `CONTRIBUTING.md` points
+  GitHub at the contributing notes (#126).
+- **Docs sweep**: five hook verbs (not four) wherever they are counted; the README's rail table,
+  laws row (nine in force, IX and XI retired), layout tree and test command match the tree;
+  dead links to `docs/limits.md`, `docs/specs/` and root-relative paths in
+  `docs/design-history.md` fixed; Copilot's hooks described where docs said it had none;
+  `GENESEED_STACK_GLOBAL` documented; bare `geneseed` described the same way everywhere.
+- **The skills badge counts folder skills** (`daydream`, `react-view-transitions`,
+  `token-report`): doctor's count and README-list gates now read every skill that ships, not
+  only the flat `src/skills/*.md` ones.
+
 ### Changed — performance
 
 - **Rendering reads each source file once per operation, and hashes the source tree once.**

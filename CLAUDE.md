@@ -14,7 +14,7 @@ For what an addition *costs*, [`docs/extending.md`](docs/extending.md) is the st
 | | |
 |---|---|
 | `bin/geneseed-cli.mjs` | `geneseed` — the user-facing CLI. 20+ verbs, parsed from `js/cli-table.json`. **May not spawn** (transitive `child_process` ban; doctor's `node --check` is the one allow-listed exception) |
-| `bin/geneseed-hook.mjs` | `geneseed-hook` — what the emitted `settings.json` invokes **on every tool call**. Four verbs, refuses everything else by name, ~14 ms to load |
+| `bin/geneseed-hook.mjs` | `geneseed-hook` — what the emitted `settings.json` invokes **on every tool call**. Five verbs, refuses everything else by name, ~14 ms to load |
 | `bin/build-driver.mjs` | `geneseed-build` — the generator. Render flags (`--emit`/`--theme`/`--footprint`/`--out`/`--sync-themes`) and the emit targets. Also under a hard `child_process` ban |
 
 ## Proving a change

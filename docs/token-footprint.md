@@ -31,9 +31,10 @@ this: the context hook re-injected the root file the host had already loaded
 natively, and skill descriptions ran to 900 characters each — see the
 "Where the tokens go" list below for what changed. Bob and Copilot carry the §3/§4 catalogue tables inline because their
 hosts expose no native skill/agent inventory; Claude Code and OpenCode ship a
-pointer to the host's own inventory instead, ~1.9k tokens lighter. Copilot also
-runs without eager injection — it has no hook mechanism, so the
-memory/notebook indexes load when the agent reads them, not eagerly. The
+pointer to the host's own inventory instead, ~1.9k tokens lighter. Copilot's
+eager injection rides its `sessionStart` hook, which the **global** emit wires;
+a project-scope Copilot install has no hooks, so there the memory/notebook
+indexes load when the agent reads them, not eagerly. The
 eager-injection path is budget-capped identically everywhere — 16 KB per file
 (cut at a line break, with a marker saying so) and 48 KB per session (files past
 the budget are listed lazy with the reason) — so a 40k-character README no
@@ -96,8 +97,9 @@ token counter also includes, none of which Geneseed controls:
    definitions. On OpenCode this is typically 5–10k tokens before any
    harness content loads.
 2. **Your repo's docs, injected eagerly** — the context delivery
-   (plugin on OpenCode, SessionStart hook on Claude Code / Bob; Copilot has no
-   hook channel, so its sessions read docs on demand instead) discovers and
+   (plugin on OpenCode, SessionStart hook on Claude Code / Bob, `sessionStart`
+   hook on a global Copilot install; a project-scope Copilot install has no
+   hooks, so it reads docs on demand instead) discovers and
    injects `README.md`, `CONTRIBUTING.md`, and files under `docs/`, up to the
    48 KB budget (≈12k tokens). A doc-heavy repo fills it.
 3. **Wiki eager entries** plus the lazy listing of the rest, if a wiki is

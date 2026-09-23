@@ -32,7 +32,7 @@ Three seams, and almost every question about "where do I edit?" resolves to one 
 Two rules follow from the table and they cause most of the surprises:
 
 - **Nothing propagates by itself.** A bundle is a *render*. Editing `src/` changes nothing on any
-  machine until something re-emits (`js/build/emit.mjs:362` re-fingerprints, `js/inspect/status.mjs:80`
+  machine until something re-emits (`sourceFingerprint` in `js/build/version.mjs` re-fingerprints, `js/inspect/status.mjs`
   reports the drift).
 - **`docs/web/` is data, `web/src/` is code.** A new documentation page is one file and no
   rebuild. A new screen is a new hashed chunk and a mandatory `web/dist` commit.
@@ -58,10 +58,10 @@ badge keys `agents`/`skills`/`laws`/`themes`/`plugins`; `proseMirrorProblems` ho
 
 ---
 
-## 1 — The baseline, and the five commands that reproduce CI
+## 1 — The baseline, and the six commands that reproduce CI
 
-Verified on this checkout: `doctor --all` green on 14 themes; the Node suite reports
-**1033 tests, 1029 pass, 4 skipped, 0 fail**.
+The baseline is whatever these commands report on your checkout — run them; no count is
+written here, because a typed count is stale by the next commit.
 
 CI is **four jobs expanding to six runs** (`.github/workflows/ci.yml`): `validate` and
 `node-cells` on Linux *and* Windows, plus `package-no-python` and `web` on Linux. From the repo
@@ -107,12 +107,12 @@ Notes that matter:
   on PATH they report *skipped* and the run is green.
 - CI additionally re-runs the packaging suite under `npm@latest` (Linux, last in the job) and
   packs the tarball into a `node:22-slim` container with no interpreter. Neither is reproducible
-  from the five commands; the container one is reachable locally through
+  from the six commands; the container one is reachable locally through
   `tests/helpers/no-python-container.sh` with a docker daemon.
 - **Two assertions in `tests/unit/claude.test.mjs` silently stand down** on any machine where an
   ancestor of the temp sandbox is a `.claude`/`.bob` install — which is every developer machine
   with Claude Code installed under `~`. They are replaced by a `t.diagnostic`, so the TAP
-  `# skipped` count does **not** move. Locally you read `1035/1031/0/4` and see no sign of it.
+  `# skipped` count does **not** move, and a local run shows no sign of it.
 
 ### The gates CI does not run
 
@@ -287,7 +287,7 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
 
 ## 3 — Adding a SKILL or an AGENT
 
-**Order matters at the first two steps.** `missingReferencedSpecs` (in `js/build/emit.mjs`) *aborts the
+**Order matters at the first two steps.** `missingReferencedSpecs` (in `js/build/bundle.mjs`) *aborts the
 build* when `AGENT.md.tmpl` names a spec with no file — so the file comes before the table row, or
 nothing builds at all. The refusal is clean: `tests/unit/emit_gates.test.mjs:265` proves a refused
 emit leaves the prior install intact.
@@ -627,7 +627,7 @@ gated. Every other appearance is derived at runtime (`.geneseed-version` markers
 why no test pins a version string and none should.
 
 Do not run `npm version`. Bump the two files by hand, add the `CHANGELOG` section, update
-`SHIPPED.md`, rebuild `web/dist` if `web/src` moved, run the five commands from §1, push, tag,
+`SHIPPED.md`, rebuild `web/dist` if `web/src` moved, run the six commands from §1, push, tag,
 then rehearse and fire the workflow:
 
 ```bash
