@@ -17,7 +17,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseJson, jsonDumpsIndent, jsonDumpsCompact } from '../../js/lib/json.mjs';
+import { parseJson, jsonDumpsIndent, jsonDumpsCompact, isDict } from '../../js/lib/json.mjs';
+
+// `isDict` over parsed JSON: an object is a dict; a NUMBER is not, although `parseJson` hands it
+// back as a wrapper object — before, `"permission": 5` passed as a dict and the OpenCode merge
+// wrote its git gate into a number that serialised back as `5`.
+test('isDict is true for a parsed object and false for every parsed non-object', () => {
+  const v = parseJson('{"o":{},"i":5,"f":1.0,"a":[],"s":"x","n":null,"b":true}');
+  assert.equal(isDict(v), true);
+  assert.equal(isDict(v.o), true);
+  for (const k of ['i', 'f', 'a', 's', 'n', 'b']) assert.equal(isDict(v[k]), false, k);
+});
 
 // A read-modify-write is what every settings merge does: parse the user's file, change one key,
 // write it back. Every OTHER key must come back as the reference would have written it.

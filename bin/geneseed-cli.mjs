@@ -54,7 +54,7 @@
 // table below now holds one LOADER per row (`() => import(…).then(m => m.cmdX)`), so a verb
 // loads its slice of the tree and no other verb's. The spawn allow-list gate still sees the
 // whole graph: `tests/unit/hook_cli.test.mjs`'s `importClosure` follows both import spellings.
-import { cliSpec, printHelp } from '../js/ui/cli.mjs';
+import { cliSpec, printHelp, printVerbList } from '../js/ui/cli.mjs';
 import { parseIntStrict } from '../js/lib/text.mjs';
 import { printErr } from '../js/lib/fs.mjs';
 
@@ -279,10 +279,15 @@ async function main(argv) {
   // 'error' event and a stack trace.
   process.stdout.on('error', (e) => { if (e.code === 'EPIPE') process.exit(0); });
 
+  // Bare = `home`, as both launchers (`geneseed`, `geneseed.cmd`) already did — but the npm
+  // `bin` names THIS file, so a bare `geneseed` off PATH used to die asking for a verb.
+  if (!argv.length) argv = ['home'];
   const verb = argv[0];
-  if (!verb || verb === '-h' || verb === '--help') {
-    return die(2, `the following arguments are required: cmd (one of ${
-      Object.keys(VERBS).join(', ')})`);
+  if (verb === '-h' || verb === '--help') {
+    return printVerbList('geneseed', [...Object.keys(VERBS), 'validate'], {
+      update: 'an alias of upgrade',
+      validate: "check the source tree without emitting (the generator's --validate-only)",
+    });
   }
   // `validate` — the generator's `--validate-only`, and the one verb this entry answers that is NOT
   // in the table above. It is dispatched here, before the lookup, for a reason that is a
@@ -319,7 +324,7 @@ async function main(argv) {
     // just about to become false — it was already claiming a third place for verbs that do
     // not exist.
     return die(2, `invalid choice: '${verb}'. This entry point carries only `
-      + `${Object.keys(VERBS).join(', ')}; the four hook verbs live in `
+      + `${Object.keys(VERBS).join(', ')}; the five hook verbs live in `
       + 'bin/geneseed-hook.mjs.');
   }
   // `js/cli-table.json`, the CLI as data. A verb this table dispatches and the file does not

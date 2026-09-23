@@ -419,7 +419,10 @@ export function wikiItems(state) {
     // blank every OTHER vault in it.
     const root = wikiPath(String(dget(w, 'path', null) || ''));
     if (!root || !isDir(root)) continue;
-    const entries = (dget(w, 'entries', null) || [])
+    // A hand-edited `entries` that is not a list (`{}`, a string) is a malformed vault, not a
+    // crash: `/api/status` counts these, and one bad manifest must not fail the dashboard.
+    const rawEntries = dget(w, 'entries', null);
+    const entries = (Array.isArray(rawEntries) ? rawEntries : [])
       .filter((e) => e && typeof e === 'object' && !Array.isArray(e));
     const excludes = entries.filter((e) => dget(e, 'load', null) === 'exclude')
       .map((e) => String(dget(e, 'path', null) || '').replace(/^\/+|\/+$/g, '').replace(/\\/g, '/'));

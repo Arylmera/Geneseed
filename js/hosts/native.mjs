@@ -31,7 +31,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { writeText, copyFile, readText } from '../lib/fs.mjs';
-import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy } from '../lib/json.mjs';
+import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
 export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report']);
@@ -222,8 +222,8 @@ export function stripSkillBodyLinks(body) {
 /** `_build_emit._agent_color_map` — validated, always a valid OpenCode slot. */
 function agentColorMap(theme) {
   let raw = null;
-  if (isPlainObject(theme)) raw = theme.AGENT_COLORS;
-  if (!isPlainObject(raw)) raw = AGENT_COLORS;
+  if (isDict(theme)) raw = theme.AGENT_COLORS;
+  if (!isDict(raw)) raw = AGENT_COLORS;
   const cleaned = {};
   // Insertion order matters: it is the order the warnings below are printed in, and the
   // parity gate compares the warning stream. Python dicts and JS objects agree on it for
@@ -246,10 +246,6 @@ function agentColorMap(theme) {
 function agentColor(stem, theme) {
   const colors = agentColorMap(theme);
   return Object.hasOwn(colors, stem) ? colors[stem] : colors._default;
-}
-
-function isPlainObject(v) {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 /** `is not None` — the test that lets a configured `temperature: 0` survive. */
@@ -374,8 +370,8 @@ export function loadAgentOverrides(base) {
     // than reproduced — matching it means detecting a decode error Node does not report.
     return {};
   }
-  const agents = isPlainObject(data) ? data.agents : null;
-  return isPlainObject(agents) ? agents : {};
+  const agents = isDict(data) ? data.agents : null;
+  return isDict(agents) ? agents : {};
 }
 
 /** `Path.relative_to(base).as_posix()`. */

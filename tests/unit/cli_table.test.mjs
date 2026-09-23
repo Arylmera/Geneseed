@@ -195,3 +195,29 @@ test('a hidden argument is hidden from help but still binds a value', () => {
   assert.ok(cliCommand('web').options.some((a) => a.hidden),
     '`web` has no hidden option — `--daemon-internal` is how a launch says it is the daemon');
 });
+
+test('`geneseed --help` lists every verb the entry dispatches, and exits 0', () => {
+  // README promised this and the entry died with "arguments are required". The list is
+  // scraped from the entry's own VERBS table, so a verb added there without appearing here
+  // fails — and so does a listing that names a verb the entry would refuse.
+  const r = spawnSync(process.execPath, [path.join(ROOT, ...ENTRY.split('/')), '--help'],
+    { cwd: ROOT, encoding: 'utf8', windowsHide: true });
+  assert.equal(r.status, 0, r.stderr);
+  const listed = [...r.stdout.matchAll(/^ {2}([a-z][a-z-]*) /gm)].map((m) => m[1]);
+  assert.deepEqual(listed.sort(), [...entryVerbs(), 'validate'].sort());
+});
+
+test('a bare `geneseed` runs `home`, as both launchers do', () => {
+  // The npm `bin` names the entry directly, so the launchers' `set -- home` never ran for an
+  // `npm i -g` install. Off a TTY with the web disabled, `home` prints the menu's help.
+  const sb = makeSandbox('clitable-');
+  try {
+    const r = spawnSync(process.execPath, [path.join(ROOT, ...ENTRY.split('/'))],
+      { cwd: ROOT, encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...cellEnv(path.join(sb.path, 'home')), GENESEED_NO_WEB: '1' } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /geneseed setup/);
+  } finally {
+    sb.cleanup();
+  }
+});

@@ -1,4 +1,3 @@
-.geneseed-mirror/
 # Project-scope runtime state the workflow plugin writes (.geneseed/workflow-runs/).
 # Distinct from the USER-scope ~/.geneseed/ that holds the hook shim — same name, two
 # scopes. Running a pipeline inside this checkout would otherwise leave it untracked.
@@ -26,15 +25,22 @@ improvements/
 /ontology/
 /postures/
 /skills/
-# Agent Notebook — personal/agent scratch space, never committed (AGENT.md §5).
-notebook/
+# Agent Notebook — personal/agent scratch space, never committed (AGENT.md §5). ANCHORED for
+# the same reason as the block above: a bare `notebook/` also ignored NEW files under
+# `src/notebook/`, which is authored source — git would never offer them for commit.
+/notebook/
+
+# Claude Code, per machine: agent worktrees and the personal settings file. `.claude/launch.json`
+# and `.claude/skills/` are tracked.
+.claude/worktrees/
+.claude/settings.local.json
 
 # Brainstorming visual companion (transient)
 .superpowers/
 
 # Web UI: dev-only deps (dist/ is committed and MUST stay tracked)
 web/node_modules/
-# Stray vite cache when a build is invoked from the repo root instead of web/
+# The root devDependencies (ESLint) that `npm ci` installs
 /node_modules/
 # `npm pack` output. Untracked and unignored, it would otherwise be copied into every
 # harness fixture (`_copy_checkout` copies `git ls-files --cached --others`).
