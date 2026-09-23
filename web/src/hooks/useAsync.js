@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 // Module-level result memo, shared by every useAsync caller that names a `key`.
 // The console refetched every catalog on every page visit — cross-navigation is
@@ -30,12 +30,19 @@ export function useAsync(fn, deps = [], key = null) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(() => !(ck !== null && CACHE.has(ck)))
   // Keep the latest loader without forcing it into `deps`, so callers can pass
-  // an inline arrow without retriggering on every render.
+  // an inline arrow without retriggering on every render. Written in a layout
+  // effect, not during render (react-hooks/refs): a render React discards must
+  // not leave its loader behind. Layout effects run before the passive effect
+  // below, so the mount/deps fetch still sees this render's values.
   const fnRef = useRef(fn)
-  fnRef.current = fn
   const ckRef = useRef(ck)
-  ckRef.current = ck
+  useLayoutEffect(() => {
+    fnRef.current = fn
+    ckRef.current = ck
+  })
 
+  // react-hooks/use-memo wants a literal dependency array; this hook's whole
+  // contract is forwarding the caller's `deps`, so that rule cannot hold here.
   const reload = useCallback(() => {
     setLoading(true)
     setError('')
@@ -47,7 +54,7 @@ export function useAsync(fn, deps = [], key = null) {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
     // deps are the caller's refetch triggers; fnRef keeps the loader fresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
   }, deps)
 
   useEffect(() => {

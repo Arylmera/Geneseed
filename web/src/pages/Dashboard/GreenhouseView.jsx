@@ -24,16 +24,22 @@ function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) 
   const r = size / 2 - stroke / 2
   const cx = size / 2
   const cy = size / 2
+  // Each arc's running start, computed before the JSX: the map callback below
+  // must not reassign a render-scope variable (react-hooks/immutability).
+  const starts = []
   let acc = 0
+  for (const seg of segments) {
+    starts.push(acc)
+    acc += seg.value
+  }
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={stroke} />
       {segments.map((seg, i) => {
         const frac = seg.value / total
         if (frac <= 0) return null
-        const start = (acc / total) * 2 * Math.PI - Math.PI / 2
-        const end = ((acc + seg.value) / total) * 2 * Math.PI - Math.PI / 2
-        acc += seg.value
+        const start = (starts[i] / total) * 2 * Math.PI - Math.PI / 2
+        const end = ((starts[i] + seg.value) / total) * 2 * Math.PI - Math.PI / 2
         const x1 = cx + r * Math.cos(start)
         const y1 = cy + r * Math.sin(start)
         const x2 = cx + r * Math.cos(end)

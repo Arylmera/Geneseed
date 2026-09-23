@@ -8,7 +8,9 @@ generator's `VENDORED_SKILL_DIRS`.
 - **Upstream:** https://github.com/glebis/claude-skills/tree/main/daydream
 - **Commit:** f47170dee300dd3d5da2a1c3c708986faeea3d5a
 - **Author:** Gleb Kalinin
-- **License:** MIT (declared in `.claude-plugin/plugin.json`)
+- **License:** MIT (declared in `.claude-plugin/plugin.json`). The text is in `LICENSE`,
+  copied from upstream's root `LICENSE` as added in 93677f479f40ab43520883e7a6c954b755ab39ef
+  (the pinned commit predates the file; its copyright line covers 2025-2026).
 - **Inspired by:** Gwern's [LLM Daydreaming](https://gwern.net/ai-daydreaming)
 
 ## Geneseed adaptation

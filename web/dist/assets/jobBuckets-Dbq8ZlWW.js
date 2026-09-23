@@ -1,0 +1,1 @@
+function e(e,t=10,n=`today`){let r=Array(t).fill(0).map((e,r)=>({t:r===t-1?n:`${t-1-r}d`,v:0})),i=Date.now();for(let n of e){let e=n.started||n.finished||n.created||n.ts;if(!e)continue;let a=typeof e==`string`?Date.parse(e):e*1e3;if(!Number.isFinite(a))continue;let o=Math.floor((i-a)/864e5);o<0||o>=t||(r[t-1-o].v+=1)}return r}export{e as t};

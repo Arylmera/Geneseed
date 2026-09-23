@@ -16,10 +16,17 @@ export function useSearchIndex(rev = 0) {
   const inflight = useRef(null)
   const [harness] = useHarness()
 
-  useEffect(() => {
+  // Drop the index during render when rev/harness move (no stale paint), and the
+  // in-flight handle in an effect (refs are not touched during render).
+  const resetKey = `${rev}|${harness}`
+  const [seenKey, setSeenKey] = useState(resetKey)
+  if (seenKey !== resetKey) {
+    setSeenKey(resetKey)
     setIndex(null)
+  }
+  useEffect(() => {
     inflight.current = null
-  }, [rev, harness])
+  }, [resetKey])
 
   const prime = useCallback(() => {
     if (index || inflight.current) return inflight.current

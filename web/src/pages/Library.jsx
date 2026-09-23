@@ -86,14 +86,17 @@ export default function Library({ overview, section, selected, dataRev }) {
   const rowsRef = useRef(null)
 
   // Sync sec from prop whenever the route hands us a different section, and drop
-  // any filter text so it doesn't carry across sections.
-  useEffect(() => {
+  // any filter text so it doesn't carry across sections. Adjusted during render
+  // against the last-seen prop, not in an effect.
+  const [seenSection, setSeenSection] = useState(section)
+  if (section !== seenSection) {
+    setSeenSection(section)
     const next = resolveSec(section)
     if (section && SECTIONS[section] && next !== sec) {
       setSec(next)
       setQ('')
     }
-  }, [section]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const {
     data: catalog,

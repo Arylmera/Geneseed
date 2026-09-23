@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import prettier from 'eslint-config-prettier'
 import globals from 'globals'
 
-// Flat config (ESLint 9). Catches real bugs — bad hook usage, undefined names —
+// Flat config (ESLint 10). Catches real bugs — bad hook usage, undefined names —
 // while eslint-config-prettier turns off every stylistic rule so formatting is
 // Prettier's job alone, never a source of lint noise.
 export default [
