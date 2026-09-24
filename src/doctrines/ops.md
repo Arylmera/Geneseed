@@ -100,3 +100,24 @@ makes it be *read* — often not a restart. Establish which — recreate, down-a
 full restart — perform it, then confirm the new value in the *running* system, not the file
 ({{LAW}} III).
 <!-- LEAN:end -->
+
+### {{DOCTRINE}} ops 7 — {{DOC_OPS_7}}
+<!-- LEAN:begin -->
+A shared resource that rations its answers — a rate-limited API, a quota, a single
+gateway — is called in sequence, never fanned out. Parallel requests against it fail
+together: a slow job becomes a failed one, and the partial progress a serial run would
+have kept is lost. Before any parallelism, budget the allowance — the quota divided by
+the callers that share it; if one caller's share cannot finish the work, parallelism is
+a guaranteed failure, not a speed choice. Serialize, back off on each refusal, and cap
+the retries before the first call ({{DOCTRINE}} process 6). A refusal that repeats
+unchanged on retry is a hard limit, not transient backpressure: stop and report it
+({{LAW}} V), and never re-send the same parallel batch. Where {{DOCTRINE}} process 3
+batches independent calls, this names the calls that are not independent — they draw on
+one allowance. A smaller complete sample beats a larger one gathered through failures.
+<!-- LEAN:else -->
+A shared resource that rations its answers — a rate-limited API, a quota, a single
+gateway — is called in sequence, never fanned out. Before any parallelism, divide the
+quota by its callers; if one share cannot finish the work, do not parallelise. Back off on
+each refusal, within a retry cap set first. A refusal repeating unchanged is a hard limit:
+stop and report it ({{LAW}} V), never re-send the batch.
+<!-- LEAN:end -->

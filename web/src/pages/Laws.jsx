@@ -64,6 +64,7 @@ const DOCTRINE_META = {
   'craft.4': ['craft', 'Confirm nothing equivalent exists before adding it.'],
   'craft.5': ['craft', "Match the surrounding code's patterns and style."],
   'craft.6': ['craft', 'Make the minimal surgical edit: no incidental churn.'],
+  'craft.7': ['craft', 'One home writes a duplicated value; derive or gate every other copy.'],
   'rigor.1': ['rigor', 'Design actions safe to run twice; guard the ones that are not.'],
   'rigor.2': ['rigor', 'Test observable behaviour, deterministically: no flaky, no wiring.'],
   'rigor.3': ['rigor', 'Cover new or changed behaviour with a test; run the affected tests green.'],
@@ -79,6 +80,10 @@ const DOCTRINE_META = {
   'ops.4': ['ops', 'Finish a delete or rename: reconcile every reference, no danglers.'],
   'ops.5': ['ops', 'Record how to derive a volatile fact, not its stale value.'],
   'ops.6': ['ops', 'A restart may not reload config; force the re-read, confirm it live.'],
+  'ops.7': [
+    'ops',
+    'Call a rate-limited resource in sequence; budget the quota before any fan-out.',
+  ],
   'process.1': [
     'process',
     "Durable decisions are recorded before the session ends — and rule or memory is the user's call.",

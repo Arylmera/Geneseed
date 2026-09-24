@@ -102,3 +102,23 @@ a rename, a codemod — is one intent ({{LAW}} II) and is fine. Where matching c
 ({{DOCTRINE}} craft 5) would widen the diff, surface the convention gap as its own proposed
 change.
 <!-- LEAN:end -->
+
+### {{DOCTRINE}} craft 7 — {{DOC_CRAFT_7}}
+<!-- LEAN:begin -->
+A value that lives in several places — a version, a count, a name, a threshold — drifts
+in whichever place nothing checks. Appoint one home as its sole writer and derive every
+other copy from it; where a copy cannot be derived, gate it against the writer so a
+divergence fails loudly ({{DOCTRINE}} rigor 4). Count the homes before trusting the gate —
+search for the value itself, not only the name you expect it under — because a home the
+gate does not know about drifts in silence. A tool that updates one home has not updated
+the others until each is checked: a version bumper that rewrites one manifest leaves every
+other file stating the version behind. Where {{DOCTRINE}} craft 4 refuses duplicated code
+and {{DOCTRINE}} ops 3 sends an edit to the layer a system renders from, this governs one
+value kept by hand in several places. One writer; every other copy derived or checked.
+<!-- LEAN:else -->
+A value that lives in several places — a version, a count, a name, a threshold — drifts
+in whichever place nothing checks. Appoint one home as its sole writer and derive the
+others; where a copy cannot be derived, gate it against the writer ({{DOCTRINE}} rigor 4).
+Search for the value to count its homes before trusting the gate. After a tool updates one
+home, check every other.
+<!-- LEAN:end -->

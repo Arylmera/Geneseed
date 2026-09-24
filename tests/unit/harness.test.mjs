@@ -325,11 +325,11 @@ test('the gate refuses a doctrine citation inside an always-on tier', () => {
 
 test('the gate flags a pack whose rule ids skip, and one filed under the wrong pack', () => {
   const craft = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
-  // A gap. Appending `craft 8` after six rules puts it at position 7 — the id and the position
+  // A gap. Appending `craft 9` after seven rules puts it at position 8 — the id and the position
   // disagree, which is exactly what a deletion in the middle leaves behind.
-  const gap = withFault({ 'src/doctrines/craft.md': `${craft}\n### {{DOCTRINE}} craft 8 — x\nbody\n` },
+  const gap = withFault({ 'src/doctrines/craft.md': `${craft}\n### {{DOCTRINE}} craft 9 — x\nbody\n` },
     (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(gap.some((p) => p.includes('rule 8') && p.includes('position 7')),
+  assert.ok(gap.some((p) => p.includes('rule 9') && p.includes('position 8')),
     `no contiguity problem in ${JSON.stringify(gap)}`);
   // A rule filed in the wrong file. `pack` is read from the HEADING, so this rule is reachable
   // at `ops.7` — a name `ops.md` also numbers — and unreachable at any craft address.
@@ -416,7 +416,7 @@ test('the gate flags a theme missing a doctrine title, and a dead one it still c
     `no dead-key problem in ${JSON.stringify(dead)}`);
 });
 
-test('the gate holds every theme to exactly LEX_I..LEX_IX', () => {
+test('the gate holds every theme to exactly LEX_I..LEX_XI', () => {
   // ⚠ I1, AND IT IS AN EQUALITY BECAUSE A PRESENCE CHECK ALREADY MISSED IT ONCE. The renumber's
   // deletion ranges skipped LEX_XXII, LEX_XXIII, LEX_XXIV and LEX_XXXVI; they survived in all
   // fifteen files, and parity was silent because a key present everywhere is missing nowhere.
@@ -788,7 +788,9 @@ test('every doctrine rule carries a DOCTRINE_META principle', () => {
   const addrs = doctrineAddrs();
   // 24 since 2026-09: Law IX retired in place into rigor 5, so the doctrine roll grew by one.
   // 25 since process 8 (one writer per file) was appended, later the same month.
-  assert.equal(addrs.length, 25, `${addrs.length} rules parsed — expected 25`);
+  // 27 since craft 7 (one writer per value) and ops 7 (serialize against a rationed resource)
+  // were appended on 2026-09-23.
+  assert.equal(addrs.length, 27, `${addrs.length} rules parsed — expected 27`);
   assert.deepEqual(doctrineMetaProblems(addrs), []);
 });
 

@@ -413,11 +413,12 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
       `${p.pack} has a rule with no title, no body, or a class that is not its pack`);
     assert.ok(p.title && p.desc, `${p.pack} has no themed name or blurb`);
   }
-  // 11 + 25 + the four absorbed-into-prose sections is the whole constitution. The 24th is
+  // 11 + 27 + the four absorbed-into-prose sections is the whole constitution. The 24th is
   // rigor 5 — Law IX retired in place and moved into the rigor pack (2026-09), so the law count
   // stays 11 (its heading is kept) while the doctrine count grows by one. The 25th is process 8,
-  // one writer per file, appended later that month.
-  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 25);
+  // one writer per file, appended later that month. The 26th and 27th are craft 7 (one writer
+  // per value) and ops 7 (serialize against a rationed resource), appended 2026-09-23.
+  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 27);
 });
 
 test('every theme parses to the same three tiers, whatever it calls them', () => {
@@ -428,7 +429,7 @@ test('every theme parses to the same three tiers, whatever it calls them', () =>
   const counts = (inv) => [inv.laws.length, inv.ontology.length, inv.doctrines.length,
     inv.doctrines.reduce((n, p) => n + p.rules.length, 0)];
   const base = counts(tuiInventory('neutral'));
-  assert.deepEqual(base, [11, 4, 4, 25]);
+  assert.deepEqual(base, [11, 4, 4, 27]); // 27 rules since craft 7 and ops 7 (2026-09-23)
   for (const t of themeNames()) {
     const inv = tuiInventory(t);
     assert.deepEqual(counts(inv), base, `${t} parses to a different constitution`);
@@ -503,13 +504,13 @@ test('a pack that is not built in is listed and MARKED, never quietly dropped', 
   // reader cannot infer from the text.
   const rows = tuiEntries(tuiInventory('neutral', ['craft']));
   const doctrine = rows.filter(([k]) => k === 'doctrine');
-  assert.equal(doctrine.length, 25, 'a narrowed install lost rows instead of marking them');
+  assert.equal(doctrine.length, 27, 'a narrowed install lost rows instead of marking them');
   const off = doctrine.filter(([, , d]) => d.active === false);
-  assert.equal(off.length, 19, 'the inactive packs are not marked inactive (25 rules - craft 6)');
+  assert.equal(off.length, 20, 'the inactive packs are not marked inactive (27 rules - craft 7)');
   assert.ok(doctrine.every(([, , d]) => (d.pack === 'craft') === (d.active === true)),
     'the active flag does not follow the selection');
   const head = rows.filter(([k]) => k === 'head').find((h) => h[1].startsWith('DOCTRINES'));
-  assert.equal(head[1], 'DOCTRINES (6 in 1/4 packs)', head[1]);
+  assert.equal(head[1], 'DOCTRINES (7 in 1/4 packs)', head[1]); // craft alone: 7 rules
   // ...and the badge column says so, which is what a reader of `geneseed catalog` sees.
   const lines = catalogLines(tuiInventory('neutral', ['craft']), 'doctrines', 200);
   assert.ok(lines.some((l) => l.includes('(off)')), 'no row is marked off in the listing');

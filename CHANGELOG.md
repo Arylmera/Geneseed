@@ -42,6 +42,29 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   agent runs on its own branch and worktree; an unchanged one is released, a changed one is kept,
   and the summary names every kept branch and every file two agents changed (`rt.overlaps()`).
   Nothing is merged for you, and without git the agent fails rather than run in the shared tree.
+- **Ops 7, serialize against a rationed resource.** A rate-limited API, a quota or a single
+  gateway is called in sequence, never fanned out: budget the quota across its callers before any
+  parallelism, back off on refusal within a retry cap set first, and treat a refusal that repeats
+  unchanged as a hard limit to report, never a batch to re-send. It names the calls process 3's
+  "batch independent calls" must not batch.
+- **Craft 7, one writer per value.** A value held by hand in several places — a version, a count,
+  a name, a threshold — gets one home as its sole writer; every other copy is derived from it or
+  gated against it, the homes are counted before the gate is trusted, and a tool that updates one
+  home is not trusted to have updated the rest. Distinct from process 8, which gives a *file* one
+  writer across agents; this gives a *value* one writer across files.
+  The carrier ceilings move `full` 57_500 → 59_500 and `lean` 38_900 → 39_500 for the two rules.
+
+### Changed — tests and maintainer docs
+
+- **CLI-matrix faults are edits of the real file, not copies of it.** Six `doctor` cells held
+  whole copies of `Laws.jsx`, `cyberpunk.json` and `registry.json` to change one line each; every
+  new rule, theme key or spec had to be carried into them by hand, and the `Laws.jsx` copies had
+  already drifted from the real file. A fault may now be `{ "edit": [[find, replace]] }`, applied
+  to the copied checkout; a `find` that does not match exactly once fails the cell.
+- **`docs/extending.md` lists the seven CI commands** (`golden --cli` was missing), names the
+  craft-specific fixtures §2a skipped, and drops typed figures that had gone stale (the ceiling
+  headroom, a line number). `DESIGN.md` and §2c now say `I..XI` / `LEX_I..LEX_XI`, and the claim
+  that `LEX_I` is frozen in a recording is gone — the recordings were retired.
 
 ### Changed — toolchain
 
