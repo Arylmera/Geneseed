@@ -198,12 +198,29 @@ export function copyCheckout(dst, faults) {
 // every planted file one byte short per line — `bundle/context.json` recorded at 18 bytes
 // replayed at 17. The same rule in a second place, which is why both call the product's owner of
 // it rather than each keeping a copy.
+//
+// A fault of `{ edit: [[find, replace], ...] }` is an EDIT OF THE COPIED FILE, not a copy of it.
+// Six cells once held whole copies of `Laws.jsx`, `cyberpunk.json` and `registry.json` to change
+// one line each, and every new rule, key or spec had to be carried into them by hand — a second
+// home for each file that nothing derived. Each `find` must occur exactly once, so a fault that
+// no longer applies fails loudly instead of planting nothing.
 function plant(dst, faults) {
-  for (const [rel, text] of Object.entries(faults || {})) {
+  for (const [rel, fault] of Object.entries(faults || {})) {
     const p = path.join(dst, rel);
-    if (text === null) {
+    if (fault === null) {
       try { fs.unlinkSync(p); } catch { /* already absent */ }
       continue;
+    }
+    let text = fault;
+    if (typeof fault === 'object') {
+      text = fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+      for (const [find, replace] of fault.edit) {
+        const at = text.indexOf(find);
+        if (at < 0 || text.indexOf(find, at + 1) >= 0) {
+          throw new Error(`fault edit on ${rel} must match exactly once: ${JSON.stringify(find)}`);
+        }
+        text = text.slice(0, at) + replace + text.slice(at + find.length);
+      }
     }
     fs.mkdirSync(path.dirname(p), { recursive: true });
     writeText(p, text);

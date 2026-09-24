@@ -377,7 +377,7 @@ export function leanBlockProblems() {
  * ⚠ THE VOCABULARY GATES ARE HERE BECAUSE `themeParityProblems` CANNOT SEE THEM. That check is
  * presence-only and SYMMETRIC over the union of every theme's keys: a key missing from all
  * fourteen is in parity, and a key whose VALUE breaks a parser is not its business at all. So
- * `DOC_*` coverage, the `LEX_I..LEX_IX` equality and the single-word tier noun each need a gate
+ * `DOC_*` coverage, the `LEX_I..LEX_XI` equality and the single-word tier noun each need a gate
  * that reads the SOURCE and asks what the source requires.
  */
 export function constitutionProblems() {

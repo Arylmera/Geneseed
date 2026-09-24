@@ -58,7 +58,7 @@ badge keys `agents`/`skills`/`laws`/`themes`/`plugins`; `proseMirrorProblems` ho
 
 ---
 
-## 1 — The baseline, and the six commands that reproduce CI
+## 1 — The baseline, and the seven commands that reproduce CI
 
 The baseline is whatever these commands report on your checkout — run them; no count is
 written here, because a typed count is stale by the next commit.
@@ -84,6 +84,10 @@ node tests/golden.mjs --deletion
 ```
 
 ```bash
+node tests/golden.mjs --cli
+```
+
+```bash
 node tests/mutate.mjs --verify
 ```
 
@@ -100,6 +104,11 @@ Notes that matter:
 - `--test-reporter=tap` is not decoration. Both workflows gate on the *count* (`# tests N ≥ 500`)
   because `node --test` over a glob that matches nothing prints `# tests 0` and **exits 0**. Node's
   default reporter changed between majors, which is how a green 1043-test suite once reported zero.
+- `--cli` runs the ~320-cell CLI/hook matrix against the expectations written in each cell —
+  the only end-to-end gate on what a verb prints. CI runs it in `node-cells` on both platforms.
+  A cell that needs a broken checkout plants its fault as an **edit of the real file**
+  (`{ "edit": [[find, replace]] }` in `tests/helpers/matrix/cli.*.json`), never as a copy of it;
+  a `find` that stops matching exactly once fails the cell loudly.
 - `--deletion` is the only thing that exercises the write-before-delete prune. Anyone renaming or
   removing a plugin, a skill or an emitted file needs it.
 - **A local pass is weaker than CI.** ~18 tests in `tests/unit/package_manifest.test.mjs` carry
@@ -107,7 +116,7 @@ Notes that matter:
   on PATH they report *skipped* and the run is green.
 - CI additionally re-runs the packaging suite under `npm@latest` (Linux, last in the job) and
   packs the tarball into a `node:22-slim` container with no interpreter. Neither is reproducible
-  from the six commands; the container one is reachable locally through
+  from the seven commands; the container one is reachable locally through
   `tests/helpers/no-python-container.sh` with a docker daemon.
 - **Two assertions in `tests/unit/claude.test.mjs` silently stand down** on any machine where an
   ancestor of the temp sandbox is a `.claude`/`.bob` install — which is every developer machine
@@ -207,7 +216,11 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
 - **No renumber risk.** But there *are* written-out rule totals to bump — expected values are
   written out, never recorded — in `tests/unit/emit_smoke.test.mjs`, `harness.test.mjs`,
   `setup.test.mjs` and `web_api.test.mjs`. Each fails loudly with the new count; change the
-  number *and* the comment that explains it. A rule long enough to matter can also breach the
+  number *and* the comment that explains it. A rule in **craft** moves more: `setup` and
+  `web_api` also pin the craft-only narrowed counts, `generate.test.mjs` excludes every craft
+  rule by address to empty the pack, and `harness.test.mjs`'s contiguity fixture plants a rule at
+  the first free craft id — the doctrine twin of §2c step 8. Grep `tests/` for the previous
+  rule's address before trusting this list. A rule long enough to matter can also breach the
   `full` carrier ceiling in `emit_smoke` — raise it with a dated note there, as every earlier
   move did.
 
@@ -240,7 +253,7 @@ the bar is in `DESIGN.md` Decision 7, and most candidates belong in a doctrine p
    citations in `js/hosts/hooks.mjs` and two OpenCode plugins, and **nothing resolves a cross-reference
    against the canon**. Renumbering silently rewires every one of them.
 2. `themes/_TEMPLATE.json` — add `LEX_<roman>` in template order. Gated, as in §2a step 2:
-   `constitutionProblems` holds `LEX_I..LEX_IX` as an **equality** across all fifteen files (the
+   `constitutionProblems` holds `LEX_I..LEX_XI` as an **equality** across all fifteen files (the
    fourteen voices and the template), so both a missing key *and* a leftover one are reported. That
    arm exists because the renumber left `LEX_XXII`, `LEX_XXIII`, `LEX_XXIV` and `LEX_XXXVI` behind
    in every file and parity was silent — they were absent from nowhere.
@@ -253,7 +266,7 @@ the bar is in `DESIGN.md` Decision 7, and most candidates belong in a doctrine p
 6. `README.md` — badge `badge/laws-N` and the `N universal laws` sentence.
 7. `SHIPPED.md` — the `N laws, N agents, N skills` triple.
 8. `tests/unit/harness.test.mjs` — the negative fixture for the `LAW_CLASS` gate plants a rule at
-   the *first free numeral*, which is `X` now that the invariants are I..IX. Bump it, or it stops
+   the *first free numeral*, which is `XII` now that the invariants are I..XI. Bump it, or it stops
    being a fixture and starts being a duplicate.
 9. `CHANGELOG.md`, then rebuild and commit `web/dist` (step 5 touched `web/src`).
 
@@ -264,9 +277,9 @@ error — the heading simply stops matching and the whole tier parses to nothing
 
 The carrier itself is gated: `tests/unit/emit_smoke.test.mjs` checks every rule reaches every one
 of nine emit modes in order and themed, under both footprints, with a `CEILING` **and** a floor
-(half the ceiling) on the rendered size. Its docblock carries the current measurement: headroom is
-1,522 characters (2.8%) at full and 1,794 (4.8%) at lean, against the largest carrier — the
-host-agnostic `files` bundle. Read that docblock before adding text to any tier; it is
+(half the ceiling) on the rendered size. Its docblock carries the current measurement against
+the largest carrier — the host-agnostic `files` bundle; no figure is repeated here, because a
+typed headroom is stale by the next rule. Read that docblock before adding text to any tier; it is
 re-measured, never nudged, and the ceiling is measured **with all four packs active**, which is
 the only configuration it can speak for.
 
@@ -553,7 +566,7 @@ only, at best, on its presence.
 | `LOADED_SIGIL` uniqueness | `themes/*.json` | nothing, and it is load-bearing for theme detection |
 | `adapters/claude-code/settings.json` | — | nothing compares it to what the emitter writes; **it is already divergent** |
 | `NATIVE`, twice | two test files | they check each other, which is the gate that makes the duplication safe |
-| The emit-size `CEILING` | `tests/unit/emit_smoke.test.mjs:54` | a hand-transcribed measurement |
+| The emit-size `CEILING` | `tests/unit/emit_smoke.test.mjs` (`const CEILING`) | a hand-transcribed measurement |
 | Stale docblock counts | `js/build/themes.mjs:62` ("137 values" → 140), `js/build/render.mjs:116` ("145 tokens" → 148) | nothing |
 
 ---
@@ -632,7 +645,7 @@ gated. Every other appearance is derived at runtime (`.geneseed-version` markers
 why no test pins a version string and none should.
 
 Do not run `npm version`. Bump the two files by hand, add the `CHANGELOG` section, update
-`SHIPPED.md`, rebuild `web/dist` if `web/src` moved, run the six commands from §1, push, tag,
+`SHIPPED.md`, rebuild `web/dist` if `web/src` moved, run the seven commands from §1, push, tag,
 then rehearse and fire the workflow:
 
 ```bash

@@ -14,10 +14,10 @@
  * `_argv` emits neither flag (argued in situ at `bin/build-driver.mjs`'s dispatch), so the
  * acceptance matrix that gates all nine emits is structurally blind to both, and the driver
  * refused them rather than crossing for exactly that reason. The gate is
- * `tests/unit/maintainer_tools.test.mjs`, replaying the frozen recording in
- * `tests/__snapshots__/sync_themes.json`: a corpus of hand-made theme directories, comparing
- * the printed output, the return value and the resulting FILE BYTES against what the reference
- * answered. Nothing can re-record it, so a change here that moves a byte is a product change.
+ * `tests/unit/maintainer_tools.test.mjs`, over the written-out cases in
+ * `tests/fixtures/sync_themes_cases.json`: hand-made theme directories, each with the output,
+ * exit status and FILE BYTES it must produce. A change that moves a byte changes a case and
+ * the sentence explaining it, in the same commit.
  *
  * WHY THIS MODULE IS NOT `js/inspect/doctor.mjs`. `--sync-themes` has no doctor dependency, so it
  * stays on the generator driver where its flag lives — and the driver is under a transitive

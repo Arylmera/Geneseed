@@ -54,6 +54,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   writer across agents; this gives a *value* one writer across files.
   The carrier ceilings move `full` 57_500 → 59_500 and `lean` 38_900 → 39_500 for the two rules.
 
+### Changed — tests and maintainer docs
+
+- **CLI-matrix faults are edits of the real file, not copies of it.** Six `doctor` cells held
+  whole copies of `Laws.jsx`, `cyberpunk.json` and `registry.json` to change one line each; every
+  new rule, theme key or spec had to be carried into them by hand, and the `Laws.jsx` copies had
+  already drifted from the real file. A fault may now be `{ "edit": [[find, replace]] }`, applied
+  to the copied checkout; a `find` that does not match exactly once fails the cell.
+- **`docs/extending.md` lists the seven CI commands** (`golden --cli` was missing), names the
+  craft-specific fixtures §2a skipped, and drops typed figures that had gone stale (the ceiling
+  headroom, a line number). `DESIGN.md` and §2c now say `I..XI` / `LEX_I..LEX_XI`, and the claim
+  that `LEX_I` is frozen in a recording is gone — the recordings were retired.
+
 ### Changed — toolchain
 
 - **Web console toolchain on current majors** (dev-only; React stays 18): vite 5 → 8, vitest

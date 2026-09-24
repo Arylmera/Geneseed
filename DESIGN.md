@@ -44,7 +44,7 @@ vault or a specific tool's hooks.
      and the prose words the docs use: the core nouns `LAW(S)`/`DOCTRINE(S)`/`ONTOLOGY`/
      `AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`VAULT`/`WIKI`, plus `TAGLINE`,
      `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`, `ROAST_PERSONA`, the invariant
-     titles `LEX_I`..`LEX_IX`, the 27 doctrine-rule titles `DOC_<PACK>_<n>`, the four pack
+     titles `LEX_I`..`LEX_XI`, the 27 doctrine-rule titles `DOC_<PACK>_<n>`, the four pack
      names `PACK_CRAFT`/`PACK_RIGOR`/`PACK_OPS`/`PACK_PROCESS`, and the section intros
      `INTRO_*`. Each theme defines its own nouns; **neutral keeps the plain words** (Rule,
      Doctrine, Agent, Skill, Memory, Workspace), so neutral output is unchanged.
@@ -98,8 +98,9 @@ vault or a specific tool's hooks.
      and tier by reversibility; show the real forks), **Conduct** (answer what was asked,
      once). It absorbed the Pact, which is now stated *inside* Telos rather than standing
      as a peer of the rules.
-   - **Invariants** (`src/laws/universal.md`) — *what is never traded*. Nine numbered
-     Rules, `I`..`IX`, headed `### {{LAW}} <roman> — {{LEX_<roman>}}`.
+   - **Invariants** (`src/laws/universal.md`) — *what is never traded*. Eleven numbered
+     Rules, `I`..`XI`, nine in force — IX and XI are retired in place, their numbers kept so
+     existing citations resolve — headed `### {{LAW}} <roman> — {{LEX_<roman>}}`.
    - **Doctrines** (`src/doctrines/{craft,rigor,ops,process}.md`) — *how work is done
      here*. Practice rules addressed by pack and number, cited as `Doctrine process 5`.
      `PACK_ORDER` (`js/build/source.mjs`) fixes the order craft → rigor → ops → process, which
@@ -163,7 +164,7 @@ vault or a specific tool's hooks.
    Almost all of it is gated, across six named checks in `js/inspect/checks-build.mjs` —
    `themeParityProblems` (key parity across the voices), `lawMetaProblems` and
    `doctrineMetaProblems` (the console's Principle column, in both directions),
-   `constitutionProblems` (pack numbering and filing, `LEX_I..LEX_IX` as an *equality*, the
+   `constitutionProblems` (pack numbering and filing, `LEX_I..LEX_XI` as an *equality*, the
    `DOC_*` vocabulary, and every `{{DOCTRINE}}` citation in `src/`), and
    `countTableProblems` / `proseMirrorProblems` (badges and prose). So `geneseed doctor
    --all` is the check; the table above only says what it will ask for. `CHANGELOG.md` has
@@ -172,9 +173,7 @@ vault or a specific tool's hooks.
    Two things the table cannot tell you, and `docs/extending.md` can: the default footprint
    is **lean**, which inlines the authored `LEAN:else` half of each invariant and each
    doctrine rule (and of the Ontology) rather than the full body — so an amendment written
-   into one half only does not exist for most installs — and `LEX_I` is one of seven theme
-   keys frozen byte-for-byte in a recording nothing can re-make, so Rule I's themed titles
-   are the one part of this list that cannot be edited. Nothing is machine-cut any more:
+   into one half only does not exist for most installs. Nothing is machine-cut any more:
    `leanBlockProblems` refuses a rule whose block is missing or whose lean half is blank.
 
 ## 🧩 Components

@@ -416,7 +416,7 @@ test('the gate flags a theme missing a doctrine title, and a dead one it still c
     `no dead-key problem in ${JSON.stringify(dead)}`);
 });
 
-test('the gate holds every theme to exactly LEX_I..LEX_IX', () => {
+test('the gate holds every theme to exactly LEX_I..LEX_XI', () => {
   // ⚠ I1, AND IT IS AN EQUALITY BECAUSE A PRESENCE CHECK ALREADY MISSED IT ONCE. The renumber's
   // deletion ranges skipped LEX_XXII, LEX_XXIII, LEX_XXIV and LEX_XXXVI; they survived in all
   // fifteen files, and parity was silent because a key present everywhere is missing nowhere.
