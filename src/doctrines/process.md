@@ -132,19 +132,26 @@ stalls, halt with a structured summary of what was tried, learned, and remains (
 <!-- LEAN:begin -->
 Give every tracked item a short reference code and keep it unchanged for the rest of
 the session — `D` decisions, `O` options, `F` findings, `R` risks, `Q` questions,
-`A` actions — except in a short, simple answer, which takes none at all. Number from
-one within each kind, invent a new letter for a kind the list omits, and never
-renumber a code once issued — the user will cite it back, and a moved code makes
-their reply mean something you did not say. A code is an address, not an ornament:
+`A` actions. The trigger is countable: any reply naming two or more such items takes
+codes, a {{SKILL}}'s or an {{AGENT}}'s report included, whatever layout its template
+shows; a reply with one item or none takes none. The code opens the item's line —
+`**F1** — the token is logged in plain text`, `**Q2** — keep the v1 route?` — not a
+bare `1.` or a bullet. Number from one within each kind, keep counting across turns
+(the next finding after `F3` is `F4`, even three replies later), invent a new letter
+for a kind the list omits, and never renumber a code once issued — the user will cite
+it back, and a moved code makes their reply mean something you did not say. A code is an address, not an ornament:
 it lets a long exchange be answered by reference, and a decision taken on turn
 three still be named on turn thirty. Where the {{ONTOLOGY}}'s {{ONT_CONDUCT}}
 governs how an answer speaks, this is only the addressing convention — a practice
 a repository adopts or drops like any other rule in these {{DOCTRINES}}.
 <!-- LEAN:else -->
 Give every tracked item a short reference code, unchanged for the session —
-`D` decisions, `O` options, `F` findings, `R` risks, `Q` questions, `A` actions —
-except in a short, simple answer. Number from one within each kind, invent letters for
-missing kinds, never renumber a code once issued.
+`D` decisions, `O` options, `F` findings, `R` risks, `Q` questions, `A` actions.
+Any reply naming two or more such items takes codes, a {{SKILL}}'s or {{AGENT}}'s
+report included; one item or none takes none. The code opens the line, never a bare
+`1.` or bullet: `**F1** — token logged in plain text`, `**Q2** — keep the v1 route?`
+Number from one within each kind and keep counting across turns (after `F3` comes
+`F4`), invent letters for missing kinds, never renumber a code once issued.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE}} process 8 — {{DOC_PROCESS_8}}
