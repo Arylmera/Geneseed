@@ -8,14 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-### Fixed — blank web console on a non-canonical checkout path
+_Nothing yet._
 
-- **`geneseed web` served a blank page when the checkout was reached by a path that is not its
-  real one** (a symlink, a Windows junction, a `subst` or mapped drive, an 8.3 short name). The
-  static route realpathed each requested file but compared it against an unresolved `web/dist`,
-  so every asset failed the "under dist" check and was answered with `index.html` at `text/html`;
-  the browser refused the module script and nothing was logged. `dist` is now resolved once in
-  `makeHandler`, and `tests/unit/web_server.test.mjs` serves an asset through a linked `dist`.
+## [3.5.0] — 2026-09-25
+
+**Upgrading:** re-emit (or `geneseed rebuild-all`) after installing. Copilot installs need it most:
+the re-emit replaces the legacy `toolCall` hook, which Copilot no longer fires, with the gates
+listed under *Fixed — hosts and core*.
 
 ### Added — web console motion
 
@@ -62,6 +61,14 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   home is not trusted to have updated the rest. Distinct from process 8, which gives a *file* one
   writer across agents; this gives a *value* one writer across files.
   The carrier ceilings move `full` 57_500 → 59_500 and `lean` 38_900 → 39_500 for the two rules.
+
+### Added — doctor
+
+- **A `leanBlockProblems` doctor arm** over `src/laws/universal.md` and every pack: exactly one
+  `LEAN` block per rule, neither half blank. `resolveLean` is a replace over a marker pair and
+  therefore a no-op on markerless text, so a rule that lost its block would inline its full
+  body at the default footprint in silence, with every other gate in the tree green. Nothing
+  in `js/inspect/` read a LEAN marker before this — not for the packs, and not for the laws.
 
 ### Changed — tests and maintainer docs
 
@@ -182,25 +189,6 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   matrix.
 - The 30-second fetch-timeout test has its own file, so it overlaps the rest of the suite.
 
-### Fixed — web console
-
-- **A failed first load no longer hangs on the splash.** The boot splash waited on the overview
-  and the error toast rendered beneath it; a failure now lifts the splash and the dashboard shows
-  the error with a Retry.
-- **Search stays current**: the Spotlight index is dropped on every data revision (a build, a
-  deleted fact, an install switch) and on a docs-host change. MCP results open the Harness page,
-  where MCP wiring lives, not Settings.
-- **A refused Profile save keeps your draft** (it was replaced by the disk copy), the next Save
-  carries the new fingerprint, and leaving with unsaved edits asks first.
-- Blocked `sessionStorage` no longer stops the app mounting.
-- **Contrast**: `--text-3` clears WCAG AA (4.5:1) against its background and surface in every
-  skin — 19 of them were below it, the default dark skin at 3.9:1.
-- **Keyboard**: voice picks are buttons (Esc closes the list), and the dashboard's section rows
-  carry a real link.
-- The Docs host follows the deployed install when nothing is stored (Bob and Copilot read the
-  Claude Code pages). The unused `d3-force` dependency is gone; `docs/web-ui.md` describes the
-  rail as it is (no Specs view).
-
 ### Changed — the constitution
 
 - **Law IV**: a durable authorization the user gave counts, alongside per-act confirmation (the
@@ -227,7 +215,51 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   dead `EPI_PACT` key is gone. Prose outside the catalogue blocks no longer points at a table
   the Claude emit does not render.
 
-### Fixed
+### Changed — doctrine lean forms (#128)
+
+- **Doctrine rules inline an authored lean form.** All 24 rules across the four packs now
+  carry a `LEAN` block with both halves written by hand, the way the invariants and the
+  Ontology already did; `doctrinesBody` picks the half through `resolveLean` and the
+  first-sentence cut (`terseBlocks`) is gone. It was cutting eleven of the 24 rules down to a
+  maxim with no verb an agent could act on — *Make actions safe to run twice.*, *Change as
+  little as the task requires.*, and eight words of process 5's 213-word consent protocol.
+  The Doctrines section grows 4,096 → 9,635 characters at `lean` on neutral, which is the
+  point of the change rather than a cost of it; `CEILING.lean` moves 37,500 → 41,300 and
+  `CEILING.full` does not move, because not one full half was edited.
+- **`doctrines/` ships at full text under both footprints,** joining `laws/` and `ontology/`
+  in `renderAll`'s on-disk exemption. It shipped whole before only because a pack file had no
+  markers for `resolveLean` to act on — by accident, where the Doctrines section's own pointer
+  promises it by contract.
+
+### Fixed — blank web console on a non-canonical checkout path
+
+- **`geneseed web` served a blank page when the checkout was reached by a path that is not its
+  real one** (a symlink, a Windows junction, a `subst` or mapped drive, an 8.3 short name). The
+  static route realpathed each requested file but compared it against an unresolved `web/dist`,
+  so every asset failed the "under dist" check and was answered with `index.html` at `text/html`;
+  the browser refused the module script and nothing was logged. `dist` is now resolved once in
+  `makeHandler`, and `tests/unit/web_server.test.mjs` serves an asset through a linked `dist`.
+
+### Fixed — web console
+
+- **A failed first load no longer hangs on the splash.** The boot splash waited on the overview
+  and the error toast rendered beneath it; a failure now lifts the splash and the dashboard shows
+  the error with a Retry.
+- **Search stays current**: the Spotlight index is dropped on every data revision (a build, a
+  deleted fact, an install switch) and on a docs-host change. MCP results open the Harness page,
+  where MCP wiring lives, not Settings.
+- **A refused Profile save keeps your draft** (it was replaced by the disk copy), the next Save
+  carries the new fingerprint, and leaving with unsaved edits asks first.
+- Blocked `sessionStorage` no longer stops the app mounting.
+- **Contrast**: `--text-3` clears WCAG AA (4.5:1) against its background and surface in every
+  skin — 19 of them were below it, the default dark skin at 3.9:1.
+- **Keyboard**: voice picks are buttons (Esc closes the list), and the dashboard's section rows
+  carry a real link.
+- The Docs host follows the deployed install when nothing is stored (Bob and Copilot read the
+  Claude Code pages). The unused `d3-force` dependency is gone; `docs/web-ui.md` describes the
+  rail as it is (no Specs view).
+
+### Fixed — hosts and core
 
 - **Copilot's hooks match Copilot's current schema.** The global emit wired a single-object
   `toolCall` hook answered with `{"block": true}`; Copilot no longer has that event, so no
@@ -260,30 +292,6 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **`.gitignore`**: `notebook/` is anchored to the root — unanchored, it also ignored new files
   under `src/notebook/`. `.claude/worktrees/` and `.claude/settings.local.json` are ignored for
   every clone, not only through the maintainer's global excludes.
-
-### Changed
-
-- **Doctrine rules inline an authored lean form.** All 24 rules across the four packs now
-  carry a `LEAN` block with both halves written by hand, the way the invariants and the
-  Ontology already did; `doctrinesBody` picks the half through `resolveLean` and the
-  first-sentence cut (`terseBlocks`) is gone. It was cutting eleven of the 24 rules down to a
-  maxim with no verb an agent could act on — *Make actions safe to run twice.*, *Change as
-  little as the task requires.*, and eight words of process 5's 213-word consent protocol.
-  The Doctrines section grows 4,096 → 9,635 characters at `lean` on neutral, which is the
-  point of the change rather than a cost of it; `CEILING.lean` moves 37,500 → 41,300 and
-  `CEILING.full` does not move, because not one full half was edited.
-- **`doctrines/` ships at full text under both footprints,** joining `laws/` and `ontology/`
-  in `renderAll`'s on-disk exemption. It shipped whole before only because a pack file had no
-  markers for `resolveLean` to act on — by accident, where the Doctrines section's own pointer
-  promises it by contract.
-
-### Added
-
-- **A `leanBlockProblems` doctor arm** over `src/laws/universal.md` and every pack: exactly one
-  `LEAN` block per rule, neither half blank. `resolveLean` is a replace over a marker pair and
-  therefore a no-op on markerless text, so a rule that lost its block would inline its full
-  body at the default footprint in silence, with every other gate in the tree green. Nothing
-  in `js/inspect/` read a LEAN marker before this — not for the packs, and not for the laws.
 
 ## [3.4.0] — 2026-09-06
 
