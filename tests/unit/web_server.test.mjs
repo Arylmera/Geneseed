@@ -24,7 +24,7 @@
  */
 import assert from 'node:assert/strict';
 import { gunzipSync } from 'node:zlib';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, symlinkSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import test, { after } from 'node:test';
@@ -35,6 +35,7 @@ import { KINDS } from '../../js/web/docs.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
 import { makeHandler } from '../../js/web/handler.mjs';
 import { GET_INLINE, POST_INLINE, POST_ROUTES, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 import { webFixture, webFixtureTeardown } from '../helpers/web_fixture.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -224,6 +225,40 @@ test('a path climbing out of dist serves index.html and leaks no file', async ()
       `${p} was served as something other than the SPA shell`);
     assert.ok(!r.body.toString('utf8').includes(marker),
       `${p} SERVED A FILE FROM OUTSIDE web/dist — this is a file-read primitive`);
+  }
+});
+
+test('dist reached through a link still serves assets as themselves', async () => {
+  // THE BLANK-PAGE BUG. `serveStatic` compared a REALPATHED file against an UNRESOLVED `dist`,
+  // so a checkout reached by a non-canonical path — here a link, on Windows also a junction, a
+  // `subst` or mapped drive, an 8.3 short name — failed the "is it under dist" check for every
+  // asset and answered each one with index.html at `text/html`. The browser then refused the
+  // module script and the console rendered nothing, with no log on either side. `junction` so
+  // the link needs no privilege on Windows; POSIX ignores the type.
+  const { name } = asset();
+  const sb = makeSandbox('dist-link-');
+  const link = path.join(sb.path, 'dist');
+  symlinkSync(DIST, link, 'junction');
+  const srv = http.createServer(makeHandler(webState('neutral'), new JobManager(), TOKEN, link, {}));
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  try {
+    const got = await new Promise((resolve, reject) => {
+      http.get({ host: '127.0.0.1', port: srv.address().port, path: `/assets/${name}`,
+        headers: { 'Accept-Encoding': 'identity' } }, (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ ctype: res.headers['content-type'],
+          body: Buffer.concat(chunks) }));
+      }).on('error', reject);
+    });
+    assert.equal(got.ctype, 'text/javascript',
+      'a JS asset under a linked dist was not served as JS — the SPA shell stood in for it');
+    assert.ok(got.body.equals(readFileSync(path.join(DIST, 'assets', name))),
+      'the body is not the asset file');
+  } finally {
+    srv.closeAllConnections();
+    srv.close();
+    sb.cleanup();
   }
 });
 

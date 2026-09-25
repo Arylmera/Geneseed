@@ -8,6 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed — blank web console on a non-canonical checkout path
+
+- **`geneseed web` served a blank page when the checkout was reached by a path that is not its
+  real one** (a symlink, a Windows junction, a `subst` or mapped drive, an 8.3 short name). The
+  static route realpathed each requested file but compared it against an unresolved `web/dist`,
+  so every asset failed the "under dist" check and was answered with `index.html` at `text/html`;
+  the browser refused the module script and nothing was logged. `dist` is now resolved once in
+  `makeHandler`, and `tests/unit/web_server.test.mjs` serves an asset through a linked `dist`.
+
 ### Added — web console motion
 
 - **The dashboard moves where motion carries meaning** (anime.js 4, bundled into `web/dist` like
