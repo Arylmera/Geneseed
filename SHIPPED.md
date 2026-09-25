@@ -20,7 +20,7 @@ historical references, not files distributed with the repo.
 > **On version numbers.** [`harness.config.json`](harness.config.json)'s `version` is a
 > human-readable label only. The canonical identity of an installed harness is the
 > **source fingerprint** stamped in `.geneseed-version` (see `geneseed version`), not the
-> string. Current label: **3.4.0**.
+> string. Current label: **3.5.0**.
 
 ## Capabilities
 
