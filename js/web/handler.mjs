@@ -62,6 +62,13 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   // syscall against the readFileSync + gzipSync it saves. `gz` is the gzipped body,
   // computed once on the first gzip-accepting request instead of per request.
   const staticCache = new Map();
+  // `dist` RESOLVED ONCE, because every path compared against it below is resolved too.
+  // `resolvePath` is `realpathSync.native`, so a checkout reached by any path that is not its
+  // canonical one — a symlink, a Windows junction, a `subst` or mapped drive, an 8.3 short name,
+  // a lowercase drive letter — made `fp.startsWith(dist + sep)` false for EVERY asset. Each one
+  // then fell back to index.html at `text/html`, the browser refused the module script, and the
+  // page stayed blank with nothing logged on either side.
+  const distReal = resolvePath(dist);
 
   function sendBytes(res, body, ctype, code = 200, extra = null, acceptEncoding = '', gzStore = null) {
     const headers = { ...(extra || {}) };
@@ -86,12 +93,12 @@ export function makeHandler(state, jm, token, dist, holder = null) {
 
   function serveStatic(res, path, acceptEncoding) {
     const rel = (path === '/' || path === '') ? 'index.html' : path.replace(/^\/+/, '');
-    const index = resolvePath(join(dist, 'index.html'));
-    let fp = resolvePath(join(dist, rel));
+    const index = join(distReal, 'index.html');
+    let fp = resolvePath(join(distReal, rel));
     // STRICTLY under `dist`: `fp === dist` itself must also take the fallback below, which
-    // is why this checks `fp !== dist` and not just the prefix.
-    if (!(fp.startsWith(dist + sep) && fp !== dist) && fp !== index) fp = join(dist, 'index.html');
-    if (!isFile(fp)) fp = join(dist, 'index.html');
+    // is why this checks `fp !== distReal` and not just the prefix.
+    if (!(fp.startsWith(distReal + sep) && fp !== distReal) && fp !== index) fp = index;
+    if (!isFile(fp)) fp = index;
     if (!isFile(fp)) {
       return sendJson(res, { error: 'web/dist missing — run the UI build' }, 500, acceptEncoding);
     }
