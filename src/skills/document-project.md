@@ -35,7 +35,8 @@ write; with none, step 3 proposes them.
      `overview`, `module`, `api`, `flow`, `how-to`, `prd`, `design-system`, `architecture`),
      `mirrors-commit: <sha>`, and `generated: <date>` — so drift is auditable per page, not only
      in the HTML footer. The doc-home `index.md` is reserved and carries no frontmatter, and
-     neither does the root `AGENTS.md` (agents read it raw).
+     neither does the root `AGENTS.md` (agents read it raw) — though it still takes the
+     fences below.
    - **Fenced generated regions.** Wrap each generated **section** between
      `<!-- geneseed:doc:start -->` and `<!-- geneseed:doc:end -->` markers — one pair per
      section, so prose a reader adds between sections survives — and on re-runs rewrite *only*
