@@ -20,11 +20,13 @@ write; with none, step 3 proposes them.
    documents apply and wait for the user's go-ahead — e.g. "no UI detected (no stylesheet,
    theme, or component tree) — skipping `DESIGN.md`". `AGENTS.md`, `PRD.md` and
    `architecture.md` apply to every project; `DESIGN.md` only when a UI exists.
+   `all` still skips `DESIGN.md` when no UI exists, and says so in one line.
 4. **Write or refresh each selected document** from its template in *The doc set* below,
    under the rules in *Re-runs*. **Invent nothing**: every claim cites `path:line`, or carries
    the marker `⚠ to confirm` (in the user's language). When drafting is done, put every `⚠` to
    the user as **one** batch of questions — not one at a time — and fold the answers in as plain
    text. A command you could not run is recorded as `⚠ fails: <error>`, never as working.
+   Every document follows the three page conventions in step 5.
 5. **Reconcile the markdown (whole tree).** Check every existing page against the current
    implementation — renamed or removed APIs, changed flags, dead examples — and fix the
    drift. Add pages for significant undocumented surfaces; remove docs for features that no
@@ -40,8 +42,7 @@ write; with none, step 3 proposes them.
    - **Fenced generated regions.** Wrap each generated **section** between
      `<!-- geneseed:doc:start -->` and `<!-- geneseed:doc:end -->` markers — one pair per
      section, so prose a reader adds between sections survives — and on re-runs rewrite *only*
-     inside them; hand-authored prose outside the markers is never touched
-     ({{DOCTRINE}} process 3: edit the layer you own, never the reader's additions).
+     inside them; hand-authored prose outside the markers is never touched.
    - **Diagrams as Mermaid, keyed by purpose.** In the markdown, render diagrams as fenced
      `mermaid` code blocks — they render natively on GitHub, Obsidian, and VS Code with no
      dependency. Pick the kind by what you are showing: sequence for runtime/request flows,
@@ -50,7 +51,8 @@ write; with none, step 3 proposes them.
 6. **Keep an index.** Ensure the doc home has an index/README linking every page, the doc-set
    members included, current with the set you just reconciled.
 7. **Regenerate the HTML** — self-contained files at the doc home, a visual parallel to the
-   markdown and never a source of truth: regenerate them whole from the markdown each run.
+   markdown and never a source of truth: regenerate them whole from the markdown each run
+   ({{DOCTRINE}} ops 3: edit the source, not the surface).
    Overwrite the previous ones, but confirm each is the generated artifact before clobbering
    ({{LAW}} III, {{LAW}} IV). Both files:
    - **Stand alone, fully offline** — a single file, content pre-rendered to semantic HTML,
@@ -105,16 +107,19 @@ One product PRD for the whole project — the intent reconstructed from the code
 Only when a UI exists.
 1. **Principles** — 3–5 lines on the visual character the code shows.
 2. **Tokens** — one table per family (colour, typography, spacing, radius, shadow, motion):
-   `Name | Value | Role | Source`. Colours add their semantic role and their contrast against
-   the reference background; flag every pair below WCAG AA. List **hard-coded values** found
-   outside the token system separately, as drift — never legitimise them as tokens.
+   `Name | Value | Role | Source`. Colours add their semantic role and their WCAG 2.x contrast
+   ratio (relative luminance) against the reference background; flag every pair below WCAG AA.
+   A family the code has no scale for keeps its heading and one line: `⚠ no <family> scale
+   found`. List **hard-coded values** found outside the token system separately, as drift —
+   never legitimise them as tokens.
 3. **Components** — each reusable component: role, variants, states, key props, path.
 4. **Usage rules** — do / don't for layout, accessibility, and UI copy tone. Only rules the code
    actually follows — never generic best practice.
 
 ### `docs/architecture.md` — `type: architecture`
 The detailed architecture. Open with a link to the root `ARCHITECTURE.md` (repo-map's short
-map) and make sure the map links back; repeat nothing between the two.
+map) and make sure the map links back — one fenced `geneseed:doc` line at its top, nothing else
+in that file touched; repeat nothing between the two.
 1. **Context (C4 L1)** — the system, its actors, and the external systems (APIs, SSO, shared
    databases), as a Mermaid flowchart.
 2. **Containers (C4 L2)** — the deployable units and the protocols between them.
@@ -142,9 +147,10 @@ only that block, add the project sections below it.
   rewritten: offer to fence the sections you recognise, or to leave it and report its drift —
   the user chooses.
 - **IDs are stable.** Before rewriting, read the existing FR, NFR and ADR tables. Keep every
-  ID and any wording the user corrected; update only *Status*, *Code*, and *Evidence*; append
-  new rows with the next free number. A requirement that disappears becomes `retired` — never
-  deleted, never renumbered.
+  ID and any wording the user corrected; update only *Status*, *Code*, *Threshold*, and
+  *Evidence*; append new rows with the next free number. A requirement that disappears becomes
+  `retired` — never deleted, never renumbered. An ADR the code no longer bears is marked
+  `superseded`, never deleted.
 - **`mirrors-commit` moves only with a rewrite.** A document outside this run's target keeps
   its old value, so its staleness stays visible.
 - **An answered `⚠` stays answered** — it is plain text now, not re-asked unless the code
