@@ -197,7 +197,11 @@ const HOSTS = {
       }
       // An openai-compatible provider only serves the models it declares; declare the one asked for.
       const [prov, model] = opt.model.split('/');
-      if (cfg.provider?.[prov]?.models && model) cfg.provider[prov].models[model] ??= { name: model };
+      // With no `limit`, OpenCode asks for an output budget some backends refuse outright (Groq:
+      // "max_tokens must be <= 16384"), so a model declared here gets a conservative one.
+      if (cfg.provider?.[prov]?.models && model) {
+        cfg.provider[prov].models[model] ??= { name: model, limit: { context: 128000, output: 8192 } };
+      }
       fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
       return env;
     },
