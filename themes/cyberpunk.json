@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Trace the history for when the regression hit or why the code's there — bisect, blame, pickaxe, read-only run.",
   "DESC_GIT_RESCUE": "Recover a corrupted or tangled repo, or rewrite history clean — reflog, undo, rebase, every move backed up first.",
   "DESC_REPO_MAP": "Map the grid — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Sync the project's docs to the live code — spin up or patch the doc tree, and re-render a single offline HTML overview of the core.",
+  "DESC_DOCUMENT_PROJECT": "Rip the PRD, design system, architecture and AGENTS.md out of the live code, patch the doc tree, and re-render the offline HTML overview.",
   "DESC_COMMIT": "Stage only the sectors this run touched and push a focused commit.",
   "DESC_CODE_REVIEW": "Scan a diff or PR — correctness first, craft second.",
   "DESC_BRAINSTORM": "Turn a raw spec into an agreed design before any code hits the deck.",

@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Dig the history to find when you broke it or why the code's there — bisect, blame, pickaxe, hands off the working tree.",
   "DESC_GIT_RESCUE": "Clean up the mess you made of the repo, or rewrite history safely — reflog, undo, rebase, behind a backup so you can't make it worse.",
   "DESC_REPO_MAP": "Draw the map — a single-read map of the repository, kept current, so nobody has your excuse for getting lost.",
-  "DESC_DOCUMENT_PROJECT": "Drag the project's docs into line with the living code — build or fix the doc tree, and re-render a single offline HTML overview of what matters.",
+  "DESC_DOCUMENT_PROJECT": "Drag a PRD, design system, architecture and AGENTS.md out of the code, fix the doc tree, and re-render the offline HTML overview.",
   "DESC_COMMIT": "Stage only what the work touched and write a focused commit. Not a junk drawer.",
   "DESC_CODE_REVIEW": "Go over a diff or PR — correctness first, polish after — and don't soften it.",
   "DESC_BRAINSTORM": "Beat a raw idea into an approved design before a single line of code is written.",

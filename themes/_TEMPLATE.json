@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "<one-line description: investigate history — bisect, blame, pickaxe, read-only>",
   "DESC_GIT_RESCUE": "<one-line description: recover a broken repo / rewrite history safely behind a backup>",
   "DESC_REPO_MAP": "<one-line description: create/maintain a one-read repo orientation map>",
-  "DESC_DOCUMENT_PROJECT": "<one-line description: reconcile the project's docs with the code; regenerate an offline HTML overview>",
+  "DESC_DOCUMENT_PROJECT": "<one-line description: write the doc set (PRD, design system, architecture, AGENTS.md) from the code; reconcile docs; regenerate the offline HTML>",
   "DESC_COMMIT": "<one-line description: stage the right paths and write a focused commit>",
   "DESC_CODE_REVIEW": "<one-line description: review a diff/PR — correctness first, quality second>",
   "DESC_BRAINSTORM": "<one-line description: turn a raw idea into an approved design before code>",

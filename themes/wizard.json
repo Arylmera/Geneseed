@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Scry the chronicle for when the curse took hold or why a rune was set — bisect, blame, and the pickaxe, disturbing nothing.",
   "DESC_GIT_RESCUE": "Mend a broken or tangled grimoire, or rewrite its history without a backfire — reflog and undo, every working warded by a backup.",
   "DESC_REPO_MAP": "Chart the sanctum — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Set the project's tomes in accord with the living code — inscribe or mend the doc tree, and re-conjure a single offline HTML overview of the essential workings.",
+  "DESC_DOCUMENT_PROJECT": "Inscribe the PRD, design system, architecture and AGENTS.md from the living code, mend the tomes, and re-conjure the offline HTML overview.",
   "DESC_COMMIT": "Gather only the reagents this working touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Scry a diff or petition — soundness first, craft after.",
   "DESC_BRAINSTORM": "Turn a raw notion into an agreed design before any rune is cut.",

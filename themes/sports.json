@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Go to the tape — find when the regression landed or why the code's there — bisect, blame, pickaxe, look but don't touch.",
   "DESC_GIT_RESCUE": "Recover a blown or messy repo, or rewrite history clean — reflog, undo, rebase, every move backed up first.",
   "DESC_REPO_MAP": "Chart the field — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Bring the playbook into line with the current code — build or fix up the doc tree, and re-cut a single offline HTML overview of the big plays.",
+  "DESC_DOCUMENT_PROJECT": "Draw up the PRD, design system, architecture and AGENTS.md from the current code, fix the playbook, and re-cut the offline HTML overview.",
   "DESC_COMMIT": "Stage only what this drive touched and log a focused commit.",
   "DESC_CODE_REVIEW": "Review a diff or PR — correctness first, form second.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed game plan before any code is run.",

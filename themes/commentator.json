@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Replay the data to find when the lap fell apart or why a line was driven — bisect, blame, and the pickaxe, hands off the car.",
   "DESC_GIT_RESCUE": "Recover a crashed or tangled session, or rewrite the history safely — reflog, undo, and rebase behind a backup lap.",
   "DESC_REPO_MAP": "Draw the track map — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Bring the team's own notes into line with the living code — raise or mend the doc tree, and re-render a single offline HTML overview of what matters most.",
+  "DESC_DOCUMENT_PROJECT": "Call the team's PRD, design system, architecture and AGENTS.md straight from the code, mend the doc tree, and re-render the offline HTML overview.",
   "DESC_COMMIT": "Stage only the parts this lap touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Scrutineer a diff or PR — correctness first, polish after.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed strategy before a single tyre hits the track.",
