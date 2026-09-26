@@ -329,6 +329,10 @@ emit leaves the prior install intact.
    `·`-separated name in the 🛠 row (that enumeration is gated two ways, unlike the laws' one).
 7. `SHIPPED.md` — the `N laws, N agents, N skills` triple.
 8. `doctor --all`, then the suite.
+9. **Skills only, and optional** — cases in `tests/fixtures/skill_triggers.json` (positives *and*
+   near-miss negatives), then `node tests/skill_triggers.mjs --only <name>`. It is the one check
+   that asks a real model whether the description routes: every gate above passes a skill that
+   never fires. Hand-run, spends model calls on your own login, not part of the suite.
 
 **A vendored skill folder** (`src/skills/<name>/SKILL.md`) is a different shape: add it to
 `VENDORED_SKILL_DIRS` (`js/hosts/native.mjs:37` — the literal is frozen in
