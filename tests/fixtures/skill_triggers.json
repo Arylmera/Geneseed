@@ -8,8 +8,14 @@
   "debug": [
     { "query": "The parser test fails with 'unexpected token' since yesterday, find out why", "should_trigger": true },
     { "query": "The app crashes on startup when the config file is empty", "should_trigger": true },
+    { "query": "TypeError: Cannot read properties of undefined (reading 'map')\n    at renderList (src/list.js:42:18)\n    at main (src/index.js:10:3)\nwhy?", "should_trigger": true },
+    { "query": "parseDate returns the wrong value for empty input, it should return null", "should_trigger": true },
+    { "query": "npm run build started failing with 'Module not found: Can't resolve ./utils' after I moved some files", "should_trigger": true },
     { "query": "Add a --verbose flag to the CLI", "should_trigger": false },
-    { "query": "What is a stack trace, conceptually?", "should_trigger": false }
+    { "query": "What is a stack trace, conceptually?", "should_trigger": false },
+    { "query": "Explain what a race condition is", "should_trigger": false },
+    { "query": "Refactor the config loader into smaller functions without changing behaviour", "should_trigger": false },
+    { "query": "Add retry with exponential backoff to the HTTP client", "should_trigger": false }
   ],
   "git-rescue": [
     { "query": "I did a hard reset and lost my last three commits, get them back", "should_trigger": true },

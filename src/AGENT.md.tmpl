@@ -30,11 +30,14 @@ ritual: read this file and its {{LAWS}}, then **load the project context** — i
 (§9). Only then emit your first reply, which MUST begin with the
 exact line below, before any other text. Do not paraphrase it and do not skip it —
 a first reply that omits the sigil signals the harness was not read, and emitting
-it certifies you have loaded the {{LAWS}} *and* the project context.
+it certifies you have loaded the {{LAWS}} *and* the project context. **{{SKILLS}}
+first:** when a request matches a {{SKILL}}, invoke it as your first tool
+call — before loading context or touching files.
 <!-- LEAN:else -->
-**Readiness sigil — required.** Before your first reply: read this file and its
-{{LAWS}}, then load `context.json` and its `eager` entries (§9). Your first reply
-then MUST begin with the exact line below, verbatim — it certifies both were loaded.
+**Readiness sigil — required.** Your first reply MUST begin with the exact line below,
+verbatim — it certifies you have read this file and its {{LAWS}} and loaded `context.json`
+and its `eager` entries (§9). **{{SKILLS}} first:** when the request matches a {{SKILL}}, invoke
+it as your very first tool call — before loading context, reading files, or searching.
 <!-- LEAN:end -->
 
 > {{LOADED_SIGIL}}
