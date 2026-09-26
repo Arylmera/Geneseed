@@ -1,0 +1,20 @@
+{
+  "commit": [
+    { "query": "I'm done with the refactor, commit it", "should_trigger": true },
+    { "query": "Stage only the files for the login fix and write the commit message", "should_trigger": true },
+    { "query": "Explain what a git commit hash is", "should_trigger": false },
+    { "query": "Summarise the last five commits in the log", "should_trigger": false }
+  ],
+  "debug": [
+    { "query": "The parser test fails with 'unexpected token' since yesterday, find out why", "should_trigger": true },
+    { "query": "The app crashes on startup when the config file is empty", "should_trigger": true },
+    { "query": "Add a --verbose flag to the CLI", "should_trigger": false },
+    { "query": "What is a stack trace, conceptually?", "should_trigger": false }
+  ],
+  "git-rescue": [
+    { "query": "I did a hard reset and lost my last three commits, get them back", "should_trigger": true },
+    { "query": "My rebase is half finished and the repo is a mess, help", "should_trigger": true },
+    { "query": "Create a new branch for the payment feature", "should_trigger": false },
+    { "query": "Commit these changes", "should_trigger": false }
+  ]
+}
