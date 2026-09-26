@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Dive the ship's log for when she sprang a leak or why a plank was laid — bisect, blame, and the pickaxe, hands off the cargo.",
   "DESC_GIT_RESCUE": "Right a wrecked or fouled hold, or rewrite her log without sinkin' her — reflog and undo, every move with a backup line rigged.",
   "DESC_REPO_MAP": "Chart the waters — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Bring the ship's log and charts into line with the living code — raise or mend the doc tree, and re-draw a single offline HTML overview of what matters most.",
+  "DESC_DOCUMENT_PROJECT": "Chart the PRD, design system, architecture and AGENTS.md from the living code, mend the ship's log, and re-draw the offline HTML overview.",
   "DESC_COMMIT": "Load only the cargo this run touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Inspect a diff or petition — correctness first, craft after.",
   "DESC_BRAINSTORM": "Turn a raw notion into an agreed course before any plank is cut.",

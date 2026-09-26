@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Trace the roadbook to find when it broke or why a part was fitted — bisect, blame, and the pickaxe, hands off the bike.",
   "DESC_GIT_RESCUE": "Recover a wrecked or fouled run, or rewrite the history safely — reflog, undo, and rebase behind a backup.",
   "DESC_REPO_MAP": "Draw the route map — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Bring the crew's own notes into line with the living code — raise or mend the doc tree, and re-render a single offline HTML overview of what matters most.",
+  "DESC_DOCUMENT_PROJECT": "Write the crew's PRD, design system, architecture and AGENTS.md off the living code, mend the doc tree, and re-render the offline HTML overview.",
   "DESC_COMMIT": "Load only what this run touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Go over a diff or PR — correctness first, finish after.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed route before a single wheel turns.",

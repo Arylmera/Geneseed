@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Interrogate the chronicle — when the corruption entered, or why a line was inscribed — by bisect, blame, and pickaxe, touching nothing.",
   "DESC_GIT_RESCUE": "Reclaim a ruined or tangled archive, or rewrite its history without ruin — by reflog and undo, every rite warded by a backup.",
   "DESC_REPO_MAP": "Chart the territory — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Set the project's own records in accord with the living code — raise or amend the doc tree, and re-forge a single offline HTML overview of what matters most.",
+  "DESC_DOCUMENT_PROJECT": "Inscribe the PRD, design system, architecture and AGENTS.md from the living code, amend the records, and re-forge the offline HTML overview.",
   "DESC_COMMIT": "Stage only what the deed touched, and seal it with a focused commit.",
   "DESC_CODE_REVIEW": "Scrutinise a diff or petition — correctness above all, craft thereafter.",
   "DESC_BRAINSTORM": "Forge a raw idea into an approved design before a single line of code is written.",

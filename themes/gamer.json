@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Replay the history to find when the run broke or why the code's there — bisect, blame, pickaxe, no edits.",
   "DESC_GIT_RESCUE": "Recover a corrupted or messy save, or rewrite history clean — reflog, undo, rebase, always backed up first.",
   "DESC_REPO_MAP": "Draw the minimap — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Sync the wiki to the current code — build or patch the doc tree, and re-render a single offline HTML overview of the key parts.",
+  "DESC_DOCUMENT_PROJECT": "Build the PRD, design system, architecture and AGENTS.md from the current code, patch the wiki, and re-render the offline HTML overview.",
   "DESC_COMMIT": "Stage only what this run touched and save a focused commit.",
   "DESC_CODE_REVIEW": "Review a diff or PR — correctness first, polish second.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed build before any code drops.",

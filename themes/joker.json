@@ -38,7 +38,7 @@
   "DESC_GIT_ARCHAEOLOGY": "Replay the tapes to find when the bit broke or why a line is in the set — bisect, blame, and the pickaxe, hands off the act.",
   "DESC_GIT_RESCUE": "Recover a botched or tangled set, or rewrite the history safely — reflog, undo, and rebase behind a backup.",
   "DESC_REPO_MAP": "Draw the venue map — a single-read map of the repository, kept current.",
-  "DESC_DOCUMENT_PROJECT": "Bring the act's own notes into line with the living code — raise or mend the doc tree, and re-render a single offline HTML overview of what matters most.",
+  "DESC_DOCUMENT_PROJECT": "Script the act's PRD, design system, architecture and AGENTS.md from the living code, mend the doc tree, and re-render the offline HTML overview.",
   "DESC_COMMIT": "Stage only the lines this bit touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Go over a diff or PR — correctness first, polish after.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed set before a single line is written.",
