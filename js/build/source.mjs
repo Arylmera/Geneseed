@@ -92,17 +92,18 @@ export function discoverNames(dir, first) {
  *
  * DELIBERATELY NOT `discoverNames('doctrines', 'craft')`. That helper `.sort()`s, so it
  * answers `craft, ops, process, rigor`; the constitution's order is a reading order —
- * write it (craft), prove it (rigor), run it (ops), ship it (process) — and no sort
- * produces it. Discovery still runs, but as a GATE rather than as the order: `js/build/render.mjs`
+ * write it (craft), prove it (rigor), run it (ops), ship it (process), then say it
+ * (comms) — and no sort produces it. comms is LAST because presenting the answer is the last
+ * act of any task, and because appending left every earlier pack's position untouched. Discovery still runs, but as a GATE rather than as the order: `js/build/render.mjs`
  * refuses to build when a pack file exists under `src/doctrines/` that is missing from this
- * array, so a fifth pack cannot be silently dropped from every install.
+ * array, so a sixth pack cannot be silently dropped from every install.
  *
  * It lives here, beside `makeCfg` and `discoverNames`, because every consumer (the cfg
  * default, the render loop, the `Active packs:` marker, the CLI flag, the wizard, the
  * doctor) already imports this module and this module imports nothing of theirs — the one
  * placement that cannot introduce a cycle.
  */
-export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process'];
+export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process', 'comms'];
 
 /**
  * Every doctrine rule address this checkout ships — `pack.n`, in render order.

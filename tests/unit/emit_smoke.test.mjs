@@ -136,8 +136,16 @@ const FOOTPRINTS = ['full', 'lean'];
  * mechanism only, yet two headings plus ~330 characters each still outrun 666, so lean breaches
  * too. `full` moves 57_500 → 59_500 and `lean` 38_900 → 39_500, each the next 500 up
  * (headroom 499 / 379).
+ *
+ * BOTH RAISED 2026-09-27, for the comms pack: process 7 (reference codes) MOVED into it as
+ * comms 1, and comms 2 (structure beside prose) is new — so the growth is one new rule plus a
+ * pack header, a lead line and the fifth name on the `Active packs:` marker. Measured `files`
+ * carrier before, on origin/main at 29a260d: full 59_494, lean 39_486 (headroom 6 / 14 — the
+ * 3.6.0 routing work had already spent what the note above left). After: full 60_782, lean
+ * 40_146. `full` moves 59_500 → 61_000 and `lean` 39_500 → 40_500, each the next 500 up
+ * (headroom 218 / 354).
  */
-const CEILING = { full: 59_500, lean: 39_500 };
+const CEILING = { full: 61_000, lean: 40_500 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -373,14 +381,14 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
   const other = JSON.parse(readTextPy(path.join(ROOT, 'themes', 'imperial.json')));
   // Derived from the source, never transcribed — the same rule the law loop above follows.
   const rules = [];
-  for (const pack of ['craft', 'rigor', 'ops', 'process']) {
+  for (const pack of ['craft', 'rigor', 'ops', 'process', 'comms']) {
     const src = readTextPy(path.join(ROOT, 'src', 'doctrines', `${pack}.md`));
     for (const m of src.matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+) —/gm)) {
       rules.push({ pack: m[1], n: m[2], key: `DOC_${m[1].toUpperCase()}_${m[2]}` });
     }
   }
-  assert.equal(rules.length, 27,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 27 (rigor 5 is retired Law IX; process 8, one writer per file, joined 2026-09; craft 7 and ops 7 joined 2026-09-23); either the `
+  assert.equal(rules.length, 28,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 28 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27); either the `
     + 'heading shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in
@@ -419,7 +427,7 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       // PACK_ORDER is narrative, not alphabetical, so "in source order" above is also the claim
       // that `ops` renders THIRD and not second. Stated once, absolutely, so the loop's ordering
       // assertion cannot be satisfied by an accidental alphabetical sort.
-      const packAt = ['craft', 'rigor', 'ops', 'process']
+      const packAt = ['craft', 'rigor', 'ops', 'process', 'comms']
         .map((p) => text.indexOf(`${theme.DOCTRINE} ${p} 1 —`));
       assert.deepEqual(packAt, [...packAt].sort((a, b) => a - b),
         `--emit ${mode} --footprint ${footprint}: the packs render out of PACK_ORDER`);
@@ -451,15 +459,15 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (27_400 / 20_650) is below the SMALLEST measured carrier (`opencode` and
-      // `opencode-global`, tied at 46_207 / 31_322) and far above any plausible stub.
+      // the ceiling (30_500 / 20_250) is below the SMALLEST measured carrier (`opencode` and
+      // `opencode-global`, 52_309 / 31_691 on 2026-09-27) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
       // each set describing a corpus that had already moved. The arithmetic held every time, so
       // nothing was ever red, and a comment that is only wrong never announces itself.
       // Re-derive both whenever the constant above moves; the lean half of that constant moved
-      // on 2026-09-09 and these figures are that re-derivation.
+      // on 2026-09-27 and these figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `
         + 'satisfied by a render that collapsed, so the floor is what says it did not');

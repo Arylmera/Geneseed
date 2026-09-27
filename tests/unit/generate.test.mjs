@@ -1402,7 +1402,7 @@ test('the ontology and doctrines dirs are owned — a stale file in either is wi
     // The control: the wipe is a wipe-and-regenerate, not a wipe. Without this an emit that
     // deleted the two dirs and never rewrote them would pass the loop above.
     assert.ok(isFile(out, 'ontology', 'universal.md'));
-    for (const pack of ['craft', 'rigor', 'ops', 'process']) {
+    for (const pack of ['craft', 'rigor', 'ops', 'process', 'comms']) {
       assert.ok(isFile(out, 'doctrines', `${pack}.md`));
     }
   });
@@ -1580,6 +1580,7 @@ const PACK_MARK = {
   rigor: 'Make actions safe to run twice.',
   ops: 'The tools available to you are not fixed, and they are not only the obvious ones.',
   process: 'Recording and sharing code is consented, never unilateral.',
+  comms: 'Prose and structure are distinct',
 };
 
 /**
@@ -1602,7 +1603,7 @@ test('a default build carries the ontology, every pack, and the active-packs mar
     }
     // The exact line, anchored at both ends: a later reader parses the active set back out of a
     // deployed carrier by this prefix, so a marker that merely CONTAINS the names is not enough.
-    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process'),
+    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process, comms'),
       'the Active packs: marker line is missing or does not read in PACK_ORDER');
     // Not a token in sight: `DOCTRINES_BODY`/`DOCTRINES_LIST` are render-injected rather than
     // theme keys, so a template that spends them without an injector fails HERE first.
@@ -1617,7 +1618,7 @@ test('narrowing the packs removes their rules from AGENT.md but not from the bun
     const agent = agentText(out);
 
     assert.ok(agent.includes(PACK_MARK.craft), 'the one selected pack is not in AGENT.md');
-    for (const pack of ['rigor', 'ops', 'process']) {
+    for (const pack of ['rigor', 'ops', 'process', 'comms']) {
       assert.ok(!agent.includes(PACK_MARK[pack]),
         `AGENT.md still carries ${pack}'s rule text with only craft active`);
     }
@@ -1626,7 +1627,7 @@ test('narrowing the packs removes their rules from AGENT.md but not from the bun
     // THE OTHER HALF, and the reason `src/doctrines/README.md` licenses cross-pack citations:
     // the full catalogue ships whether or not a pack is built into AGENT.md, so a rule that
     // names an inactive pack's rule is still resolvable from the install.
-    for (const pack of ['craft', 'rigor', 'ops', 'process']) {
+    for (const pack of ['craft', 'rigor', 'ops', 'process', 'comms']) {
       assert.ok(isFile(out, 'doctrines', `${pack}.md`),
         `${pack}.md is missing from the bundle — an inactive pack must still ship`);
     }
@@ -1723,7 +1724,7 @@ test('doctrinesOfDir round-trips the marker a real build wrote', () => {
   withDir((d) => {
     const all = path.join(d, 'all');
     buildInto(all);
-    assert.deepEqual(doctrinesOfDir(all), ['craft', 'rigor', 'ops', 'process']);
+    assert.deepEqual(doctrinesOfDir(all), ['craft', 'rigor', 'ops', 'process', 'comms']);
 
     // Handed in out of order and still read back in PACK_ORDER: the marker is compared against
     // itself across builds, so the reader must not preserve whatever order the writer was given.
@@ -1842,7 +1843,7 @@ test('excluding a rule removes that rule and nothing else', () => {
         `process ${n} went with process 7 — the exclusion took its whole pack`);
     }
     // ...and the pack is still ACTIVE, or a reader would think the install dropped Observance.
-    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process'),
+    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process, comms'),
       'excluding one rule dropped its pack from the marker');
     // The second marker, in the SPACED spelling — read by people first, by
     // `excludedRulesOfDir` second.
@@ -1865,12 +1866,12 @@ test('a pack whose every rule is excluded leaves the marker', () => {
       'craft.6', 'craft.7'] });
     const agent = agentText(out);
 
-    assert.ok(agent.split('\n').includes('Active packs: rigor, ops, process'),
+    assert.ok(agent.split('\n').includes('Active packs: rigor, ops, process, comms'),
       'a pack with every rule excluded is still listed as active');
     assert.ok(!agent.includes(PACK_MARK.craft), "the empty pack's rule text survived");
     assert.ok(!agent.includes('**Craft** —'), 'the empty pack kept its header');
-    // The other three are untouched — this cannot go green by rendering no doctrines at all.
-    for (const pack of ['rigor', 'ops', 'process']) {
+    // The other four are untouched — this cannot go green by rendering no doctrines at all.
+    for (const pack of ['rigor', 'ops', 'process', 'comms']) {
       assert.ok(agent.includes(PACK_MARK[pack]), `${pack} went with craft`);
     }
   });
@@ -1891,7 +1892,7 @@ test('a default build writes no Excluded rules line at all', () => {
     // And no unspent token where the line would have been.
     assert.ok(!agent.includes('{{EXCLUDED_RULES_LINE}}'));
     // The marker it sits under is unaffected either way.
-    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process'));
+    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process, comms'));
   });
 });
 
@@ -1904,7 +1905,7 @@ test('excludedRulesOfDir round-trips the marker a real build wrote', () => {
     // builds exactly as the pack line is.
     buildInto(some, { excludeRules: ['process.7', 'craft.2'] });
     assert.deepEqual(excludedRulesOfDir(some), ['craft.2', 'process.7']);
-    assert.deepEqual(doctrinesOfDir(some), ['craft', 'rigor', 'ops', 'process'],
+    assert.deepEqual(doctrinesOfDir(some), ['craft', 'rigor', 'ops', 'process', 'comms'],
       'excluding rules narrowed the PACK axis as a side effect');
 
     // ⚠ AND ABSENCE IS AN ANSWER HERE, unlike the pack line. The line is only written when
@@ -1915,6 +1916,48 @@ test('excludedRulesOfDir round-trips the marker a real build wrote', () => {
     buildInto(none);
     assert.deepEqual(excludedRulesOfDir(none), [],
       'a carrier with no Excluded rules: line must read as [], never as null');
+  });
+});
+
+// THE ADDRESS MIGRATION (2026-09-27). The comms pack took `process 7` (reference codes) out of
+// process as `comms 1`, and `process 8` (one writer per file) became `process 7`. An install
+// built before that carries a marker naming `process` and not `comms` — and so does a current
+// install whose owner switched comms off. The carrier's text tells them apart: only a pre-comms
+// carrier can say `process 8` (as a rendered heading, or in its `Excluded rules:` line).
+
+test('a pre-comms install that carried process gains comms, and keeps its codes rule', () => {
+  withDir((d) => {
+    const old = path.join(d, 'old');
+    fs.mkdirSync(old);
+    const write = (body) => writeText(path.join(old, 'AGENT.md'), `# Geneseed\n\n${body}\n`);
+
+    // The default pre-comms carrier: process active, its eighth rule rendered.
+    write('### Doctrine process 8 — One Writer Per File\n\nActive packs: craft, rigor, ops, process');
+    assert.deepEqual(doctrinesOfDir(old), ['craft', 'rigor', 'ops', 'process', 'comms'],
+      'a pre-comms install lost the codes rule on its first rebuild');
+    assert.deepEqual(excludedRulesOfDir(old), []);
+
+    // Its exclusions are re-addressed, once: the old `process 7` IS `comms 1` now, and the old
+    // `process 8` is `process 7` — never chained on to `comms 1`.
+    write('Active packs: craft, process\nExcluded rules: process 7, process 8');
+    assert.deepEqual(doctrinesOfDir(old), ['craft', 'process', 'comms']);
+    assert.deepEqual(excludedRulesOfDir(old), ['comms.1', 'process.7']);
+
+    // No process, no codes rule to preserve: nothing is added.
+    write('### Doctrine process 8 — x\n\nActive packs: craft');
+    assert.deepEqual(doctrinesOfDir(old), ['craft']);
+  });
+});
+
+test('a current install with comms switched off stays off across a rebuild', () => {
+  // The other direction, and the reason the migration sniffs the carrier instead of keying on
+  // the marker alone: `process` without `comms` is also what a deliberate current choice says.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out, { doctrines: ['craft', 'process'], excludeRules: ['process.7'] });
+    assert.deepEqual(doctrinesOfDir(out), ['craft', 'process']);
+    assert.deepEqual(excludedRulesOfDir(out), ['process.7'],
+      'a current `process 7` exclusion was re-addressed as if it were a pre-comms one');
   });
 });
 
