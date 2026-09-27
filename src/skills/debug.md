@@ -2,7 +2,7 @@
 
 > {{DESC_DEBUG}}
 
-**Trigger:** a bug, test failure, crash, or behaviour that doesn't match expectation — before proposing a fix.
+**Trigger:** a test fails, something crashes, an error or stack trace appears, or code returns the wrong result — load this FIRST, before reading code or investigating, not only before proposing a fix.
 
 **No fix without a root cause.** A change you cannot tie to a cause you understand is
 a guess — and a guess that happens to pass is worse than a failure, because it hides.
