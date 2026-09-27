@@ -94,11 +94,11 @@ test('a selection is passed in PACK_ORDER, and an empty one is spelled none', ()
   assert.deepEqual(ARGS(['rigor', 'craft']).slice(-2), ['--doctrines', 'craft,rigor']);
   assert.deepEqual(ARGS(['process']).slice(-2), ['--doctrines', 'process']);
   assert.deepEqual(ARGS([...PACK_ORDER]).slice(-2),
-    ['--doctrines', 'craft,rigor,ops,process']);
+    ['--doctrines', 'craft,rigor,ops,process,comms']);
   // Order is not what the canonicalisation preserves: the SET is, re-ordered through the pack
   // order, because the `Active packs:` marker the build writes is compared against itself.
   assert.deepEqual(ARGS([...PACK_ORDER].reverse()).slice(-2),
-    ['--doctrines', 'craft,rigor,ops,process']);
+    ['--doctrines', 'craft,rigor,ops,process,comms']);
   // The empty list cannot be `--doctrines ` — the driver's parser rejects that as a usage
   // error — so it has to become the literal `none` it also accepts.
   assert.deepEqual(ARGS([]).slice(-2), ['--doctrines', 'none']);
@@ -276,7 +276,7 @@ test('the wizard menu lists every shipped pack, in narrative order, each with a 
   const opts = doctrineOptions();
   assert.deepEqual(opts.map(([n]) => n),
     PACK_ORDER.filter((p) => discoverNames('doctrines', PACK_ORDER[0]).includes(p)));
-  assert.deepEqual(opts.map(([n]) => n), ['craft', 'rigor', 'ops', 'process']);
+  assert.deepEqual(opts.map(([n]) => n), ['craft', 'rigor', 'ops', 'process', 'comms']);
   for (const [name, blurb] of opts) {
     assert.ok(blurb.length > 20, `pack ${name} has no usable blurb: ${JSON.stringify(blurb)}`);
   }
@@ -384,8 +384,8 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
   assert.deepEqual(inv.ontology.map((s) => s.id), ['telos', 'evidence', 'decisions', 'conduct']);
   assert.ok(inv.ontology.every((s) => s.title && s.body), 'an ontology section has no body');
 
-  // ⚠ FOUR PACKS, NOT FIVE, AND IN NARRATIVE ORDER. `src/doctrines/README.md` passes the
-  // `_`-scaffold filter, so publishing whatever the walk found would put a fifth pack with zero
+  // ⚠ FIVE PACKS, NOT SIX, AND IN NARRATIVE ORDER. `src/doctrines/README.md` passes the
+  // `_`-scaffold filter, so publishing whatever the walk found would put a sixth pack with zero
   // rules in the catalogue; `PACK_ORDER` is the single owner of both the set and the order, and
   // this equality is the cell that reddens if the list is ever built from the walk instead. The
   // existence check keeps it from passing vacuously once the README is gone.
@@ -413,12 +413,15 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
       `${p.pack} has a rule with no title, no body, or a class that is not its pack`);
     assert.ok(p.title && p.desc, `${p.pack} has no themed name or blurb`);
   }
-  // 11 + 27 + the four absorbed-into-prose sections is the whole constitution. The 24th is
+  // 11 + 28 + the four absorbed-into-prose sections is the whole constitution. The 24th is
   // rigor 5 — Law IX retired in place and moved into the rigor pack (2026-09), so the law count
-  // stays 11 (its heading is kept) while the doctrine count grows by one. The 25th is process 8,
-  // one writer per file, appended later that month. The 26th and 27th are craft 7 (one writer
+  // stays 11 (its heading is kept) while the doctrine count grows by one. The 25th is
+  // one writer per file, appended later that month as process 8 (process 7 since the comms
+  // pack took the old process 7). The 26th and 27th are craft 7 (one writer
   // per value) and ops 7 (serialize against a rationed resource), appended 2026-09-23.
-  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 27);
+  // The comms pack (2026-09-27) MOVED process 7 (reference codes) in as comms 1 — no change to
+  // the total — and added comms 2 (structure beside prose), the 28th.
+  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 28);
 });
 
 test('every theme parses to the same three tiers, whatever it calls them', () => {
@@ -429,7 +432,7 @@ test('every theme parses to the same three tiers, whatever it calls them', () =>
   const counts = (inv) => [inv.laws.length, inv.ontology.length, inv.doctrines.length,
     inv.doctrines.reduce((n, p) => n + p.rules.length, 0)];
   const base = counts(tuiInventory('neutral'));
-  assert.deepEqual(base, [11, 4, 4, 27]); // 27 rules since craft 7 and ops 7 (2026-09-23)
+  assert.deepEqual(base, [11, 4, 5, 28]); // 5 packs, 28 rules since the comms pack (2026-09-27)
   for (const t of themeNames()) {
     const inv = tuiInventory(t);
     assert.deepEqual(counts(inv), base, `${t} parses to a different constitution`);
@@ -457,15 +460,15 @@ test('a pack is listed whether or not it is built in, and only `active` moves', 
     assert.deepEqual(inv.doctrines.map((p) => p.rules.length),
       all.doctrines.map((p) => p.rules.length), 'a narrowed build lost a pack\'s rules');
   }
-  assert.deepEqual(all.doctrines.map((p) => p.active), [true, true, true, true]);
-  assert.deepEqual(one.doctrines.map((p) => p.active), [true, false, false, false]);
-  assert.deepEqual(none.doctrines.map((p) => p.active), [false, false, false, false]);
+  assert.deepEqual(all.doctrines.map((p) => p.active), [true, true, true, true, true]);
+  assert.deepEqual(one.doctrines.map((p) => p.active), [true, false, false, false, false]);
+  assert.deepEqual(none.doctrines.map((p) => p.active), [false, false, false, false, false]);
   // ⚠ `null` IS NOT `[]`. No argument means "no install to ask" and resolves to every pack, the
   // same answer `doctrinesForBuild` gives an unknown; an explicit empty list is a stated
   // `--doctrines none`. `catalog`, `status` and the graph all pass nothing, so a reader that
   // collapsed the two would report every pack inactive on three verbs at once.
   assert.deepEqual(tuiInventory('neutral', null).doctrines.map((p) => p.active),
-    [true, true, true, true], 'unknown was read as none');
+    [true, true, true, true, true], 'unknown was read as none');
 });
 
 test('the entry rows carry every kind, and a selection yields real detail', () => {
@@ -504,13 +507,13 @@ test('a pack that is not built in is listed and MARKED, never quietly dropped', 
   // reader cannot infer from the text.
   const rows = tuiEntries(tuiInventory('neutral', ['craft']));
   const doctrine = rows.filter(([k]) => k === 'doctrine');
-  assert.equal(doctrine.length, 27, 'a narrowed install lost rows instead of marking them');
+  assert.equal(doctrine.length, 28, 'a narrowed install lost rows instead of marking them');
   const off = doctrine.filter(([, , d]) => d.active === false);
-  assert.equal(off.length, 20, 'the inactive packs are not marked inactive (27 rules - craft 7)');
+  assert.equal(off.length, 21, 'the inactive packs are not marked inactive (28 rules - craft 7)');
   assert.ok(doctrine.every(([, , d]) => (d.pack === 'craft') === (d.active === true)),
     'the active flag does not follow the selection');
   const head = rows.filter(([k]) => k === 'head').find((h) => h[1].startsWith('DOCTRINES'));
-  assert.equal(head[1], 'DOCTRINES (7 in 1/4 packs)', head[1]); // craft alone: 7 rules
+  assert.equal(head[1], 'DOCTRINES (7 in 1/5 packs)', head[1]); // craft alone: 7 rules
   // ...and the badge column says so, which is what a reader of `geneseed catalog` sees.
   const lines = catalogLines(tuiInventory('neutral', ['craft']), 'doctrines', 200);
   assert.ok(lines.some((l) => l.includes('(off)')), 'no row is marked off in the listing');

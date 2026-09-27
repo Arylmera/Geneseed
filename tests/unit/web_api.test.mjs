@@ -163,7 +163,7 @@ test('the laws section carries all three tiers, in constitutional order', () => 
   const by = (t) => items.filter((i) => i.tier === t);
   assert.equal(by('ontology').length, 4);
   assert.equal(by('invariant').length, 11);
-  assert.equal(by('doctrine').length, 27);
+  assert.equal(by('doctrine').length, 28); // 28 since the comms pack (2026-09-27)
   // ⚠ THE THREE ADDRESS SHAPES MUST NOT COLLIDE — they share one `type=law` route, so a
   // duplicate name makes one item unreachable.
   assert.equal(new Set(items.map((i) => i.name)).size, items.length, 'two items share a name');
@@ -207,7 +207,7 @@ test('an inactive pack stays in the payload and says so', () => {
   // other getter into a plain value and leaves the rest of the state intact.
   const st = { ...neutral(), inventory: tuiInventory('neutral', ['craft']) };
   const doctrine = apiCatalog(st, 'laws').items.filter((i) => i.tier === 'doctrine');
-  assert.equal(doctrine.length, 27, 'a narrowed install lost rows instead of marking them');
+  assert.equal(doctrine.length, 28, 'a narrowed install lost rows instead of marking them');
   // craft alone is active, and craft carries 7 rules since craft 7 (one writer per value).
   assert.equal(doctrine.filter((i) => i.active).length, 7);
   assert.ok(doctrine.every((i) => (i.pack === 'craft') === i.active),
@@ -227,16 +227,16 @@ test('the doc tokens count each tier separately, and a pack toggle moves only tw
     '{N_SKILLS}': st.inventory.skills.length,
     '{N_PLUGINS}': docCounts(st)['{N_PLUGINS}'],
     '{N_ONTOLOGY}': 4,
-    '{N_PACKS}': 4,
-    '{N_PACKS_ACTIVE}': 4,
-    '{N_DOCTRINE_RULES}': 27,
+    '{N_PACKS}': 5,
+    '{N_PACKS_ACTIVE}': 5,
+    '{N_DOCTRINE_RULES}': 28,
   });
   // A narrowed install moves the two tokens that describe THIS install and none of the three
   // that describe the catalogue. `{N_PACKS}` is what ships; `{N_PACKS_ACTIVE}` is what binds.
   const narrowed = docCounts({ ...st, inventory: tuiInventory('neutral', ['craft']) });
   assert.equal(narrowed['{N_PACKS_ACTIVE}'], 1);
   assert.equal(narrowed['{N_DOCTRINE_RULES}'], 7); // craft alone: 7 rules
-  assert.equal(narrowed['{N_PACKS}'], 4, 'a pack that is off left the catalogue count');
+  assert.equal(narrowed['{N_PACKS}'], 5, 'a pack that is off left the catalogue count');
   assert.equal(narrowed['{N_LAWS}'], 11, 'a pack toggle moved the invariant count');
   assert.equal(narrowed['{N_ONTOLOGY}'], 4);
   // ...and a page that spends one really is substituted. `concept` is the only kind
@@ -276,10 +276,10 @@ test('the overview counts the tiers without moving the laws badge', () => {
   // the four cannot be re-blessed.
   assert.equal(o.counts.laws, 11);
   assert.equal(o.counts.ontology, 4);
-  assert.deepEqual(o.counts.doctrines, { active: 4, total: 4, rules: 27 });
+  assert.deepEqual(o.counts.doctrines, { active: 5, total: 5, rules: 28 });
   const narrowed = apiOverview({ ...neutral(), inventory: tuiInventory('neutral', ['craft', 'rigor']) });
   assert.equal(narrowed.counts.laws, 11, 'a pack toggle moved the invariant count');
-  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 4, rules: 12 },
+  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 5, rules: 12 },
     'the summary counts rules this install did not build in (craft 7 + rigor 5, rigor 5 being retired Law IX)');
 });
 
@@ -1445,7 +1445,7 @@ test('a body that says nothing usable falls back to the INSTALL, never to the co
     // `Active packs:` marker, exactly like every pre-2.3 install, and with
     // `{"doctrines":["craft"]}` in that file the rebuild dropped its commit/push consent gate.
     // Unknown resolves to ALL PACKS here, as it does at every other build-side consumer.
-    const all = 'craft,rigor,ops,process';
+    const all = 'craft,rigor,ops,process,comms';
     const cmd0 = apiInstallCmd(st, { host: 'claude', path: cl }).cmd.map(String);
     assert.equal(cmd0[cmd0.indexOf('--doctrines') + 1], all,
       'a markerless install was left to a machine-wide config file to describe');
@@ -1475,13 +1475,13 @@ test('an empty pack list is a real answer and is spelled none', () => {
 test('a full pack list is SPELLED OUT, so the config cannot reinterpret the console\'s answer', () => {
   // This asserted the opposite until the elision came out, and the reason it flipped is the
   // point: a `--doctrines`-less command line falls through to `harness.config.json`, so a
-  // console user who ticked all four packs on a machine configured `{"doctrines":["craft"]}`
+  // console user who ticked every pack on a machine configured `{"doctrines":["craft"]}`
   // got an install with one — and no commit/push consent gate. The console knows the answer;
   // the command line has to carry it.
   withThreeInstalls(({ st, cl }) => {
     const cmd = apiInstallCmd(st,
-      { host: 'claude', path: cl, doctrines: ['craft', 'rigor', 'ops', 'process'] }).cmd.map(String);
-    assert.equal(cmd[cmd.indexOf('--doctrines') + 1], 'craft,rigor,ops,process');
+      { host: 'claude', path: cl, doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'] }).cmd.map(String);
+    assert.equal(cmd[cmd.indexOf('--doctrines') + 1], 'craft,rigor,ops,process,comms');
   });
 });
 
@@ -1507,7 +1507,7 @@ test('a picked rule list reaches the install command, in render order', () => {
     // ...and the PACK axis is untouched by it. Two axes that moved together would make
     // "exclude one rule" and "drop its pack" the same request, which is the control this whole
     // feature exists to remove.
-    assert.equal(cmd[cmd.indexOf('--doctrines') + 1], 'craft,rigor,ops,process');
+    assert.equal(cmd[cmd.indexOf('--doctrines') + 1], 'craft,rigor,ops,process,comms');
   });
 });
 
@@ -2217,13 +2217,13 @@ test('the deploy command validates its pack list the same way the install comman
     // real all-four Claude project install, took its 6 hook groups to 5 and dropped
     // `PreToolUse::Bash` with them. Unknown resolves to ALL packs; this sandbox holds no install,
     // so that is the full set.
-    assert.equal(after$(at({}), '--doctrines'), 'craft,rigor,ops,process');
+    assert.equal(after$(at({}), '--doctrines'), 'craft,rigor,ops,process,comms');
     assert.equal(after$(at({ doctrines: ['craft', '../evil'] }), '--doctrines'),
-      'craft,rigor,ops,process');
+      'craft,rigor,ops,process,comms');
     // A USABLE full list is not "unspecified": it is the console's answer and it is spelled out,
     // because the configured default it would otherwise fall through to can be a narrower set.
-    assert.equal(after$(at({ doctrines: ['craft', 'rigor', 'ops', 'process'] }), '--doctrines'),
-      'craft,rigor,ops,process');
+    assert.equal(after$(at({ doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'] }), '--doctrines'),
+      'craft,rigor,ops,process,comms');
     // The rule axis rides the same boundary with the same rules, and resolves through
     // `excludedRulesOfDir(root)` — which for this empty sandbox is the empty list. Spelled
     // `none` rather than elided, for the reason one flag over.

@@ -235,6 +235,24 @@ export const modeOfDir = (d) => leadOfDir(d, discoverNames('modes', 'direct'));
 const ACTIVE_PACKS_RE = /^Active packs:[ \t]*(.+?)[ \t]*$/m;
 
 /**
+ * A carrier rendered BEFORE the comms pack existed — the address migration's one detector.
+ *
+ * The comms pack took `process 7` (reference codes) out of process, and `process 8` (one
+ * writer per file) was renumbered to `process 7`. An install built before that names
+ * `process` in its marker and not `comms`, and so does a later install whose owner turned
+ * comms OFF — the marker alone cannot tell them apart. The carrier text can: a pre-comms
+ * process pack had eight rules, so wherever it was active the carrier renders a
+ * `process 8` heading, and wherever that rule was excluded the `Excluded rules:` line names
+ * it. No current carrier can say `process 8` — the pack has seven rules and nothing cites
+ * an eighth.
+ *
+ * ponytail: text sniff, not a stamp. It holds only while process has seven rules; the day
+ * process gets an eighth, this must move to a build stamp (or be retired, once no install
+ * built before the migration can remain).
+ */
+const legacyProcessCarrier = (text) => /\bprocess 8\b/.test(text);
+
+/**
  * The doctrine packs a DEPLOYED install carries — the third register read back off disk,
  * beside `postureOfDir` and `modeOfDir`, and the first that is a SET.
  *
@@ -274,6 +292,12 @@ export function doctrinesOfDir(d) {
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
     if (!named.every((n) => PACK_ORDER.includes(n))) return null;
+    // MIGRATION: a pre-comms install that carried process carried the codes rule inside it,
+    // so it keeps that rule by gaining comms. Its old `process 7` exclusion, if any, is
+    // re-addressed to `comms 1` by `excludedRulesOfDir` in the same pass.
+    if (named.includes('process') && !named.includes('comms') && legacyProcessCarrier(text)) {
+      named.push('comms');
+    }
     return PACK_ORDER.filter((pk) => named.includes(pk));
   });
 }
@@ -336,7 +360,12 @@ export function excludedRulesOfDir(d) {
       return parts.length === 2 && PACK_ORDER.includes(parts[0]) && /^\d+$/.test(parts[1])
         ? `${parts[0]}.${Number(parts[1])}` : null;
     });
-    return ids.every(Boolean) ? [...new Set(ids)].sort() : [];
+    if (!ids.every(Boolean)) return [];
+    // MIGRATION: the same pre-comms carrier spells the old addresses — see
+    // `legacyProcessCarrier`. One map, applied once, so `process 8` cannot chain onward.
+    const MOVED = { 'process.7': 'comms.1', 'process.8': 'process.7' };
+    const out = legacyProcessCarrier(text) ? ids.map((id) => MOVED[id] ?? id) : ids;
+    return [...new Set(out)].sort();
   }, []);
 }
 

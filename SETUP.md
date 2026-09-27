@@ -323,7 +323,7 @@ case where a `0` would have meant "in sync" without having checked anything.
 The constitution is three tiers, and only one of them is a choice. The **Ontology** (how the
 agent thinks — Telos, Evidence, Decisions, Conduct) and the nine **Rules** (what it never
 trades away) are always on and cannot be switched off. The **Doctrines** are practices rather
-than principles, and they ship as four packs:
+than principles, and they ship as five packs:
 
 | Pack | What it governs |
 | --- | --- |
@@ -331,17 +331,18 @@ than principles, and they ship as four packs:
 | **rigor** | how work is proven — idempotence, honest tests, cover-and-verify, gates that can actually fail |
 | **ops** | how the machine is driven — tool discovery, commands that return, complete teardowns, restart is not reload |
 | **process** | how a session runs — planning, context economy, docs first, bounded loops, and the consent gate on every commit and push |
+| **comms** | how answers are presented — stable reference codes on tracked items, a diagram or a table only where it earns its place |
 
 They are picked **at build time**, once, on the generator — there is no runtime toggle — and
-the default is all four:
+the default is all five:
 
     geneseed-build --doctrines craft,rigor   # two packs
     geneseed-build --doctrines none          # ontology and the nine Rules only
-    geneseed-build                           # all four (the default)
+    geneseed-build                           # all five (the default)
 
 `harness.config.json`'s `doctrines` array sets this checkout's own default, and `doctor`
 refuses one that names a pack the checkout does not ship. Order is fixed by the harness
-(craft → rigor → ops → process) regardless of the order you type.
+(craft → rigor → ops → process → comms) regardless of the order you type.
 
 ### One rule at a time
 

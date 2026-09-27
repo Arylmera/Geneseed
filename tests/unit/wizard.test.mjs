@@ -61,7 +61,7 @@ const WIZARD_INSTALL = {
   '.config/opencode/.geneseed-theme': 'pirate\n',
   '.config/opencode/.geneseed-footprint': 'full\n',
   '.config/opencode/AGENT.md': '# deployed\n\n**Artisan** — the posture lead\n\n'
-    + '**Foreman** — the mode lead\n\nActive packs: craft, rigor, ops, process\n',
+    + '**Foreman** — the mode lead\n\nActive packs: craft, rigor, ops, process, comms\n',
 };
 
 /**
@@ -95,7 +95,7 @@ const NARROWED_INSTALL = {
 const EXCLUDED_INSTALL = {
   ...WIZARD_INSTALL,
   '.config/opencode/AGENT.md': '# deployed\n\n**Artisan** — the posture lead\n\n'
-    + '**Foreman** — the mode lead\n\nActive packs: craft, rigor, ops, process\n'
+    + '**Foreman** — the mode lead\n\nActive packs: craft, rigor, ops, process, comms\n'
     + 'Excluded rules: craft 2, process 5\n',
 };
 
@@ -152,23 +152,23 @@ function wizardJobs() {
     // ---- and the wizard itself, six ways through it.
     // Every sequence below carries a FOURTH answer, between mode and the install mode: the
     // Doctrine-packs gate. It is the one question with two levels, so the count of answers a
-    // run consumes is no longer fixed — `all` costs one line and `choose` costs five.
+    // run consumes is no longer fixed — `all` costs one line and `choose` costs six.
     ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n'],
     ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\n\nn\n'],
     // A PROJECT emit, the arm that asks a seventh question — `out` and `root` both from one
     // answer. `1` at the packs gate is `all`, the same answer an empty line gives.
     ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n1\n/tmp/somerepo\ny\n'],
     // `files`, the other arm: one answer, `out` only, `root` left null. This is also the
-    // per-pack arm — `choose`, then four y/n — and the subset it keeps is NON-CONTIGUOUS
-    // (rigor and process, skipping craft and ops), so a port that dropped the filter and kept
+    // per-pack arm — `choose`, then five y/n — and the subset it keeps is NON-CONTIGUOUS
+    // (rigor and process, skipping craft, ops and comms), so a port that dropped the filter and kept
     // a prefix, a suffix or the whole list answers differently from one that reads each y/n.
     ['wizard-files', [['collect_setup_lines', []]],
-      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\n9\nfull\n\ny\n'],
+      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n9\nfull\n\ny\n'],
     // Every pack declined. A real configuration (invariants and ontology only), and the only
     // input that reaches `--doctrines none` — the spelling an empty list has to take, because
     // an empty `--doctrines ` is a usage error at the driver.
     ['wizard-no-packs', [['collect_setup_lines', []]],
-      '\n\n\nchoose\nno\nno\nno\nno\n\n\n\n'],
+      '\n\n\nchoose\nno\nno\nno\nno\nno\n\n\n\n'],
     // EOF before the first question. Every reader returns its default, which is the PRE-SELECTED
     // one — so this is the case that fails if `installedDefaults` stopped answering posture, mode
     // or footprint.
@@ -352,14 +352,14 @@ test('the wizard job really walks the wizard', () => {
     // below therefore ELIDES `--doctrines`. `wizard-eof-narrowed` is the same input against a
     // two-pack install and takes the other arm, which is what makes this one an assertion about
     // the marker rather than about a constant.
-    'all — craft + rigor + ops + process (default)   (default)',
+    'all — craft + rigor + ops + process + comms (default)   (default)',
     '2) choose — pick packs',
     'About to run:  geneseed build --theme pirate --emit claude-global --footprint full '
       + '--posture artisan --mode foreman',
     '{"theme":"pirate","posture":"artisan","mode":"foreman","doctrines":["craft","rigor","ops",'
-      + '"process"],"excludeRules":null,"emit":"claude-global"',
+      + '"process","comms"],"excludeRules":null,"emit":"claude-global"',
   ]) assert.ok(out.includes(line), `the wizard did not print:\n  ${line}`);
-  // The gate is a GATE: taking `all` must not print the four per-pack questions.
+  // The gate is a GATE: taking `all` must not print the five per-pack questions.
   assert.ok(!out.includes('Include craft'),
     'the packs gate asked the per-pack questions anyway, so `all` is not a shortcut');
 });
@@ -379,13 +379,13 @@ test('holding Enter through a re-run keeps a narrowed pack selection instead of 
     theme: 'pirate', posture: 'artisan', mode: 'foreman', doctrines: ['rigor', 'process'],
     excludeRules: null, emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over a two-pack install did not come back with two packs');
-  assert.deepEqual(runs()['wizard-eof'].results[0].doctrines, ['craft', 'rigor', 'ops', 'process'],
+  assert.deepEqual(runs()['wizard-eof'].results[0].doctrines, ['craft', 'rigor', 'ops', 'process', 'comms'],
     'the all-four half of the pair moved, so the narrowed half proves nothing');
   // The narrowed install opens on `choose`, not on `all` — otherwise the per-pack defaults it
   // carries are never reached, and the arm cannot be selected without a typed answer.
   assert.ok(narrowed.text.includes('choose — pick packs (installed: rigor, process)'),
     `the gate did not name the installed subset:\n${narrowed.text}`);
-  assert.ok(!/\ball — craft \+ rigor \+ ops \+ process \(default\)/.test(narrowed.text),
+  assert.ok(!/\ball — craft \+ rigor \+ ops \+ process \+ comms \(default\)/.test(narrowed.text),
     '`all` still advertises itself as THE default on an install that is not at all four');
   // ...and the two packs that are off are pre-answered `no`, which is the half a
   // `known.includes(name) ? 'yes' : 'no'` inversion would flip.
@@ -410,7 +410,7 @@ test('a re-run keeps the RULES an install excluded, without asking about them', 
   const excl = runs()['wizard-eof-excluded'];
   assert.deepEqual(excl.results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman',
-    doctrines: ['craft', 'rigor', 'ops', 'process'], excludeRules: ['craft.2', 'process.5'],
+    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: ['craft.2', 'process.5'],
     emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over an install with excluded rules did not carry them back');
   // ...and it reaches the argv, in the dotted form the flag parses. A selection that came back
@@ -435,7 +435,7 @@ test('the packs gate offers every pack, in narrative order, with what dropping o
   // that pack off is what removes the commit/push ask. A blurb that quietly stopped saying so
   // would still render a legal menu.
   const out = runs()['wizard-no-packs'].text;
-  const at = ['craft', 'rigor', 'ops', 'process'].map((p) => out.indexOf(`Include ${p} —`));
+  const at = ['craft', 'rigor', 'ops', 'process', 'comms'].map((p) => out.indexOf(`Include ${p} —`));
   assert.ok(at.every((i) => i >= 0), `a pack was missing from the per-pack questions:\n${out}`);
   assert.deepEqual(at, [...at].sort((a, b) => a - b),
     'the per-pack questions are not in PACK_ORDER — discovery sorts alphabetically, PACK_ORDER '
@@ -451,7 +451,7 @@ test('the declined wizard returns null and the confirmed one does not', () => {
   assert.deepEqual(runs()['wizard-declined'].results, [null]);
   assert.deepEqual(runs()['wizard-defaults'].results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman',
-    doctrines: ['craft', 'rigor', 'ops', 'process'], excludeRules: null,
+    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null,
     emit: 'claude-global', out: null, root: null, footprint: 'full',
   }]);
 });
@@ -463,7 +463,7 @@ test('the project arm asks a sixth question and the files arm does not', () => {
   // the second half: the project job never names a footprint and takes the default.
   assert.deepEqual(runs()['wizard-project'].results, [{
     theme: 'neutral', posture: 'peer', mode: 'direct',
-    doctrines: ['craft', 'rigor', 'ops', 'process'], excludeRules: null,
+    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null,
     emit: 'opencode', out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
   }]);
   assert.deepEqual(runs()['wizard-files'].results, [{
@@ -506,7 +506,7 @@ test('the summary job produces rows and not an empty list', () => {
   // wizard's pack question must not fall through this walk to `cwd/Harness`.
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
-    doctrines: ['craft', 'rigor', 'ops', 'process'], excludeRules: [],
+    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: [],
   });
 });
 

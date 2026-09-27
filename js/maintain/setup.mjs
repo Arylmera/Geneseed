@@ -228,6 +228,7 @@ const DOCTRINE_BLURBS = {
   ops: 'how the machine is driven — tool discovery, non-blocking commands, teardown',
   process: 'how a session runs — planning, context economy, docs first, and the consent gate '
     + 'on every commit and push (drop this pack and that gate goes with it)',
+  comms: 'how answers are presented — stable reference codes, a diagram or a table only where it earns its place',
 };
 
 /**

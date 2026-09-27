@@ -60,7 +60,7 @@ carries the script API — load it before writing one).
    to the primitives, and hold to the host's size guideline unless the user asked for
    more.
 4. **Give every editing agent a write set, and isolate parallel editors** ({{DOCTRINE}}
-   process 8). Name in each editing `agent()` prompt the files it may change and have it
+   process 7). Name in each editing `agent()` prompt the files it may change and have it
    return the files it did change; overlapping sets run in sequence, not in one
    `parallel()`. Pass `isolation: 'worktree'` to each agent that edits in parallel — both
    runtimes take it; read-only agents need none. After the fan-out, compare the changed

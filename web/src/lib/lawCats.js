@@ -41,6 +41,7 @@ export const PACK_CATS = {
   rigor: CAT_HUES.verify,
   ops: CAT_HUES.process,
   process: CAT_HUES.security,
+  comms: CAT_HUES.comms,
 }
 
 export const packColor = (pack) => PACK_CATS[pack] || 'var(--text-3)'
