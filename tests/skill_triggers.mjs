@@ -6,7 +6,7 @@
 // `js/hosts/native.mjs`), and the defect it produces is silent: a skill that never fires looks
 // exactly like a skill nobody needed. So this script asks a real model.
 //
-// IT EMITS A REAL BUNDLE AND ROUTES AGAINST ALL OF IT. `--emit <host> --footprint lean` into a
+// IT EMITS A REAL BUNDLE AND ROUTES AGAINST ALL OF IT. `--emit <host> --footprint lean` (or `full`) into a
 // sandbox, with the home variables moved there first (`cellEnv`) — the same isolation
 // `tests/golden.mjs` relies on, for the same reason: an emit that reaches the real home rewrites
 // the machine-wide shim. The bundle's hook wiring is removed before any session starts, because
@@ -54,6 +54,7 @@
 //   node tests/skill_triggers.mjs --only commit,debug
 //   node tests/skill_triggers.mjs --host opencode --model litellm/agent-llm
 //   node tests/skill_triggers.mjs --runs 5 --jobs 4     (--jobs defaults per host: claude 4, opencode 1)
+//   node tests/skill_triggers.mjs --footprint full   the full root file (default lean, the install default)
 //   node tests/skill_triggers.mjs --ambient           against the operator's own setup too
 //
 // Cases: `tests/fixtures/skill_triggers.json`, `{ "<skill>": [{ "query", "should_trigger" }] }`.
@@ -78,6 +79,7 @@ const { values: opt } = parseArgs({
     model: { type: 'string' },
     jobs: { type: 'string' },
     turns: { type: 'string', default: '4' },
+    footprint: { type: 'string', default: 'lean' },
     ambient: { type: 'boolean', default: false },
   },
 });
@@ -245,7 +247,7 @@ try {
   const out = path.join(sb.path, 'out');
   fs.mkdirSync(home);
   const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin/build-driver.mjs'),
-    '--theme', 'neutral', '--emit', opt.host, '--footprint', 'lean', '--out', out],
+    '--theme', 'neutral', '--emit', opt.host, '--footprint', opt.footprint, '--out', out],
   { env: cellEnv(home), encoding: 'utf8' });
   if (emit.status !== 0) throw new Error(`emit failed:\n${emit.stderr}`);
   // A project, not a bare folder: the bundle's session-start ritual reads `context.json` and
@@ -280,7 +282,7 @@ try {
     const won = others.length ? `  [instead: ${others.join(', ')}]` : '';
     console.log(`${ok ? 'PASS' : 'FAIL'} ${c.skill.padEnd(12)} ${n}/${RUNS} want=${String(c.should_trigger).padEnd(5)} ${c.query}${won}`);
   });
-  console.log(`\n${cases.length - failed}/${cases.length} cases pass (${opt.host}, ${opt.model}, ${RUNS} runs, ${opt.ambient ? 'ambient' : 'isolated'})`);
+  console.log(`\n${cases.length - failed}/${cases.length} cases pass (${opt.host}, ${opt.model}, ${RUNS} runs, ${opt.footprint}, ${opt.ambient ? 'ambient' : 'isolated'})`);
 } finally {
   sb.cleanup();
 }
