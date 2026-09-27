@@ -126,7 +126,7 @@ export function emitClaudeRender(cfg, job) {
   // settings.local.json; Bob documents no local variant, so its settings.json is ignored.
   if (scope === 'project') {
     const gi = path.join(cfgDir, '.gitignore');
-    const giLines = (host === 'claude' ? ['settings.local.json']
+    const giLines = (host === 'claude' || host === 'openclaude' ? ['settings.local.json']
       : host === 'bob' ? ['settings.json'] : [])
       .concat(['wiki.jsonc', 'agent-overrides.json']);
     if (!existsSync(gi)) {

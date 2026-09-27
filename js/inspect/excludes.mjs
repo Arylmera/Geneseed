@@ -28,6 +28,10 @@ import { readText, writeText, printOut, printErr, isDir, isFile, isOsError } fro
 import { parseJson, jsonDumpsIndent, get, isDict } from '../lib/json.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 
+/** The per-repo settings file a claudeMdExcludes entry goes in (Claude and OpenClaude). */
+const localSettings = (repo, host) =>
+  path.join(repo, HOSTS.find((h) => h.host === host).projectMarker, 'settings.local.json');
+
 /** `_global_installs` — every host whose GLOBAL config dir carries a Geneseed manifest. */
 function globalInstalls() {
   const out = [];
@@ -102,10 +106,9 @@ export function excludeAdd(target) {
     const prior = data.excludes.find((e) => isDict(e) && same(get(e, 'path'), repo));
     const priorWired = (isDict(prior) ? get(prior, 'wired') : null) || {};
     const wired = {};
-    if (host === 'claude' && isDir(repo)) {
+    if ((host === 'claude' || host === 'openclaude') && isDir(repo)) {
       const entry = resolvePath(path.join(cfg, 'CLAUDE.md')).split(path.sep).join('/');
-      const added = wireClaudeExcludes(
-        path.join(repo, '.claude', 'settings.local.json'), [entry]);
+      const added = wireClaudeExcludes(localSettings(repo, host), [entry]);
       if (added.length) {
         wired.claude_md_excludes = added;
       } else if (get(priorWired, 'claude_md_excludes')) {
@@ -172,8 +175,7 @@ export function excludeRemove(target) {
     found = true;
     const wired = get(mine, 'wired') || {};
     if (get(wired, 'claude_md_excludes')) {
-      unwireClaudeExcludes(path.join(repo, '.claude', 'settings.local.json'),
-        get(wired, 'claude_md_excludes'));
+      unwireClaudeExcludes(localSettings(repo, host), get(wired, 'claude_md_excludes'));
     }
     if (get(wired, 'bob_rules_stub')) {
       const stub = path.join(repo, '.bob', 'rules', 'geneseed.md');

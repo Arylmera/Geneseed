@@ -3,7 +3,7 @@
 // WHAT THE THREE MODES PROVE, and they are self-comparisons: nothing here is measured against a
 // stored answer.
 //
-//   * default — every cell RUNS. 261 configurations render without crashing, which is the
+//   * default — every cell RUNS. 317 configurations render without crashing, which is the
 //     cheapest thing worth knowing after any change to the emit path and the only thing a
 //     matrix this wide can say quickly.
 //   * `--idempotent` — emit twice into the same tree and require the second to change nothing.
@@ -17,7 +17,7 @@
 //     reference and were retired with their replayer (28415c8) — the written expectations were
 //     kept, and until this mode nothing ran them.
 //
-// A SEPARATE SCRIPT RATHER THAN A `*.test.mjs`, because 261 cells is minutes of wall clock and
+// A SEPARATE SCRIPT RATHER THAN A `*.test.mjs`, because 317 cells is minutes of wall clock and
 // `node --test "tests/**/*.test.mjs"` runs on every push on two operating systems. The pure
 // halves — the normaliser, the flag parsing — are gated in `tests/unit/`, where they cost
 // nothing.

@@ -120,7 +120,7 @@ streams the output of background jobs and keeps their history across reloads.
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
   reference (generated from the harness argument parser), and a glossary, grouped into
   Get started / Core concepts / How-to / MCP servers / Plugins / Reference / Deeper. Filtered
-  for one host family (OpenCode, or Claude Code — which Bob and Copilot share); with no
+  for one host family (OpenCode, or Claude Code — which Bob, Copilot and OpenClaude share); with no
   choice stored it follows the deployed install.
 
 ### 🩺 Care

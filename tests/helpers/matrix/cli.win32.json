@@ -4641,10 +4641,11 @@
         "[neutral claude] dead link './nowhere.md' in .claude\\memory\\README.md",
         "[neutral bob] unresolved token {{NOPE}} in .bob\\memory\\README.md",
         "[neutral copilot] dead link './nowhere.md' in .github\\memory\\README.md",
+        "[neutral openclaude] dead link './nowhere.md' in .openclaude\\memory\\README.md",
         "tip: dead links to skills mean your source is incomplete"
       ],
       "expect_re": [
-        "\\[doctor\\] 12 problem\\(s\\) across 1 theme\\(s\\)"
+        "\\[doctor\\] 14 problem\\(s\\) across 1 theme\\(s\\)"
       ],
       "id": "doctor/an-unresolved-token-and-a-dead-link-reach-every-emit-scan",
       "steps": [
@@ -5740,7 +5741,7 @@
       "bin": "cli",
       "expect": [
         "[uninstall] no Geneseed install detected at <SB>",
-        "[uninstall] pass --target <repo> for a project install (.opencode/.claude/.bob/.github) or --target <config dir> for a global one."
+        "[uninstall] pass --target <repo> for a project install (.opencode/.claude/.bob/.github/.openclaude) or --target <config dir> for a global one."
       ],
       "expect_silent": true,
       "id": "uninstall/an-unrecognised-target-is-refused",

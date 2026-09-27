@@ -231,7 +231,8 @@ const SHIM_ARGV = new Set(['$@', '%*']);
 // The emits that wire settings.json hooks and therefore MUST leave a shim behind. Named rather
 // than derived: it is the contract `shimHealth` holds the generator to, and reading it out of
 // the generator would let the gate drift along with the thing it gates.
-const HOOK_EMITS = new Set(['claude', 'claude-global', 'bob', 'bob-global']);
+const HOOK_EMITS = new Set(['claude', 'claude-global', 'bob', 'bob-global', 'openclaude',
+  'openclaude-global']);
 
 // EXPORTED IN P3 T7, because `tests/unit/node_driver.test.mjs` needs the walk `filesIn` cannot
 // give it: that one filters the shim OUT, and the shim is exactly what the driver's own gates

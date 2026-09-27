@@ -96,7 +96,9 @@ const removeLayer = (host, scope) => {
         ? '.bob/ + the AGENTS.md block'
         : host === 'copilot'
           ? ".github's Geneseed agents/skills + the AGENTS.md block"
-          : '.opencode/ + AGENT.md + the bundle'
+          : host === 'openclaude'
+            ? '.openclaude/ + its CLAUDE.md block'
+            : '.opencode/ + AGENT.md + the bundle'
   }
   return host === 'claude'
     ? "~/.claude's agents/skills + the CLAUDE.md block + settings hooks"
@@ -104,7 +106,9 @@ const removeLayer = (host, scope) => {
       ? "~/.bob's agents/skills + the AGENTS.md block + settings hooks"
       : host === 'copilot'
         ? "~/.copilot's agents/skills + the copilot-instructions.md block"
-        : "~/.config/opencode's AGENT.md, agents, skills, plugins + the opencode.json entry"
+        : host === 'openclaude'
+          ? "~/.openclaude's agents/skills + the CLAUDE.md block + settings hooks"
+          : "~/.config/opencode's AGENT.md, agents, skills, plugins + the opencode.json entry"
 }
 
 // Sovereign-repo exclusions: folders where every global install goes dormant. Its own
@@ -531,7 +535,7 @@ export default function Harnesses({
           <h1 className="h">Harness</h1>
           <p className="sub">
             This machine’s install: where it lives, how it’s built, and the voice it speaks with.
-            Other hosts (Claude Code, Bob, Copilot) install from here too.
+            Other hosts (Claude Code, Bob, Copilot, OpenClaude) install from here too.
           </p>
         </div>
         <div className="row wrap gap-10">
@@ -588,6 +592,7 @@ export default function Harnesses({
                   <option value="claude">Claude Code</option>
                   <option value="bob">BOB (IBM)</option>
                   <option value="copilot">GitHub Copilot</option>
+                  <option value="openclaude">OpenClaude</option>
                 </select>
               </label>
               <label className="dp-field">
@@ -642,7 +647,9 @@ export default function Harnesses({
                     ? '.bob/ + AGENTS.md'
                     : deploy.host === 'copilot'
                       ? '.github/ + AGENTS.md'
-                      : '.opencode/ + AGENT.md'}
+                      : deploy.host === 'openclaude'
+                        ? '.openclaude/ + its CLAUDE.md'
+                        : '.opencode/ + AGENT.md'}
               </code>
               ) into the folder, non-destructively. It’s then tracked here even after you leave its
               directory.
@@ -650,10 +657,11 @@ export default function Harnesses({
           </div>
         ) : null}
         <p className="sub mb-16">
-          Every Geneseed install on this machine: OpenCode, Claude Code, Bob, and Copilot — global
-          and per-repo. Toggle one off without deleting it (files move aside, reactivate any time).
-          Active rows expand to wire their MCP servers. <strong>Rebuild all</strong> re-emits every
-          active install in its own voice and mode, as one background job.
+          Every Geneseed install on this machine: OpenCode, Claude Code, Bob, Copilot, and
+          OpenClaude — global and per-repo. Toggle one off without deleting it (files move aside,
+          reactivate any time). Active rows expand to wire their MCP servers.{' '}
+          <strong>Rebuild all</strong> re-emits every active install in its own voice and mode, as
+          one background job.
         </p>
         <p className="sub mb-16">
           <strong>Per-folder now overrides global.</strong> Inside a folder that has its own

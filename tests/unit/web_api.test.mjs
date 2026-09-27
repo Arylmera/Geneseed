@@ -2324,6 +2324,25 @@ test('bob is a flagless MCP host and its config is its own mcp.json, never setti
   }
 });
 
+test('openclaude MCP: .mcp.json per repo, .openclaude.json in home or in its config dir', () => {
+  // OpenClaude's `getGlobalClaudeFile`: `.openclaude.json` beside the home dir, but INSIDE
+  // `$OPENCLAUDE_CONFIG_DIR` when that is set — unlike Claude, whose ~/.claude.json never moves.
+  const sb = makeSandbox();
+  const prev = process.env.OPENCLAUDE_CONFIG_DIR;
+  try {
+    assert.equal(mcpConfigFor('openclaude', 'project', sb.path), path.join(sb.path, '.mcp.json'));
+    delete process.env.OPENCLAUDE_CONFIG_DIR;
+    assert.equal(path.basename(mcpConfigFor('openclaude', 'global', sb.path)), '.openclaude.json');
+    process.env.OPENCLAUDE_CONFIG_DIR = path.join(sb.path, 'oc');
+    assert.equal(mcpConfigFor('openclaude', 'global', sb.path),
+      path.join(sb.path, 'oc', '.openclaude.json'));
+  } finally {
+    if (prev === undefined) delete process.env.OPENCLAUDE_CONFIG_DIR;
+    else process.env.OPENCLAUDE_CONFIG_DIR = prev;
+    sb.cleanup();
+  }
+});
+
 // A bob PROJECT install's data lives under `<repo>/.bob`, not at the bare root, and a restore
 // must render the BOB expected tree rather than OpenCode's — which would corrupt the agents'
 // frontmatter.

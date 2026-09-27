@@ -13,7 +13,8 @@
  * exactly where Claude asks, in Copilot's envelope. `--host bob` is Bob's own
  * protocol: PreToolUse ignores stdout and refuses only on EXIT CODE 2, so the two Laws
  * exit 2 with the reason on stderr and the rest is a stderr line with exit 0; SessionStart
- * context is plain stdout, as on Claude. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
+ * context is plain stdout, as on Claude. `--host openclaude` speaks Claude's dialect verbatim
+ * (OpenClaude is a Claude Code fork); the flag only picks which root file counts as native. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
  * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
  * driver emits has no Python in its hook path at all — which is what let the interpreter
  * discovery and its exit-4 refusal be deleted rather than merely bypassed.
@@ -223,7 +224,12 @@ const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor',
 // host had its own root in EAGER_ROOT. Other tools' roots stay eager (a repo carrying a
 // hand-written AGENTS.md is worth showing Claude Code); only the host's OWN is dropped.
 // The OpenCode context plugin carries the same rule for AGENT.md/AGENTS.md/CLAUDE.md.
-const NATIVE_ROOT = { claude: ['CLAUDE.md'], bob: ['AGENTS.md'], copilot: ['AGENTS.md'] };
+// OpenClaude's root file is AGENTS.md, or CLAUDE.md when AGENTS.md is absent — resolved
+// per repo in `discoverContext`, since which one it loads depends on what is on disk.
+const NATIVE_ROOT = {
+  claude: ['CLAUDE.md'], bob: ['AGENTS.md'], copilot: ['AGENTS.md'],
+  openclaude: ['AGENTS.md', 'CLAUDE.md'],
+};
 
 // Eager injection budget: a root README of 40k chars was going out whole, every session and
 // every compaction, and cost more than the harness itself. Per-file cut at the last line
@@ -231,7 +237,7 @@ const NATIVE_ROOT = { claude: ['CLAUDE.md'], bob: ['AGENTS.md'], copilot: ['AGEN
 const EAGER_FILE_BYTES = 16 * 1024;
 const EAGER_TOTAL_BYTES = 48 * 1024;
 
-const CLAUDE_MARKERS = ['.claude', '.bob'];
+const CLAUDE_MARKERS = ['.claude', '.bob', '.openclaude'];
 const GENESEED_MANIFEST = '.geneseed-manifest.json';
 
 /**
@@ -302,7 +308,8 @@ function rglobMd(dir, acc = []) {
 export function discoverContext(root, host = HOST) {
   const eager = new Map();
   const lazy = new Map();
-  const native = NATIVE_ROOT[host] || [];
+  const native = host === 'openclaude' && isFile(path.join(root, 'AGENTS.md'))
+    ? ['AGENTS.md'] : NATIVE_ROOT[host] || [];
   for (const full of sortPaths(listDir(root).map((n) => path.join(root, n)))) {
     if (!isFile(full)) continue;
     const name = path.basename(full);

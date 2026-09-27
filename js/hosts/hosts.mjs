@@ -1,5 +1,5 @@
 /**
- * The four host config dirs, and the two path primitives they are built on.
+ * The five host config dirs, and the two path primitives they are built on.
  *
  * EXTRACTED IN P5c, and the reason is arithmetic rather than taste. `bin/build-driver.mjs`
  * owned these; `bin/geneseed-cli.mjs` needs the same four to find a global install, and a
@@ -209,8 +209,21 @@ export function bobConfigDir() {
 }
 
 /**
+ * OpenClaude (`@gitlawb/openclaude`) — `~/.openclaude`, relocatable via `$OPENCLAUDE_CONFIG_DIR`.
+ *
+ * Unlike Claude's, this env branch is the HOST'S OWN documented variable, not a Geneseed knob:
+ * OpenClaude reads it in `src/utils/envUtils.ts` and never falls back to `~/.claude` or
+ * `$CLAUDE_CONFIG_DIR`, so honouring it is what keeps the two CLIs agreeing on the target.
+ */
+export function openclaudeConfigDir() {
+  const env = process.env.OPENCLAUDE_CONFIG_DIR;
+  if (env) return resolvePath(env);
+  return resolvePath(path.join(os.homedir(), '.openclaude'));
+}
+
+/**
  * `_build_global.HOSTS`, reduced to the two columns a non-emitting caller needs, and IN ITS
- * ORDER — opencode, claude, bob, copilot.
+ * ORDER — opencode, claude, bob, copilot, openclaude.
  *
  * An array rather than an object because the order is observable output, not an
  * implementation detail: `harness exclude add` walks it and prints one message per host, so
@@ -235,6 +248,7 @@ export const HOSTS = [
   { host: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md' },
   { host: 'bob', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md' },
   { host: 'copilot', configDir: copilotConfigDir, projectMarker: '.github', agentFile: 'AGENTS.md' },
+  { host: 'openclaude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md' },
 ];
 
 /**
@@ -265,6 +279,7 @@ const NATIVE_CATALOG = {
   claude: { skills: true, agents: true },
   bob: { skills: true, agents: false },
   copilot: { skills: false, agents: false },
+  openclaude: { skills: true, agents: true },
 };
 
 /** `{ skills, agents }` for a known host, `false` for an unknown one. */

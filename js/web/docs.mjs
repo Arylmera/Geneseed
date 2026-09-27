@@ -207,7 +207,7 @@ const HARNESS_HINT_RE = /<!--\s*harness:/;
 export function normHarness(value, state) {
   const v = (value || '').trim().toLowerCase();
   if (HARNESSES.includes(v)) return v;
-  return String(state.emit || '').startsWith('claude') ? 'claude' : 'opencode';
+  return /^(claude|openclaude)/.test(String(state.emit || '')) ? 'claude' : 'opencode';
 }
 
 /**

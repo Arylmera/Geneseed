@@ -11,6 +11,8 @@
  *                              (SQLite, v1.2+: session/message/part tables,
  *                              JSON `data` columns; falls back to the pre-1.2
  *                              storage/ JSON files when no DB exists)
+ *   openclaude OpenClaude     ~/.openclaude/projects/<slug>/<session>.jsonl exact usage
+ *                              (Claude Code fork; $OPENCLAUDE_CONFIG_DIR honoured)
  *   copilot   GitHub Copilot   ~/.copilot/history-session-state/           best effort
  *                              (schema undocumented; token fields harvested
  *                              generically, estimates otherwise)
@@ -485,13 +487,14 @@ class SessionData {
 }
 
 // ---------------------------------------------------------------------------
-// Host: Claude Code / IBM Bob (same transcript shape, different config root)
+// Host: Claude Code / IBM Bob / OpenClaude (same transcript shape, different config root)
 // ---------------------------------------------------------------------------
 
 const slugify = (p) => p.replace(/[^A-Za-z0-9]/g, '-');
 
 function claudeShapedRoot(host) {
-  const env = { claude: 'CLAUDE_CONFIG_DIR', bob: 'BOB_CONFIG_DIR' }[host];
+  const env = { claude: 'CLAUDE_CONFIG_DIR', bob: 'BOB_CONFIG_DIR',
+    openclaude: 'OPENCLAUDE_CONFIG_DIR' }[host];
   const root = process.env[env] || path.join(homedir(), `.${host}`);
   return isDir(path.join(root, 'projects')) ? root : null;
 }
@@ -1017,6 +1020,7 @@ async function detect(hostArg, transcript, session) {
   const finders = {
     claude: () => claudeShapedFind('claude', transcript),
     bob: () => claudeShapedFind('bob', transcript),
+    openclaude: () => claudeShapedFind('openclaude', transcript),
     opencode: () => opencodeFind(session),
     copilot: () => copilotFind(transcript),
   };
@@ -1042,13 +1046,13 @@ async function detect(hostArg, transcript, session) {
   }
   if (!best) {
     sysExit('error: no session data found for any supported host '
-      + '(claude, bob, opencode, copilot)');
+      + '(claude, bob, openclaude, opencode, copilot)');
   }
   return [best[0], best[1]];
 }
 
 async function load(host, found) {
-  if (host === 'claude' || host === 'bob') return claudeShapedParse(host, found);
+  if (['claude', 'bob', 'openclaude'].includes(host)) return claudeShapedParse(host, found);
   if (host === 'opencode') {
     const [kind, payload] = found;
     if (kind === 'db') return opencodeDbParse(...payload);
@@ -1058,7 +1062,10 @@ async function load(host, found) {
   return copilotParse(found);
 }
 
-const HOST_NAMES = { claude: 'Claude Code', bob: 'IBM Bob', opencode: 'OpenCode', copilot: 'GitHub Copilot' };
+const HOST_NAMES = {
+  claude: 'Claude Code', bob: 'IBM Bob', openclaude: 'OpenClaude', opencode: 'OpenCode',
+  copilot: 'GitHub Copilot',
+};
 
 function render(d, limit, topN) {
   const out = [`# Token usage report — ${HOST_NAMES[d.host] ?? d.host}`, ''];
@@ -1188,11 +1195,11 @@ function render(d, limit, topN) {
 // ---------------------------------------------------------------------------
 
 const PROG = path.basename(process.argv[1] ?? 'token_report.mjs');
-const HOST_CHOICES = ['claude', 'bob', 'opencode', 'copilot'];
+const HOST_CHOICES = ['claude', 'bob', 'openclaude', 'opencode', 'copilot'];
 const OPTIONS = [
   ['-h, --help', 'show this help message and exit'],
   [`--host {${HOST_CHOICES.join(',')}}`, 'force a host instead of auto-detecting by recency'],
-  ['--transcript TRANSCRIPT', 'explicit transcript path (claude/bob/copilot)'],
+  ['--transcript TRANSCRIPT', 'explicit transcript path (claude/bob/openclaude/copilot)'],
   ['--session SESSION', 'explicit session id (opencode)'],
   ['--limit LIMIT', 'context window limit for % columns (default 200000)'],
   ['--top TOP', 'how many heaviest single items to list (default 5)'],

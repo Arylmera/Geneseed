@@ -14,7 +14,7 @@
 [![Agents](https://img.shields.io/badge/agents-18-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-11-critical)](src/laws/universal.md)
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
-[![OpenCode · Claude Code · Bob · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
+[![OpenCode · Claude Code · Bob · Copilot · OpenClaude · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20Copilot%20·%20OpenClaude%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
 [**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & terminal**](#-3--web--terminal) · [**What you get**](#-4--what-you-get)
 
@@ -24,7 +24,7 @@
 
 <p align="center"><img src="docs/assets/demo.svg" alt="geneseed setup, then two laws catching a force-push and a credential at the tool boundary" width="760"></p>
 
-**Geneseed compiles your agent's rules instead of asking you to write them.** One source in `src/` renders into a ready-made harness for OpenCode, Claude Code, Bob, Copilot, or any `AGENT.md` tool: a constitution of laws and doctrines, a roster of capability agents, native skills, a memory convention — and, wherever the host has a hook surface, gates that *enforce* the laws at the tool boundary instead of hoping the model remembers them.
+**Geneseed compiles your agent's rules instead of asking you to write them.** One source in `src/` renders into a ready-made harness for OpenCode, Claude Code, Bob, Copilot, OpenClaude, or any `AGENT.md` tool: a constitution of laws and doctrines, a roster of capability agents, native skills, a memory convention — and, wherever the host has a hook surface, gates that *enforce* the laws at the tool boundary instead of hoping the model remembers them.
 
 ```bash
 npx geneseed setup
@@ -36,8 +36,8 @@ Want to read what it leaves behind before installing anything? [**geneseed-demo*
 
 A hand-written instructions file is prose the model may or may not honour, copied into every repo and drifting in each one. Geneseed is a build, and that changes four things:
 
-- **Laws are enforced, not suggested.** A force-push, a `reset --hard`, or a credential written into a tracked file is caught by a hook *before* the tool runs, in the host's own dialect — a prompt on Claude Code and Copilot, a hard block on OpenCode, exit 2 on Bob. The gates fail closed, and every catch is one line in a ledger that `geneseed status` counts.
-- **One source, five targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 261 emit configurations, and a second emit into the same tree must change nothing.
+- **Laws are enforced, not suggested.** A force-push, a `reset --hard`, or a credential written into a tracked file is caught by a hook *before* the tool runs, in the host's own dialect — a prompt on Claude Code, Copilot and OpenClaude, a hard block on OpenCode, exit 2 on Bob. The gates fail closed, and every catch is one line in a ledger that `geneseed status` counts.
+- **One source, six targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 317 emit configurations, and a second emit into the same tree must change nothing.
 - **Costs are measured, not guessed.** Zero runtime dependencies. The hook path loads in about 14 ms per tool call. The default *lean* footprint keeps the always-on context small and puts the full rationale one read away — the numbers are in [docs/token-footprint.md](docs/token-footprint.md).
 - **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
 
@@ -222,37 +222,37 @@ Want to check a build before it touches anything real? `geneseed-build --validat
 
 ## 🔌 Supported harnesses
 
-One source, five emit targets. Geneseed builds into whichever host you point it
+One source, six emit targets. Geneseed builds into whichever host you point it
 at — each with a per-repo and a global (`-global`) variant — plus a portable
 `files` bundle any `AGENT.md`-aware tool can read. **OpenCode** runs its own
-engine (JS plugins, colour themes, LSP); **Claude Code**, **Bob**, and
-**Copilot** share one Claude-shaped engine that diverges only by host dialect.
+engine (JS plugins, colour themes, LSP); **Claude Code**, **Bob**, **Copilot**
+and **OpenClaude** share one Claude-shaped engine that diverges only by host dialect.
 
 The harness — its Rules, Agents, Skills, Memory convention, and preamble voice —
 is **identical on every host**. What differs is how much of it the host can
 *automate* for you (via plugins or hooks) versus carry as preamble discipline.
 
-| Capability | OpenCode | Claude Code | Bob | Copilot |
-| --- | :---: | :---: | :---: | :---: |
-| **Instructions file** | `AGENT.md` + `opencode.json` | `CLAUDE.md` | `AGENTS.md` + `rules/geneseed.md` | `AGENTS.md` / `copilot-instructions.md` |
-| **Agents** (capability specialists) | ✅ native | ✅ | ✅ | ✅ `.agent.md` |
-| **Skills** (byte-identical) | ✅ | ✅ | ✅ | ✅ |
-| **Memory & Notebook** | ✅ | ✅ | ✅ | ✅ |
-| **Context injection** | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook³ |
-| **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook³ |
-| **Git-gate consent** (process 5) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ (warn) | 🪝 hook³ |
-| **Rule-gate consent** (process 1) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ (warn) | 🪝 hook³ |
-| **Laws I / IV at the boundary** | ⚙️ plugin (block) | 🪝 hook (ask) | 🪝 hook¹ (exit 2) | 🪝 hook³ (ask) |
-| **Sovereign-repo excludes** | ⚙️ plugin | ✅ `claudeMdExcludes` | ✅ rules-shadow | ➖ none |
-| **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcp.json` | ✅ `mcp-config.json` |
-| **Colour themes** | ✅ full palette | ➖ | ➖ | ➖ |
-| **LSP · workflow runner · primary-agent · `/`-commands** | ✅ | ➖ | ➖ | ➖ |
+| Capability | OpenCode | Claude Code | Bob | Copilot | OpenClaude |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| **Instructions file** | `AGENT.md` + `opencode.json` | `CLAUDE.md` | `AGENTS.md` + `rules/geneseed.md` | `AGENTS.md` / `copilot-instructions.md` | `CLAUDE.md` (in `.openclaude/` per repo) |
+| **Agents** (capability specialists) | ✅ native | ✅ | ✅ | ✅ `.agent.md` | ✅ |
+| **Skills** (byte-identical) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Memory & Notebook** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Context injection** | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook³ | 🪝 hook⁴ |
+| **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook³ | 🪝 hook⁴ |
+| **Git-gate consent** (process 5) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ (warn) | 🪝 hook³ | 🪝 hook⁴ |
+| **Rule-gate consent** (process 1) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ (warn) | 🪝 hook³ | 🪝 hook⁴ |
+| **Laws I / IV at the boundary** | ⚙️ plugin (block) | 🪝 hook (ask) | 🪝 hook¹ (exit 2) | 🪝 hook³ (ask) | 🪝 hook⁴ (ask) |
+| **Sovereign-repo excludes** | ⚙️ plugin | ✅ `claudeMdExcludes` | ✅ rules-shadow | ➖ none | ✅ `claudeMdExcludes` |
+| **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcp.json` | ✅ `mcp-config.json` | ✅ `mcpServers` |
+| **Colour themes** | ✅ full palette | ➖ | ➖ | ➖ | ➖ |
+| **LSP · workflow runner · primary-agent · `/`-commands** | ✅ | ➖ | ➖ | ➖ | ➖ |
 
-<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob's own hook contract: global hooks in `~/.bob/settings/settings.json`, Claude's event names but stdout ignored on `PreToolUse` — a refusal is **exit code 2**. So Laws I/IV exit 2, the consent rules are a stderr line, `SessionStart` context is plain stdout, `Stop` runs learn; `SubagentStop`/`PreCompact` are not Bob events and are not written. Unverified live (no Bob install on the authoring machine); the harness still holds via the rules preamble. · ² OpenCode's `tool.execute.before` can only allow or throw, with no "ask the user" tier, so the rule gate is a one-shot speed bump there rather than a prompt. · ³ Copilot's `~/.copilot/settings.json` hooks (`sessionStart`, `preToolUse`, `agentStop`, `preCompact`) wired by the **global** emit only; `preToolUse` has an ask tier, so every rule asks as on Claude Code. Unverified live (no Copilot CLI on the authoring machine).</sub>
+<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob's own hook contract: global hooks in `~/.bob/settings/settings.json`, Claude's event names but stdout ignored on `PreToolUse` — a refusal is **exit code 2**. So Laws I/IV exit 2, the consent rules are a stderr line, `SessionStart` context is plain stdout, `Stop` runs learn; `SubagentStop`/`PreCompact` are not Bob events and are not written. Unverified live (no Bob install on the authoring machine); the harness still holds via the rules preamble. · ² OpenCode's `tool.execute.before` can only allow or throw, with no "ask the user" tier, so the rule gate is a one-shot speed bump there rather than a prompt. · ³ Copilot's `~/.copilot/settings.json` hooks (`sessionStart`, `preToolUse`, `agentStop`, `preCompact`) wired by the **global** emit only; `preToolUse` has an ask tier, so every rule asks as on Claude Code. Unverified live (no Copilot CLI on the authoring machine). · ⁴ OpenClaude is a Claude Code fork: Claude's hook groups and verdicts verbatim, in `~/.openclaude/settings.json` (global) or `.openclaude/settings.local.json` (per repo). Unverified live (no OpenClaude install on the authoring machine).</sub>
 
 **Reading the matrix.** Everything above the divider is at full parity — no host
 drops an Agent, Skill, or the memory convention. The asymmetry is entirely in
-*automation mechanism*: OpenCode's plugin surface and the Claude/Bob/Copilot hook
+*automation mechanism*: OpenCode's plugin surface and the Claude/Bob/Copilot/OpenClaude hook
 surfaces enforce a few Rules for you, each in the tier its host offers (a prompt on
 Claude Code, a hard block or a logged warning where the host has no prompt to
 give), and what no host can automate rides the preamble. The OpenCode-only extras (themes, LSP,
@@ -260,7 +260,8 @@ workflow runner, primary-agent) have no analogue on a Claude-shaped host.
 
 Per-host wiring in depth: **[OpenCode](adapters/opencode/README.md)** ·
 **[Claude Code](adapters/claude-code/README.md)** ·
-**[Bob](adapters/bob/README.md)** · **[Copilot](adapters/copilot/README.md)**.
+**[Bob](adapters/bob/README.md)** · **[Copilot](adapters/copilot/README.md)** ·
+**[OpenClaude](adapters/openclaude/README.md)**.
 Token cost per host: **[docs/token-footprint.md](docs/token-footprint.md)**.
 
 ## 🗂 Layout
@@ -293,7 +294,7 @@ Geneseed/
 ├── tests/                Node test suites, golden.mjs (every emit config) and mutate.mjs
 ├── docs/                 guides (web-ui, wiki, …) + docs/web/ (the console's Docs pages);
 │                         specs/, reviews/, superpowers/ are local working docs — git-ignored
-├── adapters/             per-host glue (opencode/, claude-code/, bob/, copilot/)
+├── adapters/             per-host glue (opencode/, claude-code/, bob/, copilot/, openclaude/)
 └── .github/workflows/    ci.yml (doctor + tests) · publish.yml (npm, OIDC, manual only)
 ```
 
@@ -345,6 +346,7 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 | **[adapters/claude-code/](adapters/claude-code/README.md)** | The Claude Code hook adapter |
 | **[adapters/bob/](adapters/bob/README.md)** | The IBM Bob adapter — Claude-shaped, rules-file preamble |
 | **[adapters/copilot/](adapters/copilot/README.md)** | The GitHub Copilot adapter — global hooks (`sessionStart`, `preToolUse`, `agentStop`, `preCompact`) |
+| **[adapters/openclaude/](adapters/openclaude/README.md)** | The OpenClaude adapter — the Claude engine under `~/.openclaude` / `.openclaude/` |
 | **[src/memory/README.md](src/memory/README.md)** | The memory convention |
 | **[src/notebook/README.md](src/notebook/README.md)** | The agent's own freeform-space convention |
 

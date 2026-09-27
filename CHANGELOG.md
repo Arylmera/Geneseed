@@ -8,7 +8,19 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **OpenClaude as a fifth host** (`--emit openclaude` / `--emit openclaude-global`).
+  [OpenClaude](https://openclaude.gitlawb.com/) is an any-model CLI forked from Claude Code, so
+  it rides the Claude engine and hook dialect verbatim. Only the paths differ:
+  `~/.openclaude` (`$OPENCLAUDE_CONFIG_DIR`, OpenClaude's own variable) globally, and
+  `.openclaude/` per repo. The per-repo preamble is `.openclaude/CLAUDE.md` rather than a root
+  file, because OpenClaude skips a root `CLAUDE.md` whenever `AGENTS.md` exists. MCP config goes
+  in `.openclaude.json` / `.mcp.json`. The host is wired through setup (appended after `files`,
+  so scripted menu answers keep their numbers), uninstall, disable/enable, excludes, status,
+  doctor, the web console's Harness page and Deploy form, and the `token-report` skill. The
+  golden matrix gains 56 cells, plus 2 deletion cells. Unverified live: no OpenClaude install
+  on the authoring machine. See `adapters/openclaude/README.md`.
 
 ## [3.6.0] — 2026-09-27
 

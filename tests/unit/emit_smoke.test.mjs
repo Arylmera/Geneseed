@@ -158,6 +158,12 @@ const EXPECTED = {
   copilot: { host: 'copilot', base: 'out', rel: 'AGENTS.md', native: ['out', '.github'] },
   'copilot-global': { host: 'copilot', base: 'home', rel: '.copilot/copilot-instructions.md',
     native: ['home', '.copilot'] },
+  // The preamble sits INSIDE `.openclaude/`: OpenClaude skips a root CLAUDE.md whenever the repo
+  // carries an AGENTS.md, and reads `.openclaude/CLAUDE.md` unconditionally.
+  openclaude: { host: 'openclaude', base: 'out', rel: '.openclaude/CLAUDE.md',
+    native: ['out', '.openclaude'] },
+  'openclaude-global': { host: 'openclaude', base: 'home', rel: '.openclaude/CLAUDE.md',
+    native: ['home', '.openclaude'] },
 };
 
 // The native layer is generated from the same source tree for every host, so the counts are

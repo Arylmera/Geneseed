@@ -197,7 +197,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Themes | `themes/*.json` | — | token → label maps; `themes/opencode/` is a separate colour system |
 | Release label | `harness.config.json` | `.geneseed-version` | the theme and the human-readable version the driver reads; the canonical identity is the source fingerprint, not this string |
 | Lifecycle | `registry.json` | — | maintainer-side status/version/owner per agent and skill; never rendered into a bundle |
-| Generator | `bin/build-driver.mjs` (`geneseed-build`) | — | substitution + `<!-- INCLUDE: -->` inlining, and the nine `--emit` targets |
+| Generator | `bin/build-driver.mjs` (`geneseed-build`) | — | substitution + `<!-- INCLUDE: -->` inlining, and the eleven `--emit` targets |
 | CLI, as data | `js/cli-table.json` | — | the owned document the entry point parses its own argv from |
 | Automation | `bin/geneseed-cli.mjs` (`geneseed`) | — | 25 verbs — `build` / `doctor` / `status` / `prompt` / `diff` / `setup` / `web` / `upgrade` / … |
 | Hooks | `bin/geneseed-hook.mjs` (`geneseed-hook`) | — | the five verbs an emitted hook config invokes: `context` / `git-gate` / `rule-gate` / `tool-gate` / `learn` |
@@ -225,7 +225,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
   stuck. WIRE must precede MANIFEST because wiring is what fills the `managed` record the
   manifest stores, and no RENDER may follow a WIRE because a render writes wholesale a file
   a wire has just reconciled. `tests/unit/emit_phase_order.test.mjs` fails the build if any of
-  the nine emits drifts out of that order, or if a new file-mutating routine in
+  the eleven emits drifts out of that order, or if a new file-mutating routine in
   `js/hosts/settings.mjs` is called from an emit without being classified. RENDER and WIRE now run
   in the *same process* — the seam that once spawned a second runtime per emit is gone — so
   the render and wire dispatchers stay two separate functions and two separate statements on

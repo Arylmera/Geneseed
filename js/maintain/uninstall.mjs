@@ -71,7 +71,7 @@ import { comparePaths, isAbsolutePath, within } from '../lib/paths.mjs';
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
 
 /** The Claude-STYLE hosts — one manifest shape, one reversal. Spelled once. */
-const CLAUDE_STYLE = ['claude', 'bob', 'copilot'];
+const CLAUDE_STYLE = ['claude', 'bob', 'copilot', 'openclaude'];
 
 /**
  * `shutil.rmtree(p, ignore_errors=True)`.
@@ -681,7 +681,7 @@ export function cmdUninstall(args) {
     const targetDesc = resolvePath(expanduser(args.target));
     printErr(`[uninstall] no Geneseed install detected at ${targetDesc}.\n`
       + '[uninstall] pass --target <repo> for a project install (.opencode/.claude/'
-      + '.bob/.github) or --target <config dir> for a global one.\n');
+      + '.bob/.github/.openclaude) or --target <config dir> for a global one.\n');
     return 1;
   }
   const [host, scope, root] = hit;
@@ -700,7 +700,7 @@ export function cmdUninstall(args) {
       + `${hostSpec(host).agentFile} managed block, and Geneseed's `
       + '~/.copilot/settings.json hooks on a global install (your own keys/hooks and '
       + '.github files are kept).\n');
-  } else if (host === 'claude' || host === 'bob') {
+  } else if (['claude', 'bob', 'openclaude'].includes(host)) {
     printOut('[uninstall] removes: agents/, skills/, markers, the '
       + `${hostSpec(host).agentFile} managed block, and Geneseed's `
       + 'settings.json hooks/excludes (your own keys/hooks are kept).\n');

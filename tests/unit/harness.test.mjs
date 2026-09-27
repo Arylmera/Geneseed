@@ -943,6 +943,8 @@ test("discovery drops the host's own native root, and only that one", () => {
       ['claude', 'CLAUDE.md', ['AGENTS.md', 'AGENT.md']],
       ['bob', 'AGENTS.md', ['CLAUDE.md', 'AGENT.md']],
       ['copilot', 'AGENTS.md', ['CLAUDE.md', 'AGENT.md']],
+      // OpenClaude loads AGENTS.md when there is one, and then NOT CLAUDE.md.
+      ['openclaude', 'AGENTS.md', ['CLAUDE.md', 'AGENT.md']],
     ];
     for (const [host, dropped, kept] of rows) {
       const [eager, lazy] = discoverContext(d, host);
@@ -952,6 +954,10 @@ test("discovery drops the host's own native root, and only that one", () => {
       for (const k of kept) assert.ok(en.has(k), `${host}: another tool's ${k} should stay eager`);
       assert.ok(en.has('README.md'), `${host}: README.md should stay eager`);
     }
+    // With no AGENTS.md, OpenClaude falls back to loading CLAUDE.md, so that one is native.
+    fs.rmSync(path.join(d, 'AGENTS.md'));
+    const en = baseNames(discoverContext(d, 'openclaude')[0]);
+    assert.ok(!en.has('CLAUDE.md') && en.has('AGENT.md'), [...en].join(', '));
   });
 });
 

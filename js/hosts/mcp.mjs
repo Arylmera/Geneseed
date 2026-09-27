@@ -44,7 +44,7 @@ import { opencodeTarget, readJsonc } from './settings.mjs';
 const dget = (obj, key, dflt) => (isDict(obj) && Object.hasOwn(obj, key) ? obj[key] : dflt);
 
 /** The hosts whose MCP config is strict JSON under `mcpServers`, with no `enabled` flag. */
-const FLAGLESS = ['claude', 'bob', 'copilot'];
+const FLAGLESS = ['claude', 'bob', 'copilot', 'openclaude'];
 
 /**
  * `_harness_mcp._MCP_PRESETS` — the ready-to-wire servers the MCP screen can toggle.
@@ -247,6 +247,13 @@ export function mcpConfigFor(host, scope, root) {
     // The Copilot CLI reads MCP servers from ~/.copilot/mcp-config.json only — no per-repo
     // file is documented, so a project install carries no MCP wiring.
     return scope === 'global' ? path.join(copilotConfigDir(), 'mcp-config.json') : null;
+  }
+  if (host === 'openclaude') {
+    // Claude's `.mcp.json` per repo; globally `.openclaude.json` beside the home dir, or
+    // INSIDE `$OPENCLAUDE_CONFIG_DIR` when set — OpenClaude's own `getGlobalClaudeFile` rule.
+    if (scope === 'project') return path.join(root, '.mcp.json');
+    const env = process.env.OPENCLAUDE_CONFIG_DIR;
+    return resolvePath(path.join(env || os.homedir(), '.openclaude.json'));
   }
   return null;
 }
