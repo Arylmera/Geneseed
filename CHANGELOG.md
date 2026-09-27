@@ -10,6 +10,39 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 _Nothing yet._
 
+## [3.6.0] — 2026-09-27
+
+**Upgrading:** re-emit (or `geneseed rebuild-all`) after installing. The root file changed, and
+skills only start routing ahead of the startup ritual once it is re-emitted.
+
+### Added — skills
+
+- **`document-project` writes the whole doc set** on an existing codebase: `docs/PRD.md`
+  (traced FR/NFR tables with stable IDs), `docs/DESIGN.md` (tokens with their sources and WCAG
+  contrast, UI projects only), `docs/architecture.md` (C4 L1–L3 plus inline ADRs) and a short
+  `AGENTS.md`, presented by `overview.html` and `design.html`. Every claim cites `path:line` or
+  carries a ⚠; re-runs rewrite only inside `geneseed:doc` fences and keep every ID (#149).
+
+### Fixed — skill routing
+
+- **A matching skill is now the first tool call, before the readiness ritual.** The root file
+  told the model to read `context.json` before its first reply; its first tool calls were then
+  file reads, and a bug report was investigated by hand without ever loading `debug`. Both
+  footprints now say "Skills first". Measured with the new probe on Claude Code (sonnet, 3 runs
+  per case): `debug` went from 3/15 positive runs to 14–15/15 on both footprints, with every
+  near-miss still routed elsewhere (#150).
+- **`debug` triggers on the symptom**: a failing test, a crash, an error or stack trace, a wrong
+  result, and it loads before reading code, not only before proposing a fix (#150).
+
+### Added — for maintainers
+
+- **`tests/skill_triggers.mjs`, a hand-run probe** that emits a real bundle into a sandbox and asks
+  a real model whether each skill's description routes the prompts it should and only those.
+  Claude Code and OpenCode adapters, `--footprint lean|full`, isolated from the operator's own
+  plugins unless `--ambient`; infrastructure failures report as errors, never as misses. Not part
+  of the suite; `docs/extending.md` lists it as an optional last step for a new skill
+  (#148, #150, #151).
+
 ## [3.5.0] — 2026-09-25
 
 **Upgrading:** re-emit (or `geneseed rebuild-all`) after installing. Copilot installs need it most:
