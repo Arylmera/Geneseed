@@ -44,8 +44,8 @@ vault or a specific tool's hooks.
      and the prose words the docs use: the core nouns `LAW(S)`/`DOCTRINE(S)`/`ONTOLOGY`/
      `AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`VAULT`/`WIKI`, plus `TAGLINE`,
      `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`, `ROAST_PERSONA`, the invariant
-     titles `LEX_I`..`LEX_XI`, the 27 doctrine-rule titles `DOC_<PACK>_<n>`, the four pack
-     names `PACK_CRAFT`/`PACK_RIGOR`/`PACK_OPS`/`PACK_PROCESS`, and the section intros
+     titles `LEX_I`..`LEX_XI`, the 28 doctrine-rule titles `DOC_<PACK>_<n>`, the five pack
+     names `PACK_CRAFT`/`PACK_RIGOR`/`PACK_OPS`/`PACK_PROCESS`/`PACK_COMMS`, and the section intros
      `INTRO_*`. Each theme defines its own nouns; **neutral keeps the plain words** (Rule,
      Doctrine, Agent, Skill, Memory, Workspace), so neutral output is unchanged.
      `{{LAW}}` and `{{DOCTRINE}}` must each be a **single word** — both heading parsers
@@ -101,9 +101,9 @@ vault or a specific tool's hooks.
    - **Invariants** (`src/laws/universal.md`) — *what is never traded*. Eleven numbered
      Rules, `I`..`XI`, nine in force — IX and XI are retired in place, their numbers kept so
      existing citations resolve — headed `### {{LAW}} <roman> — {{LEX_<roman>}}`.
-   - **Doctrines** (`src/doctrines/{craft,rigor,ops,process}.md`) — *how work is done
+   - **Doctrines** (`src/doctrines/{craft,rigor,ops,process,comms}.md`) — *how work is done
      here*. Practice rules addressed by pack and number, cited as `Doctrine process 5`.
-     `PACK_ORDER` (`js/build/source.mjs`) fixes the order craft → rigor → ops → process, which
+     `PACK_ORDER` (`js/build/source.mjs`) fixes the order craft → rigor → ops → process → comms, which
      is narrative and deliberately not alphabetical.
 
    **The Ontology and the Invariants are never toggleable** — every build carries both,

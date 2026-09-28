@@ -780,17 +780,20 @@ test('roman numerals bridge to LAW_META\'s arabic keys', () => {
 // DOCTRINE_META — the same column, one tier over and 23 rules wide.
 
 /** The doctrine addresses as the pack files really spell them. Derived, never transcribed. */
-const doctrineAddrs = () => ['craft', 'rigor', 'ops', 'process'].flatMap((p) =>
+const doctrineAddrs = () => ['craft', 'rigor', 'ops', 'process', 'comms'].flatMap((p) =>
   [...fs.readFileSync(path.join(SRC, 'doctrines', `${p}.md`), 'utf8')
     .matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)].map((m) => `${m[1]}.${m[2]}`));
 
 test('every doctrine rule carries a DOCTRINE_META principle', () => {
   const addrs = doctrineAddrs();
   // 24 since 2026-09: Law IX retired in place into rigor 5, so the doctrine roll grew by one.
-  // 25 since process 8 (one writer per file) was appended, later the same month.
+  // 25 since one writer per file was appended as process 8 (process 7 since 2026-09-27), later
+  // the same month.
   // 27 since craft 7 (one writer per value) and ops 7 (serialize against a rationed resource)
   // were appended on 2026-09-23.
-  assert.equal(addrs.length, 27, `${addrs.length} rules parsed — expected 27`);
+  // 28 since the comms pack (2026-09-27): process 7 (reference codes) MOVED to comms 1, which
+  // leaves the total alone, and comms 2 (structure beside prose) is new.
+  assert.equal(addrs.length, 28, `${addrs.length} rules parsed — expected 28`);
   assert.deepEqual(doctrineMetaProblems(addrs), []);
 });
 

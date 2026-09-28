@@ -8,7 +8,40 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-### Added
+**Upgrading:** re-emit (or `geneseed rebuild-all`) after installing. An install built before
+this change keeps the reference-codes rule: see *Address migration* below.
+
+### Added — doctrines
+
+- **A fifth doctrine pack, `comms` — how answers are presented.** On by default, rendered last
+  (craft → rigor → ops → process → comms), toggleable like every pack. It holds two rules:
+  - `comms 1` — *Codes That Persist*: the reference-codes rule (`D`/`O`/`F`/`R`/`Q`/`A`),
+    moved out of process unchanged, themed titles included.
+  - `comms 2` — *Structure Beside Prose*: beside the prose, pick a diagram or a table, rarely
+    both. Draw a boxes-and-arrows diagram only when the arrows carry meaning (flow,
+    dependencies, topology, a spatial subject, four or more linked elements, or on request);
+    classifications and comparisons take a table or list; three steps or fewer stay inline.
+    ASCII in a terminal, Mermaid where markdown renders it; a richer rendered page is offered
+    in one line, never built unasked. Strictly additive to `comms 1`: a diagram or table may
+    tag a coded item, never absorb, merge or renumber it.
+
+### Changed — address migration
+
+Anyone citing a doctrine rule by address must remap two of them:
+
+| Old address | New address | Rule |
+|---|---|---|
+| `process 7` | `comms 1` | Codes That Persist (reference codes) |
+| `process 8` | `process 7` | One Writer Per File |
+
+`process 1`–`6` are unchanged. Every citation inside `src/` was remapped in this change. An
+existing install is migrated when it is next rebuilt: if its carrier was rendered before the
+comms pack existed (it names `process 8`, as a heading or in its `Excluded rules:` line) and its
+`Active packs:` marker names `process`, `comms` is added so the codes rule is not lost; its
+excluded rules are re-addressed by the table above. An install built after this change that has
+comms switched off stays off.
+
+### Added — hosts
 
 - **OpenClaude as a fifth host** (`--emit openclaude` / `--emit openclaude-global`).
   [OpenClaude](https://openclaude.gitlawb.com/) is an any-model CLI forked from Claude Code, so

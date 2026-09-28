@@ -17,7 +17,7 @@ The agent's standing rules come in **three tiers**, and the tier decides how a r
 
 ### Doctrines — chosen at build time
 
-Practices rather than principles: **craft** (how code is written), **rigor** (how work is proven), **ops** (how the machine is operated), **process** (how a task is run), one file each under `src/doctrines/`. A repository picks its set with `geneseed-build --doctrines <list>` or through the setup wizard — all {N_PACKS} are on by default. This install built in {N_PACKS_ACTIVE}, carrying {N_DOCTRINE_RULES} rules between them. Cited by pack and number — `Doctrine process 5`.
+Practices rather than principles: **craft** (how code is written), **rigor** (how work is proven), **ops** (how the machine is operated), **process** (how a task is run), **comms** (how answers are presented), one file each under `src/doctrines/`. A repository picks its set with `geneseed-build --doctrines <list>` or through the setup wizard — all {N_PACKS} are on by default. This install built in {N_PACKS_ACTIVE}, carrying {N_DOCTRINE_RULES} rules between them. Cited by pack and number — `Doctrine process 5`.
 
 A pack you leave out **still ships in the bundle**: every pack file lands under `doctrines/` beside `AGENT.md` whether or not it was built in. So a rule that cites one in an inactive pack still resolves on disk, and you can read the alternatives before turning one on. What an inactive pack loses is bindingness, not availability.
 

@@ -13,7 +13,7 @@ Every rule in the constitution gets its title from a theme key, and a theme that
 
 - `LEX_I`…`LEX_IX` — one title per invariant. `doctor` holds this to an **equality**, not mere presence: a `LEX_*` outside `I`–`IX` is a title for a rule that does not exist and fails the check too.
 - `DOC_*` — one title per doctrine rule, named after its address (`DOC_CRAFT_1`, `DOC_PROCESS_5`, …). `doctor` reads the pack files under `src/doctrines/` and requires exactly the set they name — a missing one is a blank heading, an extra one is a dead key.
-- `PACK_*` — one name per pack (`PACK_CRAFT`, `PACK_RIGOR`, `PACK_OPS`, `PACK_PROCESS`), used for the pack's own sub-heading.
+- `PACK_*` — one name per pack (`PACK_CRAFT`, `PACK_RIGOR`, `PACK_OPS`, `PACK_PROCESS`, `PACK_COMMS`), used for the pack's own sub-heading.
 
 The Ethos section names are **not** theme keys: a citation reads `({{ONTOLOGY}}: {{ONT_TELOS}})`, token on both sides, so heading and reference always move together. They live in the build's fixed structure table and you neither declare nor rename them.
 

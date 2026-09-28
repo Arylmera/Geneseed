@@ -171,7 +171,7 @@ test('a build row given no pack selection states ALL packs, not the config defau
   const tail = actionCommands('build', { ...OPTS, doctrines: undefined })[0].slice(2);
   const at = tail.indexOf('--doctrines');
   assert.ok(at >= 0, 'a build row with no pack selection left the axis to harness.config.json');
-  assert.equal(tail[at + 1], 'craft,rigor,ops,process');
+  assert.equal(tail[at + 1], 'craft,rigor,ops,process,comms');
   // The same argument one tier down, and it defaults to the other end of the same safety: a
   // row that named no exclusions must say `none` rather than leave the flag off, or an
   // `excludeRules` in `harness.config.json` takes the consent gate out of a Build that never
@@ -223,7 +223,7 @@ test('the deploy argv resolves the body it is handed', () => {
     assert.deepEqual(plan.cmd.slice(2).map(String).map((s) => s.split(td).join('<TARGET>')),
       ['--theme', 'imperial', '--emit', 'opencode', '--out', '<TARGET>', '--root', '<TARGET>',
         '--footprint', 'lean', '--posture', 'mentor', '--mode', 'foreman',
-        '--doctrines', 'craft,rigor,ops,process', '--exclude-rules', 'none']);
+        '--doctrines', 'craft,rigor,ops,process,comms', '--exclude-rules', 'none']);
   } finally {
     sb.cleanup();
   }

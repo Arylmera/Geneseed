@@ -280,7 +280,7 @@ of nine emit modes in order and themed, under both footprints, with a `CEILING` 
 (half the ceiling) on the rendered size. Its docblock carries the current measurement against
 the largest carrier — the host-agnostic `files` bundle; no figure is repeated here, because a
 typed headroom is stale by the next rule. Read that docblock before adding text to any tier; it is
-re-measured, never nudged, and the ceiling is measured **with all four packs active**, which is
+re-measured, never nudged, and the ceiling is measured **with all five packs active**, which is
 the only configuration it can speak for.
 
 ### 2d — Adding a whole PACK
@@ -291,15 +291,27 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    file `PACK_ORDER` names but cannot read, or one carrying no `### {{DOCTRINE}} <pack> <n>`
    heading at all, is a refusal.
 2. `PACK_ORDER` in `js/build/source.mjs` — the registration, and the render order. It is **narrative,
-   not alphabetical** (craft → rigor → ops → process); discovery sorts alphabetically and the
+   not alphabetical** (craft → rigor → ops → process → comms); discovery sorts alphabetically and the
    renderer refuses a `.md` under `src/doctrines/` that `PACK_ORDER` does not name, rather than
    skipping it.
 3. `PACK_<NAME>` in `themes/_TEMPLATE.json` and all fourteen voices. Unlike `DOC_*`, this family is
    held only by `themeParityProblems` — presence, across the voices, template excluded.
 4. `DOCTRINE_BLURBS` in `js/maintain/setup.mjs` — the one-line description an installer sees in the wizard,
    and the only place a pack is ever explained to them. Missing entries fall back to the bare name.
-5. `harness.config.json` if the pack should be on by default; `constitutionProblems` refuses a
-   `doctrines` array naming a pack this checkout does not ship.
+5. `harness.config.json` only if this checkout's default must be *narrower* than every pack. The
+   shipped file carries no `doctrines` key, and an absent key means all of `PACK_ORDER`, so
+   step 2 already makes a new pack default-on. `constitutionProblems` refuses a `doctrines`
+   array naming a pack this checkout does not ship.
+6. The written-out **pack lists** in `tests/` — not only the rule totals of §2a. The full set is
+   spelled out, in `PACK_ORDER`, in `emit_smoke`, `generate`, `harness`, `setup`, `web_api`,
+   `web_jobs` and `wizard`, and the wizard cells also feed one y/n answer per pack on stdin.
+   Grep `tests/` for `'process']` and `ops,process` before trusting this list.
+7. **Existing installs.** An install's pack set is read back off its carrier's `Active packs:`
+   marker (§9), which names only the packs that existed when it was built, so a new pack reaches
+   an existing install only if that install is re-emitted *and* the reader adds it. A pack that
+   merely adds rules can stay off for old installs. A pack that *moves* a rule out of another
+   pack cannot, or the moved rule disappears on the next rebuild: `comms` (2026-09-27) is the
+   worked example — see `legacyProcessCarrier` in `js/hosts/installs.mjs`.
 
 ---
 
@@ -682,7 +694,7 @@ rows, nor `web/package.json`.
 |---|---|---|
 | git checkout | `geneseed upgrade` | export improvements → preflight → ff-only pull → `doctor` on the pulled tree → re-emit this bundle → bounce the web daemon → `rebuild-all` |
 | npm | `npm install -g geneseed@latest`, then `geneseed rebuild-all` | there is no `postinstall`; the two steps are manual |
-| any | `geneseed rebuild-all` | every **active** install, each re-read in its own five values (theme, emit, footprint, posture, mode) |
+| any | `geneseed rebuild-all` | every **active** install, each re-read in its own values: theme, emit, footprint, posture, mode, and the two doctrine axes (`Active packs:` and `Excluded rules:`, read back by `doctrinesForBuild` and `excludedRulesOfDir`) |
 
 **Which installs get missed:** project installs that were never registered; installs disabled via
 the `.geneseed-disabled` stash; registry rows whose directory is gone; and everything after the
