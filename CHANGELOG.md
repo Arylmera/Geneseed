@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.7.0] — 2026-09-28
+
 **Upgrading:** re-emit (or `geneseed rebuild-all`) after installing. An install built before
 this change keeps the reference-codes rule: see *Address migration* below.
 
