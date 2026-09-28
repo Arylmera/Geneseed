@@ -59,7 +59,7 @@ const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
  * hosts, which is what the project's host-parity rule asks for.
  */
 function hookSettingsFile(root, host, scope) {
-  if (host !== 'claude' && host !== 'bob') return null;
+  if (!['claude', 'bob', 'openclaude'].includes(host)) return null;
   const name = scope === 'project' && host !== 'bob' ? 'settings.local.json' : 'settings.json';
   return path.join(root, name);
 }

@@ -14,10 +14,10 @@ export function useHarness(fallback = 'opencode') {
   return useLocalStorage(HARNESS_KEY, (v) => (v === 'claude' || v === 'opencode' ? v : fallback))
 }
 
-// The Docs carry two families: OpenCode's, and Claude Code's — which Bob and Copilot
-// share, since both emit through the Claude engine. `files` and unknown emits read the
+// The Docs carry two families: OpenCode's, and Claude Code's — which Bob, Copilot and
+// OpenClaude share, since all three emit through the Claude engine. `files` and unknown emits read the
 // OpenCode pages, the server's default.
 export function docsHostOf(emit) {
   const e = String(emit || '')
-  return /^(claude|bob|copilot)/.test(e) ? 'claude' : 'opencode'
+  return /^(claude|bob|copilot|openclaude)/.test(e) ? 'claude' : 'opencode'
 }

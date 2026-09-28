@@ -1261,6 +1261,286 @@
       "theme": "wizard"
     },
     {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "openclaude",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
       "emit": "files",
       "footprint": "lean",
       "posture": "peer",
@@ -1431,6 +1711,30 @@
         "notebook/README.md"
       ],
       "theme": "imperial"
+    },
+    {
+      "before": {
+        "emit": "openclaude",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "openclaude",
+      "footprint": "full",
+      "label": "openclaude/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "openclaude-global",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "openclaude-global",
+      "footprint": "full",
+      "label": "openclaude-global/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
     }
   ],
   "platform": "posix"

@@ -22,7 +22,7 @@ that matches your tool, then configure and verify. For the conceptual overview s
 
 - **Node ≥ 22.3** — the only hard requirement. Geneseed ships as an npm package with
   **zero dependencies**; `npx geneseed` needs nothing else.
-- **Your agent tool** — OpenCode (recommended), Claude Code, Bob, Copilot, or anything
+- **Your agent tool** — OpenCode (recommended), Claude Code, Bob, Copilot, OpenClaude, or anything
   that reads a root instructions file.
 - *Only for a git checkout:* **git**. Nothing else — a checkout runs the same Node
   entry points the npm package installs.
@@ -94,6 +94,7 @@ hand? Pick a path below.
 | [B — OpenCode, per-repo](#path-b--opencode-per-repo) | You want a committed `.opencode/` layer in one repository. |
 | [C — Claude Code](#path-c--claude-code) | You drive Claude Code and want the lifecycle hooks. |
 | [C′ — GitHub Copilot](#path-c--github-copilot) | You drive the Copilot CLI, coding agent, or VS Code agent mode. |
+| [C″ — OpenClaude](#path-c--openclaude) | You drive OpenClaude, the any-model Claude Code fork. |
 | [D — Any `AGENT.md` tool](#path-d--any-agentmd-tool) | Cursor, Aider, or any tool that reads a root instructions file. |
 | [E — No runtime on the target at all](#path-e--no-runtime-on-the-target-at-all) | The machine that *uses* the harness cannot run Node. |
 
@@ -214,7 +215,8 @@ Inside an excluded folder the global install is fully dormant: the context,
 learn and git-gate hooks exit silently (they check `<config dir>/excludes.json`
 on every call — edits take effect immediately, no re-emit), and the global
 preamble is suppressed natively (Claude: `claudeMdExcludes` written to the
-repo's own `.claude/settings.local.json`; Bob: the workspace rules shadow stub;
+repo's own `.claude/settings.local.json`, and OpenClaude's in `.openclaude/settings.local.json`;
+Bob: the workspace rules shadow stub;
 OpenCode: the plugins stand down). Everything is reversed by `exclude remove`.
 
 Limitations: GitHub Copilot has no per-repo suppression mechanism, so the global
@@ -254,6 +256,28 @@ MCP servers go in `~/.copilot/mcp-config.json` (the Settings/MCP screens know th
 shape). `$COPILOT_CONFIG_DIR` relocates the personal dir, mirroring
 `$BOB_CONFIG_DIR`. Note both carriers stack if you install globally *and* per-repo —
 the global emit warns when that's about to happen.
+
+### Path C″ — OpenClaude
+
+```
+geneseed-build --emit openclaude-global           # render into ~/.openclaude
+geneseed-build --emit openclaude --out . --root .  # per-repo: .openclaude/, committed
+```
+
+[OpenClaude](https://openclaude.gitlawb.com/) grew out of the Claude Code codebase, so this
+is Path C with another config dir: the same agents, skills, hook groups and `ask` verdicts.
+It never reads `~/.claude` or a project `.claude/`, so a Claude Code install does not reach
+it. Both installs can live side by side. Two differences:
+
+- **The per-repo preamble is `.openclaude/CLAUDE.md`**, not a root file. OpenClaude skips a
+  root `CLAUDE.md` whenever the repo has an `AGENTS.md`, and reads `.openclaude/CLAUDE.md`
+  always. Hooks go in `.openclaude/settings.local.json` (gitignored) with a
+  `claudeMdExcludes` for the global preamble, as on Claude Code.
+- **`$OPENCLAUDE_CONFIG_DIR` relocates the global dir.** It is OpenClaude's own variable.
+  MCP servers go in `~/.openclaude.json`, or in `.openclaude.json` inside that dir when it is
+  set. Per repo they go in `.mcp.json`.
+
+Details in [adapters/openclaude/](adapters/openclaude/README.md).
 
 ### Path D — Any `AGENT.md` tool
 
@@ -429,7 +453,7 @@ you run a smaller model.
 **Same harness, either way.** Footprint changes neither what the harness *is* nor what it
 can *do*: lean and full emit identical files (same agents, skills, plugins, commands, memory,
 notebook, hooks) and every Rule is present and binding. The only structural difference is
-that a lean install on a global / Claude / Bob / Copilot target also ships the standalone
+that a lean install on a global / Claude / Bob / Copilot / OpenClaude target also ships the standalone
 `laws/universal.md` and `ontology/` (project bundles already carry them, and `doctrines/`
 ships at both footprints on every target); the only behavioural difference is that the
 reasoning loads on demand instead of every turn. Lean is the default; full, with the rationale
@@ -439,7 +463,7 @@ with a weaker model, and is one flag away.
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
 the web Settings, the per-harness dropdown in the Harnesses tab, or the setup wizard. It is
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
-host (OpenCode, Claude Code, Bob, Copilot).
+host (OpenCode, Claude Code, Bob, Copilot, OpenClaude).
 
 ### Dry-run a build (`validate`)
 
@@ -918,6 +942,7 @@ not connected, walk these in order:
 | `GENESEED_NO_WEB` | `home` | `1` disables the web-first default of bare `geneseed` — it prints the command list instead |
 | `GENESEED_STACK_GLOBAL` | context hook | `1` disables project-bypasses-global: a project install of the same host no longer makes the global install's hook stand down, so both inject |
 | `OPENCODE_CONFIG_DIR` / `XDG_CONFIG_HOME` | global emit | where the global install is written |
+| `OPENCLAUDE_CONFIG_DIR` | `openclaude-global` emit | OpenClaude's own config dir variable (default `~/.openclaude`); also moves `.openclaude.json` |
 | `OPENCODE_DISABLE_LSP_DOWNLOAD` | OpenCode (LSP) | `true` stops OpenCode auto-downloading built-in language servers (typescript, pyright, jdtls) — set it on air-gapped machines and pre-install each server yourself |
 
 ---

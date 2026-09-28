@@ -107,8 +107,8 @@ export const MUTATIONS = [
     id: 'M4',
     name: 'drop `|| exit 0` from a non-gate hook command',
     file: 'js/hosts/settings.mjs',
-    find: 'const context = `${run} context --root "${cfg}" || exit 0`;',
-    replace: 'const context = `${run} context --root "${cfg}"`;',
+    find: 'const context = `${run} context --root "${cfg}"${h} || exit 0`;',
+    replace: 'const context = `${run} context --root "${cfg}"${h}`;',
     gate: UNIT_HOOK_FORM,
     why: 'A hook that fails to LAUNCH — a moved checkout, a dead interpreter — must not break '
       + "the user's tool call. The partition is the assertion: `|| exit 0` on every non-gate "

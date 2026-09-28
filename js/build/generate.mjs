@@ -123,7 +123,7 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
   excludeRules = null) {
   const argv = ['--theme', theme, '--emit', emit];
-  if (!['opencode-global', 'claude-global', 'bob-global', 'copilot-global'].includes(emit)) {
+  if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
     if (root) argv.push('--root', root);
   }
@@ -158,6 +158,7 @@ export const DEFAULT_EMIT = new Map([
   ['claude global', 'claude-global'], ['claude project', 'claude'],
   ['bob global', 'bob-global'], ['bob project', 'bob'],
   ['copilot global', 'copilot-global'], ['copilot project', 'copilot'],
+  ['openclaude global', 'openclaude-global'], ['openclaude project', 'openclaude'],
 ]);
 
 /**

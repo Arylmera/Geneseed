@@ -716,7 +716,10 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       preCompact: entry(`${run} learn ${mem} || exit 0`),
     };
   }
-  const context = `${run} context --root "${cfg}" || exit 0`;
+  // OpenClaude takes Claude's whole group set and verdicts unchanged; only `context` needs
+  // the host, to know which root file OpenClaude already loads by itself.
+  const h = host === 'openclaude' ? ' --host openclaude' : '';
+  const context = `${run} context --root "${cfg}"${h} || exit 0`;
   const gate = `${run} git-gate --root "${cfg}"${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
   const learn = `${run} learn ${mem} || exit 0`;

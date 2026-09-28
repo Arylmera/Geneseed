@@ -1,5 +1,5 @@
 /**
- * The generator driver — flag parsing, the nine emit targets, and the per-host emit orchestration.
+ * The generator driver — flag parsing, the eleven emit targets, and the per-host emit orchestration.
  * `bin/build-driver.mjs` (`geneseed-build`) is only its entry; this module is what the CLI verbs
  * (`build`, `setup`, `migrate`, `doctor`, `diff`, `validate`, the web console) import. It lived in
  * `bin/` until 2026-09, which made nine `js/` modules import upward from a binary.
@@ -51,7 +51,7 @@ import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 // that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
 import {
   GLOBAL_MANIFEST, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
-  copilotConfigDir, hostCatalogsNatively,
+  copilotConfigDir, openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
@@ -71,9 +71,9 @@ import { registryRecord, registryRoots } from '../inspect/registry.mjs';
 // maintainer pair that needs nothing this driver is banned from having.
 import { syncThemes } from './themes.mjs';
 
-/** The nine `--emit` choices, in build.py:337-338's order. */
+/** The eleven `--emit` choices: build.py:337-338's nine, then OpenClaude's pair. */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
-  'bob', 'bob-global', 'copilot', 'copilot-global'];
+  'bob', 'bob-global', 'copilot', 'copilot-global', 'openclaude', 'openclaude-global'];
 
 /** `_build_emit.PRIMARY_AGENT_SRC`. */
 const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
@@ -509,9 +509,11 @@ export function hookRunnerEntry() {
  * POSIX spelling, per the original: `claudeMdExcludes` entries are glob patterns, where a
  * backslash is an escape, so the Windows-native form risks never matching.
  */
-function preambleExclude(claudeMd) {
+function preambleExclude(claudeMd, host) {
   if (path.basename(claudeMd) !== 'CLAUDE.md') return null;
-  return resolvePath(path.join(claudeConfigDir(), 'CLAUDE.md')).split(path.sep).join('/');
+  // OpenClaude inherited `claudeMdExcludes` from Claude Code; its global preamble is its own.
+  const globalDir = host === 'openclaude' ? openclaudeConfigDir() : claudeConfigDir();
+  return resolvePath(path.join(globalDir, 'CLAUDE.md')).split(path.sep).join('/');
 }
 
 /**
@@ -808,7 +810,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     theme: args.theme, cfgDir, claudeMd, scope, host,
     out: out === null ? null : out,
     footprint: args.footprint, nativeCatalog: hostCatalogsNatively(host),
-    oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd),
+    oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
     ...(hookOpts ? { hookOpts } : {}),
   });
   const { owned, stats, memStatus, nbStatus, managed } = rendered;
@@ -931,6 +933,42 @@ function emitClaude(cfg, args, out) {
 }
 
 /**
+ * OpenClaude global — `~/.openclaude` (or `$OPENCLAUDE_CONFIG_DIR`). The Claude emit with
+ * another config dir: OpenClaude is a Claude Code fork that reads neither `~/.claude` nor
+ * `CLAUDE_CONFIG_DIR`, so a Claude install is invisible to it and it needs its own.
+ */
+function emitOpenclaudeGlobal(cfg, args, out) {
+  const cfgDir = args.cfgDir ?? openclaudeConfigDir();
+  const hookOpts = hookRunnerEntry();
+  const r = emitClaudeCore(cfg, args, {
+    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'openclaude', out,
+    hookOpts,
+  });
+  process.stdout.write(`[geneseed] openclaude-global -> ${cfgDir}: ${r.nAgents} subagents, `
+    + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
+    + `${r.memStatus}, ${r.nbStatus}. MCP servers go in .openclaude.json.\n`);
+  return cfgDir;
+}
+
+/**
+ * OpenClaude per-repo — everything under `.openclaude/`, the preamble included. OpenClaude
+ * reads the root CLAUDE.md only when the repo has no AGENTS.md, but `.openclaude/CLAUDE.md`
+ * always; keeping the root untouched also lets a Claude Code install share the repo.
+ */
+function emitOpenclaude(cfg, args, out) {
+  const root = args.root ? resolveOut(args.root) : out;
+  const cfgDir = path.join(root, '.openclaude');
+  const hookOpts = hookRunnerEntry();
+  const r = emitClaudeCore(cfg, args, {
+    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'project', host: 'openclaude', out,
+    hookOpts,
+  });
+  process.stdout.write(`[geneseed] openclaude (folder) -> ${root}: .openclaude/ `
+    + `(CLAUDE.md, ${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
+    + `settings.local.json), ${r.memStatus}, ${r.nbStatus}.\n`);
+}
+
+/**
  * `_build_global.emit_bob_global` — into Bob's global config dir (~/.bob).
  *
  * The warning fires BEFORE the emit, matching the Python order: it is about a state this
@@ -1012,6 +1050,7 @@ const GLOBAL_EMITS = {
   claude: emitClaudeGlobal,
   bob: emitBobGlobal,
   copilot: emitCopilotGlobal,
+  openclaude: emitOpenclaudeGlobal,
 };
 
 /**
@@ -1033,7 +1072,7 @@ const GLOBAL_EMITS = {
  * three-positional call leaves in place, inherited here rather than re-decided.
  */
 const PROJECT_EMITS = {
-  claude: emitClaude, bob: emitBob, copilot: emitCopilot,
+  claude: emitClaude, bob: emitBob, copilot: emitCopilot, openclaude: emitOpenclaude,
   // P2. `opencode` joins the three for `cmdValidate`, which has to be able to render EVERY
   // `--emit` choice into its sandbox and not only the three doctor already scans. Its call
   // shape is `emitClaude`'s exactly — `(cfg, args, out)` — so the row is the whole change.
@@ -1186,6 +1225,8 @@ function run(argv) {
   // An ALLOW-LIST, not "everything that is not global": a plain `--emit files` dev build —
   // the default — must never pollute the registry, and only the four per-repo host emits
   // are ones `_EMIT_HOST_SCOPE` can map back to a row. Records `out`, where the marker is.
-  if (['opencode', 'claude', 'bob', 'copilot'].includes(args.emit)) registryRecord(markerDir);
+  if (['opencode', 'claude', 'bob', 'copilot', 'openclaude'].includes(args.emit)) {
+    registryRecord(markerDir);
+  }
   return 0;
 }

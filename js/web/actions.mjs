@@ -41,8 +41,8 @@ import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
 import { frontmatter, memoryDropIndex } from '../hosts/hooks.mjs';
 import {
-  HOSTS, bobConfigDir, claudeConfigDir, copilotConfigDir, expanduser, opencodeConfigDir,
-  resolvePath,
+  HOSTS, bobConfigDir, claudeConfigDir, copilotConfigDir, expanduser, openclaudeConfigDir,
+  opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState,
@@ -644,7 +644,7 @@ export function apiMcpToggle(state, body) {
     return { ok: false, error: 'config holds comments — edit it by hand to keep them' };
   }
   let cfg;
-  if (['claude', 'bob', 'copilot'].includes(host)) {
+  if (['claude', 'bob', 'copilot', 'openclaude'].includes(host)) {
     if (isFile(p)) {
       let parsed;
       try {
@@ -817,6 +817,7 @@ const EMIT_FOR = new Map([
   ['claude global', 'claude-global'], ['claude project', 'claude'],
   ['bob global', 'bob-global'], ['bob project', 'bob'],
   ['copilot global', 'copilot-global'], ['copilot project', 'copilot'],
+  ['openclaude global', 'openclaude-global'], ['openclaude project', 'openclaude'],
 ]);
 
 /**
@@ -951,7 +952,8 @@ export function apiDeployCmd(state, body) {
     return { error: `folder not writable: ${root}` };
   }
   const cfgdirs = new Set();
-  for (const fn of [opencodeConfigDir, claudeConfigDir, bobConfigDir, copilotConfigDir]) {
+  for (const fn of [opencodeConfigDir, claudeConfigDir, bobConfigDir, copilotConfigDir,
+    openclaudeConfigDir]) {
     try {
       cfgdirs.add(resolvePath(fn()));
     } catch { /* not every host has a resolvable config dir; skip it */ }
@@ -976,7 +978,7 @@ export function apiDeployCmd(state, body) {
   // and `PreToolUse::Bash` went with them. `doctrinesForBuild` resolves unknown to ALL packs.
   const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
-  // project-scope emit name == host name (opencode / claude / bob / copilot)
+  // project-scope emit name == host name (opencode / claude / bob / copilot / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };

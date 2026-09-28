@@ -119,7 +119,7 @@ Notes that matter:
   from the seven commands; the container one is reachable locally through
   `tests/helpers/no-python-container.sh` with a docker daemon.
 - **Two assertions in `tests/unit/claude.test.mjs` silently stand down** on any machine where an
-  ancestor of the temp sandbox is a `.claude`/`.bob` install — which is every developer machine
+  ancestor of the temp sandbox is a `.claude`/`.bob`/`.openclaude` install — which is every developer machine
   with Claude Code installed under `~`. They are replaced by a `t.diagnostic`, so the TAP
   `# skipped` count does **not** move, and a local run shows no sign of it.
 

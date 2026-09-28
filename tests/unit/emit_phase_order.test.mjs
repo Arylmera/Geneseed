@@ -44,9 +44,9 @@ const DRIVER = path.join(ROOT, 'bin', 'build-driver.mjs');
 const ORDER = ['RENDER', 'WIRE', 'PRUNE', 'MANIFEST', 'VERIFY'];
 const rank = (p) => ORDER.indexOf(p);
 
-/** The nine `--emit` modes, by the name the flag takes. */
+/** The eleven `--emit` modes, by the name the flag takes. */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
-  'bob', 'bob-global', 'copilot', 'copilot-global'];
+  'bob', 'bob-global', 'copilot', 'copilot-global', 'openclaude', 'openclaude-global'];
 
 /** The one emit that touches nothing the user co-owns. */
 const BUNDLE = 'files';

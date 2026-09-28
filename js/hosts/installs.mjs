@@ -393,6 +393,7 @@ export const EMIT_HOST_SCOPE = new Map([
   ['claude', ['claude', 'project']], ['claude-global', ['claude', 'global']],
   ['bob', ['bob', 'project']], ['bob-global', ['bob', 'global']],
   ['copilot', ['copilot', 'project']], ['copilot-global', ['copilot', 'global']],
+  ['openclaude', ['openclaude', 'project']], ['openclaude-global', ['openclaude', 'global']],
 ]);
 
 /** `_harness_mcp._emit_host_scope_of` — `root`'s own marker, resolved, or null. */
@@ -434,7 +435,7 @@ export function installKind(root) {
 
 /** `_harness_mcp._install_state` — 'active' | 'disabled' | 'absent'. */
 export function installState(root, host = 'opencode', scope = 'global') {
-  if (['claude', 'bob', 'copilot'].includes(host)) return claudeState(root, scope, host);
+  if (['claude', 'bob', 'copilot', 'openclaude'].includes(host)) return claudeState(root, scope, host);
   if (isDir(path.join(root, DISABLED_STASH))) return 'disabled';
   return installKind(root) !== null ? 'active' : 'absent';
 }

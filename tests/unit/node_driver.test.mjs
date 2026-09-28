@@ -53,7 +53,7 @@ const read = (...p) => readFileSync(path.join(ROOT, ...p), 'utf8');
  * `the driver classifies every emit` below is what re-joins the copy to the source.
  */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
-  'bob', 'bob-global', 'copilot', 'copilot-global'];
+  'bob', 'bob-global', 'copilot', 'copilot-global', 'openclaude', 'openclaude-global'];
 
 /**
  * The driver's flag surface, frozen, and the same argument applies with more force.
@@ -339,6 +339,9 @@ test('every relocation var moves its global target, and Claude\'s does not', () 
     // The first version of this row named AGENTS.md and failed — the table caught its own author.
     ['BOB_CONFIG_DIR', true, 'bob-global', path.join('rules', 'geneseed.md'), '.bob'],
     ['CLAUDE_CONFIG_DIR', false, 'claude-global', 'CLAUDE.md', '.claude'],
+    // OpenClaude forked Claude Code but DOES document its variable (and ignores Claude's), so
+    // its row is a mover — the fork is the one place the two hosts' answers differ.
+    ['OPENCLAUDE_CONFIG_DIR', true, 'openclaude-global', 'CLAUDE.md', '.openclaude'],
   ];
   assert.deepEqual(hosts.map((h) => h[2]).sort(), EMITS.filter((e) => e.endsWith('-global')).sort(),
     'a global emit has no relocation-var row (or this table names one that is not an emit) — that '
@@ -525,7 +528,8 @@ test('a hook-writing emit needs no python at all', (t) => {
   // environment has to produce sit in one measured world rather than three convenient ones.
   // Emitting is the weaker half: the strong half is running the emitted git-gate command with
   // that same PATH, which is what catches a hook path reaching back for Python anywhere along it.
-  for (const emit of ['claude', 'claude-global', 'bob', 'bob-global']) {
+  for (const emit of ['claude', 'claude-global', 'bob', 'bob-global', 'openclaude',
+    'openclaude-global']) {
     const { sb, home } = emitSandbox('driver-nopy-hooks-');
     try {
       const env = strippedEnv(t, home);

@@ -33,6 +33,7 @@ import { cmdRebuildAll } from '../../js/build/generate.mjs';
 import { globalHookStandingDown, cmdContext } from '../../js/hosts/hooks.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
+  openclaudeConfigDir,
 } from '../../js/hosts/hosts.mjs';
 import { BOB_RULES_STUB } from '../../js/build/stubs.mjs';
 import {
@@ -598,6 +599,7 @@ test('deactivating leaves no empty skill folders behind', () => {
 
 const ENV_FOR_HOST = {
   opencode: 'OPENCODE_CONFIG_DIR', bob: 'BOB_CONFIG_DIR', copilot: 'COPILOT_CONFIG_DIR',
+  openclaude: 'OPENCLAUDE_CONFIG_DIR',
 };
 
 /**
@@ -1119,7 +1121,8 @@ function cliGlobalEmit(kind) {
 test('rebuild-all rebuilds every active install, survives one failing, and creates none', () => {
   withDir((d) => {
     const savedEnv = {};
-    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'COPILOT_CONFIG_DIR']) {
+    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'COPILOT_CONFIG_DIR',
+      'OPENCLAUDE_CONFIG_DIR']) {
       savedEnv[v] = process.env[v];
     }
     // Every host inside the sandbox, including the two nothing is installed into — leaving one
@@ -1127,6 +1130,7 @@ test('rebuild-all rebuilds every active install, survives one failing, and creat
     process.env.OPENCODE_CONFIG_DIR = path.join(d, 'oc-cfg');
     process.env.BOB_CONFIG_DIR = path.join(d, 'bob-none');
     process.env.COPILOT_CONFIG_DIR = path.join(d, 'copilot-none');
+    process.env.OPENCLAUDE_CONFIG_DIR = path.join(d, 'openclaude-none');
     try {
       cliGlobalEmit('claude-global');
       cliGlobalEmit('opencode-global');
@@ -1156,8 +1160,8 @@ test('rebuild-all rebuilds every active install, survives one failing, and creat
       assert.equal(installState(claudeCfg, 'claude', 'global'), 'active');
 
       // An absent install is never CREATED. A rebuild that treated a candidate row as a target
-      // would install Geneseed into two hosts the user never asked for.
-      for (const v of ['BOB_CONFIG_DIR', 'COPILOT_CONFIG_DIR']) {
+      // would install Geneseed into three hosts the user never asked for.
+      for (const v of ['BOB_CONFIG_DIR', 'COPILOT_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR']) {
         assert.ok(!fs.existsSync(process.env[v]), `${v} was created by rebuild-all`);
       }
     } finally {
@@ -1228,6 +1232,34 @@ test('a Claude global emit writes no exclude at all', () => {
     const cfg = path.join(d, 'dotclaude');
     globalEmit('claude', path.join(d, 'bundle'), cfg);
     assert.ok(!('claudeMdExcludes' in readJson(cfg, 'settings.json')));
+  }));
+});
+
+test('an OpenClaude project emit keeps the repo root clean and excludes ITS global preamble', () => {
+  // OpenClaude is a Claude Code fork with its own config dir, so three things differ from the
+  // Claude row above and each one fails silently if wrong. The preamble goes in
+  // `.openclaude/CLAUDE.md` (a root CLAUDE.md is skipped by OpenClaude whenever an AGENTS.md
+  // exists). The exclude names `~/.openclaude/CLAUDE.md`: naming Claude's would leave
+  // OpenClaude's global preamble stacked. And the context hook says `--host openclaude`, so it
+  // drops the root file OpenClaude loads natively.
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    projectEmit('openclaude', repo, undefined);
+    assert.ok(!fs.existsSync(path.join(repo, 'CLAUDE.md')), 'the emit wrote a root CLAUDE.md');
+    assert.ok(read(repo, '.openclaude', 'CLAUDE.md').includes('BEGIN GENESEED'),
+      'the preamble is not in .openclaude/CLAUDE.md');
+
+    const s = projectSettings(repo, '.openclaude');
+    const want = path.resolve(path.join(openclaudeConfigDir(), 'CLAUDE.md'))
+      .split(path.sep).join('/');
+    assert.deepEqual(s.claudeMdExcludes, [want]);
+
+    const ctx = hookCmds(s).filter((c) => c.includes(' context '));
+    assert.ok(ctx.length > 0 && ctx.every((c) => c.includes('--host openclaude')),
+      JSON.stringify(ctx));
+    // The gates speak Claude's dialect, so they carry no host flag at all.
+    assert.ok(hookCmds(s).some((c) => c.includes(' git-gate ') && !c.includes('--host')));
   }));
 });
 
