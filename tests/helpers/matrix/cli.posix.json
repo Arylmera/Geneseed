@@ -8521,7 +8521,7 @@
         "\"scope\": \"global\"",
         "\"emit\": \"opencode-global\"",
         "\"theme\": \"imperial\"",
-        "\"rebuild\": \"geneseed-build --theme imperial --emit opencode-global"
+        "\"rebuild\": \"geneseed build --theme imperial --emit opencode-global"
       ],
       "id": "status/json-names-every-install-and-the-command-that-rebuilds-it",
       "steps": [{ "argv": ["status", "--json"], "cwd": "repo" }],

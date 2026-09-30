@@ -220,9 +220,15 @@ export function installProfile(host, scope, root) {
   };
 }
 
-/** `argv` as one pasteable command. Only whitespace needs quoting: flags and values never hold `"`. */
+/**
+ * `argv` as one pasteable command, using the `geneseed build` launcher rather than the raw
+ * generator: `geneseed-build` is only on PATH for an npm global install, while a git-clone
+ * install has only the `geneseed` launcher, and `geneseed build` now forwards every flag
+ * `setupBuildArgs` produces. Only whitespace is quoted — a path holding shell metacharacters
+ * (`$`, `&`) would need quoting by hand.
+ */
 export function rebuildCommand(argv) {
-  return ['geneseed-build', ...argv.map((a) => (/\s/.test(a) ? `"${a}"` : a))].join(' ');
+  return ['geneseed', 'build', ...argv.map((a) => (/\s/.test(a) ? `"${a}"` : a))].join(' ');
 }
 
 /**

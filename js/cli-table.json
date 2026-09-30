@@ -806,7 +806,7 @@
           "names": ["--json"],
           "dest": "json",
           "metavar": null,
-          "help": "print the status payload as JSON — every install with its settings and the geneseed-build command that rebuilds it",
+          "help": "print the status payload as JSON — every install with its settings and the geneseed build command that rebuilds it",
           "choices": null,
           "default": false,
           "required": false,

@@ -11,12 +11,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Added
 - `geneseed status` lists every install with its theme, footprint, posture/mode, doctrine packs
   and excluded rules; `geneseed status --json` prints the same payload plus, per install, the
-  `geneseed-build` command that rebuilds it unchanged.
+  `geneseed build` command that rebuilds it unchanged.
 - `geneseed build` forwards the generator's flags (`--emit`, `--footprint`, `--posture`, `--mode`,
   `--doctrines`, `--exclude-rules`, `--out`, `--root`); the dry run is `geneseed validate`.
-
-### Changed
-- `geneseed status` lists only installs that exist; an absent host slot is no longer shown.
 
 ### Fixed
 - `setup`'s non-interactive hint (`geneseed build --emit … --theme …`) was a usage error.

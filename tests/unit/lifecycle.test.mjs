@@ -30,7 +30,7 @@ import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
   projectQualifies,
 } from '../../js/maintain/uninstall.mjs';
-import { emitHostScopeOf } from '../../js/hosts/installs.mjs';
+import { emitHostScopeOf, installTargets } from '../../js/hosts/installs.mjs';
 import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts/hosts.mjs';
 import { installProfile, rebuildCommand } from '../../js/build/generate.mjs';
@@ -1025,8 +1025,8 @@ test('an install profile reads back every setting it was built with, and its arg
 
 test('a rebuild command quotes only the arguments a shell would split', () => {
   assert.equal(rebuildCommand(['--theme', 'imperial', '--out', 'C:\\My Repo']),
-    'geneseed-build --theme imperial --out "C:\\My Repo"');
-  assert.equal(rebuildCommand([]), 'geneseed-build');
+    'geneseed build --theme imperial --out "C:\\My Repo"');
+  assert.equal(rebuildCommand([]), 'geneseed build');
 });
 
 test('status renders one row per install with the settings a rebuild would reproduce', () => {
@@ -1055,5 +1055,8 @@ test('status renders one row per install with the settings a rebuild would repro
 
 test('status lists only installs that exist — an absent slot has no settings to show', () => {
   const d = statusData();
+  // Without this, `every` over an empty list would pass vacuously and hide a walk that found
+  // nothing at all.
+  assert.ok(installTargets().length > 0, 'installTargets() found no hosts to check');
   assert.ok(d.installs.every((p) => p.state !== 'absent'), 'an absent slot leaked into installs');
 });
