@@ -335,7 +335,7 @@ function copilotAsk(r, what) {
 test('copilot: every rule asks, top-level, in Copilot\'s envelope', () => {
   for (const [args, rule, what] of [
     [{ command: 'git push --force' }, /Law IV/, 'force'],
-    [{ command: 'git commit -m x' }, /Consent Before Push/, 'commit'],
+    [{ command: 'git commit -m x' }, /process 5/, 'commit'],
     [{ path: 'src/a.js', file_text: 'k = "AKIAIOSFODNN7EXAMPLE"' }, /Law I\b/, 'create'],
     [{ path: 'src/a.js', old_str: 'a', new_str: 'k = "AKIAIOSFODNN7EXAMPLE"' }, /Law I\b/, 'edit'],
     [{ path: '/x/user-rules.md', file_text: 'rule' }, /process 1/, 'user-rules']]) {
@@ -387,7 +387,7 @@ test('bob: Laws I and IV exit 2 with the reason on stderr; consent rules warn an
   }
   const commit = hookRun('tool-gate', { stdin: bashPayload('git commit -m x'), host: 'bob' });
   assertDefers(commit, 'commit');
-  assert.match(commit.err, /Consent Before Push/);
+  assert.match(commit.err, /process 5/);
   // The ask also points at the visual walkthrough, so a reviewer can see the change first.
   assert.match(commit.err, /explain-changes/);
   assertDefers(hookRun('tool-gate', { stdin: bashPayload('git status'), host: 'bob' }), 'status');

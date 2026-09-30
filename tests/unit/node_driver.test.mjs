@@ -554,7 +554,7 @@ test('a hook-writing emit needs no python at all', (t) => {
       // stdout; Bob's consent nudge is a stderr line (its PreToolUse never reads stdout).
       // Either is a hook that RAN.
       assert.match(bob ? (proc.stderr ?? '') : (proc.stdout ?? ''),
-        bob ? /Consent Before Push/ : /"permissionDecision"/,
+        bob ? /process 5/ : /"permissionDecision"/,
         `the hook ${emit} emitted ran with no python on PATH but produced no verdict — it is `
         + `disabled, and nothing else reports that:\n  ${command}\n`
         + `  stdout: ${(proc.stdout ?? '').slice(0, 300)}`);

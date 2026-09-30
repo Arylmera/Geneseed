@@ -916,7 +916,7 @@ function decision(argv, payload) {
 
 for (const [verb, payload, cite] of [
   ['git-gate', { tool_name: 'Bash', tool_input: { command: 'git commit -m x' } },
-    'Consent Before Push'],
+    'Doctrine process 5'],
   ['rule-gate', { tool_name: 'Write', tool_input: { file_path: '/x/user-rules.md' } },
     'Doctrine process 1'],
 ]) {
