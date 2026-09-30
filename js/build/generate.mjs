@@ -95,6 +95,7 @@ const BUILD_FORWARD = [
   ['theme', '--theme'], ['emit', '--emit'], ['footprint', '--footprint'],
   ['posture', '--posture'], ['mode', '--mode'], ['doctrines', '--doctrines'],
   ['excludeRules', '--exclude-rules'], ['out', '--out'], ['root', '--root'],
+  ['configDir', '--config-dir'],
 ];
 
 export function cmdBuild(args) {
@@ -214,6 +215,11 @@ export function installProfile(host, scope, root) {
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
     PACK_ORDER, excludeRules);
+  // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
+  // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
+  // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
+  // install beside the one it was meant to rebuild. Appended, so the argv's head is unchanged.
+  if (scope === 'global') argv.push('--config-dir', root);
   return {
     host, scope, root, state: installState(root, host, scope),
     emit, theme, footprint, posture, mode, doctrines, excludeRules, argv,

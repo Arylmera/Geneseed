@@ -1023,6 +1023,35 @@ test('an install profile reads back every setting it was built with, and its arg
   }
 });
 
+test('a global install profile names its own config dir, and its argv rebuilds exactly there', () => {
+  // A global root is wherever the host's resolver pointed — env overrides included — so the
+  // argv must carry it: run from a shell without that override it would otherwise re-emit into
+  // the host's DEFAULT dir. The round trip is into a second dir, which it can only reach by the
+  // flag.
+  const sb = makeSandbox();
+  try {
+    const g1 = path.join(sb.path, 'g1');
+    const r = emitInherited(['--emit', 'opencode-global', '--theme', 'imperial',
+      '--config-dir', g1, '--mode', 'foreman']);
+    assert.equal(r.rc, 0, r.err);
+
+    const p = installProfile('opencode', 'global', g1);
+    assert.deepEqual(p.argv.slice(-2), ['--config-dir', g1]);
+    assert.equal(p.theme, 'imperial');
+    assert.equal(p.mode, 'foreman');
+
+    const g2 = path.join(sb.path, 'g2');
+    const r2 = emitInherited(p.argv.map((a) => (a === g1 ? g2 : a)));
+    assert.equal(r2.rc, 0, r2.err);
+    const p2 = installProfile('opencode', 'global', g2);
+    for (const k of ['emit', 'theme', 'footprint', 'posture', 'mode', 'doctrines', 'excludeRules']) {
+      assert.deepEqual(p2[k], p[k], `${k} did not survive its own rebuild argv`);
+    }
+  } finally {
+    sb.cleanup();
+  }
+});
+
 test('a rebuild command quotes only the arguments a shell would split', () => {
   assert.equal(rebuildCommand(['--theme', 'imperial', '--out', 'C:\\My Repo']),
     'geneseed build --theme imperial --out "C:\\My Repo"');

@@ -234,7 +234,7 @@ test('every option `geneseed build` declares is a flag the generator accepts', (
   assert.deepEqual(declared.filter((f) => !driverFlags.has(f)), [],
     'geneseed build declares a flag geneseed-build does not have');
   for (const f of ['--emit', '--footprint', '--posture', '--mode', '--doctrines',
-    '--exclude-rules', '--out', '--root']) {
+    '--exclude-rules', '--out', '--root', '--config-dir']) {
     assert.ok(declared.includes(f), `geneseed build does not forward ${f}`);
   }
 });

@@ -192,6 +192,21 @@
           "is_flag": false,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--config-dir"
+          ],
+          "dest": "config_dir",
+          "metavar": null,
+          "help": "the config dir a -global emit writes to (default: the host's resolved one)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
