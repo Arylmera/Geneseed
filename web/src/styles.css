@@ -462,6 +462,19 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .lib-group { padding: 10px 16px 4px; font-family: var(--font-mono); font-size: 10px;
   letter-spacing: .14em; text-transform: uppercase; color: var(--text-3);
   background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.lib-group .cdot { display: inline-block; width: 7px; height: 7px; margin-right: 8px;
+  border-radius: 50%; background: var(--cc, var(--text-3)); vertical-align: 1px; }
+/* Skill class chips (the old Skills page's class bar), under the list's filter. */
+.skill-cats { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px 10px;
+  border-bottom: 1px solid var(--line); }
+.skill-cat { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  color: var(--text-2); font-family: var(--font-mono); font-size: 11px; cursor: pointer;
+  transition: border-color .14s, color .14s, background .14s; }
+.skill-cat:hover { color: var(--text); border-color: var(--line-2); }
+.skill-cat .cdot { width: 7px; height: 7px; border-radius: 50%; background: var(--cc, var(--text-3)); }
+.skill-cat .cn { color: var(--text-3); }
+.skill-cat.on { color: var(--text); border-color: var(--accent-line); background: var(--accent-soft); }
 
 /* Manifest doc — the parsed wiki.jsonc / context.json view (cards + entries
    table with load-mode badges) that replaces the raw JSON dump. */

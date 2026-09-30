@@ -3,7 +3,7 @@ import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { Icon } from '../components/Icon.jsx'
 import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
-import { SKILL_CATS } from '../lib/lawCats.js'
+import { SKILL_CATS, SKILL_CAT_ORDER } from '../lib/lawCats.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
@@ -67,10 +67,30 @@ const enc = encodeURIComponent
 // Personal's Memory and Notebook tabs render this same component with `lock` (one kind,
 // no kinds column) and `base` (the tab's own address, `#/personal/memory`), so an entry
 // opened there stays on the Personal page.
+// Skills in class order, each row tagged with its class and the header it sits under, plus
+// the classes present with their counts (the chips). Exported for the test that pins it.
+export function splitSkills(items) {
+  const catOf = (it) => (SKILL_CATS[it.klass] ? it.klass : 'personal')
+  const rows = SKILL_CAT_ORDER.flatMap((k) =>
+    items
+      .filter((it) => catOf(it) === k)
+      .map((it) => ({ ...it, cat: k, group: SKILL_CATS[k].label, groupC: SKILL_CATS[k].c })),
+  )
+  const cats = SKILL_CAT_ORDER.map((k) => ({
+    key: k,
+    label: SKILL_CATS[k].label,
+    c: SKILL_CATS[k].c,
+    n: rows.filter((r) => r.cat === k).length,
+  })).filter((x) => x.n > 0)
+  return { rows, cats }
+}
+
 export default function Library({ overview, section, selected, dataRev, lock, base }) {
   const confirm = useConfirm()
   const [sec, setSec] = useState(() => resolveSec(section, lock))
   const [q, setQ] = useState('')
+  // The skill class chip ('all' or a SKILL_CATS key). Skills only; reset with the kind.
+  const [cat, setCat] = useState('all')
   // A failed memory action (promote, forget), shown in the page's error slot until the
   // next one.
   const [actionErr, setActionErr] = useState('')
@@ -85,6 +105,7 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
     if (next !== sec) {
       setSec(next)
       setQ('')
+      setCat('all')
     }
   }
 
@@ -101,7 +122,10 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   const items = catalog?.section === sec ? catalog?.items || [] : []
   // The entry on display: the URL-selected one, or the first row when the kind was opened
   // without a selection, so the highlighted row and the reader always agree.
-  const activeName = selected || items[0]?.name || null
+  // Skills are listed class by class (splitSkills), so their first row is not items[0].
+  const isSkills = sec === 'skills'
+  const skillSplit = isSkills ? splitSkills(items) : null
+  const activeName = selected || (isSkills ? skillSplit.rows[0] : items[0])?.name || null
   const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
   const activeType = fromCatalog?.type || SECTIONS[sec].type
   const { data: item, error: itemErr } = useAsync(
@@ -118,17 +142,24 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   const activeItem = fromCatalog || synthetic
   const counts = overview?.counts || {}
 
+  // Skills are divided by class, as the old Skills page did: listed class by class under a
+  // header, with a chip per class to narrow to one. A skill the registry does not know is
+  // yours (`personal`), outside the taxonomy, so it gets its own chip only when one exists.
+  const pool = isSkills ? skillSplit.rows.filter((it) => cat === 'all' || it.cat === cat) : items
+
   // Render-cap the list so a big kind (a wiki vault is the case that bites) doesn't paint
   // hundreds of rows. Typing searches the full list; the active item is always kept in view.
-  const CAP = 50
+  // Skills are never capped: a class header must not promise rows the cap then hides.
+  const CAP = isSkills ? Infinity : 50
   const ql = q.trim().toLowerCase()
   const matches = ql
-    ? items.filter((it) =>
+    ? pool.filter((it) =>
         `${it.title || ''} ${it.name || ''} ${it.desc || ''}`.toLowerCase().includes(ql),
       )
-    : items.slice(0, CAP)
+    : pool.slice(0, CAP)
+  // A class chip narrows on purpose, so it does not pull the active entry back in.
   const shown =
-    !ql && activeName && !matches.some((it) => it.name === activeName)
+    !ql && cat === 'all' && activeName && !matches.some((it) => it.name === activeName)
       ? [...matches, ...items.filter((it) => it.name === activeName)]
       : matches
 
@@ -245,7 +276,7 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
             <b>
               {label}{' '}
               <span className="mono dim">
-                {ql ? `${matches.length} of ${items.length}` : items.length}
+                {ql ? `${matches.length} of ${pool.length}` : pool.length}
               </span>
             </b>
           </div>
@@ -255,10 +286,35 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
             placeholder={`Filter ${label.toLowerCase()}`}
             label={`Filter ${label}`}
           />
+          {isSkills && skillSplit.cats.length > 1 && (
+            <div className="skill-cats" role="group" aria-label="Skill classes">
+              <button
+                type="button"
+                className={`skill-cat${cat === 'all' ? ' on' : ''}`}
+                aria-pressed={cat === 'all'}
+                onClick={() => setCat('all')}
+              >
+                All <span className="cn">{items.length}</span>
+              </button>
+              {skillSplit.cats.map(({ key, label: cl, n, c }) => (
+                <button
+                  type="button"
+                  key={key}
+                  className={`skill-cat${cat === key ? ' on' : ''}`}
+                  aria-pressed={cat === key}
+                  style={{ '--cc': c }}
+                  onClick={() => setCat(key)}
+                >
+                  <span className="cdot" aria-hidden="true" />
+                  {cl} <span className="cn">{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="lib-rows" ref={rowsRef} onKeyDown={onRowsKey}>
             {(() => {
-              // A small header each time the row's group changes. Only wiki pages carry a
-              // group (their vault); elsewhere no headers render.
+              // A small header each time the row's group changes: a wiki page's vault, or a
+              // skill's class. Kinds without groups render no headers.
               let lastGroup = null
               const out = []
               for (const it of shown) {
@@ -266,6 +322,9 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
                   lastGroup = it.group
                   out.push(
                     <div className="lib-group" key={`g-${it.group}`}>
+                      {it.groupC ? (
+                        <span className="cdot" style={{ '--cc': it.groupC }} aria-hidden="true" />
+                      ) : null}
                       {it.group}
                     </div>,
                   )

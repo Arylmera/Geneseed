@@ -14,7 +14,7 @@ vi.mock('../api/index.js', () => ({
 const { askConfirm } = vi.hoisted(() => ({ askConfirm: vi.fn(async () => true) }))
 vi.mock('../hooks/useConfirm.jsx', () => ({ useConfirm: () => askConfirm }))
 
-import Library from '../pages/Library.jsx'
+import Library, { splitSkills } from '../pages/Library.jsx'
 import { api } from '../api/index.js'
 
 const overview = (counts) => ({ counts })
@@ -150,5 +150,56 @@ describe('Library', () => {
 
     releaseSkills()
     await waitFor(() => expect(screen.getAllByText('Brainstorm').length).toBeGreaterThan(0))
+  })
+})
+
+// Skills are divided by class, as the old Skills page was: listed class by class in the
+// SKILL_CATS order under a header, with a chip per class present. A klass the registry does
+// not know lands in `personal`, outside the taxonomy.
+describe('skill classes', () => {
+  const SKILLS = [
+    { name: 'commit', klass: 'ship' },
+    { name: 'debug', klass: 'build' },
+    { name: 'brainstorm', klass: 'design' },
+    { name: 'develop', klass: 'build' },
+    { name: 'mine', klass: 'no-such-class' },
+  ]
+
+  it('orders skills by class and counts each class present', () => {
+    const { rows, cats } = splitSkills(SKILLS)
+    expect(rows.map((r) => [r.name, r.group])).toEqual([
+      ['brainstorm', 'Design'],
+      ['debug', 'Build'],
+      ['develop', 'Build'],
+      ['commit', 'Ship'],
+      ['mine', 'Personal'],
+    ])
+    expect(cats.map((c) => [c.key, c.n])).toEqual([
+      ['design', 1],
+      ['build', 2],
+      ['ship', 1],
+      ['personal', 1],
+    ])
+  })
+
+  it('heads the list by class and narrows to one class with its chip', async () => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({ section, items: section === 'skills' ? SKILLS : [] }),
+    )
+    render(<Library section="skills" overview={overview({ skills: 5 })} />)
+    await waitFor(() => expect(document.querySelector('.skill-cats')).toBeTruthy())
+    expect([...document.querySelectorAll('.lib-group')].map((g) => g.textContent)).toEqual([
+      'Design',
+      'Build',
+      'Ship',
+      'Personal',
+    ])
+    fireEvent.click(screen.getByRole('button', { name: /^Build/ }))
+    expect([...document.querySelectorAll('.lib-row')].length).toBe(2)
+    expect([...document.querySelectorAll('.lib-group')].map((g) => g.textContent)).toEqual([
+      'Build',
+    ])
+    fireEvent.click(screen.getByRole('button', { name: /^All/ }))
+    expect([...document.querySelectorAll('.lib-row')].length).toBe(5)
   })
 })
