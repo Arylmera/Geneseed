@@ -78,6 +78,19 @@ describe('Library chip-bar (replaces Section)', () => {
     expect(screen.queryByText('Forget this fact')).toBeNull()
   })
 
+  // #/agents and #/library share one Library slot, so going from one to the other
+  // re-renders with section undefined instead of remounting. The page must
+  // leave Agents and land on the first chip, not keep the Agents list.
+  it('leaves agents for the first chip when #/library carries no section', async () => {
+    const { rerender } = render(<Library section="agents" overview={overview({})} />)
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Agents'),
+    )
+    rerender(<Library section={undefined} overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.lib-secbar')).toBeTruthy())
+    expect(screen.getByRole('heading', { level: 1 }).textContent).not.toBe('Agents')
+  })
+
   it('hides the prior section and skips a cross-type fetch while the next catalog loads', async () => {
     // Hold the skills catalog in flight so we can observe the switch window.
     let releaseSkills

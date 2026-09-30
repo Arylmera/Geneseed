@@ -275,7 +275,8 @@ button { font-family: inherit; }
 .voice .chev { margin-left: auto; color: var(--text-3); font-size: 12px; }
 
 /* Narrow viewports: the rail collapses to an icon strip. Overriding --rail-w
-   keeps the grid and the console (left: var(--rail-w)) in sync for free.
+   keeps the grid and the console (left: var(--rail-w)) in sync for free, except
+   under the phone drawer (see the rule after .console).
    Labels stay in the accessibility tree via the clip pattern (not display:none);
    sighted users get the title tooltip the Rail adds on every item. */
 @media (max-width: 960px) {
@@ -874,6 +875,10 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   display: flex; flex-direction: column;
   /* opens by sliding, not by animating height: transform stays off the layout path */
   transition: transform .18s cubic-bezier(.22,1,.36,1); }
+/* On a phone the rail is an off-canvas drawer, so --rail-w (its 248px width)
+   no longer means "the column the console sits beside": the console spans the
+   screen. Declared after .console on purpose, so it wins at equal specificity. */
+@media (max-width: 720px) { .console { left: 0; } }
 .console-head { display: flex; align-items: center; gap: 12px; padding: 0 18px; height: 42px;
   cursor: pointer; user-select: none; flex: none; }
 .console-head .ttl { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em;
