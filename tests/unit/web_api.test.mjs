@@ -24,6 +24,7 @@ import { buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
   apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg, wikiItems,
+  STATE_ROUTES,
 } from '../../js/web/api.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -2587,6 +2588,26 @@ test('the rules stub is seeded once and never overwritten', () => {
     emitInto(box.cfg);                      // a rebuild, the way a user re-runs it
     assert.equal(fs.readFileSync(box.file, 'utf8'), 'MINE\n',
       "a rebuild overwrote the user's own rules file");
+  });
+});
+
+// `/api/profile`'s `seeded` flag is what the console's Overview reads to ask for the profile
+// to be filled in. It is true exactly while PROFILE.md is still the template the emit wrote:
+// the seeded file says true, the same text with CRLF endings (an editor that only re-saved
+// it on Windows) still says true, one edited word says false, and a missing file carries
+// no flag at all, only `exists: false`.
+test('the profile reads seeded until its first real edit', () => {
+  withRules((box) => {
+    const profile = () => STATE_ROUTES['/api/profile'](box.state);
+    const file = path.join(box.cfg, 'PROFILE.md');
+    assert.equal(profile().seeded, true);
+    const seed = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+    fs.writeFileSync(file, seed.replace(/\n/g, '\r\n'));
+    assert.equal(profile().seeded, true);
+    fs.writeFileSync(file, seed.replace('Who I am', 'Who I really am'));
+    assert.equal(profile().seeded, false);
+    fs.rmSync(file);
+    assert.deepEqual([profile().exists, profile().seeded], [false, undefined]);
   });
 });
 

@@ -35,6 +35,7 @@ import { readText, withDiscardableStderr, isDir, isFile } from '../lib/fs.mjs';
 import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace, percentDecode } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
+import { PROFILE_STUB } from '../build/stubs.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
 import { apiMcp, apiRules } from './actions.mjs';
 
@@ -755,7 +756,11 @@ function apiProfile(state) {
   const p = profilePath(state);
   if (!isFile(p)) return { exists: false, path: p, text: '', fingerprint: '' };
   const text = readMaybe(p) ?? '';
-  return { exists: true, path: p, text, fingerprint: fingerprint(text) };
+  // `seeded`: the file is still the template the build wrote once and never touched since.
+  // `readMaybe` normalises line endings, so a CRLF copy (the emit writes the platform's, and
+  // an editor may re-save either way) still compares equal to the LF literal.
+  const seeded = text === PROFILE_STUB;
+  return { exists: true, path: p, text, fingerprint: fingerprint(text), seeded };
 }
 
 /** The dashboard aggregate. */
