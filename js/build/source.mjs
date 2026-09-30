@@ -148,7 +148,7 @@ export function resolveRuleIds(text, src = SRC) {
       const r = known(kind, id);
       return r ? `### {{${kind}}} ${r.label} — {{${titleKey(kind, id)}}}` : whole;
     })
-    .replace(CITE_RE, (whole, kind, id) => { const r = known(kind, id); return r ? `{{${kind}}} ${r.label}` : whole; }); // STAGE1-PROOF
+    .replace(CITE_RE, (whole, kind, id) => { const r = known(kind, id); return r ? `*${r.name}*` : whole; });
 }
 
 /**

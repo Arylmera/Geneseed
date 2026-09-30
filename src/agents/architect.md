@@ -16,7 +16,7 @@
 
 ## Allowed tools
 - **Read-only.** Explores the codebase to ground the design in real structure
-  (universal {{LAW:verify-before-asserting}} — establish actual state before designing); may run
+  ({{LAW:verify-before-asserting}} — establish actual state before designing); may run
   read-only shell commands (`git log`, a tree listing, the existing suite once)
   to see what is actually there and green. Never edits.
   <!-- bash: allow -->

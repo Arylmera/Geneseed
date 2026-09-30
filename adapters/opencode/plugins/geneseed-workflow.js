@@ -89,7 +89,7 @@ function summarize(name, result, stats, tracePath) {
 }
 
 // Kept worktrees are work awaiting review, and an overlap is a conflict awaiting ONE
-// merger (process 7) — both are said out loud, never left for the trace to hold.
+// merger (One Writer Per File) — both are said out loud, never left for the trace to hold.
 function isolationReport(stats) {
   const kept = stats.worktrees || []
   if (!kept.length) return ""

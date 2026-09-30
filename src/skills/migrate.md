@@ -12,10 +12,10 @@ onto a new API.
    migration rolls back cleanly ({{DOCTRINE:consent-before-push}} applies its shared-branch
    care to anything that does land there).
 3. Migrate one dependency — or one breaking change — at a time. Never batch
-   unrelated bumps into a single step (universal {{LAW:one-intent-one-act}}).
+   unrelated bumps into a single step ({{LAW:one-intent-one-act}}).
 4. Run the project's checks after *each* step. A green suite between steps is what
    lets you bisect a later failure to the exact change that caused it
-   (universal {{LAW:verify-before-asserting}}).
+   ({{LAW:verify-before-asserting}}).
 5. Keep the version bump itself a separate commit from any code changes it forces,
    each through the [commit {{SKILL}}](commit.md) ({{DOCTRINE:consent-before-push}}), so each
    diff is reviewable in isolation.
@@ -23,7 +23,7 @@ onto a new API.
 **Schema migrations stay backward-compatible.** For a database or stored-format
 change, move in expand → backfill → contract phases so every migration is
 compatible with the currently running code, and never bundle a destructive schema
-change into the same deploy as the code that depends on it (universal {{LAW:one-intent-one-act}},
+change into the same deploy as the code that depends on it ({{LAW:one-intent-one-act}},
 {{LAW:deletion-is-deliberate}}) — the old code must keep working until the new code is live.
 
 ## Done when

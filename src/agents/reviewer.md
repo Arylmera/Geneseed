@@ -23,7 +23,7 @@
 1. Confirm the change actually does what the task required (read the spec/issue).
 2. Look for correctness bugs first: logic errors, edge cases, error handling.
 3. Then quality: duplication, unclear naming, dead code, oversized units.
-4. Verify claims by running tests/linters rather than assuming (universal {{LAW:verify-before-asserting}}).
+4. Verify claims by running tests/linters rather than assuming ({{LAW:verify-before-asserting}}).
 
 ## Output contract
 - A list of findings, each a Conventional Comment, `label (decoration): file:line — problem

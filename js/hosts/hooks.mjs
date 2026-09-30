@@ -700,13 +700,13 @@ function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
   if (DESTRUCTIVE_GIT_RE.test(command)) {
-    return ask(args, 'git-gate', 'law-4', 'Geneseed Law IV \u2014 a history-rewriting or '
+    return ask(args, 'git-gate', 'law-4', 'Geneseed (Deletion Is Deliberate) \u2014 a history-rewriting or '
       + 'discarding git act needs confirmation bound to this specific command');
   }
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run.
   if (args.noConsent || !GIT_GATE_RE.test(command)) return 0;
-  return ask(args, 'git-gate', 'process-5', 'Geneseed Doctrine process 5 \u2014 every git '
+  return ask(args, 'git-gate', 'process-5', 'Geneseed (Consent Before Push) \u2014 every git '
     + 'commit/push needs explicit approval');
 }
 export const cmdGitGate = guardGate(gitGate, 'git-gate');
@@ -764,13 +764,13 @@ function ruleDecide(args, payload) {
   const body = [ti.content, ti.new_string, ti.file_text, ti.new_str]
     .find((v) => typeof v === 'string') || '';
   if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
-    return ask(args, 'rule-gate', 'law-1', `Geneseed Law I — ${p} would carry a `
+    return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
       + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
       + 'tracked file.');
   }
   const target = ruleGateTarget(p, args.root);
   if (!target) return 0;
-  return ask(args, 'rule-gate', 'process-1', `Geneseed Doctrine process 1 \u2014 writing to `
+  return ask(args, 'rule-gate', 'process-1', `Geneseed (Persist Insight) \u2014 writing to `
     + `${target}: a standing rule, or a fact to remember? That choice is the user's. Run the `
     + 'rule skill first.');
 }

@@ -916,9 +916,9 @@ function decision(argv, payload) {
 
 for (const [verb, payload, cite] of [
   ['git-gate', { tool_name: 'Bash', tool_input: { command: 'git commit -m x' } },
-    'Doctrine process 5'],
+    'Consent Before Push'],
   ['rule-gate', { tool_name: 'Write', tool_input: { file_path: '/x/user-rules.md' } },
-    'Doctrine process 1'],
+    'Persist Insight'],
 ]) {
   test(`${verb} emits the document the host reads`, () => {
     const got = decision([verb], payload);

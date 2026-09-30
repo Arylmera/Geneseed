@@ -32,7 +32,7 @@
 5. Check the supply chain of anything new: install-time scripts (`postinstall` and
    kin) a dependency would run, the licence of each added package against the
    project's own, and the provenance of any vendored or copied-in code.
-6. Confirm no secret is committed (universal {{LAW:sealed-secrets}}).
+6. Confirm no secret is committed ({{LAW:sealed-secrets}}).
 
 ## Output contract
 - Findings as `severity — location — issue — remediation`, highest severity

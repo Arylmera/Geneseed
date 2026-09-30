@@ -488,7 +488,7 @@
     },
     {
       "name": "git-gate",
-      "help": "PreToolUse hook: ASK before a history-discarding git act (Law IV) and before every git commit/push (process 5 backstop)",
+      "help": "PreToolUse hook: ASK before a history-discarding git act (Deletion Is Deliberate) and before every git commit/push (Consent Before Push backstop)",
       "description": "",
       "positionals": [],
       "options": [
@@ -528,7 +528,7 @@
           ],
           "dest": "no_consent",
           "metavar": null,
-          "help": "skip the process-5 commit/push ask (set by the emit when the process pack or process 5 is off); Law IV still asks",
+          "help": "skip the Consent Before Push commit/push ask (set by the emit when the process pack or that rule is off); Deletion Is Deliberate still asks",
           "choices": null,
           "default": false,
           "required": false,
@@ -766,7 +766,7 @@
     },
     {
       "name": "rule-gate",
-      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or memory (process 1 backstop)",
+      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or memory (Persist Insight backstop)",
       "description": "",
       "positionals": [],
       "options": [

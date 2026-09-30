@@ -21,7 +21,7 @@
 0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. For new tests: write the test, watch it fail with the behaviour absent or
    deliberately broken, then confirm it passes against the implementation —
-   a test that has never failed verifies nothing (universal {{LAW:verify-before-asserting}}).
+   a test that has never failed verifies nothing ({{LAW:verify-before-asserting}}).
 2. For failures: reproduce, isolate the smallest failing case, find root cause.
 3. Cover edge cases and error paths, not just the happy path — including
    adversarial inputs at any trust boundary the code under test exposes.

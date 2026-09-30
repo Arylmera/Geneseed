@@ -321,13 +321,20 @@ test('the capability tables match the declared host capability', () => {
  * together. This gates the RENDER, never the corpus; `doctor`'s LAW_CLASS and LAW_META arms are
  * what notice a rule leaving the source.
  */
+// The numeral a law renders with is its POSITION in the file — written out here rather than
+// imported from `js/build/source.mjs`, so a render that numbered by anything else would disagree.
+const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
+const idKey = (prefix, id) => `${prefix}_${id.toUpperCase().replaceAll('-', '_')}`;
+
 test('the carrier still carries every law, themed and in order', () => {
   const source = readTextPy(path.join(ROOT, 'src', 'laws', 'universal.md'));
-  const romans = [...source.matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+) —/gm)].map((m) => m[1]);
-  assert.equal(romans.length, 11,
-    `${romans.length} rules parsed out of src/laws/universal.md — expected the eleven invariants; `
-    + 'either the heading shape moved and this test would assert almost nothing, or the corpus '
-    + 'grew a twelfth invariant without the rest of the tree being told');
+  const ids = [...source.matchAll(/^### \{\{LAW:([a-z0-9-]+)\}\} /gm)].map((m) => m[1]);
+  assert.equal(ids.length, 9,
+    `${ids.length} rules parsed out of src/laws/universal.md — expected the nine invariants (IX `
+    + 'and XI were removed 2026-09-30; Echo the Intent is IX now); either the declaration shape '
+    + 'moved and this test would assert almost nothing, or the corpus grew a tenth invariant '
+    + 'without the rest of the tree being told');
+  const romans = ids.map((id, i) => ({ roman: ROMANS[i], key: idKey('LEX', id) }));
   const theme = JSON.parse(readTextPy(path.join(ROOT, 'themes', 'neutral.json')));
   // A second theme, read only to be asserted ABSENT — the one claim here that does not share a
   // source with the render.
@@ -337,8 +344,8 @@ test('the carrier still carries every law, themed and in order', () => {
     for (const [mode, spec] of Object.entries(EXPECTED)) {
       const text = readTextPy(carrierOf(ok(mode, footprint), spec));
       let at = -1;
-      for (const roman of romans) {
-        const heading = `### ${theme.LAW} ${roman} — ${theme[`LEX_${roman}`]}`;
+      for (const { roman, key } of romans) {
+        const heading = `### ${theme.LAW} ${roman} — ${theme[key]}`;
         const found = text.indexOf(heading);
         assert.ok(found !== -1,
           `--emit ${mode} --footprint ${footprint}: the carrier is missing rule ${roman} as `
@@ -347,12 +354,12 @@ test('the carrier still carries every law, themed and in order', () => {
           `--emit ${mode} --footprint ${footprint}: rule ${roman} renders out of source order`);
         at = found;
       }
-      assert.ok(!/\{\{LEX_[IVXLCDM]+\}\}/.test(text),
+      assert.ok(!/\{\{LEX_[A-Z_]+\}\}/.test(text),
         `--emit ${mode} --footprint ${footprint}: the carrier ships an unsubstituted {{LEX_*}} — a `
         + 'theme is missing a law title');
-      for (const roman of romans) {
-        const foreign = other[`LEX_${roman}`];
-        if (!foreign || foreign === theme[`LEX_${roman}`]) continue;
+      for (const { roman, key } of romans) {
+        const foreign = other[key];
+        if (!foreign || foreign === theme[key]) continue;
         assert.ok(!text.includes(foreign),
           `--emit ${mode} --footprint ${footprint}: built with --theme neutral, yet the carrier `
           + `carries imperial's title for rule ${roman} ('${foreign}')`);
@@ -389,13 +396,14 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
   const rules = [];
   for (const pack of ['craft', 'rigor', 'ops', 'process', 'comms']) {
     const src = readTextPy(path.join(ROOT, 'src', 'doctrines', `${pack}.md`));
-    for (const m of src.matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+) —/gm)) {
-      rules.push({ pack: m[1], n: m[2], key: `DOC_${m[1].toUpperCase()}_${m[2]}` });
-    }
+    // A rule's number is its position within its pack, counted here, not read.
+    [...src.matchAll(/^### \{\{DOCTRINE:([a-z0-9-]+)\}\} /gm)].forEach((m, i) => {
+      rules.push({ pack, n: String(i + 1), key: idKey('DOC', m[1]) });
+    });
   }
   assert.equal(rules.length, 28,
     `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 28 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27); either the `
-    + 'heading shape moved and this test asserts almost nothing, or a pack changed size without '
+    + 'declaration shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in
   // the full text, once in the hand-written condensation — so the parse counts occurrences

@@ -9,7 +9,7 @@ disambiguating against each other and should merge. Meta by nature: it edits the
 apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, {{LAW:deletion-is-deliberate}}).
 
 ## Procedure
-1. **Reuse before authoring** ({{DOCTRINE:automate-repetition}}, craft 4). Read the catalogue — the
+1. **Reuse before authoring** ({{DOCTRINE:automate-repetition}}, {{DOCTRINE:search-before-creating}}). Read the catalogue — the
    host's skill list, or AGENT.md §4 — and the nearest existing {{SKILL}} in full. If
    its domain already covers the need, the change is an *edit* to that file (a step,
    a trigger phrase, a done-when), not a new file. Name the skill by its domain, not

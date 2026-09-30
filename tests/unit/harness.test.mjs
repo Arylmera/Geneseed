@@ -269,32 +269,70 @@ test('the fixture can actually reproduce a clean run', () => {
 // what stops any of them passing because the copy is broken.
 
 test('the gate flags a citation into a doctrine rule that does not exist', () => {
-  // The shape a 339-site citation sweep leaves behind: a rewire that lands on a plausible
-  // address nobody defines. `craft 99` is chosen over `craft 7` deliberately — a rule one past
-  // the end would also be caught, but a wildly wrong one proves the gate reads the CATALOGUE
-  // rather than a hardcoded ceiling.
+  // The shape a citation sweep leaves behind: an id nobody declares. It would render as the raw
+  // token — `resolveRuleIds` leaves an unknown id exactly as written rather than guess.
   const skill = fs.readFileSync(path.join(SRC, 'skills', 'commit.md'), 'utf8');
   const problems = withFault(
-    { 'src/skills/commit.md': `${skill}\n\nSee {{DOCTRINE}} craft 99 for the rest.\n` },
+    { 'src/skills/commit.md': `${skill}\n\nSee {{DOCTRINE:craft-ninety-nine}} for the rest.\n` },
     (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(problems.some((p) => p.includes('craft 99') && p.includes('skills/commit.md')),
+  assert.ok(problems.some((p) => p.includes('craft-ninety-nine') && p.includes('skills/commit.md')
+    && p.includes('no law or doctrine declares')),
     `no dangling-citation problem in ${JSON.stringify(problems)}`);
 });
 
-test('the gate flags a citation of a retired law number', () => {
-  // IX and XI keep their numbers so old references resolve — to the word "Retired". Two bruno
-  // skills cited them for "ask first" and "verify", which now live in IV and III; nothing noticed.
-  // The set is read off the canon, so the planted cite must be flagged for each retired number
-  // and a live one (III) must not be.
+test('the gate flags a citation by number, in either tier', () => {
+  // THE RULE THE WHOLE ID SCHEME RESTS ON. A number is a position; a citation that names one is
+  // silently rewired the next time a rule before it is removed — which is how Law X became IX.
   const skill = fs.readFileSync(path.join(SRC, 'skills', 'commit.md'), 'utf8');
   const problems = withFault(
-    { 'src/skills/commit.md': `${skill}\n\nPer {{LAW}} IX and {{LAW}} XI, but {{LAW}} III.\n` },
+    { 'src/skills/commit.md': `${skill}\n\nPer {{LAW}} III and {{DOCTRINE}}\n  craft 1.\n` },
     (root) => gate(root, 'm.constitutionProblems()'));
-  for (const num of ['IX', 'XI']) {
-    assert.ok(problems.some((p) => p.includes(`{{LAW}} ${num}, which is retired`)
-      && p.includes('skills/commit.md')), `${num}: ${JSON.stringify(problems)}`);
+  // The doctrine cite is wrapped across a line on purpose — one really was, in workflow.md.
+  for (const bare of ["'{{LAW}} III' by number", "'{{DOCTRINE}} craft 1' by number"]) {
+    assert.ok(problems.some((p) => p.includes(bare) && p.includes('skills/commit.md')),
+      `${bare}: ${JSON.stringify(problems)}`);
   }
-  assert.ok(!problems.some((p) => p.includes('{{LAW}} III,')), JSON.stringify(problems));
+});
+
+test('the gate flags a citation of a retired id, and a live id under the wrong tier', () => {
+  // `absence-is-a-claim` is gone for good (Law XI, folded into verify-before-asserting);
+  // `external-gate` lives on only as a DOCTRINE (it was Law IX), so citing it as a law is the
+  // mistake an old note would make. A live law cited correctly must stay silent.
+  const skill = fs.readFileSync(path.join(SRC, 'skills', 'commit.md'), 'utf8');
+  const problems = withFault({ 'src/skills/commit.md': `${skill}\n\nPer {{LAW:absence-is-a-claim}}, `
+    + '{{LAW:external-gate}}, {{LAW:consent-before-push}} and {{LAW:verify-before-asserting}}.\n' },
+  (root) => gate(root, 'm.constitutionProblems()'));
+  for (const [id, why] of [['absence-is-a-claim', 'a retired id'], ['external-gate', 'is a doctrine rule'],
+    ['consent-before-push', 'is a doctrine rule']]) {
+    assert.ok(problems.some((p) => p.includes(`{{LAW:${id}}}`) && p.includes(why)),
+      `${id}: ${JSON.stringify(problems)}`);
+  }
+  assert.ok(!problems.some((p) => p.includes('{{LAW:verify-before-asserting}}')), JSON.stringify(problems));
+});
+
+test('the gate flags a retired id declared again, a duplicate id, and a heading with no id', () => {
+  const laws = fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8');
+  const craft = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
+  const block = '<!-- LEAN:begin -->\nx\n<!-- LEAN:else -->\nx\n<!-- LEAN:end -->\n';
+  // A retired id may never come back: someone's notes still mean the OLD rule by it.
+  const reused = withFault(
+    { 'src/laws/universal.md': `${laws}\n### {{LAW:absence-is-a-claim}} Absence Is a Claim\n${block}` },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(reused.some((p) => p.includes("reuses the retired id 'absence-is-a-claim'")),
+    `no retired-reuse problem in ${JSON.stringify(reused)}`);
+  // Ids are unique across BOTH tiers: a citation names one rule, never two.
+  const dup = withFault(
+    { 'src/doctrines/craft.md': `${craft}\n### {{DOCTRINE:honest-tests}} Honest Tests Again\n${block}` },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(dup.some((p) => p.includes("rule id 'honest-tests' is declared twice")),
+    `no duplicate-id problem in ${JSON.stringify(dup)}`);
+  // The pre-id heading shape, and a law declared inside a pack file: neither is a rule here.
+  for (const heading of ['### {{DOCTRINE}} craft 8 — x', '### {{LAW:zz-probe}} Zz Probe']) {
+    const bad = withFault({ 'src/doctrines/craft.md': `${craft}\n${heading}\n${block}` },
+      (root) => gate(root, 'm.constitutionProblems()'));
+    assert.ok(bad.some((p) => p.includes(`'${heading}' is not a rule declaration`)),
+      `${heading}: ${JSON.stringify(bad)}`);
+  }
 });
 
 test('the gate refuses a doctrine citation inside an always-on tier', () => {
@@ -304,8 +342,8 @@ test('the gate refuses a doctrine citation inside an always-on tier', () => {
   // Both files are planted, because the two are separate arms of the same walk and a gate
   // wired into one of them satisfies a test that only checks the other.
   for (const [rel, body] of [
-    ['src/laws/universal.md', '\n\nas {{DOCTRINE}} ops 1 already requires.\n'],
-    ['src/ontology/universal.md', '\n\nweighed against {{DOCTRINE}} process 3.\n'],
+    ['src/laws/universal.md', '\n\nas {{DOCTRINE:tool-discovery}} already requires.\n'],
+    ['src/ontology/universal.md', '\n\nweighed against {{DOCTRINE:context-economy}}.\n'],
   ]) {
     const before = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     const problems = withFault({ [rel]: before + body },
@@ -321,22 +359,6 @@ test('the gate refuses a doctrine citation inside an always-on tier', () => {
     { 'src/laws/universal.md': `${laws}\n\nThe {{DOCTRINES}} sit under this.\n` },
     (root) => gate(root, 'm.constitutionProblems()')), [],
   '{{DOCTRINES}}, the section noun, was read as a rule citation');
-});
-
-test('the gate flags a pack whose rule ids skip, and one filed under the wrong pack', () => {
-  const craft = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
-  // A gap. Appending `craft 9` after seven rules puts it at position 8 — the id and the position
-  // disagree, which is exactly what a deletion in the middle leaves behind.
-  const gap = withFault({ 'src/doctrines/craft.md': `${craft}\n### {{DOCTRINE}} craft 9 — x\nbody\n` },
-    (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(gap.some((p) => p.includes('rule 9') && p.includes('position 8')),
-    `no contiguity problem in ${JSON.stringify(gap)}`);
-  // A rule filed in the wrong file. `pack` is read from the HEADING, so this rule is reachable
-  // at `ops.7` — a name `ops.md` also numbers — and unreachable at any craft address.
-  const wrong = withFault({ 'src/doctrines/craft.md': `${craft}\n### {{DOCTRINE}} ops 7 — x\nbody\n` },
-    (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(wrong.some((p) => p.includes('craft.md') && p.includes('ops 7')),
-    `no wrong-pack problem in ${JSON.stringify(wrong)}`);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -365,27 +387,27 @@ test('the gate flags a rule whose LEAN block is missing, and one whose lean half
   // the old ones were written. It reads as complete, and at full it renders as complete.
   const none = withFault({ 'src/doctrines/craft.md': nthLeanBlock(craft, 0, (full) => full) },
     (root) => gate(root, 'm.leanBlockProblems()'));
-  assert.ok(none.some((p) => p.includes('craft 1') && p.includes('craft.md')),
+  assert.ok(none.some((p) => p.includes('automate-repetition') && p.includes('craft.md')),
     `no missing-block problem in ${JSON.stringify(none)}`);
   // The other direction, and the more dangerous one: the markers ARE there, so a reader skims
   // past them, and the rule renders as a heading over nothing at the footprint most installs use.
   const blank = withFault({ 'src/doctrines/craft.md': nthLeanBlock(craft, 0,
     (full) => `<!-- LEAN:begin -->\n${full}<!-- LEAN:else -->\n\n<!-- LEAN:end -->\n`) },
   (root) => gate(root, 'm.leanBlockProblems()'));
-  assert.ok(blank.some((p) => p.includes('craft 1') && p.includes('lean half')),
+  assert.ok(blank.some((p) => p.includes('automate-repetition') && p.includes('lean half')),
     `no empty-half problem in ${JSON.stringify(blank)}`);
 });
 
 test('the LEAN gate walks the laws too, not only the packs', () => {
   // BOTH DIRECTORIES, because they are two arms of one walk and an arm wired to the packs alone
   // satisfies the row above while leaving the invariants — the tier that can never be switched
-  // off — ungated. Block 1 is {{LAW}} II; block 0 would redden too, and would prove less.
+  // off — ungated. Block 1 is One Intent, One Act; block 0 would redden too, and would prove less.
   const laws = fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8');
   const problems = withFault(
     { 'src/laws/universal.md': nthLeanBlock(laws, 1, (full) => full) },
     (root) => gate(root, 'm.leanBlockProblems()'));
   assert.equal(problems.length, 1, `expected exactly one problem, got ${JSON.stringify(problems)}`);
-  assert.ok(problems[0].includes('universal.md') && problems[0].includes('{{LAW}} II'),
+  assert.ok(problems[0].includes('universal.md') && problems[0].includes('{{LAW:one-intent-one-act}}'),
     `the law was not named in ${JSON.stringify(problems)}`);
 });
 
@@ -402,21 +424,21 @@ test('the gate flags a theme missing a doctrine title, and a dead one it still c
   // themes owe instead of asking the themes about each other.
   const neutral = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'neutral.json'), 'utf8'));
   const short = { ...neutral };
-  delete short.DOC_CRAFT_1;
+  delete short.DOC_AUTOMATE_REPETITION;
   const missing = withFault({ 'themes/neutral.json': JSON.stringify(short, null, 2) },
     (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(missing.some((p) => p.includes('DOC_CRAFT_1') && p.includes('neutral.json')),
+  assert.ok(missing.some((p) => p.includes('DOC_AUTOMATE_REPETITION') && p.includes('neutral.json')),
     `no missing-title problem in ${JSON.stringify(missing)}`);
   // The other direction: a title for a rule that does not exist. Its cost is not cosmetic —
   // it is the residue a deleted rule leaves in fifteen files at once.
   const dead = withFault(
     { 'themes/neutral.json': JSON.stringify({ ...neutral, DOC_CRAFT_9: 'Ghost' }, null, 2) },
     (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(dead.some((p) => p.includes('DOC_CRAFT_9') && p.includes('no doctrine file uses')),
+  assert.ok(dead.some((p) => p.includes('DOC_CRAFT_9') && p.includes('no doctrine rule declares')),
     `no dead-key problem in ${JSON.stringify(dead)}`);
 });
 
-test('the gate holds every theme to exactly LEX_I..LEX_XI', () => {
+test('the gate holds every theme to exactly one LEX_<ID> per declared law', () => {
   // ⚠ I1, AND IT IS AN EQUALITY BECAUSE A PRESENCE CHECK ALREADY MISSED IT ONCE. The renumber's
   // deletion ranges skipped LEX_XXII, LEX_XXIII, LEX_XXIV and LEX_XXXVI; they survived in all
   // fifteen files, and parity was silent because a key present everywhere is missing nowhere.
@@ -427,10 +449,10 @@ test('the gate holds every theme to exactly LEX_I..LEX_XI', () => {
   assert.ok(stale.some((p) => p.includes('LEX_XXII')),
     `a survivor of the renumber went unflagged: ${JSON.stringify(stale)}`);
   const gone = { ...neutral };
-  delete gone.LEX_IX;
+  delete gone.LEX_ECHO_THE_INTENT;
   const short = withFault({ 'themes/neutral.json': JSON.stringify(gone, null, 2) },
     (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(short.some((p) => p.includes('LEX_IX')),
+  assert.ok(short.some((p) => p.includes('LEX_ECHO_THE_INTENT')),
     `a missing invariant title went unflagged: ${JSON.stringify(short)}`);
   // `_TEMPLATE.json` is HELD TO THIS TOO, unlike theme parity, which skips `_`-scaffolds. It is
   // the file `--sync-themes` seeds a new voice from, so a stale key there propagates forward.
@@ -550,24 +572,23 @@ test('the gate holds knownRuleIds to the rules the pack files actually define', 
     `a rule the enumerator invented went unflagged: ${JSON.stringify(long)}`);
 });
 
-test('the gate flags the consent gate and the process pack naming different rules', () => {
-  // ⚠ THE ONE HARDCODED RULE ADDRESS IN THE CODEBASE. `js/hosts/settings.mjs` keys the git-gate hooks
-  // on the literal `process.5`, so a renumber of that pack silently re-points the TOOL BOUNDARY
-  // at whichever rule inherited the number while the PROMPT still says `process 5` — and the
-  // per-rule axis made that worse, because `process 5` can now be excluded on its own.
+test('the gate flags a hook-gated rule moving out from under its hook', () => {
+  // ⚠ THE HOOKS ARE THE ONE PLACE A NUMBER IS STILL A KEY. The hook path cannot read the canon on
+  // every tool call, so its ledger keys (`process-5`), `settings.mjs`'s CONSENT_RULE and the
+  // console's HOOK_GATED name addresses. A reorder that moved the consent rule would re-point the
+  // TOOL BOUNDARY at whichever rule inherited `process 5` — so HOOK_PINNED holds each gated id to
+  // its address, and moving one is a doctor failure rather than a silent swap.
   //
-  // The fault swaps two rules' titles without breaking contiguity, which is exactly what a
-  // reorder looks like: every other arm of the gate stays silent, so a red here is this arm.
+  // The fault swaps process 5 and 6 — a reorder, every declaration still valid.
   const proc = fs.readFileSync(path.join(SRC, 'doctrines', 'process.md'), 'utf8');
-  const swapped = proc
-    .replace('### {{DOCTRINE}} process 5 — {{DOC_PROCESS_5}}', '### {{DOCTRINE}} process 5 — @@')
-    .replace('### {{DOCTRINE}} process 6 — {{DOC_PROCESS_6}}',
-      '### {{DOCTRINE}} process 6 — {{DOC_PROCESS_5}}')
-    .replace('### {{DOCTRINE}} process 5 — @@', '### {{DOCTRINE}} process 5 — {{DOC_PROCESS_6}}');
-  assert.ok(swapped.includes('process 6 — {{DOC_PROCESS_5}}'), 'the fault did not apply');
-  const problems = withFault({ 'src/doctrines/process.md': swapped },
+  const blocks = proc.split(/(?=^### )/m);
+  const five = blocks.findIndex((b) => b.startsWith('### {{DOCTRINE:consent-before-push}}'));
+  assert.ok(five > 0, 'the consent rule has moved — re-site this fault');
+  [blocks[five], blocks[five + 1]] = [blocks[five + 1], blocks[five]];
+  const problems = withFault({ 'src/doctrines/process.md': blocks.join('') },
     (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(problems.some((p) => p.includes('settings.mjs') && p.includes('process 5')),
+  assert.ok(problems.some((p) => p.includes("'consent-before-push' as process 5")
+    && p.includes('numbers it process 6')),
     `the consent rule moved out from under its gate unflagged: ${JSON.stringify(problems)}`);
 });
 
@@ -623,18 +644,15 @@ test('the gate flags a law missing from LAW_CLASS', () => {
   // The gate that would have caught the Law XXXV 'craft' fallback: a numeral parsed out of
   // universal.md but absent from LAW_CLASS.
   const laws = fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8');
-  // The numeral has to be one PAST the corpus — `XL` was free until laws XXXIX and XL landed,
-  // at which point the fixture stopped introducing anything unclassified and the gate went
-  // quiet while the test still read as coverage. The three-tier split cut the corpus to nine
-  // invariants and the Law III split grew it to eleven, so the first free numeral is now
-  // `XII`. Planting the first FREE numeral keeps the fixture's claim literal: the next rule
-  // someone actually adds is the one caught here.
-  const problems = withFault({ 'src/laws/universal.md': `${laws}\n### {{LAW}} XII — z\n` },
+  // Numbers are positional, so an appended law IS the next numeral — nine laws make it `X`.
+  // Appending, rather than planting a literal numeral, keeps the fixture's claim literal: the
+  // next rule someone actually adds is the one caught here.
+  const problems = withFault({ 'src/laws/universal.md': `${laws}\n### {{LAW:zz-probe}} Zz Probe\n` },
     (root) => gate(root, 'm.countTableProblems()'));
-  // `rule XII ` with the trailing space, not a bare `XII`: a short substring matches other
+  // `rule X ` with the trailing space, not a bare `X`: a short substring matches other
   // messages by accident, and a gate satisfied by accident is not a gate.
-  assert.ok(problems.some((p) => p.includes('rule XII ') && p.includes('LAW_CLASS')),
-    `no XII/LAW_CLASS problem in ${JSON.stringify(problems)}`);
+  assert.ok(problems.some((p) => p.includes('rule X ') && p.includes('LAW_CLASS')),
+    `no X/LAW_CLASS problem in ${JSON.stringify(problems)}`);
 });
 
 test('the gate flags an unknown LAW_CLASS value', () => {
@@ -718,14 +736,28 @@ test('the count gate really reads the onboarding pages the prose arms are about'
 // ---------------------------------------------------------------------------------------------
 // LAW_META — the web Laws ledger's per-rule Principle, copy that exists nowhere else.
 
-/** The law numerals as `universal.md` really spells them. Derived, never transcribed. */
-const lawNumerals = () => [...fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8')
-  .matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+)\b/gm)].map((m) => m[1]);
+/** The law ids in declaration order. Derived, never transcribed. */
+const lawIds = () => [...fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8')
+  .matchAll(/^### \{\{LAW:([a-z0-9-]+)\}\} /gm)].map((m) => m[1]);
+/** The numerals those laws render with — their positions, written out. */
+const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const lawNumerals = () => lawIds().map((_, i) => ROMANS[i]);
 
 test('every law carries a LAW_META principle', () => {
   // The live check against the real tree. Laws XXXVI and XXXVII shipped without one and
   // rendered with a blank description; this is the gate for it.
-  assert.deepEqual(lawMetaProblems(lawNumerals(), LAW_CLASS, LAW_CLASSES), []);
+  assert.deepEqual(lawMetaProblems(lawNumerals(), LAW_CLASS, LAW_CLASSES, lawIds()), []);
+});
+
+test('the LAW_META gate flags a row pinned to a different rule than its number now holds', () => {
+  // THE RENUMBER DEFECT, SEEN FROM THE CONSOLE. Removing Laws IX and XI left row 9 describing
+  // the retired External Gate while rule IX became Echo the Intent — same class chip on both
+  // sides of that swap, so only the pin could tell. Shift the ids by one and every row is wrong.
+  const ids = lawIds();
+  const shifted = [...ids.slice(1), ids[0]];
+  const problems = lawMetaProblems(lawNumerals(), LAW_CLASS, LAW_CLASSES, shifted);
+  assert.ok(problems.some((x) => x.includes("LAW_META[1] is pinned to 'sealed-secrets'")
+    && x.includes(`'${shifted[0]}'`)), JSON.stringify(problems));
 });
 
 test('the LAW_META gate reads the real literal, wrapped rows included', () => {
@@ -779,10 +811,11 @@ test('roman numerals bridge to LAW_META\'s arabic keys', () => {
 // ---------------------------------------------------------------------------------------------
 // DOCTRINE_META — the same column, one tier over and 23 rules wide.
 
-/** The doctrine addresses as the pack files really spell them. Derived, never transcribed. */
-const doctrineAddrs = () => ['craft', 'rigor', 'ops', 'process', 'comms'].flatMap((p) =>
+/** Each doctrine rule's address — pack plus position — and id. Derived, never transcribed. */
+const doctrineRules = () => ['craft', 'rigor', 'ops', 'process', 'comms'].flatMap((p) =>
   [...fs.readFileSync(path.join(SRC, 'doctrines', `${p}.md`), 'utf8')
-    .matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)].map((m) => `${m[1]}.${m[2]}`));
+    .matchAll(/^### \{\{DOCTRINE:([a-z0-9-]+)\}\} /gm)].map((m, i) => ({ addr: `${p}.${i + 1}`, id: m[1] })));
+const doctrineAddrs = () => doctrineRules().map((r) => r.addr);
 
 test('every doctrine rule carries a DOCTRINE_META principle', () => {
   const addrs = doctrineAddrs();
@@ -794,7 +827,7 @@ test('every doctrine rule carries a DOCTRINE_META principle', () => {
   // 28 since the comms pack (2026-09-27): process 7 (reference codes) MOVED to comms 1, which
   // leaves the total alone, and comms 2 (structure beside prose) is new.
   assert.equal(addrs.length, 28, `${addrs.length} rules parsed — expected 28`);
-  assert.deepEqual(doctrineMetaProblems(addrs), []);
+  assert.deepEqual(doctrineMetaProblems(addrs, doctrineRules().map((r) => r.id)), []);
 });
 
 test('the DOCTRINE_META gate reads the real literal, wrapped rows included', () => {
@@ -830,7 +863,7 @@ test('the DOCTRINE_META gate flags a missing row, a stale row and a wrong pack',
   // pack above it, which would render under the wrong colour and the wrong chip while every
   // count stayed right.
   const text = fs.readFileSync(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx'), 'utf8');
-  const swapped = text.replace("'ops.1': ['ops',", "'ops.1': ['craft',");
+  const swapped = text.replace(/('ops\.1': \[\s*)'ops',/, "$1'craft',");
   assert.notEqual(swapped, text, 'the ops.1 row has moved — re-site this fault');
   const problems = withFault({ 'web/src/pages/Laws.jsx': swapped },
     (root) => gate(root, 'm.constitutionProblems()'));

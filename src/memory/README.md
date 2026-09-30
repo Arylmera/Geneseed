@@ -83,7 +83,7 @@ memory that turns out to be wrong" rule.
 - After writing a file, add one line to `MEMORY.md`:
   `- [Title](file.md) — one-line hook`.
 - Verify a recalled memory still matches reality before acting on it
-  (universal {{LAW:verify-before-asserting}}).
+  ({{LAW:verify-before-asserting}}).
 
 ## Per-{{AGENT}} memory (`agents/` subdirectory)
 

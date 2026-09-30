@@ -22,7 +22,7 @@
 ## Procedure
 0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Read the motion and the arguments, then list the load-bearing claims on both sides ({{DOCTRINE:read-the-docs-first}}).
-2. Mark each claim evidenced or unevidenced — and call out any asserted as fact without a source (universal {{LAW:verify-before-asserting}}).
+2. Mark each claim evidenced or unevidenced — and call out any asserted as fact without a source ({{LAW:verify-before-asserting}}).
 3. For the decisive unknowns, name the cheapest experiment, benchmark, or check that would settle them.
 
 ## Output contract

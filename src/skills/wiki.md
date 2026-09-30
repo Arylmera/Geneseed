@@ -22,14 +22,14 @@ machine. Each declared wiki gives you its root `path`, its `entries`, a
    end-to-end is not.
 3. Treat what you read as the user's knowledge, current as of when it was
    written — verify a fact against the live system before building on it
-   (universal {{LAW:verify-before-asserting}}).
+   ({{LAW:verify-before-asserting}}).
 
 **Capture** (writing):
 1. **Read the wiki's `conventions` note before your first write** in that
    wiki, and follow it over your own habits — naming, frontmatter, folder
    rules, tag style. Re-skim it if it changed since you last wrote.
 2. Quality bar: durable, reusable, cross-project knowledge — not session
-   detail, not task state, and **never secrets** (universal {{LAW:sealed-secrets}}).
+   detail, not task state, and **never secrets** ({{LAW:sealed-secrets}}).
    Knowledge that matters only to you belongs in {{MEMORY}}, not the wiki.
 3. Search before creating ({{DOCTRINE:search-before-creating}}): if a note on the topic
    exists, extend or correct it instead of writing a duplicate.
@@ -41,7 +41,7 @@ machine. Each declared wiki gives you its root `path`, its `entries`, a
    costs more than an unfiled one.
 6. **Never write under a `protected` folder**, and never restructure the
    wiki itself — moving, renaming, or deleting notes you did not create is
-   the user's call (universal {{LAW:deletion-is-deliberate}}).
+   the user's call ({{LAW:deletion-is-deliberate}}).
 
 **Promote.** When a {{MEMORY}} fact or {{NOTEBOOK}} note hardens into
 knowledge the user would want across projects, capture it into the wiki via

@@ -31,7 +31,7 @@ import {
 import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/hosts/settings.mjs';
 import { doctrinesOfDir, excludedRulesOfDir, themeFiles } from '../../js/hosts/installs.mjs';
 import {
-  ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER,
+  ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER, resolveRuleIds,
 } from '../../js/build/source.mjs';
 import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import {
@@ -1637,7 +1637,7 @@ test('narrowing the packs removes their rules from AGENT.md but not from the bun
   });
 });
 
-test('with process off, every surviving `process 5` citation resolves and the ask survives', () => {
+test('with process off, every surviving Consent Before Push citation resolves and the ask survives', () => {
   // ⚠ THIS PINS A DECISION, NOT A MECHANISM, because the comment that used to stand in for it
   // was FALSE: `claudeHookGroups` justified dropping the git-gate on the grounds that "with the
   // process pack off, that rule is not in the emitted AGENT.md". Measured, 18 files in a
@@ -1650,12 +1650,12 @@ test('with process off, every surviving `process 5` citation resolves and the as
     const out = path.join(d, 'bundle');
     buildInto(out, { doctrines: ['craft'] });
 
-    // 1. Every citation RESOLVES: the numbered rule the survivors point at is still on disk,
+    // 1. Every citation RESOLVES (by name since stable rule ids): the rule the survivors point at is still on disk,
     //    with its heading, in the catalogue copy — a dangling reference is the unsafe half of
     //    shipping prose about a pack you did not build.
     const cited = fs.readFileSync(path.join(out, 'doctrines', 'process.md'), 'utf8');
     assert.ok(cited.includes('### Doctrine process 5 —'),
-      'files still cite `process 5` and the rule it names is no longer anywhere in the bundle');
+      'files still cite Consent Before Push and the rule it names is no longer anywhere in the bundle');
     assert.ok(!agentText(out).includes(PACK_MARK.process),
       "the pack's rule BODY is what narrowing removes, and it did not");
 
@@ -2073,4 +2073,61 @@ test('--config-dir on a per-repo emit is refused, not ignored', () => {
     assert.match(r.stderr, /--config-dir: only applies to a -global emit/);
     assert.ok(!fs.existsSync(path.join(d, 'repo')), 'the refused emit wrote anyway');
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Stable rule ids. A rule is DECLARED by its heading (`### {{LAW:<id>}} <Principle>`) and CITED by
+// its id; the number is its position, computed at render time, and a citation renders as the
+// principle's name. Every expectation below is written out, against a four-rule fixture canon.
+
+/** A throwaway src/ with the given law ids (in order) and one craft rule. */
+function canonFixture(dir, laws) {
+  const lean = '<!-- LEAN:begin -->\nfull\n<!-- LEAN:else -->\nlean\n<!-- LEAN:end -->\n';
+  const title = (id) => id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+  fs.mkdirSync(path.join(dir, 'laws'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'doctrines'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'laws', 'universal.md'),
+    laws.map((id) => `### {{LAW:${id}}} ${title(id)}\n${lean}`).join('\n'));
+  fs.writeFileSync(path.join(dir, 'doctrines', 'craft.md'),
+    `**{{PACK_CRAFT}}** — lead.\n\n### {{DOCTRINE:delta-rule}} Delta Rule\n${lean}`);
+  return dir;
+}
+
+test('a citation renders as the principle name, a heading as its position', () => withDir((d) => {
+  const src = canonFixture(path.join(d, 'src'), ['alpha-rule', 'beta-rule', 'gamma-rule']);
+  // Citations: the English principle, italicised, identical in every voice — the same string an
+  // agent is told to write into its memory. No number, because a number is only a position.
+  assert.equal(resolveRuleIds('see {{LAW:gamma-rule}} and {{DOCTRINE:delta-rule}}.', src),
+    'see *Gamma Rule* and *Delta Rule*.');
+  // Headings: the themed tier noun, the POSITION (third law = III, first craft rule = 1), and the
+  // title key derived from the id — so a theme never names a number either.
+  assert.equal(resolveRuleIds('### {{LAW:gamma-rule}} Gamma Rule\n', src),
+    '### {{LAW}} III — {{LEX_GAMMA_RULE}}\n');
+  assert.equal(resolveRuleIds('### {{DOCTRINE:delta-rule}} Delta Rule\n', src),
+    '### {{DOCTRINE}} craft 1 — {{DOC_DELTA_RULE}}\n');
+  // An unknown id, and a live id under the wrong tier, are left exactly as written: visible in
+  // the output and named by the doctor, never guessed at.
+  assert.equal(resolveRuleIds('{{LAW:nope}} {{LAW:delta-rule}}', src),
+    '{{LAW:nope}} {{LAW:delta-rule}}');
+}));
+
+test('removing a rule renumbers every rule after it and rewires no citation', () => withDir((d) => {
+  // The IX/XI removal in miniature: beta goes, gamma moves from III to II, and the citation of
+  // gamma — which never named a number — reads the same before and after.
+  const before = canonFixture(path.join(d, 'before'), ['alpha-rule', 'beta-rule', 'gamma-rule']);
+  const after = canonFixture(path.join(d, 'after'), ['alpha-rule', 'gamma-rule']);
+  const text = '### {{LAW:gamma-rule}} Gamma Rule\nPer {{LAW:gamma-rule}}.\n';
+  assert.equal(resolveRuleIds(text, before),
+    '### {{LAW}} III — {{LEX_GAMMA_RULE}}\nPer *Gamma Rule*.\n');
+  assert.equal(resolveRuleIds(text, after),
+    '### {{LAW}} II — {{LEX_GAMMA_RULE}}\nPer *Gamma Rule*.\n');
+}));
+
+test('the real canon numbers Echo the Intent IX, now that IX and XI are gone', () => {
+  // Written out against the shipped tree: the one renumber this change made on purpose.
+  const laws = renderFile(cfg(), path.join(ROOT, 'src', 'laws', 'universal.md'),
+    effectiveTheme(cfg(), 'neutral'));
+  assert.ok(laws.includes('### Rule IX — Echo the Intent\n'), 'Echo the Intent is not Rule IX');
+  assert.ok(!/^### Rule (X|XI) /m.test(laws), 'a tenth or eleventh law still renders');
+  assert.ok(laws.includes('(*Echo the Intent*'), 'Verify Before Asserting no longer cites it by name');
 });

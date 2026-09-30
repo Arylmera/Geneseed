@@ -384,7 +384,7 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   `2026-06-17-opencode-color-themes` spec).
 - **Runtime guard plugin** (`geneseed-guard.js`, installed with the others). Enforces
   the safety Laws at the tool boundary: **blocks** writes to private-key/credential
-  files (Law I), catastrophic shell like `rm -rf /` (Law IV), and any mutation under
+  files (Sealed Secrets), catastrophic shell like `rm -rf /` (Deletion Is Deliberate), and any mutation under
   a declared wiki's `protected` folders (AGENT.md §8, from `wiki.jsonc`); **warns** on
   `.env` writes and force-push. `GENESEED_GUARD=off` disables it, `=warn` downgrades
   blocks to warnings. Every **block** appends one line to the install's
@@ -400,7 +400,7 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
 - **Default permissions.** A fresh `opencode.json` gets a minimal policy that **asks**
   before `rm -rf *` and a force-push — those are **Rule IV**'s territory and are in every
   build — and, **on an install that built the `process` pack in**, before every
-  `git commit` and `git push` (the host-level backstop for **Doctrine process 5**: the
+  `git commit` and `git push` (the host-level backstop for **Consent Before Push**: the
   agent never records or shares code unprompted, on any branch). Build with
   `--doctrines` leaving `process` out and those two entries are simply not written.
   The whole block is added only when you have no `permission` key; an existing policy is
@@ -534,7 +534,7 @@ install `jsonc-parser` yourself — you lose OCX's dependency management and
 auto-updates, and you own the upgrade-by-re-copy. Prefer the OCX path.
 
 **Consent note.** `worktree_delete` auto-commits before removal. The harness's
-consent-before-commit rule (**Doctrine process 5**, when the `process` pack is built in)
+consent-before-commit rule (**Consent Before Push**, when the `process` pack is built in)
 is enforced for *shell* `git commit` via `opencode.json`
 permissions, but this plugin commits through its own tool path — so review what it
 will commit before invoking delete, or keep the worktree and commit yourself.

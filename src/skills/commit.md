@@ -6,9 +6,9 @@
 
 ## Procedure
 1. Review the working tree; identify the paths that belong to *this* change only.
-2. Stage exactly those paths — never `git add -A` blindly (universal {{LAW:one-intent-one-act}}:
+2. Stage exactly those paths — never `git add -A` blindly ({{LAW:one-intent-one-act}}:
    one intent, one act). Leave unrelated dirty files out.
-3. Confirm no secret is being committed (universal {{LAW:sealed-secrets}}), and no leftover
+3. Confirm no secret is being committed ({{LAW:sealed-secrets}}), and no leftover
    debug scaffolding rides along — `console.log`, `debugger`, `print`,
    commented-out code, or hardcoded test values left over from diagnosis
    ({{LAW:cure-the-cause}}).

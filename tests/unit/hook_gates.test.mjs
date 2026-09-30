@@ -189,7 +189,7 @@ function ruleAsks(p, { root = null, key = 'file_path' } = {}) {
   const dec = askDecision(hookRun('rule-gate', { root, stdin: writePayload(p, key) }), p);
   // THE MESSAGE IS THE FEATURE. An `ask` with no reason is a permission prompt the user
   // cannot answer: it must name the rule and route to the skill that resolves it.
-  assert.ok(dec.permissionDecisionReason.includes('Doctrine process 1'), dec.permissionDecisionReason);
+  assert.ok(dec.permissionDecisionReason.includes('Persist Insight'), dec.permissionDecisionReason);
   assert.ok(dec.permissionDecisionReason.includes('rule skill'), dec.permissionDecisionReason);
 }
 
@@ -255,7 +255,7 @@ test('the alternate path key is read, and a well-formed but empty path defers', 
 // unstaged work — the mistake this repo's own memory records. `push --force` trips this gate
 // rather than process 5's, because the stronger reason is the one the user should read.
 
-test('a destructive git verb asks under Law IV', () => {
+test('a destructive git verb asks under Deletion Is Deliberate', () => {
   for (const cmd of ['git reset --hard HEAD~1',
     'git clean -fd',
     'git branch -D feature',
@@ -263,7 +263,7 @@ test('a destructive git verb asks under Law IV', () => {
     'git push --force-with-lease',
     'cd /repo && git reset --hard origin/main']) {
     const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
-    assert.ok(dec.permissionDecisionReason.includes('Law IV'), dec.permissionDecisionReason);
+    assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
   }
 });
 
@@ -282,7 +282,7 @@ test('a soft reset, a -d branch delete, a plain checkout and a dry-run clean def
 const contentPayload = (file_path, content, key = 'content') =>
   JSON.stringify({ tool_name: 'Write', tool_input: { file_path, [key]: content } });
 
-test('a credential-shaped write asks under Law I', () => {
+test('a credential-shaped write asks under Sealed Secrets', () => {
   const shapes = ['AKIAIOSFODNN7EXAMPLE',
     'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef012345',
     'github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123',
@@ -292,7 +292,7 @@ test('a credential-shaped write asks under Law I', () => {
   for (const s of shapes) {
     const dec = askDecision(hookRun('rule-gate',
       { stdin: contentPayload('src/config.js', `const k = "${s}";`) }), s);
-    assert.ok(dec.permissionDecisionReason.includes('Law I'), dec.permissionDecisionReason);
+    assert.ok(dec.permissionDecisionReason.includes('Sealed Secrets'), dec.permissionDecisionReason);
   }
   // Edit sends `new_string`, not `content`.
   askDecision(hookRun('rule-gate',
@@ -308,7 +308,7 @@ test('git-gate --no-consent skips only the process-5 ask; Law IV still asks', ()
   assertDefers(hookRun('git-gate', opts('git commit -m x')), 'commit');
   assertDefers(hookRun('git-gate', opts('git push origin main')), 'push');
   const law4 = askDecision(hookRun('git-gate', opts('git reset --hard HEAD~1')), 'reset --hard');
-  assert.match(law4.permissionDecisionReason, /Law IV/);
+  assert.match(law4.permissionDecisionReason, /Deletion Is Deliberate/);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -334,11 +334,11 @@ function copilotAsk(r, what) {
 
 test('copilot: every rule asks, top-level, in Copilot\'s envelope', () => {
   for (const [args, rule, what] of [
-    [{ command: 'git push --force' }, /Law IV/, 'force'],
-    [{ command: 'git commit -m x' }, /process 5/, 'commit'],
-    [{ path: 'src/a.js', file_text: 'k = "AKIAIOSFODNN7EXAMPLE"' }, /Law I\b/, 'create'],
-    [{ path: 'src/a.js', old_str: 'a', new_str: 'k = "AKIAIOSFODNN7EXAMPLE"' }, /Law I\b/, 'edit'],
-    [{ path: '/x/user-rules.md', file_text: 'rule' }, /process 1/, 'user-rules']]) {
+    [{ command: 'git push --force' }, /Deletion Is Deliberate/, 'force'],
+    [{ command: 'git commit -m x' }, /Consent Before Push/, 'commit'],
+    [{ path: 'src/a.js', file_text: 'k = "AKIAIOSFODNN7EXAMPLE"' }, /Sealed Secrets/, 'create'],
+    [{ path: 'src/a.js', old_str: 'a', new_str: 'k = "AKIAIOSFODNN7EXAMPLE"' }, /Sealed Secrets/, 'edit'],
+    [{ path: '/x/user-rules.md', file_text: 'rule' }, /Persist Insight/, 'user-rules']]) {
     const dec = copilotAsk(hookRun('tool-gate',
       { stdin: copilotPayload('bash', args), host: 'copilot' }), what);
     assert.match(dec.permissionDecisionReason, rule, what);
@@ -376,9 +376,9 @@ test('copilot: every ask is ledgered', () => {
 
 test('bob: Laws I and IV exit 2 with the reason on stderr; consent rules warn and exit 0', () => {
   for (const [verb, stdin, what] of [
-    ['tool-gate', bashPayload('git reset --hard'), 'Law IV'],
-    ['tool-gate', contentPayload('src/a.js', 'AKIAIOSFODNN7EXAMPLE'), 'Law I'],
-    ['git-gate', bashPayload('git push --force'), 'Law IV']]) {
+    ['tool-gate', bashPayload('git reset --hard'), 'Deletion Is Deliberate'],
+    ['tool-gate', contentPayload('src/a.js', 'AKIAIOSFODNN7EXAMPLE'), 'Sealed Secrets'],
+    ['git-gate', bashPayload('git push --force'), 'Deletion Is Deliberate']]) {
     const r = hookRun(verb, { stdin, host: 'bob' });
     assert.equal(r.rc, 2, `${what}: expected exit 2, got ${r.rc}`);
     assert.equal(r.out, '', `${what}: Bob ignores stdout, nothing should be there: ${r.out}`);
@@ -387,7 +387,7 @@ test('bob: Laws I and IV exit 2 with the reason on stderr; consent rules warn an
   }
   const commit = hookRun('tool-gate', { stdin: bashPayload('git commit -m x'), host: 'bob' });
   assertDefers(commit, 'commit');
-  assert.match(commit.err, /process 5/);
+  assert.match(commit.err, /Consent Before Push/);
   assertDefers(hookRun('tool-gate', { stdin: bashPayload('git status'), host: 'bob' }), 'status');
 });
 

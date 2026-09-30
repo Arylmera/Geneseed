@@ -1,7 +1,5 @@
-<!-- Canonical, runtime-agnostic laws. Themed labels are substituted at build time. -->
-<!-- Each law carries two bodies inside its LEAN block: the full text with its rationale,
-     then the authored lean form AGENT.md inlines under the default lean footprint. Amend
-     BOTH. The lean form is the rule and its mechanism, no maxims; the on-disk copy is full. -->
+<!-- Each law: a heading declaring its permanent id (its number is its position) and one
+     LEAN block, full text then the lean form AGENT.md inlines. Amend BOTH halves. -->
 
 These {{LAWS}} are the invariants: always in force, never toggleable, never
 traded away, in every task and in every repository. The {{DOCTRINES}} govern
@@ -160,17 +158,6 @@ fix is out of scope, say so and stop; a workaround only when named as one and
 consented to ({{LAW:surface-failures}}).
 <!-- LEAN:end -->
 
-### {{LAW:external-gate-law}} External Gate
-<!-- LEAN:begin -->
-Retired — it was a design principle for systems the agent builds, not an
-invariant on the agent, so it now lives as the rigor pack's fifth rule (the
-gate you build stands outside the mind it governs). The number is kept so
-existing references resolve.
-<!-- LEAN:else -->
-Retired — now the rigor pack's fifth rule. The number is kept so existing
-references resolve.
-<!-- LEAN:end -->
-
 ### {{LAW:echo-the-intent}} Echo the Intent
 <!-- LEAN:begin -->
 An inferred intent is not ground truth until echoed back: when a request admits
@@ -189,11 +176,3 @@ stop and ask rather than guess. Where {{LAW:verify-before-asserting}} verifies y
 verifies the goal.
 <!-- LEAN:end -->
 
-### {{LAW:absence-is-a-claim}} Absence Is a Claim
-<!-- LEAN:begin -->
-Retired — folded into {{LAW:verify-before-asserting}} (absence and truncation are claims awaiting
-the check). The number is kept so existing references resolve.
-<!-- LEAN:else -->
-Retired — folded into {{LAW:verify-before-asserting}}. The number is kept so existing references
-resolve.
-<!-- LEAN:end -->

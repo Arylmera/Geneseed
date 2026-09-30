@@ -37,7 +37,7 @@ as a per-host install at project or global scope.
 
 | module | owns |
 |---|---|
-| `source.mjs` | Where the SOURCE is: `ROOT`/`SRC`/`THEMES`/`CONFIG`, `PACK_ORDER`, rule ids, the cfg object |
+| `source.mjs` | Where the SOURCE is: `ROOT`/`SRC`/`THEMES`/`CONFIG`, `PACK_ORDER`, the rule canon (stable ids → positional numbers, citations → names), the cfg object |
 | `render.mjs` | The pure text pipeline: theme load, `INCLUDE` inlining, CATALOG blocks, `{{TOKENS}}`, dest paths |
 | `bundle.mjs` | `build` — render a theme into a bundle dir, plus the source-completeness refusal. Sits UNDER both emits |
 | `emit-claude.mjs` | The Claude/Bob/Copilot/OpenClaude emit — the render half plus the settings + CLAUDE.md managed-block wire |
@@ -182,8 +182,9 @@ and inline lists are held against a surface list written out in
 
 | I want to | open first | then |
 |---|---|---|
-| a doctrine rule | `src/doctrines/<pack>.md` — APPEND, ids run contiguously | `docs/extending.md` §2a — five files, `--sync-themes`, restyle 14 voices by hand. Author BOTH LEAN halves |
-| a law (invariant) | `src/laws/universal.md` — **APPEND, never insert** | `docs/extending.md` §2c. Author both LEAN halves: the lean footprint ships nothing else |
+| a doctrine rule | `src/doctrines/<pack>.md` — `### {{DOCTRINE:<id>}} <Principle>`; the number is its position | `docs/extending.md` §2a — five files, `--sync-themes`, restyle 14 voices by hand. Author BOTH LEAN halves |
+| a law (invariant) | `src/laws/universal.md` — `### {{LAW:<id>}} <Principle>`; cite by id, never by number | `docs/extending.md` §2c. Author both LEAN halves: the lean footprint ships nothing else |
+| to remove or retire a rule | `docs/extending.md` §2e | `RETIRED_RULE_IDS` in `js/build/source.mjs` — a retired id is never reused |
 | a skill or an agent | `src/skills/<name>.md` or `src/agents/<name>.md` | `docs/extending.md` §3 — eight steps. Write the FILE before the table row or the build aborts |
 | a doctor check | `js/inspect/checks-{build,repo,authoring}.mjs` | register with `ran(...)` in `doctor.mjs`, then a PLANTED FAULT in `tests/unit/harness.test.mjs` |
 | a web endpoint | GET → `js/web/api.mjs`; POST → `js/web/actions.mjs` | declare it in `js/web/routes.mjs`; the partition test probes the real handler |

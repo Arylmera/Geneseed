@@ -10,15 +10,15 @@ finding *when/why* something changed without altering history, use git-archaeolo
 ## Procedure
 1. **Stop.** Do not run more commands that could compound the damage. Capture the
    current state first and read it: `git status`, `git reflog`, and `git stash list`
-   (universal {{LAW:verify-before-asserting}}). The reflog is the safety net — every HEAD move is recoverable
+   ({{LAW:verify-before-asserting}}). The reflog is the safety net — every HEAD move is recoverable
    from it.
 2. **Back up before any destructive op.** Create a timestamped marker so the current
    state is always recoverable: `git branch backup/$(date +%Y%m%d-%H%M%S)`. A branch
    preserves only *committed* state — if the working tree is dirty, `git stash push -u`
    (or a WIP commit) first, so a later `reset --hard` cannot destroy uncommitted or
    untracked work the reflog will never see. Rewriting, resetting, and force-pushing
-   are irreversible acts — never run one without a recovery path in place (universal
-   {{LAW:deletion-is-deliberate}}).
+   are irreversible acts — never run one without a recovery path in place
+   ({{LAW:deletion-is-deliberate}}).
 3. Choose the **minimal** recovery for the actual problem:
    - *Lost commits / bad reset:* find the SHA in `git reflog`, then
      `git reset --hard <sha>` (or `git cherry-pick`/`git branch <name> <sha>` to salvage
@@ -39,12 +39,12 @@ finding *when/why* something changed without altering history, use git-archaeolo
    checks (typecheck, tests, format) and fix what the merge broke.
 5. For a **deliberate rewrite** (interactive rebase, squash, fixup, amend): work on a
    dedicated branch, never a shared one, and keep it the only change in flight
-   (universal {{LAW:one-intent-one-act}}). A rewrite *creates commits* — amend, squash, `--continue`
+   ({{LAW:one-intent-one-act}}). A rewrite *creates commits* — amend, squash, `--continue`
    all do — so present what will change and get the user's acceptance before running
    it, exactly as for any commit ({{DOCTRINE:consent-before-push}}).
 6. Verify the result before declaring success: inspect `git log --oneline`,
    `git status`, and the diff against the intended state — read the actual output, do
-   not assume the rewrite landed as planned (universal {{LAW:verify-before-asserting}}).
+   not assume the rewrite landed as planned ({{LAW:verify-before-asserting}}).
 7. Push only with the user's explicit, per-push consent — and a history rewrite needs a
    **force**-push (`--force-with-lease`), which is doubly outward-facing: present what
    changed and wait for acceptance before pushing ({{DOCTRINE:consent-before-push}} / {{LAW:deletion-is-deliberate}}).
