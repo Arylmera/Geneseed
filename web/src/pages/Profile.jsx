@@ -15,7 +15,7 @@ import Seg from '../components/Seg.jsx'
 // the new fingerprint but KEEP the user's draft on screen — reloading used to replace
 // the textarea with the disk copy, silently discarding the edit being saved.
 
-export default function Profile() {
+export default function Profile({ onChanged }) {
   const { data, error, loading, reload } = useAsync(() => api.profile(), [])
   const [text, setText] = useState('')
   const [fingerprint, setFingerprint] = useState('')
@@ -63,6 +63,7 @@ export default function Profile() {
         setNotice('Saved.')
         setMode('view')
         reload()
+        onChanged?.()
       } else {
         setKeepDraft(true)
         setNotice(
@@ -83,7 +84,7 @@ export default function Profile() {
       <div className="head-row mb-16">
         <div>
           <div className="eyebrow">identity · yours</div>
-          <h1 className="h">Profile</h1>
+          <h2 className="h">Profile</h2>
           <p className="sub">
             Who you are and how you like to work, from <code className="mono">PROFILE.md</code>{' '}
             beside the deployed AGENT.md. Unlike <code className="mono">user-rules.md</code>, it is
