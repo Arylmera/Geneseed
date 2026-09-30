@@ -30,9 +30,10 @@ import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
   projectQualifies,
 } from '../../js/maintain/uninstall.mjs';
-import { emitHostScopeOf } from '../../js/hosts/installs.mjs';
+import { emitHostScopeOf, installTargets } from '../../js/hosts/installs.mjs';
 import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts/hosts.mjs';
+import { installProfile, rebuildCommand } from '../../js/build/generate.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
 import { CONFIG, ROOT, SRC, makeCfg } from '../../js/build/source.mjs';
 import {
@@ -981,4 +982,110 @@ test('colour adds ANSI without changing the line count', () => {
   assert.equal(plain.length, colored.length);
   assert.ok(!plain.join('').includes('['), 'the plain panel carries ANSI');
   assert.ok(colored.join('').includes('['), 'the coloured panel carries no ANSI');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The install profile: what `rebuild-all` reads back, and what `status` now shows.
+
+test('an install profile reads back every setting it was built with, and its argv reproduces them', () => {
+  // THE ROUND TRIP IS THE CLAIM. `status` promises an agent that the `rebuild` command it
+  // prints re-emits the install unchanged; the only way to say that without recording anything
+  // is to build with that argv into a second tree and read the same seven settings back.
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const r = emitInherited(['--emit', 'opencode', '--theme', 'imperial', '--out', repo,
+      '--root', repo, '--footprint', 'full', '--posture', 'mentor', '--mode', 'foreman',
+      '--doctrines', 'craft,rigor', '--exclude-rules', 'craft 1']);
+    assert.equal(r.rc, 0, r.err);
+
+    const p = installProfile('opencode', 'project', repo);
+    assert.equal(p.state, 'active');
+    assert.equal(p.emit, 'opencode');
+    assert.equal(p.theme, 'imperial');
+    assert.equal(p.footprint, 'full');
+    assert.equal(p.posture, 'mentor');
+    assert.equal(p.mode, 'foreman');
+    assert.deepEqual(p.doctrines, ['craft', 'rigor']);
+    assert.equal(p.excludeRules.length, 1, JSON.stringify(p.excludeRules));
+
+    const repo2 = path.join(sb.path, 'repo2');
+    fs.mkdirSync(repo2);
+    const r2 = emitInherited(p.argv.map((a) => (a === repo ? repo2 : a)));
+    assert.equal(r2.rc, 0, r2.err);
+    const p2 = installProfile('opencode', 'project', repo2);
+    for (const k of ['emit', 'theme', 'footprint', 'posture', 'mode', 'doctrines', 'excludeRules']) {
+      assert.deepEqual(p2[k], p[k], `${k} did not survive its own rebuild argv`);
+    }
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('a global install profile names its own config dir, and its argv rebuilds exactly there', () => {
+  // A global root is wherever the host's resolver pointed — env overrides included — so the
+  // argv must carry it: run from a shell without that override it would otherwise re-emit into
+  // the host's DEFAULT dir. The round trip is into a second dir, which it can only reach by the
+  // flag.
+  const sb = makeSandbox();
+  try {
+    const g1 = path.join(sb.path, 'g1');
+    const r = emitInherited(['--emit', 'opencode-global', '--theme', 'imperial',
+      '--config-dir', g1, '--mode', 'foreman']);
+    assert.equal(r.rc, 0, r.err);
+
+    const p = installProfile('opencode', 'global', g1);
+    assert.deepEqual(p.argv.slice(-2), ['--config-dir', g1]);
+    assert.equal(p.theme, 'imperial');
+    assert.equal(p.mode, 'foreman');
+
+    const g2 = path.join(sb.path, 'g2');
+    const r2 = emitInherited(p.argv.map((a) => (a === g1 ? g2 : a)));
+    assert.equal(r2.rc, 0, r2.err);
+    const p2 = installProfile('opencode', 'global', g2);
+    for (const k of ['emit', 'theme', 'footprint', 'posture', 'mode', 'doctrines', 'excludeRules']) {
+      assert.deepEqual(p2[k], p[k], `${k} did not survive its own rebuild argv`);
+    }
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('a rebuild command quotes only the arguments a shell would split', () => {
+  assert.equal(rebuildCommand(['--theme', 'imperial', '--out', 'C:\\My Repo']),
+    'geneseed build --theme imperial --out "C:\\My Repo"');
+  assert.equal(rebuildCommand([]), 'geneseed build');
+});
+
+test('status renders one row per install with the settings a rebuild would reproduce', () => {
+  const d = statusData();
+  assert.ok(Array.isArray(d.installs), 'the status payload has no installs array');
+  const p = {
+    host: 'opencode', scope: 'project', root: 'R', state: 'active', emit: 'opencode',
+    theme: 'imperial', footprint: 'full', posture: 'mentor', mode: 'foreman',
+    doctrines: ['craft', 'rigor'], excludeRules: ['craft.1'], argv: [], rebuild: 'geneseed-build',
+  };
+  const lines = statusLines({ ...d, installs: [p] }, false);
+  const row = lines.find((l) => l.includes('opencode:project'));
+  assert.ok(row, 'no install row');
+  assert.match(row, /active · imperial · full · mentor\/foreman · craft,rigor · excluding craft\.1 {2}\(R\)/);
+  assert.equal(new Set(lines.map((l) => l.length)).size, 1, 'the install row broke the frame');
+
+  // A global install names no path, an empty pack list says so, and no marker reads "none".
+  const g = { ...p, scope: 'global', doctrines: [], excludeRules: null };
+  const grow = statusLines({ ...d, installs: [g] }, false).find((l) => l.includes('opencode:global'));
+  assert.match(grow, /· no packs · no rules excluded *│$/);
+
+  // A recorded-shape payload (no `installs`) renders no row — the 30 recordings stay valid.
+  const { installs: _omit, ...legacy } = d;
+  assert.ok(!statusLines(legacy, false).some((l) => /\w+:(global|project)/.test(l)));
+});
+
+test('status lists only installs that exist — an absent slot has no settings to show', () => {
+  const d = statusData();
+  // Without this, `every` over an empty list would pass vacuously and hide a walk that found
+  // nothing at all.
+  assert.ok(installTargets().length > 0, 'installTargets() found no hosts to check');
+  assert.ok(d.installs.every((p) => p.state !== 'absent'), 'an absent slot leaked into installs');
 });

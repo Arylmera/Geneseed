@@ -80,12 +80,28 @@ function sysExit(msg) {
  * Calling the driver in-process keeps that: `resolveOut` resolves against `process.cwd()`
  * the same way. `build/the-bundle-follows-cwd-not-the-checkout` is the cell.
  *
- * Every other flag is the generator's own default, read from `harness.config.json` by the
- * driver — `harness build` forwards `--theme` and nothing else, and its own `--theme`
- * carries no `choices`, so an unknown one is refused by the generator rather than here.
+ * `geneseed build` used to forward `--theme` alone, which made `setup`'s own off-TTY hint
+ * (`geneseed build --emit … --theme …`) a usage error and left every other axis reachable
+ * only through the undocumented `geneseed-build`. Values are forwarded unchecked: the driver
+ * owns the choices, so the table does not repeat them.
+ *
+ * `--validate-only` is NOT one of these: it lives on `geneseed validate` only — that verb's
+ * source-tree half is the doctor, which starts a process, and this command's whole closure
+ * (`bin/geneseed-cli.mjs` → here → `driverMain`) is under the same transitive `child_process`
+ * ban as `bin/build-driver.mjs` itself. `driver.mjs`'s `run()` refuses the flag unconditionally
+ * for exactly that reason.
  */
+const BUILD_FORWARD = [
+  ['theme', '--theme'], ['emit', '--emit'], ['footprint', '--footprint'],
+  ['posture', '--posture'], ['mode', '--mode'], ['doctrines', '--doctrines'],
+  ['excludeRules', '--exclude-rules'], ['out', '--out'], ['root', '--root'],
+  ['configDir', '--config-dir'],
+];
+
 export function cmdBuild(args) {
-  return driverMain(args.theme ? ['--theme', args.theme] : []);
+  const argv = [];
+  for (const [key, flag] of BUILD_FORWARD) if (args[key] != null) argv.push(flag, args[key]);
+  return driverMain(argv);
 }
 
 // --------------------------------------------------------------------------------------
@@ -162,6 +178,66 @@ export const DEFAULT_EMIT = new Map([
 ]);
 
 /**
+ * Everything `rebuild-all` reads back off one install, and the argv that re-emits it unchanged.
+ *
+ * EXTRACTED SO `status` SHOWS WHAT A REBUILD WOULD USE, not a second reading of the same
+ * markers that could drift from this one. An agent changing one setting takes `argv`, edits one
+ * flag and runs it; every flag it did not touch has to be the install's own, or the "one
+ * change" silently resets the rest — which is exactly the failure the seven read-backs below
+ * exist to prevent.
+ *
+ * THE MARKER IS TRUSTED ONLY FOR ITS OWN HOST. There is one `.geneseed-emit` per root and the
+ * last deploy wins, so in a dual-host repo (`.opencode/` and `.claude/` in one cwd) the other
+ * host's row would otherwise rebuild with the WRONG emit — turning a Claude install into an
+ * OpenCode one. `rebuild-all/a-dual-host-repo-rebuilds-each-row-in-its-own-emit` is the cell.
+ */
+export function installProfile(host, scope, root) {
+  const raw = readMaybe(path.join(root, '.geneseed-emit'));
+  let marker = raw === null ? '' : raw.trim();
+  if (marker && (EMIT_HOST_SCOPE.get(marker) ?? ['', ''])[0] !== host) marker = '';
+  const emit = marker || DEFAULT_EMIT.get(`${host} ${scope}`) || 'opencode-global';
+  const theme = themeOfDir(root) || defaultTheme();
+  const footprint = footprintOfDir(root);
+  const posture = postureOfDir(root) || defaultPosture();
+  const mode = modeOfDir(root) || defaultMode();
+  // A rebuild that defaulted the pack selection would re-emit an install into a constitution
+  // its owner did not choose — and in one direction that is not merely surprising: dropping
+  // the process pack takes the commit/push consent RULES out of AGENT.md while
+  // `claudeHookGroups` keeps the gate wired, or the reverse. ⚠ AND THE FALLBACK IS NOT
+  // `harness.config.json`: a pre-migration carrier has no marker, and resolving that silence
+  // out of a machine-wide config narrows every such install on its first upgrade.
+  // `doctrinesForBuild` resolves unknown to ALL packs — see its docblock.
+  const doctrines = doctrinesForBuild(root);
+  // The per-rule axis is preserved for the same reason and with sharper teeth: an upgrade that
+  // dropped it would quietly hand back every rule its owner switched off, and `process 5` is
+  // one of them. `null` (no marker) stays `null` so the argv omits the flag, as it always did.
+  const excludeRules = excludedRulesOfDir(root);
+  const out = scope === 'global' ? null : root;
+  const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
+    PACK_ORDER, excludeRules);
+  // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
+  // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
+  // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
+  // install beside the one it was meant to rebuild. Appended, so the argv's head is unchanged.
+  if (scope === 'global') argv.push('--config-dir', root);
+  return {
+    host, scope, root, state: installState(root, host, scope),
+    emit, theme, footprint, posture, mode, doctrines, excludeRules, argv,
+  };
+}
+
+/**
+ * `argv` as one pasteable command, using the `geneseed build` launcher rather than the raw
+ * generator: `geneseed-build` is only on PATH for an npm global install, while a git-clone
+ * install has only the `geneseed` launcher, and `geneseed build` now forwards every flag
+ * `setupBuildArgs` produces. Only whitespace is quoted — a path holding shell metacharacters
+ * (`$`, `&`) would need quoting by hand.
+ */
+export function rebuildCommand(argv) {
+  return ['geneseed', 'build', ...argv.map((a) => (/\s/.test(a) ? `"${a}"` : a))].join(' ');
+}
+
+/**
  * `_harness_build.cmd_rebuild_all` — re-emit every ACTIVE install in place, best-effort.
  *
  * WHY THIS IS THE VERB THAT MADE THE DRIVER'S `die` A THROW. The Python spawns one
@@ -172,16 +248,12 @@ export const DEFAULT_EMIT = new Map([
  * `main` converts, and `rebuild-all/one-broken-install-does-not-stop-the-rest` is the cell
  * that fails if either half is undone.
  *
- * FIVE VALUES ARE READ BACK OFF EACH INSTALL, not defaulted. Theme and emit and footprint
- * come from markers; posture and mode are detected from the `**<Name>**` lead in the
- * deployed carrier's prose, because they were never markered. A rebuild that defaulted any
- * of them would silently re-emit an install into something its owner did not choose — which
- * is the same failure mode `_footprint_of_dir`'s WARN exists to prevent, at a larger scale.
- *
- * THE MARKER IS TRUSTED ONLY FOR ITS OWN HOST. There is one `.geneseed-emit` per root and the
- * last deploy wins, so in a dual-host repo (`.opencode/` and `.claude/` in one cwd) the other
- * host's row would otherwise rebuild with the WRONG emit — turning a Claude install into an
- * OpenCode one. `rebuild-all/a-dual-host-repo-rebuilds-each-row-in-its-own-emit` is the cell.
+ * SEVEN VALUES ARE READ BACK OFF EACH INSTALL, not defaulted — see `installProfile`. Theme and
+ * emit and footprint come from markers; posture and mode are detected from the `**<Name>**`
+ * lead in the deployed carrier's prose, because they were never markered. A rebuild that
+ * defaulted any of them would silently re-emit an install into something its owner did not
+ * choose — which is the same failure mode `_footprint_of_dir`'s WARN exists to prevent, at a
+ * larger scale.
  */
 export function cmdRebuildAll() {
   const targets = installTargets().filter(([h, s, r]) => installState(r, h, s) === 'active');
@@ -191,34 +263,11 @@ export function cmdRebuildAll() {
   }
   const failures = [];
   for (const [host, scope, root] of targets) {
-    const raw = readMaybe(path.join(root, '.geneseed-emit'));
-    let marker = raw === null ? '' : raw.trim();
-    if (marker && (EMIT_HOST_SCOPE.get(marker) ?? ['', ''])[0] !== host) marker = '';
-    const emit = marker || DEFAULT_EMIT.get(`${host} ${scope}`) || 'opencode-global';
-    const theme = themeOfDir(root) || defaultTheme();
-    const footprint = footprintOfDir(root);
-    const posture = postureOfDir(root) || defaultPosture();
-    const mode = modeOfDir(root) || defaultMode();
-    const out = scope === 'global' ? null : root;
-    // SIX values now, not five. A rebuild that defaulted the pack selection would re-emit an
-    // install into a constitution its owner did not choose — and in one direction that is not
-    // merely surprising: dropping the process pack takes the commit/push consent RULES out of
-    // AGENT.md while `claudeHookGroups` keeps the gate wired, or the reverse. ⚠ AND THE
-    // FALLBACK IS NOT `harness.config.json`: a pre-migration carrier has no marker, and
-    // resolving that silence out of a machine-wide config narrows every such install on its
-    // first upgrade. `doctrinesForBuild` resolves unknown to ALL packs — see its docblock.
-    const doctrines = doctrinesForBuild(root);
-    // SEVEN. The per-rule axis is preserved for the same reason and with sharper teeth: an
-    // upgrade that dropped it would quietly hand back every rule its owner switched off, and
-    // `process 5` is one of them — the consent gate would return to a harness that had been
-    // built without it. No `doctrinesForBuild` rescue is needed here; see `apiInstallCmd`.
-    const excludeRules = excludedRulesOfDir(root);
-    const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-      PACK_ORDER, excludeRules);
+    const p = installProfile(host, scope, root);
     const label = `${host}:${scope} (${root})`;
-    printOut(`[rebuild-all] ${label}: theme=${theme} emit=${emit} footprint=${footprint} `
-      + `posture=${posture} mode=${mode}\n`);
-    const rc = driverMain(argv);
+    printOut(`[rebuild-all] ${label}: theme=${p.theme} emit=${p.emit} footprint=${p.footprint} `
+      + `posture=${p.posture} mode=${p.mode}\n`);
+    const rc = driverMain(p.argv);
     if (rc !== 0) {
       failures.push(label);
       printErr(`[rebuild-all] FAILED ${label} (exit ${rc})\n`);

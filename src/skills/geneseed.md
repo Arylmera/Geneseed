@@ -2,17 +2,18 @@
 
 > {{DESC_GENESEED}}
 
-**Trigger:** the user mentions Geneseed, the harness, `AGENT.md`, or asks you to inspect, read from, or refresh the deployed bundle — or you need to know what {{LAWS}}, {{AGENTS}}, or {{SKILLS}} are available in the current install.
+**Trigger:** the user mentions Geneseed, the harness, or `AGENT.md`; asks how the install is set up; asks to change its theme, footprint, posture, mode, doctrine packs or excluded rules — or you need to know what {{LAWS}}, {{AGENTS}}, or {{SKILLS}} this install carries.
 
 ## Procedure
-1. Locate the deployment. Try in order: `command -v geneseed` (use the launcher if found); `$GENESEED_HARNESS`; `$OPENCODE_CONFIG_DIR`; `~/.config/opencode/AGENT.md`; `.opencode/AGENT.md` walking up from `pwd`; any `AGENT.md` at the repo root. Stop and say so if none resolves — do not run `setup`, `build`, or `upgrade` to "fix" this.
-2. For state — install mode, theme, counts, version fingerprint, drift — prefer the CLI: `geneseed status`, `geneseed version`, `geneseed doctor`, `geneseed diff`. All read-only and cheap ({{DOCTRINE}} process 3).
-3. To read a specific piece, read the file directly rather than re-deriving from prose ({{LAW}} III): `<harness>/agents/<name>.md`, `<harness>/skills/<name>/SKILL.md`, `<harness>/memory/<file>.md`, `<harness>/notebook/<file>.md`. The {{ONTOLOGY}}, the {{LAWS}} and the active {{DOCTRINES}} live as their own numbered `## N. …` sections inside `<harness>/AGENT.md`.
-4. Side-effecting verbs need explicit assent ({{DOCTRINE}} process 5): `geneseed learn` (writes to {{MEMORY}}), `geneseed context` (refreshes the project's `context.json`), `geneseed web start|stop` (the local browser UI on `127.0.0.1`). `geneseed web status` is read-only.
-5. Never run `setup`, `build`, `upgrade`, `bootstrap`, `update`, `sync-self`, `link`, `unlink`, or `uninstall` as a side effect — these are scope-changing and only run when the user explicitly asks ({{LAW}} II).
-6. The bundle's directory and section names are theme-independent (plain English everywhere); only voice and prose change per theme. Don't pattern-match on flavour words to find files.
+1. **Locate.** Run `geneseed status --json` first: `installs` lists every install on this machine — host, scope, root, state, theme, footprint, posture, mode, packs, excluded rules — and `rebuild`, the command that reproduces each one exactly. `geneseed` not on PATH → ask the user before using `npx geneseed` (it downloads the package), and prefix every command below the same way. Still nothing → look for a host root file: `~/.config/opencode/AGENT.md` or `.opencode/AGENT.md` (OpenCode), `~/.claude/CLAUDE.md` or `.claude/` (Claude Code), `.openclaude/` (OpenClaude), `AGENTS.md` beside `.bob/` or `.github/` (Bob, Copilot). None → say so; never install to "fix" it.
+2. **Read state** with the read-only verbs, cheapest first ({{DOCTRINE}} process 3): `geneseed status --json`, `geneseed version`, `geneseed catalog` (optionally `agents|skills|laws|ontology|doctrines`), `geneseed doctor`, `geneseed diff`, `geneseed mcp`, `geneseed memory list`, `geneseed exclude list`.
+3. **Read a piece** from disk, not from recall ({{LAW}} III): `<root>/agents/<name>.md`, `<root>/skills/<name>/SKILL.md`, `<root>/memory/`, `<root>/notebook/`. The {{ONTOLOGY}}, the {{LAWS}} and the active {{DOCTRINES}} are numbered `## N. …` sections of the install's root file.
+4. **Change an install only when the user asked for that change** ({{LAW}} II). Take that install's `rebuild` command from step 1, edit only the flag the user named (add it if the command omits it — `--posture` and `--mode` are left out at their defaults) — `--theme`, `--footprint lean|full`, `--posture`, `--mode direct|foreman`, `--doctrines craft,rigor|none`, `--exclude-rules "process 7"|none` — dry-run it first by running the same flags through `geneseed validate`, show the command, and run it once the user agrees. Never rebuild from a bare `geneseed build`: every omitted flag resets that setting to the generator default. Confirm with `geneseed status`.
+5. **Other writes also need the user's word:** `geneseed memory rm <name>`, `geneseed exclude add|remove <path>`, `geneseed web start|stop`, `geneseed uninstall --target <root> --yes`. Personal rules and the profile belong to their own {{SKILLS}}; do not edit `user-rules.md` or `PROFILE.md` from here.
+6. **Never on your own initiative:** `geneseed setup` (interactive only), `geneseed upgrade`, `geneseed update`, `geneseed bootstrap`, `geneseed sync-self`, `geneseed rebuild-all`, `geneseed migrate`, `geneseed link`, `geneseed unlink`. `learn`, `context` and the `*-gate` verbs are `geneseed-hook` verbs the host's hooks run — never run them by hand.
+7. Directory and section names are plain English in every theme; only prose changes. Do not search by flavour words.
 
 ## Done when
-- The user's question about the deployed harness is answered from the live install — file paths or CLI output — not from recall.
+- The answer comes from the live install — CLI output or file paths, not recall — or the requested change was rebuilt with every other setting preserved and `geneseed status` shows it.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

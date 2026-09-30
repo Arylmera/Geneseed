@@ -221,3 +221,52 @@ test('a bare `geneseed` runs `home`, as both launchers do', () => {
     sb.cleanup();
   }
 });
+
+test('every option `geneseed build` declares is a flag the generator accepts', () => {
+  // `setup` tells an off-TTY caller to run `geneseed build --emit … --theme …`, and the skill
+  // tells an agent to rebuild with one flag changed. Both need the generator's axes on the
+  // front door; this pins that they are there and that none is invented.
+  const table = JSON.parse(readFileSync(TABLE, 'utf8'));
+  const declared = table.commands.find((c) => c.name === 'build').options.flatMap((o) => o.names);
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--help'],
+    { encoding: 'utf8', windowsHide: true });
+  const driverFlags = new Set(r.stdout.match(/--[a-z-]+/g));
+  assert.deepEqual(declared.filter((f) => !driverFlags.has(f)), [],
+    'geneseed build declares a flag geneseed-build does not have');
+  for (const f of ['--emit', '--footprint', '--posture', '--mode', '--doctrines',
+    '--exclude-rules', '--out', '--root', '--config-dir']) {
+    assert.ok(declared.includes(f), `geneseed build does not forward ${f}`);
+  }
+});
+
+test("setup's off-TTY hint is a command that parses", () => {
+  const sb = makeSandbox();
+  try {
+    const out = path.join(sb.path, 'out');
+    const r = spawnSync(process.execPath, [path.join(ROOT, ...ENTRY.split('/')), 'build',
+      '--emit', 'files', '--theme', 'neutral', '--out', out],
+    { encoding: 'utf8', env: cellEnv(sb.path), windowsHide: true, maxBuffer: 1 << 26 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(existsSync(out), 'geneseed build wrote nothing into the sandbox');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the geneseed skill names only verbs the CLI entry dispatches', () => {
+  // The skill once told agents to run `geneseed learn` and `geneseed context` — both hook
+  // verbs, both `invalid choice` on this entry. Every `geneseed <verb>` it names must be a key
+  // of the entry's VERBS table; hook verbs are written `geneseed-hook <verb>` and are not read.
+  const entry = readFileSync(path.join(ROOT, ...ENTRY.split('/')), 'utf8');
+  const block = entry.slice(entry.indexOf('const VERBS = {'));
+  const verbs = new Set([...block.matchAll(/^ {2}'?([a-z-]+)'?: \(\) => import/gm)].map((m) => m[1]));
+  // `validate` is a real CLI verb but is dispatched as a special case OUTSIDE the VERBS table
+  // (bin/geneseed-cli.mjs, `if (verb === 'validate')`), so it is never a VERBS key and must be
+  // added to the allowed set by hand.
+  verbs.add('validate');
+  const skill = readFileSync(path.join(ROOT, 'src', 'skills', 'geneseed.md'), 'utf8');
+  const named = [...skill.matchAll(/`geneseed ([a-z-]+)/g)].map((m) => m[1]);
+  assert.ok(named.length >= 8, `only ${named.length} verbs named — the regex found nothing`);
+  assert.deepEqual(named.filter((v) => !verbs.has(v)), [],
+    'the geneseed skill names a verb the CLI refuses');
+});

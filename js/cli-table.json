@@ -54,7 +54,7 @@
     },
     {
       "name": "build",
-      "help": "render src/ -> Harness/",
+      "help": "render the harness (same flags as geneseed-build; an omitted flag takes the generator default, not the install's — see geneseed status --json for an install's own; dry run: geneseed validate)",
       "description": "",
       "positionals": [],
       "options": [
@@ -65,6 +65,141 @@
           "dest": "theme",
           "metavar": null,
           "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--emit"
+          ],
+          "dest": "emit",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--footprint"
+          ],
+          "dest": "footprint",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--posture"
+          ],
+          "dest": "posture",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--mode"
+          ],
+          "dest": "mode",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--doctrines"
+          ],
+          "dest": "doctrines",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--exclude-rules"
+          ],
+          "dest": "exclude_rules",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--out"
+          ],
+          "dest": "out",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--root"
+          ],
+          "dest": "root",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--config-dir"
+          ],
+          "dest": "config_dir",
+          "metavar": null,
+          "help": "the config dir a -global emit writes to (default: the host's resolved one)",
           "choices": null,
           "default": null,
           "required": false,
@@ -681,7 +816,21 @@
       "help": "print the install dashboard as text (theme, mode, counts, memory, version)",
       "description": "",
       "positionals": [],
-      "options": [],
+      "options": [
+        {
+          "names": ["--json"],
+          "dest": "json",
+          "metavar": null,
+          "help": "print the status payload as JSON — every install with its settings and the geneseed build command that rebuilds it",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {

@@ -216,7 +216,7 @@ Lean is the default: the rationale is one read away and the context it frees is 
 
 Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates the *reasoning* to on-demand (and adds the standalone law, ontology and doctrine files to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer.
 
-Want to check a build before it touches anything real? `geneseed-build --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build-validate).
+Want to check a build before it touches anything real? `geneseed validate --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build-validate).
 
 ---
 

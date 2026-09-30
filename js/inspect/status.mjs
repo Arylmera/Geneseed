@@ -70,8 +70,9 @@ import {
 // re-exported below because `tests/fixtures/pure_probe.mjs` names this module for two of them
 // and a corpus that followed the code to its new file would stop testing the caller's view.
 import {
-  defaultTheme, installedDefaults, manifestIsClaude, readJsonMaybe, readMaybe,
+  defaultTheme, installedDefaults, installTargets, manifestIsClaude, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
+import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
@@ -262,6 +263,20 @@ export function statusData() {
     agent_md: agentMd ? String(agentMd) : null,
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
+    // EVERY install, not just the one `installedDefaults` settles on — and read through the
+    // same `installProfile` `rebuild-all` uses, so the settings shown are the ones a rebuild
+    // keeps. `rebuild` is the pasteable command an agent edits one flag of. A broken install
+    // must not sink the panel, so it is reported rather than thrown. `absent` slots are
+    // filtered out here: an absent slot has no settings, so a row of defaults for it reads as
+    // an install that does not exist — noise in the panel and misinformation in `--json`.
+    installs: installTargets().map(([host, scope, root]) => {
+      try {
+        const p = installProfile(host, scope, root);
+        return { ...p, rebuild: rebuildCommand(p.argv) };
+      } catch (e) {
+        return { host, scope, root, state: 'unreadable', error: String(e?.message ?? e) };
+      }
+    }).filter((p) => p.state !== 'absent'),
   };
 }
 
@@ -343,6 +358,18 @@ export function statusLines(d, color = false) {
     rows.push(['gates', `${armed}  ${DOT}  ${g.total} ask${g.total === 1 ? '' : 's'}`
       + (byRule ? ` (${byRule})` : '')]);
   }
+  // Conditional for the recording reason again: no recorded panel carries `installs`.
+  for (const p of d.installs ?? []) {
+    const where = p.scope === 'project' ? `  (${p.root})` : '';
+    if (p.state === 'unreadable') {
+      rows.push([`${p.host}:${p.scope}`, `unreadable: ${p.error}${where}`]);
+      continue;
+    }
+    const packs = p.doctrines.length ? p.doctrines.join(',') : 'no packs';
+    const excl = p.excludeRules?.length ? `excluding ${p.excludeRules.join(',')}` : 'no rules excluded';
+    rows.push([`${p.host}:${p.scope}`, [p.state, p.theme, p.footprint, `${p.posture}/${p.mode}`,
+      packs, excl].join(` ${DOT} `) + where]);
+  }
 
   const labelW = Math.max(...rows.map(([k]) => codePointLength(k)));
   const body = rows.map(([k, v]) => `  ${padEndToWidth(k, labelW)}   ${v}`);
@@ -365,8 +392,17 @@ export function statusLines(d, color = false) {
   return lines;
 }
 
-/** `_harness_status.cmd_status`. */
-export function cmdStatus() {
-  for (const line of statusLines(statusData(), colorEnabled())) printOut(`${line}\n`);
+/**
+ * `_harness_status.cmd_status` — and `--json`, the machine face of the same payload. An agent
+ * reading the panel had to scrape box-drawing; the object below is what the panel is drawn
+ * FROM, so the two cannot disagree.
+ */
+export function cmdStatus(args) {
+  const d = statusData();
+  if (args?.json) {
+    printOut(`${JSON.stringify(d, null, 2)}\n`);
+    return 0;
+  }
+  for (const line of statusLines(d, colorEnabled())) printOut(`${line}\n`);
   return 0;
 }

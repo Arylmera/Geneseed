@@ -73,7 +73,7 @@
   "DESC_HERDR": "<one-line description: drive herdr from inside it — split panes, spawn agents, read panes>",
   "DESC_RULE": "<one-line description: ask whether the user wants a standing rule or a durable memory, then write the memory, or pressure-test the rule until it is generic and adopt it in user-rules.md>",
   "DESC_PROFILE": "<one-line description: interview the user and draft or refresh PROFILE.md — who they are, how they work, how they like answers pitched; identity only, rules go to user-rules.md>",
-  "DESC_GENESEED": "<one-line description: interact with the deployed Geneseed harness — read files, status, doctor, diff>",
+  "DESC_GENESEED": "<one-line description: operate the deployed Geneseed harness — find installs and their settings, read files, status, doctor, diff, rebuild one setting on request>",
   "DESC_REVIEW_RESPONSE": "<one-line description: respond to review feedback — verify each point, apply or decline with reasons>",
   "LEX_I": "<themed title for Law I (Sealed Secrets)>",
   "LEX_II": "<themed title for Law II (One Intent, One Act)>",

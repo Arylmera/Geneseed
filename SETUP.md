@@ -472,8 +472,8 @@ geneseed validate --theme imperial --emit opencode --out /path/to/repo/Harness
 ```
 
 (It is a verb on the CLI rather than a flag on the generator because it runs `doctor`, and
-the generator is deliberately unable to start a process. `geneseed-build --validate-only
-…` is the same tool with the same flags.)
+the generator is deliberately unable to start a process — `geneseed-build` refuses
+`--validate-only` outright.)
 
 Renders and emits the requested `--theme`/`--emit`/`--out`/`--root`/`--footprint`
 combination into a throwaway sandbox — nothing under the real `--out`/`--root` is
