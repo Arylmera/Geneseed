@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
+import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
@@ -58,6 +58,13 @@ vi.mock('../api/index.js', () => ({
   },
 }))
 
+// Every confirm answers yes, and the questions a page asked are read off
+// `askConfirm.mock.calls` (hooks/useConfirm.jsx; its own dialog is tested in useConfirm.test).
+const { askConfirm } = vi.hoisted(() => ({ askConfirm: vi.fn(async () => true) }))
+vi.mock('../hooks/useConfirm.jsx', () => ({ useConfirm: () => askConfirm }))
+// The confirm is a promise, so the action behind it lands a microtask after the click.
+const answered = () => act(async () => {})
+
 import Harness, { Switch } from '../pages/Harness.jsx'
 import { api } from '../api/index.js'
 
@@ -81,7 +88,6 @@ describe('Harness', () => {
 
   it('discloses the install steps before dispatching, and defaults the voice to the deployed one', async () => {
     const onAction = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(
       <Harness
         onAction={onAction}
@@ -99,6 +105,7 @@ describe('Harness', () => {
     // Opened, the four steps are there and the voice defaults to the deployed one.
     expect(screen.getByLabelText('voice for claude · global')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    await answered()
     // The PAYLOAD IS UNCHANGED from the inline lane this replaced — same action, same six
     // fields, same defaults. Only the moment the user is asked has moved.
     expect(onAction).toHaveBeenCalledWith('install', {
@@ -114,7 +121,6 @@ describe('Harness', () => {
 
   it('the disclosed voice picker changes the install theme', async () => {
     const onAction = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(
       <Harness
         onAction={onAction}
@@ -126,6 +132,7 @@ describe('Harness', () => {
     const select = screen.getByLabelText('voice for claude · global')
     fireEvent.change(select, { target: { value: 'neutral' } })
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    await answered()
     expect(onAction).toHaveBeenCalledWith('install', expect.objectContaining({ theme: 'neutral' }))
   })
 

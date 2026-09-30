@@ -4,6 +4,7 @@ import { Icon } from './Icon.jsx'
 import Search from './Search.jsx'
 import HarnessSelector from './HarnessSelector.jsx'
 import { PAGES } from '../lib/router.js'
+import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // The top bar: a faux `geneseed --tab=…` prompt, the global search, the
 // light/dark toggle, and the stop-server button (same /api/shutdown as
@@ -22,6 +23,16 @@ export default function Topbar({
   dataRev,
   onSwitch,
 }) {
+  const confirm = useConfirm()
+  const askShutdown = async () => {
+    const ok = await confirm(
+      <>
+        The console goes offline until you start it again with <code>geneseed web</code>.
+      </>,
+      { title: 'Stop the server?', confirmLabel: 'Stop server' },
+    )
+    if (ok) onShutdown()
+  }
   return (
     <header className="topbar">
       {/* Phone-width drawer toggle. CSS hides it above 720px, where the rail is
@@ -58,7 +69,12 @@ export default function Topbar({
       >
         <Icon name={mode === 'light' ? 'moon' : 'sun'} />
       </button>
-      <button className="iconbtn" title="Stop server" aria-label="Stop server" onClick={onShutdown}>
+      <button
+        className="iconbtn"
+        title="Stop server"
+        aria-label="Stop server"
+        onClick={askShutdown}
+      >
         <Icon name="power" />
       </button>
     </header>

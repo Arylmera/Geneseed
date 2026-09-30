@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The Constitution page had NO component test before this file — its only gate was doctor's
@@ -11,6 +11,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('../api/index.js', () => ({
   api: { catalog: vi.fn(), item: vi.fn() },
 }))
+
+// Every confirm answers yes, and the questions a page asked are read off
+// `askConfirm.mock.calls` (hooks/useConfirm.jsx; its own dialog is tested in useConfirm.test).
+const { askConfirm } = vi.hoisted(() => ({ askConfirm: vi.fn(async () => true) }))
+vi.mock('../hooks/useConfirm.jsx', () => ({ useConfirm: () => askConfirm }))
+// The confirm is a promise, so the action behind it lands a microtask after the click.
+const answered = () => act(async () => {})
 
 import Laws from '../pages/Laws.jsx'
 import { api } from '../api/index.js'
@@ -264,13 +271,13 @@ describe('Constitution page — doctrine toggles', () => {
     // ⚠ THE WHOLE POINT. Acting per click would re-emit the install once per switch — each
     // rebuild describing a state nobody asked for, each writing a different marker pair.
     const onAction = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
     await settled(container)
     fireEvent.click(sw(container, 'Documentation in Step')) // off -> on
     fireEvent.click(sw(container, 'English Configuration')) // on  -> off
     expect(onAction).not.toHaveBeenCalled() // still nothing — this is the claim
     fireEvent.click(applyBtn())
+    await answered()
     expect(onAction).toHaveBeenCalledTimes(1)
     const [action, body] = onAction.mock.calls[0]
     expect(action).toBe('install')
@@ -294,11 +301,11 @@ describe('Constitution page — doctrine toggles', () => {
     // rule. `doctrines` must still carry `process` — dropping the pack would take the other
     // six rules with it.
     const onAction = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
     await waitFor(() => expect(sw(container, 'Codes That Persist')).toBeTruthy())
     fireEvent.click(sw(container, 'Codes That Persist'))
     fireEvent.click(applyBtn())
+    await answered()
     const body = onAction.mock.calls[0][1]
     expect(body.doctrines).toContain('process')
     expect(body.excludeRules).toEqual(['craft.3', 'process.7'])
@@ -310,12 +317,12 @@ describe('Constitution page — doctrine toggles', () => {
     // renders a pack header with nothing under it. And its rules must NOT then be listed as
     // exclusions — the pack's absence already says it, and naming both is what the CLI rejects.
     const onAction = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
     await settled(container)
     fireEvent.click(sw(container, 'Automate Repetition'))
     fireEvent.click(sw(container, 'English Configuration')) // craft.3 is already off
     fireEvent.click(applyBtn())
+    await answered()
     const body = onAction.mock.calls[0][1]
     expect(body.doctrines).toEqual(['process'])
     expect(body.excludeRules).toEqual([])
@@ -326,7 +333,6 @@ describe('Constitution page — doctrine toggles', () => {
     // The server reads `[]` as a deliberate `--doctrines none` and anything falsier as
     // "unspecified", which resolves to ALL packs — so an empty list must arrive as an empty list.
     const onAction = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { container } = render(withInstall(onAction))
     await settled(container)
     for (const name of [
@@ -338,6 +344,7 @@ describe('Constitution page — doctrine toggles', () => {
       fireEvent.click(sw(container, name))
     }
     fireEvent.click(applyBtn())
+    await answered()
     expect(onAction.mock.calls[0][1].doctrines).toEqual([])
     expect(onAction.mock.calls[0][1].excludeRules).toEqual([])
     vi.restoreAllMocks()
@@ -358,14 +365,17 @@ describe('Constitution page — doctrine toggles', () => {
     // Supported, so it is NAMED rather than refused — and named at rule granularity now, since
     // dropping `process 7` beside it costs nothing at the tool boundary.
     const onAction = vi.fn()
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const confirm = askConfirm
+    confirm.mockClear()
     const { container } = render(withInstall(onAction))
     await waitFor(() => expect(sw(container, 'Codes That Persist')).toBeTruthy())
     fireEvent.click(sw(container, 'Codes That Persist'))
     fireEvent.click(applyBtn())
+    await answered()
     expect(confirm.mock.calls[0][0]).not.toMatch(/consent/) // a sibling rule costs no gate
     fireEvent.click(sw(container, 'Consent Before Push'))
     fireEvent.click(applyBtn())
+    await answered()
     expect(confirm.mock.calls[1][0]).toMatch(/process 5/)
     expect(confirm.mock.calls[1][0]).toMatch(/consent/)
     expect(onAction).toHaveBeenCalledTimes(2)

@@ -10,6 +10,11 @@ vi.mock('../api/index.js', () => ({
   api: { catalog: vi.fn(), item: vi.fn(), memoryDelete: vi.fn() },
 }))
 
+// Every confirm answers yes, and the questions a page asked are read off
+// `askConfirm.mock.calls` (hooks/useConfirm.jsx; its own dialog is tested in useConfirm.test).
+const { askConfirm } = vi.hoisted(() => ({ askConfirm: vi.fn(async () => true) }))
+vi.mock('../hooks/useConfirm.jsx', () => ({ useConfirm: () => askConfirm }))
+
 import Library from '../pages/Library.jsx'
 import { api } from '../api/index.js'
 
@@ -65,7 +70,6 @@ describe('Library chip-bar (replaces Section)', () => {
   })
 
   it('forgets a memory fact via the delete control', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<Library section="memory" selected="fact-a" overview={overview({})} />)
     await waitFor(() => expect(screen.getByText('Forget this fact')).toBeTruthy())
     fireEvent.click(screen.getByText('Forget this fact'))

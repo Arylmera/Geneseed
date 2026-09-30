@@ -4,6 +4,7 @@ import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // Setup → Harness: this machine's install first, everything else under it.
 //
@@ -280,6 +281,7 @@ export default function Harnesses({
   dataRev,
   onMutated,
 }) {
+  const confirm = useConfirm()
   const { data: instData, error: instErr } = useAsync(() => api.installs(), [dataRev]) // { installs }
   const { data: mcpData, error: mcpErr } = useAsync(() => api.mcp(), [dataRev]) // { targets }
   const [note, setNote] = useState('')
@@ -362,7 +364,7 @@ export default function Harnesses({
   // Install a not-installed location, or rebuild an active one with the picked voice +
   // footprint — both go through the 'install' action (a non-destructive in-place
   // re-emit), streamed to the console.
-  const applyVoice = (inst) => {
+  const applyVoice = async (inst) => {
     const theme = voiceFor(inst)
     const footprint = footprintFor(inst)
     const posture = postureFor(inst)
@@ -372,7 +374,11 @@ export default function Harnesses({
         ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint, ${posture} posture, ${mode} mode)? ` +
           `Files are added non-destructively (your own config is left untouched); deactivate or uninstall later.`
         : `Rebuild this install (voice “${theme}”, ${footprint} footprint, ${posture} posture, ${mode} mode)? It rebuilds in place, non-destructive.`
-    if (window.confirm(msg))
+    const ok = await confirm(msg, {
+      title: inst.state === 'absent' ? 'Install Geneseed?' : 'Rebuild this install?',
+      confirmLabel: inst.state === 'absent' ? 'Install' : 'Rebuild',
+    })
+    if (ok)
       onAction?.('install', {
         host: inst.host,
         scope: inst.scope,
@@ -387,9 +393,10 @@ export default function Harnesses({
   const toggleInstall = async (inst) => {
     if (
       inst.state === 'active' &&
-      !window.confirm(
+      !(await confirm(
         'Deactivate this install? Files are moved aside, not deleted; reactivate any time.',
-      )
+        { title: 'Deactivate this install?', confirmLabel: 'Deactivate' },
+      ))
     )
       return
     setBusyKey(inst.id)

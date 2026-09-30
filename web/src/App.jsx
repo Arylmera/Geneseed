@@ -18,7 +18,7 @@ import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
 import Loading from './components/Loading.jsx'
-import ConfirmDialog from './components/ConfirmDialog.jsx'
+import { ConfirmProvider } from './hooks/useConfirm.jsx'
 // Dashboard is the landing route, so it ships in the shell. Every other page is
 // code-split: importing all fourteen statically put the whole console — graph
 // rendering, the harness manager, the docs viewer — into one chunk that had to be
@@ -151,11 +151,8 @@ export default function App() {
 
   // Stop the local server (same /api/shutdown the Settings card uses). The
   // connection drops as the server goes down, so a rejected request right
-  // after the call is still a successful stop. Confirmed through the themed
-  // <dialog> rather than window.confirm — same question, console's own chrome.
-  const [confirmStop, setConfirmStop] = useState(false)
+  // after the call is still a successful stop. The topbar asks first.
   const doShutdown = async () => {
-    setConfirmStop(false)
     try {
       await api.shutdown()
     } catch {
@@ -240,64 +237,67 @@ export default function App() {
       className={`app fl-${flavour} ${mode === 'light' ? 'light' : ''}${navOpen ? ' nav-open' : ''}`}
       ref={appRef}
     >
-      <div className="atmos" aria-hidden="true" />
-      {/* Keyboard users land on the rail's fourteen nav items before any page
+      {/* One themed confirm for every page — see hooks/useConfirm.jsx for why it sits
+          inside `.app`. */}
+      <ConfirmProvider>
+        <div className="atmos" aria-hidden="true" />
+        {/* Keyboard users land on the rail's fourteen nav items before any page
           content; this jumps past them. Visible only while focused. */}
-      <a className="skip-link" href="#main">
-        Skip to content
-      </a>
-      {/* Actions (rebuild, update, doctor) run as background jobs whose only
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
+        {/* Actions (rebuild, update, doctor) run as background jobs whose only
           feedback was visual — the console panel and a spinner. Announce the
           transitions so a screen-reader user knows a job started and ended. */}
-      <p className="sr-only" role="status" aria-live="polite">
-        {jobAnnouncement}
-      </p>
-      {navOpen && (
-        <button
-          type="button"
-          className="nav-scrim"
-          aria-label="Close navigation"
-          onClick={() => setNavOpen(false)}
-        />
-      )}
-      <Rail
-        route={route}
-        overview={overview}
-        setup={setup}
-        onOpenVoice={() => setVoiceOpen((v) => !v)}
-        onNavigate={() => setNavOpen(false)}
-        finish={finish}
-      />
-      {voiceOpen && (
-        <VoicePopover
-          themes={themes}
-          current={overview?.theme}
-          onPick={(name) => {
-            setVoiceOpen(false)
-            runAction('build', { theme: name, emit: overview?.emit })
-          }}
-          onClose={() => setVoiceOpen(false)}
-        />
-      )}
-      <div className="col" ref={colRef}>
-        <Topbar
+        <p className="sr-only" role="status" aria-live="polite">
+          {jobAnnouncement}
+        </p>
+        {navOpen && (
+          <button
+            type="button"
+            className="nav-scrim"
+            aria-label="Close navigation"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
+        <Rail
           route={route}
-          navOpen={navOpen}
-          onToggleNav={() => setNavOpen((v) => !v)}
-          target={overview?.target}
-          version={overview?.version}
-          query={query}
-          onQuery={setQuery}
-          mode={mode}
-          onToggleMode={toggleMode}
-          onShutdown={() => setConfirmStop(true)}
-          dataRev={dataRev}
-          onSwitch={refresh}
+          overview={overview}
+          setup={setup}
+          onOpenVoice={() => setVoiceOpen((v) => !v)}
+          onNavigate={() => setNavOpen(false)}
+          finish={finish}
         />
-        <main className="page" id="main" tabIndex={-1}>
-          <div className={route.page === 'harness' ? 'pad pad-wide' : 'pad'}>
-            <Suspense fallback={<Loading />}>
-              {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. `Laws`, `Skills` and `Library`
+        {voiceOpen && (
+          <VoicePopover
+            themes={themes}
+            current={overview?.theme}
+            onPick={(name) => {
+              setVoiceOpen(false)
+              runAction('build', { theme: name, emit: overview?.emit })
+            }}
+            onClose={() => setVoiceOpen(false)}
+          />
+        )}
+        <div className="col" ref={colRef}>
+          <Topbar
+            route={route}
+            navOpen={navOpen}
+            onToggleNav={() => setNavOpen((v) => !v)}
+            target={overview?.target}
+            version={overview?.version}
+            query={query}
+            onQuery={setQuery}
+            mode={mode}
+            onToggleMode={toggleMode}
+            onShutdown={doShutdown}
+            dataRev={dataRev}
+            onSwitch={refresh}
+          />
+          <main className="page" id="main" tabIndex={-1}>
+            <div className={route.page === 'harness' ? 'pad pad-wide' : 'pad'}>
+              <Suspense fallback={<Loading />}>
+                {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. `Laws`, `Skills` and `Library`
                   are each reachable from three routes — the flat view, `#/section/<name>` and
                   `#/item/<type>/<name>` — and rendering them from three different positions in
                   this tree made React UNMOUNT and remount the whole page whenever the route
@@ -310,43 +310,35 @@ export default function App() {
                   this ONE expression, so React reconciles by component type: `#/agents` and
                   `#/library` are both `<Library>` and keep their state across the switch.
                   Pinned by __tests__/app.routing.test.jsx. */}
-              {pages[route.page]?.()}
-            </Suspense>
-          </div>
-        </main>
-        <Console
-          runs={runs}
-          open={consoleOpen}
-          busy={!!activeId}
-          finish={finish}
-          onToggle={() => setConsoleOpen((v) => !v)}
-          onClear={clearRuns}
-          onCancel={cancelJob}
-        />
-      </div>
-      <ConfirmDialog
-        open={confirmStop}
-        title="Stop the server?"
-        confirmLabel="Stop server"
-        onConfirm={doShutdown}
-        onClose={() => setConfirmStop(false)}
-      >
-        The console goes offline until you start it again with <code>geneseed web</code>.
-      </ConfirmDialog>
-      {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
-      {booting && (
-        <BootSplash
-          ready={!!overview || !!overviewError}
-          onDone={() => {
-            try {
-              window.sessionStorage.setItem('gs-booted', '1')
-            } catch {
-              /* storage blocked — the splash plays again next load, nothing worse */
-            }
-            setBooting(false)
-          }}
-        />
-      )}
+                {pages[route.page]?.()}
+              </Suspense>
+            </div>
+          </main>
+          <Console
+            runs={runs}
+            open={consoleOpen}
+            busy={!!activeId}
+            finish={finish}
+            onToggle={() => setConsoleOpen((v) => !v)}
+            onClear={clearRuns}
+            onCancel={cancelJob}
+          />
+        </div>
+        {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
+        {booting && (
+          <BootSplash
+            ready={!!overview || !!overviewError}
+            onDone={() => {
+              try {
+                window.sessionStorage.setItem('gs-booted', '1')
+              } catch {
+                /* storage blocked — the splash plays again next load, nothing worse */
+              }
+              setBooting(false)
+            }}
+          />
+        )}
+      </ConfirmProvider>
     </div>
   )
 }

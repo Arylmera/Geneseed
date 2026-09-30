@@ -8,6 +8,7 @@ import ErrorState from '../components/ErrorState.jsx'
 import { LAW_CATS, LAW_CAT_ORDER, PACK_CATS } from '../lib/lawCats.js'
 import CatalogRow from '../components/CatalogRow.jsx'
 import FilterInput from '../components/FilterInput.jsx'
+import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // THE FILENAME AND THE ROUTE STAY `laws`. tests/helpers/cli_golden.mjs hard-requires this path,
 // doctor's lawMetaProblems reads this ONE file out of web/src, and the npm partition ships it
@@ -212,6 +213,7 @@ function OntologyCard({ sec, isOpen, onToggle }) {
 // route). The open row is driven straight off the URL so those links pre-open the rule and any
 // opened rule is itself shareable.
 export default function Laws({ selected, overview, onAction, dataRev }) {
+  const confirm = useConfirm()
   const { data, error } = useAsync(() => api.catalog('laws'), [dataRev], 'catalog:laws')
   const [sel, setSel] = useState('all')
   const [q, setQ] = useState('')
@@ -361,7 +363,7 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
   // both `doctrines` (the packs with at least one rule left) and `excludeRules` (the rules
   // dropped from the packs that survive). An exclusion naming a pack that is already absent
   // would be noise, so it is not sent — the pack's absence already says it.
-  const applyPacks = () => {
+  const applyPacks = async () => {
     if (!canApply || !dirty) return
     const keptPacks = packs.filter((p) => p.rules.some((r) => isOn(r.addr))).map((p) => p.pack)
     const excludeRules = packs
@@ -375,13 +377,12 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
     const what = pickedRules.length
       ? `${pickedRules.length} of ${allRules.length} doctrine rules`
       : 'no doctrine rules'
-    if (
-      window.confirm(
-        `Rebuild ${install.host} · ${install.scope} with ${what}? ` +
-          `It rebuilds in place, non-destructive.${warn}`,
-      )
+    const ok = await confirm(
+      `Rebuild ${install.host} · ${install.scope} with ${what}? ` +
+        `It rebuilds in place, non-destructive.${warn}`,
+      { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild' },
     )
-      onAction('install', { ...install, doctrines: keptPacks, excludeRules })
+    if (ok) onAction('install', { ...install, doctrines: keptPacks, excludeRules })
   }
 
   const counts = {}

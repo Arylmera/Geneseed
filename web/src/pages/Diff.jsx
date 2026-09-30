@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon.jsx'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // How often the export job is polled for completion.
 const EXPORT_POLL_INTERVAL_MS = 700
@@ -18,6 +19,7 @@ function lineKind(ln) {
 }
 
 export default function Diff({ onMutated, dataRev }) {
+  const confirm = useConfirm()
   const { data, error, reload } = useAsync(() => api.diff(), [dataRev])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
@@ -69,12 +71,11 @@ export default function Diff({ onMutated, dataRev }) {
     const warning = added.length
       ? `Restoring will DELETE ${added.length} deployed-only file(s):\n${added.join('\n')}\n\n`
       : ''
-    if (
-      !window.confirm(
-        `${warning}Discard local edits and restore ${files.length} file(s) from source?`,
-      )
+    const ok = await confirm(
+      `${warning}Discard local edits and restore ${files.length} file(s) from source?`,
+      { title: 'Restore from source?', confirmLabel: 'Restore' },
     )
-      return
+    if (!ok) return
     setBusy(true)
     try {
       const res = await api.restore(files)

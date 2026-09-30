@@ -3,6 +3,7 @@ import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // Rules — the user's own standing rules (user-rules.md beside the deployed
 // AGENT.md). The page is the curation surface for the file the agent obeys
@@ -105,6 +106,7 @@ function RuleRow({ rule, isOpen, onToggle, onEdit, onDelete, onGraduate }) {
 }
 
 export default function Rules() {
+  const confirm = useConfirm()
   const [rev, setRev] = useState(0)
   const { data, error } = useAsync(() => api.rules(), [rev])
   const [open, setOpen] = useState(null)
@@ -143,9 +145,15 @@ export default function Rules() {
     }
   }
 
-  const onDelete = (r) => {
-    if (!window.confirm(`Retire rule R${r.id} — “${r.title}”? It is removed from user-rules.md.`))
-      return
+  const onDelete = async (r) => {
+    const ok = await confirm(
+      `Retire rule R${r.id} — “${r.title}”? It is removed from user-rules.md.`,
+      {
+        title: 'Retire this rule?',
+        confirmLabel: 'Retire',
+      },
+    )
+    if (!ok) return
     mutate({ op: 'delete', id: r.id })
   }
   // Graduate = same rule, trial marker dropped (adopted for good).

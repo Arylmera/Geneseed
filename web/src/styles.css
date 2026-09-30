@@ -1077,7 +1077,8 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 }
 .confirm-title { margin: 0 0 8px; font-family: var(--font-display);
   font-weight: 600; font-size: 17px; }
-.confirm-body { color: var(--text-2); font-size: 13px; line-height: 1.5; }
+/* pre-line: some questions (Diff restore, Laws rebuild) break lines with a newline, as they did in window.confirm */
+.confirm-body { color: var(--text-2); font-size: 13px; line-height: 1.5; white-space: pre-line; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
 /* the in-page filter box on the Constitution/Skills toolbars (Library styles
