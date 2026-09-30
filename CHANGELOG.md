@@ -8,7 +8,33 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-_Nothing yet._
+**Upgrading:** re-emit after installing. Laws IX and XI are gone and Echo the Intent is now
+**Law IX**: a note, memory or commit that says "Law IX" or "Law XI" from before this release
+means the retired External Gate (now a rigor rule) or Absence Is a Claim (folded into Verify
+Before Asserting). Nothing in the harness cites a rule by number any more.
+
+### Changed
+- **Stable rule ids.** Every law and doctrine rule is declared by a permanent id on its heading
+  (`### {{LAW:verify-before-asserting}} Verify Before Asserting`) and cited by it. The number is
+  the rule's position, computed at render time, so removing or reordering a rule rewires no
+  citation. Theme title keys are keyed by id too (`LEX_VERIFY_BEFORE_ASSERTING`,
+  `DOC_CONSENT_BEFORE_PUSH`), so a renumber never touches a theme.
+- **Citations render as principle names.** Every cross-reference in AGENT.md, the laws, the
+  doctrines, skills and agents now reads *Verify Before Asserting* rather than "Rule III" — the
+  same in every voice. The hook and guard-plugin messages name the principle too. Numbers remain
+  only on each rule's own heading.
+- The memory section of AGENT.md (always on, both footprints) tells the agent to cite a rule by
+  its principle, never its number, in anything that outlives the session.
+
+### Removed
+- Laws IX (External Gate, a rigor rule since 3.x) and XI (Absence Is a Claim, folded into Law III),
+  both retired in place until now. Their ids are recorded in `RETIRED_RULE_IDS` and can never be
+  reused.
+
+### Added
+- `doctor` refuses a citation by number, an unknown id, a duplicate id, a rule heading with no id,
+  a retired id declared again, a console `LAW_META`/`DOCTRINE_META` row pinned to a different rule
+  than its number now holds, and a hook-gated rule moving away from the address its hook keys.
 
 ## [3.8.0] — 2026-09-30
 
