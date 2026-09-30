@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { Icon } from '../components/Icon.jsx'
-import { SECTIONS, LIBRARY_ORDER, SECTION_ALIAS } from '../lib/sections.js'
+import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
@@ -61,10 +61,10 @@ function EmptyDoc({ section, source }) {
 //
 // Selecting a row pushes the matching #/item/.../<name> URL so deep-linking
 // keeps working from the search spotlight and the Graph.
-// Resolve a routed section onto the chip that actually hosts it: `config`
-// folds into the wiki ("Knowledge") chip, so a #/section/config genome cell or a
-// #/item/config/… deep-link lands there instead of on an absent chip.
-const resolveSec = (s) => (s && SECTIONS[s] ? SECTION_ALIAS[s] || s : LIBRARY_ORDER[0])
+// The chip to open for a routed section. The router has already folded aliased
+// sections onto their host chip (`config` -> the wiki "Knowledge" chip, see
+// lib/router.js); an absent or unknown section opens the first chip.
+const resolveSec = (s) => (s && Object.hasOwn(SECTIONS, s) ? s : LIBRARY_ORDER[0])
 
 // The Knowledge chip is a merged view: the config catalog (the two setup
 // manifests) as a "Setup" group, then every wiki page grouped by vault. Each

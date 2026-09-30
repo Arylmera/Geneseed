@@ -12,7 +12,7 @@ const overview = { counts: { agents: 16, skills: 25, laws: 20 }, theme: 'ember' 
 // new Laws tab between Dashboard and Library.
 describe('Rail navigation', () => {
   it('lights up Library on the landing route', () => {
-    render(<Rail route={{ view: 'library' }} overview={overview} />)
+    render(<Rail route={{ page: 'library' }} overview={overview} />)
     const libraryLink = screen.getByText('Library').closest('a')
     expect(libraryLink.getAttribute('href')).toBe('#/library')
     expect(libraryLink.className).toContain('active')
@@ -20,17 +20,24 @@ describe('Rail navigation', () => {
 
   it('keeps Library lit on section + item routes', () => {
     // Library owns every section except laws and skills (those have their own tabs).
-    render(<Rail route={{ view: 'section', section: 'memory' }} overview={overview} />)
+    render(<Rail route={{ page: 'library', section: 'memory' }} overview={overview} />)
     expect(screen.getByText('Library').closest('a').className).toContain('active')
   })
 
   it('keeps Library lit on an item-detail route', () => {
-    render(<Rail route={{ view: 'item', type: 'memory', name: 'some-fact' }} overview={overview} />)
+    render(
+      <Rail
+        route={{ page: 'library', section: 'memory', item: 'some-fact' }}
+        overview={overview}
+      />,
+    )
     expect(screen.getByText('Library').closest('a').className).toContain('active')
   })
 
   it('exposes Agents as its own rail entry and claims agent item routes', () => {
-    render(<Rail route={{ view: 'item', type: 'agent', name: 'advocate' }} overview={overview} />)
+    render(
+      <Rail route={{ page: 'agents', section: 'agents', item: 'advocate' }} overview={overview} />,
+    )
     const agentsLink = screen.getByText('Agents').closest('a')
     expect(agentsLink.getAttribute('href')).toBe('#/agents')
     expect(agentsLink.className).toContain('active')
@@ -45,7 +52,7 @@ describe('Rail navigation', () => {
     // is deliberate — `tests/helpers/cli_golden.mjs` hard-requires web/src/pages/Laws.jsx and
     // every deep link in the wild is `#/laws` — so the pairing under it still reads: the
     // Constitution is Geneseed's, the Rules below are yours.
-    render(<Rail route={{ view: 'laws' }} overview={overview} />)
+    render(<Rail route={{ page: 'laws' }} overview={overview} />)
     const lawsLink = screen.getByText('Constitution').closest('a')
     expect(lawsLink.getAttribute('href')).toBe('#/laws')
     expect(lawsLink.className).toContain('active')
@@ -55,14 +62,14 @@ describe('Rail navigation', () => {
   })
 
   it('exposes Activity as its own rail entry', () => {
-    render(<Rail route={{ view: 'activity' }} overview={overview} />)
+    render(<Rail route={{ page: 'activity' }} overview={overview} />)
     const link = screen.getByText('Activity').closest('a')
     expect(link.getAttribute('href')).toBe('#/activity')
     expect(link.className).toContain('active')
   })
 
   it('does not render section sub-items in the rail', () => {
-    render(<Rail route={{ view: 'library' }} overview={overview} />)
+    render(<Rail route={{ page: 'library' }} overview={overview} />)
     // Library's sections (Memory, Notebook, Wiki, …) live in the Library
     // chip-bar, not the rail. Skills and Laws are the exceptions — each is now
     // its own top-level rail entry.

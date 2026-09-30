@@ -81,6 +81,9 @@ const TABLE = [
   // Names are URI-decoded, so a space or a slash in a name survives the round trip.
   ['#/item/memory/a%20b', 'Library section=memory selected=a b', 'Library'],
   ['#/item/notebook/x%2Fy', 'Library section=notebook selected=x/y', 'Library'],
+  // config has no chip of its own: the resolver folds it onto the wiki (Knowledge) chip.
+  ['#/section/config', 'Library section=wiki', 'Library'],
+  ['#/item/config/x', 'Library section=wiki selected=x', 'Library'],
   ['#/rules', 'Rules', 'Rules'],
   ['#/profile', 'Profile', 'Profile'],
   ['#/docs', 'Docs page=', 'Docs'],
@@ -103,6 +106,23 @@ describe('App routing', () => {
     render(<App />)
     expect(await page()).toBe(expected)
     expect(lit()).toMatch(new RegExp(`^${rail}`))
+  })
+})
+
+// The prompt's --tab flag comes from the same page the rail lights, so the two can no
+// longer disagree: `#/section/agents` used to light Agents while the prompt said library.
+describe('topbar tab flag', () => {
+  it.each([
+    ['#/', 'overview'],
+    ['#/section/agents', 'agents'],
+    ['#/item/law/IV', 'laws'],
+    ['#/activity/s1', 'activity'],
+    ['#/themes', 'harness'],
+  ])('%s -> --tab=%s', async (hash, flag) => {
+    window.location.hash = hash
+    render(<App />)
+    await page()
+    expect(document.querySelector('.prompt .flag').textContent).toBe(`--tab=${flag}`)
   })
 })
 
