@@ -2517,7 +2517,15 @@ a.tier .tier-bar > span { background: var(--line-3); }
   font-weight: 600; letter-spacing: 0; text-transform: none; }
 .hosts-tbl th:first-child, .hosts-tbl td:first-child { padding-left: 20px; }
 .hosts-tbl td { white-space: nowrap; }
-.hosts-tbl tr.on { background: var(--accent-soft); }
+.hosts-tbl tr.pickable { cursor: pointer; }
+.hosts-tbl tr.pickable:hover { background: var(--surface-2); }
+.hosts-tbl tr.on, .hosts-tbl tr.on:hover { background: var(--accent-soft); }
+.hosts-tbl tr.on .row-pick { color: var(--accent-text); }
+.hosts-tbl .pick-mark { text-align: right; color: var(--accent-text); font-size: 12px;
+  font-weight: 600; white-space: nowrap; }
+.install-panel .ip-eyebrow { font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); }
+.install-panel .ip-kind { margin-top: -6px; font-size: 13px; color: var(--text-2); }
 .hosts-tbl tr.quiet td { color: var(--text-3); }
 .path-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; font-size: 12px;
   color: var(--text-2); }
@@ -2526,7 +2534,8 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .row-pick:hover { color: var(--accent-text); }
 .install-panel { position: sticky; top: calc(var(--topbar-h) + 16px); display: flex;
   flex-direction: column; gap: 16px; padding: 24px; background: var(--bg-2);
-  border: 1px solid var(--line); border-radius: var(--r-md); }
+  /* It edits the row marked Editing, so its border takes the same accent. */
+  border: 1px solid var(--accent-line); border-radius: var(--r-md); }
 .ip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ip-head h2 { margin: 0; font-size: 20px; font-weight: 700; }
 code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: var(--text-3);

@@ -1,5 +1,5 @@
 import React from 'react'
-import { removeLayer } from '../../lib/hosts.js'
+import { removeLayer, hostInfo, installName } from '../../lib/hosts.js'
 import { PickSelects, Switch } from './controls.jsx'
 import ExclusionsCard from './ExclusionsCard.jsx'
 
@@ -141,10 +141,16 @@ export default function InstallPanel({
   const absent = inst.state === 'absent'
   return (
     <aside className="install-panel" aria-label={`${who} install`}>
+      <span className="ip-eyebrow">Selected install</span>
       <div className="ip-head">
-        <h2>{who}</h2>
+        <h2>{installName(inst)}</h2>
         <span className={`tag ${tone}`}>{label}</span>
       </div>
+      <span className="ip-kind">
+        {inst.scope === 'global'
+          ? 'Global install'
+          : `Per-project install · ${hostInfo(inst.host).label}`}
+      </span>
       <code className="ip-path">{inst.path}</code>
 
       {absent ? (

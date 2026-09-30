@@ -131,6 +131,21 @@ describe('Installs / Hosts', () => {
     expect(screen.queryByRole('table', { name: 'Per-project installs' })).toBeNull()
   })
 
+  // The table and the panel are one control: the whole row selects (not only the name),
+  // the selected row says it is the one being edited, and the panel says it shows the
+  // selection, by the same name the table uses and with its kind.
+  it('selects an install by clicking anywhere on its row, and the panel follows', async () => {
+    render(<Hosts onAction={() => {}} />)
+    await waitFor(() => expect(panel()).toBeTruthy())
+    const row = (await screen.findByRole('button', { name: 'Claude Code' })).closest('tr')
+    fireEvent.click(row.querySelector('.path-cell'))
+    expect(panel().querySelector('h2').textContent).toBe('Claude Code')
+    expect(panel().querySelector('.ip-eyebrow').textContent).toBe('Selected install')
+    expect(panel().querySelector('.ip-kind').textContent).toBe('Global install')
+    expect(row.querySelector('.pick-mark').textContent).toBe('Editing ›')
+    expect([...document.querySelectorAll('.pick-mark')].filter((c) => c.textContent).length).toBe(1)
+  })
+
   it('Rebuild all dispatches the build-all action', async () => {
     const onAction = vi.fn()
     render(<Hosts onAction={onAction} />)
@@ -141,7 +156,7 @@ describe('Installs / Hosts', () => {
   it('opens the panel on the active install', async () => {
     render(<Hosts onAction={() => {}} />)
     await waitFor(() => expect(panel()).toBeTruthy())
-    expect(panel().querySelector('h2').textContent).toBe('opencode · global')
+    expect(panel().querySelector('h2').textContent).toBe('OpenCode')
     expect(screen.getByRole('button', { name: 'OpenCode', pressed: true })).toBeTruthy()
   })
 
@@ -155,7 +170,7 @@ describe('Installs / Hosts', () => {
       />,
     )
     await pick('Claude Code')
-    expect(panel().querySelector('h2').textContent).toBe('claude · global')
+    expect(panel().querySelector('h2').textContent).toBe('Claude Code')
     // The four choices are there, the voice on the deployed one.
     expect(screen.getByLabelText('voice for claude · global').value).toBe('imperial')
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))

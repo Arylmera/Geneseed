@@ -8,20 +8,13 @@ import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { FOOTPRINT_OPTIONS } from './controls.jsx'
 import DeployForm from './DeployForm.jsx'
 import InstallPanel from './InstallPanel.jsx'
-import { hostInfo } from '../../lib/hosts.js'
+import { hostInfo, installName } from '../../lib/hosts.js'
 
 // Join key for the MCP-target -> install pairing: an install owns the targets the API tags
 // with its (host, root). Keying on the install identity (not the config's dirname) is what
 // lets a Claude global target, whose ~/.claude.json sits OUTSIDE its ~/.claude root, still
 // attach to the right install.
 const installKey = (host, root) => `${host} ${root}`
-
-// The last segment of a project path, the name a repo is known by.
-const folderName = (path) =>
-  String(path || '')
-    .replace(/[\\/]+$/, '')
-    .split(/[\\/]/)
-    .pop() || path
 
 const STATE = { active: ['Active', 'ok'], disabled: ['Disabled', 'warn'] }
 
@@ -40,6 +33,9 @@ function InstallTable({ rows, project, currentId, onPick, label }) {
             <th>Voice</th>
             <th>Footprint</th>
             <th>State</th>
+            <th>
+              <span className="sr-only">Selected</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -48,7 +44,12 @@ function InstallTable({ rows, project, currentId, onPick, label }) {
             const on = currentId === inst.id
             const quiet = inst.state === 'absent'
             return (
-              <tr key={inst.id} className={`${on ? 'on' : ''}${quiet ? ' quiet' : ''}`}>
+              // The whole row picks it, not only the name: the button stays for the keyboard.
+              <tr
+                key={inst.id}
+                className={`pickable${on ? ' on' : ''}${quiet ? ' quiet' : ''}`}
+                onClick={() => onPick(inst.id)}
+              >
                 <td>
                   <button
                     type="button"
@@ -57,7 +58,7 @@ function InstallTable({ rows, project, currentId, onPick, label }) {
                     title={inst.path}
                     onClick={() => onPick(inst.id)}
                   >
-                    {project ? folderName(inst.path) : hostInfo(inst.host).label}
+                    {installName(inst)}
                   </button>
                 </td>
                 {project ? (
@@ -72,6 +73,7 @@ function InstallTable({ rows, project, currentId, onPick, label }) {
                 <td>
                   <span className={`tag ${tone}`}>{stateLabel}</span>
                 </td>
+                <td className="pick-mark">{on ? 'Editing ›' : ''}</td>
               </tr>
             )
           })}
