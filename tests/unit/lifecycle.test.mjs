@@ -1028,3 +1028,27 @@ test('a rebuild command quotes only the arguments a shell would split', () => {
     'geneseed-build --theme imperial --out "C:\\My Repo"');
   assert.equal(rebuildCommand([]), 'geneseed-build');
 });
+
+test('status renders one row per install with the settings a rebuild would reproduce', () => {
+  const d = statusData();
+  assert.ok(Array.isArray(d.installs), 'the status payload has no installs array');
+  const p = {
+    host: 'opencode', scope: 'project', root: 'R', state: 'active', emit: 'opencode',
+    theme: 'imperial', footprint: 'full', posture: 'mentor', mode: 'foreman',
+    doctrines: ['craft', 'rigor'], excludeRules: ['craft.1'], argv: [], rebuild: 'geneseed-build',
+  };
+  const lines = statusLines({ ...d, installs: [p] }, false);
+  const row = lines.find((l) => l.includes('opencode:project'));
+  assert.ok(row, 'no install row');
+  assert.match(row, /active · imperial · full · mentor\/foreman · craft,rigor · excluding craft\.1 {2}\(R\)/);
+  assert.equal(new Set(lines.map((l) => l.length)).size, 1, 'the install row broke the frame');
+
+  // A global install names no path, an empty pack list says so, and no marker reads "none".
+  const g = { ...p, scope: 'global', doctrines: [], excludeRules: null };
+  const grow = statusLines({ ...d, installs: [g] }, false).find((l) => l.includes('opencode:global'));
+  assert.match(grow, /· no packs · no rules excluded *│$/);
+
+  // A recorded-shape payload (no `installs`) renders no row — the 30 recordings stay valid.
+  const { installs: _omit, ...legacy } = d;
+  assert.ok(!statusLines(legacy, false).some((l) => /\w+:(global|project)/.test(l)));
+});
