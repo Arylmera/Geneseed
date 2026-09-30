@@ -387,9 +387,13 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
                 {skillCat ? <span className="tag">{skillCat.label}</span> : null}
                 <StatusBadge status={status} />
               </div>
-              <h2 className="reader-title">{item?.title || activeItem.title || activeItem.name}</h2>
-              {/* Console-only: the agent's glyph, under its name (components/AgentGlyph.jsx). */}
-              {sec === 'agents' ? <AgentGlyph name={activeItem.name} /> : null}
+              <div className="reader-head">
+                <h2 className="reader-title">
+                  {item?.title || activeItem.title || activeItem.name}
+                </h2>
+                {/* Console-only: the agent's emblem, beside its name (components/AgentGlyph.jsx). */}
+                {sec === 'agents' ? <AgentGlyph name={activeItem.name} /> : null}
+              </div>
               {(item?.desc || activeItem.desc) && (
                 <p className="reader-lede">{item?.desc || activeItem.desc}</p>
               )}
