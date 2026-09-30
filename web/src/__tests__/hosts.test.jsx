@@ -76,19 +76,59 @@ const pick = async (label) =>
 const panel = () => document.querySelector('.install-panel')
 
 describe('Installs / Hosts', () => {
-  it('lists each install (host · scope) with its state, and a Rebuild all button', async () => {
+  it('lists each global install by its tool, with its state, and a Rebuild all button', async () => {
     render(<Hosts onAction={() => {}} />)
     await waitFor(() => expect(document.querySelectorAll('.hosts-tbl tbody tr')).toHaveLength(2))
     const rows = [...document.querySelectorAll('.hosts-tbl tbody tr')].map((tr) => [
       tr.querySelector('.row-pick').textContent,
       tr.querySelector('.tag').textContent,
     ])
-    // Globals first, active before absent.
+    // Active before absent. A global row is named by its tool: there is one per tool.
     expect(rows).toEqual([
-      ['opencode · global', 'Active'],
-      ['claude · global', 'Not installed'],
+      ['OpenCode', 'Active'],
+      ['Claude Code', 'Not installed'],
     ])
     expect(screen.getByRole('button', { name: /rebuild all/i })).toBeTruthy()
+  })
+
+  // Global and per-project installs are two tables, not one mixed list: a global row is
+  // named by its tool, a project row by its folder with the tool beside it, and with no
+  // project installs the second table says so instead of rendering empty.
+  it('splits global and per-project installs into two tables', async () => {
+    api.installs.mockImplementationOnce(() =>
+      Promise.resolve({
+        installs: [
+          {
+            id: 'opencode:global',
+            host: 'opencode',
+            scope: 'global',
+            path: 'C:/cfg',
+            state: 'active',
+          },
+          {
+            id: 'claude:C:/git/Terra',
+            host: 'claude',
+            scope: 'project',
+            path: 'C:\\git\\Terra\\',
+            state: 'active',
+            theme: 'imperial',
+          },
+        ],
+      }),
+    )
+    render(<Hosts onAction={() => {}} />)
+    const table = (name) => screen.findByRole('table', { name })
+    const names = (t) => [...t.querySelectorAll('.row-pick')].map((b) => b.textContent)
+    expect(names(await table('Global installs'))).toEqual(['OpenCode'])
+    const proj = await table('Per-project installs')
+    expect(names(proj)).toEqual(['Terra'])
+    expect(proj.querySelector('tbody td:nth-child(2)').textContent).toBe('Claude Code')
+  })
+
+  it('says so when no repo has its own harness', async () => {
+    render(<Hosts onAction={() => {}} />)
+    expect(await screen.findByText(/No repo has its own harness yet/)).toBeTruthy()
+    expect(screen.queryByRole('table', { name: 'Per-project installs' })).toBeNull()
   })
 
   it('Rebuild all dispatches the build-all action', async () => {
@@ -102,7 +142,7 @@ describe('Installs / Hosts', () => {
     render(<Hosts onAction={() => {}} />)
     await waitFor(() => expect(panel()).toBeTruthy())
     expect(panel().querySelector('h2').textContent).toBe('opencode · global')
-    expect(screen.getByRole('button', { name: 'opencode · global', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'OpenCode', pressed: true })).toBeTruthy()
   })
 
   it('installs a picked absent host, the voice defaulting to the deployed one', async () => {
@@ -114,7 +154,7 @@ describe('Installs / Hosts', () => {
         themes={[{ name: 'neutral' }, { name: 'imperial' }]}
       />,
     )
-    await pick('claude · global')
+    await pick('Claude Code')
     expect(panel().querySelector('h2').textContent).toBe('claude · global')
     // The four choices are there, the voice on the deployed one.
     expect(screen.getByLabelText('voice for claude · global').value).toBe('imperial')
@@ -142,7 +182,7 @@ describe('Installs / Hosts', () => {
         themes={[{ name: 'neutral' }, { name: 'imperial' }]}
       />,
     )
-    await pick('claude · global')
+    await pick('Claude Code')
     fireEvent.change(screen.getByLabelText('voice for claude · global'), {
       target: { value: 'neutral' },
     })
@@ -229,7 +269,7 @@ describe('Installs / Hosts', () => {
 
   it('an absent install offers no switch and no Uninstall', async () => {
     render(<Hosts onAction={() => {}} />)
-    await pick('claude · global')
+    await pick('Claude Code')
     expect(within(panel()).queryByRole('switch')).toBeNull()
     expect(within(panel()).queryByText('Uninstall…')).toBeNull()
   })

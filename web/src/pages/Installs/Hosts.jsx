@@ -8,12 +8,78 @@ import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { FOOTPRINT_OPTIONS } from './controls.jsx'
 import DeployForm from './DeployForm.jsx'
 import InstallPanel from './InstallPanel.jsx'
+import { hostInfo } from '../../lib/hosts.js'
 
 // Join key for the MCP-target -> install pairing: an install owns the targets the API tags
 // with its (host, root). Keying on the install identity (not the config's dirname) is what
 // lets a Claude global target, whose ~/.claude.json sits OUTSIDE its ~/.claude root, still
 // attach to the right install.
 const installKey = (host, root) => `${host} ${root}`
+
+// The last segment of a project path, the name a repo is known by.
+const folderName = (path) =>
+  String(path || '')
+    .replace(/[\\/]+$/, '')
+    .split(/[\\/]/)
+    .pop() || path
+
+const STATE = { active: ['Active', 'ok'], disabled: ['Disabled', 'warn'] }
+
+// One of the two install tables. Global installs are one per host tool and named by it;
+// per-project installs are named by their folder, with the host beside it, because the
+// question each table answers is different ("which tools carry the harness everywhere"
+// vs "which repos carry their own").
+function InstallTable({ rows, project, currentId, onPick, label }) {
+  return (
+    <div className="tbl-scroll">
+      <table className="tbl hosts-tbl" aria-label={label}>
+        <thead>
+          <tr>
+            <th>{project ? 'Project' : 'Host'}</th>
+            <th>{project ? 'Host' : 'Path'}</th>
+            <th>Voice</th>
+            <th>Footprint</th>
+            <th>State</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((inst) => {
+            const [stateLabel, tone] = STATE[inst.state] || ['Not installed', '']
+            const on = currentId === inst.id
+            const quiet = inst.state === 'absent'
+            return (
+              <tr key={inst.id} className={`${on ? 'on' : ''}${quiet ? ' quiet' : ''}`}>
+                <td>
+                  <button
+                    type="button"
+                    className="row-pick"
+                    aria-pressed={on}
+                    title={inst.path}
+                    onClick={() => onPick(inst.id)}
+                  >
+                    {project ? folderName(inst.path) : hostInfo(inst.host).label}
+                  </button>
+                </td>
+                {project ? (
+                  <td>{hostInfo(inst.host).label}</td>
+                ) : (
+                  <td className="mono path-cell" title={inst.path}>
+                    {inst.path}
+                  </td>
+                )}
+                <td>{quiet ? '' : inst.theme || ''}</td>
+                <td>{quiet ? '' : inst.footprint || ''}</td>
+                <td>
+                  <span className={`tag ${tone}`}>{stateLabel}</span>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 // The voice REFERENCE: what each voice sounds like, and nothing you can act on. A <select>
 // of fourteen bare names cannot tell you that; the panel's Voice picker is where you
@@ -250,7 +316,12 @@ export default function Hosts({
     installs.find((i) => i.state === 'active')?.host ||
     installs[0]?.host ||
     'opencode'
-  const STATE = { active: ['Active', 'ok'], disabled: ['Disabled', 'warn'] }
+  const globals = installs.filter((i) => i.scope === 'global')
+  const projects = installs.filter((i) => i.scope !== 'global')
+  const pick = (id) => {
+    setPicked(id)
+    setRemoving(null)
+  }
 
   return (
     <div className="hosts">
@@ -258,82 +329,74 @@ export default function Hosts({
         <div className="toolbar">
           <span className="dim">
             {installs.filter((i) => i.state === 'active').length} active of {installs.length}{' '}
-            detected. Inside a folder with its own harness, only that folder’s harness loads.
+            detected.
           </span>
           {onAction ? (
             <div className="row gap-8">
-              <button type="button" className="btn ghost" onClick={() => setDeploying((d) => !d)}>
-                <Icon name="folder" /> Deploy to a repo…
-              </button>
               <button type="button" className="btn ghost" onClick={() => onAction('build-all')}>
                 <Icon name="refresh" /> Rebuild all
               </button>
             </div>
           ) : null}
         </div>
-        {deploying ? (
-          <div className="panel">
-            <DeployForm
-              host={defaultHost}
-              theme={currentTheme || 'neutral'}
-              options={options}
-              onAction={onAction}
-              onClose={() => setDeploying(false)}
-              onNote={setNote}
-            />
-          </div>
-        ) : null}
         {note ? (
           <p className="tag bad note" role="status">
             {note}
           </p>
         ) : null}
-        <section className="panel flush" aria-label="Installs">
-          <div className="tbl-scroll">
-            <table className="tbl hosts-tbl">
-              <thead>
-                <tr>
-                  <th>Host</th>
-                  <th>Path</th>
-                  <th>Voice</th>
-                  <th>Footprint</th>
-                  <th>State</th>
-                </tr>
-              </thead>
-              <tbody>
-                {installs.map((inst) => {
-                  const [label, tone] = STATE[inst.state] || ['Not installed', '']
-                  const on = current?.id === inst.id
-                  const quiet = inst.state === 'absent'
-                  return (
-                    <tr key={inst.id} className={`${on ? 'on' : ''}${quiet ? ' quiet' : ''}`}>
-                      <td>
-                        <button
-                          type="button"
-                          className="row-pick"
-                          aria-pressed={on}
-                          onClick={() => {
-                            setPicked(inst.id)
-                            setRemoving(null)
-                          }}
-                        >
-                          {inst.host} · {inst.scope}
-                        </button>
-                      </td>
-                      <td className="mono path-cell" title={inst.path}>
-                        {inst.path}
-                      </td>
-                      <td>{quiet ? '' : inst.theme || ''}</td>
-                      <td>{quiet ? '' : inst.footprint || ''}</td>
-                      <td>
-                        <span className={`tag ${tone}`}>{label}</span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        <section className="panel flush" aria-labelledby="inst-global">
+          <div className="inst-head">
+            <div>
+              <h2 id="inst-global">Global installs</h2>
+              <p className="dim">One per tool. Loaded in every folder, except excluded ones.</p>
+            </div>
           </div>
+          <InstallTable
+            rows={globals}
+            currentId={current?.id}
+            onPick={pick}
+            label="Global installs"
+          />
+        </section>
+        <section className="panel flush" aria-labelledby="inst-project">
+          <div className="inst-head">
+            <div>
+              <h2 id="inst-project">Per-project installs</h2>
+              <p className="dim">
+                A repo with its own harness. Inside it, only that harness loads.
+              </p>
+            </div>
+            {onAction ? (
+              <button type="button" className="btn ghost" onClick={() => setDeploying((d) => !d)}>
+                <Icon name="folder" /> Deploy to a repo…
+              </button>
+            ) : null}
+          </div>
+          {deploying ? (
+            <div className="inst-deploy">
+              <DeployForm
+                host={defaultHost}
+                theme={currentTheme || 'neutral'}
+                options={options}
+                onAction={onAction}
+                onClose={() => setDeploying(false)}
+                onNote={setNote}
+              />
+            </div>
+          ) : null}
+          {projects.length ? (
+            <InstallTable
+              rows={projects}
+              project
+              currentId={current?.id}
+              onPick={pick}
+              label="Per-project installs"
+            />
+          ) : (
+            <div className="empty inst-empty">
+              No repo has its own harness yet. Deploy one to give a project its own rules and voice.
+            </div>
+          )}
         </section>
         <Checkout setup={setup} overview={overview} />
         <VoiceGallery themes={themes} current={overview?.theme} />
