@@ -111,6 +111,36 @@ test('an untracked binary file is flagged binary, not decoded', () => {
   assert.deepEqual([f.status, f.binary, f.hunks.length], ['added', true, 0]);
 });
 
+test('an untracked nested repository is one added entry, header only, not a crash', () => {
+  const { dir } = repo({ 'k.txt': 'k\n' });
+  const sub = path.join(dir, 'sub');
+  fs.mkdirSync(sub);
+  const s = (...a) => execFileSync('git', a, { cwd: sub, encoding: 'utf8' });
+  s('init', '-q');
+  s('config', 'user.email', 't@example.com');
+  s('config', 'user.name', 'T');
+  write(sub, { 'in.txt': 'in\n' });
+  s('add', '-A');
+  s('commit', '-q', '-m', 'sub');
+  // `git ls-files --others` lists the nested repository as `sub/`, with the slash; the entry is
+  // written as git itself writes a gitlink, `sub`, so a brief cites the same path staged or not.
+  const f = parseDiff(selectDiff(dir).text).find((x) => x.path === 'sub');
+  assert.deepEqual([f.status, f.hunks.length], ['added', 0]);
+});
+
+test('an untracked broken symlink shows its target, as git would diff it', (t) => {
+  const { dir } = repo({ 'k.txt': 'k\n' });
+  // Windows without Developer Mode refuses to create a symlink (EPERM): skip there, run elsewhere.
+  try { fs.symlinkSync('nowhere', path.join(dir, 'l')); } catch (e) {
+    if (process.platform === 'win32' && e.code === 'EPERM') { t.skip('symlinks need privileges here'); return; }
+    throw e;
+  }
+  const f = parseDiff(selectDiff(dir).text).find((x) => x.path === 'l');
+  assert.equal(f.status, 'added');
+  assert.deepEqual(f.hunks[0].lines.map((l) => [l.t, l.text]),
+    [['add', 'nowhere'], ['note', '\\ No newline at end of file']]);
+});
+
 test('CR and the no-newline marker survive the parse unchanged', () => {
   const { dir } = repo({ 'w.txt': 'x\r\n', 'n.txt': 'x' });
   write(dir, { 'w.txt': 'y\r\n', 'n.txt': 'y' });

@@ -36,14 +36,25 @@ function gitOr(cwd, args, fallback) {
 
 /**
  * Untracked files as the diff `git add` would produce. Read here rather than via `git add -N`,
- * which would write the index.
+ * which would write the index. A nested repository is listed as `sub/` and cannot be read as a
+ * file, and a broken symlink has nothing to read: both are written the way git writes them
+ * (a gitlink header; a symlink's target as its one line), since reading either would throw.
  */
 function untrackedAsDiff(root) {
   const paths = git(root, ['ls-files', '--others', '--exclude-standard', '-z'])
     .split('\0').filter(Boolean);
   let out = '';
-  for (const p of paths) {
-    const buf = fs.readFileSync(path.join(root, p));
+  for (const listed of paths) {
+    const full = path.join(root, listed);
+    const st = fs.lstatSync(full);
+    const p = listed.replace(/\/$/, '');
+    if (st.isDirectory()) { out += `diff --git a/${p} b/${p}\nnew file mode 160000\n`; continue; }
+    if (st.isSymbolicLink()) {
+      out += `diff --git a/${p} b/${p}\nnew file mode 120000\n--- /dev/null\n+++ b/${p}\n@@ -0,0 +1 @@\n`
+        + `+${fs.readlinkSync(full)}\n\\ No newline at end of file\n`;
+      continue;
+    }
+    const buf = fs.readFileSync(full);
     out += `diff --git a/${p} b/${p}\nnew file mode 100644\n`;
     if (buf.includes(0)) { out += `Binary files /dev/null and b/${p} differ\n`; continue; }
     const text = buf.toString('utf8');
