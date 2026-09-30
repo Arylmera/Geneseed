@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { diffHash, parseDiff, selectDiff, MAX_FILE_LINES }
+import { diffHash, parseDiff, selectDiff, MAX_FILE_LINES, checkBrief, safeSvg, markGenerated }
   from '../../src/skills/explain-changes/scripts/render_changes.mjs';
 
 const dirs = [];
@@ -145,4 +145,56 @@ test('a file past the display cap keeps its true counts but stops adding lines',
   assert.equal(f.add, n);
   assert.equal(f.hunks[0].lines.length, MAX_FILE_LINES);
   assert.equal(f.truncated, true);
+});
+
+test('a diagram is accepted only when it cannot run code or reach outside the page', () => {
+  for (const [svg, ok] of [
+    ['<svg viewBox="0 0 1 1"><rect/></svg>', true],
+    ['<svg><a href="#u1"><text>x</text></a></svg>', true],
+    ['<svg><rect style="fill:url(#g)"/></svg>', true],
+    ['<svg><script>x()</script></svg>', false],
+    ['<svg onload="x()"></svg>', false],
+    ['<svg><rect onclick = "x()"/></svg>', false],
+    ['<svg><foreignObject><div/></foreignObject></svg>', false],
+    ['<svg><a href="https://evil.example">x</a></svg>', false],
+    ['<svg><image xlink:href="data:image/png;base64,AA"/></svg>', false],
+    ['<svg><rect style="fill:url(https://evil.example/x)"/></svg>', false],
+    ['<div>not an svg</div>', false],
+  ]) assert.equal(safeSvg(svg), ok, svg);
+});
+
+const FILES = parseDiff([
+  'diff --git a/a.txt b/a.txt', '--- a/a.txt', '+++ b/a.txt', '@@ -1 +1 @@', '-a', '+A',
+  'diff --git a/b.txt b/b.txt', '--- a/b.txt', '+++ b/b.txt', '@@ -1 +1 @@', '-b', '+B',
+  'diff --git a/package-lock.json b/package-lock.json', '--- a/package-lock.json',
+  '+++ b/package-lock.json', '@@ -1 +1 @@', '-{}', '+{ }', '',
+].join('\n'));
+
+test('the brief is checked against the diff: phantom files, phantom hunks, unexplained changes', () => {
+  const lock = FILES.find((f) => f.path === 'package-lock.json');
+  lock.generated = true;
+  const problems = checkBrief({
+    risks: [{ level: 'low', text: 'x' }],
+    units: [{ title: 'U', files: ['phantom.js'], hunks: { 'a.txt': [0, 5] }, svg: '<svg onload="x()"/>' }],
+  }, FILES);
+  assert.deepEqual(problems, [
+    'unit "U" cites phantom.js, which is not in the diff',
+    'unit "U" cites hunk 5 of a.txt, which has 1',
+    'unit "U": diagram dropped (unsafe SVG)',
+    'b.txt is changed but no unit explains it',
+  ]);
+});
+
+test('an empty risk list needs a stated reason', () => {
+  const units = [{ title: 'U', files: ['a.txt', 'b.txt', 'package-lock.json'] }];
+  assert.deepEqual(checkBrief({ units }, FILES), ['no risks listed and no risks_none_reason given']);
+  assert.deepEqual(checkBrief({ units, risks: [], risks_none_reason: 'docs only' }, FILES), []);
+});
+
+test('lockfiles, dist/ and linguist-generated paths are marked generated', () => {
+  const { dir } = repo({ '.gitattributes': 'gen/** linguist-generated\n' });
+  const files = ['package-lock.json', 'dist/app.js', 'gen/x.ts', 'src/x.ts']
+    .map((p) => ({ path: p, generated: false }));
+  markGenerated(dir, files);
+  assert.deepEqual(files.map((f) => f.generated), [true, true, true, false]);
 });

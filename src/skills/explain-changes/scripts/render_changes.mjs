@@ -121,3 +121,54 @@ export function parseDiff(text) {
   }
   return files;
 }
+
+const GENERATED = /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|poetry\.lock|composer\.lock|Gemfile\.lock)$|(^|\/)dist\//;
+
+export function markGenerated(root, files) {
+  let attrs = '';
+  try {
+    attrs = git(root, ['check-attr', '--stdin', 'linguist-generated'],
+      files.map((f) => f.path).join('\n') + '\n');
+  } catch { /* no attributes → only the name patterns apply */ }
+  const marked = new Set();
+  for (const l of attrs.split('\n')) {
+    const i = l.lastIndexOf(': linguist-generated: ');
+    if (i > 0 && /: (true|set)$/.test(l)) marked.add(l.slice(0, i));
+  }
+  for (const f of files) f.generated = GENERATED.test(f.path) || marked.has(f.path);
+}
+
+/** Inline SVG from the model: no script, no handler, no foreign HTML, nothing outside the page. */
+export function safeSvg(svg) {
+  return /^\s*<svg[\s>/]/i.test(svg)
+    && !/<script|<foreignObject|\son\w+\s*=|href\s*=\s*["'](?!#)|url\(\s*["']?(?!#)/i.test(svg);
+}
+
+export const unitFiles = (u) => [...new Set([...(u.files ?? []), ...Object.keys(u.hunks ?? {})])];
+
+export function checkBrief(brief, files) {
+  const problems = [];
+  const byPath = new Map(files.map((f) => [f.path, f]));
+  const covered = new Set();
+  for (const u of brief.units ?? []) {
+    for (const p of unitFiles(u)) {
+      if (byPath.has(p)) covered.add(p);
+      else problems.push(`unit "${u.title}" cites ${p}, which is not in the diff`);
+    }
+    for (const [p, idx] of Object.entries(u.hunks ?? {})) {
+      const f = byPath.get(p);
+      if (!f) continue;
+      for (const i of idx) {
+        if (!f.hunks[i]) problems.push(`unit "${u.title}" cites hunk ${i} of ${p}, which has ${f.hunks.length}`);
+      }
+    }
+    if (u.svg && !safeSvg(u.svg)) problems.push(`unit "${u.title}": diagram dropped (unsafe SVG)`);
+  }
+  for (const f of files) {
+    if (!covered.has(f.path) && !f.generated) problems.push(`${f.path} is changed but no unit explains it`);
+  }
+  if (!brief.risks?.length && !brief.risks_none_reason) {
+    problems.push('no risks listed and no risks_none_reason given');
+  }
+  return problems;
+}
