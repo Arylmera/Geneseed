@@ -107,7 +107,7 @@ function FreshlyGrown({ recent, buildEpoch }) {
   )
 }
 
-export default function JournalView({ overview, recent, onAction, onDirection }) {
+export default function JournalView({ overview, recent, onAction, onDirection, dataRev }) {
   const counts = overview?.counts || {}
   return (
     <>
@@ -138,7 +138,7 @@ export default function JournalView({ overview, recent, onAction, onDirection })
             open →
           </button>
         </div>
-        <ConstitutionMap overview={overview} />
+        <ConstitutionMap overview={overview} dataRev={dataRev} />
       </div>
 
       {/* The other two directions, kept reachable. They were a segmented control beside a

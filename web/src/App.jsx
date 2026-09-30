@@ -191,7 +191,7 @@ export default function App() {
     library,
     rules: () => <Rules />,
     profile: () => <Profile />,
-    diff: () => <Diff onMutated={reload} dataRev={dataRev} />,
+    diff: () => <Diff onMutated={reload} onAction={runAction} dataRev={dataRev} />,
     doctor: () => <Doctor />,
     settings: () => (
       <Settings

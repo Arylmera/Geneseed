@@ -1,10 +1,11 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useLayoutEffect, useRef } from 'react'
 import { animate, createTimeline, stagger, svg, utils } from 'animejs'
 import { api } from '../../api/index.js'
 import { go } from '../../lib/router.js'
 import { packColor } from '../../lib/lawCats.js'
 import { rulesInForce } from '../../lib/format.js'
 import { motionOK, settle } from '../../lib/motion.js'
+import { useAsync } from '../../hooks/useAsync.js'
 
 // THE CONSTITUTION, DRAWN AS WHAT IT IS: a hub of rules in force, its three tiers around
 // it, and dashed lines out to the four things those rules govern. The dashboard used to
@@ -99,22 +100,15 @@ function Node({ hash, label, part, children }) {
   )
 }
 
-export default function ConstitutionMap({ overview }) {
+export default function ConstitutionMap({ overview, dataRev }) {
   // The catalogue is what carries the per-pack roster — the overview deliberately does not
   // (api.mjs says why: one source for the roster, and it is this one). Fetched here so the
   // map is the only thing that pays for it, and degrading to `null` just means the doctrine
   // satellite draws without its pack nodes.
-  const [laws, setLaws] = useState(null)
-  useEffect(() => {
-    let alive = true
-    api
-      .catalog('laws')
-      .then((r) => alive && setLaws(r.items || []))
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [])
+  // Same key and deps as the Laws page's own fetch, so whichever renders first pays for
+  // both — and a rebuild (`dataRev`) refetches the roster instead of keeping the old one.
+  const { data } = useAsync(() => api.catalog('laws'), [dataRev], 'catalog:laws')
+  const laws = data?.items ?? null
 
   const root = useRef(null)
   // The pack discs may arrive before the map has scrolled into view; they then wait for

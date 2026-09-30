@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { go } from '../lib/router.js'
@@ -7,6 +7,7 @@ import { STATUS, ELLIPSIS, baseName, compact, Elapsed, TodoStrip } from '../lib/
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { useFlip } from '../lib/motion.js'
+import { usePoll } from '../hooks/usePoll.js'
 
 function SessionCard({ s }) {
   const st = STATUS[s.status] || STATUS.idle
@@ -118,39 +119,24 @@ export default function Activity() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
-  // No page polled before this one — mirror the setInterval + cleanup shape from
-  // hooks/useJobs.js. 2s is plenty for a glanceable HUD; a failed poll is held (the
-  // next tick recovers) so a momentary blip doesn't blank the view.
-  useEffect(() => {
-    let alive = true
-    const tick = () =>
+  // 2s is plenty for a glanceable HUD; a failed poll is held (the next tick
+  // recovers) so a momentary blip doesn't blank the view.
+  usePoll(
+    (alive) =>
       api.activity().then(
         (d) => {
-          if (alive) {
+          if (alive()) {
             setData(d)
             setError('')
           }
         },
         (e) => {
-          if (alive) setError(e.message)
+          if (alive()) setError(e.message)
         },
-      )
-    tick()
-    // Hidden tab → no poll; the visibilitychange tick refreshes the instant
-    // the HUD is looked at again instead of waiting out the interval.
-    const t = setInterval(() => {
-      if (!document.hidden) tick()
-    }, 2000)
-    const onVis = () => {
-      if (!document.hidden) tick()
-    }
-    document.addEventListener('visibilitychange', onVis)
-    return () => {
-      alive = false
-      clearInterval(t)
-      document.removeEventListener('visibilitychange', onVis)
-    }
-  }, [])
+      ),
+    2000,
+    [],
+  )
 
   // Default on when the field is absent (older server / first paint).
   const enabled = data ? data.enabled !== false : true

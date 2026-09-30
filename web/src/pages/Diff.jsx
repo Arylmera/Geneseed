@@ -6,9 +6,6 @@ import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 
-// How often the export job is polled for completion.
-const EXPORT_POLL_INTERVAL_MS = 700
-
 // Map a unified-diff line to its display class. Headers (+++/---) and hunk
 // markers read as hunks; the synthetic added/missing banners read as context.
 function lineKind(ln) {
@@ -18,7 +15,7 @@ function lineKind(ln) {
   return 'ctx'
 }
 
-export default function Diff({ onMutated, dataRev }) {
+export default function Diff({ onMutated, onAction, dataRev }) {
   const confirm = useConfirm()
   const { data, error, reload } = useAsync(() => api.diff(), [dataRev])
   const [busy, setBusy] = useState(false)
@@ -48,22 +45,10 @@ export default function Diff({ onMutated, dataRev }) {
       s.size === data.files.length ? new Set() : new Set(data.files.map((f) => f.rel)),
     )
 
-  const exportImprovements = async () => {
-    setBusy(true)
-    try {
-      const { job_id } = await api.action('export')
-      let j
-      do {
-        await new Promise((r) => setTimeout(r, EXPORT_POLL_INTERVAL_MS))
-        j = await api.job(job_id)
-      } while (j.status === 'running')
-      setNote(j.status === 'done' ? 'Improvements file written.' : 'Export failed. See logs.')
-    } catch (e) {
-      setNote(e.message)
-    } finally {
-      setBusy(false)
-    }
-  }
+  // Export is a job like any other: it streams into the console, can be cancelled there,
+  // and its finish refreshes the page through `dataRev`. It used to run its own poll
+  // loop here, which nothing cancelled — leaving the page kept it polling to the end.
+  const exportImprovements = () => onAction?.('export')
 
   const restore = async () => {
     const files = [...sel]
