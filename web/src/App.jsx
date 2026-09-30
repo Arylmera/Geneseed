@@ -6,7 +6,7 @@ import { useRoute } from './lib/router.js'
 import { applyAccent, applyCuratedAccent } from './lib/accents.js'
 import { useColorMode } from './hooks/useColorMode.js'
 import { useFlavour } from './hooks/useFlavour.js'
-import { useAccentMode } from './hooks/useAccentMode.js'
+import { useAccentMode, customAccentName } from './hooks/useAccentMode.js'
 import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
@@ -129,11 +129,13 @@ export default function App() {
       ? `${lastRun.action} running`
       : `${lastRun.action} ${lastRun.status}`
 
-  // The accent is either the flavour's curated signature ('curated' mode) or the deployed
-  // voice's accent ('auto'), adjusted for light/dark.
+  // The accent is a fixed pick ('custom:<name>'), the flavour's curated signature
+  // ('curated'), or the deployed voice's accent ('auto'), adjusted for light/dark.
   useEffect(() => {
     const el = appRef.current
     if (!el) return
+    const custom = customAccentName(accentMode)
+    if (custom) return applyAccent(el, custom, mode)
     if (accentMode === 'curated' && applyCuratedAccent(el, flavour, mode)) return
     if (overview?.accent) applyAccent(el, overview.accent, mode)
   }, [overview, mode, accentMode, flavour])

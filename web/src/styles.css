@@ -2240,6 +2240,13 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
   border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
 .ap-group { display: flex; flex-direction: column; gap: 6px; }
 .ap-label { font-size: 12px; font-weight: 600; color: var(--text-2); }
+/* Accent: the two sources, then the fixed colours as round swatches. */
+.accent-picker { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.accent-swatches { display: flex; gap: 8px; }
+.accent-swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--sw); border: 2px solid var(--bg-2); box-shadow: 0 0 0 1px var(--line-2); }
+.accent-swatch:hover { box-shadow: 0 0 0 1px var(--text-3); }
+.accent-swatch.on { box-shadow: 0 0 0 2px var(--text); }
 .appearance-pop .seg { flex-wrap: wrap; }
 
 /* ---- page frame ---- */

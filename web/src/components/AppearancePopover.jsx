@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import Seg from './Seg.jsx'
 import { FLAVOURS } from '../hooks/useFlavour.js'
-import { ACCENT_MODES } from '../hooks/useAccentMode.js'
+import AccentPicker from './AccentPicker.jsx'
 import { LAYOUTS } from '../hooks/useLayout.js'
 
 // The display choices, one click from any page: the skin, where the accent colour comes
@@ -57,7 +57,12 @@ export default function AppearancePopover({
   return (
     <div className="appearance-pop" ref={ref} role="dialog" aria-label="Appearance">
       {group('ap-skin', 'Skin', FLAVOURS, flavour, onFlavour)}
-      {group('ap-accent', 'Accent', ACCENT_MODES, accentMode, onAccentMode)}
+      <div className="ap-group">
+        <span className="ap-label" id="ap-accent">
+          Accent
+        </span>
+        <AccentPicker value={accentMode} onChange={onAccentMode} labelledBy="ap-accent" />
+      </div>
       {group('ap-view', 'Overview view', LAYOUTS, layout, onLayout)}
     </div>
   )

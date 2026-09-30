@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { api } from '../../api/index.js'
 import { FLAVOURS } from '../../hooks/useFlavour.js'
-import { ACCENT_MODES } from '../../hooks/useAccentMode.js'
+import { accentTagline } from '../../hooks/useAccentMode.js'
+import AccentPicker from '../../components/AccentPicker.jsx'
 import { LAYOUTS } from '../../hooks/useLayout.js'
 import ServerControl from './ServerControl.jsx'
 import Seg from '../../components/Seg.jsx'
@@ -147,29 +148,21 @@ export default function Settings({
             persists across reloads.
           </p>
 
-          {/* Accent source — chosen independently of the skin below. 'Auto'
-              follows the deployed voice's accent; 'Curated' gives each theme its
-              own designed signature colour. Live, persisted across reloads. */}
+          {/* Accent — chosen independently of the skin below. 'Auto' follows the
+              deployed voice's accent, 'Curated' gives each theme its own designed
+              signature colour, a swatch pins one fixed colour. Live, persisted. */}
           {accentMode && onAccentMode && (
             <div className="dir-layout">
               <span className="tick" id="dir-accent-label">
                 Accent
               </span>
-              <Seg aria-labelledby="dir-accent-label">
-                {ACCENT_MODES.map((m) => (
-                  <button
-                    key={m.id}
-                    className={accentMode === m.id ? 'on' : ''}
-                    onClick={() => onAccentMode(m.id)}
-                    aria-pressed={accentMode === m.id}
-                    title={m.tagline}
-                  >
-                    {m.short}
-                  </button>
-                ))}
-              </Seg>
+              <AccentPicker
+                value={accentMode}
+                onChange={onAccentMode}
+                labelledBy="dir-accent-label"
+              />
               <span className="dir-layout-note sub" role="status" aria-live="polite">
-                {ACCENT_MODES.find((m) => m.id === accentMode)?.tagline ?? ''}
+                {accentTagline(accentMode)}
               </span>
             </div>
           )}
