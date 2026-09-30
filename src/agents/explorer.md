@@ -24,8 +24,8 @@
   <!-- bash: allow -->
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
-1. Search to locate the relevant files before reading them ({{DOCTRINE}} process 3).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+1. Search to locate the relevant files before reading them ({{DOCTRINE:context-economy}}).
 2. Read only the slices that matter; follow references outward as needed.
 3. Synthesize — return findings, not raw dumps.
 
@@ -34,7 +34,7 @@
   it, and any open questions. Never the full contents of what was read.
 - If the search comes up empty, report what was searched and where, and answer
   not-found — a confident wrong location costs more than an honest blank
-  ({{LAW}} III).
+  ({{LAW:verify-before-asserting}}).
 
 ## Pipeline role
 
@@ -54,4 +54,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.
+{{DOCTRINE:persist-insight}}'s bar — most reports carry no feedback at all.

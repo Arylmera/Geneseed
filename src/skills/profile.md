@@ -8,7 +8,7 @@ still the untouched stub, or an existing profile visibly contradicts how the use
 now works.
 
 ## Procedure
-1. Locate `PROFILE.md` beside the deployed AGENT.md and read it ({{LAW}} III — the
+1. Locate `PROFILE.md` beside the deployed AGENT.md and read it ({{LAW:verify-before-asserting}} — the
    real current file, not a remembered copy). The build seeds it once and never
    overwrites it; if it is genuinely absent, start from the stub's three sections
    (below) and note that a rebuild would have seeded it.
@@ -30,7 +30,7 @@ now works.
 4. Draft the profile in the stub's shape — the `##` sections above, short plain
    prose, no placeholders left standing. Keep it lean: a profile is read every
    session, and bloat dilutes the parts that matter.
-5. Show the full draft and wait for explicit consent ({{LAW}} IV) before writing
+5. Show the full draft and wait for explicit consent ({{LAW:deletion-is-deliberate}}) before writing
    `PROFILE.md`. Remind the user the file is theirs — hand-editable any time, and
    it survives updates, rebuilds, and theme switches.
 

@@ -59,8 +59,7 @@ carries the script API — load it before writing one).
    before; an inline one has not. Author inline only when no saved shape fits, keep it
    to the primitives, and hold to the host's size guideline unless the user asked for
    more.
-4. **Give every editing agent a write set, and isolate parallel editors** ({{DOCTRINE}}
-   process 7). Name in each editing `agent()` prompt the files it may change and have it
+4. **Give every editing agent a write set, and isolate parallel editors** ({{DOCTRINE:one-writer-per-file}}). Name in each editing `agent()` prompt the files it may change and have it
    return the files it did change; overlapping sets run in sequence, not in one
    `parallel()`. Pass `isolation: 'worktree'` to each agent that edits in parallel — both
    runtimes take it; read-only agents need none. After the fan-out, compare the changed
@@ -81,7 +80,7 @@ carries the script API — load it before writing one).
    is a finding about the task, not a reason to loop.
 8. **Exit — carry the conclusion yourself.** The workflow gathers and verifies;
    committing, pushing, merging, or opening anything outward stays with you
-   ({{DOCTRINE}} process 5, {{LAW}} IV). State what the run concluded, what you are
+   ({{DOCTRINE:consent-before-push}}, {{LAW:deletion-is-deliberate}}). State what the run concluded, what you are
    doing with it, and where the trace lives.
 
 ## Done when

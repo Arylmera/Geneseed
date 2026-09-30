@@ -9,7 +9,7 @@ server — exposing an external API or service to an agent as a set of tools.
 depends on it.
 
 ## Procedure
-1. Research first ({{DOCTRINE}} process 4): read the MCP specification
+1. Research first ({{DOCTRINE:read-the-docs-first}}): read the MCP specification
    (`modelcontextprotocol.io`) and the target service's API docs, then pick the
    SDK — Python (FastMCP) or TypeScript (MCP SDK) — and load its documentation.
 2. Plan the tool surface: list the service's key operations and design
@@ -18,15 +18,15 @@ depends on it.
    real task with it.
 3. Build the core: an authenticated API client, shared error-handling and
    pagination helpers, and response formatting that returns focused, relevant
-   data rather than raw dumps ({{DOCTRINE}} process 3).
+   data rather than raw dumps ({{DOCTRINE:context-economy}}).
 4. Define each tool's input and output schema (Pydantic or Zod), set the
    annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
    `openWorldHint`), and write error messages that name the specific, actionable
    fix. A destructive tool's guard is enforced server-side, at the boundary the
-   call must cross — never left to the calling model's judgement ({{DOCTRINE}} rigor 5).
+   call must cross — never left to the calling model's judgement ({{DOCTRINE:external-gate}}).
 5. Review and test: kill duplication, ensure consistent errors and full type
    coverage, then build and exercise every tool with the MCP Inspector — don't
-   assume it works ({{LAW}} III).
+   assume it works ({{LAW:verify-before-asserting}}).
 6. Evaluate: pick ~10 realistic, read-only questions that each need multiple tool
    calls and have one verifiable, stable answer; run them and confirm the server
    actually answers them.

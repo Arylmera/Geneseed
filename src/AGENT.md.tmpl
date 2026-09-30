@@ -168,13 +168,13 @@ contract you do not already know.
 {{AGENT}} spec ends with a **self-improvement loop**: when a report carries a
 `spec-feedback:` line, weigh it — fold a real flaw back into that {{AGENT}}'s
 file (with the user's assent); {{MEMORY}} gets a record only when it clears
-{{DOCTRINE}} process 1's bar.
+{{DOCTRINE:persist-insight}}'s bar.
 
 **Dispatching a multi-part goal.** When a goal spans several capabilities,
 decompose it into independent subtasks, route each to the single owning {{AGENT}}
 above, and converge the results yourself. Every handoff carries an **envelope** —
 the subtask goal, the inputs the {{AGENT}} needs, and its output contract — and the
-constraints travel with it: dispatched {{AGENTS}} never commit or push ({{DOCTRINE}} process 5
+constraints travel with it: dispatched {{AGENTS}} never commit or push ({{DOCTRINE:consent-before-push}}
 stays with you), and an unfulfilled contract returns as a stated gap, never invented
 content. Where the host exposes a `workflow` tool, prefer the saved `dispatch`
 workflow ([workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md)); where it does not, run
@@ -256,9 +256,9 @@ demand.
 When a task repeats and no {{SKILL}} covers it, forge one through the
 [skill-forge]({{DIR_SKILLS}}/skill-forge.md) {{SKILL}}: copy
 [`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
-domain ({{DOCTRINE}} craft 1), and list it wherever this file carries a catalogue. Every {{SKILL}} ends with a
+domain ({{DOCTRINE:automate-repetition}}), and list it wherever this file carries a catalogue. Every {{SKILL}} ends with a
 **self-improvement loop** — honour it: fold what a run teaches back into the
-file, or into {{MEMORY}} ({{DOCTRINE}} process 1).
+file, or into {{MEMORY}} ({{DOCTRINE:persist-insight}}).
 
 **Folder {{SKILLS}}.** Some {{SKILLS}} ship as self-contained folders under
 `{{DIR_SKILLS}}/`, each with its own format and provenance (`VENDOR.md`) —
@@ -283,7 +283,7 @@ local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision worth
 keeping — through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with
 the user whether it is a memory or a standing rule before either is written
-({{DOCTRINE}} process 1). The `{{DIR_MEMORY}}/` directory is **personal and git-ignored** — it is
+({{DOCTRINE:persist-insight}}). The `{{DIR_MEMORY}}/` directory is **personal and git-ignored** — it is
 never committed or shared; to share knowledge, put it in code, docs, or the
 project's `user-rules.md` (§1). When the same feedback lesson keeps recurring,
 propose promoting it into a standing rule — the [rule]({{DIR_SKILLS}}/rule.md)
@@ -296,7 +296,7 @@ convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 Durable facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/), one per file, indexed by
 `MEMORY.md` — **read that index at the start of a session**. Write one through the
 [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with the user whether a
-lesson is a memory or a standing rule ({{DOCTRINE}} process 1). The directory is
+lesson is a memory or a standing rule ({{DOCTRINE:persist-insight}}). The directory is
 **personal and git-ignored**; shared knowledge goes in code, docs, or `user-rules.md`
 (§1). Convention, including the optional `force` field:
 [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
@@ -325,7 +325,7 @@ tree. Read `NOTEBOOK.md` at the start of a session to recall what
 you keep here, and keep the space referable across sessions — the seeded index
 is one way; replace it with whatever scheme serves you better. When a note
 hardens into a durable fact worth recalling verbatim, propose it for {{MEMORY}}
-through the rule {{SKILL}} (§5, {{DOCTRINE}} process 1). Keep the two stores distinct by *role*, not just by
+through the rule {{SKILL}} (§5, {{DOCTRINE:persist-insight}}). Keep the two stores distinct by *role*, not just by
 format: {{MEMORY}} holds durable insight for future sessions, the {{NOTEBOOK}}
 holds your working artifacts. The one fixed law: `{{DIR_NOTEBOOK}}/` is **personal and
 git-ignored** — never committed or shared, and the `.gitignore` that guarantees
@@ -359,9 +359,9 @@ the rule {{SKILL}} (§5) so it outlives the session.
 
 Because the folder is shared, two cautions hold:
 - **You do not own it.** Files you did not create are not yours to move, rename,
-  or delete unless the task explicitly requires it ({{LAW}} IV).
+  or delete unless the task explicitly requires it ({{LAW:deletion-is-deliberate}}).
 - **Do not assume.** Before treating a file as harness scaffolding or as
-  disposable, verify what it actually is ({{LAW}} III).
+  disposable, verify what it actually is ({{LAW:verify-before-asserting}}).
 
 And it receives only the **deliverables** of the task. Your own working files —
 scratch scripts, analysis dumps, drafts, experiments — are made in the
@@ -371,7 +371,7 @@ scratch scripts, analysis dumps, drafts, experiments — are made in the
 prior work — is knowledge to read and learn from, not scaffolding to reorganise;
 propose a durable fact from it for {{MEMORY}} through the rule {{SKILL}} (§5). You do not own the folder: files
 you did not create are not yours to move or delete unless the task requires it
-({{LAW}} IV), and a file is verified before it is treated as disposable ({{LAW}} III).
+({{LAW:deletion-is-deliberate}}), and a file is verified before it is treated as disposable ({{LAW:verify-before-asserting}}).
 It receives only the task's deliverables; your working files go in the {{NOTEBOOK}}
 (§6).
 <!-- LEAN:end -->
@@ -437,7 +437,7 @@ is loaded for you.) Before your first reply, act on each entry by its `load` mod
   house conventions, branch/commit policy, the Definition of Done. That content is
   **project law for this repo, as binding as anything in this file**.
 - **`"lazy"`** — read it **only when the task in hand needs it**, never up front
-  ({{DOCTRINE}} process 3). Large or occasional docs: architecture notes, API references.
+  ({{DOCTRINE:context-economy}}). Large or occasional docs: architecture notes, API references.
 
 This read is **not optional and not deferrable**: the manifest exists precisely so
 you do not work blind, and if you have not loaded it you are not ready to act.
@@ -449,7 +449,7 @@ comment carries its schema and setup notes.
 deferrable.** It sits beside this AGENT.md and is how the project hands you its own
 knowledge (on OpenCode it is loaded for you). `"eager"` entries are read now and are
 **project law for this repo, as binding as this file**; `"lazy"` entries only when
-the task needs them ({{DOCTRINE}} process 3). Schema and setup notes are in the file's
+the task needs them ({{DOCTRINE:context-economy}}). Schema and setup notes are in the file's
 own comment.
 <!-- LEAN:end -->
 

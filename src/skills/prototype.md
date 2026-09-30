@@ -16,7 +16,7 @@ real implementation.
 2. Throwaway from day one, and marked as such: place it near the code it
    prototypes for, but name it so a casual reader sees it is not production.
    No persistence (state lives in memory), no tests, no error handling beyond
-   what makes it runnable, no abstractions ({{DOCTRINE}} craft 6).
+   what makes it runnable, no abstractions ({{DOCTRINE:smallest-viable-diff}}).
 3. One command to run, using the project's existing task runner — the user
    must be able to start it without thinking.
 4. Surface the full relevant state after every action or variant switch, so

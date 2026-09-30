@@ -7,7 +7,7 @@ their own ("always…", "never…", "from now on…", "make that a rule") or a d
 fact ("remember that…", "note that…", "keep in mind…"). Also fires when a
 `feedback` {{MEMORY}} lesson keeps recurring and deserves promotion, or when
 `user-rules.md` needs review — a trial rule past its date, a stale rule, a bloated
-set. Nothing reaches `user-rules.md` or {{MEMORY}} except through here ({{DOCTRINE}} process 1).
+set. Nothing reaches `user-rules.md` or {{MEMORY}} except through here ({{DOCTRINE:persist-insight}}).
 
 ## Procedure
 
@@ -54,7 +54,7 @@ re-derived. Then take exactly one branch.
    regenerated on every update and the edit would be silently lost.
 5. **Destination.** Scope decides the file: a rule that holds across all the user's
    work goes to the *global* install's `user-rules.md`, a rule bound to this
-   codebase to the project's. Read the target first ({{LAW}} III — the real current
+   codebase to the project's. Read the target first ({{LAW:verify-before-asserting}} — the real current
    rules, not a remembered copy). The build seeds it once and never overwrites it;
    if it is genuinely absent, create it with a `# User rules` header and note that a
    rebuild would have seeded it.
@@ -63,7 +63,7 @@ re-derived. Then take exactly one branch.
    short paragraph, plain and testable. For a promotion from {{MEMORY}}, set
    `source:` to the memory's name and add `trial until:` about a month out — a
    promoted rule starts on probation.
-7. Show the exact text to the user and wait for explicit consent ({{LAW}} IV) before
+7. Show the exact text to the user and wait for explicit consent ({{LAW:deletion-is-deliberate}}) before
    appending it. For a promotion, after the rule lands, delete or archive the source
    memory (with the same consent) so the lesson is not loaded twice.
 8. **Keep the set lean.** After writing, if the file holds more than ~15 rules or

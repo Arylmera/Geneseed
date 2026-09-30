@@ -19,27 +19,27 @@ surface.
    the surface*, stop.
 2. **Dispatch the [security {{AGENT}}](../{{DIR_AGENTS}}/security.md)** with the surface
    from step 1 and the diff — read-only, in its own context so the main one stays
-   clean ({{DOCTRINE}} process 3). It runs the passes below; for a small change you may
+   clean ({{DOCTRINE:context-economy}}). It runs the passes below; for a small change you may
    run them yourself.
 3. **Pass 1 — the classic classes**, each checked against the actual code, not
    assumed: injection (SQL, shell, path, template), broken auth or missing authz on
    a new route, unsafe deserialisation, SSRF, insecure defaults, missing rate or size
    limits, error messages that leak internals. Verify by reading the handling at the
-   boundary and, where a test can exercise it, by running one ({{LAW}} III).
+   boundary and, where a test can exercise it, by running one ({{LAW:verify-before-asserting}}).
 4. **Pass 2 — secrets and data.** Nothing sensitive in code, config, logs, fixtures,
-   or the commit itself ({{LAW}} I); PII handled and logged to the project's policy;
+   or the commit itself ({{LAW:sealed-secrets}}); PII handled and logged to the project's policy;
    tokens scoped and expiring. Grep the diff for key-shaped strings, and check what the
    new code *logs*.
 5. **Pass 3 — the supply chain.** A new or bumped dependency: who publishes it, how
    maintained, what it pulls in transitively, any advisory against the pinned version
    (the [deps-audit {{SKILL}}](deps-audit.md) carries the tooling). A destructive
    capability exposed to an agent or a tool: its guard is enforced server-side, at the
-   boundary the call crosses, never left to the caller's judgement ({{DOCTRINE}} rigor 5).
+   boundary the call crosses, never left to the caller's judgement ({{DOCTRINE:external-gate}}).
 6. **Report, don't fix.** Each finding as `file:line — attack — impact — fix`, ranked
    critical → high → medium → note, with the evidence that made it a finding. Then the
    verdict — **ship / fix-then-ship / block** — and, for anything above medium, the
    test that would pin the fix. Applying fixes is a [develop {{SKILL}}](develop.md)
-   task on its own commit ({{LAW}} II); a review that quietly edits the code it judges
+   task on its own commit ({{LAW:one-intent-one-act}}); a review that quietly edits the code it judges
    has stopped being a review.
 
 ## Done when

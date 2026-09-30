@@ -9,15 +9,15 @@ request or merge the branch.
 1. Confirm the work is actually done before shipping. Find the project's Definition
    of Done — its test, lint, and build commands (often pointed at from
    `context.json`); if it is undefined, ask rather than assume. Run those checks and
-   read the actual output (universal {{LAW}} III); state what you ran and its result.
+   read the actual output (universal {{LAW:verify-before-asserting}}); state what you ran and its result.
    Never ship on an unproven claim.
 2. Confirm the branch carries only this change's commits and is rebased/updated on
    the base branch; resolve any divergence before opening.
 3. Push the branch only with the user's explicit, per-push acceptance — on every
-   branch, feature branches included ({{DOCTRINE}} process 5); present the change summary + commit
+   branch, feature branches included ({{DOCTRINE:consent-before-push}}); present the change summary + commit
    message and wait, and never treat an earlier approval as consent for this push.
    Opening a PR or merging is **outward-facing** — get explicit confirmation first too,
-   unless already authorized (universal {{LAW}} IV).
+   unless already authorized (universal {{LAW:deletion-is-deliberate}}).
 4. Open the PR with a structured body: *what* changed and *why*, *how it was
    tested*, and any risk or follow-up. Link the issue it closes; keep the title an
    imperative one-line summary.
@@ -25,10 +25,10 @@ request or merge the branch.
    review/approval, then delete the merged branch.
    If shipping triggers a production deploy, confirm a tested rollback or
    fix-forward path and a retained previous artifact *before* deploying — there must
-   be a way back (universal {{LAW}} IV); dispatch the
+   be a way back (universal {{LAW:deletion-is-deliberate}}); dispatch the
    [operator {{AGENT}}](../{{DIR_AGENTS}}/operator.md) when the runtime surface is
    non-trivial.
-6. Make sure documentation shipped with the code ({{DOCTRINE}} craft 3) — a change
+6. Make sure documentation shipped with the code ({{DOCTRINE:documentation-in-step}}) — a change
    that alters behaviour without its docs is incomplete, not ready to ship.
 
 ## Done when

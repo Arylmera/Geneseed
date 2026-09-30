@@ -34,7 +34,7 @@ import { readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
-import { PACK_ORDER, readPackText } from './source.mjs';
+import { PACK_ORDER, readPackText, resolveRuleIds } from './source.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
 export const STRUCTURE = {
@@ -216,7 +216,8 @@ function readSource(cfg, p) {
   let seen = SRC_TEXT.get(cfg);
   if (!seen) SRC_TEXT.set(cfg, (seen = new Map()));
   let text = seen.get(p);
-  if (text === undefined) seen.set(p, (text = readText(p)));
+  // Rule ids resolve here, once per file, so every stage after sees the addressed form.
+  if (text === undefined) seen.set(p, (text = resolveRuleIds(readText(p), cfg.src)));
   return text;
 }
 
@@ -250,7 +251,9 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
 function registerBody(cfg, theme, dir, selected, fallback) {
   for (const name of [selected, fallback]) {
     const p = path.join(cfg.src, dir, `${name}.md`);
-    if (existsSync(p) && statSync(p).isFile()) return substitute(readText(p), theme).trim();
+    if (existsSync(p) && statSync(p).isFile()) {
+      return substitute(resolveRuleIds(readText(p), cfg.src), theme).trim();
+    }
   }
   return '';
 }

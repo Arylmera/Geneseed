@@ -48,7 +48,7 @@ markerless text.
    shared-branch names, the reference letters). Drop illustrative examples.
 4. Cut every "Where X governs A, this governs B" sibling sentence and every closing
    aphorism — the full file ships beside `AGENT.md` and the section pointer says so.
-5. Keep a citation only where it names the thing to do (confirm per `{{LAW}} IV`, run
+5. Keep a citation only where it names the thing to do (confirm per `{{LAW:deletion-is-deliberate}}`, run
    the develop `{{SKILL}}`), parenthesised at clause end.
 6. No new tokens, no `####`, no heading inside a block.
 

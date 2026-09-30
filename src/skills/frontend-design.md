@@ -29,7 +29,7 @@ preview tool) — the second-pass critique in step 6 cannot run without one.
 5. Avoid the three tells unless the brief truly calls for them: (a) cream
    `#F4F1EA` + high-contrast serif + terracotta accent; (b) near-black + acid-green
    or vermilion accent; (c) broadsheet hairline rules, zero radius, dense columns.
-6. Second pass — critique against the brief ({{LAW}} III): screenshot the result
+6. Second pass — critique against the brief ({{LAW:verify-before-asserting}}): screenshot the result
    and read it. If any part reads like the generic default you'd produce for any
    similar page, revise it. Spend boldness in one place and keep the rest quiet;
    remove one accessory. Hold the quality floor without announcing it — responsive,

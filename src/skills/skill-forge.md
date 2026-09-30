@@ -6,10 +6,10 @@
 self-improvement loop produced an edit worth making; the user says "make this a
 skill", "write a skill for…", "fix the trigger of…"; or two {{SKILLS}} keep
 disambiguating against each other and should merge. Meta by nature: it edits the
-apparatus, so every step ends in the user's assent ({{LAW}} II, {{LAW}} IV).
+apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, {{LAW:deletion-is-deliberate}}).
 
 ## Procedure
-1. **Reuse before authoring** ({{DOCTRINE}} craft 1, craft 4). Read the catalogue — the
+1. **Reuse before authoring** ({{DOCTRINE:automate-repetition}}, craft 4). Read the catalogue — the
    host's skill list, or AGENT.md §4 — and the nearest existing {{SKILL}} in full. If
    its domain already covers the need, the change is an *edit* to that file (a step,
    a trigger phrase, a done-when), not a new file. Name the skill by its domain, not
@@ -44,11 +44,11 @@ apparatus, so every step ends in the user's assent ({{LAW}} II, {{LAW}} IV).
    each, rewrite the exit so the survivor routes to what the retired one led to, and
    remove the retired file and *every* reference to it (table row, sibling links, theme
    tokens, registry, README) — a dangling link is a build failure, a dangling trigger
-   phrase is a silent miss. Retirement is deletion; get consent ({{LAW}} IV).
+   phrase is a silent miss. Retirement is deletion; get consent ({{LAW:deletion-is-deliberate}}).
 6. **Verify by rendering.** Build or re-emit, open the emitted `SKILL.md`, read the
    frontmatter description as the host will, and confirm the body carries no
    unresolved token or dead link (`doctor`, or `geneseed-build --validate-only`).
-   Show the user the diff and the emitted description before it lands ({{LAW}} II).
+   Show the user the diff and the emitted description before it lands ({{LAW:one-intent-one-act}}).
 
 ## Done when
 - The need is met by an edit to an existing {{SKILL}} or by one new file in its own

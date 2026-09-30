@@ -10,7 +10,7 @@ or rewrite needs a disposable copy, or the user says "worktree", "isolate this",
 changes you did not make.
 
 ## Procedure
-1. **Look before you branch** ({{LAW}} III). `git status` and `git worktree list`
+1. **Look before you branch** ({{LAW:verify-before-asserting}}). `git status` and `git worktree list`
    first. Uncommitted changes you did not author mean someone else owns this tree —
    never `checkout -b` from it (that moves *their* HEAD onto your branch) and never
    stash or revert it. Note the branch they are on; you will not touch it.
@@ -23,7 +23,7 @@ changes you did not make.
    branch so `git worktree list` reads as a task list.
 3. **Make it runnable.** A worktree shares the repository, not the untracked files:
    install dependencies (`npm ci`, the project's equivalent) or link the ones that are
-   large and pure; copy no `.env` — secrets are the user's to place ({{LAW}} I). Run
+   large and pure; copy no `.env` — secrets are the user's to place ({{LAW:sealed-secrets}}). Run
    the project's checks once in the new tree and read the output before changing
    anything, so a later red is yours.
 4. **Work only in the worktree.** Every edit, test, commit and `doctor`/lint run
@@ -33,10 +33,10 @@ changes you did not make.
    the repo through it; verify with the tool's own status command rather than assume.
 5. **Integrate through the normal gate** — commit via the [commit {{SKILL}}](commit.md),
    ship via [ship](ship.md). A worktree earns no exemption from per-commit and
-   per-push consent ({{DOCTRINE}} process 5). Expect conflicts with a sibling tree that
+   per-push consent ({{DOCTRINE:consent-before-push}}). Expect conflicts with a sibling tree that
    touched the same files; resolve them on the branch, not in the other tree.
 6. **Clean up when the branch is merged or abandoned** — with consent, since removal
-   is deletion ({{LAW}} IV):
+   is deletion ({{LAW:deletion-is-deliberate}}):
    ```
    git worktree remove ../<repo>-<slug>
    git branch -d <type>/<slug>

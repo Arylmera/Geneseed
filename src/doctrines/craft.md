@@ -1,6 +1,6 @@
 **{{PACK_CRAFT}}** — how code is written.
 
-### {{DOCTRINE}} craft 1 — {{DOC_CRAFT_1}}
+### {{DOCTRINE:automate-repetition}} Automate Repetition
 <!-- LEAN:begin -->
 When an action repeats, automate it — and choose the vessel by the nature of the task,
 not by how many similar steps one session needs. Do not
@@ -27,7 +27,7 @@ domain covers the need and extend it; build each {{SKILL}} for one coherent doma
 a single command, not a grab-bag — and name {{SKILLS}} by domain. Reuse before creating.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} craft 2 — {{DOC_CRAFT_2}}
+### {{DOCTRINE:english-configuration}} English Configuration
 <!-- LEAN:begin -->
 All configuration and instruction files — this file, {{LAW}} and {{DOCTRINE}} files,
 {{AGENT}} and {{SKILL}} specs — are written in English, so any contributor or tool can
@@ -38,7 +38,7 @@ files, {{AGENT}} and {{SKILL}} specs — in English, so any contributor or tool 
 them.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} craft 3 — {{DOC_CRAFT_3}}
+### {{DOCTRINE:documentation-in-step}} Documentation in Step
 <!-- LEAN:begin -->
 When a change alters structure, an interface, or behaviour, update the affected
 documentation — README, API docs, usage examples — in the *same* change. Code and
@@ -50,25 +50,25 @@ documentation — README, API docs, usage examples — in the *same* change; doc
 drifts from the code is a defect, not a deferred task.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} craft 4 — {{DOC_CRAFT_4}}
+### {{DOCTRINE:search-before-creating}} Search Before Creating
 <!-- LEAN:begin -->
 Before adding a file, module, function, or abstraction, confirm an equivalent
 does not already exist; prefer extending what is there. Duplication is a defect.
-({{DOCTRINE}} craft 1 applies this to {{SKILLS}}; here it binds all code.)
+({{DOCTRINE:automate-repetition}} applies this to {{SKILLS}}; here it binds all code.)
 <!-- LEAN:else -->
 Before adding a file, module, function, or abstraction, confirm an equivalent does not
 already exist; prefer extending what is there. Duplication is a defect.
-({{DOCTRINE}} craft 1 applies this to {{SKILLS}}; here it binds all code.)
+({{DOCTRINE:automate-repetition}} applies this to {{SKILLS}}; here it binds all code.)
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} craft 5 — {{DOC_CRAFT_5}}
+### {{DOCTRINE:respect-conventions}} Respect Conventions
 <!-- LEAN:begin -->
 Match the surrounding code — its naming, structure, formatting, and patterns.
 Before writing new code, find a concrete example of the same pattern already in the
 repo and follow it; build on libraries already in use, and do not introduce a new
 dependency without surfacing it first. A new external dependency is a consequential
 decision ({{ONTOLOGY}}: {{ONT_DECISIONS}}): confirm the existing stack cannot already
-do the job ({{DOCTRINE}} craft 4), then present the choice with its cost —
+do the job ({{DOCTRINE:search-before-creating}}), then present the choice with its cost —
 maintenance, upgrades, supply chain — and add it only once accepted. Introduce a
 divergent convention only with reason, and where it affects others, only with
 agreement. Where a conventional and a clever path both work, prefer the conventional
@@ -78,47 +78,47 @@ outranks personal preference.
 Match the surrounding code's naming, structure, formatting, and patterns. Find a concrete
 example of the same pattern already in the repo and follow it; build on libraries already in
 use. Add no new dependency without surfacing it first: confirm the existing stack cannot do
-the job ({{DOCTRINE}} craft 4), present its cost, and add it only once accepted.
+the job ({{DOCTRINE:search-before-creating}}), present its cost, and add it only once accepted.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} craft 6 — {{DOC_CRAFT_6}}
+### {{DOCTRINE:smallest-viable-diff}} Smallest Viable Diff
 <!-- LEAN:begin -->
 Change as little as the task requires. Make the minimal, surgical edit that solves
 the problem and stop — do not rewrite a whole file when a few lines suffice,
 reformat code you were not asked to touch, or refactor untouched regions because
-you happened to read them. Where {{LAW}} II keeps one *intent* per change, this
+you happened to read them. Where {{LAW:one-intent-one-act}} keeps one *intent* per change, this
 keeps that intent's *footprint* small: a diff a human can review in one sitting is
-a diff a human will actually review ({{DOCTRINE}} process 5). A genuinely needed wide
+a diff a human will actually review ({{DOCTRINE:consent-before-push}}). A genuinely needed wide
 change — a rename, a codemod, a mechanical sweep — is itself one intent and is fine;
 what is forbidden is the incidental churn that rides alongside the real change and
-buries it. When matching conventions ({{DOCTRINE}} craft 5) would mean touching
+buries it. When matching conventions ({{DOCTRINE:respect-conventions}}) would mean touching
 regions the task does not, the smallest diff wins: note the convention gap and
 surface the broader style fix as its own proposed change, not as baggage on this one.
 The smaller the diff, the cheaper the review and the cleaner the revert.
 <!-- LEAN:else -->
 Make the minimal, surgical edit and stop: do not reformat code you were not asked to touch,
 and do not rewrite a whole file when a few lines suffice. A genuinely needed wide change —
-a rename, a codemod — is one intent ({{LAW}} II) and is fine. Where matching conventions
-({{DOCTRINE}} craft 5) would widen the diff, surface the convention gap as its own proposed
+a rename, a codemod — is one intent ({{LAW:one-intent-one-act}}) and is fine. Where matching conventions
+({{DOCTRINE:respect-conventions}}) would widen the diff, surface the convention gap as its own proposed
 change.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} craft 7 — {{DOC_CRAFT_7}}
+### {{DOCTRINE:one-writer-per-value}} One Writer Per Value
 <!-- LEAN:begin -->
 A value that lives in several places — a version, a count, a name, a threshold — drifts
 in whichever place nothing checks. Appoint one home as its sole writer and derive every
 other copy from it; where a copy cannot be derived, gate it against the writer so a
-divergence fails loudly ({{DOCTRINE}} rigor 4). Count the homes before trusting the gate —
+divergence fails loudly ({{DOCTRINE:prove-the-gate}}). Count the homes before trusting the gate —
 search for the value itself, not only the name you expect it under — because a home the
 gate does not know about drifts in silence. A tool that updates one home has not updated
 the others until each is checked: a version bumper that rewrites one manifest leaves every
-other file stating the version behind. Where {{DOCTRINE}} craft 4 refuses duplicated code
-and {{DOCTRINE}} ops 3 sends an edit to the layer a system renders from, this governs one
+other file stating the version behind. Where {{DOCTRINE:search-before-creating}} refuses duplicated code
+and {{DOCTRINE:edit-the-source-not-the-surface}} sends an edit to the layer a system renders from, this governs one
 value kept by hand in several places. One writer; every other copy derived or checked.
 <!-- LEAN:else -->
 A value that lives in several places — a version, a count, a name, a threshold — drifts
 in whichever place nothing checks. Appoint one home as its sole writer and derive the
-others; where a copy cannot be derived, gate it against the writer ({{DOCTRINE}} rigor 4).
+others; where a copy cannot be derived, gate it against the writer ({{DOCTRINE:prove-the-gate}}).
 Search for the value to count its homes before trusting the gate. After a tool updates one
 home, check every other.
 <!-- LEAN:end -->
