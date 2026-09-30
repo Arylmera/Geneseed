@@ -266,7 +266,9 @@ export function statusData() {
     // EVERY install, not just the one `installedDefaults` settles on — and read through the
     // same `installProfile` `rebuild-all` uses, so the settings shown are the ones a rebuild
     // keeps. `rebuild` is the pasteable command an agent edits one flag of. A broken install
-    // must not sink the panel, so it is reported rather than thrown.
+    // must not sink the panel, so it is reported rather than thrown. `absent` slots are
+    // filtered out here: an absent slot has no settings, so a row of defaults for it reads as
+    // an install that does not exist — noise in the panel and misinformation in `--json`.
     installs: installTargets().map(([host, scope, root]) => {
       try {
         const p = installProfile(host, scope, root);
@@ -274,7 +276,7 @@ export function statusData() {
       } catch (e) {
         return { host, scope, root, state: 'unreadable', error: String(e?.message ?? e) };
       }
-    }),
+    }).filter((p) => p.state !== 'absent'),
   };
 }
 

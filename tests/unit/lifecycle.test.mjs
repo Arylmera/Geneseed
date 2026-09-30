@@ -1052,3 +1052,8 @@ test('status renders one row per install with the settings a rebuild would repro
   const { installs: _omit, ...legacy } = d;
   assert.ok(!statusLines(legacy, false).some((l) => /\w+:(global|project)/.test(l)));
 });
+
+test('status lists only installs that exist — an absent slot has no settings to show', () => {
+  const d = statusData();
+  assert.ok(d.installs.every((p) => p.state !== 'absent'), 'an absent slot leaked into installs');
+});
