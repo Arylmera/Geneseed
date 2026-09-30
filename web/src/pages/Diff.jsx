@@ -103,7 +103,7 @@ export default function Diff({ onMutated, onAction, dataRev }) {
     <>
       <div className="head-row mb-16">
         <div>
-          <h1 className="h">Local edits</h1>
+          <h2 className="h">Local edits</h2>
           <p className="sub">
             The agent refines its own deployed files in place. Export them as improvements before
             any rebuild overwrites them.

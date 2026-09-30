@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon.jsx'
 import { api } from '../../api/index.js'
 import { FLAVOURS } from '../../hooks/useFlavour.js'
 import { ACCENT_MODES } from '../../hooks/useAccentMode.js'
-import { LAYOUTS, defaultLayoutFor } from '../../hooks/useLayout.js'
+import { LAYOUTS } from '../../hooks/useLayout.js'
 import ServerControl from './ServerControl.jsx'
 import Seg from '../../components/Seg.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
@@ -98,7 +98,7 @@ function AboutSection() {
 
 // The settings page: the console direction picker, machine maintenance
 // (PATH/uninstall, git-pull update), server control, and the About colophon.
-// Per-install detail and building live in the Harness tab and the Dashboard.
+// Per-install detail and building live on the Hosts tab and the Overview.
 export default function Settings({
   overview,
   onAction,
@@ -126,11 +126,11 @@ export default function Settings({
     <div className="narrow-lg">
       <div className="head-row mb-18">
         <div>
-          <h1 className="h">Settings</h1>
+          <h2 className="h">Settings</h2>
           <p className="sub">
-            Console direction, harness footprint, machine maintenance (incl. git-pull update),
-            server control, and about. See per-install detail in the Harness tab; build from there
-            and the Dashboard.
+            Console appearance, the footprint of the install you are viewing, machine maintenance
+            (including the update), server control, and about. Each install is managed on the Hosts
+            tab.
           </p>
         </div>
       </div>
@@ -174,13 +174,12 @@ export default function Settings({
             </div>
           )}
 
-          {/* Dashboard layout — the Status lens, chosen independently of the
-              skin chosen below. 'Auto' follows the layout each theme was
-              designed around; the others force one regardless of skin. */}
+          {/* The Overview's view, chosen independently of the skin below: the new
+              Overview, or one of the four older dashboards. */}
           {layout && onLayout && (
             <div className="dir-layout">
               <span className="tick" id="dir-layout-label">
-                Dashboard layout
+                Overview view
               </span>
               <Seg aria-labelledby="dir-layout-label">
                 {LAYOUTS.map((l) => (
@@ -196,11 +195,7 @@ export default function Settings({
                 ))}
               </Seg>
               <span className="dir-layout-note sub" role="status" aria-live="polite">
-                {layout === 'auto'
-                  ? `Following the theme: ${
-                      LAYOUTS.find((l) => l.id === defaultLayoutFor(flavour))?.short ?? ''
-                    }.`
-                  : (LAYOUTS.find((l) => l.id === layout)?.tagline ?? '')}
+                {LAYOUTS.find((l) => l.id === layout)?.tagline ?? ''}
               </span>
             </div>
           )}
