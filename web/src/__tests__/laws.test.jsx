@@ -232,6 +232,22 @@ describe('Constitution page', () => {
     // The tier strip lights the tier the table shows.
     expect(container.querySelector('.tier.on .tier-name').textContent).toBe('Doctrines')
   })
+  // A gate in the Gate asks card takes you to its rule: the whole entry is the control, and
+  // a tab or filter hiding the rule is lifted first, so the row is there to land on.
+  it('jumps from a gate to its rule, lifting a tab that hides it', async () => {
+    window.location.hash = '#/laws'
+    render(<Laws setup={{ gates: { asks: { 'process-5': 4 }, total: 4, standing_down: [] } }} />)
+    await waitFor(() => expect(screen.getByText('Sealed Secrets')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /^Invariants/ }))
+    expect(screen.queryByText('Automate Repetition')).toBeNull()
+    const gate = document.querySelector('.gate-row')
+    expect(gate.querySelector('.gate-name').textContent).toBe('Consent Before Push')
+    fireEvent.click(gate)
+    expect(window.location.hash).toBe('#/item/law/process.5')
+    expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(document.querySelector('[data-addr="process.5"]')).toBeTruthy()
+  })
+
   it('deep-links each of the three address shapes to its own row', async () => {
     // One `type=law` route serves all three tiers, so the addresses must not collide and each
     // must open the row it names — the failure mode is a link that renders and dead-ends.
