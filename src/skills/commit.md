@@ -22,7 +22,8 @@
 5. **Get explicit consent before committing ({{DOCTRINE}} process 5).** On *every*
    branch — feature branches included — first show the user a plain-language summary of
    the change *and* the exact commit message, then wait for explicit acceptance before
-   committing. A previous approval is not standing consent; ask again each commit. On a
+   committing. For a non-trivial change, offer the `explain-changes` skill's visual walkthrough before
+   asking — an offer, never a condition of the commit. A previous approval is not standing consent; ask again each commit. On a
    *shared branch* (`main`, `master`, `develop`/`development`, a release/hotfix branch,
    or any branch that is not a dedicated feature branch) apply the same gate with extra
    care.

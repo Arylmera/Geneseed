@@ -706,8 +706,8 @@ function gitDecide(args, payload) {
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run.
   if (args.noConsent || !GIT_GATE_RE.test(command)) return 0;
-  return ask(args, 'git-gate', 'process-5', 'Geneseed Doctrine process 5 \u2014 every git '
-    + 'commit/push needs explicit approval');
+  return ask(args, 'git-gate', 'process-5', 'Geneseed (Consent Before Push) \u2014 every git '
+    + 'commit/push needs explicit approval; to see the change first, use the explain-changes skill');
 }
 export const cmdGitGate = guardGate(gitGate, 'git-gate');
 

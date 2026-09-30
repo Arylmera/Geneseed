@@ -984,7 +984,7 @@
     {
       "expect": [
         "permissionDecision",
-        "Doctrine process 5"
+        "Consent Before Push"
       ],
       "id": "git-gate/commit",
       "steps": [
