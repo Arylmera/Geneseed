@@ -213,10 +213,13 @@ export default function Library({ overview, section, selected, dataRev }) {
       { title: 'Forget this fact?', confirmLabel: 'Forget' },
     )
     if (!ok) return
+    setActionErr('')
     try {
       await api.memoryDelete(name)
-    } catch {
-      // surface via reload, if any
+    } catch (e) {
+      // Stay on the fact that failed to go, and say why.
+      setActionErr(`Could not forget "${name}": ${e.message}`)
+      return
     }
     go('#/section/memory')
     reloadCatalog()

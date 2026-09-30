@@ -1,5 +1,4 @@
 import React from 'react'
-import { go } from '../../lib/router.js'
 import { SECTIONS, SECTION_ORDER } from '../../lib/sections.js'
 import { maxCount, editCount } from '../../lib/format.js'
 import ActivityFeed from './ActivityFeed.jsx'
@@ -96,9 +95,10 @@ export default function OperatorView({ overview, setup, jobs }) {
                 const m = SECTIONS[k],
                   v = overview.counts?.[k] ?? 0
                 return (
-                  <tr key={k} className="clickable" onClick={() => go('#/section/' + k)}>
+                  // The row's hit area is its name link, stretched (.stretch-link).
+                  <tr key={k} className="clickable">
                     <td className="name">
-                      <a href={'#/section/' + k} onClick={(e) => e.stopPropagation()}>
+                      <a href={'#/section/' + k} className="stretch-link">
                         {m.label}
                       </a>
                     </td>

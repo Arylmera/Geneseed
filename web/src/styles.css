@@ -394,7 +394,8 @@ svg.glyph { width: 16px; height: 16px; flex: none; }
 .card.pad-md { padding: 18px 20px; }
 /* Activity cards open the session detail — a chevron affordance + a subtle hover
    lift that brightens the chevron and nudges it right (click-to-open signal). */
-.act-card { transition: border-color .15s, transform .12s; }
+.act-card { display: block; color: inherit; text-decoration: none;
+  transition: border-color .15s, transform .12s; }
 .act-card:hover { border-color: var(--line-2); transform: translateY(-1px); }
 .act-chev { color: var(--text-3); transition: color .14s, transform .14s; }
 .act-card:hover .act-chev { color: var(--text); transform: translateX(2px); }
@@ -594,7 +595,11 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .tbl tbody tr:hover { background: var(--surface-2); }
 .tbl .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
 .tbl .name { font-weight: 600; }
-.tbl .clickable { cursor: pointer; }
+.tbl .clickable { cursor: pointer; position: relative; }
+/* A row or card whose one link is its hit area: the link's ::after covers the nearest
+   positioned ancestor (.strand, .tbl .clickable), so the whole row clicks through
+   the real <a> instead of a mouse-only onClick beside it. */
+.stretch-link::after { content: ''; position: absolute; inset: 0; }
 
 /* harness table: install rows that expand to their MCP wiring */
 .tbl-scroll { overflow-x: auto; }
@@ -638,7 +643,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .hbar.warn > i { background: var(--warn); }
 
 /* genome strand — one section's volume bar in the lineage view */
-.strand { display: flex; align-items: center; justify-content: space-between;
+.strand { position: relative; display: flex; align-items: center; justify-content: space-between;
   padding: 13px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .strand .strand-name { display: flex; align-items: center; gap: 12px; min-width: 150px; font-weight: 600; }
 .strand .strand-link { color: inherit; text-decoration: none; }

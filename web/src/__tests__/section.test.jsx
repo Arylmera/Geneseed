@@ -76,6 +76,14 @@ describe('Library chip-bar (replaces Section)', () => {
     await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a'))
   })
 
+  it('says why a forget failed instead of swallowing it', async () => {
+    // It used to catch the error, navigate away and reload as if the fact were gone.
+    api.memoryDelete.mockRejectedValueOnce(new Error('store is read-only'))
+    render(<Library section="memory" selected="fact-a" overview={overview({})} />)
+    fireEvent.click(await screen.findByText('Forget this fact'))
+    expect(await screen.findByText(/Could not forget "fact-a": store is read-only/)).toBeTruthy()
+  })
+
   it('shows no forget control for non-memory sections', async () => {
     render(<Library section="agents" selected="reviewer" overview={overview({})} />)
     await waitFor(() => expect(screen.getByText('A fact')).toBeTruthy())
