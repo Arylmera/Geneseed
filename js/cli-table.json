@@ -681,7 +681,21 @@
       "help": "print the install dashboard as text (theme, mode, counts, memory, version)",
       "description": "",
       "positionals": [],
-      "options": [],
+      "options": [
+        {
+          "names": ["--json"],
+          "dest": "json",
+          "metavar": null,
+          "help": "print the status payload as JSON — every install with its settings and the geneseed-build command that rebuilds it",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {

@@ -8469,6 +8469,27 @@
       "world": {
         "repo/.keep": ""
       }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "\"installs\": [",
+        "\"host\": \"opencode\"",
+        "\"scope\": \"global\"",
+        "\"emit\": \"opencode-global\"",
+        "\"theme\": \"imperial\"",
+        "\"rebuild\": \"geneseed-build --theme imperial --emit opencode-global"
+      ],
+      "id": "status/json-names-every-install-and-the-command-that-rebuilds-it",
+      "steps": [{ "argv": ["status", "--json"], "cwd": "repo" }],
+      "world": {
+        "home/.config/opencode/.geneseed-emit": "opencode-global\n",
+        "home/.config/opencode/.geneseed-theme": "imperial\n",
+        "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
+        "home/.config/opencode/.geneseed-manifest.json": "{}\n",
+        "home/.config/opencode/AGENT.md": "# deployed\n",
+        "repo/.keep": ""
+      }
     }
   ],
   "platform": "win32",

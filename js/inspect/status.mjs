@@ -392,8 +392,17 @@ export function statusLines(d, color = false) {
   return lines;
 }
 
-/** `_harness_status.cmd_status`. */
-export function cmdStatus() {
-  for (const line of statusLines(statusData(), colorEnabled())) printOut(`${line}\n`);
+/**
+ * `_harness_status.cmd_status` — and `--json`, the machine face of the same payload. An agent
+ * reading the panel had to scrape box-drawing; the object below is what the panel is drawn
+ * FROM, so the two cannot disagree.
+ */
+export function cmdStatus(args) {
+  const d = statusData();
+  if (args?.json) {
+    printOut(`${JSON.stringify(d, null, 2)}\n`);
+    return 0;
+  }
+  for (const line of statusLines(d, colorEnabled())) printOut(`${line}\n`);
   return 0;
 }
