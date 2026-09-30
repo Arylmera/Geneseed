@@ -11,6 +11,7 @@ import StatusBadge from '../components/StatusBadge.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
+import AgentGlyph from '../components/AgentGlyph.jsx'
 
 // The on-disk source path for a given (section, name), for the reader's source line when
 // the item payload carries none. Informational only; it drives no fetch.
@@ -387,6 +388,8 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
                 <StatusBadge status={status} />
               </div>
               <h2 className="reader-title">{item?.title || activeItem.title || activeItem.name}</h2>
+              {/* Console-only: the agent's glyph, under its name (components/AgentGlyph.jsx). */}
+              {sec === 'agents' ? <AgentGlyph name={activeItem.name} /> : null}
               {(item?.desc || activeItem.desc) && (
                 <p className="reader-lede">{item?.desc || activeItem.desc}</p>
               )}

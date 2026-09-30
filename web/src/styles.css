@@ -2677,3 +2677,49 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }
 }
+
+/* ============================ AGENT GLYPHS (components/AgentGlyph.jsx) ============ */
+/* One slow motion per agent, in the accent colour. Each moving part turns about its own
+   box (transform-box), so the drawing reads the same at any size. */
+.agent-glyph { display: block; color: var(--accent-text); margin: 2px 0 4px; overflow: visible; }
+.agent-glyph g, .agent-glyph path, .agent-glyph circle, .agent-glyph ellipse {
+  transform-box: fill-box; transform-origin: center; }
+.ag-wave { transform-origin: left center; animation: agWave 2.4s ease-in-out infinite; }
+.ag-draw { stroke-dasharray: 100; animation: agDraw 4s ease-in-out infinite; }
+.ag-blink { animation: agBlink 1.1s steps(1) infinite; }
+.ag-write { animation: agWrite 3s ease-in-out infinite; }
+.ag-search { animation: agSearch 3.2s ease-in-out infinite; }
+.ag-frame { animation: agFrame 2.8s ease-in-out infinite; }
+.ag-turn { animation: agTurn 4s ease-in-out infinite; }
+.ag-gauge { transform-origin: left bottom; animation: agGauge 2.6s ease-in-out infinite; }
+.ag-tilt { transform-origin: center top; animation: agTilt 3s ease-in-out infinite; }
+.ag-spin { animation: agSpin 3.6s linear infinite; }
+.ag-sweep { animation: agSweep 3.4s ease-in-out infinite; }
+.ag-pulse { animation: agPulse 2.4s ease-in-out infinite; }
+.ag-lean { transform-origin: center bottom; animation: agLean 2.8s ease-in-out infinite; }
+.ag-grow { transform-origin: center bottom; animation: agGrow 3.6s ease-in-out infinite; }
+.ag-bubble { animation: agBubble 2.2s ease-in infinite; }
+.ag-late { animation-delay: 1.1s; }
+.ag-beat { animation: agBeat 1.4s ease-in-out infinite; }
+.ag-twinkle { animation: agTwinkle 2s ease-in-out infinite; }
+@keyframes agWave { 50% { transform: skewY(-6deg) scaleX(.94); } }
+@keyframes agDraw { 0% { stroke-dashoffset: 100; } 55%, 100% { stroke-dashoffset: 0; } }
+@keyframes agBlink { 50% { opacity: 0; } }
+@keyframes agWrite { 50% { transform: translate(-6px, 2px); } }
+@keyframes agSearch { 25% { transform: rotate(28deg); } 60% { transform: rotate(-18deg); } }
+@keyframes agFrame { 50% { transform: scale(.88); } }
+@keyframes agTurn { 0%, 40% { transform: rotate(0); } 60%, 100% { transform: rotate(180deg); } }
+@keyframes agGauge { 50% { transform: rotate(-38deg); } }
+@keyframes agTilt { 25% { transform: rotate(6deg); } 75% { transform: rotate(-6deg); } }
+@keyframes agSpin { 50% { transform: scaleX(.15); } }
+@keyframes agSweep { 50% { transform: translateX(12px); } }
+@keyframes agPulse { 50% { transform: scale(1.08); opacity: .7; } }
+@keyframes agLean { 50% { transform: rotate(-10deg); } }
+@keyframes agGrow { 0% { transform: scale(.85); } 50% { transform: scale(1); } 100% { transform: scale(.85); } }
+@keyframes agBubble { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-12px); opacity: 0; } }
+@keyframes agBeat { 15% { transform: scale(1.14); } 30% { transform: scale(1); } }
+@keyframes agTwinkle { 50% { opacity: .2; transform: rotate(45deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .agent-glyph * { animation: none !important; }
+  .ag-draw { stroke-dasharray: none; }
+}
