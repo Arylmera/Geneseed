@@ -188,6 +188,10 @@ describe('skill classes', () => {
     )
     render(<Library section="skills" overview={overview({ skills: 5 })} />)
     await waitFor(() => expect(document.querySelector('.skill-cats')).toBeTruthy())
+    // The types are a banner across the whole card, not a corner of the list column.
+    const banner = document.querySelector('.skill-banner')
+    expect(banner.parentElement.classList.contains('library')).toBe(true)
+    expect(banner.closest('.lib-list')).toBeNull()
     expect([...document.querySelectorAll('.lib-group')].map((g) => g.textContent)).toEqual([
       'Design',
       'Build',

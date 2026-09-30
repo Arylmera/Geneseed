@@ -243,7 +243,50 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   return (
     <>
       {err ? <ErrorState error={err} style={{ margin: '0 0 12px' }} /> : null}
-      <div className={`library${lock ? ' locked' : ''}`}>
+      <div
+        className={`library${lock ? ' locked' : ''}${isSkills && skillSplit.cats.length > 1 ? ' has-banner' : ''}`}
+      >
+        {isSkills && skillSplit.cats.length > 1 && (
+          // Skill types as a banner across the whole card: the classes are the first way to
+          // cut 50-odd skills, so they get the width, not a wrapped corner of the list column.
+          <div className="skill-banner" role="group" aria-label="Skill types">
+            <div className="skill-banner-row">
+              <span className="skill-banner-label">Skill types</span>
+              <div className="skill-cats">
+                <button
+                  type="button"
+                  className={`skill-cat${cat === 'all' ? ' on' : ''}`}
+                  aria-pressed={cat === 'all'}
+                  onClick={() => setCat('all')}
+                >
+                  All <span className="cn">{items.length}</span>
+                </button>
+                {skillSplit.cats.map(({ key, label: cl, n, c }) => (
+                  <button
+                    type="button"
+                    key={key}
+                    className={`skill-cat${cat === key ? ' on' : ''}`}
+                    aria-pressed={cat === key}
+                    style={{ '--cc': c }}
+                    onClick={() => setCat(key)}
+                  >
+                    <span className="cdot" aria-hidden="true" />
+                    {cl} <span className="cn">{n}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="skill-mix" aria-hidden="true">
+              {skillSplit.cats.map(({ key, n, c }) => (
+                <span
+                  key={key}
+                  className={cat === 'all' || cat === key ? '' : 'dim'}
+                  style={{ '--cc': c, flexGrow: n }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
         {lock ? null : (
           <aside className="lib-kinds" aria-label="Library kinds">
             <div className="lib-title">
@@ -286,31 +329,6 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
             placeholder={`Filter ${label.toLowerCase()}`}
             label={`Filter ${label}`}
           />
-          {isSkills && skillSplit.cats.length > 1 && (
-            <div className="skill-cats" role="group" aria-label="Skill classes">
-              <button
-                type="button"
-                className={`skill-cat${cat === 'all' ? ' on' : ''}`}
-                aria-pressed={cat === 'all'}
-                onClick={() => setCat('all')}
-              >
-                All <span className="cn">{items.length}</span>
-              </button>
-              {skillSplit.cats.map(({ key, label: cl, n, c }) => (
-                <button
-                  type="button"
-                  key={key}
-                  className={`skill-cat${cat === key ? ' on' : ''}`}
-                  aria-pressed={cat === key}
-                  style={{ '--cc': c }}
-                  onClick={() => setCat(key)}
-                >
-                  <span className="cdot" aria-hidden="true" />
-                  {cl} <span className="cn">{n}</span>
-                </button>
-              ))}
-            </div>
-          )}
           <div className="lib-rows" ref={rowsRef} onKeyDown={onRowsKey}>
             {(() => {
               // A small header each time the row's group changes: a wiki page's vault, or a

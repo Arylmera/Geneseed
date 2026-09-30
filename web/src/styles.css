@@ -464,9 +464,18 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   background: var(--surface-2); border-bottom: 1px solid var(--line); }
 .lib-group .cdot { display: inline-block; width: 7px; height: 7px; margin-right: 8px;
   border-radius: 50%; background: var(--cc, var(--text-3)); vertical-align: 1px; }
-/* Skill class chips (the old Skills page's class bar), under the list's filter. */
-.skill-cats { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px 10px;
-  border-bottom: 1px solid var(--line); }
+/* Skill types: a thin banner across the whole Library card (all grid columns), the
+   chips on one row and a stacked bar of each type's share under them. */
+.library.has-banner { grid-template-rows: auto 1fr; }
+.skill-banner { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 20px; background: var(--bg-2); border-bottom: 1px solid var(--line); }
+.skill-banner-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.skill-banner-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3); }
+.skill-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.skill-mix { display: flex; gap: 2px; height: 5px; }
+.skill-mix span { border-radius: 2px; background: var(--cc, var(--text-3)); transition: opacity .14s; }
+.skill-mix span.dim { opacity: .25; }
 .skill-cat { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
   color: var(--text-2); font-family: var(--font-mono); font-size: 11px; cursor: pointer;
@@ -2461,6 +2470,7 @@ a.tier .tier-bar > span { background: var(--line-3); }
   border-right: 1px solid var(--line); }
 .lib-list-head { padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .library .lib-rows { flex: 1; max-height: calc(100vh - var(--topbar-h) - 250px); overflow: auto; }
+.library.has-banner .lib-rows { max-height: calc(100vh - var(--topbar-h) - 330px); }
 .library .lib-row { display: flex; flex-direction: column; gap: 3px; padding: 10px 18px;
   color: var(--text); }
 .library .lib-row.on { background: var(--accent-soft); }
