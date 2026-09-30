@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { diffHash, parseDiff, selectDiff, MAX_FILE_LINES, checkBrief, safeSvg, markGenerated }
+import { diffHash, parseDiff, selectDiff, MAX_FILE_LINES, checkBrief, safeSvg, markGenerated, run }
   from '../../src/skills/explain-changes/scripts/render_changes.mjs';
 
 const dirs = [];
@@ -203,4 +203,108 @@ test('lockfiles, dist/ and linguist-generated paths are marked generated', () =>
     .map((p) => ({ path: p, generated: false }));
   markGenerated(dir, files);
   assert.deepEqual(files.map((f) => f.generated), [true, true, true, false]);
+});
+
+const outDir = () => tmp();
+
+/** A brief that explains `paths` in one unit and lists one risk. */
+const brief = (paths, extra = {}) => ({
+  title: 'T', request: 'the request', summary: 'the summary',
+  risks: [{ level: 'high', text: 'check this', unit: 'u1' }],
+  units: [{ id: 'u1', title: 'U', why: 'because', files: paths }], ...extra,
+});
+
+function render(dir, b, extra = ['--out', outDir()]) {
+  const bf = path.join(tmp(), 'brief.json');
+  fs.writeFileSync(bf, JSON.stringify(b));
+  const r = run(['--brief', bf, ...extra], dir);
+  assert.equal(r.code, 0, r.err.join('\n'));
+  return { ...r, html: fs.readFileSync(r.out[0], 'utf8') };
+}
+
+test('a modified file renders side by side: old line left, new line right, escaped', () => {
+  const { dir } = repo({ 'a.js': 'if (a < b) go();\nx = 1;\n' });
+  write(dir, { 'a.js': 'if (a < b) go();\nx = 2;\n' });
+  const { html } = render(dir, brief(['a.js']));
+  assert.match(html, /<table class="diff split">/);
+  assert.match(html, /<td class="n del">2<\/td><td class="c del">x = 1;<\/td><td class="n add">2<\/td><td class="c add">x = 2;<\/td>/);
+  assert.match(html, /if \(a &lt; b\) go\(\);/);
+});
+
+test('an added file is one full-width column', () => {
+  const { dir } = repo({ 'k.txt': 'k\n' });
+  write(dir, { 'new.js': 'one\ntwo\n' });
+  const { html } = render(dir, brief(['new.js']));
+  assert.match(html, /<table class="diff single">/);
+  assert.match(html, /<td class="n add">2<\/td><td class="s add">\+<\/td><td class="c add">two<\/td>/);
+});
+
+test('a carriage return is made visible rather than silently dropped', () => {
+  const { dir } = repo({ 'w.txt': 'x\r\n' });
+  write(dir, { 'w.txt': 'y\r\n' });
+  assert.match(render(dir, brief(['w.txt'])).html, /y<span class="cr" title="CR">␍<\/span>/);
+});
+
+test('brief text is escaped: a title cannot inject markup', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  write(dir, { 'a.txt': 'A\n' });
+  const { html } = render(dir, brief(['a.txt'], { title: '<img src=x onerror=alert(1)>' }));
+  assert.ok(!html.includes('<img src=x'));
+  assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+});
+
+test('the page opens dark, carries no external reference, and footers the diff hash', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  write(dir, { 'a.txt': 'A\n' });
+  const { html, out } = render(dir, brief(['a.txt']));
+  assert.match(html, /^<!doctype html>\n<html lang="en" data-theme="dark">/);
+  assert.doesNotMatch(html, /(src|href)=["']https?:/);
+  const hash = out[1].replace('diff ', '');
+  assert.equal(run(['--hash'], dir).out[0], hash);
+  assert.ok(html.includes(`diff ${hash}`));
+});
+
+test('a mismatched brief still renders, bannered, with every problem on stderr', () => {
+  const { dir } = repo({ 'a.txt': 'a\n', 'b.txt': 'b\n' });
+  write(dir, { 'a.txt': 'A\n', 'b.txt': 'B\n' });
+  const { html, err } = render(dir, brief(['a.txt', 'phantom.js']));
+  assert.match(html, /<div class="mismatch">/);
+  assert.ok(html.includes('phantom.js, which is not in the diff'));
+  assert.ok(err.some((l) => l.includes('2 narrative mismatch(es)')));
+});
+
+test('risks come ranked high to low whatever order the brief gives', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  write(dir, { 'a.txt': 'A\n' });
+  const { html } = render(dir, brief(['a.txt'], { risks: [
+    { level: 'low', text: 'third' }, { level: 'high', text: 'first' }, { level: 'medium', text: 'second' },
+  ] }));
+  assert.ok(html.indexOf('first') < html.indexOf('second') && html.indexOf('second') < html.indexOf('third'));
+});
+
+test('lang fr switches the fixed labels', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  write(dir, { 'a.txt': 'A\n' });
+  const { html } = render(dir, brief(['a.txt'], { lang: 'fr' }));
+  assert.ok(html.includes('À vérifier en priorité'));
+  assert.match(html, /<html lang="fr"/);
+});
+
+test('without --out the report lands inside .git, so the next diff never contains it', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  write(dir, { 'a.txt': 'A\n' });
+  const first = render(dir, brief(['a.txt']), []);
+  assert.ok(first.out[0].includes(`${path.sep}.git${path.sep}explain-changes${path.sep}`), first.out[0]);
+  assert.equal(render(dir, brief(['a.txt']), []).out[1], first.out[1]);
+});
+
+test('an empty diff is exit 3 and writes nothing; bad arguments are exit 2', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  const out = outDir();
+  assert.equal(run(['--brief', 'x.json', '--out', out], dir).code, 3);
+  assert.deepEqual(fs.readdirSync(out), []);
+  write(dir, { 'a.txt': 'A\n' });
+  assert.equal(run(['--nope'], dir).code, 2);
+  assert.equal(run(['--base', '--output=x'], dir).code, 2);
+  assert.equal(run([], dir).code, 2);
 });

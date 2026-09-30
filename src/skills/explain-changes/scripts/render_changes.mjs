@@ -172,3 +172,289 @@ export function checkBrief(brief, files) {
   }
   return problems;
 }
+
+const TEST_PATH = /(^|\/)(tests?|__tests__|spec)\/|\.(test|spec)\.[^/]+$/;
+const RISK_ORDER = { high: 0, medium: 1, low: 2 };
+
+const LABELS = {
+  en: {
+    request: 'Original request', inShort: 'In short', checkFirst: 'Check first',
+    walkthrough: 'Walkthrough', appendix: 'Appendix — full diff',
+    mismatch: 'The narrative does not match the diff', noRisks: 'No risks listed',
+    files: 'files', tests: 'test files', outOfScope: 'out of scope',
+    high: 'high', medium: 'medium', low: 'low', binary: 'binary', generated: 'generated',
+    truncated: `truncated after ${MAX_FILE_LINES} lines`, light: '☀ Light', dark: '☾ Dark',
+    generatedOn: 'generated',
+    status: { added: 'added', deleted: 'deleted', modified: 'modified', renamed: 'renamed', copied: 'copied' },
+  },
+  fr: {
+    request: "Demande d'origine", inShort: 'En bref', checkFirst: 'À vérifier en priorité',
+    walkthrough: 'Parcours des changements', appendix: 'Annexe — diff complet',
+    mismatch: 'Le récit ne correspond pas au diff', noRisks: 'Aucun risque listé',
+    files: 'fichiers', tests: 'fichiers de test', outOfScope: 'hors périmètre',
+    high: 'élevé', medium: 'moyen', low: 'faible', binary: 'binaire', generated: 'généré',
+    truncated: `tronqué après ${MAX_FILE_LINES} lignes`, light: '☀ Clair', dark: '☾ Sombre',
+    generatedOn: 'généré le',
+    status: { added: 'nouveau', deleted: 'supprimé', modified: 'modifié', renamed: 'renommé', copied: 'copié' },
+  },
+};
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const code = (s) => esc(s).replace(/\r$/, '<span class="cr" title="CR">␍</span>');
+
+function splitRows(h) {
+  const side = (l, which) => (l
+    ? `<td class="n ${l.t}">${which === 'o' ? l.o : l.n}</td><td class="c ${l.t}">${code(l.text)}</td>`
+    : '<td class="n empty"></td><td class="c empty"></td>');
+  const L = h.lines;
+  let r = '';
+  let i = 0;
+  while (i < L.length) {
+    if (L[i].t === 'ctx') { r += `<tr>${side(L[i], 'o')}${side(L[i], 'n')}</tr>`; i++; continue; }
+    if (L[i].t === 'note') { r += `<tr><td class="note" colspan="4">${esc(L[i].text)}</td></tr>`; i++; continue; }
+    const dels = [];
+    const adds = [];
+    while (i < L.length && L[i].t === 'del') dels.push(L[i++]);
+    while (i < L.length && L[i].t === 'add') adds.push(L[i++]);
+    for (let k = 0; k < Math.max(dels.length, adds.length); k++) {
+      r += `<tr>${side(dels[k], 'o')}${side(adds[k], 'n')}</tr>`;
+    }
+  }
+  return r;
+}
+
+function singleRows(h, added) {
+  return h.lines.map((l) => (l.t === 'note'
+    ? `<tr><td class="note" colspan="3">${esc(l.text)}</td></tr>`
+    : `<tr><td class="n ${l.t}">${added ? l.n : l.o}</td><td class="s ${l.t}">${added ? '+' : '−'}</td>`
+      + `<td class="c ${l.t}">${code(l.text)}</td></tr>`)).join('');
+}
+
+function diffTable(f, hunks) {
+  if (f.binary || !hunks.length) return '';
+  const single = f.status === 'added' || f.status === 'deleted';
+  const rows = hunks.map((h) => `<tr class="hunk"><td colspan="${single ? 3 : 4}">${esc(h.header)}</td></tr>`
+    + (single ? singleRows(h, f.status === 'added') : splitRows(h))).join('');
+  return `<div class="diffwrap"><table class="diff ${single ? 'single' : 'split'}">${rows}</table></div>`;
+}
+
+function fileHead(f, L) {
+  const tags = [f.binary && L.binary, f.generated && L.generated, f.truncated && L.truncated]
+    .filter(Boolean).map((t) => `<span class="tag">${esc(t)}</span> `).join('');
+  return `<div class="fhead"><span class="path">diff --git a/${esc(f.oldPath || f.path)} b/${esc(f.path)}</span>`
+    + `<span>${tags}${esc(L.status[f.status])} · <span class="plus">+${f.add}</span> `
+    + `<span class="minus">−${f.del}</span></span></div>`;
+}
+
+const CSS = `
+:root{--bg:#16181c;--panel:#1d2025;--ink:#e6e7e9;--muted:#9a9ea6;--line:#2e3238;--accent:#8aa4ff;
+--add-bg:#16311f;--add-ink:#8fe0a6;--add-gut:#1d4029;--del-bg:#3a1a1d;--del-ink:#ff9aa2;--del-gut:#4a2226;
+--hunk-bg:#1f2638;--hunk-ink:#8aa4ff;--high:#ff7b6b;--medium:#f0b44c;--low:#a8cf6f;--code-bg:#191b1f;color-scheme:dark}
+:root[data-theme="light"]{--bg:#fbfbfa;--panel:#fff;--ink:#1d1f23;--muted:#62666d;--line:#e3e4e6;--accent:#3a5bd9;
+--add-bg:#e6f6ea;--add-ink:#1a6b33;--add-gut:#cdeed6;--del-bg:#fdebec;--del-ink:#a1232b;--del-gut:#f8d4d7;
+--hunk-bg:#eef2fd;--hunk-ink:#3a5bd9;--high:#c0392b;--medium:#c77c02;--low:#5a7d2a;--code-bg:#f6f7f8;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{padding:32px clamp(16px,3vw,48px) 64px}
+.ask,.summary,.why{max-width:110ch}
+code,.path,.diff,.chip,footer{font-family:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;font-size:12.5px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:40px 0 12px}h3{font-size:15px;margin:0}
+.muted{color:var(--muted)}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+button{font:inherit;font-size:13px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+.ask{margin:16px 0;padding:12px 16px;border-left:3px solid var(--accent);background:var(--panel);border-radius:0 8px 8px 0}
+.label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px}
+.plus{color:var(--add-ink)}.minus{color:var(--del-ink)}
+.summary{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 20px}
+.mismatch{margin:16px 0;padding:12px 16px;border:1px solid var(--high);border-radius:10px;color:var(--high)}
+.checks{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.checks li{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:auto auto 1fr;gap:10px;align-items:start}
+.checks input{margin-top:4px;width:16px;height:16px}
+.checks li.done{opacity:.55}.checks li.done .what{text-decoration:line-through}
+.checks a{color:var(--accent);text-decoration:none;font-size:13px}
+.sev{font-size:11px;font-weight:600;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px solid;white-space:nowrap}
+.sev.high{color:var(--high)}.sev.medium{color:var(--medium)}.sev.low{color:var(--low)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:16px 0;overflow:hidden}
+.card>.head{padding:16px 20px;border-bottom:1px solid var(--line)}
+.step{font-size:12px;color:var(--muted)}.why{margin:6px 0 0}
+.files{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+.diagram{padding:16px 20px;border-bottom:1px solid var(--line);color:var(--ink)}
+.diagram svg{width:100%;height:auto;max-width:900px;display:block;margin:0 auto}
+.file+.file{border-top:1px solid var(--line)}
+.fhead{display:flex;justify-content:space-between;gap:8px;padding:8px 14px;background:var(--code-bg);border-bottom:1px solid var(--line);font-size:12.5px}
+.path{font-weight:600;overflow-wrap:anywhere}
+.tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 6px}
+.diffwrap{overflow-x:auto}
+.diff{width:100%;border-collapse:collapse;table-layout:fixed;tab-size:4}
+.diff td{padding:0 8px;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+.diff td.n{width:52px;text-align:right;color:var(--muted);user-select:none;padding:0 6px}
+.diff td.s{width:18px;text-align:center;user-select:none;padding:0}
+.diff td.add{background:var(--add-bg);color:var(--add-ink)}.diff td.n.add{background:var(--add-gut)}
+.diff td.del{background:var(--del-bg);color:var(--del-ink)}.diff td.n.del{background:var(--del-gut)}
+.diff td.empty{background:var(--code-bg)}
+.diff tr.hunk td{background:var(--hunk-bg);color:var(--hunk-ink);padding:3px 8px}
+.diff td.note{color:var(--muted);font-style:italic}
+.cr{color:var(--muted)}
+details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}
+details>summary .fhead::before{content:"▸ "}details[open]>summary .fhead::before{content:"▾ "}
+footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted)}
+`;
+
+const JS = `
+const R=document.documentElement,B=document.getElementById('theme');
+function set(t){R.dataset.theme=t;B.textContent=t==='dark'?B.dataset.light:B.dataset.dark;
+try{localStorage.setItem('explain-changes-theme',t)}catch(e){}}
+let t='dark';try{t=localStorage.getItem('explain-changes-theme')||'dark'}catch(e){}
+set(t);B.onclick=()=>set(R.dataset.theme==='dark'?'light':'dark');
+document.querySelectorAll('.checks input').forEach(c=>c.onchange=()=>c.closest('li').classList.toggle('done',c.checked));
+`;
+
+export function renderPage({ brief, files, problems, meta }) {
+  const lang = LABELS[brief.lang] ? brief.lang : 'en';
+  const L = LABELS[lang];
+  const byPath = new Map(files.map((f) => [f.path, f]));
+  const units = (brief.units ?? []).map((u, i) => ({ ...u, id: u.id ?? `u${i + 1}` }));
+  const titleOf = (id) => units.find((u) => u.id === id)?.title ?? id;
+  const add = files.reduce((s, f) => s + f.add, 0);
+  const del = files.reduce((s, f) => s + f.del, 0);
+  const tests = files.filter((f) => TEST_PATH.test(f.path)).length;
+  const oos = units.filter((u) => u.out_of_scope).length;
+
+  const risks = [...(brief.risks ?? [])]
+    .map((r) => ({ ...r, level: r.level in RISK_ORDER ? r.level : 'low' }))
+    .sort((a, b) => RISK_ORDER[a.level] - RISK_ORDER[b.level]);
+  const riskHtml = risks.length
+    ? `<ul class="checks">${risks.map((r) => `<li><input type="checkbox"><span class="sev ${r.level}">${esc(L[r.level])}</span>`
+      + `<div><div class="what">${esc(r.text)}</div>`
+      + `${r.unit ? `<a href="#${esc(r.unit)}">→ ${esc(titleOf(r.unit))}</a>` : ''}</div></li>`).join('')}</ul>`
+    : `<p class="muted">${esc(L.noRisks)} — ${esc(brief.risks_none_reason)}</p>`;
+
+  const cards = units.map((u, i) => {
+    const paths = unitFiles(u);
+    const diffs = paths.map((p) => {
+      const f = byPath.get(p);
+      if (!f) return '';
+      const idx = u.hunks?.[p];
+      const hunks = idx ? idx.map((k) => f.hunks[k]).filter(Boolean) : f.hunks;
+      return `<div class="file">${fileHead(f, L)}${diffTable(f, hunks)}</div>`;
+    }).join('');
+    const svg = u.svg && safeSvg(u.svg) ? `<div class="diagram">${u.svg}</div>` : '';
+    return `<section class="card" id="${esc(u.id)}"><div class="head">`
+      + `<div class="step">${i + 1} / ${units.length}${u.kind ? ` · ${esc(u.kind)}` : ''}</div>`
+      + `<h3>${esc(u.title)}</h3><p class="why">${esc(u.why)}</p>`
+      + `<div class="files">${paths.map((p) => `<span class="chip">${esc(p)}</span>`).join('')}</div>`
+      + `</div>${svg}${diffs}</section>`;
+  }).join('');
+
+  const appendix = files.map((f) => `<details class="card file"><summary>${fileHead(f, L)}</summary>`
+    + `${f.generated ? '' : diffTable(f, f.hunks)}</details>`).join('');
+  const banner = problems.length
+    ? `<div class="mismatch"><strong>${esc(L.mismatch)}</strong><ul>${problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
+    : '';
+
+  return `<!doctype html>
+<html lang="${lang}" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(brief.title)} — ${esc(meta.branch)}</title>
+<style>${CSS}</style>
+</head>
+<body>
+<main>
+<header>
+<div class="top"><div><h1>${esc(brief.title)}</h1><div class="muted">${esc(meta.branch)} · ${esc(meta.mode)}</div></div>
+<button id="theme" data-light="${esc(L.light)}" data-dark="${esc(L.dark)}">${esc(L.light)}</button></div>
+<div class="ask"><div class="label">${esc(L.request)}</div>${esc(brief.request)}</div>
+<div class="stats"><span class="stat"><b>${files.length}</b> ${esc(L.files)}</span>
+<span class="stat plus"><b>+${add}</b></span><span class="stat minus"><b>−${del}</b></span>
+<span class="stat"><b>${tests}</b> ${esc(L.tests)}</span><span class="stat"><b>${oos}</b> ${esc(L.outOfScope)}</span></div>
+</header>
+${banner}
+<h2>${esc(L.inShort)}</h2>
+<div class="summary">${esc(brief.summary)}</div>
+<h2>${esc(L.checkFirst)}</h2>
+${riskHtml}
+<h2>${esc(L.walkthrough)}</h2>
+${cards}
+<h2>${esc(L.appendix)}</h2>
+${appendix}
+<footer>diff ${esc(meta.hash)} · base ${esc(meta.base)} (${esc(meta.branch)}) · ${esc(L.generatedOn)} ${esc(meta.generated)} · explain-changes</footer>
+</main>
+<script>${JS}</script>
+</body>
+</html>
+`;
+}
+
+const USAGE = 'usage: render_changes.mjs --brief <file.json> [--out <notebook-dir>] [--base <ref>]\n'
+  + '       render_changes.mjs --hash [--base <ref>]';
+
+function parseArgs(argv) {
+  const a = {};
+  for (let i = 0; i < argv.length; i++) {
+    const k = argv[i];
+    if (k === '--hash') { a.hash = true; continue; }
+    if (k !== '--brief' && k !== '--out' && k !== '--base') return { error: `unknown argument ${k}` };
+    const v = argv[++i];
+    if (v === undefined) return { error: `${k} needs a value` };
+    // A ref starting with "-" would reach git as an option.
+    if (k === '--base' && v.startsWith('-')) return { error: `--base ${v}: not a ref` };
+    a[k.slice(2)] = v;
+  }
+  return a;
+}
+
+/** Warn when a report lands where git could pick it up. Exit 1 = not ignored; 128 = outside. */
+function ignored(root, file) {
+  try { git(root, ['check-ignore', '-q', '--', file]); return true; } catch (e) { return e.status !== 1; }
+}
+
+export function run(argv, cwd = process.cwd()) {
+  const fail = (code, msg) => ({ code, out: [], err: [`explain-changes: ${msg}`, ...(code === 2 ? [USAGE] : [])] });
+  const a = parseArgs(argv);
+  if (a.error) return fail(2, a.error);
+  let root;
+  try { root = git(cwd, ['rev-parse', '--show-toplevel']).trim(); } catch { return fail(2, 'not inside a git repository'); }
+  const d = selectDiff(root, a.base);
+  if (!d.text.trim()) return fail(3, 'nothing to explain — the diff is empty');
+  const hash = diffHash(d.text);
+  if (a.hash) return { code: 0, out: [hash], err: [] };
+  if (!a.brief) return fail(2, '--brief <file.json> is required');
+  let brief;
+  try { brief = JSON.parse(fs.readFileSync(path.resolve(cwd, a.brief), 'utf8')); } catch (e) {
+    return fail(2, `cannot read the brief: ${e.message}`);
+  }
+  const files = parseDiff(d.text);
+  markGenerated(root, files);
+  const problems = checkBrief(brief, files);
+  const branch = gitOr(root, ['rev-parse', '--abbrev-ref', 'HEAD'], 'no-commit');
+  const base = gitOr(root, ['rev-parse', '--short', a.base ?? 'HEAD'], 'none');
+  const now = new Date().toISOString();
+  const html = renderPage({ brief, files, problems,
+    meta: { branch, mode: d.mode, hash, base, generated: now.slice(0, 16).replace('T', ' ') } });
+  const dir = a.out
+    ? path.resolve(cwd, a.out, 'changes')
+    : path.resolve(root, git(root, ['rev-parse', '--git-dir']).trim(), 'explain-changes');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${now.slice(0, 10)}-${branch.replace(/[^\w.-]+/g, '-')}-${hash}.html`);
+  fs.writeFileSync(file, html);
+  const err = [];
+  if (a.out && !ignored(root, file)) err.push(`explain-changes: warning — ${file} is not git-ignored, and the report contains code`);
+  if (problems.length) {
+    err.push(`explain-changes: ${problems.length} narrative mismatch(es) — fix the brief and re-run:`,
+      ...problems.map((p) => `  - ${p}`));
+  }
+  return { code: 0, out: [file, `diff ${hash}`], err };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const r = run(process.argv.slice(2));
+  if (r.out.length) process.stdout.write(`${r.out.join('\n')}\n`);
+  if (r.err.length) process.stderr.write(`${r.err.join('\n')}\n`);
+  process.exitCode = r.code;
+}
