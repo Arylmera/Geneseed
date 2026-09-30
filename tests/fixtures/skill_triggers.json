@@ -17,6 +17,13 @@
     { "query": "Refactor the config loader into smaller functions without changing behaviour", "should_trigger": false },
     { "query": "Add retry with exponential backoff to the HTTP client", "should_trigger": false }
   ],
+  "geneseed": [
+    { "query": "Which theme and footprint is my Geneseed install using?", "should_trigger": true },
+    { "query": "Switch my harness to the full footprint but keep everything else the same", "should_trigger": true },
+    { "query": "Turn off the comms doctrine pack on my global install", "should_trigger": true },
+    { "query": "Write a commit message for the staged changes", "should_trigger": false },
+    { "query": "Scaffold a new Vite + React project", "should_trigger": false }
+  ],
   "git-rescue": [
     { "query": "I did a hard reset and lost my last three commits, get them back", "should_trigger": true },
     { "query": "My rebase is half finished and the repo is a mess, help", "should_trigger": true },

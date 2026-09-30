@@ -252,3 +252,21 @@ test("setup's off-TTY hint is a command that parses", () => {
     sb.cleanup();
   }
 });
+
+test('the geneseed skill names only verbs the CLI entry dispatches', () => {
+  // The skill once told agents to run `geneseed learn` and `geneseed context` — both hook
+  // verbs, both `invalid choice` on this entry. Every `geneseed <verb>` it names must be a key
+  // of the entry's VERBS table; hook verbs are written `geneseed-hook <verb>` and are not read.
+  const entry = readFileSync(path.join(ROOT, ...ENTRY.split('/')), 'utf8');
+  const block = entry.slice(entry.indexOf('const VERBS = {'));
+  const verbs = new Set([...block.matchAll(/^ {2}'?([a-z-]+)'?: \(\) => import/gm)].map((m) => m[1]));
+  // `validate` is a real CLI verb but is dispatched as a special case OUTSIDE the VERBS table
+  // (bin/geneseed-cli.mjs, `if (verb === 'validate')`), so it is never a VERBS key and must be
+  // added to the allowed set by hand.
+  verbs.add('validate');
+  const skill = readFileSync(path.join(ROOT, 'src', 'skills', 'geneseed.md'), 'utf8');
+  const named = [...skill.matchAll(/`geneseed ([a-z-]+)/g)].map((m) => m[1]);
+  assert.ok(named.length >= 8, `only ${named.length} verbs named — the regex found nothing`);
+  assert.deepEqual(named.filter((v) => !verbs.has(v)), [],
+    'the geneseed skill names a verb the CLI refuses');
+});

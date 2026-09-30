@@ -73,7 +73,7 @@
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Ask first — standing rule, or merely something to remember? Then write the memory, or test the rule against the case that ruins it before adopting it in user-rules.md. Either way, entropy wins.",
   "DESC_PROFILE": "Record who the user is in PROFILE.md — role, habits, preferred register. They'll change their mind, but do ask. Identity only; rules go in user-rules.md.",
-  "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
+  "DESC_GENESEED": "Operate the deployed Geneseed harness — find each install and its settings, read its files, run status, doctor and diff, and rebuild it with one setting changed when the user asks.",
   "DESC_REVIEW_RESPONSE": "Answer the review with rigour — weigh each point, then heed it or refute it with reasons.",
   "LEX_I": "Keep It in the Memory Banks · Sealed Secrets",
   "LEX_II": "One Task, One Act · One Intent, One Act",
