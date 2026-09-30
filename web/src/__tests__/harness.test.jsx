@@ -65,7 +65,8 @@ vi.mock('../hooks/useConfirm.jsx', () => ({ useConfirm: () => askConfirm }))
 // The confirm is a promise, so the action behind it lands a microtask after the click.
 const answered = () => act(async () => {})
 
-import Harness, { Switch } from '../pages/Harness.jsx'
+import Harness from '../pages/Harness.jsx'
+import { Switch } from '../pages/Installs/controls.jsx'
 import { api } from '../api/index.js'
 
 describe('Harness', () => {
@@ -134,6 +135,48 @@ describe('Harness', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
     await answered()
     expect(onAction).toHaveBeenCalledWith('install', expect.objectContaining({ theme: 'neutral' }))
+  })
+
+  it('deploys to a folder with the picked host, naming what that host adds', async () => {
+    const onAction = vi.fn(async () => 'job-1')
+    render(<Harness onAction={onAction} currentTheme="imperial" themes={[{ name: 'imperial' }]} />)
+    fireEvent.click(await screen.findByRole('button', { name: /deploy to folder/i }))
+    // Default host: the active install's (opencode here), and its note says what it adds.
+    const host = screen.getByLabelText('host for the new harness')
+    expect(host.value).toBe('opencode')
+    expect(document.querySelector('.dp-note code').textContent).toBe('.opencode/ + AGENT.md')
+    fireEvent.change(host, { target: { value: 'claude' } })
+    expect(document.querySelector('.dp-note code').textContent).toBe('.claude/ + CLAUDE.md')
+    fireEvent.change(screen.getByLabelText('Folder to deploy into'), {
+      target: { value: ' C:/proj ' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Deploy' }))
+    await answered()
+    expect(onAction).toHaveBeenCalledWith('deploy', {
+      host: 'claude',
+      path: 'C:/proj',
+      theme: 'imperial',
+      footprint: 'full',
+      posture: 'peer',
+      mode: 'direct',
+    })
+    // An accepted job closes the form.
+    expect(screen.queryByLabelText('Folder to deploy into')).toBeNull()
+  })
+
+  it('the remove confirm names the layer it deletes, and sends the memory choice', async () => {
+    api.installRemove = vi.fn(async () => ({ ok: true }))
+    render(<Harness onAction={vi.fn()} />)
+    fireEvent.click(await screen.findByLabelText('remove opencode · global from C:/cfg'))
+    expect(document.querySelector('.h-remove code').textContent).toBe(
+      "~/.config/opencode's AGENT.md, agents, skills, plugins + the opencode.json entry",
+    )
+    fireEvent.change(screen.getByLabelText('memory disposition'), {
+      target: { value: 'archive' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await answered()
+    expect(api.installRemove).toHaveBeenCalledWith('opencode', 'C:/cfg', 'archive')
   })
 
   it('renders this machine’s install as the first card, from the overview', async () => {
