@@ -3,10 +3,10 @@ import { flushSync } from 'react-dom'
 import { api } from './api/index.js'
 import { motionOK } from './lib/motion.js'
 import { useRoute } from './lib/router.js'
-import { applyAccent, applyCuratedAccent } from './lib/accents.js'
+import { applyAccent, applyCuratedAccent, applyHexAccent } from './lib/accents.js'
 import { useColorMode } from './hooks/useColorMode.js'
 import { useFlavour } from './hooks/useFlavour.js'
-import { useAccentMode, customAccentName } from './hooks/useAccentMode.js'
+import { useAccentMode, customAccentName, pickedHex } from './hooks/useAccentMode.js'
 import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
@@ -129,14 +129,16 @@ export default function App() {
       ? `${lastRun.action} running`
       : `${lastRun.action} ${lastRun.status}`
 
-  // The accent is a fixed pick ('custom:<name>'), the flavour's curated signature
-  // ('curated'), or the deployed voice's accent ('auto'), adjusted for light/dark.
+  // The accent is a picked colour ('hex:#RRGGBB'), a fixed pick ('custom:<name>') or the
+  // flavour's curated signature ('curated', the default), adjusted for light/dark. The
+  // voice's accent is only the fallback for a flavour with no curated entry.
   useEffect(() => {
     const el = appRef.current
     if (!el) return
+    if (applyHexAccent(el, pickedHex(accentMode), mode)) return
     const custom = customAccentName(accentMode)
     if (custom) return applyAccent(el, custom, mode)
-    if (accentMode === 'curated' && applyCuratedAccent(el, flavour, mode)) return
+    if (applyCuratedAccent(el, flavour, mode)) return
     if (overview?.accent) applyAccent(el, overview.accent, mode)
   }, [overview, mode, accentMode, flavour])
 

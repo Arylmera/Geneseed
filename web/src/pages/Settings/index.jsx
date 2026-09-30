@@ -148,9 +148,9 @@ export default function Settings({
             persists across reloads.
           </p>
 
-          {/* Accent — chosen independently of the skin below. 'Auto' follows the
-              deployed voice's accent, 'Curated' gives each theme its own designed
-              signature colour, a swatch pins one fixed colour. Live, persisted. */}
+          {/* Accent — chosen independently of the skin below: 'Curated' gives each
+              theme its own designed signature colour, a swatch pins one fixed colour,
+              the last swatch picks any. Live, saved in this browser. */}
           {accentMode && onAccentMode && (
             <div className="dir-layout">
               <span className="tick" id="dir-accent-label">

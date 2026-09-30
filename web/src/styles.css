@@ -2240,13 +2240,26 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
   border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
 .ap-group { display: flex; flex-direction: column; gap: 6px; }
 .ap-label { font-size: 12px; font-weight: 600; color: var(--text-2); }
-/* Accent: the two sources, then the fixed colours as round swatches. */
+/* Accent: Curated, the fixed colours as round swatches, then the colour picker. */
 .accent-picker { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.accent-src { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line-2);
+  background: transparent; color: var(--text-2); font: inherit; font-size: 12px;
+  font-weight: 600; cursor: pointer; }
+.accent-src:hover { color: var(--text); }
+.accent-src.on { color: var(--text); border-color: var(--accent-line); background: var(--accent-soft); }
 .accent-swatches { display: flex; gap: 8px; }
-.accent-swatch { width: 22px; height: 22px; padding: 0; border-radius: 50%; cursor: pointer;
-  background: var(--sw); border: 2px solid var(--bg-2); box-shadow: 0 0 0 1px var(--line-2); }
+.accent-swatch { position: relative; width: 22px; height: 22px; padding: 0; border-radius: 50%;
+  cursor: pointer; background: var(--sw); border: 2px solid var(--bg-2);
+  box-shadow: 0 0 0 1px var(--line-2); }
 .accent-swatch:hover { box-shadow: 0 0 0 1px var(--text-3); }
 .accent-swatch.on { box-shadow: 0 0 0 2px var(--text); }
+/* The picker swatch: a hue wheel until a colour is picked, that colour after. The native
+   input covers it, invisible, so a click opens the system colour chooser. */
+.accent-custom { background: conic-gradient(#FF5C57, #E8B53D, #4ED888, #3AD4C4, #5B8CFF, #C77DFF, #FF5C57); }
+.accent-custom.picked { background: var(--sw); }
+.accent-custom input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+  padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.accent-custom:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .appearance-pop .seg { flex-wrap: wrap; }
 
 /* ---- page frame ---- */
