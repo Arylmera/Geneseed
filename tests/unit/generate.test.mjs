@@ -2035,3 +2035,42 @@ test('a render reads each source file once per cfg, and a new cfg sees an edit',
   });
 });
 
+
+// ---------------------------------------------------------------------------------------------
+// `--config-dir`: WHERE A GLOBAL EMIT WRITES. A global emit's target is the host's resolved
+// config dir and never `--out`, so previewing one used to write over the live install. The
+// flag must move the WHOLE emit — nothing may land in the resolved dir — and a per-repo emit,
+// which has no config dir to move, must refuse it rather than ignore it the same way.
+
+function driver(dir, argv) {
+  return spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    env: { ...process.env, ...homeOverrides(path.join(dir, 'home')) },
+    maxBuffer: 1 << 26,
+    windowsHide: true,
+  });
+}
+
+test('--config-dir moves a global emit and leaves the resolved config dir untouched', () => {
+  withDir((d) => {
+    const target = path.join(d, 'preview');
+    const r = driver(d, ['--emit', 'openclaude-global', '--theme', 'neutral',
+      '--config-dir', target]);
+    assert.equal(r.status, 0, (r.stderr || '').slice(-1200));
+    assert.ok(isFile(target, 'CLAUDE.md'), 'the carrier did not land in --config-dir');
+    assert.ok(isFile(target, 'settings.json'), 'the hooks did not land in --config-dir');
+    assert.ok(!fs.existsSync(path.join(d, 'home', '.openclaude')),
+      'the emit still wrote into the resolved ~/.openclaude');
+  });
+});
+
+test('--config-dir on a per-repo emit is refused, not ignored', () => {
+  withDir((d) => {
+    const r = driver(d, ['--emit', 'claude', '--theme', 'neutral',
+      '--out', path.join(d, 'repo'), '--config-dir', path.join(d, 'preview')]);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--config-dir: only applies to a -global emit/);
+    assert.ok(!fs.existsSync(path.join(d, 'repo')), 'the refused emit wrote anyway');
+  });
+});

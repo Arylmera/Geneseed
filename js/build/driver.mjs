@@ -166,7 +166,7 @@ const VALUED = {
   '--theme': 'theme', '--posture': 'posture', '--mode': 'mode',
   '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
-  '--footprint': 'footprint', '--root': 'root',
+  '--footprint': 'footprint', '--root': 'root', '--config-dir': 'cfgDir',
 };
 const FLAGS = {
   '--sync-themes': 'syncThemes', '--validate-only': 'validateOnly',
@@ -1032,10 +1032,10 @@ function writeMarkers(markerDir, emit, footprint) {
  * compares it file by file. The Python spells that `HOSTS[host]["emit_global"](theme,
  * out=..., cfg=<tmp>, footprint=...)`, where `cfg` overrides the target the emit would
  * otherwise resolve. This is that call, and the override is threaded as `args.cfgDir` through
- * the four `emit*Global` bodies rather than added to `parseArgs`: `build.py` has no
- * `--cfg-dir` flag, and a flag on one driver and not the other is a divergence
- * `tests/golden.py` compares 259 times and could never see, because it drives both from the
- * same argv.
+ * the `emit*Global` bodies. The same key is also `--config-dir` on the command line: a global
+ * emit never writes to `--out` (there `out` is the legacy bundle a memory store migrates FROM,
+ * and `update` passes it for exactly that), so without the flag there was no way to preview a
+ * global install anywhere but over the live one.
  *
  * WHICH SIDE OF THE BOUNDARY THIS SITS ON. P3c's rule was that a render CHILD must never
  * resolve a config dir, because a child that did would write 135 files into the developer's
@@ -1187,6 +1187,15 @@ function run(argv) {
   }
 
   const out = resolveOut(args.out);
+  // Refused rather than ignored on a per-repo emit: an ignored target flag is how a preview
+  // lands on a live install, which is the bug this flag exists to close.
+  if (args.cfgDir !== undefined) {
+    if (!args.emit.endsWith('-global')) {
+      die(2, `argument --config-dir: only applies to a -global emit (got --emit ${args.emit}); `
+        + 'a per-repo emit writes under --out/--root');
+    }
+    args.cfgDir = resolveOut(args.cfgDir);
+  }
   const cfg = makeCfg(args);
 
   // The marker directory is the emit's TARGET, which for a global emit is the config dir it

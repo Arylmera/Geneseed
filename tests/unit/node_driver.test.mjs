@@ -87,6 +87,9 @@ const VALUED_FLAGS = [
   ['--emit', 'emit', 'files'],
   ['--footprint', 'footprint', 'lean'],
   ['--root', 'root', 'Repo'],
+  // A global emit's target. Bound raw here and resolved in `main`, which is also where a
+  // per-repo emit refuses it — the parser cannot, because `--emit` may come after it.
+  ['--config-dir', 'cfgDir', 'Preview'],
 ];
 const BARE_FLAGS = [
   ['--sync-themes', 'syncThemes'],
