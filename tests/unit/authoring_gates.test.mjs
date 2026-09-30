@@ -49,8 +49,8 @@ import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
-/** The three vendored folders, frozen: `js/hosts/native.mjs` is the owner and this is the check on it. */
-const VENDORED = ['react-view-transitions', 'daydream', 'token-report'];
+/** The four vendored folders, frozen: `js/hosts/native.mjs` is the owner and this is the check on it. */
+const VENDORED = ['react-view-transitions', 'daydream', 'token-report', 'explain-changes'];
 
 const sandboxes = [];
 after(() => { for (const sb of sandboxes) sb.cleanup(); });
@@ -312,7 +312,7 @@ test('a listed folder that does not exist is flagged', async () => {
   // `mock.patch.object(_build_core, "VENDORED_SKILL_DIRS", ("gone",))` becomes here: the source
   // line itself is rewritten in the copy, and the copy's own module graph is imported.
   const decl = "export const VENDORED_SKILL_DIRS = new Set(["
-    + "'react-view-transitions', 'daydream', 'token-report']);";
+    + "'react-view-transitions', 'daydream', 'token-report', 'explain-changes']);";
   const live = readFileSync(path.join(ROOT, 'js', 'hosts', 'native.mjs'), 'utf8');
   assert.ok(live.includes(decl),
     'js/hosts/native.mjs no longer declares VENDORED_SKILL_DIRS the way this fault rewrites it — the '

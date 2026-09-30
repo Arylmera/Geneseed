@@ -34,7 +34,7 @@ import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
-export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report']);
+export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report', 'explain-changes']);
 
 /**
  * `PurePath(rel).parts` — split on EITHER separator, empties dropped.

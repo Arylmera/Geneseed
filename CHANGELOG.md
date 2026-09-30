@@ -8,7 +8,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- **`explain-changes` folder skill — a visual walkthrough of a diff before it is committed**:
+  the agent writes a short brief (intent, risks, logical units) and
+  `scripts/render_changes.mjs` renders one offline HTML page with the exact git diff side by
+  side, then opens it. Offered by the `commit` skill and the git-gate prompt; never a gate.
 
 ## [3.8.0] — 2026-09-30
 

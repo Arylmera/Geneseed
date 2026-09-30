@@ -181,7 +181,7 @@ const EXPECTED = {
 // 18 specs. `agents/_template.md` does NOT ship: every host loads each `.md` in its agents dir
 // as an agent, so it would register a phantom `_template` agent.
 const N_AGENTS = 18;
-const N_SKILLS = 52;
+const N_SKILLS = 53;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
 // translates `\n` to `os.linesep`, so on Windows the file really is CRLF on disk (gated as M1).

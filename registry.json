@@ -463,6 +463,13 @@
       "added": "2026-07-29",
       "last_verified": ""
     },
+    "skills/explain-changes": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-09-30",
+      "last_verified": ""
+    },
     "skills/wayfinder": {
       "status": "approved",
       "version": "1.0.0",
