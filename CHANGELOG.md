@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.9.0] — 2026-09-30
+
 **Upgrading:** re-emit after installing. Laws IX and XI are gone and Echo the Intent is now
 **Law IX**: a note, memory or commit that says "Law IX" or "Law XI" from before this release
 means the retired External Gate (now a rigor rule) or Absence Is a Claim (folded into Verify
@@ -25,6 +29,11 @@ Before Asserting). Nothing in the harness cites a rule by number any more.
   only on each rule's own heading.
 - The memory section of AGENT.md (always on, both footprints) tells the agent to cite a rule by
   its principle, never its number, in anything that outlives the session.
+- **Web console redesign (Slate + Graphite).** New Overview (health, three charts, what needs
+  you), Constitution, Library, Personal and Installs pages; global and per-project installs are
+  shown apart; skill types head the Library as a full-width banner (#162). The console's flavours
+  are cut to Cultivar, Operator, Matrix and Atlas (#161). The Overview view choice now lives only
+  in the Appearance palette, not in the page header.
 
 ### Removed
 - Laws IX (External Gate, a rigor rule since 3.x) and XI (Absence Is a Claim, folded into Law III),
