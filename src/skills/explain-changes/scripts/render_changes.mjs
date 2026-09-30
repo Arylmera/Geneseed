@@ -141,7 +141,7 @@ export function markGenerated(root, files) {
 /** Inline SVG from the model: no script, no handler, no foreign HTML, nothing outside the page. */
 export function safeSvg(svg) {
   return /^\s*<svg[\s>/]/i.test(svg)
-    && !/<script|<foreignObject|\son\w+\s*=|href\s*=\s*["'](?!#)|url\(\s*["']?(?!#)/i.test(svg);
+    && !/<script|<foreignObject|\son\w+\s*=|href\s*=\s*(?!["']?#)|url\(\s*(?!["']?#)/i.test(svg);
 }
 
 export const unitFiles = (u) => [...new Set([...(u.files ?? []), ...Object.keys(u.hunks ?? {})])];

@@ -160,6 +160,12 @@ test('a diagram is accepted only when it cannot run code or reach outside the pa
     ['<svg><image xlink:href="data:image/png;base64,AA"/></svg>', false],
     ['<svg><rect style="fill:url(https://evil.example/x)"/></svg>', false],
     ['<div>not an svg</div>', false],
+    ['<svg><a href=#u1>x</a></svg>', true],
+    ["<svg><a href='#u1'>x</a></svg>", true],
+    ['<svg><rect style="fill:url(\'#g\')"/></svg>', true],
+    ['<svg><rect style=\'fill:url("#g")\'/></svg>', true],
+    ['<svg><a href=https://evil.example>x</a></svg>', false],
+    ['<svg><image xlink:href=https://evil.example/x.png /></svg>', false],
   ]) assert.equal(safeSvg(svg), ok, svg);
 });
 
