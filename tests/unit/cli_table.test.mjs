@@ -221,3 +221,34 @@ test('a bare `geneseed` runs `home`, as both launchers do', () => {
     sb.cleanup();
   }
 });
+
+test('every option `geneseed build` declares is a flag the generator accepts', () => {
+  // `setup` tells an off-TTY caller to run `geneseed build --emit … --theme …`, and the skill
+  // tells an agent to rebuild with one flag changed. Both need the generator's axes on the
+  // front door; this pins that they are there and that none is invented.
+  const table = JSON.parse(readFileSync(TABLE, 'utf8'));
+  const declared = table.commands.find((c) => c.name === 'build').options.flatMap((o) => o.names);
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--help'],
+    { encoding: 'utf8', windowsHide: true });
+  const driverFlags = new Set(r.stdout.match(/--[a-z-]+/g));
+  assert.deepEqual(declared.filter((f) => !driverFlags.has(f)), [],
+    'geneseed build declares a flag geneseed-build does not have');
+  for (const f of ['--emit', '--footprint', '--posture', '--mode', '--doctrines',
+    '--exclude-rules', '--out', '--root']) {
+    assert.ok(declared.includes(f), `geneseed build does not forward ${f}`);
+  }
+});
+
+test("setup's off-TTY hint is a command that parses", () => {
+  const sb = makeSandbox();
+  try {
+    const out = path.join(sb.path, 'out');
+    const r = spawnSync(process.execPath, [path.join(ROOT, ...ENTRY.split('/')), 'build',
+      '--emit', 'files', '--theme', 'neutral', '--out', out],
+    { encoding: 'utf8', env: cellEnv(sb.path), windowsHide: true, maxBuffer: 1 << 26 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(existsSync(out), 'geneseed build wrote nothing into the sandbox');
+  } finally {
+    sb.cleanup();
+  }
+});

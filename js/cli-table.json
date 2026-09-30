@@ -54,7 +54,7 @@
     },
     {
       "name": "build",
-      "help": "render src/ -> Harness/",
+      "help": "render the harness (same flags as geneseed-build; an omitted flag takes the generator default, not the install's — see geneseed status --json for an install's own; dry run: geneseed validate)",
       "description": "",
       "positionals": [],
       "options": [
@@ -63,6 +63,126 @@
             "--theme"
           ],
           "dest": "theme",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--emit"
+          ],
+          "dest": "emit",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--footprint"
+          ],
+          "dest": "footprint",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--posture"
+          ],
+          "dest": "posture",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--mode"
+          ],
+          "dest": "mode",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--doctrines"
+          ],
+          "dest": "doctrines",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--exclude-rules"
+          ],
+          "dest": "exclude_rules",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--out"
+          ],
+          "dest": "out",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--root"
+          ],
+          "dest": "root",
           "metavar": null,
           "help": "",
           "choices": null,

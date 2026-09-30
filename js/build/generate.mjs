@@ -80,12 +80,27 @@ function sysExit(msg) {
  * Calling the driver in-process keeps that: `resolveOut` resolves against `process.cwd()`
  * the same way. `build/the-bundle-follows-cwd-not-the-checkout` is the cell.
  *
- * Every other flag is the generator's own default, read from `harness.config.json` by the
- * driver — `harness build` forwards `--theme` and nothing else, and its own `--theme`
- * carries no `choices`, so an unknown one is refused by the generator rather than here.
+ * `geneseed build` used to forward `--theme` alone, which made `setup`'s own off-TTY hint
+ * (`geneseed build --emit … --theme …`) a usage error and left every other axis reachable
+ * only through the undocumented `geneseed-build`. Values are forwarded unchecked: the driver
+ * owns the choices, so the table does not repeat them.
+ *
+ * `--validate-only` is NOT one of these: it lives on `geneseed validate` only — that verb's
+ * source-tree half is the doctor, which starts a process, and this command's whole closure
+ * (`bin/geneseed-cli.mjs` → here → `driverMain`) is under the same transitive `child_process`
+ * ban as `bin/build-driver.mjs` itself. `driver.mjs`'s `run()` refuses the flag unconditionally
+ * for exactly that reason.
  */
+const BUILD_FORWARD = [
+  ['theme', '--theme'], ['emit', '--emit'], ['footprint', '--footprint'],
+  ['posture', '--posture'], ['mode', '--mode'], ['doctrines', '--doctrines'],
+  ['excludeRules', '--exclude-rules'], ['out', '--out'], ['root', '--root'],
+];
+
 export function cmdBuild(args) {
-  return driverMain(args.theme ? ['--theme', args.theme] : []);
+  const argv = [];
+  for (const [key, flag] of BUILD_FORWARD) if (args[key] != null) argv.push(flag, args[key]);
+  return driverMain(argv);
 }
 
 // --------------------------------------------------------------------------------------
