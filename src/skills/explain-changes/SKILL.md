@@ -15,7 +15,7 @@ You write the **brief** — the narrative only. `scripts/render_changes.mjs` run
 
 ## Procedure
 
-1. **Measure.** `git diff --cached --shortstat`; if empty, `git diff HEAD --shortstat`; for a branch, `git diff <ref>...HEAD --shortstat`.
+1. **Measure.** `git diff --cached --shortstat`; if empty, `git diff HEAD --shortstat`; for a branch, `git diff <ref>...HEAD --shortstat`. The shortstat leaves out untracked files, which the report includes when nothing is staged: add `git ls-files --others --exclude-standard | wc -l` (or the host equivalent) to the file count.
 2. **Choose who writes the brief.**
    - You made the change, and it is under ~300 changed lines and ~10 files: write it yourself from what you already know. Read only the hunks you do not remember (`git diff -- <path>`).
    - Bigger, a change you did not make, or your context is already heavy: delegate to **one fresh subagent** (the `developer` agent where the host has agents). Hand it the user's request verbatim, your intent notes per logical unit (a few lines each), the diff command, this file's brief rules, and the render command. It returns the report path and three lines. The full diff never enters your context.
@@ -23,8 +23,9 @@ You write the **brief** — the narrative only. `scripts/render_changes.mjs` run
 3. **Write the brief** as JSON to a temporary file outside the repository (schema below).
 4. **Render.**
    `node <this-skill-directory>/scripts/render_changes.mjs --brief <brief.json> --out <your notebook directory>` — add `--base <ref>` for a branch. Your notebook directory is named in your root instructions; if this install has none, omit `--out` and the report goes under `.git/explain-changes/`.
+   `--base <ref>` covers committed work only (`<ref>...HEAD`); uncommitted changes are not in it — commit first, or explain them separately without `--base`.
 5. **Fix mismatches.** If the script prints narrative mismatches — a file or hunk you cited that is not in the diff, a changed file no unit explains, an unsafe diagram, no risks — fix the brief and re-run. Never hand over a bannered report.
-6. **Open it.** Windows `start "" "<path>"`, macOS `open "<path>"`, Linux `xdg-open "<path>"`. If that fails (headless, SSH, container), print the path instead.
+6. **Open it.** Windows `start "" "<path>"` from cmd or Git Bash, `Start-Process "<path>"` from PowerShell; macOS `open "<path>"`, Linux `xdg-open "<path>"`. If that fails (headless, SSH, container), print the path instead.
 7. **Hand over** in two lines: the path, and the one risk the user should check first. Before you later ask commit consent, run the script with `--hash`: if it differs from the `diff <hash>` in the report's footer, the diff has changed since — regenerate.
 
 ## The brief
@@ -56,7 +57,7 @@ You write the **brief** — the narrative only. `scripts/render_changes.mjs` run
 - `request` is the user's words, verbatim — not your summary of them.
 - **Units follow execution order** (entry point → core → effects → tests), not file order. One unit = one intent. `hunks` picks hunks by index; omit it to show every hunk of each file in `files`.
 - **`risks` is the section the reader acts on.** Cover, whenever they exist: assumptions you did not verify; what is untested; files touched outside the request (also mark that unit `"out_of_scope": true`); user-visible behaviour changes (API, config, schema, migrations). You are describing your own work — err toward listing. `level` is `high`, `medium` or `low`. An empty list needs `"risks_none_reason"`.
-- **`svg` only when the change alters a flow between components** — a call sequence, a data model, a state machine. A change local to one file gets none. Hand-written inline SVG; no scripts, event handlers, `foreignObject`, external links or `url()` to anything but a `#fragment` — the script drops unsafe diagrams. Use `currentColor`, `var(--muted)`, `var(--add-ink)`, `var(--del-ink)`, `var(--line)` and `var(--code-bg)` so it follows the page theme.
+- **`svg` only when the change alters a flow between components** — a call sequence, a data model, a state machine. A change local to one file gets none. Hand-written inline SVG, one `<svg>` element and nothing after it; no scripts, event handlers, `foreignObject`, `<style>` (use attributes), animated links, external links or `url()` to anything but a `#fragment` — the script drops unsafe diagrams. Use `currentColor`, `var(--muted)`, `var(--add-ink)`, `var(--del-ink)`, `var(--line)` and `var(--code-bg)` so it follows the page theme.
 - `lang` is `en` or `fr`, matching the user's language; write every text field in that language.
 
 ## Privacy

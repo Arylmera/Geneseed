@@ -168,6 +168,24 @@ test('the hash is a pure function of the diff text', () => {
   assert.match(diffHash('abc'), /^[0-9a-f]{12}$/);
 });
 
+test('C-quoted paths are decoded; an unquoted path with spaces still splits at " b/"', () => {
+  // git C-quotes a path holding `"`, `\`, a tab or a newline even with core.quotePath=false,
+  // on the diff --git line and on rename/copy lines alike; octal escapes are UTF-8 bytes.
+  const files = parseDiff([
+    'diff --git "a/we\\"ird.txt" "b/we\\"ird.txt"', '--- "a/we\\"ird.txt"', '+++ "b/we\\"ird.txt"',
+    '@@ -1 +1 @@', '-a', '+b',
+    'diff --git "a/old\\tname" "b/caf\\303\\251 \\"x\\""', 'similarity index 100%',
+    'rename from "old\\tname"', 'rename to "caf\\303\\251 \\"x\\""',
+    'diff --git a/my file.txt b/my file.txt', '--- a/my file.txt', '+++ b/my file.txt',
+    '@@ -1 +1 @@', '-a', '+b', '',
+  ].join('\n'));
+  assert.deepEqual(files.map((f) => [f.path, f.oldPath, f.status]), [
+    ['we"ird.txt', 'we"ird.txt', 'modified'],
+    ['café "x"', 'old\tname', 'renamed'],
+    ['my file.txt', 'my file.txt', 'modified'],
+  ]);
+});
+
 test('a file past the display cap keeps its true counts but stops adding lines', () => {
   const n = MAX_FILE_LINES + 10;
   const text = `diff --git a/big b/big\nnew file mode 100644\n--- /dev/null\n+++ b/big\n@@ -0,0 +1,${n} @@\n`
@@ -237,6 +255,25 @@ test('an empty risk list needs a stated reason', () => {
   const units = [{ title: 'U', files: ['a.txt', 'b.txt', 'package-lock.json'] }];
   assert.deepEqual(checkBrief({ units }, FILES), ['no risks listed and no risks_none_reason given']);
   assert.deepEqual(checkBrief({ units, risks: [], risks_none_reason: 'docs only' }, FILES), []);
+});
+
+test('a malformed brief is reported field by field instead of crashing the check', () => {
+  const units = [{ title: 'U', files: ['a.txt', 'b.txt', 'package-lock.json'], hunks: { 'a.txt': 5 } }];
+  assert.deepEqual(checkBrief({ units, risks_none_reason: 'x' }, FILES),
+    ['unit "U": hunks for a.txt must be an array of hunk indexes']);
+  assert.deepEqual(checkBrief({ units: 'U', risks: [{ level: 'low' }], risks_none_reason: 'x' }, FILES), [
+    'units must be an array',
+    'risk 1 must be an object with a string "text"',
+    'a.txt is changed but no unit explains it',
+    'b.txt is changed but no unit explains it',
+  ]);
+  assert.deepEqual(checkBrief(null, FILES), ['the brief must be a JSON object']);
+});
+
+test('a risk level outside high, medium, low is reported, even one Object.prototype owns', () => {
+  const units = [{ title: 'U', files: ['a.txt', 'b.txt', 'package-lock.json'] }];
+  assert.deepEqual(checkBrief({ units, risks: [{ level: 'toString', text: 'x' }] }, FILES),
+    ['risk "x" has level "toString" — use high, medium or low']);
 });
 
 test('lockfiles, dist/ and linguist-generated paths are marked generated', () => {
@@ -333,6 +370,29 @@ test('risks come ranked high to low whatever order the brief gives', () => {
     { level: 'low', text: 'third' }, { level: 'high', text: 'first' }, { level: 'medium', text: 'second' },
   ] }));
   assert.ok(html.indexOf('first') < html.indexOf('second') && html.indexOf('second') < html.indexOf('third'));
+});
+
+test('a prototype key is not a language or a level: English labels, ranked low', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  write(dir, { 'a.txt': 'A\n' });
+  const { html } = render(dir, brief(['a.txt'], { lang: 'constructor', risks: [{ level: 'toString', text: 'r' }] }));
+  assert.match(html, /<html lang="en"/);
+  assert.ok(html.includes('Check first'));
+  assert.ok(html.includes('<span class="sev low">low</span>'));
+});
+
+test('a brief with a malformed field still renders; a brief that is not an object is exit 2', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  write(dir, { 'a.txt': 'A\n' });
+  const b = brief(['a.txt']);
+  b.units[0].hunks = { 'a.txt': 5 };
+  const { html } = render(dir, b);
+  assert.ok(html.includes('hunks for a.txt must be an array of hunk indexes'));
+  const bf = path.join(tmp(), 'null.json');
+  fs.writeFileSync(bf, 'null');
+  const r = run(['--brief', bf, '--out', outDir()], dir);
+  assert.equal(r.code, 2);
+  assert.equal(r.err[0], 'explain-changes: the brief must be a JSON object');
 });
 
 test('lang fr switches the fixed labels', () => {

@@ -21,7 +21,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+// ponytail: the SHA-1 empty tree; a SHA-256 repository has another id. Upgrade if one shows up:
+// `git hash-object -t tree --stdin` on empty input answers for either object format.
+const EMPTY_TREE ='4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 export const MAX_FILE_LINES = 1500;
 
 function git(cwd, args, input) {
@@ -81,6 +83,22 @@ export function selectDiff(root, base) {
 
 export const diffHash = (text) => createHash('sha256').update(text).digest('hex').slice(0, 12);
 
+const C_ESC = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13 };
+
+/**
+ * A path as git prints it. git C-quotes a path holding `"`, `\`, a tab or a newline even with
+ * core.quotePath=false; octal escapes are raw bytes, so they are collected and decoded as UTF-8.
+ */
+export function unquote(s) {
+  if (!s.startsWith('"')) return s;
+  const parts = [];
+  for (const [m, e] of s.slice(1, -1).matchAll(/\\([0-7]{3}|.)|[^\\]+/gs)) {
+    if (e === undefined) parts.push(Buffer.from(m));
+    else parts.push(Buffer.from([/^[0-7]/.test(e) ? parseInt(e, 8) : (C_ESC[e] ?? e.charCodeAt(0))]));
+  }
+  return Buffer.concat(parts).toString('utf8');
+}
+
 export function parseDiff(text) {
   const files = [];
   let f = null;
@@ -89,10 +107,12 @@ export function parseDiff(text) {
   let n = 0;
   for (const line of text.split('\n')) {
     if (line.startsWith('diff --git ')) {
-      // ponytail: a path containing " b/" splits wrong here; the rename/copy lines correct it
-      const m = /^diff --git a\/(.*) b\/(.*)$/.exec(line);
+      // ponytail: an unquoted path containing " b/" splits wrong here; the rename/copy lines correct it
+      const m = /^diff --git (?:"((?:[^"\\]|\\.)*)"|a\/(.*?)) (?:"((?:[^"\\]|\\.)*)"|b\/(.*))$/.exec(line);
+      const a = m && (m[2] ?? unquote(`"${m[1]}"`).slice(2));
+      const b = m && (m[4] ?? unquote(`"${m[3]}"`).slice(2));
       f = {
-        path: m ? m[2] : line.slice(11), oldPath: m ? m[1] : '', status: 'modified',
+        path: m ? b : line.slice(11), oldPath: m ? a : '', status: 'modified',
         binary: false, generated: false, truncated: false, hunks: [], add: 0, del: 0, shown: 0,
       };
       files.push(f);
@@ -111,10 +131,10 @@ export function parseDiff(text) {
     if (!h) {
       if (line.startsWith('new file mode')) f.status = 'added';
       else if (line.startsWith('deleted file mode')) f.status = 'deleted';
-      else if (line.startsWith('rename from ')) { f.status = 'renamed'; f.oldPath = line.slice(12); }
-      else if (line.startsWith('rename to ')) f.path = line.slice(10);
-      else if (line.startsWith('copy from ')) { f.status = 'copied'; f.oldPath = line.slice(10); }
-      else if (line.startsWith('copy to ')) f.path = line.slice(8);
+      else if (line.startsWith('rename from ')) { f.status = 'renamed'; f.oldPath = unquote(line.slice(12)); }
+      else if (line.startsWith('rename to ')) f.path = unquote(line.slice(10));
+      else if (line.startsWith('copy from ')) { f.status = 'copied'; f.oldPath = unquote(line.slice(10)); }
+      else if (line.startsWith('copy to ')) f.path = unquote(line.slice(8));
       else if (line.startsWith('Binary files ') || line === 'GIT binary patch') f.binary = true;
       continue;
     }
@@ -167,11 +187,59 @@ export function safeSvg(svg) {
 
 export const unitFiles = (u) => [...new Set([...(u.files ?? []), ...Object.keys(u.hunks ?? {})])];
 
-export function checkBrief(brief, files) {
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * The brief with every malformed field reported and dropped, so neither the check nor the page
+ * trips over model-written JSON of the wrong shape. `brief` is null when there is nothing to keep.
+ */
+export function shapeBrief(raw) {
+  if (!isObj(raw)) return { brief: null, problems: ['the brief must be a JSON object'] };
   const problems = [];
+  const list = (v, name) => {
+    if (v === undefined) return [];
+    if (Array.isArray(v)) return v;
+    problems.push(`${name} must be an array`);
+    return [];
+  };
+  const units = list(raw.units, 'units').flatMap((u, i) => {
+    if (!isObj(u)) { problems.push(`unit ${i + 1} must be an object`); return []; }
+    const c = { ...u };
+    if (u.files !== undefined && !(Array.isArray(u.files) && u.files.every((p) => typeof p === 'string'))) {
+      problems.push(`unit "${u.title}": files must be an array of paths`);
+      delete c.files;
+    }
+    if (u.hunks !== undefined && !isObj(u.hunks)) {
+      problems.push(`unit "${u.title}": hunks must be an object of path → hunk indexes`);
+      delete c.hunks;
+    } else if (u.hunks) {
+      c.hunks = Object.fromEntries(Object.entries(u.hunks).filter(([p, idx]) => {
+        const ok = Array.isArray(idx) && idx.every(Number.isInteger);
+        if (!ok) problems.push(`unit "${u.title}": hunks for ${p} must be an array of hunk indexes`);
+        return ok;
+      }));
+    }
+    return [c];
+  });
+  const risks = list(raw.risks, 'risks').filter((r, i) => {
+    if (!isObj(r) || typeof r.text !== 'string') {
+      problems.push(`risk ${i + 1} must be an object with a string "text"`);
+      return false;
+    }
+    if (!Object.hasOwn(RISK_ORDER, r.level)) {
+      problems.push(`risk "${r.text}" has level "${r.level}" — use high, medium or low`);
+    }
+    return true;
+  });
+  return { brief: { ...raw, units, risks }, problems };
+}
+
+export function checkBrief(raw, files) {
+  const { brief, problems } = shapeBrief(raw);
+  if (!brief) return problems;
   const byPath = new Map(files.map((f) => [f.path, f]));
   const covered = new Set();
-  for (const u of brief.units ?? []) {
+  for (const u of brief.units) {
     for (const p of unitFiles(u)) {
       if (byPath.has(p)) covered.add(p);
       else problems.push(`unit "${u.title}" cites ${p}, which is not in the diff`);
@@ -188,7 +256,7 @@ export function checkBrief(brief, files) {
   for (const f of files) {
     if (!covered.has(f.path) && !f.generated) problems.push(`${f.path} is changed but no unit explains it`);
   }
-  if (!brief.risks?.length && !brief.risks_none_reason) {
+  if (!brief.risks.length && !brief.risks_none_reason) {
     problems.push('no risks listed and no risks_none_reason given');
   }
   return problems;
@@ -341,7 +409,7 @@ const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
   + `script-src 'sha256-${createHash('sha256').update(JS).digest('base64')}'; form-action 'none'; base-uri 'none'`;
 
 export function renderPage({ brief, files, problems, meta }) {
-  const lang = LABELS[brief.lang] ? brief.lang : 'en';
+  const lang = Object.hasOwn(LABELS, brief.lang) ? brief.lang : 'en';
   const L = LABELS[lang];
   const byPath = new Map(files.map((f) => [f.path, f]));
   const units = (brief.units ?? []).map((u, i) => ({ ...u, id: u.id ?? `u${i + 1}` }));
@@ -352,7 +420,7 @@ export function renderPage({ brief, files, problems, meta }) {
   const oos = units.filter((u) => u.out_of_scope).length;
 
   const risks = [...(brief.risks ?? [])]
-    .map((r) => ({ ...r, level: r.level in RISK_ORDER ? r.level : 'low' }))
+    .map((r) => ({ ...r, level: Object.hasOwn(RISK_ORDER, r.level) ? r.level : 'low' }))
     .sort((a, b) => RISK_ORDER[a.level] - RISK_ORDER[b.level]);
   const riskHtml = risks.length
     ? `<ul class="checks">${risks.map((r) => `<li><input type="checkbox"><span class="sev ${r.level}">${esc(L[r.level])}</span>`
@@ -453,13 +521,15 @@ export function run(argv, cwd = process.cwd()) {
   const hash = diffHash(d.text);
   if (a.hash) return { code: 0, out: [hash], err: [] };
   if (!a.brief) return fail(2, '--brief <file.json> is required');
-  let brief;
-  try { brief = JSON.parse(fs.readFileSync(path.resolve(cwd, a.brief), 'utf8')); } catch (e) {
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(path.resolve(cwd, a.brief), 'utf8')); } catch (e) {
     return fail(2, `cannot read the brief: ${e.message}`);
   }
+  const { brief } = shapeBrief(raw);
+  if (!brief) return fail(2, 'the brief must be a JSON object');
   const files = parseDiff(d.text);
   markGenerated(root, files);
-  const problems = checkBrief(brief, files);
+  const problems = checkBrief(raw, files);
   const branch = gitOr(root, ['rev-parse', '--abbrev-ref', 'HEAD'], 'no-commit');
   const base = gitOr(root, ['rev-parse', '--short', a.base ?? 'HEAD'], 'none');
   const now = new Date().toISOString();
