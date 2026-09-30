@@ -134,6 +134,29 @@ describe('Constitution page', () => {
     expect(screen.getByText('Sealed Secrets')).toBeTruthy()
     expect(screen.getByText('Automate Repetition')).toBeTruthy()
   })
+  // Ethos sits above the tabs and the filter and neither reaches it: its sections are the
+  // character the rules serve, not rules to narrow down. So "All" counts only what the filter
+  // can reach (3 invariants + the fixture's doctrine rules), and Telos survives a tab switch
+  // and a filter that matches nothing in it.
+  it('keeps Ethos above the filter zone, outside the tabs and the filter', async () => {
+    const { container } = render(<Laws />)
+    await waitFor(() => expect(screen.getByText('Telos')).toBeTruthy())
+    const panel = container.querySelector('.law-wrap')
+    const firstBand = panel.querySelector('.band-head .tier-h')
+    expect(firstBand.textContent).toBe('Ethos')
+    expect(
+      firstBand.compareDocumentPosition(panel.querySelector('.law-toolbar')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    const all = screen.getByRole('button', { name: /^All/ })
+    expect(all.textContent).toBe(`All ${INV.length + DOC.length}`)
+    fireEvent.click(screen.getByRole('button', { name: /^Invariants/ }))
+    expect(screen.getByText('Telos')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'Sealed' } })
+    expect(screen.getByText('Telos')).toBeTruthy()
+    expect(screen.getByText('Sealed Secrets')).toBeTruthy()
+  })
+
   it('shows a pack that is not built in, greyed, with the command to enable it', async () => {
     // ⚠ THE CLAIM THIS PAGE EXISTS FOR. An inactive pack that were simply omitted would make
     // "off" indistinguishable from "never shipped" — and the enable command has to name the
@@ -199,11 +222,12 @@ describe('Constitution page', () => {
   it('narrows to one tier with the segmented tabs', async () => {
     const { container } = render(<Laws />)
     await waitFor(() => expect(screen.getByText('Sealed Secrets')).toBeTruthy())
-    // All = 4 ethos + 3 invariants + 7 doctrine rules.
-    expect(screen.getByRole('button', { name: 'All 14' }).getAttribute('aria-pressed')).toBe('true')
+    // All = 3 invariants + 7 doctrine rules. Ethos is not counted: it sits above the tabs.
+    expect(screen.getByRole('button', { name: 'All 10' }).getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: 'Doctrines 7' }))
     expect(screen.queryByText('Sealed Secrets')).toBeNull()
-    expect(screen.queryByText('Telos')).toBeNull()
+    // Ethos stays: the tabs narrow the rules, never the character above them.
+    expect(screen.getByText('Telos')).toBeTruthy()
     expect(screen.getByText('Automate Repetition')).toBeTruthy()
     // The tier strip lights the tier the table shows.
     expect(container.querySelector('.tier.on .tier-name').textContent).toBe('Doctrines')

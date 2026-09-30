@@ -481,11 +481,10 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   )
 
   const TABS_ = [
-    ['all', 'All', ontology.length + laws.length + allRules.length],
+    ['all', 'All', laws.length + allRules.length],
     ['invariants', 'Invariants', laws.length],
     ['doctrines', 'Doctrines', allRules.length],
   ]
-  const showEthos = tab === 'all'
   const showInv = tab === 'all' || tab === 'invariants'
   const showDoc = tab === 'all' || tab === 'doctrines'
   const bandHead = (title, src) => (
@@ -494,10 +493,8 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
       <span className="mono dim">{src}</span>
     </div>
   )
-  const ethosRows = ontology.filter(match)
   const invRows = laws.filter(match)
   const shownCount =
-    (showEthos ? ethosRows.length : 0) +
     (showInv ? invRows.length : 0) +
     (showDoc ? packs.reduce((n, p) => n + p.rules.filter(match).length, 0) : 0)
   const maxPack = Math.max(1, ...packs.map((p) => p.rules.length))
@@ -520,6 +517,22 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
           className={`panel flush law-wrap${canApply && showDoc ? ' with-toggle' : ''}`}
           aria-label="Rules"
         >
+          {/* Ethos sits ABOVE the tabs and the filter, and neither touches it: its four
+              sections are the character the rules below serve, not rules to narrow down, so
+              the tabs and "All" count only what the filter can actually reach. */}
+          {ontology.length > 0 && (
+            <>
+              {bandHead('Ethos', 'ontology/universal.md')}
+              {ontology.map((s) => (
+                <LawRow
+                  key={s.addr}
+                  law={s}
+                  isOpen={open === s.addr}
+                  onToggle={() => toggle(s.addr)}
+                />
+              ))}
+            </>
+          )}
           <div className="law-toolbar">
             <Seg aria-label="Show">
               {TABS_.map(([k, l, n]) => (
@@ -550,19 +563,6 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
             <span>Status</span>
             <span>Enforced by</span>
           </div>
-          {showEthos && ethosRows.length > 0 && (
-            <>
-              {bandHead('Ethos', 'ontology/universal.md')}
-              {ethosRows.map((s) => (
-                <LawRow
-                  key={s.addr}
-                  law={s}
-                  isOpen={open === s.addr}
-                  onToggle={() => toggle(s.addr)}
-                />
-              ))}
-            </>
-          )}
           {showInv && invRows.length > 0 && (
             <>
               {bandHead('Invariants', 'laws/universal.md')}
