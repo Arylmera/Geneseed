@@ -544,9 +544,11 @@ export default function Harnesses({
               <Icon name="folder" /> Deploy to folder…
             </button>
           ) : null}
-          <button className="btn" onClick={() => onAction('build-all')}>
-            <Icon name="refresh" /> Rebuild all
-          </button>
+          {onAction ? (
+            <button className="btn" onClick={() => onAction('build-all')}>
+              <Icon name="refresh" /> Rebuild all
+            </button>
+          ) : null}
         </div>
       </div>
 

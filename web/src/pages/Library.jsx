@@ -92,7 +92,9 @@ export default function Library({ overview, section, selected, dataRev }) {
   if (section !== seenSection) {
     setSeenSection(section)
     const next = resolveSec(section)
-    if (section && SECTIONS[section] && next !== sec) {
+    // `#/library` hands no section at all, and must still leave `#/agents`:
+    // one Library slot serves both routes, so nothing remounts to reset it.
+    if (next !== sec) {
       setSec(next)
       setQ('')
     }
