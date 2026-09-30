@@ -21,21 +21,13 @@ export const LAYOUTS = [
 
 const VALID = new Set(LAYOUTS.map((l) => l.id))
 
-// The layout each flavour was designed around — the 'auto' fallback. The three
-// mono terminals are deliberately split across the layouts so they no longer
-// present identically: Operator keeps the dense HUD readout, Cobalt takes the
-// Greenhouse ring, and Matrix falls through to the Cultivar genome grid (a grid of
-// cells suits "the matrix"). Every other skin → Cultivar.
-//
-// GREENHOUSE MOVED TO 'journal', WHICH IS A VISIBLE CHANGE FOR EXISTING USERS and is
-// the point rather than a side effect: the journal dashboard was designed as the
-// organic skins' home — growth rings, what grew lately, the constitution drawn as a
-// map — and Greenhouse is the organic skin that shipped before Atlas existed. Its old
-// lens is not gone, it is one click away in Settings, which is the whole reason this
-// table is separate from the flavour in the first place.
+// The layout each flavour was designed around — the 'auto' fallback. Atlas was
+// drawn for the Journal, Operator keeps its dense HUD readout, and Cultivar and
+// Matrix take the Cultivar genome grid (a grid of cells suits "the matrix").
+// The Greenhouse lens is no flavour's default since its skin was cut; it stays
+// one click away in Settings, which is why this table is separate from the flavour.
 export function defaultLayoutFor(flavour) {
-  if (flavour === 'atlas' || flavour === 'greenhouse') return 'journal'
-  if (flavour === 'cobalt') return 'greenhouse'
+  if (flavour === 'atlas') return 'journal'
   if (flavour === 'operator') return 'operator'
   return 'cultivar'
 }

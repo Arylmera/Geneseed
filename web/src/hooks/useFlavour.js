@@ -5,18 +5,12 @@ const FLAV_KEY = 'geneseed-flavour'
 // The console "directions" — each is a full visual skin applied as `fl-<id>` on
 // .app, where the id is the theme's slug. See styles.css for the matching
 // .fl-<slug> / .dir-<slug> blocks.
-//   cultivar    — Cultivar Evolved (current console, modernised; clinical & calm)
-//   greenhouse  — Greenhouse       (warm, organic, friendly; generous radius)
-//   operator    — Operator HUD     (dense terminal readout; sharp, all-mono)
-//   heirloom    — Heirloom         (premium editorial; plum-tinted, serif display)
-//   matrix      — Matrix           (cyber-slick order-book; fixed green, Space Mono)
-//   aurora      — Aurora Glass     (glassmorphism; frosted surfaces, deep navy)
-//   perspective — Perspective      (depth-driven; layered shadows, Oswald)
-//   sequencer   — Sequencer        (bright clinical dashboard; Inter, light/dark)
-//   cobalt      — Cobalt Terminal  (mono terminal; fixed blue, IBM Plex Mono)
-//   cosmic      — Cosmic           (deep-space sci-fi; Audiowide, cut corners)
-//   neon        — Neon             (mono dark; fixed hot-pink, Geist Mono, glass)
-//   atlas       — Atlas            (field journal; loam dark, sage ink, Space Grotesk)
+//   cultivar — Cultivar Evolved (current console, modernised; clinical & calm)
+//   operator — Operator HUD     (dense terminal readout; sharp, all-mono)
+//   matrix   — Matrix           (cyber-slick order-book; fixed green, Space Mono)
+//   atlas    — Atlas            (field journal; loam dark, sage ink, Space Grotesk)
+// Eight more shipped until 2026-09-30 and were cut to these four; RETIRED below
+// keeps a stored choice of one of them landing on its nearest survivor.
 export const FLAVOURS = [
   {
     id: 'cultivar',
@@ -26,23 +20,10 @@ export const FLAVOURS = [
       'The calm default — cool teal ink, geometric sans, soft flat cards lit by one quiet shadow.',
   },
   {
-    id: 'greenhouse',
-    short: 'Greenhouse',
-    name: 'Greenhouse',
-    tagline:
-      'Warm loam dark, fresh sage green, rounded humanist type — the softest, friendliest skin.',
-  },
-  {
     id: 'operator',
     short: 'Operator',
     name: 'Operator HUD',
     tagline: 'Amber phosphor on cool charcoal — all-mono, zero-radius instrument readout.',
-  },
-  {
-    id: 'heirloom',
-    short: 'Heirloom',
-    name: 'Heirloom',
-    tagline: 'Aubergine plum and serif display — the one luxe, calm, editorial skin.',
   },
   {
     id: 'matrix',
@@ -50,46 +31,6 @@ export const FLAVOURS = [
     name: 'Matrix',
     tagline:
       'Acid-green order-book terminal on pure black — all Space Mono, square 2px, a faint code-grid.',
-  },
-  {
-    id: 'aurora',
-    short: 'Aurora',
-    name: 'Aurora Glass',
-    tagline:
-      'The glass skin — frosted navy panels lit by a cyan-to-violet aurora, airy and weightless.',
-  },
-  {
-    id: 'perspective',
-    short: 'Perspective',
-    name: 'Perspective',
-    tagline:
-      'Coral on cool slate, condensed-architectural headings, cards that physically lift off the page.',
-  },
-  {
-    id: 'sequencer',
-    short: 'Sequencer',
-    name: 'Sequencer',
-    tagline:
-      'A quant terminal in daylight — indigo on white, Inter, lining numerals on a fine ruled grid.',
-  },
-  {
-    id: 'cobalt',
-    short: 'Cobalt',
-    name: 'Cobalt Terminal',
-    tagline: 'Electric-blue hacker terminal — all-mono, 2px corners, CRT scanlines on near-black.',
-  },
-  {
-    id: 'cosmic',
-    short: 'Cosmic',
-    name: 'Cosmic',
-    tagline:
-      'Violet-magenta nebula on near-black — wide Audiowide wordmark, chamfered sci-fi instrumentation.',
-  },
-  {
-    id: 'neon',
-    short: 'Neon',
-    name: 'Neon',
-    tagline: 'Neon-noir: hot-pink edge-glow on near-black, all-mono Geist, frosted glass.',
   },
   {
     id: 'atlas',
@@ -101,23 +42,39 @@ export const FLAVOURS = [
 
 const VALID = new Set(FLAVOURS.map((f) => f.id))
 
-// Old single-letter ids (pre-rename) → current slugs, so a stored selection
-// survives the rename instead of silently resetting to the default.
-const LEGACY = {
+// Ids that no longer name a flavour → the survivor a stored choice lands on, so
+// nobody silently resets to the default. Two generations: the single-letter ids
+// from before the slug rename, and the eight skins cut on 2026-09-30. The organic
+// Greenhouse goes to Atlas (its successor, same Journal lens); the mono terminals
+// Cobalt and Neon go to Matrix; everything else to the Cultivar default.
+const RETIRED = {
   a: 'cultivar',
-  b: 'greenhouse',
+  b: 'atlas',
   c: 'operator',
-  d: 'heirloom',
+  d: 'cultivar',
   e: 'matrix',
-  f: 'aurora',
-  g: 'perspective',
-  z: 'sequencer',
-  cb: 'cobalt',
-  cm: 'cosmic',
+  f: 'cultivar',
+  g: 'cultivar',
+  z: 'cultivar',
+  cb: 'matrix',
+  cm: 'cultivar',
+  greenhouse: 'atlas',
+  heirloom: 'cultivar',
+  aurora: 'cultivar',
+  perspective: 'cultivar',
+  sequencer: 'cultivar',
+  cobalt: 'matrix',
+  cosmic: 'cultivar',
+  neon: 'matrix',
 }
 
 // Persisted to localStorage, defaulting to `cultivar`. Returns [id, set] — a plain
 // setter, no toggle, because there are several values not two.
 export function useFlavour() {
-  return useLocalStorage(FLAV_KEY, (v) => (VALID.has(v) ? v : LEGACY[v] || 'cultivar'))
+  return useLocalStorage(FLAV_KEY, resolveFlavour)
+}
+
+// A stored value → the flavour it shows. Exported for the test that pins RETIRED.
+export function resolveFlavour(v) {
+  return VALID.has(v) ? v : RETIRED[v] || 'cultivar'
 }

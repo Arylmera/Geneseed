@@ -52,16 +52,8 @@ export function applyAccent(el, name, mode) {
 // `inkLight` are the readable text colour on a filled accent in each mode.
 export const CURATED_ACCENT = {
   cultivar: { dark: '#3AD4C4', light: '#127E73', ink: '#06100D', inkLight: '#FFFFFF' },
-  greenhouse: { dark: '#74CE86', light: '#1C8450', ink: '#06140C', inkLight: '#FFFFFF' },
   operator: { dark: '#E8A23B', light: '#8F5E10', ink: '#1A1306', inkLight: '#FFFFFF' },
-  heirloom: { dark: '#B9A6C6', light: '#6E5A7C', ink: '#1B1622', inkLight: '#FFFFFF' },
   matrix: { dark: '#19E37C', light: '#0B7A47', ink: '#04140C', inkLight: '#FFFFFF' },
-  aurora: { dark: '#2DE0B8', light: '#0B7D62', ink: '#04231A', inkLight: '#FFFFFF' },
-  perspective: { dark: '#FF7A59', light: '#C24A2C', ink: '#2A0E04', inkLight: '#FFFFFF' },
-  sequencer: { dark: '#5B57E8', light: '#4F46E5', ink: '#FFFFFF', inkLight: '#FFFFFF' },
-  cobalt: { dark: '#2BA8FF', light: '#1668A8', ink: '#021018', inkLight: '#FFFFFF' },
-  cosmic: { dark: '#C081FF', light: '#7A33CC', ink: '#1A0833', inkLight: '#FFFFFF' },
-  neon: { dark: '#DB245C', light: '#D81E5B', ink: '#FFFFFF', inkLight: '#FFFFFF' },
   // Atlas' sage, and the ink is the prototype's own #14200F rather than the shared
   // near-black: a sage fill wants a dark GREEN on it, not a neutral, or the primary
   // button reads as a sticker laid over the page instead of part of it.
