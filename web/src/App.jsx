@@ -163,7 +163,6 @@ export default function App() {
         runs={runs}
         onAction={runAction}
         layout={layout}
-        onLayout={setLayout}
         dataRev={dataRev}
       />
     ),

@@ -1,7 +1,6 @@
 import React, { lazy, Suspense } from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
-import { LAYOUTS } from '../../hooks/useLayout.js'
 import { relTime } from '../../lib/format.js'
 import {
   constitutionMix,
@@ -10,13 +9,12 @@ import {
   runBars,
   skillsByStage,
 } from '../../lib/overview.js'
-import Seg from '../../components/Seg.jsx'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import Onboarding from '../Dashboard/Onboarding.jsx'
 
 // The four older dashboards, kept as alternate views of this page. Lazy: they are behind
-// the View control most sessions never touch.
+// the Appearance palette's "Overview view", which most sessions never touch.
 const Dashboard = lazy(() => import('../Dashboard/index.jsx'))
 
 const pct = (n, of) => `${of ? (n / of) * 100 : 0}%`
@@ -206,8 +204,8 @@ function NeedsAttention({ rows }) {
 }
 
 // The landing page. By default the new Overview (health, three charts, what needs you);
-// the View control swaps in one of the four older dashboards, and the choice persists
-// (hooks/useLayout.js).
+// the Appearance palette's "Overview view" swaps in one of the four older dashboards, and
+// the choice persists (hooks/useLayout.js).
 export default function Overview({
   overview,
   overviewError,
@@ -217,7 +215,6 @@ export default function Overview({
   runs,
   onAction,
   layout = 'overview',
-  onLayout,
   dataRev,
 }) {
   const own = layout === 'overview' && !!overview?.deployed
@@ -270,22 +267,6 @@ export default function Overview({
           </p>
         </div>
         <div className="page-actions">
-          {onLayout ? (
-            <Seg aria-label="Overview view">
-              {LAYOUTS.map((l) => (
-                <button
-                  type="button"
-                  key={l.id}
-                  className={layout === l.id ? 'on' : ''}
-                  aria-pressed={layout === l.id}
-                  title={l.tagline}
-                  onClick={() => onLayout(l.id)}
-                >
-                  {l.short}
-                </button>
-              ))}
-            </Seg>
-          ) : null}
           <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
             Run doctor
           </button>
