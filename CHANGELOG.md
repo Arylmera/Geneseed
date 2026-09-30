@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.8.0] — 2026-09-30
+
+**Upgrading:** re-emit (or `geneseed rebuild-all`) after installing, so each install carries the
+rewritten `geneseed` skill.
+
 ### Added
 - `geneseed status` lists every install with its theme, footprint, posture/mode, doctrine packs
   and excluded rules; `geneseed status --json` prints the same payload plus, per install, the
@@ -24,6 +31,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   refuses; it now reads `status --json` and changes an install by one flag of its rebuild command.
 - README and SETUP claimed `geneseed-build --validate-only` dry-runs a build; the generator refuses
   that flag, and both now name `geneseed validate`.
+- A `-global` emit ignored `--out` and always wrote the live config dir, so a global install could
+  not be previewed anywhere else; `--config-dir <dir>` now redirects it, and a per-repo emit
+  refuses the flag rather than ignoring it (#156).
 
 ## [3.7.0] — 2026-09-28
 
