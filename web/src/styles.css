@@ -2344,9 +2344,13 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 14%, transparent); }
 .health p { margin: 0; flex: 1; min-width: 0; }
 .health-built { font-size: 12px; white-space: nowrap; }
-.needs { list-style: none; margin: 0 -20px -18px; padding: 0; }
-.needs li { display: grid; grid-template-columns: 96px minmax(0, 1fr) 170px auto; gap: 16px;
+/* The COLUMNS live on the list and every row inherits them (subgrid): with a grid per row,
+   the auto-width action column sized itself row by row and the path column drifted. */
+.needs { list-style: none; margin: 0 -20px -18px; padding: 0; display: grid; column-gap: 16px;
+  grid-template-columns: max-content minmax(0, 1fr) max-content max-content; }
+.needs li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid;
   align-items: center; padding: 11px 20px; border-top: 1px solid var(--line); }
+.needs .tag { justify-self: start; }
 .needs-where { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .needs-verb { justify-self: end; color: var(--accent-text); font-weight: 600; white-space: nowrap; }
 .needs-verb:hover { text-decoration: underline; }
@@ -2568,7 +2572,7 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
   .library.locked .lib-reader { grid-column: auto; border-top: 0; }
   .law-wrap { --law-5: 80px minmax(0, 1fr) 96px 104px; }
   .law-latin, .law-rowhead > span:nth-child(3) { display: none; }
-  .needs li { grid-template-columns: 90px minmax(0, 1fr) auto; }
+  .needs { grid-template-columns: max-content minmax(0, 1fr) max-content; }
   .needs-where { display: none; }
 }
 @media (max-width: 960px) {
@@ -2616,7 +2620,7 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
   .console { bottom: 64px; }
   .ov-charts, .card-row { grid-template-columns: minmax(0, 1fr); }
   .health { flex-wrap: wrap; }
-  .needs li { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .needs { grid-template-columns: minmax(0, 1fr) max-content; column-gap: 10px; }
   .needs .tag { display: none; }
   .law-wrap { --law-5: 64px minmax(0, 1fr) 84px; }
   .law-enf, .law-rowhead > span:nth-child(5) { display: none; }
