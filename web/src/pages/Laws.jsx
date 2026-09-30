@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
@@ -202,7 +202,7 @@ function TierStrip({ tiers, current }) {
 // How often each hook gate stopped to ask, from the gate ledger (`setup.gates`). The ledger
 // keys by gate id (`process-5`); lib/constitution.js turns that into the rule's address,
 // and the catalog names it.
-function GateAsks({ gates, byAddr }) {
+function GateAsks({ gates, byAddr, onJump }) {
   const asks = Object.entries(gates?.asks || {}).sort((a, b) => b[1] - a[1])
   const max = Math.max(1, ...asks.map(([, n]) => n))
   return (
@@ -217,16 +217,17 @@ function GateAsks({ gates, byAddr }) {
             const addr = gateAddress(gate)
             return (
               <li key={gate}>
-                <span className="gate-top">
-                  <a href={`#/item/law/${encodeURIComponent(addr)}`}>
-                    {byAddr[addr]?.name || addr}
-                  </a>
-                  <span className="mono dim">{addr}</span>
-                  <span className="mono gate-n">{n}</span>
-                </span>
-                <span className="hbar warn" aria-hidden="true">
-                  <span style={{ width: `${(n / max) * 100}%` }} />
-                </span>
+                {/* The whole entry is the control: it takes you to the rule in the table. */}
+                <button type="button" className="gate-row" onClick={() => onJump(addr)}>
+                  <span className="gate-top">
+                    <span className="gate-name">{byAddr[addr]?.name || addr}</span>
+                    <span className="mono dim">{addr}</span>
+                    <span className="mono gate-n">{n}</span>
+                  </span>
+                  <span className="hbar warn" aria-hidden="true">
+                    <span style={{ width: `${(n / max) * 100}%` }} />
+                  </span>
+                </button>
               </li>
             )
           })}
@@ -257,6 +258,32 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   const [q, setQ] = useState('')
   const open = selected || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)
+  // Bring the open rule into view. Any deep link (a gate, the Overview, Spotlight) scrolls
+  // to its row when it is off screen; a row clicked in place is already on screen and stays
+  // put. A jump from the Gate asks card always scrolls and briefly lights the row, so the eye
+  // lands on it. `jump` re-runs this when the same rule is asked for twice.
+  const [jump, setJump] = useState(0)
+  const jumpTo = useRef(null)
+  useEffect(() => {
+    if (!selected) return undefined
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-addr="${selected}"]`)
+      if (!el) return
+      const flash = jumpTo.current === selected
+      jumpTo.current = null
+      const r = el.getBoundingClientRect()
+      if (flash || r.top < 80 || r.bottom > window.innerHeight) {
+        const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        el.scrollIntoView?.({ block: 'center', behavior: still ? 'auto' : 'smooth' })
+      }
+      if (flash) {
+        el.classList.remove('law-flash')
+        void el.offsetWidth // restart the animation on a second jump
+        el.classList.add('law-flash')
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [selected, jump, data])
 
   // ⚠ EVERY HOOK BEFORE THE EARLY RETURNS BELOW. The staged pack selection is derived from
   // `data`, which is null on the first render; a `useState` placed after `if (!data)` makes
@@ -439,6 +466,17 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   // staged selection above keeps operating on the full rule set.
   const ql = q.trim().toLowerCase()
   const match = (r) => !ql || `${r.addr} ${r.name} ${r.latin} ${r.ess}`.toLowerCase().includes(ql)
+  // From the Gate asks card: make the rule's row visible first (a tab or a filter can hide
+  // it), then open it; the effect above scrolls there and lights it.
+  const jumpToRule = (addr) => {
+    const row = byAddr[addr]
+    const doctrine = String(addr).includes('.')
+    if ((doctrine && tab === 'invariants') || (!doctrine && tab === 'doctrines')) setTab('all')
+    if (row && !match(row)) setQ('')
+    jumpTo.current = addr
+    setJump((n) => n + 1)
+    go(`#/item/law/${encodeURIComponent(addr)}`)
+  }
 
   const activeInv = laws.filter((l) => !l.retired).length
   const activeDoc = deployedRules.length
@@ -706,7 +744,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
               </>
             )}
           </section>
-          <GateAsks gates={setup?.gates} byAddr={byAddr} />
+          <GateAsks gates={setup?.gates} byAddr={byAddr} onJump={jumpToRule} />
         </aside>
       </div>
     </>
