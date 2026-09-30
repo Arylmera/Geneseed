@@ -8,20 +8,20 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { diffHash, parseDiff, selectDiff, MAX_FILE_LINES, checkBrief, safeSvg, markGenerated, run }
   from '../../src/skills/explain-changes/scripts/render_changes.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
-const dirs = [];
-after(() => { for (const d of dirs) fs.rmSync(d, { recursive: true, force: true }); });
+const sandboxes = [];
+after(() => { for (const sb of sandboxes) sb.cleanup(); });
 
 function tmp() {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-changes-'));
-  dirs.push(d);
-  return d;
+  const sb = makeSandbox('explain-changes-');
+  sandboxes.push(sb);
+  return sb.path;
 }
 
 function write(dir, files) {
