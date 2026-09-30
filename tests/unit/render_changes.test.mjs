@@ -7,6 +7,7 @@
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
@@ -196,6 +197,17 @@ test('a diagram is accepted only when it cannot run code or reach outside the pa
     ['<svg><rect style=\'fill:url("#g")\'/></svg>', true],
     ['<svg><a href=https://evil.example>x</a></svg>', false],
     ['<svg><image xlink:href=https://evil.example/x.png /></svg>', false],
+    // Known bypasses of the attribute checks: an animation that rewrites href at run time, and
+    // markup after the closing tag, which the page would render as HTML outside the diagram.
+    ['<svg><a><animate attributeName="href" values="javascript:alert(1)"/><text>x</text></a></svg>', false],
+    ['<svg><a><set attributeName="xlink:href" to="javascript:alert(1)"/></a></svg>', false],
+    ['<svg></svg><iframe srcdoc="&lt;script&gt;x()&lt;/script&gt;"></iframe>', false],
+    ['<svg></svg><img src="https://evil.example/x.png">', false],
+    ['<svg><style>@import "https://evil.example/x.css";</style></svg>', false],
+    ['<svg></svg><meta http-equiv="refresh" content="0;url=https://evil.example">', false],
+    ['<svg></svg><form action="https://evil.example"></form>', false],
+    ['<svg viewBox="0 0 1 1"/>', true],
+    ['<svg><rect/></svg>trailing', false],
   ]) assert.equal(safeSvg(svg), ok, svg);
 });
 
@@ -292,6 +304,17 @@ test('the page opens dark, carries no external reference, and footers the diff h
   const hash = out[1].replace('diff ', '');
   assert.equal(run(['--hash'], dir).out[0], hash);
   assert.ok(html.includes(`diff ${hash}`));
+});
+
+test('the page forbids every script but its own, by hash, and every external load', () => {
+  const { dir } = repo({ 'a.txt': 'a\n' });
+  write(dir, { 'a.txt': 'A\n' });
+  const { html } = render(dir, brief(['a.txt']));
+  const js = html.slice(html.indexOf('<script>') + 8, html.indexOf('</script>'));
+  const sha = createHash('sha256').update(js).digest('base64');
+  assert.ok(html.includes('<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
+    + `style-src 'unsafe-inline'; img-src data:; script-src 'sha256-${sha}'; form-action 'none'; base-uri 'none'">`));
+  assert.match(html, /<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy"/);
 });
 
 test('a mismatched brief still renders, bannered, with every problem on stderr', () => {

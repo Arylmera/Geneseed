@@ -149,10 +149,20 @@ export function markGenerated(root, files) {
   for (const f of files) f.generated = GENERATED.test(f.path) || marked.has(f.path);
 }
 
-/** Inline SVG from the model: no script, no handler, no foreign HTML, nothing outside the page. */
+/**
+ * Inline SVG from the model: one <svg> element and nothing after it, no script, no handler, no
+ * foreign HTML, no animation that rewrites a link, nothing outside the page. A denylist can be
+ * bypassed; the page's CSP is what actually stops a script or a fetch. This check exists so an
+ * unsafe diagram raises the mismatch banner instead of rendering inert and unnoticed.
+ */
 export function safeSvg(svg) {
-  return /^\s*<svg[\s>/]/i.test(svg)
-    && !/<script|<foreignObject|\son\w+\s*=|href\s*=\s*(?!["']?#)|url\(\s*(?!["']?#)/i.test(svg);
+  const t = String(svg).trim();
+  const close = t.toLowerCase().indexOf('</svg>');
+  const shape = /^<svg[\s>/][\s\S]*<\/svg>$/i.test(t) ? close === t.length - 6 : /^<svg[^>]*\/>$/i.test(t);
+  return shape
+    && !/<script|<foreignObject|\son\w+\s*=|href\s*=\s*(?!["']?#)|url\(\s*(?!["']?#)/i.test(t)
+    && !/attributeName\s*=\s*["']?(xlink:)?href/i.test(t)
+    && !/<(iframe|img|meta|form|link|object|embed|style|base)\b|javascript:/i.test(t);
 }
 
 export const unitFiles = (u) => [...new Set([...(u.files ?? []), ...Object.keys(u.hunks ?? {})])];
@@ -324,6 +334,12 @@ set(t);B.onclick=()=>set(R.dataset.theme==='dark'?'light':'dark');
 document.querySelectorAll('.checks input').forEach(c=>c.onchange=()=>c.closest('li').classList.toggle('done',c.checked));
 `;
 
+// The CSP is the barrier: no script runs but the page's own (pinned by hash, so it must be
+// byte-identical to what sits between <script> and </script>), nothing is fetched, no form posts.
+// safeSvg is only the check that raises the banner.
+const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
+  + `script-src 'sha256-${createHash('sha256').update(JS).digest('base64')}'; form-action 'none'; base-uri 'none'`;
+
 export function renderPage({ brief, files, problems, meta }) {
   const lang = LABELS[brief.lang] ? brief.lang : 'en';
   const L = LABELS[lang];
@@ -371,6 +387,7 @@ export function renderPage({ brief, files, problems, meta }) {
 <html lang="${lang}" data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(brief.title)} — ${esc(meta.branch)}</title>
 <style>${CSS}</style>
