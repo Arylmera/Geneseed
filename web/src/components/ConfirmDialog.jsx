@@ -12,11 +12,14 @@ export default function ConfirmDialog({ open, title, children, confirmLabel, onC
     const d = ref.current
     if (!d) return
     if (open && !d.open) {
-      // Older jsdom lacks showModal — the attribute fallback keeps tests rendering.
+      // jsdom lacks showModal/close — the attribute fallbacks keep tests rendering.
       if (typeof d.showModal === 'function') d.showModal()
       else d.setAttribute('open', '')
     }
-    if (!open && d.open) d.close()
+    if (!open && d.open) {
+      if (typeof d.close === 'function') d.close()
+      else d.removeAttribute('open')
+    }
   }, [open])
   return (
     // onCancel covers Esc; onClose covers every way the dialog shuts, so the

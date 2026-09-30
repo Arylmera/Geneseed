@@ -4,7 +4,6 @@ import { api } from './api/index.js'
 import { motionOK } from './lib/motion.js'
 import { useRoute } from './lib/router.js'
 import { applyAccent, applyCuratedAccent } from './lib/accents.js'
-import { TYPE_TO_SECTION } from './lib/sections.js'
 import { useColorMode } from './hooks/useColorMode.js'
 import { useFlavour } from './hooks/useFlavour.js'
 import { useAccentMode } from './hooks/useAccentMode.js'
@@ -19,7 +18,7 @@ import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
 import Loading from './components/Loading.jsx'
-import ConfirmDialog from './components/ConfirmDialog.jsx'
+import { ConfirmProvider } from './hooks/useConfirm.jsx'
 // Dashboard is the landing route, so it ships in the shell. Every other page is
 // code-split: importing all fourteen statically put the whole console — graph
 // rendering, the harness manager, the docs viewer — into one chunk that had to be
@@ -45,32 +44,6 @@ const Docs = lazy(() => import('./pages/Docs/index.jsx'))
 // composes them, the way the CLI entry point composes its submodules.
 export default function App() {
   const route = useRoute()
-  // Which page each route lands on, derived ONCE so each page has exactly one slot in the tree
-  // below — see the ⚠ beside them. A route only ever selects one of these three.
-  const isSection = route.view === 'section'
-  const isItem = route.view === 'item'
-  const showLaws =
-    route.view === 'laws' ||
-    (isSection && route.section === 'laws') ||
-    (isItem && route.type === 'law')
-  const showSkills =
-    route.view === 'skills' ||
-    (isSection && route.section === 'skills') ||
-    (isItem && route.type === 'skill')
-  const showLibrary =
-    route.view === 'library' ||
-    route.view === 'agents' ||
-    ((isSection || isItem) && !showLaws && !showSkills)
-  // `#/library` alone carries no section — Library reads that as "all of them".
-  const librarySection =
-    route.view === 'agents'
-      ? 'agents'
-      : isSection
-        ? route.section
-        : isItem
-          ? TYPE_TO_SECTION[route.type] || route.type
-          : undefined
-  const selectedItem = isItem ? route.name : undefined
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState(null)
   const [voiceOpen, setVoiceOpen] = useState(false)
@@ -178,17 +151,71 @@ export default function App() {
 
   // Stop the local server (same /api/shutdown the Settings card uses). The
   // connection drops as the server goes down, so a rejected request right
-  // after the call is still a successful stop. Confirmed through the themed
-  // <dialog> rather than window.confirm — same question, console's own chrome.
-  const [confirmStop, setConfirmStop] = useState(false)
+  // after the call is still a successful stop. The topbar asks first.
   const doShutdown = async () => {
-    setConfirmStop(false)
     try {
       await api.shutdown()
     } catch {
       // server dropped the connection while shutting down — expected
     }
     setStopped(true)
+  }
+
+  // route.page -> its element. Keys are lib/router.js's PAGES; the Library component
+  // serves both `agents` (pinned to the agents chip) and `library`.
+  const library = () => (
+    <Library overview={overview} section={route.section} selected={route.item} dataRev={dataRev} />
+  )
+  const pages = {
+    dashboard: () => (
+      <Dashboard
+        overview={overview}
+        overviewError={overviewError}
+        onRetry={reload}
+        themes={themes}
+        setup={setup}
+        runs={runs}
+        onAction={runAction}
+        flavour={flavour}
+        layout={layout}
+        dataRev={dataRev}
+      />
+    ),
+    activity: () =>
+      route.item ? <ActivityDetail key={route.item} sid={route.item} /> : <Activity />,
+    laws: () => (
+      <Laws selected={route.item} overview={overview} onAction={runAction} dataRev={dataRev} />
+    ),
+    skills: () => <Skills selected={route.item} dataRev={dataRev} />,
+    agents: library,
+    library,
+    rules: () => <Rules />,
+    profile: () => <Profile />,
+    diff: () => <Diff onMutated={reload} onAction={runAction} dataRev={dataRev} />,
+    doctor: () => <Doctor />,
+    settings: () => (
+      <Settings
+        overview={overview}
+        onAction={runAction}
+        flavour={flavour}
+        onFlavour={switchFlavour}
+        accentMode={accentMode}
+        onAccentMode={setAccentMode}
+        layout={layout}
+        onLayout={setLayout}
+      />
+    ),
+    harness: () => (
+      <Harness
+        onAction={runAction}
+        themes={themes}
+        currentTheme={overview?.theme}
+        overview={overview}
+        dataRev={dataRev}
+        onMutated={refresh}
+      />
+    ),
+    docs: () => <Docs page={route.item} query={query} onAction={runAction} overview={overview} />,
   }
 
   if (stopped) {
@@ -210,82 +237,67 @@ export default function App() {
       className={`app fl-${flavour} ${mode === 'light' ? 'light' : ''}${navOpen ? ' nav-open' : ''}`}
       ref={appRef}
     >
-      <div className="atmos" aria-hidden="true" />
-      {/* Keyboard users land on the rail's fourteen nav items before any page
+      {/* One themed confirm for every page — see hooks/useConfirm.jsx for why it sits
+          inside `.app`. */}
+      <ConfirmProvider>
+        <div className="atmos" aria-hidden="true" />
+        {/* Keyboard users land on the rail's fourteen nav items before any page
           content; this jumps past them. Visible only while focused. */}
-      <a className="skip-link" href="#main">
-        Skip to content
-      </a>
-      {/* Actions (rebuild, update, doctor) run as background jobs whose only
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
+        {/* Actions (rebuild, update, doctor) run as background jobs whose only
           feedback was visual — the console panel and a spinner. Announce the
           transitions so a screen-reader user knows a job started and ended. */}
-      <p className="sr-only" role="status" aria-live="polite">
-        {jobAnnouncement}
-      </p>
-      {navOpen && (
-        <button
-          type="button"
-          className="nav-scrim"
-          aria-label="Close navigation"
-          onClick={() => setNavOpen(false)}
-        />
-      )}
-      <Rail
-        route={route}
-        overview={overview}
-        setup={setup}
-        onOpenVoice={() => setVoiceOpen((v) => !v)}
-        onNavigate={() => setNavOpen(false)}
-        finish={finish}
-      />
-      {voiceOpen && (
-        <VoicePopover
-          themes={themes}
-          current={overview?.theme}
-          onPick={(name) => {
-            setVoiceOpen(false)
-            runAction('build', { theme: name, emit: overview?.emit })
-          }}
-          onClose={() => setVoiceOpen(false)}
-        />
-      )}
-      <div className="col" ref={colRef}>
-        <Topbar
+        <p className="sr-only" role="status" aria-live="polite">
+          {jobAnnouncement}
+        </p>
+        {navOpen && (
+          <button
+            type="button"
+            className="nav-scrim"
+            aria-label="Close navigation"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
+        <Rail
           route={route}
-          navOpen={navOpen}
-          onToggleNav={() => setNavOpen((v) => !v)}
-          target={overview?.target}
-          version={overview?.version}
-          query={query}
-          onQuery={setQuery}
-          mode={mode}
-          onToggleMode={toggleMode}
-          onShutdown={() => setConfirmStop(true)}
-          dataRev={dataRev}
-          onSwitch={refresh}
+          overview={overview}
+          setup={setup}
+          onOpenVoice={() => setVoiceOpen((v) => !v)}
+          onNavigate={() => setNavOpen(false)}
+          finish={finish}
         />
-        <main className="page" id="main" tabIndex={-1}>
-          <div className={route.view === 'harness' ? 'pad pad-wide' : 'pad'}>
-            <Suspense fallback={<Loading />}>
-              {route.view === 'dashboard' && (
-                <Dashboard
-                  overview={overview}
-                  overviewError={overviewError}
-                  onRetry={reload}
-                  themes={themes}
-                  setup={setup}
-                  runs={runs}
-                  onAction={runAction}
-                  flavour={flavour}
-                  layout={layout}
-                  dataRev={dataRev}
-                />
-              )}
-              {route.view === 'activity' && <Activity />}
-              {route.view === 'activity-detail' && (
-                <ActivityDetail key={route.sid} sid={route.sid} />
-              )}
-              {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. `Laws`, `Skills` and `Library`
+        {voiceOpen && (
+          <VoicePopover
+            themes={themes}
+            current={overview?.theme}
+            onPick={(name) => {
+              setVoiceOpen(false)
+              runAction('build', { theme: name, emit: overview?.emit })
+            }}
+            onClose={() => setVoiceOpen(false)}
+          />
+        )}
+        <div className="col" ref={colRef}>
+          <Topbar
+            route={route}
+            navOpen={navOpen}
+            onToggleNav={() => setNavOpen((v) => !v)}
+            target={overview?.target}
+            version={overview?.version}
+            query={query}
+            onQuery={setQuery}
+            mode={mode}
+            onToggleMode={toggleMode}
+            onShutdown={doShutdown}
+            dataRev={dataRev}
+            onSwitch={refresh}
+          />
+          <main className="page" id="main" tabIndex={-1}>
+            <div className={route.page === 'harness' ? 'pad pad-wide' : 'pad'}>
+              <Suspense fallback={<Loading />}>
+                {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. `Laws`, `Skills` and `Library`
                   are each reachable from three routes — the flat view, `#/section/<name>` and
                   `#/item/<type>/<name>` — and rendering them from three different positions in
                   this tree made React UNMOUNT and remount the whole page whenever the route
@@ -293,90 +305,40 @@ export default function App() {
                   `#/item/law/craft.1`), so the page threw away its state, refetched its
                   catalogue, flashed the spinner and lost the scroll position. Only on the
                   FIRST expand — a second row is `item` -> `item`, same slot, no remount —
-                  which is what made it look intermittent rather than broken. Deriving the
-                  props and rendering from one slot each lets React reconcile instead. */}
-              {showLaws && (
-                <Laws
-                  selected={selectedItem}
-                  overview={overview}
-                  onAction={runAction}
-                  dataRev={dataRev}
-                />
-              )}
-              {showSkills && <Skills selected={selectedItem} dataRev={dataRev} />}
-              {showLibrary && (
-                <Library
-                  overview={overview}
-                  section={librarySection}
-                  selected={selectedItem}
-                  dataRev={dataRev}
-                />
-              )}
-              {route.view === 'rules' && <Rules />}
-              {route.view === 'profile' && <Profile />}
-              {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
-              {route.view === 'doctor' && <Doctor />}
-              {route.view === 'settings' && (
-                <Settings
-                  overview={overview}
-                  onAction={runAction}
-                  flavour={flavour}
-                  onFlavour={switchFlavour}
-                  accentMode={accentMode}
-                  onAccentMode={setAccentMode}
-                  layout={layout}
-                  onLayout={setLayout}
-                />
-              )}
-              {route.view === 'harness' && (
-                <Harness
-                  onAction={runAction}
-                  themes={themes}
-                  currentTheme={overview?.theme}
-                  overview={overview}
-                  dataRev={dataRev}
-                  onMutated={refresh}
-                />
-              )}
-              {route.view === 'docs' && (
-                <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
-              )}
-            </Suspense>
-          </div>
-        </main>
-        <Console
-          runs={runs}
-          open={consoleOpen}
-          busy={!!activeId}
-          finish={finish}
-          onToggle={() => setConsoleOpen((v) => !v)}
-          onClear={clearRuns}
-          onCancel={cancelJob}
-        />
-      </div>
-      <ConfirmDialog
-        open={confirmStop}
-        title="Stop the server?"
-        confirmLabel="Stop server"
-        onConfirm={doShutdown}
-        onClose={() => setConfirmStop(false)}
-      >
-        The console goes offline until you start it again with <code>geneseed web</code>.
-      </ConfirmDialog>
-      {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
-      {booting && (
-        <BootSplash
-          ready={!!overview || !!overviewError}
-          onDone={() => {
-            try {
-              window.sessionStorage.setItem('gs-booted', '1')
-            } catch {
-              /* storage blocked — the splash plays again next load, nothing worse */
-            }
-            setBooting(false)
-          }}
-        />
-      )}
+                  which is what made it look intermittent rather than broken. The resolver
+                  (lib/router.js) folds every route onto its page, and every page renders from
+                  this ONE expression, so React reconciles by component type: `#/agents` and
+                  `#/library` are both `<Library>` and keep their state across the switch.
+                  Pinned by __tests__/app.routing.test.jsx. */}
+                {pages[route.page]?.()}
+              </Suspense>
+            </div>
+          </main>
+          <Console
+            runs={runs}
+            open={consoleOpen}
+            busy={!!activeId}
+            finish={finish}
+            onToggle={() => setConsoleOpen((v) => !v)}
+            onClear={clearRuns}
+            onCancel={cancelJob}
+          />
+        </div>
+        {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
+        {booting && (
+          <BootSplash
+            ready={!!overview || !!overviewError}
+            onDone={() => {
+              try {
+                window.sessionStorage.setItem('gs-booted', '1')
+              } catch {
+                /* storage blocked — the splash plays again next load, nothing worse */
+              }
+              setBooting(false)
+            }}
+          />
+        )}
+      </ConfirmProvider>
     </div>
   )
 }

@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { relTime } from '../lib/format.js'
 import { STATUS, ELLIPSIS, baseName, compact, Elapsed } from '../lib/activity.jsx'
 import Loading from '../components/Loading.jsx'
+import { usePoll } from '../hooks/usePoll.js'
 
 // Timeline-row dot colour by record kind/outcome.
 function dotFor(rec) {
@@ -95,39 +96,25 @@ export default function ActivityDetail({ sid }) {
 
   // Poll the per-session endpoint on the same 2s HUD cadence; a 404 means the
   // session ended (pruned), which is a normal terminal state, not an error.
-  useEffect(() => {
-    let alive = true
-    const tick = () =>
+  usePoll(
+    (alive) =>
       api.activityDetail(sid).then(
         (d) => {
-          if (alive) {
+          if (alive()) {
             setData(d)
             setError('')
             setGone(false)
           }
         },
         (e) => {
-          if (!alive) return
+          if (!alive()) return
           if (e.status === 404) setGone(true)
           else setError(e.message)
         },
-      )
-    tick()
-    // Same hidden-tab economy as Activity: no polls nobody sees, one refresh
-    // the moment the tab is fronted again.
-    const t = setInterval(() => {
-      if (!document.hidden) tick()
-    }, 2000)
-    const onVis = () => {
-      if (!document.hidden) tick()
-    }
-    document.addEventListener('visibilitychange', onVis)
-    return () => {
-      alive = false
-      clearInterval(t)
-      document.removeEventListener('visibilitychange', onVis)
-    }
-  }, [sid])
+      ),
+    2000,
+    [sid],
+  )
 
   const back = (
     <a

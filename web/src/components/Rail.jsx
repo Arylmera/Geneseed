@@ -7,8 +7,8 @@ import { motionOK, settle, useGlide } from '../lib/motion.js'
 
 // Left navigation rail, grouped like the design: the Dashboard on its own, then
 // Codex (what the harness knows and is bound by), Care (what needs attention)
-// and Setup (what you configure). `match` decides which item lights up for the
-// current route; `tag` surfaces a live count or status from the overview.
+// and Setup (what you configure). `page` lights the item whose page the current
+// route resolves to (lib/router.js); `tag` surfaces a live count or status from the overview.
 //
 // EVERY TAG READS THE OVERVIEW, and the ones the design asked for that it cannot
 // are simply absent. The mockup badged Docs, Graph and Activity too — none of the
@@ -24,9 +24,9 @@ const NAV = [
   {
     hash: '#/',
     id: 'dashboard',
+    page: 'dashboard',
     label: 'Dashboard',
     icon: 'dashboard',
-    match: (r) => r.view === 'dashboard',
     // Not a count — the field journal's own name for itself. It is the one row
     // whose tag says what the page IS rather than how much it holds.
     tag: () => 'today',
@@ -35,12 +35,9 @@ const NAV = [
   {
     hash: '#/laws',
     id: 'laws',
+    page: 'laws',
     label: 'Constitution',
     icon: 'law',
-    match: (r) =>
-      r.view === 'laws' ||
-      (r.view === 'section' && r.section === 'laws') ||
-      (r.view === 'item' && r.type === 'law'),
     tag: (o) => o?.counts?.laws ?? null,
   },
   {
@@ -48,52 +45,41 @@ const NAV = [
     // Laws so the pairing reads at a glance: Laws are Geneseed's, Rules are yours.
     hash: '#/rules',
     id: 'rules',
+    page: 'rules',
     label: 'Rules',
     icon: 'rule',
-    match: (r) => r.view === 'rules',
   },
   {
     // The user's identity (PROFILE.md) — sits by Rules: Rules are what you must do,
     // the Profile is who you are. Both files are yours, seeded once and never wiped.
     hash: '#/profile',
     id: 'profile',
+    page: 'profile',
     label: 'Profile',
     icon: 'profile',
-    match: (r) => r.view === 'profile',
   },
   {
     hash: '#/skills',
     id: 'skills',
+    page: 'skills',
     label: 'Skills',
     icon: 'skill',
-    match: (r) =>
-      r.view === 'skills' ||
-      (r.view === 'section' && r.section === 'skills') ||
-      (r.view === 'item' && r.type === 'skill'),
     tag: (o) => o?.counts?.skills ?? null,
   },
   {
     hash: '#/agents',
     id: 'agents',
+    page: 'agents',
     label: 'Agents',
     icon: 'agent',
-    match: (r) =>
-      r.view === 'agents' ||
-      (r.view === 'section' && r.section === 'agents') ||
-      (r.view === 'item' && r.type === 'agent'),
     tag: (o) => o?.counts?.agents ?? null,
   },
   {
     hash: '#/library',
     id: 'library',
+    page: 'library',
     label: 'Library',
     icon: 'library',
-    // Laws, Skills, and Agents own their item/section routes (matched above); the
-    // Library tab claims every other section/item so its highlight doesn't steal theirs.
-    match: (r) =>
-      r.view === 'library' ||
-      (r.view === 'section' && !['laws', 'skills', 'agents'].includes(r.section)) ||
-      (r.view === 'item' && !['law', 'skill', 'agent'].includes(r.type)),
     // The four sections the page actually lists — memory, notebook, wiki, and the
     // config manifests folded into the wiki chip. NOT `SECTION_ORDER`, which also
     // counts agents: those have their own row two lines up, and counting them here
@@ -109,32 +95,32 @@ const NAV = [
   {
     hash: '#/docs',
     id: 'docs',
+    page: 'docs',
     label: 'Docs',
     icon: 'docs',
-    match: (r) => r.view === 'docs',
   },
   { group: 'Care' },
   {
     hash: '#/activity',
     id: 'activity',
+    page: 'activity',
     label: 'Activity',
     icon: 'activity',
-    match: (r) => r.view === 'activity' || r.view === 'activity-detail',
   },
   {
     hash: '#/diff',
     id: 'changes',
+    page: 'diff',
     label: 'Changes',
     icon: 'changes',
-    match: (r) => r.view === 'diff',
     tag: (o) => (o?.diff ? editCount(o.diff) : null) || null,
   },
   {
     hash: '#/doctor',
     id: 'doctor',
+    page: 'doctor',
     label: 'Doctor',
     icon: 'doctor',
-    match: (r) => r.view === 'doctor',
     // Status-bearing, not count-bearing: a clean doctor used to badge NOTHING, which
     // reads the same as "never run". It now says so in words, and only the failing
     // arm takes the warn colour.
@@ -147,9 +133,9 @@ const NAV = [
     // this view (router.js's VIEW_ALIAS), so old links and bookmarks still land.
     hash: '#/harness',
     id: 'harness',
+    page: 'harness',
     label: 'Harness',
     icon: 'layers',
-    match: (r) => r.view === 'harness',
     tag: (o) => o?.theme ?? null,
   },
   {
@@ -157,9 +143,9 @@ const NAV = [
     // "About" group is gone.
     hash: '#/settings',
     id: 'settings',
+    page: 'settings',
     label: 'Settings',
     icon: 'settings',
-    match: (r) => r.view === 'settings',
   },
 ]
 
@@ -299,7 +285,7 @@ export default function Rail({ route, overview, setup, onOpenVoice, onNavigate, 
             </div>
           )
         const tag = n.tag ? n.tag(overview) : null
-        const lit = n.match(route)
+        const lit = route.page === n.page
         const warn = typeof n.warn === 'function' ? n.warn(overview) : !!n.warn
         return (
           <div className="rail-nav" key={n.id}>

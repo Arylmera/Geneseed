@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({ api: { diff: vi.fn() } }))
@@ -29,5 +29,15 @@ describe('Diff', () => {
     await waitFor(() => expect(screen.getByText('AGENT.md')).toBeTruthy())
     expect(screen.getByText('edited')).toBeTruthy()
     expect(screen.getByText('1 edited')).toBeTruthy() // summary badge
+  })
+
+  // Export runs as a console job (App's runAction): the page starts it and nothing else.
+  // It used to poll api.job itself, in a loop nothing cancelled.
+  it('hands the export to the job runner', async () => {
+    api.diff.mockResolvedValueOnce({ deployed: true, files: [] })
+    const onAction = vi.fn()
+    render(<Diff onAction={onAction} />)
+    fireEvent.click(await screen.findByText('Export improvements'))
+    expect(onAction).toHaveBeenCalledWith('export')
   })
 })

@@ -6,6 +6,7 @@ import { ACCENT_MODES } from '../../hooks/useAccentMode.js'
 import { LAYOUTS, defaultLayoutFor } from '../../hooks/useLayout.js'
 import ServerControl from './ServerControl.jsx'
 import Seg from '../../components/Seg.jsx'
+import { useConfirm } from '../../hooks/useConfirm.jsx'
 
 // The repo the install actually updates from (its git origin). Falls back to the canonical
 // upstream when the About payload can't be fetched. The github-shaped deep links (/issues,
@@ -108,18 +109,18 @@ export default function Settings({
   layout,
   onLayout,
 }) {
+  const confirm = useConfirm()
   const install = overview?.install
   const footprint = overview?.footprint
 
-  const setFootprint = (fp) => {
+  const setFootprint = async (fp) => {
     if (!install || fp === footprint) return
-    if (
-      window.confirm(
-        `Rebuild ${install.host} · ${install.scope} with the “${fp}” footprint? ` +
-          `It rebuilds in place, non-destructive.`,
-      )
+    const ok = await confirm(
+      `Rebuild ${install.host} · ${install.scope} with the “${fp}” footprint? ` +
+        `It rebuilds in place, non-destructive.`,
+      { title: 'Change the footprint?', confirmLabel: 'Rebuild' },
     )
-      onAction?.('install', { ...install, footprint: fp })
+    if (ok) onAction?.('install', { ...install, footprint: fp })
   }
   return (
     <div className="narrow-lg">
@@ -297,13 +298,12 @@ export default function Settings({
           </button>
           <button
             className="btn ghost"
-            onClick={() => {
-              if (
-                window.confirm(
-                  'Uninstall the global Geneseed harness? Your memory store is kept; everything else this install added is removed.',
-                )
+            onClick={async () => {
+              const ok = await confirm(
+                'Uninstall the global Geneseed harness? Your memory store is kept; everything else this install added is removed.',
+                { title: 'Uninstall Geneseed?', confirmLabel: 'Uninstall' },
               )
-                onAction('uninstall')
+              if (ok) onAction('uninstall')
             }}
           >
             <Icon name="clear" />

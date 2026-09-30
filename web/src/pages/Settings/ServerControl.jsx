@@ -2,21 +2,22 @@ import React, { useState } from 'react'
 import { api } from '../../api/index.js'
 import { Icon } from '../../components/Icon.jsx'
 import { RESTART_POLL_INTERVAL_MS, waitForServerThenReload } from '../../hooks/waitForServer.js'
+import { useConfirm } from '../../hooks/useConfirm.jsx'
 
 // Stops the local server from the page (same /api/shutdown that `geneseed web
 // stop` uses). The connection may drop as the server goes down, so a rejected
 // request right after the call is still treated as a successful stop.
 export default function ServerControl() {
+  const confirm = useConfirm()
   const [stopped, setStopped] = useState(false)
   const [restarting, setRestarting] = useState(false)
 
   const stop = async () => {
-    if (
-      !window.confirm(
-        'Stop the local Geneseed server? The console goes offline until you start it again.',
-      )
+    const ok = await confirm(
+      'Stop the local Geneseed server? The console goes offline until you start it again.',
+      { title: 'Stop the server?', confirmLabel: 'Stop server' },
     )
-      return
+    if (!ok) return
     try {
       await api.shutdown()
     } catch {
@@ -30,8 +31,11 @@ export default function ServerControl() {
   // `RESTART_POLL_INTERVAL_MS` as the initial delay reproduces this page's own
   // original loop, which slept before EVERY ping attempt including the first.
   const restart = async () => {
-    if (!window.confirm('Restart the local Geneseed server? The console reconnects in a moment.'))
-      return
+    const ok = await confirm(
+      'Restart the local Geneseed server? The console reconnects in a moment.',
+      { title: 'Restart the server?', confirmLabel: 'Restart' },
+    )
+    if (!ok) return
     setRestarting(true)
     try {
       await api.restart()

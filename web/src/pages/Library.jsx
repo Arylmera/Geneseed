@@ -2,13 +2,14 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { Icon } from '../components/Icon.jsx'
-import { SECTIONS, LIBRARY_ORDER, SECTION_ALIAS } from '../lib/sections.js'
+import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import FilterInput from '../components/FilterInput.jsx'
+import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // The on-disk source path for a given (section, name). Surface text for the
 // "source" meta line in the detail pane — purely informational, doesn't drive
@@ -61,10 +62,10 @@ function EmptyDoc({ section, source }) {
 //
 // Selecting a row pushes the matching #/item/.../<name> URL so deep-linking
 // keeps working from the search spotlight and the Graph.
-// Resolve a routed section onto the chip that actually hosts it: `config`
-// folds into the wiki ("Knowledge") chip, so a #/section/config genome cell or a
-// #/item/config/… deep-link lands there instead of on an absent chip.
-const resolveSec = (s) => (s && SECTIONS[s] ? SECTION_ALIAS[s] || s : LIBRARY_ORDER[0])
+// The chip to open for a routed section. The router has already folded aliased
+// sections onto their host chip (`config` -> the wiki "Knowledge" chip, see
+// lib/router.js); an absent or unknown section opens the first chip.
+const resolveSec = (s) => (s && Object.hasOwn(SECTIONS, s) ? s : LIBRARY_ORDER[0])
 
 // The Knowledge chip is a merged view: the config catalog (the two setup
 // manifests) as a "Setup" group, then every wiki page grouped by vault. Each
@@ -80,9 +81,13 @@ async function fetchKnowledge() {
 }
 
 export default function Library({ overview, section, selected, dataRev }) {
+  const confirm = useConfirm()
   const initialSec = resolveSec(section)
   const [sec, setSec] = useState(initialSec)
   const [q, setQ] = useState('')
+  // A failed memory action (promote, forget), shown in the page's error slot until the
+  // next one. It used to be a window.alert — or, for forget, nothing at all.
+  const [actionErr, setActionErr] = useState('')
   const rowsRef = useRef(null)
 
   // Sync sec from prop whenever the route hands us a different section, and drop
@@ -133,7 +138,7 @@ export default function Library({ overview, section, selected, dataRev }) {
     [sec, activeName, activeType, dataRev],
   )
 
-  const err = catErr || itemErr
+  const err = actionErr || catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic row when the URL names
   // an item that isn't in the listing (e.g. a fresh deep-link before the
   // catalog finishes).
@@ -203,16 +208,18 @@ export default function Library({ overview, section, selected, dataRev }) {
   const onForget = async () => {
     const name = activeItem?.name
     if (!name) return
-    if (
-      !window.confirm(
-        `Forget the memory fact "${name}"? It is deleted from the store and the index.`,
-      )
+    const ok = await confirm(
+      `Forget the memory fact "${name}"? It is deleted from the store and the index.`,
+      { title: 'Forget this fact?', confirmLabel: 'Forget' },
     )
-      return
+    if (!ok) return
+    setActionErr('')
     try {
       await api.memoryDelete(name)
-    } catch {
-      // surface via reload, if any
+    } catch (e) {
+      // Stay on the fact that failed to go, and say why.
+      setActionErr(`Could not forget "${name}": ${e.message}`)
+      return
     }
     go('#/section/memory')
     reloadCatalog()
@@ -226,18 +233,18 @@ export default function Library({ overview, section, selected, dataRev }) {
   const onPromote = async () => {
     const name = activeItem?.name
     if (!name) return
-    if (
-      !window.confirm(
-        `Promote "${name}" into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact is deleted so the lesson isn't loaded twice.`,
-      )
+    const ok = await confirm(
+      `Promote "${name}" into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact is deleted so the lesson isn't loaded twice.`,
+      { title: 'Promote to a rule?', confirmLabel: 'Promote' },
     )
-      return
+    if (!ok) return
+    setActionErr('')
     try {
       const cur = await api.rules()
       await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true })
       go('#/rules')
     } catch (e) {
-      window.alert(`Could not promote: ${e.message}`)
+      setActionErr(`Could not promote: ${e.message}`)
       reloadCatalog()
     }
   }

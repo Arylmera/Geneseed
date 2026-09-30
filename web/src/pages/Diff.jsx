@@ -4,9 +4,7 @@ import { Icon } from '../components/Icon.jsx'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
-
-// How often the export job is polled for completion.
-const EXPORT_POLL_INTERVAL_MS = 700
+import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // Map a unified-diff line to its display class. Headers (+++/---) and hunk
 // markers read as hunks; the synthetic added/missing banners read as context.
@@ -17,7 +15,8 @@ function lineKind(ln) {
   return 'ctx'
 }
 
-export default function Diff({ onMutated, dataRev }) {
+export default function Diff({ onMutated, onAction, dataRev }) {
+  const confirm = useConfirm()
   const { data, error, reload } = useAsync(() => api.diff(), [dataRev])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
@@ -46,22 +45,10 @@ export default function Diff({ onMutated, dataRev }) {
       s.size === data.files.length ? new Set() : new Set(data.files.map((f) => f.rel)),
     )
 
-  const exportImprovements = async () => {
-    setBusy(true)
-    try {
-      const { job_id } = await api.action('export')
-      let j
-      do {
-        await new Promise((r) => setTimeout(r, EXPORT_POLL_INTERVAL_MS))
-        j = await api.job(job_id)
-      } while (j.status === 'running')
-      setNote(j.status === 'done' ? 'Improvements file written.' : 'Export failed. See logs.')
-    } catch (e) {
-      setNote(e.message)
-    } finally {
-      setBusy(false)
-    }
-  }
+  // Export is a job like any other: it streams into the console, can be cancelled there,
+  // and its finish refreshes the page through `dataRev`. It used to run its own poll
+  // loop here, which nothing cancelled — leaving the page kept it polling to the end.
+  const exportImprovements = () => onAction?.('export')
 
   const restore = async () => {
     const files = [...sel]
@@ -69,12 +56,11 @@ export default function Diff({ onMutated, dataRev }) {
     const warning = added.length
       ? `Restoring will DELETE ${added.length} deployed-only file(s):\n${added.join('\n')}\n\n`
       : ''
-    if (
-      !window.confirm(
-        `${warning}Discard local edits and restore ${files.length} file(s) from source?`,
-      )
+    const ok = await confirm(
+      `${warning}Discard local edits and restore ${files.length} file(s) from source?`,
+      { title: 'Restore from source?', confirmLabel: 'Restore' },
     )
-      return
+    if (!ok) return
     setBusy(true)
     try {
       const res = await api.restore(files)

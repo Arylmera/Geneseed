@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react'
+import React, { lazy, Suspense, useState } from 'react'
 import { api } from '../../api/index.js'
 import StatusView from './StatusView.jsx'
 import LineageView from './LineageView.jsx'
@@ -8,6 +8,7 @@ import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import { resolveLayout } from '../../hooks/useLayout.js'
 import Seg from '../../components/Seg.jsx'
+import { useAsync } from '../../hooks/useAsync.js'
 
 // Dashboard ships in the eager shell chunk (it is the landing route), so only
 // the DEFAULT lens rides along. The alternative lenses are behind the layout
@@ -41,33 +42,25 @@ export default function Dashboard({
 }) {
   const lens = resolveLayout(flavour, layout)
   const [dir, setDir] = useState('status')
-  const [doctor, setDoctor] = useState(null)
-  const [recent, setRecent] = useState(null)
   const sigil = overview ? themes.find((t) => t.name === overview.theme)?.sigil || '' : ''
 
-  useEffect(() => {
-    let alive = true
-    // Doctor is only needed by Greenhouse (ring + check chips) and Operator
-    // HUD (check matrix). Cultivar's Status lens doesn't read it, so the load
-    // is lazy: skipping it on Cultivar saves a round-trip on dashboard mount.
-    if (lens === 'greenhouse' || lens === 'operator') {
-      api
-        .doctor()
-        .then((v) => alive && setDoctor(v))
-        .catch(() => {})
-    }
-    // Recency stats every file-backed entry in the harness server-side, so it is
-    // fetched by the one lens that shows it and by nothing else.
-    if (lens === 'journal') {
-      api
-        .recent()
-        .then((v) => alive && setRecent(v))
-        .catch(() => {})
-    }
-    return () => {
-      alive = false
-    }
-  }, [lens, dataRev])
+  // Doctor is only needed by Greenhouse (ring + check chips) and Operator HUD
+  // (check matrix). Cultivar's Status lens doesn't read it, so the load is lazy:
+  // skipping it on Cultivar saves a round-trip on dashboard mount. A failed load
+  // just leaves the panels without it.
+  const { data: doctor } = useAsync(
+    () =>
+      lens === 'greenhouse' || lens === 'operator'
+        ? api.doctor().catch(() => null)
+        : Promise.resolve(null),
+    [lens, dataRev],
+  )
+  // Recency stats every file-backed entry in the harness server-side, so it is
+  // fetched by the one lens that shows it and by nothing else.
+  const { data: recent } = useAsync(
+    () => (lens === 'journal' ? api.recent().catch(() => null) : Promise.resolve(null)),
+    [lens, dataRev],
+  )
 
   if (!overview)
     return overviewError ? (
@@ -93,7 +86,13 @@ export default function Dashboard({
   if (dir === 'status' && lens === 'journal')
     return (
       <Suspense fallback={<Loading />}>
-        <JournalView overview={overview} recent={recent} onAction={onAction} onDirection={setDir} />
+        <JournalView
+          overview={overview}
+          recent={recent}
+          onAction={onAction}
+          onDirection={setDir}
+          dataRev={dataRev}
+        />
       </Suspense>
     )
 

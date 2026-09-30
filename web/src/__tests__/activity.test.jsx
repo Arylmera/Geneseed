@@ -32,6 +32,19 @@ describe('Activity page', () => {
     expect(await screen.findByText('No active sessions')).toBeTruthy()
   })
 
+  it('makes each session card a real link to its detail page', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({
+          activity: [{ session_id: 'ses a', title: 'fix it', status: 'busy', updated_at: 0 }],
+        }),
+      ),
+    )
+    render(<Activity />)
+    const link = (await screen.findByText('fix it')).closest('a')
+    expect(link.getAttribute('href')).toBe('#/activity/ses%20a')
+  })
+
   it('renders a card per session with agent, status label, and cwd fallback', async () => {
     const now = Date.now() / 1000
     global.fetch = vi.fn(() =>
