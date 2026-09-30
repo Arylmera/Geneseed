@@ -9,7 +9,7 @@
 Durable knowledge that must survive across sessions lives here as **one fact per
 file**. An agent reads `MEMORY.md` (the local index it creates) at the start of a
 session. A new fact is written through the rule {{SKILL}}, which settles with the user
-whether it is a fact for here or a standing rule ({{DOCTRINE}} process 1) — never on the
+whether it is a fact for here or a standing rule ({{DOCTRINE:persist-insight}}) — never on the
 agent's own initiative. The one automatic writer is the `learn` hook, where the host
 runs it: a distiller the user opted into at install, not an agent's judgement call.
 
@@ -83,7 +83,7 @@ memory that turns out to be wrong" rule.
 - After writing a file, add one line to `MEMORY.md`:
   `- [Title](file.md) — one-line hook`.
 - Verify a recalled memory still matches reality before acting on it
-  (universal {{LAW}} III).
+  ({{LAW:verify-before-asserting}}).
 
 ## Per-{{AGENT}} memory (`agents/` subdirectory)
 
@@ -104,7 +104,7 @@ Read and write follow one rule each:
   {{AGENT}}'s file. A caller may also fold a returned `spec-feedback:` line in by
   hand.
 
-Same bar as {{DOCTRINE}} process 1: capture only how this {{AGENT}} should work *next time* —
+Same bar as {{DOCTRINE:persist-insight}}: capture only how this {{AGENT}} should work *next time* —
 a boundary that proved wrong, an input it always needs — never task residue. Files
 are capped (oldest bullets drop) so they never grow unbounded. The `agents/`
 subdirectory name is literal (not themed), because the write code addresses it

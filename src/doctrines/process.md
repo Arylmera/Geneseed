@@ -1,6 +1,6 @@
 **{{PACK_PROCESS}}** — how a task is run.
 
-### {{DOCTRINE}} process 1 — {{DOC_PROCESS_1}}
+### {{DOCTRINE:persist-insight}} Persist Insight
 <!-- LEAN:begin -->
 When a session yields a durable decision, correction, non-obvious discovery, or
 architectural stance, record it before the session ends — through the rule {{SKILL}},
@@ -14,30 +14,30 @@ with the user whether it belongs in {{MEMORY}} or a standing rule, never on your
 initiative.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} process 2 — {{DOC_PROCESS_2}}
+### {{DOCTRINE:plan-before-acting}} Plan Before Acting
 <!-- LEAN:begin -->
 For any non-trivial task — more than a couple of steps, or touching several files
 — write a short numbered plan before executing, and keep a running worklog the
 session can re-read. One line suffices: `Done: 1-2. Current: 3 (tests). Next: 4.
 Blockers: none. Irreversible: none.` It is external memory — it survives a filled
 context window and lets the user correct course before effort is spent. When a
-session ends mid-task, persist it to {{MEMORY}} ({{DOCTRINE}} process 1), open
+session ends mid-task, persist it to {{MEMORY}} ({{DOCTRINE:persist-insight}}), open
 blockers and irreversible changes included. Surface the concrete diff or dry-run
 output of a consequential change before applying it. Before a risky step, lay down a
 recovery point — a stash, a branch, a worktree, a copy — never an unconsented commit
-({{DOCTRINE}} process 5). On a long task, re-read the worklog and re-verify ground
+({{DOCTRINE:consent-before-push}}). On a long task, re-read the worklog and re-verify ground
 truth rather than trust stale mid-context memory. Trivial edits need no plan.
 <!-- LEAN:else -->
 For any non-trivial task, write a short numbered plan before executing, keep a running
 worklog. One line:
 `Done: 1-2. Current: 3 (tests). Next: 4. Blockers: none. Irreversible: none.`
-When a session ends mid-task, persist it to {{MEMORY}} ({{DOCTRINE}} process 1) with open
+When a session ends mid-task, persist it to {{MEMORY}} ({{DOCTRINE:persist-insight}}) with open
 blockers and irreversibles. Show the diff or dry-run before a consequential change. Before
 a risky step, lay down a recovery point — stash or branch — never an unconsented commit
-({{DOCTRINE}} process 5). Trivial edits need no plan.
+({{DOCTRINE:consent-before-push}}). Trivial edits need no plan.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} process 3 — {{DOC_PROCESS_3}}
+### {{DOCTRINE:context-economy}} Context Economy
 <!-- LEAN:begin -->
 Treat the context window as scarce. Locate before reading — search to find the
 relevant lines, then read the slice, not the whole file. Summarise long command
@@ -58,26 +58,26 @@ returns only its conclusion. Batch independent reads and commands. After two fai
 corrections, reset with a sharper prompt rather than piling on more.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} process 4 — {{DOC_PROCESS_4}}
+### {{DOCTRINE:read-the-docs-first}} Read the Docs First
 <!-- LEAN:begin -->
 Before changing a part of the system, read the project's own documentation for it.
 Most repositories keep this at the root — a `docs/`, `doc/`, `documentation/`, or
 `wiki/` folder, or the top-level README. Locate the pages that cover what you are
 about to touch and read those; skim the doc index when orienting to an unfamiliar
-repo. Read the relevant pages, not the whole tree ({{DOCTRINE}} process 3). Where the
-docs and the inspected code disagree, the code is ground truth ({{LAW}} III): flag the
-stale page and fix it in the same change ({{DOCTRINE}} craft 3) rather than follow it
+repo. Read the relevant pages, not the whole tree ({{DOCTRINE:context-economy}}). Where the
+docs and the inspected code disagree, the code is ground truth ({{LAW:verify-before-asserting}}): flag the
+stale page and fix it in the same change ({{DOCTRINE:documentation-in-step}}) rather than follow it
 into error. Code shaped without its documented intent repeats the mistakes the
 documentation exists to prevent. This is the read-before counterpart to
-{{DOCTRINE}} craft 3's write-after.
+{{DOCTRINE:documentation-in-step}}'s write-after.
 <!-- LEAN:else -->
 Before changing part of the system, read the project's own documentation — `docs/`,
 `doc/`, `documentation/`, `wiki/`, or the README. Read the pages covering your change, not
-the whole tree. Where docs and code disagree, the code is ground truth ({{LAW}} III): flag
-the stale page and fix it in the same change ({{DOCTRINE}} craft 3).
+the whole tree. Where docs and code disagree, the code is ground truth ({{LAW:verify-before-asserting}}): flag
+the stale page and fix it in the same change ({{DOCTRINE:documentation-in-step}}).
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} process 5 — {{DOC_PROCESS_5}}
+### {{DOCTRINE:consent-before-push}} Consent Before Push
 <!-- LEAN:begin -->
 Recording and sharing code is consented, never unilateral. **Every** `git commit`
 and `git push` needs the user's **explicit acceptance**, on every branch, every
@@ -106,7 +106,7 @@ take the same gate. Never force-push, hard-reset, or rebase one: undo with a rev
 (git-rescue {{SKILL}} for a legitimate rewrite). The host gates both at the tool boundary.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} process 6 — {{DOC_PROCESS_6}}
+### {{DOCTRINE:bound-the-loop}} Bound the Loop
 <!-- LEAN:begin -->
 Every autonomous loop needs an exit you set before you enter it. Before iterating —
 retrying, searching, generating-and-checking — fix the bounds: a cap on attempts, a
@@ -116,7 +116,7 @@ call, hitting the same error, or trying variations of one approach with no new
 information, that is not persistence, it is thrashing — break out, change strategy,
 gather different context, or stop. When a bound is reached or progress stalls, do
 not grind on: halt and hand back a structured summary of what was tried, what was
-learned, and what remains ({{LAW}} V, {{DOCTRINE}} process 2). {{DOCTRINE}} process 3
+learned, and what remains ({{LAW:surface-failures}}, {{DOCTRINE:plan-before-acting}}). {{DOCTRINE:context-economy}}
 economises *within* a step; this bounds the *number* of steps. An agent that cannot
 stop itself is a cost without a limit.
 <!-- LEAN:else -->
@@ -124,11 +124,11 @@ Fix an autonomous loop's bounds before you enter it: an attempt cap, a time or t
 budget, an explicit definition of success *and* failure. Watch for the loop that has
 stopped progressing: the same call, the same error, variations with no new information are
 thrashing; break out, change strategy, or stop. When a bound is reached or progress
-stalls, halt with a structured summary of what was tried, learned, and remains ({{LAW}} V,
-{{DOCTRINE}} process 2).
+stalls, halt with a structured summary of what was tried, learned, and remains ({{LAW:surface-failures}},
+{{DOCTRINE:plan-before-acting}}).
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} process 7 — {{DOC_PROCESS_7}}
+### {{DOCTRINE:one-writer-per-file}} One Writer Per File
 <!-- LEAN:begin -->
 When several {{AGENTS}} work on the same code — sub-{{AGENTS}}, a pipeline crew, a
 workflow fan-out, another session or tool in this checkout — each file has one writer at

@@ -19,9 +19,9 @@
   may run documented examples and commands to confirm they work as written.
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Read the actual code/behaviour before describing it — never document intent
-   that the code does not implement (universal {{LAW}} III).
+   that the code does not implement ({{LAW:verify-before-asserting}}).
 2. Write for the stated audience; lead with what the reader needs to do.
 3. Keep examples runnable; update any example that the change broke.
 
@@ -51,4 +51,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.
+{{DOCTRINE:persist-insight}}'s bar — most reports carry no feedback at all.

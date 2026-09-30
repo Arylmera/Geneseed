@@ -14,7 +14,7 @@ or rewrite, use git-rescue.md; to write a new commit, use commit.md).
 2. **"When did it break"** → `git bisect`. Find a known-good and known-bad commit, then
    `git bisect start <bad> <good>`. Drive it with `git bisect run <cmd>` when the test
    is scriptable — a non-zero exit marks bad — otherwise mark each step by hand. Read
-   the actual command output at each step; never assume a result (universal {{LAW}} III).
+   the actual command output at each step; never assume a result ({{LAW:verify-before-asserting}}).
 3. **"Why / who"** → `git blame -w -C <file>` (ignore whitespace, follow moved code) to
    reach the introducing commit, then `git show <sha>` for its message and full diff.
 4. **"Where did this come from"** → the pickaxe: `git log -S'<string>'` for when a
@@ -22,12 +22,12 @@ or rewrite, use git-rescue.md; to write a new commit, use commit.md).
    `git log -p -- <path>` to walk a file's history with diffs.
 5. Read the evidence end to end before concluding — the first matching commit is not
    always the cause. Corroborate across lenses when the answer is consequential
-   (universal {{LAW}} III).
+   ({{LAW:verify-before-asserting}}).
 6. **Reset the investigation state** when done: `git bisect reset` returns to the
-   original HEAD. Confirm the working tree is back where it started (universal {{LAW}} III).
+   original HEAD. Confirm the working tree is back where it started ({{LAW:verify-before-asserting}}).
 7. Report the offending/originating commit with its evidence. Do **not** fix the bug
-   inside this investigation — that is a separate, single-purpose change (universal
-   {{LAW}} II); hand off to debug.md or commit.md.
+   inside this investigation — that is a separate, single-purpose change
+   ({{LAW:one-intent-one-act}}); hand off to debug.md or commit.md.
 
 ## Done when
 - The question is answered with a specific commit (or commits) and the diff/output that

@@ -18,10 +18,10 @@
 - Does not change production code; if a fix is needed, it reports the diagnosis.
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. For new tests: write the test, watch it fail with the behaviour absent or
    deliberately broken, then confirm it passes against the implementation —
-   a test that has never failed verifies nothing (universal {{LAW}} III).
+   a test that has never failed verifies nothing ({{LAW:verify-before-asserting}}).
 2. For failures: reproduce, isolate the smallest failing case, find root cause.
 3. Cover edge cases and error paths, not just the happy path — including
    adversarial inputs at any trust boundary the code under test exposes.
@@ -55,4 +55,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.
+{{DOCTRINE:persist-insight}}'s bar — most reports carry no feedback at all.

@@ -37,7 +37,7 @@ import path from 'node:path';
  * on raw or folded text, so one behaviour serves both.
  */
 const _packTexts = new Map();
-export function readPackText(file) {
+export function readRawText(file) {
   const key = path.resolve(file);
   const mtime = statSync(file).mtimeMs;
   const hit = _packTexts.get(key);
@@ -45,6 +45,110 @@ export function readPackText(file) {
   const text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
   _packTexts.set(key, { mtime, text });
   return text;
+}
+
+/**
+ * A doctrine pack as the render sees it: ids resolved, so the heading reads
+ * `### {{DOCTRINE}} process 5 — {{DOC_CONSENT_BEFORE_PUSH}}` again. Every reader that keys on the
+ * `<pack> <n>` address (`knownRuleIds`, the exclusion filter, the survives gate) goes through
+ * here and keeps working unchanged — the address is computed, only the source stopped typing it.
+ */
+export function readPackText(file) {
+  return resolveRuleIds(readRawText(file), path.dirname(path.dirname(file)));
+}
+
+/**
+ * STABLE RULE IDS. Every law and doctrine rule is DECLARED by its heading —
+ * `### {{LAW:verify-before-asserting}} Verify Before Asserting` — and CITED by its id —
+ * `{{LAW:verify-before-asserting}}`. The id is permanent; the number is not stored anywhere. It
+ * is the rule's position (Roman in `laws/universal.md`, Arabic within its pack), computed here
+ * at render time, so removing or reordering a rule renumbers every heading after it and rewires
+ * nothing: no citation ever named the number.
+ *
+ * WHY CITATIONS RENDER AS THE NAME, NOT THE NUMBER. A citation is the one place a number would
+ * leak into text that outlives the build — an agent reads "Law III", writes "Law III" into its
+ * memory, and the memory is wrong the day the canon moves. The rendered harness models what it
+ * asks of the agent: a rule is cited by its principle, in English, identical in every voice. The
+ * number survives only where it is structural — the rule's own heading.
+ *
+ * Retired ids live in `RETIRED_RULE_IDS` so the doctor can refuse their reuse: an id that meant
+ * one thing in someone's notes must never come back meaning another.
+ */
+const DECL_RE = /^### \{\{(LAW|DOCTRINE):([a-z0-9]+(?:-[a-z0-9]+)*)\}\}[ \t]+(\S[^\n]*?)[ \t]*$/gm;
+const CITE_RE = /\{\{(LAW|DOCTRINE):([a-z0-9-]+)\}\}/g;
+export const RULE_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Ids that no longer name a live rule, and must never be declared again. `liveAs` names the one
+ * tier that may still declare it — `external-gate` was Law IX before it became a rigor rule, so
+ * the doctrine keeps it and `{{LAW:external-gate}}` is refused; `null` means gone for good.
+ */
+export const RETIRED_RULE_IDS = {
+  'external-gate': { was: 'Law IX', liveAs: 'DOCTRINE', note: 'moved to the rigor pack' },
+  'absence-is-a-claim': { was: 'Law XI', liveAs: null, note: 'folded into verify-before-asserting' },
+};
+
+const ROMAN = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
+  [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+export function toRoman(n) {
+  let out = '';
+  for (const [v, r] of ROMAN) while (n >= v) { out += r; n -= v; }
+  return out;
+}
+
+/** `sealed-secrets` -> `LEX_SEALED_SECRETS`; a doctrine rule's title key is `DOC_<ID>`. */
+export const titleKey = (kind, id) =>
+  `${kind === 'LAW' ? 'LEX' : 'DOC'}_${id.toUpperCase().replaceAll('-', '_')}`;
+
+/** The files that may declare rules, in canon order: `[kind, pack|null, file]`. */
+export function canonFiles(src = SRC) {
+  return [['LAW', null, path.join(src, 'laws', 'universal.md')],
+    ...PACK_ORDER.map((p) => ['DOCTRINE', p, path.join(src, 'doctrines', `${p}.md`)])];
+}
+
+const _canons = new Map();
+/**
+ * Every declared rule, in render order: `{ kind, pack, id, name, n, label }`, where `label` is
+ * the address the heading renders (`III`, `process 5`). Memoised on the raw texts' identity —
+ * `readRawText` hands back the same string until a file's mtime moves.
+ */
+export function ruleCanon(src = SRC) {
+  const files = canonFiles(src);
+  const texts = files.map(([, , f]) => { try { return readRawText(f); } catch { return ''; } });
+  const key = path.resolve(src);
+  const hit = _canons.get(key);
+  if (hit && hit.texts.every((t, i) => t === texts[i])) return hit.canon;
+  const rules = [];
+  files.forEach(([kind, pack], i) => {
+    let n = 0;
+    for (const m of texts[i].matchAll(DECL_RE)) {
+      if (m[1] !== kind) continue;             // a wrong-tier declaration is the doctor's to name
+      n += 1;
+      rules.push({ kind, pack, id: m[2], name: m[3], n, label: kind === 'LAW' ? toRoman(n) : `${pack} ${n}` });
+    }
+  });
+  const byId = new Map();
+  for (const r of rules) if (!byId.has(r.id)) byId.set(r.id, r);
+  const canon = { rules, byId };
+  _canons.set(key, { texts, canon });
+  return canon;
+}
+
+/**
+ * Resolve every declaration and citation in `text` against the canon under `src`. An unknown id
+ * is left exactly as written — visible in the output, and named by the doctor — rather than
+ * guessed at.
+ */
+export function resolveRuleIds(text, src = SRC) {
+  if (!text.includes('{{LAW:') && !text.includes('{{DOCTRINE:')) return text;
+  const { byId } = ruleCanon(src);
+  const known = (kind, id) => { const r = byId.get(id); return r && r.kind === kind ? r : null; };
+  return text
+    .replace(DECL_RE, (whole, kind, id) => {
+      const r = known(kind, id);
+      return r ? `### {{${kind}}} ${r.label} — {{${titleKey(kind, id)}}}` : whole;
+    })
+    .replace(CITE_RE, (whole, kind, id) => { const r = known(kind, id); return r ? `*${r.name}*` : whole; });
 }
 
 /**

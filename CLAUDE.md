@@ -91,8 +91,13 @@ silently permissive.
 **Adding any tracked file fails the packaging suite** until it has a row, with a written reason, in
 the SHIPS or WITHHELD partition of `tests/unit/package_manifest.test.mjs`.
 
-**Never insert a law — append.** Nothing resolves a `{{LAW}} <roman>` cross-reference against the
-canon, and ~153 of them live across `src/`. Renumbering silently rewires every one.
+**Rule ids are permanent; numbers are positional.** Every law and doctrine rule is declared
+`### {{LAW:<id>}} <Principle>` / `### {{DOCTRINE:<id>}} <Principle>` and cited `{{LAW:<id>}}` /
+`{{DOCTRINE:<id>}}` — never by number, which the doctor refuses. The render computes the number
+from position and renders a citation as the principle's name, so removing a rule rewires nothing.
+Never rename an id; a removed one goes into `RETIRED_RULE_IDS` (`js/build/source.mjs`) so it is
+never reused. Append anyway where you can: `LAW_META`, `LAW_CLASS`, `DOCTRINE_META`, exclusions
+and the hook ledger keys are still number-keyed (doctor-pinned) — `docs/extending.md` §2e.
 
 **`--footprint` defaults to `lean`.** A law's lean text is the authored `LEAN:else` half of its
 block in `src/laws/universal.md` — amend both halves, or the amendment does not exist for most

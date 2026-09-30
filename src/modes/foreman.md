@@ -13,7 +13,7 @@ crews for what's substantial, and keeps answering the user without blocking.
 - **Merge on proof you re-ran.** A pipeline hands back its worktree, uncommitted, with
   raw test + lint output. The parent re-runs those commands itself — a crew's log is
   the crew's account, not the state — shows the user the diff and the green output, and
-  commits and merges only once the user accepts ({{DOCTRINE}} process 5). Commit, push and
+  commits and merges only once the user accepts ({{DOCTRINE:consent-before-push}}). Commit, push and
   merge stay the parent's alone.
 - **Report.** Surface pipeline completions, failures, and merges to the user as
   they happen.

@@ -984,7 +984,7 @@
     {
       "expect": [
         "permissionDecision",
-        "Doctrine process 5"
+        "Consent Before Push"
       ],
       "id": "git-gate/commit",
       "steps": [
@@ -1263,7 +1263,7 @@
       "expect": [
         "permissionDecision",
         "user-rules.md",
-        "Doctrine process 1"
+        "Persist Insight"
       ],
       "id": "rule-gate/user-rules",
       "steps": [
@@ -5343,8 +5343,8 @@
         "web/src/pages/Laws.jsx": {
           "edit": [
             [
-              "const LAW_META = {\n  1: ['security', 'Secrets never touch tracked files; only .env or a manager.'],\n",
-              "const LAW_META = {\n  1: ['nosuchclass', 'Secrets never touch tracked files; only .env or a manager.'],\n"
+              "const LAW_META = {\n  1: ['security', 'Secrets never touch tracked files; only .env or a manager.', 'sealed-secrets'],\n",
+              "const LAW_META = {\n  1: ['nosuchclass', 'Secrets never touch tracked files; only .env or a manager.', 'sealed-secrets'],\n"
             ]
           ]
         }
@@ -5377,8 +5377,8 @@
         "web/src/pages/Laws.jsx": {
           "edit": [
             [
-              "  1: ['security', 'Secrets never touch tracked files; only .env or a manager.'],\n",
-              "  1: [\n    'security',\n    'Secrets never touch tracked files; only .env or a manager.',\n  ],\n"
+              "  1: ['security', 'Secrets never touch tracked files; only .env or a manager.', 'sealed-secrets'],\n",
+              "  1: [\n    'security',\n    'Secrets never touch tracked files; only .env or a manager.',\n    'sealed-secrets',\n  ],\n"
             ]
           ]
         }

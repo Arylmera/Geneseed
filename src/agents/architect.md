@@ -16,13 +16,13 @@
 
 ## Allowed tools
 - **Read-only.** Explores the codebase to ground the design in real structure
-  (universal {{LAW}} III — establish actual state before designing); may run
+  ({{LAW:verify-before-asserting}} — establish actual state before designing); may run
   read-only shell commands (`git log`, a tree listing, the existing suite once)
   to see what is actually there and green. Never edits.
   <!-- bash: allow -->
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Establish the current state: data shapes, module boundaries, existing patterns.
 2. Propose 2–3 approaches with trade-offs; recommend one with reasoning.
 3. Break the chosen approach into isolated units, each with one purpose and a
@@ -55,4 +55,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.
+{{DOCTRINE:persist-insight}}'s bar — most reports carry no feedback at all.

@@ -2,9 +2,9 @@
 //
 // Enforces the safety Laws at the tool boundary (`tool.execute.before`), the same
 // "enforce by injection, don't just instruct" stance as the context plugin:
-//   - Law I  (Sealed Secrets):  block writes to private-key / credential files.
-//   - Law IV (Deletion Is Deliberate):  block catastrophic shell commands.
-//   - Doctrine process 1 (rule vs memory):  speed-bump the first write to user-rules.md
+//   - Sealed Secrets:  block writes to private-key / credential files.
+//   - Deletion Is Deliberate:  block catastrophic shell commands.
+//   - Persist Insight (rule vs memory):  speed-bump the first write to user-rules.md
 //     memory file — that choice belongs to the user, via the rule skill.
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in wiki.jsonc.
@@ -238,7 +238,7 @@ async function protectedPrefixes() {
   return prefixes
 }
 
-// ---- the rule / memory stores (Doctrine process 1) -----------------------------
+// ---- the rule / memory stores (Persist Insight) --------------------------------
 // Whether something the user wants kept is a standing rule or a durable fact is THEIR
 // call, settled through the rule skill. `tool.execute.before` can only allow or throw —
 // it has no "ask the user" tier like the Claude/Bob rule-gate hook —
@@ -285,13 +285,13 @@ export const GeneseedGuard = async () => {
       try {
         if (hasAny(tool, WRITE_TOOLS)) {
           const p = pickPath(args)
-          if (p && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Law I)`, "law-1"); return }
-          if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Law I)`)
+          if (p && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
+          if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
           const store = p && ruleStoreTarget(p)
           if (store && !RULE_STORE_BUMPED.has(p)) {
             RULE_STORE_BUMPED.add(p)
             await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
-                 `choice is the user's (Doctrine process 1). Settle it through the rule skill, ` +
+                 `choice is the user's (Persist Insight). Settle it through the rule skill, ` +
                  `then re-issue this write`, "process-1")
             return
           }
@@ -309,8 +309,8 @@ export const GeneseedGuard = async () => {
         // classes, and the shell check must still run after the write check.
         if (hasAny(tool, SHELL_TOOLS)) {
           const c = pickCommand(args)
-          if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { await deny(`catastrophic command (Law IV): ${c.slice(0, 80)}`, "law-4"); return }
-          if (c && SHELL_WARN_RE.some((re) => re.test(c))) log(`WARN: irreversible op — confirm intent (Law IV): ${c.slice(0, 80)}`)
+          if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { await deny(`catastrophic command (Deletion Is Deliberate): ${c.slice(0, 80)}`, "law-4"); return }
+          if (c && SHELL_WARN_RE.some((re) => re.test(c))) log(`WARN: irreversible op — confirm intent (Deletion Is Deliberate): ${c.slice(0, 80)}`)
         }
       } catch (err) {
         // Our own deny must propagate; any inspection error must never break a tool call.

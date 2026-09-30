@@ -8,8 +8,8 @@ import { gateAddress, parseRuleTitle } from './constitution.js'
 
 // The constitution's four tiers as one composition bar. `laws` is the catalog payload
 // (/api/catalog/laws) when it has loaded: it is the only source that says which
-// invariants are retired, so without it the invariant row carries no "retired" note
-// rather than a guessed one. Doctrines count the rules in force, from the overview.
+// invariants are retired (only an older install still lists one — the canon removes a retired
+// rule now), so without it the invariant row carries no "retired" note rather than a guessed one. Doctrines count the rules in force, from the overview.
 export function constitutionMix(counts, laws, rulesStats) {
   const items = laws?.items || []
   const retired = items.filter(
@@ -23,7 +23,7 @@ export function constitutionMix(counts, laws, rulesStats) {
       key: 'invariants',
       label: 'Invariants',
       n: invariants,
-      note: laws ? `+${retired} retired` : '',
+      note: laws && retired ? `+${retired} retired` : '',
     },
     {
       key: 'doctrines',

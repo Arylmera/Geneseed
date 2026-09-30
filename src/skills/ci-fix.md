@@ -14,7 +14,7 @@ gets the fix back through the same gate.
 ## Procedure
 1. **Read the log, not the badge.** Find the first failing job and the first failing
    step inside it — later failures are usually consequences. Read the actual error and
-   the command that produced it in full ({{LAW}} III); note the runner's OS, toolchain
+   the command that produced it in full ({{LAW:verify-before-asserting}}); note the runner's OS, toolchain
    versions, and the exact invocation.
 2. **Classify before touching anything:** a *real failure* (the code or test is
    wrong), an *environment difference* (a version, a path, line endings, a missing
@@ -32,14 +32,14 @@ gets the fix back through the same gate.
    difference, prefer making the *repo* deterministic (pin, normalise, declare) over
    making CI more permissive. A flake is fixed at its source — the race, the timeout,
    the unpinned resource — or quarantined *with an issue and an owner*, never
-   silently skipped ({{LAW}} VIII).
+   silently skipped ({{LAW:cure-the-cause}}).
 5. **Prove it the way CI will.** Run CI's command locally once more and read the
-   output; then push with the user's per-push consent ({{DOCTRINE}} process 5) and
+   output; then push with the user's per-push consent ({{DOCTRINE:consent-before-push}}) and
    watch the re-run to green — a fix is verified by the gate that reported the
    failure, not by a local pass.
 6. **Exit.** Say what failed, which class it was, what changed, and the run that is
    now green. If the failure was a gate misconfiguration or a flake in CI itself,
-   leave the fix to CI config as its own commit ({{LAW}} II) and note it in the PR.
+   leave the fix to CI config as its own commit ({{LAW:one-intent-one-act}}) and note it in the PR.
 
 ## Done when
 - The first real failure was reproduced locally under CI's conditions, fixed at its

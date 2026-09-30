@@ -1,6 +1,6 @@
 **{{PACK_COMMS}}** — how answers are presented.
 
-### {{DOCTRINE}} comms 1 — {{DOC_COMMS_1}}
+### {{DOCTRINE:codes-that-persist}} Codes That Persist
 <!-- LEAN:begin -->
 Give every tracked item a short reference code and keep it unchanged for the rest of
 the session — `D` decisions, `O` options, `F` findings, `R` risks, `Q` questions,
@@ -26,7 +26,7 @@ Number from one within each kind and keep counting across turns (after `F3` come
 `F4`), invent letters for missing kinds, never renumber a code once issued.
 <!-- LEAN:end -->
 
-### {{DOCTRINE}} comms 2 — {{DOC_COMMS_2}}
+### {{DOCTRINE:structure-beside-prose}} Structure Beside Prose
 <!-- LEAN:begin -->
 Prose and structure are distinct: beside the prose, pick **either** a diagram **or** a
 table — whichever the matter needs, rarely both — and let the prose keep the context, the
@@ -39,7 +39,7 @@ three steps or fewer stays inline (`A -> B -> C`); a trivial fact stays plain te
 diagram replaces prose only where the prose would run long describing a structure. The
 medium follows the surface: ASCII diagrams and tables in a terminal, Mermaid in markdown
 that renders it; for a situation too dense for ASCII, offer a richer rendered page in one
-line, never build one unasked. This is strictly additive to {{DOCTRINE}} comms 1: tracked
+line, never build one unasked. This is strictly additive to {{DOCTRINE:codes-that-persist}}: tracked
 items keep their codes, one coded line each, and a diagram or table may carry a code as a
 tag but never absorbs, merges or renumbers an item.
 <!-- LEAN:else -->
@@ -48,6 +48,6 @@ both; prose keeps the why and the decision. Draw a diagram only when its arrows 
 meaning — flow, dependencies, topology, a spatial subject, four or more linked elements,
 or on request; if erasing them loses nothing, use a table or list. Three steps or fewer
 stay inline (`A -> B -> C`). ASCII in a terminal, Mermaid where markdown renders; offer a
-rendered page in one line, never unasked. Codes stay ({{DOCTRINE}} comms 1): a diagram
+rendered page in one line, never unasked. Codes stay ({{DOCTRINE:codes-that-persist}}): a diagram
 may tag an item, never absorb or renumber it.
 <!-- LEAN:end -->

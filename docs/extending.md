@@ -155,36 +155,43 @@ Notes that matter:
 
 ## 2 — Changing the constitution
 
-Three tiers, four different costs. The addresses are `{{LAW}} <roman>` for an invariant and
-`{{DOCTRINE}} <pack> <n>` for a doctrine rule; the ontology is cited by section name and adding a
-section to it is not a checklist, it is a design change.
+Three tiers, four different costs. Every law and doctrine rule has a **permanent id** — kebab-case,
+derived from its English principle when it is created (`verify-before-asserting`,
+`consent-before-push`) — declared by its heading, `### {{LAW:<id>}} <Principle Name>` or
+`### {{DOCTRINE:<id>}} <Principle Name>`, and cited by it: `{{LAW:<id>}}`, `{{DOCTRINE:<id>}}`.
+**The number is not stored anywhere.** `ruleCanon` in `js/build/source.mjs` computes it from the
+rule's position (Roman in `laws/universal.md`, Arabic within its pack) at render time; the heading
+renders `Rule III — <themed title>` and a citation renders as the principle's name, in italics,
+identical in every voice — the same string an agent is told to write into its memory. So adding,
+removing or reordering a rule rewires nothing. `constitutionProblems` refuses a citation by number,
+an unknown id, a duplicate id, a heading with no id, and a retired id declared again. The ontology is
+cited by section name, and adding a section to it is not a checklist, it is a design change.
 
 To count the cross-references either tier already carries, from the repo root:
 
 ```bash
-grep -rhoE "\{\{LAW\}\} [IVXL]+" src/ | wc -l
-grep -rhoE "\{\{DOCTRINE\}\} [a-z]+ [0-9]+" src/ | wc -l
+grep -rhoE "\{\{LAW:[a-z0-9-]+\}\}" src/ | wc -l
+grep -rhoE "\{\{DOCTRINE:[a-z0-9-]+\}\}" src/ | wc -l
 ```
 
-On this checkout that reports 153 and 209. Both numbers move on every wave of editing, which is
-why the commands are here and the answers are not load-bearing.
+Both numbers move on every wave of editing, which is why the commands are here and the answers are
+not.
 
 ### 2a — Adding a DOCTRINE RULE (the common case)
 
 Five files, plus the written-out rule totals in four test files. This is the slot most new
 material belongs in, and it is cheap on purpose so that the invariant slot stays scarce.
 
-1. `src/doctrines/<pack>.md` — **append** `### {{DOCTRINE}} <pack> <n> — {{DOC_<PACK>_<n>}}` plus
-   the body, wrapped in a `LEAN` block with **both halves authored** — the heading stays outside the
-   block, the full text goes in `LEAN:begin`, and the lean half is the rule *and its mechanism*, no
-   maxims (the style rule is in `src/doctrines/README.md`, and `leanBlockProblems` refuses a rule
-   with no block or an empty half). Two gates in `constitutionProblems`
-   (`js/inspect/checks-authoring.mjs`) sit on this too: the pack named in
-   the *heading* is what addresses the rule (not the filename, so a rule filed in the wrong file is
-   reported rather than silently renamed), and ids must run **contiguously from 1**, so appending
-   at the end is the only place `n` is free. Packs are numbered independently — nothing outside
-   this file renumbers.
-2. `themes/_TEMPLATE.json` — add `DOC_<PACK>_<n>`. ⚠ **This file *is* gated for this key family.**
+1. `src/doctrines/<pack>.md` — add `### {{DOCTRINE:<new-id>}} <Principle Name>` plus the body,
+   wrapped in a `LEAN` block with **both halves authored** — the heading stays outside the block,
+   the full text goes in `LEAN:begin`, and the lean half is the rule *and its mechanism*, no maxims
+   (the style rule is in `src/doctrines/README.md`, and `leanBlockProblems` refuses a rule with no
+   block or an empty half). The id is kebab-case, unique across laws **and** doctrines, and never
+   one listed in `RETIRED_RULE_IDS` (`js/build/source.mjs`). Where it goes in the file decides its
+   number; appending is still the kind move, because `excludeRules`, `DOCTRINE_META` and the
+   hook-gated addresses are keyed `<pack>.<n>` (see §2e).
+2. `themes/_TEMPLATE.json` — add `DOC_<ID>` (`consent-before-push` → `DOC_CONSENT_BEFORE_PUSH`).
+   ⚠ **This file *is* gated for this key family.**
    `themeFiles()` filters `_`-prefixed names and theme parity never sees the template, but
    `constitutionProblems` reads it alongside the fourteen voices for `DOC_*` and `LEX_*`
    specifically — because it is what `--sync-themes` seeds the *next* voice from. Every other key
@@ -199,7 +206,9 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
    is one of the two. See §7.2 before you copy a command from anywhere else. Then restyle all
    fourteen by hand: `--sync-themes` writes the template's placeholder and only *prints*
    `RESTYLE these`; a shipped placeholder passes every gate.
-4. `web/src/pages/Laws.jsx` — a `DOCTRINE_META` row keyed `'<pack>.<n>'`. Its first field is the
+4. `web/src/pages/Laws.jsx` — a `DOCTRINE_META` row keyed `'<pack>.<n>'`, whose third field is the
+   rule's id — `doctrineMetaProblems` holds that pin to the canon, so a row left behind by a
+   renumber is a failure rather than a description of the neighbour. Its first field is the
    **pack**, not one of `LAW_CLASSES`' six; `doctrineMetaProblems` requires an *equality* between
    that field and the key's own pack, which catches the copy error a six-way vocabulary cannot — a
    row pasted from the pack above it, keeping the wrong pack. Its second field is the one-line
@@ -213,19 +222,18 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
   there is no second taxonomy over it.
 - **No count in the product.** No badge, no `SHIPPED.md` triple, no prose mirror. The console spends
   `{N_PACKS}` / `{N_PACKS_ACTIVE}` / `{N_DOCTRINE_RULES}`, all computed at request time.
-- **No renumber risk.** But there *are* written-out rule totals to bump — expected values are
+- **No citation to rewire.** But there *are* written-out rule totals to bump — expected values are
   written out, never recorded — in `tests/unit/emit_smoke.test.mjs`, `harness.test.mjs`,
   `setup.test.mjs` and `web_api.test.mjs`. Each fails loudly with the new count; change the
   number *and* the comment that explains it. A rule in **craft** moves more: `setup` and
   `web_api` also pin the craft-only narrowed counts, `generate.test.mjs` excludes every craft
-  rule by address to empty the pack, and `harness.test.mjs`'s contiguity fixture plants a rule at
-  the first free craft id — the doctrine twin of §2c step 8. Grep `tests/` for the previous
+  rule by address to empty the pack. Grep `tests/` for the previous
   rule's address before trusting this list. A rule long enough to matter can also breach the
   `full` carrier ceiling in `emit_smoke` — raise it with a dated note there, as every earlier
   move did.
 
 ⚠ **Cite only downward.** An always-on tier may never reference a toggleable one:
-`constitutionProblems` refuses a `{{DOCTRINE}}` token anywhere under `src/ontology/` or
+`constitutionProblems` refuses a `{{DOCTRINE:…}}` token anywhere under `src/ontology/` or
 `src/laws/`, because a `--doctrines craft` build would then ship an invariant pointing at text its
 `AGENT.md` does not contain. Doctrine→doctrine citations are fine and stay — every pack file ships
 on disk whether or not it was built in. If the build's own default is narrowed,
@@ -248,26 +256,25 @@ Steps 1 and 9 of §2c, plus `LAW_META` if the Principle line moved. Two cautions
 Nine steps, and only the first is the rule itself. This is the expensive one, and it should be:
 the bar is in `DESIGN.md` Decision 7, and most candidates belong in a doctrine pack instead.
 
-1. `src/laws/universal.md` — **append** `### {{LAW}} <roman> — {{LEX_<roman>}}` plus the body.
-   Never insert: the `{{LAW}}` cross-references counted above live all over `src/`, plus hardcoded
-   citations in `js/hosts/hooks.mjs` and two OpenCode plugins, and **nothing resolves a cross-reference
-   against the canon**. Renumbering silently rewires every one of them.
-2. `themes/_TEMPLATE.json` — add `LEX_<roman>` in template order. Gated, as in §2a step 2:
-   `constitutionProblems` holds `LEX_I..LEX_XI` as an **equality** across all fifteen files (the
-   fourteen voices and the template), so both a missing key *and* a leftover one are reported. That
-   arm exists because the renumber left `LEX_XXII`, `LEX_XXIII`, `LEX_XXIV` and `LEX_XXXVI` behind
-   in every file and parity was silent — they were absent from nowhere.
+1. `src/laws/universal.md` — add `### {{LAW:<new-id>}} <Principle Name>` plus the body. Citations
+   are by id and resolve against the canon, so position is safe to choose — but append unless the
+   order is the point: `LAW_CLASS` and `LAW_META` are keyed by the rendered number (see §2e).
+2. `themes/_TEMPLATE.json` — add `LEX_<ID>` in template order. Gated, as in §2a step 2:
+   `constitutionProblems` holds the `LEX_*` keys as an **equality** with the declared law ids across
+   all fifteen files (the fourteen voices and the template), so both a missing key *and* a leftover
+   one are reported. That arm exists because an old renumber left `LEX_XXII`, `LEX_XXIII`,
+   `LEX_XXIV` and `LEX_XXXVI` behind in every file and parity was silent.
 3. `--sync-themes`, then restyle all fourteen by hand (§2a step 3).
 4. `LAW_CLASS` in `js/inspect/inventory.mjs` — one of the six in `LAW_CLASSES` beside it.
-5. `LAW_META` in `web/src/pages/Laws.jsx` — same class, plus the one-line Principle. Note the map
-   is keyed by **arabic** number where `universal.md` heads with a Roman numeral. **This copy
+5. `LAW_META` in `web/src/pages/Laws.jsx` — same class, the one-line Principle, and the rule's id
+   as the pin. Note the map is keyed by **arabic** number where the heading renders a Roman numeral. **This copy
    exists nowhere else**; a rule absent here renders with a blank description. It is why that one
    React file ships alone out of `web/src` in `package.json` — `doctor` regex-parses its literal.
 6. `README.md` — badge `badge/laws-N` and the `N universal laws` sentence.
 7. `SHIPPED.md` — the `N laws, N agents, N skills` triple.
-8. `tests/unit/harness.test.mjs` — the negative fixture for the `LAW_CLASS` gate plants a rule at
-   the *first free numeral*, which is `XII` now that the invariants are I..XI. Bump it, or it stops
-   being a fixture and starts being a duplicate.
+8. `tests/unit/harness.test.mjs` — the negative fixture for the `LAW_CLASS` gate appends a law and
+   expects the next numeral (`X` while there are nine), and `ROMANS` there and in `emit_smoke`
+   lists the numerals written out. Bump both.
 9. `CHANGELOG.md`, then rebuild and commit `web/dist` (step 5 touched `web/src`).
 
 ⚠ While restyling, `{{LAW}}` must stay a **single word** in every theme (and so must
@@ -288,8 +295,8 @@ the only configuration it can speak for.
 Rare, and mechanical. On top of §2a for each rule the pack carries:
 
 1. `src/doctrines/<pack>.md`, opening with its lead line — `**{{PACK_<NAME>}}** — how … .` A pack
-   file `PACK_ORDER` names but cannot read, or one carrying no `### {{DOCTRINE}} <pack> <n>`
-   heading at all, is a refusal.
+   file `PACK_ORDER` names but cannot read, or one declaring no `### {{DOCTRINE:<id>}}` rule at
+   all, is a refusal.
 2. `PACK_ORDER` in `js/build/source.mjs` — the registration, and the render order. It is **narrative,
    not alphabetical** (craft → rigor → ops → process → comms); discovery sorts alphabetically and the
    renderer refuses a `.md` under `src/doctrines/` that `PACK_ORDER` does not name, rather than
@@ -312,6 +319,31 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    merely adds rules can stay off for old installs. A pack that *moves* a rule out of another
    pack cannot, or the moved rule disappears on the next rebuild: `comms` (2026-09-27) is the
    worked example — see `legacyProcessCarrier` in `js/hosts/installs.mjs`.
+
+---
+
+### 2e — Removing, retiring or reordering a rule
+
+Delete the rule's heading and both LEAN halves, and every rule after it renumbers on the next
+render — no citation moves, because none names a number. Then:
+
+1. `RETIRED_RULE_IDS` in `js/build/source.mjs` — add the id with what it was and where its text
+   went. `constitutionProblems` refuses a retired id declared again, so an id that meant one rule in
+   someone's notes can never come back meaning another. `liveAs` names the one tier that may still
+   declare it (Law IX's `external-gate` lives on as a rigor rule).
+2. Every citation of the removed id — the doctor names each one; point it at the rule that now
+   carries the text.
+3. Its `LEX_<ID>`/`DOC_<ID>` key in all fifteen theme files (the equality arm names each).
+4. The number-keyed tables, which the doctor checks against the canon: `LAW_CLASS`
+   (`js/inspect/inventory.mjs`), `LAW_META`/`DOCTRINE_META` (their id pins fail on every shifted
+   row), and — only if a hook-gated rule moved — `HOOK_PINNED` in `checks-authoring.mjs` names the
+   ledger keys, `CONSENT_RULE` and `HOOK_GATED` to move with it. `--exclude-rules` addresses are
+   `<pack>.<n>` too, and an install that excluded a shifted doctrine rule excludes its neighbour
+   after a re-emit: prefer appending in a pack, and say so in the CHANGELOG when you cannot.
+5. The count mirrors: README badge and prose, `SHIPPED.md`, and the written-out totals in tests.
+
+Laws IX (External Gate) and XI (Absence Is a Claim) were removed this way on 2026-09-30; Echo the
+Intent became IX.
 
 ---
 
@@ -574,7 +606,7 @@ only, at best, on its presence.
 |---|---|---|
 | `§N` cross-references into `AGENT.md`'s anatomy | `src/skills/*`, `src/agents/*`, `adapters/**` | **range only.** `constitutionProblems` refuses a `§N` the template declares no section for — which catches a pointer past the end, the shape *removing* a section leaves. It cannot catch one that still resolves and now means something else, which is the shape *inserting* a section leaves, and is what actually happened when `## 2. Doctrines` pushed every later section down one. **Renumbering the anatomy means `grep -rn '§' src/ adapters/` and reading every hit.** Four satellites and a live OpenCode deny message shipped stale because the sweep stopped at `AGENT.md.tmpl` |
 | Per-law Principle lines | `web/src/pages/Laws.jsx` | presence and class only, never accuracy |
-| 588 themed constitution titles (42 keys × 14 voices) — `LEX_I..LEX_XI` (11), `DOC_<PACK>_<n>` (27), `PACK_<NAME>` (4) | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
+| 588 themed constitution titles (42 keys × 14 voices) — `LEX_<ID>` (one per law), `DOC_<ID>` (one per doctrine rule), `PACK_<NAME>` | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
 | The README keyword enumerations | `README.md`, `docs/web/rules.md` | nothing |
 | The plugin capability enumeration | `docs/web/model.md` | nothing (the number substitutes; the list does not) |
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |

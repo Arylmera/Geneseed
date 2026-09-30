@@ -362,14 +362,15 @@ test('the inventory counts match the source tree and every entry has a body', ()
   assert.equal(inv.skills.length, specStems('skills').length);
   // And the law count is parsed rather than transcribed — the reference hard-codes 37.
   const laws = [...fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8')
-    .matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+)\b/gm)].length;
+    .matchAll(/^### \{\{LAW:[a-z0-9-]+\}\} /gm)].length;
   assert.equal(inv.laws.length, laws);
   // THE FLOOR IS NOW AN EQUALITY, because the corpus grows only by deliberate append. `> 30`
   // was a guard against the regex silently matching nothing while the derived equality above
-  // stayed vacuously true. The three-tier split fixed the corpus at nine invariants and the
-  // Law III split (X and XI appended) took it to ELEVEN — the doctrine packs carry the rest —
-  // so the same guard is stated exactly rather than as a floor.
-  assert.equal(laws, 11, `${laws} laws parsed — expected the eleven invariants`);
+  // stayed vacuously true. The three-tier split fixed the corpus at nine invariants, the Law III
+  // split (X and XI appended) took it to eleven, and removing the two retired laws (IX and XI,
+  // 2026-09-30) brought it back to NINE — the doctrine packs carry the rest — so the same guard
+  // is stated exactly rather than as a floor.
+  assert.equal(laws, 9, `${laws} laws parsed — expected the nine invariants`);
 
   assert.ok(inv.agents.every((e) => e.desc && e.body), 'an agent entry has no desc or body');
   assert.ok(inv.skills.every((e) => e.desc && e.body), 'a skill entry has no desc or body');
@@ -398,12 +399,12 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
 
   for (const p of inv.doctrines) {
     const src = fs.readFileSync(path.join(SRC, 'doctrines', `${p.pack}.md`), 'utf8');
-    const want = [...src.matchAll(/^### \{\{DOCTRINE\}\} (\w+) (\d+)\b/gm)];
+    const want = [...src.matchAll(/^### \{\{DOCTRINE:[a-z0-9-]+\}\} /gm)];
     assert.equal(p.rules.length, want.length, `${p.pack}: parsed ${p.rules.length} of ${want.length}`);
     assert.ok(p.rules.length > 0, `${p.pack} parsed to no rules at all`);
-    // Contiguous from 1, and every rule filed under the pack whose file it is in. The `pack`
-    // field is read from the HEADING, so this is the cell that catches a rule mis-addressed as
-    // `ops 3` inside `craft.md` rather than letting its container silently rename it.
+    // Contiguous from 1, and every rule filed under the pack whose file it is in. The source no
+    // longer types a number — it is the rule's position — so this is the cell that proves the
+    // render numbered by position and filed each rule under the file it is declared in.
     assert.deepEqual(p.rules.map((r) => r.n), p.rules.map((_, i) => i + 1),
       `${p.pack}'s rule ids are not 1..${p.rules.length}`);
     assert.ok(p.rules.every((r) => r.pack === p.pack),
@@ -413,9 +414,9 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
       `${p.pack} has a rule with no title, no body, or a class that is not its pack`);
     assert.ok(p.title && p.desc, `${p.pack} has no themed name or blurb`);
   }
-  // 11 + 28 + the four absorbed-into-prose sections is the whole constitution. The 24th is
-  // rigor 5 — Law IX retired in place and moved into the rigor pack (2026-09), so the law count
-  // stays 11 (its heading is kept) while the doctrine count grows by one. The 25th is
+  // 9 + 28 + the four absorbed-into-prose sections is the whole constitution. The 24th is
+  // rigor 5 — Law IX, moved into the rigor pack (2026-09); the law itself was removed on
+  // 2026-09-30, with XI, when numbers became positional. The 25th is
   // one writer per file, appended later that month as process 8 (process 7 since the comms
   // pack took the old process 7). The 26th and 27th are craft 7 (one writer
   // per value) and ops 7 (serialize against a rationed resource), appended 2026-09-23.
@@ -432,7 +433,8 @@ test('every theme parses to the same three tiers, whatever it calls them', () =>
   const counts = (inv) => [inv.laws.length, inv.ontology.length, inv.doctrines.length,
     inv.doctrines.reduce((n, p) => n + p.rules.length, 0)];
   const base = counts(tuiInventory('neutral'));
-  assert.deepEqual(base, [11, 4, 5, 28]); // 5 packs, 28 rules since the comms pack (2026-09-27)
+  // 9 laws since IX and XI were removed (2026-09-30); 5 packs, 28 rules since the comms pack.
+  assert.deepEqual(base, [9, 4, 5, 28]);
   for (const t of themeNames()) {
     const inv = tuiInventory(t);
     assert.deepEqual(counts(inv), base, `${t} parses to a different constitution`);

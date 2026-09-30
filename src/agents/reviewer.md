@@ -19,11 +19,11 @@
 <!-- bash: allow -->
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Confirm the change actually does what the task required (read the spec/issue).
 2. Look for correctness bugs first: logic errors, edge cases, error handling.
 3. Then quality: duplication, unclear naming, dead code, oversized units.
-4. Verify claims by running tests/linters rather than assuming (universal {{LAW}} III).
+4. Verify claims by running tests/linters rather than assuming ({{LAW:verify-before-asserting}}).
 
 ## Output contract
 - A list of findings, each a Conventional Comment, `label (decoration): file:line — problem
@@ -52,4 +52,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.
+{{DOCTRINE:persist-insight}}'s bar — most reports carry no feedback at all.

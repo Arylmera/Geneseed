@@ -9,8 +9,8 @@ non-design work (a refactor, a migration, an investigation) whose *ask* is fuzzy
 interview half runs, the design half is skipped.
 
 ## Procedure
-1. **Ground.** Read the current project state and its own docs ({{DOCTRINE}} process 4)
-   so every question is about the real thing ({{LAW}} III). If the request bundles
+1. **Ground.** Read the current project state and its own docs ({{DOCTRINE:read-the-docs-first}})
+   so every question is about the real thing ({{LAW:verify-before-asserting}}). If the request bundles
    several goals or systems, separate them and take one at a time.
 2. **Interpret charitably, then interview.** Read the request in its strongest
    reasonable form — do not manufacture ambiguity from a fair ask. If goal, scope and
@@ -22,7 +22,7 @@ interview half runs, the design half is skipped.
    direction chosen, trade-offs accepted, load-bearing constraints, assumptions,
    non-goals. Surface each silent assumption as a decision to ratify, not a settled
    fact. Read the ledger back as a numbered list and get an EXPLICIT confirmation
-   ({{LAW}} X — an inferred intent is not ground truth until echoed and agreed);
+   ({{LAW:echo-the-intent}} — an inferred intent is not ground truth until echoed and agreed);
    scope the read-back to what is consequential, irreversible or genuinely uncertain.
 4. **Design — only when there is something to design.** Propose 2–3 approaches with
    trade-offs, leading with your recommendation. Present the chosen design in

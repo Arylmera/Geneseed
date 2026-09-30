@@ -44,7 +44,7 @@ vault or a specific tool's hooks.
      and the prose words the docs use: the core nouns `LAW(S)`/`DOCTRINE(S)`/`ONTOLOGY`/
      `AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`VAULT`/`WIKI`, plus `TAGLINE`,
      `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`, `ROAST_PERSONA`, the invariant
-     titles `LEX_I`..`LEX_XI`, the 28 doctrine-rule titles `DOC_<PACK>_<n>`, the five pack
+     titles `LEX_<ID>`, the 28 doctrine-rule titles `DOC_<ID>` (keyed by stable rule id), the five pack
      names `PACK_CRAFT`/`PACK_RIGOR`/`PACK_OPS`/`PACK_PROCESS`/`PACK_COMMS`, and the section intros
      `INTRO_*`. Each theme defines its own nouns; **neutral keeps the plain words** (Rule,
      Doctrine, Agent, Skill, Memory, Workspace), so neutral output is unchanged.
@@ -98,11 +98,13 @@ vault or a specific tool's hooks.
      and tier by reversibility; show the real forks), **Conduct** (answer what was asked,
      once). It absorbed the Pact, which is now stated *inside* Telos rather than standing
      as a peer of the rules.
-   - **Invariants** (`src/laws/universal.md`) — *what is never traded*. Eleven numbered
-     Rules, `I`..`XI`, nine in force — IX and XI are retired in place, their numbers kept so
-     existing citations resolve — headed `### {{LAW}} <roman> — {{LEX_<roman>}}`.
+   - **Invariants** (`src/laws/universal.md`) — *what is never traded*. Nine Rules, `I`..`IX`,
+     each declared `### {{LAW:<id>}} <Principle>` with a permanent id; the numeral is its
+     position, computed at render time (the retired IX and XI were removed on 2026-09-30, and
+     Echo the Intent became IX without a single citation changing).
    - **Doctrines** (`src/doctrines/{craft,rigor,ops,process,comms}.md`) — *how work is done
-     here*. Practice rules addressed by pack and number, cited as `Doctrine process 5`.
+     here*. Practice rules addressed by pack and position (`process 5`), declared and cited by
+     id the same way; a citation of any rule renders as its principle's name.
      `PACK_ORDER` (`js/build/source.mjs`) fixes the order craft → rigor → ops → process → comms, which
      is narrative and deliberately not alphabetical.
 
@@ -145,12 +147,12 @@ vault or a specific tool's hooks.
 
    | Satellite | A new invariant | A new doctrine rule | A whole new pack |
    |---|---|---|---|
-   | body | append to `src/laws/universal.md` — never insert; nothing resolves a cross-reference against the canon | append to `src/doctrines/<pack>.md`, `### {{DOCTRINE}} <pack> <n> — {{DOC_<PACK>_<n>}}`; ids must run contiguously from 1 | a new `src/doctrines/<pack>.md` with its `**Name** — lead line` |
-   | themed title | `LEX_<roman>` in all 15 theme files | `DOC_<PACK>_<n>` in all 15 theme files | `PACK_<NAME>` in all 15, plus each rule's `DOC_*` |
+   | body | `### {{LAW:<id>}} <Principle>` in `src/laws/universal.md`; citations resolve by id, so no position rewires one | `### {{DOCTRINE:<id>}} <Principle>` in `src/doctrines/<pack>.md`; the number is its position | a new `src/doctrines/<pack>.md` with its `**Name** — lead line` |
+   | themed title | `LEX_<ID>` in all 15 theme files | `DOC_<ID>` in all 15 theme files | `PACK_<NAME>` in all 15, plus each rule's `DOC_*` |
    | class | `LAW_CLASS` in `js/inspect/inventory.mjs`, one of the six in `LAW_CLASSES` | **none** — a doctrine rule's class *is* its pack, and there is no second taxonomy over it | — |
    | console copy | a `LAW_META` row in `web/src/pages/Laws.jsx` (keyed by arabic number) | a `DOCTRINE_META` row in the same file (keyed `<pack>.<n>`) | one `DOCTRINE_META` row per rule |
    | registration | the numeral is the registration | the number is the registration | the pack name in `PACK_ORDER`, `js/build/source.mjs` |
-   | renumber risk | high — appending is the only safe move | none — packs are numbered independently | none |
+   | renumber risk | none for citations (by id); `LAW_META`/`LAW_CLASS` are number-keyed and doctor-pinned, so append by preference | none for citations; `DOCTRINE_META`, exclusions and hook ledger keys are `<pack>.<n>` — append by preference | none |
    | counts | README badge + the `N universal laws` prose, `SHIPPED.md`'s triple, the web onboarding copy | **none** — the console spends the `N_PACKS` / `N_PACKS_ACTIVE` / `N_DOCTRINE_RULES` count tokens, all computed at request time | none, same reason |
    | changelog | `CHANGELOG.md` | `CHANGELOG.md` | `CHANGELOG.md` |
 
@@ -164,8 +166,9 @@ vault or a specific tool's hooks.
    Almost all of it is gated, across six named checks in `js/inspect/checks-build.mjs` —
    `themeParityProblems` (key parity across the voices), `lawMetaProblems` and
    `doctrineMetaProblems` (the console's Principle column, in both directions),
-   `constitutionProblems` (pack numbering and filing, `LEX_I..LEX_XI` as an *equality*, the
-   `DOC_*` vocabulary, and every `{{DOCTRINE}}` citation in `src/`), and
+   `constitutionProblems` (rule ids declared, unique and never retired, `LEX_*` as an *equality*,
+   the `DOC_*` vocabulary, the hook-gated addresses, and every `{{LAW:…}}`/`{{DOCTRINE:…}}`
+   citation in `src/` — a citation by number is refused), and
    `countTableProblems` / `proseMirrorProblems` (badges and prose). So `geneseed doctor
    --all` is the check; the table above only says what it will ask for. `CHANGELOG.md` has
    no gate and never has.

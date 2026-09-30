@@ -48,8 +48,8 @@ markerless text.
    shared-branch names, the reference letters). Drop illustrative examples.
 4. Cut every "Where X governs A, this governs B" sibling sentence and every closing
    aphorism — the full file ships beside `AGENT.md` and the section pointer says so.
-5. Keep a citation only where it names the thing to do (confirm per `{{LAW}} IV`, run
-   the develop `{{SKILL}}`), parenthesised at clause end.
+5. Keep a citation only where it names the thing to do (confirm per {{LAW:deletion-is-deliberate}}, run
+   the develop {{SKILL}}), parenthesised at clause end.
 6. No new tokens, no `####`, no heading inside a block.
 
 Budget, heading excluded: 40–70 words, target ~55; 25–50 where one sentence already
@@ -57,7 +57,8 @@ says it all; up to 90 where the rule carries several mechanisms.
 
 To add a pack, drop a `<name>.md` here (body only, no top-level heading — it is
 inlined under `AGENT.md`'s own Doctrines heading), open it with a bold pack name and
-a one-line characterisation, number its rules from 1, give each one its `LEAN` block,
+a one-line characterisation, head each rule with its permanent id (its number is its
+position, computed at render), give each one its `LEAN` block,
 add the pack's title keys to every theme, add a row above, and register the name in
 `PACK_ORDER` (`js/build/source.mjs`). That last step is not optional: discovery sorts
 alphabetically and `PACK_ORDER` carries the narrative render order, so a pack file

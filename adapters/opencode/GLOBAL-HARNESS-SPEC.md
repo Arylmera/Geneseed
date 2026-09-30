@@ -276,7 +276,7 @@ It is not one now: the invariants are a closed set of nine, and project-context
 discovery is one of the two old laws absorbed into AGENT.md's own **§9 Context**
 section, which every build carries as prose. Nothing an adapter spec writes is
 added to the invariants. The text below survives as the *instruction* tier behind
-the *injection* tier, and `{{DOCTRINE}} process 4` (Read the Docs First) is its
+the *injection* tier, and `{{DOCTRINE:read-the-docs-first}}` (Read the Docs First) is its
 nearest live citation:
 
 > **Rule (Project Context Discovery).** When project context has not already been

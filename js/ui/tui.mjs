@@ -347,7 +347,7 @@ export function themePreview(key) {
   if (data.TAGLINE) lines.push(['dim', data.TAGLINE], ['', '']);
   if (data.LOADED_SIGIL) lines.push(['ok', data.LOADED_SIGIL], ['', '']);
   if (data.VOICE) lines.push(['', `Voice — ${data.VOICE}`], ['', '']);
-  if (data.LEX_I) lines.push(['', `e.g.  Rule I — ${data.LEX_I}`]);
+  if (data.LEX_SEALED_SECRETS) lines.push(['', `e.g.  Rule I — ${data.LEX_SEALED_SECRETS}`]);
   if (data.BENEDICTION) lines.push(['', ''], ['dim', data.BENEDICTION]);
   return lines;
 }

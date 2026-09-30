@@ -13,7 +13,8 @@
  */
 import path from 'node:path';
 import {
-  CONFIG, PACK_ORDER, PLUGIN_SRC, ROOT, SRC, THEMES, knownRuleIds,
+  CONFIG, PACK_ORDER, PLUGIN_SRC, RETIRED_RULE_IDS, ROOT, RULE_ID_RE, SRC, THEMES, canonFiles,
+  knownRuleIds, ruleCanon, titleKey,
 } from '../build/source.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
 import { descBlockProblem, firstBlockquote } from '../hosts/native.mjs';
@@ -47,7 +48,11 @@ export function romanToInt(num) {
 }
 
 /**
- * `_harness_build._LAW_META_ROW` — `<arabic>: ['<class>', '<principle>'],` in the web page.
+ * `_harness_build._LAW_META_ROW` — `<arabic>: ['<class>', '<principle>', '<id>'],` in the web page.
+ *
+ * The third field PINS the row to a rule id. The key is the number the catalogue renders, and a
+ * number is only a position: remove a law and every later row describes its predecessor's
+ * neighbour, with every class still plausible. The pin is what makes that a doctor failure.
  *
  * Either quote style, because a principle carrying an apostrophe is double-quoted. Every
  * `\s*` spans newlines and the trailing comma before `]` is optional, so a row a prettier has
@@ -57,7 +62,8 @@ export function romanToInt(num) {
  * `(?m)` is the `m` flag; JS has no inline form. The `.` inside the captures must NOT match a
  * newline (Python has no `re.S` here), which is JS's default.
  */
-const LAW_META_ROW = /^[^\S\n]*(\d+):\s*\[\s*(['"])(.*?)\2\s*,\s*(['"])(.*?)\4\s*,?\s*\]\s*,?[^\S\n]*$/gm;
+const LAW_META_ROW =
+  /^[^\S\n]*(\d+):\s*\[\s*(['"])(.*?)\2\s*,\s*(['"])(.*?)\4\s*(?:,\s*(['"])(.*?)\6\s*)?,?\s*\]\s*,?[^\S\n]*$/gm;
 
 /**
  * `_harness_build._law_meta_problems` — the web Laws ledger's per-rule copy stays complete.
@@ -67,7 +73,7 @@ const LAW_META_ROW = /^[^\S\n]*(\d+):\s*\[\s*(['"])(.*?)\2\s*,\s*(['"])(.*?)\4\s
  * description and the wrong class chip, while everything upstream is fine. That is exactly
  * how two laws shipped description-less.
  */
-export function lawMetaProblems(lawNums, lawClass, lawClasses) {
+export function lawMetaProblems(lawNums, lawClass, lawClasses, lawIds = null) {
   const page = path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx');
   let text;
   try { text = readText(page); } catch (e) {
@@ -80,11 +86,11 @@ export function lawMetaProblems(lawNums, lawClass, lawClasses) {
   }
   const meta = new Map();
   for (const m of block[1].matchAll(LAW_META_ROW)) {
-    meta.set(Number(m[1]), [m[3], m[5]]);
+    meta.set(Number(m[1]), [m[3], m[5], m[7]]);
   }
   const problems = [];
   const seen = new Set();
-  for (const roman of lawNums) {
+  for (const [i, roman] of lawNums.entries()) {
     const n = romanToInt(roman);
     seen.add(n);
     if (!meta.has(n)) {
@@ -93,7 +99,12 @@ export function lawMetaProblems(lawNums, lawClass, lawClasses) {
         + 'render it with a blank Principle');
       continue;
     }
-    const [klass, principle] = meta.get(n);
+    const [klass, principle, pin] = meta.get(n);
+    if (lawIds && pin !== lawIds[i]) {
+      problems.push(`[authoring] LAW_META[${n}] is pinned to '${pin ?? '(no id)'}' but rule ${roman} is `
+        + `'${lawIds[i]}' — the rows no longer follow the canon's order, so this principle `
+        + 'describes a different law');
+    }
     if (!principle.trim()) {
       problems.push(`[authoring] LAW_META[${n}] has an empty principle line — rule `
         + `${roman} would render with a blank description`);
@@ -112,9 +123,9 @@ export function lawMetaProblems(lawNums, lawClass, lawClasses) {
   return problems;
 }
 
-/** `LAW_META_ROW`'s twin for a STRING key — `'<pack>.<n>': ['<pack>', '<principle>'],`. */
+/** `LAW_META_ROW`'s twin for a STRING key — `'<pack>.<n>': ['<pack>', '<principle>', '<id>'],`. */
 const DOCTRINE_META_ROW =
-  /^[^\S\n]*(['"])([a-z]+\.\d+)\1:\s*\[\s*(['"])(.*?)\3\s*,\s*(['"])(.*?)\5\s*,?\s*\]\s*,?[^\S\n]*$/gm;
+  /^[^\S\n]*(['"])([a-z]+\.\d+)\1:\s*\[\s*(['"])(.*?)\3\s*,\s*(['"])(.*?)\5\s*(?:,\s*(['"])(.*?)\7\s*)?,?\s*\]\s*,?[^\S\n]*$/gm;
 
 /**
  * `lawMetaProblems`' doctrine half — the console's per-rule Principle column stays complete.
@@ -130,7 +141,7 @@ const DOCTRINE_META_ROW =
  * error a six-way vocabulary cannot: a row pasted from the pack above it, keeping the class of
  * the pack it came from, which would colour the row and label its chip with the wrong pack.
  */
-export function doctrineMetaProblems(addrs) {
+export function doctrineMetaProblems(addrs, ids = null) {
   const page = path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx');
   let text;
   try { text = readText(page); } catch (e) {
@@ -142,17 +153,21 @@ export function doctrineMetaProblems(addrs) {
       + "console's doctrine rows would have no gate on their Principle column"];
   }
   const meta = new Map();
-  for (const m of block[1].matchAll(DOCTRINE_META_ROW)) meta.set(m[2], [m[4], m[6]]);
+  for (const m of block[1].matchAll(DOCTRINE_META_ROW)) meta.set(m[2], [m[4], m[6], m[8]]);
   const problems = [];
   const seen = new Set();
-  for (const addr of addrs) {
+  for (const [i, addr] of addrs.entries()) {
     seen.add(addr);
     if (!meta.has(addr)) {
       problems.push(`[authoring] doctrine rule ${addr} has no row in DOCTRINE_META `
         + '(web/src/pages/Laws.jsx) — the console would render it with a blank Principle');
       continue;
     }
-    const [klass, principle] = meta.get(addr);
+    const [klass, principle, pin] = meta.get(addr);
+    if (ids && pin !== ids[i]) {
+      problems.push(`[authoring] DOCTRINE_META['${addr}'] is pinned to '${pin ?? '(no id)'}' but `
+        + `that address is '${ids[i]}' now — the row describes a different rule`);
+    }
     if (!principle.trim()) {
       problems.push(`[authoring] DOCTRINE_META['${addr}'] has an empty principle line — that `
         + 'rule would render with a blank description');
@@ -267,22 +282,35 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
 
 /** `_build_render._TMPL_SPEC_RE`, as the count gate spells it. */
 const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
-const LAW_HEADING_RE = /^### \{\{LAW\}\} ([IVXLCDM]+)\b/gm;
+// A rule is DECLARED by its heading and CITED by its id — see `ruleCanon` in
+// `js/build/source.mjs`. The gates below read the RAW source, because the render resolves ids and
+// a bad one would already be gone from what it hands back.
+const DECL_LINE_RE = /^### \{\{(LAW|DOCTRINE):([^}]*)\}\}[ \t]+\S/;
+const ID_CITE_RE = /\{\{(LAW|DOCTRINE):([^}]*)\}\}/g;
+// The pre-id spellings. Either one in src/ is a citation that names a POSITION, which is exactly
+// what stops being true the next time the canon moves.
+const BARE_CITE_RE = /\{\{LAW\}\}\s+[IVXLCDM]+\b|\{\{DOCTRINE\}\}\s+[a-z]+\s+\d+\b/g;
+// `{{DOCTRINE}}` or `{{DOCTRINE:` and not `DOCTRINE`: `{{DOCTRINES}}` is the SECTION noun and is
+// legal everywhere, including in an invariant that points at the tier as a whole.
+const DOCTRINE_TOKEN_RE = /\{\{DOCTRINE(?:\}\}|:)/;
 
-// The doctrine twins of `LAW_HEADING_RE`, over the UNRENDERED source — `js/inspect/inventory.mjs`'s
-// pair of the same names read the rendered form. A citation is the heading minus its `### `,
-// so one regex cannot serve both: a heading is an anchored line, a citation is anywhere.
-const DOCTRINE_HEADING_RE = /^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm;
-const DOCTRINE_CITE_RE = /\{\{DOCTRINE\}\}\s+([a-z]+)\s+(\d+)/g;
-// `\{\{DOCTRINE\}\}` and not `DOCTRINE`: `{{DOCTRINES}}` is the SECTION noun and is legal
-// everywhere, including in an invariant that points at the tier as a whole.
-const DOCTRINE_TOKEN_RE = /\{\{DOCTRINE\}\}/;
-const DOC_TOKEN_RE = /\{\{(DOC_[A-Z0-9_]+)\}\}/g;
+/**
+ * The rules the hooks enforce at the tool boundary, and the address each is bound to there. The
+ * hook path cannot afford to read the canon on every tool call, so its gate-ledger keys
+ * (`law-1`, `law-4`, `process-1`, `process-5` in `js/hosts/hooks.mjs` and the OpenCode guard
+ * plugin), `CONSENT_RULE` in `js/hosts/settings.mjs` and the console's `HOOK_GATED` stay
+ * number-keyed — and this pin is what turns a renumber that moves one of these rules into a
+ * doctor failure instead of a gate silently guarding its neighbour.
+ */
+export const HOOK_PINNED = {
+  'sealed-secrets': 'I', 'deletion-is-deliberate': 'IV',
+  'persist-insight': 'process 1', 'consent-before-push': 'process 5',
+};
 
 /**
  * The LEAN block grammar, and the heading split, both duplicated from `js/build/render.mjs`.
  *
- * Deliberately duplicated, the way `DOCTRINE_HEADING_RE` above is: both are module-private
+ * Deliberately duplicated rather than imported: both are module-private
  * there, and exporting them so one gate could borrow them would widen the renderer's surface
  * for a reader that only needs to know the shape. Two literals, one paragraph apart from the
  * rule they encode, is cheaper than a seam.
@@ -377,48 +405,84 @@ export function leanBlockProblems() {
  * ⚠ THE VOCABULARY GATES ARE HERE BECAUSE `themeParityProblems` CANNOT SEE THEM. That check is
  * presence-only and SYMMETRIC over the union of every theme's keys: a key missing from all
  * fourteen is in parity, and a key whose VALUE breaks a parser is not its business at all. So
- * `DOC_*` coverage, the `LEX_I..LEX_XI` equality and the single-word tier noun each need a gate
+ * `DOC_*` coverage, the `LEX_*` equality and the single-word tier noun each need a gate
  * that reads the SOURCE and asks what the source requires.
  */
 export function constitutionProblems() {
   const problems = [];
-  const dir = path.join(SRC, 'doctrines');
 
-  // ---- the packs themselves: present, contiguous from 1, and filed where they say they are.
-  const rules = new Map();                                    // 'craft.1' -> title-less marker
-  for (const pack of PACK_ORDER) {
-    const file = path.join(dir, `${pack}.md`);
+  // ---- every rule declares an id, every id is well-formed and unique, none is retired.
+  //
+  // Numbers are positional now (`ruleCanon`), so contiguity and filing cannot go wrong; what can
+  // is the declaration itself. A `### ` line in a canon file that is not `{{KIND:id}} Name`
+  // renders nowhere as a rule — no number, no title — and a duplicated id makes every citation
+  // of it ambiguous.
+  for (const [kind, pack, file] of canonFiles(SRC)) {
+    const rel = path.relative(SRC, file).split(path.sep).join('/');
     let text;
     try { text = readText(file); } catch (e) {
-      problems.push(`[authoring] doctrines/${pack}.md is named in PACK_ORDER but unreadable: `
-        + `${e.message} — the build ships the whole catalogue, so a missing pack file breaks `
-        + 'every citation into it, active or not');
+      problems.push(`[authoring] ${rel} is ${pack ? 'named in PACK_ORDER' : 'the canon'} but `
+        + `unreadable: ${e.message} — every citation into it breaks`);
       continue;
     }
-    const found = [...text.matchAll(DOCTRINE_HEADING_RE)];
-    if (!found.length) {
-      problems.push(`[authoring] doctrines/${pack}.md carries no '### {{DOCTRINE}} ${pack} <n>' `
-        + 'heading — the pack would render as an empty section');
-      continue;
+    let count = 0;
+    for (const line of text.split('\n').filter((l) => l.startsWith('### '))) {
+      const m = DECL_LINE_RE.exec(line);
+      if (!m || m[1] !== kind) {
+        problems.push(`[authoring] ${rel}: '${line}' is not a rule declaration — a rule heading `
+          + `here reads '### {{${kind}:<id>}} <Principle Name>'; without an id it has no number, `
+          + 'no title and no way to be cited');
+        continue;
+      }
+      count += 1;
+      if (!RULE_ID_RE.test(m[2])) {
+        problems.push(`[authoring] ${rel}: rule id '${m[2]}' is not kebab-case (a-z, 0-9, '-')`);
+      }
     }
-    found.forEach(([, named, n], i) => {
-      if (named !== pack) {
-        problems.push(`[authoring] doctrines/${pack}.md holds a rule addressed to '${named} `
-          + `${n}' — a rule's pack is read from its heading, so this one is unreachable at `
-          + `'${pack}.${n}' and shadows whatever ${named}.md numbers ${n}`);
-      }
-      if (Number(n) !== i + 1) {
-        problems.push(`[authoring] doctrines/${pack}.md rule ${n} is at position ${i + 1} — `
-          + 'pack ids must run contiguously from 1, or a citation addresses a gap');
-      }
-      rules.set(`${named}.${Number(n)}`, true);
-    });
+    if (!count) {
+      const why = pack ? 'the pack would render as an empty section' : 'there would be no invariants';
+      problems.push(`[authoring] ${rel} declares no rule — ${why}`);
+    }
+  }
+  const canon = ruleCanon(SRC);
+  const seenIds = new Map();
+  const seenNames = new Map();
+  for (const r of canon.rules) {
+    const where = r.kind === 'LAW' ? `law ${r.label}` : `doctrine ${r.label}`;
+    if (seenIds.has(r.id)) {
+      problems.push(`[authoring] rule id '${r.id}' is declared twice (${seenIds.get(r.id)} and `
+        + `${where}) — ids are unique across laws and doctrines, or a citation names two rules`);
+    } else seenIds.set(r.id, where);
+    const lower = r.name.toLowerCase();
+    if (seenNames.has(lower)) {
+      problems.push(`[authoring] principle name '${r.name}' is declared twice (${seenNames.get(lower)} `
+        + `and ${where}) — a citation renders as the name, so two rules would read as one`);
+    } else seenNames.set(lower, where);
+    const retiredAs = RETIRED_RULE_IDS[r.id];
+    if (retiredAs && retiredAs.liveAs !== r.kind) {
+      problems.push(`[authoring] ${where} reuses the retired id '${r.id}' (${retiredAs.was}, `
+        + `${retiredAs.note}) — an id that meant one rule in someone's notes must never come back `
+        + 'meaning another; pick a new one');
+    }
+  }
+  const rules = new Map(canon.rules.filter((r) => r.kind === 'DOCTRINE')
+    .map((r) => [`${r.pack}.${r.n}`, r]));
+
+  // ---- the hook-gated rules are still at the address the hooks key them by.
+  for (const [id, label] of Object.entries(HOOK_PINNED)) {
+    const r = canon.byId.get(id);
+    if (!r || r.label !== label) {
+      problems.push(`[authoring] the hooks gate '${id}' as ${label} (js/hosts/hooks.mjs ledger keys, `
+        + `settings.mjs CONSENT_RULE, the console's HOOK_GATED), but the canon ${r ? `numbers it ${r.label}`
+          : 'no longer declares it'} — move those keys with it, or the tool boundary guards a `
+        + 'different rule than the prompt names');
+    }
   }
 
   // The console's Principle column, keyed off the rules just parsed — so the gate is driven by
   // the SOURCE and a rule added to a pack file is caught the same day, not when someone
   // notices a blank description in the browser.
-  problems.push(...doctrineMetaProblems([...rules.keys()]));
+  problems.push(...doctrineMetaProblems([...rules.keys()], [...rules.values()].map((r) => r.id)));
 
   // ---- `--exclude-rules` closes against the SAME rules this walk just found.
   //
@@ -440,41 +504,11 @@ export function constitutionProblems() {
       + 'no switch for it');
   }
 
-  // ---- the consent gate's address still names the consent rule.
+  // ---- every citation in src/ is by id, and every id resolves.
   //
-  // ⚠ THE ONE HARDCODED ADDRESS IN THE CODEBASE, and the one whose drift is silent AND unsafe.
-  // `js/hosts/settings.mjs` keys the git-gate hooks on `process.5` by literal; a renumber of the
-  // process pack moves that rule's neighbours under it, and the boundary would then follow
-  // whatever rule inherited the number while the prompt still said `process 5`. Checked
-  // against the pack file's own title token rather than against prose, so a reworded rule is
-  // not a false alarm and a MOVED one is not a silent pass.
-  const consentTitle = 'DOC_PROCESS_5';
-  let processText = '';
-  try { processText = readText(path.join(dir, 'process.md')); } catch { /* reported above */ }
-  if (processText && !new RegExp(`^### \\{\\{DOCTRINE\\}\\} process 5 — \\{\\{${consentTitle}\\}\\}`,
-    'm').test(processText)) {
-    problems.push('[authoring] js/hosts/settings.mjs gates git commit/push on doctrine \'process 5\', '
-      + `but doctrines/process.md does not number {${consentTitle}} 5 — the tool boundary and `
-      + 'the prompt now name different rules');
-  }
-
-  // ---- every `{{DOCTRINE}} <pack> <n>` anywhere in src/ resolves to a rule that exists.
-  //
-  // The whole tree, not the template: a skill footer citing `process 9` is as broken as a
-  // template one, and it is the shape 339 rewired citations could have left behind.
+  // The whole tree, not the template: a skill footer citing a rule that does not exist is as
+  // broken as a template one, and it renders into every bundle.
   const cited = new Map();                                    // 'process.5' -> [rel, …]
-  // ⚠ A RETIRED LAW KEEPS ITS NUMBER, SO A CITATION OF IT STILL RESOLVES — to "Retired". Laws
-  // are appended, never renumbered, which is what keeps ~150 cross-references stable; the price
-  // is that nothing else notices `{{LAW}} IX` in a skill that means "ask first" (it is rigor 5
-  // now) or `{{LAW}} XI` that means "verify" (folded into III). Read off the canon itself, so a
-  // law retired tomorrow is covered the same day.
-  const retired = new Set();
-  try {
-    for (const [, num] of readText(path.join(SRC, 'laws', 'universal.md'))
-      .matchAll(/^### \{\{LAW\}\} ([IVXLCDM]+) —[^\n]*\n<!-- LEAN:begin -->\nRetired\b/gm)) {
-      retired.add(num);
-    }
-  } catch { /* an unreadable canon is reported elsewhere */ }
   for (const p of rglob(SRC)) {
     if (!isFile(p) || !(p.endsWith('.md') || p.endsWith('.tmpl'))) continue;
     let text;
@@ -489,35 +523,33 @@ export function constitutionProblems() {
         + 'reference a toggleable one, or a pack-off build ships a rule pointing at text '
         + 'that is not there. State the point directly instead');
     }
-    if (rel !== 'laws/universal.md') {
-      for (const [, num] of text.matchAll(/\{\{LAW\}\}\s+([IVXLCDM]+)\b/g)) {
-        if (retired.has(num)) {
-          problems.push(`[authoring] ${rel} cites {{LAW}} ${num}, which is retired — cite the `
-            + 'law or rule its text now lives in');
+    for (const [bare] of text.matchAll(BARE_CITE_RE)) {
+      problems.push(`[authoring] ${rel} cites '${bare.replace(/\s+/g, ' ')}' by number — numbers are `
+        + 'positional and move when the canon does; cite {{LAW:<id>}} / {{DOCTRINE:<id>}}');
+    }
+    for (const [whole, kind, id] of text.matchAll(ID_CITE_RE)) {
+      const r = canon.byId.get(id);
+      if (r && r.kind === kind) {
+        if (kind === 'DOCTRINE') {
+          const key = `${r.pack}.${r.n}`;
+          if (!cited.has(key)) cited.set(key, []);
+          cited.get(key).push(rel);
         }
+        continue;
       }
+      const retiredAs = RETIRED_RULE_IDS[id];
+      let why = 'which no law or doctrine declares — it would render as the raw token';
+      if (r) why = `but '${id}' is a ${r.kind === 'LAW' ? 'law' : 'doctrine rule'} — use {{${r.kind}:${id}}}`;
+      else if (retiredAs) {
+        why = `a retired id (${retiredAs.was}, ${retiredAs.note}) — cite the rule its text now lives in`;
+      }
+      problems.push(`[authoring] ${rel} cites ${whole}, ${why}`);
     }
-    for (const [, pack, n] of text.matchAll(DOCTRINE_CITE_RE)) {
-      const key = `${pack}.${Number(n)}`;
-      if (!cited.has(key)) cited.set(key, []);
-      cited.get(key).push(rel);
-    }
-  }
-  for (const [key, where] of [...cited].sort()) {
-    if (rules.has(key)) continue;
-    problems.push(`[authoring] ${where[0]} cites {{DOCTRINE}} ${key.replace('.', ' ')}, which `
-      + `no pack file defines${where.length > 1 ? ` (and ${where.length - 1} more)` : ''}`);
   }
 
-  // ---- the vocabulary every theme owes the source.
-  const wanted = new Set();
-  for (const pack of PACK_ORDER) {
-    let text;
-    try { text = readText(path.join(dir, `${pack}.md`)); } catch { continue; }
-    for (const [, key] of text.matchAll(DOC_TOKEN_RE)) wanted.add(key);
-  }
-  const lexWant = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI']
-    .map((r) => `LEX_${r}`);
+  // ---- the vocabulary every theme owes the source: one title per declared rule, keyed by id.
+  const wanted = new Set(canon.rules.filter((r) => r.kind === 'DOCTRINE').map((r) => titleKey(r.kind, r.id)));
+  const lexWant = canon.rules.filter((r) => r.kind === 'LAW').map((r) => titleKey(r.kind, r.id));
   // `_TEMPLATE.json` is included — it is the file `--sync-themes` seeds a new theme from, so a
   // stale key there propagates into every voice added afterwards. `themeFiles()` excludes it.
   const files = [...themeFiles(), path.join(THEMES, '_TEMPLATE.json')];
@@ -532,13 +564,13 @@ export function constitutionProblems() {
     const keys = Object.keys(theme);
     for (const key of [...wanted].sort()) {
       if (!Object.hasOwn(theme, key)) {
-        problems.push(`[authoring] ${name} has no {${key}} — a doctrine file names it, and `
+        problems.push(`[authoring] ${name} has no {${key}} — a doctrine rule declares it, and `
           + 'theme parity cannot see a key that is missing from every theme at once');
       }
     }
     for (const key of keys.filter((k) => k.startsWith('DOC_')).sort()) {
       if (!wanted.has(key)) {
-        problems.push(`[authoring] ${name} defines {${key}}, which no doctrine file uses — a `
+        problems.push(`[authoring] ${name} defines {${key}}, which no doctrine rule declares — a `
           + 'dead voice key ships a title for a rule that does not exist');
       }
     }
@@ -549,8 +581,8 @@ export function constitutionProblems() {
     const stale = lex.filter((k) => !lexWant.includes(k));
     const missing = lexWant.filter((k) => !lex.includes(k));
     for (const k of stale) {
-      problems.push(`[authoring] ${name} still defines {${k}} — no law heading carries this `
-        + 'numeral and nothing renders this key, so it is a title for a rule that no longer exists');
+      problems.push(`[authoring] ${name} still defines {${k}} — no law declares this id and `
+        + 'nothing renders this key, so it is a title for a rule that no longer exists');
     }
     for (const k of missing) {
       problems.push(`[authoring] ${name} has no {${k}} — one of the invariants would `
@@ -670,9 +702,10 @@ export function countTableProblems() {
     problems.push(`[authoring] SKILL_CLASS lists '${stale}' but no skills/${stale}.md exists`);
   }
 
-  const lawsMd = path.join(SRC, 'laws', 'universal.md');
-  const lawNums = isFile(lawsMd)
-    ? [...readText(lawsMd).matchAll(LAW_HEADING_RE)].map((m) => m[1]) : [];
+  // The numerals the laws RENDER with — positional, off the canon — because LAW_CLASS and the
+  // console's LAW_META are keyed the way the rendered catalogue numbers them.
+  const lawRules = ruleCanon(SRC).rules.filter((r) => r.kind === 'LAW');
+  const lawNums = lawRules.map((r) => r.label);
   for (const num of lawNums) {
     if (!has(LAW_CLASS, num)) {
       problems.push(`[authoring] laws/universal.md rule ${num} has no class in LAW_CLASS`);
@@ -686,7 +719,7 @@ export function countTableProblems() {
         + `class ${formatRepr(LAW_CLASSES)}`);
     }
   }
-  problems.push(...lawMetaProblems(lawNums, LAW_CLASS, LAW_CLASSES));
+  problems.push(...lawMetaProblems(lawNums, LAW_CLASS, LAW_CLASSES, lawRules.map((r) => r.id)));
 
   // WHAT SHIPS, NOT WHAT IS FLAT. A folder skill (`src/skills/<name>/SKILL.md`, vendored with
   // its scripts or references) ships exactly like a flat one, so the badge, the README list and

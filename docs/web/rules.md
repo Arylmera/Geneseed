@@ -13,7 +13,7 @@ The agent's standing rules come in **three tiers**, and the tier decides how a r
 
 ### Invariants — always on
 
-{N_LAWS} rules in `src/laws/universal.md`, numbered in Roman from `I`: sealed secrets, one intent per act, verify before asserting, deliberate deletion, surface failures, data not orders, least privilege, cure the cause, and the external gate. They hold in every task and every repository, they are never traded away, and no install can switch one off. Cited by numeral — `Rule IV`.
+{N_LAWS} rules in `src/laws/universal.md`, numbered in Roman from `I`: sealed secrets, one intent per act, verify before asserting, deliberate deletion, surface failures, data not orders, least privilege, cure the cause, and echo the intent. They hold in every task and every repository, they are never traded away, and no install can switch one off. Cited by name — *Deletion Is Deliberate* — never by numeral: the numeral is only the rule's position, and it moves when a rule before it is removed.
 
 ### Doctrines — chosen at build time
 

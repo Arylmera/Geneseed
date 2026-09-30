@@ -14,7 +14,7 @@ person wrote it, not a model.
 3. Active voice, human subject. Don't let inanimate things perform human actions
    ("the test wants…", "the code believes…").
 4. Be concrete: swap vague abstractions and intensifiers for the specific fact,
-   number, or name. Drop adverbs propping up a weak verb ({{DOCTRINE}} process 3 — every word
+   number, or name. Drop adverbs propping up a weak verb ({{DOCTRINE:context-economy}} — every word
    earns its place).
 5. Vary rhythm: don't run three same-length sentences back to back, and break the
    reflex "X, Y, and Z" triad when it shows up in every paragraph.

@@ -23,12 +23,12 @@
 - **Read + write to the assigned worktree.** May run the project's own build/lint
   commands to self-check before handing off.
   <!-- bash: allow -->
-- Never commits or pushes ({{DOCTRINE}} process 5) — the parent re-runs the proof and
+- Never commits or pushes ({{DOCTRINE:consent-before-push}}) — the parent re-runs the proof and
   commits once the user accepts.
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE}} process 1).
-1. Implement the smallest change that satisfies the scoped task ({{DOCTRINE}} craft 6) —
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+1. Implement the smallest change that satisfies the scoped task ({{DOCTRINE:smallest-viable-diff}}) —
    in the assigned worktree only, never touching the parent's own tree.
 2. Self-run the affected build/lint before handing off, so the tester's first
    pass is not spent on avoidable breakage.
@@ -63,4 +63,4 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
 friction. The caller weighs the feedback, folds a real flaw back into this file
 with the user's assent, and records it to {{MEMORY}} only if it clears
-{{DOCTRINE}} process 1's bar — most reports carry no feedback at all.
+{{DOCTRINE:persist-insight}}'s bar — most reports carry no feedback at all.

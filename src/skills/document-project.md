@@ -13,8 +13,8 @@ write; with none, step 3 proposes them.
    convention [repo-map {{SKILL}}](repo-map.md) and the context loader use). Reuse the one
    that exists — never create a second. If none exists, create `docs/` at the root.
 2. **Survey the code, not the intent.** Map entry points, the public API / modules,
-   commands, config, and key directories — read the actual behaviour (universal {{LAW}} III,
-   {{DOCTRINE}} process 4). If there is no `ARCHITECTURE.md`, run [repo-map {{SKILL}}](repo-map.md)
+   commands, config, and key directories — read the actual behaviour ({{LAW:verify-before-asserting}},
+   {{DOCTRINE:read-the-docs-first}}). If there is no `ARCHITECTURE.md`, run [repo-map {{SKILL}}](repo-map.md)
    first so you have the orientation map to build on.
 3. **Select the doc set.** Unless the argument names the targets, propose which of the four
    documents apply and wait for the user's go-ahead — e.g. "no UI detected (no stylesheet,
@@ -30,7 +30,7 @@ write; with none, step 3 proposes them.
 5. **Reconcile the markdown (whole tree).** Check every existing page against the current
    implementation — renamed or removed APIs, changed flags, dead examples — and fix the
    drift. Add pages for significant undocumented surfaces; remove docs for features that no
-   longer exist (deletion is deliberate — {{LAW}} IV). For substantial writing, dispatch
+   longer exist ({{LAW:deletion-is-deliberate}}). For substantial writing, dispatch
    the [docs {{AGENT}}](../{{DIR_AGENTS}}/docs.md). Keep examples runnable — run them.
    Every generated page follows three conventions:
    - **Typed frontmatter.** Open each page with YAML frontmatter carrying `type:` (one of
@@ -52,9 +52,9 @@ write; with none, step 3 proposes them.
    members included, current with the set you just reconciled.
 7. **Regenerate the HTML** — self-contained files at the doc home, a visual parallel to the
    markdown and never a source of truth: regenerate them whole from the markdown each run
-   ({{DOCTRINE}} ops 3: edit the source, not the surface).
+   ({{DOCTRINE:edit-the-source-not-the-surface}}).
    Overwrite the previous ones, but confirm each is the generated artifact before clobbering
-   ({{LAW}} III, {{LAW}} IV). Both files:
+   ({{LAW:verify-before-asserting}}, {{LAW:deletion-is-deliberate}}). Both files:
    - **Stand alone, fully offline** — a single file, content pre-rendered to semantic HTML,
      all styling in one inline `<style>`, at most minimal vanilla JS (light/dark toggle, TOC
      scroll). No CDN, no external assets, no web fonts (use a system-font stack). Render any
@@ -84,7 +84,7 @@ write; with none, step 3 proposes them.
    (variants, states, path) — no live rendering, which would need the project's framework; and
    the hard-coded-value drift in a separate callout.
 8. **Do not auto-publish.** Leave the changes for the user to review; stage and commit only
-   on consent, via the [commit {{SKILL}}](commit.md) ({{DOCTRINE}} process 5).
+   on consent, via the [commit {{SKILL}}](commit.md) ({{DOCTRINE:consent-before-push}}).
 
 ## The doc set
 

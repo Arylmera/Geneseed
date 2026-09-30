@@ -182,8 +182,8 @@ async function runChildSession(client, { prompt, agent, model, title, directory 
 
 // ---- worktree isolation ------------------------------------------------------
 // `agent(prompt, { isolation: "worktree" })` — the same option Claude Code's Workflow
-// takes. Parallel editors in one tree lose each other's writes (process 7, one writer per
-// file), so each isolated agent gets its own branch + worktree off the root's HEAD, and
+// takes. Parallel editors in one tree lose each other's writes (One Writer Per File),
+// so each isolated agent gets its own branch + worktree off the root's HEAD, and
 // the files it changed are recorded for `overlaps()`. A worktree with no change is
 // removed with its branch; one with changes is KEPT for the parent to review and merge —
 // the runtime never merges, commits, or deletes work. `git(argv, cwd)` is injected by the

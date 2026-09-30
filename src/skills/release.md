@@ -7,20 +7,20 @@
 ## Procedure
 1. Decide the version from the changes since the last tag, following the project's
    scheme (semver: breaking → major, feature → minor, fix → patch). Verify the
-   current version and the last tag rather than guessing (universal {{LAW}} III).
+   current version and the last tag rather than guessing ({{LAW:verify-before-asserting}}).
    **Never ship a breaking change under a non-major bump** — honest versions are a
    promise to downstream consumers, and a quiet break is a broken one.
 2. Update the version wherever it is declared (manifest, package metadata, a VERSION
-   constant) — find *every* occurrence so they cannot drift ({{DOCTRINE}} craft 4).
+   constant) — find *every* occurrence so they cannot drift ({{DOCTRINE:search-before-creating}}).
 3. Update the changelog: a dated section for the new version summarising the
    user-visible changes, grouped (added / changed / fixed), derived from the commits
    since the last tag.
 4. Commit the version bump and changelog as one focused commit, through the
    [commit {{SKILL}}](commit.md) — summary and exact message presented for
-   acceptance (universal {{LAW}} II, {{DOCTRINE}} process 5).
+   acceptance ({{LAW:one-intent-one-act}}, {{DOCTRINE:consent-before-push}}).
 5. Tag the release (annotated, matching the version). Tagging and publishing are
-   **outward-facing** (universal {{LAW}} IV), and the push itself needs explicit
-   per-push acceptance — a release lands on a shared branch, where {{DOCTRINE}} process 5
+   **outward-facing** ({{LAW:deletion-is-deliberate}}), and the push itself needs explicit
+   per-push acceptance — a release lands on a shared branch, where {{DOCTRINE:consent-before-push}}
    applies with extra care and grants no standing consent.
 6. With that acceptance, push the commit and the tag together; trigger or verify
    the publish/release pipeline.
