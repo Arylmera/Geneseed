@@ -160,7 +160,7 @@ streams the output of background jobs and keeps their history across reloads.
     global harness goes dormant (hooks stay silent, the global preamble never loads);
     add or remove one here, the web mirror of `harness exclude add|remove|list`.
 - **Settings** (`#/settings`) — a **Console direction** picker (the visual flavour of the
-  console) with a **Dashboard layout** control (Auto follows each theme's designed Status
+  console: Cultivar, Operator, Matrix or Atlas) with a **Dashboard layout** control (Auto follows each theme's designed Status
   lens; Cultivar / Greenhouse / Operator / Journal force one regardless of skin), the
   install snapshot (deployed/target/theme/version/memory store), a Maintenance card (PATH
   link/unlink, uninstall), an offline package download, server controls (Stop), and the

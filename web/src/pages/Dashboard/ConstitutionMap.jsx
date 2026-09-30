@@ -25,7 +25,7 @@ import { useAsync } from '../../hooks/useAsync.js'
 // centres are still the approved composition; only the radii are computed.
 
 // Advance width per character as a fraction of the font size. Sized for the WIDEST case the
-// console can produce: four skins (Matrix, Cobalt, Operator, Neon) set --font-mono for
+// console can produce: two skins (Matrix, Operator) set --font-mono for
 // everything, and JetBrains/Space Mono advance at ~0.6em. A proportional skin then sits
 // comfortably inside its circle rather than being clipped — this estimate's error only ever
 // makes a circle roomier, which is the safe direction to be wrong in.
