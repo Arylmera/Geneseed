@@ -137,8 +137,13 @@ the project's own. Follow the root \`AGENTS.md\`.
 /** `_build_render.PROFILE_FILE`. */
 const PROFILE_FILE = 'PROFILE.md';
 
-/** `_build_render.PROFILE_STUB`. */
-const PROFILE_STUB = `\
+/**
+ * `_build_render.PROFILE_STUB`.
+ *
+ * Exported for the web console: `/api/profile` answers `seeded: true` while PROFILE.md is
+ * still byte-for-byte this text, which is how the Overview knows to ask for it to be filled in.
+ */
+export const PROFILE_STUB = `\
 # Your profile
 
 Who you are and how you like to work — so the agent can meet you where you are

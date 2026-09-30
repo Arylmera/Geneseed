@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { SECTIONS, SECTION_ORDER } from '../lib/sections.js'
+import { PAGES, TABS, TAB_LABELS } from '../lib/router.js'
 import { useHarness } from './useHarness.js'
 
 // Lazy-loaded global search index for the topbar spotlight. Pulls catalog
@@ -31,7 +32,20 @@ export function useSearchIndex(rev = 0) {
   const prime = useCallback(() => {
     if (index || inflight.current) return inflight.current
     const job = (async () => {
-      const entries = []
+      // Every page and tab first: the search box is also how you get somewhere by name.
+      const entries = Object.entries(PAGES).flatMap(([page, label]) =>
+        (TABS[page] || ['']).map((tab) => {
+          const title = tab ? label + ' / ' + TAB_LABELS[tab] : label
+          return {
+            kind: 'Pages',
+            sortKey: -1,
+            title,
+            desc: '',
+            hay: title.toLowerCase(),
+            route: page === 'overview' ? '#/' : '#/' + page + (tab ? '/' + tab : ''),
+          }
+        }),
+      )
 
       // Content catalogs, in parallel. Laws and Skills live on their own tabs
       // (not in SECTION_ORDER), but the spotlight should still find them — so
@@ -78,8 +92,8 @@ export function useSearchIndex(rev = 0) {
               title,
               desc: s.desc || '',
               hay: `${title} ${s.desc || ''} ${s.name || ''} mcp`.toLowerCase(),
-              // MCP wiring lives on the Harness page, not Settings.
-              route: '#/harness',
+              // MCP wiring lives beside each install, on Installs / Hosts.
+              route: '#/installs/hosts',
             })
           }
         }

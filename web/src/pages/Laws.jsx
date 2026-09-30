@@ -1,11 +1,13 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
 import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
-import { LAW_CATS, LAW_CAT_ORDER, PACK_CATS } from '../lib/lawCats.js'
+import { LAW_CATS, PACK_CATS } from '../lib/lawCats.js'
+import { enforcedBy, gateAddress, parseRuleTitle } from '../lib/constitution.js'
+import Seg from '../components/Seg.jsx'
 import CatalogRow from '../components/CatalogRow.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
@@ -14,8 +16,8 @@ import { useConfirm } from '../hooks/useConfirm.jsx'
 // doctor's lawMetaProblems reads this ONE file out of web/src, and the npm partition ships it
 // for that reason alone. Only what a reader sees says "Constitution".
 
-// Six-class taxonomy for the INVARIANTS. Holds the chip label, the dot colour, and the one-line
-// essence rendered in the table's "Principle" column.
+// Six-class taxonomy for the INVARIANTS. Holds the class label, the dot colour, and the one-line
+// principle rendered under each rule's name.
 //
 // ⚠ SIX, THOUGH ONLY FOUR HAVE A MEMBER. `context` and `comms` lost theirs when the corpus became
 // nine invariants — that material moved to the ontology and the doctrine packs, neither of which
@@ -27,7 +29,7 @@ import { useConfirm } from '../hooks/useConfirm.jsx'
 // (it is lazy for a reason) and it cannot move (doctor reads LAW_META out of this path).
 
 // One row per invariant in src/laws/universal.md: its class (fallback for an older server that
-// returns no `klass`) and the one-line principle shown in the table's "Principle" column — display
+// returns no `klass`) and the one-line principle shown under the rule's name — display
 // copy that lives nowhere else, so a rule missing here renders with a blank description. Doctor
 // enforces one entry per rule, a known class, and agreement with LAW_CLASS; keep it in step when a
 // rule lands in universal.md.
@@ -122,32 +124,25 @@ function LawText({ text }) {
   )
 }
 
-// Strip the address prefix the catalog includes in `title` — `Rule <num> — ` for an invariant,
-// `Doctrine <pack> <n> — ` for a doctrine rule — so the table shows just the rule's name. The
-// server emits the Roman numeral for an invariant, so both spellings are matched for resilience.
-function ruleName(rawTitle, romanNum, arabicNum) {
-  const re = new RegExp(
-    `^(?:Rule\\s+(?:${romanNum}|${arabicNum})|Doctrine\\s+[a-z]+\\s+\\d+)\\s*[—-]\\s*`,
-  )
-  return String(rawTitle).replace(re, '').trim() || rawTitle
-}
-
-// One expandable row, shared by the invariant and doctrine bands via CatalogRow — see that
-// component for the lazy-load/expand-panel machinery. The address is the catalog's `name` —
-// a Roman numeral or `<pack>.<n>` — never the display number.
+// One expandable row of the constitution table, shared by all three tiers via CatalogRow
+// (the lazy-load/expand-panel machinery). The address is the catalog's `name`: a Roman
+// numeral, `<pack>.<n>` or `ont:<id>`; `no` is what the No. column prints.
 function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
   const head = (
     <>
       <span className="law-no">
-        <span className="x">›</span>
-        {law.pad}
+        <span className="x" aria-hidden="true">
+          ›
+        </span>
+        {law.no}
       </span>
-      <span className="law-name">{law.name}</span>
-      <span className="law-princ">{law.ess}</span>
-      <span className="law-class">
-        <span className="cdot" />
-        {law.catLabel}
+      <span className="law-name">
+        <span>{law.name}</span>
+        {law.ess ? <span className="law-princ">{law.ess}</span> : null}
       </span>
+      <span className="law-latin">{law.latin}</span>
+      <span className={`law-status ${law.statusTone}`}>{law.status}</span>
+      <span className={`law-enf${law.enf === 'Hook gate' ? ' hook' : ''}`}>{law.enf}</span>
     </>
   )
   return (
@@ -156,7 +151,7 @@ function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
       addr={law.addr}
       isOpen={isOpen}
       onToggle={onToggle}
-      className={`law-row${toggleCol ? ' has-toggle' : ''} ${isOpen ? 'on' : ''} ${law.off ? 'law-off' : ''}`}
+      className={`law-row${toggleCol ? ' has-toggle' : ''}${isOpen ? ' on' : ''}${law.off ? ' law-off' : ''}`}
       style={{ '--cc': law.c }}
       head={head}
       toggleCol={toggleCol}
@@ -170,65 +165,133 @@ function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
   )
 }
 
-// An Ethos section: prose, not a rule row. THE IDENTIFIER STAYS `OntologyCard` — the rename
-// was of the noun a reader sees, not of the address, which is still `ontology/universal.md`.
-// No class chip and no number — it is a worldview, and numbering it would invite the
-// citation-by-numeral the tier deliberately does not have.
-function OntologyCard({ sec, isOpen, onToggle }) {
-  const { data: detail } = useAsync(
-    () => (isOpen ? api.item('law', sec.addr) : Promise.resolve(null)),
-    [isOpen, sec.addr],
-  )
+// The four tiers as one strip: each with its count, a bar for how much of it is in force,
+// and a line on what the count means. The tier the table is showing is lit; the fourth
+// (your own rules) lives on the Personal page and links there.
+function TierStrip({ tiers, current }) {
   return (
-    <>
-      <button
-        className={`law-row ont-row ${isOpen ? 'on' : ''}`}
-        onClick={onToggle}
-        aria-expanded={isOpen}
-      >
-        <span className="law-no">
-          <span className="x">›</span>
-        </span>
-        <span className="law-name">{sec.name}</span>
-        <span className="law-princ">{isOpen ? '' : 'Open to read this section'}</span>
-        <span className="law-class" />
-      </button>
-      {isOpen && (
-        <div className="law-expand">
-          {detail ? (
-            <p>
-              <LawText text={detail.body} />
-            </p>
-          ) : (
-            <p className="dim">Loading…</p>
-          )}
-          <div className="law-srcline">$ geneseed law {sec.addr} · ontology/universal.md</div>
-        </div>
-      )}
-    </>
+    <div className="tier-strip">
+      {tiers.map((t, i) => {
+        const body = (
+          <>
+            <span className="tier-k mono">TIER {i + 1}</span>
+            <span className="tier-top">
+              <span className="tier-name">{t.name}</span>
+              <span className="tier-n mono">{t.n}</span>
+            </span>
+            <span className="tier-bar" aria-hidden="true">
+              <span style={{ width: `${Math.round(t.fill * 100)}%` }} />
+            </span>
+            <span className="tier-sub">{t.sub}</span>
+          </>
+        )
+        return t.href ? (
+          <a key={t.key} className="tier" href={t.href}>
+            {body}
+          </a>
+        ) : (
+          <div key={t.key} className={`tier${current === t.key ? ' on' : ''}`}>
+            {body}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
-// `selected` is the address from a #/item/law/<address> deep-link (Spotlight, the old Library
-// route). The open row is driven straight off the URL so those links pre-open the rule and any
-// opened rule is itself shareable.
-export default function Laws({ selected, overview, onAction, dataRev }) {
+// How often each hook gate stopped to ask, from the gate ledger (`setup.gates`). The ledger
+// keys by gate id (`process-5`); lib/constitution.js turns that into the rule's address,
+// and the catalog names it.
+function GateAsks({ gates, byAddr, onJump }) {
+  const asks = Object.entries(gates?.asks || {}).sort((a, b) => b[1] - a[1])
+  const max = Math.max(1, ...asks.map(([, n]) => n))
+  return (
+    <section className="panel" aria-labelledby="gate-asks">
+      <div className="panel-head">
+        <h2 id="gate-asks">Gate asks</h2>
+        <span className="mono dim">{gates?.total ?? 0} in ledger</span>
+      </div>
+      {asks.length ? (
+        <ul className="gate-list">
+          {asks.map(([gate, n]) => {
+            const addr = gateAddress(gate)
+            return (
+              <li key={gate}>
+                {/* The whole entry is the control: it takes you to the rule in the table. */}
+                <button type="button" className="gate-row" onClick={() => onJump(addr)}>
+                  <span className="gate-top">
+                    <span className="gate-name">{byAddr[addr]?.name || addr}</span>
+                    <span className="mono dim">{addr}</span>
+                    <span className="mono gate-n">{n}</span>
+                  </span>
+                  <span className="hbar warn" aria-hidden="true">
+                    <span style={{ width: `${(n / max) * 100}%` }} />
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
+        <p className="sub">No gate has asked yet.</p>
+      )}
+      <p className="panel-note">
+        {gates?.standing_down?.length
+          ? `Standing down: ${gates.standing_down.join(', ')}.`
+          : 'None standing down.'}
+      </p>
+    </section>
+  )
+}
+
+// `selected` is the address from a #/item/law/<address> deep link (Spotlight, the
+// Overview's gate row). The open row is driven straight off the URL so those links
+// pre-open the rule and any opened rule is itself shareable.
+export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   const confirm = useConfirm()
   const { data, error } = useAsync(() => api.catalog('laws'), [dataRev], 'catalog:laws')
-  const [sel, setSel] = useState('all')
+  const { data: rulesData } = useAsync(
+    () => Promise.resolve(api.rules?.()).catch(() => null),
+    [dataRev],
+  )
+  const [tab, setTab] = useState('all')
   const [q, setQ] = useState('')
   const open = selected || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)
+  // Bring the open rule into view. Any deep link (a gate, the Overview, Spotlight) scrolls
+  // to its row when it is off screen; a row clicked in place is already on screen and stays
+  // put. A jump from the Gate asks card always scrolls and briefly lights the row, so the eye
+  // lands on it. `jump` re-runs this when the same rule is asked for twice.
+  const [jump, setJump] = useState(0)
+  const jumpTo = useRef(null)
+  useEffect(() => {
+    if (!selected) return undefined
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-addr="${selected}"]`)
+      if (!el) return
+      const flash = jumpTo.current === selected
+      jumpTo.current = null
+      const r = el.getBoundingClientRect()
+      if (flash || r.top < 80 || r.bottom > window.innerHeight) {
+        const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        el.scrollIntoView?.({ block: 'center', behavior: still ? 'auto' : 'smooth' })
+      }
+      if (flash) {
+        el.classList.remove('law-flash')
+        void el.offsetWidth // restart the animation on a second jump
+        el.classList.add('law-flash')
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [selected, jump, data])
 
   // ⚠ EVERY HOOK BEFORE THE EARLY RETURNS BELOW. The staged pack selection is derived from
-  // `data`, which is null on the first render — so the obvious placement, beside the packs it
-  // describes, puts a `useState` and a `useEffect` AFTER `if (!data) return <Loading />`. React
-  // then sees a different number of hooks between the loading render and the loaded one and
-  // throws, taking the whole page down rather than just the control. Hence the defensive
-  // `data?.items` here and the plain (non-hook) helpers further down.
+  // `data`, which is null on the first render; a `useState` placed after `if (!data)` makes
+  // React see a different number of hooks between the loading render and the loaded one
+  // and throw, taking the whole page down rather than just the control.
   const allItems = data?.items || []
   // ⚠ THE UNIT IS THE RULE, not the pack. The selection below is a list of rule ADDRESSES
-  // (`process.7`), and the pack axis is DERIVED from it when Apply builds the request — a
+  // (`process.7`), and the pack axis is DERIVED from it when Apply builds the request: a
   // pack with every rule off drops out of `--doctrines` entirely, so the rendered AGENT.md
   // never carries a pack header with nothing under it.
   const deployedRules = allItems
@@ -238,7 +301,7 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
   const [picked, setPicked] = useState([])
   // Re-sync on the VALUE, never on the payload's identity: `data` is a fresh object on every
   // refetch, so an identity dependency would discard a half-made selection. Adjusted during
-  // render against the last-synced key (React's "adjust state on prop change"), not in an effect.
+  // render against the last-synced key (React's "adjust state on prop change").
   const [syncedKey, setSyncedKey] = useState('')
   if (syncedKey !== deployedKey) {
     setSyncedKey(deployedKey)
@@ -249,39 +312,55 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
   if (!data) return <Loading />
 
   const items = allItems
+  const isOn = (addr) => picked.includes(addr)
 
   const ontology = items
     .filter((it) => it.tier === 'ontology')
-    .map((it) => ({ addr: it.name, name: it.title }))
+    .map((it) => ({
+      addr: it.name,
+      no: '',
+      name: it.title,
+      latin: '',
+      ess: '',
+      status: 'Always',
+      statusTone: 'ok',
+      enf: 'Instruction',
+      c: 'var(--text-3)',
+      src: 'ontology/universal.md',
+    }))
 
-  // An older server sends no `tier` at all — every item is then an invariant, which is what this
-  // page rendered before the split. Treating "no tier" as the invariant band keeps a new console
-  // pointed at an old daemon readable instead of empty.
+  // An older server sends no `tier` at all: every item is then an invariant, which is what
+  // this page rendered before the split. Treating "no tier" as the invariant band keeps a
+  // new console pointed at an old daemon readable instead of empty.
   const laws = items
     .filter((it) => (it.tier ?? 'invariant') === 'invariant')
     .map((it) => {
-      const roman = it.name
-      const n = romanToInt(roman)
-      const pad = Number.isFinite(n) ? String(n).padStart(2, '0') : String(roman)
+      const n = romanToInt(it.name)
       // Prefer the API's classification (server-side LAW_CLASS) and fall back to the local
-      // LAW_META map if an older server didn't return one. The principle line is always local —
-      // it's display copy, not domain data.
+      // LAW_META map if an older server didn't return one. The principle line is always
+      // local: it's display copy, not domain data.
       const [metaCat, ess] = LAW_META[n] || ['craft', '']
       const cat = it.klass && LAW_CATS[it.klass] ? it.klass : metaCat
+      const t = parseRuleTitle(it.title)
       return {
-        addr: roman,
-        pad,
-        name: ruleName(it.title, roman, n),
+        addr: it.name,
+        no: it.name,
+        name: t.name,
+        latin: t.latin,
+        ess,
+        retired: t.retired,
+        status: t.retired ? 'Retired' : 'Active',
+        statusTone: t.retired ? '' : 'ok',
+        enf: t.retired ? 'None' : enforcedBy(it.name),
         cat,
         c: LAW_CATS[cat].c,
-        catLabel: LAW_CATS[cat].label,
-        ess,
+        off: t.retired,
         src: 'laws/universal.md',
       }
     })
 
-  // Grouped by pack, in the order the server sends them — PACK_ORDER, which is the reading order
-  // and is not alphabetical. Every pack is here whether or not it is built in.
+  // Grouped by pack, in the order the server sends them (PACK_ORDER, the reading order, not
+  // alphabetical). Every pack is here whether or not it is built in.
   const packs = []
   for (const it of items) {
     if (it.tier !== 'doctrine') continue
@@ -292,51 +371,52 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
         title: it.packTitle || it.pack,
         desc: it.packDesc || '',
         // ⚠ `packActive`, NOT the first rule's `active`. A pack is on when the install built
-        // it in AT ALL; with the per-rule axis its first rule can be the excluded one, and
-        // reading the pack's state off it would report a live pack as dropped.
+        // it in AT ALL; with the per-rule axis its first rule can be the excluded one.
         active: it.packActive !== false,
         rules: [],
       }
       packs.push(pack)
     }
     const [, ess] = DOCTRINE_META[it.name] || [it.pack, '']
+    const t = parseRuleTitle(it.title)
     pack.rules.push({
       addr: it.name,
-      pad: String(it.name.split('.')[1] || '').padStart(2, '0'),
-      name: ruleName(it.title, '', ''),
-      c: PACK_CATS[it.pack] || 'oklch(0.7 0 0)',
-      catLabel: pack.title,
-      off: it.active === false,
+      no: `${it.pack} ${it.name.split('.')[1] || ''}`,
+      name: t.name,
+      latin: t.latin,
       ess,
+      enf: enforcedBy(it.name),
+      c: PACK_CATS[it.pack] || 'var(--text-3)',
       src: `doctrines/${it.pack}.md`,
     })
   }
-  const activePacks = packs.filter((p) => p.active)
-  // Rule by rule, not pack by pack: an active pack can carry an excluded rule, and this
-  // readout claims to say how many rules bind the install.
-  const ruleCount = packs.reduce((n, p) => n + p.rules.filter((r) => !r.off).length, 0)
+  // A doctrine row's status is the STAGED switch against what is deployed: a rule the
+  // install carries reads Active, one it excludes reads Off, and a rule whose switch was
+  // flipped but not applied says so rather than reporting the staged state as fact.
+  const docRow = (r) => {
+    const on = isOn(r.addr)
+    const live = deployedRules.includes(r.addr)
+    const status = on === live ? (on ? 'Active' : 'Off') : on ? 'Staged on' : 'Staged off'
+    return { ...r, off: !on, status, statusTone: on ? 'ok' : on === live ? '' : 'warn' }
+  }
 
   // ---- the pack selection: STAGED here, applied once -------------------------------------
   //
-  // The control lives on THIS page and not in Settings, because this is where a reader is
-  // already looking at what each pack contains — deciding to drop `ops` is a decision about
-  // the six rules listed right under its header, and a switch three screens away in Settings
-  // makes that a decision taken blind.
-  //
-  // ⚠ ONE REBUILD, NOT ONE PER TOGGLE. A pack selection is a SET: acting on each click would
-  // re-emit the install once per switch — four rebuilds to get from all-four to one, three of
-  // them describing a state nobody asked for, each writing a different `Active packs:` marker
-  // for the next reader to parse. So the switches edit local state and `Apply` sends the whole
-  // selection. The state itself lives above the early returns — see the ⚠ there.
-  const isOn = (addr) => picked.includes(addr)
+  // ⚠ ONE REBUILD, NOT ONE PER TOGGLE. A selection is a SET: acting on each click would
+  // re-emit the install once per switch, each rebuild describing a state nobody asked for.
+  // So the switches edit local state and `Apply` sends the whole selection.
   const toggleRule = (addr) =>
     setPicked((cur) => (cur.includes(addr) ? cur.filter((a) => a !== addr) : [...cur, addr]))
-  // A pack is never picked directly — it is on when any of its rules is. One source, so the
-  // header and the switches under it cannot disagree.
+  // A pack is on when any of its rules is; its switch turns every rule on or every rule off.
   const packOn = (p) => p.rules.some((r) => isOn(r.addr))
+  const togglePack = (p) => {
+    const addrs = p.rules.map((r) => r.addr)
+    setPicked((cur) =>
+      packOn(p) ? cur.filter((a) => !addrs.includes(a)) : [...new Set([...cur, ...addrs])],
+    )
+  }
   // ⚠ A STAGED PACK MUST NOT READ AS A DEPLOYED ONE. `p.active` is what the install built;
-  // `packOn(p)` is what the switches currently say. Where they differ the header says so —
-  // reporting the staged state as fact is the one lie a control like this can tell.
+  // `packOn(p)` is what the switches currently say. Where they differ the line says so.
   const packState = (p) => {
     const on = p.rules.filter((r) => isOn(r.addr)).length
     if (!on) return p.active ? 'staged off' : 'not built in'
@@ -344,25 +424,22 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
     return `${on} of ${p.rules.length} active`
   }
   // What the install excludes today: a rule that is off inside a pack it still builds in.
-  // A rule whose whole pack is absent is not an exclusion — the pack's absence says it, and
-  // naming it beside a `--doctrines` that omits the pack would be noise the CLI rejects.
   const deployedExcluded = packs
     .filter((p) => p.active)
-    .flatMap((p) => p.rules.filter((r) => r.off).map((r) => r.addr))
+    .flatMap((p) => p.rules.filter((r) => !deployedRules.includes(r.addr)).map((r) => r.addr))
   const allRules = packs.flatMap((p) => p.rules.map((r) => r.addr))
   const pickedRules = allRules.filter(isOn)
   const dirty = pickedRules.join(',') !== deployedKey
   const CONSENT = 'process.5'
   const losingConsent = deployedRules.includes(CONSENT) && !picked.includes(CONSENT)
-  // Nothing to rebuild means nothing to toggle — a source render with no deployed install
+  // Nothing to rebuild means nothing to toggle: a source render with no deployed install
   // still READS, it just cannot be changed from here.
   const install = overview?.install
   const canApply = Boolean(install && onAction)
 
   // ⚠ TWO AXES OUT OF ONE SELECTION. The user only ever touches rules; the request carries
   // both `doctrines` (the packs with at least one rule left) and `excludeRules` (the rules
-  // dropped from the packs that survive). An exclusion naming a pack that is already absent
-  // would be noise, so it is not sent — the pack's absence already says it.
+  // dropped from the packs that survive).
   const applyPacks = async () => {
     if (!canApply || !dirty) return
     const keptPacks = packs.filter((p) => p.rules.some((r) => isOn(r.addr))).map((p) => p.pack)
@@ -370,9 +447,9 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
       .filter((p) => keptPacks.includes(p.pack))
       .flatMap((p) => p.rules.filter((r) => !isOn(r.addr)).map((r) => r.addr))
     const warn = losingConsent
-      ? '\n\n⚠ process 5 carries commit/push consent. Dropping it also removes the git-gate ' +
+      ? '\n\nprocess 5 carries commit/push consent. Dropping it also removes the git-gate ' +
         'hook, so commits and pushes stop being confirmed at the tool boundary. ' +
-        '(rm -rf and force-push stay gated — those are Rule IV’s, not the pack’s.)'
+        '(rm -rf and force-push stay gated: those are Rule IV’s, not the pack’s.)'
       : ''
     const what = pickedRules.length
       ? `${pickedRules.length} of ${allRules.length} doctrine rules`
@@ -385,217 +462,291 @@ export default function Laws({ selected, overview, onAction, dataRev }) {
     if (ok) onAction('install', { ...install, doctrines: keptPacks, excludeRules })
   }
 
-  const counts = {}
-  laws.forEach((l) => {
-    counts[l.cat] = (counts[l.cat] || 0) + 1
-  })
-  // ⚠ ONLY NON-EMPTY FACETS RENDER. Two of the six classes have no invariant since the split, and
-  // a chip reading `Context 0` is a filter that can only ever produce the empty state.
-  const facets = LAW_CAT_ORDER.filter((k) => counts[k])
-  // Substring narrowing over address, name and principle — display-only, so the
-  // staged pack selection above keeps operating on the full rule set.
+  // Substring narrowing over address, name, Latin name and principle; display-only, so the
+  // staged selection above keeps operating on the full rule set.
   const ql = q.trim().toLowerCase()
-  const ruleMatch = (r) => !ql || `${r.addr} ${r.name} ${r.ess}`.toLowerCase().includes(ql)
-  const shown = (sel === 'all' ? laws : laws.filter((l) => l.cat === sel)).filter(ruleMatch)
+  const match = (r) => !ql || `${r.addr} ${r.name} ${r.latin} ${r.ess}`.toLowerCase().includes(ql)
+  // From the Gate asks card: make the rule's row visible first (a tab or a filter can hide
+  // it), then open it; the effect above scrolls there and lights it.
+  const jumpToRule = (addr) => {
+    const row = byAddr[addr]
+    const doctrine = String(addr).includes('.')
+    if ((doctrine && tab === 'invariants') || (!doctrine && tab === 'doctrines')) setTab('all')
+    if (row && !match(row)) setQ('')
+    jumpTo.current = addr
+    setJump((n) => n + 1)
+    go(`#/item/law/${encodeURIComponent(addr)}`)
+  }
+
+  const activeInv = laws.filter((l) => !l.retired).length
+  const activeDoc = deployedRules.length
+  const stats = rulesData?.stats
+  const tiers = [
+    {
+      key: 'ethos',
+      name: 'Ethos',
+      n: ontology.length,
+      fill: 1,
+      sub: `${ontology.length} sections`,
+    },
+    {
+      key: 'invariants',
+      name: 'Invariants',
+      n: activeInv,
+      fill: laws.length ? activeInv / laws.length : 0,
+      sub: `${activeInv} active · ${laws.length - activeInv} retired`,
+    },
+    {
+      key: 'doctrines',
+      name: 'Doctrines',
+      n: activeDoc,
+      fill: allRules.length ? activeDoc / allRules.length : 0,
+      sub: `${activeDoc} rules · ${packs.filter((p) => p.active).length} of ${packs.length} packs`,
+    },
+    {
+      key: 'yours',
+      name: 'Your rules',
+      n: stats?.rules ?? 0,
+      fill: stats ? stats.rules / stats.max_rules : 0,
+      sub: stats
+        ? `${stats.rules} of ${stats.max_rules} · ${stats.tokens}/${stats.max_tokens} tok`
+        : 'user-rules.md',
+      href: '#/personal/rules',
+    },
+  ]
+  const byAddr = Object.fromEntries(
+    [...laws, ...packs.flatMap((p) => p.rules)].map((r) => [r.addr, r]),
+  )
+
+  const TABS_ = [
+    ['all', 'All', laws.length + allRules.length],
+    ['invariants', 'Invariants', laws.length],
+    ['doctrines', 'Doctrines', allRules.length],
+  ]
+  const showInv = tab === 'all' || tab === 'invariants'
+  const showDoc = tab === 'all' || tab === 'doctrines'
+  const bandHead = (title, src) => (
+    <div className="band-head" role="presentation">
+      <h2 className="tier-h">{title}</h2>
+      <span className="mono dim">{src}</span>
+    </div>
+  )
+  const invRows = laws.filter(match)
+  const shownCount =
+    (showInv ? invRows.length : 0) +
+    (showDoc ? packs.reduce((n, p) => n + p.rules.filter(match).length, 0) : 0)
+  const maxPack = Math.max(1, ...packs.map((p) => p.rules.length))
 
   return (
     <>
-      <div className="head-row mb-16">
+      <div className="page-head">
         <div>
-          <div className="eyebrow">governance</div>
           <h1 className="h">Constitution</h1>
           <p className="sub">
-            Three tiers, read top to bottom: the <b>Ethos</b> the agent thinks with, the{' '}
-            <b>Invariants</b> it never breaks, and the <b>Doctrines</b> — practice packs this
-            install chose at build time. Open any entry to read its canonical text.
+            What the agent follows on every turn. A higher tier always wins. Open any rule to read
+            its canonical text.
           </p>
         </div>
       </div>
+      <TierStrip tiers={tiers} current={tab} />
 
-      <div className="tier-head">
-        <h2 className="tier-h">Ethos</h2>
-        <span className="law-readout">
-          <b>{ontology.length}</b> sections · always in force · source <b>ontology/universal.md</b>
-        </span>
-      </div>
-      <div className="card law-wrap mb-16">
-        {ontology.map((s) => (
-          <OntologyCard
-            key={s.addr}
-            sec={s}
-            isOpen={open === s.addr}
-            onToggle={() => toggle(s.addr)}
-          />
-        ))}
-        {ontology.length === 0 && (
-          <div className="empty" style={{ padding: 32 }}>
-            <div className="big">No ontology sections</div>
-            This install predates the three-tier constitution.
-          </div>
-        )}
-      </div>
-
-      <div className="tier-head">
-        <h2 className="tier-h">Invariants</h2>
-      </div>
-      <div className="law-toolbar">
-        <div className="law-cats">
-          <button className={`law-cat ${sel === 'all' ? 'on' : ''}`} onClick={() => setSel('all')}>
-            <span>All</span>
-            <span className="cn">{laws.length}</span>
-          </button>
-          {facets.map((k) => (
-            <button
-              key={k}
-              className={`law-cat ${sel === k ? 'on' : ''}`}
-              style={{ '--cc': LAW_CATS[k].c }}
-              onClick={() => setSel(k)}
-            >
-              <span className="cdot" />
-              <span>{LAW_CATS[k].label}</span>
-              <span className="cn">{counts[k] || 0}</span>
-            </button>
-          ))}
-        </div>
-        <FilterInput
-          className="lib-filter law-filter"
-          value={q}
-          onChange={setQ}
-          placeholder="Filter rules…"
-          label="Filter rules"
-        />
-        <span className="law-readout">
-          {/* Derived, never transcribed: a hardcoded 6 outlived the corpus it counted once. */}
-          <b>{shown.length}</b> invariants · <b>{facets.length}</b> classes · source{' '}
-          <b>laws/universal.md</b>
-        </span>
-      </div>
-      <div className="card law-wrap mb-16">
-        <div className="law-rowhead">
-          <span>№</span>
-          <span>Rule</span>
-          <span>Principle</span>
-          <span>Class</span>
-        </div>
-        {shown.map((l) => (
-          <LawRow key={l.addr} law={l} isOpen={open === l.addr} onToggle={() => toggle(l.addr)} />
-        ))}
-        {shown.length === 0 && (
-          <div className="empty" style={{ padding: 32 }}>
-            <div className="big">{ql ? 'No matching rules' : 'No rules in this class'}</div>
-            {ql ? <>Nothing matches “{q.trim()}”.</> : <>Try another class, or pick All.</>}
-          </div>
-        )}
-      </div>
-
-      <div className="tier-head">
-        <h2 className="tier-h">Doctrines</h2>
-        <span className="law-readout">
-          <b>{ruleCount}</b> rules in <b>{activePacks.length}</b>/<b>{packs.length}</b> packs ·
-          source <b>doctrines/</b>
-        </span>
-      </div>
-      {packs.map((p) => {
-        // The filter narrows the doctrine bands too; a pack with no matching
-        // rule drops out entirely rather than rendering an empty shell.
-        const packRules = p.rules.filter(ruleMatch)
-        if (ql && packRules.length === 0) return null
-        return (
-          <div
-            className={`card law-wrap mb-16 pack-wrap ${packOn(p) ? '' : 'pack-off'}`}
-            key={p.pack}
-          >
-            <div className="pack-head">
-              <span className="pack-name" style={{ '--cc': PACK_CATS[p.pack] }}>
-                <span className="cdot" />
-                {p.title}
-              </span>
-              <span className="pack-desc">{p.desc}</span>
-              {/* Derived from the rules, never held separately — a pack IS however many of its
-                rules are on, and a second source could disagree with the switches above it. */}
-              <span className="pack-state">{packState(p)}</span>
-            </div>
-            {!p.active && !canApply && (
-              // The fallback for a console with no install to rebuild — a reader still needs the
-              // exact selection, because `--doctrines` REPLACES the set rather than adding to it.
-              // ⚠ `geneseed-build`, not `geneseed build`: the CLI's `build` verb forwards
-              // `--theme` and nothing else, so the shorter spelling errors.
-              <div className="pack-enable">
-                $ geneseed-build --doctrines{' '}
-                {packs
-                  .filter((q) => q.active || q.pack === p.pack)
-                  .map((q) => q.pack)
-                  .join(',')}
-                {deployedExcluded.length > 0 && ` --exclude-rules ${deployedExcluded.join(',')}`}
-              </div>
-            )}
-            <div className="law-rowhead">
-              <span>№</span>
-              <span>Rule</span>
-              <span>Principle</span>
-              <span>Pack</span>
-              <span className="toggle-col">Toggle</span>
-            </div>
-            {packRules.map((r) => (
-              <LawRow
-                key={r.addr}
-                law={{ ...r, off: !isOn(r.addr) }}
-                isOpen={open === r.addr}
-                onToggle={() => toggle(r.addr)}
-                toggleCol={
-                  canApply ? (
-                    <button
-                      type="button"
-                      className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
-                      role="switch"
-                      aria-checked={isOn(r.addr)}
-                      aria-label={`${r.name} rule`}
-                      onClick={() => toggleRule(r.addr)}
-                    />
-                  ) : null
-                }
-              />
-            ))}
-          </div>
-        )
-      })}
-      {canApply && packs.length > 0 && (
-        <div className="card pad-lg mb-16">
-          {losingConsent && (
-            <p className="pack-warn" role="status" aria-live="polite">
-              ⚠ Dropping <b>process 5</b> also removes the commit/push consent gate —{' '}
-              <code>git commit</code> and <code>git push</code> stop being confirmed at the tool
-              boundary. <code>rm -rf</code> and force-push stay gated.
-            </p>
+      <div className="split">
+        <section
+          className={`panel flush law-wrap${canApply && showDoc ? ' with-toggle' : ''}`}
+          aria-label="Rules"
+        >
+          {/* Ethos sits ABOVE the tabs and the filter, and neither touches it: its four
+              sections are the character the rules below serve, not rules to narrow down, so
+              the tabs and "All" count only what the filter can actually reach. */}
+          {ontology.length > 0 && (
+            <>
+              {bandHead('Ethos', 'ontology/universal.md')}
+              {ontology.map((s) => (
+                <LawRow
+                  key={s.addr}
+                  law={s}
+                  isOpen={open === s.addr}
+                  onToggle={() => toggle(s.addr)}
+                />
+              ))}
+            </>
           )}
-          <div className="pack-apply">
-            <button className="btn soft" onClick={applyPacks} disabled={!dirty}>
-              Apply{dirty ? ` (${pickedRules.length}/${allRules.length} rules)` : ''}
-            </button>
-            <button
-              className="btn ghost"
-              onClick={() => setPicked(deployedKey ? deployedKey.split(',') : [])}
-              disabled={!dirty}
-            >
-              Revert
-            </button>
-            <span className="sub" role="status" aria-live="polite">
-              {dirty
-                ? `Not applied yet — Apply rebuilds ${install.host} · ${install.scope} once, ` +
-                  'with every change together.'
-                : 'Matches the deployed install.'}
-            </span>
+          <div className="law-toolbar">
+            <Seg aria-label="Show">
+              {TABS_.map(([k, l, n]) => (
+                <button
+                  type="button"
+                  key={k}
+                  className={tab === k ? 'on' : ''}
+                  aria-pressed={tab === k}
+                  onClick={() => setTab(k)}
+                >
+                  {l} <span className="mono">{n}</span>
+                </button>
+              ))}
+            </Seg>
+            <FilterInput
+              className="law-filter"
+              value={q}
+              onChange={setQ}
+              placeholder="Filter rules"
+              label="Filter rules"
+            />
+            <span className="dim law-note">Retired rules keep their number.</span>
           </div>
-        </div>
-      )}
-      {packs.length === 0 && (
-        <div className="card law-wrap">
-          <div className="empty" style={{ padding: 32 }}>
-            <div className="big">No doctrine packs</div>
-            This install predates the three-tier constitution.
+          <div className="law-rowhead">
+            <span>No.</span>
+            <span>Rule</span>
+            <span>Latin name</span>
+            <span>Status</span>
+            <span>Enforced by</span>
           </div>
-        </div>
-      )}
+          {showInv && invRows.length > 0 && (
+            <>
+              {bandHead('Invariants', 'laws/universal.md')}
+              {invRows.map((l) => (
+                <LawRow
+                  key={l.addr}
+                  law={l}
+                  isOpen={open === l.addr}
+                  onToggle={() => toggle(l.addr)}
+                />
+              ))}
+            </>
+          )}
+          {showDoc &&
+            packs.map((p) => {
+              const rows = p.rules.filter(match)
+              if (!rows.length) return null
+              return (
+                <div className={`pack-wrap${packOn(p) ? '' : ' pack-off'}`} key={p.pack}>
+                  <div className="band-head pack-head">
+                    <h2 className="tier-h" style={{ '--cc': PACK_CATS[p.pack] }}>
+                      {p.title}
+                    </h2>
+                    <span className="pack-desc dim">{p.desc}</span>
+                    {/* Derived from the rules, never held separately: a pack IS however many
+                        of its rules are on. */}
+                    <span className="pack-state mono">{packState(p)}</span>
+                  </div>
+                  {!p.active && !canApply && (
+                    // The fallback for a console with no install to rebuild: a reader still
+                    // needs the exact selection, because `--doctrines` REPLACES the set.
+                    // ⚠ `geneseed-build`, not `geneseed build`: the CLI's `build` verb
+                    // forwards `--theme` and nothing else, so the shorter spelling errors.
+                    <div className="pack-enable">
+                      $ geneseed-build --doctrines{' '}
+                      {packs
+                        .filter((x) => x.active || x.pack === p.pack)
+                        .map((x) => x.pack)
+                        .join(',')}
+                      {deployedExcluded.length > 0 &&
+                        ` --exclude-rules ${deployedExcluded.join(',')}`}
+                    </div>
+                  )}
+                  {rows.map((r) => (
+                    <LawRow
+                      key={r.addr}
+                      law={docRow(r)}
+                      isOpen={open === r.addr}
+                      onToggle={() => toggle(r.addr)}
+                      toggleCol={
+                        canApply ? (
+                          <button
+                            type="button"
+                            className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
+                            role="switch"
+                            aria-checked={isOn(r.addr)}
+                            aria-label={`${r.name} rule`}
+                            onClick={() => toggleRule(r.addr)}
+                          />
+                        ) : null
+                      }
+                    />
+                  ))}
+                </div>
+              )
+            })}
+          {shownCount === 0 && (
+            <div className="empty" style={{ padding: 32 }}>
+              <div className="big">{ql ? 'No matching rules' : 'Nothing in this tier'}</div>
+              {ql ? <>Nothing matches “{q.trim()}”.</> : <>This install predates the tier.</>}
+            </div>
+          )}
+        </section>
+
+        <aside className="aside-stack">
+          <section className="panel" aria-labelledby="doc-packs">
+            <div className="panel-head">
+              <h2 id="doc-packs">Doctrine packs</h2>
+              <span className="mono dim">
+                {packs.filter(packOn).length}/{packs.length} on
+              </span>
+            </div>
+            {packs.length ? (
+              <ul className="pack-list">
+                {packs.map((p) => {
+                  const on = p.rules.filter((r) => isOn(r.addr)).length
+                  return (
+                    <li key={p.pack} className={packOn(p) ? '' : 'off'}>
+                      <span className="pl-name" title={p.desc}>
+                        {p.title}
+                      </span>
+                      <span className="hbar" aria-hidden="true">
+                        <span style={{ width: `${(on / maxPack) * 100}%` }} />
+                      </span>
+                      <span className="mono pl-n">{on}</span>
+                      {canApply ? (
+                        <button
+                          type="button"
+                          className={`sw-toggle${packOn(p) ? ' on' : ''}`}
+                          role="switch"
+                          aria-checked={packOn(p)}
+                          aria-label={`${p.title} pack`}
+                          onClick={() => togglePack(p)}
+                        />
+                      ) : null}
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <p className="sub">This install predates the three-tier constitution.</p>
+            )}
+            {canApply && packs.length > 0 && (
+              <>
+                {losingConsent && (
+                  <p className="pack-warn" role="status" aria-live="polite">
+                    Dropping <b>process 5</b> also removes the commit/push consent gate:{' '}
+                    <code>git commit</code> and <code>git push</code> stop being confirmed at the
+                    tool boundary. <code>rm -rf</code> and force-push stay gated.
+                  </p>
+                )}
+                <div className="pack-apply">
+                  <button type="button" className="btn" onClick={applyPacks} disabled={!dirty}>
+                    Apply{dirty ? ` (${pickedRules.length}/${allRules.length} rules)` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => setPicked(deployedKey ? deployedKey.split(',') : [])}
+                    disabled={!dirty}
+                  >
+                    Revert
+                  </button>
+                </div>
+                <p className="panel-note" role="status" aria-live="polite">
+                  {dirty
+                    ? `Not applied yet. Apply rebuilds ${install.host} · ${install.scope} once, ` +
+                      'with every change together.'
+                    : 'Matches the deployed install. Changing a pack rebuilds it.'}
+                </p>
+              </>
+            )}
+          </section>
+          <GateAsks gates={setup?.gates} byAddr={byAddr} onJump={jumpToRule} />
+        </aside>
+      </div>
     </>
   )
 }

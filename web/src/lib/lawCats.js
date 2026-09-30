@@ -45,3 +45,22 @@ export const PACK_CATS = {
 }
 
 export const packColor = (pack) => PACK_CATS[pack] || 'var(--text-3)'
+
+// The skill classes, over the same hues so the two taxonomies read as one family:
+// Design == Context's hue, Build == Craft's, Review == Security's, Ship == Process's,
+// Understand == Verification's, Learn == Communication's. The class itself comes from the
+// server (SKILL_CLASS, shipped as `klass`); this holds only the label and the colour.
+// Harness (skills about the agent's own apparatus) takes a slate of its own. `personal`
+// is a skill the lifecycle registry has never heard of, your own, living in this install
+// only: near-grey, because it is OUTSIDE the taxonomy rather than another member of it.
+export const SKILL_CATS = {
+  design: { label: 'Design', c: CAT_HUES.context },
+  build: { label: 'Build', c: CAT_HUES.craft },
+  review: { label: 'Review', c: CAT_HUES.security },
+  ship: { label: 'Ship', c: CAT_HUES.process },
+  understand: { label: 'Understand', c: CAT_HUES.verify },
+  learn: { label: 'Learn', c: CAT_HUES.comms },
+  harness: { label: 'Harness', c: 'oklch(0.76 0.07 250)' },
+  personal: { label: 'Personal', c: 'oklch(0.72 0.025 250)' },
+}
+export const SKILL_CAT_ORDER = Object.keys(SKILL_CATS)

@@ -106,11 +106,10 @@ export default function Search({ value, onChange, dataRev }) {
         placeholder="Search the harness…"
         title="Press / to jump here, or Ctrl-K / ⌘K from inside any field"
       />
-      {/* The badge still shows `/`: it is the shorter binding and the one that fits. The
-          chord is in the title above rather than a second badge — two keycaps in a topbar
-          field is noise, and the chord is the one you reach for when `/` is being typed
-          into something. */}
-      <span className="kbd">/</span>
+      {/* The badge shows the chord, the binding that works from anywhere, including inside
+          another field; `/` is in the title above. One keycap, not two: two in a topbar
+          field is noise. */}
+      <span className="kbd">Ctrl K</span>
       {/* `aria-expanded` tells a screen reader a list appeared; it does not say whether
           anything is IN it. Typing narrows the results silently otherwise — the one thing a
           sighted user gets for free from watching the list shrink. Polite, so it queues

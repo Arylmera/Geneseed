@@ -92,13 +92,7 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
             ))}
           </select>
         </label>
-        <PickSelects
-          layout="form"
-          value={deploy}
-          options={options}
-          onChange={set}
-          who="the new harness"
-        />
+        <PickSelects value={deploy} options={options} onChange={set} who="the new harness" />
         <button className="btn sm" onClick={submitDeploy}>
           Deploy
         </button>

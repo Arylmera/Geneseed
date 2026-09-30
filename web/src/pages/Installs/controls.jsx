@@ -1,6 +1,6 @@
 import React from 'react'
 
-// A <select> in the app's `.sel` style, shared by every picker on the Harness page — voice,
+// A <select> in the app's `.sel` style, shared by every picker on the Hosts tab — voice,
 // footprint, posture and mode were four near-identical components differing only in
 // their option list. Renders nothing until that list is non-empty: voice/posture/mode
 // are discovered server-side and start empty, where footprint's fixed lean/full pair
@@ -53,42 +53,28 @@ export function Switch({ on, disabled, label, onToggle }) {
 }
 
 // The four build choices every install carries, in the order the install consumes them.
-// `name` is the accessible label's first word, `lane` the active row's column class.
+// `name` is the accessible label's first word, `title` the visible one.
 const PICKS = [
-  { key: 'theme', name: 'voice', title: 'Voice', lane: 'ha-voice' },
-  { key: 'footprint', name: 'footprint', title: 'Footprint', lane: 'ha-fp' },
-  { key: 'posture', name: 'posture', title: 'Posture', lane: 'ha-posture' },
-  { key: 'mode', name: 'mode', title: 'Mode', lane: 'ha-mode' },
+  { key: 'theme', name: 'voice', title: 'Voice' },
+  { key: 'footprint', name: 'footprint', title: 'Footprint' },
+  { key: 'posture', name: 'posture', title: 'Posture' },
+  { key: 'mode', name: 'mode', title: 'Mode' },
 ]
 
-// The four selects, in one of the three places they appear:
-//   lanes — an active install row's first four fixed columns. The cells always render
-//           (empty when `hidden`) so every row's controls line up.
-//   steps — an absent row's install wizard, numbered in install order.
-//   form  — the deploy-to-folder form.
-// `value` is { theme, footprint, posture, mode }; `options` the same keys -> option lists;
-// `who` finishes each label ("voice for claude · global").
-export function PickSelects({ layout, value, options, onChange, who, hidden = false }) {
-  return PICKS.map((p, i) => {
-    const sel = hidden ? null : (
+// The four selects, each in its own label: the install side panel and the deploy-to-folder
+// form both lay them out this way. `value` is { theme, footprint, posture, mode };
+// `options` the same keys -> option lists; `who` finishes each accessible label ("voice for
+// claude · global").
+export function PickSelects({ value, options, onChange, who }) {
+  return PICKS.map((p) => (
+    <label className="dp-field" key={p.key}>
+      <span>{p.title}</span>
       <Sel
         label={`${p.name} for ${who}`}
         value={value[p.key]}
         options={options[p.key]}
         onChange={(v) => onChange(p.key, v)}
       />
-    )
-    if (layout === 'lanes')
-      return (
-        <div className={`ha-cell ${p.lane}`} key={p.key}>
-          {sel}
-        </div>
-      )
-    return (
-      <label className={layout === 'steps' ? 'hs-step' : 'dp-field'} key={p.key}>
-        <span>{layout === 'steps' ? `${i + 1} · ${p.title}` : p.title}</span>
-        {sel}
-      </label>
-    )
-  })
+    </label>
+  ))
 }

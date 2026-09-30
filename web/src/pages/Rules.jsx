@@ -105,7 +105,7 @@ function RuleRow({ rule, isOpen, onToggle, onEdit, onDelete, onGraduate }) {
   )
 }
 
-export default function Rules() {
+export default function Rules({ onChanged }) {
   const confirm = useConfirm()
   const [rev, setRev] = useState(0)
   const { data, error } = useAsync(() => api.rules(), [rev])
@@ -142,6 +142,7 @@ export default function Rules() {
     } finally {
       setBusy(false)
       reload()
+      onChanged?.()
     }
   }
 
@@ -173,7 +174,7 @@ export default function Rules() {
       <div className="head-row mb-16">
         <div>
           <div className="eyebrow">governance · yours</div>
-          <h1 className="h">Rules</h1>
+          <h2 className="h">Rules</h2>
           <p className="sub">
             Your own standing rules, from <code className="mono">user-rules.md</code> beside the
             deployed AGENT.md. The agent obeys them with the same force as the Laws — they may

@@ -19,32 +19,22 @@ export const SECTIONS = {
   },
   memory: { label: 'Memory', type: 'memory', desc: 'durable facts', icon: 'library' },
   notebook: { label: 'Notebook', type: 'notebook', desc: 'sovereign space', icon: 'notebook' },
-  // The wiki chip is the merged "Knowledge" view: it lists the two setup
-  // manifests (project context + wiki.jsonc) as a Setup group, then every wiki
-  // page grouped by vault. See Library.jsx (config folds into this chip).
-  wiki: { label: 'Knowledge', type: 'wiki', desc: 'knowledge base + setup', icon: 'graph' },
-  config: { label: 'Config', type: 'config', desc: 'install metadata', icon: 'settings' },
+  wiki: { label: 'Wiki', type: 'wiki', desc: 'knowledge base', icon: 'graph' },
+  config: { label: 'Setup files', type: 'config', desc: 'install metadata', icon: 'settings' },
 }
 
 // Canonical taxonomy order for dashboard strands, genome bars, and the search
-// index. Laws and Skills are deliberately absent: each has its own top-level
-// tab (#/laws, #/skills) with a purpose-built ledger view. `SECTIONS.laws`/
-// `SECTIONS.skills` are kept so the `law`/`skill` item types still resolve
-// (TYPE_TO_SECTION, deep-link redirects).
+// index. Laws and Skills are deliberately absent: each carries a purpose-built
+// view of its own (the Constitution page, the Skills-by-stage chart), and the
+// strands would double-count them. `SECTIONS.laws`/`SECTIONS.skills` are kept so
+// the `law`/`skill` item types still resolve.
 export const SECTION_ORDER = ['agents', 'memory', 'notebook', 'wiki', 'config']
 
-// The Library chip-bar's order. It drops two keys that SECTION_ORDER keeps:
-//   agents — has its own top-level tab (#/agents); a Library chip would be a
-//            worse second door.
-//   config — folds into the wiki ("Knowledge") chip, which lists the setup
-//            manifests alongside the wiki pages (they share one load vocabulary).
-// Both stay in SECTION_ORDER so the dashboard genome and search index still
-// count and index them as their own content strands.
-export const LIBRARY_ORDER = SECTION_ORDER.filter((k) => k !== 'agents' && k !== 'config')
-
-// Sections whose content is surfaced under a different chip. A deep-link or
-// genome cell for the source section resolves onto the chip that hosts it.
-export const SECTION_ALIAS = { config: 'wiki' }
+// The Library's kinds column, in order: every section except the constitution,
+// which has a page of its own. Skills and agents first (the bulk of the harness),
+// then what the agent remembers, then the setup manifests. The first kind is what
+// a bare `#/library` opens on.
+export const LIBRARY_ORDER = ['skills', 'agents', 'memory', 'notebook', 'wiki', 'config']
 
 // Singular item type -> plural section key, for resolving #/item/<type>/<name>
 // routes back to the section that owns them.

@@ -63,3 +63,13 @@ export const hostInfo = (id) => HOSTS.find((h) => h.id === id) || HOSTS[0]
 // remove confirm. A project install is the deployed bundle; a global is the config-dir layer.
 export const removeLayer = (id, scope) =>
   scope === 'project' ? hostInfo(id).removeProject : hostInfo(id).removeGlobal
+
+// The name an install is shown by, the same in the table and in the panel: a global
+// install is one per tool, so it is the tool; a project install is its repo folder.
+export const folderName = (path) =>
+  String(path || '')
+    .replace(/[\\/]+$/, '')
+    .split(/[\\/]/)
+    .pop() || path
+export const installName = (inst) =>
+  inst.scope === 'global' ? hostInfo(inst.host).label : folderName(inst.path)

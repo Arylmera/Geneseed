@@ -6,7 +6,6 @@ import OperatorView from './OperatorView.jsx'
 import Onboarding from './Onboarding.jsx'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
-import { resolveLayout } from '../../hooks/useLayout.js'
 import Seg from '../../components/Seg.jsx'
 import { useAsync } from '../../hooks/useAsync.js'
 
@@ -36,11 +35,10 @@ export default function Dashboard({
   setup,
   runs: jobs,
   onAction,
-  flavour = 'a',
-  layout = 'auto',
+  layout = 'cultivar',
   dataRev,
 }) {
-  const lens = resolveLayout(flavour, layout)
+  const lens = layout
   const [dir, setDir] = useState('status')
   const sigil = overview ? themes.find((t) => t.name === overview.theme)?.sigil || '' : ''
 
@@ -99,13 +97,6 @@ export default function Dashboard({
   return (
     <>
       <div className="head-row">
-        <div>
-          <h1 className="h">Harness console</h1>
-          <p className="sub">
-            A live readout of the harness this machine carries. Its voice, its capabilities, its
-            drift from source.
-          </p>
-        </div>
         <Seg aria-label="Dashboard view">
           {[
             ['status', 'Status'],

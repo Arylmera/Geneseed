@@ -37,7 +37,7 @@ export default function CatalogRow({
   if (toggleCol) {
     return (
       <>
-        <div className={className} style={style}>
+        <div className={className} style={style} data-addr={addr}>
           <button className="law-disclosure" onClick={onToggle} aria-expanded={isOpen}>
             {head}
           </button>
@@ -49,7 +49,13 @@ export default function CatalogRow({
   }
   return (
     <>
-      <button className={className} style={style} onClick={onToggle} aria-expanded={isOpen}>
+      <button
+        className={className}
+        style={style}
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        data-addr={addr}
+      >
         {head}
       </button>
       {expand}

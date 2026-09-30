@@ -61,7 +61,7 @@ export default function Doctor() {
     <div className="narrow">
       <div className="head-row mb-16">
         <div>
-          <h1 className="h">Doctor</h1>
+          <h2 className="h">Doctor</h2>
           <p className="sub">
             Every check builds each theme in a sandbox and validates the result: token resolution,
             link integrity, parity, and drift.

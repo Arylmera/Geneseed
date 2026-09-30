@@ -1,55 +1,71 @@
 import { describe, it, expect } from 'vitest'
-import { PAGES, VIEW_ALIAS, resolveRoute } from '../lib/router.js'
+import { PAGES, TABS, VIEW_ALIAS, resolveRoute } from '../lib/router.js'
 
-// The resolver is the one place a hash becomes a page. Each row states what the hash
-// must resolve to, written out: a routing change that moves a row has to move it here,
-// with a reason. `section`/`item` are omitted from a row where the route carries none.
+// The resolver is the one place a hash becomes a page. Each row states what the hash must
+// resolve to, written out: a routing change that moves a row has to move it here, with a
+// reason. `section`/`item`/`tab` are omitted from a row where the route carries none.
+//
+// The console went from fourteen flat pages to five (Overview, Constitution, Library,
+// Personal, Installs) plus Docs and Activity. EVERY OLD ADDRESS STILL LANDS: the block
+// "retired pages" below is the old->new mapping, one row per name that used to be a page.
 const TABLE = [
-  // The dashboard, and everything the resolver does not recognise.
-  ['', { page: 'dashboard' }],
-  ['#/', { page: 'dashboard' }],
-  ['#/dashboard', { page: 'dashboard' }],
-  ['#/nonsense', { page: 'dashboard' }],
+  // The overview, and everything the resolver does not recognise.
+  ['', { page: 'overview' }],
+  ['#/', { page: 'overview' }],
+  ['#/overview', { page: 'overview' }],
+  ['#/nonsense', { page: 'overview' }],
   // A hash is user input; the lookup tables are plain objects.
-  ['#/constructor', { page: 'dashboard' }],
-  // Flat pages resolve to themselves.
+  ['#/constructor', { page: 'overview' }],
+  // The five pages and the two footer pages resolve to themselves.
   ['#/laws', { page: 'laws' }],
-  ['#/skills', { page: 'skills' }],
-  ['#/rules', { page: 'rules' }],
-  ['#/profile', { page: 'profile' }],
   ['#/library', { page: 'library' }],
+  ['#/docs', { page: 'docs', item: '' }],
   ['#/activity', { page: 'activity' }],
-  ['#/diff', { page: 'diff' }],
-  ['#/doctor', { page: 'doctor' }],
-  ['#/harness', { page: 'harness' }],
-  ['#/settings', { page: 'settings' }],
-  // `#/agents` is the Library view pinned to the agents chip.
-  ['#/agents', { page: 'agents', section: 'agents' }],
-  // VIEW_ALIAS: retired names land on the page that absorbed them.
-  ['#/themes', { page: 'harness' }],
-  ['#/harnesses', { page: 'harness' }],
-  ['#/about', { page: 'settings' }],
-  // Sections fold into the page that owns them: laws, skills and agents have their own
-  // pages; every other section is a Library chip.
+  // Tabbed pages: a bare page opens its first tab; an unknown tab falls to the first.
+  ['#/personal', { page: 'personal', tab: 'rules' }],
+  ['#/personal/profile', { page: 'personal', tab: 'profile' }],
+  ['#/personal/bogus', { page: 'personal', tab: 'rules' }],
+  ['#/installs', { page: 'installs', tab: 'hosts' }],
+  ['#/installs/edits', { page: 'installs', tab: 'edits' }],
+  ['#/installs/server', { page: 'installs', tab: 'server' }],
+  // Personal's Memory and Notebook tabs carry an entry of their own, URI-decoded.
+  ['#/personal/memory/a%20b', { page: 'personal', tab: 'memory', item: 'a b' }],
+  // ...but an item under an unknown tab is dropped with the tab, not attached to rules.
+  ['#/personal/bogus/x', { page: 'personal', tab: 'rules' }],
+  // Retired pages -> where they live now.
+  ['#/dashboard', { page: 'overview' }],
+  ['#/constitution', { page: 'laws' }],
+  ['#/skills', { page: 'library', section: 'skills' }],
+  ['#/agents', { page: 'library', section: 'agents' }],
+  ['#/rules', { page: 'personal', tab: 'rules' }],
+  ['#/profile', { page: 'personal', tab: 'profile' }],
+  ['#/harness', { page: 'installs', tab: 'hosts' }],
+  ['#/harnesses', { page: 'installs', tab: 'hosts' }],
+  ['#/themes', { page: 'installs', tab: 'hosts' }],
+  ['#/diff', { page: 'installs', tab: 'edits' }],
+  ['#/doctor', { page: 'installs', tab: 'doctor' }],
+  ['#/settings', { page: 'installs', tab: 'server' }],
+  ['#/about', { page: 'installs', tab: 'server' }],
+  // Sections: the constitution has its own page; every other section is a Library kind.
   ['#/section/laws', { page: 'laws', section: 'laws' }],
-  ['#/section/skills', { page: 'skills', section: 'skills' }],
-  ['#/section/agents', { page: 'agents', section: 'agents' }],
+  ['#/section/skills', { page: 'library', section: 'skills' }],
+  ['#/section/agents', { page: 'library', section: 'agents' }],
   ['#/section/memory', { page: 'library', section: 'memory' }],
   ['#/section', { page: 'library' }],
-  // SECTION_ALIAS: config has no chip of its own; it folds into the wiki chip.
-  ['#/section/config', { page: 'library', section: 'wiki' }],
+  // Setup files are a kind of their own now; they no longer fold into the wiki.
+  ['#/section/config', { page: 'library', section: 'config' }],
   // Items: the singular type names the section, and the name is URI-decoded.
   ['#/item/law/IV', { page: 'laws', section: 'laws', item: 'IV' }],
-  ['#/item/skill/tdd', { page: 'skills', section: 'skills', item: 'tdd' }],
-  ['#/item/agent/advocate', { page: 'agents', section: 'agents', item: 'advocate' }],
+  ['#/item/law/process.5', { page: 'laws', section: 'laws', item: 'process.5' }],
+  ['#/item/skill/tdd', { page: 'library', section: 'skills', item: 'tdd' }],
+  ['#/item/agent/advocate', { page: 'library', section: 'agents', item: 'advocate' }],
   ['#/item/memory/a%20b', { page: 'library', section: 'memory', item: 'a b' }],
-  ['#/item/config/geneseed.jsonc', { page: 'library', section: 'wiki', item: 'geneseed.jsonc' }],
+  ['#/item/config/geneseed.jsonc', { page: 'library', section: 'config', item: 'geneseed.jsonc' }],
   ['#/item/wiki/x%2Fy', { page: 'library', section: 'wiki', item: 'x/y' }],
-  // An unknown type still lands on Library (which falls back to its first chip).
+  // An unknown type still lands on Library (which falls back to its first kind).
   ['#/item/bogus/z', { page: 'library', section: 'bogus', item: 'z' }],
   ['#/item/constructor/z', { page: 'library', section: 'constructor', item: 'z' }],
   // Docs carries a sub-page path in `item`, slashes and all; Activity a session id.
-  ['#/docs', { page: 'docs', item: '' }],
   ['#/docs/cli/build', { page: 'docs', item: 'cli/build' }],
   ['#/docs/a%20b', { page: 'docs', item: 'a b' }],
   ['#/activity/s%201', { page: 'activity', item: 's 1' }],
@@ -64,33 +80,34 @@ describe('resolveRoute', () => {
     )
   })
 
-  it('always lands on a page in PAGES', () => {
-    for (const [hash] of TABLE) expect(Object.keys(PAGES)).toContain(resolveRoute(hash).page)
+  it('always lands on a page in PAGES, and a tabbed page on one of its tabs', () => {
+    for (const [hash] of TABLE) {
+      const r = resolveRoute(hash)
+      expect(Object.keys(PAGES)).toContain(r.page)
+      if (TABS[r.page]) expect(TABS[r.page]).toContain(r.tab)
+    }
   })
 
-  it('every alias targets a real page', () => {
-    for (const target of Object.values(VIEW_ALIAS)) expect(Object.keys(PAGES)).toContain(target)
+  it('every alias targets a real page and, where it names one, a real tab', () => {
+    for (const [page, tab] of Object.values(VIEW_ALIAS)) {
+      expect(Object.keys(PAGES)).toContain(page)
+      if (tab) expect(TABS[page]).toContain(tab)
+    }
   })
 })
 
-describe('PAGES tab flags', () => {
-  // The topbar prompt prints `--tab=<flag>`. The dashboard is the only page whose flag
-  // differs from its name: the prompt calls it the overview.
-  it('names every page by itself, except the dashboard', () => {
+describe('PAGES', () => {
+  // The breadcrumb and the sidebar print these; the laws page reads "Constitution" while
+  // its route stays #/laws (doctor reads web/src/pages/Laws.jsx by that name).
+  it('names the seven pages', () => {
     expect(PAGES).toEqual({
-      dashboard: 'overview',
-      laws: 'laws',
-      rules: 'rules',
-      profile: 'profile',
-      skills: 'skills',
-      agents: 'agents',
-      library: 'library',
-      docs: 'docs',
-      activity: 'activity',
-      diff: 'diff',
-      doctor: 'doctor',
-      harness: 'harness',
-      settings: 'settings',
+      overview: 'Overview',
+      laws: 'Constitution',
+      library: 'Library',
+      personal: 'Personal',
+      installs: 'Installs',
+      docs: 'Docs',
+      activity: 'Activity',
     })
   })
 })

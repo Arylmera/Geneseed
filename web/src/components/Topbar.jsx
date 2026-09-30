@@ -1,44 +1,39 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { promptPath } from '../lib/format.js'
 import { Icon } from './Icon.jsx'
 import Search from './Search.jsx'
 import HarnessSelector from './HarnessSelector.jsx'
-import { PAGES } from '../lib/router.js'
-import { useConfirm } from '../hooks/useConfirm.jsx'
+import AppearancePopover from './AppearancePopover.jsx'
+import { PAGES, TAB_LABELS } from '../lib/router.js'
 
-// The top bar: a faux `geneseed --tab=…` prompt, the global search, the
-// light/dark toggle, and the stop-server button (same /api/shutdown as
-// `geneseed web stop` and the Settings → Server card).
+// The top bar: where you are (the install the console reads, then the page and its tab),
+// the search box that doubles as the way to jump anywhere by name, and the two display
+// controls: the appearance popover (skin and accent source) and light/dark.
 export default function Topbar({
   route,
   navOpen,
   onToggleNav,
-  target,
-  version,
+  overview,
+  installs,
   query,
   onQuery,
   mode,
   onToggleMode,
-  onShutdown,
+  appearance,
   dataRev,
   onSwitch,
 }) {
-  const confirm = useConfirm()
-  const askShutdown = async () => {
-    const ok = await confirm(
-      <>
-        The console goes offline until you start it again with <code>geneseed web</code>.
-      </>,
-      { title: 'Stop the server?', confirmLabel: 'Stop server' },
-    )
-    if (ok) onShutdown()
-  }
+  const [appearanceOpen, setAppearanceOpen] = useState(false)
+  const inst = overview?.install
+  const where = inst ? `${inst.host}:${inst.scope}` : promptPath(overview?.target)
+  const tab = route.tab && TAB_LABELS[route.tab]
   return (
     <header className="topbar">
-      {/* Phone-width drawer toggle. CSS hides it above 720px, where the rail is
+      {/* Phone-width drawer toggle. CSS hides it above 720px, where the sidebar is
           permanently on screen and there is nothing to toggle. */}
       <button
-        className="tb-menu"
+        type="button"
+        className="tb-menu iconbtn"
         onClick={onToggleNav}
         aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
         aria-expanded={!!navOpen}
@@ -46,36 +41,51 @@ export default function Topbar({
       >
         <Icon name={navOpen ? 'x' : 'menu'} />
       </button>
-      <div className="prompt">
-        <span className="path">{promptPath(target)}</span>
-        <span className="sep">$</span>
-        <span className="cmd">geneseed</span>{' '}
-        <span className="flag">--tab={PAGES[route.page]}</span>
-        {/* Dimmed, and dropped entirely when the server could not read a label — a prompt that
-            says --version= with nothing after it reads as a bug in the tool. */}
-        {version && <span className="flag ver"> --version={version}</span>}
-        <span className="cur" />
-      </div>
+      <nav className="crumbs" aria-label="Breadcrumb">
+        <span className="crumb-root mono" title={overview?.target || undefined}>
+          {where}
+        </span>
+        <span aria-hidden="true">/</span>
+        <span className={tab ? '' : 'crumb-here'} aria-current={tab ? undefined : 'page'}>
+          {PAGES[route.page]}
+        </span>
+        {tab ? (
+          <>
+            <span aria-hidden="true">/</span>
+            <span className="crumb-here" aria-current="page">
+              {tab}
+            </span>
+          </>
+        ) : null}
+      </nav>
       <div className="topbar-spacer" />
-      <HarnessSelector dataRev={dataRev} onSwitch={onSwitch} />
+      <HarnessSelector installs={installs} onSwitch={onSwitch} />
       <Search value={query} onChange={onQuery} dataRev={dataRev} />
-      {/* Icon-only buttons: `title` is a hover hint sighted mouse users get, so each
-          also carries an aria-label — the Icon SVGs are aria-hidden and name nothing. */}
+      <div className="tb-pop-anchor">
+        <button
+          type="button"
+          className="iconbtn"
+          aria-label="Appearance"
+          title="Appearance"
+          aria-expanded={appearanceOpen}
+          onClick={() => setAppearanceOpen((v) => !v)}
+        >
+          <Icon name="themes" />
+        </button>
+        {appearanceOpen ? (
+          <AppearancePopover {...appearance} onClose={() => setAppearanceOpen(false)} />
+        ) : null}
+      </div>
+      {/* Icon-only: `title` is a hover hint sighted mouse users get, so it also carries an
+          aria-label; the Icon SVGs are aria-hidden and name nothing. */}
       <button
+        type="button"
         className="iconbtn"
         title={mode === 'light' ? 'Switch to dark' : 'Switch to light'}
         aria-label={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
         onClick={onToggleMode}
       >
         <Icon name={mode === 'light' ? 'moon' : 'sun'} />
-      </button>
-      <button
-        className="iconbtn"
-        title="Stop server"
-        aria-label="Stop server"
-        onClick={askShutdown}
-      >
-        <Icon name="power" />
       </button>
     </header>
   )

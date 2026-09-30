@@ -3,6 +3,7 @@ import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { Icon } from '../components/Icon.jsx'
 import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
+import { SKILL_CATS, SKILL_CAT_ORDER } from '../lib/lawCats.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
@@ -10,10 +11,10 @@ import StatusBadge from '../components/StatusBadge.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
+import AgentGlyph from '../components/AgentGlyph.jsx'
 
-// The on-disk source path for a given (section, name). Surface text for the
-// "source" meta line in the detail pane — purely informational, doesn't drive
-// any fetching.
+// The on-disk source path for a given (section, name), for the reader's source line when
+// the item payload carries none. Informational only; it drives no fetch.
 function libSource(sec, name) {
   if (sec === 'agents' || sec === 'skills') return `${sec}/${name}.md`
   if (sec === 'memory') return `memory/${name}`
@@ -23,23 +24,26 @@ function libSource(sec, name) {
   return `${sec}/${name}.md`
 }
 
-// One row in the master list. Plain button so keyboard focus works without
-// extra plumbing; the active state is purely className-driven.
-function LibRow({ item, isOpen, onOpen }) {
+// One row in the list pane: a real link, so it opens in a new tab, reads as navigation to
+// assistive tech, and arrow keys can walk the list (onRowsKey below).
+function LibRow({ item, isOpen, href }) {
   return (
-    <button className={`lib-row ${isOpen ? 'on' : ''}`} onClick={onOpen}>
-      <div className="lr-name">
+    <a
+      className={`lib-row${isOpen ? ' on' : ''}`}
+      href={href}
+      aria-current={isOpen ? 'true' : undefined}
+    >
+      <span className="lr-name">
         {item.title || item.name}
         <StatusBadge status={item.status} />
-      </div>
-      {item.desc ? <div className="lr-desc">{item.desc}</div> : null}
-    </button>
+      </span>
+      {item.desc ? <span className="lr-desc">{item.desc}</span> : null}
+    </a>
   )
 }
 
-// Empty state for sections whose entries are conventions without per-entry
-// docs (wiki, config). Keeps the source path visible so users still learn
-// where the content lives.
+// A wiki or config entry that is a convention rather than a document of its own. The
+// source path stays visible so the reader still learns where the content lives.
 function EmptyDoc({ section, source }) {
   return (
     <div className="lib-doc-empty">
@@ -52,56 +56,57 @@ function EmptyDoc({ section, source }) {
   )
 }
 
-// Library — single page with a section chip-bar, master list, and detail
-// pane that inlines the item's Markdown. Replaces the prior card-grid landing
-// + separate Section drilldown so the design's "browse everything from one
-// place" pattern works. Routing is preserved:
-//   #/library         → chip bar opens on the first section
-//   #/section/<sec>   → chip pre-selected
-//   #/item/<t>/<name> → chip + row pre-selected
-//
-// Selecting a row pushes the matching #/item/.../<name> URL so deep-linking
-// keeps working from the search spotlight and the Graph.
-// The chip to open for a routed section. The router has already folded aliased
-// sections onto their host chip (`config` -> the wiki "Knowledge" chip, see
-// lib/router.js); an absent or unknown section opens the first chip.
-const resolveSec = (s) => (s && Object.hasOwn(SECTIONS, s) ? s : LIBRARY_ORDER[0])
+const resolveSec = (s, lock) => lock || (s && LIBRARY_ORDER.includes(s) ? s : LIBRARY_ORDER[0])
+const enc = encodeURIComponent
 
-// The Knowledge chip is a merged view: the config catalog (the two setup
-// manifests) as a "Setup" group, then every wiki page grouped by vault. Each
-// row keeps its own `type` so the detail fetch and deep-link route correctly.
-async function fetchKnowledge() {
-  const [w, c] = await Promise.all([
-    api.catalog('wiki').catch(() => ({ items: [] })),
-    api.catalog('config').catch(() => ({ items: [] })),
-  ])
-  const setup = (c.items || []).map((it) => ({ ...it, type: it.type || 'config', group: 'Setup' }))
-  const pages = (w.items || []).map((it) => ({ ...it, type: it.type || 'wiki' }))
-  return { section: 'wiki', items: [...setup, ...pages] }
+// The Library: what the agent knows, in three panes. The kinds column picks a section
+// (skills, agents, memory, notebook, wiki, setup files), the list pane lists it, the
+// reader renders the selected entry straight from its source file. Routing:
+//   #/library, #/skills, #/agents, #/section/<kind>  -> kind selected
+//   #/item/<type>/<name>                              -> kind + entry selected
+//
+// Personal's Memory and Notebook tabs render this same component with `lock` (one kind,
+// no kinds column) and `base` (the tab's own address, `#/personal/memory`), so an entry
+// opened there stays on the Personal page.
+// Skills in class order, each row tagged with its class and the header it sits under, plus
+// the classes present with their counts (the chips). Exported for the test that pins it.
+export function splitSkills(items) {
+  const catOf = (it) => (SKILL_CATS[it.klass] ? it.klass : 'personal')
+  const rows = SKILL_CAT_ORDER.flatMap((k) =>
+    items
+      .filter((it) => catOf(it) === k)
+      .map((it) => ({ ...it, cat: k, group: SKILL_CATS[k].label, groupC: SKILL_CATS[k].c })),
+  )
+  const cats = SKILL_CAT_ORDER.map((k) => ({
+    key: k,
+    label: SKILL_CATS[k].label,
+    c: SKILL_CATS[k].c,
+    n: rows.filter((r) => r.cat === k).length,
+  })).filter((x) => x.n > 0)
+  return { rows, cats }
 }
 
-export default function Library({ overview, section, selected, dataRev }) {
+export default function Library({ overview, section, selected, dataRev, lock, base }) {
   const confirm = useConfirm()
-  const initialSec = resolveSec(section)
-  const [sec, setSec] = useState(initialSec)
+  const [sec, setSec] = useState(() => resolveSec(section, lock))
   const [q, setQ] = useState('')
+  // The skill class chip ('all' or a SKILL_CATS key). Skills only; reset with the kind.
+  const [cat, setCat] = useState('all')
   // A failed memory action (promote, forget), shown in the page's error slot until the
-  // next one. It used to be a window.alert — or, for forget, nothing at all.
+  // next one.
   const [actionErr, setActionErr] = useState('')
   const rowsRef = useRef(null)
 
-  // Sync sec from prop whenever the route hands us a different section, and drop
-  // any filter text so it doesn't carry across sections. Adjusted during render
-  // against the last-seen prop, not in an effect.
+  // Follow the route's section, and drop any filter text so it doesn't carry across kinds.
+  // Adjusted during render against the last-seen prop, not in an effect.
   const [seenSection, setSeenSection] = useState(section)
   if (section !== seenSection) {
     setSeenSection(section)
-    const next = resolveSec(section)
-    // `#/library` hands no section at all, and must still leave `#/agents`:
-    // one Library slot serves both routes, so nothing remounts to reset it.
+    const next = resolveSec(section, lock)
     if (next !== sec) {
       setSec(next)
       setQ('')
+      setCat('all')
     }
   }
 
@@ -109,29 +114,20 @@ export default function Library({ overview, section, selected, dataRev }) {
     data: catalog,
     error: catErr,
     reload: reloadCatalog,
-  } = useAsync(
-    () => (sec === 'wiki' ? fetchKnowledge() : api.catalog(sec)),
-    [sec, dataRev],
-    'catalog',
-  )
+  } = useAsync(() => api.catalog(sec), [sec, dataRev], 'catalog')
 
-  // useAsync keeps the prior section's catalog in `data` while the new one is
-  // in flight (so the list doesn't flash empty). Guard against that staleness:
-  // only treat the loaded catalog as current when its `section` matches `sec`.
-  // Otherwise the first row below would be the *previous* section's first item
-  // (e.g. agent `advocate`, skill `brainstorm`), and the detail fetch would ask
-  // for it under the new section's type — a guaranteed NotFound flash on every
-  // tab switch.
+  // useAsync keeps the prior section's catalog in `data` while the new one is in flight
+  // (so the list doesn't flash empty). Only treat it as current when its `section`
+  // matches, or the first row would be the PREVIOUS kind's first item, fetched under the
+  // new kind's type: a guaranteed NotFound flash on every switch.
   const items = catalog?.section === sec ? catalog?.items || [] : []
-  // The entry whose document we display: the URL-selected item, or the first
-  // row when the section was opened without an explicit selection (e.g. after
-  // switching tabs). Auto-picking the first row keeps the highlighted row and
-  // the detail pane in sync instead of showing a generic fallback.
-  const activeName = selected || items[0]?.name || null
+  // The entry on display: the URL-selected one, or the first row when the kind was opened
+  // without a selection, so the highlighted row and the reader always agree.
+  // Skills are listed class by class (splitSkills), so their first row is not items[0].
+  const isSkills = sec === 'skills'
+  const skillSplit = isSkills ? splitSkills(items) : null
+  const activeName = selected || (isSkills ? skillSplit.rows[0] : items[0])?.name || null
   const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
-  // A merged section holds mixed item types (config manifests + wiki pages), so
-  // fetch the detail by the row's own type rather than the section's default —
-  // otherwise a `config` row would be requested as a `wiki` page and 404.
   const activeType = fromCatalog?.type || SECTIONS[sec].type
   const { data: item, error: itemErr } = useAsync(
     () => (activeName ? api.item(activeType, activeName) : Promise.resolve(null)),
@@ -139,71 +135,59 @@ export default function Library({ overview, section, selected, dataRev }) {
   )
 
   const err = actionErr || catErr || itemErr
-  // Prefer the catalog row; fall back to a synthetic row when the URL names
-  // an item that isn't in the listing (e.g. a fresh deep-link before the
-  // catalog finishes).
+  // Prefer the catalog row; fall back to a synthetic one when the URL names an item that
+  // isn't in the listing (a fresh deep link before the catalog lands).
   const synthetic = activeName
     ? { name: activeName, title: item?.title || activeName, desc: item?.desc || '' }
     : null
   const activeItem = fromCatalog || synthetic
   const counts = overview?.counts || {}
-  // The Knowledge chip subsumes the config strand, so its badge sums both.
-  const chipCount = (k) => (k === 'wiki' ? (counts.wiki || 0) + (counts.config || 0) : counts[k])
 
-  // Render-cap the list so a big section (a wiki vault is the case that bites)
-  // doesn't paint hundreds of rows. With no filter we show the first 50; typing
-  // searches the full client-side list by title/name/path. The active item is
-  // always kept in view so a deep-link past row 50 still highlights.
-  const CAP = 50
+  // Skills are divided by class, as the old Skills page did: listed class by class under a
+  // header, with a chip per class to narrow to one. A skill the registry does not know is
+  // yours (`personal`), outside the taxonomy, so it gets its own chip only when one exists.
+  const pool = isSkills ? skillSplit.rows.filter((it) => cat === 'all' || it.cat === cat) : items
+
+  // Render-cap the list so a big kind (a wiki vault is the case that bites) doesn't paint
+  // hundreds of rows. Typing searches the full list; the active item is always kept in view.
+  // Skills are never capped: a class header must not promise rows the cap then hides.
+  const CAP = isSkills ? Infinity : 50
   const ql = q.trim().toLowerCase()
   const matches = ql
-    ? items.filter((it) =>
+    ? pool.filter((it) =>
         `${it.title || ''} ${it.name || ''} ${it.desc || ''}`.toLowerCase().includes(ql),
       )
-    : items.slice(0, CAP)
+    : pool.slice(0, CAP)
+  // A class chip narrows on purpose, so it does not pull the active entry back in.
   const shown =
-    !ql && activeName && !matches.some((it) => it.name === activeName)
+    !ql && cat === 'all' && activeName && !matches.some((it) => it.name === activeName)
       ? [...matches, ...items.filter((it) => it.name === activeName)]
       : matches
 
-  // Keep the active row in view inside the master scroller without using
-  // scrollIntoView (which would also scroll the page). Only re-center when
-  // the row is GENUINELY off-screen — clicking a row that's already visible
-  // shouldn't move the list under the user's cursor; that auto-re-centering
-  // was making the just-clicked agent vanish below the fold.
+  // Keep the active row in view inside the list scroller, without scrollIntoView (which
+  // would also scroll the page), and only when it is genuinely off-screen: re-centering a
+  // row that was just clicked moves the list under the cursor.
   useEffect(() => {
-    const el = rowsRef.current?.querySelector('.lib-row.on')
     const box = rowsRef.current
+    const el = box?.querySelector('.lib-row.on')
     if (!el || !box) return
-    const elTop = el.offsetTop
-    const elBottom = elTop + el.clientHeight
-    const viewTop = box.scrollTop
-    const viewBottom = viewTop + box.clientHeight
-    // Fully visible already → leave the scroll position alone.
-    if (elTop >= viewTop && elBottom <= viewBottom) return
-    // Otherwise (deep-link from Graph/Spotlight, or section switch) center it.
-    box.scrollTop = Math.max(0, elTop - box.clientHeight / 2 + el.clientHeight / 2)
+    const top = el.offsetTop
+    if (top >= box.scrollTop && top + el.clientHeight <= box.scrollTop + box.clientHeight) return
+    box.scrollTop = Math.max(0, top - box.clientHeight / 2 + el.clientHeight / 2)
   }, [sec, selected])
 
-  const openItem = (it) =>
-    go(`#/item/${it.type || SECTIONS[sec].type}/${encodeURIComponent(it.name)}`)
-  const switchSection = (k) => go(`#/section/${k}`)
+  const itemHref = (it) =>
+    base ? `${base}/${enc(it.name)}` : `#/item/${it.type || SECTIONS[sec].type}/${enc(it.name)}`
 
-  // Arrow keys walk the master list. Focus moves between the row buttons; Enter
-  // or Space (the button's own default) opens the focused row. Keeps browsing
-  // off the mouse without spamming the history on every keystroke.
+  // Arrow keys walk the list; Enter follows the focused link.
   const onRowsKey = (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    const btns = [...(rowsRef.current?.querySelectorAll('.lib-row') || [])]
-    const idx = btns.indexOf(document.activeElement)
+    const rows = [...(rowsRef.current?.querySelectorAll('.lib-row') || [])]
+    const idx = rows.indexOf(document.activeElement)
     if (idx === -1) return
     e.preventDefault()
-    const next = e.key === 'ArrowDown' ? Math.min(idx + 1, btns.length - 1) : Math.max(idx - 1, 0)
-    btns[next]?.focus()
+    rows[e.key === 'ArrowDown' ? Math.min(idx + 1, rows.length - 1) : Math.max(idx - 1, 0)]?.focus()
   }
-  // Agents has its own top-level tab (#/agents), like Laws and Skills: the page
-  // reuses this master-detail view locked to the agents section, chip-bar hidden.
-  const standalone = sec === 'agents'
 
   const onForget = async () => {
     const name = activeItem?.name
@@ -221,15 +205,14 @@ export default function Library({ overview, section, selected, dataRev }) {
       setActionErr(`Could not forget "${name}": ${e.message}`)
       return
     }
-    go('#/section/memory')
+    go(base || '#/section/memory')
     reloadCatalog()
   }
 
-  // Promote a memory fact into a standing trial rule in user-rules.md — the web
-  // twin of the rule skill's memory→rule flow. The fact is deleted after the
-  // promotion (the rule supersedes it; keeping both would load the lesson twice),
-  // which is why the confirm spells that out. Lands on the Rules page so the new
-  // trial rule is immediately visible and editable.
+  // Promote a memory fact into a standing trial rule in user-rules.md, the web twin of the
+  // rule skill's memory->rule flow. The fact is deleted after the promotion (keeping both
+  // would load the lesson twice), which is why the confirm spells that out. Lands on the
+  // Rules tab so the new trial rule is immediately visible and editable.
   const onPromote = async () => {
     const name = activeItem?.name
     if (!name) return
@@ -242,68 +225,115 @@ export default function Library({ overview, section, selected, dataRev }) {
     try {
       const cur = await api.rules()
       await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true })
-      go('#/rules')
+      go('#/personal/rules')
     } catch (e) {
       setActionErr(`Could not promote: ${e.message}`)
       reloadCatalog()
     }
   }
 
+  // The composition bar over the kinds column: skills, agents, and everything else the
+  // agent keeps, as shares of the whole library.
+  const total = LIBRARY_ORDER.reduce((n, k) => n + (counts[k] ?? 0), 0)
+  const rest = total - (counts.skills ?? 0) - (counts.agents ?? 0)
+  const share = (n) => `${total ? (n / total) * 100 : 0}%`
+  const status = item?.status || activeItem?.status
+  const skillCat = sec === 'skills' ? SKILL_CATS[fromCatalog?.klass] : null
+  const label = SECTIONS[sec].label
+
   return (
     <>
-      <div className="head-row mb-16">
-        <div>
-          <div className="eyebrow">harness content</div>
-          <h1 className="h">{standalone ? 'Agents' : 'Library'}</h1>
-          <p className="sub">
-            {standalone
-              ? 'The capability specialists deployed in the harness. Pick one to read its charter, straight from the source file.'
-              : 'The harness content you can browse: durable memory, the notebook, and your knowledge base with its setup. Pick a section, then read an entry — straight from the source file.'}
-          </p>
-        </div>
-      </div>
-      {standalone ? null : (
-        <div className="lib-secbar" role="group" aria-label="Section">
-          {LIBRARY_ORDER.map((k) => {
-            const meta = SECTIONS[k]
-            const n = chipCount(k) ?? null
-            return (
-              <button
-                key={k}
-                className={`lib-secchip ${sec === k ? 'on' : ''}`}
-                onClick={() => switchSection(k)}
-                aria-pressed={sec === k}
-              >
-                <Icon name={meta.icon} className="glyph" />
-                <span>{meta.label}</span>
-                {n != null && <span className="lib-secchip-n">{n}</span>}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {err ? <ErrorState error={err} style={{ margin: '0 0 12px' }} /> : null}
+      <div
+        className={`library${lock ? ' locked' : ''}${isSkills && skillSplit.cats.length > 1 ? ' has-banner' : ''}`}
+      >
+        {isSkills && skillSplit.cats.length > 1 && (
+          // Skill types as a banner across the whole card: the classes are the first way to
+          // cut 50-odd skills, so they get the width, not a wrapped corner of the list column.
+          <div className="skill-banner" role="group" aria-label="Skill types">
+            <div className="skill-banner-row">
+              <span className="skill-banner-label">Skill types</span>
+              <div className="skill-cats">
+                <button
+                  type="button"
+                  className={`skill-cat${cat === 'all' ? ' on' : ''}`}
+                  aria-pressed={cat === 'all'}
+                  onClick={() => setCat('all')}
+                >
+                  All <span className="cn">{items.length}</span>
+                </button>
+                {skillSplit.cats.map(({ key, label: cl, n, c }) => (
+                  <button
+                    type="button"
+                    key={key}
+                    className={`skill-cat${cat === key ? ' on' : ''}`}
+                    aria-pressed={cat === key}
+                    style={{ '--cc': c }}
+                    onClick={() => setCat(key)}
+                  >
+                    <span className="cdot" aria-hidden="true" />
+                    {cl} <span className="cn">{n}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="skill-mix" aria-hidden="true">
+              {skillSplit.cats.map(({ key, n, c }) => (
+                <span
+                  key={key}
+                  className={cat === 'all' || cat === key ? '' : 'dim'}
+                  style={{ '--cc': c, flexGrow: n }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        {lock ? null : (
+          <aside className="lib-kinds" aria-label="Library kinds">
+            <div className="lib-title">
+              <h1 className="h">Library</h1>
+              <span className="dim">What the agent knows</span>
+            </div>
+            <div className="stackbar thin" aria-hidden="true">
+              <span className="sb-invariants" style={{ width: share(counts.skills ?? 0) }} />
+              <span className="sb-doctrines" style={{ width: share(counts.agents ?? 0) }} />
+              <span className="sb-rest" style={{ width: share(rest) }} />
+            </div>
+            <nav className="kind-list" aria-label="Kinds">
+              {LIBRARY_ORDER.map((k) => (
+                <a
+                  key={k}
+                  href={`#/section/${k}`}
+                  className={sec === k ? 'on' : ''}
+                  aria-current={sec === k ? 'page' : undefined}
+                >
+                  {SECTIONS[k].label}
+                  <span className="mono dim">{counts[k] ?? ''}</span>
+                </a>
+              ))}
+            </nav>
+          </aside>
+        )}
 
-      {err ? <ErrorState error={err} style={{ margin: '12px 0' }} /> : null}
-
-      <div className="lib lib-2">
-        <div className="card lib-main">
-          <div className="lib-head">
-            <span className="lib-head-label">{SECTIONS[sec].label}</span>
-            <span className="lib-head-count">
-              {ql ? `${matches.length} of ${items.length}` : `${items.length} items`}
-            </span>
+        <section className="lib-list" aria-label={label}>
+          <div className="lib-list-head">
+            <b>
+              {label}{' '}
+              <span className="mono dim">
+                {ql ? `${matches.length} of ${pool.length}` : pool.length}
+              </span>
+            </b>
           </div>
           <FilterInput
             value={q}
             onChange={setQ}
-            placeholder={`Filter ${SECTIONS[sec].label.toLowerCase()}…`}
-            label={`Filter ${SECTIONS[sec].label}`}
+            placeholder={`Filter ${label.toLowerCase()}`}
+            label={`Filter ${label}`}
           />
           <div className="lib-rows" ref={rowsRef} onKeyDown={onRowsKey}>
             {(() => {
-              // Insert a small header each time the row's group changes. Only the
-              // merged Knowledge section tags rows with a group (Setup, then one
-              // per vault); elsewhere `group` is absent and no headers render.
+              // A small header each time the row's group changes: a wiki page's vault, or a
+              // skill's class. Kinds without groups render no headers.
               let lastGroup = null
               const out = []
               for (const it of shown) {
@@ -311,6 +341,9 @@ export default function Library({ overview, section, selected, dataRev }) {
                   lastGroup = it.group
                   out.push(
                     <div className="lib-group" key={`g-${it.group}`}>
+                      {it.groupC ? (
+                        <span className="cdot" style={{ '--cc': it.groupC }} aria-hidden="true" />
+                      ) : null}
                       {it.group}
                     </div>,
                   )
@@ -320,7 +353,7 @@ export default function Library({ overview, section, selected, dataRev }) {
                     key={it.name}
                     item={it}
                     isOpen={activeItem?.name === it.name}
-                    onOpen={() => openItem(it)}
+                    href={itemHref(it)}
                   />,
                 )
               }
@@ -334,58 +367,50 @@ export default function Library({ overview, section, selected, dataRev }) {
             {ql && matches.length === 0 && (
               <div className="empty" style={{ padding: 32 }}>
                 <div className="big">No matches</div>
-                Nothing in {SECTIONS[sec].label.toLowerCase()} matches “{q.trim()}”.
+                Nothing in {label.toLowerCase()} matches “{q.trim()}”.
               </div>
             )}
-            {items.length === 0 && (
+            {catalog?.section === sec && items.length === 0 && (
               <div className="empty" style={{ padding: 32 }}>
                 <div className="big">Nothing here yet</div>
-                This section is empty; once the harness produces entries they will appear.
+                Once the harness produces entries they appear here.
               </div>
             )}
           </div>
-        </div>
-        <div className="card lib-detail pad-lg">
+        </section>
+
+        <article className="lib-reader" aria-label="Entry">
           {activeItem ? (
             <>
-              <div className="eyebrow">{SECTIONS[sec].label.replace(/s$/, '')}</div>
-              <h2 className="h" style={{ margin: '8px 0 10px' }}>
-                {item?.title || activeItem.title || activeItem.name}
-              </h2>
-              {(item?.desc || activeItem.desc) && (
-                <p className="sub">{item?.desc || activeItem.desc}</p>
-              )}
-              <div className="lib-meta-grid" style={{ marginTop: 14 }}>
-                <div>
-                  <div className="tick">section</div>
-                  <div className="lib-meta-v">{SECTIONS[sec].label}</div>
-                </div>
-                <div>
-                  <div className="tick">source</div>
-                  <div className="lib-meta-v mono">
-                    {item?.source || activeItem.source || libSource(sec, activeItem.name)}
-                  </div>
-                </div>
-                {/* Only agents and skills carry a lifecycle status; memory facts,
-                    notebook pages and wiki entries have none, so the cell is absent
-                    there rather than showing an empty label. */}
-                {(item?.status || activeItem.status) && (
-                  <div>
-                    <div className="tick">status</div>
-                    <div className="lib-meta-v">{item?.status || activeItem.status}</div>
-                  </div>
-                )}
+              <div className="reader-tags">
+                <span className="tag acc">{label.replace(/s$/, '')}</span>
+                {skillCat ? <span className="tag">{skillCat.label}</span> : null}
+                <StatusBadge status={status} />
               </div>
+              <div className="reader-head">
+                <h2 className="reader-title">
+                  {item?.title || activeItem.title || activeItem.name}
+                </h2>
+                {/* Console-only: the agent's emblem, beside its name (components/AgentGlyph.jsx). */}
+                {sec === 'agents' ? <AgentGlyph name={activeItem.name} /> : null}
+              </div>
+              {(item?.desc || activeItem.desc) && (
+                <p className="reader-lede">{item?.desc || activeItem.desc}</p>
+              )}
+              <p className="mono dim reader-src">
+                {item?.source || activeItem.source || libSource(sec, activeItem.name)}
+              </p>
               {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
-                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                <div className="row gap-8">
                   <button
+                    type="button"
                     className="btn ghost sm"
                     onClick={onPromote}
                     title="Turn this lesson into a standing trial rule in user-rules.md"
                   >
                     Promote to rule
                   </button>
-                  <button className="btn ghost sm" onClick={onForget}>
+                  <button type="button" className="btn ghost sm" onClick={onForget}>
                     Forget this fact
                   </button>
                 </div>
@@ -398,7 +423,7 @@ export default function Library({ overview, section, selected, dataRev }) {
                   <p className="sub">Loading…</p>
                 )
               ) : item?.body ? (
-                <div className="lib-doc">
+                <div className="lib-doc detail-doc">
                   <Markdown body={item.body} links={item.links || []} />
                 </div>
               ) : item === null && activeName ? (
@@ -409,11 +434,11 @@ export default function Library({ overview, section, selected, dataRev }) {
             </>
           ) : (
             <div className="empty">
-              <div className="big">Select an item</div>
+              <div className="big">Select an entry</div>
               Pick something from the list to read it.
             </div>
           )}
-        </div>
+        </article>
       </div>
     </>
   )
