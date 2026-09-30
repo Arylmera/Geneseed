@@ -1,41 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { resolveLayout, defaultLayoutFor } from '../hooks/useLayout.js'
+import { LAYOUTS, resolveLayout } from '../hooks/useLayout.js'
 import { FLAVOURS, resolveFlavour } from '../hooks/useFlavour.js'
 
-describe('defaultLayoutFor', () => {
-  it('pairs each surviving skin with the lens it was designed around', () => {
-    // Atlas was drawn for the Journal; Operator keeps its dense HUD readout.
-    expect(defaultLayoutFor('atlas')).toBe('journal')
-    expect(defaultLayoutFor('operator')).toBe('operator')
-    // Cultivar and Matrix share the genome grid. The Greenhouse lens is nobody's
-    // default any more; it is still pickable, see resolveLayout below.
-    expect(defaultLayoutFor('cultivar')).toBe('cultivar')
-    expect(defaultLayoutFor('matrix')).toBe('cultivar')
-  })
-
-  // The original blank-tab bug: a flavour with no dispatch branch must fall back
-  // to a real lens, not undefined.
-  it('falls back to cultivar for an unknown flavour', () => {
-    for (const f of ['neon', 'bogus', undefined]) expect(defaultLayoutFor(f)).toBe('cultivar')
-  })
-})
-
 describe('resolveLayout', () => {
-  it('honours an explicit valid layout over the flavour default', () => {
-    expect(resolveLayout('atlas', 'operator')).toBe('operator')
-    // The Greenhouse lens outlived its skin: any flavour can still pick it.
-    expect(resolveLayout('matrix', 'greenhouse')).toBe('greenhouse')
-    expect(resolveLayout('cultivar', 'journal')).toBe('journal')
+  it('offers the new Overview first, then the four older dashboards', () => {
+    expect(LAYOUTS.map((l) => l.id)).toEqual([
+      'overview',
+      'cultivar',
+      'greenhouse',
+      'operator',
+      'journal',
+    ])
   })
 
-  it('uses the flavour default for auto, invalid, or absent layout', () => {
-    expect(resolveLayout('atlas', 'auto')).toBe('journal')
-    expect(resolveLayout('atlas', 'bogus')).toBe('journal')
-    expect(resolveLayout('matrix', undefined)).toBe('cultivar')
+  it('keeps an explicit choice, whatever the skin', () => {
+    // The view is independent of the flavour: Operator's HUD under the Atlas skin is fine.
+    for (const id of ['overview', 'cultivar', 'greenhouse', 'operator', 'journal'])
+      expect(resolveLayout(id)).toBe(id)
   })
 
-  it('never returns auto', () => {
-    for (const f of FLAVOURS.map((x) => x.id)) expect(resolveLayout(f, 'auto')).not.toBe('auto')
+  // 'auto' used to mean "the lens this skin was drawn around", and useLocalStorage persists
+  // the default on first render, so nearly every browser holds a stored 'auto'. The new
+  // Overview is the console for everyone, so a stored 'auto' reads as the Overview; so do
+  // an unknown id and nothing at all.
+  it('reads auto, an unknown id and an empty store as the Overview', () => {
+    for (const v of ['auto', 'bogus', null, undefined, ''])
+      expect(resolveLayout(v)).toBe('overview')
   })
 })
 

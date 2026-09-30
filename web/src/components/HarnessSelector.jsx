@@ -1,14 +1,13 @@
 import React from 'react'
 import { api } from '../api/index.js'
-import { useAsync } from '../hooks/useAsync.js'
 
 // Re-points the whole console at one detected install. Lists the ACTIVE installs only
 // (others have no data to view); selecting one updates memory, edits, and inventory
-// everywhere. Hidden when there's nothing to switch between. Refetches on dataRev so the
-// option set + current selection stay in sync after a toggle/install.
-export default function HarnessSelector({ dataRev, onSwitch }) {
-  const { data } = useAsync(() => api.installs(), [dataRev])
-  const active = (data?.installs || []).filter((i) => i.state === 'active')
+// everywhere. Hidden when there's nothing to switch between. `installs` is App's one
+// copy of /api/installs (the sidebar's Installs count reads the same list), refetched on
+// every data revision, so the option set and the selection stay in sync after a toggle.
+export default function HarnessSelector({ installs, onSwitch }) {
+  const active = (installs || []).filter((i) => i.state === 'active')
   if (active.length < 2) return null
 
   const current = active.find((i) => i.selected) || active[0]
@@ -24,19 +23,18 @@ export default function HarnessSelector({ dataRev, onSwitch }) {
   }
 
   return (
-    <div
-      className="row gap-8"
-      style={{ alignItems: 'center' }}
+    <select
+      className="sel tb-harness"
+      aria-label="Harness to view"
       title="Harness the console is viewing"
+      value={current.id}
+      onChange={onChange}
     >
-      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>harness</span>
-      <select className="sel" aria-label="harness to view" value={current.id} onChange={onChange}>
-        {active.map((i) => (
-          <option key={i.id} value={i.id}>
-            {i.host} · {i.scope}
-          </option>
-        ))}
-      </select>
-    </div>
+      {active.map((i) => (
+        <option key={i.id} value={i.id}>
+          {i.host} · {i.scope}
+        </option>
+      ))}
+    </select>
   )
 }

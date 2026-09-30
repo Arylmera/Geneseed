@@ -15,13 +15,38 @@ import { useSearchIndex } from '../hooks/useSearchIndex.js'
 import { api } from '../api/index.js'
 
 describe('useSearchIndex', () => {
-  it('routes MCP servers to the Harness page, where their wiring lives', async () => {
+  it('routes MCP servers to Installs / Hosts, where their wiring lives', async () => {
     const { result } = renderHook(() => useSearchIndex(0))
     let entries
     await act(async () => {
       entries = await result.current.prime()
     })
-    expect(entries.find((e) => e.kind === 'MCP servers').route).toBe('#/harness')
+    expect(entries.find((e) => e.kind === 'MCP servers').route).toBe('#/installs/hosts')
+  })
+
+  // The search box is also the way to get somewhere by name: every page, and every tab of
+  // the two tabbed pages, is an entry of its own.
+  it('indexes every page and tab first', async () => {
+    const { result } = renderHook(() => useSearchIndex(0))
+    let entries
+    await act(async () => {
+      entries = await result.current.prime()
+    })
+    expect(entries.filter((e) => e.kind === 'Pages').map((e) => [e.title, e.route])).toEqual([
+      ['Overview', '#/'],
+      ['Constitution', '#/laws'],
+      ['Library', '#/library'],
+      ['Personal / Rules', '#/personal/rules'],
+      ['Personal / Profile', '#/personal/profile'],
+      ['Personal / Memory', '#/personal/memory'],
+      ['Personal / Notebook', '#/personal/notebook'],
+      ['Installs / Hosts', '#/installs/hosts'],
+      ['Installs / Local edits', '#/installs/edits'],
+      ['Installs / Doctor', '#/installs/doctor'],
+      ['Installs / Server', '#/installs/server'],
+      ['Docs', '#/docs'],
+      ['Activity', '#/activity'],
+    ])
   })
 
   it('drops the index when the data revision moves, so the next search re-reads', async () => {

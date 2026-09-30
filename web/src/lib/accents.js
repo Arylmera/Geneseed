@@ -23,6 +23,19 @@ const ACCENT_2 = {
 
 export const accentHex = (name) => ACCENT_HEX[name] || ACCENT_HEX.cyan
 
+// Accent-coloured TEXT on light surfaces. The fill colour (ACCENT_2 in light mode) sits near
+// 3:1 on the pale page, enough for a bar or a button but not for a link or a label; these
+// darker companions clear 4.5:1 on the light surfaces. Dark mode reads the fill itself.
+export const ACCENT_TEXT_LIGHT = {
+  red: '#A92F2B',
+  green: '#1E7A47',
+  yellow: '#8A6414',
+  blue: '#2F55C0',
+  magenta: '#7E3FB8',
+  cyan: '#15766C',
+  white: '#465A51',
+}
+
 // Readable text on a filled accent.
 const accentInk = (name) =>
   name === 'yellow' || name === 'white' || name === 'cyan' || name === 'green'
@@ -44,6 +57,10 @@ export function applyAccent(el, name, mode) {
   el.style.setProperty('--accent', hex)
   el.style.setProperty('--accent-2', ACCENT_2[name] || ACCENT_2.cyan)
   el.style.setProperty('--accent-ink', ink)
+  el.style.setProperty(
+    '--accent-text',
+    light ? ACCENT_TEXT_LIGHT[name] || ACCENT_TEXT_LIGHT.cyan : hex,
+  )
 }
 
 // Each flavour's CURATED signature accent — used when the accent mode is 'curated'
@@ -70,5 +87,7 @@ export function applyCuratedAccent(el, flavour, mode) {
   el.style.setProperty('--accent', light ? c.light : c.dark)
   el.style.setProperty('--accent-2', c.light)
   el.style.setProperty('--accent-ink', light ? c.inkLight : c.ink)
+  // The curated light values are already the deep companions, dark enough to read as text.
+  el.style.setProperty('--accent-text', light ? c.light : c.dark)
   return true
 }

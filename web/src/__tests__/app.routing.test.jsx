@@ -3,12 +3,12 @@ import { act, render, screen, cleanup } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // App's routing, observed from the outside: a hash goes in, and the test reads which page
-// rendered, with which props, and which rail row lit. Every page is a stub that prints its
-// routing props and counts its own mounts — the pages' real behaviour is their own suites'
-// business; what is pinned here is the dispatch, which is what a routing refactor can break.
+// rendered, with which props, which sidebar row lit, and what the breadcrumb says. Every
+// page is a stub that prints its routing props and counts its own mounts: the pages' real
+// behaviour is their own suites' business; what is pinned here is the dispatch.
 
-// vi.hoisted: the vi.mock factories below are hoisted above every import and
-// declaration, so whatever they close over must be hoisted with them.
+// vi.hoisted: the vi.mock factories below are hoisted above every import and declaration,
+// so whatever they close over must be hoisted with them.
 const { mounts, stub } = vi.hoisted(() => {
   const mounts = {}
   const stub = (name) =>
@@ -16,7 +16,7 @@ const { mounts, stub } = vi.hoisted(() => {
       useEffect(() => {
         mounts[name] = (mounts[name] || 0) + 1
       }, [])
-      const shown = ['section', 'selected', 'sid', 'page']
+      const shown = ['section', 'selected', 'tab', 'item', 'sid', 'page']
         .filter((k) => props[k] !== undefined)
         .map((k) => `${k}=${props[k]}`)
         .join(' ')
@@ -25,18 +25,13 @@ const { mounts, stub } = vi.hoisted(() => {
   return { mounts, stub }
 })
 
-vi.mock('../pages/Dashboard/index.jsx', () => ({ default: stub('Dashboard') }))
+vi.mock('../pages/Overview/index.jsx', () => ({ default: stub('Overview') }))
 vi.mock('../pages/Activity.jsx', () => ({ default: stub('Activity') }))
 vi.mock('../pages/ActivityDetail.jsx', () => ({ default: stub('ActivityDetail') }))
 vi.mock('../pages/Library.jsx', () => ({ default: stub('Library') }))
 vi.mock('../pages/Laws.jsx', () => ({ default: stub('Laws') }))
-vi.mock('../pages/Rules.jsx', () => ({ default: stub('Rules') }))
-vi.mock('../pages/Profile.jsx', () => ({ default: stub('Profile') }))
-vi.mock('../pages/Skills.jsx', () => ({ default: stub('Skills') }))
-vi.mock('../pages/Diff.jsx', () => ({ default: stub('Diff') }))
-vi.mock('../pages/Doctor.jsx', () => ({ default: stub('Doctor') }))
-vi.mock('../pages/Settings/index.jsx', () => ({ default: stub('Settings') }))
-vi.mock('../pages/Harness.jsx', () => ({ default: stub('Harness') }))
+vi.mock('../pages/Personal.jsx', () => ({ default: stub('Personal') }))
+vi.mock('../pages/Installs/index.jsx', () => ({ default: stub('Installs') }))
 vi.mock('../pages/Docs/index.jsx', () => ({ default: stub('Docs') }))
 // Every api call the shell makes answers with one empty-ish object; nothing here reads it.
 vi.mock('../api/index.js', () => ({
@@ -52,7 +47,8 @@ const navigate = async (hash) => {
   })
 }
 const page = async () => (await screen.findByTestId('page')).textContent
-const lit = () => document.querySelector('a.rail-item.active')?.textContent
+const lit = () => document.querySelector('.sidebar a.sb-item.on')?.textContent
+const crumb = () => document.querySelector('.crumbs [aria-current="page"]')?.textContent
 
 beforeEach(() => {
   for (const k of Object.keys(mounts)) delete mounts[k]
@@ -61,83 +57,70 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-// hash -> [the page and routing props it renders, the rail row that lights].
-// The rail label for the laws page is "Constitution" — the route stays #/laws.
+// hash -> [the page and routing props it renders, the sidebar row that lights, the last
+// breadcrumb]. The retired pages are the rows that matter most: each one names where an
+// old bookmark lands now.
 const TABLE = [
-  ['#/', 'Dashboard', 'Dashboard'],
-  ['#/nonsense', 'Dashboard', 'Dashboard'],
-  ['#/laws', 'Laws', 'Constitution'],
-  ['#/section/laws', 'Laws', 'Constitution'],
-  ['#/item/law/IV', 'Laws selected=IV', 'Constitution'],
-  ['#/skills', 'Skills', 'Skills'],
-  ['#/section/skills', 'Skills', 'Skills'],
-  ['#/item/skill/tdd', 'Skills selected=tdd', 'Skills'],
-  ['#/agents', 'Library section=agents', 'Agents'],
-  ['#/section/agents', 'Library section=agents', 'Agents'],
-  ['#/item/agent/advocate', 'Library section=agents selected=advocate', 'Agents'],
-  // `#/library` hands no section: Library reads that as "the first chip".
-  ['#/library', 'Library', 'Library'],
-  ['#/section/memory', 'Library section=memory', 'Library'],
+  ['#/', 'Overview', 'Overview', 'Overview'],
+  ['#/nonsense', 'Overview', 'Overview', 'Overview'],
+  ['#/dashboard', 'Overview', 'Overview', 'Overview'],
+  ['#/laws', 'Laws', 'Constitution', 'Constitution'],
+  ['#/section/laws', 'Laws', 'Constitution', 'Constitution'],
+  ['#/item/law/IV', 'Laws selected=IV', 'Constitution', 'Constitution'],
+  ['#/library', 'Library', 'Library', 'Library'],
+  ['#/skills', 'Library section=skills', 'Library', 'Library'],
+  ['#/item/skill/tdd', 'Library section=skills selected=tdd', 'Library', 'Library'],
+  ['#/agents', 'Library section=agents', 'Library', 'Library'],
+  ['#/section/agents', 'Library section=agents', 'Library', 'Library'],
+  ['#/item/agent/advocate', 'Library section=agents selected=advocate', 'Library', 'Library'],
+  ['#/section/memory', 'Library section=memory', 'Library', 'Library'],
   // Names are URI-decoded, so a space or a slash in a name survives the round trip.
-  ['#/item/memory/a%20b', 'Library section=memory selected=a b', 'Library'],
-  ['#/item/notebook/x%2Fy', 'Library section=notebook selected=x/y', 'Library'],
-  // config has no chip of its own: the resolver folds it onto the wiki (Knowledge) chip.
-  ['#/section/config', 'Library section=wiki', 'Library'],
-  ['#/item/config/x', 'Library section=wiki selected=x', 'Library'],
-  ['#/rules', 'Rules', 'Rules'],
-  ['#/profile', 'Profile', 'Profile'],
-  ['#/docs', 'Docs page=', 'Docs'],
-  ['#/docs/cli/build', 'Docs page=cli/build', 'Docs'],
-  ['#/activity', 'Activity', 'Activity'],
-  ['#/activity/s%201', 'ActivityDetail sid=s 1', 'Activity'],
-  ['#/diff', 'Diff', 'Changes'],
-  ['#/doctor', 'Doctor', 'Doctor'],
-  ['#/harness', 'Harness', 'Harness'],
-  // Retired names still land on the page that absorbed them (router.js VIEW_ALIAS).
-  ['#/harnesses', 'Harness', 'Harness'],
-  ['#/themes', 'Harness', 'Harness'],
-  ['#/settings', 'Settings', 'Settings'],
-  ['#/about', 'Settings', 'Settings'],
+  ['#/item/memory/a%20b', 'Library section=memory selected=a b', 'Library', 'Library'],
+  ['#/item/notebook/x%2Fy', 'Library section=notebook selected=x/y', 'Library', 'Library'],
+  ['#/section/config', 'Library section=config', 'Library', 'Library'],
+  ['#/personal', 'Personal tab=rules', 'Personal', 'Rules'],
+  ['#/rules', 'Personal tab=rules', 'Personal', 'Rules'],
+  ['#/profile', 'Personal tab=profile', 'Personal', 'Profile'],
+  ['#/personal/memory/f', 'Personal tab=memory item=f', 'Personal', 'Memory'],
+  ['#/installs', 'Installs tab=hosts', 'Installs', 'Hosts'],
+  ['#/harness', 'Installs tab=hosts', 'Installs', 'Hosts'],
+  ['#/harnesses', 'Installs tab=hosts', 'Installs', 'Hosts'],
+  ['#/themes', 'Installs tab=hosts', 'Installs', 'Hosts'],
+  ['#/diff', 'Installs tab=edits', 'Installs', 'Local edits'],
+  ['#/doctor', 'Installs tab=doctor', 'Installs', 'Doctor'],
+  ['#/settings', 'Installs tab=server', 'Installs', 'Server'],
+  ['#/about', 'Installs tab=server', 'Installs', 'Server'],
+  ['#/docs', 'Docs page=', 'Docs', 'Docs'],
+  ['#/docs/cli/build', 'Docs page=cli/build', 'Docs', 'Docs'],
+  ['#/activity', 'Activity', 'Activity', 'Activity'],
+  ['#/activity/s%201', 'ActivityDetail sid=s 1', 'Activity', 'Activity'],
 ]
 
 describe('App routing', () => {
-  it.each(TABLE)('%s renders %s and lights %s', async (hash, expected, rail) => {
-    window.location.hash = hash
-    render(<App />)
-    expect(await page()).toBe(expected)
-    expect(lit()).toMatch(new RegExp(`^${rail}`))
-  })
-})
-
-// The prompt's --tab flag comes from the same page the rail lights, so the two can no
-// longer disagree: `#/section/agents` used to light Agents while the prompt said library.
-describe('topbar tab flag', () => {
-  it.each([
-    ['#/', 'overview'],
-    ['#/section/agents', 'agents'],
-    ['#/item/law/IV', 'laws'],
-    ['#/activity/s1', 'activity'],
-    ['#/themes', 'harness'],
-  ])('%s -> --tab=%s', async (hash, flag) => {
-    window.location.hash = hash
-    render(<App />)
-    await page()
-    expect(document.querySelector('.prompt .flag').textContent).toBe(`--tab=${flag}`)
-  })
+  it.each(TABLE)(
+    '%s renders %s, lights %s, ends the breadcrumb at %s',
+    async (hash, expected, row, here) => {
+      window.location.hash = hash
+      render(<App />)
+      expect(await page()).toBe(expected)
+      expect(lit()).toMatch(new RegExp(`^${row}`))
+      expect(crumb()).toBe(here)
+    },
+  )
 })
 
 // ⚠ App.jsx: a page reachable from several routes must keep ONE slot in the tree, or
-// crossing between those routes unmounts it — expanding a law (`#/laws` -> `#/item/law/IV`)
-// used to throw the page's state away and refetch. Each walk below stays on one page, so
-// that page must mount exactly once however many routes it crosses.
+// crossing between those routes unmounts it (throwing away its state and refetching).
+// Each walk below stays on one page, so that page must mount exactly once.
 describe('one slot per page', () => {
   const WALKS = [
     ['Laws', ['#/laws', '#/item/law/IV', '#/item/law/craft.1', '#/section/laws', '#/laws']],
-    ['Skills', ['#/skills', '#/item/skill/tdd', '#/section/skills']],
     [
       'Library',
-      ['#/agents', '#/library', '#/section/memory', '#/item/agent/x', '#/item/wiki/y', '#/agents'],
+      ['#/skills', '#/agents', '#/library', '#/section/memory', '#/item/agent/x', '#/item/wiki/y'],
     ],
+    ['Personal', ['#/rules', '#/profile', '#/personal/memory', '#/personal/memory/f']],
+    ['Installs', ['#/harness', '#/diff', '#/doctor', '#/settings', '#/installs/hosts']],
   ]
   it.each(WALKS)('%s mounts once across %j', async (name, hashes) => {
     window.location.hash = hashes[0]
