@@ -14,8 +14,8 @@ const NAV = [
     page: 'laws',
     label: 'Constitution',
     icon: 'law',
-    // Every entry the page lists: the ethos sections, the invariants (retired ones keep
-    // their number, so they are counted), and the doctrine rules.
+    // Every entry the page lists: the ethos sections, the invariants (a retired one an older
+    // install still lists is counted too), and the doctrine rules.
     count: (o) =>
       o?.counts
         ? (o.counts.ontology ?? 0) + (o.counts.laws ?? 0) + (o.counts.doctrines?.rules ?? 0)

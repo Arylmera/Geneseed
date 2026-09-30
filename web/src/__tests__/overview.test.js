@@ -9,7 +9,8 @@ import {
 } from '../lib/overview.js'
 
 // The Overview's derivations, as tables: payloads in, rows out, every expected value written
-// out. The payload shapes are the real endpoints' (/api/overview, /api/setup, /api/rules,
+// out. LAWS is an OLDER server's catalog (eleven invariants, IX and XI retired in place), kept
+// because a console can still be pointed at such an install. The payload shapes are the real endpoints' (/api/overview, /api/setup, /api/rules,
 // /api/activity, /api/profile, /api/catalog/{skills,laws}).
 
 const COUNTS = { laws: 11, ontology: 4, doctrines: { active: 5, total: 5, rules: 28 } }
@@ -45,6 +46,14 @@ describe('constitutionMix', () => {
       { key: 'doctrines', label: 'Doctrines', n: 28, note: '5 of 5 packs' },
       { key: 'yours', label: 'Your rules', n: 3 },
     ])
+  })
+
+  it('says nothing about retirement when no invariant is retired', () => {
+    // The shipped canon since 2026-09-30: nine laws, none retired — a retired rule is removed,
+    // not kept, so '+0 retired' would describe a state the canon no longer has.
+    const current = { items: LAWS.items.filter((i) => !/(retired)/.test(i.title)) }
+    const [, inv] = constitutionMix({ ...COUNTS, laws: 9 }, current, null)
+    expect(inv).toEqual({ key: 'invariants', label: 'Invariants', n: 9, note: '' })
   })
 
   it('claims no retired count before the catalog has loaded', () => {
