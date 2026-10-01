@@ -68,9 +68,13 @@ never move.
 
 ## Posture
 
+<!-- LEAN:begin -->
 The register you work in — chosen by the user, fixed at build time so it holds
 steady instead of drifting back toward plain execution mid-session. It shapes
 *how* you engage; it never overrides a {{LAW}} or the {{PACT}}.
+<!-- LEAN:else -->
+Hold this register all session; do not drift back toward plain execution.
+<!-- LEAN:end -->
 
 {{POSTURE_BODY}}
 
@@ -78,9 +82,12 @@ steady instead of drifting back toward plain execution mid-session. It shapes
 
 ## Mode
 
+<!-- LEAN:begin -->
 How work gets executed — chosen by the user, fixed at build time. Orthogonal to
 posture: posture is the relationship register, mode is the operating register.
 
+<!-- LEAN:else -->
+<!-- LEAN:end -->
 {{MODE_BODY}}
 
 ---
@@ -116,12 +123,16 @@ the untouched stub — or the user asks — the [profile]({{DIR_SKILLS}}/profile
 
 *{{EPI_DOCTRINES}}*
 
+<!-- LEAN:begin -->
 Practices, not principles: how work is done here, chosen by this repository at
 build time. Only the packs enabled for this install appear
 below. The packs that are **not** active still ship as files under
 `{{DIR_DOCTRINES}}/`, so you can read the alternatives and so a rule here that
 cites a rule in an inactive pack is still resolvable. Change the set by
 rebuilding with `--doctrines <list>` (or through the setup wizard).
+<!-- LEAN:else -->
+Inactive packs still ship under `{{DIR_DOCTRINES}}/`, so a citation into one resolves.
+<!-- LEAN:end -->
 
 {{DOCTRINES_BODY}}
 
@@ -170,6 +181,7 @@ contract you do not already know.
 file (with the user's assent); {{MEMORY}} gets a record only when it clears
 {{DOCTRINE:persist-insight}}'s bar.
 
+<!-- LEAN:begin -->
 **Dispatching a multi-part goal.** When a goal spans several capabilities,
 decompose it into independent subtasks, route each to the single owning {{AGENT}}
 above, and converge the results yourself. Every handoff carries an **envelope** —
@@ -185,6 +197,13 @@ Ten of them — `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`,
 **council**: read-only debate seats that each argue one assigned stance. They are rarely
 dispatched alone; the [council {{SKILL}}]({{DIR_SKILLS}}/council.md) convenes the
 subset that productively clashes on a given motion.
+<!-- LEAN:else -->
+Dispatched {{AGENTS}} never commit or push ({{DOCTRINE:consent-before-push}} stays with
+you), and an unfulfilled contract returns as a stated gap, never invented content. A
+multi-part goal goes through the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md)
+(or the [workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md) where the host has a workflow tool);
+the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/council.md).
+<!-- LEAN:end -->
 
 ---
 
@@ -246,19 +265,6 @@ subset that productively clashes on a given motion.
 | [skill-forge]({{DIR_SKILLS}}/skill-forge.md) | a repeated task has no {{SKILL}}, a self-improvement loop produced an edit, or two {{SKILLS}} should merge |
 | [geneseed]({{DIR_SKILLS}}/geneseed.md) | the user mentions Geneseed, the harness, or `AGENT.md`, or you need to inspect or read from the deployed bundle ({{LAWS}}, {{AGENTS}}, {{SKILLS}}, {{MEMORY}}) |
 | [opencode-theme]({{DIR_SKILLS}}/opencode-theme.md) | the user wants their own OpenCode colour theme — pick or tweak a palette, get solid + transparent variants that survive rebuilds |
-<!-- CATALOG:else -->
-Your host lists every {{SKILL}} it can invoke, with its trigger, in your own
-inventory — that list is the catalogue and it is authoritative. Each written
-procedure is in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/) and the host loads it on
-demand.
-<!-- CATALOG:end -->
-
-When a task repeats and no {{SKILL}} covers it, forge one through the
-[skill-forge]({{DIR_SKILLS}}/skill-forge.md) {{SKILL}}: copy
-[`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
-domain ({{DOCTRINE:automate-repetition}}), and list it wherever this file carries a catalogue. Every {{SKILL}} ends with a
-**self-improvement loop** — honour it: fold what a run teaches back into the
-file, or into {{MEMORY}} ({{DOCTRINE:persist-insight}}).
 
 **Folder {{SKILLS}}.** Some {{SKILLS}} ship as self-contained folders under
 `{{DIR_SKILLS}}/`, each with its own format and provenance (`VENDOR.md`) —
@@ -272,6 +278,19 @@ its domain comes up:
   tables: context baseline, growth, per-tool attribution.
 - [explain-changes]({{DIR_SKILLS}}/explain-changes/SKILL.md) — offline HTML walkthrough
   of a diff: intent, risks, side-by-side git diff.
+<!-- CATALOG:else -->
+Your host lists every {{SKILL}} it can invoke, with its trigger, in your own
+inventory — that list is the catalogue and it is authoritative. Each written
+procedure is in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/) and the host loads it on
+demand.
+<!-- CATALOG:end -->
+
+When a task repeats and no {{SKILL}} covers it, forge one through the
+[skill-forge]({{DIR_SKILLS}}/skill-forge.md) {{SKILL}}: copy
+[`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
+domain ({{DOCTRINE:automate-repetition}}), and list it wherever this file carries a catalogue. Every {{SKILL}} ends with a
+**self-improvement loop** — honour it: fold what a run teaches back into the
+file, or into {{MEMORY}} ({{DOCTRINE:persist-insight}}).
 
 ---
 
@@ -459,23 +478,20 @@ own comment.
 
 ---
 
+<!-- LEAN:begin -->
 ## 10. {{SCRIPTS}} — optional automation
 
 *{{EPI_SCRIPTS}}*
 
-<!-- LEAN:begin -->
 {{INTRO_SCRIPTS}} The harness ships a dependency-free CLI (`geneseed
 build|doctor|diff|status|setup|web`, plus `geneseed-hook` for the verbs a host
 fires on its own) that can be wired into your host's hooks or into CI — notably
 `geneseed-hook context`, which injects the project context at session start so
 this read is enforced by the hook rather than left to you. All of it is
 opt-in; the harness works without any of it.
-<!-- LEAN:else -->
-{{INTRO_SCRIPTS}} A dependency-free CLI (`geneseed build|doctor|diff|status|setup|web`,
-plus `geneseed-hook` for host-fired verbs) can wire the gates and the §9 context
-read into your host's hooks or CI. Opt-in; the harness works without it.
-<!-- LEAN:end -->
 
 ---
 
+<!-- LEAN:else -->
+<!-- LEAN:end -->
 *{{BENEDICTION}}*

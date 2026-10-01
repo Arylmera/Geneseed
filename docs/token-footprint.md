@@ -17,7 +17,7 @@ The context every host injects at session start, before you type anything:
 
 | Component | Claude Code | OpenCode | Bob | Copilot |
 |---|---|---|---|---|
-| Root instruction file | ~7.3k (`CLAUDE.md`) | ~7.3k (`AGENT.md`) | ~7.7k (`AGENTS.md`, §3 table inline) | ~9.0k (`AGENTS.md`, §3+§4 tables inline) |
+| Root instruction file | ~7.2k (`CLAUDE.md`) | ~7.2k (`AGENT.md`) | ~7.5k (`AGENTS.md`, §3 table inline) | ~9.1k (`AGENTS.md`, §3+§4 tables inline) |
 | Skill metadata (name + description) | ~4.1k | ~4.1k | ~4.1k (native) | — (§4 table; native catalogue unverified) |
 | Agent metadata | ~0.5k | ~0.5k | — (no agents directory) | — (§3 table) |
 | Eager memory/notebook injection | ~1.2k (SessionStart hook) | ~1.2k (context plugin) | ~1.2k (SessionStart hook) | ~1.2k (sessionStart hook) |
@@ -72,10 +72,17 @@ until 2026-09 it did, and the whole harness was paid twice per session.
   capped at 320 characters (`skillDescription` in `js/hosts/native.mjs`); at
   the earlier 900-character cap the catalogue weighed ~5.6k tokens. The later
   trigger sentences still live in the body, read as soon as the skill is chosen.
-- **§5–§10 carry authored lean halves too** (Memory, Notebook, Workspace, Wiki,
-  Context, Scripts): each keeps its obligations — read `MEMORY.md`, read
+- **§5–§9 carry authored lean halves too** (Memory, Notebook, Workspace, Wiki,
+  Context): each keeps its obligations — read `MEMORY.md`, read
   `context.json` before the first reply, the git-ignored folders — and points at
-  the on-disk README or config file for the rest.
+  the on-disk README or config file for the rest. §10 (Scripts) is full-only: it
+  describes the CLI to a reader, not an obligation to the agent.
+- **Restated prose is full-only** (2026-10): the laws and Ethos intros, the §2
+  pack intro, the posture/mode intros, §3's dispatch envelope and council roster
+  (they live in the parallel-agents and council Skills; the lean root keeps
+  "dispatched agents never commit or push"), and the folder-Skill list, which
+  now sits in the §4 catalogue half and so drops wherever the host catalogues
+  Skills natively.
 - **Skill bodies (~53k) and agent bodies (~10k) are lazy** on every host —
   loaded only when invoked. A typical skill costs ≤3k per invocation; the
   heaviest (`react-view-transitions`, ~17.5k with its reference files) loads

@@ -1,6 +1,6 @@
 ---
 name: explain-changes
-description: "Explain a change visually before it is committed: renders one offline HTML page — the intent, the risks to check first, a walkthrough by logical unit, and the exact git diff side by side — and opens it. Use when the user asks to explain, walk through, show, visualise or review the changes ('what did you change?', 'show me the diff'), before asking consent to commit a non-trivial change (offer it, never impose it), or to explain a whole branch or PR."
+description: "Renders one offline HTML page explaining a change — intent, risks, walkthrough, side-by-side git diff — and opens it. Use when the user asks to explain, show or review the changes ('what did you change?', 'show me the diff'), for a branch or PR, or offer it (never impose) before asking to commit a non-trivial change."
 ---
 
 # explain-changes

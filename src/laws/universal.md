@@ -1,3 +1,4 @@
+<!-- LEAN:begin -->
 <!-- Each law: a heading declaring its permanent id (its number is its position) and one
      LEAN block, full text then the lean form AGENT.md inlines. Amend BOTH halves. -->
 
@@ -6,6 +7,8 @@ traded away, in every task and in every repository. The {{DOCTRINES}} govern
 practice and a repository may enable or disable them; nothing below is subject
 to that choice.
 
+<!-- LEAN:else -->
+<!-- LEAN:end -->
 ### {{LAW:sealed-secrets}} Sealed Secrets
 <!-- LEAN:begin -->
 No key, password, token, or secret is ever written into a tracked file. Secrets
