@@ -894,7 +894,7 @@ test('the MCP listing carries every active install with its servers', () => {
   for (const t of m.targets) {
     assert.ok('path' in t);
     assert.ok('commented' in t);
-    assert.ok(['opencode', 'claude', 'bob', 'copilot'].includes(t.host));
+    assert.ok(['opencode', 'claude', 'bob', 'openclaude'].includes(t.host));
     assert.ok('root' in t);
     for (const s of t.servers) {
       assert.ok(['enabled', 'disabled', 'absent'].includes(s.state));
@@ -1113,7 +1113,7 @@ test('a Claude config does not have its string values mangled', () => {
 //
 // ONE ASSERTION HAD TO CHANGE SHAPE, and it is worth naming rather than quietly dropping. The
 // reference asserted `len(installs) == 1`, which was a property of its FAKE: real discovery also
-// yields a global row for claude, bob and copilot, all `absent`. The property under test is
+// yields a global row for claude, bob and openclaude, all `absent`. The property under test is
 // about the ROW — its keys, its host, its scope, its path, its state — so the port selects the
 // row by path and asserts on it. The count assertion measured the monkeypatch, not the code.
 const DISABLED = '.geneseed-disabled';
@@ -2268,7 +2268,7 @@ test('the deploy command refuses a host config dir', () => {
   }
 });
 
-for (const host of ['bob', 'copilot']) {
+for (const host of ['bob']) {
   test(`the deploy command maps ${host} to its project emit`, () => {
     const sb = makeSandbox();
     try {
@@ -2280,14 +2280,13 @@ for (const host of ['bob', 'copilot']) {
   });
 }
 
-// IBM Bob and GitHub Copilot are first-class hosts: a project layer plus their own agents file,
+// IBM Bob is a first-class host: a project layer plus its own agents file,
 // riding the CLAUDE-STYLE manifest lifecycle — deactivate stashes, reactivate restores.
 const HOST_LAYOUT = {
   bob: { marker: '.bob', agents: 'AGENTS.md', cfg: ['.bob', 'settings.json'] },
-  copilot: { marker: '.github', agents: 'AGENTS.md', cfg: null },
 };
 
-for (const host of ['bob', 'copilot']) {
+for (const host of ['bob']) {
   test(`the ${host} project emit rides the disable/reactivate lifecycle`, () => {
     const sb = makeSandbox();
     try {
@@ -2371,7 +2370,7 @@ test('a flagless host removes the entry instead of flagging it', () => {
   assert.deepEqual(off.mcpServers || {}, {});
 });
 
-for (const host of ['bob', 'copilot']) {
+for (const host of ['bob']) {
   test(`the ${host} theme is detected from its emitted agents file`, () => {
     const sb = makeSandbox();
     try {
@@ -2505,7 +2504,7 @@ test('the remove action is wired and allowlisted', () => {
 });
 
 // Real per-repo emits, manifest-backed, so remove must reverse them HOST-AGNOSTICALLY.
-for (const host of ['claude', 'bob', 'copilot']) {
+for (const host of ['claude', 'bob']) {
   test(`removing a ${host} project install reverses it and keeps its memory`, () => {
     const sb = makeSandbox();
     try {

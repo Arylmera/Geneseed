@@ -143,10 +143,6 @@ export function excludeAdd(target) {
         wired.bob_rules_stub = true;
       }
     }
-    if (host === 'copilot') {
-      messages.push('copilot: no native suppression exists — the global '
-        + 'copilot-instructions.md still loads there (documented limitation)');
-    }
     const entries = data.excludes.filter((e) => !(isDict(e) && same(get(e, 'path'), repo)));
     entries.push({ path: repo.split(path.sep).join('/'), wired });
     data.excludes = entries;

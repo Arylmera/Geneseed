@@ -45,7 +45,6 @@ export const VERBATIM_CELLS = {
   'neutral/opencode-global/lean': ['home/.config/opencode/AGENT.md'],
   'neutral/files/lean': ['out/AGENT.md'],
   'neutral/bob/lean': ['out/AGENTS.md'],
-  'neutral/copilot/lean': ['out/AGENTS.md'],
 };
 
 /** The human label for one cell — shared by the corpus and by every run, so a recorded

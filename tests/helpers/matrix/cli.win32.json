@@ -2718,37 +2718,13 @@
     {
       "bin": "cli",
       "expect": [
-        "copilot: no native suppression exists",
-        "excluded."
-      ],
-      "id": "exclude/add-warns-for-copilot",
-      "steps": [
-        {
-          "argv": [
-            "exclude",
-            "add",
-            "{repo}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "home/.copilot/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
         "claude: claudeMdExcludes already present (kept)",
-        "bob: rules/geneseed.md already exists (kept, not ours)",
-        "copilot: no native suppression exists"
+        "bob: rules/geneseed.md already exists (kept, not ours)"
       ],
       "expect_files": [
         "home/.config/opencode/excludes.json",
         "home/.claude/excludes.json",
-        "home/.bob/excludes.json",
-        "home/.copilot/excludes.json"
+        "home/.bob/excludes.json"
       ],
       "id": "exclude/add-walks-every-host-in-registry-order",
       "steps": [
@@ -2765,7 +2741,6 @@
         "home/.bob/.geneseed-manifest.json": "{\"owned\": []}\n",
         "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
         "home/.config/opencode/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "home/.copilot/.geneseed-manifest.json": "{\"owned\": []}\n",
         "repo/.bob/rules/geneseed.md": "# my own rules\n",
         "repo/.claude/settings.local.json": "{\"claudeMdExcludes\": [\"{home/}/.claude/CLAUDE.md\"]}\n",
         "repo/.keep": ""
@@ -4640,12 +4615,11 @@
         "[neutral global/full] dead link './nowhere.md' in memory\\README.md",
         "[neutral claude] dead link './nowhere.md' in .claude\\memory\\README.md",
         "[neutral bob] unresolved token {{NOPE}} in .bob\\memory\\README.md",
-        "[neutral copilot] dead link './nowhere.md' in .github\\memory\\README.md",
         "[neutral openclaude] dead link './nowhere.md' in .openclaude\\memory\\README.md",
         "tip: dead links to skills mean your source is incomplete"
       ],
       "expect_re": [
-        "\\[doctor\\] 14 problem\\(s\\) across 1 theme\\(s\\)"
+        "\\[doctor\\] 12 problem\\(s\\) across 1 theme\\(s\\)"
       ],
       "id": "doctor/an-unresolved-token-and-a-dead-link-reach-every-emit-scan",
       "steps": [
@@ -5741,7 +5715,7 @@
       "bin": "cli",
       "expect": [
         "[uninstall] no Geneseed install detected at <SB>",
-        "[uninstall] pass --target <repo> for a project install (.opencode/.claude/.bob/.github/.openclaude) or --target <config dir> for a global one."
+        "[uninstall] pass --target <repo> for a project install (.opencode/.claude/.bob/.openclaude) or --target <config dir> for a global one."
       ],
       "expect_silent": true,
       "id": "uninstall/an-unrecognised-target-is-refused",
@@ -5970,34 +5944,6 @@
       "world": {
         "home/.bob/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"AGENTS.md\"\n  ],\n  \"managed\": {\n    \"claude_md\": {\n      \"rel\": \"CLAUDE.md\"\n    },\n    \"settings_file\": \"settings.json\",\n    \"settings_hooks\": [\n      {\n        \"event\": \"PreToolUse\",\n        \"group\": {\n          \"matcher\": \"Bash\",\n          \"hooks\": [\n            {\n              \"type\": \"command\",\n              \"command\": \"geneseed-hook git-gate\"\n            }\n          ]\n        }\n      }\n    ],\n    \"settings_excludes\": [\n      \"geneseed/**\"\n    ]\n  },\n  \"scope\": \"global\"\n}\n",
         "home/.bob/AGENTS.md": "# My own notes\n\nProse I wrote myself.\n\n<!-- BEGIN GENESEED -->\nthe managed block\n<!-- END GENESEED -->\n\nProse after the block.\n",
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "(copilot:project)",
-        "[uninstall] removes: agents/, skills/, markers, the AGENTS.md managed block, and Geneseed's ~/.copilot/settings.json hooks on a global install (your own keys/hooks and .github files are kept)."
-      ],
-      "expect_files": [
-        "repo/.github/workflows/ci.yml"
-      ],
-      "id": "uninstall/a-copilot-install-has-no-settings-to-unwire",
-      "steps": [
-        {
-          "argv": [
-            "uninstall",
-            "--yes",
-            "--target",
-            "{repo}"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.github/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"copilot-instructions.md\"\n  ],\n  \"managed\": {\n    \"claude_md\": {\n      \"rel\": \"CLAUDE.md\"\n    },\n    \"settings_file\": \"settings.json\",\n    \"settings_hooks\": [\n      {\n        \"event\": \"PreToolUse\",\n        \"group\": {\n          \"matcher\": \"Bash\",\n          \"hooks\": [\n            {\n              \"type\": \"command\",\n              \"command\": \"geneseed-hook git-gate\"\n            }\n          ]\n        }\n      }\n    ],\n    \"settings_excludes\": [\n      \"geneseed/**\"\n    ]\n  },\n  \"scope\": \"global\"\n}\n",
-        "repo/.github/copilot-instructions.md": "# My own notes\n\nProse I wrote myself.\n\n<!-- BEGIN GENESEED -->\nthe managed block\n<!-- END GENESEED -->\n\nProse after the block.\n",
-        "repo/.github/workflows/ci.yml": "# my own workflow\n",
         "repo/.keep": ""
       }
     },

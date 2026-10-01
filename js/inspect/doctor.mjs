@@ -134,7 +134,7 @@ export function globalEmitProblems(themeName) {
 }
 
 /**
- * `_harness_build._claude_bob_emit_problems` — validate the claude/bob/copilot/openclaude PER-REPO
+ * `_harness_build._claude_bob_emit_problems` — validate the claude/bob/openclaude PER-REPO
  * emits, which were never checked before.
  *
  * That is exactly why the CLAUDE.md/AGENTS.md skill-table dead links shipped unnoticed: the
@@ -143,7 +143,7 @@ export function globalEmitProblems(themeName) {
  * skills one level deeper than a bundle does.
  */
 export function claudeBobEmitProblems(themeName) {
-  return emitProblemsOver(['claude', 'bob', 'copilot', 'openclaude'], (tmp, label) => {
+  return emitProblemsOver(['claude', 'bob', 'openclaude'], (tmp, label) => {
     const root = path.join(tmp, 'root');
     return {
       label: `${themeName} ${label}`,
@@ -211,7 +211,7 @@ export function doctorCollect({
       problems = problems.concat(ran('global', `Global install (${themeName})`,
         globalEmitProblems(themeName)));
       problems = problems.concat(ran('claude_bob',
-        `Claude/Bob/Copilot/OpenClaude per-repo emit (${themeName})`, claudeBobEmitProblems(themeName)));
+        `Claude/Bob/OpenClaude per-repo emit (${themeName})`, claudeBobEmitProblems(themeName)));
     }
   });
   problems = problems.concat(ran('parity', 'Theme parity', themeParityProblems()));

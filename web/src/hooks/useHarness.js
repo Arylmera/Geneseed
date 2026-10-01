@@ -2,8 +2,8 @@ import { useLocalStorage } from './useLocalStorage.js'
 import { HOSTS } from '../lib/hosts.js'
 
 const HARNESS_KEY = 'geneseed-harness'
-// The Docs carry two families — OpenCode's, and Claude Code's, which Bob, Copilot and
-// OpenClaude share since all three emit through the Claude engine. The selector offers
+// The Docs carry two families — OpenCode's, and Claude Code's, which Bob and
+// OpenClaude share since both emit through the Claude engine. The selector offers
 // the hosts that head a family (lib/hosts.js's `docs` column).
 export const HARNESSES = HOSTS.filter((h) => h.docs === h.id).map(({ id, label }) => ({
   id,

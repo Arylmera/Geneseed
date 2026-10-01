@@ -312,63 +312,6 @@ test('git-gate --no-consent skips only the process-5 ask; Law IV still asks', ()
 });
 
 // ---------------------------------------------------------------------------------------------
-// THE COPILOT DIALECT (docs.github.com/en/copilot/reference/hooks-configuration). `--host
-// copilot` changes what a verdict LOOKS like, never what trips it: Copilot's `preToolUse` has an
-// ask tier, read TOP-LEVEL — `{"permissionDecision": "ask", "permissionDecisionReason"}` rather
-// than under Claude's `hookSpecificOutput` — so it asks exactly where Claude asks. The payload is
-// camelCase, and `toolArgs` may arrive as a JSON string. `tool-gate` is the two gates behind one
-// command, dispatched on the payload's shape, because Copilot's entries carry no matcher.
-
-const copilotPayload = (toolName, toolArgs, { stringArgs = false } = {}) =>
-  JSON.stringify({ sessionId: 's', timestamp: 0, cwd: '/x', toolName,
-    toolArgs: stringArgs ? JSON.stringify(toolArgs) : toolArgs });
-
-function copilotAsk(r, what) {
-  assert.equal(r.rc, 0, `${what}: exited ${r.rc}. stderr: ${r.err}`);
-  assert.ok(r.out.trim(), `${what}: expected an ask, got nothing`);
-  const dec = JSON.parse(r.out);
-  assert.ok(!('hookSpecificOutput' in dec), `${what}: Claude's envelope on Copilot: ${r.out}`);
-  assert.equal(dec.permissionDecision, 'ask', `${what}: ${r.out}`);
-  return dec;
-}
-
-test('copilot: every rule asks, top-level, in Copilot\'s envelope', () => {
-  for (const [args, rule, what] of [
-    [{ command: 'git push --force' }, /Deletion Is Deliberate/, 'force'],
-    [{ command: 'git commit -m x' }, /Consent Before Push/, 'commit'],
-    [{ path: 'src/a.js', file_text: 'k = "AKIAIOSFODNN7EXAMPLE"' }, /Sealed Secrets/, 'create'],
-    [{ path: 'src/a.js', old_str: 'a', new_str: 'k = "AKIAIOSFODNN7EXAMPLE"' }, /Sealed Secrets/, 'edit'],
-    [{ path: '/x/user-rules.md', file_text: 'rule' }, /Persist Insight/, 'user-rules']]) {
-    const dec = copilotAsk(hookRun('tool-gate',
-      { stdin: copilotPayload('bash', args), host: 'copilot' }), what);
-    assert.match(dec.permissionDecisionReason, rule, what);
-  }
-});
-
-test('copilot: toolArgs as a JSON string is read; a non-JSON one fails closed', () => {
-  copilotAsk(hookRun('tool-gate', { host: 'copilot',
-    stdin: copilotPayload('bash', { command: 'git reset --hard' }, { stringArgs: true }) }), 'string');
-  const bad = copilotAsk(hookRun('tool-gate', { host: 'copilot',
-    stdin: JSON.stringify({ toolName: 'bash', toolArgs: '{not json' }) }), 'bad-args');
-  assert.match(bad.permissionDecisionReason, /gate error/);
-  copilotAsk(hookRun('tool-gate', { stdin: 'not json', host: 'copilot' }), 'not-json');
-});
-
-test('copilot: harmless calls and a non-tool payload defer silently', () => {
-  assertDefers(hookRun('tool-gate',
-    { stdin: copilotPayload('bash', { command: 'git status' }), host: 'copilot' }), 'status');
-  assertDefers(hookRun('tool-gate', { stdin: '{"sessionId":"s"}', host: 'copilot' }), 'bare');
-});
-
-test('copilot: every ask is ledgered', () => {
-  withLedgerRoot((root, ledger) => {
-    hookRun('tool-gate', { root, host: 'copilot', stdin: copilotPayload('bash', { command: 'git commit -m x' }) });
-    hookRun('tool-gate', { root, host: 'copilot', stdin: copilotPayload('bash', { command: 'git reset --hard' }) });
-    const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-    assert.deepEqual(lines.map((l) => [l.verb, l.rule]), [['git-gate', 'process-5'], ['git-gate', 'law-4']]);
-  });
-});
-
 // THE BOB DIALECT. Bob's PreToolUse ignores stdout and refuses only on EXIT CODE 2 — the one
 // place in this file where a gate exits non-zero on purpose. Laws I and IV exit 2 with the
 // reason on stderr; the consent rules are a stderr line with exit 0 (no ask tier); stdout stays

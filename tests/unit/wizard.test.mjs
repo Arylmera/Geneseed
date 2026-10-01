@@ -163,7 +163,7 @@ function wizardJobs() {
     // (rigor and process, skipping craft, ops and comms), so a port that dropped the filter and kept
     // a prefix, a suffix or the whole list answers differently from one that reads each y/n.
     ['wizard-files', [['collect_setup_lines', []]],
-      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n9\nfull\n\ny\n'],
+      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n7\nfull\n\ny\n'],
     // Every pack declined. A real configuration (invariants and ontology only), and the only
     // input that reaches `--doctrines none` — the spelling an empty list has to take, because
     // an empty `--doctrines ` is a usage error at the driver.

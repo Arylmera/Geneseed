@@ -649,7 +649,7 @@ export function hookPrefix({ runner, entry, platform = process.platform } = {}) 
  * rule is no longer BINDING — so a gate that stopped every commit to ask for consent to a rule
  * the install did not adopt is the disagreement the three-tier split forbids. The group stays
  * and gains `--no-consent`, which skips only the process-5 branch. It once DROPPED the whole
- * group instead, and Law IV went with it — on Claude only, since Bob and Copilot carry it
+ * group instead, and Law IV went with it — on Claude only, since Bob carries it
  * through `tool-gate`. The command changing is also what re-wires an existing install:
  * `mergeClaudeSettings` prunes every previously-managed group that is not in this return
  * value.
@@ -700,22 +700,6 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem} || exit 0` }] }],
     };
   }
-  if (host === 'copilot') {
-    // COPILOT'S OWN SCHEMA (docs.github.com/en/copilot/reference/hooks-configuration): camelCase
-    // events, each an ARRAY of `{type: "command", command}` entries — no matcher groups, so the
-    // array elements ARE the groups this merge appends and prunes. `preToolUse` answers with
-    // a top-level `permissionDecision` (`--host copilot`), and `agentStop`/`preCompact` carry
-    // `transcriptPath`, so `learn` runs here as on Claude. No matcher, so `tool-gate` reads
-    // the payload's shape. Unverified live: no Copilot CLI on the authoring machine.
-    const c = ' --host copilot';
-    const entry = (command) => [{ type: 'command', command }];
-    return {
-      sessionStart: entry(`${run} context --root "${cfg}"${c} || exit 0`),
-      preToolUse: entry(`${run} tool-gate --root "${cfg}"${c}`),
-      agentStop: entry(`${run} learn ${mem} || exit 0`),
-      preCompact: entry(`${run} learn ${mem} || exit 0`),
-    };
-  }
   // OpenClaude takes Claude's whole group set and verdicts unchanged; only `context` needs
   // the host, to know which root file OpenClaude already loads by itself.
   const h = host === 'openclaude' ? ' --host openclaude' : '';
@@ -751,63 +735,6 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // re-seeds context AFTER, this captures memory BEFORE. Same `|| exit 0`: never block.
     PreCompact: [{ hooks: [{ type: 'command', command: learn }] }],
   };
-}
-
-/**
- * LEGACY: the single-slot Copilot shape (`hooks.<event>` = ONE object, events `sessionStart` /
- * `toolCall`) an emit wrote before Copilot's hooks became event → array. Copilot has no
- * `toolCall` event any more, so those gates never ran. Nothing writes this shape now; these
- * two only take an older install's recorded `copilot_hooks` claims back out.
- */
-/** Remove exactly the recorded Copilot hooks from `p`. True when the file was rewritten. */
-export function unwireCopilotSettings(p, recorded) {
-  if (!existsSync(p) || !recorded || !recorded.length) return false;
-  let loaded;
-  let hadComments;
-  try {
-    [loaded, hadComments] = readJsonc(readText(p));
-  } catch (e) {
-    if (!isOsError(e)) throw e;
-    return false;
-  }
-  if (hadComments || !isDict(loaded)) return false;
-  const hooks = get(loaded, 'hooks');
-  if (!isDict(hooks)) return false;
-  for (const rec of recorded) {
-    const event = get(rec, 'event');
-    if (deepEquals(get(hooks, event), get(rec, 'hook'))) delete hooks[event];
-  }
-  if (!Object.keys(hooks).length) delete loaded.hooks;
-  try {
-    atomicWriteJson(p, loaded);
-  } catch (e) {
-    if (!isOsError(e)) throw e;
-    return false;
-  }
-  return true;
-}
-
-/**
- * The Copilot twin of `settingsIntegrityCheck`: every recorded hook present (or absent) in
- * the file it was claimed against. Same contract — problems as strings, each also WARNed on
- * stderr, empty when clean — so a merge that did not stick is loud at emit time rather than
- * a hook that quietly never fires.
- */
-export function copilotIntegrityCheck(p, recorded, expect = 'present') {
-  const problems = [];
-  const hooks = existsSync(p) ? (() => {
-    try { return get(readJsonc(readText(p))[0], 'hooks'); } catch { return null; }
-  })() : null;
-  for (const rec of (recorded || []).filter(isDict)) {
-    const hit = deepEquals(get(hooks, rec.event), rec.hook);
-    if (expect === 'present' && !hit) {
-      problems.push(`${p}: recorded Copilot hook missing — event=${rec.event}`);
-    } else if (expect === 'absent' && hit) {
-      problems.push(`${p}: recorded Copilot hook still present after unwire — event=${rec.event}`);
-    }
-  }
-  for (const x of problems) process.stderr.write(`[geneseed] WARN: ${x}\n`);
-  return problems;
 }
 
 /**
@@ -1045,8 +972,8 @@ const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
  *
  * PURE — and currently reached only END TO END, by the `migrate/a-node-baked-shim-reads-as-current`
  * cell. No unit corpus drives it directly, which is worth knowing before trusting it.
- * 'none' is not a fault: a Copilot install wires no hooks, and a user's own
- * settings.json may carry three hand-written hooks and no Geneseed entry. Both must read as
+ * 'none' is not a fault: a user's own settings.json may carry three hand-written hooks
+ * and no Geneseed entry. That must read as
  * "nothing to migrate" rather than "unrecognised", or `migrate` refuses on the commonest
  * config on any machine.
  */
@@ -1181,8 +1108,7 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
   for (const [event, group] of presentGroups) {
     const key = `${formatRepr(event)}\u0000${jsonDumpsCompact(group, { sortKeys: true })}`;
     if (recordedSet.has(key)) continue;
-    // A Claude group nests its commands under `hooks`; a Copilot entry IS the command.
-    const cmds = [...(get(group, 'hooks') || []).filter(isDict), group]
+    const cmds = (get(group, 'hooks') || []).filter(isDict)
       .map((h) => (has(h, 'command') ? h.command : ''));
     if (cmds.some((c) => typeof c === 'string'
       && GENESEED_HOOK_SNIFF.some((mk) => c.includes(mk)))) {

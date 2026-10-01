@@ -8,7 +8,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Removed
+- **GitHub Copilot is no longer a host** — dropped for lack of support and of cross-tool
+  support. `--emit copilot` / `--emit copilot-global`, the `--host copilot` hook dialect, the
+  Copilot agent dialect, its MCP target, the setup and web-console options and
+  `adapters/copilot/` are gone. Geneseed now emits for OpenCode, Claude Code, Bob and
+  OpenClaude, plus the plain `AGENT.md` bundle. Breaking: ships as 4.0.0.
 
 ## [3.9.0] — 2026-09-30
 

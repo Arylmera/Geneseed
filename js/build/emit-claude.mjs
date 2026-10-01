@@ -11,7 +11,7 @@ import { loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub } from '../hosts/opencode.mjs';
 import {
   managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
-  unwireClaudeExcludes, unwireClaudeSettings, unwireCopilotSettings, wireClaudeExcludes,
+  unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes,
 } from '../hosts/settings.mjs';
 import { writeText } from '../lib/fs.mjs';
 import { isTruthy } from '../lib/json.mjs';
@@ -37,7 +37,7 @@ import { existsSync, mkdirSync } from 'node:fs';
  * `claudeWire` below for the CLAUDE.md managed-block merge and the settings file. PRUNE,
  * MANIFEST and VERIFY are the driver's, in `bin/build-driver.mjs`.
  *
- * Six emits route through here — claude, bob and copilot at both scopes — so this one
+ * Six emits route through here — claude, bob and openclaude at both scopes — so this one
  * job is what puts two thirds of the matrix on the seam.
  *
  * `claudeMdText` is the payload's one item that is not a file this process wrote. WIRE
@@ -90,7 +90,6 @@ export function emitClaudeRender(cfg, job) {
   const owned = [];
   const agentText = items.find((i) => i.rel === 'AGENT.md' && i.text !== null)?.text ?? null;
   const isBob = host === 'bob';
-  const isCopilot = host === 'copilot';
 
   // Bob's always-injected channel is the rules folder. At GLOBAL scope rules/geneseed.md
   // IS the preamble (a global ~/.bob/AGENTS.md is not auto-loaded), and its pointers need
@@ -112,13 +111,13 @@ export function emitClaudeRender(cfg, job) {
   const skillDirOf = !isBob ? null
     : scope === 'project' ? (name) => relPosix(path.dirname(cfgDir), path.join(cfgDir, 'skills', name))
       : (name) => path.join(cfgDir, 'skills', name);
-  // Bob's agents/skills use the Claude dialect verbatim; Copilot has its own frontmatter.
+  // Bob's and OpenClaude's agents/skills use the Claude dialect verbatim.
   // `manifestExisted` is deliberately not passed: the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.
   const { nAgents, nSkills, written } = writeNativeLayer(
     items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'),
     loadAgentOverrides(cfgDir),
-    { host: isCopilot ? 'copilot' : 'claude', oldOwned, cfg: cfgDir, src: cfg.src, skillDirOf });
+    { host: 'claude', oldOwned, cfg: cfgDir, src: cfg.src, skillDirOf });
   for (const p of written) owned.push(relPosix(cfgDir, p));
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
@@ -208,7 +207,6 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   const old = oldManaged && typeof oldManaged === 'object' && !Array.isArray(oldManaged)
     ? oldManaged : {};
   const isBob = host === 'bob';
-  const isCopilot = host === 'copilot';
   const managed = {};
 
   // CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any user
@@ -242,80 +240,63 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   // settings.local.json — the personal, untracked file — never the team-shared
   // settings.json, which would hand every teammate failing hooks pointing at this machine's
   // node and this machine's checkout. (Bob documents no local variant, so it keeps
-  // settings.json.) Copilot's settings are a different shape entirely (one command per
-  // event, no matcher groups) and take the `else` branch below; its PROJECT scope wires
-  // nothing, because the CLI documents hooks in `~/.copilot/settings.json` only and a
-  // machine-absolute hook committed into `.github/` would fail on every teammate's machine.
-  if (!isCopilot) {
-    // Bob GLOBAL: its hooks doc puts the global file at `~/.bob/settings/settings.json`
-    // (nested), where an older emit wrote `~/.bob/settings.json`; the `oldSf !==
-    // settingsName` branch below unwires the old file, so a re-emit migrates. Bob's project
-    // file stays `.bob/settings.json`.
-    const settingsName = scope === 'project' && !isBob ? 'settings.local.json'
-      : isBob && scope === 'global' ? path.join('settings', 'settings.json') : 'settings.json';
-    const settingsPath = path.join(cfgDir, settingsName);
-    mkdirSync(path.dirname(settingsPath), { recursive: true });
-    managed.settings_file = settingsName;
-    // Migration: an older install wired hooks/excludes into a different file — unwire the
-    // recorded claims there, or they linger (and run) forever.
-    const oldSf = get(old, 'settings_file') || 'settings.json';
-    if (oldSf !== settingsName) {
-      unwireClaudeSettings(path.join(cfgDir, oldSf), get(old, 'settings_hooks') || []);
-      unwireClaudeExcludes(path.join(cfgDir, oldSf), get(old, 'settings_excludes') || []);
-    }
-    // The merge prunes recorded groups that are no longer canonical and returns the
-    // COMPLETE current claim set — store it as-is; unioning with prior would resurrect the
-    // stale claims.
-    // `doctrines` decides whether the git-gate group is part of the canonical claim set. It
-    // travels from `cfg` rather than being re-read off the deployment: this is the emit that
-    // DECIDES the install's packs, so the marker on disk is still the previous build's.
-    const [, managedHooks] = mergeClaudeSettings(
-      settingsPath, scope, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
-      doctrines, excludeRules, host, cfgDir,
-    );
-    managed.settings_hooks = managedHooks;
+  // settings.json.)
+  // Bob GLOBAL: its hooks doc puts the global file at `~/.bob/settings/settings.json`
+  // (nested), where an older emit wrote `~/.bob/settings.json`; the `oldSf !==
+  // settingsName` branch below unwires the old file, so a re-emit migrates. Bob's project
+  // file stays `.bob/settings.json`.
+  const settingsName = scope === 'project' && !isBob ? 'settings.local.json'
+    : isBob && scope === 'global' ? path.join('settings', 'settings.json') : 'settings.json';
+  const settingsPath = path.join(cfgDir, settingsName);
+  mkdirSync(path.dirname(settingsPath), { recursive: true });
+  managed.settings_file = settingsName;
+  // Migration: an older install wired hooks/excludes into a different file — unwire the
+  // recorded claims there, or they linger (and run) forever.
+  const oldSf = get(old, 'settings_file') || 'settings.json';
+  if (oldSf !== settingsName) {
+    unwireClaudeSettings(path.join(cfgDir, oldSf), get(old, 'settings_hooks') || []);
+    unwireClaudeExcludes(path.join(cfgDir, oldSf), get(old, 'settings_excludes') || []);
+  }
+  // The merge prunes recorded groups that are no longer canonical and returns the
+  // COMPLETE current claim set — store it as-is; unioning with prior would resurrect the
+  // stale claims.
+  // `doctrines` decides whether the git-gate group is part of the canonical claim set. It
+  // travels from `cfg` rather than being re-read off the deployment: this is the emit that
+  // DECIDES the install's packs, so the marker on disk is still the previous build's.
+  const [, managedHooks] = mergeClaudeSettings(
+    settingsPath, scope, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
+    doctrines, excludeRules, host, cfgDir,
+  );
+  managed.settings_hooks = managedHooks;
 
-    // Project-bypasses-global (Claude only): a PROJECT install suppresses the GLOBAL
-    // ~/.claude/CLAUDE.md while cwd is this repo, via Claude's native claudeMdExcludes.
-    // Written only when this run actually emitted the project's own preamble (never
-    // suppress with no replacement); GENESEED_STACK_GLOBAL=1 opts out, and a re-emit with
-    // it set strips a prior exclude. Bob never gets one: its bypass is the same-named
-    // workspace rules file.
-    const priorRaw = get(old, 'settings_excludes');
-    const priorExcl = Array.isArray(priorRaw) ? priorRaw : [];
-    if (scope === 'project' && hasAgentText && preambleExclude) {
-      const wantExcl = [preambleExclude];
-      if (process.env.GENESEED_STACK_GLOBAL) {
-        unwireClaudeExcludes(settingsPath, wantExcl);
-        managed.settings_excludes = [];
-      } else {
-        const addedExcl = wireClaudeExcludes(settingsPath, wantExcl);
-        // Claim only what Geneseed itself wired (prior + newly added) — folding `wantExcl`
-        // in unconditionally would claim a user's own pre-existing exclude, and uninstall
-        // would then strip it. `sorted(set(a) | set(b))` — Python sorts strings by code
-        // point and so does the default `Array.sort`, which is why no comparator is passed.
-        managed.settings_excludes = [...new Set([...priorExcl, ...addedExcl])].sort();
-      }
-    } else if (priorExcl.length && isBob) {
-      // Self-heal older Bob installs: earlier versions wrote the global AGENTS.md into
-      // claudeMdExcludes here. The key is Claude-only and its Bob semantics are unknown, so
-      // a re-emit removes it instead of carrying it forward.
-      unwireClaudeExcludes(settingsPath, priorExcl);
-    } else if (priorExcl.length) {
-      managed.settings_excludes = priorExcl;
+  // Project-bypasses-global (Claude only): a PROJECT install suppresses the GLOBAL
+  // ~/.claude/CLAUDE.md while cwd is this repo, via Claude's native claudeMdExcludes.
+  // Written only when this run actually emitted the project's own preamble (never
+  // suppress with no replacement); GENESEED_STACK_GLOBAL=1 opts out, and a re-emit with
+  // it set strips a prior exclude. Bob never gets one: its bypass is the same-named
+  // workspace rules file.
+  const priorRaw = get(old, 'settings_excludes');
+  const priorExcl = Array.isArray(priorRaw) ? priorRaw : [];
+  if (scope === 'project' && hasAgentText && preambleExclude) {
+    const wantExcl = [preambleExclude];
+    if (process.env.GENESEED_STACK_GLOBAL) {
+      unwireClaudeExcludes(settingsPath, wantExcl);
+      managed.settings_excludes = [];
+    } else {
+      const addedExcl = wireClaudeExcludes(settingsPath, wantExcl);
+      // Claim only what Geneseed itself wired (prior + newly added) — folding `wantExcl`
+      // in unconditionally would claim a user's own pre-existing exclude, and uninstall
+      // would then strip it. `sorted(set(a) | set(b))` — Python sorts strings by code
+      // point and so does the default `Array.sort`, which is why no comparator is passed.
+      managed.settings_excludes = [...new Set([...priorExcl, ...addedExcl])].sort();
     }
-  } else if (scope === 'global') {
-    // Copilot's hooks are event → array now, so the Claude merge (append/prune by deep
-    // equality) is the Copilot merge too, recorded under `settings_hooks`. An install from
-    // before that recorded single-slot `copilot_hooks` (the dead `toolCall` event): unwire
-    // those claims first, or they linger in the file forever.
-    const settingsPath = path.join(cfgDir, 'settings.json');
-    managed.settings_file = 'settings.json';
-    const legacy = get(old, 'copilot_hooks');
-    if (Array.isArray(legacy) && legacy.length) unwireCopilotSettings(settingsPath, legacy);
-    const [, managedHooks] = mergeClaudeSettings(settingsPath, scope,
-      Array.isArray(legacy) ? null : get(old, 'settings_hooks'), hookOpts, null, [], host, cfgDir);
-    managed.settings_hooks = managedHooks;
+  } else if (priorExcl.length && isBob) {
+    // Self-heal older Bob installs: earlier versions wrote the global AGENTS.md into
+    // claudeMdExcludes here. The key is Claude-only and its Bob semantics are unknown, so
+    // a re-emit removes it instead of carrying it forward.
+    unwireClaudeExcludes(settingsPath, priorExcl);
+  } else if (priorExcl.length) {
+    managed.settings_excludes = priorExcl;
   }
   return managed;
 }

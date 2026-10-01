@@ -84,7 +84,7 @@ const AGENT_OVERRIDES_STUB = {
   _recommended: {
     _comment: (
       'Cheap-tier seats: copy the ones you want into "agents" with your host\'s cheap '
-      + 'model id (OpenCode: "anthropic/claude-haiku-4-5"; Claude Code / Copilot: "haiku"). '
+      + 'model id (OpenCode: "anthropic/claude-haiku-4-5"; Claude Code: "haiku"). '
       + 'Read-and-summarise work — a council convenes several at once, so this is where '
       + 'the savings compound. Nothing applies until you copy it.'
     ),

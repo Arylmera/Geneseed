@@ -3,7 +3,7 @@
  *
  * A faithful translation of `_build_emit._write_native_layer` and the frontmatter
  * builders it dispatches to. Capability specs become host-native subagents and skills:
- * one dialect per host (OpenCode / Claude Code / Copilot), vendored skill folders copied
+ * one dialect per host (OpenCode / Claude Code), vendored skill folders copied
  * through verbatim, authoring templates shipped flat.
  *
  * WHY THIS IS THE HARD HALF. `js/build/render.mjs` is a pure function of `src/` and `themes/`;
@@ -61,7 +61,7 @@ export function isVendoredPath(rel) {
  * `build._validate_is_vendored` — the same question, tolerant of `skills` at ANY depth.
  *
  * The per-repo native layers nest one level deeper than a `files`/opencode-global bundle
- * (`.claude/skills/<name>/…`, `.bob/skills/<name>/…`, `.github/skills/<name>/…`), so
+ * (`.claude/skills/<name>/…`, `.bob/skills/<name>/…`, `.openclaude/skills/<name>/…`), so
  * `doctor`'s scan of those trees needs the loose form or every vendored folder's own
  * upstream cross-links read as dead links. Never the last segment — `parts[:-1]`, because a
  * FILE named `skills` is not a directory of them.
@@ -82,8 +82,6 @@ const AGENT_COLORS = {
 const VALID_AGENT_COLOR_SLOTS = new Set(
   ['primary', 'secondary', 'accent', 'success', 'warning', 'error', 'info']);
 
-/** `_build_emit._SIBLING_AGENT_LINK_RE` — a bare same-dir agent filename in a link. */
-const SIBLING_AGENT_LINK_RE = /\]\(([A-Za-z0-9_-]+)\.md\)/g;
 
 /**
  * `_build_emit._strip_skill_body_links`'s pattern: every RELATIVE markdown link to a
@@ -299,49 +297,21 @@ const BASH_MARKER = '<!-- bash: allow -->';
 const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
 
 /**
- * The readonly-tool line `claudeAgentFrontmatter`/`copilotAgentFrontmatter` each emit — a
- * DENYLIST for Claude, an ALLOWLIST for Copilot — differing only in the key, the base list,
- * the gated entries the markers toggle, and whether the value is bracketed. Each `gated`
- * row is `[tool, marker, listedWhenMarked]`: `false` for Claude (the tool is denied UNLESS
- * the marker allows it) and `true` for Copilot (the tool is allowed ONLY IF the marker is
- * present) — the same marker, read in the opposite sense a denylist and an allowlist
- * require. Row order is emit order: WebFetch before Bash keeps the unmarked Claude line
- * byte-identical to what it was before the webfetch marker existed.
+ * `_build_emit._claude_agent_frontmatter`. A read-only spec gets a `disallowedTools` DENYLIST;
+ * each opt-in marker takes its tool back off the list. Order is emit order: WebFetch before
+ * Bash keeps the unmarked line byte-identical to what it was before the webfetch marker existed.
  */
-const READONLY_TOOLS = {
-  claude: {
-    key: 'disallowedTools', tools: ['Write', 'Edit', 'NotebookEdit'], brackets: false,
-    gated: [['WebFetch', WEBFETCH_MARKER, false], ['Bash', BASH_MARKER, false]],
-  },
-  copilot: {
-    key: 'tools', tools: ['read', 'search', 'todo', 'agent'], brackets: true,
-    gated: [['fetch', WEBFETCH_MARKER, true], ['execute', BASH_MARKER, true]],
-  },
-};
-
-/** `_build_emit._claude_agent_frontmatter` / `._copilot_agent_frontmatter`. */
-function claudeCopilotAgentFrontmatter(host, stem, text, overrides) {
+function claudeAgentFrontmatter(stem, text, overrides) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
   const ov = agentOverride(overrides, stem);
   if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
   if (isReadonly(text)) {
-    const { key, tools, brackets, gated } = READONLY_TOOLS[host];
-    const list = [...tools];
-    for (const [tool, marker, listedWhenMarked] of gated) {
-      if (text.includes(marker) === listedWhenMarked) list.push(tool);
-    }
-    fm.push(`${key}: ${brackets ? `[${list.join(', ')}]` : list.join(', ')}`);
+    const list = ['Write', 'Edit', 'NotebookEdit'];
+    if (!text.includes(WEBFETCH_MARKER)) list.push('WebFetch');
+    if (!text.includes(BASH_MARKER)) list.push('Bash');
+    fm.push(`disallowedTools: ${list.join(', ')}`);
   }
   return fm;
-}
-
-function claudeAgentFrontmatter(stem, text, overrides) {
-  return claudeCopilotAgentFrontmatter('claude', stem, text, overrides);
-}
-
-/** `tools:` is an ALLOWLIST, not a denylist. */
-function copilotAgentFrontmatter(stem, text, overrides) {
-  return claudeCopilotAgentFrontmatter('copilot', stem, text, overrides);
 }
 
 /** `_build_emit._opencode_agent_frontmatter`. */
@@ -493,12 +463,6 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       if (host === 'claude') {
         fm = claudeAgentFrontmatter(stem, text, ov);
         dest = path.join(agentsDir, `${stem}.md`);
-      } else if (host === 'copilot') {
-        fm = copilotAgentFrontmatter(stem, text, ov);
-        dest = path.join(agentsDir, `${stem}.agent.md`);
-        // The filename change drags the links with it: a sibling `](skeptic.md)` would
-        // point at a file this dialect never writes.
-        body = body.replace(SIBLING_AGENT_LINK_RE, ']($1.agent.md)');
       } else {
         fm = opencodeAgentFrontmatter(stem, text, ov, theme);
         dest = path.join(agentsDir, `${stem}.md`);
@@ -507,7 +471,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     } else {
       // Skills are BYTE-IDENTICAL across hosts: name + description, body link-stripped.
       // The user-only key is emitted for every host too — Claude Code and Bob honour it,
-      // OpenCode and Copilot ignore an unknown key — so the identity holds.
+      // OpenCode ignores an unknown key — so the identity holds.
       fm = [`name: ${stem}`, `description: ${jsonDumps(skillDescription(text))}`];
       if (isUserInvokedOnly(text)) fm.push('disable-model-invocation: true');
       body = stripSkillBodyLinks(body);

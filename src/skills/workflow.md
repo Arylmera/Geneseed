@@ -23,7 +23,7 @@ work is worth a crew: a one-file tweak or a question never is.
 |---|---|---|---|
 | OpenCode | `workflow` (the `geneseed-workflow` plugin) | **saved only** — `<name>.js` in `.opencode/workflows/` per repo or `<config>/workflows/` global (`GENESEED_WORKFLOWS_DIR` overrides); nothing inline is eval'd | none — call it when the shape fits |
 | Claude Code | `Workflow` (native) | a saved `.claude/workflows/<name>` by `name`, **or** an inline `script` you author | **required** — the tool refuses unless the user opted in for this task ("use a workflow", "ultracode", a skill that says so) |
-| Bob, Copilot, OpenClaude | none | — | fall back to [parallel-agents](parallel-agents.md) / [council](council.md) |
+| Bob, OpenClaude | none | — | fall back to [parallel-agents](parallel-agents.md) / [council](council.md) |
 | any, under Orca | Orca orchestration (`orca skills get orchestration`) | tasks, not scripts — each task spec names its target, change, ownership and acceptance | the user asked to supervise or coordinate workers |
 
 Both runtimes speak the same primitives — `agent()`, `parallel()`, `pipeline()`,

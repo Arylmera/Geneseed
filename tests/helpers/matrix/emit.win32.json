@@ -71,26 +71,6 @@
       "theme": "biker"
     },
     {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "biker"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "biker"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "biker"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "full",
-      "theme": "biker"
-    },
-    {
       "emit": "files",
       "footprint": "lean",
       "theme": "commentator"
@@ -157,26 +137,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "commentator"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "commentator"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "commentator"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "commentator"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "commentator"
     },
@@ -251,26 +211,6 @@
       "theme": "cyberpunk"
     },
     {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "cyberpunk"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "cyberpunk"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "cyberpunk"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "full",
-      "theme": "cyberpunk"
-    },
-    {
       "emit": "files",
       "footprint": "lean",
       "theme": "gamer"
@@ -337,26 +277,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "gamer"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "gamer"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "gamer"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "gamer"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "gamer"
     },
@@ -431,26 +351,6 @@
       "theme": "imperial"
     },
     {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "imperial"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "imperial"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "imperial"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "full",
-      "theme": "imperial"
-    },
-    {
       "emit": "files",
       "footprint": "lean",
       "theme": "joker"
@@ -517,26 +417,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "joker"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "joker"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "joker"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "joker"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "joker"
     },
@@ -611,26 +491,6 @@
       "theme": "marvin"
     },
     {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "marvin"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "marvin"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "marvin"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "full",
-      "theme": "marvin"
-    },
-    {
       "emit": "files",
       "footprint": "lean",
       "theme": "mean"
@@ -701,26 +561,6 @@
       "theme": "mean"
     },
     {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "mean"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "mean"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "mean"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "full",
-      "theme": "mean"
-    },
-    {
       "emit": "files",
       "footprint": "lean",
       "theme": "military"
@@ -787,26 +627,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "military"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "military"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "military"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "military"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "military"
     },
@@ -877,26 +697,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "neutral"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "neutral"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "neutral"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "neutral"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "neutral"
     },
@@ -967,26 +767,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "pirate"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "pirate"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "pirate"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "pirate"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "pirate"
     },
@@ -1057,26 +837,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "sports"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "sports"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "sports"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "sports"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "sports"
     },
@@ -1147,26 +907,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "verstappen"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "verstappen"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "verstappen"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "verstappen"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "verstappen"
     },
@@ -1237,26 +977,6 @@
     },
     {
       "emit": "bob-global",
-      "footprint": "full",
-      "theme": "wizard"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "lean",
-      "theme": "wizard"
-    },
-    {
-      "emit": "copilot",
-      "footprint": "full",
-      "theme": "wizard"
-    },
-    {
-      "emit": "copilot-global",
-      "footprint": "lean",
-      "theme": "wizard"
-    },
-    {
-      "emit": "copilot-global",
       "footprint": "full",
       "theme": "wizard"
     },
@@ -1655,30 +1375,6 @@
       "emit": "bob-global",
       "footprint": "full",
       "label": "bob-global/lean-to-full",
-      "sovereign": [],
-      "theme": "neutral"
-    },
-    {
-      "before": {
-        "emit": "copilot",
-        "footprint": "lean",
-        "theme": "neutral"
-      },
-      "emit": "copilot",
-      "footprint": "full",
-      "label": "copilot/lean-to-full",
-      "sovereign": [],
-      "theme": "neutral"
-    },
-    {
-      "before": {
-        "emit": "copilot-global",
-        "footprint": "lean",
-        "theme": "neutral"
-      },
-      "emit": "copilot-global",
-      "footprint": "full",
-      "label": "copilot-global/lean-to-full",
       "sovereign": [],
       "theme": "neutral"
     },

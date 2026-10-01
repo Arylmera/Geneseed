@@ -1,5 +1,5 @@
 // `tests/test_claude.py` — the Claude Code host emit: `ClaudeEmitTests`, `ClaudeSafetyTests`,
-// `ClaudeActivationTests`, `InstallTargetsTests`, `CopilotEmitTests`, `GitGateRootTests`,
+// `ClaudeActivationTests`, `InstallTargetsTests`, `GitGateRootTests`,
 // `RebuildAllTests` and `ProjectBypassesGlobalTests`.
 //
 // THE SEAM IS THE SAME ONE THE REFERENCE USES, which is unusual for this port and worth saying:
@@ -40,7 +40,7 @@ import {
 } from '../../js/hosts/hosts.mjs';
 import { BOB_RULES_STUB, SESSION_SEEDS } from '../../js/build/stubs.mjs';
 import {
-  uninstallGlobal, installDeactivate, installReactivate, installUninstall,
+  uninstallGlobal, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
 import {
   doctrinesOfDir, installState, installTargets, manifestIsClaude,
@@ -601,8 +601,7 @@ test('deactivating leaves no empty skill folders behind', () => {
 // situation. Pointing HOME at the cwd does not simulate that case, it reproduces it.
 
 const ENV_FOR_HOST = {
-  opencode: 'OPENCODE_CONFIG_DIR', bob: 'BOB_CONFIG_DIR', copilot: 'COPILOT_CONFIG_DIR',
-  openclaude: 'OPENCLAUDE_CONFIG_DIR',
+  opencode: 'OPENCODE_CONFIG_DIR', bob: 'BOB_CONFIG_DIR', openclaude: 'OPENCLAUDE_CONFIG_DIR',
 };
 
 /**
@@ -677,231 +676,6 @@ test('a genuine per-repo marker is still reported as a project', () => {
       const rows = installTargets().map(([h, s, r]) => `${h} ${s} ${realOrSelf(r)}`);
       assert.ok(rows.includes(`claude project ${realOrSelf(repo)}`), JSON.stringify(rows));
     } finally { process.chdir(cwd0); }
-  });
-});
-
-// ---------------------------------------------------------------------------------------------
-// `CopilotEmitTests` — the third Claude-style host, and the one that proves the family is a
-// FAMILY rather than a copy of Claude.
-//
-// Copilot shares the manifest, the claim-on-create and the managed block, and differs in three
-// ways that each have their own failure: a `copilot-instructions.md` carrier instead of a rules/
-// workaround, an `.agent.md` dialect with a tools ALLOWLIST instead of Claude's denylist, and its
-// own hook schema — camelCase events, each an array of bare `{type, command}` entries.
-
-test('the Copilot global emit writes the Copilot layout and its own hook surface', () => {
-  withDir((d) => {
-    const cfg = path.join(d, 'dotcopilot');
-    globalEmit('copilot', path.join(d, 'bundle'), cfg);
-
-    // Copilot HAS a personal instructions carrier, so unlike Bob there is no rules/ workaround.
-    const ci = read(cfg, 'copilot-instructions.md');
-    assert.ok(ci.includes('<!-- BEGIN GENESEED -->'));
-    assert.ok(ci.includes('<!-- END GENESEED -->'));
-    assert.ok(!fs.existsSync(path.join(cfg, 'rules')), 'Copilot grew Bob\'s rules/ workaround');
-    assert.ok(!fs.existsSync(path.join(cfg, 'AGENTS.md')));
-
-    // The custom-agent dialect: `.agent.md`, and an ALLOWLIST — never Claude's denylist.
-    const reviewer = read(cfg, 'agents', 'reviewer.agent.md');
-    assert.ok(reviewer.includes('name: reviewer'));
-    assert.ok(!reviewer.includes('disallowedTools'), "Copilot carries Claude's denylist key");
-    // The same marker read allowlist-wise: researcher gains `fetch`, never `execute`.
-    const researcher = read(cfg, 'agents', 'researcher.agent.md');
-    assert.match(researcher, /tools: \[read, search, todo, agent, fetch\]/);
-    assert.ok(!reviewer.includes('mode: subagent'));
-    assert.ok(!fs.existsSync(path.join(cfg, 'agents', 'reviewer.md')),
-      'the Claude-dialect filename was written beside the Copilot one');
-    assert.match(read(cfg, 'agents', 'explorer.agent.md'), /tools: \[read, search, todo, agent/);
-
-    // COPILOT'S HOOKS, IN COPILOT'S SHAPE (docs.github.com/en/copilot/reference/
-    // hooks-configuration): `hooks` is event → ARRAY of bare `{type, command}` entries, no
-    // matcher groups. `sessionStart` runs `context`, `preToolUse` runs `tool-gate`, and
-    // `agentStop`/`preCompact` run `learn` (both payloads carry `transcriptPath`). Every
-    // command names THIS install as `--root`; `|| exit 0` on everything but the gate. The
-    // retired `toolCall` event must not be written: Copilot no longer fires it.
-    const settings = readJson(cfg, 'settings.json');
-    assert.deepEqual(Object.keys(settings.hooks).sort(),
-      ['agentStop', 'preCompact', 'preToolUse', 'sessionStart']);
-    const only = (ev) => {
-      assert.equal(settings.hooks[ev].length, 1, `${ev} carries more than Geneseed's entry`);
-      assert.equal(settings.hooks[ev][0].type, 'command');
-      return settings.hooks[ev][0].command;
-    };
-    assert.ok(only('sessionStart').endsWith(` context --root "${cfg}" --host copilot || exit 0`));
-    assert.ok(only('preToolUse').endsWith(` tool-gate --root "${cfg}" --host copilot`));
-    for (const ev of ['agentStop', 'preCompact']) {
-      assert.ok(only(ev).endsWith(` learn --memory "${path.join(cfg, 'memory')}" || exit 0`), ev);
-    }
-    assert.ok(!fs.existsSync(path.join(cfg, 'settings.local.json')));
-    // The claim is recorded under `settings_hooks`, like Claude's — the array shape is what lets
-    // the one merge serve both — and never under the legacy single-slot `copilot_hooks` key.
-    const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
-    assert.ok('claude_md' in managed);
-    assert.equal(managed.settings_file, 'settings.json');
-    assert.ok(!('copilot_hooks' in managed), 'the legacy single-slot claim key was written');
-    assert.deepEqual(managed.settings_hooks.map((r) => r.event),
-      ['sessionStart', 'preToolUse', 'agentStop', 'preCompact']);
-    // …and it still reads as Claude-STYLE, which is what routes the uninstall to the manifest
-    // reversal rather than to OpenCode's opencode.json unmerge.
-    assert.equal(manifestIsClaude(cfg), true);
-  });
-});
-
-test('a skill is byte-identical across the Copilot and OpenCode global emits', () => {
-  withDir((d) => {
-    const cfg = path.join(d, 'dotcopilot');
-    const oc = path.join(d, 'dotopencode');
-    globalEmit('copilot', path.join(d, 'b1'), cfg);
-    globalEmit('opencode', path.join(d, 'b2'), oc);
-    const a = path.join(cfg, 'skills', 'develop', 'SKILL.md');
-    const b = path.join(oc, 'skills', 'develop', 'SKILL.md');
-    assert.ok(fs.existsSync(a) && fs.existsSync(b));
-    assert.equal(fs.readFileSync(a, 'utf8'), fs.readFileSync(b, 'utf8'));
-  });
-});
-
-test('the Copilot project layer lands under .github, with the pointers prefixed', () => {
-  withDir((d) => {
-    const repo = path.join(d, 'repo');
-    fs.mkdirSync(repo);
-    projectEmit('copilot', repo, undefined);
-
-    const am = read(repo, 'AGENTS.md');
-    assert.ok(am.includes('<!-- BEGIN GENESEED -->'));
-    assert.ok(am.includes('.github/memory'), 'a bare memory/ pointer names a store nothing writes');
-
-    assert.ok(fs.existsSync(path.join(repo, '.github', 'agents', 'reviewer.agent.md')));
-    assert.ok(fs.existsSync(path.join(repo, '.github', 'skills', 'develop', 'SKILL.md')));
-    for (const absent of ['settings.json', 'settings.local.json', 'rules']) {
-      assert.ok(!fs.existsSync(path.join(repo, '.github', absent)), `.github/${absent} was written`);
-    }
-    // The .gitignore keeps the personal files out of the team's git — and must NOT list
-    // settings.local.json, a Claude-only file this host never writes. A gitignore naming files
-    // the host cannot produce is how a copied template goes unnoticed.
-    const gi = read(repo, '.github', '.gitignore');
-    assert.ok(gi.includes('wiki.jsonc'));
-    assert.ok(!gi.includes('settings.local.json'));
-    assert.equal(readJson(repo, '.github', GLOBAL_MANIFEST).scope, 'project');
-  });
-});
-
-test('a Copilot project emit never clobbers the user files already in .github', () => {
-  // `.github` is the repo's own SHARED config surface — workflows, issue templates, and
-  // possibly a same-named agent. This host is the only one that emits into a directory the
-  // user was already using for something else entirely.
-  withDir((d) => {
-    const repo = path.join(d, 'repo2');
-    const wf = path.join(repo, '.github', 'workflows', 'ci.yml');
-    fs.mkdirSync(path.dirname(wf), { recursive: true });
-    fs.writeFileSync(wf, 'name: ci\n');
-    const own = path.join(repo, '.github', 'agents', 'reviewer.agent.md');
-    fs.mkdirSync(path.dirname(own), { recursive: true });
-    fs.writeFileSync(own, 'mine\n');
-
-    projectEmit('copilot', repo, undefined);
-    assert.equal(read(wf), 'name: ci\n', 'the emit touched a workflow file');
-    assert.equal(read(own), 'mine\n', 'claim-on-create clobbered a user agent');
-    assert.ok(!new Set(readJson(repo, '.github', GLOBAL_MANIFEST).owned)
-      .has('agents/reviewer.agent.md'), 'the user agent was adopted into the manifest');
-
-    // …and the uninstall removes only Geneseed's, which is the half that adoption breaks.
-    const res = captured(() => installUninstall(repo, 'copilot', 'project', 'keep'));
-    assert.ok(res.ok, JSON.stringify(res));
-    assert.equal(read(wf), 'name: ci\n');
-    assert.equal(read(own), 'mine\n');
-  });
-});
-
-test("Copilot's AGENTS.md carries no dead skill link, and still carries the rows", () => {
-  // The `.github/skills/…` prefixed form of the same link rule as CLAUDE.md and Bob's AGENTS.md.
-  withDir((d) => {
-    projectEmit('copilot', path.join(d, 'Harness'), d);
-    const am = read(d, 'AGENTS.md');
-    assert.doesNotMatch(am, /\]\([^)]*(?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/);
-    assert.ok(am.includes('| brainstorm |'), 'Copilot lost its capability rows');
-    assert.ok(am.includes('| council |'));
-  });
-});
-
-test('a Copilot re-emit is idempotent', () => {
-  withDir((d) => {
-    const cfg = path.join(d, 'dotcopilot2');
-    globalEmit('copilot', path.join(d, 'b1'), cfg);
-    const before = read(cfg, 'copilot-instructions.md');
-    const settingsBefore = read(cfg, 'settings.json');
-    globalEmit('copilot', path.join(d, 'b2'), cfg);
-    assert.equal(read(cfg, 'copilot-instructions.md'), before, 'the managed block stacked');
-    assert.equal(before.split('<!-- BEGIN GENESEED -->').length - 1, 1);
-    assert.equal(read(cfg, 'settings.json'), settingsBefore, 'the settings file was rewritten');
-  });
-});
-
-test('a Copilot emit joins the hooks the user wrote, and uninstall leaves them standing', () => {
-  // Copilot's events are ARRAYS now, so Geneseed's entry goes BESIDE the user's — first-come
-  // order, never displacing — and uninstall removes exactly the claim.
-  withDir((d) => {
-    const cfg = path.join(d, 'dotcopilot3');
-    fs.mkdirSync(cfg, { recursive: true });
-    const mine = { type: 'command', command: 'echo mine' };
-    fs.writeFileSync(path.join(cfg, 'settings.json'),
-      JSON.stringify({ model: 'x', hooks: { preToolUse: [mine], sessionEnd: [mine] } }));
-    globalEmit('copilot', path.join(d, 'b'), cfg);
-    const s = readJson(cfg, 'settings.json');
-    assert.equal(s.model, 'x', 'a foreign top-level key was lost');
-    assert.deepEqual(s.hooks.preToolUse[0], mine, "the user's preToolUse hook was displaced");
-    assert.match(s.hooks.preToolUse[1].command, / tool-gate .* --host copilot$/);
-    assert.deepEqual(s.hooks.sessionEnd, [mine]);
-
-    captured(() => installUninstall(cfg, 'copilot', 'global', 'keep'));
-    const after = readJson(cfg, 'settings.json');
-    assert.deepEqual(after, { model: 'x', hooks: { preToolUse: [mine], sessionEnd: [mine] } },
-      `uninstall did not remove exactly Geneseed's hooks: ${JSON.stringify(after)}`);
-  });
-});
-
-test('a Copilot re-emit migrates a legacy single-slot install off the dead toolCall event', () => {
-  // Every Copilot install before this change: `hooks.sessionStart` / `hooks.toolCall` as ONE
-  // object each, recorded under `copilot_hooks`. Copilot no longer fires `toolCall`, so those
-  // gates never ran. The re-emit unwires exactly the recorded legacy claims — the user's own
-  // keys stay — and wires the array shape under `settings_hooks`.
-  withDir((d) => {
-    const cfg = path.join(d, 'dotcopilot-old');
-    globalEmit('copilot', path.join(d, 'b1'), cfg);
-    const man = readJson(cfg, GLOBAL_MANIFEST);
-    const legacy = [
-      { event: 'sessionStart', hook: { command: 'geneseed-hook context --host copilot || exit 0' } },
-      { event: 'toolCall', hook: { command: 'geneseed-hook tool-gate --host copilot' } },
-    ];
-    fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({
-      mine: true, hooks: Object.fromEntries(legacy.map((r) => [r.event, r.hook])),
-    }));
-    delete man.managed.settings_hooks;
-    man.managed.copilot_hooks = legacy;
-    fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST), JSON.stringify(man));
-
-    globalEmit('copilot', path.join(d, 'b2'), cfg);
-    const s = readJson(cfg, 'settings.json');
-    assert.equal(s.mine, true, "the user's key was lost in the migration");
-    assert.ok(!('toolCall' in s.hooks), 'the dead toolCall hook was left behind');
-    assert.ok(Array.isArray(s.hooks.sessionStart) && s.hooks.sessionStart.length === 1,
-      `the legacy sessionStart object survived beside the new entry: ${JSON.stringify(s.hooks)}`);
-    const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
-    assert.ok(!('copilot_hooks' in managed));
-    assert.equal(managed.settings_hooks.length, 4);
-  });
-});
-
-test('a Copilot PROJECT emit wires no hooks', () => {
-  // Copilot reads hooks from ~/.copilot/settings.json only, and a machine-absolute command
-  // committed into a shared .github/ would fail on every other machine that clones the repo.
-  withDir((d) => {
-    const root = path.join(d, 'repo');
-    fs.mkdirSync(root, { recursive: true });
-    projectEmit('copilot', path.join(d, 'b'), root);
-    assert.ok(!fs.existsSync(path.join(root, '.github', 'settings.json')));
-    const managed = readJson(root, '.github', GLOBAL_MANIFEST).managed;
-    assert.ok(!('settings_hooks' in managed) && !('settings_file' in managed),
-      `a project emit recorded a hook claim: ${JSON.stringify(managed)}`);
   });
 });
 
@@ -1095,7 +869,7 @@ test('a re-emit with the process pack off UNWIRES the consent gate it previously
 // install across a checkout that dropped a theme. MEASURED: the generator exits 1 on it.
 //
 // AND THE "NEVER CREATED" ARM COMES FREE. `installTargets` always yields a global row per host,
-// so bob and copilot are present as candidates with nothing installed. They are the reference's
+// so bob and openclaude are present as candidates with nothing installed. They are the reference's
 // third row, supplied by the product rather than by the fixture, and what must be true of them
 // is that the run leaves no directory behind.
 
@@ -1124,15 +898,13 @@ function cliGlobalEmit(kind) {
 test('rebuild-all rebuilds every active install, survives one failing, and creates none', () => {
   withDir((d) => {
     const savedEnv = {};
-    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'COPILOT_CONFIG_DIR',
-      'OPENCLAUDE_CONFIG_DIR']) {
+    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR']) {
       savedEnv[v] = process.env[v];
     }
     // Every host inside the sandbox, including the two nothing is installed into — leaving one
     // resolved to its real location would fold the developer's own install into the run.
     process.env.OPENCODE_CONFIG_DIR = path.join(d, 'oc-cfg');
     process.env.BOB_CONFIG_DIR = path.join(d, 'bob-none');
-    process.env.COPILOT_CONFIG_DIR = path.join(d, 'copilot-none');
     process.env.OPENCLAUDE_CONFIG_DIR = path.join(d, 'openclaude-none');
     try {
       cliGlobalEmit('claude-global');
@@ -1163,8 +935,8 @@ test('rebuild-all rebuilds every active install, survives one failing, and creat
       assert.equal(installState(claudeCfg, 'claude', 'global'), 'active');
 
       // An absent install is never CREATED. A rebuild that treated a candidate row as a target
-      // would install Geneseed into three hosts the user never asked for.
-      for (const v of ['BOB_CONFIG_DIR', 'COPILOT_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR']) {
+      // would install Geneseed into two hosts the user never asked for.
+      for (const v of ['BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR']) {
         assert.ok(!fs.existsSync(process.env[v]), `${v} was created by rebuild-all`);
       }
     } finally {
@@ -1180,10 +952,9 @@ test('rebuild-all rebuilds every active install, survives one failing, and creat
 // `ProjectBypassesGlobalTests` — a project install must suppress the SAME HOST's global preamble,
 // and each host does it its own way.
 //
-// WHY THE THREE HOSTS DIVERGE HERE, which is the whole class. Claude has a native
+// WHY THE HOSTS DIVERGE HERE, which is the whole class. Claude has a native
 // `claudeMdExcludes` key, so the project install names the global `CLAUDE.md` in it. Bob has no
-// such key with known semantics, so its bypass is a SHADOWING rules file instead. Copilot has no
-// hook or settings surface at all. Getting this wrong does not fail loudly — it doubles the
+// such key with known semantics, so its bypass is a SHADOWING rules file instead. Getting this wrong does not fail loudly — it doubles the
 // preamble in every turn of every session, which reads as the model being verbose.
 
 /** Claude project installs write the personal `settings.local.json`; Bob keeps `settings.json`. */

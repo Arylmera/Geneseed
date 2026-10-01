@@ -53,7 +53,7 @@ const read = (...p) => readFileSync(path.join(ROOT, ...p), 'utf8');
  * `the driver classifies every emit` below is what re-joins the copy to the source.
  */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
-  'bob', 'bob-global', 'copilot', 'copilot-global', 'openclaude', 'openclaude-global'];
+  'bob', 'bob-global', 'openclaude', 'openclaude-global'];
 
 /**
  * The driver's flag surface, frozen, and the same argument applies with more force.
@@ -325,7 +325,7 @@ test('every relocation var moves its global target, and Claude\'s does not', () 
   // git-tracked folder.
   //
   // A TABLE because it was once one row: the first version covered `$OPENCODE_CONFIG_DIR` alone,
-  // and when the Copilot pair crossed, a mutation that ignored `$COPILOT_CONFIG_DIR` passed every
+  // and when the next host's pair crossed, a mutation that ignored its variable passed every
   // gate in the repo. The prose describing the hazard had been generalised to the new host; the
   // gate had not.
   //
@@ -336,7 +336,6 @@ test('every relocation var moves its global target, and Claude\'s does not', () 
   // from a forgotten host, which is exactly what the `covered` cross-check catches.
   const hosts = [
     ['OPENCODE_CONFIG_DIR', true, 'opencode-global', 'AGENT.md', path.join('.config', 'opencode')],
-    ['COPILOT_CONFIG_DIR', true, 'copilot-global', 'copilot-instructions.md', '.copilot'],
     // `rules/geneseed.md`, not AGENTS.md: Bob never auto-loads a global AGENTS.md, so the global
     // emit deliberately writes none and puts the preamble in its always-injected rules folder.
     // The first version of this row named AGENTS.md and failed — the table caught its own author.
@@ -390,10 +389,9 @@ test('a global emit warns about registered project installs, and prunes as it re
   // directory that no longer exists (without it `kept` equals the original list, the prune never
   // writes, and dropping the write is invisible).
   //
-  // A TABLE for the same reason the relocation one is: written for Copilot alone, it would have
-  // covered Bob's later warning with nothing at all.
-  const hosts = [['copilot', 'copilot-global', 'COPILOT_CONFIG_DIR', 'Copilot'],
-    ['bob', 'bob-global', 'BOB_CONFIG_DIR', 'Bob']];
+  // A TABLE for the same reason the relocation one is: a host added later gets a row, not a
+  // second copy of the test.
+  const hosts = [['bob', 'bob-global', 'BOB_CONFIG_DIR', 'Bob']];
   for (const [project, globalEmit, varName, word] of hosts) {
     const { sb, home, env: base } = emitSandbox('driver-stack-');
     try {

@@ -1,7 +1,7 @@
 # Geneseed — working in this repo
 
 Geneseed generates agent-harness configuration — laws, doctrines, skills, agents — from `src/` and
-`themes/`, and installs it into host tools (Claude Code, OpenCode, Bob, Copilot, OpenClaude). It ships as an
+`themes/`, and installs it into host tools (Claude Code, OpenCode, Bob, OpenClaude). It ships as an
 npm package and as a plain git clone that self-updates with `git pull`.
 
 **Start with [`js/README.md`](js/README.md)** — the module map, and the "where do I add X" table.
@@ -48,7 +48,7 @@ node bin/geneseed-cli.mjs doctor --all
 node tests/golden.mjs
 ```
 
-Runs all 317 emit configurations and requires each to render without crashing. Run it after
+Runs all 261 emit configurations and requires each to render without crashing. Run it after
 anything that touches the emit path. Its `--idempotent` mode re-emits into the same tree and
 requires the second pass to change nothing; `--deletion` covers the prune phase. All three are
 self-comparisons — nothing is measured against a stored answer. `--cli` runs the ~320-cell

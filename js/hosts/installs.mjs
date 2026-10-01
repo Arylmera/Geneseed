@@ -137,15 +137,14 @@ function themeFromAgent(agentMd) {
 }
 
 /**
- * `_harness_setup.CARRIERS` — the five instruction carriers, in the Python's order.
+ * `_harness_setup.CARRIERS` — the four instruction carriers, in the Python's order.
  *
  * A shared table rather than three copies of the same list: `_theme_of_dir`,
  * `_posture_of_dir` and `_mode_of_dir` each walk it, and the order is observable (the first
  * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use
  * because the Python writes `d / "rules" / "geneseed.md"` for that one entry.
  */
-const CARRIERS = ['AGENT.md', 'CLAUDE.md', path.join('rules', 'geneseed.md'),
-  'copilot-instructions.md', 'AGENTS.md'];
+const CARRIERS = ['AGENT.md', 'CLAUDE.md', path.join('rules', 'geneseed.md'), 'AGENTS.md'];
 
 /**
  * The scan `themeOfDir`, `leadOfDir`, `doctrinesOfDir` and `excludedRulesOfDir` each wrote
@@ -392,7 +391,6 @@ export const EMIT_HOST_SCOPE = new Map([
   ['opencode', ['opencode', 'project']], ['opencode-global', ['opencode', 'global']],
   ['claude', ['claude', 'project']], ['claude-global', ['claude', 'global']],
   ['bob', ['bob', 'project']], ['bob-global', ['bob', 'global']],
-  ['copilot', ['copilot', 'project']], ['copilot-global', ['copilot', 'global']],
   ['openclaude', ['openclaude', 'project']], ['openclaude-global', ['openclaude', 'global']],
 ]);
 
@@ -410,7 +408,7 @@ export const DISABLED_STASH = '.geneseed-disabled';
  * `_harness_mcp._claude_cfg` — where a Claude-STYLE install keeps its manifest.
  *
  * The config dir itself for a global install; `<repo>/<project_marker>` for a project one.
- * Host-aware so Bob and Copilot ride the whole Claude lifecycle with only the subdir
+ * Host-aware so Bob and OpenClaude ride the whole Claude lifecycle with only the subdir
  * differing, and the marker comes from `HOSTS` rather than a literal for that reason.
  */
 export function claudeCfg(root, scope, host = 'claude') {
@@ -435,7 +433,7 @@ export function installKind(root) {
 
 /** `_harness_mcp._install_state` — 'active' | 'disabled' | 'absent'. */
 export function installState(root, host = 'opencode', scope = 'global') {
-  if (['claude', 'bob', 'copilot', 'openclaude'].includes(host)) return claudeState(root, scope, host);
+  if (['claude', 'bob', 'openclaude'].includes(host)) return claudeState(root, scope, host);
   if (isDir(path.join(root, DISABLED_STASH))) return 'disabled';
   return installKind(root) !== null ? 'active' : 'absent';
 }

@@ -5,7 +5,7 @@ the vendored-folder mechanism because it bundles an executable
 (`scripts/render_changes.mjs`) and Geneseed's flat-skill pipeline renders single
 `.md` files only. Listing it in the generator's `VENDORED_SKILL_DIRS` makes the
 whole folder ride along verbatim into every host emit — Claude Code, IBM Bob,
-OpenCode, GitHub Copilot, OpenClaude.
+OpenCode, OpenClaude.
 
 - **Upstream:** this repository (first-party)
 - **License:** same as Geneseed (see repository LICENSE)

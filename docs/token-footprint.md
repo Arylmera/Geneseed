@@ -15,36 +15,33 @@ heavier on the root file.
 
 The context every host injects at session start, before you type anything:
 
-| Component | Claude Code | OpenCode | Bob | Copilot |
-|---|---|---|---|---|
-| Root instruction file | ~7.2k (`CLAUDE.md`) | ~7.2k (`AGENT.md`) | ~7.5k (`AGENTS.md`, §3 table inline) | ~9.1k (`AGENTS.md`, §3+§4 tables inline) |
-| Skill metadata (name + description) | ~4.1k | ~4.1k | ~4.1k (native) | — (§4 table; native catalogue unverified) |
-| Agent metadata | ~0.5k | ~0.5k | — (no agents directory) | — (§3 table) |
-| Session files (rules, profile, Memory/Notebook indexes, wiki) | 0 fresh, grows with use (SessionStart hook) | 0 fresh, grows with use (context plugin) | 0 fresh, grows with use (SessionStart hook) | 0 fresh, grows with use (sessionStart hook) |
-| **Total** | **~12k** | **~12k** | **~12k** | **~9k** |
+| Component | Claude Code | OpenCode | Bob |
+|---|---|---|---|
+| Root instruction file | ~7.2k (`CLAUDE.md`) | ~7.2k (`AGENT.md`) | ~7.5k (`AGENTS.md`, §3 table inline) |
+| Skill metadata (name + description) | ~4.1k | ~4.1k | ~4.1k (native) |
+| Agent metadata | ~0.5k | ~0.5k | — (no agents directory) |
+| Session files (rules, profile, Memory/Notebook indexes, wiki) | 0 fresh, grows with use (SessionStart hook) | 0 fresh, grows with use (context plugin) | 0 fresh, grows with use (SessionStart hook) |
+| **Total** | **~12k** | **~12k** | **~12k** |
 
-The emits are at parity by design: ~9–12k tokens, about 6% of a 200k
+The emits are at parity by design: ~12k tokens, about 6% of a 200k
 window. Bob catalogues skills natively but has no agents directory, so its
 root keeps the §3 Agents table and drops the §4 Skills table — the catalogue
 flag is per kind (`hostCatalogsNatively`), not one boolean. Before the 2026-09 footprint pass every hooked host paid roughly double
 this: the context hook re-injected the root file the host had already loaded
 natively, and skill descriptions ran to 900 characters each — see the
-"Where the tokens go" list below for what changed. Bob and Copilot carry the §3/§4 catalogue tables inline because their
-hosts expose no native skill/agent inventory; Claude Code and OpenCode ship a
-pointer to the host's own inventory instead, ~1.9k tokens lighter. Copilot's
-eager injection rides its `sessionStart` hook, which the **global** emit wires;
-a project-scope Copilot install has no hooks, so there the session files load
-when the agent reads them, not eagerly. A session file still byte-identical to its
-seed is skipped — it says nothing — so a fresh install injects none of them; until
-2026-10 the hook read them from the repo root, where a Claude-shaped install never
-puts them, and none reached the session at all. The
+"Where the tokens go" list below for what changed. Bob carries the §3/§4 catalogue tables inline because its host exposes
+no native skill/agent inventory; Claude Code and OpenCode ship a
+pointer to the host's own inventory instead, ~1.9k tokens lighter. A session file still
+byte-identical to its seed is skipped — it says nothing — so a fresh install injects none
+of them; until 2026-10 the hook read them from the repo root, where a Claude-shaped install
+never puts them, and none reached the session at all. The
 eager-injection path is budget-capped identically everywhere — 16 KB per file
 (cut at a line break, with a marker saying so) and 48 KB per session (files past
 the budget are listed lazy with the reason) — so a 40k-character README no
 longer leaves whole every session, and growing Memory degrades every host the
 same way instead of one silently falling behind. The hook also **never injects
 the root file the host loads by itself** (`CLAUDE.md` on Claude Code,
-`AGENTS.md` on Bob and Copilot, `AGENT.md`/`AGENTS.md`/`CLAUDE.md` on OpenCode):
+`AGENTS.md` on Bob, `AGENT.md`/`AGENTS.md`/`CLAUDE.md` on OpenCode):
 until 2026-09 it did, and the whole harness was paid twice per session.
 
 ## Where the tokens go
@@ -107,9 +104,7 @@ token counter also includes, none of which Geneseed controls:
    definitions. On OpenCode this is typically 5–10k tokens before any
    harness content loads.
 2. **Your repo's docs, injected eagerly** — the context delivery
-   (plugin on OpenCode, SessionStart hook on Claude Code / Bob, `sessionStart`
-   hook on a global Copilot install; a project-scope Copilot install has no
-   hooks, so it reads docs on demand instead) discovers and
+   (plugin on OpenCode, SessionStart hook on Claude Code / Bob / OpenClaude) discovers and
    injects `README.md`, `CONTRIBUTING.md`, and files under `docs/`, up to the
    48 KB budget (≈12k tokens). A doc-heavy repo fills it.
 3. **Wiki eager entries** plus the lazy listing of the rest, if a wiki is

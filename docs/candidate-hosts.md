@@ -38,8 +38,7 @@ current host gets. Skills are the largest surface by file count and they cost no
   Claude's, and `permissionDecision: "ask"` exists. The Claude engine with `host: "codex"`
   covers instructions (`AGENTS.md`), skills (`.agents/skills`) and the hook verbs
   unchanged; the only new code is the carrier writer (a `hooks.json` merge or a TOML
-  table) and the config-dir resolver (`~/.codex`, `$CODEX_HOME`). Roughly the Copilot
-  port minus the dialect work.
+  table) and the config-dir resolver (`~/.codex`, `$CODEX_HOME`).
 
 - **Gemini CLI — Claude's groups, Gemini's names.** The hook groups are Claude's
   `event → [{matcher, hooks}]` and the payload fields are Claude's, but the events are
@@ -54,7 +53,7 @@ current host gets. Skills are the largest surface by file count and they cost no
 - **Cursor — a third verdict dialect.** `AGENTS.md` and `.agents/skills` are free; hooks
   are `hooks.json` with a `{command}` list per event and a `permission: allow|deny`
   verdict, `additional_context` in snake_case for `sessionStart`. Same block-or-warn stance
-  as Copilot, one more output spelling in `js/hosts/hooks.mjs`, one more carrier writer.
+  as Bob, one more output spelling in `js/hosts/hooks.mjs`, one more carrier writer.
   Cursor also reads `.claude/skills/`, so a Claude project install already gives a Cursor
   user the skills.
 
@@ -64,8 +63,16 @@ If a fifth host is wanted, Codex first: it reuses the most and it is the only ca
 where the gates can *ask* rather than block. Before any of them, a `--emit agents` for
 the shared `.agents/skills/` folder would give Codex, Cursor and Gemini users the whole
 skill catalogue for the price of one directory name, with no host-specific code at all.
-A Gemini host would be the fourth verdict spelling in `js/hosts/hooks.mjs` (after Claude's
-ask, Copilot's block, Bob's exit code 2), plus a resolver and a carrier.
+A Gemini host would be the third verdict spelling in `js/hosts/hooks.mjs` (after Claude's
+ask and Bob's exit code 2), plus a resolver and a carrier.
+
+## Evaluated, dropped
+
+- **GitHub Copilot** — shipped as a host through 3.9.0, removed in 4.0.0. Dropped for lack
+  of support: its hooks were never verified live, its `postToolUse` output does not reach
+  the model, and it shared no cross-tool surface with the other hosts (camelCase payloads,
+  matcherless hook entries, its own agent dialect and carrier), so every feature needed a
+  Copilot-only decision.
 
 ## Not verified
 

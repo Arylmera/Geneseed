@@ -24,11 +24,10 @@ import path from 'node:path';
 
 import { makeSandbox, RELOCATION_VARS } from './sandbox.mjs';
 
-export const ALL_HOSTS = ['claude', 'bob', 'copilot', 'openclaude', 'opencode'];
+export const ALL_HOSTS = ['claude', 'bob', 'openclaude', 'opencode'];
 
 const ENV_FOR = {
   bob: 'BOB_CONFIG_DIR',
-  copilot: 'COPILOT_CONFIG_DIR',
   openclaude: 'OPENCLAUDE_CONFIG_DIR',
   opencode: 'OPENCODE_CONFIG_DIR',
 };
