@@ -102,13 +102,20 @@ export function emitClaudeRender(cfg, job) {
   }
 
   ensureAgentOverridesStub(cfg, cfgDir);
+  // Bob gives the model a skill's text but not its directory, so a folder skill's
+  // `<this-skill-directory>` is resolved here. Per repo it is relative to the workspace root,
+  // where Bob runs commands, so a committed `.bob/` stays valid on a teammate's checkout;
+  // globally there is no workspace to be relative to, so it is absolute.
+  const skillDirOf = !isBob ? null
+    : scope === 'project' ? (name) => relPosix(path.dirname(cfgDir), path.join(cfgDir, 'skills', name))
+      : (name) => path.join(cfgDir, 'skills', name);
   // Bob's agents/skills use the Claude dialect verbatim; Copilot has its own frontmatter.
   // `manifestExisted` is deliberately not passed: the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.
   const { nAgents, nSkills, written } = writeNativeLayer(
     items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'),
     loadAgentOverrides(cfgDir),
-    { host: isCopilot ? 'copilot' : 'claude', oldOwned, cfg: cfgDir, src: cfg.src });
+    { host: isCopilot ? 'copilot' : 'claude', oldOwned, cfg: cfgDir, src: cfg.src, skillDirOf });
   for (const p of written) owned.push(relPosix(cfgDir, p));
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);

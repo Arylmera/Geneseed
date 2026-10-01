@@ -22,7 +22,9 @@ import { readText } from '../lib/fs.mjs';
 import { parseJson, formatRepr } from '../lib/json.mjs';
 import { which } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { registryProblems, secretProblems, vendorPinProblems } from './checks-repo.mjs';
+import {
+  folderSkillProblems, registryProblems, secretProblems, vendorPinProblems,
+} from './checks-repo.mjs';
 import { LAW_CLASS, LAW_CLASSES, SKILL_CLASS } from './inventory.mjs';
 import { NOTE, globSorted, has, isDir, isFile, rglob, srcStems } from './scan.mjs';
 import { spawnSync } from 'node:child_process';
@@ -901,6 +903,7 @@ export function authoringProblems() {
   problems.push(...registryProblems());
   problems.push(...secretProblems());
   problems.push(...vendorPinProblems());
+  problems.push(...folderSkillProblems());
   problems.push(...constitutionProblems());
   problems.push(...leanBlockProblems());
   problems.push(...countTableProblems());

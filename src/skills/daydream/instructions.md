@@ -152,7 +152,7 @@ Store the pairs array. Each pair has:
 ## Step 4: Synthesize Connections (Parallel Task Agents)
 
 ### 4a. Read synthesizer prompt
-Read `synthesizer-prompt.md` from this skill's own folder to get the prompt template (in a deployed Geneseed bundle that is `skills/daydream/synthesizer-prompt.md`; an upstream Claude install uses `.claude/skills/daydream/synthesizer-prompt.md`).
+Read `synthesizer-prompt.md` from this skill's own folder to get the prompt template (`<this-skill-directory>/synthesizer-prompt.md`; an upstream Claude install uses `.claude/skills/daydream/synthesizer-prompt.md`).
 
 ### 4b. Batch pairs
 Split the pairs into batches of 5. This yields up to 10 batches.
@@ -212,7 +212,7 @@ If a Task agent returns malformed JSON, skip that batch and note the error. Do n
 ## Step 5: Critique and Score (Parallel Task Agents)
 
 ### 5a. Read critic prompt
-Read `critic-prompt.md` from this skill's own folder to get the prompt template (in a deployed Geneseed bundle that is `skills/daydream/critic-prompt.md`; an upstream Claude install uses `.claude/skills/daydream/critic-prompt.md`).
+Read `critic-prompt.md` from this skill's own folder to get the prompt template (`<this-skill-directory>/critic-prompt.md`; an upstream Claude install uses `.claude/skills/daydream/critic-prompt.md`).
 
 ### 5b. Batch synthesis results
 Split synthesis results into batches of 5 (same pattern as Step 4).

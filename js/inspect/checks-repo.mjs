@@ -1,6 +1,6 @@
 /**
  * The checks over the REPO's own records — the registry, committed secrets, the hook shim
- * and the vendored-skill pins.
+ * and the vendored skill folders (their pins and their SKILL.md frontmatter).
  *
  * Same contract as `checks-build.mjs`: an array of problem strings, empty when clean, one
  * planted fault per check in the gate. This is the group that reads what the repo SAYS about
@@ -235,6 +235,50 @@ export function vendorPinProblems() {
     } else if (!HEX40_RE.test(pin[1].toLowerCase())) {
       problems.push(`[authoring] skills/${name}/VENDOR.md pin '${pin[1]}' is not `
         + 'a 40-character commit sha');
+    }
+  }
+  return problems;
+}
+
+const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+
+/**
+ * Every vendored skill folder's `SKILL.md` opens with a frontmatter whose `name` IS the
+ * folder and which carries a `description`.
+ *
+ * A flat skill gets that frontmatter from `writeNativeLayer`; a folder is copied through as
+ * written, so its own SKILL.md is all a host has to register it from. Two shipped broken:
+ * daydream had no frontmatter at all and react-view-transitions named itself after its
+ * upstream repo — the Agent Skills format requires the name to match the folder. Claude Code
+ * tolerated both, so nothing showed; a stricter host is free not to register them. Only the
+ * two keys every host reads are checked, at the top level of the block (an indented
+ * `name:` under `metadata:` does not count).
+ */
+export function folderSkillProblems() {
+  const problems = [];
+  for (const name of VENDORED_SKILL_DIRS) {
+    const folder = path.join(SRC, 'skills', name);
+    if (!isDir(folder)) continue;   // vendorPinProblems reports the missing folder
+    let text;
+    try { text = readText(path.join(folder, 'SKILL.md')); } catch {
+      problems.push(`[authoring] skills/${name}/ has no SKILL.md — no host can load it`);
+      continue;
+    }
+    const fm = FRONTMATTER_RE.exec(text);
+    if (!fm) {
+      problems.push(`[authoring] skills/${name}/SKILL.md opens with no frontmatter — a host `
+        + 'registers a skill from its name and description');
+      continue;
+    }
+    const declared = /^name:[ \t]*["']?([^"'\r\n]*?)["']?[ \t]*$/m.exec(fm[1]);
+    if (!declared) {
+      problems.push(`[authoring] skills/${name}/SKILL.md frontmatter has no 'name'`);
+    } else if (declared[1] !== name) {
+      problems.push(`[authoring] skills/${name}/SKILL.md is named '${declared[1]}' — the name `
+        + 'must match the folder');
+    }
+    if (!/^description:[ \t]*\S/m.test(fm[1])) {
+      problems.push(`[authoring] skills/${name}/SKILL.md frontmatter has no 'description'`);
     }
   }
   return problems;

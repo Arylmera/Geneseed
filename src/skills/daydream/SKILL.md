@@ -1,3 +1,8 @@
+---
+name: daydream
+description: "Mine an Obsidian vault for non-obvious connections between notes: samples recency-weighted note pairs, synthesizes links with parallel subagents, keeps only critic-approved insights and writes a daily digest. Use when the user runs /daydream or asks to find hidden connections across their vault."
+---
+
 # Vault Daydream Skill
 
 Multi-agent system that mines the Obsidian vault for non-obvious connections between notes, mimicking the brain's default mode network. Samples random note pairs, synthesizes connections via Sonnet, filters with Haiku critic.
@@ -10,6 +15,9 @@ Inspired by [Gwern's LLM Daydreaming](https://gwern.net/ai-daydreaming).
 /daydream
 ```
 
+To run it, follow `<this-skill-directory>/instructions.md` step by step — that file is the
+procedure; this one is the overview.
+
 ## Setup (Geneseed)
 
 Before the first run, make sure the pieces this skill depends on are in place:
@@ -20,14 +28,13 @@ Before the first run, make sure the pieces this skill depends on are in place:
    asks. No vault → nothing to daydream about.
 2. **Parallel subagents.** Synthesis and critique fan out across ~10–20 subagents per
    run, so the host must be able to dispatch them (Claude Code's `Task`; OpenCode's
-   `task` tool — see the [parallel-agents](../parallel-agents.md) skill). On a host
+   `task` tool — see the `parallel-agents` skill). On a host
    with no subagent mechanism, the skill still works but runs serially and slowly.
 3. **Models.** The upstream prompts request `sonnet` for synthesis and `haiku` for
    critique. Those are Claude model names — on another host, substitute the host's
    capable/cheap pair (a strong model for synthesis, a fast one for scoring).
 4. **Prompt templates.** Steps 4 and 5 read the `synthesizer-prompt.md` and
-   `critic-prompt.md` files **in this skill's own folder** (`skills/daydream/` in a
-   deployed Geneseed bundle). They ship with the skill — nothing to install.
+   `critic-prompt.md` files **in this skill's own folder** (`<this-skill-directory>/`). They ship with the skill — nothing to install.
 5. **Writable output folders.** The run writes `Daydreams/`, `Daydreams/digests/`,
    `Daily/`, and `ai-research/daydream/history.json` into the vault. If any of those
    sit under a `protected` path in `wiki.jsonc`, the guard plugin will block the write —

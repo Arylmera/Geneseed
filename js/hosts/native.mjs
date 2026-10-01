@@ -33,6 +33,9 @@ import path from 'node:path';
 import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 
+/** What a folder skill writes where it needs its own directory — see `writeNativeLayer`. */
+export const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
+
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
 export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report', 'explain-changes']);
 
@@ -387,6 +390,14 @@ function relPosix(base, target) {
  * source root it is relativised against (Python reads `_build_core.SRC` directly, which
  * is the module-level single owner; here it travels explicitly, as in `js/build/render.mjs`).
  *
+ * `opts.skillDirOf(name)` — set for a host that hands the model a skill's TEXT but not where
+ * the skill lives (Bob). A folder skill names its scripts and prompts
+ * `<this-skill-directory>/…`; Claude Code resolves that because it announces each skill's
+ * base directory on load, while on Bob the model got the text with a hole in it and went
+ * hunting through the filesystem. With the option, every rendered `.md` of a vendored folder
+ * has the placeholder replaced by the answer. Only vendored folders carry the placeholder — a
+ * flat skill has no siblings to point at.
+ *
  * Returns `{ nAgents, nSkills, written }` — Python's 3-tuple, with `written` as absolute
  * paths in write order.
  *
@@ -400,7 +411,7 @@ function relPosix(base, target) {
  */
 export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, {
   host = 'opencode', oldOwned = null, cfg = null, manifestExisted = true,
-  theme = null, src,
+  theme = null, src, skillDirOf = null,
 } = {}) {
   const ov = overrides || {};
   const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
@@ -445,8 +456,10 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       mkdirSync(path.dirname(dest), { recursive: true });
       // The same vendored folder mixes both writers: a rendered `.md` goes through
       // writeText (and picks up CRLF on Windows), a binary through copy2 (and keeps LF).
-      if (text !== null) writeText(dest, text);
-      else copyFile(source, dest);
+      if (text !== null) {
+        writeText(dest, skillDirOf === null ? text
+          : text.replaceAll(SKILL_DIR_PLACEHOLDER, skillDirOf(sparts[1])));
+      } else copyFile(source, dest);
       written.push(dest);
       continue;
     }
