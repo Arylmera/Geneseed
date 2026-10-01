@@ -42,6 +42,10 @@ export const STRUCTURE = {
   SCRIPT: 'Script', SCRIPTS: 'Scripts',
   DIR_LAWS: 'laws', DIR_AGENTS: 'agents', DIR_SKILLS: 'skills', DIR_MEMORY: 'memory',
   DIR_NOTEBOOK: 'notebook', DIR_ONTOLOGY: 'ontology', DIR_DOCTRINES: 'doctrines',
+  // Where the harness's own files sit, as seen from the root instruction file: empty when they
+  // are its siblings (`files`, OpenCode), `.claude/`-style when the root sits a level above them —
+  // set per emit by `prefixedAgentText` in js/build/emit-claude.mjs, like the DIR_* prefixes.
+  AT_HARNESS: '',
   // Ontology section names. Theme-INDEPENDENT on purpose: a citation reads
   // `({{ONTOLOGY}}: {{ONT_TELOS}})` — token on both sides, so the heading and every
   // reference to it move together and a rename can never desync them.

@@ -25,9 +25,8 @@ Tool-agnostic: where the host has no sub-agents, each {{AGENT}} below is a
 
 <!-- LEAN:begin -->
 **Readiness sigil — required.** Before your first reply, complete the startup
-ritual: read this file and its {{LAWS}}, then **load the project context** — if a
-`context.json` sits beside this file, read it and load its `eager` entries now
-(§9). Only then emit your first reply, which MUST begin with the
+ritual: read this file and its {{LAWS}}, then **load the project context**
+(**Session start**, below). Only then emit your first reply, which MUST begin with the
 exact line below, before any other text. Do not paraphrase it and do not skip it —
 a first reply that omits the sigil signals the harness was not read, and emitting
 it certifies you have loaded the {{LAWS}} *and* the project context. **{{SKILLS}}
@@ -41,6 +40,12 @@ it as your very first tool call — before loading context, reading files, or se
 <!-- LEAN:end -->
 
 > {{LOADED_SIGIL}}
+
+**Session start.** The harness hook injects your session files (any still at its seed is
+skipped) and the `eager` entries of `context.json`. If no `=== SESSION FILES ===` or
+`=== PROJECT CONTEXT ===` block is in your context, read them yourself first:
+`{{AT_HARNESS}}user-rules.md`, `{{AT_HARNESS}}PROFILE.md`, `{{DIR_MEMORY}}/MEMORY.md`,
+`{{DIR_NOTEBOOK}}/NOTEBOOK.md`, `{{AT_HARNESS}}wiki.jsonc`, `{{AT_HARNESS}}context.json`.
 
 **Response voice.** {{VOICE}} This sets *tone and vocabulary* — the section *layout*,
 the law *numbers*, file paths, and folder names stay plain English so tooling and links
@@ -98,8 +103,8 @@ posture: posture is the relationship register, mode is the operating register.
 
 <!-- INCLUDE: laws/universal.md -->
 
-**The user's own rules.** If a `user-rules.md` sits beside this file, read it at
-session start and obey every rule in it with the same force as the {{LAWS}} above
+**The user's own rules.** `{{AT_HARNESS}}user-rules.md` (a session file) holds the
+user's own rules: obey every rule in it with the same force as the {{LAWS}} above
 — always, in every task (its rank is in the precedence table above). That file belongs
 to the user — the build seeds it once, never overwrites it, and no update touches
 it — and it is the **only** place standing rules are ever written: when the user
@@ -109,12 +114,12 @@ append it there with the user's consent (the [rule]({{DIR_SKILLS}}/rule.md)
 add, edit, or remove a {{DOCTRINE}} rule in §2 — both are regenerated on every
 update, and an edit to either is silently lost.
 
-**The user's profile.** If a `PROFILE.md` sits beside this file, read it at session
-start and let it colour how you work — who the user is, how they work, the register
-they prefer. Unlike `user-rules.md`, it is *identity, not rules*: it never binds,
+**The user's profile.** `{{AT_HARNESS}}PROFILE.md` (a session file) colours how you
+work — who the user is, how they work, the register they prefer. Unlike `user-rules.md`,
+it is *identity, not rules*: it never binds,
 it only informs. It too belongs to the user: seeded once, never overwritten. Never
 write standing rules into it — those go to `user-rules.md`. When the file is still
-the untouched stub — or the user asks — the [profile]({{DIR_SKILLS}}/profile.md)
+the untouched stub (so it never reaches your session) — or the user asks — the [profile]({{DIR_SKILLS}}/profile.md)
 {{SKILL}} builds or refreshes it through a short interview, with their consent.
 
 ---
@@ -300,7 +305,7 @@ file, or into {{MEMORY}} ({{DOCTRINE:persist-insight}}).
 
 <!-- LEAN:begin -->
 Persistent facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/) — one fact per file, indexed by a
-local `MEMORY.md`. Read that index at the start of a session; write a new memory
+local `MEMORY.md`, a session file (**Session start**, above); write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision worth
 keeping — through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with
 the user whether it is a memory or a standing rule before either is written
@@ -316,7 +321,7 @@ the session — memory, notebook, notes, commits, docs — cite a rule by its pr
 ("Verify Before Asserting"), never its number: numbers are positional. Full convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 <!-- LEAN:else -->
 Durable facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/), one per file, indexed by
-`MEMORY.md` — **read that index at the start of a session**. Write one through the
+`MEMORY.md`, a session file. Write one through the
 [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with the user whether a
 lesson is a memory or a standing rule ({{DOCTRINE:persist-insight}}). The directory is
 **personal and git-ignored**; shared knowledge goes in code, docs, or `user-rules.md`
@@ -344,8 +349,7 @@ starting point and is **yours to rewrite** as your practices evolve.
 **Use it — it is part of doing the work well.** Any file you create for your
 own benefit — a scratch script, an analysis dump, a draft, an experiment, a
 tool you build for yourself — belongs in `{{DIR_NOTEBOOK}}/`, never in the host
-tree. Read `NOTEBOOK.md` at the start of a session to recall what
-you keep here, and keep the space referable across sessions — the seeded index
+tree. `NOTEBOOK.md`, a session file, recalls what you keep here; keep the space referable across sessions — the seeded index
 is one way; replace it with whatever scheme serves you better. When a note
 hardens into a durable fact worth recalling verbatim, propose it for {{MEMORY}}
 through the rule {{SKILL}} (§5, {{DOCTRINE:persist-insight}}). Keep the two stores distinct by *role*, not just by
@@ -356,8 +360,8 @@ it is not yours to lift.
 <!-- LEAN:else -->
 Your own working space, [`{{DIR_NOTEBOOK}}/`]({{DIR_NOTEBOOK}}/): any file you make
 for your own benefit — scratch code, drafts, datasets, experiments — goes here, never
-in the host tree, in whatever format serves. **Read `NOTEBOOK.md` at the start of a
-session.** A note that hardens into a durable fact is proposed for {{MEMORY}} through
+in the host tree, in whatever format serves; its index `NOTEBOOK.md` is a session
+file. A note that hardens into a durable fact is proposed for {{MEMORY}} through
 the rule {{SKILL}} (§5).
 The charter [`{{DIR_NOTEBOOK}}/README.md`]({{DIR_NOTEBOOK}}/README.md) is yours to
 rewrite; the one fixed law is that the folder is **personal and git-ignored**, and
@@ -406,12 +410,11 @@ It receives only the task's deliverables; your working files go in the {{NOTEBOO
 *{{EPI_WIKI}}*
 
 <!-- LEAN:begin -->
-{{INTRO_WIKI}} It is declared in `wiki.jsonc`, **beside this AGENT.md** like
-`context.json` (§9) — or wherever `$GENESEED_WIKI` points. An empty `wikis` list
-means none is declared and this section stays dormant. (On OpenCode its `eager`
-entries are loaded for you.)
+{{INTRO_WIKI}} It is declared in `{{AT_HARNESS}}wiki.jsonc`, a session file — or
+wherever `$GENESEED_WIKI` points. An empty `wikis` list means none is declared and this
+section stays dormant. (On OpenCode its `eager` entries are loaded for you.)
 
-Read `wiki.jsonc` at the start of every session, and honour each declared wiki:
+Honour each declared wiki:
 
 - **`entries`** — load each by its `load` mode, exactly as in `context.json`
   (§9): `eager` is read **now**, every session; `lazy` only when the task in
@@ -434,9 +437,8 @@ durable fact worth sharing across projects goes here via the
 [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; one that matters only to you stays in
 {{MEMORY}} (§5).
 <!-- LEAN:else -->
-{{INTRO_WIKI}} Declared in `wiki.jsonc` beside this AGENT.md (or at `$GENESEED_WIKI`;
-an empty `wikis` list means dormant) — **read it at the start of every session**
-and honour each wiki: load `entries` by `load` mode as in `context.json` (§9), read
+{{INTRO_WIKI}} Declared in `{{AT_HARNESS}}wiki.jsonc`, a session file (or at
+`$GENESEED_WIKI`; an empty `wikis` list means dormant) — honour each wiki: load `entries` by `load` mode as in `context.json` (§9), read
 `conventions` before your first write there, drop an unplaceable note in `inbox`,
 never write inside `protected`. It is the user's: wikilinks over bare paths, every
 new note linked in. Cross-project facts go here via the
@@ -451,10 +453,11 @@ new note linked in. Cross-project facts go here via the
 *{{EPI_CONTEXT}}*
 
 <!-- LEAN:begin -->
-**Read `context.json` at the start of every session — this is not a
-suggestion.** The harness carries no project-specific knowledge; this manifest,
-**beside this AGENT.md**, is how the project hands you its own. (On OpenCode it
-is loaded for you.) Before your first reply, act on each entry by its `load` mode:
+**Load `context.json` before your first reply — this is not a suggestion.** The
+harness carries no project-specific knowledge; this manifest is how the project hands
+you its own: the repo's own (`context.json` or `.harness/context.json` at its root),
+else `{{AT_HARNESS}}context.json`. The hook injects its `eager` entries (**Session
+start**, above); where it did not, act on each entry by its `load` mode yourself:
 
 - **`"eager"`** — read it **now**, every session. Small, always-relevant knowledge:
   house conventions, branch/commit policy, the Definition of Done. That content is
@@ -462,15 +465,13 @@ is loaded for you.) Before your first reply, act on each entry by its `load` mod
 - **`"lazy"`** — read it **only when the task in hand needs it**, never up front
   ({{DOCTRINE:context-economy}}). Large or occasional docs: architecture notes, API references.
 
-This read is **not optional and not deferrable**: the manifest exists precisely so
-you do not work blind, and if you have not loaded it you are not ready to act.
-
 Each `path` may be absolute or relative to the repository root. The file's own
 comment carries its schema and setup notes.
 <!-- LEAN:else -->
-**Read `context.json` at the start of every session — before your first reply, not
-deferrable.** It sits beside this AGENT.md and is how the project hands you its own
-knowledge (on OpenCode it is loaded for you). `"eager"` entries are read now and are
+**Load `context.json` before your first reply — not deferrable.** The repo's own
+(`context.json` or `.harness/context.json` at its root), else `{{AT_HARNESS}}context.json`,
+is how the project hands you its own knowledge; the hook injects its `eager` entries
+(**Session start**). `"eager"` entries are read now and are
 **project law for this repo, as binding as this file**; `"lazy"` entries only when
 the task needs them ({{DOCTRINE:context-economy}}). Schema and setup notes are in the file's
 own comment.

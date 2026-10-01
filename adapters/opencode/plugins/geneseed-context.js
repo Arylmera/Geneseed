@@ -56,6 +56,7 @@ import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
+import { createHash } from "node:crypto"
 
 const MARKER = "<!-- geneseed-context:v2 -->"
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -155,6 +156,49 @@ const EXCLUDE_DIRS = new Set([
 
 async function isFile(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
 async function isDir(p) { try { return (await fs.stat(p)).isDirectory() } catch { return false } }
+
+// ---- session files (the harness's own) --------------------------------------
+// The files AGENT.md names for session start, relative to the HARNESS dir — the dir that
+// holds the installed AGENT.md: the repo root for a project install, the config dir for a
+// global one. Same list and seed hashes as SESSION_FILES/SEED_SHA256 in js/hosts/hooks.mjs;
+// tests/unit/claude.test.mjs gates both copies against SESSION_SEEDS in js/build/stubs.mjs.
+// context.json is not here: it is a manifest, honoured by resolveSource. wiki.jsonc is not
+// here either: the MACHINE WIKI block below already renders it in full.
+const SESSION_FILES = ["user-rules.md", "PROFILE.md", "memory/MEMORY.md", "anamnesis/MEMORY.md",
+  "notebook/NOTEBOOK.md"]
+const SEED_SHA256 = new Set([
+  "5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721", // user-rules.md
+  "29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816", // PROFILE.md
+  "cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8", // wiki.jsonc
+  "99c786049c260f6baf7aec68a5c0f59907861afe9b867da009440613bdddb907", // MEMORY.md
+  "9acb5c9d9cb5dac572104480f05b48cc144e676869bd60e86d8a15b1f6308184", // NOTEBOOK.md
+])
+
+// $GENESEED_HARNESS when set, else the first of <plugin dir>/.. (global: the config dir) and
+// <plugin dir>/../.. (project: .opencode/plugins -> the repo root) that holds AGENT.md.
+async function harnessDir() {
+  if (process.env.GENESEED_HARNESS && (await isDir(process.env.GENESEED_HARNESS))) {
+    return process.env.GENESEED_HARNESS
+  }
+  for (const d of [path.resolve(PLUGIN_DIR, ".."), path.resolve(PLUGIN_DIR, "..", "..")]) {
+    if (await isFile(path.join(d, "AGENT.md"))) return d
+  }
+  return null
+}
+
+// Session files present under the harness dir and changed from their seed: [{ rel, abs, text }].
+async function sessionFiles(dir) {
+  const found = []
+  if (!dir) return found
+  for (const rel of SESSION_FILES) {
+    const abs = path.join(dir, rel)
+    let text
+    try { text = (await fs.readFile(abs, "utf8")).replace(/\r\n/g, "\n") } catch { continue }
+    if (SEED_SHA256.has(createHash("sha256").update(text).digest("hex"))) continue
+    found.push({ rel, abs, text: text.replace(/\n+$/, "") })
+  }
+  return found
+}
 
 async function readJson(p) {
   try { return JSON.parse(await fs.readFile(p, "utf8")) } catch { return null }
@@ -474,11 +518,13 @@ async function fromManifest(manifestFile, root) {
   return { eager: eager.sort(byRel), lazy: lazy.sort(byRel) }
 }
 
-async function resolveSource(root) {
+async function resolveSource(root, harness = null) {
   const explicit = process.env.GENESEED_CONTEXT
   if (explicit && (await isFile(explicit))) return { mode: "manifest", file: explicit }
-  for (const rel of [path.join(".harness", "context.json"), "context.json"]) {
-    const p = path.join(root, rel)
+  // The harness dir last: a repo's own manifest outranks the one seeded beside the install.
+  const cands = [path.join(root, ".harness", "context.json"), path.join(root, "context.json")]
+  if (harness) cands.push(path.join(harness, "context.json"))
+  for (const p of cands) {
     if (await isFile(p)) return { mode: "manifest", file: p }
   }
   return { mode: "discover" }
@@ -494,8 +540,12 @@ async function resolveSource(root) {
 async function resolveWikiFile() {
   const explicit = process.env.GENESEED_WIKI
   if (explicit && (await isFile(explicit))) return explicit
+  // The harness dir (which honours $GENESEED_HARNESS) first: on a PROJECT install the plugin
+  // sits in .opencode/plugins, so <plugin dir>/.. is .opencode, not the dir the seed landed in.
+  // <plugin dir>/.. stays as the fallback for an install without an AGENT.md.
   const bases = []
-  if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
+  const harness = await harnessDir()
+  if (harness) bases.push(harness)
   bases.push(path.resolve(PLUGIN_DIR, ".."))
   for (const base of bases) {
     // wiki.json is the legacy name from earlier seeds — still honoured.
@@ -652,8 +702,26 @@ async function renderSet(out, { eager, lazy }, state) {
   state.lazy += lazyLines.length
 }
 
-async function buildBlock(sets, wikis = [], commands = []) {
+async function buildBlock(sets, wikis = [], commands = [], session = []) {
   const state = { spent: 0, injected: 0, lazy: 0, headingsRead: 0 }
+
+  // A session file discovery also found (user-rules.md at the root of a project install,
+  // whose harness dir IS the repo root) is injected once, in the session block.
+  const seen = new Set(session.map((s) => path.resolve(s.abs)))
+  const fresh = (x) => !seen.has(path.resolve(x.abs))
+  sets = { eager: sets.eager.filter(fresh), lazy: sets.lazy.filter(fresh) }
+  const ses = []
+  for (const s of session) {
+    const size = Buffer.byteLength(s.text, "utf8")
+    ses.push(`----- ${s.rel} -----`)
+    if (size > EAGER_FILE_KB * 1024) {
+      ses.push(`[demoted: ${s.rel} exceeded ${EAGER_FILE_KB} KB — read ${s.abs} on demand]`, "")
+      continue
+    }
+    ses.push(s.text, "")
+    state.spent += size
+    state.injected++
+  }
 
   const proj = []
   await renderSet(proj, sets, state)
@@ -675,8 +743,9 @@ async function buildBlock(sets, wikis = [], commands = []) {
     if (w.truncated) wik.push(`  [+${w.truncated} more notes in this wiki — explore its folders on demand]`, "")
   }
 
-  if (!proj.length && !wik.length) return null
+  if (!ses.length && !proj.length && !wik.length) return null
   const out = [MARKER]
+  if (ses.length) out.push("=== SESSION FILES — your harness files, injected at session start (untouched seeds skipped) ===", "", ...ses)
   if (proj.length) out.push("=== PROJECT CONTEXT — binding for this repo ===", "", ...proj)
   if (wik.length) out.push("=== MACHINE WIKI — the user's knowledge base, binding per AGENT.md §8 ===", "", ...wik)
   return { text: out.join("\n"), injected: state.injected, lazy: state.lazy, kb: kb(state.spent) }
@@ -686,13 +755,14 @@ async function buildBlock(sets, wikis = [], commands = []) {
 // and render the injection block — shared by the session.created injection and the
 // compaction hook (the transform path reuses it via cachedBlockText).
 async function resolveBlock(root) {
-  const src = await resolveSource(root)
+  const harness = await harnessDir()
+  const src = await resolveSource(root, harness)
   const sets = src.mode === "manifest"
     ? await fromManifest(src.file, root)
     : await discover(root)
   const wikis = await wikiSets()
   const commands = await discoverCommands(root)
-  return { block: await buildBlock(sets, wikis, commands), src }
+  return { block: await buildBlock(sets, wikis, commands, await sessionFiles(harness)), src }
 }
 
 // Per-process cache of the rendered block text for the transform path (root is fixed

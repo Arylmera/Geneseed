@@ -27,15 +27,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../js/build/driver.mjs';
 import { cmdRebuildAll } from '../../js/build/generate.mjs';
-import { globalHookStandingDown, cmdContext } from '../../js/hosts/hooks.mjs';
+import {
+  globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES,
+} from '../../js/hosts/hooks.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
   openclaudeConfigDir,
 } from '../../js/hosts/hosts.mjs';
-import { BOB_RULES_STUB } from '../../js/build/stubs.mjs';
+import { BOB_RULES_STUB, SESSION_SEEDS } from '../../js/build/stubs.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
@@ -1404,4 +1407,60 @@ test('an eager file is cut at 16 KB and the session budget demotes the rest to l
       if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
     }
   });
+});
+
+test('the session files reach the hook from the harness dir, and an untouched seed does not', () => {
+  // The bug this pins: discovery walks the REPO root, and on a Claude-shaped install every
+  // session file sits in `.claude/` — so until 2026-10 none of them reached the session, and
+  // the root file told the model to read them "beside this file", where they are not. Three
+  // directions: a changed file IS injected, an untouched seed is NOT (it says nothing), and a
+  // manifest in the harness dir is honoured when the repo has none of its own.
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    projectEmit('claude', repo, undefined);
+    const cfg = path.join(repo, '.claude');
+    assert.ok(fs.existsSync(path.join(cfg, 'context.json')),
+      'the claude emit seeds no context.json, yet the root names it');
+    fs.appendFileSync(path.join(cfg, 'user-rules.md'), '\n- R1 always state the plan first\n');
+    fs.mkdirSync(path.join(repo, 'docs'));
+    fs.writeFileSync(path.join(repo, 'docs', 'house.md'), '# House rules\nno friday deploys\n');
+    fs.writeFileSync(path.join(cfg, 'context.json'),
+      JSON.stringify({ context: [{ path: 'docs/house.md', load: 'eager' }] }));
+    process.env.GENESEED_ROOT = repo;
+
+    const [rc, out] = capturedOut(() => cmdContext({ root: cfg }));
+    assert.equal(rc, 0);
+    assert.ok(out.includes('=== SESSION FILES'), `no session block:\n${out}`);
+    assert.ok(out.includes('----- user-rules.md -----')
+      && out.includes('R1 always state the plan first'), `the changed rules file is missing:\n${out}`);
+    for (const seed of ['PROFILE.md', 'memory/MEMORY.md', 'notebook/NOTEBOOK.md', 'wiki.jsonc']) {
+      assert.ok(!out.includes(`----- ${seed} -----`), `the untouched ${seed} seed was injected:\n${out}`);
+    }
+    assert.ok(out.includes('no friday deploys'), `the harness-dir manifest was ignored:\n${out}`);
+  }));
+});
+
+test('both copies of the seed hashes are the stubs, and the two file lists agree', () => {
+  // The hook and the OpenCode plugin carry SHA-256 hashes of the seeds instead of importing
+  // them (the hook path pays for every import; the plugin ships on its own). A stub edited
+  // without its hashes would make every untouched seed look changed and inject it as noise —
+  // so both lists are held to `SESSION_SEEDS` here. The plugin's file list is the hook's minus
+  // `wiki.jsonc`, which its MACHINE WIKI block already renders in full.
+  const expected = Object.values(SESSION_SEEDS)
+    .map((s) => createHash('sha256').update(s.replace(/\r\n/g, '\n')).digest('hex')).sort();
+  assert.deepEqual([...SEED_SHA256].sort(), expected, 'hooks.mjs SEED_SHA256 is stale');
+  const plugin = fs.readFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins',
+    'geneseed-context.js'), 'utf8');
+  const block = plugin.match(/const SEED_SHA256 = new Set\(\[([\s\S]*?)\]\)/);
+  assert.ok(block, 'the plugin no longer declares SEED_SHA256');
+  assert.deepEqual((block[1].match(/[0-9a-f]{64}/g) || []).sort(), expected,
+    'the plugin SEED_SHA256 is stale');
+  const files = plugin.match(/const SESSION_FILES = \[([\s\S]*?)\]/);
+  assert.ok(files, 'the plugin no longer declares SESSION_FILES');
+  assert.deepEqual(files[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)),
+    SESSION_FILES.filter((f) => f !== 'wiki.jsonc'));
+  for (const name of Object.keys(SESSION_SEEDS)) {
+    assert.ok(SESSION_FILES.some((f) => path.posix.basename(f) === name), `${name} is never read`);
+  }
 });
