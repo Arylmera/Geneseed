@@ -20,10 +20,10 @@ The context every host injects at session start, before you type anything:
 | Root instruction file | ~7.2k (`CLAUDE.md`) | ~7.2k (`AGENT.md`) | ~7.5k (`AGENTS.md`, §3 table inline) | ~9.1k (`AGENTS.md`, §3+§4 tables inline) |
 | Skill metadata (name + description) | ~4.1k | ~4.1k | ~4.1k (native) | — (§4 table; native catalogue unverified) |
 | Agent metadata | ~0.5k | ~0.5k | — (no agents directory) | — (§3 table) |
-| Eager memory/notebook injection | ~1.2k (SessionStart hook) | ~1.2k (context plugin) | ~1.2k (SessionStart hook) | ~1.2k (sessionStart hook) |
-| **Total** | **~13k** | **~13k** | **~13k** | **~10k** |
+| Session files (rules, profile, Memory/Notebook indexes, wiki) | 0 fresh, grows with use (SessionStart hook) | 0 fresh, grows with use (context plugin) | 0 fresh, grows with use (SessionStart hook) | 0 fresh, grows with use (sessionStart hook) |
+| **Total** | **~12k** | **~12k** | **~12k** | **~9k** |
 
-The emits are at parity by design: ~10–13k tokens, about 6% of a 200k
+The emits are at parity by design: ~9–12k tokens, about 6% of a 200k
 window. Bob catalogues skills natively but has no agents directory, so its
 root keeps the §3 Agents table and drops the §4 Skills table — the catalogue
 flag is per kind (`hostCatalogsNatively`), not one boolean. Before the 2026-09 footprint pass every hooked host paid roughly double
@@ -33,8 +33,11 @@ natively, and skill descriptions ran to 900 characters each — see the
 hosts expose no native skill/agent inventory; Claude Code and OpenCode ship a
 pointer to the host's own inventory instead, ~1.9k tokens lighter. Copilot's
 eager injection rides its `sessionStart` hook, which the **global** emit wires;
-a project-scope Copilot install has no hooks, so there the memory/notebook
-indexes load when the agent reads them, not eagerly. The
+a project-scope Copilot install has no hooks, so there the session files load
+when the agent reads them, not eagerly. A session file still byte-identical to its
+seed is skipped — it says nothing — so a fresh install injects none of them; until
+2026-10 the hook read them from the repo root, where a Claude-shaped install never
+puts them, and none reached the session at all. The
 eager-injection path is budget-capped identically everywhere — 16 KB per file
 (cut at a line break, with a marker saying so) and 48 KB per session (files past
 the budget are listed lazy with the reason) — so a 40k-character README no

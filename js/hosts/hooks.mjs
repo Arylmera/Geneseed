@@ -47,6 +47,7 @@ import { existsSync, statSync, readFileSync, readdirSync, mkdirSync,
   from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readText, writeText, printOut, printErr, withDiscardableStderr } from '../lib/fs.mjs';
 import { jsonDumpsCompact } from '../lib/json.mjs';
 import { normcase, comparePaths, toPlatformPath } from '../lib/paths.mjs';
@@ -237,6 +238,49 @@ const NATIVE_ROOT = {
 const EAGER_FILE_BYTES = 16 * 1024;
 const EAGER_TOTAL_BYTES = 48 * 1024;
 
+// The files the root instruction file names for session start, relative to the HARNESS dir
+// (`--root`: `.claude/`, `.bob/`, a global config dir) — not to the repo root discovery walks,
+// which is why none of them reached a hooked host before 2026-10. Injected here so the read does
+// not depend on the model remembering it. `context.json` is not in the list: it is a manifest,
+// honoured by `resolveContextSets` (the harness dir is its last candidate). The OpenCode
+// context plugin carries the same list.
+const SESSION_FILES = ['user-rules.md', 'PROFILE.md', 'memory/MEMORY.md', 'anamnesis/MEMORY.md',
+  'notebook/NOTEBOOK.md', 'wiki.jsonc'];
+// SHA-256 of each seed body in `js/build/stubs.mjs` (`SESSION_SEEDS`), CRLF folded. A file still
+// byte-identical to its seed says nothing, so it is skipped rather than injected as noise.
+// Hashes, not an import: stubs.mjs pulls in the build's writers, and this module loads on every
+// tool call. tests/unit/claude.test.mjs gates this set, and the plugin's copy, against the seeds.
+const SEED_SHA256 = new Set([
+  '5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721', // user-rules.md
+  '29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816', // PROFILE.md
+  'cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8', // wiki.jsonc
+  '99c786049c260f6baf7aec68a5c0f59907861afe9b867da009440613bdddb907', // MEMORY.md
+  '9acb5c9d9cb5dac572104480f05b48cc144e676869bd60e86d8a15b1f6308184', // NOTEBOOK.md
+]);
+export { SESSION_FILES, SEED_SHA256 };
+
+/**
+ * The session files present under `hookRoot` and changed from their seed, as `{ rel, abs, text }`
+ * (text CRLF-folded, trailing newlines trimmed). `$GENESEED_WIKI` overrides the wiki declaration,
+ * as it does on OpenCode. A missing or unreadable file is simply absent — this is best-effort
+ * context, never a gate.
+ */
+export function sessionFiles(hookRoot) {
+  const found = [];
+  for (const rel of SESSION_FILES) {
+    let abs = path.join(hookRoot, rel);
+    if (rel === 'wiki.jsonc' && process.env.GENESEED_WIKI && isFile(process.env.GENESEED_WIKI)) {
+      abs = process.env.GENESEED_WIKI;
+    }
+    if (!isFile(abs)) continue;
+    let text;
+    try { text = readFileSync(abs, 'utf8').replace(/\r\n/g, '\n'); } catch { continue; }
+    if (SEED_SHA256.has(createHash('sha256').update(text).digest('hex'))) continue;
+    found.push({ rel, abs, text: text.replace(/\n+$/, '') });
+  }
+  return found;
+}
+
 const CLAUDE_MARKERS = ['.claude', '.bob', '.openclaude'];
 const GENESEED_MANIFEST = '.geneseed-manifest.json';
 
@@ -348,7 +392,7 @@ export function discoverContext(root, host = HOST) {
  * `recs` is a Map, not an object: JS reorders integer-like keys on a plain object, and
  * these keys are absolute paths whose iteration order becomes the printed order.
  */
-export function resolveContextSets(root) {
+export function resolveContextSets(root, hookRoot = null) {
   let manifest = null;
   const env = process.env.GENESEED_CONTEXT;
   if (env && isFile(env)) {
@@ -356,8 +400,9 @@ export function resolveContextSets(root) {
     // way `str(Path(...))` folds them, or the source line differs by every slash in it.
     manifest = toPlatformPath(env);
   } else {
+    // The harness dir last: a repo's own manifest outranks the one seeded beside the install.
     for (const cand of [path.join(root, '.harness', 'context.json'),
-      path.join(root, 'context.json')]) {
+      path.join(root, 'context.json'), ...(hookRoot ? [path.join(hookRoot, 'context.json')] : [])]) {
       if (isFile(cand)) { manifest = cand; break; }
     }
   }
@@ -460,18 +505,40 @@ export function cmdContext(args) {
   if (hookRoot && sovereignBypass(hookRoot)) return 0;
   if (hookRoot && !process.env.GENESEED_STACK_GLOBAL
       && globalHookStandingDown(hookRoot, root)) return 0;
-  const [eager, lazy, source] = resolveContextSets(root);
-  if (!eager.length && !lazy.length) {
+  const session = hookRoot ? sessionFiles(hookRoot) : [];
+  // A session file discovery would also pick up (a `user-rules.md` at the repo root of an
+  // install whose harness dir IS the repo root) is injected once, in the session block.
+  const seen = new Set(session.map((s) => normcase(path.resolve(s.abs))));
+  const fresh = (e) => !seen.has(normcase(path.resolve(path.isAbsolute(e.path)
+    ? e.path : path.join(root, e.path))));
+  let [eager, lazy, source] = resolveContextSets(root, hookRoot);
+  eager = eager.filter(fresh);
+  lazy = lazy.filter(fresh);
+  if (!session.length && !eager.length && !lazy.length) {
     err(`[context] nothing to load for ${root} `
       + '(no docs discovered, no manifest entries).\n');
     return 0;
   }
 
-  const lines = [
-    `=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`,
-    '',
-  ];
+  const lines = [];
   let spent = 0;
+  if (session.length) {
+    lines.push('=== SESSION FILES \u2014 your harness files, injected at session start '
+      + '(untouched seeds skipped) ===', '');
+    for (const s of session) {
+      let text = s.text;
+      if (text.length > EAGER_FILE_BYTES) {
+        const nl = text.lastIndexOf('\n', EAGER_FILE_BYTES);
+        text = `${text.slice(0, nl > 0 ? nl : EAGER_FILE_BYTES)}\n`
+          + `[context] truncated at ${EAGER_FILE_BYTES / 1024} KB \u2014 read ${s.abs} on demand`;
+      }
+      spent += text.length;
+      lines.push(`----- ${s.rel} -----`, text, '');
+    }
+  }
+  if (eager.length || lazy.length) {
+    lines.push(`=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`, '');
+  }
   const demoted = [];
   for (const entry of eager) {
     const p = entry.path === undefined ? '' : entry.path;
