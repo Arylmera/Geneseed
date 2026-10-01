@@ -41,7 +41,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { emitGlobalInto } from '../build/driver.mjs';
-import { GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir } from '../hosts/hosts.mjs';
+import {
+  GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
+} from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, footprintOfDir, modeOfDir, postureOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
@@ -174,6 +176,12 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
       // makes explicit rather than leaving to `makeCfg`'s parameter default two layers down.
       posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
     }));
+    // The one place a render depends on WHERE it is installed: a global Bob emit writes each
+    // folder skill's absolute directory into its SKILL.md (see `writeNativeLayer`), so the
+    // reference render names the temp tree. Mapped back to the deployed dir before comparing,
+    // or every such skill reads as edited. A deployment that has since MOVED still differs,
+    // and that is real drift — its skills point at a directory that is no longer theirs.
+    const deployedDir = resolvePath(dir);
     const rels = [...new Set([...ownedSet(dir), ...ownedSet(expected)])].sort();
     for (const rel of rels) {
       const a = path.join(dir, rel);
@@ -182,7 +190,7 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
         // `read_text(errors="replace")` — Node's utf8 decoder substitutes U+FFFD for the
         // same bytes, and `readText` folds the line endings the way `Path.read_text` does.
         const ta = readText(a);
-        const tb = readText(b);
+        const tb = readText(b).split(expected).join(deployedDir);
         if (cmpKey(rel, ta) !== cmpKey(rel, tb)) {
           const diff = unifiedDiff(splitLines(tb), splitLines(ta), {
             fromfile: `source/${rel}`, tofile: `deployed/${rel}`, lineterm: '',

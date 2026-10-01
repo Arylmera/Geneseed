@@ -23,5 +23,13 @@ subagents over recency-weighted note pairs. The model-name references (`sonnet`,
 non-Claude host, read the sibling `synthesizer-prompt.md` / `critic-prompt.md`
 directly and dispatch through whatever subagent mechanism the host provides.
 
-To update, re-copy the upstream folder, re-apply the wiki.jsonc adaptation in
-`SKILL.md` / `instructions.md`, and bump the commit above.
+`SKILL.md` also carries a `name`/`description` frontmatter that upstream lacks — without it
+a host that registers skills from frontmatter (the Agent Skills format: Claude Code, Bob, …)
+never lists the skill — and points the agent at `instructions.md`, which upstream leaves to
+its slash command. Sibling files are named through the this-skill-directory placeholder (see
+`SKILL_DIR_PLACEHOLDER` in `js/hosts/native.mjs`), which the emit resolves for a host that
+does not tell the model where a skill lives.
+
+To update, re-copy the upstream folder, re-apply the wiki.jsonc adaptation, the
+frontmatter and the placeholder paths in `SKILL.md` / `instructions.md`, and
+bump the commit above.

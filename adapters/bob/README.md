@@ -23,7 +23,8 @@ limitation to be aware of on a shared repo.
   - `agents/<name>.md` — the **Claude subagent dialect** verbatim (`name` +
     `description` + a `disallowedTools:` denylist for read-only agents).
   - `skills/<name>/SKILL.md` — **byte-identical** to every other host; skills
-    are model-invoked via the `skill` tool.
+    are model-invoked via the `skill` tool. The one exception is the folder skills'
+    own directory — see *Bob-ism 3*.
   - `rules/geneseed.md` — a **slim shadow stub** (see *Bob-ism 1* below).
   - `settings.json` — Geneseed's lifecycle hooks (gitignored by the emit's
     `.bob/.gitignore`, see the caveat below).
@@ -63,6 +64,21 @@ Bob's precedence is honoured.
 never gets one; the `rules/geneseed.md` shadow above covers the same
 project-bypasses-global need. An older Bob install that wrote a stale exclude is
 **self-healed** (the entry is removed) on the next emit.
+
+## Bob-ism 3 — a folder skill is told where it lives
+
+A folder skill (`explain-changes`, `token-report`, `daydream`, …) ships scripts or
+prompts beside its `SKILL.md` and names them `<this-skill-directory>/…`. Claude Code
+answers that placeholder itself — it gives the model each skill's base directory on load.
+Bob gives the skill's text only, so the model was left with a path it could not resolve
+and fell back to searching the filesystem. The Bob emit therefore writes the directory in:
+
+- per repo, relative to the workspace root — `node .bob/skills/token-report/scripts/…` —
+  which is where Bob runs commands, and stays valid in a teammate's checkout;
+- globally, the absolute path under `~/.bob/skills/`.
+
+`doctor` also requires every folder skill's `SKILL.md` to open with a frontmatter whose
+`name` is the folder's and which has a `description` — what any host registers a skill from.
 
 ## Hooks — Bob's own protocol
 

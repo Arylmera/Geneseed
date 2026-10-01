@@ -164,6 +164,23 @@ test('diff still works for a global install', () => {
   });
 });
 
+test('a fresh global Bob install diffs clean, though its folder skills name their own path', () => {
+  // A global Bob emit writes each folder skill's ABSOLUTE directory into its SKILL.md, and
+  // `diff` renders its reference into a temp dir — so without mapping that dir back to the
+  // deployed one, token-report and explain-changes read as edited on every untouched install.
+  withDir((d) => {
+    const gcfg = path.join(d, 'dotbob');
+    fs.mkdirSync(gcfg, { recursive: true });
+    mustEmit(['--emit', 'bob-global', '--theme', 'neutral'], path.join(d, 'home'),
+      { BOB_CONFIG_DIR: gcfg });
+    assert.ok(fs.readFileSync(path.join(gcfg, 'skills', 'token-report', 'SKILL.md'), 'utf8')
+      .includes(path.join(fs.realpathSync(gcfg), 'skills', 'token-report')),
+    'the precondition: the path is written (resolved, as `bobConfigDir` resolves it)');
+    const { files } = diffCollect({ target: gcfg });
+    assert.deepEqual(files.map((f) => f.rel), []);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // The migration header.
 //

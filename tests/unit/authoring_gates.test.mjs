@@ -43,7 +43,7 @@ import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { ENTITY_STATUSES, entityStatus, loadRegistry } from '../../js/inspect/inventory.mjs';
 import {
-  registryProblems, secretProblems, vendorPinProblems,
+  folderSkillProblems, registryProblems, secretProblems, vendorPinProblems,
 } from '../../js/inspect/checks-repo.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -303,6 +303,46 @@ test('a first-party folder needs no pin', () => {
 test('a proper pin is accepted', () => {
   withFault('src/skills/daydream/VENDOR.md', PINNED, () => {
     assert.deepEqual(F.checks.vendorPinProblems(), []);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE FOLDER SKILLS' FRONTMATTER
+//
+// A folder is copied through as written, so its own SKILL.md is all a host registers it from:
+// a `name` that IS the folder and a `description`. Each row below breaks exactly one of those.
+
+test('the shipped folder skills open with a name that matches the folder', () => {
+  assert.deepEqual(folderSkillProblems(), []);
+  assert.deepEqual(F.checks.folderSkillProblems(), []);
+});
+
+test('a folder SKILL.md with no frontmatter is flagged', () => {
+  // daydream shipped this way: Claude Code tolerated it, a host reading the frontmatter does not.
+  withFault('src/skills/daydream/SKILL.md', '# Vault Daydream Skill\n\nbody\n', () => {
+    assert.ok(some(F.checks.folderSkillProblems(), 'daydream', 'no frontmatter'));
+  });
+});
+
+test('a folder skill named other than its folder is flagged', () => {
+  // react-view-transitions shipped as `vercel-react-view-transitions`, upstream's own name.
+  withFault('src/skills/daydream/SKILL.md', '---\nname: vendor-daydream\ndescription: "x"\n---\n\n# body\n', () => {
+    assert.ok(some(F.checks.folderSkillProblems(), "named 'vendor-daydream'", 'match the folder'));
+  });
+});
+
+test('a nested name does not stand in for the top-level one, nor does a missing description pass', () => {
+  // `metadata:` blocks carry their own keys; only a top-level `name:` is the skill's.
+  withFault('src/skills/daydream/SKILL.md', '---\nmetadata:\n  name: daydream\n---\n\n# body\n', () => {
+    const problems = F.checks.folderSkillProblems();
+    assert.ok(some(problems, "has no 'name'"), problems.join('\n'));
+    assert.ok(some(problems, "has no 'description'"), problems.join('\n'));
+  });
+});
+
+test('a quoted name that matches is accepted', () => {
+  withFault('src/skills/daydream/SKILL.md', '---\nname: "daydream"\ndescription: x\n---\n\n# body\n', () => {
+    assert.deepEqual(F.checks.folderSkillProblems(), []);
   });
 });
 

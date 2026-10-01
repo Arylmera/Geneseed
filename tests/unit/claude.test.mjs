@@ -1330,6 +1330,34 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
   }));
 });
 
+test('a Bob emit writes a folder skill\'s own directory where the skill names it', () => {
+  // Claude Code tells the model each skill's base directory when it loads one, so a folder
+  // skill can say `node <this-skill-directory>/scripts/…`. Bob hands over the text alone, and
+  // the model went looking through the filesystem for the hole. So the Bob emit fills it in:
+  // relative to the workspace root per repo (where Bob runs commands, and what survives a
+  // teammate's checkout of a committed `.bob/`), absolute globally (no workspace to be
+  // relative to). The Claude emit must keep the placeholder — its host already answers it.
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'bobrepo3');
+    fs.mkdirSync(repo);
+    projectEmit('bob', repo, undefined);
+    const project = read(repo, '.bob', 'skills', 'token-report', 'SKILL.md');
+    assert.ok(project.includes('node .bob/skills/token-report/scripts/token_report.mjs'), project);
+    assert.ok(!project.includes('<this-skill-directory>'));
+
+    const cfg = path.join(d, 'dotbob3');
+    globalEmit('bob', path.join(d, 'bundle3'), cfg);
+    const global = read(cfg, 'skills', 'token-report', 'SKILL.md');
+    assert.ok(global.includes(`node ${path.join(cfg, 'skills', 'token-report')}/scripts/`), global);
+
+    const crepo = path.join(d, 'claudrepo3');
+    fs.mkdirSync(crepo);
+    projectEmit('claude', crepo, undefined);
+    assert.ok(read(crepo, '.claude', 'skills', 'token-report', 'SKILL.md')
+      .includes('node <this-skill-directory>/scripts/token_report.mjs'));
+  }));
+});
+
 test('a Bob re-emit migrates the hooks out of the flat settings.json an older emit wrote', () => {
   // Every existing Bob install: Claude-named groups in `~/.bob/settings.json`, recorded in the
   // manifest under `settings_file: "settings.json"`. The `oldSf !== settingsName` branch unwires
