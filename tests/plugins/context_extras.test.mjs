@@ -107,3 +107,31 @@ test("model line: omitted when the model is unknown", async () => {
   await plugin["experimental.chat.messages.transform"]({}, output)
   assert.doesNotMatch(output.messages[0].parts[0].text, /current model:/)
 })
+
+test("session files: the harness dir's changed files are injected, an untouched seed is not", async () => {
+  // The harness dir is where the installed AGENT.md sits, and the session files live there —
+  // before 2026-10 the plugin read user-rules.md/PROFILE.md only when they happened to sit at
+  // the repo root, and the Memory/Notebook indexes never. $GENESEED_HARNESS pins it here.
+  const { PROFILE_STUB } = await import("../../js/build/stubs.mjs")
+  const h = path.join(tmp, "harness")
+  await fs.mkdir(path.join(h, "memory"), { recursive: true })
+  await fs.writeFile(path.join(h, "AGENT.md"), "# harness\n")
+  await fs.writeFile(path.join(h, "user-rules.md"), "# User rules\n- R1 keep the plan visible\n")
+  await fs.writeFile(path.join(h, "PROFILE.md"), PROFILE_STUB)
+  await fs.writeFile(path.join(h, "memory", "MEMORY.md"), "# Memory Index\n")
+  const plugin = await load({}, "session")
+  const output = { messages: [userMsg("s1")] }
+  const prev = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = h          // read live when the block is built
+  try {
+    await plugin["experimental.chat.messages.transform"]({}, output)
+  } finally {
+    if (prev === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = prev
+  }
+  const text = output.messages[0].parts[0].text
+  assert.match(text, /=== SESSION FILES/)
+  assert.match(text, /----- user-rules\.md -----\n# User rules\n- R1 keep the plan visible/)
+  assert.doesNotMatch(text, /----- PROFILE\.md -----/)
+  assert.doesNotMatch(text, /----- memory\/MEMORY\.md -----/)
+})

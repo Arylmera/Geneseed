@@ -21,7 +21,8 @@ import {
 } from './emit-common.mjs';
 import { renderAll, renderFile } from './render.mjs';
 import {
-  BOB_RULES_STUB, ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex, ensureProfileStub,
+  BOB_RULES_STUB, ensureContextStub, ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex,
+  ensureProfileStub,
   ensureRulesStub, ensureWikiStub,
 } from './stubs.mjs';
 import { writeVersion } from './version.mjs';
@@ -76,9 +77,11 @@ export function emitClaudeRender(cfg, job) {
     // `themed_rel` and `lstripNewlines` are, so the two verdicts stay distinguishable.
     if (!prefix) return tmplItem.text;
     const ptheme = { ...theme };
-    for (const tok of ['DIR_LAWS', 'DIR_AGENTS', 'DIR_SKILLS', 'DIR_MEMORY', 'DIR_NOTEBOOK']) {
+    for (const tok of ['DIR_LAWS', 'DIR_AGENTS', 'DIR_SKILLS', 'DIR_MEMORY', 'DIR_NOTEBOOK',
+      'DIR_DOCTRINES']) {
       ptheme[tok] = prefix + (ptheme[tok] ?? tok.split('_').slice(1).join('_').toLowerCase());
     }
+    ptheme.AT_HARNESS = prefix;
     // Same catalogue decision as the renderAll above — a re-render that forgot it would
     // quietly put the stripped tables back.
     return renderFile(cfg, tmplItem.src, ptheme, footprint, '', new Set(), nativeCatalog);
@@ -122,6 +125,10 @@ export function emitClaudeRender(cfg, job) {
   ensureMemoryIndex(path.join(cfgDir, 'memory'));
   const nbStatus = globalNotebook(cfgDir, items, out, cfg.src);
   ensureNotebookIndex(path.join(cfgDir, 'notebook'));
+  // context.json too: the root names it as the project's own manifest, and until 2026-10 this
+  // emit never seeded one — the bundle and OpenCode did — so §9 pointed at a file that was not
+  // there. The context hook reads it from this dir (`resolveContextSets`' last candidate).
+  ensureContextStub(cfgDir);
   ensureWikiStub(cfgDir);
   ensureRulesStub(cfgDir);
   ensureProfileStub(cfgDir);
@@ -135,7 +142,7 @@ export function emitClaudeRender(cfg, job) {
     const gi = path.join(cfgDir, '.gitignore');
     const giLines = (host === 'claude' || host === 'openclaude' ? ['settings.local.json']
       : host === 'bob' ? ['settings.json'] : [])
-      .concat(['wiki.jsonc', 'agent-overrides.json']);
+      .concat(['context.json', 'wiki.jsonc', 'agent-overrides.json']);
     if (!existsSync(gi)) {
       writeText(gi, `${giLines.join('\n')}\n`);
       owned.push('.gitignore');

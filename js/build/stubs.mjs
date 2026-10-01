@@ -245,9 +245,25 @@ export const ensureBundleGitignore = stubWriter('.gitignore', BUNDLE_GITIGNORE);
  * right after the store dir is created, but never invent the dir themselves). */
 const storeIndexWriter = (file, header) => (dir) => { if (isDir(dir)) seed(path.join(dir, file), header); };
 
+const MEMORY_INDEX = '# Memory Index\n';
+const NOTEBOOK_INDEX = '# Notebook Index\n';
+
 /** `_build_render.ensure_memory_index` — only inside an EXISTING store dir. */
-export const ensureMemoryIndex = storeIndexWriter('MEMORY.md', '# Memory Index\n');
+export const ensureMemoryIndex = storeIndexWriter('MEMORY.md', MEMORY_INDEX);
 
 /** `_build_render.ensure_notebook_index`. */
-export const ensureNotebookIndex = storeIndexWriter('NOTEBOOK.md', '# Notebook Index\n');
+export const ensureNotebookIndex = storeIndexWriter('NOTEBOOK.md', NOTEBOOK_INDEX);
+
+/**
+ * The seeds of the files the session-start injection reads (`SESSION_FILES` in
+ * `js/hosts/hooks.mjs`, and its twin in the OpenCode context plugin). Both carry the SHA-256
+ * of these bodies rather than importing them — the hook path pays for every import, and the
+ * plugin is deployed on its own — so an untouched seed is skipped instead of injected as
+ * noise. `tests/unit/claude.test.mjs` gates both hash lists against this map: edit a stub and
+ * the two copies must move with it.
+ */
+export const SESSION_SEEDS = {
+  'user-rules.md': RULES_STUB, 'PROFILE.md': PROFILE_STUB, 'wiki.jsonc': WIKI_STUB,
+  'MEMORY.md': MEMORY_INDEX, 'NOTEBOOK.md': NOTEBOOK_INDEX,
+};
 
