@@ -5,7 +5,7 @@ import { HARNESSES, docsHostOf } from '../hooks/useHarness.js'
 // lib/hosts.js replaced four ternary chains over host ids. These rows are the chains'
 // answers, written out, so the table cannot quietly disagree with what they said.
 describe('host facts', () => {
-  it('lists the five hosts in deploy-picker order', () => {
+  it('lists the four hosts in deploy-picker order', () => {
     expect(HOSTS.map((h) => [h.id, h.label])).toEqual([
       ['opencode', 'OpenCode'],
       ['claude', 'Claude Code'],
