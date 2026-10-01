@@ -32,7 +32,7 @@ import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { bobConfigDir, copilotConfigDir, resolvePath } from './hosts.mjs';
+import { bobConfigDir, resolvePath } from './hosts.mjs';
 import { installState, installTargets } from './installs.mjs';
 import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
 import { isDict, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
@@ -44,7 +44,7 @@ import { opencodeTarget, readJsonc } from './settings.mjs';
 const dget = (obj, key, dflt) => (isDict(obj) && Object.hasOwn(obj, key) ? obj[key] : dflt);
 
 /** The hosts whose MCP config is strict JSON under `mcpServers`, with no `enabled` flag. */
-const FLAGLESS = ['claude', 'bob', 'copilot', 'openclaude'];
+const FLAGLESS = ['claude', 'bob', 'openclaude'];
 
 /**
  * `_harness_mcp._MCP_PRESETS` — the ready-to-wire servers the MCP screen can toggle.
@@ -105,8 +105,7 @@ const serversOf = (config, host) => {
  * `_mcp_preset_block` — the block to WRITE for a preset, shaped for `host`.
  *
  * OpenCode takes it verbatim. The flagless three split the command list into `command`
- * (head) + `args` (tail) and rename `environment` to `env`; Copilot additionally requires
- * `type` and a `tools` allowlist.
+ * (head) + `args` (tail) and rename `environment` to `env`.
  */
 export function mcpPresetBlock(name, host = 'opencode') {
   const block = { ...MCP_PRESETS[name].block };
@@ -115,10 +114,6 @@ export function mcpPresetBlock(name, host = 'opencode') {
   const out = { command: cmd.length ? cmd[0] : '', args: cmd.slice(1) };
   const env = block.environment;
   if (env) out.env = { ...env };
-  if (host === 'copilot') {
-    out.type = 'local';
-    out.tools = ['*'];
-  }
   return out;
 }
 
@@ -242,11 +237,6 @@ export function mcpConfigFor(host, scope, root) {
     // as an older version did, never loaded.
     return scope === 'project' ? path.join(root, '.bob', 'mcp.json')
       : path.join(bobConfigDir(), 'settings', 'mcp.json');
-  }
-  if (host === 'copilot') {
-    // The Copilot CLI reads MCP servers from ~/.copilot/mcp-config.json only — no per-repo
-    // file is documented, so a project install carries no MCP wiring.
-    return scope === 'global' ? path.join(copilotConfigDir(), 'mcp-config.json') : null;
   }
   if (host === 'openclaude') {
     // Claude's `.mcp.json` per repo; globally `.openclaude.json` beside the home dir, or

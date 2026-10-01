@@ -26,7 +26,7 @@ Neither setting hides text from the agent; they hide it from *every turn*.
 
 ### How to set it
 
-It's set-and-forget — stored in the `.geneseed-footprint` marker, preserved across every rebuild, identical on every host (OpenCode, Claude Code, Bob, Copilot, OpenClaude). Changing it re-emits the install.
+It's set-and-forget — stored in the `.geneseed-footprint` marker, preserved across every rebuild, identical on every host (OpenCode, Claude Code, Bob, OpenClaude). Changing it re-emits the install.
 
 - **Settings** — the **Footprint** toggle flips the current install (full ⇄ lean) and rebuilds it in place.
 - **Harness tab** — on an active install, a per-harness dropdown sets it for that install independently, then **Apply**. On a host that is not installed yet, it is step 2 of **Install…**.

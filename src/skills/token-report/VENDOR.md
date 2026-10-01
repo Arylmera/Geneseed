@@ -5,7 +5,7 @@ not third-party. It rides the vendored-folder mechanism because it bundles an
 executable (`scripts/token_report.mjs`) and Geneseed's flat-skill pipeline renders
 single `.md` files only. Listing it in the generator's `VENDORED_SKILL_DIRS`
 makes the whole folder ride along verbatim into every host emit — Claude Code,
-IBM Bob, OpenCode, GitHub Copilot, OpenClaude — which is exactly what a multi-file skill needs.
+IBM Bob, OpenCode, OpenClaude — which is exactly what a multi-file skill needs.
 
 - **Upstream:** this repository (first-party)
 - **License:** same as Geneseed (see repository LICENSE)
@@ -17,7 +17,6 @@ Consequences of riding this mechanism (deliberate):
   `description` and blockquote purpose line instead;
 - listed in AGENT.md's folder-skills section, not the main skills table.
 
-The script supports all five emitted hosts (exact usage on Claude Code, Bob,
-OpenClaude and OpenCode; best-effort on Copilot, whose session-state schema is undocumented).
+The script supports all four emitted hosts, with exact usage on each.
 If a host changes its session storage layout, fix the corresponding finder or
 parser in `scripts/token_report.mjs`.

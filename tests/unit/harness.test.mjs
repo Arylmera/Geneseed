@@ -970,7 +970,7 @@ test('discovery sorts convention files eager and the rest lazy', () => {
 });
 
 test("discovery drops the host's own native root, and only that one", () => {
-  // Claude Code loads CLAUDE.md by itself; Bob and Copilot load AGENTS.md. Until 2026-09 the
+  // Claude Code loads CLAUDE.md by itself; Bob loads AGENTS.md. Until 2026-09 the
   // hook injected that same file a second time — the whole harness paid twice per session.
   withDir((d) => {
     contextFixture(d);
@@ -980,7 +980,6 @@ test("discovery drops the host's own native root, and only that one", () => {
     const rows = [
       ['claude', 'CLAUDE.md', ['AGENTS.md', 'AGENT.md']],
       ['bob', 'AGENTS.md', ['CLAUDE.md', 'AGENT.md']],
-      ['copilot', 'AGENTS.md', ['CLAUDE.md', 'AGENT.md']],
       // OpenClaude loads AGENTS.md when there is one, and then NOT CLAUDE.md.
       ['openclaude', 'AGENTS.md', ['CLAUDE.md', 'AGENT.md']],
     ];

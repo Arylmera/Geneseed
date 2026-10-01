@@ -1,5 +1,5 @@
 /**
- * The generator driver — flag parsing, the eleven emit targets, and the per-host emit orchestration.
+ * The generator driver — flag parsing, the nine emit targets, and the per-host emit orchestration.
  * `bin/build-driver.mjs` (`geneseed-build`) is only its entry; this module is what the CLI verbs
  * (`build`, `setup`, `migrate`, `doctor`, `diff`, `validate`, the web console) import. It lived in
  * `bin/` until 2026-09, which made nine `js/` modules import upward from a binary.
@@ -51,7 +51,7 @@ import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 // that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
 import {
   GLOBAL_MANIFEST, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
-  copilotConfigDir, openclaudeConfigDir, hostCatalogsNatively,
+  openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
@@ -71,9 +71,9 @@ import { registryRecord, registryRoots } from '../inspect/registry.mjs';
 // maintainer pair that needs nothing this driver is banned from having.
 import { syncThemes } from './themes.mjs';
 
-/** The eleven `--emit` choices: build.py:337-338's nine, then OpenClaude's pair. */
+/** The nine `--emit` choices: a plain bundle, then a project and a global emit per host. */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
-  'bob', 'bob-global', 'copilot', 'copilot-global', 'openclaude', 'openclaude-global'];
+  'bob', 'bob-global', 'openclaude', 'openclaude-global'];
 
 /** `_build_emit.PRIMARY_AGENT_SRC`. */
 const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
@@ -497,7 +497,7 @@ export function hookRunnerEntry() {
  * to suppress the GLOBAL preamble of the same host, or null for a host that gets none.
  *
  * `_PREAMBLE_CONFIG_DIR` has exactly one key, so only a `CLAUDE.md` carrier resolves to a
- * value: Bob's and Copilot's `AGENTS.md`, and Copilot's `copilot-instructions.md`, get null.
+ * value: Bob's `AGENTS.md` gets null.
  *
  * Computed HERE and not in the render child, and that is the inverted boundary rule doing
  * real work rather than being restated. P3b's note on the Python original: it resolves
@@ -519,10 +519,8 @@ function preambleExclude(claudeMd, host) {
 /**
  * `_build_global._warn_bob_global_over_project` — informational, never auto-removes.
  *
- * Same shape as `warnCopilotGlobalOverProject` and a DIFFERENT message, because the two
- * hosts differ in what they can promise: Copilot simply stacks both preambles, while Bob's
- * workspace rules may or may not shadow the global copy depending on precedence nothing can
- * verify at emit time — so this text hedges where Copilot's asserts.
+ * The text hedges on purpose: Bob's workspace rules may or may not shadow the global copy,
+ * depending on a precedence nothing can verify at emit time.
  */
 function warnBobGlobalOverProject() {
   const survivors = projectSurvivors('bob');
@@ -647,27 +645,6 @@ function projectSurvivors(emitName) {
 }
 
 /**
- * `_build_global._warn_copilot_global_over_project` — purely informational.
- *
- * Copilot documents no exclude or shadow mechanism, so a global preamble and a project
- * one simply stack. UNREACHABLE from every golden cell: each emits into a fresh sandbox
- * whose registry is empty, so `projectSurvivors` is always `[]` and this never prints.
- * Reaching it needs a project emit registered BEFORE a global one in the same sandbox.
- */
-function warnCopilotGlobalOverProject() {
-  const survivors = projectSurvivors('copilot');
-  if (!survivors.length) return;
-  process.stderr.write(
-    `[geneseed] WARN: ${survivors.length} project Copilot install(s) already exist — `
-    + 'emitting GLOBAL now means BOTH preambles load together in those repos '
-    + '(doubled context): Copilot stacks ~/.copilot/copilot-instructions.md on top '
-    + "of a repo's own AGENTS.md. Review and remove what you don't want:\n");
-  for (const root of survivors) {
-    process.stderr.write(`  - ${root}  ->  geneseed uninstall --target "${root}"\n`);
-  }
-}
-
-/**
  * `_build_emit.emit_opencode` — the driver body, which is what this phase actually ports.
  *
  * RENDER and WIRE already ran in Node before P4; what lived only in Python was the stage
@@ -776,22 +753,14 @@ function emitOpencodeGlobal(cfg, args, out) {
 }
 
 /**
- * `_build_global._emit_claude_core` — the shared engine behind six emits.
+ * `_build_global._emit_claude_core` — the shared engine behind six emits (Claude, Bob and
+ * OpenClaude, each per-repo and global).
  *
- * Only the two Copilot ones run through it so far, and that is a deliberate split rather
- * than an arbitrary stopping point: `js/build/emit-claude.mjs's wire` gates the entire settings/hook path
- * behind `if (!isCopilot)`, so a Copilot emit never reaches `hookPrefix` and therefore never
- * needs `hookOpts` — the pair of machine-absolute values (`sys.executable` and the harness
- * entry point) that a Node driver has no way to produce. Copilot crossing first isolates
- * this driver body from that question entirely.
- *
- * `hookOpts` is OMITTED for a host that does not wire hooks, rather than passed as `{}` or
- * `null`. If a future change ever routed a Copilot emit into the hook path, `hookPrefix()`
- * would receive `undefined`, hit its own default and throw the error it was built to throw
- * — where `null` would raise an unrelated TypeError and `{}` would bake the literal string
- * `"undefined"` into the shim and silently kill every hook in the install. Fail loud, on
- * purpose. The four hook-writing hosts pass a real pair from `hookRunnerEntry()`, which
- * cannot fail to produce one — `process.execPath` is the node already running.
+ * Every caller passes a real `hookOpts` pair from `hookRunnerEntry()`, which cannot fail to
+ * produce one — `process.execPath` is the node already running. Were it ever omitted,
+ * `hookPrefix()` would receive `undefined`, hit its own default and throw the error it was
+ * built to throw — where `null` would raise an unrelated TypeError and `{}` would bake the
+ * literal string `"undefined"` into the shim and silently kill every hook in the install.
  */
 function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpts }) {
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
@@ -799,12 +768,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   const oldOwned = (doc && doc.owned) || [];
   const oldManaged = (doc && doc.managed && typeof doc.managed === 'object'
     && !Array.isArray(doc.managed)) ? doc.managed : {};
-  const isCopilot = host === 'copilot';
 
-  // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every host
-  // but Claude — `_PREAMBLE_CONFIG_DIR` has exactly one key, `CLAUDE.md` — so neither
-  // Copilot carrier filename (copilot-instructions.md, AGENTS.md) resolves to one, and
-  // neither does Bob's. Spelling it as a call rather than a literal is what makes that a
+  // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every
+  // carrier but `CLAUDE.md` — `_PREAMBLE_CONFIG_DIR` has exactly one key — so Bob's
+  // `AGENTS.md` does not resolve to one. Spelling it as a call rather than a literal is what makes that a
   // measured `null` instead of an assumed one.
   const rendered = emitClaudeRender(cfg, {
     theme: args.theme, cfgDir, claudeMd, scope, host,
@@ -832,8 +799,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // VERIFY — re-read the settings file just written and match it against the claims just
   // recorded, so a merge that silently did not stick (a commented file, a mid-flight
   // external edit, a bug in the merge) is loud now instead of surfacing as hooks that
-  // quietly never fire. Copilot's settings have their own shape and their own check; a
-  // Copilot PROJECT emit records no hooks and so checks nothing.
+  // quietly never fire.
   //
   // On the Python driver this stage runs in Python AFTER a Node child did the wiring, which
   // makes it a live cross-implementation check on every build. Here both halves are Node, so
@@ -845,10 +811,8 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // deleting this call is byte-identical in all 259 cells. `test_verify_reports_an_orphaned
   // _geneseed_hook` plants the fault that makes it speak.
   phaseLog('VERIFY');
-  if (!isCopilot || managed.settings_hooks) {
-    settingsIntegrityCheck(
-      path.join(cfgDir, managed.settings_file || 'settings.json'), managed, 'present');
-  }
+  settingsIntegrityCheck(
+    path.join(cfgDir, managed.settings_file || 'settings.json'), managed, 'present');
   return {
     nAgents: stats.nAgents,
     nSkills: stats.nSkills,
@@ -856,38 +820,6 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     memStatus,
     nbStatus,
   };
-}
-
-/** `_build_global.emit_copilot` — per-repo: AGENTS.md at the repo root + a `.github/` layer. */
-function emitCopilot(cfg, args, out) {
-  const root = args.root ? resolveOut(args.root) : out;
-  const cfgDir = path.join(root, '.github');
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(root, 'AGENTS.md'), scope: 'project', host: 'copilot', out,
-  });
-  process.stdout.write(`[geneseed] copilot (folder) -> ${root}: AGENTS.md + .github/ `
-    + `(${r.nAgents} agents (.agent.md), ${r.nSkills} skills), ${r.memStatus}, `
-    + `${r.nbStatus}. No hooks at project scope (Copilot reads hooks from `
-    + '~/.copilot/settings.json only — the global emit wires them).\n');
-  return cfgDir;
-}
-
-/** `_build_global.emit_copilot_global` — into Copilot's personal config dir (~/.copilot). */
-function emitCopilotGlobal(cfg, args, out) {
-  const cfgDir = args.cfgDir ?? copilotConfigDir();
-  warnCopilotGlobalOverProject();
-  // The hook runner pair, as for Claude and Bob: the global emit is the one Copilot scope
-  // that wires hooks (`~/.copilot/settings.json`), and the shim it bakes is machine-wide.
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'copilot-instructions.md'),
-    scope: 'global', host: 'copilot', out, hookOpts,
-  });
-  process.stdout.write(`[geneseed] copilot-global -> ${cfgDir}: ${r.nAgents} agents (.agent.md), `
-    + `${r.nSkills} skills, copilot-instructions.md, ${r.memStatus}, ${r.nbStatus}, `
-    + `${r.nHooks} hooks (settings.json: sessionStart context, preToolUse gate, agentStop + `
-    + 'preCompact learn); MCP servers go in mcp-config.json.\n');
-  return cfgDir;
 }
 
 /**
@@ -1018,7 +950,7 @@ function writeMarkers(markerDir, emit, footprint) {
     mkdirSync(markerDir, { recursive: true });
     writeText(path.join(markerDir, '.geneseed-emit'), `${emit}\n`);
     // Written for EVERY emit (build.py:443, unconditional), unlike the theme marker:
-    // the claude/bob/copilot PROJECT installs never call build(), so this is their only
+    // the claude/bob/openclaude PROJECT installs never call build(), so this is their only
     // footprint record. Read by harness._footprint_of_dir, which defaults to 'full'.
     writeText(path.join(markerDir, '.geneseed-footprint'), `${footprint}\n`);
   } catch { /* best-effort, exactly as build.py:444-445 — a marker hiccup never fails a build */ }
@@ -1049,14 +981,13 @@ const GLOBAL_EMITS = {
   opencode: emitOpencodeGlobal,
   claude: emitClaudeGlobal,
   bob: emitBobGlobal,
-  copilot: emitCopilotGlobal,
   openclaude: emitOpenclaudeGlobal,
 };
 
 /**
  * The PER-REPO half of the same idea, and `doctor` is its only caller.
  *
- * `_claude_bob_emit_problems` renders `emit_claude`, `emit_bob` and `emit_copilot` into
+ * `_claude_bob_emit_problems` renders `emit_claude`, `emit_bob` and `emit_openclaude` into
  * throwaway sandboxes and scans each — the three emits that write CLAUDE.md/AGENTS.md
  * straight into a repo, and the ones outside doctor's sweep when the skill-table dead links
  * shipped.
@@ -1072,7 +1003,7 @@ const GLOBAL_EMITS = {
  * three-positional call leaves in place, inherited here rather than re-decided.
  */
 const PROJECT_EMITS = {
-  claude: emitClaude, bob: emitBob, copilot: emitCopilot, openclaude: emitOpenclaude,
+  claude: emitClaude, bob: emitBob, openclaude: emitOpenclaude,
   // P2. `opencode` joins the three for `cmdValidate`, which has to be able to render EVERY
   // `--emit` choice into its sandbox and not only the three doctor already scans. Its call
   // shape is `emitClaude`'s exactly — `(cfg, args, out)` — so the row is the whole change.
@@ -1210,7 +1141,7 @@ function run(argv) {
     markerDir = GLOBAL_EMITS[args.emit.slice(0, -'-global'.length)](cfg, args, out);
   } else if (args.emit !== 'files') {
     // The PROJECT emits keep their markers in `out`, not in the host config dir the emit
-    // wrote to (build.py:435-436) — `.github/` is the layer, `out` is the install.
+    // wrote to (build.py:435-436) — `.claude/` is the layer, `out` is the install.
     PROJECT_EMITS[args.emit](cfg, args, out);
   } else {
     // The ninth choice, a plain bundle: `nativeCatalog: false` is build.py:421's
@@ -1223,7 +1154,7 @@ function run(argv) {
   writeMarkers(markerDir, args.emit, args.footprint);
   // build() drops a .geneseed-theme in `out` for the emits that call it; the global emits
   // render into the config dir WITHOUT calling build(), so the theme is recorded here.
-  // Deliberately not written for the claude/bob/copilot PROJECT emits — they carry none,
+  // Deliberately not written for the claude/bob/openclaude PROJECT emits — they carry none,
   // and `_harness_setup._installed_defaults` detects those by an AGENT.md sigil scan
   // instead. Writing one for them would change the emitted tree.
   if (args.emit.endsWith('-global')) {
@@ -1234,7 +1165,7 @@ function run(argv) {
   // An ALLOW-LIST, not "everything that is not global": a plain `--emit files` dev build —
   // the default — must never pollute the registry, and only the four per-repo host emits
   // are ones `_EMIT_HOST_SCOPE` can map back to a row. Records `out`, where the marker is.
-  if (['opencode', 'claude', 'bob', 'copilot', 'openclaude'].includes(args.emit)) {
+  if (['opencode', 'claude', 'bob', 'openclaude'].includes(args.emit)) {
     registryRecord(markerDir);
   }
   return 0;

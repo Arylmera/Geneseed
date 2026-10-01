@@ -170,9 +170,6 @@ const EXPECTED = {
   bob: { host: 'bob', base: 'out', rel: 'AGENTS.md', native: ['out', '.bob'] },
   'bob-global': { host: 'bob', base: 'home', rel: '.bob/rules/geneseed.md',
     native: ['home', '.bob'] },
-  copilot: { host: 'copilot', base: 'out', rel: 'AGENTS.md', native: ['out', '.github'] },
-  'copilot-global': { host: 'copilot', base: 'home', rel: '.copilot/copilot-instructions.md',
-    native: ['home', '.copilot'] },
   // The preamble sits INSIDE `.openclaude/`: OpenClaude skips a root CLAUDE.md whenever the repo
   // carries an AGENTS.md, and reads `.openclaude/CLAUDE.md` unconditionally.
   openclaude: { host: 'openclaude', base: 'out', rel: '.openclaude/CLAUDE.md',

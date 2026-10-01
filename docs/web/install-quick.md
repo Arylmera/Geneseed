@@ -18,7 +18,7 @@ To keep the command around: `npm install -g geneseed`, then plain `geneseed …`
 
 ### 2. Open your agent
 
-Open OpenCode (or Claude Code, Bob, Copilot, OpenClaude, or any `AGENT.md`-aware tool) in any repo. The first reply opens with the readiness sigil (`✅` neutral / `🧬` imperial / your theme's equivalent) and your project's docs are already in context.
+Open OpenCode (or Claude Code, Bob, OpenClaude, or any `AGENT.md`-aware tool) in any repo. The first reply opens with the readiness sigil (`✅` neutral / `🧬` imperial / your theme's equivalent) and your project's docs are already in context.
 
 ### Prefer a clone?
 

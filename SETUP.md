@@ -22,7 +22,7 @@ that matches your tool, then configure and verify. For the conceptual overview s
 
 - **Node ≥ 22.3** — the only hard requirement. Geneseed ships as an npm package with
   **zero dependencies**; `npx geneseed` needs nothing else.
-- **Your agent tool** — OpenCode (recommended), Claude Code, Bob, Copilot, OpenClaude, or anything
+- **Your agent tool** — OpenCode (recommended), Claude Code, Bob, OpenClaude, or anything
   that reads a root instructions file.
 - *Only for a git checkout:* **git**. Nothing else — a checkout runs the same Node
   entry points the npm package installs.
@@ -93,8 +93,7 @@ hand? Pick a path below.
 | [A — OpenCode, global](#path-a--opencode-global-recommended) | **Recommended.** One install, every repo inherits it, nothing committed into projects. |
 | [B — OpenCode, per-repo](#path-b--opencode-per-repo) | You want a committed `.opencode/` layer in one repository. |
 | [C — Claude Code](#path-c--claude-code) | You drive Claude Code and want the lifecycle hooks. |
-| [C′ — GitHub Copilot](#path-c--github-copilot) | You drive the Copilot CLI, coding agent, or VS Code agent mode. |
-| [C″ — OpenClaude](#path-c--openclaude) | You drive OpenClaude, the any-model Claude Code fork. |
+| [C′ — OpenClaude](#path-c--openclaude) | You drive OpenClaude, the any-model Claude Code fork. |
 | [D — Any `AGENT.md` tool](#path-d--any-agentmd-tool) | Cursor, Aider, or any tool that reads a root instructions file. |
 | [E — No runtime on the target at all](#path-e--no-runtime-on-the-target-at-all) | The machine that *uses* the harness cannot run Node. |
 
@@ -219,45 +218,11 @@ repo's own `.claude/settings.local.json`, and OpenClaude's in `.openclaude/setti
 Bob: the workspace rules shadow stub;
 OpenCode: the plugins stand down). Everything is reversed by `exclude remove`.
 
-Limitations: GitHub Copilot has no per-repo suppression mechanism, so the global
-`copilot-instructions.md` still loads there; and globally installed skills/
-subagents remain listed by the host (no native per-repo disable exists). A
-global install emitted later starts with an empty list — re-run
+Limitation: globally installed skills/subagents remain listed by the host (no
+native per-repo disable exists). A global install emitted later starts with an empty list — re-run
 `harness exclude add` (`exclude list` flags installs that diverge).
 
-### Path C′ — GitHub Copilot
-
-```
-geneseed-build --emit copilot-global           # personal: render into ~/.copilot
-geneseed-build --emit copilot --out . --root .  # per-repo: AGENTS.md + .github/, committed
-```
-
-Copilot is Claude-shaped where it counts: skills are the same `SKILL.md` folders
-(Copilot's Agent Skills — `.github/skills/` in a repo, `~/.copilot/skills/`
-personally), agents render in Copilot's own custom-agent dialect
-(`agents/<name>.agent.md`, a `tools:` allowlist instead of Claude's denylist), and
-the preamble rides a file Copilot auto-loads: the repo-root `AGENTS.md` (CLI, coding
-agent, and VS Code agent mode) or the personal `~/.copilot/copilot-instructions.md`
-(CLI). Two differences from the Claude paths:
-
-- **Hooks at global scope only.** The global emit adds entries to four events in
-  `~/.copilot/settings.json`: `sessionStart` (eager project-context injection),
-  `preToolUse` (both gates behind one command, since entries carry no matcher —
-  every rule **asks**, as on Claude Code), and `agentStop` + `preCompact` (`learn`,
-  from the payload's `transcriptPath`). The per-repo emit wires nothing: a
-  machine-absolute command in a shared `.github/` would fail on every teammate's
-  machine.
-- **The per-repo layer lives in the shared `.github/`** (Copilot's repo config
-  surface). Safe by construction: the ownership manifest + claim-on-create never
-  touch files Geneseed didn't write — your workflows and same-named agents/skills
-  survive every emit and uninstall.
-
-MCP servers go in `~/.copilot/mcp-config.json` (the Settings/MCP screens know the
-shape). `$COPILOT_CONFIG_DIR` relocates the personal dir, mirroring
-`$BOB_CONFIG_DIR`. Note both carriers stack if you install globally *and* per-repo —
-the global emit warns when that's about to happen.
-
-### Path C″ — OpenClaude
+### Path C′ — OpenClaude
 
 ```
 geneseed-build --emit openclaude-global           # render into ~/.openclaude
@@ -453,7 +418,7 @@ you run a smaller model.
 **Same harness, either way.** Footprint changes neither what the harness *is* nor what it
 can *do*: lean and full emit identical files (same agents, skills, plugins, commands, memory,
 notebook, hooks) and every Rule is present and binding. The only structural difference is
-that a lean install on a global / Claude / Bob / Copilot / OpenClaude target also ships the standalone
+that a lean install on a global / Claude / Bob / OpenClaude target also ships the standalone
 `laws/universal.md` and `ontology/` (project bundles already carry them, and `doctrines/`
 ships at both footprints on every target); the only behavioural difference is that the
 reasoning loads on demand instead of every turn. Lean is the default; full, with the rationale
@@ -463,7 +428,7 @@ with a weaker model, and is one flag away.
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
 the web Settings, the per-harness dropdown in the Harnesses tab, or the setup wizard. It is
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
-host (OpenCode, Claude Code, Bob, Copilot, OpenClaude).
+host (OpenCode, Claude Code, Bob, OpenClaude).
 
 ### Dry-run a build (`validate`)
 

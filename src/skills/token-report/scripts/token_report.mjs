@@ -13,9 +13,6 @@
  *                              storage/ JSON files when no DB exists)
  *   openclaude OpenClaude     ~/.openclaude/projects/<slug>/<session>.jsonl exact usage
  *                              (Claude Code fork; $OPENCLAUDE_CONFIG_DIR honoured)
- *   copilot   GitHub Copilot   ~/.copilot/history-session-state/           best effort
- *                              (schema undocumented; token fields harvested
- *                              generically, estimates otherwise)
  *
  * The report distinguishes two kinds of numbers:
  *
@@ -331,18 +328,6 @@ function mtime(p) {
 
 function listDir(p) {
   try { return readdirSync(p).map((n) => path.join(p, n)); } catch { return []; }
-}
-
-/** Every file at any depth under `root` whose basename matches `pred`. */
-function walkFiles(root, pred, out = []) {
-  let entries;
-  try { entries = readdirSync(root, { withFileTypes: true }); } catch { return out; }
-  for (const e of entries) {
-    const full = path.join(root, e.name);
-    if (e.isDirectory()) walkFiles(full, pred, out);
-    else if (pred(e.name)) out.push(full);
-  }
-  return out;
 }
 
 /** Every DIRECTORY at any depth under `root` named `name` — `Path.rglob("<name>")`. */
@@ -905,100 +890,6 @@ function opencodeParse(sid, files) {
   return data;
 }
 
-// ---------------------------------------------------------------------------
-// Host: GitHub Copilot CLI (best effort — schema undocumented)
-// ---------------------------------------------------------------------------
-
-function copilotRoot() {
-  const root = process.env.COPILOT_CONFIG_DIR || path.join(homedir(), '.copilot');
-  for (const sub of ['history-session-state', 'session-state', 'sessions']) {
-    if (isDir(path.join(root, sub))) return path.join(root, sub);
-  }
-  return null;
-}
-
-/** Recursively collect numeric fields whose key mentions tokens. */
-function harvestTokens(obj, sink) {
-  if (isDict(obj)) {
-    for (const [k, v] of Object.entries(obj)) {
-      const lk = k.toLowerCase();
-      // `isinstance(v, (int, float))` — and in Python a BOOL *is* an int, so a
-      // `"hasTokens": true` adds 1. Reproduced rather than tidied away.
-      if ((typeof v === 'number' || typeof v === 'boolean') && lk.includes('token')) {
-        sink.add(lk, typeof v === 'boolean' ? (v ? 1 : 0) : v);
-      } else {
-        harvestTokens(v, sink);
-      }
-    }
-  } else if (Array.isArray(obj)) {
-    for (const v of obj) harvestTokens(v, sink);
-  }
-}
-
-/** Recursively estimate message-ish content by role. */
-function harvestText(obj, sink, depth = 0) {
-  if (depth > 12) return;
-  if (isDict(obj)) {
-    const roleRaw = getOr(obj, 'role', undefined);
-    const role = typeof roleRaw === 'string' ? roleRaw : null;
-    const body = role ? getOr(obj, 'content', undefined) : null;
-    if (role && body !== null && body !== undefined) {
-      const cat = { user: 'User messages', assistant: 'Assistant replies',
-        tool: 'Tool result · (unattributed)' }[role] ?? `${role} messages`;
-      sink.add(cat, textLen(body));
-      return;
-    }
-    for (const v of Object.values(obj)) harvestText(v, sink, depth + 1);
-  } else if (Array.isArray(obj)) {
-    for (const v of obj) harvestText(v, sink, depth + 1);
-  }
-}
-
-function copilotFind(explicit = null) {
-  const root = copilotRoot();
-  if (!root) return null;
-  if (explicit) return existsSync(explicit) ? explicit : null;
-  return newest(listDir(root));
-}
-
-function copilotParse(target) {
-  const data = new SessionData('copilot', path.basename(target));
-  // `rglob("*.json*")` — the basename must CONTAIN ".json", so .json and .jsonl both
-  // match and so does anything after them.
-  const files = isDir(target)
-    ? walkFiles(target, (n) => n.includes('.json')).sort(comparePaths)
-    : [target];
-  const tokens = new Counter();
-  for (const f of files.slice(0, 500)) {
-    const text = readTextMaybe(f);
-    if (text === null) continue;
-    const docs = [];
-    if (path.extname(f) === '.jsonl') {
-      for (const line of pySplitLines(text)) {
-        const d = loadJsonMaybe(line);
-        if (d !== undefined) docs.push(d);
-      }
-    } else {
-      const d = loadJsonMaybe(text);
-      if (d !== undefined) docs.push(d);
-    }
-    for (const doc of docs) {
-      harvestTokens(doc, tokens);
-      harvestText(doc, data.cats);
-    }
-  }
-  if (tokens.size) {
-    data.notes.push('Copilot session state is undocumented; token-like fields '
-      + 'found (summed, field names as stored): '
-      + tokens.entries().sort((a, b) => pyStrCmp(a[0], b[0]))
-        .map(([k, v]) => `${k}=${fmt(v)}`).join(', '));
-  } else {
-    data.notes.push('Copilot records no recognisable token counts in its session '
-      + 'state — the report below is character-count estimates only.');
-  }
-  return data;
-}
-
 /**
  * `str.splitlines()` — copy of the rule the generator settles once: Python splits
  * on a dozen characters JS's `\n` split does not, and drops a trailing empty field.
@@ -1022,7 +913,6 @@ async function detect(hostArg, transcript, session) {
     bob: () => claudeShapedFind('bob', transcript),
     openclaude: () => claudeShapedFind('openclaude', transcript),
     opencode: () => opencodeFind(session),
-    copilot: () => copilotFind(transcript),
   };
   if (hostArg) {
     const found = await finders[hostArg]();
@@ -1046,25 +936,21 @@ async function detect(hostArg, transcript, session) {
   }
   if (!best) {
     sysExit('error: no session data found for any supported host '
-      + '(claude, bob, openclaude, opencode, copilot)');
+      + '(claude, bob, openclaude, opencode)');
   }
   return [best[0], best[1]];
 }
 
 async function load(host, found) {
   if (['claude', 'bob', 'openclaude'].includes(host)) return claudeShapedParse(host, found);
-  if (host === 'opencode') {
-    const [kind, payload] = found;
-    if (kind === 'db') return opencodeDbParse(...payload);
-    if (kind === 'nosqlite') return nosqliteData(...payload);
-    return opencodeParse(...payload);
-  }
-  return copilotParse(found);
+  const [kind, payload] = found;
+  if (kind === 'db') return opencodeDbParse(...payload);
+  if (kind === 'nosqlite') return nosqliteData(...payload);
+  return opencodeParse(...payload);
 }
 
 const HOST_NAMES = {
   claude: 'Claude Code', bob: 'IBM Bob', openclaude: 'OpenClaude', opencode: 'OpenCode',
-  copilot: 'GitHub Copilot',
 };
 
 function render(d, limit, topN) {
@@ -1195,11 +1081,11 @@ function render(d, limit, topN) {
 // ---------------------------------------------------------------------------
 
 const PROG = path.basename(process.argv[1] ?? 'token_report.mjs');
-const HOST_CHOICES = ['claude', 'bob', 'openclaude', 'opencode', 'copilot'];
+const HOST_CHOICES = ['claude', 'bob', 'openclaude', 'opencode'];
 const OPTIONS = [
   ['-h, --help', 'show this help message and exit'],
   [`--host {${HOST_CHOICES.join(',')}}`, 'force a host instead of auto-detecting by recency'],
-  ['--transcript TRANSCRIPT', 'explicit transcript path (claude/bob/openclaude/copilot)'],
+  ['--transcript TRANSCRIPT', 'explicit transcript path (claude/bob/openclaude)'],
   ['--session SESSION', 'explicit session id (opencode)'],
   ['--limit LIMIT', 'context window limit for % columns (default 200000)'],
   ['--top TOP', 'how many heaviest single items to list (default 5)'],

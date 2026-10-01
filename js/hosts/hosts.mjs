@@ -1,5 +1,5 @@
 /**
- * The five host config dirs, and the two path primitives they are built on.
+ * The four host config dirs, and the two path primitives they are built on.
  *
  * EXTRACTED IN P5c, and the reason is arithmetic rather than taste. `bin/build-driver.mjs`
  * owned these; `bin/geneseed-cli.mjs` needs the same four to find a global install, and a
@@ -173,20 +173,6 @@ export function opencodeConfigDir() {
 }
 
 /**
- * `_build_core._copilot_config_dir` — `~/.copilot`, relocatable via `$COPILOT_CONFIG_DIR`.
- *
- * Geneseed's own knob, mirroring `$BOB_CONFIG_DIR`: Copilot documents no such variable, but
- * tests, doctor and locked-down setups still need to re-point the target. Like every
- * relocation variable it is CLEARED by `golden.cell_env`, so no cell can observe whether
- * a driver honours it — see `test_the_relocation_var_moves_the_global_target`.
- */
-export function copilotConfigDir() {
-  const env = process.env.COPILOT_CONFIG_DIR;
-  if (env) return resolvePath(env);
-  return resolvePath(path.join(os.homedir(), '.copilot'));
-}
-
-/**
  * `_build_core._claude_config_dir` — `~/.claude`, and there is NO env branch BY DESIGN.
  *
  * Its three siblings all check a `*_CONFIG_DIR` variable first; this one does not, because
@@ -223,7 +209,7 @@ export function openclaudeConfigDir() {
 
 /**
  * `_build_global.HOSTS`, reduced to the two columns a non-emitting caller needs, and IN ITS
- * ORDER — opencode, claude, bob, copilot, openclaude.
+ * ORDER — opencode, claude, bob, openclaude.
  *
  * An array rather than an object because the order is observable output, not an
  * implementation detail: `harness exclude add` walks it and prints one message per host, so
@@ -233,21 +219,20 @@ export function openclaudeConfigDir() {
  *
  * `projectMarker` joined in P5f. `_install_targets` asks "does this cwd carry a project
  * install of host H", and `_claude_cfg` asks "which subdir holds a project install's
- * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.github` value the Python reads
+ * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.openclaude` value the Python reads
  * out of `build.HOSTS[host]["project_marker"]`, so it belongs beside the config dir rather
  * than in a second table in `js/hosts/installs.mjs`.
  *
  * `agentFile` joined in P5h, and for one caller: `cmd_uninstall` names the managed block's
  * carrier in its "removes:" preamble (`the CLAUDE.md managed block`, `the AGENTS.md managed
  * block`). It is a column and not a literal in the message for the reason every other column
- * here is one — Bob and Copilot both answer `AGENTS.md` while Claude answers `CLAUDE.md`, and
+ * here is one — Bob answers `AGENTS.md` while Claude answers `CLAUDE.md`, and
  * a host added later must not need the message edited to stay true.
  */
 export const HOSTS = [
   { host: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode', agentFile: 'AGENT.md' },
   { host: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md' },
   { host: 'bob', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md' },
-  { host: 'copilot', configDir: copilotConfigDir, projectMarker: '.github', agentFile: 'AGENTS.md' },
   { host: 'openclaude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md' },
 ];
 
@@ -271,14 +256,13 @@ export const HOSTS = [
  * single boolean was wrong both ways: `false` shipped the §4 Skills table on top of a
  * catalogue Bob already had (~1.7k tokens twice), `true` would have stripped the §3 Agents
  * table that is Bob's ONLY agent catalogue. Each CATALOG block in AGENT.md names its kind and
- * resolves against its own flag. Copilot stays unverified and keeps both tables. Mirrored in
+ * resolves against its own flag. Mirrored in
  * `bin/build-driver.mjs` (which cannot import this module's spawning neighbours).
  */
 const NATIVE_CATALOG = {
   opencode: { skills: true, agents: true },
   claude: { skills: true, agents: true },
   bob: { skills: true, agents: false },
-  copilot: { skills: false, agents: false },
   openclaude: { skills: true, agents: true },
 };
 

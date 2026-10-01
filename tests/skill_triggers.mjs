@@ -23,8 +23,7 @@
 //
 // ONE ADAPTER PER HOST (`HOSTS` below): what to emit, how to strip the hooks, how to launch the
 // session, and which event in its JSON stream counts as "the skill fired". Only hosts that load
-// skills natively are here — Copilot routes through the §4 table in AGENT.md, so "fired" there
-// is a file read, a different question.
+// skills natively are here.
 //
 //   claude    `claude -p --output-format stream-json --max-turns N`; fired = a `Skill` tool_use.
 //   opencode  `opencode run --format json -m <provider/model>`; fired = a `skill` tool part with

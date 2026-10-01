@@ -2,12 +2,12 @@
 //
 // These facts were spread across four places — the Harness page's remove-confirm strings,
 // its deploy note, the deploy form's host <select>, and the Docs host selector — each a
-// ternary chain over host ids, so adding a host (OpenClaude was the fifth) meant finding
+// ternary chain over host ids, so adding a host (OpenClaude was the last added) meant finding
 // all four. One row per host now; the order is the deploy form's option order.
 //
 //   label         — the name the deploy form's host picker shows
-//   docs          — which Docs family the host reads. Bob, Copilot and OpenClaude emit
-//                   through the Claude engine, so they share Claude Code's pages
+//   docs          — which Docs family the host reads. Bob and OpenClaude emit through
+//                   the Claude engine, so they share Claude Code's pages
 //   deployAdds    — what a per-repo deploy puts into the folder (the deploy form's note)
 //   removeProject — what `remove` deletes from a per-repo install
 //   removeGlobal  — what `remove` deletes from the global (config-dir) install
@@ -36,14 +36,6 @@ export const HOSTS = [
     deployAdds: '.bob/ + AGENTS.md',
     removeProject: '.bob/ + the AGENTS.md block',
     removeGlobal: "~/.bob's agents/skills + the AGENTS.md block + settings hooks",
-  },
-  {
-    id: 'copilot',
-    label: 'GitHub Copilot',
-    docs: 'claude',
-    deployAdds: '.github/ + AGENTS.md',
-    removeProject: ".github's Geneseed agents/skills + the AGENTS.md block",
-    removeGlobal: "~/.copilot's agents/skills + the copilot-instructions.md block",
   },
   {
     id: 'openclaude',

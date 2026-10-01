@@ -4,7 +4,7 @@ order: 11
 title: "The collaboration layer"
 kind: "concept"
 ---
-Beside the [constitution](#/docs/rules), a handful of mechanisms shape *how* the agent works with you — the two registers, the mutual contract, how memory binds, and who you are. All of them are plain content in `AGENT.md` and its neighbours, so they ride to every host (OpenCode, Claude, Bob, Copilot) unchanged.
+Beside the [constitution](#/docs/rules), a handful of mechanisms shape *how* the agent works with you — the two registers, the mutual contract, how memory binds, and who you are. All of them are plain content in `AGENT.md` and its neighbours, so they ride to every host (OpenCode, Claude, Bob, OpenClaude) unchanged.
 
 ### Postures — the register
 

@@ -58,7 +58,7 @@ which root file OpenClaude already loads (`AGENTS.md` when present, else
 ## Not supported
 
 - **Workflows.** OpenClaude ships its `WorkflowTool` disabled, so the `workflow`
-  skill falls back to parallel agents, as on Bob and Copilot.
+  skill falls back to parallel agents, as on Bob.
 - **Live verification.** The emit follows OpenClaude's source (`src/utils/envUtils.ts`,
   `src/utils/claudemd.ts`, `src/utils/config.ts`, `src/types/hooks.ts`) as of
   2026-09. It has not been run against an installed OpenClaude yet.

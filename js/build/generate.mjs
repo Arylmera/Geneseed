@@ -173,7 +173,6 @@ export const DEFAULT_EMIT = new Map([
   ['opencode global', 'opencode-global'], ['opencode project', 'opencode'],
   ['claude global', 'claude-global'], ['claude project', 'claude'],
   ['bob global', 'bob-global'], ['bob project', 'bob'],
-  ['copilot global', 'copilot-global'], ['copilot project', 'copilot'],
   ['openclaude global', 'openclaude-global'], ['openclaude project', 'openclaude'],
 ]);
 

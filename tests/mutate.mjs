@@ -294,17 +294,17 @@ export const MUTATIONS = [
   },
   {
     id: 'M15',
-    name: 'make copilotConfigDir ignore its relocation variable',
+    name: 'make bobConfigDir ignore its relocation variable',
     file: 'js/hosts/hosts.mjs',
-    find: '  const env = process.env.COPILOT_CONFIG_DIR;',
+    find: '  const env = process.env.BOB_CONFIG_DIR;',
     replace: '  const env = null;',
     gate: UNIT,
     why: 'WAS UNREACHABLE BY CONSTRUCTION FROM THE MATRIX, and for a safety reason: `cellEnv` '
       + 'CLEARED every relocation variable, because leaving one set rendered ~126 global cells '
       + "into the developer's real install. So a resolver that ignored its variable was "
       + "byte-identical in all 259 cells while writing into the user's real config dir on every "
-      + 'machine that exports it. This is the M30 shape the per-host table was built for: the '
-      + 'hazard had been generalised to Copilot in prose and not in the gate.',
+      + 'machine that exports it. This is the M30 shape the per-host table was built for: a '
+      + 'hazard generalised to a new host in prose and not in the gate.',
   },
   {
     id: 'M16',

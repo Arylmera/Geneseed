@@ -10,7 +10,6 @@ describe('host facts', () => {
       ['opencode', 'OpenCode'],
       ['claude', 'Claude Code'],
       ['bob', 'BOB (IBM)'],
-      ['copilot', 'GitHub Copilot'],
       ['openclaude', 'OpenClaude'],
     ])
   })
@@ -18,12 +17,10 @@ describe('host facts', () => {
   it.each([
     ['claude', 'project', '.claude/ + the CLAUDE.md block'],
     ['bob', 'project', '.bob/ + the AGENTS.md block'],
-    ['copilot', 'project', ".github's Geneseed agents/skills + the AGENTS.md block"],
     ['openclaude', 'project', '.openclaude/ + its CLAUDE.md block'],
     ['opencode', 'project', '.opencode/ + AGENT.md + the bundle'],
     ['claude', 'global', "~/.claude's agents/skills + the CLAUDE.md block + settings hooks"],
     ['bob', 'global', "~/.bob's agents/skills + the AGENTS.md block + settings hooks"],
-    ['copilot', 'global', "~/.copilot's agents/skills + the copilot-instructions.md block"],
     [
       'openclaude',
       'global',
@@ -45,7 +42,6 @@ describe('host facts', () => {
       '.opencode/ + AGENT.md',
       '.claude/ + CLAUDE.md',
       '.bob/ + AGENTS.md',
-      '.github/ + AGENTS.md',
       '.openclaude/ + its CLAUDE.md',
     ])
   })
@@ -59,14 +55,14 @@ describe('docs host', () => {
     ])
   })
 
-  // Bob, Copilot and OpenClaude emit through the Claude engine and read Claude's pages.
+  // Bob and OpenClaude emit through the Claude engine and read Claude's pages.
   it.each([
     ['opencode', 'opencode'],
     ['opencode-global', 'opencode'],
     ['claude', 'claude'],
     ['claude-global', 'claude'],
     ['bob-global', 'claude'],
-    ['copilot', 'claude'],
+    ['bob', 'claude'],
     ['openclaude-global', 'claude'],
     ['files', 'opencode'],
     [undefined, 'opencode'],

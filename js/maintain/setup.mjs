@@ -280,7 +280,7 @@ export function doctrineOptions() {
 /**
  * `_harness_setup.EMIT_OPTIONS`.
  *
- * Exported since P6b: `/api/themes` returns the same eleven as its `emits` list, and a copy
+ * Exported since P6b: `/api/themes` returns the same nine as its `emits` list, and a copy
  * of a table under test silently stops being the table under test.
  */
 export const EMIT_OPTIONS = [
@@ -290,8 +290,6 @@ export const EMIT_OPTIONS = [
   ['claude', 'Per-repo CLAUDE.md + .claude/ committed into one repository.'],
   ['bob-global', 'IBM Bob global config dir (~/.bob) — rules/geneseed.md, agents, skills, settings.json.'],
   ['bob', 'Per-repo AGENTS.md + .bob/ for IBM Bob, committed into one repository.'],
-  ['copilot-global', 'GitHub Copilot personal config dir (~/.copilot) — copilot-instructions.md, agents, skills.'],
-  ['copilot', 'Per-repo AGENTS.md + .github/ for GitHub Copilot, committed into one repository.'],
   ['files', 'Plain bundle for any AGENT.md tool.'],
   // Appended AFTER `files`, not beside the other hosts: the menu is answered by number, and a
   // scripted `setup` that pipes its answers must keep meaning what it meant.
@@ -377,10 +375,10 @@ export function collectSetupLines() {
     inst.footprint || 'lean');
   let out = null;
   let root = null;
-  // Every PROJECT emit needs the repo root — claude/bob/copilot included: without `--out`
+  // Every PROJECT emit needs the repo root — claude/bob/openclaude included: without `--out`
   // their CLAUDE.md/.claude land in the generator's default ./Harness, where the host never
   // looks.
-  if (['opencode', 'claude', 'bob', 'copilot', 'openclaude'].includes(emit)) {
+  if (['opencode', 'claude', 'bob', 'openclaude'].includes(emit)) {
     root = ask('Repo root to install into', '.');
     out = root;
   } else if (emit === 'files') {

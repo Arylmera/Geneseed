@@ -8,11 +8,8 @@
  *
  * ONE VERB, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
- * prompt. GitHub Copilot's `preToolUse` reads the same decision TOP-LEVEL —
- * `{"permissionDecision": "ask", "permissionDecisionReason": …}` — so `--host copilot` asks
- * exactly where Claude asks, in Copilot's envelope. `--host bob` is Bob's own
- * protocol: PreToolUse ignores stdout and refuses only on EXIT CODE 2, so the two Laws
- * exit 2 with the reason on stderr and the rest is a stderr line with exit 0; SessionStart
+ * prompt. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
+ * EXIT CODE 2, so the two Laws exit 2 with the reason on stderr and the rest is a stderr line with exit 0; SessionStart
  * context is plain stdout, as on Claude. `--host openclaude` speaks Claude's dialect verbatim
  * (OpenClaude is a Claude Code fork); the flag only picks which root file counts as native. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
  * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
@@ -227,7 +224,7 @@ const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor',
 // OpenClaude's root file is AGENTS.md, or CLAUDE.md when AGENTS.md is absent — resolved
 // per repo in `discoverContext`, since which one it loads depends on what is on disk.
 const NATIVE_ROOT = {
-  claude: ['CLAUDE.md'], bob: ['AGENTS.md'], copilot: ['AGENTS.md'],
+  claude: ['CLAUDE.md'], bob: ['AGENTS.md'],
   openclaude: ['AGENTS.md', 'CLAUDE.md'],
 };
 
@@ -511,12 +508,8 @@ export function cmdContext(args) {
     lines.push('');
   }
 
-  // Claude Code takes a SessionStart hook's plain stdout as context. Copilot's `sessionStart`
-  // wants a JSON document and reads `additionalContext` out of it; plain text there would be
-  // parsed as nothing and silently dropped.
-  // Bob reads a SessionStart hook's stdout as context exactly as Claude does.
-  const text = `${lines.join('\n')}\n`;
-  out(HOST === 'copilot' ? `${jsonDumpsCompact({ additionalContext: text })}\n` : text);
+  // Claude Code takes a SessionStart hook's plain stdout as context; Bob reads it the same way.
+  out(`${lines.join('\n')}\n`);
   return 0;
 }
 
@@ -558,16 +551,6 @@ function askDecision(reason) {
  */
 let HOST = 'claude';
 const setHost = (args) => { HOST = (args && args.host) || 'claude'; };
-
-/**
- * Copilot's `preToolUse` verdict: the same `ask` Claude reads, but top-level rather than under
- * `hookSpecificOutput` (docs.github.com/en/copilot/reference/hooks-configuration). An older
- * emit wired a `toolCall` event answered with `{"block": true}`; Copilot no longer has that
- * event, so those gates never ran.
- */
-function copilotAskDecision(reason) {
-  return `${jsonDumpsCompact({ permissionDecision: 'ask', permissionDecisionReason: reason })}\n`;
-}
 
 /**
  * Bob's PreToolUse protocol: stdout is ignored and EXIT CODE 2 is the one refusal. The
@@ -636,7 +619,7 @@ function ask(args, verb, rule, reason) {
     return BOB_DENY_EXIT;
   }
   ledger(args && args.root, verb, rule);
-  out(HOST === 'copilot' ? copilotAskDecision(reason) : askDecision(reason));
+  out(askDecision(reason));
   return 0;
 }
 
@@ -663,12 +646,6 @@ export function guardGate(fn, verb = 'gate') {
 
 /**
  * The hook payload on stdin, or null for a well-formed absence. Not-JSON THROWS.
- *
- * Copilot spells the same payload in camelCase — `toolName`/`toolArgs` where Claude sends
- * `tool_name`/`tool_input` — and `toolArgs` may arrive as a JSON STRING rather than an object.
- * Both are folded to Claude's shape so every gate reads one. (`toolInput` and the `after`
- * phase are the retired `toolCall` event's spelling, kept so an install not yet re-emitted
- * still reads right.) A `toolArgs` string that is not JSON throws: fail closed.
  */
 function readPayload() {
   const raw = readStdin();
@@ -679,16 +656,7 @@ function readPayload() {
   } catch {
     throw new Error('the hook payload on stdin is not JSON');
   }
-  if (!payload || typeof payload !== 'object') return null;
-  if (payload.phase === 'after') return null;
-  if (payload.tool_input === undefined) {
-    let ta = payload.toolArgs !== undefined ? payload.toolArgs : payload.toolInput;
-    if (typeof ta === 'string') {
-      try { ta = JSON.parse(ta); } catch { throw new Error('the payload\'s toolArgs is not JSON'); }
-    }
-    if (ta !== undefined) payload.tool_input = ta;
-  }
-  return payload;
+  return payload && typeof payload === 'object' ? payload : null;
 }
 
 function gitGate(args) {
@@ -759,9 +727,8 @@ function ruleDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   const p = ti.file_path || ti.path || '';
   if (typeof p !== 'string' || !p) return 0;
-  // Write carries `content`, Edit carries `new_string` (Copilot: `file_text`, `new_str`);
-  // any of them can plant a credential.
-  const body = [ti.content, ti.new_string, ti.file_text, ti.new_str]
+  // Write carries `content`, Edit carries `new_string`; either can plant a credential.
+  const body = [ti.content, ti.new_string]
     .find((v) => typeof v === 'string') || '';
   if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
     return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
@@ -781,8 +748,7 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 // ======================================================================================
 
 /**
- * Copilot's and Bob's PreToolUse entries carry no matcher over documented tool names, so
- * neither can name `git-gate` for Bash and `rule-gate` for Write the way Claude's
+ * Bob's PreToolUse entry carries no matcher over documented tool names, so it cannot name `git-gate` for Bash and `rule-gate` for Write the way Claude's
  * `PreToolUse` does. This verb is the two fused, dispatched on the payload rather
  * than on a matcher: a `command` field is a shell call and gets the git checks, a path
  * field is a write and gets the rule checks. Nothing here decides anything the two named
@@ -926,8 +892,7 @@ export function readNotes(raw) {
   if (s[0] === '{') {
     let payload;
     try { payload = JSON.parse(s); } catch { return raw; }
-    // Copilot's agentStop/preCompact spell it `transcriptPath`.
-    const tp = payload && (payload.transcript_path || payload.transcriptPath);
+    const tp = payload && payload.transcript_path;
     if (tp) return flattenTranscript(tp);
     return raw;
   }

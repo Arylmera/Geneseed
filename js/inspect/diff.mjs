@@ -357,7 +357,7 @@ export function cmdDiff(args) {
         + 'installs against a fresh render (a project layer is diffed against '
         + 'its own repo, which this command does not do). Pass --target at a '
         + 'global config dir (opencode-global/claude-global/bob-global/'
-        + 'copilot-global/openclaude-global), or omit '
+        + 'openclaude-global), or omit '
         + '--target to use the default.\n');
     } else {
       printErr(`[diff] no global Geneseed install at ${target} (no ${GLOBAL_MANIFEST}). `

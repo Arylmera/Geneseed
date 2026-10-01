@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * The hook entry point — a Node twin of `rituals/harness.py` for the verbs the emitted
- * `settings.json` actually invokes (four from the reference, plus `tool-gate` for Copilot).
+ * `settings.json` actually invokes (four from the reference, plus `tool-gate` for Bob).
  *
  * WHY IT IS A SECOND BINARY AND NOT A SUBCOMMAND OF `bin/build-driver.mjs`. Three reasons,
  * and each alone would be enough:

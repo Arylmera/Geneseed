@@ -61,7 +61,7 @@ import { THEMES, ROOT, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
-  claudeConfigDir, bobConfigDir, copilotConfigDir, openclaudeConfigDir, opencodeConfigDir,
+  claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir,
   resolvePath, resolveMemoryDir, sovereignBypass, GATE_LEDGER,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
@@ -99,9 +99,9 @@ export function cmdVersion(args) {
   let target = args.target ? resolvePath(args.target) : opencodeConfigDir();
   let installed = readVersion(target);
   if (installed === null) {
-    // A claude/bob/copilot-only machine must not report "no install detected". The bundle
+    // A claude/bob/openclaude-only machine must not report "no install detected". The bundle
     // candidates are cwd-relative only — see the Python for why `ROOT / "Harness"` left.
-    for (const base of [claudeConfigDir(), bobConfigDir(), copilotConfigDir(), openclaudeConfigDir(),
+    for (const base of [claudeConfigDir(), bobConfigDir(), openclaudeConfigDir(),
       path.join(process.cwd(), 'Harness'), process.cwd()]) {
       const v = readVersion(base);
       if (v) { installed = v; target = base; break; }
@@ -226,7 +226,7 @@ export function statusData() {
   let installedFp = null;
   let verTarget = null;
   const otherCfg = [];
-  for (const fn of [claudeConfigDir, bobConfigDir, copilotConfigDir, openclaudeConfigDir]) {
+  for (const fn of [claudeConfigDir, bobConfigDir, openclaudeConfigDir]) {
     try { otherCfg.push(fn()); } catch { /* a missing host dir must not sink status */ }
   }
   // Same walk as `cmdVersion`'s fallback, and cwd-relative for the same reason.

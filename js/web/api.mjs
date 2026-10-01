@@ -141,8 +141,8 @@ export function webState(theme = null, target = null) {
    * Re-point the console at another detected install's data dir.
    *
    * `root` is the install ROOT the markers and sigils live at. It defaults to `target` and
-   * differs only for claude/bob/copilot PROJECT installs, where the data sits under
-   * `<repo>/.claude|.bob|.github` while `.geneseed-emit`/`-theme`/`-footprint` land at
+   * differs only for claude/bob/openclaude PROJECT installs, where the data sits under
+   * `<repo>/.claude|.bob|.openclaude` while `.geneseed-emit`/`-theme`/`-footprint` land at
    * `<repo>/` — reading them from the data dir mis-detects the install as opencode/neutral,
    * and a Diff or a Restore would then overwrite it in the wrong dialect.
    */
@@ -725,7 +725,7 @@ export const apiExcludes = () => excludesSnapshot();
  * nested-marker host cannot silently read the bare root.
  */
 export function viewCfg(host, scope, root) {
-  if (scope === 'project' && ['claude', 'bob', 'copilot', 'openclaude'].includes(host)) {
+  if (scope === 'project' && ['claude', 'bob', 'openclaude'].includes(host)) {
     return path.join(root, HOSTS.find((h) => h.host === host).projectMarker);
   }
   return root;
@@ -795,7 +795,7 @@ export function apiOverview(state) {
   // can re-emit exactly it. Mirrors `viewCfg`'s rule, spelled out separately here.
   let install = null;
   for (const [host, scope, root] of installTargets()) {
-    const data = (scope === 'project' && ['claude', 'bob', 'copilot', 'openclaude'].includes(host))
+    const data = (scope === 'project' && ['claude', 'bob', 'openclaude'].includes(host))
       ? path.join(root, HOSTS.find((h) => h.host === host).projectMarker) : root;
     try {
       if (samePath(data, state.target)) {

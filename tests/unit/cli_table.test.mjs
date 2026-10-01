@@ -63,7 +63,7 @@ test('the table is the document the entry reads, and the page is derived from it
   // 30 = the 26 names argparse answered to (25 subparsers plus the `update` alias) plus the
   // four verbs that never had a subparser: `catalog`, `mcp` and `memory`, each a terminal
   // face on a capability that had reached the product only through the web console, and
-  // `tool-gate`, the hook verb Copilot's one-command-per-event settings needed. The split is
+  // `tool-gate`, the hook verb Bob's one-command-per-event settings need. The split is
   // owned by `NATIVE` in tests/unit/hook_cli.test.mjs, which names the native population and
   // fails a verb that has neither a recorded cell nor a place there; this line is the count
   // that says the table did not quietly grow past it.

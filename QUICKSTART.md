@@ -43,7 +43,7 @@ or a login item it did not create. Your clone keeps working meanwhile.
 
 ## Everything else
 
-Claude Code, Bob, Copilot, OpenClaude and plain-`AGENT.md` installs, per-repo mode, MCP servers, all
+Claude Code, Bob, OpenClaude and plain-`AGENT.md` installs, per-repo mode, MCP servers, all
 environment knobs, and troubleshooting live in the full **[Setup guide](SETUP.md)**.
 
 Once installed, point the agent at your repo's own docs with a tiny

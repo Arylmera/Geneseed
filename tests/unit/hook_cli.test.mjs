@@ -50,8 +50,8 @@ function block(text, start, end, where) {
  * hook entry has to satisfy, read out of the emitter.
  */
 function wiredHookVerbs() {
-  // One emitter for every hook host — Claude's matcher groups, Bob's, and Copilot's bare
-  // entries all come out of `claudeHookGroups`, each baking `${run} <verb>`.
+  // One emitter for every hook host — Claude's matcher groups and Bob's all come out
+  // of `claudeHookGroups`, each baking `${run} <verb>`.
   const src = read('js', 'hosts', 'settings.mjs');
   const body = block(src, 'export function claudeHookGroups', '\n}\n', 'js/hosts/settings.mjs');
   return new Set([...body.matchAll(/\$\{run\}\s+([a-z][a-z-]*)/g)].map((m) => m[1]));
@@ -183,8 +183,8 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
  * below refuses an exemption for a verb neither entry point carries — so the next new verb still
  * has to be written down deliberately rather than slipping through a containment.
  */
-// `tool-gate` is the hook side's one native verb: born for Copilot after the reference was
-// gone, so no cell was ever recorded for it. Its absolute gate is tests/unit/hook_gates.test.mjs.
+// `tool-gate` is the hook side's one native verb: born for a matcherless host after the
+// reference was gone, so no cell was ever recorded for it. Its absolute gate is tests/unit/hook_gates.test.mjs.
 const NATIVE = ['catalog', 'mcp', 'memory', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {

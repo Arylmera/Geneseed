@@ -605,7 +605,7 @@ test('the vendored exemption finds skills/ at every host depth', () => {
     [`.opencode/skills/${vendored}/SKILL.md`, true],
     [`.claude/skills/${vendored}/SKILL.md`, true],
     [`.bob/skills/${vendored}/nested/deep.md`, true],
-    [`.github/skills/${vendored}/SKILL.md`, true],
+    [`.openclaude/skills/${vendored}/SKILL.md`, true],
     ['skills/commit.md', false],                     // a flat skill, not vendored
     ['.claude/skills/council/SKILL.md', false],      // native, not vendored
     [`${vendored}/loose.md`, false],                 // the vendored name without skills/

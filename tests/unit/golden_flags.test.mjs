@@ -19,11 +19,11 @@ import { cellId, argvFor } from '../helpers/golden.mjs';
 
 const DOC = loadMatrix();
 
-// 261 exported cells plus OpenClaude's 56 (the claude/claude-global cells, one each under
-// the new emit names), and its two lean-to-full deletion cells beside Claude's.
+// 14 themes x 9 emits x 2 footprints = 252, plus 9 cells on the extra axes (posture, mode,
+// doctrines), and 9 lean-to-full deletion cells.
 test('the exported matrix is the matrix', () => {
-  assert.equal(DOC.cells.length, 317);
-  assert.equal(DOC.deletion_cells.length, 11);
+  assert.equal(DOC.cells.length, 261);
+  assert.equal(DOC.deletion_cells.length, 9);
 });
 
 test('a cell id is theme/emit/footprint, with the optional axes appended', () => {
@@ -99,7 +99,7 @@ test('--cli selects this platform\'s CLI matrix, and its narrowing flags narrow 
 
 test('every narrowing flag selects fewer cells, and none selects none', () => {
   const full = selectCells(DOC, parseArgs([]));
-  assert.equal(full.length, 317);
+  assert.equal(full.length, 261);
   for (const argv of [['--quick'], ['--emits', 'claude'], ['--only', 'neutral/claude'],
     ['--limit', '5'], ['--shard', '0/4']]) {
     const got = selectCells(DOC, parseArgs(argv));
@@ -111,7 +111,7 @@ test('every narrowing flag selects fewer cells, and none selects none', () => {
 });
 
 test('--deletion selects the deletion matrix and nothing else', () => {
-  assert.equal(selectCells(DOC, parseArgs(['--deletion'])).length, 11);
+  assert.equal(selectCells(DOC, parseArgs(['--deletion'])).length, 9);
 });
 
 // TWO CORPUS TESTS STOOD HERE — one asserting every anchor cell really held verbatim text in
