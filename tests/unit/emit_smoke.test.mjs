@@ -144,8 +144,15 @@ const FOOTPRINTS = ['full', 'lean'];
  * 3.6.0 routing work had already spent what the note above left). After: full 60_782, lean
  * 40_146. `full` moves 59_500 → 61_000 and `lean` 39_500 → 40_500, each the next 500 up
  * (headroom 218 / 354).
+ *
+ * LEAN LOWERED 2026-10-01, the footprint round: lean-only halves for the restated intros (laws,
+ * ontology, §2, posture, mode), §3's dispatch and council prose moved into the parallel-agents
+ * and council Skills (one sentence kept: dispatched agents never commit or push), §10 dropped
+ * from lean, and the folder-Skill list moved under CATALOG so native hosts stop carrying it
+ * twice. Measured `files` carrier after: full 60_847 (unchanged — every cut is a lean half),
+ * lean 37_894. `lean` moves 40_500 → 38_500, the next 500 up with real headroom (606).
  */
-const CEILING = { full: 61_000, lean: 40_500 };
+const CEILING = { full: 61_000, lean: 38_500 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -473,15 +480,15 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (30_500 / 20_250) is below the SMALLEST measured carrier (`opencode` and
-      // `opencode-global`, 52_309 / 31_691 on 2026-09-27) and far above any plausible stub.
+      // the ceiling (30_500 / 19_250) is below the SMALLEST measured carrier (`opencode` and
+      // `opencode-global`, 51_542 / 28_607 on 2026-10-01) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
       // each set describing a corpus that had already moved. The arithmetic held every time, so
       // nothing was ever red, and a comment that is only wrong never announces itself.
       // Re-derive both whenever the constant above moves; the lean half of that constant moved
-      // on 2026-09-27 and these figures are that re-derivation.
+      // on 2026-10-01 and these figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `
         + 'satisfied by a render that collapsed, so the floor is what says it did not');

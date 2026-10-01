@@ -401,10 +401,12 @@ test('the gate flags a rule whose LEAN block is missing, and one whose lean half
 test('the LEAN gate walks the laws too, not only the packs', () => {
   // BOTH DIRECTORIES, because they are two arms of one walk and an arm wired to the packs alone
   // satisfies the row above while leaving the invariants — the tier that can never be switched
-  // off — ungated. Block 1 is One Intent, One Act; block 0 would redden too, and would prove less.
+  // off — ungated. Block 0 is the file preamble (full-only, so lean drops the maintainer note and
+  // the restated intro), block 1 is Sealed Secrets, block 2 is One Intent, One Act; block 1 would
+  // redden too, and would prove less.
   const laws = fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8');
   const problems = withFault(
-    { 'src/laws/universal.md': nthLeanBlock(laws, 1, (full) => full) },
+    { 'src/laws/universal.md': nthLeanBlock(laws, 2, (full) => full) },
     (root) => gate(root, 'm.leanBlockProblems()'));
   assert.equal(problems.length, 1, `expected exactly one problem, got ${JSON.stringify(problems)}`);
   assert.ok(problems[0].includes('universal.md') && problems[0].includes('{{LAW:one-intent-one-act}}'),

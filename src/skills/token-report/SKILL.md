@@ -1,6 +1,6 @@
 ---
 name: token-report
-description: "Generate a token usage report for the current session — a markdown table breakdown of context window usage: the session-start baseline (harness, system prompt, tools, skills), everything processed since (user messages, replies, thinking, tool calls and results per tool), exact recorded totals, and the heaviest single items. Use this whenever the user asks about token usage, context usage, context window size, session cost in tokens, 'how full is the context', 'what is eating my context', a usage breakdown or usage report — even if they don't say the word 'token'."
+description: "Session token usage report — markdown tables of the context window: start-up baseline (harness, tools, skills), growth since, per-tool attribution, heaviest items. Use when the user asks about token or context usage, size or cost, 'how full is the context', 'what is eating my context' — even without the word 'token'."
 ---
 
 # Token usage report
