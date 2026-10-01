@@ -68,7 +68,7 @@ ask and Bob's exit code 2), plus a resolver and a carrier.
 
 ## Evaluated, dropped
 
-- **GitHub Copilot** — shipped as a host through 3.9.0, removed in 4.0.0. Dropped for lack
+- **GitHub Copilot** — shipped as a host through 3.9.0, removed in 3.10.0. Dropped for lack
   of support: its hooks were never verified live, its `postToolUse` output does not reach
   the model, and it shared no cross-tool surface with the other hosts (camelCase payloads,
   matcherless hook entries, its own agent dialect and carrier), so every feature needed a

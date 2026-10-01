@@ -8,12 +8,38 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.10.0] — 2026-10-01
+
+**Upgrading:** re-emit after installing (`geneseed rebuild-all`). A Copilot install is no longer
+maintained: `geneseed uninstall` it before upgrading, or leave its files as they are — nothing
+re-emits them any more. Breaking for Copilot users only; every other host gains features.
+
 ### Removed
 - **GitHub Copilot is no longer a host** — dropped for lack of support and of cross-tool
   support. `--emit copilot` / `--emit copilot-global`, the `--host copilot` hook dialect, the
   Copilot agent dialect, its MCP target, the setup and web-console options and
   `adapters/copilot/` are gone. Geneseed now emits for OpenCode, Claude Code, Bob and
-  OpenClaude, plus the plain `AGENT.md` bundle. Breaking: ships as 4.0.0.
+  OpenClaude, plus the plain `AGENT.md` bundle (#166).
+
+### Fixed
+- **The session files reach the session.** The root file names `user-rules.md`, `PROFILE.md`,
+  the Memory and Notebook indexes, `wiki.jsonc` and `context.json` for session start, but on a
+  Claude-shaped install (Claude Code, Bob, OpenClaude) the context hook only looked at the repo
+  root — so none of them were ever injected, and the root told the model they sit "beside this
+  file", where they are not. The hook and the OpenCode context plugin now inject them from the
+  install's own folder as a `SESSION FILES` block, skipping any file still at its seed; the root
+  gives each host's real path; Claude-shaped installs now seed `context.json`; and the OpenCode
+  plugin finds `wiki.jsonc` on a project install (#167).
+- **Bob folder skills know where they live.** Bob hands a skill's text without its directory, so
+  a folder skill's `<this-skill-directory>/…` paths were unresolvable; the Bob emit now writes the
+  real path. `daydream` gained its missing frontmatter, `react-view-transitions` is named after
+  its folder, and `doctor` checks every folder skill's `name`/`description` (#164).
+
+### Changed
+- **A lighter lean root.** Restated prose is full-footprint only: the laws, Ethos, doctrine,
+  posture and mode intros, §3's dispatch envelope and council roster (they live in the
+  parallel-agents and council skills), §10 Scripts, and the folder-skill list on hosts that list
+  skills natively. The lean Claude root drops from ~33k to ~29k characters (#165).
 
 ## [3.9.0] — 2026-09-30
 
