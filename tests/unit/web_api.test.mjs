@@ -32,7 +32,7 @@ import {
   apiActivity, apiActivityDetail, apiActivityToggle,
 } from '../../js/web/activity.mjs';
 import {
-  apiDocs, apiDocsPage, docCounts, docGroups, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
+  apiDocs, apiDocsPage, docCounts, docGroups, docSources, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
 } from '../../js/web/docs.mjs';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
@@ -50,6 +50,7 @@ import { MCP_PRESETS as _P, mcpApply, mcpConfigFor, mcpLoad, mcpSave, mcpState, 
 import { MCP_PRESETS } from '../../js/hosts/mcp.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, resolvePath } from '../../js/hosts/hosts.mjs';
 import { normcase } from '../../js/lib/paths.mjs';
+import { DOC_FOLDERS } from '../../js/build/source.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { makeSandbox, TMP_ROOT } from '../helpers/sandbox.mjs';
@@ -1841,7 +1842,7 @@ test('every doc source and concept body has balanced harness markers', () => {
   assert.ok(checked > 0, 'no doc source was checked — the registry walk found nothing');
 });
 
-// The registry lives in `docs/web/` — a `_groups.json` plus one `.md` per page — not in a
+// The registry lives in `docs/<folder>/` (DOC_FOLDERS) plus `docs/_groups.json` — not in a
 // source literal. A group that loses its pages, or a page whose frontmatter stops naming a real
 // group, silently VANISHES from the panel. Pin the shape rather than trust the glob.
 test('the docs registry loads every page from disk', () => {
@@ -1850,11 +1851,13 @@ test('the docs registry loads every page from disk', () => {
   const ids = groups.flatMap((g) => g.pages.map((p) => p.id));
   assert.equal(ids.length, new Set(ids).size, 'duplicate doc page id');
 
-  const onDisk = fs.readdirSync(path.join(ROOT, 'docs', 'web'))
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => f.slice(0, -3));
+  const onDisk = DOC_FOLDERS.flatMap((d) => {
+    const dir = path.join(ROOT, 'docs', d);
+    return fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)) : [];
+  });
   assert.deepEqual([...ids].sort(), [...onDisk].sort(),
-    'every docs/web/*.md must land in exactly one group');
+    'every docs/<folder>/*.md must land in exactly one group');
 
   for (const g of groups) {
     assert.ok(g.pages.length > 0, `group ${g.id} has no pages`);
@@ -1865,6 +1868,27 @@ test('the docs registry loads every page from disk', () => {
 // Concept bodies carry `{N_LAWS}`/`{N_AGENTS}`/`{N_SKILLS}`, substituted at render time. Moving
 // the bodies out of source must not orphan that step: an unsubstituted placeholder renders as
 // literal braces on the page.
+// THE ID IS THE BASENAME, so the folder a page sits in never reaches the router — and two
+// pages sharing a basename in two folders would leave one unreachable. That is a build error,
+// not a shadowing.
+test('docSources reads every folder and refuses a duplicate id', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-docs-'));
+  try {
+    fs.mkdirSync(path.join(root, 'understand'));
+    fs.mkdirSync(path.join(root, 'guides'));
+    fs.writeFileSync(path.join(root, 'understand', 'harness.md'), '');
+    fs.writeFileSync(path.join(root, 'guides', 'install.md'), '');
+    assert.deepEqual(docSources(root), [
+      { id: 'harness', rel: 'docs/understand/harness.md' },
+      { id: 'install', rel: 'docs/guides/install.md' },
+    ]);
+    fs.writeFileSync(path.join(root, 'understand', 'install.md'), '');
+    assert.throws(() => docSources(root), /duplicate docs page id: install/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('no unsubstituted count placeholder survives rendering', () => {
   const st = neutral();
   for (const g of docGroups()) {

@@ -38,6 +38,7 @@
     "themes/",
     "adapters/",
     "docs/*.md",
+    "docs/_groups.json",
     "docs/web/",
     "web/dist/",
     "web/src/pages/Laws.jsx",

@@ -13,7 +13,7 @@
  */
 import path from 'node:path';
 import {
-  CONFIG, PACK_ORDER, PLUGIN_SRC, RETIRED_RULE_IDS, ROOT, RULE_ID_RE, SRC, THEMES, canonFiles,
+  CONFIG, DOCS, DOC_FOLDERS, PACK_ORDER, PLUGIN_SRC, RETIRED_RULE_IDS, ROOT, RULE_ID_RE, SRC, THEMES, canonFiles,
   knownRuleIds, ruleCanon, titleKey,
 } from '../build/source.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
@@ -773,7 +773,9 @@ export function countTableProblems() {
   // byte moves. `web` stays fail-soft — a missing docs tree is not an authoring fault.
   let web = '';
   try {
-    web = globSorted(path.join(ROOT, 'docs', 'web'), (n) => n.endsWith('.md'))
+    web = DOC_FOLDERS
+      .flatMap((f) => (isDir(path.join(DOCS, f))
+        ? globSorted(path.join(DOCS, f), (n) => n.endsWith('.md')) : []))
       .map(readText).join('\n');
   } catch { web = ''; }
   // ⚠ NOT FAIL-SOFT, UNLIKE `web` ABOVE, AND THE ASYMMETRY IS THE POINT. A missing `docs/web`

@@ -1,5 +1,5 @@
 /**
- * The web console's Docs pages, and the registry built from `docs/web/`.
+ * The web console's Docs pages, and the registry built from `docs/<folder>/` (DOC_FOLDERS).
  *
  * `cli` docs render via `cliReference()` in `js/ui/cli.mjs`, which reads
  * `js/cli-table.json` — the CLI's own metadata, since `harness.build_argparser()`'s parser
@@ -18,7 +18,7 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { ROOT, THEMES } from '../build/source.mjs';
+import { DOCS, DOC_FOLDERS, ROOT, THEMES } from '../build/source.mjs';
 import { cliReference } from '../ui/cli.mjs';
 import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
@@ -29,8 +29,6 @@ import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { statusData } from '../inspect/status.mjs';
 import { originDisplay } from '../maintain/update.mjs';
 import { NotFound, deployed, resolveLinks } from './api.mjs';
-
-const DOC_DIR = path.join(ROOT, 'docs', 'web');
 
 /**
  * A docs page split into its frontmatter map and its body.
@@ -61,24 +59,45 @@ function docFrontmatter(text) {
 }
 
 /**
- * The Docs registry, built from `docs/web/`.
+ * Every docs page source as `{ id, rel }`, `rel` relative to ROOT with forward slashes.
+ *
+ * The id is the basename because it is the router's address (`#/docs/<id>`); the folder is
+ * GitHub's business, not the console's. Two pages with one basename would leave one of them
+ * unreachable, so a duplicate throws instead of shadowing.
+ */
+export function docSources(docRoot = DOCS) {
+  const out = [];
+  const seen = new Set();
+  for (const folder of DOC_FOLDERS) {
+    let names;
+    try { names = readdirSync(path.join(docRoot, folder)); } catch { continue; }
+    for (const name of names.filter((n) => normcase(n).endsWith('.md')).sort()) {
+      const id = name.slice(0, -3);
+      if (seen.has(id)) throw new Error(`duplicate docs page id: ${id}`);
+      seen.add(id);
+      out.push({ id, rel: `docs/${folder}/${name}` });
+    }
+  }
+  return out;
+}
+
+/**
+ * The Docs registry, built from `docSources()` and `docs/_groups.json`.
  *
  * A page whose file is missing or malformed is skipped rather than crashing the server; an
  * unreadable registry yields an empty Docs section, which the UI renders as "no pages".
  *
- * NOT cached at module load. The difference is invisible to a request — `docs/web/` cannot
+ * NOT cached at module load. The difference is invisible to a request — the docs tree cannot
  * change under a running daemon any more than `dist/` can — and a module-level constant
  * would freeze whatever `ROOT` was when this file was first imported.
  */
 export function docGroups() {
-  const groups = readJsonMaybe(path.join(DOC_DIR, '_groups.json'));
+  const groups = readJsonMaybe(path.join(DOCS, '_groups.json'));
   if (!Array.isArray(groups)) return [];
   const byId = new Map();
   for (const g of groups) byId.set(g.id, { ...g, pages: [] });
-  let names;
-  try { names = readdirSync(DOC_DIR); } catch { return []; }
-  for (const name of names.filter((n) => normcase(n).endsWith('.md')).sort()) {
-    const text = readMaybe(path.join(DOC_DIR, name));
+  for (const { id, rel } of docSources()) {
+    const text = readMaybe(path.join(ROOT, rel));
     if (text === null) continue;
     const [meta, body] = docFrontmatter(text);
     const group = byId.get(meta.group);
@@ -86,7 +105,7 @@ export function docGroups() {
     if (group === undefined) continue;
     const order = Object.hasOwn(meta, 'order') ? meta.order : 0;
     delete meta.order;
-    const page = { id: name.slice(0, -3), ...meta };
+    const page = { id, rel, ...meta };
     if (body.trim()) page.body = body.replace(/\n+$/, '');
     group.pages.push([order, page]);
   }
