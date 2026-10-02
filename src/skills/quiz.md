@@ -9,7 +9,8 @@
 know X, prove me wrong", "find the holes in what I know". Three shapes, picked from the
 ask: a **drill** (practise until reflex), a **feynman** (explain it back, get caught on
 the stumbles), or a **gap check** (a mastery claim stress-tested). To be taught instead,
-use the [teach {{SKILL}}](teach.md).
+use the [teach {{SKILL}}](teach.md); to learn while building, the
+[learn-mode {{SKILL}}](learn-mode.md).
 
 ## Procedure
 1. Pin the concept and set the contract plainly: you will test, not lecture, and you

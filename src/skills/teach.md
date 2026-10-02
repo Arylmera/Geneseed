@@ -9,7 +9,8 @@
 "how do I get to X in N days". Three shapes, picked from the ask: a **crash course**
 (from zero to functional, fast), a **decode** (confusing material handed over, make it
 click), or a **path** (a specific result by a deadline, day by day). To *test* what the
-user already knows rather than teach it, use the [quiz {{SKILL}}](quiz.md); to gather
+user already knows rather than teach it, use the [quiz {{SKILL}}](quiz.md); to learn while building, the
+[learn-mode {{SKILL}}](learn-mode.md); to gather
 facts from the web first, [research](research.md); to convert a PDF or web page into
 readable form, [ingest](ingest.md).
 

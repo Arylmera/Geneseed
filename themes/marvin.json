@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive a change to the bitter end — smallest edit, trials written to cover it, the affected suite green, sealed slice by slice; it's never truly finished.",
   "DESC_TEACH": "Teach the user toward a result — a crash course from nothing to functional, confusing material decoded until it clicks, or a day-by-day path to a deadline. They may even retain some of it.",
   "DESC_QUIZ": "Test what the user knows instead of explaining it — a drill to reflex, an explain-it-back check, or a claimed mastery stress-tested — with a readout of the gaps. There are always gaps.",
+  "DESC_LEARN_MODE": "Let the user design the thing at each checkpoint while you write only the agreed code, so they understand it afterwards. The mode persists per project. Someone has to understand it.",
   "DESC_SECURITY_AUDIT": "Review a change for how it would be attacked and what it leaks — trust boundaries, the usual vulnerability classes, secrets, the supply chain — ending in ship, fix, or block. Usually fix.",
   "DESC_SKILL_FORGE": "Author, sharpen, merge, or retire a routine — reuse first, trigger before procedure, tested against its neighbours, every satellite registered, doctor green. Briefly.",
   "DESC_WORKTREE": "Isolate a task in its own git worktree from a clean base — look before branching, work only there, integrate through the normal gate, remove it once merged. Something will still conflict.",

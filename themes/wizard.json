@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive a working through the cover-and-confirm loop — the smallest casting, its trials written, the touched trials green, sealed rune by rune.",
   "DESC_TEACH": "Tutor the apprentice toward a result — a crash course from novice to working caster, a confusing grimoire decoded until it clicks, or a day-by-day path to the appointed day.",
   "DESC_QUIZ": "Test the apprentice rather than lecture — a drill to reflex, an explain-it-back examination, or a claimed mastery put to trial — with an unvarnished readout of the gaps.",
+  "DESC_LEARN_MODE": "Take on an apprentice at the forge — they reason out each design at its checkpoint, you cast only the agreed code, and the apprenticeship persists per project across sessions.",
   "DESC_SECURITY_AUDIT": "Scry a change as a hostile caster would — where the wards can be breached, what it leaks, what it summons from beyond the circle — and pronounce: ship, mend, or bind.",
   "DESC_SKILL_FORGE": "Inscribe, sharpen, merge, or retire a spell — reuse the spellbook first, the trigger before the incantation, tested against neighbouring spells, every satellite recorded, doctor green.",
   "DESC_WORKTREE": "Work a task in its own warded circle — a fresh worktree off a clean base, nothing shared with the ritual in progress, back through the normal gate, circle dispelled once merged.",

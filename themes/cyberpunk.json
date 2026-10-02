@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive the change through the loop — smallest edit, a test written to cover it, the touched rigs run green, committed slice by slice.",
   "DESC_TEACH": "Bring a user online — a crash course from zero to operational, confusing data decoded until it clicks, or a day-by-day route to a deadline.",
   "DESC_QUIZ": "Probe what the user actually knows instead of explaining — drill to reflex, make them run it back, or stress-test a claimed mastery — with a cold readout of the gaps.",
+  "DESC_LEARN_MODE": "Jack the user into the build loop — they design at each checkpoint, you write the agreed code, and the mode persists per project across reboots.",
   "DESC_SECURITY_AUDIT": "Run the change like ICE would — where it can be breached, what it leaks, what it pulls in from outside the perimeter — and rule: ship, patch, or lock it down.",
   "DESC_SKILL_FORGE": "Compile, patch, merge, or decommission a program — reuse the library first, trigger before routine, tested against neighbouring programs, every hook registered, diagnostics green.",
   "DESC_WORKTREE": "Jack a task into its own sandbox — a fresh worktree off a clean base, nothing shared with the live rig, back through the normal gate, sandbox wiped once merged.",

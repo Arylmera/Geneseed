@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written to cover it, affected suite green, committed slice by slice.",
   "DESC_TEACH": "Train the recruit toward a result — a crash course to operational, a confusing manual decoded until it clicks, or a day-by-day programme to the deadline.",
   "DESC_QUIZ": "Test the recruit instead of briefing them — a drill to reflex, an explain-it-back debrief, or a claimed proficiency stress-tested — with a frank readout of the gaps.",
+  "DESC_LEARN_MODE": "Put the recruit in command of the plan — they reason out each design at its checkpoint, you execute only the approved code, and the mode holds per project across sessions.",
   "DESC_SECURITY_AUDIT": "Assess a change as the adversary would — where it can be breached, what it leaks, what it admits from outside the perimeter — and rule: ship, fix, or deny.",
   "DESC_SKILL_FORGE": "Author, sharpen, merge, or retire an SOP — reuse first, trigger before procedure, tested against neighbouring SOPs, every satellite registered, doctor green.",
   "DESC_WORKTREE": "Isolate a task in its own worktree from a clean base — recon before branching, work only there, integrate through the normal gate, strike it once merged.",

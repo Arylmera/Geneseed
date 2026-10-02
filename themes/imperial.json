@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — the smallest stroke, the trials written to cover it, the affected suite green, sealed slice by slice.",
   "DESC_TEACH": "Instruct the supplicant toward a result — a crash course from ignorance to function, a confusing text decoded until it clicks, or a day-by-day path to the appointed hour.",
   "DESC_QUIZ": "Test what the supplicant knows rather than teach it — a drill to reflex, a recitation caught on every stumble, or a claimed mastery put to the ordeal — with an unsparing readout of the gaps.",
+  "DESC_LEARN_MODE": "Make the supplicant the architect of the work — they reason out each design at its checkpoint, you forge only what they sanctioned, and the rite endures per project across sessions.",
   "DESC_SECURITY_AUDIT": "Scrutinise a change as the enemy would — where it may be breached, what it leaks, what it admits from beyond the walls — and pronounce: ship, purge, or bar it.",
   "DESC_SKILL_FORGE": "Forge, sharpen, merge, or retire a rite — reuse the canon first, the trigger before the steps, tested against its neighbouring rites, every satellite inscribed, doctor green.",
   "DESC_WORKTREE": "Wall a task off in its own cell — a fresh worktree from a clean base, nothing shared with the work already at the bench, returned through the proper gate, the cell razed once merged.",
