@@ -16,7 +16,7 @@ The agent works every task itself, turn by turn — exactly as it does without t
 The session becomes a triage layer instead of a single worker. It sorts each incoming request:
 
 - **Trivial** — answered directly, in-line, just like direct mode.
-- **Substantial** — handed to an isolated [agent pipeline](#/docs/pipelines): a crew that runs on its own, reports back, and merges only once its own tests and lint pass.
+- **Substantial** — handed to an isolated [agent pipeline](#/docs/pipelines): a crew that runs on its own and hands its work back uncommitted. The session re-runs the proof itself, and commits or merges only once you accept.
 
 Because the crew runs apart from the conversation, the session stays responsive — you keep talking to the foreman while the work proceeds. Expect foreman to cost more per substantial task (a crew runs instead of one agent), in exchange for a session that never blocks on a long job.
 

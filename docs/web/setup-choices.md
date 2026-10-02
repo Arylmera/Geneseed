@@ -23,7 +23,7 @@ Pick **peer** unless you know you want another register. Posture is orthogonal t
 How the session runs the work you hand it, fixed at build time:
 
 - **direct** *(default)* — the agent works every task itself, turn by turn, exactly as it does today.
-- **foreman** — the session triages incoming tasks: trivial ones get a direct answer, substantial ones spawn an isolated crew (analyst → developer → tester) that reports back and merges only once its tests and lint pass — while the session keeps answering you. Costs more per substantial task (a small crew runs instead of one agent) in exchange for staying responsive.
+- **foreman** — the session triages incoming tasks: trivial ones get a direct answer, substantial ones spawn an isolated crew (analyst → developer → tester) that hands its work back uncommitted, and the session merges it only after re-running the tests and getting your OK — while the session keeps answering you. Costs more per substantial task (a small crew runs instead of one agent) in exchange for staying responsive.
 
 Pick **direct** unless you want the session managing a crew for you. Switch back any time with `--mode direct`.
 

@@ -17,7 +17,7 @@ The foreman adds whatever other specialists the task calls for — a reviewer, a
 
 ### Isolated, and gated on green
 
-A pipeline runs in its own context so the main session stays free to keep answering you, and it **merges only once its own tests and lint pass** — a crew that can't get to green reports back rather than landing broken work. It's the same *decompose → route to the owning specialist → converge* shape the saved workflow runner uses, but driven live by the foreman rather than a pre-written script.
+A pipeline runs in its own context so the main session stays free to keep answering you, and it **never commits or merges by itself** — it hands back an uncommitted worktree, the session re-runs the tests and lint itself, and the merge happens only once you accept. A crew that can't get to green reports back rather than landing broken work. It's the same *decompose → route to the owning specialist → converge* shape the saved workflow runner uses, but driven live by the foreman rather than a pre-written script.
 
 ---
 
