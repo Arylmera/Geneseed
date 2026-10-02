@@ -283,7 +283,7 @@ export function cmdDoctor(args) {
       // (`js/build/generate.mjs`), which forwards `--theme` and nothing else. So the front door
       // answered `unrecognized arguments: --sync-themes` to anyone who followed doctor's own
       // advice, for as long as the premise went unchecked. The flag belongs to the GENERATOR,
-      // whose binary is `geneseed-build` — which is what `README.md` and `SETUP.md` have said
+      // whose binary is `geneseed-build` — which is what `README.md` and the install guide have said
       // all along. A hint is a command; if it is not runnable it is decoration.
       printOut('  tip: a theme is missing a key another theme defines — run '
         + '`geneseed-build --sync-themes` to fill it from _TEMPLATE.json, '

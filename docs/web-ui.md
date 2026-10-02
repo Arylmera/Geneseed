@@ -4,7 +4,7 @@
 
 **Every view in the local browser console, what it shows, and how to drive it.**
 
-[← README](../README.md) · [Setup](../SETUP.md) · [What's shipped](../SHIPPED.md)
+[← README](../README.md) · [Docs](README.md) · [What's shipped](../SHIPPED.md)
 
 </div>
 

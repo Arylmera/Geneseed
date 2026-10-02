@@ -8,6 +8,28 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **The documentation is one tree, read on GitHub and in the console.** `docs/understand/`,
+  `docs/guides/`, `docs/concepts/` and `docs/reference/` replace `docs/web/`, `SETUP.md`,
+  `QUICKSTART.md` and `docs/wiki.md`; `docs/README.md` is the index. Install paths, every
+  configuration knob and MCP setup now live in `docs/guides/`; environment variables and
+  troubleshooting (organised by symptom) in `docs/reference/`. Every page was audited against
+  the code first, and a dozen wrong or stale claims were corrected on the way.
+- **New: Understand**, four pages for developers new to agent harnesses — what a harness is,
+  what lands on your machine (per host: every file and hook, what it does, what it costs, how to
+  turn it off), a day with it, and what is enforced versus only asked.
+- **Console Docs tab**: a three-column handbook with an "on this page" margin and glossary cards
+  for the terms a page uses; Understand renders as a step-by-step track with progress; "what
+  lands on your machine" is an interactive map; the Overview offers a dismissible "New here?"
+  card. Relative `.md` links work in both places.
+- **The glossary** is a markdown table (`docs/reference/glossary.md`) with a developer analogy
+  per term, so GitHub readers get it too.
+
+### Fixed
+- The console's CLI reference printed every command as `harness <verb>`; it says `geneseed`.
+- The `pipeline` skill said the parent merges on the crew's own proof without re-verifying; it
+  re-runs the proof and merges only once you accept, as foreman mode always said.
+
 ## [3.10.0] — 2026-10-01
 
 **Upgrading:** re-emit after installing (`geneseed rebuild-all`). A Copilot install is no longer

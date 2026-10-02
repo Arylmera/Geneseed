@@ -1,6 +1,6 @@
 # 🤖 IBM Bob adapter
 
-> [← Back to README](../../README.md) · [Setup guide](../../SETUP.md) · [Claude Code adapter](../claude-code/README.md) · [OpenCode adapter](../opencode/README.md)
+> [← Back to README](../../README.md) · [Install guide](../../docs/guides/install.md) · [Claude Code adapter](../claude-code/README.md) · [OpenCode adapter](../opencode/README.md)
 
 [IBM Bob](https://bob.ibm.com) is **Claude-Code-shaped**: a project `.bob/`
 layer, an `AGENTS.md` instructions file, `SKILL.md` skills, subagents, and a

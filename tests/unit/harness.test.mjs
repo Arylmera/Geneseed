@@ -721,7 +721,7 @@ test('the count gate really reads the onboarding pages the prose arms are about'
   // THE WIRING HALF, and the defect it was written for is worth naming: the web arms were fed
   // a file the console's onboarding prose had MOVED OUT OF. The read still succeeded, all
   // three arms scored zero on every run, and nothing was red — a check can die without ever
-  // failing. The copy now lives in `docs/web/`, where the counts are rendered from
+  // failing. The copy now lives in `docs/<folder>/`, where the counts are rendered from
   // `{N_LAWS}` / `{N_AGENTS}` / `{N_SKILLS}` tokens and therefore cannot drift; what is left
   // to catch is a page that spells a count as a LITERAL, so that is the fault planted here.
   //
@@ -729,10 +729,10 @@ test('the count gate really reads the onboarding pages the prose arms are about'
   // wording is frozen by the recorded primitive corpus and names a module that no longer
   // exists, so asserting on it would gate a stale word rather than the property.
   const problems = withFault({
-    'docs/web/zzz-fixture-probe.md': '9 capability specialists — alpha, beta.\n',
+    'docs/concepts/zzz-fixture-probe.md': '9 capability specialists — alpha, beta.\n',
   }, (root) => gate(root, 'm.countTableProblems()'));
   assert.ok(problems.some((p) => p.includes("'9 capability specialists'")),
-    `the count gate is not reading docs/web: ${JSON.stringify(problems)}`);
+    `the count gate is not reading the docs tree: ${JSON.stringify(problems)}`);
 });
 
 // ---------------------------------------------------------------------------------------------

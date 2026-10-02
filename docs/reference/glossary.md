@@ -1,6 +1,6 @@
 ---
 group: reference
-order: 2
+order: 3
 title: "Glossary"
 kind: "glossary"
 ---

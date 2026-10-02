@@ -41,7 +41,7 @@ A hand-written instructions file is prose the model may or may not honour, copie
 - **Costs are measured, not guessed.** Zero runtime dependencies. The hook path loads in about 14 ms per tool call. The default *lean* footprint keeps the always-on context small and puts the full rationale one read away — the numbers are in [docs/token-footprint.md](docs/token-footprint.md).
 - **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
 
-This page is the overview. Four parts: **why** it exists, how to **set it up**, the two ways to **drive it** (web console & command line), and **what you get**. For every install path, configuration knob, and troubleshooting step, read the full [Setup guide](SETUP.md).
+This page is the overview. **New to agent harnesses?** Start with [Understand](docs/understand/harness.md) — four short pages on what a harness is, what lands on your machine, what changes in your day, and what is enforced versus only asked. Everything else — every install path, configuration knob, and troubleshooting step — is in the **[documentation](docs/README.md)**, which the web console also renders.
 
 ---
 
@@ -83,7 +83,7 @@ npm install -g geneseed       # then plain `geneseed <command>` from any directo
 npm install -g geneseed@latest   # …and that is also the update
 ```
 
-**[QUICKSTART.md](QUICKSTART.md)** walks this in 5 minutes. Every other route (Claude Code, plain `AGENT.md`, per-repo installs, MCP servers, troubleshooting) lives in the full **[Setup guide](SETUP.md)**.
+Every other route (Claude Code, Bob, OpenClaude, plain `AGENT.md`, per-repo installs) is in the **[install guide](docs/guides/install.md)**.
 
 ### 🧬 The long way — a git checkout
 
@@ -113,13 +113,13 @@ Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PA
 
 ### 🟩 One runtime — Node, and nothing else
 
-Node ≥ 22.3 is the entire dependency list — every command, all five hook verbs, the web console and both generators run from it, and nothing any bundle ships needs a second interpreter. The details, and the few honest edges, are in [SETUP.md → One runtime](SETUP.md#-one-runtime--node-and-nothing-else).
+Node ≥ 22.3 is the entire dependency list — every command, all five hook verbs, the web console and both generators run from it, and nothing any bundle ships needs a second interpreter.
 
 ### ✅ After installing
 
-- **Verify** — open your agent in any repo: the first reply starts with the readiness sigil and your project's docs are already in context. `geneseed doctor` should print `ok`.
-- **Run it from anywhere** — a global `npm install -g geneseed` already does this. From a checkout, `./geneseed link` writes a launcher shim into `~/.local/bin`; `.\geneseed.cmd link` writes a shim into `%LOCALAPPDATA%\Geneseed\bin` and adds it to your user PATH (open a new terminal).
-- **Everything else** — other tools (Claude Code, plain `AGENT.md`), per-repo installs, MCP servers, environment knobs, troubleshooting: **[SETUP.md](SETUP.md)**.
+- **Verify** — open your agent in any repo: the first reply starts with the readiness sigil and your project's docs are already in context. `geneseed doctor` should print `ok`. More in [Verify it works](docs/guides/verify.md).
+- **Run it from anywhere** — a global `npm install -g geneseed` already does this; from a checkout see [Run geneseed from anywhere](docs/guides/run-anywhere.md).
+- **Something wrong?** [Troubleshooting](docs/reference/troubleshooting.md) is organised by what you see.
 
 ---
 
@@ -142,14 +142,7 @@ geneseed web stop            # stop the daemon
 geneseed web status          # is it running, and where
 ```
 
-The left rail mirrors the harness's own shape:
-
-| Group | Views |
-| --- | --- |
-| *(ungrouped)* | **Dashboard** — live readout of what's deployed (voice, capabilities, drift, recent jobs) |
-| **📖 Codex** | **Constitution** · **Rules** · **Profile** · **Skills** · **Agents** · **Library** (Memory, Notebook, the wiki) · **Docs** |
-| **🩺 Care** | **Activity** · **Changes** — diff against the source, export an `improvements.md` · **Doctor** — health check across themes, links, parity and authoring gates |
-| **🎨 Setup** | **Harness** — installs, theme, footprint · **Settings** — MCP servers, server controls |
+The sidebar has six pages: **Overview** (what's deployed, health, recent jobs), **Constitution** (the rules and doctrine switches), **Library** (skills, agents, the wiki), **Personal** (your rules, profile, memory, notebook), **Installs** (hosts, local edits, doctor, server) and **Docs** — this documentation, opening on the Understand track, with a map of what Geneseed put on your machine.
 
 It binds to `127.0.0.1` only and runs entirely offline — no npm needed at runtime; the UI build ships in `web/dist/`. Mutating actions run in the background and report back as toasts (fire-and-notify), guarded by a per-session token so other sites can't trigger them. A global **Spotlight** search in the topbar jumps to any agent, skill, rule, doc, or MCP server. Rebuild the UI after changing anything under `web/src/` with `cd web && npm install && npm run build`. If `web/dist/` is missing (fresh clone, never built), `geneseed web` offers to run that build for you — answer `Y` and it installs, builds, and starts the server; in non-interactive shells it prints the manual recipe instead.
 
@@ -202,26 +195,11 @@ Fourteen themes ship — each a single JSON file in `themes/` carrying voice tok
 | 🏟️ **sports** | play-by-play commentary |
 | 🏍 **biker** · 🎤 **commentator** · 🃏 **joker** · 🤖 **marvin** · 😤 **mean** · 🏎 **verstappen** | community-added voices for fun |
 
-Pick with `--theme NAME` or via the setup wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible. Adding a new voice token to `themes/_TEMPLATE.json`? Run `geneseed-build --sync-themes` to fill it into every theme (template's placeholder value, reported for restyling) before `doctor` is expected to pass again.
+Pick with `--theme NAME` or via the setup wizard; upgrades remember it. More in [Themes](docs/concepts/themes.md).
 
 ### 🪶 Footprint (lean vs full)
 
-A second per-install dial, **footprint**, sets how much of the constitution `AGENT.md` carries *inline* every turn — a token-cost knob, not a change to which Rules apply (every Rule is always in force, and so is the whole of the Ethos).
-
-| Footprint | The Ethos + Sections 1–2 of `AGENT.md` | Trade-off |
-| --- | --- | --- |
-| **lean** *(default)* | the Ethos, each Rule and each active doctrine rule in their **authored** short form; then pointers to the full text | lighter every turn; rationale is one on-demand read away |
-| **full** | the Ethos, every Rule and every active doctrine rule at complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
-
-**Lean is authored, not cut.** The Ethos, every Rule and every doctrine rule carry a hand-written lean form beside their full text (`LEAN` blocks in `src/`), so a rule's lean footprint is decided by its author and not by where its first full stop happens to fall — the earlier first-sentence cut shipped Rule II as one 36-character line and dropped its stop-and-ask mechanism, and shipped a doctrine rule like *Change as little as the task requires.* as six words with no verb to act on.
-
-Both footprints put the full text on disk beside `AGENT.md`: `laws/`, `ontology/` and `doctrines/` all ship in the bundle at **full** text whatever the footprint, and **all five pack files ship whether or not the pack was built in** — which is what lets a citation into an inactive pack resolve. So lean is a context/token optimization, **not** a rules cut.
-
-Lean is the default: the rationale is one read away and the context it frees is paid back on every turn. Switch to **full** when token cost is a non-issue or you run a smaller model, which leans harder on always-present rationale. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the setup wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, OpenClaude).
-
-Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates the *reasoning* to on-demand (and adds the standalone law, ontology and doctrine files to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer.
-
-Want to check a build before it touches anything real? `geneseed validate --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build-validate).
+A second per-install dial sets how much of the constitution the root file carries *inline* every turn — a token-cost knob, not a change to which Rules apply. **lean** (the default) carries each rule's hand-written short form and points to the full text on disk; **full** inlines every rule with its rationale. Every rule is in force either way. More in [Footprint](docs/concepts/footprint.md) and [Choose your setup](docs/guides/choose-your-setup.md).
 
 ---
 
@@ -297,7 +275,8 @@ Geneseed/
 ├── themes/               voice token maps (14 themes shipped)
 ├── web/                  Vite + React UI source; the committed web/dist/ build is what ships
 ├── tests/                Node test suites, golden.mjs (every emit config) and mutate.mjs
-├── docs/                 guides (web-ui, wiki, …) + docs/web/ (the console's Docs pages);
+├── docs/                 understand/ guides/ concepts/ reference/ — the docs, also the console's
+│                         Docs pages; maintainer notes beside them (extending, design-history…);
 │                         specs/, reviews/, superpowers/ are local working docs — git-ignored
 ├── adapters/             per-host glue (opencode/, claude-code/, bob/, openclaude/)
 └── .github/workflows/    ci.yml (doctor + tests) · publish.yml (npm, OIDC, manual only)
@@ -329,19 +308,17 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 ./geneseed upgrade     # just the content refresh (remembers theme + emit mode)
 ```
 
-**Local edits survive.** The self-improvement loops let the agent refine its deployed agent/skill files in place. Before setup, re-theme, or upgrade overwrites them, any drift is auto-exported to a markdown **improvements file** under `improvements/` *inside the deployed harness dir* (e.g. `~/.config/opencode/improvements/` for the global install) — beside the install it describes, untouched by rebuilds and uninstall. Hand it to an agent in this repo to back-port the changes into `src/`. On demand: `./geneseed diff --out FILE`, or the **Changes** page in the web console.
-
-Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
+**Local edits survive.** If the agent refined its deployed agent/skill files in place, an upgrade exports that drift to an `improvements/` file inside the install before overwriting. Details: [Upgrade](docs/guides/upgrade.md).
 
 ## 📚 Documentation
 
 | Page | Read it when… |
 | --- | --- |
-| **[SETUP.md](SETUP.md)** | Installing — every path, configuration knob, env var, verify, troubleshooting |
+| **[docs/](docs/README.md)** | Using Geneseed — Understand, Guides (install, setup choices, MCP, wiki, upgrade, uninstall…), Concepts and Reference (CLI, environment, troubleshooting, glossary) |
 | **[DESIGN.md](DESIGN.md)** | Changing structure — the spec and the decisions behind it |
 | **[SHIPPED.md](SHIPPED.md)** | What's in the harness today — capabilities ↔ the spec behind each |
+| **[docs/extending.md](docs/extending.md)** | Adding to the harness — what each kind of addition costs |
 | **[docs/web-ui.md](docs/web-ui.md)** | The web console — every view, the launch/daemon/PWA surface, security model |
-| **[docs/wiki.md](docs/wiki.md)** | The machine wiki — your personal knowledge base, setup and writing model |
 | **[docs/token-footprint.md](docs/token-footprint.md)** | What the harness costs in context-window tokens, per host |
 | **[docs/opencode-plugin-setup.md](docs/opencode-plugin-setup.md)** | Installing the OpenCode plugins — the one-time wiring they all share |
 | **[CHANGELOG.md](CHANGELOG.md)** | What changed between versions |

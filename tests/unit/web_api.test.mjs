@@ -1797,13 +1797,16 @@ test('host-specific pages and groups appear only under their host', () => {
   const idsFor = (hn) => new Set(apiDocs(neutral(), hn).groups.flatMap((g) => g.pages.map((p) => p.id)));
   const oc = idsFor('opencode');
   const cc = idsFor('claude');
-  assert.ok(oc.has('adapters-opencode'));
-  assert.ok(!cc.has('adapters-opencode'));
-  assert.ok(cc.has('mcp-claude-code'));
-  assert.ok(!oc.has('mcp-claude-code'));
-  // The whole Plugins GROUP is opencode-only — a group tag, not a page tag.
-  const claudeGroups = new Set(apiDocs(neutral(), 'claude').groups.map((g) => g.id));
-  assert.ok(!claudeGroups.has('plugins'));
+  // A page tagged `harness:` exists for one host only (a how-to that cannot run elsewhere); the
+  // four groups are shared, and so are reference pages a reader comparing hosts needs — hooks,
+  // LSP and the plugin reference say their host in the title instead.
+  for (const id of ['headless', 'worktree']) {
+    assert.ok(oc.has(id), `${id} missing under opencode`);
+    assert.ok(!cc.has(id), `${id} leaks under claude`);
+  }
+  for (const id of ['hooks', 'lsp', 'opencode-plugins']) {
+    assert.ok(oc.has(id) && cc.has(id), `${id} must show under both hosts`);
+  }
 });
 
 test('the docs endpoint echoes the resolved harness', () => {
@@ -1813,9 +1816,9 @@ test('the docs endpoint echoes the resolved harness', () => {
 
 test('a docs page strips for its host', () => {
   const st = neutral();
-  // `mcp-verify` slices SETUP.md; the opencode clause must vanish under claude.
-  const oc = apiDocsPage(st, 'mcp-verify', 'opencode').body;
-  const cc = apiDocsPage(st, 'mcp-verify', 'claude').body;
+  // The MCP guide verifies per host; the opencode clause must vanish under claude.
+  const oc = apiDocsPage(st, 'mcp', 'opencode').body;
+  const cc = apiDocsPage(st, 'mcp', 'claude').body;
   assert.match(oc, /opencode mcp/);
   assert.ok(!cc.includes('opencode mcp'));
   assert.ok(!(oc + cc).includes('<!--harness'));
@@ -1903,9 +1906,9 @@ test('no unsubstituted count placeholder survives rendering', () => {
 });
 
 // Anti-drift, and the reason it exists: "six plugins" went stale when activity landed. A new
-// adapters/opencode/plugins/geneseed-<name>.js must ship its own docs page, a bullet on the
-// plugins overview, and a mention in the README and SHIPPED.md rows.
-test('every plugin ships a docs page, an overview bullet and its README/SHIPPED rows', () => {
+// adapters/opencode/plugins/geneseed-<name>.js must ship its own section of the plugins
+// reference page, and a mention in the README and SHIPPED.md rows.
+test('every plugin ships a reference section and its README/SHIPPED rows', () => {
   const st = neutral();
   const pluginDir = path.join(ROOT, 'adapters', 'opencode', 'plugins');
   const names = fs.readdirSync(pluginDir)
@@ -1914,8 +1917,7 @@ test('every plugin ships a docs page, an overview bullet and its README/SHIPPED 
     .sort();
   assert.ok(names.length > 0, 'no plugins found — wrong directory?');
 
-  const pageIds = new Set(docGroups().flatMap((g) => g.pages.map((p) => p.id)));
-  const overview = apiDocsPage(st, 'plugins', 'opencode').body;
+  const overview = apiDocsPage(st, 'opencode-plugins', 'opencode').body;
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   const shipped = fs.readFileSync(path.join(ROOT, 'SHIPPED.md'), 'utf8');
   const row = /plugins \(([^)]*)\)/.exec(shipped);
@@ -1923,9 +1925,10 @@ test('every plugin ships a docs page, an overview bullet and its README/SHIPPED 
   const shippedNames = new Set(row[1].split(',').map((s) => s.trim()));
 
   for (const name of names) {
-    assert.ok(pageIds.has(`plugin-${name}`), `geneseed-${name}.js has no docs page`);
-    assert.ok(overview.includes(`geneseed-${name}`),
-      `geneseed-${name} missing from the overview list`);
+    assert.ok(overview.includes(`
+## geneseed-${name}
+`),
+      `geneseed-${name} has no section on the plugins reference page`);
     assert.ok(readme.includes(`geneseed-${name}`),
       `geneseed-${name} missing from the README plugins row`);
     assert.ok(shippedNames.has(name), `'${name}' missing from the SHIPPED.md plugins list`);
@@ -1957,6 +1960,7 @@ test('concept counts are substituted live from the inventory', () => {
 // harness — no link dead-ends after filtering.
 test('no cross-harness dead links', () => {
   const st = neutral();
+  const dead = [];
   for (const hn of ['opencode', 'claude']) {
     const menu = apiDocs(st, hn);
     const visible = new Set(menu.groups.flatMap((g) => g.pages.map((p) => p.id)));
@@ -1965,12 +1969,12 @@ test('no cross-harness dead links', () => {
         const body = apiDocsPage(st, p.id, hn).body || '';
         for (const target of new Set([...body.matchAll(/#\/docs\/([a-z0-9-]+)/g)]
           .map((m) => m[1]))) {
-          assert.ok(visible.has(target),
-            `${hn}: page '${p.id}' links to '${target}', which is hidden under ${hn}`);
+          if (!visible.has(target)) dead.push(`${hn}: ${p.id} -> ${target}`);
         }
       }
     }
   }
+  assert.deepEqual(dead, [], 'a page links to a page its host hides');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -2839,4 +2843,14 @@ test('parseGlossaryTable reads term, theme key, meaning and analogy', () => {
       analogy: 'a git hook' },
   ]);
   assert.deepEqual(parseGlossaryTable('no table here'), []);
+});
+
+// The `*(OpenCode only)*` line under a marker is for GitHub, which hides the marker. The console
+// has already filtered the block to the reader's host, so the label goes with the marker — but
+// only in that slot: the same words anywhere else in a page are prose, and stay.
+test('stripHarnessBlocks drops the host label that opens a kept block', () => {
+  const body = 'intro\n<!--harness:claude-->\n*(Claude Code only)*\nhooks\n<!--/harness-->\n'
+    + '<!--harness:opencode-->\n*(OpenCode only)*\nplugins\n<!--/harness-->\n*(OpenCode only)*\n';
+  assert.equal(stripHarnessBlocks(body, 'claude'), 'intro\nhooks\n*(OpenCode only)*');
+  assert.equal(stripHarnessBlocks(body, 'opencode'), 'intro\nplugins\n*(OpenCode only)*');
 });

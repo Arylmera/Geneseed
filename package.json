@@ -39,8 +39,10 @@
     "adapters/",
     "docs/*.md",
     "docs/_groups.json",
+    "docs/understand/",
+    "docs/guides/",
+    "docs/concepts/",
     "docs/reference/",
-    "docs/web/",
     "web/dist/",
     "web/src/pages/Laws.jsx",
     "harness.config.json",
@@ -49,8 +51,6 @@
     "geneseed.cmd",
     "CHANGELOG.md",
     "DESIGN.md",
-    "QUICKSTART.md",
-    "SETUP.md",
     "SHIPPED.md"
   ],
   "devDependencies": {

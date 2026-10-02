@@ -763,7 +763,7 @@ export function countTableProblems() {
 
   // WHERE THE ONBOARDING COPY LIVES, AND WHY THIS READ MOVED. It used to open the one module
   // that held the web console's onboarding prose. That prose has since moved into
-  // `docs/web/*.md`, and the counts in it render from `{N_LAWS}` / `{N_AGENTS}` / `{N_SKILLS}`
+  // `docs/<folder>/*.md`, and the counts in it render from `{N_LAWS}` / `{N_AGENTS}` / `{N_SKILLS}`
   // — so the read was still succeeding against a file the sentences had left, all three arms
   // below scored zero, and the check looked healthy while gating nothing. A templated count
   // cannot drift; what these arms still catch is a maintainer typing the NUMBER into a page

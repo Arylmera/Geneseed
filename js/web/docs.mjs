@@ -304,6 +304,13 @@ export function harnessBlocksBalanced(lines) {
   return !open;
 }
 
+/**
+ * The visible `*(OpenCode only)*` line a block opens with. It exists for GitHub, which hides
+ * the marker; the console has already filtered the block to the reader's host, so there the
+ * label only repeats what the host selector says, and it goes with the marker.
+ */
+const HOST_LABEL_RE = /^\s*\*\((OpenCode|Claude Code) only\)\*\s*$/;
+
 export function stripHarnessBlocks(body, harnessName) {
   if (!HARNESS_HINT_RE.test(body)) return body;
   const lines = splitLines(body);
@@ -311,7 +318,10 @@ export function stripHarnessBlocks(body, harnessName) {
   const out = [];
   let keep = true;
   let inFence = false;
+  let afterOpen = false;
   for (const line of lines) {
+    const labelSlot = afterOpen;
+    afterOpen = false;
     if (line.startsWith('```')) {
       inFence = !inFence;
       if (keep) out.push(line);
@@ -319,8 +329,9 @@ export function stripHarnessBlocks(body, harnessName) {
     }
     if (!inFence) {
       const m = HARNESS_OPEN_RE.exec(line);
-      if (m) { keep = m[1] === harnessName; continue; }
+      if (m) { keep = m[1] === harnessName; afterOpen = true; continue; }
       if (HARNESS_CLOSE_RE.test(line)) { keep = true; continue; }
+      if (labelSlot && HOST_LABEL_RE.test(line)) continue;
     }
     if (keep) out.push(line);
   }

@@ -10,10 +10,7 @@ import path from 'node:path';
 import { ROOT } from '../../js/build/source.mjs';
 import { docSources, parseMapTable, stripHarnessBlocks } from '../../js/web/docs.mjs';
 
-// The pre-restructure tree is read by the console but predates these rules; it is exempt until
-// its pages move out, and then the folder is gone.
-const NEW_TREE = (rel) => !rel.startsWith('docs/web/');
-const pages = () => docSources().filter((s) => NEW_TREE(s.rel))
+const pages = () => docSources()
   .map((s) => ({ ...s, text: fs.readFileSync(path.join(ROOT, s.rel), 'utf8') }));
 
 const LINK_RE = /\]\((?!https?:|#|mailto:)([^)\s]+?\.md)(?:#[^)\s]*)?\)/g;

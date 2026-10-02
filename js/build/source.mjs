@@ -173,8 +173,7 @@ export const WORKFLOW_SRC = path.join(ROOT, 'adapters', 'opencode', 'workflows')
  * files the console serves. A page's id is its basename, so ids must be unique across folders.
  */
 export const DOCS = path.join(ROOT, 'docs');
-// ponytail: 'web' is the pre-restructure tree, read until its pages have moved out.
-export const DOC_FOLDERS = ['understand', 'guides', 'concepts', 'reference', 'web'];
+export const DOC_FOLDERS = ['understand', 'guides', 'concepts', 'reference'];
 
 /**
  * `_build_render.posture_names()` / `mode_names()` — discovered, never hardcoded, so a new

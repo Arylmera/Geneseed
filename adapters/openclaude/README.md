@@ -1,6 +1,6 @@
 # 🦀 OpenClaude adapter
 
-> [← Back to README](../../README.md) · [Setup guide](../../SETUP.md) · [Claude Code adapter](../claude-code/README.md) · [OpenCode adapter](../opencode/README.md)
+> [← Back to README](../../README.md) · [Install guide](../../docs/guides/install.md) · [Claude Code adapter](../claude-code/README.md) · [OpenCode adapter](../opencode/README.md)
 
 [OpenClaude](https://openclaude.gitlawb.com/) (`@gitlawb/openclaude`, binary
 `openclaude`) is an open-source coding-agent CLI that "originated from the Claude

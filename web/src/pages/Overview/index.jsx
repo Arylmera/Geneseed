@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react'
+import React, { lazy, Suspense, useState } from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import { relTime } from '../../lib/format.js'
@@ -12,6 +12,10 @@ import {
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import Onboarding from '../Dashboard/Onboarding.jsx'
+import { docsHostOf } from '../../hooks/useHarness.js'
+import { readSeen, TRACK_GROUP } from '../Docs/Track.jsx'
+
+const DISMISS_KEY = 'geneseed-newhere-dismissed'
 
 // The four older dashboards, kept as alternate views of this page. Lazy: they are behind
 // the Appearance palette's "Overview view", which most sessions never touch.
@@ -57,6 +61,53 @@ function HealthBanner({ overview, setup }) {
         {overview.build_epoch ? `built ${relTime(overview.build_epoch)} ago` : 'never built'}
       </span>
     </div>
+  )
+}
+
+// "New here?": a pointer into the Docs' Understand track with the reader's progress on it.
+// Gone for good once dismissed, or once every understand page has been read.
+export function NewHere({ harness }) {
+  const [dismissed, setDismissed] = useState(() => !!localStorage.getItem(DISMISS_KEY))
+  const { data: menu } = useAsync(
+    () => (dismissed ? Promise.resolve(null) : api.docs(harness).catch(() => null)),
+    [dismissed, harness],
+  )
+  const pages = menu?.groups?.find((g) => g.id === TRACK_GROUP)?.pages || []
+  const seen = readSeen()
+  const next = pages.findIndex((p) => !seen.includes(p.id))
+  if (dismissed || !pages.length || next < 0) return null
+  const done = pages.filter((p) => seen.includes(p.id)).length
+  const dismiss = () => {
+    localStorage.setItem(DISMISS_KEY, '1')
+    setDismissed(true)
+  }
+  return (
+    <section className="newhere" aria-label="New here?">
+      <div className="newhere-body">
+        <b>New here? Understand your harness.</b>
+        <p>
+          {pages.length} short pages: what a harness is, what was installed, what changes in your
+          day, and what is guaranteed.
+        </p>
+        <div className="newhere-dots" aria-label={`${done} of ${pages.length} read`}>
+          {pages.map((p) => (
+            <i key={p.id} className={seen.includes(p.id) ? 'f' : ''} />
+          ))}
+        </div>
+      </div>
+      <a className="btn" href={`#/docs/${encodeURIComponent(pages[next].id)}`}>
+        {done ? `Continue · step ${next + 1}` : 'Start'}
+      </a>
+      <button
+        type="button"
+        className="newhere-x"
+        onClick={dismiss}
+        title="Dismiss for good"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </section>
   )
 }
 
@@ -275,6 +326,7 @@ export default function Overview({
           </button>
         </div>
       </div>
+      <NewHere harness={docsHostOf(overview.emit)} />
       {own ? (
         <div className="ov-stack">
           <HealthBanner overview={overview} setup={setup} />
