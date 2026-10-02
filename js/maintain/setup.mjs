@@ -593,5 +593,49 @@ export function cmdSetup() {
       + '  geneseed build --emit opencode-global --theme neutral\n');
     return 1;
   }
+  if (!toolsReport()) return 1;
   return setupLines();
+}
+
+/**
+ * The AI coding tools Geneseed installs into, as `[label, present, url]` rows in HOSTS order.
+ *
+ * PRESENT MEANS THE COMMAND IS ON PATH, and nothing else. The config dir looked like a second
+ * signal — a desktop-only install has one and no command — but GENESEED ITSELF CREATES IT: a
+ * `bob-global` emit writes `~/.bob` on a machine that never had Bob, and the first run of this
+ * check reported Bob present on exactly such a machine. A wrong "ok" sends the user to an
+ * install mode for a tool they cannot open; a wrong "not found" costs one line they can ignore.
+ *
+ * NO SPAWN, deliberately. `which` walks PATH by hand, so asking costs nothing on the CLI's
+ * child_process allow-list — a `claude --version` probe would have been a third entry there to
+ * learn nothing `which` does not already say. `lookup` is the seam for the test, which cannot
+ * rely on what this machine happens to have installed.
+ */
+export function hostTools({ lookup = which } = {}) {
+  return [
+    ['OpenCode', 'opencode', 'https://opencode.ai/docs/'],
+    ['Claude Code', 'claude', 'https://code.claude.com/docs/en/setup'],
+    ['IBM Bob', 'bob', 'https://bob.ibm.com/'],
+    ['OpenClaude', 'openclaude', 'https://openclaude.gitlawb.com/'],
+  ].map(([label, cmd, url]) => [label, Boolean(lookup(cmd)), url]);
+}
+
+/**
+ * Show which tools are here before asking anything — the install-mode question is easier to
+ * answer knowing it — and when NONE is, ask whether to stop and install one first. It never
+ * installs one: on a managed machine that is IT's call, and each tool has its own installer.
+ * A missing tool among several present is a line, not a question; nobody needs all four.
+ * `false` is the user choosing to stop.
+ */
+export function toolsReport(tools = hostTools()) {
+  printOut('AI coding tools on this machine:\n');
+  for (const [label, present, url] of tools) {
+    printOut(present ? `  ok  ${label}\n` : `  --  ${label} not on PATH — install: ${url}\n`);
+  }
+  if (tools.some(([, present]) => present)) { printOut('\n'); return true; }
+  printOut('\nNone of them is installed. Install the one you use (links above), then run setup '
+    + 'again — or go on and pick the plain bundle, which any AGENT.md tool can read.\n');
+  if (confirm('Continue without one?', false)) { printOut('\n'); return true; }
+  printOut('Stopped. Run setup again once a tool is installed.\n');
+  return false;
 }

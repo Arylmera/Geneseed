@@ -89,7 +89,7 @@ npm install -g geneseed@latest   # …and that is also the update
 
 Cloning is the route when npm is out of reach (a corporate network with no registry access) or when you intend to *change* the harness rather than use it. It needs **git** and the same **Node ≥ 22.3** as everything else — there is nothing extra to install.
 
-**One step: run the installer at the root of the clone.** It checks that Node ≥ 22.3 and git are there and, when one is missing, says exactly what to install and where (on a managed PC: Software Center / Company Portal) — it never installs anything itself. Then it runs the setup wizard and offers to open the web console.
+**One step: run the installer at the root of the clone.** It checks that Node ≥ 22.3 and git are there and, when one is missing, says exactly what to install and where (on a managed PC: Software Center / Company Portal) — it never installs anything itself. Then it runs the setup wizard — which opens by listing the AI coding tools it can install into (OpenCode, Claude Code, IBM Bob, OpenClaude), each `ok` or with its install link, and asks before going on when none is there — and offers to open the web console.
 
 ```bash
 git clone https://github.com/Arylmera/Geneseed.git

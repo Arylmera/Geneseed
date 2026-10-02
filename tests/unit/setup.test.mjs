@@ -22,7 +22,7 @@ import path from 'node:path';
 
 import { setupBuildArgs } from '../../js/build/generate.mjs';
 import {
-  doctrineOptions, javaMajorOk, lspPrereqs, setupSummaryLines,
+  doctrineOptions, hostTools, javaMajorOk, lspPrereqs, setupSummaryLines,
 } from '../../js/maintain/setup.mjs';
 import { themeFlair, tuiEntries, detailLines } from '../../js/ui/tui.mjs';
 import { catalogLines } from '../../js/build/catalog.mjs';
@@ -325,6 +325,17 @@ test('the java major version parses on both numbering schemes', () => {
   assert.equal(javaMajorOk('java version "24" 2025-03-18'), true);
   assert.equal(javaMajorOk('java version "1.8.0_392"'), false);
   assert.equal(javaMajorOk('no version string here'), false);
+});
+
+// A tool is present when its command is on PATH — never on its config dir alone, which a
+// Geneseed emit creates on a machine that never had the tool. The four rows come in HOSTS order,
+// and an absent tool carries the URL the wizard prints beside it.
+test('hostTools reads only the command on PATH', () => {
+  const rows = hostTools({ lookup: (cmd) => (cmd === 'claude' ? '/bin/claude' : null) });
+  assert.deepEqual(rows.map(([label, present]) => [label, present]), [
+    ['OpenCode', false], ['Claude Code', true], ['IBM Bob', false], ['OpenClaude', false],
+  ]);
+  assert.equal(rows[0][2], 'https://opencode.ai/docs/');
 });
 
 test('the prereq list has one row with a bool and a hint', () => {
