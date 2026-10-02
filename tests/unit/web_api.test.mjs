@@ -32,7 +32,8 @@ import {
   apiActivity, apiActivityDetail, apiActivityToggle,
 } from '../../js/web/activity.mjs';
 import {
-  apiDocs, apiDocsPage, docCounts, docGroups, docSources, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
+  apiDocs, apiDocsPage, docCounts, docGroups, docSources, rewriteDocLinks, parseMapTable,
+  parseGlossaryTable, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
 } from '../../js/web/docs.mjs';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
@@ -1872,7 +1873,8 @@ test('the docs registry loads every page from disk', () => {
 // pages sharing a basename in two folders would leave one unreachable. That is a build error,
 // not a shadowing.
 test('docSources reads every folder and refuses a duplicate id', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-docs-'));
+  const sb = makeSandbox();
+  const root = sb.path;
   try {
     fs.mkdirSync(path.join(root, 'understand'));
     fs.mkdirSync(path.join(root, 'guides'));
@@ -1885,7 +1887,7 @@ test('docSources reads every folder and refuses a duplicate id', () => {
     fs.writeFileSync(path.join(root, 'understand', 'install.md'), '');
     assert.throws(() => docSources(root), /duplicate docs page id: install/);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    sb.cleanup();
   }
 });
 
@@ -2781,4 +2783,60 @@ test('a wiki manifest whose entries is not a list is skipped, not a crash', () =
     if (prev === undefined) delete process.env.GENESEED_WIKI; else process.env.GENESEED_WIKI = prev;
     sb.cleanup();
   }
+});
+
+// ---- docs tables and links ------------------------------------------------------------------
+
+// A relative `.md` link is how a page links on GitHub. In the console a docs page becomes its
+// route (anchor dropped: the console addresses pages, not headings), any other repo file opens
+// on GitHub with its anchor kept, and absolute URLs and fenced examples are never touched.
+test('rewriteDocLinks turns relative .md links into console routes or GitHub links', () => {
+  const ids = new Map([['docs/concepts/rules.md', 'rules']]);
+  const from = 'docs/guides/install.md';
+  const cases = [
+    ['[r](../concepts/rules.md)', '[r](#/docs/rules)'],
+    ['[r](../concepts/rules.md#lean)', '[r](#/docs/rules)'],
+    ['[e](../extending.md#two)',
+      '[e](https://github.com/Arylmera/Geneseed/blob/main/docs/extending.md#two)'],
+    ['[x](https://example.com/a.md)', '[x](https://example.com/a.md)'],
+    ['[h](#on-this-page)', '[h](#on-this-page)'],
+    ['```\n[r](../concepts/rules.md)\n```', '```\n[r](../concepts/rules.md)\n```'],
+  ];
+  for (const [body, want] of cases) assert.equal(rewriteDocLinks(body, from, ids), want, body);
+});
+
+// The map on understand page 2 is a table a GitHub reader reads as-is; the console builds the
+// clickable view from the same rows. A missing column, a ragged row, or a kind outside the four
+// the view has a chip for is a malformed map, and the answer is null rather than a guess.
+test('parseMapTable reads the map rows and refuses a malformed table', () => {
+  const head = '| Piece | What it does for you | Kind | Cost | Turn it off |\n|---|---|---|---|---|\n';
+  const body = `Intro prose.\n\n${head}`
+    + '| `AGENT.md` | The rules, loaded every session | asked | ~4k tokens | `--footprint lean` |\n'
+    + '| tool-gate hook | Stops force-push and leaked secrets | Enforced | ~14 ms / call | drop the process pack |\n';
+  assert.deepEqual(parseMapTable(body), [
+    { piece: '`AGENT.md`', does: 'The rules, loaded every session', kind: 'asked',
+      cost: '~4k tokens', off: '`--footprint lean`' },
+    { piece: 'tool-gate hook', does: 'Stops force-push and leaked secrets', kind: 'enforced',
+      cost: '~14 ms / call', off: 'drop the process pack' },
+  ]);
+  assert.equal(parseMapTable('| Piece | Cost |\n|---|---|\n| a | b |\n'), null);
+  assert.equal(parseMapTable(`${head}| a | b | maybe | c | d |\n`), null);
+  assert.equal(parseMapTable(`${head}| a | b | asked |\n`), null);
+});
+
+// The glossary moved from a source literal into docs/reference/glossary.md so GitHub readers get
+// it too. `—` in the theme-key column means no theme renames the term; in the analogy column it
+// means there is no analogy worth giving.
+test('parseGlossaryTable reads term, theme key, meaning and analogy', () => {
+  const body = '| Term | Theme key | Meaning | In dev terms |\n|---|---|---|---|\n'
+    + '| Skill | SKILL | a repeatable workflow | a runbook |\n'
+    + '| Tagline | TAGLINE | the theme in one line | — |\n'
+    + '| Hook | — | a command run around an agent action | a git hook |\n';
+  assert.deepEqual(parseGlossaryTable(body), [
+    { label: 'Skill', key: 'SKILL', desc: 'a repeatable workflow', analogy: 'a runbook' },
+    { label: 'Tagline', key: 'TAGLINE', desc: 'the theme in one line', analogy: null },
+    { label: 'Hook', key: null, desc: 'a command run around an agent action',
+      analogy: 'a git hook' },
+  ]);
+  assert.deepEqual(parseGlossaryTable('no table here'), []);
 });
