@@ -342,8 +342,8 @@ function advice() {
 }
 
 test('the migrate advice names a launcher this package installs', () => {
-  // The table's `prog` is `harness`; the launcher name is the npm `bin` key, so that is where it
-  // is derived from.
+  // The launcher name is the npm `bin` key, not the table's `prog` (which only labels the docs
+  // page), so that is where it is derived from.
   const bins = Object.keys(readJson('package.json').bin);
   const token = advice().split(/\s+/)[0];
   assert.ok(bins.includes(token),

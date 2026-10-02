@@ -14,10 +14,11 @@ bin/geneseed-hook.mjs …` — so at user scope they would fire and fail in ever
 repo that doesn't vendor the harness. A generated global install wires
 absolute-path hooks instead — `geneseed setup` does that for you.) It:
 
-- on **PreToolUse** (matcher `Bash`), **on an install that built the `process` pack in**,
-  runs `harness git-gate` — the tool-boundary half of Doctrine process 5 (*consent before
-  every commit and push*). Drop that pack and this hook is not written at all; the
-  invariant-territory refusals (`rm -rf`, force-push) stay in every build. The hook inspects
+- on **PreToolUse** (matcher `Bash`), runs `geneseed-hook git-gate` — the tool-boundary
+  half of Doctrine process 5 (*consent before every commit and push*) and of the
+  destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
+  wired with `--no-consent`: commits and pushes pass without asking, while the
+  invariant-territory refusals (force-push, `reset --hard`) stay in every build. The hook inspects
   command and, when it runs a `git commit` or `git push` (bare, flagged, `-C <path>`,
   or chained like `git add . && git commit … && git push`), returns
   `permissionDecision: "ask"` so Claude Code **prompts on every such call**. Crucially
@@ -31,27 +32,31 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   `create_or_update_file` / `merge_pull_request`, which bypass Bash. To gate those too,
   widen the matcher to `"Bash|mcp__github__.*"` — `git-gate` ignores any payload it
   doesn't recognise as a commit/push, so over-matching the tool surface is harmless.
+- on **PreToolUse** (matcher `Write|Edit|MultiEdit|NotebookEdit`), runs
+  `geneseed-hook rule-gate` — refuses a write that would put a credential into a tracked
+  file, and asks first on the first write to `user-rules.md` or a memory file (whether
+  something you want kept is a rule or a fact is your call). Ordinary edits pass.
 - on **SessionStart** (`startup`/`clear` only — a fresh context), prints `AGENT.md`
-  so the harness is in context from the first turn, then runs `harness context` to
+  so the harness is in context from the first turn, then runs `geneseed-hook context` to
   **inject the project context** directly into the session — so the project-context load is
   by the hook, not left to the agent to remember (lazy entries are only listed). On
-  **`resume`** it runs `harness context` *without* re-`cat`ting `AGENT.md`: the resumed
+  **`resume`** it runs `geneseed-hook context` *without* re-`cat`ting `AGENT.md`: the resumed
   conversation already carries the harness, so re-injecting the static file each resume
   is pure token waste — only the (possibly changed) project context is refreshed;
-- on **Stop**, runs `harness learn` over the session to capture durable memories.
+- on **Stop**, runs `geneseed-hook learn` over the session to capture durable memories.
   Claude Code pipes the hook payload (with the session's `transcript_path`) to the
   command on stdin; `learn` reads that, flattens the transcript, distils new
   memories, and **writes them into the bundle's `memory/` while updating
   `MEMORY.md`** — deduping against what is already stored. No `< /dev/null` and no
   redirection: the stdin payload is the whole point.
-- on **SubagentStop**, runs the *same* `harness learn` command. `learn` reads the
+- on **SubagentStop**, runs the *same* `geneseed-hook learn` command. `learn` reads the
   payload's `hook_event_name`, sees a subagent dispatch, and routes it to the
   per-agent lesson path instead of the shared store: it distils at most one durable
   lesson and appends it to `memory/agents/<agent-name>.md` (capped, newest kept). If
   the payload does not name the subagent, the step is a silent no-op — never a
   crash, never a wrong write. This is the parity twin of the OpenCode learn plugin's
   child-session branch.
-- on **PreCompact**, runs the same `harness learn` once more. `learn` distils the
+- on **PreCompact**, runs the same `geneseed-hook learn` once more. `learn` distils the
   *tail* of the transcript, so per-turn Stop is a sliding window over the session —
   and auto-compaction is the moment that window is about to be summarised away.
   This captures memory *before* the summary; the SessionStart `compact` matcher
@@ -68,11 +73,11 @@ the commands are identical (`node bin/geneseed-hook.mjs …`).
 
 Why inject rather than instruct? The constitution tells the agent to read the project
 context at startup, but startup rituals are exactly what agents skip. The
-`harness context` hook removes the choice: the eager files' contents land in
+`geneseed-hook context` hook removes the choice: the eager files' contents land in
 context before the first turn regardless of agent discipline. On tools without
 hooks or plugins, the AGENT.md prose still carries the rule.
 
-> **Auto-discovery (parity with OpenCode).** `harness context` no longer needs a
+> **Auto-discovery (parity with OpenCode).** `geneseed-hook context` no longer needs a
 > hand-filled `context.json`: with no manifest (or just the empty stub) it
 > **auto-discovers the repo's docs by convention** — root `AGENTS.md`/`AGENT.md`/
 > `CLAUDE.md`/`README.md`/`CONTRIBUTING.md` injected eager, `docs/`/`adr/`/monorepo
