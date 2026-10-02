@@ -26,7 +26,7 @@ Three seams, and almost every question about "where do I edit?" resolves to one 
 | Seam | Source of truth | How it reaches a user | Rebuild needed |
 |---|---|---|---|
 | **Harness content** | `src/` (laws, agents, skills, memory/notebook conventions, `AGENT.md.tmpl`) + `themes/*.json` for voice | rendered into a bundle by `geneseed build` / `update` / `rebuild-all` | yes — every active install must be re-emitted |
-| **Console docs** | `docs/web/*.md` + `docs/web/_groups.json` | read off disk at request time by `js/web/docs.mjs:101` | no — not even a daemon restart for content |
+| **Docs** | `docs/{understand,guides,concepts,reference}/*.md` + `docs/_groups.json` | read on GitHub as plain markdown, and off disk at request time by `js/web/docs.mjs` | no — not even a daemon restart for content |
 | **Console app** | `web/src/**` | built by vite into the **tracked** `web/dist/` | yes — rebuild *and commit* dist, then `geneseed web restart` |
 
 Two rules follow from the table and they cause most of the surprises:
@@ -34,7 +34,7 @@ Two rules follow from the table and they cause most of the surprises:
 - **Nothing propagates by itself.** A bundle is a *render*. Editing `src/` changes nothing on any
   machine until something re-emits (`sourceFingerprint` in `js/build/version.mjs` re-fingerprints, `js/inspect/status.mjs`
   reports the drift).
-- **`docs/web/` is data, `web/src/` is code.** A new documentation page is one file and no
+- **`docs/` is data, `web/src/` is code.** A new documentation page is one file and no
   rebuild. A new screen is a new hashed chunk and a mandatory `web/dist` commit.
 
 ### Counts are computed — never type one
@@ -408,10 +408,11 @@ The `geneseed-` prefix and the `.js` suffix are mechanically load-bearing: the b
 1. `adapters/opencode/plugins/geneseed-<name>.js` — ESM, zero dependencies. The factory-export
    convention is real (OpenCode requires it) but **ungated**; the only generic gate on plugin
    source is `node --check` (the one spawn in `authoringProblems`).
-2. `docs/web/plugin-<name>.md` — `group: plugins`, `title: "geneseed-<name>"`, `kind: "concept"`.
-3. `docs/web/plugins.md` — a bullet. The count above it renders from `{N_PLUGINS}`.
-4. `docs/web/model.md` — a second `{N_PLUGINS}` sentence whose **enumeration of the capabilities
-   is hand-written and ungated**.
+2. `docs/reference/opencode-plugins.md` — a `## geneseed-<name>` section (gated: every plugin
+   file needs one). The count in its intro renders from `{N_PLUGINS}`.
+3. `docs/understand/on-your-machine.md` — a row in the OpenCode map table (Piece · What it does
+   for you · Kind · Cost · Turn it off). **Hand-written and ungated** beyond the table parsing.
+4. `docs/concepts/hosts.md` — check the capability matrix still tells the truth.
 5. `README.md` — **three** sites: the badge, the `N plugins` prose, and the 🔌 Plugins row.
 6. `SHIPPED.md` — the bare name inside `plugins (…)`; that list must equal the directory exactly,
    in both directions (`tests/unit/web_api.test.mjs:1655`).
@@ -432,14 +433,20 @@ a row to `js/cli-table.json` with a help string over 20 characters.
 
 ### 4c — A documentation page
 
-**One file, no rebuild, no server change.** `docs/web/<id>.md`, where the stem is the id.
-Frontmatter is JSON-per-value, not YAML (`js/web/docs.mjs:63-82`):
+**One file, no rebuild, no server change.** `docs/<folder>/<id>.md` — folder ∈ understand,
+guides, concepts, reference; the stem is the id and must be unique across folders (a duplicate
+throws). The same file is what GitHub shows, so write for both
+(`tests/unit/docs_tree.test.mjs` gates it). Frontmatter is JSON-per-value, not YAML
+(`docFrontmatter` in `js/web/docs.mjs`):
 
-- `group` must match an id in `_groups.json` — an unknown group is a **silent skip**.
-- `kind` ∈ `markdown | concept | glossary | about | cli`; anything else 404s.
-- `harness: "claude"|"opencode"` hides the page from the other host. Note the `plugins` group
-  carries this at the **group** level, and `hooks` symmetrically — a Claude-relevant page dropped
-  into `plugins` vanishes with no error.
+- `group` must match an id in `docs/_groups.json` — gated by `docs_tree.test.mjs`.
+- `kind` ∈ `markdown | concept | map | glossary | about | cli`; anything else 404s. `map` is a
+  concept page whose Piece/Kind/Cost table the console turns into the clickable map.
+- `harness: "claude"|"opencode"` hides the page from the other host — keep it for how-tos that
+  cannot run elsewhere; a reference page says its host in its title instead.
+- Link pages with relative `.md` links; the console rewrites them to `#/docs/<id>`. A host-only
+  passage is `<!--harness:x-->` + a visible `*(OpenCode only)*` / `*(Claude Code only)*` line.
+- No `{N_*}` token in `understand/` or `guides/` — GitHub would show it raw.
 - `kind: "markdown"` pulls from a repo file via `source:`, traversal-guarded, optionally sliced to
   one section with `anchor:` + `slice: true`.
 
@@ -593,7 +600,7 @@ text or flags is now an ordinary edit: `js/cli-table.json` is the owned document
 holds. Three hand-written equalities still converge on it and are cheap to keep in step — the
 29-command count and the hidden-argument rule (`tests/unit/cli_table.test.mjs`), and
 `tests/unit/docs.test.mjs`, which validates every fenced `geneseed <verb> <flags>` line in
-`README.md`, `SETUP.md`, `QUICKSTART.md` and `SHIPPED.md` against the table.
+`README.md`, `SHIPPED.md` and every page under `docs/{understand,guides,concepts,reference}/` against the table.
 
 ---
 
@@ -607,8 +614,8 @@ only, at best, on its presence.
 | `§N` cross-references into `AGENT.md`'s anatomy | `src/skills/*`, `src/agents/*`, `adapters/**` | **range only.** `constitutionProblems` refuses a `§N` the template declares no section for — which catches a pointer past the end, the shape *removing* a section leaves. It cannot catch one that still resolves and now means something else, which is the shape *inserting* a section leaves, and is what actually happened when `## 2. Doctrines` pushed every later section down one. **Renumbering the anatomy means `grep -rn '§' src/ adapters/` and reading every hit.** Four satellites and a live OpenCode deny message shipped stale because the sweep stopped at `AGENT.md.tmpl` |
 | Per-law Principle lines | `web/src/pages/Laws.jsx` | presence and class only, never accuracy |
 | 588 themed constitution titles (42 keys × 14 voices) — `LEX_<ID>` (one per law), `DOC_<ID>` (one per doctrine rule), `PACK_<NAME>` | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
-| The README keyword enumerations | `README.md`, `docs/web/rules.md` | nothing |
-| The plugin capability enumeration | `docs/web/model.md` | nothing (the number substitutes; the list does not) |
+| The README keyword enumerations | `README.md`, `docs/concepts/rules.md` | nothing |
+| The per-host map of what lands on a machine | `docs/understand/on-your-machine.md` | table shape only, never accuracy |
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |
 | `THEME_BLURBS` (8 of 14), `ART` (8 of 14) | `js/maintain/setup.mjs`, `js/ui/anim.mjs` | nothing — missing entries fall back silently |
 | `LOADED_SIGIL` uniqueness | `themes/*.json` | nothing, and it is load-bearing for theme detection |
@@ -678,10 +685,9 @@ answer.
 - **`AGENT_LESSON_PROMPT` has no drift gate.** Its sibling `LEARN_PROMPT_HEAD` is checked for
   extractability; this one's parity test was retired. Reformat the declaration in
   `geneseed-learn.js` and the per-agent lesson prompt silently degrades to a two-line fallback.
-- **The fenced-command gate still covers only four documents.** `tests/unit/docs.test.mjs`
-  validates every `geneseed <verb> <flags>` line against `js/cli-table.json` — but only in
-  `README.md`, `SETUP.md`, `QUICKSTART.md` and `SHIPPED.md`. Adding `DESIGN.md` and the `docs/`
-  tree to that array is one line, and it would have caught item 2 on the day it was written.
+- **The fenced-command gate skips the maintainer docs.** `tests/unit/docs.test.mjs` validates
+  every `geneseed <verb> <flags>` line against `js/cli-table.json` in `README.md`, `SHIPPED.md`
+  and the user docs tree — not in `DESIGN.md` or the `docs/*.md` maintainer pages.
 
 ---
 

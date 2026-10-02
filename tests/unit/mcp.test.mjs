@@ -184,9 +184,9 @@ test('meta falls back to the bare name for an unknown server', () => {
 });
 
 test('the starter presets are present and well formed', () => {
-  // The three starter MCP servers Geneseed ships, as SETUP.md documents them. `gitlab-2` was
+  // The three starter MCP servers Geneseed ships, as the MCP guide documents them. `gitlab-2` was
   // the fourth and is gone: it was a byte-for-byte copy of `gitlab` under a different URL, so
-  // the screen carried two rows to teach one pattern that SETUP.md teaches in prose. Removing
+  // the screen carried two rows to teach one pattern that the MCP guide teaches in prose. Removing
   // it cost 10 web recordings that cannot be re-recorded — the reason this list is now also
   // the gate that a fifth preset does not quietly reappear.
   assert.deepEqual(Object.keys(MCP_PRESETS), ['markitdown', 'gitlab', 'filesystem'],

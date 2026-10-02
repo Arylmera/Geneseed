@@ -283,7 +283,11 @@ const SHIPS = [
   ['src/', 'the product: what a bundle is rendered from'],
   ['themes/', 'render.loadTheme reads these; a themeless install renders nothing'],
   ['adapters/', 'js/build/driver.mjs, js/hosts/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
-  ['docs/web/', "js/web/docs.mjs serves ROOT/docs; the console's Docs pages ARE these files"],
+  ['docs/reference/', "js/web/docs.mjs serves it; the console's Reference pages ARE these files"],
+  ['docs/_groups.json', 'js/web/docs.mjs reads it; without it the Docs tab has no groups and shows nothing'],
+  ['docs/understand/', "js/web/docs.mjs serves it; the console's Understand track IS these files"],
+  ['docs/guides/', "js/web/docs.mjs serves it; the console's Guides pages ARE these files"],
+  ['docs/concepts/', "js/web/docs.mjs serves it; the console's Concepts pages ARE these files"],
   // ONE ROW FOR THE NON-WEB PAGES, not one per page, and the reason is that every per-file row
   // this replaced gave the SAME reason — the literal string `docs/*.md`, seven times. The
   // decision they were all restating is `package.json`'s own `files` entry, spelled identically
@@ -296,7 +300,7 @@ const SHIPS = [
   // callers for limits.md, two for declined.md), so deleting either breaks live citations and
   // is worth a red run. A page nothing cites is worth a glob.
   ['docs/*.md', 'offline reading beside the package — the design history, the extension guide, '
-    + 'the host notes. No runtime code reads them (js/web/docs.mjs serves only docs/web/); '
+    + 'the host notes. No runtime code reads them (js/web/docs.mjs serves only the four docs folders); '
     + 'DESIGN.md and README.md link into them'],
   ['web/dist/', 'TRACKED and load-bearing: js/web/server.mjs serves it, and npmBuild is a '
     + 'first-run-from-a-partial-checkout path no cell reaches'],
@@ -340,8 +344,6 @@ const SHIPS = [
   ['SHIPPED.md', "doctor's proseMirrorProblems reads it"],
   ['CHANGELOG.md', 'user-facing; small'],
   ['DESIGN.md', 'user-facing; small'],
-  ['QUICKSTART.md', 'user-facing; small'],
-  ['SETUP.md', 'user-facing, and the install/autostart reference the README points at'],
 ];
 
 const WITHHELD = [

@@ -1,6 +1,6 @@
 # 🔌 OpenCode adapter
 
-> [← Back to README](../../README.md) · [Setup guide](../../SETUP.md) · [How OpenCode loads](HOW-OPENCODE-LOADS.md) · [Global harness spec](GLOBAL-HARNESS-SPEC.md)
+> [← Back to README](../../README.md) · [Install guide](../../docs/guides/install.md) · [How OpenCode loads](HOW-OPENCODE-LOADS.md) · [Global harness spec](GLOBAL-HARNESS-SPEC.md)
 
 [OpenCode](https://opencode.ai) is `AGENTS.md`-native and has first-class
 **subagents** and **commands**, so Geneseed fits it cleanly. Pick the depth you
@@ -211,7 +211,7 @@ the harness live entirely in the global config dir with zero per-repo files.
   install). Per wiki: eager entries inject in full, lazy entries list, and the
   `conventions` / `inbox` / `protected` metadata is surfaced — on the **same**
   budgets, compaction and transform paths as the project context. Schema and
-  behaviour: [SETUP.md → Wiki](../../SETUP.md#wiki--your-own-knowledge-base-optional).
+  behaviour: [the wiki guide](../../docs/guides/wiki.md).
 
 It needs no model, writes nothing, skips the learn plugin's throwaway sessions, and
 swallows every error. Output mirrors `geneseed-hook context`.
@@ -468,9 +468,9 @@ OpenCode runs, so the command has to resolve — the `uvx` form above needs only
 call). No uv? `pipx install markitdown-mcp` and swap the command to `["markitdown-mcp"]`.
 Or drop the block entirely — the skill falls back to a CLI converter (MarkItDown /
 Pandoc / Docling) and never installs one silently. Listed but not connecting? The
-command isn't on PATH — see [SETUP.md → MCP server won't connect](../../SETUP.md#mcp-server-wont-connect).
+command isn't on PATH — see [the MCP guide](../../docs/guides/mcp.md).
 Full runbook, including the corporate-TLS (`UV_SYSTEM_CERTS`) step and the OCR extras:
-[SETUP.md → MarkItDown via MCP](../../SETUP.md#markitdown-via-mcp-opencode).
+[the MCP guide](../../docs/guides/mcp.md).
 
 ## Optional add-on — git-worktree isolation (third-party, not vendored)
 

@@ -1,5 +1,5 @@
 /**
- * The web console's Docs pages, and the registry built from `docs/web/`.
+ * The web console's Docs pages, and the registry built from `docs/<folder>/` (DOC_FOLDERS).
  *
  * `cli` docs render via `cliReference()` in `js/ui/cli.mjs`, which reads
  * `js/cli-table.json` — the CLI's own metadata, since `harness.build_argparser()`'s parser
@@ -7,9 +7,9 @@
  * the same file, so there is exactly one description of the CLI surface, not a second
  * transcription of it.
  *
- * `tests/unit/web_server.test.mjs` holds `KINDS` against a written-out list of the five
+ * `tests/unit/web_server.test.mjs` holds `KINDS` against a written-out list of the six
  * kinds this daemon dispatches on — same declaration-vs-dispatch shape as the route table,
- * which is why it is a table here too and not five `if`s.
+ * which is why it is a table here too and not six `if`s.
  *
  * THE `?harness=` QUERY PARAM IS the Docs selector, and it is the ONLY input to these
  * endpoints that is not the checkout itself — the one thing a test can vary. Every
@@ -18,7 +18,7 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { ROOT, THEMES } from '../build/source.mjs';
+import { DOCS, DOC_FOLDERS, ROOT, THEMES } from '../build/source.mjs';
 import { cliReference } from '../ui/cli.mjs';
 import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
@@ -29,8 +29,6 @@ import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { statusData } from '../inspect/status.mjs';
 import { originDisplay } from '../maintain/update.mjs';
 import { NotFound, deployed, resolveLinks } from './api.mjs';
-
-const DOC_DIR = path.join(ROOT, 'docs', 'web');
 
 /**
  * A docs page split into its frontmatter map and its body.
@@ -61,24 +59,45 @@ function docFrontmatter(text) {
 }
 
 /**
- * The Docs registry, built from `docs/web/`.
+ * Every docs page source as `{ id, rel }`, `rel` relative to ROOT with forward slashes.
+ *
+ * The id is the basename because it is the router's address (`#/docs/<id>`); the folder is
+ * GitHub's business, not the console's. Two pages with one basename would leave one of them
+ * unreachable, so a duplicate throws instead of shadowing.
+ */
+export function docSources(docRoot = DOCS) {
+  const out = [];
+  const seen = new Set();
+  for (const folder of DOC_FOLDERS) {
+    let names;
+    try { names = readdirSync(path.join(docRoot, folder)); } catch { continue; }
+    for (const name of names.filter((n) => normcase(n).endsWith('.md')).sort()) {
+      const id = name.slice(0, -3);
+      if (seen.has(id)) throw new Error(`duplicate docs page id: ${id}`);
+      seen.add(id);
+      out.push({ id, rel: `docs/${folder}/${name}` });
+    }
+  }
+  return out;
+}
+
+/**
+ * The Docs registry, built from `docSources()` and `docs/_groups.json`.
  *
  * A page whose file is missing or malformed is skipped rather than crashing the server; an
  * unreadable registry yields an empty Docs section, which the UI renders as "no pages".
  *
- * NOT cached at module load. The difference is invisible to a request — `docs/web/` cannot
+ * NOT cached at module load. The difference is invisible to a request — the docs tree cannot
  * change under a running daemon any more than `dist/` can — and a module-level constant
  * would freeze whatever `ROOT` was when this file was first imported.
  */
 export function docGroups() {
-  const groups = readJsonMaybe(path.join(DOC_DIR, '_groups.json'));
+  const groups = readJsonMaybe(path.join(DOCS, '_groups.json'));
   if (!Array.isArray(groups)) return [];
   const byId = new Map();
   for (const g of groups) byId.set(g.id, { ...g, pages: [] });
-  let names;
-  try { names = readdirSync(DOC_DIR); } catch { return []; }
-  for (const name of names.filter((n) => normcase(n).endsWith('.md')).sort()) {
-    const text = readMaybe(path.join(DOC_DIR, name));
+  for (const { id, rel } of docSources()) {
+    const text = readMaybe(path.join(ROOT, rel));
     if (text === null) continue;
     const [meta, body] = docFrontmatter(text);
     const group = byId.get(meta.group);
@@ -86,7 +105,7 @@ export function docGroups() {
     if (group === undefined) continue;
     const order = Object.hasOwn(meta, 'order') ? meta.order : 0;
     delete meta.order;
-    const page = { id: name.slice(0, -3), ...meta };
+    const page = { id, rel, ...meta };
     if (body.trim()) page.body = body.replace(/\n+$/, '');
     group.pages.push([order, page]);
   }
@@ -103,50 +122,96 @@ export function docGroups() {
   return out;
 }
 
+// ---- markdown tables as data ------------------------------------------------------------
+
+/** One table row's cells; a `\|` inside a cell is kept as a literal bar. */
+function tableCells(line) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/)
+    .map((c) => c.trim().replace(/\\\|/g, '|'));
+}
+
 /**
- * The neutral term, the theme key whose value renames it, and the one-line description. A
- * key of `null` marks a term no theme renames.
+ * The body rows of the first table whose header, lower-cased, is exactly `head` — or `null`.
+ *
+ * A TABLE IS THE DATA so a page reads the same on GitHub as in the console: the map on
+ * understand page 2 and the glossary are both tables a person can read, and the console builds
+ * its richer view from the same rows rather than from a second copy that could drift. A row
+ * with the wrong number of cells is a malformed table, so the whole answer is `null`.
  */
-const GLOSSARY_KEYS = [
-  // The three tiers, in constitutional order and before the entities — a reader who does not
-  // know what an Ethos is here cannot read the rest of the glossary's first rows.
-  //
-  // `Ethos (Ontology)` for the same reason as `Rule (Law)` below: the neutral theme renamed
-  // what a reader SEES, while the address the reader will meet in `src/ontology/`, in the
-  // `ONTOLOGY` theme key and in every identifier did not move. The parenthesis is the bridge
-  // between the two, and the glossary is the one page that owes a reader that bridge.
-  ['Ethos (Ontology)', 'ONTOLOGY', 'the always-on worldview under the rules — telos, evidence, '
-    + 'decisions, conduct; it holds the Pact'],
-  ['Rule (Law)', 'LAW', 'one of the nine always-on invariants: what is never done'],
-  ['Rules (Laws)', 'LAWS', 'the body of always-on invariants'],
-  ['Doctrine', 'DOCTRINE', 'one practice rule, cited `<pack> <n>` — how work is done here'],
-  ['Doctrines', 'DOCTRINES', 'the practice packs, chosen at build time; inactive packs still '
-    + 'ship in the bundle'],
-  ['Agent', 'AGENT', 'a capability specialist'],
-  ['Agents', 'AGENTS', 'the roster of specialists'],
-  ['Skill', 'SKILL', 'a repeatable workflow'],
-  ['Skills', 'SKILLS', 'the catalogue of workflows'],
-  ['Memory', 'MEMORY', 'durable, one-fact-per-file knowledge'],
-  ['Notebook', 'NOTEBOOK', "the agent's sovereign space"],
-  ['Wiki', 'WIKI', 'the machine-wide knowledge base'],
-  // Still a token, still themed, but it names a CONCEPT INSIDE the ontology's Telos now
-  // rather than a peer of the Rules — `src/postures/peer.md` cites it and the section that
-  // used to carry it is the Ethos.
-  ['Pact', 'PACT', 'the two-way collaboration contract, stated in Telos, the first Ethos '
-    + 'section'],
-  ['Posture', null, 'the relationship register the agent works in '
-    + '(peer, mentor, expert, assistant, artisan)'],
-  ['Mode', null, 'how work gets executed — direct (the agent works every '
-    + 'task itself) or foreman (substantial tasks spawn an isolated pipeline)'],
-  ['Footprint', null, 'how much of the Rules loads inline each turn '
-    + '(full vs lean)'],
-  ['Profile', null, 'who you are — seeded once, colours but never binds'],
-  ['Memory force', null, "a memory's binding strength (constraint, "
-    + 'choice, conviction, tempered)'],
-  ['Tagline', 'TAGLINE', 'the one-line essence of the theme'],
-  ['Loaded sigil', 'LOADED_SIGIL', 'what the agent emits when ready'],
-  ['Benediction', 'BENEDICTION', 'the closing line of an install'],
-];
+export function tableRows(body, head) {
+  const lines = body.split('\n');
+  for (let i = 0; i + 1 < lines.length; i += 1) {
+    if (!lines[i].trim().startsWith('|')) continue;
+    const h = tableCells(lines[i]).map((c) => c.toLowerCase());
+    if (h.length !== head.length || h.some((c, j) => c !== head[j])) continue;
+    const rows = [];
+    for (let j = i + 2; j < lines.length && lines[j].trim().startsWith('|'); j += 1) {
+      const row = tableCells(lines[j]);
+      if (row.length !== head.length) return null;
+      rows.push(row);
+    }
+    return rows;
+  }
+  return null;
+}
+
+const MAP_HEAD = ['piece', 'what it does for you', 'kind', 'cost', 'turn it off'];
+export const MAP_KINDS = ['enforced', 'automatic', 'asked', 'on demand'];
+
+/** The "what lands on your machine" table as rows, or `null` when absent or malformed. */
+export function parseMapTable(body) {
+  const rows = tableRows(body, MAP_HEAD);
+  if (!rows || !rows.length) return null;
+  const out = rows.map(([piece, does, kind, cost, off]) => (
+    { piece, does, kind: kind.toLowerCase(), cost, off }));
+  return out.every((r) => MAP_KINDS.includes(r.kind)) ? out : null;
+}
+
+const GLOSSARY_HEAD = ['term', 'theme key', 'meaning', 'in dev terms'];
+
+/**
+ * The glossary table: term, the theme key whose value renames it (`—` when no theme does),
+ * the meaning, and the developer analogy (`—` when there is none).
+ */
+export function parseGlossaryTable(body) {
+  const rows = tableRows(body, GLOSSARY_HEAD);
+  if (!rows) return [];
+  const dash = (s) => (s === '—' || s === '-' || s === '' ? null : s);
+  return rows.map(([label, key, desc, analogy]) => (
+    { label, key: dash(key), desc, analogy: dash(analogy) }));
+}
+
+// ---- links between pages ----------------------------------------------------------------
+
+const MD_LINK_RE = /\]\((?!https?:|#|mailto:)([^)\s]+?\.md)(#[^)\s]*)?\)/g;
+// ponytail: the canonical repo, not the install's origin; a fork's console links upstream.
+const GITHUB_BLOB = 'https://github.com/Arylmera/Geneseed/blob/main/';
+
+/**
+ * Relative `.md` links, which is how the pages link on GitHub, rewritten for the console.
+ *
+ * A target that is a docs page becomes `#/docs/<id>` (its `#anchor` dropped — the console
+ * addresses pages, not headings); any other repo file — a maintainer doc, a README under
+ * `src/` — opens on GitHub, since the console does not serve it. Absolute URLs, in-page
+ * anchors and fenced examples are left alone.
+ */
+export function rewriteDocLinks(body, fromRel, idByRel) {
+  if (!body.includes('.md')) return body;
+  let inFence = false;
+  return body.split('\n').map((line) => {
+    if (line.startsWith('```')) { inFence = !inFence; return line; }
+    if (inFence) return line;
+    return line.replace(MD_LINK_RE, (m, target, anchor) => {
+      const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(fromRel), target));
+      const id = idByRel.get(resolved);
+      return id ? `](#/docs/${id})` : `](${GITHUB_BLOB}${resolved}${anchor ?? ''})`;
+    });
+  }).join('\n');
+}
+
+function idsByRel() {
+  return new Map(docSources().map((s) => [s.rel, s.id]));
+}
 
 // ---- counts substituted into concept bodies -------------------------------------------
 
@@ -239,6 +304,13 @@ export function harnessBlocksBalanced(lines) {
   return !open;
 }
 
+/**
+ * The visible `*(OpenCode only)*` line a block opens with. It exists for GitHub, which hides
+ * the marker; the console has already filtered the block to the reader's host, so there the
+ * label only repeats what the host selector says, and it goes with the marker.
+ */
+const HOST_LABEL_RE = /^\s*\*\((OpenCode|Claude Code) only\)\*\s*$/;
+
 export function stripHarnessBlocks(body, harnessName) {
   if (!HARNESS_HINT_RE.test(body)) return body;
   const lines = splitLines(body);
@@ -246,7 +318,10 @@ export function stripHarnessBlocks(body, harnessName) {
   const out = [];
   let keep = true;
   let inFence = false;
+  let afterOpen = false;
   for (const line of lines) {
+    const labelSlot = afterOpen;
+    afterOpen = false;
     if (line.startsWith('```')) {
       inFence = !inFence;
       if (keep) out.push(line);
@@ -254,8 +329,9 @@ export function stripHarnessBlocks(body, harnessName) {
     }
     if (!inFence) {
       const m = HARNESS_OPEN_RE.exec(line);
-      if (m) { keep = m[1] === harnessName; continue; }
+      if (m) { keep = m[1] === harnessName; afterOpen = true; continue; }
       if (HARNESS_CLOSE_RE.test(line)) { keep = true; continue; }
+      if (labelSlot && HOST_LABEL_RE.test(line)) continue;
     }
     if (keep) out.push(line);
   }
@@ -363,8 +439,8 @@ function readDocSource(rel) {
   return readMaybe(target) ?? '';
 }
 
-/** The deployed theme's words beside the neutral ones. */
-function glossary(state) {
+/** The deployed theme's words beside the neutral ones, from `docs/reference/glossary.md`. */
+function glossary(state, page) {
   const load = (theme) => {
     const doc = readJsonMaybe(path.join(THEMES, `${theme}.json`));
     return doc && typeof doc === 'object' && !Array.isArray(doc) ? doc : {};
@@ -372,10 +448,10 @@ function glossary(state) {
   const neutral = load('neutral');
   const themed = state.theme !== 'neutral' ? load(state.theme) : neutral;
   const rows = [];
-  for (const [label, key, desc] of GLOSSARY_KEYS) {
+  for (const { label, key, desc, analogy } of parseGlossaryTable(page.body ?? '')) {
     if (key === null) {
       const term = label.toLowerCase();
-      rows.push({ label, neutral: term, themed: term, desc });
+      rows.push({ label, neutral: term, themed: term, desc, analogy });
       continue;
     }
     rows.push({
@@ -383,6 +459,7 @@ function glossary(state) {
       neutral: String(Object.hasOwn(neutral, key) ? neutral[key] : '').trim(),
       themed: String(Object.hasOwn(themed, key) ? themed[key] : '').trim(),
       desc,
+      analogy,
     });
   }
   return { theme: state.theme, rows };
@@ -452,7 +529,7 @@ export function apiDocsPage(state, pageId, harnessName = null) {
 }
 
 /**
- * The five kinds, as a TABLE and not five `if`s.
+ * The six kinds, as a TABLE and not six `if`s.
  *
  * `tests/unit/web_server.test.mjs` holds `Object.keys(KIND_ROUTES)` against a written-out
  * list of the kinds `apiDocsPage` must dispatch on — this table is what the dispatcher
@@ -470,17 +547,24 @@ const KIND_ROUTES = {
       body = sliced;
       if (ok) anchor = null;
     }
-    body = stripHarnessBlocks(body, hn);
+    body = rewriteDocLinks(stripHarnessBlocks(body, hn), page.source, idsByRel());
     return { id: pageId, title: page.title, kind: 'markdown', body,
       source: page.source, anchor, links: resolveLinks(state, body) };
   },
   concept: (state, pageId, page, hn) => {
-    const body = subCounts(state, stripHarnessBlocks(page.body ?? '', hn));
+    const body = rewriteDocLinks(subCounts(state, stripHarnessBlocks(page.body ?? '', hn)),
+      page.rel, idsByRel());
     return { id: pageId, title: page.title, kind: 'concept', body,
       link: page.link ?? null, links: resolveLinks(state, body) };
   },
+  // A concept page plus the rows of its own map table, for the console's map view.
+  map: (state, pageId, page, hn) => {
+    const body = rewriteDocLinks(stripHarnessBlocks(page.body ?? '', hn), page.rel, idsByRel());
+    return { id: pageId, title: page.title, kind: 'map', body, rows: parseMapTable(body),
+      links: resolveLinks(state, body) };
+  },
   glossary: (state, pageId, page) => ({
-    id: pageId, title: page.title, kind: 'glossary', ...glossary(state),
+    id: pageId, title: page.title, kind: 'glossary', ...glossary(state, page),
   }),
   about: (state, pageId, page) => ({
     id: pageId, title: page.title, kind: 'about', ...about(state),

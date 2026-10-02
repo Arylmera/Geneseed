@@ -290,8 +290,8 @@ test('FIRING CONTROL: each rule catches a planted offender', () => {
     ['js/build/x.mjs', 'python3 -c "import sys"', 'INVOCATION'],
     ['docs/y.md', '$ uv run thing.py', 'INVOCATION'],
     // BARE_INVOCATION — the arm INVOCATION cannot reach
-    ['docs/web/footprint.md', 'build.py --footprint lean', 'BARE_INVOCATION'],
-    ['SETUP.md', 'rituals/harness.py --help', 'BARE_INVOCATION'],
+    ['docs/concepts/footprint.md', 'build.py --footprint lean', 'BARE_INVOCATION'],
+    ['docs/guides/install.md', 'rituals/harness.py --help', 'BARE_INVOCATION'],
     // ARGV_SPLIT — the shape a whitespace-anchored pattern cannot see
     ['.claude/launch.json', '"runtimeArgs": ["python", "-c", "print(1)"]', 'ARGV_SPLIT'],
     // PY_LITERAL
@@ -315,7 +315,7 @@ test('FIRING CONTROL: the widened rules do not fire on what must stay', () => {
     // touch, and each is the reason a broader pattern was rejected.
     ['adapters/opencode/plugins/geneseed-context.js', 'const IGNORE = ["node_modules", "__pycache__", ".git"];'],
     ['src/skills/forge-mcp.md', 'FastMCP is the official Python SDK for MCP servers.'],
-    ['docs/web/lsp-overview.md', '| pyright | Python | a language server the user may already run |'],
+    ['docs/concepts/lsp.md', '| Python | pyright | nothing — OpenCode downloads it |'],
     ['js/build/generate.mjs', "  'No Python or build step is required.',"],
     ['js/cli-table.json', '"help": "print the install prompt (no Python needed to use it)"'],
     // PROVENANCE, the class this file exists NOT to hunt — one from each shape in the tree.

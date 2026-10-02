@@ -36,7 +36,7 @@ function safeQuery(root, selector) {
 // even before the HTML is parsed. We skip code blocks (``` fences) to avoid
 // catching hashes inside snippets. Each entry's `id` matches the id the
 // post-mount pass assigns to the rendered heading.
-function extractToc(body) {
+export function extractToc(body) {
   const out = []
   let inFence = false
   let idx = 0
@@ -55,20 +55,27 @@ function extractToc(body) {
   return out
 }
 
-// State-aware overlay: when this page is the Setup page and we know the
-// deployed `emit` mode, highlight that path's heading so the user sees which
-// row applies to their install at a glance.
-const SETUP_ANCHOR_BY_EMIT = {
-  'opencode-global': 'path-a-opencode-global-recommended',
-  'opencode-per-repo': 'path-b-opencode-per-repo',
-  'claude-code': 'path-c-claude-code',
-  'agent-md': 'path-d-any-agentmd-tool',
-  bundle: 'path-d-any-agentmd-tool',
+// State-aware overlay: on the install guide, the H3 for the deployed emit is
+// highlighted and scrolled to, so the guide opens on the reader's own path.
+// Matched by slug, so a heading that drifts from this text simply goes unlit.
+const INSTALL_HEADING_BY_EMIT = {
+  'opencode-global': 'OpenCode, global (recommended)',
+  opencode: 'OpenCode, per-repo',
+  'claude-global': 'Claude Code',
+  claude: 'Claude Code',
+  'openclaude-global': 'OpenClaude',
+  openclaude: 'OpenClaude',
+  'bob-global': 'Bob',
+  bob: 'Bob',
+  files: 'Any AGENT.md tool',
 }
+
+// A blockquote that opens on **You already know this:** is a dev analogy, styled as
+// a box of its own (the Understand track introduces every term this way).
+const ANALOGY_LEAD = 'you already know this'
 
 export default function MarkdownPage({ page, overview, onAction }) {
   const ref = useRef(null)
-  const toc = useMemo(() => extractToc(page.body), [page.body])
   const html = useMemo(() => renderMarkdown(page.body, page.links), [page.body, page.links])
 
   // After the markdown lands in the DOM, assign id="..." to each h1/h2/h3
@@ -82,11 +89,15 @@ export default function MarkdownPage({ page, overview, onAction }) {
     if (!el) return
     let idx = 0
     el.querySelectorAll('h1, h2, h3').forEach((h) => {
-      idx += 1
+      if (h.tagName !== 'H1') idx += 1
       if (!h.id) {
         const id = slug(h.textContent || '', idx)
         if (id) h.id = id
       }
+    })
+    el.querySelectorAll('blockquote').forEach((q) => {
+      const lead = (q.querySelector('strong')?.textContent || '').toLowerCase()
+      if (lead.startsWith(ANALOGY_LEAD)) q.classList.add('analogy')
     })
   }, [html])
 
@@ -120,31 +131,22 @@ export default function MarkdownPage({ page, overview, onAction }) {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [html, page.anchor])
 
-  // Install-paths overlay: outline the path heading that matches the deployed
-  // emit mode, so the docs read as a status surface for free. The page is a
-  // slice of SETUP.md §"Choose your path", so the H3s ("Path A", "Path B"…)
-  // still appear inline and the highlight lands on the right one.
+  // Install overlay: outline and scroll to the H3 that matches the deployed emit.
   useEffect(() => {
     const el = ref.current
-    if (!el || page.id !== 'install-paths') return
+    if (!el || page.id !== 'install') return
     el.querySelectorAll('.docs-here').forEach((n) => n.classList.remove('docs-here'))
-    const anchor = SETUP_ANCHOR_BY_EMIT[overview?.emit]
-    if (!anchor) return
-    const h = safeQuery(el, `#${CSS.escape(anchor)}`)
-    if (h) h.classList.add('docs-here')
+    const want = INSTALL_HEADING_BY_EMIT[overview?.emit]
+    if (!want) return
+    const h = [...el.querySelectorAll('h3')].find((n) => slug(n.textContent || '') === slug(want))
+    if (!h) return
+    h.classList.add('docs-here')
+    h.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }, [html, page.id, overview?.emit])
-
-  const onJump = (id) => {
-    if (!id) return
-    const el = safeQuery(ref.current, `#${CSS.escape(id)}`)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  const showToc = toc.length >= 3
 
   // "Try this" buttons — wired only for pages where a safe action is obvious.
   const tryActions = []
-  if (page.id === 'install-paths' || page.id === 'install-quick') {
+  if (page.id === 'install') {
     tryActions.push({ label: 'Run doctor', action: 'doctor' })
     tryActions.push({ label: 'Rebuild', action: 'build' })
   }
@@ -180,26 +182,6 @@ export default function MarkdownPage({ page, overview, onAction }) {
               </button>
             ),
           )}
-        </div>
-      )}
-      {showToc && (
-        <div className="docs-toc">
-          <div className="docs-toc-head">On this page</div>
-          <ul>
-            {toc.map((t) => (
-              <li key={t.id} className={`lvl-${t.level}`}>
-                <a
-                  href={`#${t.id}`}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    onJump(t.id)
-                  }}
-                >
-                  {t.title}
-                </a>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
       <div className="markdown" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />

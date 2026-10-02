@@ -12,7 +12,7 @@ export default function Glossary({ page }) {
       <p className="sub" style={{ marginTop: 4 }}>
         Geneseed&apos;s invented vocabulary, decoded. Left: the neutral, plain-English term. Right:
         the word your <code style={{ textTransform: 'capitalize' }}>{theme}</code> theme actually
-        uses in the agent&apos;s voice.
+        uses in the agent&apos;s voice. Last: the developer idea it maps to.
       </p>
       <div className="card pad-md" style={{ marginTop: 18 }}>
         <table className="glossary-table">
@@ -22,6 +22,7 @@ export default function Glossary({ page }) {
               <th>Neutral term</th>
               <th>In {theme}</th>
               <th>Meaning</th>
+              <th>In dev terms</th>
             </tr>
           </thead>
           <tbody>
@@ -37,6 +38,7 @@ export default function Glossary({ page }) {
                   <code>{r.themed || r.neutral || '—'}</code>
                 </td>
                 <td className="dim">{r.desc}</td>
+                <td className="dim">{r.analogy || '—'}</td>
               </tr>
             ))}
           </tbody>

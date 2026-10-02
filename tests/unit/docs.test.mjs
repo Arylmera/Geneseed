@@ -34,8 +34,11 @@ const read = (...p) => readFileSync(path.join(ROOT, ...p), 'utf8');
 const readJson = (...p) => JSON.parse(read(...p));
 
 const README = 'README.md';
-const SETUP = 'SETUP.md';
-const QUICKSTART = 'QUICKSTART.md';
+// SETUP.md and QUICKSTART.md were split into docs/guides/ (with the newcomer pages in
+// docs/understand/), so every gate that read those two now reads every page that replaced them.
+const NEW_DOCS = ['understand', 'guides', 'concepts', 'reference']
+  .flatMap((d) => readdirSync(path.join(ROOT, 'docs', d)).filter((n) => n.endsWith('.md'))
+    .map((n) => `docs/${d}/${n}`));
 
 const WORDS = Object.fromEntries(
   ('zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen '
@@ -112,7 +115,7 @@ test('every theme count in prose is the real one', () => {
     .filter((n) => n.endsWith('.json') && n !== '_TEMPLATE.json').length;
   assert.ok(want > 1, 'no themes found');
   let seen = 0;
-  for (const doc of [README, SETUP, QUICKSTART]) {
+  for (const doc of [README, ...NEW_DOCS]) {
     for (const m of read(doc).matchAll(/(\w+) themes\b/g)) {
       const got = asInt(m[1]);
       if (got === null) continue;
@@ -120,7 +123,7 @@ test('every theme count in prose is the real one', () => {
       assert.equal(got, want, `${doc} says "${m[1]} themes" and ${want} ship`);
     }
   }
-  assert.ok(seen > 0, 'no theme count in any of the three docs');
+  assert.ok(seen > 0, 'no theme count in the README or the docs tree');
 });
 
 // THE TREE IS JAVASCRIPT, AND STAYS THAT WAY
@@ -168,7 +171,7 @@ function* npxCalls(text) {
 }
 
 test('every npx line that runs a geneseed binary names the package', () => {
-  // "EVERY npx LINE NAMES OUR PACKAGE" IS SIMPLY FALSE and the docs are right: SETUP.md tells
+  // "EVERY npx LINE NAMES OUR PACKAGE" IS SIMPLY FALSE and the docs are right: the MCP guide tells
   // you to run `npx @modelcontextprotocol/server-filesystem` to wire an MCP server. The real
   // claim is narrower and derived — an npx line whose BINARY is one of `package.json`'s `bin`
   // keys must resolve to this package. That also catches what the loose version could not:
@@ -176,7 +179,7 @@ test('every npx line that runs a geneseed binary names the package', () => {
   const man = readJson('package.json');
   const bins = new Set(Object.keys(man.bin));
   let seen = 0;
-  for (const doc of [README, QUICKSTART, SETUP, 'docs/web/install-quick.md']) {
+  for (const doc of [README, ...NEW_DOCS]) {
     for (const [spec, binary] of npxCalls(read(...doc.split('/')))) {
       if (!bins.has(bare(binary))) continue;           // a third-party package the docs name
       seen += 1;
@@ -192,7 +195,7 @@ test('every npx line that runs a geneseed binary names the package', () => {
 test('the global install names the package too', () => {
   const { name } = readJson('package.json');
   let seen = 0;
-  for (const doc of [README, QUICKSTART, SETUP]) {
+  for (const doc of [README, ...NEW_DOCS]) {
     for (const m of read(doc).matchAll(NPM_G_RE)) {
       seen += 1;
       assert.equal(bare(m[1]), name, `${doc} says \`npm i -g ${m[1]}\` but the package is '${name}'`);
@@ -342,8 +345,8 @@ function advice() {
 }
 
 test('the migrate advice names a launcher this package installs', () => {
-  // The table's `prog` is `harness`; the launcher name is the npm `bin` key, so that is where it
-  // is derived from.
+  // The launcher name is the npm `bin` key, not the table's `prog` (which only labels the docs
+  // page), so that is where it is derived from.
   const bins = Object.keys(readJson('package.json').bin);
   const token = advice().split(/\s+/)[0];
   assert.ok(bins.includes(token),
@@ -416,7 +419,7 @@ test('every fenced geneseed command in the docs is one the CLI table declares', 
     readJson('js', 'cli-table.json').commands.map((c) => [c.name, c]));
 
   // ⚠ ONE VERB THE ENTRY ANSWERS IS DELIBERATELY NOT IN THE TABLE, and the first draft of this
-  // gate reported SETUP.md for it. `validate` is `build.py --validate-only`: a GENERATOR flag,
+  // gate reported the setup guide for it. `validate` is `build.py --validate-only`: a GENERATOR flag,
   // so `harness.py` never had a `validate` subcommand for the table to describe. The docs are
   // right and the gate was wrong.
   //
@@ -432,7 +435,7 @@ test('every fenced geneseed command in the docs is one the CLI table declares', 
     + 'there — it is a generator flag with no subparser — and anything else is a verb whose '
     + 'flags no document check can reach');
 
-  const docs = ['README.md', 'SETUP.md', 'QUICKSTART.md', 'SHIPPED.md'];
+  const docs = ['README.md', 'SHIPPED.md', ...NEW_DOCS];
   let checked = 0;
   const bad = [];
   for (const doc of docs) {

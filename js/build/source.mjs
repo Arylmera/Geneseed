@@ -168,6 +168,12 @@ export const CONFIG = path.join(ROOT, 'harness.config.json');
 export const THEMES = path.join(ROOT, 'themes');
 export const PLUGIN_SRC = path.join(ROOT, 'adapters', 'opencode', 'plugins');
 export const WORKFLOW_SRC = path.join(ROOT, 'adapters', 'opencode', 'workflows');
+/**
+ * The user docs: one folder per kind of reading, all under `docs/` so GitHub renders the same
+ * files the console serves. A page's id is its basename, so ids must be unique across folders.
+ */
+export const DOCS = path.join(ROOT, 'docs');
+export const DOC_FOLDERS = ['understand', 'guides', 'concepts', 'reference'];
 
 /**
  * `_build_render.posture_names()` / `mode_names()` — discovered, never hardcoded, so a new

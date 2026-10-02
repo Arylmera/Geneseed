@@ -1,0 +1,18 @@
+[
+  {
+    "id": "understand",
+    "label": "Understand"
+  },
+  {
+    "id": "guides",
+    "label": "Guides"
+  },
+  {
+    "id": "concepts",
+    "label": "Concepts"
+  },
+  {
+    "id": "reference",
+    "label": "Reference"
+  }
+]

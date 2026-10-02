@@ -988,7 +988,7 @@ export function migrateShape(commands, shimBody) {
 /**
  * `_build_settings._autostart_paths` — where a hand-written web-daemon autostart entry lives.
  *
- * NOTHING IN THIS REPOSITORY HAS EVER WRITTEN ONE — `SETUP.md` tells the user to create them
+ * NOTHING IN THIS REPOSITORY HAS EVER WRITTEN ONE — the install guide tells the user to create them
  * by hand, and no .py/.mjs/.sh/.cmd in the tree contains `vbs`, `LaunchAgents` or `plist`. So
  * `migrate` REPORTS a stale one and never rewrites it, on the rule `settingsIntegrityCheck`
  * already states: an entry the manifest does not claim is "possibly user-authored; left alone".

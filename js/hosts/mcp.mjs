@@ -68,7 +68,7 @@ export const MCP_PRESETS = {
       + 'install). Edit GITLAB_PERSONAL_ACCESS_TOKEN (scopes: api, read_repository) '
       + 'and GITLAB_API_URL before use. For a second instance (a self-hosted server), '
       + 'copy this block by hand under a new name and point it at the other URL — '
-      + 'SETUP.md has the pattern.',
+      + 'docs/guides/mcp.md has the pattern.',
     block: {
       type: 'local',
       command: ['npx', '-y', '@zereight/mcp-gitlab'],

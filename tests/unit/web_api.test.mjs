@@ -32,7 +32,8 @@ import {
   apiActivity, apiActivityDetail, apiActivityToggle,
 } from '../../js/web/activity.mjs';
 import {
-  apiDocs, apiDocsPage, docCounts, docGroups, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
+  apiDocs, apiDocsPage, docCounts, docGroups, docSources, rewriteDocLinks, parseMapTable,
+  parseGlossaryTable, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
 } from '../../js/web/docs.mjs';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
@@ -50,6 +51,7 @@ import { MCP_PRESETS as _P, mcpApply, mcpConfigFor, mcpLoad, mcpSave, mcpState, 
 import { MCP_PRESETS } from '../../js/hosts/mcp.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, resolvePath } from '../../js/hosts/hosts.mjs';
 import { normcase } from '../../js/lib/paths.mjs';
+import { DOC_FOLDERS } from '../../js/build/source.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { makeSandbox, TMP_ROOT } from '../helpers/sandbox.mjs';
@@ -1795,13 +1797,16 @@ test('host-specific pages and groups appear only under their host', () => {
   const idsFor = (hn) => new Set(apiDocs(neutral(), hn).groups.flatMap((g) => g.pages.map((p) => p.id)));
   const oc = idsFor('opencode');
   const cc = idsFor('claude');
-  assert.ok(oc.has('adapters-opencode'));
-  assert.ok(!cc.has('adapters-opencode'));
-  assert.ok(cc.has('mcp-claude-code'));
-  assert.ok(!oc.has('mcp-claude-code'));
-  // The whole Plugins GROUP is opencode-only — a group tag, not a page tag.
-  const claudeGroups = new Set(apiDocs(neutral(), 'claude').groups.map((g) => g.id));
-  assert.ok(!claudeGroups.has('plugins'));
+  // A page tagged `harness:` exists for one host only (a how-to that cannot run elsewhere); the
+  // four groups are shared, and so are reference pages a reader comparing hosts needs — hooks,
+  // LSP and the plugin reference say their host in the title instead.
+  for (const id of ['headless', 'worktree']) {
+    assert.ok(oc.has(id), `${id} missing under opencode`);
+    assert.ok(!cc.has(id), `${id} leaks under claude`);
+  }
+  for (const id of ['hooks', 'lsp', 'opencode-plugins']) {
+    assert.ok(oc.has(id) && cc.has(id), `${id} must show under both hosts`);
+  }
 });
 
 test('the docs endpoint echoes the resolved harness', () => {
@@ -1811,9 +1816,9 @@ test('the docs endpoint echoes the resolved harness', () => {
 
 test('a docs page strips for its host', () => {
   const st = neutral();
-  // `mcp-verify` slices SETUP.md; the opencode clause must vanish under claude.
-  const oc = apiDocsPage(st, 'mcp-verify', 'opencode').body;
-  const cc = apiDocsPage(st, 'mcp-verify', 'claude').body;
+  // The MCP guide verifies per host; the opencode clause must vanish under claude.
+  const oc = apiDocsPage(st, 'mcp', 'opencode').body;
+  const cc = apiDocsPage(st, 'mcp', 'claude').body;
   assert.match(oc, /opencode mcp/);
   assert.ok(!cc.includes('opencode mcp'));
   assert.ok(!(oc + cc).includes('<!--harness'));
@@ -1841,7 +1846,7 @@ test('every doc source and concept body has balanced harness markers', () => {
   assert.ok(checked > 0, 'no doc source was checked — the registry walk found nothing');
 });
 
-// The registry lives in `docs/web/` — a `_groups.json` plus one `.md` per page — not in a
+// The registry lives in `docs/<folder>/` (DOC_FOLDERS) plus `docs/_groups.json` — not in a
 // source literal. A group that loses its pages, or a page whose frontmatter stops naming a real
 // group, silently VANISHES from the panel. Pin the shape rather than trust the glob.
 test('the docs registry loads every page from disk', () => {
@@ -1850,11 +1855,13 @@ test('the docs registry loads every page from disk', () => {
   const ids = groups.flatMap((g) => g.pages.map((p) => p.id));
   assert.equal(ids.length, new Set(ids).size, 'duplicate doc page id');
 
-  const onDisk = fs.readdirSync(path.join(ROOT, 'docs', 'web'))
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => f.slice(0, -3));
+  const onDisk = DOC_FOLDERS.flatMap((d) => {
+    const dir = path.join(ROOT, 'docs', d);
+    return fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)) : [];
+  });
   assert.deepEqual([...ids].sort(), [...onDisk].sort(),
-    'every docs/web/*.md must land in exactly one group');
+    'every docs/<folder>/*.md must land in exactly one group');
 
   for (const g of groups) {
     assert.ok(g.pages.length > 0, `group ${g.id} has no pages`);
@@ -1865,6 +1872,28 @@ test('the docs registry loads every page from disk', () => {
 // Concept bodies carry `{N_LAWS}`/`{N_AGENTS}`/`{N_SKILLS}`, substituted at render time. Moving
 // the bodies out of source must not orphan that step: an unsubstituted placeholder renders as
 // literal braces on the page.
+// THE ID IS THE BASENAME, so the folder a page sits in never reaches the router — and two
+// pages sharing a basename in two folders would leave one unreachable. That is a build error,
+// not a shadowing.
+test('docSources reads every folder and refuses a duplicate id', () => {
+  const sb = makeSandbox();
+  const root = sb.path;
+  try {
+    fs.mkdirSync(path.join(root, 'understand'));
+    fs.mkdirSync(path.join(root, 'guides'));
+    fs.writeFileSync(path.join(root, 'understand', 'harness.md'), '');
+    fs.writeFileSync(path.join(root, 'guides', 'install.md'), '');
+    assert.deepEqual(docSources(root), [
+      { id: 'harness', rel: 'docs/understand/harness.md' },
+      { id: 'install', rel: 'docs/guides/install.md' },
+    ]);
+    fs.writeFileSync(path.join(root, 'understand', 'install.md'), '');
+    assert.throws(() => docSources(root), /duplicate docs page id: install/);
+  } finally {
+    sb.cleanup();
+  }
+});
+
 test('no unsubstituted count placeholder survives rendering', () => {
   const st = neutral();
   for (const g of docGroups()) {
@@ -1877,9 +1906,9 @@ test('no unsubstituted count placeholder survives rendering', () => {
 });
 
 // Anti-drift, and the reason it exists: "six plugins" went stale when activity landed. A new
-// adapters/opencode/plugins/geneseed-<name>.js must ship its own docs page, a bullet on the
-// plugins overview, and a mention in the README and SHIPPED.md rows.
-test('every plugin ships a docs page, an overview bullet and its README/SHIPPED rows', () => {
+// adapters/opencode/plugins/geneseed-<name>.js must ship its own section of the plugins
+// reference page, and a mention in the README and SHIPPED.md rows.
+test('every plugin ships a reference section and its README/SHIPPED rows', () => {
   const st = neutral();
   const pluginDir = path.join(ROOT, 'adapters', 'opencode', 'plugins');
   const names = fs.readdirSync(pluginDir)
@@ -1888,8 +1917,7 @@ test('every plugin ships a docs page, an overview bullet and its README/SHIPPED 
     .sort();
   assert.ok(names.length > 0, 'no plugins found — wrong directory?');
 
-  const pageIds = new Set(docGroups().flatMap((g) => g.pages.map((p) => p.id)));
-  const overview = apiDocsPage(st, 'plugins', 'opencode').body;
+  const overview = apiDocsPage(st, 'opencode-plugins', 'opencode').body;
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   const shipped = fs.readFileSync(path.join(ROOT, 'SHIPPED.md'), 'utf8');
   const row = /plugins \(([^)]*)\)/.exec(shipped);
@@ -1897,9 +1925,10 @@ test('every plugin ships a docs page, an overview bullet and its README/SHIPPED 
   const shippedNames = new Set(row[1].split(',').map((s) => s.trim()));
 
   for (const name of names) {
-    assert.ok(pageIds.has(`plugin-${name}`), `geneseed-${name}.js has no docs page`);
-    assert.ok(overview.includes(`geneseed-${name}`),
-      `geneseed-${name} missing from the overview list`);
+    assert.ok(overview.includes(`
+## geneseed-${name}
+`),
+      `geneseed-${name} has no section on the plugins reference page`);
     assert.ok(readme.includes(`geneseed-${name}`),
       `geneseed-${name} missing from the README plugins row`);
     assert.ok(shippedNames.has(name), `'${name}' missing from the SHIPPED.md plugins list`);
@@ -1931,6 +1960,7 @@ test('concept counts are substituted live from the inventory', () => {
 // harness — no link dead-ends after filtering.
 test('no cross-harness dead links', () => {
   const st = neutral();
+  const dead = [];
   for (const hn of ['opencode', 'claude']) {
     const menu = apiDocs(st, hn);
     const visible = new Set(menu.groups.flatMap((g) => g.pages.map((p) => p.id)));
@@ -1939,12 +1969,12 @@ test('no cross-harness dead links', () => {
         const body = apiDocsPage(st, p.id, hn).body || '';
         for (const target of new Set([...body.matchAll(/#\/docs\/([a-z0-9-]+)/g)]
           .map((m) => m[1]))) {
-          assert.ok(visible.has(target),
-            `${hn}: page '${p.id}' links to '${target}', which is hidden under ${hn}`);
+          if (!visible.has(target)) dead.push(`${hn}: ${p.id} -> ${target}`);
         }
       }
     }
   }
+  assert.deepEqual(dead, [], 'a page links to a page its host hides');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -2757,4 +2787,70 @@ test('a wiki manifest whose entries is not a list is skipped, not a crash', () =
     if (prev === undefined) delete process.env.GENESEED_WIKI; else process.env.GENESEED_WIKI = prev;
     sb.cleanup();
   }
+});
+
+// ---- docs tables and links ------------------------------------------------------------------
+
+// A relative `.md` link is how a page links on GitHub. In the console a docs page becomes its
+// route (anchor dropped: the console addresses pages, not headings), any other repo file opens
+// on GitHub with its anchor kept, and absolute URLs and fenced examples are never touched.
+test('rewriteDocLinks turns relative .md links into console routes or GitHub links', () => {
+  const ids = new Map([['docs/concepts/rules.md', 'rules']]);
+  const from = 'docs/guides/install.md';
+  const cases = [
+    ['[r](../concepts/rules.md)', '[r](#/docs/rules)'],
+    ['[r](../concepts/rules.md#lean)', '[r](#/docs/rules)'],
+    ['[e](../extending.md#two)',
+      '[e](https://github.com/Arylmera/Geneseed/blob/main/docs/extending.md#two)'],
+    ['[x](https://example.com/a.md)', '[x](https://example.com/a.md)'],
+    ['[h](#on-this-page)', '[h](#on-this-page)'],
+    ['```\n[r](../concepts/rules.md)\n```', '```\n[r](../concepts/rules.md)\n```'],
+  ];
+  for (const [body, want] of cases) assert.equal(rewriteDocLinks(body, from, ids), want, body);
+});
+
+// The map on understand page 2 is a table a GitHub reader reads as-is; the console builds the
+// clickable view from the same rows. A missing column, a ragged row, or a kind outside the four
+// the view has a chip for is a malformed map, and the answer is null rather than a guess.
+test('parseMapTable reads the map rows and refuses a malformed table', () => {
+  const head = '| Piece | What it does for you | Kind | Cost | Turn it off |\n|---|---|---|---|---|\n';
+  const body = `Intro prose.\n\n${head}`
+    + '| `AGENT.md` | The rules, loaded every session | asked | ~4k tokens | `--footprint lean` |\n'
+    + '| tool-gate hook | Stops force-push and leaked secrets | Enforced | ~14 ms / call | drop the process pack |\n';
+  assert.deepEqual(parseMapTable(body), [
+    { piece: '`AGENT.md`', does: 'The rules, loaded every session', kind: 'asked',
+      cost: '~4k tokens', off: '`--footprint lean`' },
+    { piece: 'tool-gate hook', does: 'Stops force-push and leaked secrets', kind: 'enforced',
+      cost: '~14 ms / call', off: 'drop the process pack' },
+  ]);
+  assert.equal(parseMapTable('| Piece | Cost |\n|---|---|\n| a | b |\n'), null);
+  assert.equal(parseMapTable(`${head}| a | b | maybe | c | d |\n`), null);
+  assert.equal(parseMapTable(`${head}| a | b | asked |\n`), null);
+});
+
+// The glossary moved from a source literal into docs/reference/glossary.md so GitHub readers get
+// it too. `—` in the theme-key column means no theme renames the term; in the analogy column it
+// means there is no analogy worth giving.
+test('parseGlossaryTable reads term, theme key, meaning and analogy', () => {
+  const body = '| Term | Theme key | Meaning | In dev terms |\n|---|---|---|---|\n'
+    + '| Skill | SKILL | a repeatable workflow | a runbook |\n'
+    + '| Tagline | TAGLINE | the theme in one line | — |\n'
+    + '| Hook | — | a command run around an agent action | a git hook |\n';
+  assert.deepEqual(parseGlossaryTable(body), [
+    { label: 'Skill', key: 'SKILL', desc: 'a repeatable workflow', analogy: 'a runbook' },
+    { label: 'Tagline', key: 'TAGLINE', desc: 'the theme in one line', analogy: null },
+    { label: 'Hook', key: null, desc: 'a command run around an agent action',
+      analogy: 'a git hook' },
+  ]);
+  assert.deepEqual(parseGlossaryTable('no table here'), []);
+});
+
+// The `*(OpenCode only)*` line under a marker is for GitHub, which hides the marker. The console
+// has already filtered the block to the reader's host, so the label goes with the marker — but
+// only in that slot: the same words anywhere else in a page are prose, and stay.
+test('stripHarnessBlocks drops the host label that opens a kept block', () => {
+  const body = 'intro\n<!--harness:claude-->\n*(Claude Code only)*\nhooks\n<!--/harness-->\n'
+    + '<!--harness:opencode-->\n*(OpenCode only)*\nplugins\n<!--/harness-->\n*(OpenCode only)*\n';
+  assert.equal(stripHarnessBlocks(body, 'claude'), 'intro\nhooks\n*(OpenCode only)*');
+  assert.equal(stripHarnessBlocks(body, 'opencode'), 'intro\nplugins\n*(OpenCode only)*');
 });

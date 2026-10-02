@@ -74,8 +74,8 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/i
 const EXPECT_409 = ['/api/excludes', '/api/install', '/api/mcp', '/api/profile', '/api/rules',
   '/api/rules/promote', '/api/view'];
 
-/** Every kind `apiDocsPage` dispatches on — 5. */
-const EXPECT_KINDS = ['about', 'cli', 'concept', 'glossary', 'markdown'];
+/** Every kind `apiDocsPage` dispatches on — 6. */
+const EXPECT_KINDS = ['about', 'cli', 'concept', 'glossary', 'map', 'markdown'];
 
 const sorted = (xs) => [...xs].sort();
 

@@ -69,7 +69,7 @@ function load() {
   try {
     return JSON.parse(readFileSync(CLI_JSON, 'utf-8'));
   } catch {
-    return { prog: 'harness', commands: [] };
+    return { prog: 'geneseed', commands: [] };
   }
 }
 
@@ -88,7 +88,7 @@ const pageArgs = (args) => (args ?? [])
 export function cliReference() {
   const data = load();
   return {
-    prog: data.prog ?? 'harness',
+    prog: data.prog ?? 'geneseed',
     commands: (data.commands ?? []).map((c) => ({
       name: c.name ?? '',
       help: c.help ?? '',

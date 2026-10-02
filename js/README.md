@@ -168,7 +168,7 @@ the deployed harness as JSON.
 | `actions.mjs` | The mutating endpoints — rules, profile, memory, MCP, excludes — plus install/deploy argv |
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |
 | `jobs.mjs` | `JobManager` and the action→argv table. The only module here that spawns job children |
-| `docs.mjs` | The Docs tab: the `docs/web/` page registry, `?harness=` filtering, the five page kinds |
+| `docs.mjs` | The Docs tab: the `docs/<folder>/` page registry, `?harness=` filtering, link rewriting, the six page kinds |
 | `activity.mjs` | The `activity/` session files: pid-liveness prune, list, detail, and the on/off flag |
 
 **Before editing:** `makeHandler(state, jm, token, dist, holder)`'s arity is load-bearing — three
@@ -190,6 +190,6 @@ and inline lists are held against a surface list written out in
 | a web endpoint | GET → `js/web/api.mjs`; POST → `js/web/actions.mjs` | declare it in `js/web/routes.mjs`; the partition test probes the real handler |
 | a CLI verb | `js/cli-table.json` — the table IS the parser | the `VERBS` row in `bin/geneseed-cli.mjs`, the row count in `cli_table.test.mjs`, `NATIVE` in **two** test files |
 | a hook verb | `js/hosts/hooks.mjs` | `claudeHookGroups` in `settings.mjs`, `VERBS` in `bin/geneseed-hook.mjs`. Keep the import graph tiny |
-| a console doc page | `docs/web/<id>.md` — the stem is the id | `docs/extending.md` §4c. Only `kind: "concept"` gets `{N_*}` substitution |
+| a console doc page | `docs/<understand|guides|concepts|reference>/<id>.md` — the stem is the id | `docs/extending.md` §4c. Only `kind: "concept"` gets `{N_*}` substitution |
 | an OpenCode plugin | `adapters/opencode/plugins/geneseed-<name>.js` | `docs/extending.md` §4a — the `geneseed-` prefix is mechanically load-bearing |
 | to change a `js/lib/` primitive | `tests/fixtures/pure_probe.mjs` **first** | the docblock says which Node default it deliberately departs from — change that sentence too, or the next reader restores the default |

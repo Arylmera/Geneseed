@@ -8,6 +8,9 @@ import ErrorState from '../../components/ErrorState.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
 import CliPage from './CliPage.jsx'
 import Glossary from './Glossary.jsx'
+import MapPage from './MapPage.jsx'
+import Margin from './Margin.jsx'
+import Track, { TrackBar, TRACK_GROUP, markSeen, readSeen } from './Track.jsx'
 import About from './About.jsx'
 import Seg from '../../components/Seg.jsx'
 
@@ -20,18 +23,17 @@ function defaultPageId(menu) {
 
 // One docs page rendered, dispatched by `kind`. Keeping the dispatch here
 // keeps each sub-component focused on one shape — the same split the CLI
-// uses to keep its topic submodules small.
-function PageView({ pageId, harness, overview, onAction }) {
-  const { data, error, loading } = useAsync(
-    () => (pageId ? api.docsPage(pageId, harness) : Promise.resolve(null)),
-    [pageId, harness],
-  )
+// uses to keep its topic submodules small. The page is fetched by the caller,
+// which also feeds its body to the margin.
+function PageView({ data, error, overview, onAction }) {
   if (error) return <ErrorState error={error} style={{ margin: 18 }} />
-  if (loading || !data) return <Loading label="Loading page…" />
+  if (!data) return <Loading label="Loading page…" />
   switch (data.kind) {
     case 'markdown':
     case 'concept':
       return <MarkdownPage page={data} overview={overview} onAction={onAction} />
+    case 'map':
+      return <MapPage page={data} overview={overview} onAction={onAction} />
     case 'cli':
       return <CliPage page={data} />
     case 'glossary':
@@ -48,8 +50,7 @@ function PageView({ pageId, harness, overview, onAction }) {
   }
 }
 
-// Which group contains a given page id. With the chip-bar showing all groups
-// at once, the active chip is the one whose pages contain the current page.
+// Which group contains a given page id — the one the sidebar treats as current.
 function groupOfPage(menu, pageId) {
   if (!menu || !pageId) return null
   for (const g of menu.groups) {
@@ -62,6 +63,21 @@ export default function Docs({ page, query, overview, onAction }) {
   const [harness, setHarness] = useHarness(docsHostOf(overview?.emit))
   const { data: menu, error } = useAsync(() => api.docs(harness), [harness])
   const pageId = page || defaultPageId(menu)
+  const {
+    data: pageData,
+    error: pageError,
+    loading: pageLoading,
+  } = useAsync(
+    () => (pageId ? api.docsPage(pageId, harness) : Promise.resolve(null)),
+    [pageId, harness],
+  )
+  // Fetched once per harness for the margin's term cards; a missing glossary just means
+  // no cards, never an error on the page being read.
+  const { data: glossary } = useAsync(
+    () => api.docsPage('glossary', harness).catch(() => null),
+    [harness],
+    'docs:glossary',
+  )
 
   // Switching harness (or a deep link) can land on a page the active harness
   // hides — the server still renders it, but the menu wouldn't list it. Send
@@ -75,15 +91,23 @@ export default function Docs({ page, query, overview, onAction }) {
     }
   }, [menu, pageId])
   const activeGroup = groupOfPage(menu, pageId) || menu?.groups?.[0]
+  const onTrack = activeGroup?.id === TRACK_GROUP
   const q = (query || '').toLowerCase().trim()
 
-  // With a query, the master list scopes across every group so search stays
-  // discoverable (group headers appear so it's clear where each result
-  // lives). Without a query, scope to just the active group's pages — the
-  // chip-bar already surfaces the other groups one click away.
+  // Opening an understand page counts it as read — the track's progress and the
+  // Overview's "New here?" card both read this. The render counts the open page
+  // already, so storage is written after it without a second render.
+  useEffect(() => {
+    if (onTrack && pageData?.id === pageId) markSeen(pageId)
+  }, [onTrack, pageData, pageId])
+  const seen = onTrack ? [...readSeen(), pageId] : []
+
+  // Without a query the sidebar lists every group with its pages (the Handbook);
+  // with one it filters across all of them, matching a page by its own title or id
+  // or by its group's label.
   const groups = useMemo(() => {
     if (!menu) return []
-    if (!q) return activeGroup ? [activeGroup] : []
+    if (!q) return menu.groups
     return menu.groups
       .map((g) => ({
         ...g,
@@ -95,16 +119,9 @@ export default function Docs({ page, query, overview, onAction }) {
         ),
       }))
       .filter((g) => g.pages.length > 0)
-  }, [menu, q, activeGroup])
+  }, [menu, q])
 
   if (error) return <ErrorState error={error} />
-
-  const allGroups = menu?.groups || []
-  const showGroupHeaders = !!q
-  const switchGroup = (g) => {
-    const first = g.pages[0]?.id
-    if (first) go(`#/docs/${encodeURIComponent(first)}`)
-  }
 
   return (
     <>
@@ -113,7 +130,7 @@ export default function Docs({ page, query, overview, onAction }) {
           <div className="eyebrow">documentation</div>
           <h1 className="h">Docs</h1>
           <p className="sub">
-            Concept pages, a generated CLI reference, and a glossary. Pages and config that differ
+            Start with Understand, then guides, concepts and reference. Pages and config that differ
             by host are filtered to your selected harness.
           </p>
         </div>
@@ -133,57 +150,46 @@ export default function Docs({ page, query, overview, onAction }) {
           ))}
         </Seg>
       </div>
-      {/* Horizontal group chip-bar — same pattern as Library's section bar so
-          the two surfaces feel coherent. Active chip = group of the current
-          page; each chip carries its page count. */}
-      <div className="lib-secbar">
-        {allGroups.map((g) => (
-          <button
-            key={g.id}
-            className={`lib-secchip ${activeGroup?.id === g.id ? 'on' : ''}`}
-            onClick={() => switchGroup(g)}
-          >
-            <span>{g.label}</span>
-            <span className="lib-secchip-n">{g.pages.length}</span>
-          </button>
-        ))}
-      </div>
-      <div className="lib lib-2">
-        <div className="card lib-main">
-          <div className="lib-head">
-            <span className="lib-head-label">{q ? 'all groups' : activeGroup?.label || ''}</span>
-            <span className="lib-head-count">
-              {groups.reduce((s, g) => s + g.pages.length, 0)} pages
-            </span>
-          </div>
-          <div className="lib-rows">
-            {groups.map((g) => (
+      <div className="docs-hb">
+        <nav className="card docs-nav" aria-label="Docs pages">
+          {onTrack && !q ? (
+            <Track menu={menu} pageId={pageId} seen={seen} />
+          ) : (
+            groups.map((g) => (
               <div key={g.id} className="docs-group">
-                {showGroupHeaders && <div className="docs-group-head">{g.label}</div>}
+                <div className="docs-group-head">{g.label}</div>
                 {g.pages.map((p) => (
                   <button
                     key={p.id}
                     className={`lib-row ${pageId === p.id ? 'on' : ''}`}
+                    aria-current={pageId === p.id ? 'page' : undefined}
                     onClick={() => go(`#/docs/${encodeURIComponent(p.id)}`)}
                   >
                     <div className="lr-name">{p.title}</div>
-                    {p.date ? <div className="lr-desc">{p.date}</div> : null}
                   </button>
                 ))}
               </div>
-            ))}
-            {groups.length === 0 && menu && (
-              <div className="empty" style={{ padding: 32 }}>
-                <div className="big">No matches</div>
-                Try another search.
-              </div>
-            )}
-            {!menu && <Loading label="Loading docs…" />}
-          </div>
+            ))
+          )}
+          {groups.length === 0 && menu && (
+            <div className="empty" style={{ padding: 32 }}>
+              <div className="big">No matches</div>
+              Try another search.
+            </div>
+          )}
+          {!menu && <Loading label="Loading docs…" />}
+        </nav>
+        <div className="card docs-article">
+          <PageView
+            key={`${pageId}|${harness}`}
+            data={pageLoading ? null : pageData}
+            error={pageError}
+            overview={overview}
+            onAction={onAction}
+          />
+          {onTrack && !pageLoading && <TrackBar menu={menu} pageId={pageId} />}
         </div>
-        <div className="card lib-detail">
-          <PageView pageId={pageId} harness={harness} overview={overview} onAction={onAction} />
-        </div>
+        {!pageLoading && <Margin body={pageData?.body} glossaryRows={glossary?.rows} />}
       </div>
     </>
   )
