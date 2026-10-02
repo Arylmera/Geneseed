@@ -1,14 +1,31 @@
 #!/usr/bin/env bash
 # Geneseed — one-step install for a git clone on macOS, Linux or a POSIX shell on Windows.
 #
-#   ./install      check what the machine is missing, then run the setup wizard
+#   ./install         check what the machine is missing, then run the setup wizard
+#   install.command   the same, double-clickable in the macOS Finder
 #
 # The twin of install.cmd. It installs NOTHING itself: a missing prerequisite is named, with
 # where to get it, and the script stops — re-run it once that is fixed. $GENESEED_NODE
 # overrides the interpreter, as in ./geneseed.
+#
+# Bash 3.2 on purpose — the one macOS still ships — so no ${x,,}, no associative arrays,
+# no mapfile. The hints are per OS because the right answer differs: on macOS git arrives with
+# the Command Line Tools, and on Linux the distribution's own nodejs is usually too old.
 set -uo pipefail
 HERE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE="${GENESEED_NODE:-node}"
+
+case "$(uname -s)" in
+  Darwin)
+    NODE_HINT="brew install node   (Homebrew), or the macOS installer from https://nodejs.org/"
+    GIT_HINT="xcode-select --install   (Apple's Command Line Tools), or brew install git" ;;
+  Linux)
+    NODE_HINT="https://nodejs.org/en/download (nvm or NodeSource) — a distro nodejs package is often older than 22.3"
+    GIT_HINT="your package manager: sudo apt install git / sudo dnf install git / sudo pacman -S git" ;;
+  *)
+    NODE_HINT="the current Node.js LTS from https://nodejs.org/"
+    GIT_HINT="https://git-scm.com/downloads" ;;
+esac
 
 echo
 echo "Geneseed install — checking prerequisites"
@@ -16,14 +33,15 @@ echo
 
 if ! "$NODE" --version >/dev/null 2>&1; then
   echo "  xx  Node.js not found."
-  echo "      Install the current Node.js LTS: https://nodejs.org/ (or your package manager)."
+  echo "      Install it: $NODE_HINT"
   echo "      Then open a new terminal and run ./install again."
   exit 1
 fi
 # engines.node in package.json is >=22.3.0; below that the CLI fails on syntax, not with a hint.
 if ! "$NODE" -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=3)?0:1)"; then
   echo "  xx  Node $("$NODE" --version) is too old — Geneseed needs 22.3 or newer."
-  echo "      Install the current Node.js LTS: https://nodejs.org/ (or your package manager)."
+  echo "      Install a newer one: $NODE_HINT"
+  echo "      Then open a new terminal and run ./install again."
   exit 1
 fi
 echo "  ok  Node $("$NODE" --version)"
@@ -32,7 +50,8 @@ if git --version >/dev/null 2>&1; then
   echo "  ok  Git"
 else
   # Not fatal: setup runs without it. Updates do not — `geneseed upgrade` is a git pull.
-  echo "  !!  Git not found. Setup will work, but updates are a git pull and need it: https://git-scm.com/"
+  echo "  !!  Git not found. Setup will work, but updates are a git pull and need it."
+  echo "      Install it: $GIT_HINT"
 fi
 [ -e "$HERE/.git" ] || echo "  !!  This folder is not a git clone, so it cannot update itself. Prefer: git clone https://github.com/Arylmera/Geneseed.git"
 

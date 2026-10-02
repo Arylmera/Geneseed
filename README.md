@@ -97,6 +97,8 @@ cd Geneseed
 ./install                 # prerequisites, then the wizard
 ```
 
+**macOS** — or double-click `install.command` in the Finder (it opens in Terminal). **Linux** — `./install` from any shell. On both, a missing prerequisite comes with the platform's own fix: Homebrew or the Command Line Tools on macOS, nvm/NodeSource or the package manager on Linux.
+
 **Windows** — native, no bash, WSL, curl, unzip or PowerShell script; double-click `install.cmd` in Explorer, or from cmd or PowerShell:
 
 ```powershell
