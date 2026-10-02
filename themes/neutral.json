@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — smallest change, tests written for it, the affected suite green, committed slice by slice.",
   "DESC_TEACH": "Teach the user toward a result — a crash course from zero to functional, confusing material decoded until it clicks, or a day-by-day path to a deadline.",
   "DESC_QUIZ": "Test what the user knows instead of explaining it — a drill to reflex, an explain-it-back check, or a mastery claim stress-tested — with a blunt readout of the gaps.",
+  "DESC_LEARN_MODE": "Learn while building — the user designs at each checkpoint, the agent writes only the agreed code and explains it, and the mode persists per project across sessions.",
   "DESC_SECURITY_AUDIT": "Review a change for how it would be attacked and what it leaks — trust boundaries, the classic vulnerability classes, secrets, the supply chain — ending in a ship / fix / block verdict.",
   "DESC_SKILL_FORGE": "Author, sharpen, merge, or retire a skill — reuse first, trigger before procedure, tested against its neighbours, every satellite registered, doctor green.",
   "DESC_WORKTREE": "Isolate a task in its own git worktree from a clean base — look before branching, work only there, integrate through the normal gate, remove it when merged.",

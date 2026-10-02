@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "<one-line description: drive a code change through cover-and-verify — smallest change, tests written for it, affected suite green, committed slice by slice>",
   "DESC_TEACH": "<one-line description: teach toward a result — crash course, decode confusing material, or a day-by-day path to a deadline>",
   "DESC_QUIZ": "<one-line description: test what the user knows instead of explaining — drill, explain-it-back check, or mastery claim stress-tested>",
+  "DESC_LEARN_MODE": "<one-line description: learn while building — the user designs at checkpoints, the agent writes the agreed code, state kept per project>",
   "DESC_SECURITY_AUDIT": "<one-line description: review a change for how it would be attacked and what it leaks, ending in ship / fix / block>",
   "DESC_SKILL_FORGE": "<one-line description: author, sharpen, merge, or retire a skill — reuse first, trigger tested, every satellite registered>",
   "DESC_WORKTREE": "<one-line description: isolate a task in its own git worktree from a clean base, integrate through the normal gate, remove when merged>",

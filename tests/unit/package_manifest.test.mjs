@@ -351,6 +351,10 @@ const WITHHELD = [
     + 'console never needs building at install time; web/src/pages/Laws.jsx is carved back in '
     + 'above'],
   ['.github/', 'CI configuration for this repository'],
+  ['install', 'the clone-only installer: checks Node and git, then runs `setup`. An npm install '
+    + 'already has Node, and its own front door is `npx geneseed setup`'],
+  ['install.cmd', 'the Windows twin of `install`, same argument'],
+  ['install.command', 'the macOS Finder double-click wrapper around `install`, same argument'],
   ['.claude/', "this repository's OWN agent config — a deployed harness, not the product"],
   ['.gitignore', 'repo mechanics; npm strips it from a tarball anyway'],
   ['.gitattributes', 'repo mechanics'],

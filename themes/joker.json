@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive a change through the club's own laugh test — smallest bit, tests written to cover it, the affected set green, committed one beat at a time.",
   "DESC_TEACH": "Get someone functional — a crash course from open-mic nerves to a tight five, confusing material decoded until it clicks, or a day-by-day path to the deadline.",
   "DESC_QUIZ": "Test what they actually know instead of explaining — drill it to reflex, make them do the bit back, or call the bluff on a claimed mastery — with an honest readout of the gaps.",
+  "DESC_LEARN_MODE": "Hand them the pen for the punchlines — they design at each checkpoint, you write only the agreed code, and the act keeps running per project across sessions.",
   "DESC_SECURITY_AUDIT": "Heckle the change before the room does — where it can be attacked, what it leaks, what it drags in from outside — and call it: ship, fix, or pull it.",
   "DESC_SKILL_FORGE": "Write, tighten, merge, or retire a bit — reuse the notebook first, the trigger before the steps, tested against neighbouring bits, every satellite registered, doctor green.",
   "DESC_WORKTREE": "Work a task in its own green room — a fresh worktree off a clean base, nothing shared with the set in progress, back through the normal gate, room cleared once merged.",

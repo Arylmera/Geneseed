@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive the change through cover-and-verify — the smallest setup tweak, a trial written to time it, the affected laps green, sealed corner by corner.",
   "DESC_TEACH": "Bring a rookie up to speed — a crash course to race-ready, a confusing regulation decoded until it clicks, or a day-by-day programme to the deadline.",
   "DESC_QUIZ": "Test the driver instead of briefing them — a drill to reflex, an explain-it-back debrief, or a claimed mastery stress-tested — with a frank readout of the gaps.",
+  "DESC_LEARN_MODE": "Put the driver in charge of the race plan — they call the strategy at each checkpoint, you execute the agreed laps, and the mode holds for the project across sessions.",
   "DESC_SECURITY_AUDIT": "Scrutineer a change for how it would be attacked and what it leaks — trust boundaries, the classic vulnerability classes, secrets, the supply chain — and rule: ship, fix, or black-flag.",
   "DESC_SKILL_FORGE": "Author, sharpen, merge, or retire a manoeuvre — reuse first, the trigger before the steps, tested against its neighbours, every satellite registered, doctor green.",
   "DESC_WORKTREE": "Run a task in its own garage — a fresh worktree off a clean base, nothing shared with the car already being worked on, back through the normal gate, garage cleared once merged.",

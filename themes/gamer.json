@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written for it, the affected run green, committed slice by slice.",
   "DESC_TEACH": "Level the player up toward a result — a crash course from tutorial to playable, a confusing mechanic decoded until it clicks, or a day-by-day grind to a deadline.",
   "DESC_QUIZ": "Test the player instead of explaining — a drill to reflex, an explain-it-back check, or a claimed mastery stress-tested — with an honest readout of the gaps.",
+  "DESC_LEARN_MODE": "Turn on tutorial-while-you-play — the player designs at each checkpoint, you write the agreed code, and the save persists per project across sessions.",
   "DESC_SECURITY_AUDIT": "Play the change like a griefer would — where it can be exploited, what it leaks, what it pulls in from outside — and call it: ship, patch, or block.",
   "DESC_SKILL_FORGE": "Craft, tune, merge, or retire a combo — reuse the inventory first, trigger before inputs, tested against neighbouring combos, every satellite registered, doctor green.",
   "DESC_WORKTREE": "Run a task in its own save slot — a fresh worktree off a clean base, nothing shared with the run in progress, back through the normal gate, slot deleted once merged.",

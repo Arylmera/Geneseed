@@ -151,8 +151,14 @@ const FOOTPRINTS = ['full', 'lean'];
  * from lean, and the folder-Skill list moved under CATALOG so native hosts stop carrying it
  * twice. Measured `files` carrier after: full 60_847 (unchanged — every cut is a lean half),
  * lean 37_894. `lean` moves 40_500 → 38_500, the next 500 up with real headroom (606).
+ *
+ * FULL RAISED 2026-10-02, for the learn-mode Skill: one catalogue row plus the two-line Mode
+ * anchor that tells every session to read `.geneseed/learn.md` — the anchor is the point, since
+ * it is what lets the mode survive a restart or a compaction without a hook. Measured `files`
+ * carrier before: full 60_938, lean 38_191. After: full 61_229, lean 38_482. `full` moves
+ * 61_000 → 61_500, the next 500 up (headroom 271); lean still fits, with 18 to spare.
  */
-const CEILING = { full: 61_000, lean: 38_500 };
+const CEILING = { full: 61_500, lean: 38_500 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -185,7 +191,7 @@ const EXPECTED = {
 // 18 specs. `agents/_template.md` does NOT ship: every host loads each `.md` in its agents dir
 // as an agent, so it would register a phantom `_template` agent.
 const N_AGENTS = 18;
-const N_SKILLS = 53;
+const N_SKILLS = 54;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
 // translates `\n` to `os.linesep`, so on Windows the file really is CRLF on disk (gated as M1).

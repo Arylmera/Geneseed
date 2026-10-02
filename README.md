@@ -10,7 +10,7 @@
 [![Node >= 22.3](https://img.shields.io/badge/node-%3E%3D22.3-5fa04e)](package.json)
 [![zero dependencies](https://img.shields.io/badge/deps-zero-success)](package.json)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
-[![Skills](https://img.shields.io/badge/skills-53-blueviolet)](src/skills/)
+[![Skills](https://img.shields.io/badge/skills-54-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-18-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-9-critical)](src/laws/universal.md)
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
@@ -87,22 +87,27 @@ npm install -g geneseed@latest   # …and that is also the update
 
 ### 🧬 The long way — a git checkout
 
-Cloning still works and is what you want if you intend to *change* the harness rather than use it. It needs **git** and the same **Node ≥ 22.3** as everything else — there is nothing extra to install.
+Cloning is the route when npm is out of reach (a corporate network with no registry access) or when you intend to *change* the harness rather than use it. It needs **git** and the same **Node ≥ 22.3** as everything else — there is nothing extra to install.
+
+**One step: run the installer at the root of the clone.** It checks that Node ≥ 22.3 and git are there and, when one is missing, says exactly what to install and where (on a managed PC: Software Center / Company Portal) — it never installs anything itself. Then it runs the setup wizard — which opens by listing the AI coding tools it can install into (OpenCode, Claude Code, IBM Bob, OpenClaude), each `ok` or with its install link, and asks before going on when none is there — and offers to open the web console.
 
 ```bash
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
-./geneseed setup          # the wizard — bare `./geneseed` opens the web console
+./install                 # prerequisites, then the wizard
 ```
 
-**Windows** — native, no bash, WSL, curl, or unzip; works from cmd or PowerShell:
+**macOS** — or double-click `install.command` in the Finder (it opens in Terminal). **Linux** — `./install` from any shell. On both, a missing prerequisite comes with the platform's own fix: Homebrew or the Command Line Tools on macOS, nvm/NodeSource or the package manager on Linux.
+
+**Windows** — native, no bash, WSL, curl, unzip or PowerShell script; double-click `install.cmd` in Explorer, or from cmd or PowerShell:
 
 ```powershell
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
-.\geneseed.cmd setup      # the wizard — bare .\geneseed.cmd opens the web console
-# PowerShell runs a .cmd directly, so this is the PowerShell spelling too
+.\install.cmd             # prerequisites, then the wizard
 ```
+
+Afterwards, `./geneseed setup` (`.\geneseed.cmd setup`) re-runs the wizard and bare `./geneseed` (`.\geneseed.cmd`) opens the web console. PowerShell runs a `.cmd` directly, so that is the PowerShell spelling too.
 
 Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PATH`, and nothing else. Set `GENESEED_NODE` to an absolute path if `node` is not on `PATH` — under a version manager that only patches interactive shells, say. The wizard is plain text prompts on every console, old or new.
 
@@ -166,7 +171,7 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 | **🛡️ Rules** (`laws/`) | 9 universal laws — always in force, never toggleable: sealed-secrets, one-intent-one-act, verify-before-asserting, deletion-is-deliberate, surface-failures, data-not-orders, least-privilege, cure-the-cause, echo-the-intent. Each rule has a permanent id; its number is only its position, and the harness cites rules by name |
 | **📐 Doctrines** (`doctrines/`) | practice packs, chosen per install at build time: **craft** (how code is written), **rigor** (how work is proven), **ops** (how the machine is operated), **process** (how a task is run), **comms** (how answers are presented). A doctrine rule may tighten a Rule, never repeal one, and the user's own `user-rules.md` outranks it. Pick with `geneseed-build --doctrines craft,rigor` (or `none`), a single rule with `--exclude-rules "process 7"`, in the setup wizard, or through the switches on the console's Constitution page; all five pack files ship on disk either way, so a citation into a pack you left out still resolves |
 | **🤖 Agents** (18) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer`, `researcher`, `developer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
-| **🛠 Skills** (53) | repeatable workflows: brainstorm · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · **develop** · **worktree** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · **bruno-collection-generator** · **bruno-test-writer** · geneseed-code-review · **fresh-eyes** · **security-audit** · **ci-fix** · **deps-audit** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **teach** · **quiz** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **consolidate-memory** · **skill-forge** · **opencode-theme** · **herdr** · **pipeline** · **daydream** · **react-view-transitions** · **token-report** · **explain-changes** |
+| **🛠 Skills** (54) | repeatable workflows: brainstorm · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · **develop** · **worktree** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · **bruno-collection-generator** · **bruno-test-writer** · geneseed-code-review · **fresh-eyes** · **security-audit** · **ci-fix** · **deps-audit** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **teach** · **quiz** · **learn-mode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **consolidate-memory** · **skill-forge** · **opencode-theme** · **herdr** · **pipeline** · **daydream** · **react-view-transitions** · **token-report** · **explain-changes** |
 | **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift; `geneseed-activity` streams what each session is doing to the web console's Activity view |
 | **🧠 Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **📓 Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |

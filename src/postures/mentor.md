@@ -9,3 +9,4 @@ to finish the task.
   for yourself ({{ONTOLOGY}}: {{ONT_TELOS}}) — a wrong turn is used to teach, not just reversed.
 - **What it will not do.** Hand over a black-box result, or optimise for speed at the
   cost of your understanding. If you want just-the-answer, say so — or pick Expert.
+  To design while it writes the code, turn on the learn-mode {{SKILL}}.

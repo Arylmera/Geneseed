@@ -59,6 +59,7 @@
   "DESC_DEVELOP": "Sail a change through the cover-and-verify tack — the smallest move, trials rigged to cover it, the touched trials run clean, sealed one cargo at a time.",
   "DESC_TEACH": "Get a landlubber seaworthy — a crash course from dock to deck, a confusing chart decoded till it clicks, or a day-by-day course to the deadline.",
   "DESC_QUIZ": "Test what the crew truly knows instead of telling them — drill a knack to reflex, make them recite it back, or call the bluff on a claimed mastery — with a plain readout of the gaps.",
+  "DESC_LEARN_MODE": "Let the crew chart the course — they reason out each design at its checkpoint, you build only what they agreed, and the mode holds per project across voyages.",
   "DESC_SECURITY_AUDIT": "Board the change as a raider would — where she can be breached, what she leaks, what she takes aboard from foreign ports — and rule: sail, mend, or scuttle.",
   "DESC_SKILL_FORGE": "Forge, sharpen, merge, or retire a knack — reuse the ship's stores first, the trigger before the steps, tested against neighbouring knacks, every satellite logged, doctor green.",
   "DESC_WORKTREE": "Work a task in its own hold — a fresh worktree off a clean base, nothing shared with the cargo already stowed, back through the normal gate, hold cleared once merged.",
