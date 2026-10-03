@@ -22,7 +22,7 @@ import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 /** `bin/geneseed-hook.mjs <verb> [--root R]` with `stdin` on fd 0. */
-function hookRun(verb, { root = null, stdin = '', host = null, extra = [] } = {}) {
+function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd = null } = {}) {
   const sb = makeSandbox();
   try {
     const inFile = path.join(sb.path, 'stdin.json');
@@ -33,8 +33,9 @@ function hookRun(verb, { root = null, stdin = '', host = null, extra = [] } = {}
       if (root !== null) argv.push('--root', root);
       if (host !== null) argv.push('--host', host);
       argv.push(...extra);
-      const proc = spawnSync(process.execPath, argv,
-        { encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'] });
+      const proc = spawnSync(process.execPath, argv, {
+        encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], ...(cwd ? { cwd } : {}),
+      });
       return { rc: proc.status, out: proc.stdout, err: proc.stderr };
     } finally { fs.closeSync(fd); }
   } finally { sb.cleanup(); }
@@ -360,4 +361,59 @@ test('a dotenv target and ordinary content defer', () => {
   '.env.local');
   assertDefers(hookRun('rule-gate',
     { stdin: contentPayload('src/a.js', 'const sk = "skeleton-key";') }), 'ordinary');
+});
+
+// ---------------------------------------------------------------------------------------------
+// A loop branch is a named-batch consent for commit and push on that branch (process doctrine,
+// Consent Before Push). The gate learns the branch from .git/HEAD — through a worktree's .git
+// FILE too — and never spawns git. Anything naming a shared branch still asks, and so does every
+// destructive act: the exemption suppresses needless asks, it does not lift Law IV.
+
+/** A sandboxed repo on `branch`, as a plain repo or a worktree, with `cwd` inside it. */
+function repoOn(branch, { worktree = false } = {}) {
+  const sb = makeSandbox();
+  const root = sb.path;
+  if (worktree) {
+    const gitdir = path.join(root, 'main-repo', '.git', 'worktrees', 'w');
+    fs.mkdirSync(gitdir, { recursive: true });
+    fs.writeFileSync(path.join(gitdir, 'HEAD'), `ref: refs/heads/${branch}\n`);
+    fs.mkdirSync(path.join(root, 'w'));
+    fs.writeFileSync(path.join(root, 'w', '.git'), `gitdir: ${gitdir}\n`);
+    return { cleanup: sb.cleanup, cwd: path.join(root, 'w') };
+  }
+  fs.mkdirSync(path.join(root, '.git'));
+  fs.writeFileSync(path.join(root, '.git', 'HEAD'), `ref: refs/heads/${branch}\n`);
+  fs.mkdirSync(path.join(root, 'sub'));
+  return { cleanup: sb.cleanup, cwd: path.join(root, 'sub') };
+}
+
+test('on a loop/* branch, commit and push defer — plain repo and worktree', () => {
+  for (const worktree of [false, true]) {
+    const { cleanup, cwd } = repoOn('loop/pricing', { worktree });
+    try {
+      for (const cmd of ['git commit -m "loop(pricing): iteration 2"', 'git push -u origin loop/pricing',
+        'git add -A && git commit -F msg.txt && git push']) {
+        assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), cmd);
+      }
+    } finally { cleanup(); }
+  }
+});
+
+test('on a loop/* branch, naming a shared branch or a destructive act still asks', () => {
+  const { cleanup, cwd } = repoOn('loop/pricing');
+  try {
+    for (const cmd of ['git push origin HEAD:main', 'git push origin loop/pricing:master',
+      'git commit -m x && git push origin develop', 'git push origin release/2.0',
+      'git push --force origin loop/pricing', 'git reset --hard HEAD~1']) {
+      askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), cmd);
+    }
+  } finally { cleanup(); }
+});
+
+test('off a loop branch nothing changes: commit asks', () => {
+  for (const branch of ['main', 'feature/x', 'looper']) {
+    const { cleanup, cwd } = repoOn(branch);
+    try { askDecision(hookRun('git-gate', { stdin: bashPayload('git commit -m x'), cwd }), branch); }
+    finally { cleanup(); }
+  }
 });

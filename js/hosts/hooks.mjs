@@ -599,6 +599,40 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 const DESTRUCTIVE_GIT_RE =
   /\bgit\b[^\n]*\b(?:reset\s+--hard|clean\s+-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\s+[^\n]*--force)/;
 
+/**
+ * The branch checked out in `cwd`, read from .git/HEAD without spawning git — a worktree's
+ * `.git` is a FILE naming its gitdir, so both shapes are followed. null on anything unexpected
+ * (detached HEAD, no repo, unreadable): the caller then falls back to asking, never to allowing.
+ */
+export function currentBranch(cwd) {
+  try {
+    let dir = path.resolve(cwd);
+    for (;;) {
+      const dotgit = path.join(dir, '.git');
+      if (existsSync(dotgit)) {
+        let gitdir = dotgit;
+        if (statSync(dotgit).isFile()) {
+          const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, 'utf8'));
+          if (!m) return null;
+          gitdir = path.resolve(dir, m[1]);
+        }
+        const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitdir, 'HEAD'), 'utf8'));
+        return ref ? ref[1] : null;
+      }
+      const up = path.dirname(dir);
+      if (up === dir) return null;
+      dir = up;
+    }
+  } catch {
+    return null;
+  }
+}
+
+// A shared branch named anywhere in the command — as a refspec target (`HEAD:main`), a
+// remote-qualified name, or a bare word. Deliberately broad: a false ask costs one prompt, a
+// false allow publishes to a shared branch.
+export const SHARED_BRANCH_RE = /(?:^|[\s:/])(?:main|master|develop|development|release\/\S+|hotfix\/\S+)(?=[\s;&|]|$)/;
+
 /** The `permissionDecision: "ask"` document, in Python's compact `json.dumps` spelling. */
 function askDecision(reason) {
   return `${jsonDumpsCompact({
@@ -738,6 +772,10 @@ function gitDecide(args, payload) {
     return ask(args, 'git-gate', 'law-4', 'Geneseed (Deletion Is Deliberate) \u2014 a history-rewriting or '
       + 'discarding git act needs confirmation bound to this specific command');
   }
+  // Consent Before Push: launching a loop is a named batch for commit and push on its own
+  // `loop/*` branch. Merging into a shared branch is never part of that batch.
+  const branch = currentBranch((payload && payload.cwd) || process.cwd());
+  if (branch && branch.startsWith('loop/') && !SHARED_BRANCH_RE.test(command)) return 0;
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run.
   if (args.noConsent || !GIT_GATE_RE.test(command)) return 0;
