@@ -13,12 +13,13 @@
  * to the first directory holding `.git` (a directory for a normal clone, a FILE for a worktree
  * or submodule) — rather than taking a path the caller could point anywhere.
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, isFile, printOut } from '../lib/fs.mjs';
 import { loadCatalog, catalogProblems, parseBrick } from './catalog.mjs';
 import { checkGraph } from './graph.mjs';
 import { parseNumstat, DEFAULT_PRESET } from './score.mjs';
+import { currentBranch } from '../hosts/hooks.mjs';
 import {
   initState, nextStep, scoreDeclared, scoreDiff, recordOutcome, decideAwaiting,
   renderLoopFile, parseLoopFile, LOOP_FILE,
@@ -42,6 +43,37 @@ function requireRoot() {
   const root = gitRoot(process.cwd());
   if (!root) throw new Error('not inside a git repository');
   return root;
+}
+
+/**
+ * The `.git` DIRECTORY for `root` — itself, or the gitdir a worktree's `.git` FILE names.
+ * Same resolution as `js/hosts/hooks.mjs`'s `currentBranch` (gitdir half): LOOP_COMMIT_MSG has
+ * to live where the loop's own worktree keeps its git state, never in a shared main repo's.
+ */
+function gitDirOf(root) {
+  const dotgit = path.join(root, '.git');
+  if (statSync(dotgit).isFile()) {
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, 'utf8'));
+    if (!m) throw new Error(`${dotgit} does not name a gitdir`);
+    return path.resolve(root, m[1]);
+  }
+  return dotgit;
+}
+
+/**
+ * When `score --diff`/`decide` closes a unit (`commit: true`), write the commit message to
+ * `<gitdir>/LOOP_COMMIT_MSG` — never tracked, never part of any diff — so the loop's own
+ * automation never has to quote a message on a command line (`js/hosts/hooks.mjs`'s
+ * `loopExempt` only whitelists `git commit -F <path>`). Adds `message_file` to the result for
+ * the skill to read back.
+ */
+function writeCommitMessage(root, result) {
+  if (!result || result.commit !== true) return result;
+  const branch = currentBranch(root);
+  const slug = branch && branch.startsWith('loop/') ? branch.slice('loop/'.length) : 'loop';
+  const file = path.join(gitDirOf(root), 'LOOP_COMMIT_MSG');
+  writeText(file, `loop(${slug}): iteration ${result.iteration} — ${result.intent || 'setup'}\n\n${result.trailers}\n`);
+  return { ...result, message_file: file };
 }
 
 function withState(fn) {
@@ -92,7 +124,7 @@ const ACTIONS = {
   },
   next: () => withState((s, b) => nextStep(s, b)),
   score(args) {
-    if (args.diff) return withState((s) => scoreDiff(s, parseNumstat(stdin())));
+    if (args.diff) return writeCommitMessage(requireRoot(), withState((s) => scoreDiff(s, parseNumstat(stdin()))));
     if (!args.declared) throw new Error('score needs --declared or --diff');
     return withState((s) => scoreDeclared(s, {
       actions: list(args.actions), writeSet: list(args.writeSet), intent: args.intent ?? null,
@@ -105,7 +137,7 @@ const ACTIONS = {
     return withState((s, b) => recordOutcome(s, b, args.outcome, { card, porcelain: raw ? raw.replace(/\r\n/g, '\n').trimEnd() : null }));
   },
   decide(args) {
-    return withState((s, b) => decideAwaiting(s, b, args.verdict, args.note ?? ''));
+    return writeCommitMessage(requireRoot(), withState((s, b) => decideAwaiting(s, b, args.verdict, args.note ?? '')));
   },
 };
 

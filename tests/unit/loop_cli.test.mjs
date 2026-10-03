@@ -42,8 +42,16 @@ test('init -> next -> score -> record on the shipped bugfix template', () => {
     assert.deepEqual(run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']).out,
       { score: 0.4, preset: 'balanced', threshold: [0.2, 0.6], decision: 'soft' });
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], '?? test/r.test.js\n').out, { verify: true });
-    assert.deepEqual(run(sb.path, ['score', '--diff'], '12\t0\ttest/r.test.js\n').out.commit, true);
+    const scored = run(sb.path, ['score', '--diff'], '12\t0\ttest/r.test.js\n').out;
+    assert.equal(scored.commit, true);
     assert.match(readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8'), /"iteration": 1/);
+    // The commit message never has to be quoted on a command line (`js/hosts/hooks.mjs`'s
+    // `loopExempt` only whitelists `git commit -F <path>`): the CLI writes it to a file beside
+    // LOOP.md's own gitdir and names that file in the result.
+    const msgFile = path.join(sb.path, '.git', 'LOOP_COMMIT_MSG');
+    assert.equal(scored.message_file, msgFile);
+    assert.equal(readFileSync(msgFile, 'utf8').replace(/\r\n/g, '\n'),
+      `loop(loop): iteration ${scored.iteration} — reproduce\n\n${scored.trailers}\n`);
     assert.equal(run(sb.path, ['record', '--outcome', 'nope']).out.error,
       'identify cannot report "nope" — one of more, done');
   } finally { sb.cleanup(); }

@@ -40,7 +40,7 @@
  * of the implementation it was once compared against.
  */
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync,
-  appendFileSync, writeFileSync }
+  appendFileSync, writeFileSync, openSync, readSync, closeSync }
   from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -628,10 +628,112 @@ export function currentBranch(cwd) {
   }
 }
 
-// A shared branch named anywhere in the command — as a refspec target (`HEAD:main`), a
-// remote-qualified name, or a bare word. Deliberately broad: a false ask costs one prompt, a
-// false allow publishes to a shared branch.
-export const SHARED_BRANCH_RE = /(?:^|[\s:/])(?:main|master|develop|development|release\/\S+|hotfix\/\S+)(?=[\s;&|]|$)/;
+/**
+ * The directory holding `.git` for `cwd` — the SAME walk `currentBranch` does, stopped one
+ * step earlier: a worktree's `.git` is a FILE naming its gitdir elsewhere, but LOOP.md always
+ * lives beside that FILE, not beside the gitdir it points to. null on anything unexpected.
+ */
+export function gitRootOf(cwd) {
+  try {
+    let dir = path.resolve(cwd);
+    for (;;) {
+      if (existsSync(path.join(dir, '.git'))) return dir;
+      const up = path.dirname(dir);
+      if (up === dir) return null;
+      dir = up;
+    }
+  } catch {
+    return null;
+  }
+}
+
+// `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
+// false allow publishes. So the exemption holds only when the ENTIRE command is built from
+// forms read in full below, on a branch a loop was actually launched on (LOOP.md's state
+// marker, left by `geneseed loop init` — not just a name starting with `loop/`, which anyone
+// can type).
+
+// No newline, backtick, or `$(` substitution anywhere — these can smuggle a second command (or
+// a shared-branch target) past every check below, so the command is refused before it is even
+// split. `<`/`>` are refused too: a redirect can both hide a second effect and, as the review
+// found, trail off the end of an otherwise-whitelisted push (`HEAD:main>/dev/null`).
+const UNSAFE_CHARS_RE = /[\n`<>]|\$\(/;
+
+// The only three git shapes a loop's own automation ever needs: adding unquoted paths,
+// committing via `-F`/`--file` (so the message text, which may contain anything, never has to
+// be quoted on this command line at all — see `js/loop/cli.mjs`'s LOOP_COMMIT_MSG), and
+// read-only inspection. A quoted token anywhere (`'`, `"`) refuses — quoting is exactly how an
+// argument hides a shared branch or a flag from this read.
+const SEG_ADD_RE = /^git\s+add(\s+[^\s'"]+)*$/;
+const SEG_COMMIT_RE = /^git\s+commit(\s+-q)?\s+(-F\s+|--file[=\s])[^\s'"]+(\s+-q)?$/;
+const SEG_READONLY_RE = /^git\s+(status|diff|log|rev-parse|show)(\s+[^\s'"$]+)*$/;
+
+/**
+ * `git push`, exactly: nothing; `[-u|--set-upstream] <remote>`; or `[-u|--set-upstream]
+ * <remote> <ref>` where `<ref>` is the current branch, `HEAD`, or `HEAD:<branch>` — never a
+ * force, a `+`/`:` refspec, `--all`/`--mirror`/`--tags`/`--delete`, or any extra token. The
+ * remote's first character must be alphanumeric so a flag (`-f`, `--all`, `--delete`, …) can
+ * never be read as a remote name — `[A-Za-z0-9._-]*` alone would accept one.
+ */
+function pushSegmentOk(seg, branch) {
+  const m = /^git\s+push(?:\s+(.*))?$/.exec(seg);
+  if (!m) return false;
+  const rest = (m[1] || '').trim();
+  if (!rest) return true;
+  const tokens = rest.split(/\s+/);
+  let i = 0;
+  if (tokens[i] === '-u' || tokens[i] === '--set-upstream') i += 1;
+  const remote = tokens[i];
+  if (remote === undefined || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) return false;
+  i += 1;
+  if (i === tokens.length) return true;
+  const ref = tokens[i];
+  i += 1;
+  if (i !== tokens.length) return false;
+  return ref === branch || ref === 'HEAD' || ref === `HEAD:${branch}`;
+}
+
+const LOOP_STATE_MARKER = '<!-- loop-state:begin -->';
+
+/** Whether `<root>/LOOP.md` carries the engine's state marker — `geneseed loop init`'s mark
+ * that a loop was actually launched here, not merely that the branch is named `loop/...`.
+ * Read at most the first 64 KB: the marker sits in the first line, and a huge LOOP.md (notes,
+ * history) must never make this check slow. */
+function loopLaunched(root) {
+  let fd;
+  try {
+    fd = openSync(path.join(root, 'LOOP.md'), 'r');
+    const buf = Buffer.alloc(65536);
+    const n = readSync(fd, buf, 0, buf.length, 0);
+    return buf.toString('utf8', 0, n).includes(LOOP_STATE_MARKER);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) { try { closeSync(fd); } catch { /* already gone */ } }
+  }
+}
+
+/**
+ * Consent Before Push's loop/* exemption: true only when EVERY clause holds —
+ * (1) the command carries none of the characters that could smuggle a second effect past this
+ * read, (2)-(3) every `&&`/`;`/`||`/`|`-separated segment is one of the three whitelisted git
+ * shapes above, with every push segment also passing `pushSegmentOk`, and (4) the branch
+ * checked out in `cwd` starts with `loop/` AND its git root carries a launched LOOP.md. Splitting
+ * on the separators without respecting quotes is deliberate, not an oversight: (1) and the
+ * per-segment whitelist already refuse any segment a quoted separator could produce, because a
+ * quote character fails every one of the three segment patterns.
+ */
+export function loopExempt(command, cwd) {
+  if (typeof command !== 'string' || UNSAFE_CHARS_RE.test(command)) return false;
+  const branch = currentBranch(cwd);
+  if (!branch || !branch.startsWith('loop/')) return false;
+  const root = gitRootOf(cwd);
+  if (!root || !loopLaunched(root)) return false;
+  const segments = command.split(/&&|\|\||[;|]/).map((s) => s.trim()).filter(Boolean);
+  if (!segments.length) return false;
+  return segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_COMMIT_RE.test(seg)
+    || SEG_READONLY_RE.test(seg) || pushSegmentOk(seg, branch));
+}
 
 /** The `permissionDecision: "ask"` document, in Python's compact `json.dumps` spelling. */
 function askDecision(reason) {
@@ -772,13 +874,13 @@ function gitDecide(args, payload) {
     return ask(args, 'git-gate', 'law-4', 'Geneseed (Deletion Is Deliberate) \u2014 a history-rewriting or '
       + 'discarding git act needs confirmation bound to this specific command');
   }
-  // Consent Before Push: launching a loop is a named batch for commit and push on its own
-  // `loop/*` branch. Merging into a shared branch is never part of that batch.
-  const branch = currentBranch((payload && payload.cwd) || process.cwd());
-  if (branch && branch.startsWith('loop/') && !SHARED_BRANCH_RE.test(command)) return 0;
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
-  // no rule behind it — but Law IV above is universal and has already run.
+  // no rule behind it — but Law IV above is universal and has already run. Checked before
+  // `loopExempt` so a non-git command, or one with consent off, never pays for the whitelist.
   if (args.noConsent || !GIT_GATE_RE.test(command)) return 0;
+  // Consent Before Push: a loop launched on its own `loop/*` branch is a named batch for a
+  // fixed set of commit/push forms on that branch only — never a merge into anything shared.
+  if (loopExempt(command, (payload && payload.cwd) || process.cwd())) return 0;
   return ask(args, 'git-gate', 'process-5', 'Geneseed (Consent Before Push) \u2014 every git '
     + 'commit/push needs explicit approval; to see the change first, use the explain-changes skill');
 }

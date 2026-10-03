@@ -364,56 +364,94 @@ test('a dotenv target and ordinary content defer', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// A loop branch is a named-batch consent for commit and push on that branch (process doctrine,
-// Consent Before Push). The gate learns the branch from .git/HEAD — through a worktree's .git
-// FILE too — and never spawns git. Anything naming a shared branch still asks, and so does every
-// destructive act: the exemption suppresses needless asks, it does not lift Law IV.
+// Consent Before Push's loop/* exemption is a WHITELIST, not a blacklist: it holds only for a
+// fixed set of command forms, on a branch a loop was actually LAUNCHED on (LOOP.md's state
+// marker — not just a name starting with `loop/`, which anyone can type). The gate learns the
+// branch from .git/HEAD — through a worktree's .git FILE too — and never spawns git.
 
-/** A sandboxed repo on `branch`, as a plain repo or a worktree, with `cwd` inside it. */
-function repoOn(branch, { worktree = false } = {}) {
+const LOOP_MARKER = '<!-- loop-state:begin -->\n{}\n<!-- loop-state:end -->\n';
+
+/**
+ * A sandboxed repo on `branch`, as a plain repo or a worktree, with `cwd` inside it.
+ * `loop`: `'valid'` writes a LOOP.md carrying the state marker at the git root, `'invalid'`
+ * writes one without it, `'none'` (default) writes no LOOP.md at all.
+ */
+function repoOn(branch, { worktree = false, loop = 'none' } = {}) {
   const sb = makeSandbox();
   const root = sb.path;
+  let gitRoot;
+  let cwd;
   if (worktree) {
     const gitdir = path.join(root, 'main-repo', '.git', 'worktrees', 'w');
     fs.mkdirSync(gitdir, { recursive: true });
     fs.writeFileSync(path.join(gitdir, 'HEAD'), `ref: refs/heads/${branch}\n`);
     fs.mkdirSync(path.join(root, 'w'));
     fs.writeFileSync(path.join(root, 'w', '.git'), `gitdir: ${gitdir}\n`);
-    return { cleanup: sb.cleanup, cwd: path.join(root, 'w') };
+    gitRoot = path.join(root, 'w');
+    cwd = gitRoot;
+  } else {
+    fs.mkdirSync(path.join(root, '.git'));
+    fs.writeFileSync(path.join(root, '.git', 'HEAD'), `ref: refs/heads/${branch}\n`);
+    fs.mkdirSync(path.join(root, 'sub'));
+    gitRoot = root;
+    cwd = path.join(root, 'sub');
   }
-  fs.mkdirSync(path.join(root, '.git'));
-  fs.writeFileSync(path.join(root, '.git', 'HEAD'), `ref: refs/heads/${branch}\n`);
-  fs.mkdirSync(path.join(root, 'sub'));
-  return { cleanup: sb.cleanup, cwd: path.join(root, 'sub') };
+  if (loop === 'valid') fs.writeFileSync(path.join(gitRoot, 'LOOP.md'), LOOP_MARKER);
+  if (loop === 'invalid') fs.writeFileSync(path.join(gitRoot, 'LOOP.md'), '# a loop file with no state block\n');
+  return { cleanup: sb.cleanup, cwd };
 }
 
-test('on a loop/* branch, commit and push defer — plain repo and worktree', () => {
+test('on a loop/* branch with a launched loop, the whitelisted commit/push forms defer — plain repo and worktree', () => {
   for (const worktree of [false, true]) {
-    const { cleanup, cwd } = repoOn('loop/pricing', { worktree });
+    const { cleanup, cwd } = repoOn('loop/x', { worktree, loop: 'valid' });
     try {
-      for (const cmd of ['git commit -m "loop(pricing): iteration 2"', 'git push -u origin loop/pricing',
-        'git add -A && git commit -F msg.txt && git push']) {
+      for (const cmd of [
+        'git add -A && git commit -F .git/LOOP_COMMIT_MSG && git push -u origin loop/x',
+        'git push',
+        'git push origin HEAD',
+        'git push origin HEAD:loop/x',
+        'git status && git commit -F msg.txt',
+      ]) {
         assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), cmd);
       }
     } finally { cleanup(); }
   }
 });
 
-test('on a loop/* branch, naming a shared branch or a destructive act still asks', () => {
-  const { cleanup, cwd } = repoOn('loop/pricing');
+test('every escape the review found still asks, on that same loop/launched branch', () => {
+  const { cleanup, cwd } = repoOn('loop/x', { loop: 'valid' });
   try {
-    for (const cmd of ['git push origin HEAD:main', 'git push origin loop/pricing:master',
-      'git commit -m x && git push origin develop', 'git push origin release/2.0',
-      'git push --force origin loop/pricing', 'git reset --hard HEAD~1']) {
+    for (const cmd of [
+      'git push origin "HEAD:main"',
+      "git push origin 'main'",
+      'git push origin HEAD:main>/dev/null',
+      'git push origin HEAD:main)',
+      'cd ../other && git push',
+      'git -C ../other push',
+      'git switch - && git commit -F m',
+      'GIT_DIR=x git push',
+      'git push --all',
+      'git push --mirror',
+      'git -c push.default=matching push',
+      'git push --tags',
+      'git push origin v9.9.9',
+      'git push -f origin loop/x',
+      'git push origin +loop/x',
+      'git push origin :feature/x',
+      'git push origin --delete feature/x',
+      'git commit -m "x"',
+      'git commit --amend -F m',
+      'git commit -F m\necho hi',
+    ]) {
       askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), cmd);
     }
   } finally { cleanup(); }
 });
 
-test('off a loop branch nothing changes: commit asks', () => {
-  for (const branch of ['main', 'feature/x', 'looper']) {
-    const { cleanup, cwd } = repoOn(branch);
-    try { askDecision(hookRun('git-gate', { stdin: bashPayload('git commit -m x'), cwd }), branch); }
+test('also asks: no LOOP.md, a LOOP.md without the state marker, or a shared branch with a valid one', () => {
+  for (const [branch, loop] of [['loop/x', 'none'], ['loop/x', 'invalid'], ['main', 'valid']]) {
+    const { cleanup, cwd } = repoOn(branch, { loop });
+    try { askDecision(hookRun('git-gate', { stdin: bashPayload('git push'), cwd }), `${branch}/${loop}`); }
     finally { cleanup(); }
   }
 });

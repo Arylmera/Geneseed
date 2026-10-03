@@ -117,8 +117,11 @@ function finishUnit(state, committed) {
 
 function commitUnit(state) {
   const t = trailers(state); const iteration = state.iteration;
+  // Read before `finishUnit` resets the card for the next unit — the CLI needs it to name
+  // the commit message it writes to LOOP_COMMIT_MSG.
+  const intent = state.card?.intent ?? null;
   finishUnit(state, true);
-  return { commit: true, trailers: t, iteration };
+  return { commit: true, trailers: t, iteration, intent };
 }
 
 function assertRunning(state) {

@@ -42,7 +42,7 @@ Every plugin swallows its own errors — none can block or crash a session. Each
 
 It ships whole on every install, whatever [doctrine packs](../concepts/rules.md) you chose. On Claude Code and Bob the same checks are hooks, which can *ask* you instead of refusing; OpenCode's tool hook has no ask tier. Protected wiki folders are enforced only here — on the other hosts they are an instruction.
 
-On a dedicated `loop/*` branch, a `permission.ask` hook lets a plain `git commit`/`git push` through the static ask — a shared-branch mention or anything destructive still asks, same as the Claude/Bob git-gate's loop/* exemption.
+A `permission.ask` hook lets through only a fixed set of commit/push forms on a `loop/*` branch with a running loop — anything else still asks, same as the Claude/Bob git-gate's loop/* exemption.
 
 **When it runs.** Before every tool call (`tool.execute.before`), and before a static `permission.bash` ask is shown to you (`permission.ask`).
 

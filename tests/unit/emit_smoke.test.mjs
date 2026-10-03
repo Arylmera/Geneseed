@@ -158,13 +158,19 @@ const FOOTPRINTS = ['full', 'lean'];
  * carrier before: full 60_938, lean 38_191. After: full 61_229, lean 38_482. `full` moves
  * 61_000 → 61_500, the next 500 up (headroom 271); lean still fits, with 18 to spare.
  *
- * LEAN RAISED, 2026-10-03, for the loop/* consent amendment (process 5, Consent Before
- * Push — Task 7 of the loop-engineering plan): the LEAN:else half gained one sentence
- * naming the `loop/*` exemption. The sentence was already cut to the shortest form that
- * still states the exemption and its shared-branch limit (`Loop batches cover `loop/*`
- * only, never a shared merge.`); with lean headroom at only 18 characters, even that
- * minimum overflows by 38. Measured `files` carrier: lean 38_538. Raised by exactly that
- * overrun, not rounded, per the amendment's own instruction to measure rather than guess.
+ * LEAN RAISED, 2026-10-03, for the loop/* consent amendment (Consent Before Push —
+ * Task 7 of the loop-engineering plan): the LEAN:else half gained one sentence naming
+ * the `loop/*` exemption. The sentence was already cut to the shortest form that still
+ * states the exemption and its shared-branch limit (`Loop batches cover `loop/*` only,
+ * never a shared merge.`); with lean headroom at only 18 characters, even that minimum
+ * overflows by 38. Measured `files` carrier: lean 38_538. Raised by exactly that overrun,
+ * not rounded, per the amendment's own instruction to measure rather than guess.
+ *
+ * NOT RAISED AGAIN, Task 7 fix round 1: the adversarial review replaced the blacklist
+ * exemption with a whitelist gated on a LAUNCHED loop, and the doctrine sentence grew
+ * to say so ("A launched loop's batch covers commit and push on its own `loop/*`
+ * branch only; merging it never.") — the rest of the LEAN:else half was trimmed instead
+ * (tighter wording, same meaning) so the carrier stayed inside this same 38_538 ceiling.
  */
 const CEILING = { full: 61_500, lean: 38_538 };
 

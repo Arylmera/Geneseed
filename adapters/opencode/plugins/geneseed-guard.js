@@ -20,17 +20,18 @@
 // `permission.ask` — the loop/* exemption (Consent Before Push). OpenCode's static
 // `permission.bash` globs (`git commit*`/`git push*` = "ask", written by
 // js/hosts/settings.mjs) cannot see which branch is checked out — they are a build-time
-// string match with no request-time context. This hook is the ONLY seam where Geneseed
-// can look at the live branch, and it only DOWNGRADES an ask to allow, on a dedicated
-// `loop/*` branch, for a plain commit or push that names no shared branch — mirroring
-// the Claude/Bob git-gate's loop/* exemption exactly (see js/hosts/hooks.mjs's
-// `currentBranch`/`SHARED_BRANCH_RE`, copied below). It never raises the bar: anything
-// destructive, any shared-branch mention, anything off a loop branch, or any non-bash
-// permission leaves `output.status` untouched and OpenCode's own ask stands. A host
-// version that never fires `permission.ask` simply never reaches this hook — the static
-// ask still fires, so the failure mode is one extra prompt, never a silent allow.
+// string match with no request-time context. This hook is the ONLY seam where Geneseed can
+// look at the live branch, and it only DOWNGRADES an ask to allow: only a fixed set of
+// commit/push forms (see `loopExempt` below, the twin of js/hosts/hooks.mjs's) on a `loop/*`
+// branch a loop was actually LAUNCHED on — not just named `loop/...`. It is a WHITELIST, not
+// a blacklist: a false ask costs one prompt, a false allow publishes. It never raises the
+// bar: anything not on the whitelist, anything off a launched loop branch, a status this hook
+// did not itself leave as the default "ask", or any non-bash permission leaves `output.status`
+// untouched and OpenCode's own ask (or another hook's deny) stands. A host version that never
+// fires `permission.ask` simply never reaches this hook — the static ask still fires, so the
+// failure mode is one extra prompt, never a silent allow.
 
-import { promises as fs, existsSync, statSync, readFileSync } from "node:fs"
+import { promises as fs, existsSync, statSync, readFileSync, openSync, readSync, closeSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
@@ -286,15 +287,58 @@ const WIKI_MUTATE_TOOLS = [...WRITE_TOOLS, "delete", "remove", "rename", "move",
 // hook reads it, so the two decide the exemption identically.
 
 const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/
-const DESTRUCTIVE_GIT_RE =
-  /\bgit\b[^\n]*\b(?:reset\s+--hard|clean\s+-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\s+[^\n]*--force)/
-const SHARED_BRANCH_RE =
-  /(?:^|[\s:/])(?:main|master|develop|development|release\/\S+|hotfix\/\S+)(?=[\s;&|]|$)/
+
+// No newline, backtick, or `$(` substitution anywhere, and no `<`/`>` redirect — these can
+// smuggle a second command (or a shared-branch target) past every check below.
+const UNSAFE_CHARS_RE = /[\n`<>]|\$\(/
+
+// The only three git shapes a loop's own automation ever needs — see js/hosts/hooks.mjs's
+// identically-named constants for the full rationale. A quoted token anywhere refuses.
+const SEG_ADD_RE = /^git\s+add(\s+[^\s'"]+)*$/
+const SEG_COMMIT_RE = /^git\s+commit(\s+-q)?\s+(-F\s+|--file[=\s])[^\s'"]+(\s+-q)?$/
+const SEG_READONLY_RE = /^git\s+(status|diff|log|rev-parse|show)(\s+[^\s'"$]+)*$/
+
+/** `git push`, exactly — see js/hosts/hooks.mjs's `pushSegmentOk`, same rule, same shape. */
+function pushSegmentOk(seg, branch) {
+  const m = /^git\s+push(?:\s+(.*))?$/.exec(seg)
+  if (!m) return false
+  const rest = (m[1] || "").trim()
+  if (!rest) return true
+  const tokens = rest.split(/\s+/)
+  let i = 0
+  if (tokens[i] === "-u" || tokens[i] === "--set-upstream") i += 1
+  const remote = tokens[i]
+  if (remote === undefined || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) return false
+  i += 1
+  if (i === tokens.length) return true
+  const ref = tokens[i]
+  i += 1
+  if (i !== tokens.length) return false
+  return ref === branch || ref === "HEAD" || ref === `HEAD:${branch}`
+}
+
+const LOOP_STATE_MARKER = "<!-- loop-state:begin -->"
+
+/** Whether `<root>/LOOP.md` carries the engine's state marker — read at most 64 KB. */
+function loopLaunched(gitRoot) {
+  let fd
+  try {
+    fd = openSync(path.join(gitRoot, "LOOP.md"), "r")
+    const buf = Buffer.alloc(65536)
+    const n = readSync(fd, buf, 0, buf.length, 0)
+    return buf.toString("utf8", 0, n).includes(LOOP_STATE_MARKER)
+  } catch {
+    return false
+  } finally {
+    if (fd !== undefined) { try { closeSync(fd) } catch { /* already gone */ } }
+  }
+}
 
 /**
- * The branch checked out in `cwd`, read from .git/HEAD without spawning git — a worktree's
- * `.git` is a FILE naming its gitdir, so both shapes are followed. null on anything
- * unexpected (detached HEAD, no repo, unreadable): the caller then leaves the ask alone.
+ * The branch checked out in `cwd`, and the directory holding `.git` for it, read from
+ * .git/HEAD without spawning git — a worktree's `.git` is a FILE naming its gitdir, so both
+ * shapes are followed. `{ branch: null, root: null }` on anything unexpected (detached HEAD,
+ * no repo, unreadable): the caller then leaves the ask alone.
  */
 function currentBranch(cwd) {
   try {
@@ -305,19 +349,37 @@ function currentBranch(cwd) {
         let gitdir = dotgit
         if (statSync(dotgit).isFile()) {
           const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, "utf8"))
-          if (!m) return null
+          if (!m) return { branch: null, root: null }
           gitdir = path.resolve(dir, m[1])
         }
         const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitdir, "HEAD"), "utf8"))
-        return ref ? ref[1] : null
+        return { branch: ref ? ref[1] : null, root: dir }
       }
       const up = path.dirname(dir)
-      if (up === dir) return null
+      if (up === dir) return { branch: null, root: null }
       dir = up
     }
   } catch {
-    return null
+    return { branch: null, root: null }
   }
+}
+
+/**
+ * Consent Before Push's loop/* exemption — the twin of js/hosts/hooks.mjs's `loopExempt`.
+ * True only when the command carries none of the unsafe characters, every `&&`/`;`/`||`/`|`
+ * segment is one of the three whitelisted git shapes (every push segment also passing
+ * `pushSegmentOk`), and the branch checked out in `cwd` starts with `loop/` AND its git root
+ * carries a launched LOOP.md.
+ */
+function loopExempt(command, cwd) {
+  if (typeof command !== "string" || UNSAFE_CHARS_RE.test(command)) return false
+  const { branch, root } = currentBranch(cwd)
+  if (!branch || !branch.startsWith("loop/")) return false
+  if (!root || !loopLaunched(root)) return false
+  const segments = command.split(/&&|\|\||[;|]/).map((s) => s.trim()).filter(Boolean)
+  if (!segments.length) return false
+  return segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_COMMIT_RE.test(seg)
+    || SEG_READONLY_RE.test(seg) || pushSegmentOk(seg, branch))
 }
 
 export const GeneseedGuard = async (ctx) => {
@@ -379,14 +441,16 @@ export const GeneseedGuard = async (ctx) => {
       // error, exactly as a crashed check here must default to the static ask standing.
       try {
         if (OFF) return
+        // Never loosen anything but the plain "ask" this hook itself would otherwise leave
+        // alone — a deny (or any other status another hook already set) is never overwritten.
+        if (output?.status && output.status !== "ask") return
         if (input?.type !== "bash") return
-        const raw = input?.metadata?.command ?? input?.pattern ?? input?.title
-        const command = Array.isArray(raw) ? raw.join(" ") : raw
-        if (typeof command !== "string" || !command) return
-        if (!GIT_GATE_RE.test(command)) return
-        if (DESTRUCTIVE_GIT_RE.test(command) || SHARED_BRANCH_RE.test(command)) return
-        const branch = currentBranch(root())
-        if (branch && branch.startsWith("loop/")) output.status = "allow"
+        // ONLY `input.metadata?.command` — no pattern/title fallback. A value this hook did
+        // not itself read in full is a value it must not reason about.
+        const command = input?.metadata?.command
+        if (typeof command !== "string" || !command || !GIT_GATE_RE.test(command)) return
+        if (await sovereignBypass(root())) return
+        if (loopExempt(command, root())) output.status = "allow"
       } catch { /* leave output.status untouched */ }
     },
   }
