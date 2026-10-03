@@ -105,7 +105,7 @@ export default function ActiveLoops({ item, bricks }) {
     (alive) =>
       api.activeLoops().then(
         (d) => alive() && (setData(d), setError(null)),
-        (e) => alive() && setError(e),
+        (e) => alive() && setError(e.message),
       ),
     POLL_MS,
     [rev],
@@ -113,7 +113,7 @@ export default function ActiveLoops({ item, bricks }) {
   const onPreset = (root, preset) =>
     api.setLoopPreset(root, preset).then(
       () => setRev((r) => r + 1),
-      (e) => setError(e),
+      (e) => setError(e.message),
     )
 
   if (!data) return error ? <ErrorState error={error} /> : <Loading />

@@ -221,6 +221,17 @@ const DONE = {
 describe('Loops › Active', () => {
   const show = (loops) => api.activeLoops.mockImplementation(() => Promise.resolve({ loops }))
 
+  // A failed read rejects with an Error object (api/http.js `fail`); the page must show its
+  // message, not hand the object to React — a console on an older server (no
+  // /api/loops/active yet) crashed the whole page with React error #31 this way.
+  it('shows a failed read as its message instead of crashing', async () => {
+    api.activeLoops.mockImplementation(() =>
+      Promise.reject(new Error('not found: /api/loops/active')),
+    )
+    render(<Loops tab="active" />)
+    expect(await screen.findByText('not found: /api/loops/active')).toBeTruthy()
+  })
+
   it('renders one card per loop with its branch, status, iteration, preset and node', async () => {
     show([RUN, WAITING, DONE])
     render(<Loops tab="active" />)
