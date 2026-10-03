@@ -15,7 +15,7 @@
  * expose X?", which has nothing to do with sockets, daemons or gzip.
  */
 import { formatValue, isTruthy, parseJson } from '../lib/json.mjs';
-import { apiExcludesMutate, apiInstallToggle, apiMcpToggle, apiMemoryDelete, apiProfileSave, apiRulesMutate, apiRulesPromote, apiSelectView } from './actions.mjs';
+import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcpToggle, apiMemoryDelete, apiProfileSave, apiRulesMutate, apiRulesPromote, apiSelectView } from './actions.mjs';
 import { apiActivityToggle } from './activity.mjs';
 
 /**
@@ -45,6 +45,10 @@ export const POST_ROUTES = new Map([
   ['/api/rules', [apiRulesMutate, true]],
   ['/api/rules/promote', [apiRulesPromote, true]],
   ['/api/profile', [apiProfileSave, true]],
+  // No `ok: false` arm: success returns `{ok: true, loop}`, and both refusals (unknown root,
+  // unknown preset) throw `NotFound`, which `doPost`'s catch answers 404 before this column is
+  // ever consulted — the same shape as `/api/memory/delete` and `/api/activity` above.
+  ['/api/loops/preset', [apiLoopsPresetMutate, false]],
 ]);
 
 /**

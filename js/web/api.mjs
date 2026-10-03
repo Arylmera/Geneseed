@@ -27,6 +27,7 @@ import {
 import { frontmatter } from '../hosts/hooks.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
+import { activeLoops } from '../loop/registry.mjs';
 import {
   SKILL_CLASS, entityStatus, loadRegistry, tuiInventory,
 } from '../inspect/inventory.mjs';
@@ -968,6 +969,17 @@ export function apiLoops(state) {
   };
 }
 
+/**
+ * The Active tab's read: every worktree `geneseed loop init` has registered, with its live
+ * `LOOP.md` state re-read on every call (`activeLoops` itself, not a cached copy — the registry
+ * stores identity only, see `js/loop/registry.mjs`). Takes no `state`-derived filtering: the
+ * registry is machine-wide, not scoped to this install's root, so a loop launched from a
+ * different project still shows up here.
+ */
+export function apiLoopsActive() {
+  return { loops: activeLoops() };
+}
+
 /** The source's release label, or null when it cannot be read. */
 function releaseLabel() {
   const v = sourceReleaseVersion({ config: CONFIG });
@@ -1018,4 +1030,5 @@ export const STATE_ROUTES = {
   '/api/rules': apiRules,
   '/api/mcp': apiMcp,
   '/api/loops': apiLoops,
+  '/api/loops/active': apiLoopsActive,
 };

@@ -24,7 +24,7 @@ import { buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
   apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg, wikiItems,
-  STATE_ROUTES, apiLoops,
+  STATE_ROUTES, apiLoops, apiLoopsActive,
 } from '../../js/web/api.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -38,7 +38,7 @@ import {
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
   apiInstallCmd, apiSelectView, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
-  apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE,
+  apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE, apiLoopsPresetMutate,
 } from '../../js/web/actions.mjs';
 import { installState, themeOfDir, installTargets } from '../../js/hosts/installs.mjs';
 import {
@@ -54,6 +54,10 @@ import { normcase } from '../../js/lib/paths.mjs';
 import { DOC_FOLDERS } from '../../js/build/source.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
+import { POST_ROUTES, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
+import { recordLoop } from '../../js/loop/registry.mjs';
+import { initState, renderLoopFile } from '../../js/loop/state.mjs';
+import { PRESETS } from '../../js/loop/score.mjs';
 import { makeSandbox, TMP_ROOT } from '../helpers/sandbox.mjs';
 import { webFixture, webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
 import { withGlobalInstalls as withGlobalInstallsFixture } from '../helpers/installs_fixture.mjs';
@@ -2970,4 +2974,112 @@ test('the loops endpoint reports graph problems in a template, as loop check doe
     else process.env.XDG_CONFIG_HOME = prevXdg;
     sb.cleanup();
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// LOOPS ACTIVE TAB — `GET /api/loops/active` + `POST /api/loops/preset`. `apiLoopsActive` is a
+// thin wrapper over `activeLoops` (registry behaviour itself is `tests/unit/loop_registry.test.mjs`'s
+// claim), so these only need to prove the wrapper shape and the wiring; `apiLoopsPresetMutate`
+// owns the two refusals the brief asks for, turning `setLoopPreset`'s throw into the same
+// `NotFound` → 404 convention every other mutating route here answers in.
+
+/** A minimal but real graph — the same fixture `loop_registry.test.mjs` uses — just enough for
+ * `initState` to produce a genuine LOOP.md; these tests are about the API wrapper, not the
+ * engine that writes the file. */
+const ACTIVE_TAB_GRAPH = {
+  name: 'g', start: 'a',
+  loops: [{ name: 'iter', iteration: true, nodes: ['a'], max: 5 }],
+  edges: [{ from: 'a', on: 'pass', to: '$close' }],
+  weights: {},
+};
+
+function withLoopsXdg(sb, fn) {
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(sb.path, 'xdg');
+  try {
+    return fn();
+  } finally {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+  }
+}
+
+function makeLoopWorktree(sb, name, preset = 'balanced') {
+  const root = path.join(sb.path, name);
+  fs.mkdirSync(root, { recursive: true });
+  const state = initState({ title: 'T', requirement: 'R', graph: ACTIVE_TAB_GRAPH, preset });
+  fs.writeFileSync(path.join(root, 'LOOP.md'), renderLoopFile(state));
+  return root;
+}
+
+test('GET /api/loops/active returns the registry rows — one running, one finished', () => {
+  const sb = makeSandbox();
+  try {
+    withLoopsXdg(sb, () => {
+      const running = makeLoopWorktree(sb, 'running');
+      recordLoop({ root: running, branch: 'loop/a', title: 'Running loop',
+        now: new Date('2026-10-01T00:00:00Z') });
+      const gone = path.join(sb.path, 'finished');
+      fs.mkdirSync(gone, { recursive: true });
+      recordLoop({ root: gone, branch: 'loop/b', title: 'Finished loop',
+        now: new Date('2026-10-01T00:00:00Z') });
+      // No LOOP.md in `gone` — `activeLoops` reports it `finished` (see registry docblock).
+      const { loops } = apiLoopsActive();
+      assert.equal(loops.length, 2);
+      const row = loops.find((l) => l.root === running);
+      assert.equal(row.status, 'running');
+      assert.equal(row.preset, 'balanced');
+      assert.deepEqual(row.threshold, PRESETS.balanced);
+      const finished = loops.find((l) => l.root === gone);
+      assert.deepEqual(finished,
+        { root: gone, branch: 'loop/b', title: 'Finished loop', started: '2026-10-01T00:00:00.000Z',
+          status: 'finished' });
+      assert.equal(STATE_ROUTES['/api/loops/active'], apiLoopsActive);
+    });
+  } finally { sb.cleanup(); }
+});
+
+test('POST /api/loops/preset success: LOOP.md is rewritten and the updated row is returned', () => {
+  const sb = makeSandbox();
+  try {
+    withLoopsXdg(sb, () => {
+      const root = makeLoopWorktree(sb, 'proj', 'balanced');
+      recordLoop({ root, branch: 'loop/a', title: 'My loop' });
+      const res = apiLoopsPresetMutate(null, { root, preset: 'aggressive' });
+      assert.equal(res.ok, true);
+      assert.equal(res.loop.preset, 'aggressive');
+      assert.deepEqual(res.loop.threshold, PRESETS.aggressive);
+      const text = fs.readFileSync(path.join(root, 'LOOP.md'), 'utf8');
+      assert.match(text, /"preset":\s*"aggressive"/);
+    });
+  } finally { sb.cleanup(); }
+});
+
+test('POST /api/loops/preset refuses an unknown root with a 4xx-shaped NotFound', () => {
+  const sb = makeSandbox();
+  try {
+    withLoopsXdg(sb, () => {
+      const root = makeLoopWorktree(sb, 'proj'); // never recordLoop'd
+      assert.throws(() => apiLoopsPresetMutate(null, { root, preset: 'balanced' }),
+        (e) => e instanceof NotFound && e.message === 'unknown loop');
+    });
+  } finally { sb.cleanup(); }
+});
+
+test('POST /api/loops/preset refuses a preset outside PRESETS with a 4xx-shaped NotFound', () => {
+  const sb = makeSandbox();
+  try {
+    withLoopsXdg(sb, () => {
+      const root = makeLoopWorktree(sb, 'proj');
+      recordLoop({ root, branch: 'loop/a', title: 'My loop' });
+      assert.throws(() => apiLoopsPresetMutate(null, { root, preset: 'yolo' }),
+        (e) => e instanceof NotFound && e.message === 'unknown preset "yolo"');
+    });
+  } finally { sb.cleanup(); }
+});
+
+test('POST /api/loops/preset is wired through POST_ROUTES with the handler\'s NotFound/404 convention, not the 409 column', () => {
+  assert.equal(POST_ROUTES.get('/api/loops/preset')[0], apiLoopsPresetMutate);
+  assert.equal(POST_ROUTES_CONVENTION['/api/loops/preset'], false,
+    'this route never returns {ok: false} — both refusals throw NotFound instead');
 });
