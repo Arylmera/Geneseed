@@ -19,12 +19,22 @@ that…".
    - **level** — project `<repo>/.geneseed/bricks/` (committed, shared with the team), global
      `$XDG_CONFIG_HOME/geneseed/bricks/` (default `~/.config/geneseed/bricks/`, every project on
      this machine), or shipped `src/bricks/` — only inside the Geneseed repository itself.
-2. **Write `<level>/<name>.md`** in the shape of the shipped `src/bricks/_template.md`: flat
-   frontmatter (`name`, `description`, `effect`, `agent` or `skill`, `outcomes`) between `---`
-   lines, then a 4-10 line body of direct instructions that ends with exactly how to choose
-   among the outcomes. No double-brace tokens in the body: the loop hands it to the model raw.
+2. **Write `<level>/<name>.md`**, the file stem equal to `name`:
+
+   ```
+   ---
+   name: <kebab-name>
+   description: <one line>
+   effect: read | mutate
+   agent: <agent>            (or  skill: <skill> — exactly one of the two)
+   outcomes: <a>, <b>
+   ---
+   <4-10 lines of direct instructions, ending with exactly how to choose among the outcomes>
+   ```
+
+   No double-brace tokens in the body: the loop hands it to the model raw.
 3. **Overriding by name** — a project or global brick named like a shipped one replaces it in
-   every template. That is allowed; say so to the user, and `geneseed loop check` reports it.
+   every template. That is allowed; say so to the user. `geneseed loop check` lists overrides under `overridden`.
 4. **Check it:** `geneseed loop check --brick <path>` (this file alone), then
    `geneseed loop check` from the repository (the whole catalogue, including every template that
    now routes through it). Fix every listed problem and re-run both.

@@ -87,8 +87,19 @@ const ACTIONS = {
       const problems = checkGraph(resolveGraph(args.graph, catalog), catalog.bricks);
       return { ok: !problems.length, problems };
     }
+    // The bare check doubles as the catalogue LISTING the loop skill composes a free graph
+    // from — frontmatter only: a brick's body reaches the model through `next`, for the node
+    // the engine chose, never as a menu.
     const problems = catalogProblems({ projectRoot: process.cwd() });
-    return { ok: !problems.length, problems };
+    const { bricks, templates, overridden } = loadCatalog({ projectRoot: process.cwd() });
+    const byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    return {
+      ok: !problems.length, problems,
+      templates: [...templates.keys()].sort(byName),
+      bricks: [...bricks.values()].sort((a, b) => byName(a.name, b.name))
+        .map(({ body, available, reason, ...b }) => ({ ...b, available, ...(reason ? { reason } : {}) })),
+      overridden,
+    };
   },
   init(args) {
     const root = requireRoot();

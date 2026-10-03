@@ -27,11 +27,12 @@ action prints one JSON object — act on its keys, never on your own reading of 
 
 ## Compose
 
-3. Use a template when the user names one. Otherwise compose a graph JSON (`name`, `nodes`,
-   `start`, `edges` of `{from, on, to}` with `$close`/`$stop` as terminals, `loops` with exactly
-   one `"iteration": true`) from the templates' bricks; skip a brick whose `skill` you do not
-   have. Write it to a temp `<name>.json` and check it: `geneseed loop check --graph <file>`.
-   `geneseed loop check` alone checks the whole catalogue.
+3. Use a template when the user names one. Otherwise run `geneseed loop check`: it lists the
+   `templates` and every brick (`name`, `description`, `effect`, `agent`/`skill`, `outcomes`,
+   `available`). Compose a graph JSON from available bricks — skip one marked unavailable or whose
+   `skill` you do not have: `name`, `nodes`, `start`, `edges` of `{from, on, to}` (one per
+   outcome; `$close`/`$stop` are terminals), `loops` with exactly one `"iteration": true`.
+   Write it to a temp `<name>.json` and validate it: `geneseed loop check --graph <file>`.
 4. `geneseed loop init --title "<title>" --requirement "<requirement>" --graph <template|file> --preset {{TRUST}}`.
    A refused graph prints `problems` — fix them and retry.
 
@@ -59,17 +60,23 @@ What `score --diff`, `decide` and `record` print back:
 
 - **`{commit: true, message_file}`** — close the unit with exactly this command, nothing added:
   `git add -A && git commit -F <message_file> && git push -u origin HEAD:loop/<slug>`
-  Never `git commit -m`: only this form is exempt; anything else asks.
+  Never `git commit -m`: only this form is exempt; anything else asks. It assumes a remote named
+  `origin` and a `message_file` path without spaces: if the path has a space, quote it and accept
+  that the gate asks; with no remote, report and stop instead of retrying.
 - **`{discard: true}`** (with `resplit` when an inner ring was exhausted) — set the attempt aside,
-  keeping `LOOP.md`: `git stash push --include-untracked -m loop-discarded -- . :^LOOP.md`
-- **`{empty}`**, **`{resumed}`**, **`{dropped}`**, **`{node}`**, **`{verify}`**, **`{stopped}`**,
-  a declared score — call `next` again.
+  keeping `LOOP.md`: `git stash -u -m loop-discarded -- . :^LOOP.md` (never `git stash push` —
+  the word `push` trips the git gate mid-run).
+- **`{done: true}`**, **`{empty}`**, **`{resumed}`**, **`{dropped}`**, **`{node}`**, **`{verify}`**,
+  **`{stopped}`**, a declared score, and any result with `commit: false` (a blocking diff score
+  included — it surfaces as `{awaiting}`) — call `next` again.
 - **`{error}`** — read it; it names the step you skipped (`score --declared` before a mutate
   brick, `score --diff` before `record`). Do the step, never edit the state block to get past it.
+  An `{error}` from `record` that mentions JSON means the shell mangled the card's quotes: retry
+  with the card on a single line and no single quotes inside it.
 
 ## The end
 
-5. On `$close`: `git rm LOOP.md`, then
+5. On `$close`: `git rm -f LOOP.md` (the engine rewrote it after the last commit), then
    `git commit -m "loop(<slug>): close" && git push -u origin HEAD:loop/<slug>`.
    This final commit is outside the exemption — the loop is no longer running — so the gate
    asks: that ask is the user's consent to close the loop.

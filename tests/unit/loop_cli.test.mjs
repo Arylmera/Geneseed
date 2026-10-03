@@ -21,10 +21,32 @@ const run = (cwd, argv, input = '') => {
   return { code: r.status, out: r.stdout.trim() ? JSON.parse(r.stdout) : null, err: r.stderr };
 };
 
-test('check over the shipped catalogue is clean', () => {
+// A bare `check` is also the catalogue LISTING the loop skill composes a free graph from: every
+// template name, and every brick's frontmatter (never its body — `next` hands that over, and
+// only for the node the engine chose), sorted by name, with `overridden` naming any brick a
+// later origin replaced. The two rows below are written out from `src/bricks/apply.md` and
+// `src/bricks/bruno-test.md`: one agent brick, one skill brick, both shipped and available.
+test('check over the shipped catalogue is clean, and lists templates and bricks', () => {
   const sb = makeSandbox('loopcli-');
   try {
-    assert.deepEqual(run(sb.path, ['check']), { code: 0, out: { ok: true, problems: [] }, err: '' });
+    const r = run(sb.path, ['check']);
+    assert.equal(r.code, 0);
+    assert.equal(r.out.ok, true);
+    assert.deepEqual(r.out.problems, []);
+    assert.deepEqual(r.out.templates, ['bugfix', 'feature', 'refactor']);
+    assert.deepEqual(r.out.overridden, []);
+    assert.deepEqual(r.out.bricks.map((b) => b.name), [
+      'apply', 'baseline-green', 'bruno-test', 'ci-fix', 'deps-audit', 'docs-update', 'identify',
+      'lint', 'plan', 'reproduce', 'review', 'security-scan', 'test',
+    ]);
+    assert.deepEqual(r.out.bricks[0], {
+      name: 'apply', description: "Implement the current card's intent, touching only its declared write set.",
+      effect: 'mutate', agent: 'developer', skill: null, outcomes: ['pass'], origin: 'shipped', available: true,
+    });
+    assert.deepEqual(r.out.bricks[2], {
+      name: 'bruno-test', description: 'Write or update Bruno requests for the endpoints this iteration touched.',
+      effect: 'mutate', agent: null, skill: 'bruno-test-writer', outcomes: ['pass', 'fail'], origin: 'shipped', available: true,
+    });
   } finally { sb.cleanup(); }
 });
 
