@@ -8,19 +8,23 @@ export const PAGES = {
   overview: 'Overview',
   laws: 'Constitution',
   library: 'Library',
+  loops: 'Loops',
   personal: 'Personal',
   installs: 'Installs',
   docs: 'Docs',
   activity: 'Activity',
 }
 
-// The two pages that carry tabs, and their tab ids in display order. The first id is the
+// The pages that carry tabs, and their tab ids in display order. The first id is the
 // tab a bare `#/personal` or `#/installs` opens on, and the one an unknown tab falls to.
 export const TABS = {
+  loops: ['templates', 'bricks'],
   personal: ['rules', 'profile', 'memory', 'notebook'],
   installs: ['hosts', 'edits', 'doctor', 'server'],
 }
 export const TAB_LABELS = {
+  templates: 'Templates',
+  bricks: 'Bricks',
   rules: 'Rules',
   profile: 'Profile',
   memory: 'Memory',
@@ -65,7 +69,7 @@ const tabOf = (page, t) => (TABS[page].includes(t) ? t : TABS[page][0])
 //   page    - a PAGES key; an unknown hash is the overview.
 //   section - the Library kind to open (`#/library` leaves it undefined, which Library
 //             reads as "the first kind"). Laws are the one section with a page of their own.
-//   tab     - the Personal or Installs tab.
+//   tab     - the Loops, Personal or Installs tab.
 //   item    - the selected entry's name, URI-decoded. Docs and Activity reuse the slot for
 //             their own sub-address: the docs page id, the activity session id.
 // Routes: #/ , #/<page>, #/<page>/<tab>[/<item>], #/section/<name>, #/item/<type>/<name>,
@@ -84,7 +88,7 @@ export function resolveRoute(hash) {
   if (head === 'activity' && a) return { page: 'activity', item: dec(a) }
   // Skills and Agents were pages of their own; each is now a kind in the Library.
   if (head === 'skills' || head === 'agents') return { page: 'library', section: head }
-  if (head === 'personal' || head === 'installs') {
+  if (own(TABS, head)) {
     const tab = tabOf(head, a)
     return b && tab === a ? { page: head, tab, item: dec(b) } : { page: head, tab }
   }

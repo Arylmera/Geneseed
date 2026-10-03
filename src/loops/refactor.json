@@ -1,0 +1,20 @@
+{
+  "name": "refactor",
+  "description": "Confirm the suite is green before touching anything, then iterate on the shape of the code alone. Tests are not edited by this template — a refactor that needs a different test is a behaviour change, not a refactor.",
+  "nodes": ["baseline-green", "identify", "apply", "test"],
+  "start": "baseline-green",
+  "edges": [
+    { "from": "baseline-green", "on": "pass", "to": "identify" },
+    { "from": "baseline-green", "on": "fail", "to": "$stop" },
+    { "from": "identify", "on": "more", "to": "apply" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "test" },
+    { "from": "test", "on": "pass", "to": "identify" },
+    { "from": "test", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "apply", "test"], "max": 20, "iteration": true },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 }
+  ],
+  "weights": { "logic": 0.6 }
+}

@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest run that clears it — least code, shortest path; base kit before custom mods, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send the party on independent objectives at once, then regroup the loot.",
   "DESC_PIPELINE": "Send a small party — scout, builder, tester — into their own instance, and only merge the run once the clear is verified.",
+  "DESC_LOOP": "Grind a requirement in small, scored rounds on a loop/* branch, the loop engine running the turns.",
+  "DESC_BRICK_FORGE": "Craft or tune a loop brick, then verify it with geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written for it, the affected run green, committed slice by slice.",
   "DESC_TEACH": "Level the player up toward a result — a crash course from tutorial to playable, a confusing mechanic decoded until it clicks, or a day-by-day grind to a deadline.",
   "DESC_QUIZ": "Test the player instead of explaining — a drill to reflex, an explain-it-back check, or a claimed mastery stress-tested — with an honest readout of the gaps.",

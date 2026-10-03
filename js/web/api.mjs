@@ -21,10 +21,12 @@ import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState, installTargets,
-  installedDefaults, modeOfDir,
+  installedDefaults, modeOfDir, trustOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { frontmatter } from '../hosts/hooks.mjs';
+import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
+import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import {
   SKILL_CLASS, entityStatus, loadRegistry, tuiInventory,
 } from '../inspect/inventory.mjs';
@@ -87,6 +89,7 @@ export function webState(theme = null, target = null) {
     footprint: null,
     posture: null,
     mode: null,
+    trust: null,
     _inv: null,
     _doctor: null,
   };
@@ -98,6 +101,7 @@ export function webState(theme = null, target = null) {
   st.footprint = footprintOfDir(st.target);      // 'full' when no marker
   st.posture = postureOfDir(st.target) || 'peer';
   st.mode = modeOfDir(st.target) || 'direct';
+  st.trust = trustOfDir(st.target) || DEFAULT_PRESET;
 
   Object.defineProperty(st, 'inventory', {
     get() {
@@ -154,6 +158,7 @@ export function webState(theme = null, target = null) {
     st.footprint = footprintOfDir(st.root);
     st.posture = postureOfDir(st.root) || 'peer';
     st.mode = modeOfDir(st.root) || 'direct';
+    st.trust = trustOfDir(st.root) || DEFAULT_PRESET;
     st._inv = null;
     st._doctor = null;
   };
@@ -165,6 +170,7 @@ export function webState(theme = null, target = null) {
     st.footprint = footprintOfDir(st.root);
     st.posture = postureOfDir(st.root) || 'peer';
     st.mode = modeOfDir(st.root) || 'direct';
+    st.trust = trustOfDir(st.root) || DEFAULT_PRESET;
   };
   return st;
 }
@@ -741,11 +747,12 @@ export function apiInstalls(state) {
       footprint: footprintOfDir(root),
       posture: postureOfDir(root),
       mode: modeOfDir(root),
+      trust: trustOfDir(root),
       selected: samePath(viewCfg(host, scope, root), state.target),
     });
   }
   return { installs: out, postures: discoverNames('postures', 'peer'),
-    modes: discoverNames('modes', 'direct') };
+    modes: discoverNames('modes', 'direct'), trusts: Object.keys(PRESETS) };
 }
 
 /** Beside the deployed AGENT.md. */
@@ -848,6 +855,9 @@ export function apiOverview(state) {
       notebook: notebookItems(state).length,
       wiki: wikiItems(state).length,
       config: configItems(state).length,
+      // The rail's Loops badge: templates only, from the same catalogue `/api/loops` reads —
+      // a brick is a part, the template is what a person runs.
+      loops: loadCatalog({ projectRoot: state.root }).templates.size,
     },
     doctor: state.doctor,
     diff,
@@ -933,6 +943,31 @@ export function apiRecent(state) {
   return { items: items.slice(0, RECENT_LIMIT), skipped, limit: RECENT_LIMIT };
 }
 
+/**
+ * The Loops page: the brick and template catalogue the `geneseed loop` CLI reads, resolved from
+ * the install ROOT — for a project install that is the repo, where `<repo>/.geneseed/` lives; for
+ * a global one it is the config dir, which has no `.geneseed/` and so adds nothing. Read-only:
+ * the page draws templates and lists bricks, it never writes one.
+ *
+ * A template's graph is passed whole (`graph`) rather than flattened, because the page's ring
+ * layout needs `nodes`, `edges` and `loops` exactly as the engine reads them.
+ */
+export function apiLoops(state) {
+  const { bricks, templates, overridden } = loadCatalog({ projectRoot: state.root });
+  const byName = ([a], [b]) => (a < b ? -1 : 1);
+  return {
+    templates: [...templates].sort(byName).map(([name, { origin, ...graph }]) => ({
+      name, description: graph.description || '', origin, graph,
+    })),
+    bricks: [...bricks].sort(byName).map(([, b]) => ({ reason: null, ...b })),
+    overridden,
+    // A brick or template the catalogue skipped (bad frontmatter, not JSON, misnamed), and a
+    // template that fails the graph rules: the page says so — the same list `loop check`
+    // prints — or a team's broken override would just silently not be there.
+    problems: catalogProblems({ projectRoot: state.root }),
+  };
+}
+
 /** The source's release label, or null when it cannot be read. */
 function releaseLabel() {
   const v = sourceReleaseVersion({ config: CONFIG });
@@ -982,4 +1017,5 @@ export const STATE_ROUTES = {
   // answers — a daemon whose POST worked and whose GET 501'd would have no way to obtain one.
   '/api/rules': apiRules,
   '/api/mcp': apiMcp,
+  '/api/loops': apiLoops,
 };

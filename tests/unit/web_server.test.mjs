@@ -51,10 +51,10 @@ const TOKEN = 'test-token';
 // message. (`/api/graph` left this list when the web graph pages were retired — the last
 // endpoint to leave it.)
 
-/** Every GET path the daemon answers — 20. Trailing `/` marks a prefix route. */
+/** Every GET path the daemon answers — 21. Trailing `/` marks a prefix route. */
 const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
   '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/installs', '/api/item/',
-  '/api/jobs', '/api/jobs/', '/api/mcp', '/api/overview', '/api/ping', '/api/profile',
+  '/api/jobs', '/api/jobs/', '/api/loops', '/api/mcp', '/api/overview', '/api/ping', '/api/profile',
   '/api/rules', '/api/setup', '/api/themes', '/api/recent'];
 
 /** Every POST path the daemon answers — 15. */

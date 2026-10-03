@@ -59,6 +59,12 @@ async function action(name, opts) {
   }
 }
 
+// ── Loops ────────────────────────────────────────────────────────────────────
+// The loop catalogue, read-only: templates (each with its graph), bricks (with their
+// source body), and which project or global brick overrides a shipped one.
+
+const loops = () => get('/api/loops')
+
 // ── MCP ─────────────────────────────────────────────────────────────────────
 // MCP server wiring: list configured targets/servers, and toggle one on or off
 // (the server rewrites only the `mcp` block of the target config).
@@ -141,6 +147,7 @@ const excludes = () => get('/api/excludes')
 const excludeMutate = (action, path) => post('/api/excludes', { action, path })
 
 export const api = {
+  loops,
   overview,
   recent,
   activity,

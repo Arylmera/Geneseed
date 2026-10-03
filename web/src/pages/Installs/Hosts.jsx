@@ -147,7 +147,7 @@ export default function Hosts({
   const [note, setNote] = useState('')
   const [busyKey, setBusyKey] = useState('') // install toggle in flight
   const [mcpBusy, setMcpBusy] = useState('') // mcp server toggle in flight
-  // Each install's build choices, keyed by id: { theme, footprint, posture, mode }, each
+  // Each install's build choices, keyed by id: { theme, footprint, posture, mode, trust }, each
   // key present only once the user has picked it (choiceFor fills the rest).
   const [picks, setPicks] = useState({})
   const [deploying, setDeploying] = useState(false)
@@ -188,6 +188,7 @@ export default function Hosts({
       footprint: p.footprint || inst.footprint || 'full',
       posture: p.posture || inst.posture || 'peer',
       mode: p.mode || inst.mode || 'direct',
+      trust: p.trust || inst.trust || 'balanced',
     }
   }
   const setPick = (inst, key, v) =>
@@ -198,7 +199,8 @@ export default function Hosts({
       c.theme === inst.theme &&
       c.footprint === (inst.footprint || 'full') &&
       c.posture === (inst.posture || 'peer') &&
-      c.mode === (inst.mode || 'direct')
+      c.mode === (inst.mode || 'direct') &&
+      c.trust === (inst.trust || 'balanced')
     )
   }
   const options = {
@@ -206,12 +208,13 @@ export default function Hosts({
     footprint: FOOTPRINT_OPTIONS,
     posture: instData.postures || [],
     mode: instData.modes || [],
+    trust: instData.trusts || [],
   }
 
   // Install a not-installed location, or rebuild an active one with its picks. Both go
   // through the 'install' action (a non-destructive in-place emit), streamed to the console.
   const applyVoice = async (inst) => {
-    const { theme, footprint, posture, mode } = choiceFor(inst)
+    const { theme, footprint, posture, mode, trust } = choiceFor(inst)
     const msg =
       inst.state === 'absent'
         ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint, ${posture} posture, ${mode} mode)? ` +
@@ -230,6 +233,7 @@ export default function Hosts({
         footprint,
         posture,
         mode,
+        trust,
       })
   }
 

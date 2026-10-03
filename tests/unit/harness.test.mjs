@@ -1565,3 +1565,20 @@ test('the module map gate sees a module nobody documented, and a row for a modul
   assert.ok(dangling.some((p) => p.includes('ghost.mjs') && p.includes('does not exist')),
     `a row for a missing module went unreported: ${JSON.stringify(dangling)}`);
 });
+
+// ---------------------------------------------------------------------------------------------
+// The shipped loop catalogue.
+
+test('the loop catalogue gate sees a shipped template whose graph no longer terminates', () => {
+  const clean = gate(fixture(), 'm.loopProblems()');
+  assert.deepEqual(clean, [],
+    `the untouched copy already fails the loop catalogue, so the fault below proves nothing: ${JSON.stringify(clean)}`);
+
+  const bugfix = fs.readFileSync(path.join(fixture(), 'src', 'loops', 'bugfix.json'), 'utf8');
+  const broken = JSON.parse(bugfix);
+  broken.edges = broken.edges.filter((e) => !(e.from === 'test' && e.on === 'fail'));
+  const problems = withFault({ 'src/loops/bugfix.json': JSON.stringify(broken, null, 2) },
+    (root) => gate(root, 'm.loopProblems()'));
+  assert.ok(problems.includes('loops/bugfix: node test: no edge for outcome fail'),
+    `the missing-edge fault went unreported: ${JSON.stringify(problems)}`);
+});

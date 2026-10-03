@@ -295,6 +295,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     // packs — never to `harness.config.json`, which would drop the consent gate.
     const cmds = actionCommands(action, {
       theme, emit, footprint: state.footprint, posture: state.posture, mode: state.mode,
+      trust: state.trust,
       doctrines: doctrinesForBuild(state.target),
     });
     if (!isTruthy(cmds)) {

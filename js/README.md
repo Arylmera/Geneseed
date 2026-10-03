@@ -1,6 +1,6 @@
 # `js/` — the module map
 
-Fifty-seven modules in seven folders. This page is the address book: **what each one owns**, and
+Sixty-one modules in eight folders. This page is the address book: **what each one owns**, and
 **which file to open first** for a given task. It is not documentation of behaviour — every module
 has a docblock for that, and the docblock is the thing to read before editing.
 
@@ -20,6 +20,7 @@ js/build/     src/ + themes/  →  rendered text  →  a bundle  →  a per-host
 js/hosts/     where it stops being a renderer and touches the machine
 js/inspect/   the read-only half: doctor, status, diff, validate, catalog
 js/lib/       primitives, every one a deliberate divergence from the Node default
+js/loop/      `geneseed loop` — the state machine over LOOP.md, and what it steps through
 js/maintain/  lifecycle verbs that change an install that already exists
 js/ui/        what it prints at a terminal
 js/web/       the `geneseed web` console
@@ -68,10 +69,11 @@ user co-owns, and the hook verbs those emitted configs then run.
 |---|---|
 | `hosts.mjs` | The four host config dirs (opencode/claude/bob/openclaude), plus `resolvePath`/`expanduser` |
 | `hooks.mjs` | The verbs the emitted hooks run every session: `context`, `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Bob), `learn`. `--host` picks the verdict dialect |
+| `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `currentBranch`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate and `js/loop/cli.mjs`'s commit-message writer |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json`; owns the hook shim and the managed blocks |
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |
-| `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture and mode |
+| `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |
 | `mcp.mjs` | MCP server presets, the per-host `mcpServers` config read/write, and toggle state |
 | `link.mjs` | `geneseed link`/`unlink` — the PATH shim, and the only Windows USER-Path registry edit |
 
@@ -124,6 +126,26 @@ into files users have committed, so change the test that states it in the same c
 float `1.0` into one double, and that value gets written into a user's file. Do not swap in a diff
 library for `udiff.mjs`: it is not Myers, ties resolve to the earliest match. Every function in
 `paths.mjs` branches on `process.platform`, so green on one OS proves nothing about the other.
+
+## `js/loop/` — the loop engine
+
+`geneseed loop` — a state machine over a brick graph, persisted as a JSON block in `LOOP.md` at
+the git root. The model only ever runs the node it is handed and reports an outcome; every
+transition, score and stop is computed here.
+
+| module | owns |
+|---|---|
+| `graph.mjs` | `checkGraph` — the rules a loop graph must satisfy before a node runs: nodes name real bricks, edges cover every outcome, `$close` is reachable, every cycle is inside a declared loop |
+| `score.mjs` | The risk arithmetic: `WEIGHTS`, `PRESETS`, `declaredRisk`/`actualRisk`/`decide`, `parseNumstat`. Pure — no import but node builtins |
+| `catalog.mjs` | `loadCatalog` — bricks and loop templates from shipped/global/project origins, later overrides earlier BY NAME |
+| `state.mjs` | The engine itself: `initState`, `nextStep`, `scoreDeclared`/`scoreDiff`, `recordOutcome`, `decideAwaiting`, `renderLoopFile`/`parseLoopFile` |
+| `cli.mjs` | `geneseed loop check\|init\|next\|score\|record\|decide` — the only face either a model or a human reaches this engine through |
+
+**Before editing:** `score.mjs` is imported by the build driver (the `--trust` choices), so it must
+stay free of every import but node builtins and `graph.mjs`. `state.mjs` excludes `LOOP.md` itself
+from every score and every read-brick porcelain check — it is the engine's own bookkeeping, never
+part of the work being scored. `cli.mjs` may not spawn: git output is piped in on stdin by the
+model, never read by this entry.
 
 ## `js/maintain/` — lifecycle
 

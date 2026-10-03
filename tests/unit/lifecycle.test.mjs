@@ -1120,12 +1120,13 @@ test('status renders one row per install with the settings a rebuild would repro
   const p = {
     host: 'opencode', scope: 'project', root: 'R', state: 'active', emit: 'opencode',
     theme: 'imperial', footprint: 'full', posture: 'mentor', mode: 'foreman',
-    doctrines: ['craft', 'rigor'], excludeRules: ['craft.1'], argv: [], rebuild: 'geneseed-build',
+    trust: 'prudent', doctrines: ['craft', 'rigor'], excludeRules: ['craft.1'], argv: [], rebuild: 'geneseed-build',
   };
   const lines = statusLines({ ...d, installs: [p] }, false);
   const row = lines.find((l) => l.includes('opencode:project'));
   assert.ok(row, 'no install row');
-  assert.match(row, /active · imperial · full · mentor\/foreman · craft,rigor · excluding craft\.1 {2}\(R\)/);
+  // Posture, mode and the loop trust preset share one slash-joined slot.
+  assert.match(row, /active · imperial · full · mentor\/foreman\/prudent · craft,rigor · excluding craft\.1 {2}\(R\)/);
   assert.equal(new Set(lines.map((l) => l.length)).size, 1, 'the install row broke the frame');
 
   // A global install names no path, an empty pack list says so, and no marker reads "none".

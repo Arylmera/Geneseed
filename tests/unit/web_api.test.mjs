@@ -24,7 +24,7 @@ import { buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
   apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg, wikiItems,
-  STATE_ROUTES,
+  STATE_ROUTES, apiLoops,
 } from '../../js/web/api.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -2283,6 +2283,42 @@ test('the deploy command validates its pack list the same way the install comman
   } finally { sb.cleanup(); }
 });
 
+test('the deploy and install commands forward a valid loop trust preset, and only a valid one', () => {
+  // The same boundary posture and mode cross: a picked preset reaches the argv, a bogus one
+  // never does, and the default elides — so a form that sends nothing builds `balanced`.
+  const sb = makeSandbox();
+  try {
+    const at = (body) => apiDeployCmd(neutral(), { host: 'opencode', path: sb.path, ...body })
+      .cmd.map(String);
+    assert.equal(after$(at({ trust: 'prudent' }), '--trust'), 'prudent');
+    assert.equal(after$(at({ trust: 'aggressive' }), '--trust'), 'aggressive');
+    assert.ok(!at({ trust: 'balanced' }).includes('--trust'));
+    assert.ok(!at({}).includes('--trust'));
+    assert.ok(!at({ trust: 'reckless' }).includes('--trust'));
+  } finally { sb.cleanup(); }
+  withThreeInstalls(({ st, cl }) => {
+    const cmd = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
+    assert.equal(after$(cmd({ trust: 'prudent' }), '--trust'), 'prudent');
+    // No pick and no deployed loop skill: the install keeps (here: gets) the default.
+    assert.ok(!cmd({}).includes('--trust'));
+    assert.ok(!cmd({ trust: '../evil' }).includes('--trust'));
+  });
+});
+
+test('the installs payload carries the trust presets and each install\'s own', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    const state = neutral();
+    assert.deepEqual(apiInstalls(state).trusts, ['prudent', 'balanced', 'aggressive']);
+    // No loop skill deployed in this seeded install: unknown, as `mode` is null on no lead.
+    assert.equal(rowFor(state, root).trust, null);
+    fs.mkdirSync(path.join(root, 'skills', 'loop'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'skills', 'loop', 'SKILL.md'),
+      '# loop\n\nDefault trust preset: **Prudent**\n');
+    assert.equal(rowFor(state, root).trust, 'prudent');
+  });
+});
+
 test('a bogus deploy theme falls back to the state theme', () => {
   const sb = makeSandbox();
   try {
@@ -2864,4 +2900,74 @@ test('stripHarnessBlocks drops the host label that opens a kept block', () => {
     + '<!--harness:opencode-->\n*(OpenCode only)*\nplugins\n<!--/harness-->\n*(OpenCode only)*\n';
   assert.equal(stripHarnessBlocks(body, 'claude'), 'intro\nhooks\n*(OpenCode only)*');
   assert.equal(stripHarnessBlocks(body, 'opencode'), 'intro\nplugins\n*(OpenCode only)*');
+});
+
+// THE LOOPS PAGE READS THE CATALOGUE THE CLI READS, from the console's install ROOT — the repo for
+// a project install, where `.geneseed/` lives. Hermetic: the root is a sandbox carrying one
+// project brick that overrides the shipped `apply`, and XDG points into the sandbox so a
+// developer's own global bricks cannot leak in. Shipped templates come through with their graph;
+// a brick carries its body; the override is reported, never silent.
+test('the loops endpoint lists templates, bricks and overrides from the install root', () => {
+  const sb = makeSandbox();
+  const prevXdg = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(sb.path, 'xdg');
+  try {
+    const bricks = path.join(sb.path, '.geneseed', 'bricks');
+    fs.mkdirSync(bricks, { recursive: true });
+    fs.writeFileSync(path.join(bricks, 'apply.md'), '---\nname: apply\ndescription: Team apply.\n'
+      + 'effect: mutate\nagent: developer\noutcomes: pass\n---\nDo it our way.\n');
+    const { templates, bricks: rows, overridden } = apiLoops(webState('neutral', sb.path));
+    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'feature', 'refactor']);
+    const bugfix = templates[0];
+    assert.equal(bugfix.origin, 'shipped');
+    assert.equal(bugfix.graph.start, 'reproduce');
+    assert.equal(bugfix.graph.loops[0].name, 'iterations');
+    assert.equal(typeof bugfix.description, 'string');
+    const apply = rows.find((b) => b.name === 'apply');
+    assert.deepEqual(
+      { origin: apply.origin, description: apply.description, effect: apply.effect,
+        agent: apply.agent, skill: apply.skill, outcomes: apply.outcomes, body: apply.body,
+        available: apply.available },
+      { origin: 'project', description: 'Team apply.', effect: 'mutate', agent: 'developer',
+        skill: null, outcomes: ['pass'], body: 'Do it our way.', available: true });
+    assert.deepEqual(overridden, ['apply (project, overrides shipped)']);
+    // A malformed project brick is skipped by the catalogue — and SAID, not dropped silently.
+    fs.writeFileSync(path.join(bricks, 'broken.md'), '---\nname: broken\neffect: maybe\n---\n');
+    assert.deepEqual(apiLoops(webState('neutral', sb.path)).problems, [
+      'bricks/broken.md (project): broken: description is empty',
+      'bricks/broken.md (project): broken: effect must be read or mutate, not "maybe"',
+      'bricks/broken.md (project): broken: exactly one of agent or skill',
+      'bricks/broken.md (project): broken: outcomes is empty',
+    ]);
+    assert.ok(rows.every((b, i) => i === 0 || rows[i - 1].name < b.name), 'bricks sorted by name');
+    assert.equal(STATE_ROUTES['/api/loops'], apiLoops);
+    // The rail badge: the three shipped templates, counted on the overview it already polls.
+    assert.equal(apiOverview(webState('neutral', sb.path)).counts.loops, 3);
+  } finally {
+    if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = prevXdg;
+    sb.cleanup();
+  }
+});
+
+// A project template that parses but fails the graph rules is listed AND reported: the Loops
+// page renders `problems`, so a broken team graph says why `loop init` would refuse it. The
+// template is the shipped bugfix with one bad weight override, prefixed like `loop check` does.
+test('the loops endpoint reports graph problems in a template, as loop check does', () => {
+  const sb = makeSandbox();
+  const prevXdg = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(sb.path, 'xdg');
+  try {
+    const loops = path.join(sb.path, '.geneseed', 'loops');
+    fs.mkdirSync(loops, { recursive: true });
+    const graph = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/loops/bugfix.json'), 'utf8'));
+    fs.writeFileSync(path.join(loops, 'team.json'), JSON.stringify({ ...graph, name: 'team', weights: { vibes: 1 } }));
+    const { templates, problems } = apiLoops(webState('neutral', sb.path));
+    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'feature', 'refactor', 'team']);
+    assert.deepEqual(problems, ['loops/team: weights: vibes is not an action']);
+  } finally {
+    if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = prevXdg;
+    sb.cleanup();
+  }
 });

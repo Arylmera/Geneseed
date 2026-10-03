@@ -2698,11 +2698,13 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
   .nav-scrim { display: block; position: fixed; inset: 0; z-index: 39; padding: 0; border: 0;
     background: rgba(0,0,0,.55); cursor: pointer; }
   .page { padding: 18px 16px 150px; }
-  .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed;
+  /* One column per NAV entry, however many there are: a fixed repeat(N) wraps the N+1th. */
+  .tabbar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: fixed;
     left: 0; right: 0; bottom: 0; z-index: 25; height: 64px; background: var(--bg-2);
     border-top: 1px solid var(--line); }
   .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 3px; min-width: 0; color: var(--text-3); font-size: 11px; font-weight: 600; }
+    gap: 3px; min-width: 0; color: var(--text-3); font-size: 11px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; }
   .tabbar a.on { color: var(--accent-text); }
   .tabbar .glyph { width: 20px; height: 20px; }
   .console { bottom: 64px; }
@@ -2808,3 +2810,57 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
   .ag-draw { stroke-dasharray: none; }
   .ag-mark { opacity: 1; }
 }
+
+/* ---- Loops page (pages/Loops.jsx, components/RingGraph.jsx) ----
+   The ring reads three tokens: the accent is the iteration (the big turn), --good the inner
+   retries, --warn the ⛨ validate gate — the mockup's blue / green / yellow, retinted by every
+   voice and by light mode. */
+.tab-off { padding: 6px 14px; color: var(--text-3); font-weight: 600; white-space: nowrap;
+  cursor: not-allowed; }
+.loop-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px; margin-bottom: 16px; }
+.loop-tpl { gap: 6px; color: var(--text); }
+.loop-tpl:hover { border-color: var(--line-2); }
+.loop-tpl.on { border-color: var(--accent-line); background: var(--accent-soft); }
+.loop-graph { align-items: center; }
+.loop-ring { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto;
+  font-family: var(--font-ui); }
+.loop-h2 { margin: 22px 0 10px; font-size: 15px; font-weight: 700; }
+.loop-bricks { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px; }
+.loop-brick { gap: 6px; scroll-margin-top: calc(var(--topbar-h) + 12px); }
+.loop-brick.dimmed { opacity: .55; }
+.loop-brick-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.loop-brick-head b { margin-right: 4px; }
+.loop-brick-desc { margin: 0; color: var(--text-2); }
+.loop-brick-src { margin: 8px 0 0; padding: 10px 12px; max-height: 320px; overflow: auto;
+  white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.loop-brick summary { cursor: pointer; }
+.loop-problems { margin-bottom: 16px; border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.loop-problems ul { margin: 0; padding-left: 18px; }
+
+.lr-ring { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.lr-inner { fill: color-mix(in srgb, var(--good) 6%, transparent);
+  stroke: color-mix(in srgb, var(--good) 25%, transparent); stroke-width: 1; }
+path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linecap: round; }
+.lr-flow { fill: none; stroke: var(--line-3); stroke-width: 1.6; }
+.lr-box { fill: none; stroke: color-mix(in srgb, var(--good) 45%, transparent); stroke-width: 1.2; }
+.lr-head-ring { fill: var(--accent); }
+.lr-head-inner { fill: var(--good); }
+.lr-head-flow { fill: var(--line-3); }
+.lr-node { cursor: pointer; }
+.lr-node circle { fill: color-mix(in srgb, var(--accent) 12%, var(--surface)); stroke: var(--accent);
+  stroke-width: 2; }
+.lr-node.inner circle { stroke: var(--good); fill: color-mix(in srgb, var(--good) 12%, var(--surface)); }
+.lr-node text { font-size: 11.5px; font-weight: 600; fill: var(--text); }
+.lr-node:hover circle, .lr-node:focus-visible circle { stroke-width: 3; }
+.lr-node:focus { outline: none; }
+.lr-gate circle { fill: var(--warn); }
+.lr-gate text:first-of-type { font-size: 14px; fill: var(--surface); }
+.lr-lbl { font-size: 14px; font-weight: 600; fill: var(--text); }
+.lr-sub { font-size: 11px; fill: var(--text-2); }
+.lr-sub.lr-good { fill: var(--good); }
+.lr-sub.lr-warn { fill: var(--warn); }
+.lr-sub.lr-acc { fill: var(--accent); }
+.lr-title { font-size: 18px; font-weight: 700; fill: var(--text); }

@@ -46,6 +46,7 @@ import {
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, footprintOfDir, modeOfDir, postureOfDir,
+  trustOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
@@ -175,6 +176,8 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
       // `null` (no marker) means unknown and renders at all four, which `doctrinesForBuild`
       // makes explicit rather than leaving to `makeCfg`'s parameter default two layers down.
       posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
+      // The loop skill's preset, or its `Default trust preset:` line reads as edited.
+      trust: trustOfDir(dir),
     }));
     // The one place a render depends on WHERE it is installed: a global Bob emit writes each
     // folder skill's absolute directory into its SKILL.md (see `writeNativeLayer`), so the

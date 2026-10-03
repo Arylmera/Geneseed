@@ -26,6 +26,7 @@
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_PRESET } from '../loop/score.mjs';
 
 /**
  * One doctrine pack file used to be read three times per render — the survives gate and the
@@ -256,7 +257,8 @@ export function knownRuleIds() {
  * `PACK_ORDER` for the whole process.
  */
 export function makeCfg({
-  posture = 'peer', mode = 'direct', doctrines = PACK_ORDER, excludeRules = [],
+  posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
+  excludeRules = [],
 } = {}) {
   return {
     root: ROOT,
@@ -268,6 +270,8 @@ export function makeCfg({
     workflowSrc: WORKFLOW_SRC,
     posture,
     mode,
+    // The loop skill's default preset (`--trust`); the skill is its only reader.
+    trust,
     doctrines: Array.isArray(doctrines) ? [...doctrines] : [...PACK_ORDER],
     // ⚠ THE SECOND DOCTRINE AXIS, AND ITS DEFAULT IS THE OPPOSITE WAY ROUND. `doctrines`
     // defaults to EVERYTHING because an unknown selection must bind the most; `excludeRules`

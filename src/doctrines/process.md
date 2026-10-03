@@ -85,7 +85,9 @@ time — a personal feature branch included. A one-time approval is not standing
 consent. Consent may cover a **named batch**: "commit as you go on this branch"
 stands for commits on that branch until the session ends or the scope changes; a
 new session, a new branch, or a widened scope re-asks. Push earns no such default
-and stays per-ask unless granted in the same named form. Before each, present in
+and stays per-ask unless granted in the same named form. A launched loop's batch
+covers commit and push on its own `loop/*` branch; merging that branch into a
+shared one never is. Before each, present in
 order (1) a plain-language summary of what changed and why and (2) the exact
 commit message you intend to use, then wait. Never push on your own initiative.
 On a **shared branch** — `main`, `master`, `develop`, `development`, a
@@ -97,13 +99,14 @@ through the git-rescue {{SKILL}} behind a backup. The host gates commit and push
 the tool boundary too, so this consent cannot be lost to a sticky allowlist.
 <!-- LEAN:else -->
 Recording and sharing code is consented, never unilateral: **every** `git commit` and
-`git push` needs the user's **explicit acceptance**, on every branch, every time; a
-one-time approval is not standing consent. A named batch ("commit as you go") stands until
-the session ends or scope changes; push earns no default. Before each, present the plain
-summary of what changed and why, the exact commit message, then wait. Shared branches —
-`main`, `master`, `develop`, `development`, `release`/`hotfix`, any you are unsure of —
-take the same gate. Never force-push, hard-reset, or rebase one: undo with a revert commit
-(git-rescue {{SKILL}} for a legitimate rewrite). The host gates both at the tool boundary.
+`git push` needs **explicit acceptance**, every branch, every time; one-time approval is
+not standing consent. A named batch ("commit as you go") stands until the session ends or
+scope changes; push earns no default. A launched loop's batch covers commit and push on
+its own `loop/*` branch only; merging it never. Show the plain summary and the exact
+commit message before each, then wait. Shared branches — `main`, `master`, `develop`,
+`development`, `release`/`hotfix`, any unsure — take the same gate. Never force-push,
+hard-reset, or rebase one: undo with a revert commit (git-rescue {{SKILL}} for a
+legitimate rewrite). The host gates both at the tool boundary.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:bound-the-loop}} Bound the Loop

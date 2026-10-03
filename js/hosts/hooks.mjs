@@ -56,6 +56,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 import {
   GATE_LEDGER, resolveMemoryDir, resolvePath, sovereignBypass,
 } from './hosts.mjs';
+import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
@@ -599,6 +600,88 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 const DESTRUCTIVE_GIT_RE =
   /\bgit\b[^\n]*\b(?:reset\s+--hard|clean\s+-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\s+[^\n]*--force)/;
 
+// `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
+// false allow publishes. So the exemption holds only when the ENTIRE command is built from
+// forms read in full below, on a branch a loop was actually launched on (LOOP.md's state
+// marker, left by `geneseed loop init` — not just a name starting with `loop/`, which anyone
+// can type). `currentBranch`/`gitRootOf`/`loopLaunched` live in `./gitref.mjs` — the one
+// fs-only reader this file shares with `js/loop/cli.mjs`'s commit-message writer.
+
+// No newline, backtick, or `$(` substitution anywhere — these can smuggle a second command (or
+// a shared-branch target) past every check below, so the command is refused before it is even
+// split. `<`/`>` are refused too: a redirect can both hide a second effect and, as the review
+// found, trail off the end of an otherwise-whitelisted push (`HEAD:main>/dev/null`). A single
+// `&` — not doubled into `&&` — is refused too: a shell runs `a & b` as TWO commands just like
+// `a && b`, and the review found it unparsed by the splitter below, which only recognised the
+// doubled form. `(?<!&)&(?!&)` matches a lone `&` without also matching either half of `&&`.
+const UNSAFE_CHARS_RE = /[\n`<>]|\$\(|(?<!&)&(?!&)/;
+
+// The only three git shapes a loop's own automation ever needs: adding unquoted paths,
+// committing via `-F`/`--file` (so the message text, which may contain anything, never has to
+// be quoted on this command line at all — see `js/loop/cli.mjs`'s LOOP_COMMIT_MSG), and
+// read-only inspection. The token class `[\w./:@^~=+,-]` excludes quotes, braces, `!`, `*`,
+// `$` and `&` — a brace or glob expansion (`{a,b}`, `*`) is exactly how a shell can turn one
+// whitelisted-looking token into several unknown ones, so no pattern's path/arg tokens may
+// contain them. The SAME class is the `-F`/`--file` path, not the looser `[^\s'"]+` this once
+// was: with that loose class, `git commit -F {m,--amend}` brace-expands to `git commit -F m
+// --amend` and `git commit -F m*` glob-expands to whatever matches — either turns a commit of
+// the loop's own message file into an amend of the last one. `ARG_RE` already accepts a drive
+// letter (`C:/…`) via its `:`, so tightening it here costs nothing the loop's own writer uses.
+const ARG_RE = '[\\w./:@^~=+,-]+';
+const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`);
+const SEG_COMMIT_RE = new RegExp(`^git\\s+commit(\\s+-q)?\\s+(-F\\s+|--file[=\\s])${ARG_RE}(\\s+-q)?$`);
+const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`);
+
+/**
+ * `git push`, exactly: `[-u|--set-upstream] <remote> HEAD:<branch>` or
+ * `HEAD:refs/heads/<branch>` — the ONLY exempt form. Bare `git push`, a remote alone, a plain
+ * branch name, or bare `HEAD` are no longer enough: every one of those is redirectable by
+ * `push.default`/`remote.*.push`/an upstream config this read cannot see, which is exactly how
+ * the review's re-review turned "looks like it only pushes `loop/x`" into "pushes wherever the
+ * repo's config says". An EXPLICIT `HEAD:<ref>` refspec is immune to both — git ignores
+ * `push.default` once a refspec is given, and a mirror/`+`/`:`-prefixed form refuses to
+ * coexist with one. The remote's first character must be alphanumeric so a flag (`-f`,
+ * `--all`, `--delete`, …) can never be read as a remote name.
+ */
+function pushSegmentOk(seg, branch) {
+  const m = /^git\s+push(?:\s+(.*))?$/.exec(seg);
+  if (!m) return false;
+  const rest = (m[1] || '').trim();
+  if (!rest) return false;
+  const tokens = rest.split(/\s+/);
+  let i = 0;
+  if (tokens[i] === '-u' || tokens[i] === '--set-upstream') i += 1;
+  const remote = tokens[i];
+  if (remote === undefined || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) return false;
+  i += 1;
+  const ref = tokens[i];
+  i += 1;
+  if (ref === undefined || i !== tokens.length) return false;
+  return ref === `HEAD:${branch}` || ref === `HEAD:refs/heads/${branch}`;
+}
+
+/**
+ * Consent Before Push's loop/* exemption: true only when EVERY clause holds —
+ * (1) the command carries none of the characters that could smuggle a second effect past this
+ * read, (2)-(3) every `&&`/`;`/`||`/`|`-separated segment is one of the three whitelisted git
+ * shapes above, with every push segment also passing `pushSegmentOk`, and (4) the branch
+ * checked out in `cwd` starts with `loop/` AND its git root carries a launched LOOP.md. Splitting
+ * on the separators without respecting quotes is deliberate, not an oversight: (1) and the
+ * per-segment whitelist already refuse any segment a quoted separator could produce, because a
+ * quote character fails every one of the three segment patterns.
+ */
+export function loopExempt(command, cwd) {
+  if (typeof command !== 'string' || UNSAFE_CHARS_RE.test(command)) return false;
+  const branch = currentBranch(cwd);
+  if (!branch || !branch.startsWith('loop/')) return false;
+  const root = gitRootOf(cwd);
+  if (!root || !loopLaunched(root)) return false;
+  const segments = command.split(/&&|\|\||[;|]/).map((s) => s.trim()).filter(Boolean);
+  if (!segments.length) return false;
+  return segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_COMMIT_RE.test(seg)
+    || SEG_READONLY_RE.test(seg) || pushSegmentOk(seg, branch));
+}
+
 /** The `permissionDecision: "ask"` document, in Python's compact `json.dumps` spelling. */
 function askDecision(reason) {
   return `${jsonDumpsCompact({
@@ -739,8 +822,12 @@ function gitDecide(args, payload) {
       + 'discarding git act needs confirmation bound to this specific command');
   }
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
-  // no rule behind it — but Law IV above is universal and has already run.
+  // no rule behind it — but Law IV above is universal and has already run. Checked before
+  // `loopExempt` so a non-git command, or one with consent off, never pays for the whitelist.
   if (args.noConsent || !GIT_GATE_RE.test(command)) return 0;
+  // Consent Before Push: a loop launched on its own `loop/*` branch is a named batch for a
+  // fixed set of commit/push forms on that branch only — never a merge into anything shared.
+  if (loopExempt(command, (payload && payload.cwd) || process.cwd())) return 0;
   return ask(args, 'git-gate', 'process-5', 'Geneseed (Consent Before Push) \u2014 every git '
     + 'commit/push needs explicit approval; to see the change first, use the explain-changes skill');
 }

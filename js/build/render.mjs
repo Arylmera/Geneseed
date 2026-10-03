@@ -35,6 +35,7 @@ import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
 import { PACK_ORDER, readPackText, resolveRuleIds } from './source.mjs';
+import { DEFAULT_PRESET } from '../loop/score.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
 export const STRUCTURE = {
@@ -391,6 +392,10 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
   theme.POSTURE_BODY = registerBody(cfg, theme, 'postures', cfg.posture ?? 'peer', 'peer');
   theme.MODE_BODY = registerBody(cfg, theme, 'modes', cfg.mode ?? 'direct', 'direct');
+  // The loop skill's default trust preset (`--trust`), raw for `--preset` and capitalised for
+  // the `Default trust preset: **<Label>**` line `trustOfDir` reads back off an install.
+  theme.TRUST = cfg.trust ?? DEFAULT_PRESET;
+  theme.TRUST_LABEL = theme.TRUST[0].toUpperCase() + theme.TRUST.slice(1);
   // The doctrines pair is threaded, not read off `cfg`: `footprint` is a per-RENDER value
   // (`renderAll`'s option, and the same cfg renders both ways in one process), so parking it
   // on cfg would make the terse/full choice sticky across calls. An options object rather

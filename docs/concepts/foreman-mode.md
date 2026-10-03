@@ -9,7 +9,7 @@ link: {"hash": "#/harness", "label": "Set the mode in Harness →"}
 
 > **You already know this:** a tech lead with a team. Quick questions get answered on the spot; a real feature becomes a ticket that someone builds on a branch, and the lead reviews the result before it is merged.
 
-Mode is chosen at build time, so it does not drift mid-session, and kept across every rebuild and re-theme. It is separate from [posture](collaboration.md) (the relationship register), the doctrine packs ([Rules](rules.md)) and [footprint](footprint.md).
+Mode is chosen at build time, so it does not drift mid-session, and kept across every rebuild and re-theme. It is separate from [posture](collaboration.md) (the relationship register), the doctrine packs ([Rules](rules.md)) and [footprint](footprint.md). It is also separate from a [loop](loops.md) — a pipeline is a one-shot, uncommitted crew for a single task; a loop is a long-running state machine that commits each validated iteration on its own branch.
 
 ### direct — the default
 

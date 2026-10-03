@@ -39,6 +39,7 @@ import {
 import { withStdoutSwallowed } from '../inspect/diff.mjs';
 import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
+import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { frontmatter, memoryDropIndex } from '../hosts/hooks.mjs';
 import {
   HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
@@ -46,7 +47,7 @@ import {
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState,
-  installTargets, modeOfDir, postureOfDir, readMaybe,
+  installTargets, modeOfDir, postureOfDir, readMaybe, trustOfDir,
 } from '../hosts/installs.mjs';
 import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
@@ -777,6 +778,7 @@ export function apiRestore(state, files) {
       footprint: state.footprint,
       posture: state.posture,
       mode: state.mode,
+      trust: state.trust,
       // THE PACK SELECTION IS THE FIFTH, and it is the one that makes this verb a BOUNDARY
       // question rather than a cosmetic one. `expected` rendered at all four packs, and this
       // verb COPIES OUT OF IT: restoring AGENT.md onto an install built `--doctrines craft`
@@ -858,6 +860,8 @@ export function apiInstallCmd(state, body) {
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode)
     ? bmode : (modeOfDir(root) || 'direct');
+  const btrust = bget(body, 'trust');
+  const trust = Object.keys(PRESETS).includes(btrust) ? btrust : (trustOfDir(root) || DEFAULT_PRESET);
   // Unspecified means "keep what this install already has", exactly as theme, footprint,
   // posture and mode above do — a rebuild through the console is not a place to silently
   // re-decide the constitution. ⚠ AND A CARRIER WITH NO `Active packs:` MARKER (a pre-2.3
@@ -872,7 +876,7 @@ export function apiInstallCmd(state, body) {
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules);
+    PACK_ORDER, excludeRules, trust);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -969,6 +973,8 @@ export function apiDeployCmd(state, body) {
   const pos = discoverNames('postures', 'peer').includes(bpos) ? bpos : 'peer';
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode) ? bmode : 'direct';
+  const btrust = bget(body, 'trust');
+  const trust = Object.keys(PRESETS).includes(btrust) ? btrust : DEFAULT_PRESET;
   // Same resolution as `apiInstallCmd` above, and for the same reason: the console's Deploy
   // form sends host/path/theme/footprint/posture/mode and NO pack selection, and nothing stops
   // it landing on a directory that already holds an install. Taking `bodyDoctrines` alone left
@@ -979,6 +985,6 @@ export function apiDeployCmd(state, body) {
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules);
+    PACK_ORDER, excludeRules, trust);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

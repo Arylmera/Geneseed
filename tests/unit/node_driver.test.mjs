@@ -72,6 +72,7 @@ const VALUED_FLAGS = [
   ['--theme', 'theme', 'neutral'],
   ['--posture', 'posture', 'peer'],
   ['--mode', 'mode', 'direct'],
+  ['--trust', 'trust', 'prudent'],
   // The one row whose dest is not the string that was typed: `--doctrines` takes a comma LIST
   // and binds the parsed pack array, so the row carries both forms. A two-pack value, not one:
   // a single name would parse to a one-element array and leave the comma split untested.
@@ -734,7 +735,7 @@ test('the help choices come from the parser, not a copy', () => {
   // gains a posture, and every other gate stays green.
   const said = help('--help').stdout;
   let checked = 0;
-  for (const flag of ['--emit', '--footprint', '--posture', '--mode']) {
+  for (const flag of ['--emit', '--footprint', '--posture', '--mode', '--trust']) {
     const r = runDriver([flag, `${flag}-no-such-value`]);
     assert.equal(r.status, 2, `${flag} accepted a nonsense value: ${r.stdout.slice(0, 200)}`);
     const refused = /choose from (.+)\)/.exec(r.stderr);

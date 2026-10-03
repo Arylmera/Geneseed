@@ -19,6 +19,7 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
     footprint: 'full',
     posture: 'peer',
     mode: 'direct',
+    trust: 'balanced',
   })
   const [browsing, setBrowsing] = useState(false) // native folder picker in flight
   const set = (k, v) => setDeploy((d) => ({ ...d, [k]: v }))
@@ -56,6 +57,7 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
       footprint: deploy.footprint,
       posture: deploy.posture,
       mode: deploy.mode,
+      trust: deploy.trust,
     })
     if (jobId) onClose()
   }

@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest fix that rides — least code, shortest road; stock parts before custom builds, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several riders on independent runs at once, then bring in what they gather.",
   "DESC_PIPELINE": "Send a small crew of riders — scout, wrench, test rider — to work a job in their own lane, rolling it into the pack only once the road-test comes back clean.",
+  "DESC_LOOP": "Ride a requirement in short, scored laps on its own loop/* lane, the loop engine calling every turn.",
+  "DESC_BRICK_FORGE": "Build or re-tune a loop brick, then run it past geneseed loop check.",
   "DESC_DEVELOP": "Push a change through the run — the smallest turn of the wrench, a test written to cover it, the touched trials green, sealed slice by slice.",
   "DESC_TEACH": "Get a rider road-ready — a crash course from never-ridden to rolling, a confusing manual decoded till it clicks, or a day-by-day route to a deadline.",
   "DESC_QUIZ": "Test what they've actually got instead of explaining it — drill a move to reflex, make them talk you through it, or call the bluff on a claimed skill — with a straight readout of the gaps.",

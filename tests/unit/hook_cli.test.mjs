@@ -165,10 +165,12 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
  * of a value under test wearing a corpus's clothes.
  *
  * So the equality below becomes TWO NAMED POPULATIONS rather than a weakened one. Listing the
- * native three by name is what keeps this a gate: a FOURTH verb with no cells falls into neither
- * population and fails loudly, where a `covered ⊆ carried` containment would have let it through
- * ungated. What the three are held to instead lives in `tests/snapshot/cli_help.test.mjs` (help layout) and
- * in the absolute gates of their own units — nothing here claims to gate their behaviour.
+ * native population by name is what keeps this a gate: an unnamed verb with no cells falls into
+ * neither population and fails loudly, where a `covered ⊆ carried` containment would have let it
+ * through ungated. What they are held to instead lives in `tests/snapshot/cli_help.test.mjs` (help layout)
+ * and in the absolute gates of their own units — nothing here claims to gate their behaviour.
+ * `loop` joined the original three later, under the same rule below rather than a new one: it
+ * is a state machine with no Python original, so it has no cell to be compared against either.
  *
  * ⚠ THE EXEMPTION APPLIES TO BOTH ENTRY POINTS, AND IT DID NOT USED TO. The hook half of the
  * equality below was a bare `covered.hook === verbsOf(HOOK)` with no exemption at all, which was
@@ -185,7 +187,7 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
  */
 // `tool-gate` is the hook side's one native verb: born for a matcherless host after the
 // reference was gone, so no cell was ever recorded for it. Its absolute gate is tests/unit/hook_gates.test.mjs.
-const NATIVE = ['catalog', 'mcp', 'memory', 'tool-gate'];
+const NATIVE = ['catalog', 'loop', 'mcp', 'memory', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the

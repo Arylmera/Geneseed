@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Documentation for loops** (`docs/concepts/loops.md`): bricks, templates and the three
+  origins, the trust presets and the three validation levels, `LOOP.md` and its trailers, the
+  `loop/*` branch exemption and why merging always asks, and the `geneseed loop` actions table.
+  Cross-linked from `foreman-mode.md`; `glossary.md` gains `brick`, `iteration`, `loop` and
+  `trust preset`.
+
 ## [3.11.0] — 2026-10-03
 
 **Upgrading:** re-emit after installing (`geneseed rebuild-all`) — it also repairs a dead hook

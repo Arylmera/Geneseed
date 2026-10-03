@@ -54,6 +54,7 @@ export function cellId(cell) {
   return `${cell.theme}/${cell.emit}/${cell.footprint}`
     + (cell.posture ? `/${cell.posture}` : '')
     + (cell.mode ? `/${cell.mode}` : '')
+    + (cell.trust ? `/${cell.trust}` : '')
     // ⚠ AN EMPTY SELECTION IS AN ANSWER, so the test is `!== undefined` and not truthiness:
     // `--doctrines none` is a real configuration and an id that omitted it would collide with
     // the default-build cell for the same theme and emit.
@@ -65,6 +66,7 @@ export function argvFor(cell, out) {
     '--out', out];
   if (cell.posture) a.push('--posture', cell.posture);
   if (cell.mode) a.push('--mode', cell.mode);
+  if (cell.trust) a.push('--trust', cell.trust);
   // The driver refuses an empty `--doctrines `, so an empty list takes the literal `none` — the
   // same spelling `setupBuildArgs` uses and the same one `configDefaults` parses back.
   if (cell.doctrines !== undefined) a.push('--doctrines', cell.doctrines.join(',') || 'none');

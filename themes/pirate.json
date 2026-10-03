@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest haul that floats — least code, shortest course; ship's stores before custom rigging, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several hands on independent tasks at once, then haul in what they bring.",
   "DESC_PIPELINE": "Send a small crew — scout, shipwright, tester — off to work a job in their own berth, only hauling it aboard once the trial run comes back clean.",
+  "DESC_LOOP": "Work a requirement in short, scored legs on a loop/* branch, the loop engine at the helm.",
+  "DESC_BRICK_FORGE": "Forge or refit a loop brick, then pass it through geneseed loop check.",
   "DESC_DEVELOP": "Sail a change through the cover-and-verify tack — the smallest move, trials rigged to cover it, the touched trials run clean, sealed one cargo at a time.",
   "DESC_TEACH": "Get a landlubber seaworthy — a crash course from dock to deck, a confusing chart decoded till it clicks, or a day-by-day course to the deadline.",
   "DESC_QUIZ": "Test what the crew truly knows instead of telling them — drill a knack to reflex, make them recite it back, or call the bluff on a claimed mastery — with a plain readout of the gaps.",

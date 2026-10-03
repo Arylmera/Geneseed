@@ -29,5 +29,15 @@
     { "query": "My rebase is half finished and the repo is a mess, help", "should_trigger": true },
     { "query": "Create a new branch for the payment feature", "should_trigger": false },
     { "query": "Commit these changes", "should_trigger": false }
+  ],
+  "loop": [
+    { "query": "Run a bugfix loop on the date parser returning null for ISO weeks", "should_trigger": true },
+    { "query": "Work this requirement in small validated iterations, one commit each: add CSV export to the report page", "should_trigger": true },
+    { "query": "Keep checking the deploy status every five minutes", "should_trigger": false }
+  ],
+  "brick-forge": [
+    { "query": "Make a loop brick that runs our Playwright suite and reports pass or fail", "should_trigger": true },
+    { "query": "Our tests run through make check, adapt the test brick for this project", "should_trigger": true },
+    { "query": "Write a new skill for generating changelogs", "should_trigger": false }
   ]
 }

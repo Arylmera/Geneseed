@@ -52,17 +52,18 @@ export function Switch({ on, disabled, label, onToggle }) {
   )
 }
 
-// The four build choices every install carries, in the order the install consumes them.
+// The five build choices every install carries, in the order the install consumes them.
 // `name` is the accessible label's first word, `title` the visible one.
 const PICKS = [
   { key: 'theme', name: 'voice', title: 'Voice' },
   { key: 'footprint', name: 'footprint', title: 'Footprint' },
   { key: 'posture', name: 'posture', title: 'Posture' },
   { key: 'mode', name: 'mode', title: 'Mode' },
+  { key: 'trust', name: 'trust', title: 'Loop trust' },
 ]
 
-// The four selects, each in its own label: the install side panel and the deploy-to-folder
-// form both lay them out this way. `value` is { theme, footprint, posture, mode };
+// The five selects, each in its own label: the install side panel and the deploy-to-folder
+// form both lay them out this way. `value` is { theme, footprint, posture, mode, trust };
 // `options` the same keys -> option lists; `who` finishes each accessible label ("voice for
 // claude · global").
 export function PickSelects({ value, options, onChange, who }) {

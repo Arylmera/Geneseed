@@ -135,6 +135,21 @@
         },
         {
           "names": [
+            "--trust"
+          ],
+          "dest": "trust",
+          "metavar": null,
+          "help": "default loop trust preset: how much a loop may do before it stops to ask (default balanced)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--doctrines"
           ],
           "dest": "doctrines",
@@ -621,6 +636,226 @@
         }
       ],
       "options": [],
+      "mutex": []
+    },
+    {
+      "name": "loop",
+      "help": "run a loop: check graphs, start one in LOOP.md, and step its state machine (next/score/record/decide)",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "action",
+          "metavar": null,
+          "help": "",
+          "choices": [
+            "check",
+            "init",
+            "next",
+            "score",
+            "record",
+            "decide"
+          ],
+          "default": null,
+          "required": true,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": ["--graph"],
+          "dest": "graph",
+          "metavar": null,
+          "help": "a loop template name or a .json graph file",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--brick"],
+          "dest": "brick",
+          "metavar": null,
+          "help": "check one brick file instead of the whole catalogue",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--title"],
+          "dest": "title",
+          "metavar": null,
+          "help": "the loop's title, written into LOOP.md",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--requirement"],
+          "dest": "requirement",
+          "metavar": null,
+          "help": "the requirement the loop exists to satisfy",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--preset"],
+          "dest": "preset",
+          "metavar": null,
+          "help": "the risk preset to run under (default: balanced)",
+          "choices": [
+            "prudent",
+            "balanced",
+            "aggressive"
+          ],
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--declared"],
+          "dest": "declared",
+          "metavar": null,
+          "help": "score the card just declared, before it runs",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--diff"],
+          "dest": "diff",
+          "metavar": null,
+          "help": "score the actual diff, read as numstat on stdin",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--actions"],
+          "dest": "actions",
+          "metavar": null,
+          "help": "comma-separated declared action kinds (new-file, logic, api, ...)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--write-set"],
+          "dest": "write_set",
+          "metavar": null,
+          "help": "comma-separated files the declared card expects to touch",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--intent"],
+          "dest": "intent",
+          "metavar": null,
+          "help": "a short label for what the declared card is doing",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--outcome"],
+          "dest": "outcome",
+          "metavar": null,
+          "help": "the brick's reported outcome, one of its declared outcomes",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--card"],
+          "dest": "card",
+          "metavar": null,
+          "help": "a JSON card to record alongside the outcome",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--verdict"],
+          "dest": "verdict",
+          "metavar": null,
+          "help": "the user's answer to an awaiting validation",
+          "choices": [
+            "ok",
+            "no",
+            "amend"
+          ],
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--note"],
+          "dest": "note",
+          "metavar": null,
+          "help": "a note attached to the verdict, written into LOOP.md",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {

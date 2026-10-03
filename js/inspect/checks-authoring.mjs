@@ -25,6 +25,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 import {
   folderSkillProblems, registryProblems, secretProblems, vendorPinProblems,
 } from './checks-repo.mjs';
+import { catalogProblems } from '../loop/catalog.mjs';
 import { LAW_CLASS, LAW_CLASSES, SKILL_CLASS } from './inventory.mjs';
 import { NOTE, globSorted, has, isDir, isFile, rglob, srcStems } from './scan.mjs';
 import { spawnSync } from 'node:child_process';
@@ -834,6 +835,15 @@ function loadLearnPromptHead() {
   } catch { /* OSError — fall through */ }
   return 'Distil at most one durable, reusable memory from the notes below. '
     + 'When in doubt, output exactly: NOTHING.';
+}
+
+/**
+ * The shipped loop catalogue parses and every shipped template passes the engine's own graph
+ * rules. Global and project bricks are deliberately out of scope: doctor judges what this
+ * checkout ships, not what a user wrote in their config.
+ */
+export function loopProblems() {
+  return catalogProblems({ projectRoot: null, globalLevel: false });
 }
 
 /**

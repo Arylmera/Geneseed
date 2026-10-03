@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "Force the laziest solution that works — minimal and shortest-path; stdlib and native before custom code, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Fan independent subtasks out to concurrent subagents, then converge the results.",
   "DESC_PIPELINE": "Spawn a small crew — analyst, developer, tester — to work a substantial task in its own worktree, merging only once the tests and lint pass.",
+  "DESC_LOOP": "Work a requirement in small, scored iterations on a loop/* branch, stepping the geneseed loop engine.",
+  "DESC_BRICK_FORGE": "Author or adapt a loop brick, then check it with geneseed loop check.",
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — smallest change, tests written for it, the affected suite green, committed slice by slice.",
   "DESC_TEACH": "Teach the user toward a result — a crash course from zero to functional, confusing material decoded until it clicks, or a day-by-day path to a deadline.",
   "DESC_QUIZ": "Test what the user knows instead of explaining it — a drill to reflex, an explain-it-back check, or a mastery claim stress-tested — with a blunt readout of the gaps.",

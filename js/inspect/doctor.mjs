@@ -36,7 +36,7 @@ import { resolvePath } from '../hosts/hosts.mjs';
 import { installedDefaults, themeFiles } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut } from '../lib/fs.mjs';
-import { authoringProblems } from './checks-authoring.mjs';
+import { authoringProblems, loopProblems } from './checks-authoring.mjs';
 import {
   checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
@@ -217,6 +217,7 @@ export function doctorCollect({
   problems = problems.concat(ran('parity', 'Theme parity', themeParityProblems()));
   problems = problems.concat(ran('colors', 'Colour themes', colorThemeProblems()));
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
+  problems = problems.concat(ran('loops', 'Loop catalogue', loopProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed

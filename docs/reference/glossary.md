@@ -26,6 +26,10 @@ Every word Geneseed uses that you would not find in a general programming glossa
 | Posture | — | the relationship register the agent works in (peer, mentor, expert, assistant, artisan) | pairing style |
 | Mode | — | how work gets executed — direct (the agent works every task itself) or foreman (substantial tasks spawn an isolated pipeline) | solo vs. delegating to a sub-team |
 | Footprint | — | how much of the Rules loads inline each turn (full vs lean) | eager vs. lazy loading |
+| Loop | — | a requirement worked as small, validated, committed iterations on their own branch, driven by `geneseed loop` | a state machine over a ticket's steps |
+| Iteration | — | one cycle of a loop back to its head; closes into its own commit | one sprint-of-one through a checklist |
+| Brick | — | one node of a loop graph: a prompt for one agent or skill, reporting one of a declared set of outcomes | a step in a runbook |
+| Trust preset | — | the loop's risk tolerance — prudent, balanced (default) or aggressive — set at `loop init` and editable in `LOOP.md` | how much a reviewer lets through without a second look |
 | Profile | — | who you are — seeded once, colours but never binds | your onboarding notes |
 | Memory force | — | a memory's binding strength (constraint, choice, conviction, tempered) | MUST / SHOULD / MAY |
 | Tagline | TAGLINE | the one-line essence of the theme | — |
