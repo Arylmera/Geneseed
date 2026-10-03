@@ -140,12 +140,16 @@ transition, score and stop is computed here.
 | `catalog.mjs` | `loadCatalog` — bricks and loop templates from shipped/global/project origins, later overrides earlier BY NAME |
 | `state.mjs` | The engine itself: `initState`, `nextStep`, `scoreDeclared`/`scoreDiff`, `recordOutcome`, `decideAwaiting`, `renderLoopFile`/`parseLoopFile` |
 | `cli.mjs` | `geneseed loop check\|init\|next\|score\|record\|decide` — the only face either a model or a human reaches this engine through |
+| `registry.mjs` | `loops.json` under XDG — the launched-loop identity list `loop init` records into and the Active tab's `activeLoops`/`setLoopPreset` read and rewrite |
 
 **Before editing:** `score.mjs` is imported by the build driver (the `--trust` choices), so it must
 stay free of every import but node builtins and `graph.mjs`. `state.mjs` excludes `LOOP.md` itself
 from every score and every read-brick porcelain check — it is the engine's own bookkeeping, never
 part of the work being scored. `cli.mjs` may not spawn: git output is piped in on stdin by the
-model, never read by this entry.
+model, never read by this entry. `registry.mjs` swallows its own errors on `recordLoop`/`activeLoops`
+on purpose, like `js/inspect/registry.mjs` — a registry hiccup must never fail `loop init` or a
+read — but `setLoopPreset` does not: a preset change the caller asked for must be reported when it
+fails.
 
 ## `js/maintain/` — lifecycle
 

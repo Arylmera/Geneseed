@@ -24,6 +24,7 @@ import {
   initState, nextStep, scoreDeclared, scoreDiff, recordOutcome, decideAwaiting,
   renderLoopFile, parseLoopFile, LOOP_FILE,
 } from './state.mjs';
+import { recordLoop } from './registry.mjs';
 
 const emit = (obj) => { printOut(`${JSON.stringify(obj)}\n`); return obj.error || obj.ok === false ? 1 : 0; };
 const stdin = () => (process.stdin.isTTY ? '' : readFileSync(0, 'utf8'));
@@ -112,6 +113,9 @@ const ACTIONS = {
     if (problems.length) return { error: 'the graph does not pass loop check', problems };
     const state = initState({ title: args.title, requirement: args.requirement, graph, preset: args.preset || DEFAULT_PRESET });
     writeText(file, renderLoopFile(state));
+    // Best-effort: the registry is how the Active tab discovers this loop, but a registry
+    // hiccup must never fail the init the loop itself just succeeded at.
+    recordLoop({ root, branch: currentBranch(root), title: args.title });
     return { file, graph: graph.name, preset: state.preset, status: state.status };
   },
   next: () => withState((s, b) => nextStep(s, b)),
