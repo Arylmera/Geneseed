@@ -8,6 +8,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.11.0] — 2026-10-03
+
+**Upgrading:** re-emit after installing (`geneseed rebuild-all`) — it also repairs a dead hook
+shim and restarts a console left running on old code.
+
+### Added
+- **`learn-mode` skill** (user-invoked): you design at checkpoints, the agent writes only what an
+  answered checkpoint approved. State lives in `.geneseed/learn.md`, anchored by two lines in
+  `AGENT.md`'s Mode section; no hook changes. Inspired by nykooi1/vibe-wise (MIT), rewritten.
+- **One-step installers** — `install` / `install.cmd` / `install.command` check Node ≥ 22.3 and
+  git with per-OS hints (they never install anything), then run setup and offer the web console.
+- **Setup lists the tools it can install into** — OpenCode, Claude Code, IBM Bob and OpenClaude,
+  each found on PATH or shown with its install link — and asks before going on when none is present.
+
 ### Changed
 - **The documentation is one tree, read on GitHub and in the console.** `docs/understand/`,
   `docs/guides/`, `docs/concepts/` and `docs/reference/` replace `docs/web/`, `SETUP.md`,
@@ -26,6 +40,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   per term, so GitHub readers get it too.
 
 ### Fixed
+- **Docs no longer claim a foreman pipeline merges on its own.** It hands back an uncommitted
+  worktree; the session re-runs the proof and merges only once you accept. The Claude hooks page
+  no longer says dropping the process pack loses the git gate — destructive git is still refused.
 - The console's CLI reference printed every command as `harness <verb>`; it says `geneseed`.
 - The `pipeline` skill said the parent merges on the crew's own proof without re-verifying; it
   re-runs the proof and merges only once you accept, as foreman mode always said.
