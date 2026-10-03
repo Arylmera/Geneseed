@@ -26,6 +26,7 @@
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_PRESET } from '../loop/score.mjs';
 
 /**
  * One doctrine pack file used to be read three times per render — the survives gate and the
@@ -256,7 +257,8 @@ export function knownRuleIds() {
  * `PACK_ORDER` for the whole process.
  */
 export function makeCfg({
-  posture = 'peer', mode = 'direct', trust = 'balanced', doctrines = PACK_ORDER, excludeRules = [],
+  posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
+  excludeRules = [],
 } = {}) {
   return {
     root: ROOT,

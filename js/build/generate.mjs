@@ -34,6 +34,7 @@ import path from 'node:path';
 
 import { main as driverMain } from './driver.mjs';
 import { makeCfg, PACK_ORDER } from './source.mjs';
+import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
@@ -137,7 +138,7 @@ export function cmdBuild(args) {
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null, trust = 'balanced') {
+  excludeRules = null, trust = DEFAULT_PRESET) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -146,7 +147,7 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   if (footprint) argv.push('--footprint', footprint);
   if (posture && posture !== 'peer') argv.push('--posture', posture);
   if (mode && mode !== 'direct') argv.push('--mode', mode);
-  if (trust && trust !== 'balanced') argv.push('--trust', trust);
+  if (trust && trust !== DEFAULT_PRESET) argv.push('--trust', trust);
   if (Array.isArray(doctrines)) {
     // Emitted in `allPacks` order, not the order handed in: a caller may legitimately pass an
     // unsorted list, and the flag has to be canonical for the same reason the driver
@@ -200,8 +201,8 @@ export function installProfile(host, scope, root) {
   const footprint = footprintOfDir(root);
   const posture = postureOfDir(root) || defaultPosture();
   const mode = modeOfDir(root) || defaultMode();
-  // Read off the deployed loop skill; no config fallback — `balanced` is the engine's default.
-  const trust = trustOfDir(root) || 'balanced';
+  // Read off the deployed loop skill; no config fallback — `DEFAULT_PRESET` is the engine's.
+  const trust = trustOfDir(root) || DEFAULT_PRESET;
   // A rebuild that defaulted the pack selection would re-emit an install into a constitution
   // its owner did not choose — and in one direction that is not merely surprising: dropping
   // the process pack takes the commit/push consent RULES out of AGENT.md while

@@ -88,6 +88,7 @@ import path from 'node:path';
 
 import { ROOT, PACK_ORDER } from '../build/source.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
+import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { isDict } from '../hosts/mcp.mjs';
 import { readText, writeText, isFile } from '../lib/fs.mjs';
 import { jsonDumpsCompact, parseJson, isTruthy } from '../lib/json.mjs';
@@ -402,7 +403,7 @@ export const INLINE_ACTIONS = ['restore', 'install', 'deploy'];
 function actionTable({
   theme = 'neutral', emit = 'opencode-global', footprint = 'full',
   posture = 'peer', mode = 'direct', doctrines = [...PACK_ORDER], excludeRules = [],
-  trust = 'balanced',
+  trust = DEFAULT_PRESET,
 } = {}) {
   const buildArgv = setupBuildArgs(theme, emit, null, null, footprint, posture, mode,
     doctrines, PACK_ORDER, excludeRules, trust);

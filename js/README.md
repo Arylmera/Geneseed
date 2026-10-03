@@ -73,7 +73,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json`; owns the hook shim and the managed blocks |
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |
-| `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture and mode |
+| `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |
 | `mcp.mjs` | MCP server presets, the per-host `mcpServers` config read/write, and toggle state |
 | `link.mjs` | `geneseed link`/`unlink` — the PATH shim, and the only Windows USER-Path registry edit |
 

@@ -42,6 +42,7 @@ import {
   trustOfDir,
 } from '../hosts/installs.mjs';
 import { DEFAULT_EMIT, setupBuildArgs } from '../build/generate.mjs';
+import { DEFAULT_PRESET } from '../loop/score.mjs';
 import {
   autostartPaths, autostartStale, hookShimPath, migrateShape, readJsonc, shimHome,
 } from '../hosts/settings.mjs';
@@ -223,7 +224,7 @@ export function cmdMigrate(args = {}) {
     const out = r.scope === 'global' ? null : r.root;
     const argv = setupBuildArgs(theme, emit, out, out, footprintOfDir(r.root),
       postureOfDir(r.root) || defaultPosture(), modeOfDir(r.root) || defaultMode(),
-      doctrinesForBuild(r.root), PACK_ORDER, null, trustOfDir(r.root) || 'balanced');
+      doctrinesForBuild(r.root), PACK_ORDER, null, trustOfDir(r.root) || DEFAULT_PRESET);
     const label = `${r.host}:${r.scope} (${r.root})`;
     printOut(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
     let rc = 1;

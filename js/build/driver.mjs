@@ -67,7 +67,7 @@ import {
 import { registryRecord, registryRoots } from '../inspect/registry.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
 // what lets it sit inside this driver's total `child_process` ban.
-import { PRESETS } from '../loop/score.mjs';
+import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 
 // P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
 // of textual surgery over committed files with a corpus of its own, and it is the half of the
@@ -114,7 +114,7 @@ export function resolveOut(raw) {
  */
 function configDefaults() {
   const d = {
-    theme: 'neutral', posture: 'peer', mode: 'direct', trust: 'balanced',
+    theme: 'neutral', posture: 'peer', mode: 'direct', trust: DEFAULT_PRESET,
     doctrines: [...PACK_ORDER], excludeRules: [],
   };
   if (!existsSync(CONFIG)) return d;
@@ -1063,7 +1063,7 @@ export function emitGlobalInto(host, {
       // at `[]`, so the key is OMITTED instead of passed through — `makeCfg`'s own default is
       // the fail-closed answer and an explicit `doctrines: null` would not reach it.
       makeCfg({
-        posture: posture || 'peer', mode: mode || 'direct', trust: trust || 'balanced',
+        posture: posture || 'peer', mode: mode || 'direct', trust: trust || DEFAULT_PRESET,
         ...(doctrines ? { doctrines } : {}),
       }),
       { theme, footprint, root: null, cfgDir }, out,

@@ -39,7 +39,7 @@ import {
 import { withStdoutSwallowed } from '../inspect/diff.mjs';
 import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
-import { PRESETS } from '../loop/score.mjs';
+import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { frontmatter, memoryDropIndex } from '../hosts/hooks.mjs';
 import {
   HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
@@ -861,7 +861,7 @@ export function apiInstallCmd(state, body) {
   const mode = discoverNames('modes', 'direct').includes(bmode)
     ? bmode : (modeOfDir(root) || 'direct');
   const btrust = bget(body, 'trust');
-  const trust = Object.keys(PRESETS).includes(btrust) ? btrust : (trustOfDir(root) || 'balanced');
+  const trust = Object.keys(PRESETS).includes(btrust) ? btrust : (trustOfDir(root) || DEFAULT_PRESET);
   // Unspecified means "keep what this install already has", exactly as theme, footprint,
   // posture and mode above do — a rebuild through the console is not a place to silently
   // re-decide the constitution. ⚠ AND A CARRIER WITH NO `Active packs:` MARKER (a pre-2.3
@@ -974,7 +974,7 @@ export function apiDeployCmd(state, body) {
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode) ? bmode : 'direct';
   const btrust = bget(body, 'trust');
-  const trust = Object.keys(PRESETS).includes(btrust) ? btrust : 'balanced';
+  const trust = Object.keys(PRESETS).includes(btrust) ? btrust : DEFAULT_PRESET;
   // Same resolution as `apiInstallCmd` above, and for the same reason: the console's Deploy
   // form sends host/path/theme/footprint/posture/mode and NO pack selection, and nothing stops
   // it landing on a directory that already holds an install. Taking `bodyDoctrines` alone left
