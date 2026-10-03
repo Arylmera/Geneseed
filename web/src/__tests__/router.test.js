@@ -19,6 +19,10 @@ const TABLE = [
   // The five pages and the two footer pages resolve to themselves.
   ['#/laws', { page: 'laws' }],
   ['#/library', { page: 'library' }],
+  ['#/loops', { page: 'loops', tab: 'templates' }],
+  ['#/loops/bricks', { page: 'loops', tab: 'bricks' }],
+  // Loops' Templates tab carries the selected template.
+  ['#/loops/templates/bugfix', { page: 'loops', tab: 'templates', item: 'bugfix' }],
   ['#/docs', { page: 'docs', item: '' }],
   ['#/activity', { page: 'activity' }],
   // Tabbed pages: a bare page opens its first tab; an unknown tab falls to the first.
@@ -99,11 +103,12 @@ describe('resolveRoute', () => {
 describe('PAGES', () => {
   // The breadcrumb and the sidebar print these; the laws page reads "Constitution" while
   // its route stays #/laws (doctor reads web/src/pages/Laws.jsx by that name).
-  it('names the seven pages', () => {
+  it('names the eight pages', () => {
     expect(PAGES).toEqual({
       overview: 'Overview',
       laws: 'Constitution',
       library: 'Library',
+      loops: 'Loops',
       personal: 'Personal',
       installs: 'Installs',
       docs: 'Docs',

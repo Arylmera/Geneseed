@@ -24,7 +24,7 @@ import { buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
   apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg, wikiItems,
-  STATE_ROUTES,
+  STATE_ROUTES, apiLoops,
 } from '../../js/web/api.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -2900,4 +2900,44 @@ test('stripHarnessBlocks drops the host label that opens a kept block', () => {
     + '<!--harness:opencode-->\n*(OpenCode only)*\nplugins\n<!--/harness-->\n*(OpenCode only)*\n';
   assert.equal(stripHarnessBlocks(body, 'claude'), 'intro\nhooks\n*(OpenCode only)*');
   assert.equal(stripHarnessBlocks(body, 'opencode'), 'intro\nplugins\n*(OpenCode only)*');
+});
+
+// THE LOOPS PAGE READS THE CATALOGUE THE CLI READS, from the console's install ROOT — the repo for
+// a project install, where `.geneseed/` lives. Hermetic: the root is a sandbox carrying one
+// project brick that overrides the shipped `apply`, and XDG points into the sandbox so a
+// developer's own global bricks cannot leak in. Shipped templates come through with their graph;
+// a brick carries its body; the override is reported, never silent.
+test('the loops endpoint lists templates, bricks and overrides from the install root', () => {
+  const sb = makeSandbox();
+  const prevXdg = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(sb.path, 'xdg');
+  try {
+    const bricks = path.join(sb.path, '.geneseed', 'bricks');
+    fs.mkdirSync(bricks, { recursive: true });
+    fs.writeFileSync(path.join(bricks, 'apply.md'), '---\nname: apply\ndescription: Team apply.\n'
+      + 'effect: mutate\nagent: developer\noutcomes: pass\n---\nDo it our way.\n');
+    const { templates, bricks: rows, overridden } = apiLoops(webState('neutral', sb.path));
+    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'feature', 'refactor']);
+    const bugfix = templates[0];
+    assert.equal(bugfix.origin, 'shipped');
+    assert.equal(bugfix.graph.start, 'reproduce');
+    assert.equal(bugfix.graph.loops[0].name, 'iterations');
+    assert.equal(typeof bugfix.description, 'string');
+    const apply = rows.find((b) => b.name === 'apply');
+    assert.deepEqual(
+      { origin: apply.origin, description: apply.description, effect: apply.effect,
+        agent: apply.agent, skill: apply.skill, outcomes: apply.outcomes, body: apply.body,
+        available: apply.available },
+      { origin: 'project', description: 'Team apply.', effect: 'mutate', agent: 'developer',
+        skill: null, outcomes: ['pass'], body: 'Do it our way.', available: true });
+    assert.deepEqual(overridden, ['apply (project, overrides shipped)']);
+    assert.ok(rows.every((b, i) => i === 0 || rows[i - 1].name < b.name), 'bricks sorted by name');
+    assert.equal(STATE_ROUTES['/api/loops'], apiLoops);
+    // The rail badge: the three shipped templates, counted on the overview it already polls.
+    assert.equal(apiOverview(webState('neutral', sb.path)).counts.loops, 3);
+  } finally {
+    if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = prevXdg;
+    sb.cleanup();
+  }
 });

@@ -27,6 +27,7 @@ import Overview from './pages/Overview/index.jsx'
 const Activity = lazy(() => import('./pages/Activity.jsx'))
 const ActivityDetail = lazy(() => import('./pages/ActivityDetail.jsx'))
 const Library = lazy(() => import('./pages/Library.jsx'))
+const Loops = lazy(() => import('./pages/Loops.jsx'))
 const Laws = lazy(() => import('./pages/Laws.jsx'))
 const Personal = lazy(() => import('./pages/Personal.jsx'))
 const Installs = lazy(() => import('./pages/Installs/index.jsx'))
@@ -183,6 +184,7 @@ export default function App() {
         dataRev={dataRev}
       />
     ),
+    loops: () => <Loops tab={route.tab} item={route.item} dataRev={dataRev} />,
     personal: () => <Personal tab={route.tab} item={route.item} setup={setup} dataRev={dataRev} />,
     installs: () => (
       <Installs

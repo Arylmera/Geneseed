@@ -25,7 +25,7 @@ describe('useSearchIndex', () => {
   })
 
   // The search box is also the way to get somewhere by name: every page, and every tab of
-  // the two tabbed pages, is an entry of its own.
+  // the tabbed pages, is an entry of its own.
   it('indexes every page and tab first', async () => {
     const { result } = renderHook(() => useSearchIndex(0))
     let entries
@@ -36,6 +36,8 @@ describe('useSearchIndex', () => {
       ['Overview', '#/'],
       ['Constitution', '#/laws'],
       ['Library', '#/library'],
+      ['Loops / Templates', '#/loops/templates'],
+      ['Loops / Bricks', '#/loops/bricks'],
       ['Personal / Rules', '#/personal/rules'],
       ['Personal / Profile', '#/personal/profile'],
       ['Personal / Memory', '#/personal/memory'],

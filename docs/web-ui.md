@@ -51,7 +51,7 @@ The left rail mirrors the harness's own shape:
 | Group | Views |
 | --- | --- |
 | *(ungrouped)* | Dashboard |
-| **📖 Codex** | Constitution · Rules · Profile · Skills · Agents · Library · Docs |
+| **📖 Codex** | Constitution · Rules · Profile · Skills · Agents · Library · Loops · Docs |
 | **🩺 Care** | Activity · Changes · Doctor |
 | **🎨 Setup** | Harness · Settings |
 
@@ -111,6 +111,17 @@ streams the output of background jobs and keeps their history across reloads.
   **Promote to rule** control turns a recurring lesson into a trial rule in
   `user-rules.md` — provenance recorded, the source fact deleted so it isn't loaded
   twice — landing you on the Rules page.
+- **Loops** (`#/loops`) — the loop catalogue `geneseed loop` runs from, read-only.
+  **Templates** draws the selected template as a ring: the iteration turning clockwise from
+  its head, each inner retry loop hung outside on its head node, the ⛨ *validate* gate the
+  engine adds before the first mutate step, setup entering from the left and `done → close`
+  leaving from the head; a card per brick sits under it, and clicking a node scrolls to its
+  card. A graph a ring cannot draw cleanly (more than eight iteration steps, a node in more
+  than three loops) falls back to left-to-right boxes. **Bricks** lists every brick with its
+  origin (shipped / global / project), what it overrides, why it is unavailable, and its
+  source. **Active** (live runs) is announced for v2 and disabled. Reads `GET /api/loops`,
+  resolved from the selected install's root, so a project install shows its
+  `.geneseed/` bricks and templates.
 - **Profile** (`#/profile`) — `PROFILE.md` beside the deployed AGENT.md: who you are and
   how you like to work. Opens rendered; **Edit** is a whole-file editor. The save carries
   the fingerprint it loaded — if an agent session changed the file first, your edit stays

@@ -3,8 +3,8 @@ import { go } from '../lib/router.js'
 import { editCount, relTime } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
 
-// The five pages, in the order a visit reads them: how the harness is doing, what it
-// obeys, what it knows, what is yours, and where it is installed. Each count reads data
+// The six pages, in the order a visit reads them: how the harness is doing, what it
+// obeys, what it knows, how it iterates, what is yours, and where it is installed. Each count reads data
 // the shell already holds (the overview and the installs list); a page with no honest
 // single number carries none rather than an invented one.
 const NAV = [
@@ -33,6 +33,14 @@ const NAV = [
             0,
           )
         : null,
+  },
+  // Templates only: a brick is a part, the template is what a person runs.
+  {
+    hash: '#/loops',
+    page: 'loops',
+    label: 'Loops',
+    icon: 'loop',
+    count: (o) => o?.counts?.loops ?? null,
   },
   { hash: '#/personal', page: 'personal', label: 'Personal', icon: 'profile' },
   {
@@ -146,7 +154,7 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
   )
 }
 
-// The phone layout's bottom bar: the same five pages, always one thumb away. The drawer
+// The phone layout's bottom bar: the same six pages, always one thumb away. The drawer
 // above still carries Docs, Activity and the vitals.
 export function TabBar({ route }) {
   return (

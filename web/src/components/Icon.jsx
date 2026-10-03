@@ -3,6 +3,8 @@ import React from 'react'
 export const ICONS = {
   dashboard: 'M3 13h7V3H3v10Zm0 8h7v-6H3v6Zm11 0h7V11h-7v10Zm0-18v6h7V3h-7Z',
   library: 'M4 5h10v14H4zM16 7h4v12h-4M7 9h4M7 12h4',
+  // A circle left open at the top right, an arrowhead closing it: the iteration turning.
+  loop: 'M19.5 9A8 8 0 1 1 15 4.6M15 1.5l.2 3.3-3.2.8',
   graph:
     'M6 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM7.5 14.5l8-8M16.7 15.2L8.8 16.6',
   changes: 'M4 6h10M4 12h7M4 18h12M17 4l3 3-3 3M20 7h-6',
