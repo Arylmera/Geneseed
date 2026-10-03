@@ -254,6 +254,10 @@ test("permission.ask: every escape the review found leaves the ask untouched, on
       'git commit -m "x"',
       "git commit --amend -F m",
       "git commit -F m\necho hi",
+      // Re-review fold-in: the loose `[^\s'"]+` path class let brace/glob expansion turn
+      // the loop's own commit into something else entirely.
+      "git commit -F {m,--amend} && git push -u origin HEAD:loop/x",
+      "git commit -F m* && git push -u origin HEAD:loop/x",
       // X1: a single `&` (not doubled into `&&`) still chains two commands for a shell.
       "git add -A & git push origin HEAD:main",
       "git status & git push --mirror",

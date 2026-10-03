@@ -451,6 +451,10 @@ test('every escape the review found still asks, on that same loop/launched branc
       'git commit -m "x"',
       'git commit --amend -F m',
       'git commit -F m\necho hi',
+      // Re-review fold-in: the loose `[^\s'"]+` path class let brace/glob expansion turn
+      // the loop's own commit into something else entirely.
+      'git commit -F {m,--amend} && git push -u origin HEAD:loop/x',
+      'git commit -F m* && git push -u origin HEAD:loop/x',
       // X1: a single `&` (not doubled into `&&`) still chains two commands for a shell —
       // the splitter used to only recognise the doubled form.
       'git add -A & git push origin HEAD:main',

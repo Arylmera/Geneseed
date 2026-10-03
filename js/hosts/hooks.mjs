@@ -621,11 +621,15 @@ const UNSAFE_CHARS_RE = /[\n`<>]|\$\(|(?<!&)&(?!&)/;
 // be quoted on this command line at all — see `js/loop/cli.mjs`'s LOOP_COMMIT_MSG), and
 // read-only inspection. The token class `[\w./:@^~=+,-]` excludes quotes, braces, `!`, `*`,
 // `$` and `&` — a brace or glob expansion (`{a,b}`, `*`) is exactly how a shell can turn one
-// whitelisted-looking token into several unknown ones, so neither pattern's path/arg tokens may
-// contain them.
+// whitelisted-looking token into several unknown ones, so no pattern's path/arg tokens may
+// contain them. The SAME class is the `-F`/`--file` path, not the looser `[^\s'"]+` this once
+// was: with that loose class, `git commit -F {m,--amend}` brace-expands to `git commit -F m
+// --amend` and `git commit -F m*` glob-expands to whatever matches — either turns a commit of
+// the loop's own message file into an amend of the last one. `ARG_RE` already accepts a drive
+// letter (`C:/…`) via its `:`, so tightening it here costs nothing the loop's own writer uses.
 const ARG_RE = '[\\w./:@^~=+,-]+';
 const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`);
-const SEG_COMMIT_RE = /^git\s+commit(\s+-q)?\s+(-F\s+|--file[=\s])[^\s'"]+(\s+-q)?$/;
+const SEG_COMMIT_RE = new RegExp(`^git\\s+commit(\\s+-q)?\\s+(-F\\s+|--file[=\\s])${ARG_RE}(\\s+-q)?$`);
 const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`);
 
 /**

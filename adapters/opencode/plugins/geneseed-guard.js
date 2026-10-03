@@ -300,10 +300,12 @@ const UNSAFE_CHARS_RE = /[\n`<>]|\$\(|(?<!&)&(?!&)/
 // The only three git shapes a loop's own automation ever needs — see js/hosts/hooks.mjs's
 // identically-named constants for the full rationale. The token class `[\w./:@^~=+,-]`
 // excludes quotes, braces, `!`, `*`, `$` and `&` — a brace/glob expansion is exactly how a
-// shell turns one whitelisted-looking token into several unknown ones.
+// shell turns one whitelisted-looking token into several unknown ones, which is also why the
+// `-F`/`--file` path uses this same class rather than the looser `[^\s'"]+` it once did: that
+// loose class let `git commit -F {m,--amend}` brace-expand into an amend of the last commit.
 const ARG_RE = "[\\w./:@^~=+,-]+"
 const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`)
-const SEG_COMMIT_RE = /^git\s+commit(\s+-q)?\s+(-F\s+|--file[=\s])[^\s'"]+(\s+-q)?$/
+const SEG_COMMIT_RE = new RegExp(`^git\\s+commit(\\s+-q)?\\s+(-F\\s+|--file[=\\s])${ARG_RE}(\\s+-q)?$`)
 const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`)
 
 /**
