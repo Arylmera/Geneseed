@@ -4,20 +4,21 @@
 // real config: XDG_CONFIG_HOME is pointed into the sandbox for the whole file.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import os from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 import { parseBrick, loadCatalog, catalogProblems, userLoopsDir } from '../../js/loop/catalog.mjs';
 
-let tmp; let prevXdg;
+let tmp; let prevXdg; let sb;
 before(() => {
-  tmp = mkdtempSync(path.join(os.tmpdir(), 'loopcat-'));
+  sb = makeSandbox('loopcat-');
+  tmp = sb.path;
   prevXdg = process.env.XDG_CONFIG_HOME;
   process.env.XDG_CONFIG_HOME = path.join(tmp, 'xdg');
 });
 after(() => {
   if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = prevXdg;
-  rmSync(tmp, { recursive: true, force: true });
+  sb.cleanup();
 });
 
 const brickMd = (name, extra = 'agent: tester') =>

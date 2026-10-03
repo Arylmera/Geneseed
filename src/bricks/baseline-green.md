@@ -13,3 +13,5 @@ in your report either way, so a `fail` carries the actual failure rather than a 
 
 Report `fail` on the first red suite or linter run, and stop there: a loop that starts on a red
 baseline cannot tell its own changes apart from pre-existing breakage.
+
+Never edit, create or delete any file: this brick only reads.

@@ -16,3 +16,5 @@ its own. Report `more` with a card, as JSON:
 Declare every action honestly: the diff is scored again before commit, and anything outside the
 write set or under-declared escalates to a blocking stop. If LOOP.md's notes say the previous
 attempt was re-split, make this card strictly smaller than that one.
+
+Never edit, create or delete any file: this brick only reads.
