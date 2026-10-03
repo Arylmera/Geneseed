@@ -29,6 +29,24 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - The console's CLI reference printed every command as `harness <verb>`; it says `geneseed`.
 - The `pipeline` skill said the parent merges on the crew's own proof without re-verifying; it
   re-runs the proof and merges only once you accept, as foreman mode always said.
+- **Dead hooks are said out loud.** When the machine's hook shim points at a folder that no
+  longer exists, every Claude Code, Bob and OpenClaude hook is silently off. Every `geneseed`
+  command now warns about it on stderr (`GENESEED_NO_SHIM_CHECK=1` silences it), and the `gates`
+  row of `geneseed status` reads `DEAD` instead of `armed`. `geneseed rebuild-all` repairs it.
+- **Scratch installs stay out of the install list.** Installs built under the OS temp folder
+  (agent scratchpads, throwaway tests) are no longer registered, and existing ones are dropped,
+  so `rebuild-all` and `status` only cover real installs.
+- **A console running old code says so.** After an upgrade replaced the console's files, a
+  still-running console served a page that could not load. `geneseed web status` and a banner on
+  the console now say when it is out of date, the banner restarts it, and `rebuild-all`
+  restarts a stale console by itself.
+- **An old Node gets one sentence.** Below Node 22.3 every Geneseed command — including `npx`,
+  a global npm install and the hooks — says which Node it needs instead of crashing with a
+  stack trace.
+- **The end of setup tells the truth for every host.** It names the file each tool really loads
+  and where it is, the hooks wired for Claude Code, Bob and OpenClaude, whether memory learning
+  is on, the right tool to restart, and where to read what was installed. A successful Claude
+  Code install no longer ends on "expected AGENT.md … but it is not there".
 
 ## [3.10.0] — 2026-10-01
 
