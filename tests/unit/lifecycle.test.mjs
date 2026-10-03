@@ -710,7 +710,7 @@ test('a root under the OS temp dir is scratch only when the registry is not', ()
 test('a real registry never records a temp root, and prunes one it already holds', () => {
   // The registry file OUTSIDE the temp dir, as on a real machine: a directory in the checkout,
   // removed afterwards.
-  const cfgHome = fs.mkdtempSync(path.join(ROOT, '.registry-test-'));
+  const cfgHome = fs.realpathSync(fs.mkdtempSync(path.join(ROOT, '.registry-test-')));
   const saved = process.env.XDG_CONFIG_HOME;
   process.env.XDG_CONFIG_HOME = cfgHome;
   try {
