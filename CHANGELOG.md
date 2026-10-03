@@ -8,6 +8,17 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Console: Loops › Active tab** — every loop `geneseed loop init` has launched, discovered via a
+  new **loop registry** (`$XDG_CONFIG_HOME/geneseed/loops.json`, identity only — `LOOP.md` stays
+  the source of state) instead of a worktree scan. `GET /api/loops/active` reports each loop's
+  branch, status, iteration, current node and preset; a card per loop, an `awaiting` loop
+  highlighted with what it's waiting on (answered in the agent's session, never the page),
+  finished loops kept muted for 7 days. Selecting a card draws its ring with the current node and
+  its iteration history. A per-loop preset picker (`POST /api/loops/preset`) rewrites `LOOP.md`'s
+  `preset`, applying from the next score on — the tab's only write; no `decide` and no relaunch
+  from the page. Only loops launched on this version or later are registered.
+
 ## [3.12.0] — 2026-10-03
 
 **Upgrading:** re-emit after installing (`geneseed rebuild-all`) to get the `loop` and
