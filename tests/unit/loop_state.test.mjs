@@ -340,3 +340,41 @@ test('F6: a read-only unit that re-enters the head and hits the iteration ceilin
   assert.deepEqual(recordOutcome(s, bricks, 'loop'), { stopped: 'iteration ceiling of 1 reached' });
   assert.equal(s.status, 'stopped');
 });
+
+// --- Final review ----------------------------------------------------------------------------
+
+// I1: amending a blocked SETUP diff re-runs the setup brick (graph.start), not the iteration's
+// first mutate node — the setup unit's work is a reproduction test, not the fix.
+test('I1: an amended setup diff resumes at graph.start, not at the iteration\'s first mutate node', () => {
+  const s = start(); // node: 'reproduce', iteration: 0
+  scoreDeclared(s, { actions: ['new-file'], writeSet: ['test/a.test.js'], intent: 'reproduce' });
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { verify: true });
+  assert.deepEqual(scoreDiff(s, [file('test/a.test.js'), file('src/b.js')]),
+    { score: 0.8, decision: 'blocking', reasons: ['outside the write set: src/b.js'], commit: false });
+  assert.deepEqual(decideAwaiting(s, BRICKS, 'amend', 'test only'), { resumed: true });
+  assert.equal(s.node, 'reproduce');
+  assert.equal(s.iteration, 0);
+});
+
+// I1: an inner loop exhausted during setup has no head to re-split into (the head belongs to
+// the iterations that come after setup), so it stops the loop by name instead.
+test('I1: exhausting an inner loop during setup stops the loop instead of jumping to the head', () => {
+  const g = bugfix();
+  g.edges.find((e) => e.from === 'reproduce' && e.on === 'fail').to = 'reproduce';
+  g.loops.push({ name: 'repro', nodes: ['reproduce'], max: 2 });
+  const s = initState({ title: 't', requirement: 'r', graph: g, preset: 'balanced' });
+  scoreDeclared(s, { actions: ['new-file'], writeSet: ['test/a.test.js'], intent: 'reproduce' });
+  for (let i = 0; i < 3; i += 1) assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'reproduce' });
+  assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { stopped: 'setup repro exhausted its max of 2' });
+  assert.equal(s.status, 'stopped');
+});
+
+// M2: once the unit has closed (pendingVerify), a declared score would rewrite the card of a unit
+// whose diff has not been scored yet; it is refused with the same message `record` gives.
+test('M2: scoreDeclared is refused while the iteration waits for its diff score', () => {
+  const s = start();
+  scoreDeclared(s, { actions: ['new-file'], writeSet: ['test/a.test.js'], intent: 'reproduce' });
+  recordOutcome(s, BRICKS, 'pass');
+  assert.throws(() => scoreDeclared(s, { actions: ['logic'] }),
+    { message: 'the iteration is closed: run `geneseed loop score --diff` first' });
+});

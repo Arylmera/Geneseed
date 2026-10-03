@@ -31,8 +31,10 @@ action prints one JSON object — act on its keys, never on your own reading of 
    `templates` and every brick (`name`, `description`, `effect`, `agent`/`skill`, `outcomes`,
    `available`). Compose a graph JSON from available bricks — skip one marked unavailable or whose
    `skill` you do not have: `name`, `nodes`, `start`, `edges` of `{from, on, to}` (one per
-   outcome; `$close`/`$stop` are terminals), `loops` with exactly one `"iteration": true`.
-   Write it to a temp `<name>.json` and validate it: `geneseed loop check --graph <file>`.
+   outcome; `$close`/`$stop` are terminals), `loops` with exactly one `"iteration": true`. The
+   iteration loop's first node is where every iteration begins (normally `identify`).
+   Write it to `<name>.json` in the OS temp directory — never inside the worktree, where it would
+   be scored and committed — and validate it: `geneseed loop check --graph <file>`.
 4. `geneseed loop init --title "<title>" --requirement "<requirement>" --graph <template|file> --preset {{TRUST}}`.
    A refused graph prints `problems` — fix them and retry.
 

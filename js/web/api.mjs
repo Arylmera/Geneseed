@@ -26,7 +26,7 @@ import {
 } from '../hosts/installs.mjs';
 import { frontmatter } from '../hosts/hooks.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
-import { loadCatalog } from '../loop/catalog.mjs';
+import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import {
   SKILL_CLASS, entityStatus, loadRegistry, tuiInventory,
 } from '../inspect/inventory.mjs';
@@ -953,7 +953,7 @@ export function apiRecent(state) {
  * layout needs `nodes`, `edges` and `loops` exactly as the engine reads them.
  */
 export function apiLoops(state) {
-  const { bricks, templates, overridden, problems } = loadCatalog({ projectRoot: state.root });
+  const { bricks, templates, overridden } = loadCatalog({ projectRoot: state.root });
   const byName = ([a], [b]) => (a < b ? -1 : 1);
   return {
     templates: [...templates].sort(byName).map(([name, { origin, ...graph }]) => ({
@@ -961,9 +961,10 @@ export function apiLoops(state) {
     })),
     bricks: [...bricks].sort(byName).map(([, b]) => ({ reason: null, ...b })),
     overridden,
-    // A brick or template the catalogue skipped (bad frontmatter, not JSON, misnamed): the
-    // page says so, or a team's broken override would just silently not be there.
-    problems,
+    // A brick or template the catalogue skipped (bad frontmatter, not JSON, misnamed), and a
+    // template that fails the graph rules: the page says so — the same list `loop check`
+    // prints — or a team's broken override would just silently not be there.
+    problems: catalogProblems({ projectRoot: state.root }),
   };
 }
 

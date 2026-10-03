@@ -65,8 +65,11 @@ test('rule 4 — every cycle lies inside a declared loop with a max', () => {
   const g = bugfix(); g.loops = g.loops.filter((l) => l.name !== 'apply-test');
   // apply⇄test is still inside the iteration loop, so it is bounded; drop that too:
   g.loops[0].nodes = ['identify', 'review'];
+  // Shrinking the iteration to [identify, review] also makes test -> review an entry into the
+  // iteration that is not its head (rule 4c, I3) — a second, independent fault of this graph.
   assert.deepEqual(checkGraph(g, BRICKS), [
     'cycle apply, identify, review, test has no declared loop around it',
+    'edge test --pass--> review enters the iteration at review, not at its head identify',
   ]);
 });
 
@@ -94,4 +97,21 @@ test('rule 5 — exactly one iteration loop, max within the engine ceiling, sane
 test('weights may only override known actions', () => {
   const g = bugfix(); g.weights = { logic: 0.6, vibes: 1 };
   assert.deepEqual(checkGraph(g, BRICKS), ['weights: vibes is not an action']);
+});
+
+// I3: the runtime closes a unit whenever the graph re-enters the iteration loop's FIRST node, so
+// a graph that enters the iteration anywhere else would run a whole unit with no head behind it
+// (no card from identify, a commit boundary in the wrong place). Every edge entering the
+// iteration from outside it — and `start`, when it is inside — must target nodes[0].
+test('I3 — the iteration is entered only at its head (the first node listed)', () => {
+  const g = bugfix(); g.loops[0].nodes = ['apply', 'test', 'review', 'identify'];
+  assert.deepEqual(checkGraph(g, BRICKS), [
+    'edge reproduce --pass--> identify enters the iteration at identify, not at its head apply',
+  ]);
+  const h = bugfix(); h.start = 'identify'; h.loops[0].nodes = ['apply', 'test', 'review', 'identify'];
+  // reproduce is now unreachable but still a node: its edge still enters the iteration
+  assert.deepEqual(checkGraph(h, BRICKS), [
+    'start identify is inside the iteration but is not its head apply',
+    'edge reproduce --pass--> identify enters the iteration at identify, not at its head apply',
+  ]);
 });

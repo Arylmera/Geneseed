@@ -123,6 +123,19 @@ export function checkGraph(graph, bricks) {
       const covered = loops.some((l) => l !== iteration && comp.every((n) => (l.nodes ?? []).includes(n)));
       if (!covered) problems.push(`cycle ${comp.join(', ')} inside an iteration has no inner loop around it`);
     }
+    // rule 4c — the iteration is entered only at its head: the runtime opens and closes units
+    // on re-entering nodes[0], so entering anywhere else runs a unit with no head behind it.
+    const inside = new Set(iteration.nodes ?? []);
+    if (head !== undefined) {
+      if (inside.has(graph.start) && graph.start !== head) {
+        problems.push(`start ${graph.start} is inside the iteration but is not its head ${head}`);
+      }
+      for (const e of edges) {
+        if (!inside.has(e.from) && inside.has(e.to) && e.to !== head) {
+          problems.push(`edge ${e.from} --${e.on}--> ${e.to} enters the iteration at ${e.to}, not at its head ${head}`);
+        }
+      }
+    }
   }
   // template weight overrides
   for (const k of Object.keys(graph.weights ?? {})) {

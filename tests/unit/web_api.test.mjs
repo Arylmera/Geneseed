@@ -2949,3 +2949,25 @@ test('the loops endpoint lists templates, bricks and overrides from the install 
     sb.cleanup();
   }
 });
+
+// A project template that parses but fails the graph rules is listed AND reported: the Loops
+// page renders `problems`, so a broken team graph says why `loop init` would refuse it. The
+// template is the shipped bugfix with one bad weight override, prefixed like `loop check` does.
+test('the loops endpoint reports graph problems in a template, as loop check does', () => {
+  const sb = makeSandbox();
+  const prevXdg = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(sb.path, 'xdg');
+  try {
+    const loops = path.join(sb.path, '.geneseed', 'loops');
+    fs.mkdirSync(loops, { recursive: true });
+    const graph = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/loops/bugfix.json'), 'utf8'));
+    fs.writeFileSync(path.join(loops, 'team.json'), JSON.stringify({ ...graph, name: 'team', weights: { vibes: 1 } }));
+    const { templates, problems } = apiLoops(webState('neutral', sb.path));
+    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'feature', 'refactor', 'team']);
+    assert.deepEqual(problems, ['loops/team: weights: vibes is not an action']);
+  } finally {
+    if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = prevXdg;
+    sb.cleanup();
+  }
+});

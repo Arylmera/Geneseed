@@ -138,3 +138,28 @@ test('every state action refuses outside a git repository', () => {
     assert.equal(r.code, 1); assert.deepEqual(r.out, { error: 'not inside a git repository' });
   } finally { sb.cleanup(); }
 });
+
+// M1: `decide` closes a unit through the CLI too — a diff with a file outside the write set
+// escalates to blocking (0.8 > balanced's 0.6), `decide --verdict ok` commits it at that actual
+// score, and the message file it names carries the setup unit's trailers byte for byte.
+test('M1: a blocking actual diff, answered with decide --verdict ok, commits through the message file', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    run(sb.path, ['record', '--outcome', 'pass'], '?? test/r.test.js\n?? src/b.js\n');
+    assert.deepEqual(run(sb.path, ['score', '--diff'], '12\t0\ttest/r.test.js\n3\t0\tsrc/b.js\n').out,
+      { score: 0.8, decision: 'blocking', reasons: ['outside the write set: src/b.js'], commit: false });
+    assert.equal(run(sb.path, ['next']).out.awaiting.kind, 'actual');
+    const decided = run(sb.path, ['decide', '--verdict', 'ok']).out;
+    const msgFile = path.join(sb.path, '.git', 'LOOP_COMMIT_MSG');
+    const trailers = 'Loop-Iteration: 0\nLoop-Bricks: reproduce\nLoop-Risk-Declared: 0.4\nLoop-Risk-Actual: 0.8\n'
+      + 'Loop-Threshold: balanced 0.2/0.6\nLoop-Decision: blocking\nLoop-Tests: n/a';
+    assert.deepEqual(decided, {
+      commit: true, trailers, iteration: 0, intent: 'reproduce', message_file: msgFile.replaceAll('\\', '/'),
+    });
+    assert.equal(readFileSync(msgFile, 'utf8').replace(/\r\n/g, '\n'), `loop(loop): iteration 0 — reproduce\n\n${trailers}\n`);
+  } finally { sb.cleanup(); }
+});

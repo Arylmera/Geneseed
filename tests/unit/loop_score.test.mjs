@@ -72,3 +72,27 @@ test('worst picks the more severe decision', () => {
   assert.equal(worst('soft', 'silent'), 'soft');
   assert.equal(worst(undefined, 'silent'), 'silent');
 });
+
+// I2: git prints a rename as `old => new` or `pre/{a => b}/post` (either side may be empty, which
+// leaves a doubled slash to collapse). BOTH paths are emitted so both meet the write set: the old
+// one with 0/0 counts, so a rename never counts its lines twice toward the deletion threshold.
+// A C-quoted path (git's default core.quotepath) has its octal escapes decoded as UTF-8 bytes.
+test('numstat expands renames into both paths and decodes C-quoted paths', () => {
+  assert.deepEqual(parseNumstat('3\t1\tsrc/{a.js => b.js}'), [
+    { file: 'src/b.js', added: 3, deleted: 1 }, { file: 'src/a.js', added: 0, deleted: 0 },
+  ]);
+  assert.deepEqual(parseNumstat('0\t0\told.js => new.js'), [
+    { file: 'new.js', added: 0, deleted: 0 }, { file: 'old.js', added: 0, deleted: 0 },
+  ]);
+  assert.deepEqual(parseNumstat('2\t0\tsrc/{ => sub}/x.js\n1\t1\t{lib => src}/y.js\n0\t0\ta/{b => }/z.js'), [
+    { file: 'src/sub/x.js', added: 2, deleted: 0 }, { file: 'src/x.js', added: 0, deleted: 0 },
+    { file: 'src/y.js', added: 1, deleted: 1 }, { file: 'lib/y.js', added: 0, deleted: 0 },
+    { file: 'a/z.js', added: 0, deleted: 0 }, { file: 'a/b/z.js', added: 0, deleted: 0 },
+  ]);
+  // String.raw: the backslashes below are the bytes git prints, not JS escapes.
+  assert.deepEqual(parseNumstat(`1\t0\t${String.raw`"caf\303\251.js"`}`), [{ file: 'café.js', added: 1, deleted: 0 }]);
+  assert.deepEqual(parseNumstat(`1\t0\t${String.raw`"a\"b\\c\td.js"`}`), [{ file: 'a"b\\c\td.js', added: 1, deleted: 0 }]);
+  assert.deepEqual(parseNumstat(`0\t0\t${String.raw`"caf\303\251.js" => "b.js"`}`), [
+    { file: 'b.js', added: 0, deleted: 0 }, { file: 'café.js', added: 0, deleted: 0 },
+  ]);
+});

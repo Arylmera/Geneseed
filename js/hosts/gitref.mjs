@@ -78,8 +78,9 @@ const LOOP_STATE_MARKER = '<!-- loop-state:begin -->';
  * which anyone can type. `lstatSync` (never `statSync`, which follows a link) must find an
  * ordinary file: a FIFO would block the read, and a symlink could point anywhere outside the
  * repo — either makes "LOOP.md says so" a claim this reader cannot stand behind. Read at
- * most the first 64 KB: the marker sits on the first line, and a huge LOOP.md (notes,
- * history) must never make this check slow.
+ * most the first 64 KB: the marker is not on the first line (it follows the title and the
+ * requirement), so it must appear within those 64 KB — a huge LOOP.md (notes, history) must
+ * never make this check slow.
  */
 export function loopLaunched(root) {
   let fd;

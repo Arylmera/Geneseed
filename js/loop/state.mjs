@@ -144,6 +144,7 @@ export function nextStep(state, bricks) {
 
 export function scoreDeclared(state, { actions = null, writeSet = null, intent = null } = {}) {
   assertRunning(state);
+  if (state.pendingVerify) throw new Error('the iteration is closed: run `geneseed loop score --diff` first');
   if (actions) {
     state.card = {
       ...(state.card ?? {}), intent: intent ?? state.card?.intent ?? state.node,
@@ -197,6 +198,8 @@ export function scoreDiff(state, files) {
 }
 
 function exhaust(state, loop) {
+  // Setup has no head to re-split into: the head belongs to the iterations after it.
+  if (isSetupUnit(state)) return stop(state, `setup ${loop.name} exhausted its max of ${loop.max}`);
   if (state.resplit) {
     return stop(state, `${loop.name} exhausted its max of ${loop.max} twice in iteration ${state.iteration}`);
   }
@@ -307,7 +310,10 @@ export function decideAwaiting(state, bricks, verdict, note = '') {
     // for this unit restarts (reset counters) now that the amendment changes what it does.
     state.current = { declared: state.current.declared, decision: 'blocking', amended: true };
     state.counters = {};
-    state.node = iterationLoop(state.graph).nodes.find((n) => bricks.get(n)?.effect === 'mutate') ?? head(state);
+    // A setup unit re-runs its own brick (graph.start), never the iteration's fix brick.
+    state.node = isSetupUnit(state)
+      ? state.graph.start
+      : iterationLoop(state.graph).nodes.find((n) => bricks.get(n)?.effect === 'mutate') ?? head(state);
     return { resumed: true };
   }
   if (isSetupUnit(state)) return stop(state, `setup rejected${note ? `: ${note}` : ''}`);

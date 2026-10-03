@@ -24,19 +24,23 @@ it may be re-entered. Picture it as rings: the outer ring is the iteration itsel
 test, review, back to plan), and inner rings sit inside it for retries (apply failed its test, try
 `apply` again without going all the way back around). The three shipped templates —
 `bugfix`, `feature`, `refactor` — all nest a short `apply`↔`test` retry ring inside the iteration
-ring, and `bugfix` nests a second, wider `apply`↔`test`↔`review` ring around that.
+ring, and `bugfix` and `feature` nest a second, wider `apply`↔`test`↔`review` ring
+(`review-fix`) around that.
 
 Work closes into a commit whenever the graph re-enters the iteration loop's head — so any setup
 work before the loop starts (reproducing a bug, say) is its own unit, numbered iteration 0, kept
-out of iteration 1's diff.
+out of iteration 1's diff. For the same reason the iteration has exactly one way in: its
+**head** is the first node listed in the iteration loop (normally `identify`), and every edge that
+enters the iteration from outside it — and `start`, when `start` is inside it — must target that
+head. `geneseed loop check` refuses a graph that enters anywhere else.
 
 **A node's re-entry budget is not each loop's `max` added up.** Every node inside one or more
 inner loops gets a single shared counter: `1 + the largest max among the inner loops that contain
 it`. A node in both a `max: 5` and a `max: 3` loop gets 6 re-entries total, not 8 — the loops don't
 stack, the larger one wins and the `+1` is the node's own first run. A node inside no inner loop at
 all gets exactly 1 — no re-entry — which is also why **every cycle inside an iteration must be a
-named inner loop** in the graph JSON: a cycle the author forgot to declare hits that one-shot
-budget on its second pass and stops, by construction, rather than looping forever.
+named inner loop** in the graph JSON: `geneseed loop check` (and `loop init`, which runs the same
+check) refuses a graph with an undeclared cycle inside an iteration, before a single node runs.
 
 ## Bricks, templates, and the three origins
 
@@ -101,7 +105,7 @@ Three levels follow from where the score lands:
 
 `LOOP.md`, at the worktree root, is both the human-readable record (title, requirement, and the
 rule that you may edit `preset` or `contracts` there) and the engine's own JSON state block. Every
-closing commit carries six trailers, read straight off that state:
+closing commit carries seven trailers, read straight off that state:
 
 ```
 Loop-Iteration: <n>
@@ -115,7 +119,8 @@ Loop-Tests: <what the loop was told about test state>
 
 ## The `loop/*` branch, and why merge always asks
 
-A loop runs in its own worktree, on a branch named `loop/<slug>`, created by `geneseed loop init`.
+A loop runs in its own worktree, on a branch named `loop/<slug>` — the `loop` skill creates both
+with `git worktree add -b loop/<slug>` before `geneseed loop init` writes `LOOP.md` there.
 While that branch is checked out and `LOOP.md` carries the engine's state marker, the git gate lets
 exactly one commit/push form through without asking:
 
