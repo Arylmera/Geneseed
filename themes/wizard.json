@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest working spell — least incantation, shortest path; the standard grimoire before bespoke runes, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Loose several familiars on independent tasks at once, then gather what they bring.",
   "DESC_PIPELINE": "Dispatch a small coven of familiars — scout, artisan, examiner — to labour in their own warded circle, bound into the Grimoire only once the proving-rite returns clean.",
+  "DESC_LOOP": "Work a requirement in small, weighed incantations on a loop/* branch, the loop engine binding every step.",
+  "DESC_BRICK_FORGE": "Inscribe or adapt a loop brick, then prove it with geneseed loop check.",
   "DESC_DEVELOP": "Drive a working through the cover-and-confirm loop — the smallest casting, its trials written, the touched trials green, sealed rune by rune.",
   "DESC_TEACH": "Tutor the apprentice toward a result — a crash course from novice to working caster, a confusing grimoire decoded until it clicks, or a day-by-day path to the appointed day.",
   "DESC_QUIZ": "Test the apprentice rather than lecture — a drill to reflex, an explain-it-back examination, or a claimed mastery put to trial — with an unvarnished readout of the gaps.",

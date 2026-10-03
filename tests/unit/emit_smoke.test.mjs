@@ -171,8 +171,15 @@ const FOOTPRINTS = ['full', 'lean'];
  * to say so ("A launched loop's batch covers commit and push on its own `loop/*`
  * branch only; merging it never.") — the rest of the LEAN:else half was trimmed instead
  * (tighter wording, same meaning) so the carrier stayed inside this same 38_538 ceiling.
+ *
+ * LEAN RAISED 2026-10-03, for the loop and brick-forge Skills (Task 9 of the loop-engineering
+ * plan): two catalogue rows, already cut to the shortest trigger that still routes (`the user
+ * asks to run a loop`, `a new or adapted loop brick`) — the full trigger lives in each Skill's
+ * own description. Even those two rows overflow lean by 118. Measured `files` carrier after:
+ * full 61_480 (inside 61_500, headroom 20), lean 38_656. `lean` raised by exactly that
+ * overrun, 38_538 → 38_656, not rounded.
  */
-const CEILING = { full: 61_500, lean: 38_538 };
+const CEILING = { full: 61_500, lean: 38_656 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -205,7 +212,7 @@ const EXPECTED = {
 // 18 specs. `agents/_template.md` does NOT ship: every host loads each `.md` in its agents dir
 // as an agent, so it would register a phantom `_template` agent.
 const N_AGENTS = 18;
-const N_SKILLS = 54;
+const N_SKILLS = 56;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
 // translates `\n` to `os.linesep`, so on Windows the file really is CRLF on disk (gated as M1).

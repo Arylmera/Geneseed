@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "Minimum viable solution that holds — least code, shortest path; issued kit before custom build, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Deploy independent tasks to concurrent units, then consolidate the results.",
   "DESC_PIPELINE": "Deploy a small fire team — scout, builder, verifier — into their own sector, cleared to merge only once the after-action report comes back green.",
+  "DESC_LOOP": "Execute a requirement in small, scored sorties on a loop/* branch, the loop engine issuing every order.",
+  "DESC_BRICK_FORGE": "Draft or adapt a loop brick, then clear it through geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written to cover it, affected suite green, committed slice by slice.",
   "DESC_TEACH": "Train the recruit toward a result — a crash course to operational, a confusing manual decoded until it clicks, or a day-by-day programme to the deadline.",
   "DESC_QUIZ": "Test the recruit instead of briefing them — a drill to reflex, an explain-it-back debrief, or a claimed proficiency stress-tested — with a frank readout of the gaps.",

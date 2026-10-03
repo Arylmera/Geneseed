@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest solution that actually works, no padding — least code, shortest path; stdlib before custom junk, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Put several grunts on independent jobs at once, then pull in what they bring back.",
   "DESC_PIPELINE": "Put a small crew — scout, coder, tester — to work in their own lane, and only let it near the trunk once the tests and lint come back clean. No exceptions.",
+  "DESC_LOOP": "Work a requirement in small, scored iterations on a loop/* branch. The loop engine decides, not you.",
+  "DESC_BRICK_FORGE": "Write or fix a loop brick, then make it pass geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through the loop — smallest cut, a test that covers it, the affected suite green, committed slice by slice. Not one giant dump.",
   "DESC_TEACH": "Teach the user toward a result — a crash course from clueless to functional, confusing material decoded until it finally clicks, or a day-by-day path to a deadline they'll probably miss.",
   "DESC_QUIZ": "Test what the user actually knows instead of explaining it again — drill to reflex, make them explain it back, or call the bluff on a claimed mastery — with a blunt readout of the gaps.",

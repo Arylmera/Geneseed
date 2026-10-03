@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest line that wins — least code, shortest path; standard parts before custom builds, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several engineers on independent jobs at once, then bring in what they get.",
   "DESC_PIPELINE": "Send a small crew — scout, engineer, tester — off on their own run, and only bring the setup into the race once the telemetry comes back clean.",
+  "DESC_LOOP": "Work a requirement in short, scored stints on a loop/* branch, the loop engine calling every lap.",
+  "DESC_BRICK_FORGE": "Build or tune a loop brick, then run it through geneseed loop check.",
   "DESC_DEVELOP": "Drive the change home — smallest move, a test written to cover it, the affected trials green, and sealed commit by commit.",
   "DESC_TEACH": "Get the user up to speed — a crash course from zero to functional, confusing material decoded until it clicks, or a day-by-day programme to the deadline. No wasted laps.",
   "DESC_QUIZ": "Test what they actually know instead of explaining it — a drill to reflex, an explain-it-back debrief, or a claimed mastery stress-tested — with a straight readout of the gaps.",

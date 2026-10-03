@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest play that scores — least code, shortest path; standard kit before custom plays, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several players on independent plays at once, then regroup the results.",
   "DESC_PIPELINE": "Send a small squad — scout, builder, tester — onto their own field, and only bring the play into the game once the film comes back clean.",
+  "DESC_LOOP": "Work a requirement in short, scored drills on a loop/* branch, the loop engine calling every play.",
+  "DESC_BRICK_FORGE": "Draw up or adapt a loop brick, then run it through geneseed loop check.",
   "DESC_DEVELOP": "Drive it in on cover-and-verify — smallest gain, a test set on the new ground, the affected drills green, and log it snap by snap.",
   "DESC_TEACH": "Coach the player toward a result — a crash course from bench to game-ready, a confusing playbook decoded until it clicks, or a day-by-day training plan to the deadline.",
   "DESC_QUIZ": "Test the player instead of coaching — a drill to reflex, an explain-it-back film session, or a claimed mastery stress-tested — with a straight readout of the gaps.",

@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest build that runs — least code, shortest path; stock libs before custom rigs, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Fork independent tasks to concurrent threads, then merge the output.",
   "DESC_PIPELINE": "Spin up a small crew of daemons — scout, coder, tester — on their own fork, and only merge the run once the trace comes back clean.",
+  "DESC_LOOP": "Run a requirement in small, scored cycles on a loop/* fork, the loop engine driving every jump.",
+  "DESC_BRICK_FORGE": "Compile or patch a loop brick, then run it through geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through the loop — smallest edit, a test written to cover it, the touched rigs run green, committed slice by slice.",
   "DESC_TEACH": "Bring a user online — a crash course from zero to operational, confusing data decoded until it clicks, or a day-by-day route to a deadline.",
   "DESC_QUIZ": "Probe what the user actually knows instead of explaining — drill to reflex, make them run it back, or stress-test a claimed mastery — with a cold readout of the gaps.",

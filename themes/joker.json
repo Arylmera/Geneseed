@@ -56,6 +56,8 @@
   "DESC_PONYTAIL": "The laziest gag that lands — least code, shortest setup; stock bits before custom props, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several sidekicks on independent bits at once, then bring in what they get.",
   "DESC_PIPELINE": "Send a small crew — scout, coder, tester — off to do their bit in their own green room, and only bring it on stage once the run-through comes back clean.",
+  "DESC_LOOP": "Work a requirement in small, scored takes on a loop/* branch, the loop engine calling every cue.",
+  "DESC_BRICK_FORGE": "Write or rework a loop brick, then run it past geneseed loop check.",
   "DESC_DEVELOP": "Drive a change through the club's own laugh test — smallest bit, tests written to cover it, the affected set green, committed one beat at a time.",
   "DESC_TEACH": "Get someone functional — a crash course from open-mic nerves to a tight five, confusing material decoded until it clicks, or a day-by-day path to the deadline.",
   "DESC_QUIZ": "Test what they actually know instead of explaining — drill it to reflex, make them do the bit back, or call the bluff on a claimed mastery — with an honest readout of the gaps.",
