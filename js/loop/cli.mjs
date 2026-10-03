@@ -22,8 +22,9 @@ import { parseNumstat, DEFAULT_PRESET } from './score.mjs';
 import { gitRootOf, gitDirOf, currentBranch } from '../hosts/gitref.mjs';
 import {
   initState, nextStep, scoreDeclared, scoreDiff, recordOutcome, decideAwaiting,
-  renderLoopFile, parseLoopFile, LOOP_FILE,
+  writeLoopFile, parseLoopFile, LOOP_FILE,
 } from './state.mjs';
+import { recordLoop } from './registry.mjs';
 
 const emit = (obj) => { printOut(`${JSON.stringify(obj)}\n`); return obj.error || obj.ok === false ? 1 : 0; };
 const stdin = () => (process.stdin.isTTY ? '' : readFileSync(0, 'utf8'));
@@ -64,7 +65,7 @@ function withState(fn) {
   const state = parseLoopFile(readText(file));
   const { bricks } = loadCatalog({ projectRoot: root });
   const result = fn(state, bricks);
-  writeText(file, renderLoopFile(state));
+  writeLoopFile(file, state);
   return result;
 }
 
@@ -111,7 +112,10 @@ const ACTIONS = {
     const problems = checkGraph(graph, catalog.bricks);
     if (problems.length) return { error: 'the graph does not pass loop check', problems };
     const state = initState({ title: args.title, requirement: args.requirement, graph, preset: args.preset || DEFAULT_PRESET });
-    writeText(file, renderLoopFile(state));
+    writeLoopFile(file, state);
+    // Best-effort: the registry is how the Active tab discovers this loop, but a registry
+    // hiccup must never fail the init the loop itself just succeeded at.
+    recordLoop({ root, branch: currentBranch(root), title: args.title });
     return { file, graph: graph.name, preset: state.preset, status: state.status };
   },
   next: () => withState((s, b) => nextStep(s, b)),

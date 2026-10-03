@@ -5,6 +5,7 @@ import Tabs from '../components/Tabs.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import Loading from '../components/Loading.jsx'
 import RingGraph from '../components/RingGraph.jsx'
+import ActiveLoops from '../components/ActiveLoops.jsx'
 
 const enc = encodeURIComponent
 
@@ -145,9 +146,9 @@ function Bricks({ data }) {
 }
 
 // The Loops page: the templates `geneseed loop` runs, drawn as rings, and the bricks they are
-// built from. Read-only — templates and bricks are files (src/, the user's config dir, the
-// repo's .geneseed/), and this page shows which one won. "Active" is the live-run view,
-// announced and not built yet.
+// built from — files (src/, the user's config dir, the repo's .geneseed/), read-only here, and
+// this page shows which one won. "Active" is the live-run view (components/ActiveLoops.jsx):
+// it does not wait on the catalogue, which it only borrows bricks from for the ring's gate.
 export default function Loops({ tab = 'templates', item, dataRev }) {
   const { data, error } = useAsync(() => api.loops(), [dataRev], 'loops')
   return (
@@ -163,14 +164,12 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
         current={tab}
         label="Loops"
         badges={data ? { templates: data.templates.length, bricks: data.bricks.length } : {}}
-      >
-        <span className="tab-off" aria-disabled="true" title="Live runs arrive in v2">
-          Active <span className="tab-badge">v2</span>
-        </span>
-      </Tabs>
+      />
       <ErrorState error={error} style={{ margin: '0 0 12px' }} />
       <Problems problems={data?.problems} />
-      {!data ? (
+      {tab === 'active' ? (
+        <ActiveLoops item={item} bricks={data?.bricks || []} />
+      ) : !data ? (
         error ? null : (
           <Loading />
         )

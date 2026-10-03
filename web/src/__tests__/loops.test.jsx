@@ -1,11 +1,13 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The Loops page over a fixture `/api/loops` payload: the template cards, the ring for the
-// selected one with a card per brick, the Bricks tab with its sources, and the announced but
-// disabled Active tab. The ring's geometry is lib/loopRing.js's suite; this one pins the page.
-vi.mock('../api/index.js', () => ({ api: { loops: vi.fn() } }))
+// selected one with a card per brick, the Bricks tab with its sources, and the Active tab's
+// link (its own suite is below). The ring's geometry is lib/loopRing.js's suite; this one pins the page.
+vi.mock('../api/index.js', () => ({
+  api: { loops: vi.fn(), activeLoops: vi.fn(), setLoopPreset: vi.fn() },
+}))
 
 import Loops from '../pages/Loops.jsx'
 import { api } from '../api/index.js'
@@ -113,14 +115,12 @@ describe('Loops', () => {
     )
   })
 
-  it('shows Active as a disabled v2 tab, not a link', async () => {
+  it('shows Active as a tab link beside Templates and Bricks', async () => {
     render(<Loops tab="templates" />)
     await screen.findByText('The smallest loop.')
     const tabs = [...document.querySelectorAll('nav.tabs a')].map((a) => a.textContent)
-    expect(tabs).toEqual(['Templates2', 'Bricks4'])
-    const off = document.querySelector('nav.tabs .tab-off')
-    expect(off.textContent).toBe('Active v2')
-    expect(off.getAttribute('aria-disabled')).toBe('true')
+    expect(tabs).toEqual(['Templates2', 'Bricks4', 'Active'])
+    expect(document.querySelector('nav.tabs .tab-off')).toBeNull()
   })
 
   // A brick or template the catalogue skipped is named on the page, on both tabs, or a team's
@@ -155,5 +155,170 @@ describe('Loops', () => {
     )
     render(<Loops tab="templates" />)
     expect(await screen.findByText('No templates')).toBeTruthy()
+  })
+})
+
+// The Active tab over a fixture `/api/loops/active` payload: one card per registered loop,
+// read off its LOOP.md. Live rows carry the state; finished and unreadable rows carry only
+// their identity and are shown muted. The selected card draws its graph's ring with the node
+// the loop stands on highlighted, and the iteration history under it.
+const RUN = {
+  root: 'C:/w/fix-login',
+  branch: 'loop/fix-login',
+  title: 'Fix the login bug',
+  started: '2026-10-03T08:00:00.000Z',
+  status: 'running',
+  iteration: 3,
+  node: 'apply',
+  preset: 'balanced',
+  threshold: 5,
+  current: { declared: 2 },
+  history: [
+    {
+      iteration: 1,
+      bricks: [],
+      declared: 2,
+      actual: 3,
+      decision: 'silent',
+      tests: 'pass',
+      intent: 'Guard the null user',
+    },
+    {
+      iteration: 2,
+      bricks: [],
+      declared: 6,
+      actual: 6,
+      decision: 'soft',
+      tests: 'fail',
+      intent: 'Rework the session check',
+    },
+  ],
+  review: [],
+  reason: null,
+  awaiting: null,
+  graph: GRAPH,
+}
+const WAITING = {
+  ...RUN,
+  root: 'C:/w/refactor',
+  branch: 'loop/refactor',
+  title: 'Split the parser',
+  status: 'awaiting',
+  iteration: 1,
+  node: 'identify',
+  preset: 'prudent',
+  history: [],
+  awaiting: { kind: 'declared', iteration: 1, score: 7, threshold: 3 },
+}
+const DONE = {
+  root: 'C:/w/old',
+  branch: 'loop/old',
+  title: 'An old loop',
+  started: '2026-10-01T08:00:00.000Z',
+  status: 'finished',
+}
+
+describe('Loops › Active', () => {
+  const show = (loops) => api.activeLoops.mockImplementation(() => Promise.resolve({ loops }))
+
+  // A failed read rejects with an Error object (api/http.js `fail`); the page must show its
+  // message, not hand the object to React — a console on an older server (no
+  // /api/loops/active yet) crashed the whole page with React error #31 this way.
+  it('shows a failed read as its message instead of crashing', async () => {
+    api.activeLoops.mockImplementation(() =>
+      Promise.reject(new Error('not found: /api/loops/active')),
+    )
+    render(<Loops tab="active" />)
+    expect(await screen.findByText('not found: /api/loops/active')).toBeTruthy()
+  })
+
+  it('renders one card per loop with its branch, status, iteration, preset and node', async () => {
+    show([RUN, WAITING, DONE])
+    render(<Loops tab="active" />)
+    await screen.findByText('Fix the login bug')
+    const cards = [...document.querySelectorAll('.loop-run')]
+    expect(cards.map((c) => c.querySelector('.loop-run-title').textContent)).toEqual([
+      'Fix the login bug',
+      'Split the parser',
+      'An old loop',
+    ])
+    const run = cards[0]
+    expect(run.textContent).toContain('loop/fix-login')
+    expect(run.querySelector('.tag.acc').textContent).toBe('running')
+    // max is the graph's iteration loop's `max` (7 in GRAPH).
+    expect(run.textContent).toContain('iteration 3 / 7')
+    expect(run.textContent).toContain('at apply')
+    expect(screen.getByLabelText('Preset for Fix the login bug').value).toBe('balanced')
+  })
+
+  it('highlights an awaiting loop with what it waits on and where to answer', async () => {
+    show([RUN, WAITING])
+    render(<Loops tab="active" />)
+    await screen.findByText('Split the parser')
+    const [run, waiting] = document.querySelectorAll('.loop-run')
+    expect(run.classList.contains('awaiting')).toBe(false)
+    expect(waiting.classList.contains('awaiting')).toBe(true)
+    expect(waiting.querySelector('.tag.warn').textContent).toBe('awaiting')
+    expect(waiting.textContent).toContain('Awaiting declared')
+    expect(waiting.textContent).toContain("Answer in the agent's session.")
+  })
+
+  it('shows finished and unreadable loops muted, with their status and no picker', async () => {
+    show([RUN, DONE, { ...DONE, root: 'C:/w/bad', title: 'Broken', status: 'unreadable' }])
+    render(<Loops tab="active" />)
+    await screen.findByText('An old loop')
+    const [, done, bad] = document.querySelectorAll('.loop-run')
+    expect(done.classList.contains('dimmed')).toBe(true)
+    expect(done.querySelector('.tag').textContent).toBe('finished')
+    expect(done.querySelector('select')).toBeNull()
+    expect(bad.classList.contains('dimmed')).toBe(true)
+    expect(bad.querySelector('.tag.bad').textContent).toBe('unreadable')
+  })
+
+  it('posts a preset change and reads the loops again', async () => {
+    show([RUN])
+    api.setLoopPreset.mockImplementation(() => Promise.resolve({ ok: true, loop: RUN }))
+    render(<Loops tab="active" />)
+    const pick = await screen.findByLabelText('Preset for Fix the login bug')
+    expect(api.activeLoops).toHaveBeenCalledTimes(1)
+    fireEvent.change(pick, { target: { value: 'aggressive' } })
+    expect(api.setLoopPreset).toHaveBeenCalledWith('C:/w/fix-login', 'aggressive')
+    await waitFor(() => expect(api.activeLoops).toHaveBeenCalledTimes(2))
+  })
+
+  it('draws the selected loop with its current node highlighted, and its history', async () => {
+    show([RUN, WAITING])
+    render(<Loops tab="active" item="C:/w/fix-login" />)
+    await screen.findByText('Fix the login bug')
+    expect(document.querySelector('.loop-run.on .loop-run-title').textContent).toBe(
+      'Fix the login bug',
+    )
+    const current = document.querySelectorAll('svg.loop-ring .lr-node.current')
+    expect([...current].map((n) => n.textContent)).toEqual(['apply'])
+    const rows = [...document.querySelectorAll('.loop-history tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('td')].map((td) => td.textContent),
+    )
+    expect(rows).toEqual([
+      ['1', 'Guard the null user', '2', '3', 'silent', 'pass'],
+      ['2', 'Rework the session check', '6', '6', 'soft', 'fail'],
+    ])
+  })
+
+  it('selects the first live loop when none is routed', async () => {
+    show([DONE, WAITING])
+    render(<Loops tab="active" />)
+    await screen.findByText('Split the parser')
+    expect(document.querySelector('.loop-run.on .loop-run-title').textContent).toBe(
+      'Split the parser',
+    )
+    const current = document.querySelectorAll('svg.loop-ring .lr-node.current')
+    expect([...current].map((n) => n.textContent)).toEqual(['identify'])
+  })
+
+  it('explains how to start a loop when none is registered', async () => {
+    show([])
+    render(<Loops tab="active" />)
+    expect(await screen.findByText('No loops yet')).toBeTruthy()
+    expect(document.querySelector('.empty').textContent).toContain('geneseed loop init')
   })
 })

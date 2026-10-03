@@ -51,17 +51,17 @@ const TOKEN = 'test-token';
 // message. (`/api/graph` left this list when the web graph pages were retired — the last
 // endpoint to leave it.)
 
-/** Every GET path the daemon answers — 21. Trailing `/` marks a prefix route. */
+/** Every GET path the daemon answers — 22. Trailing `/` marks a prefix route. */
 const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
   '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/installs', '/api/item/',
-  '/api/jobs', '/api/jobs/', '/api/loops', '/api/mcp', '/api/overview', '/api/ping', '/api/profile',
-  '/api/rules', '/api/setup', '/api/themes', '/api/recent'];
+  '/api/jobs', '/api/jobs/', '/api/loops', '/api/loops/active', '/api/mcp', '/api/overview',
+  '/api/ping', '/api/profile', '/api/rules', '/api/setup', '/api/themes', '/api/recent'];
 
-/** Every POST path the daemon answers — 15. */
+/** Every POST path the daemon answers — 16. */
 const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/install',
-  '/api/jobs/', '/api/mcp', '/api/memory/delete', '/api/pick-folder', '/api/profile',
-  '/api/restart', '/api/reveal', '/api/rules', '/api/rules/promote', '/api/shutdown',
-  '/api/view'];
+  '/api/jobs/', '/api/loops/preset', '/api/mcp', '/api/memory/delete', '/api/pick-folder',
+  '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/promote',
+  '/api/shutdown', '/api/view'];
 
 /**
  * The POST paths whose send carries a `200 if … else 409` conditional.
@@ -367,6 +367,16 @@ test('the declared surface is the one the dispatcher uses', async () => {
     // cannot answer 200 here: this probe's dist root is 'nowhere', so a fall-through is a 404.)
     assert.equal(await hit('GET', '/api/recent'), 200,
       'GET /api/recent must answer — a 404 means the declaration is not dispatched on');
+    // An empty body names no `root`, which `setLoopPreset` refuses as an unknown loop before it
+    // ever writes anything — a READ-ONLY refusal, unlike `apiLoopsActive` (GET `/api/loops`'s
+    // sibling), which this probe deliberately does not drive for the same reason it never drove
+    // `/api/loops`: a real poll can write the DEVELOPER's own `loops.json` (a pruned stale row),
+    // and this probe runs against the real machine config, not a sandbox.
+    // `apiLoopsPresetMutate` turns the throw into `NotFound`, which the outer catch maps to 404,
+    // proving the route reaches `setLoopPreset` rather than answering from the table alone.
+    assert.equal(await hit('POST', '/api/loops/preset', 'tok'), 404,
+      'POST /api/loops/preset: an empty body names no root, so it must reach setLoopPreset and '
+      + 'raise NotFound');
     assert.equal(await hit('POST', '/api/excludes', 'tok'), 409,
       'a table POST must answer, and an empty body is the 409 arm of the convention — the '
       + 'control for the refusals below');

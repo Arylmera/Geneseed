@@ -129,8 +129,10 @@ export function actualRisk(declared, files, { writeSet = [], contracts = [], ove
 }
 
 export function decide(score, preset) {
+  if (!Object.hasOwn(PRESETS, preset)) {
+    throw new Error(`unknown preset ${JSON.stringify(preset)} — one of ${Object.keys(PRESETS).join(', ')}`);
+  }
   const t = PRESETS[preset];
-  if (!t) throw new Error(`unknown preset ${JSON.stringify(preset)} — one of ${Object.keys(PRESETS).join(', ')}`);
   if (score <= t[0]) return 'silent';
   if (score <= t[1]) return 'soft';
   return 'blocking';

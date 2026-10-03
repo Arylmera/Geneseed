@@ -2815,8 +2815,6 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
    The ring reads three tokens: the accent is the iteration (the big turn), --good the inner
    retries, --warn the ⛨ validate gate — the mockup's blue / green / yellow, retinted by every
    voice and by light mode. */
-.tab-off { padding: 6px 14px; color: var(--text-3); font-weight: 600; white-space: nowrap;
-  cursor: not-allowed; }
 .loop-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px; margin-bottom: 16px; }
 .loop-tpl { gap: 6px; color: var(--text); }
@@ -2825,6 +2823,17 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
 .loop-graph { align-items: center; }
 .loop-ring { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto;
   font-family: var(--font-ui); }
+/* Loops › Active: a card per registered loop. Awaiting borders in --warn (it needs the user);
+   finished/unreadable reuse the brick's .dimmed. */
+.loop-run { gap: 6px; }
+.loop-run.on { border-color: var(--accent-line); background: var(--accent-soft); }
+.loop-run.awaiting { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.loop-run.dimmed { opacity: .55; }
+.loop-run-title { font-weight: 700; color: var(--text); margin-right: 4px; }
+.loop-run-title:hover { color: var(--accent-text); }
+.loop-run-wait { margin: 0; font-size: 12.5px; }
+.loop-run-preset { display: flex; align-items: center; gap: 8px; }
+.loop-history { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); }
 .loop-h2 { margin: 22px 0 10px; font-size: 15px; font-weight: 700; }
 .loop-bricks { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 12px; }
@@ -2856,6 +2865,9 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 .lr-node text { font-size: 11.5px; font-weight: 600; fill: var(--text); }
 .lr-node:hover circle, .lr-node:focus-visible circle { stroke-width: 3; }
 .lr-node:focus { outline: none; }
+.lr-node.current circle, .lr-node.inner.current circle { fill: var(--accent); stroke: var(--accent);
+  stroke-width: 4; }
+.lr-node.current text { fill: var(--accent-ink); }
 .lr-gate circle { fill: var(--warn); }
 .lr-gate text:first-of-type { font-size: 14px; fill: var(--surface); }
 .lr-lbl { font-size: 14px; font-weight: 600; fill: var(--text); }

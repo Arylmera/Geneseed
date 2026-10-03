@@ -8,7 +8,8 @@ import { ENTRY_TO, layoutLoop } from '../lib/loopRing.js'
 // console's tokens, so light mode and every accent retint it with no code here.
 //
 // A node is a button: `onSelect(name)` is the page scrolling to that brick's card.
-export default function RingGraph({ graph, bricks, onSelect }) {
+// `highlight` names the node a live loop stands on (Loops › Active); it is drawn `.current`.
+export default function RingGraph({ graph, bricks, onSelect, highlight }) {
   const l = layoutLoop(graph, bricks)
   const it = (graph.loops || []).find((x) => x.iteration)
   const pick = (name) => (e) => {
@@ -105,7 +106,8 @@ export default function RingGraph({ graph, bricks, onSelect }) {
         ) : (
           <g
             key={n.name}
-            className={`lr-node${n.inner ? ' inner' : ''}${n.effect === 'mutate' ? ' mutate' : ''}`}
+            className={`lr-node${n.inner ? ' inner' : ''}${n.effect === 'mutate' ? ' mutate' : ''}${n.name === highlight ? ' current' : ''}`}
+            aria-current={n.name === highlight ? 'step' : undefined}
             role="button"
             tabIndex={0}
             aria-label={`${n.name} brick`}

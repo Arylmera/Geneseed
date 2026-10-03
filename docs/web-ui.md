@@ -119,9 +119,14 @@ streams the output of background jobs and keeps their history across reloads.
   card. A graph a ring cannot draw cleanly (more than eight iteration steps, a node in more
   than three loops) falls back to left-to-right boxes. **Bricks** lists every brick with its
   origin (shipped / global / project), what it overrides, why it is unavailable, and its
-  source. **Active** (live runs) is announced for v2 and disabled. Reads `GET /api/loops`,
-  resolved from the selected install's root, so a project install shows its
-  `.geneseed/` bricks and templates.
+  source. Templates and Bricks read `GET /api/loops`, resolved from the selected install's
+  root, so a project install shows its `.geneseed/` bricks and templates. **Active** is every
+  loop `geneseed loop init` registered on this machine (`GET /api/loops/active`, polled every
+  5 s): a card per loop with its branch, status, `iteration N / max`, current node and a
+  preset picker (`POST /api/loops/preset`, the page's only write); a loop awaiting a decision
+  is highlighted with what it waits on (launch / declared / actual) — the answer is given in
+  the agent's session, never here; finished and unreadable loops are muted. Selecting a card
+  draws its ring with the current node filled, and its iteration history under it.
 - **Profile** (`#/profile`) — `PROFILE.md` beside the deployed AGENT.md: who you are and
   how you like to work. Opens rendered; **Edit** is a whole-file editor. The save carries
   the fingerprint it loaded — if an agent session changed the file first, your edit stays

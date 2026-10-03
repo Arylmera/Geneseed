@@ -156,6 +156,27 @@ Run `geneseed loop --help` for the full flag list.
 - **A per-install skill exclusion is invisible to the CLI** (see above) — the `loop` skill is
   responsible for skipping bricks it can't run, not the engine.
 
+## Watching a loop
+
+Every `geneseed loop init` upserts an identity row — root, branch, title, started — into a
+**loop registry** at `$XDG_CONFIG_HOME/geneseed/loops.json` (default `~/.config/geneseed/loops.json`).
+`LOOP.md` stays the only source of loop *state*; the registry just lets the console find a loop
+without scanning every worktree on the machine. Only loops launched by this version or later are
+registered, so a loop started before the registry existed won't appear until re-initialised.
+
+The console's **Loops › Active** tab (`GET /api/loops/active`, polled every few seconds) reads that
+registry and shows one card per loop: branch, status (`running`, `awaiting`, `done`, `stopped`,
+`finished`, or `unreadable` if `LOOP.md` fails to parse), `iteration N / max`, and its current
+node. A loop `awaiting` a decision is highlighted with what it's waiting on — the launch, the
+declared score, or the actual score — but **the answer is given in the agent's session**, with
+`geneseed loop decide`, never from the page. A finished loop (`LOOP.md` removed) is kept, muted,
+for 7 days after first being seen finished, then dropped. Selecting a card draws its ring with the
+current node filled, with the iteration history (declared, actual, decision, tests) underneath.
+
+Each live card also carries a **preset picker** (`POST /api/loops/preset`) that rewrites
+`LOOP.md`'s `preset` field — the same edit you could make by hand — applying from the next score
+on, not retroactively. It's the tab's only write; there is no relaunch button.
+
 ## Not foreman mode
 
 A loop and a [foreman-mode](foreman-mode.md) pipeline are both "hand work off and keep going," but

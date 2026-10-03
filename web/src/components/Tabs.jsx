@@ -5,9 +5,8 @@ import { TABS, TAB_LABELS } from '../lib/router.js'
 // tab is part of the address, so it survives a reload, can be bookmarked, and the old
 // flat routes (`#/doctor`, `#/rules`...) land on it. Hence `aria-current` rather than
 // the tablist pattern, which is for panels switched in place without navigating.
-// `badges` maps a tab id to what its label carries (a count, a dot). `children` trail the
-// links: a tab announced but not yet built (Loops' "Active") is a span, not a link.
-export default function Tabs({ page, current, badges = {}, label, children }) {
+// `badges` maps a tab id to what its label carries (a count, a dot).
+export default function Tabs({ page, current, badges = {}, label }) {
   return (
     <nav className="tabs" aria-label={label}>
       {TABS[page].map((t) => (
@@ -21,7 +20,6 @@ export default function Tabs({ page, current, badges = {}, label, children }) {
           {badges[t] != null ? <span className="tab-badge">{badges[t]}</span> : null}
         </a>
       ))}
-      {children}
     </nav>
   )
 }

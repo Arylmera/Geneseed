@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
+import { registryPath } from '../../js/loop/registry.mjs';
 
 const CLI = path.resolve(import.meta.dirname, '../../bin/geneseed-cli.mjs');
 const run = (cwd, argv, input = '') => {
@@ -120,6 +121,31 @@ test('X6: a malformed .git gitdir file errors on score --diff without advancing 
     assert.equal(readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8'), before,
       'the loop state must not advance when the gitdir resolution itself fails');
   } finally { sb.cleanup(); }
+});
+
+// The registry is how the Active tab discovers a loop without scanning every worktree on the
+// machine; `init` records into it right after LOOP.md is written, with the branch read straight
+// off `.git/HEAD` (`currentBranch`, never spawned git).
+test('init records the loop into the registry, branch from currentBranch', () => {
+  const sb = makeSandbox('loopcli-');
+  const savedXdg = process.env.XDG_CONFIG_HOME;
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    writeFileSync(path.join(sb.path, '.git', 'HEAD'), 'ref: refs/heads/loop/rounding\n');
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    // The child process was handed its own XDG_CONFIG_HOME; read the same file from here.
+    process.env.XDG_CONFIG_HOME = path.join(sb.path, 'xdg');
+    const raw = JSON.parse(readFileSync(registryPath(), 'utf8'));
+    assert.equal(raw.loops.length, 1);
+    assert.equal(raw.loops[0].root, sb.path);
+    assert.equal(raw.loops[0].branch, 'loop/rounding');
+    assert.equal(raw.loops[0].title, 'Rounding');
+    assert.ok(raw.loops[0].started);
+  } finally {
+    if (savedXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = savedXdg;
+    sb.cleanup();
+  }
 });
 
 test('an unknown preset is refused by init', () => {

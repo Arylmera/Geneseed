@@ -38,6 +38,7 @@ describe('useSearchIndex', () => {
       ['Library', '#/library'],
       ['Loops / Templates', '#/loops/templates'],
       ['Loops / Bricks', '#/loops/bricks'],
+      ['Loops / Active', '#/loops/active'],
       ['Personal / Rules', '#/personal/rules'],
       ['Personal / Profile', '#/personal/profile'],
       ['Personal / Memory', '#/personal/memory'],
