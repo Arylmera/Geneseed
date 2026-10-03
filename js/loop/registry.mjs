@@ -182,7 +182,7 @@ export function activeLoops({ now = new Date() } = {}) {
  * every other LOOP.md persist — see `state.mjs`'s docblock).
  */
 export function setLoopPreset(root, preset) {
-  if (!PRESETS[preset]) throw new Error(`unknown preset ${JSON.stringify(preset)}`);
+  if (!Object.hasOwn(PRESETS, preset)) throw new Error(`unknown preset ${JSON.stringify(preset)}`);
   const key = normalize(root);
   const loops = load();
   const entry = loops.find((l) => sameRoot(l.root, key));

@@ -3,11 +3,11 @@
 // The trailer block is written out byte for byte: it is what lands in a user's git history.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   initState, nextStep, scoreDeclared, scoreDiff, recordOutcome, decideAwaiting,
-  renderLoopFile, parseLoopFile, writeLoopFile, trailers,
+  renderLoopFile, parseLoopFile, writeLoopFile, trailers, renameWithRetry,
 } from '../../js/loop/state.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
@@ -430,5 +430,51 @@ test('writeLoopFile writes atomically: no .tmp sibling survives, and the state r
     writeLoopFile(file, s2);
     assert.ok(!existsSync(`${file}.tmp`));
     assert.deepEqual(parseLoopFile(readFileSync(file, 'utf8')), s2);
+  } finally { sb.cleanup(); }
+});
+
+test('initState refuses an inherited Object key as a preset — PRESETS[preset] is truthy for these', () => {
+  for (const bad of ['constructor', 'toString', '__proto__']) {
+    assert.throws(() => initState({ title: 't', requirement: 'r', graph: bugfix(), preset: bad }),
+      new RegExp(`unknown preset ${JSON.stringify(bad)}`), bad);
+  }
+});
+
+// Fix round 2, item 2: a rename that fails with a transient Windows lock (EPERM/EACCES/EBUSY —
+// an AV scanner or editor briefly holding the handle) is retried up to 3 times with a short
+// synchronous back-off, not surfaced on the first failure.
+test('renameWithRetry retries a transient lock and succeeds once the lock clears', () => {
+  let calls = 0;
+  const renameFn = () => {
+    calls += 1;
+    if (calls < 3) { const e = new Error('busy'); e.code = 'EBUSY'; throw e; }
+  };
+  renameWithRetry('a.tmp', 'a', renameFn);
+  assert.equal(calls, 3);
+});
+
+test('renameWithRetry gives up after 3 attempts, removes the temp file, and rethrows', () => {
+  const sb = makeSandbox('loopstate-');
+  try {
+    const tmp = path.join(sb.path, 'a.tmp');
+    writeFileSync(tmp, 'x');
+    let calls = 0;
+    const renameFn = () => { calls += 1; const e = new Error('busy'); e.code = 'EBUSY'; throw e; };
+    assert.throws(() => renameWithRetry(tmp, path.join(sb.path, 'a'), renameFn), { code: 'EBUSY' });
+    assert.equal(calls, 3);
+    assert.ok(!existsSync(tmp), 'the temp file must be removed on final failure');
+  } finally { sb.cleanup(); }
+});
+
+test('renameWithRetry does not retry a non-transient error, and still removes the temp file', () => {
+  const sb = makeSandbox('loopstate-');
+  try {
+    const tmp = path.join(sb.path, 'a.tmp');
+    writeFileSync(tmp, 'x');
+    let calls = 0;
+    const renameFn = () => { calls += 1; const e = new Error('nope'); e.code = 'ENOENT'; throw e; };
+    assert.throws(() => renameWithRetry(tmp, path.join(sb.path, 'a'), renameFn), { code: 'ENOENT' });
+    assert.equal(calls, 1, 'a non-retryable error must not be retried');
+    assert.ok(!existsSync(tmp));
   } finally { sb.cleanup(); }
 });

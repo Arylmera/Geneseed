@@ -67,6 +67,12 @@ test('the three presets and their boundaries (≤ is inclusive)', () => {
   assert.throws(() => decide(0.1, 'reckless'), /unknown preset "reckless"/);
 });
 
+test('decide refuses an inherited Object key as a preset — PRESETS[preset] is truthy for these', () => {
+  for (const bad of ['constructor', 'toString', '__proto__']) {
+    assert.throws(() => decide(0.1, bad), new RegExp(`unknown preset ${JSON.stringify(bad)}`), bad);
+  }
+});
+
 test('worst picks the more severe decision', () => {
   assert.equal(worst('soft', 'blocking'), 'blocking');
   assert.equal(worst('soft', 'silent'), 'soft');

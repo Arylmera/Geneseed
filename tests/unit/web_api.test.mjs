@@ -3078,6 +3078,23 @@ test('POST /api/loops/preset refuses a preset outside PRESETS with a 4xx-shaped 
   } finally { sb.cleanup(); }
 });
 
+test('POST /api/loops/preset lets a corrupt LOOP.md surface as a 500, not a 404', () => {
+  const sb = makeSandbox();
+  try {
+    withLoopsXdg(sb, () => {
+      const root = makeLoopWorktree(sb, 'proj');
+      recordLoop({ root, branch: 'loop/a', title: 'My loop' });
+      // Corrupt the file AFTER recordLoop: setLoopPreset still finds the registry row and the
+      // file, but `parseLoopFile` throws its own message — that is not one of the two refusals
+      // (`unknown loop` / `unknown preset …`) `apiLoopsPresetMutate` is allowed to turn into a
+      // NotFound, so it must be rethrown and fall through to the handler's 500 instead.
+      fs.writeFileSync(path.join(root, 'LOOP.md'), 'not a loop file at all');
+      assert.throws(() => apiLoopsPresetMutate(null, { root, preset: 'balanced' }),
+        (e) => !(e instanceof NotFound) && /loop-state block/.test(e.message));
+    });
+  } finally { sb.cleanup(); }
+});
+
 test('POST /api/loops/preset is wired through POST_ROUTES with the handler\'s NotFound/404 convention, not the 409 column', () => {
   assert.equal(POST_ROUTES.get('/api/loops/preset')[0], apiLoopsPresetMutate);
   assert.equal(POST_ROUTES_CONVENTION['/api/loops/preset'], false,

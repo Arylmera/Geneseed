@@ -241,3 +241,20 @@ test('setLoopPreset refuses a preset outside PRESETS', () => {
     });
   } finally { sb.cleanup(); }
 });
+
+test('setLoopPreset refuses an inherited Object key as a preset, and leaves LOOP.md byte-identical', () => {
+  const sb = makeSandbox('loopreg-');
+  try {
+    withXdg(sb, () => {
+      const { root } = makeLoopRoot(sb, 'proj');
+      recordLoop({ root, branch: 'loop/x', title: 'My loop' });
+      const before = readFileSync(path.join(root, 'LOOP.md'));
+      for (const bad of ['constructor', 'toString', '__proto__']) {
+        assert.throws(() => setLoopPreset(root, bad),
+          { message: `unknown preset ${JSON.stringify(bad)}` }, bad);
+      }
+      assert.ok(before.equals(readFileSync(path.join(root, 'LOOP.md'))),
+        'a refused preset must not touch LOOP.md');
+    });
+  } finally { sb.cleanup(); }
+});

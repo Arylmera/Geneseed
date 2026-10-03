@@ -584,9 +584,12 @@ export function apiExcludesMutate(state, body) {
  * The Active tab's one write: rewrite a registered worktree's `LOOP.md` `preset` field.
  * `setLoopPreset` throws for both refusals the brief requires `POST /api/loops/preset` to make —
  * a `root` the registry does not know (no arbitrary path writes) and a `preset` outside
- * `PRESETS` — and this is where that throw is turned into the `NotFound` convention every other
- * mutating route here already answers in, so the handler's catch (`4xx`, not the 500 a bare
- * `Error` would fall to) covers this route the same way it covers `apiRulesMutate`'s unknown id.
+ * `PRESETS` — and this is where those two throws are turned into the `NotFound` convention
+ * every other mutating route here already answers in, so the handler's catch (`4xx`, not the
+ * 500 a bare `Error` would fall to) covers this route the same way it covers `apiRulesMutate`'s
+ * unknown id. Anything else `setLoopPreset` throws — a corrupt `LOOP.md` that fails to
+ * parse, say — is not one of those two refusals and is rethrown as-is, so it falls through to
+ * the handler's 500 instead of being misreported as "not found".
  */
 export function apiLoopsPresetMutate(state, body) {
   const root = strOr(bget(body, 'root'));
@@ -594,7 +597,8 @@ export function apiLoopsPresetMutate(state, body) {
   try {
     return { ok: true, loop: setLoopPreset(root, preset) };
   } catch (e) {
-    throw new NotFound(e.message);
+    if (e.message === 'unknown loop' || e.message.startsWith('unknown preset ')) throw new NotFound(e.message);
+    throw e;
   }
 }
 

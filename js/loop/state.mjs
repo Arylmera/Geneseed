@@ -36,7 +36,7 @@
  * `filterPorcelain` and `scoreDiff`'s exclusion below for exactly that case: a lingering
  * `LOOP.md.tmp` is the engine's own bookkeeping too, never scored work.
  */
-import { renameSync } from 'node:fs';
+import { renameSync, unlinkSync } from 'node:fs';
 import { writeText } from '../lib/fs.mjs';
 import { declaredRisk, actualRisk, decide, worst, PRESETS, DEFAULT_PRESET } from './score.mjs';
 import { iterationLoop, ENGINE_MAX_ITERATIONS } from './graph.mjs';
@@ -55,11 +55,39 @@ export function renderLoopFile(state) {
     + `${BEGIN}\n\`\`\`json\n${JSON.stringify(state, null, 2)}\n\`\`\`\n${END}\n`;
 }
 
-/** `<file>.tmp` then `renameSync` — the atomic write every LOOP.md persist goes through. */
+const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+/** Synchronous back-off between rename attempts — `Atomics.wait` on a throwaway
+ * `SharedArrayBuffer`, the stdlib's own blocking sleep with no dependency. */
+function backoff(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Rename `tmp` to `file`, retrying up to 3 attempts total on a transient Windows lock
+ * (EPERM/EACCES/EBUSY — an AV scanner or editor briefly holding the handle open) with a short
+ * back-off between attempts. A non-retryable error, or the 3rd retryable failure, removes the
+ * temp file (best-effort — a cleanup failure must not mask the real error) and rethrows.
+ * `renameFn` is an injectable seam for tests; production never passes it.
+ */
+export function renameWithRetry(tmp, file, renameFn = renameSync) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      renameFn(tmp, file);
+      return;
+    } catch (e) {
+      if (attempt < 3 && RETRYABLE_RENAME_CODES.has(e.code)) { backoff(25 * attempt); continue; }
+      try { unlinkSync(tmp); } catch { /* best-effort cleanup; the rename error is what matters */ }
+      throw e;
+    }
+  }
+}
+
+/** `<file>.tmp` then `renameWithRetry` — the atomic write every LOOP.md persist goes through. */
 export function writeLoopFile(file, state) {
   const tmp = `${file}.tmp`;
   writeText(tmp, renderLoopFile(state));
-  renameSync(tmp, file);
+  renameWithRetry(tmp, file);
 }
 
 export function parseLoopFile(text) {
@@ -74,7 +102,7 @@ const head = (state) => iterationLoop(state.graph).nodes[0];
 const fmt = (n) => Number(n).toFixed(1);
 
 export function initState({ title, requirement, graph, preset = DEFAULT_PRESET }) {
-  if (!PRESETS[preset]) throw new Error(`unknown preset ${JSON.stringify(preset)}`);
+  if (!Object.hasOwn(PRESETS, preset)) throw new Error(`unknown preset ${JSON.stringify(preset)}`);
   const loop = iterationLoop(graph);
   const state = {
     v: 1, title, requirement, preset, contracts: [], graph, node: graph.start,
