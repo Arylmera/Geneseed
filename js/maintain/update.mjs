@@ -50,7 +50,7 @@ import { appendText, copyFile, printOut, printErr, readText, writeText } from '.
 import { toPlatformPath, which } from '../lib/paths.mjs';
 import { WHITESPACE, parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { restartDaemon } from '../web/daemon.mjs';
+import { bounceDaemonIfRunning } from '../web/daemon.mjs';
 
 /**
  * `_CREDS_RE` / `_redact_url_creds` — strip a `user[:token]@` userinfo out of any URL in
@@ -578,20 +578,9 @@ export async function rebuildBundle(here, out, theme, emit, rootDir, log) {
     { cwd: String(here), stdio: 'inherit' });
   if (proc.status !== 0) return proc.status === null ? 1 : proc.status;
   // If a web daemon is running, bounce it so the new source and the freshly rebuilt web/dist
-  // take effect — otherwise the open PWA keeps hitting the old code. EXCEPT when this
-  // upgrade IS a web-daemon job: restarting the daemon here kills the process tracking this
-  // very job (console stuck on 'running' forever); in that case the server restarts itself
-  // once the job is recorded as finished. `js/web/jobs.mjs` sets the variable; this is the
-  // side that reads it, and `upgrade/the-web-job-marker-...` is what gates the pair.
-  if (process.env.GENESEED_WEB_JOB) {
-    log('[geneseed] web daemon will restart itself after this job to load the new code.');
-    return 0;
-  }
-  try {
-    await restartDaemon(theme, 4747, false, true);
-  } catch (e) {                       // never fail an upgrade on this
-    log(`[geneseed] ⚠️  could not refresh the web daemon (${e && e.message ? e.message : e}) — \`geneseed web restart\` manually if it was running.`);
-  }
+  // take effect — otherwise the open PWA keeps hitting the old code. The web-job exception
+  // (`upgrade/the-web-job-marker-...` gates it) lives with the helper.
+  await bounceDaemonIfRunning(theme, log);
   return 0;
 }
 

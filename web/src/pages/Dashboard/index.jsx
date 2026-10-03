@@ -7,6 +7,7 @@ import Onboarding from './Onboarding.jsx'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import Seg from '../../components/Seg.jsx'
+import StaleBanner from '../../components/StaleBanner.jsx'
 import { useAsync } from '../../hooks/useAsync.js'
 
 // Dashboard ships in the eager shell chunk (it is the landing route), so only
@@ -72,9 +73,18 @@ export default function Dashboard({
       <Loading />
     )
 
+  // Above every arm below: a console serving pre-upgrade code is broken in any of them.
+  const stale = overview.daemon_stale ? <StaleBanner /> : null
+
   // Nothing deployed yet → onboard the user into a first deploy instead of
   // showing an empty, read-only dashboard.
-  if (!overview.deployed) return <Onboarding onAction={onAction} />
+  if (!overview.deployed)
+    return (
+      <>
+        {stale}
+        <Onboarding onAction={onAction} />
+      </>
+    )
 
   // The Journal lens is a page, not a panel: it brings its own header (the field
   // journal's date line and its two actions), so the shared head-row and the
@@ -84,6 +94,7 @@ export default function Dashboard({
   if (dir === 'status' && lens === 'journal')
     return (
       <Suspense fallback={<Loading />}>
+        {stale}
         <JournalView
           overview={overview}
           recent={recent}
@@ -96,6 +107,7 @@ export default function Dashboard({
 
   return (
     <>
+      {stale}
       <div className="head-row">
         <Seg aria-label="Dashboard view">
           {[

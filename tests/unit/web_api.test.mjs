@@ -108,6 +108,17 @@ test('foreign hosts are rejected by the local-host guard', () => {
 
 const neutral = () => webState('neutral');
 
+test('the overview says whether the server is running code older than the files on disk', () => {
+  // `serve` installs `daemonStale` (its start stamp against `codeStamp()` read now); a state
+  // built without a server has none and reports false rather than a guess.
+  const st = neutral();
+  assert.equal(apiOverview(st).daemon_stale, false);
+  st.daemonStale = () => true;
+  assert.equal(apiOverview(st).daemon_stale, true);
+  st.daemonStale = () => false;
+  assert.equal(apiOverview(st).daemon_stale, false);
+});
+
 test('the overview carries counts, a doctor verdict and an accent', () => {
   const ov = apiOverview(neutral());
 

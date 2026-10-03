@@ -263,6 +263,10 @@ svg.glyph { width: 16px; height: 16px; flex: none; }
 .btn.soft { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
 .btn.soft:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); filter: none; }
 .btn.sm { padding: 5px 10px; font-size: 12px; }
+.stale-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; margin-bottom: 16px; padding: 10px 14px; border-radius: 8px; color: var(--warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 36%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent); }
 .btn .glyph { width: 15px; height: 15px; }
 
 /* Disabled primary buttons must read as inert, not lit/pressable. Matrix layers an

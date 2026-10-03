@@ -819,6 +819,9 @@ export function apiOverview(state) {
     install,
     target: state.target,
     deployed: deployed(state),
+    // True when the files on disk changed under this server since it started (an upgrade).
+    // `serve` installs the comparison; a state built without a server has none and is false.
+    daemon_stale: Boolean(state.daemonStale?.()),
     counts: {
       agents: inv.agents.length,
       skills: inv.skills.length,
