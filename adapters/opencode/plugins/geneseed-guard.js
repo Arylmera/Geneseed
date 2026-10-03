@@ -16,8 +16,21 @@
 //
 // Install: dropped into the plugins dir by `build --emit opencode[-global]` (the *.js
 // glob), exactly like the context and learn plugins. Errors never break a tool call.
+//
+// `permission.ask` — the loop/* exemption (Consent Before Push). OpenCode's static
+// `permission.bash` globs (`git commit*`/`git push*` = "ask", written by
+// js/hosts/settings.mjs) cannot see which branch is checked out — they are a build-time
+// string match with no request-time context. This hook is the ONLY seam where Geneseed
+// can look at the live branch, and it only DOWNGRADES an ask to allow, on a dedicated
+// `loop/*` branch, for a plain commit or push that names no shared branch — mirroring
+// the Claude/Bob git-gate's loop/* exemption exactly (see js/hosts/hooks.mjs's
+// `currentBranch`/`SHARED_BRANCH_RE`, copied below). It never raises the bar: anything
+// destructive, any shared-branch mention, anything off a loop branch, or any non-bash
+// permission leaves `output.status` untouched and OpenCode's own ask stands. A host
+// version that never fires `permission.ask` simply never reaches this hook — the static
+// ask still fires, so the failure mode is one extra prompt, never a silent allow.
 
-import { promises as fs } from "node:fs"
+import { promises as fs, existsSync, statSync, readFileSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
@@ -267,7 +280,50 @@ function ruleStoreTarget(p) {
 // substring stance: over-matching the class is harmless (see WRITE_TOOLS note).
 const WIKI_MUTATE_TOOLS = [...WRITE_TOOLS, "delete", "remove", "rename", "move", "trash"]
 
-export const GeneseedGuard = async () => {
+// ---- the loop/* exemption (Consent Before Push) --------------------------------
+// Twin of js/hosts/hooks.mjs's git-gate — keep in step. Node's native sync `fs` (not the
+// `fs.promises` import above): a worktree's `.git` is read the same way the Claude/Bob
+// hook reads it, so the two decide the exemption identically.
+
+const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/
+const DESTRUCTIVE_GIT_RE =
+  /\bgit\b[^\n]*\b(?:reset\s+--hard|clean\s+-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\s+[^\n]*--force)/
+const SHARED_BRANCH_RE =
+  /(?:^|[\s:/])(?:main|master|develop|development|release\/\S+|hotfix\/\S+)(?=[\s;&|]|$)/
+
+/**
+ * The branch checked out in `cwd`, read from .git/HEAD without spawning git — a worktree's
+ * `.git` is a FILE naming its gitdir, so both shapes are followed. null on anything
+ * unexpected (detached HEAD, no repo, unreadable): the caller then leaves the ask alone.
+ */
+function currentBranch(cwd) {
+  try {
+    let dir = path.resolve(cwd)
+    for (;;) {
+      const dotgit = path.join(dir, ".git")
+      if (existsSync(dotgit)) {
+        let gitdir = dotgit
+        if (statSync(dotgit).isFile()) {
+          const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, "utf8"))
+          if (!m) return null
+          gitdir = path.resolve(dir, m[1])
+        }
+        const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitdir, "HEAD"), "utf8"))
+        return ref ? ref[1] : null
+      }
+      const up = path.dirname(dir)
+      if (up === dir) return null
+      dir = up
+    }
+  } catch {
+    return null
+  }
+}
+
+export const GeneseedGuard = async (ctx) => {
+  // The session's working directory, the same resolution the context plugin uses — a
+  // worktree session's `.git` is a FILE, which `currentBranch` already follows.
+  const root = () => ctx?.worktree || ctx?.directory || process.cwd()
   return {
     "tool.execute.before": async (input, output) => {
       if (OFF) return
@@ -317,6 +373,21 @@ export const GeneseedGuard = async () => {
         if (err && String(err.message || "").startsWith("[geneseed-guard]")) throw err
         log(`inspect error (ignored): ${err?.message ?? err}`)
       }
+    },
+    "permission.ask": async (input, output) => {
+      // Never throw from a permission hook — leave `output.status` untouched on any
+      // error, exactly as a crashed check here must default to the static ask standing.
+      try {
+        if (OFF) return
+        if (input?.type !== "bash") return
+        const raw = input?.metadata?.command ?? input?.pattern ?? input?.title
+        const command = Array.isArray(raw) ? raw.join(" ") : raw
+        if (typeof command !== "string" || !command) return
+        if (!GIT_GATE_RE.test(command)) return
+        if (DESTRUCTIVE_GIT_RE.test(command) || SHARED_BRANCH_RE.test(command)) return
+        const branch = currentBranch(root())
+        if (branch && branch.startsWith("loop/")) output.status = "allow"
+      } catch { /* leave output.status untouched */ }
     },
   }
 }

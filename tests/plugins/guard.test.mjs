@@ -158,3 +158,70 @@ test("no notebook/ dir means no ledger and no mkdir", async () => {
 })
 
 async function isFileAt(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
+
+// ---- permission.ask: the loop/* exemption (Consent Before Push) ---------------------
+// Twin of js/hosts/hooks.mjs's git-gate tests — same shapes, same expectations, driven
+// here with a fake `input`/`output` the way OpenCode calls a permission hook.
+
+/** A sandboxed repo on `branch`, as a plain repo or a worktree, with `directory` inside it. */
+async function repoOn(branch, { worktree = false } = {}) {
+  const sb = makeSandbox("gsguard-branch-")
+  const root = sb.path
+  if (worktree) {
+    const gitdir = path.join(root, "main-repo", ".git", "worktrees", "w")
+    await fs.mkdir(gitdir, { recursive: true })
+    await fs.writeFile(path.join(gitdir, "HEAD"), `ref: refs/heads/${branch}\n`)
+    await fs.mkdir(path.join(root, "w"))
+    await fs.writeFile(path.join(root, "w", ".git"), `gitdir: ${gitdir}\n`)
+    return { cleanup: sb.cleanup, directory: path.join(root, "w") }
+  }
+  await fs.mkdir(path.join(root, ".git"))
+  await fs.writeFile(path.join(root, ".git", "HEAD"), `ref: refs/heads/${branch}\n`)
+  await fs.mkdir(path.join(root, "sub"))
+  return { cleanup: sb.cleanup, directory: path.join(root, "sub") }
+}
+
+/** `output.status` after one `permission.ask` call for a bash `command` in `directory`. */
+async function askStatus(directory, command, type = "bash") {
+  const hooks = await GeneseedGuard({ directory })
+  const output = {}
+  await hooks["permission.ask"]({ type, metadata: { command } }, output)
+  return output.status
+}
+
+test("permission.ask: on a loop/* branch, commit and push are allowed — plain repo and worktree", async () => {
+  for (const worktree of [false, true]) {
+    const { cleanup, directory } = await repoOn("loop/pricing", { worktree })
+    try {
+      for (const cmd of ['git commit -m "loop(pricing): iteration 2"', "git push -u origin loop/pricing",
+        "git add -A && git commit -F msg.txt && git push"]) {
+        assert.equal(await askStatus(directory, cmd), "allow", cmd)
+      }
+    } finally { cleanup() }
+  }
+})
+
+test("permission.ask: naming a shared branch or a destructive act leaves the ask untouched", async () => {
+  const { cleanup, directory } = await repoOn("loop/pricing")
+  try {
+    for (const cmd of ["git push origin HEAD:main", "git push origin loop/pricing:master",
+      "git commit -m x && git push origin develop", "git push origin release/2.0",
+      "git push --force origin loop/pricing", "git reset --hard HEAD~1"]) {
+      assert.equal(await askStatus(directory, cmd), undefined, cmd)
+    }
+  } finally { cleanup() }
+})
+
+test("permission.ask: off a loop branch, a commit's ask is left untouched", async () => {
+  const { cleanup, directory } = await repoOn("main")
+  try {
+    assert.equal(await askStatus(directory, "git commit -m x"), undefined)
+  } finally { cleanup() }
+})
+
+test("permission.ask: a non-bash permission is left untouched even on a loop branch", async () => {
+  const { cleanup, directory } = await repoOn("loop/pricing")
+  try {
+    assert.equal(await askStatus(directory, "git commit -m x", "write"), undefined)
+  } finally { cleanup() }
+})
