@@ -32,6 +32,18 @@ node --version
 
 prints 22.3 or newer, and the installer's first line reads `ok  Node v…`.
 
+### `geneseed needs Node 22.3 or newer`
+
+Run without the installer — `npx geneseed`, a global npm install, or a hook — on an older Node, every Geneseed command stops with one sentence:
+
+> `geneseed needs Node 22.3 or newer; this is Node 20.18.1. Install a current Node from https://nodejs.org (or your package manager), then run the command again.`
+
+**Cause.** The `node` on PATH is older than 22.3. npm only *warns* about the engine requirement, so a global install succeeds anyway. A hook prints the same sentence and lets the tool call through rather than block it, so on Claude Code, Bob or OpenClaude the hooks are off until Node is upgraded.
+
+**Fix.** Install the current Node.js LTS (see above), open a **new** terminal, and run the command again.
+
+**Confirm.** `geneseed version` prints the version instead of the sentence.
+
 ### `setup` says it needs an interactive terminal
 
 > `[setup] needs an interactive terminal. Non-interactive? e.g.:`
@@ -106,6 +118,12 @@ works from any directory. See [Run anywhere](../guides/run-anywhere.md).
 ### Hooks stopped firing
 
 The agent loads its rules, but nothing is enforced and no memory is written — on Claude Code, Bob or OpenClaude.
+
+Every `geneseed` command now says so first, on stderr:
+
+> `[geneseed] ⚠ hooks are off on this machine: the hook shim points at <path>, which no longer exists. Fix: geneseed rebuild-all`
+
+and the `gates` row of `geneseed status` reads `DEAD — hook shim points at <path>; run: geneseed rebuild-all`. A script that must not see the line can set `GENESEED_NO_SHIM_CHECK=1`.
 
 **Cause.** Almost always a **stale hook shim**. Your tool's settings call `geneseed-hook` through one small script, `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows), which holds the absolute path of your Geneseed folder. Move or delete that folder and the shim points at nothing: the hooks still fire, fail, and every gate goes silently dead. `geneseed doctor` reports it as:
 
@@ -290,6 +308,24 @@ cd web && npm install && npm run build
 If it instead says `web/ sources are missing`, run `geneseed upgrade` (twice on an old install).
 
 **Confirm.** `geneseed web` opens the console.
+
+### The console looks broken after an upgrade
+
+Pages fail to load, or the console shows a banner: *This console is running code from before your last upgrade.* `geneseed web status` adds:
+
+> `[web] running OLD code (started before the last upgrade) — geneseed web restart`
+
+**Cause.** The console server serves the page it started with. An `npm install -g geneseed@latest` or a `git pull` replaces `web/dist/`, and the old page asks for files that no longer exist. `geneseed upgrade` and `geneseed rebuild-all` restart a stale console themselves; other upgrade paths do not.
+
+**Fix.** Click **Restart** on the banner, or:
+
+```bash
+geneseed web restart
+```
+
+A browser refresh is not enough — the server, not the page, is out of date.
+
+**Confirm.** `geneseed web status` prints no `OLD code` line and the banner is gone.
 
 ### The console says `no deployed harness`
 

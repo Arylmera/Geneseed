@@ -254,7 +254,18 @@ export function rebuildCommand(argv) {
  * choose — which is the same failure mode `_footprint_of_dir`'s WARN exists to prevent, at a
  * larger scale.
  */
-export function cmdRebuildAll() {
+export async function cmdRebuildAll() {
+  const rc = rebuildAll();
+  // A console started before an upgrade keeps serving the old `index.html`; restart it — only
+  // when stale, see `bounceDaemonIfRunning`. Lazy: no other verb in this module needs js/web/.
+  const { bounceDaemonIfRunning } = await import('../web/daemon.mjs');
+  await bounceDaemonIfRunning(null, (m) => printOut(`${m}
+`), { onlyIfStale: true });
+  return rc;
+}
+
+/** The rebuild itself, synchronous — `cmdRebuildAll` is it plus the console restart. */
+export function rebuildAll() {
   const targets = installTargets().filter(([h, s, r]) => installState(r, h, s) === 'active');
   if (!targets.length) {
     printOut('[rebuild-all] no active installs detected.\n');

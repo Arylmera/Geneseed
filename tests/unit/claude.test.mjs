@@ -30,7 +30,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../js/build/driver.mjs';
-import { cmdRebuildAll } from '../../js/build/generate.mjs';
+import { rebuildAll } from '../../js/build/generate.mjs';
 import {
   globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES,
 } from '../../js/hosts/hooks.mjs';
@@ -917,7 +917,7 @@ test('rebuild-all rebuilds every active install, survives one failing, and creat
       // The failure, made real: a theme marker naming a theme this checkout does not have.
       fs.writeFileSync(path.join(ocCfg, '.geneseed-theme'), 'no-such-theme\n');
 
-      const [rc, out, err] = capturedOut(() => cmdRebuildAll());
+      const [rc, out, err] = capturedOut(() => rebuildAll());
 
       assert.equal(rc, 1, 'a failing install must make the whole run non-zero');
       const lines = out.split('\n').filter((l) => /^\[rebuild-all] \w+:global /.test(l));

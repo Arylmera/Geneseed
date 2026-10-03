@@ -20,6 +20,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -31,7 +32,7 @@ import {
   projectQualifies,
 } from '../../js/maintain/uninstall.mjs';
 import { emitHostScopeOf, installTargets } from '../../js/hosts/installs.mjs';
-import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
+import { isScratchRoot, registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts/hosts.mjs';
 import { installProfile, rebuildCommand } from '../../js/build/generate.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
@@ -275,7 +276,9 @@ test('status carries the gates: bypass visibility and the ledger counted by rule
       '',
     ].join('\n'));
     let g = gateSummary([dir]);
-    assert.deepEqual(g, { standing_down: [], asks: { 'law-4': 1, 'process-5': 2 }, total: 3 });
+    assert.deepEqual(g, {
+      standing_down: [], asks: { 'law-4': 1, 'process-5': 2 }, total: 3, dead: [],
+    });
 
     // The bypass: an excludes entry covering cwd names the install as standing down.
     fs.writeFileSync(path.join(dir, 'excludes.json'),
@@ -679,6 +682,58 @@ test('a project uninstall deregisters the root from the install registry', () =>
       'the registry still lists a root whose install has been removed — `upgrade` would '
       + 'rebuild into it');
   });
+});
+
+test('a root under the OS temp dir is scratch only when the registry is not', () => {
+  // Agent sessions emit into scratchpads under %TEMP%; a real registry (~/.config) must not
+  // keep them, while a sandboxed registry — itself under the temp dir — keeps its temp roots,
+  // which is what every test and golden cell relies on.
+  const tmp = os.tmpdir();
+  const outside = path.join(ROOT, 'no-such-config', 'geneseed', 'installs.json');
+  const insideReg = path.join(tmp, 'sb', '.config', 'geneseed', 'installs.json');
+  const cases = [
+    [path.join(tmp, 'scratchpad', 'proj'), outside, true],
+    [path.join(tmp, 'scratchpad', 'proj'), insideReg, false],
+    [path.join(ROOT, 'proj'), outside, false],
+    [path.join(ROOT, 'proj'), insideReg, false],
+  ];
+  if (process.platform === 'win32') {
+    // One directory, two spellings: the temp dir upper- and lower-cased.
+    cases.push([path.join(tmp.toLowerCase(), 'scratchpad'), outside, true]);
+    cases.push([path.join(tmp.toUpperCase(), 'scratchpad'), outside, true]);
+  }
+  for (const [root, reg, want] of cases) {
+    assert.equal(isScratchRoot(root, reg), want, `${root} with registry ${reg}`);
+  }
+});
+
+test('a real registry never records a temp root, and prunes one it already holds', () => {
+  // The registry file OUTSIDE the temp dir, as on a real machine: a directory in the checkout,
+  // removed afterwards.
+  const cfgHome = fs.realpathSync(fs.mkdtempSync(path.join(ROOT, '.registry-test-')));
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = cfgHome;
+  try {
+    withDir((d) => {
+      const scratch = path.join(d, 'scratch');
+      fs.mkdirSync(scratch);
+      fs.writeFileSync(path.join(scratch, '.geneseed-emit'), 'claude\n', 'utf8');
+      registryRecord(scratch);
+      const file = path.join(cfgHome, 'geneseed', 'installs.json');
+      assert.ok(!fs.existsSync(file), 'a temp root was recorded in a real registry');
+
+      // A row written before this rule existed is dropped on the next read, and the file
+      // rewritten without it.
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `${JSON.stringify([scratch])}\n`, 'utf8');
+      assert.deepEqual(registryRoots(), []);
+      assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), []);
+    });
+  } finally {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+    fs.rmSync(cfgHome, { recursive: true, force: true });
+  }
 });
 
 test('--archive-memory archives a project store', () => {

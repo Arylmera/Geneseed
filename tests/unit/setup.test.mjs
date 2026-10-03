@@ -19,6 +19,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import { setupBuildArgs } from '../../js/build/generate.mjs';
 import {
@@ -29,7 +30,7 @@ import { catalogLines } from '../../js/build/catalog.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 import { doctrinesForBuild, doctrinesOfDir, themeFiles } from '../../js/hosts/installs.mjs';
 import { ROOT, SRC, PACK_ORDER, discoverNames } from '../../js/build/source.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
 
 const themeNames = () => themeFiles().map((p) => path.basename(p, '.json'));
 
@@ -356,6 +357,109 @@ test('the LSP line is surfaced for an opencode emit and not for a portable one',
   assert.ok(oc.includes('Java 21+ (jdtls)'), oc);
   assert.ok(!files.includes('Java 21+ (jdtls)'),
     'the portable bundle advertised a language server it does not wire');
+});
+
+/**
+ * Run the real generator for `emit` into a fresh home, then read the summary with the process
+ * environment swapped for that home's — the same env the wizard would run in after its build.
+ * The LSP rows depend on whether this machine has a JDK, so they are folded to `LSP`.
+ */
+function summaryAfterEmit(emit, extraEnv = {}) {
+  const sb = makeSandbox('summary-');
+  const home = sb.path;
+  const proj = path.join(home, 'proj');
+  fs.mkdirSync(proj);
+  const env = { ...cellEnv(home), ...extraEnv };
+  const args = [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', emit, '--theme', 'neutral'];
+  if (!emit.endsWith('-global')) args.push('--out', proj, ...(emit === 'files' ? [] : ['--root', proj]));
+  const r = spawnSync(process.execPath, args, { cwd: ROOT, env, encoding: 'utf8', maxBuffer: 1 << 26 });
+  assert.equal(r.status, 0, (r.stderr || r.stdout).slice(-1500));
+  const saved = { ...process.env };
+  for (const k of Object.keys(process.env)) delete process.env[k];
+  Object.assign(process.env, env);
+  try {
+    const out = emit.endsWith('-global') ? null : proj;
+    const rows = setupSummaryLines('neutral', emit, out, emit === 'files' ? null : out, true)
+      .map(([k, t]) => (t.startsWith('Java 21+ (jdtls)') ? [k === 'ok' ? 'ok' : 'warn', 'LSP'] : [k, t]))
+      .map(([k, t]) => [t === 'LSP' ? 'lsp' : k, t.split(home).join('<H>')]);
+    return rows;
+  } finally {
+    for (const k of Object.keys(process.env)) delete process.env[k];
+    Object.assign(process.env, saved);
+    sb.cleanup();
+  }
+}
+
+const NEXT = 'what was installed and what each piece does: '
+  + 'https://github.com/Arylmera/Geneseed/blob/main/docs/understand/on-your-machine.md';
+const LEARN_OFF = 'memory learning is off until you set GENESEED_LLM '
+  + '(see docs/reference/environment.md)';
+const p = (...s) => path.join('<H>', ...s);
+
+// The end of setup names the file each host really loads, where it really is, the hooks a
+// Claude-shaped host wired, and the tool to restart. It used to know only OpenCode's AGENT.md,
+// so a successful claude-global install ended on "expected AGENT.md … but it is not there" and
+// "start a NEW OpenCode session". The hook-group counts are the groups each emit wires: seven
+// for Claude Code and OpenClaude (SessionStart ×2, PreToolUse ×2, Stop, SubagentStop,
+// PreCompact), three for Bob, whose contract has no SubagentStop/PreCompact and takes one
+// PreToolUse group for both gates (`claudeHookGroups`).
+test('the end-of-setup summary tells the truth for every host', () => {
+  const cases = {
+    'opencode-global': [
+      ['ok', `AGENT.md written to ${p('.config', 'opencode', 'AGENT.md')}`],
+      ['lsp', 'LSP'],
+      ['info', "theme is now 'neutral' — start a NEW OpenCode session to load it"],
+      ['info', NEXT],
+    ],
+    opencode: [
+      ['ok', `AGENT.md written to ${p('proj', 'AGENT.md')}`],
+      ['lsp', 'LSP'],
+      ['info', "theme is now 'neutral' — start a NEW OpenCode session to load it"],
+      ['info', NEXT],
+    ],
+    'claude-global': [
+      ['ok', `CLAUDE.md written to ${p('.claude', 'CLAUDE.md')}`],
+      ['ok', `7 hook groups wired in ${p('.claude', 'settings.json')}`],
+      ['info', LEARN_OFF],
+      ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
+      ['info', NEXT],
+    ],
+    claude: [
+      ['ok', `CLAUDE.md written to ${p('proj', 'CLAUDE.md')}`],
+      ['ok', `7 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
+      ['info', LEARN_OFF],
+      ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
+      ['info', NEXT],
+    ],
+    'bob-global': [
+      ['ok', `geneseed.md written to ${p('.bob', 'rules', 'geneseed.md')}`],
+      ['ok', `3 hook groups wired in ${p('.bob', 'settings', 'settings.json')}`],
+      ['info', LEARN_OFF],
+      ['info', "theme is now 'neutral' — start a NEW IBM Bob session to load it"],
+      ['info', NEXT],
+    ],
+    'openclaude-global': [
+      ['ok', `CLAUDE.md written to ${p('.openclaude', 'CLAUDE.md')}`],
+      ['ok', `7 hook groups wired in ${p('.openclaude', 'settings.json')}`],
+      ['info', LEARN_OFF],
+      ['info', "theme is now 'neutral' — start a NEW OpenClaude session to load it"],
+      ['info', NEXT],
+    ],
+    files: [
+      ['ok', `AGENT.md written to ${p('proj', 'AGENT.md')}`],
+      ['info', `point your tool's instructions at ${p('proj', 'AGENT.md')}`],
+      ['info', "theme is now 'neutral' — start a NEW session in your tool to load it"],
+      ['info', NEXT],
+    ],
+  };
+  for (const [emit, want] of Object.entries(cases)) {
+    const got = summaryAfterEmit(emit);
+    assert.deepEqual(got, want, emit);
+    assert.ok(!got.some(([, t]) => t.includes('is not there')), `${emit}: the Finding 5 regression`);
+  }
+  // With a model CLI configured, learning is on and the summary says nothing about it.
+  assert.ok(!summaryAfterEmit('claude-global', { GENESEED_LLM: 'claude -p' })
+    .some(([, t]) => t === LEARN_OFF));
 });
 
 // ---------------------------------------------------------------------------------------------

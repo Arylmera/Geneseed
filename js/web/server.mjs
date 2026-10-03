@@ -28,7 +28,7 @@ import { which } from '../lib/paths.mjs';
 import { parseIntStrict } from '../lib/text.mjs';
 import { promptLine } from '../maintain/setup.mjs';
 import { webState } from './api.mjs';
-import { clearDaemon, openUrl, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
+import { clearDaemon, codeStamp, openUrl, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
 import { isFile, makeHandler } from './handler.mjs';
 import { JobManager } from './jobs.mjs';
 import { spawnSync } from 'node:child_process';
@@ -137,6 +137,9 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
     printOut('      Run `geneseed setup` first — serving anyway (read-only UI).\n');
   }
   const token = randomBytes(24).toString('base64url');
+  // The code this server loaded, compared on every overview against the files on disk now.
+  const startCode = codeStamp();
+  state.daemonStale = () => startCode !== codeStamp();
   const holder = {};
   // The console's job list survives a reload and a restart because it is a FILE on disk,
   // not held in process memory.
@@ -156,7 +159,7 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
       if (daemon) {
         writeDaemon(state.target, {
           pid: process.pid, port: hostPort, url,
-          token, theme: state.theme, started: Math.floor(Date.now() / 1000),
+          token, theme: state.theme, started: Math.floor(Date.now() / 1000), code: startCode,
         });
       }
       printOut(`[web] Geneseed UI on ${url}  (theme: ${state.theme})\n`);

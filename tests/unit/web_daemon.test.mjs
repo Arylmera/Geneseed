@@ -29,13 +29,17 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { cliSpec } from '../../js/ui/cli.mjs';
 import { POST_INLINE } from '../../js/web/routes.mjs';
+import {
+  codeStamp, daemonStale, statusDaemon, writeDaemon, STALE_LINE,
+} from '../../js/web/daemon.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -280,4 +284,61 @@ test('the npm step pair is install then build', () => {
   // reverse order is the same failure.
   assert.ok(serverSource().includes("for (const step of [['install'], ['run', 'build']]) {"),
     'the npm steps are no longer install-then-build');
+});
+
+// ---------------------------------------------------------------------------------------------
+// A console running old code. The record carries the code stamp the daemon started with; an
+// upgrade that replaces web/dist changes the stamp on disk, and the daemon is then stale.
+
+test('the code stamp follows web/dist/index.html and nothing else', () => {
+  const sb = makeSandbox('codestamp-');
+  try {
+    mkdirSync(path.join(sb.path, 'web', 'dist'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'package.json'), '{"version":"9.9.9"}');
+    const html = path.join(sb.path, 'web', 'dist', 'index.html');
+    writeFileSync(html, '<html>a</html>');
+    const a = codeStamp(sb.path);
+    assert.match(a, /^9\.9\.9:[0-9a-f]{12}$/);
+    assert.equal(codeStamp(sb.path), a, 'the stamp moved with nothing changed');
+    writeFileSync(html, '<html>b</html>');
+    assert.notEqual(codeStamp(sb.path), a, 'a replaced index.html left the stamp unchanged');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('a record is stale unless it carries the stamp on disk now', () => {
+  assert.equal(daemonStale({ code: codeStamp() }), false);
+  assert.equal(daemonStale({}), true, 'a record from an older daemon (no code) must be stale');
+  assert.equal(daemonStale({ code: 'x' }), true);
+});
+
+test('web status says OLD code when the running daemon is stale', async () => {
+  // A live answer is all `probe` asks for; the record is what decides the second line.
+  const srv = http.createServer((_q, r) => { r.end('ok'); });
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  const sb = makeSandbox('webstale-');
+  const saved = process.env.OPENCODE_CONFIG_DIR;
+  process.env.OPENCODE_CONFIG_DIR = sb.path;
+  const write = process.stdout.write;
+  let out = '';
+  try {
+    const url = `http://127.0.0.1:${srv.address().port}`;
+    for (const [code, stale] of [[undefined, true], [codeStamp(), false]]) {
+      writeDaemon(sb.path, { pid: 1, port: srv.address().port, url, theme: 'neutral', code });
+      out = '';
+      process.stdout.write = (c) => { out += c; return true; };
+      try { assert.equal(await statusDaemon('neutral'), 0); } finally {
+        process.stdout.write = write;
+      }
+      assert.equal(out.includes(STALE_LINE), stale, out);
+    }
+    assert.equal(STALE_LINE,
+      '[web] running OLD code (started before the last upgrade) — geneseed web restart');
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+    else process.env.OPENCODE_CONFIG_DIR = saved;
+    sb.cleanup();
+    await new Promise((r) => { srv.close(r); });
+  }
 });

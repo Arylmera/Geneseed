@@ -118,6 +118,7 @@ into files users have committed, so change the test that states it in the same c
 | `text.mjs` | String primitives: `codePointLength`, `WHITESPACE`, `parseIntStrict`, `percentDecode` |
 | `udiff.mjs` | `geneseed diff`'s own difflib clone — the alignment IS the printed hunks — plus `splitLines` |
 | `proc.mjs` | One constant: the `windowsHide` flag every spawn in `js/` must reuse |
+| `node-floor.mjs` | The first import of all three binaries: below Node 22.3, one sentence on stderr and exit 1 (0 in the hook) instead of a stack trace |
 
 **Before editing:** parse with `parseJson`, never `JSON.parse` — the latter collapses int `1` and
 float `1.0` into one double, and that value gets written into a user's file. Do not swap in a diff

@@ -54,6 +54,8 @@
 // table below now holds one LOADER per row (`() => import(…).then(m => m.cmdX)`), so a verb
 // loads its slice of the tree and no other verb's. The spawn allow-list gate still sees the
 // whole graph: `tests/unit/hook_cli.test.mjs`'s `importClosure` follows both import spellings.
+// FIRST, before anything it could fail to run: an old Node gets one sentence, not a stack trace.
+import '../js/lib/node-floor.mjs';
 import { cliSpec, printHelp, printVerbList } from '../js/ui/cli.mjs';
 import { parseIntStrict } from '../js/lib/text.mjs';
 import { printErr } from '../js/lib/fs.mjs';
@@ -288,6 +290,21 @@ async function main(argv) {
       update: 'an alias of upgrade',
       validate: "check the source tree without emitting (the generator's --validate-only)",
     });
+  }
+  // A DEAD HOOK SHIM, SAID ON EVERY RUN. The shim is machine-wide, so one stale write turns off
+  // every hook of every Claude-shaped install, and the hooks fail into a channel nobody reads —
+  // `doctor` was the only thing that looked. stderr, so no verb's stdout moves; skipped for help
+  // and for scripted callers that opt out. Not in `bin/geneseed-hook.mjs`: a dead shim means
+  // that binary is never reached, and its import graph is paid on every tool call.
+  if (process.env.GENESEED_NO_SHIM_CHECK !== '1' && verb !== 'help'
+    && !argv.some((t) => t === '-h' || t === '--help')) {
+    const { shimDead } = await import('../js/hosts/settings.mjs');
+    const dead = shimDead();
+    if (dead.length) {
+      printErr(`[geneseed] ⚠ hooks are off on this machine: the hook shim points at `
+        + `${dead.join(', ')}, which no longer exists. Fix: geneseed rebuild-all
+`);
+    }
   }
   // `validate` — the generator's `--validate-only`, and the one verb this entry answers that is NOT
   // in the table above. It is dispatched here, before the lookup, for a reason that is a

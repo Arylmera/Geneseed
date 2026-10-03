@@ -13,12 +13,36 @@ import { printOut, writeText } from '../lib/fs.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { webState } from './api.mjs';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, mkdirSync, openSync, readFileSync, unlinkSync } from 'node:fs';
 import { join, resolve as pathResolve } from 'node:path';
 
 const ROOT = pathResolve(import.meta.dirname, '..', '..');
 
 // ---- the daemon record -----------------------------------------------------
+
+/**
+ * Which code a console serves: the package version and a hash of the `web/dist/index.html` it
+ * would load. A daemon writes the stamp it started with into its record; an npm upgrade or a
+ * `git pull` that replaces `web/dist/` changes the stamp on disk, and the daemon — still
+ * serving the old `index.html`, whose chunk hashes may no longer exist — is then STALE.
+ * Read fresh on every call: the comparison is against the files as they are NOW.
+ */
+export function codeStamp(root = ROOT) {
+  const read = (rel) => { try { return readFileSync(join(root, rel)); } catch { return ''; } };
+  let version = 'unknown';
+  try { version = JSON.parse(read('package.json')).version ?? version; } catch { /* unknown */ }
+  const html = createHash('sha256').update(read(join('web', 'dist', 'index.html'))).digest('hex');
+  return `${version}:${html.slice(0, 12)}`;
+}
+
+/** A record written by an older daemon carries no `code` — and is stale by definition. */
+export function daemonStale(record, root = ROOT) {
+  return record?.code !== codeStamp(root);
+}
+
+export const STALE_LINE = '[web] running OLD code (started before the last upgrade) — '
+  + 'geneseed web restart';
 
 const statePath = (target) => join(target, '.geneseed-web.json');
 
@@ -268,12 +292,40 @@ export async function statusDaemon(theme = null) {
   const st = await liveDaemon(target);
   if (st) {
     printOut(`[web] running on ${st.url}  (theme: ${none(st.theme)}, pid ${none(st.pid)})\n`);
+    if (daemonStale(st)) printOut(`${STALE_LINE}\n`);
     return 0;
   }
   // EXIT 1, which is the verb's whole contract for a script. The snapshot's `<exit>`
   // column is what gates it.
   printOut('[web] not running.\n');
   return 1;
+}
+
+/**
+ * Bounce a running console so it serves the code now on disk — `upgrade` after it rebuilt,
+ * `rebuild-all` when the running one is stale. EXCEPT inside a web job (`GENESEED_WEB_JOB`,
+ * set by `js/web/jobs.mjs`): restarting here would kill the process tracking that very job,
+ * leaving the console stuck on 'running'; the server restarts itself after an update job, and
+ * shows its stale banner otherwise. `onlyIfStale` is `rebuild-all`'s: after an `upgrade`
+ * (which bounces, then runs `rebuild-all`) the console is current, and bouncing it again
+ * would drop the open tab for nothing. Never throws — no rebuild fails over a console.
+ */
+export async function bounceDaemonIfRunning(theme, log, { onlyIfStale = false } = {}) {
+  if (onlyIfStale) {
+    const st = readDaemon(webState(theme).target);
+    if (!st || !daemonStale(st)) return;
+  }
+  if (process.env.GENESEED_WEB_JOB) {
+    log(onlyIfStale
+      ? '[geneseed] the web console is running old code — use its Restart banner.'
+      : '[geneseed] web daemon will restart itself after this job to load the new code.');
+    return;
+  }
+  try {
+    await restartDaemon(theme, 4747, false, true);
+  } catch (e) {
+    log(`[geneseed] ⚠️  could not refresh the web daemon (${e && e.message ? e.message : e}) — \`geneseed web restart\` manually if it was running.`);
+  }
 }
 
 export async function restartDaemon(theme = null, port = 4747, openBrowser = true,
