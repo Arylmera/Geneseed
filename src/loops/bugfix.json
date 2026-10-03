@@ -1,0 +1,22 @@
+{
+  "name": "bugfix",
+  "description": "Reproduce the bug with a failing test, then iterate: apply the fix, test, and review, until the requirement is met and the reproduction passes.",
+  "nodes": ["reproduce", "identify", "apply", "test", "review"],
+  "start": "reproduce",
+  "edges": [
+    { "from": "reproduce", "on": "pass", "to": "identify" },
+    { "from": "reproduce", "on": "fail", "to": "$stop" },
+    { "from": "identify", "on": "more", "to": "apply" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "test" },
+    { "from": "test", "on": "fail", "to": "apply" },
+    { "from": "test", "on": "pass", "to": "review" },
+    { "from": "review", "on": "pass", "to": "identify" },
+    { "from": "review", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "apply", "test", "review"], "max": 20, "iteration": true },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "review-fix", "nodes": ["apply", "test", "review"], "max": 3 }
+  ]
+}

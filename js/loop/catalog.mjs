@@ -68,11 +68,15 @@ function availability(brick, srcRoot) {
   return { available: true };
 }
 
-export function loadCatalog({ projectRoot = process.cwd(), srcRoot = SRC } = {}) {
+export function loadCatalog({
+  projectRoot = process.cwd(), srcRoot = SRC, globalLevel = true,
+} = {}) {
   const levels = [
     ['shipped', path.join(srcRoot, 'bricks'), path.join(srcRoot, 'loops')],
-    ['global', path.join(userLoopsDir(), 'bricks'), path.join(userLoopsDir(), 'loops')],
   ];
+  if (globalLevel) {
+    levels.push(['global', path.join(userLoopsDir(), 'bricks'), path.join(userLoopsDir(), 'loops')]);
+  }
   if (projectRoot) {
     levels.push(['project', path.join(projectRoot, '.geneseed', 'bricks'), path.join(projectRoot, '.geneseed', 'loops')]);
   }

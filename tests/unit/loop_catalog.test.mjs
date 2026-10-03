@@ -85,3 +85,20 @@ test('catalogProblems runs checkGraph over every template and prefixes it', () =
     'loops/tiny: node test: no edge for outcome fail',
   ]);
 });
+
+// ---------------------------------------------------------------------------------------------
+// The shipped catalogue — the real `src/bricks` and `src/loops` this package ships.
+
+test('the shipped catalogue is clean and carries exactly the three shipped templates', () => {
+  assert.deepEqual(catalogProblems({ projectRoot: null, globalLevel: false }), []);
+  const { templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  assert.deepEqual([...templates.keys()].sort(), ['bugfix', 'feature', 'refactor']);
+});
+
+test('globalLevel: false ignores a global brick entirely', () => {
+  put(path.join(userLoopsDir(), 'bricks', 'only-global.md'), brickMd('only-global'));
+  const withGlobal = loadCatalog({ projectRoot: null, globalLevel: true });
+  assert.ok(withGlobal.bricks.has('only-global'));
+  const withoutGlobal = loadCatalog({ projectRoot: null, globalLevel: false });
+  assert.ok(!withoutGlobal.bricks.has('only-global'));
+});
