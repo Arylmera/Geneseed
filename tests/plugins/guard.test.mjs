@@ -193,7 +193,7 @@ async function repoOn(branch, { worktree = false, loop = "none" } = {}) {
   }
   if (loop === "valid") await fs.writeFile(path.join(gitRoot, "LOOP.md"), LOOP_MARKER)
   if (loop === "invalid") await fs.writeFile(path.join(gitRoot, "LOOP.md"), "# no state block\n")
-  return { cleanup: sb.cleanup, directory }
+  return { cleanup: sb.cleanup, directory, gitRoot }
 }
 
 /** `output.status` after one `permission.ask` call for a bash `command` in `directory`. */
@@ -209,11 +209,13 @@ test("permission.ask: on a loop/x branch with a launched loop, the whitelisted f
     const { cleanup, directory } = await repoOn("loop/x", { worktree, loop: "valid" })
     try {
       for (const cmd of [
-        "git add -A && git commit -F .git/LOOP_COMMIT_MSG && git push -u origin loop/x",
-        "git push",
-        "git push origin HEAD",
-        "git push origin HEAD:loop/x",
+        // The ONLY exempt push form: an explicit, colon-qualified HEAD:<branch> refspec.
+        "git push -u origin HEAD:loop/x",
+        "git push origin HEAD:refs/heads/loop/x",
+        "git add -A && git commit -F .git/LOOP_COMMIT_MSG && git push -u origin HEAD:loop/x",
         "git status && git commit -F msg.txt",
+        // A Windows absolute path (drive letter) through the `-F` path token.
+        "git commit -F C:/Users/x/repo/.git/LOOP_COMMIT_MSG",
       ]) {
         assert.equal(await askStatus(directory, cmd), "allow", cmd)
       }
@@ -225,6 +227,13 @@ test("permission.ask: every escape the review found leaves the ask untouched, on
   const { cleanup, directory } = await repoOn("loop/x", { loop: "valid" })
   try {
     for (const cmd of [
+      // Moved to ASK in fix round 2 (X2): none of these names an explicit HEAD:<branch>
+      // refspec, so every one is redirectable by push.default/remote.*.push.
+      "git push",
+      "git push origin",
+      "git push -u origin",
+      "git push origin HEAD",
+      "git push origin loop/x",
       'git push origin "HEAD:main"',
       "git push origin 'main'",
       "git push origin HEAD:main>/dev/null",
@@ -245,16 +254,46 @@ test("permission.ask: every escape the review found leaves the ask untouched, on
       'git commit -m "x"',
       "git commit --amend -F m",
       "git commit -F m\necho hi",
+      // X1: a single `&` (not doubled into `&&`) still chains two commands for a shell.
+      "git add -A & git push origin HEAD:main",
+      "git status & git push --mirror",
+      "git log & git push origin :main",
+      "git add -A & cd ../o & git push",
+      // X1: brace/glob expansion is excluded from the tightened argument token class. (A
+      // bare `git add` never reaches this gate — it names neither commit nor push.)
+      "git add {a,b} && git commit -F m",
+      "git add * && git push -u origin HEAD:loop/x",
     ]) {
       assert.equal(await askStatus(directory, cmd), "ask", cmd)
     }
   } finally { cleanup() }
 })
 
+test("permission.ask: LOOP.md as a symlink is not launched evidence — leaves the ask untouched", async (t) => {
+  const { cleanup, directory, gitRoot } = await repoOn("loop/x", { loop: "none" })
+  try {
+    const target = path.join(gitRoot, "REAL_LOOP.md")
+    await fs.writeFile(target, LOOP_MARKER)
+    try {
+      await fs.symlink(target, path.join(gitRoot, "LOOP.md"))
+    } catch (e) {
+      if (process.platform === "win32" && e.code === "EPERM") { t.skip("symlinks need privileges here"); return }
+      throw e
+    }
+    assert.equal(await askStatus(directory, "git push -u origin HEAD:loop/x"), "ask")
+  } finally { cleanup() }
+})
+
 test("permission.ask: also leaves the ask untouched — no LOOP.md, no state marker, or a shared branch with a valid one", async () => {
-  for (const [branch, loop] of [["loop/x", "none"], ["loop/x", "invalid"], ["main", "valid"]]) {
+  // Each row's command is otherwise the one exempt shape for that row's own branch, so the
+  // ask proves the LOOP.md/branch check, not the shape.
+  for (const [branch, loop, cmd] of [
+    ["loop/x", "none", "git push -u origin HEAD:loop/x"],
+    ["loop/x", "invalid", "git push -u origin HEAD:loop/x"],
+    ["main", "valid", "git push -u origin HEAD:main"],
+  ]) {
     const { cleanup, directory } = await repoOn(branch, { loop })
-    try { assert.equal(await askStatus(directory, "git push"), "ask", `${branch}/${loop}`) }
+    try { assert.equal(await askStatus(directory, cmd), "ask", `${branch}/${loop}`) }
     finally { cleanup() }
   }
 })

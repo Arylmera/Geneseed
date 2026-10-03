@@ -40,7 +40,7 @@
  * of the implementation it was once compared against.
  */
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync,
-  appendFileSync, writeFileSync, openSync, readSync, closeSync }
+  appendFileSync, writeFileSync }
   from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -56,6 +56,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 import {
   GATE_LEDGER, resolveMemoryDir, resolvePath, sovereignBypass,
 } from './hosts.mjs';
+import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
@@ -599,118 +600,60 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 const DESTRUCTIVE_GIT_RE =
   /\bgit\b[^\n]*\b(?:reset\s+--hard|clean\s+-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\s+[^\n]*--force)/;
 
-/**
- * The branch checked out in `cwd`, read from .git/HEAD without spawning git — a worktree's
- * `.git` is a FILE naming its gitdir, so both shapes are followed. null on anything unexpected
- * (detached HEAD, no repo, unreadable): the caller then falls back to asking, never to allowing.
- */
-export function currentBranch(cwd) {
-  try {
-    let dir = path.resolve(cwd);
-    for (;;) {
-      const dotgit = path.join(dir, '.git');
-      if (existsSync(dotgit)) {
-        let gitdir = dotgit;
-        if (statSync(dotgit).isFile()) {
-          const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, 'utf8'));
-          if (!m) return null;
-          gitdir = path.resolve(dir, m[1]);
-        }
-        const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitdir, 'HEAD'), 'utf8'));
-        return ref ? ref[1] : null;
-      }
-      const up = path.dirname(dir);
-      if (up === dir) return null;
-      dir = up;
-    }
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The directory holding `.git` for `cwd` — the SAME walk `currentBranch` does, stopped one
- * step earlier: a worktree's `.git` is a FILE naming its gitdir elsewhere, but LOOP.md always
- * lives beside that FILE, not beside the gitdir it points to. null on anything unexpected.
- */
-export function gitRootOf(cwd) {
-  try {
-    let dir = path.resolve(cwd);
-    for (;;) {
-      if (existsSync(path.join(dir, '.git'))) return dir;
-      const up = path.dirname(dir);
-      if (up === dir) return null;
-      dir = up;
-    }
-  } catch {
-    return null;
-  }
-}
-
 // `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
 // false allow publishes. So the exemption holds only when the ENTIRE command is built from
 // forms read in full below, on a branch a loop was actually launched on (LOOP.md's state
 // marker, left by `geneseed loop init` — not just a name starting with `loop/`, which anyone
-// can type).
+// can type). `currentBranch`/`gitRootOf`/`loopLaunched` live in `./gitref.mjs` — the one
+// fs-only reader this file shares with `js/loop/cli.mjs`'s commit-message writer.
 
 // No newline, backtick, or `$(` substitution anywhere — these can smuggle a second command (or
 // a shared-branch target) past every check below, so the command is refused before it is even
 // split. `<`/`>` are refused too: a redirect can both hide a second effect and, as the review
-// found, trail off the end of an otherwise-whitelisted push (`HEAD:main>/dev/null`).
-const UNSAFE_CHARS_RE = /[\n`<>]|\$\(/;
+// found, trail off the end of an otherwise-whitelisted push (`HEAD:main>/dev/null`). A single
+// `&` — not doubled into `&&` — is refused too: a shell runs `a & b` as TWO commands just like
+// `a && b`, and the review found it unparsed by the splitter below, which only recognised the
+// doubled form. `(?<!&)&(?!&)` matches a lone `&` without also matching either half of `&&`.
+const UNSAFE_CHARS_RE = /[\n`<>]|\$\(|(?<!&)&(?!&)/;
 
 // The only three git shapes a loop's own automation ever needs: adding unquoted paths,
 // committing via `-F`/`--file` (so the message text, which may contain anything, never has to
 // be quoted on this command line at all — see `js/loop/cli.mjs`'s LOOP_COMMIT_MSG), and
-// read-only inspection. A quoted token anywhere (`'`, `"`) refuses — quoting is exactly how an
-// argument hides a shared branch or a flag from this read.
-const SEG_ADD_RE = /^git\s+add(\s+[^\s'"]+)*$/;
+// read-only inspection. The token class `[\w./:@^~=+,-]` excludes quotes, braces, `!`, `*`,
+// `$` and `&` — a brace or glob expansion (`{a,b}`, `*`) is exactly how a shell can turn one
+// whitelisted-looking token into several unknown ones, so neither pattern's path/arg tokens may
+// contain them.
+const ARG_RE = '[\\w./:@^~=+,-]+';
+const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`);
 const SEG_COMMIT_RE = /^git\s+commit(\s+-q)?\s+(-F\s+|--file[=\s])[^\s'"]+(\s+-q)?$/;
-const SEG_READONLY_RE = /^git\s+(status|diff|log|rev-parse|show)(\s+[^\s'"$]+)*$/;
+const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`);
 
 /**
- * `git push`, exactly: nothing; `[-u|--set-upstream] <remote>`; or `[-u|--set-upstream]
- * <remote> <ref>` where `<ref>` is the current branch, `HEAD`, or `HEAD:<branch>` — never a
- * force, a `+`/`:` refspec, `--all`/`--mirror`/`--tags`/`--delete`, or any extra token. The
- * remote's first character must be alphanumeric so a flag (`-f`, `--all`, `--delete`, …) can
- * never be read as a remote name — `[A-Za-z0-9._-]*` alone would accept one.
+ * `git push`, exactly: `[-u|--set-upstream] <remote> HEAD:<branch>` or
+ * `HEAD:refs/heads/<branch>` — the ONLY exempt form. Bare `git push`, a remote alone, a plain
+ * branch name, or bare `HEAD` are no longer enough: every one of those is redirectable by
+ * `push.default`/`remote.*.push`/an upstream config this read cannot see, which is exactly how
+ * the review's re-review turned "looks like it only pushes `loop/x`" into "pushes wherever the
+ * repo's config says". An EXPLICIT `HEAD:<ref>` refspec is immune to both — git ignores
+ * `push.default` once a refspec is given, and a mirror/`+`/`:`-prefixed form refuses to
+ * coexist with one. The remote's first character must be alphanumeric so a flag (`-f`,
+ * `--all`, `--delete`, …) can never be read as a remote name.
  */
 function pushSegmentOk(seg, branch) {
   const m = /^git\s+push(?:\s+(.*))?$/.exec(seg);
   if (!m) return false;
   const rest = (m[1] || '').trim();
-  if (!rest) return true;
+  if (!rest) return false;
   const tokens = rest.split(/\s+/);
   let i = 0;
   if (tokens[i] === '-u' || tokens[i] === '--set-upstream') i += 1;
   const remote = tokens[i];
   if (remote === undefined || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) return false;
   i += 1;
-  if (i === tokens.length) return true;
   const ref = tokens[i];
   i += 1;
-  if (i !== tokens.length) return false;
-  return ref === branch || ref === 'HEAD' || ref === `HEAD:${branch}`;
-}
-
-const LOOP_STATE_MARKER = '<!-- loop-state:begin -->';
-
-/** Whether `<root>/LOOP.md` carries the engine's state marker — `geneseed loop init`'s mark
- * that a loop was actually launched here, not merely that the branch is named `loop/...`.
- * Read at most the first 64 KB: the marker sits in the first line, and a huge LOOP.md (notes,
- * history) must never make this check slow. */
-function loopLaunched(root) {
-  let fd;
-  try {
-    fd = openSync(path.join(root, 'LOOP.md'), 'r');
-    const buf = Buffer.alloc(65536);
-    const n = readSync(fd, buf, 0, buf.length, 0);
-    return buf.toString('utf8', 0, n).includes(LOOP_STATE_MARKER);
-  } catch {
-    return false;
-  } finally {
-    if (fd !== undefined) { try { closeSync(fd); } catch { /* already gone */ } }
-  }
+  if (ref === undefined || i !== tokens.length) return false;
+  return ref === `HEAD:${branch}` || ref === `HEAD:refs/heads/${branch}`;
 }
 
 /**

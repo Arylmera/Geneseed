@@ -13,13 +13,13 @@
  * to the first directory holding `.git` (a directory for a normal clone, a FILE for a worktree
  * or submodule) — rather than taking a path the caller could point anywhere.
  */
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, isFile, printOut } from '../lib/fs.mjs';
 import { loadCatalog, catalogProblems, parseBrick } from './catalog.mjs';
 import { checkGraph } from './graph.mjs';
 import { parseNumstat, DEFAULT_PRESET } from './score.mjs';
-import { currentBranch } from '../hosts/hooks.mjs';
+import { gitRootOf, gitDirOf, currentBranch } from '../hosts/gitref.mjs';
 import {
   initState, nextStep, scoreDeclared, scoreDiff, recordOutcome, decideAwaiting,
   renderLoopFile, parseLoopFile, LOOP_FILE,
@@ -29,51 +29,32 @@ const emit = (obj) => { printOut(`${JSON.stringify(obj)}\n`); return obj.error |
 const stdin = () => (process.stdin.isTTY ? '' : readFileSync(0, 'utf8'));
 const list = (s) => (s ? String(s).split(',').map((x) => x.trim()).filter(Boolean) : null);
 
-function gitRoot(start) {
-  let dir = path.resolve(start);
-  for (;;) {
-    if (existsSync(path.join(dir, '.git'))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-}
-
 function requireRoot() {
-  const root = gitRoot(process.cwd());
+  const root = gitRootOf(process.cwd());
   if (!root) throw new Error('not inside a git repository');
   return root;
-}
-
-/**
- * The `.git` DIRECTORY for `root` — itself, or the gitdir a worktree's `.git` FILE names.
- * Same resolution as `js/hosts/hooks.mjs`'s `currentBranch` (gitdir half): LOOP_COMMIT_MSG has
- * to live where the loop's own worktree keeps its git state, never in a shared main repo's.
- */
-function gitDirOf(root) {
-  const dotgit = path.join(root, '.git');
-  if (statSync(dotgit).isFile()) {
-    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, 'utf8'));
-    if (!m) throw new Error(`${dotgit} does not name a gitdir`);
-    return path.resolve(root, m[1]);
-  }
-  return dotgit;
 }
 
 /**
  * When `score --diff`/`decide` closes a unit (`commit: true`), write the commit message to
  * `<gitdir>/LOOP_COMMIT_MSG` — never tracked, never part of any diff — so the loop's own
  * automation never has to quote a message on a command line (`js/hosts/hooks.mjs`'s
- * `loopExempt` only whitelists `git commit -F <path>`). Adds `message_file` to the result for
- * the skill to read back.
+ * `loopExempt` only whitelists `git commit -F <path>`).
+ *
+ * `gitdir` is RESOLVED BY THE CALLER, before `withState` ran the state change (X6, fix round
+ * 2): a malformed `.git` FILE makes `gitDirOf` throw, and that throw must abort the action
+ * before anything about the loop's state has moved, not after. Adds `message_file` to the
+ * result for the skill to read back, with forward slashes (`C:/...`) even on Windows — Git
+ * Bash and git itself both accept that form on every platform, and a backslash-laden path
+ * breaks when a later shell command tries to use it unquoted.
  */
-function writeCommitMessage(root, result) {
+function writeCommitMessage(root, gitdir, result) {
   if (!result || result.commit !== true) return result;
   const branch = currentBranch(root);
   const slug = branch && branch.startsWith('loop/') ? branch.slice('loop/'.length) : 'loop';
-  const file = path.join(gitDirOf(root), 'LOOP_COMMIT_MSG');
+  const file = path.join(gitdir, 'LOOP_COMMIT_MSG');
   writeText(file, `loop(${slug}): iteration ${result.iteration} — ${result.intent || 'setup'}\n\n${result.trailers}\n`);
-  return { ...result, message_file: file };
+  return { ...result, message_file: file.replaceAll('\\', '/') };
 }
 
 function withState(fn) {
@@ -124,7 +105,13 @@ const ACTIONS = {
   },
   next: () => withState((s, b) => nextStep(s, b)),
   score(args) {
-    if (args.diff) return writeCommitMessage(requireRoot(), withState((s) => scoreDiff(s, parseNumstat(stdin()))));
+    if (args.diff) {
+      // X6: resolve (and validate) the gitdir BEFORE withState runs the state change, so a
+      // malformed `.git` file errors without advancing the loop.
+      const root = requireRoot();
+      const gitdir = gitDirOf(root);
+      return writeCommitMessage(root, gitdir, withState((s) => scoreDiff(s, parseNumstat(stdin()))));
+    }
     if (!args.declared) throw new Error('score needs --declared or --diff');
     return withState((s) => scoreDeclared(s, {
       actions: list(args.actions), writeSet: list(args.writeSet), intent: args.intent ?? null,
@@ -137,7 +124,10 @@ const ACTIONS = {
     return withState((s, b) => recordOutcome(s, b, args.outcome, { card, porcelain: raw ? raw.replace(/\r\n/g, '\n').trimEnd() : null }));
   },
   decide(args) {
-    return writeCommitMessage(requireRoot(), withState((s, b) => decideAwaiting(s, b, args.verdict, args.note ?? '')));
+    // X6: same ordering as `score --diff` above.
+    const root = requireRoot();
+    const gitdir = gitDirOf(root);
+    return writeCommitMessage(root, gitdir, withState((s, b) => decideAwaiting(s, b, args.verdict, args.note ?? '')));
   },
 };
 

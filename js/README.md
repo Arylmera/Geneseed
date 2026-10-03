@@ -69,6 +69,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 |---|---|
 | `hosts.mjs` | The four host config dirs (opencode/claude/bob/openclaude), plus `resolvePath`/`expanduser` |
 | `hooks.mjs` | The verbs the emitted hooks run every session: `context`, `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Bob), `learn`. `--host` picks the verdict dialect |
+| `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `currentBranch`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate and `js/loop/cli.mjs`'s commit-message writer |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json`; owns the hook shim and the managed blocks |
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |

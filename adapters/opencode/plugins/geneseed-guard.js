@@ -31,7 +31,7 @@
 // fires `permission.ask` simply never reaches this hook — the static ask still fires, so the
 // failure mode is one extra prompt, never a silent allow.
 
-import { promises as fs, existsSync, statSync, readFileSync, openSync, readSync, closeSync } from "node:fs"
+import { promises as fs, existsSync, statSync, lstatSync, readFileSync, openSync, readSync, closeSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
@@ -282,48 +282,66 @@ function ruleStoreTarget(p) {
 const WIKI_MUTATE_TOOLS = [...WRITE_TOOLS, "delete", "remove", "rename", "move", "trash"]
 
 // ---- the loop/* exemption (Consent Before Push) --------------------------------
-// Twin of js/hosts/hooks.mjs's git-gate — keep in step. Node's native sync `fs` (not the
-// `fs.promises` import above): a worktree's `.git` is read the same way the Claude/Bob
-// hook reads it, so the two decide the exemption identically.
+// Twin of js/hosts/gitref.mjs (currentBranch/loopLaunched) and js/hosts/hooks.mjs's
+// git-gate (the rest) — keep in step. Node's native sync `fs` (not the `fs.promises`
+// import above): a worktree's `.git` is read the same way the Claude/Bob hook reads it, so
+// the two decide the exemption identically. This plugin cannot import from `js/` at all
+// (it is copied whole into an OpenCode install, outside this repo's module graph), so it
+// keeps its own standalone copy rather than the single shared owner the Node side has.
 
 const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/
 
-// No newline, backtick, or `$(` substitution anywhere, and no `<`/`>` redirect — these can
-// smuggle a second command (or a shared-branch target) past every check below.
-const UNSAFE_CHARS_RE = /[\n`<>]|\$\(/
+// No newline, backtick, or `$(` substitution anywhere, no `<`/`>` redirect, and no single
+// `&` (a shell runs `a & b` as two commands exactly like `a && b`) — these can smuggle a
+// second command (or a shared-branch target) past every check below. `(?<!&)&(?!&)` matches
+// a lone `&` without matching either half of a doubled `&&`.
+const UNSAFE_CHARS_RE = /[\n`<>]|\$\(|(?<!&)&(?!&)/
 
 // The only three git shapes a loop's own automation ever needs — see js/hosts/hooks.mjs's
-// identically-named constants for the full rationale. A quoted token anywhere refuses.
-const SEG_ADD_RE = /^git\s+add(\s+[^\s'"]+)*$/
+// identically-named constants for the full rationale. The token class `[\w./:@^~=+,-]`
+// excludes quotes, braces, `!`, `*`, `$` and `&` — a brace/glob expansion is exactly how a
+// shell turns one whitelisted-looking token into several unknown ones.
+const ARG_RE = "[\\w./:@^~=+,-]+"
+const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`)
 const SEG_COMMIT_RE = /^git\s+commit(\s+-q)?\s+(-F\s+|--file[=\s])[^\s'"]+(\s+-q)?$/
-const SEG_READONLY_RE = /^git\s+(status|diff|log|rev-parse|show)(\s+[^\s'"$]+)*$/
+const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`)
 
-/** `git push`, exactly — see js/hosts/hooks.mjs's `pushSegmentOk`, same rule, same shape. */
+/**
+ * `git push`, exactly: `[-u|--set-upstream] <remote> HEAD:<branch>` or
+ * `HEAD:refs/heads/<branch>` — the ONLY exempt form, same as js/hosts/hooks.mjs's
+ * `pushSegmentOk`. An explicit refspec is immune to `push.default`/`remote.*.push`
+ * redirection and refuses to coexist with a mirror/`+`/`:`-prefixed form; nothing else is.
+ */
 function pushSegmentOk(seg, branch) {
   const m = /^git\s+push(?:\s+(.*))?$/.exec(seg)
   if (!m) return false
   const rest = (m[1] || "").trim()
-  if (!rest) return true
+  if (!rest) return false
   const tokens = rest.split(/\s+/)
   let i = 0
   if (tokens[i] === "-u" || tokens[i] === "--set-upstream") i += 1
   const remote = tokens[i]
   if (remote === undefined || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) return false
   i += 1
-  if (i === tokens.length) return true
   const ref = tokens[i]
   i += 1
-  if (i !== tokens.length) return false
-  return ref === branch || ref === "HEAD" || ref === `HEAD:${branch}`
+  if (ref === undefined || i !== tokens.length) return false
+  return ref === `HEAD:${branch}` || ref === `HEAD:refs/heads/${branch}`
 }
 
 const LOOP_STATE_MARKER = "<!-- loop-state:begin -->"
 
-/** Whether `<root>/LOOP.md` carries the engine's state marker — read at most 64 KB. */
+/**
+ * Whether `<root>/LOOP.md` carries the engine's state marker — read at most 64 KB.
+ * `lstatSync` (never `statSync`, which follows a link) must find an ordinary file: a FIFO
+ * would block the read, a symlink could point anywhere outside the repo.
+ */
 function loopLaunched(gitRoot) {
   let fd
   try {
-    fd = openSync(path.join(gitRoot, "LOOP.md"), "r")
+    const p = path.join(gitRoot, "LOOP.md")
+    if (!lstatSync(p).isFile()) return false
+    fd = openSync(p, "r")
     const buf = Buffer.alloc(65536)
     const n = readSync(fd, buf, 0, buf.length, 0)
     return buf.toString("utf8", 0, n).includes(LOOP_STATE_MARKER)

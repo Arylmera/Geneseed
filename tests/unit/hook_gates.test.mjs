@@ -398,7 +398,7 @@ function repoOn(branch, { worktree = false, loop = 'none' } = {}) {
   }
   if (loop === 'valid') fs.writeFileSync(path.join(gitRoot, 'LOOP.md'), LOOP_MARKER);
   if (loop === 'invalid') fs.writeFileSync(path.join(gitRoot, 'LOOP.md'), '# a loop file with no state block\n');
-  return { cleanup: sb.cleanup, cwd };
+  return { cleanup: sb.cleanup, cwd, gitRoot };
 }
 
 test('on a loop/* branch with a launched loop, the whitelisted commit/push forms defer — plain repo and worktree', () => {
@@ -406,11 +406,13 @@ test('on a loop/* branch with a launched loop, the whitelisted commit/push forms
     const { cleanup, cwd } = repoOn('loop/x', { worktree, loop: 'valid' });
     try {
       for (const cmd of [
-        'git add -A && git commit -F .git/LOOP_COMMIT_MSG && git push -u origin loop/x',
-        'git push',
-        'git push origin HEAD',
-        'git push origin HEAD:loop/x',
+        // The ONLY exempt push form: an explicit, colon-qualified HEAD:<branch> refspec.
+        'git push -u origin HEAD:loop/x',
+        'git push origin HEAD:refs/heads/loop/x',
+        'git add -A && git commit -F .git/LOOP_COMMIT_MSG && git push -u origin HEAD:loop/x',
         'git status && git commit -F msg.txt',
+        // A Windows absolute path (drive letter) through the `-F` path token.
+        'git commit -F C:/Users/x/repo/.git/LOOP_COMMIT_MSG',
       ]) {
         assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), cmd);
       }
@@ -422,6 +424,13 @@ test('every escape the review found still asks, on that same loop/launched branc
   const { cleanup, cwd } = repoOn('loop/x', { loop: 'valid' });
   try {
     for (const cmd of [
+      // Moved to ASK in fix round 2 (X2): none of these names an explicit HEAD:<branch>
+      // refspec, so every one of them is redirectable by push.default/remote.*.push.
+      'git push',
+      'git push origin',
+      'git push -u origin',
+      'git push origin HEAD',
+      'git push origin loop/x',
       'git push origin "HEAD:main"',
       "git push origin 'main'",
       'git push origin HEAD:main>/dev/null',
@@ -442,16 +451,50 @@ test('every escape the review found still asks, on that same loop/launched branc
       'git commit -m "x"',
       'git commit --amend -F m',
       'git commit -F m\necho hi',
+      // X1: a single `&` (not doubled into `&&`) still chains two commands for a shell —
+      // the splitter used to only recognise the doubled form.
+      'git add -A & git push origin HEAD:main',
+      'git status & git push --mirror',
+      'git log & git push origin :main',
+      'git add -A & cd ../o & git push',
+      // X1: brace/glob expansion can turn one whitelisted-looking token into several
+      // unknown ones, so neither is in the tightened argument token class. (A bare `git add`
+      // never reaches this gate at all — it names neither commit nor push — so each is
+      // chained with a push/commit to actually exercise the whitelist.)
+      'git add {a,b} && git commit -F m',
+      'git add * && git push -u origin HEAD:loop/x',
     ]) {
       askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), cmd);
     }
   } finally { cleanup(); }
 });
 
+test('LOOP.md as a symlink is not launched evidence — asks', (t) => {
+  const { cleanup, cwd, gitRoot } = repoOn('loop/x', { loop: 'none' });
+  try {
+    const target = path.join(gitRoot, 'REAL_LOOP.md');
+    fs.writeFileSync(target, LOOP_MARKER);
+    try {
+      fs.symlinkSync(target, path.join(gitRoot, 'LOOP.md'));
+    } catch (e) {
+      if (process.platform === 'win32' && e.code === 'EPERM') { t.skip('symlinks need privileges here'); return; }
+      throw e;
+    }
+    askDecision(hookRun('git-gate',
+      { stdin: bashPayload('git push -u origin HEAD:loop/x'), cwd }), 'symlink LOOP.md');
+  } finally { cleanup(); }
+});
+
 test('also asks: no LOOP.md, a LOOP.md without the state marker, or a shared branch with a valid one', () => {
-  for (const [branch, loop] of [['loop/x', 'none'], ['loop/x', 'invalid'], ['main', 'valid']]) {
+  // Each row's command is otherwise the one exempt shape — an explicit HEAD:<branch> refspec
+  // for that row's own branch — so the ask proves the LOOP.md/branch check, not the shape.
+  for (const [branch, loop, cmd] of [
+    ['loop/x', 'none', 'git push -u origin HEAD:loop/x'],
+    ['loop/x', 'invalid', 'git push -u origin HEAD:loop/x'],
+    ['main', 'valid', 'git push -u origin HEAD:main'],
+  ]) {
     const { cleanup, cwd } = repoOn(branch, { loop });
-    try { askDecision(hookRun('git-gate', { stdin: bashPayload('git push'), cwd }), `${branch}/${loop}`); }
+    try { askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), `${branch}/${loop}`); }
     finally { cleanup(); }
   }
 });

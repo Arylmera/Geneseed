@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
@@ -49,11 +49,54 @@ test('init -> next -> score -> record on the shipped bugfix template', () => {
     // `loopExempt` only whitelists `git commit -F <path>`): the CLI writes it to a file beside
     // LOOP.md's own gitdir and names that file in the result.
     const msgFile = path.join(sb.path, '.git', 'LOOP_COMMIT_MSG');
-    assert.equal(scored.message_file, msgFile);
+    // X3: forward slashes even on Windows — Git Bash and git both accept that form, and a
+    // raw backslash path breaks when an unquoted shell command later tries to use it.
+    assert.equal(scored.message_file, msgFile.replaceAll('\\', '/'));
     assert.equal(readFileSync(msgFile, 'utf8').replace(/\r\n/g, '\n'),
       `loop(loop): iteration ${scored.iteration} — reproduce\n\n${scored.trailers}\n`);
     assert.equal(run(sb.path, ['record', '--outcome', 'nope']).out.error,
       'identify cannot report "nope" — one of more, done');
+  } finally { sb.cleanup(); }
+});
+
+test('X8: the root\'s .git is a gitdir file — LOOP_COMMIT_MSG lands in that gitdir, forward-slashed', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    const realgit = path.join(sb.path, 'realgit');
+    mkdirSync(realgit);
+    writeFileSync(path.join(sb.path, '.git'), `gitdir: ${realgit}\n`);
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    run(sb.path, ['record', '--outcome', 'pass'], '?? test/r.test.js\n');
+    const scored = run(sb.path, ['score', '--diff'], '12\t0\ttest/r.test.js\n').out;
+    assert.equal(scored.commit, true);
+    const msgFile = path.join(realgit, 'LOOP_COMMIT_MSG');
+    assert.equal(scored.message_file, msgFile.replaceAll('\\', '/'));
+    assert.ok(existsSync(msgFile), 'the message file must land in the gitdir the .git FILE names');
+    assert.ok(!existsSync(path.join(sb.path, '.git', 'LOOP_COMMIT_MSG')),
+      '.git is a file here — nothing should ever try to write inside it as a directory');
+  } finally { sb.cleanup(); }
+});
+
+test('X6: a malformed .git gitdir file errors on score --diff without advancing the loop', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    run(sb.path, ['record', '--outcome', 'pass'], '?? test/r.test.js\n');
+    const before = readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8');
+    // Replace the `.git` DIRECTORY with a FILE that does not name a gitdir — `gitDirOf`
+    // must throw on this, and that throw must happen before `withState` ever runs.
+    rmSync(path.join(sb.path, '.git'), { recursive: true, force: true });
+    writeFileSync(path.join(sb.path, '.git'), 'not a gitdir line\n');
+    const r = run(sb.path, ['score', '--diff'], '12\t0\ttest/r.test.js\n');
+    assert.equal(r.code, 1);
+    assert.match(r.out.error, /does not name a gitdir/);
+    assert.equal(readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8'), before,
+      'the loop state must not advance when the gitdir resolution itself fails');
   } finally { sb.cleanup(); }
 });
 
