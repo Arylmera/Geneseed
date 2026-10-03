@@ -3,10 +3,13 @@
 // The trailer block is written out byte for byte: it is what lands in a user's git history.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   initState, nextStep, scoreDeclared, scoreDiff, recordOutcome, decideAwaiting,
-  renderLoopFile, parseLoopFile, trailers,
+  renderLoopFile, parseLoopFile, writeLoopFile, trailers,
 } from '../../js/loop/state.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const brick = (name, effect, outcomes) => [name, { name, effect, outcomes, agent: 'tester', skill: null, body: `do ${name}`, available: true }];
 const BRICKS = new Map([
@@ -229,6 +232,31 @@ test('F2: a read-brick porcelain that only touches LOOP.md does not stop the loo
   assert.deepEqual(recordOutcome(s, BRICKS, 'more', { card, porcelain: ' M LOOP.md' }), { node: 'apply' });
 });
 
+// Fix round 1, item 3: `writeLoopFile`'s atomic writer leaves a `LOOP.md.tmp` sibling for the
+// instant between the write and the rename — ordinarily invisible, but a lingering one (a crash
+// in that window) must not pollute the scored diff or the read-brick porcelain check, exactly
+// like LOOP.md itself.
+test('a lingering LOOP.md.tmp is dropped from the scored diff, same as LOOP.md', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  const result = scoreDiff(s, [file('LOOP.md'), file('LOOP.md.tmp'), file('src/a.js')]);
+  assert.equal(result.commit, true);
+  assert.match(result.trailers, /Loop-Risk-Declared: 0\.4\nLoop-Risk-Actual: 0\.4/);
+});
+
+test('a diff of only LOOP.md and LOOP.md.tmp counts as empty', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  assert.deepEqual(scoreDiff(s, [file('LOOP.md'), file('LOOP.md.tmp')]), { empty: true, commit: false });
+});
+
+test('a read-brick porcelain that only touches LOOP.md.tmp does not stop the loop', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1; s.snapshot = '';
+  assert.deepEqual(recordOutcome(s, BRICKS, 'more', { card, porcelain: '?? LOOP.md.tmp' }), { node: 'apply' });
+});
+
 // F3: rejecting the setup unit (iteration 0, start outside the iteration loop) stops the loop —
 // there is no "back to the head" to reset into.
 test('F3: rejecting the setup unit stops the loop instead of resetting it', () => {
@@ -377,4 +405,30 @@ test('M2: scoreDeclared is refused while the iteration waits for its diff score'
   recordOutcome(s, BRICKS, 'pass');
   assert.throws(() => scoreDeclared(s, { actions: ['logic'] }),
     { message: 'the iteration is closed: run `geneseed loop score --diff` first' });
+});
+
+// Fix round 1, item 3: `writeLoopFile` writes `<file>.tmp` then renames — no `.tmp` sibling
+// survives a successful write, and the result round-trips through `parseLoopFile` byte for
+// byte with what `renderLoopFile` would have written directly. Also covers overwriting an
+// existing LOOP.md (the `init`/`withState` call sites both rewrite one that already exists
+// on every action after the first).
+test('writeLoopFile writes atomically: no .tmp sibling survives, and the state round-trips', () => {
+  const sb = makeSandbox('loopstate-');
+  try {
+    const s = start();
+    const file = path.join(sb.path, 'LOOP.md');
+    writeLoopFile(file, s);
+    assert.ok(existsSync(file));
+    assert.ok(!existsSync(`${file}.tmp`), 'the atomic writer must not leave its tmp file behind');
+    // `writeText` (the writer `writeLoopFile` goes through) translates `\n` to the platform's
+    // line separator, so the bytes on disk are CRLF on Windows while `renderLoopFile` returns
+    // bare `\n` — compared through `parseLoopFile`, which tolerates both, not byte for byte.
+    assert.deepEqual(parseLoopFile(readFileSync(file, 'utf8')), s);
+
+    // Overwrite: a second write (a later action, a changed preset) replaces the file cleanly.
+    const s2 = { ...s, preset: 'aggressive' };
+    writeLoopFile(file, s2);
+    assert.ok(!existsSync(`${file}.tmp`));
+    assert.deepEqual(parseLoopFile(readFileSync(file, 'utf8')), s2);
+  } finally { sb.cleanup(); }
 });

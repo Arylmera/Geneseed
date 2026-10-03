@@ -21,7 +21,23 @@
  * action — is excluded from every score and every read-brick porcelain check: it is never part
  * of the work being scored, and including it would make every action's own bookkeeping look
  * like an undeclared file touch.
+ *
+ * `writeLoopFile` IS THE ONLY WRITER. Every call site that persists LOOP.md — `cli.mjs`'s
+ * `withState` and `init`, and `registry.mjs`'s `setLoopPreset` — writes through it rather than
+ * through a bare `writeText(file, renderLoopFile(state))`, so a process killed mid-write can
+ * never leave a torn, half-written LOOP.md for the next `loop next`/`score`/`record` to choke
+ * on. `LOOP_FILE_TMP` sits BESIDE `LOOP_FILE` in the worktree, not inside the gitdir: the gitdir
+ * is resolved by `gitDirOf`, which can THROW on a malformed worktree link (X6 in `cli.mjs`), and
+ * every one of these three call sites must still be able to rewrite LOOP.md when that resolution
+ * fails or was never attempted (`setLoopPreset` has no gitdir concept at all). A temp file beside
+ * LOOP.md needs no new failure mode to reason about instead — it is exposed to `git status`, but
+ * only for the instant between the write and the rename (ordinarily unobservable; a crash in
+ * that window is the one case it lingers), and `LOOP_FILE_TMP` joins `LOOP_FILE` in both
+ * `filterPorcelain` and `scoreDiff`'s exclusion below for exactly that case: a lingering
+ * `LOOP.md.tmp` is the engine's own bookkeeping too, never scored work.
  */
+import { renameSync } from 'node:fs';
+import { writeText } from '../lib/fs.mjs';
 import { declaredRisk, actualRisk, decide, worst, PRESETS, DEFAULT_PRESET } from './score.mjs';
 import { iterationLoop, ENGINE_MAX_ITERATIONS } from './graph.mjs';
 
@@ -29,6 +45,7 @@ const BEGIN = '<!-- loop-state:begin -->';
 const END = '<!-- loop-state:end -->';
 export const VERIFY_COMMAND = 'git add -A && git diff --cached --numstat | geneseed loop score --diff';
 export const LOOP_FILE = 'LOOP.md';
+export const LOOP_FILE_TMP = `${LOOP_FILE}.tmp`;
 const slash = (p) => String(p).replaceAll('\\', '/');
 
 export function renderLoopFile(state) {
@@ -36,6 +53,13 @@ export function renderLoopFile(state) {
     + 'The block below belongs to the engine. You may change `preset` (prudent, balanced, '
     + 'aggressive) or `contracts`: they apply from the next score on.\n\n'
     + `${BEGIN}\n\`\`\`json\n${JSON.stringify(state, null, 2)}\n\`\`\`\n${END}\n`;
+}
+
+/** `<file>.tmp` then `renameSync` — the atomic write every LOOP.md persist goes through. */
+export function writeLoopFile(file, state) {
+  const tmp = `${file}.tmp`;
+  writeText(tmp, renderLoopFile(state));
+  renameSync(tmp, file);
 }
 
 export function parseLoopFile(text) {
@@ -172,7 +196,7 @@ export function scoreDiff(state, files) {
   if (!Array.isArray(state.contracts) || state.contracts.some((c) => typeof c !== 'string')) {
     throw new Error('LOOP.md: contracts must be a list of file paths');
   }
-  const scored = files.filter((f) => slash(f.file) !== LOOP_FILE);
+  const scored = files.filter((f) => slash(f.file) !== LOOP_FILE && slash(f.file) !== LOOP_FILE_TMP);
   if (!scored.length) {
     // A closing unit (reached $close with a mutate already visited) finishes as done even
     // when this is its second empty diff in a row: there is nothing left to retry into.
@@ -223,12 +247,13 @@ function allowedEntries(graph, v) {
 }
 
 // Porcelain lines are `XY <path>`; strip the 2-char status + space, slash-normalise, drop
-// LOOP.md rows (the engine rewrites it on every action — it is never part of the scored work).
+// LOOP.md rows (the engine rewrites it on every action — it is never part of the scored work)
+// and a lingering LOOP.md.tmp (the atomic writer's own sibling — see `writeLoopFile`'s docblock).
 function filterPorcelain(porcelain) {
   const lines = porcelain.split(/\r?\n/).filter((line) => {
     if (!line) return false;
     const path = line.slice(3).replace(/^"|"$/g, '');
-    return slash(path) !== LOOP_FILE;
+    return slash(path) !== LOOP_FILE && slash(path) !== LOOP_FILE_TMP;
   });
   return lines.join('\n').trimEnd();
 }

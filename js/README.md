@@ -144,12 +144,16 @@ transition, score and stop is computed here.
 
 **Before editing:** `score.mjs` is imported by the build driver (the `--trust` choices), so it must
 stay free of every import but node builtins and `graph.mjs`. `state.mjs` excludes `LOOP.md` itself
-from every score and every read-brick porcelain check — it is the engine's own bookkeeping, never
-part of the work being scored. `cli.mjs` may not spawn: git output is piped in on stdin by the
-model, never read by this entry. `registry.mjs` swallows its own errors on `recordLoop`/`activeLoops`
-on purpose, like `js/inspect/registry.mjs` — a registry hiccup must never fail `loop init` or a
+(and its own atomic-write sibling, `LOOP.md.tmp`) from every score and every read-brick porcelain
+check — it is the engine's own bookkeeping, never part of the work being scored. Every LOOP.md
+write goes through `state.mjs`'s `writeLoopFile`, never a bare `writeText`, so a killed process
+cannot leave a torn file. `cli.mjs` may not spawn: git output is piped in on stdin by the model,
+never read by this entry. `registry.mjs` swallows its own errors on `recordLoop`/`activeLoops` on
+purpose, like `js/inspect/registry.mjs` — a registry hiccup must never fail `loop init` or a
 read — but `setLoopPreset` does not: a preset change the caller asked for must be reported when it
-fails.
+fails. `activeLoops` saves the registry back only when the kept set actually changed (a pruned
+root, a loop newly seen finished or seen running again) — a routine poll from the Active tab must
+never be a write.
 
 ## `js/maintain/` — lifecycle
 
