@@ -52,6 +52,20 @@ geneseed build --emit opencode-global --mode direct    # back to the default
 
 More in [Foreman mode](../concepts/foreman-mode.md).
 
+## Loop trust: how far a loop goes before it asks
+
+The `loop` skill scores every change it validates and stops to ask once the score passes a threshold. `--trust` sets the preset the skill starts a loop with; the user can still name another one per loop.
+
+- **prudent**: asks early, on anything past a rename.
+- **balanced** *(default)*: logic changes and new files pass with a note; API changes and deletions stop.
+- **aggressive**: only an architecture-level change stops the loop.
+
+The preset lives in the `loop` skill only, so it costs nothing in the always-on instructions.
+
+```
+geneseed build --emit opencode-global --trust prudent
+```
+
 ## Doctrine packs: which practices bind
 
 The harness's rules come in tiers (see [Rules](../concepts/rules.md)). The Ethos and the Rules are always on. The **doctrines** are practices rather than principles, and they ship as packs you choose:

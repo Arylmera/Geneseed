@@ -175,8 +175,7 @@ describe('Installs / Hosts', () => {
     expect(screen.getByLabelText('voice for claude · global').value).toBe('imperial')
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
     await answered()
-    // THE PAYLOAD IS UNCHANGED from the table-row install this panel replaced: same action,
-    // same seven fields, same defaults.
+    // The table-row install's seven fields, plus the loop trust preset at its default.
     expect(onAction).toHaveBeenCalledWith('install', {
       host: 'claude',
       scope: 'global',
@@ -185,6 +184,7 @@ describe('Installs / Hosts', () => {
       footprint: 'full',
       posture: 'peer',
       mode: 'direct',
+      trust: 'balanced',
     })
   })
 
@@ -240,6 +240,43 @@ describe('Installs / Hosts', () => {
     )
   })
 
+  it('the loop trust picker lists the presets and rebuilds with the picked one', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce({
+      installs: [
+        {
+          id: 'opencode:global',
+          host: 'opencode',
+          scope: 'global',
+          path: 'C:/cfg',
+          state: 'active',
+          theme: 'neutral',
+          footprint: 'lean',
+          posture: 'peer',
+          mode: 'direct',
+          trust: 'balanced',
+        },
+      ],
+      postures: ['peer'],
+      modes: ['direct'],
+      trusts: ['prudent', 'balanced', 'aggressive'],
+    })
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    const apply = await screen.findByRole('button', { name: 'Apply and rebuild' })
+    const trust = screen.getByLabelText('trust for opencode · global')
+    expect(trust.value).toBe('balanced')
+    expect([...trust.options].map((o) => o.value)).toEqual(['prudent', 'balanced', 'aggressive'])
+    expect(apply.disabled).toBe(true)
+    fireEvent.change(trust, { target: { value: 'prudent' } })
+    expect(apply.disabled).toBe(false)
+    fireEvent.click(apply)
+    await answered()
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({ host: 'opencode', trust: 'prudent' }),
+    )
+  })
+
   it('deploys to a folder with the picked host, naming what that host adds', async () => {
     const onAction = vi.fn(async () => 'job-1')
     render(<Hosts onAction={onAction} currentTheme="imperial" themes={[{ name: 'imperial' }]} />)
@@ -262,6 +299,7 @@ describe('Installs / Hosts', () => {
       footprint: 'full',
       posture: 'peer',
       mode: 'direct',
+      trust: 'balanced',
     })
     // An accepted job closes the form.
     expect(screen.queryByLabelText('Folder to deploy into')).toBeNull()

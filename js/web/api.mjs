@@ -21,10 +21,11 @@ import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState, installTargets,
-  installedDefaults, modeOfDir,
+  installedDefaults, modeOfDir, trustOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { frontmatter } from '../hosts/hooks.mjs';
+import { PRESETS } from '../loop/score.mjs';
 import {
   SKILL_CLASS, entityStatus, loadRegistry, tuiInventory,
 } from '../inspect/inventory.mjs';
@@ -87,6 +88,7 @@ export function webState(theme = null, target = null) {
     footprint: null,
     posture: null,
     mode: null,
+    trust: null,
     _inv: null,
     _doctor: null,
   };
@@ -98,6 +100,7 @@ export function webState(theme = null, target = null) {
   st.footprint = footprintOfDir(st.target);      // 'full' when no marker
   st.posture = postureOfDir(st.target) || 'peer';
   st.mode = modeOfDir(st.target) || 'direct';
+  st.trust = trustOfDir(st.target) || 'balanced';
 
   Object.defineProperty(st, 'inventory', {
     get() {
@@ -154,6 +157,7 @@ export function webState(theme = null, target = null) {
     st.footprint = footprintOfDir(st.root);
     st.posture = postureOfDir(st.root) || 'peer';
     st.mode = modeOfDir(st.root) || 'direct';
+    st.trust = trustOfDir(st.root) || 'balanced';
     st._inv = null;
     st._doctor = null;
   };
@@ -165,6 +169,7 @@ export function webState(theme = null, target = null) {
     st.footprint = footprintOfDir(st.root);
     st.posture = postureOfDir(st.root) || 'peer';
     st.mode = modeOfDir(st.root) || 'direct';
+    st.trust = trustOfDir(st.root) || 'balanced';
   };
   return st;
 }
@@ -741,11 +746,12 @@ export function apiInstalls(state) {
       footprint: footprintOfDir(root),
       posture: postureOfDir(root),
       mode: modeOfDir(root),
+      trust: trustOfDir(root),
       selected: samePath(viewCfg(host, scope, root), state.target),
     });
   }
   return { installs: out, postures: discoverNames('postures', 'peer'),
-    modes: discoverNames('modes', 'direct') };
+    modes: discoverNames('modes', 'direct'), trusts: Object.keys(PRESETS) };
 }
 
 /** Beside the deployed AGENT.md. */

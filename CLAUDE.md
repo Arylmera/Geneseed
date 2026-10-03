@@ -48,7 +48,7 @@ node bin/geneseed-cli.mjs doctor --all
 node tests/golden.mjs
 ```
 
-Runs all 261 emit configurations and requires each to render without crashing. Run it after
+Runs all 263 emit configurations and requires each to render without crashing. Run it after
 anything that touches the emit path. Its `--idempotent` mode re-emits into the same tree and
 requires the second pass to change nothing; `--deletion` covers the prune phase. All three are
 self-comparisons — nothing is measured against a stored answer. `--cli` runs the ~320-cell

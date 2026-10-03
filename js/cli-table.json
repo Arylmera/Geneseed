@@ -135,6 +135,21 @@
         },
         {
           "names": [
+            "--trust"
+          ],
+          "dest": "trust",
+          "metavar": null,
+          "help": "default loop trust preset: how much a loop may do before it stops to ask (default balanced)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--doctrines"
           ],
           "dest": "doctrines",

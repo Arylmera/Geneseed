@@ -37,7 +37,7 @@ Want to read what it leaves behind before installing anything? [**geneseed-demo*
 A hand-written instructions file is prose the model may or may not honour, copied into every repo and drifting in each one. Geneseed is a build, and that changes four things:
 
 - **Laws are enforced, not suggested.** A force-push, a `reset --hard`, or a credential written into a tracked file is caught by a hook *before* the tool runs, in the host's own dialect — a prompt on Claude Code and OpenClaude, a hard block on OpenCode, exit 2 on Bob. The gates fail closed, and every catch is one line in a ledger that `geneseed status` counts.
-- **One source, five targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 261 emit configurations, and a second emit into the same tree must change nothing.
+- **One source, five targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 263 emit configurations, and a second emit into the same tree must change nothing.
 - **Costs are measured, not guessed.** Zero runtime dependencies. The hook path loads in about 14 ms per tool call. The default *lean* footprint keeps the always-on context small and puts the full rationale one read away — the numbers are in [docs/token-footprint.md](docs/token-footprint.md).
 - **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
 

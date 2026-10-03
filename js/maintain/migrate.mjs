@@ -35,10 +35,11 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:
 import path from 'node:path';
 
 import { main as driverMain } from '../build/driver.mjs';
-import { ROOT } from '../build/source.mjs';
+import { PACK_ORDER, ROOT } from '../build/source.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
   footprintOfDir, installState, installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
+  trustOfDir,
 } from '../hosts/installs.mjs';
 import { DEFAULT_EMIT, setupBuildArgs } from '../build/generate.mjs';
 import {
@@ -222,7 +223,7 @@ export function cmdMigrate(args = {}) {
     const out = r.scope === 'global' ? null : r.root;
     const argv = setupBuildArgs(theme, emit, out, out, footprintOfDir(r.root),
       postureOfDir(r.root) || defaultPosture(), modeOfDir(r.root) || defaultMode(),
-      doctrinesForBuild(r.root));
+      doctrinesForBuild(r.root), PACK_ORDER, null, trustOfDir(r.root) || 'balanced');
     const label = `${r.host}:${r.scope} (${r.root})`;
     printOut(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
     let rc = 1;

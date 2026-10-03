@@ -22,8 +22,12 @@ import {
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { buildInto, emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
-import { makeCfg } from '../../js/build/source.mjs';
+import {
+  buildInto, emitGlobalInto, emitProjectInto, main as driverMain, parseDriverArgs,
+} from '../../js/build/driver.mjs';
+import { setupBuildArgs } from '../../js/build/generate.mjs';
+import { makeCfg, PACK_ORDER } from '../../js/build/source.mjs';
+import { trustOfDir } from '../../js/hosts/installs.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { colorThemeFiles } from '../../js/hosts/opencode.mjs';
@@ -404,4 +408,64 @@ test('a global re-emit preserves the memory store', () => {
     emitGlobal(d);
     assert.ok(existsSync(fact), 'the memory store must never be wiped on re-emit');
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `--trust` — the loop skill's default preset, the one build axis carried by a SKILL rather
+// than by AGENT.md (zero always-on footprint). It renders into the `loop` skill as a literal
+// `Default trust preset: **<Label>**` line, `trustOfDir` reads that line back, and an argv built
+// by `setupBuildArgs` carries a non-default preset through the driver's parser intact.
+
+const LOOP_SKILL = ['skills', 'loop', 'SKILL.md'];
+const emitGlobalAt = (cfgDir, trust) => quiet(() => emitGlobalInto('opencode', {
+  theme: 'neutral', out: null, cfgDir, footprint: 'lean', trust,
+}));
+
+for (const [preset, label] of [
+  ['prudent', 'Prudent'], ['balanced', 'Balanced'], ['aggressive', 'Aggressive'],
+]) {
+  test(`the ${preset} preset renders into the loop skill and reads back off the install`, () => {
+    withDir((d) => {
+      emitGlobalAt(d, preset);
+      const skill = read(d, ...LOOP_SKILL);
+      assert.ok(skill.includes(`Default trust preset: **${label}**`), 'no preset line');
+      assert.ok(skill.includes(`--preset ${preset}`), 'init is not handed the preset');
+      assert.equal(trustOfDir(d), preset);
+    });
+  });
+}
+
+test('an emit that names no trust renders the balanced default', () => {
+  withDir((d) => {
+    emitGlobalAt(d, undefined);
+    assert.ok(read(d, ...LOOP_SKILL).includes('Default trust preset: **Balanced**'));
+    assert.equal(trustOfDir(d), 'balanced');
+  });
+});
+
+test('trustOfDir answers null where no loop skill is deployed', () => {
+  withDir((d) => assert.equal(trustOfDir(d), null));
+});
+
+test('trustOfDir finds a project install\'s loop skill under the host\'s own dir', () => {
+  // A Claude project emit lands its skills in `<repo>/.claude/skills/loop/SKILL.md`, while the
+  // markers (and so the root every reader is handed) stay at `<repo>/`.
+  withDir((d) => {
+    const [rc] = quiet(() => driverMain(['--theme', 'neutral', '--emit', 'claude',
+      '--out', d, '--root', d, '--trust', 'aggressive']));
+    assert.equal(rc, 0);
+    assert.ok(existsSync(path.join(d, '.claude', ...LOOP_SKILL)));
+    assert.equal(trustOfDir(d), 'aggressive');
+  });
+});
+
+test('a non-default trust round-trips through setupBuildArgs and the driver parser', () => {
+  const argv = (trust) => setupBuildArgs('neutral', 'opencode-global', null, null, 'lean',
+    'peer', 'direct', null, PACK_ORDER, null, trust);
+  // The default elides, exactly as posture and mode do at theirs.
+  assert.ok(!argv('balanced').includes('--trust'));
+  assert.ok(!argv(undefined).includes('--trust'));
+  assert.deepEqual(argv('prudent').slice(-2), ['--trust', 'prudent']);
+  assert.equal(quiet(() => parseDriverArgs(argv('prudent')))[0].trust, 'prudent');
+  assert.equal(quiet(() => parseDriverArgs(argv('balanced')))[0].trust, 'balanced');
 });

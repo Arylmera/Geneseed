@@ -1305,6 +1305,18 @@
     {
       "emit": "files",
       "footprint": "lean",
+      "theme": "neutral",
+      "trust": "prudent"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "neutral",
+      "trust": "aggressive"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
       "doctrines": [
         "craft"
       ],

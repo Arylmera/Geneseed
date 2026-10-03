@@ -402,9 +402,10 @@ export const INLINE_ACTIONS = ['restore', 'install', 'deploy'];
 function actionTable({
   theme = 'neutral', emit = 'opencode-global', footprint = 'full',
   posture = 'peer', mode = 'direct', doctrines = [...PACK_ORDER], excludeRules = [],
+  trust = 'balanced',
 } = {}) {
   const buildArgv = setupBuildArgs(theme, emit, null, null, footprint, posture, mode,
-    doctrines, PACK_ORDER, excludeRules);
+    doctrines, PACK_ORDER, excludeRules, trust);
   return {
     doctor: [[NODE(), CLI(), 'doctor']],
     build: [[NODE(), GEN(), ...buildArgv]],

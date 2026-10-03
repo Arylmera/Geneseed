@@ -65,6 +65,9 @@ import {
 // registry to find every install it must re-emit, and a CLI verb may not reach into a driver
 // for a reader. See js/inspect/registry.mjs.
 import { registryRecord, registryRoots } from '../inspect/registry.mjs';
+// The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
+// what lets it sit inside this driver's total `child_process` ban.
+import { PRESETS } from '../loop/score.mjs';
 
 // P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
 // of textual surgery over committed files with a corpus of its own, and it is the half of the
@@ -111,8 +114,8 @@ export function resolveOut(raw) {
  */
 function configDefaults() {
   const d = {
-    theme: 'neutral', posture: 'peer', mode: 'direct', doctrines: [...PACK_ORDER],
-    excludeRules: [],
+    theme: 'neutral', posture: 'peer', mode: 'direct', trust: 'balanced',
+    doctrines: [...PACK_ORDER], excludeRules: [],
   };
   if (!existsSync(CONFIG)) return d;
   try {
@@ -163,7 +166,7 @@ function configDefaults() {
  * flag is added to one and not the other, and nothing downstream would say so.
  */
 const VALUED = {
-  '--theme': 'theme', '--posture': 'posture', '--mode': 'mode',
+  '--theme': 'theme', '--posture': 'posture', '--mode': 'mode', '--trust': 'trust',
   '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
   '--footprint': 'footprint', '--root': 'root', '--config-dir': 'cfgDir',
@@ -194,13 +197,13 @@ const FLAG_BY_NAME = Object.fromEntries(
 );
 
 /**
- * The four flags `choice` validates, as ONE table for the same anti-drift reason.
+ * The five flags `choice` validates, as ONE table for the same anti-drift reason.
  *
- * A function and not a constant because two of the four read the checkout: `discoverNames`
+ * A function and not a constant because two of the five read the checkout: `discoverNames`
  * scans `postures/` and `modes/`, so the answer depends on the source tree this driver is
  * standing in and cannot be frozen at import.
  *
- * `--doctrines` is DELIBERATELY not a fifth row. Every consumer of this table treats an
+ * `--doctrines` is DELIBERATELY not a sixth row. Every consumer of this table treats an
  * entry as one value drawn from a closed list — `choice` refuses anything else, and
  * `usage`'s metavar prints the list as the whole legal surface. `--doctrines` takes a comma
  * LIST plus the sentinel `none`, so a row here would have refused `craft,rigor` outright and
@@ -213,6 +216,7 @@ function choicesFor() {
     '--footprint': ['lean', 'full'],
     '--posture': discoverNames('postures', 'peer'),
     '--mode': discoverNames('modes', 'direct'),
+    '--trust': Object.keys(PRESETS),
   };
 }
 
@@ -340,6 +344,7 @@ function usage() {
 function parseArgs(argv, defaults) {
   const args = {
     theme: defaults.theme, posture: defaults.posture, mode: defaults.mode,
+    trust: defaults.trust,
     doctrines: defaults.doctrines,
     excludeRules: defaults.excludeRules,
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
@@ -1035,7 +1040,7 @@ export function buildInto({ theme, out, footprint = 'lean' }) {
 }
 
 export function emitGlobalInto(host, {
-  theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null,
+  theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -1058,7 +1063,8 @@ export function emitGlobalInto(host, {
       // at `[]`, so the key is OMITTED instead of passed through — `makeCfg`'s own default is
       // the fail-closed answer and an explicit `doctrines: null` would not reach it.
       makeCfg({
-        posture: posture || 'peer', mode: mode || 'direct', ...(doctrines ? { doctrines } : {}),
+        posture: posture || 'peer', mode: mode || 'direct', trust: trust || 'balanced',
+        ...(doctrines ? { doctrines } : {}),
       }),
       { theme, footprint, root: null, cfgDir }, out,
     ),

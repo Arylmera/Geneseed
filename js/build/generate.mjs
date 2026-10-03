@@ -38,7 +38,7 @@ import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
   excludedRulesOfDir, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
-  readMaybe, themeOfDir,
+  readMaybe, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
@@ -93,7 +93,7 @@ function sysExit(msg) {
  */
 const BUILD_FORWARD = [
   ['theme', '--theme'], ['emit', '--emit'], ['footprint', '--footprint'],
-  ['posture', '--posture'], ['mode', '--mode'], ['doctrines', '--doctrines'],
+  ['posture', '--posture'], ['mode', '--mode'], ['trust', '--trust'], ['doctrines', '--doctrines'],
   ['excludeRules', '--exclude-rules'], ['out', '--out'], ['root', '--root'],
   ['configDir', '--config-dir'],
 ];
@@ -114,7 +114,7 @@ export function cmdBuild(args) {
  * The elision rules are not symmetric and the Python says why: `footprint` is ALWAYS passed,
  * because omitting it when it matched the generator's default silently coupled the answer to
  * whatever that default happened to be — the moment the default moved, picking the old one
- * produced the new one. `posture` and `mode` still elide at theirs, and neither has moved.
+ * produced the new one. `posture`, `mode` and `trust` still elide at theirs, and none has moved.
  *
  * ⚠ `doctrines` DOES NOT ELIDE, AND THAT IS THE SAFETY DECISION, NOT A STYLE ONE. It used to
  * elide on the full set, by analogy with posture and mode — but those two compare against a
@@ -137,7 +137,7 @@ export function cmdBuild(args) {
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null) {
+  excludeRules = null, trust = 'balanced') {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -146,6 +146,7 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   if (footprint) argv.push('--footprint', footprint);
   if (posture && posture !== 'peer') argv.push('--posture', posture);
   if (mode && mode !== 'direct') argv.push('--mode', mode);
+  if (trust && trust !== 'balanced') argv.push('--trust', trust);
   if (Array.isArray(doctrines)) {
     // Emitted in `allPacks` order, not the order handed in: a caller may legitimately pass an
     // unsorted list, and the flag has to be canonical for the same reason the driver
@@ -199,6 +200,8 @@ export function installProfile(host, scope, root) {
   const footprint = footprintOfDir(root);
   const posture = postureOfDir(root) || defaultPosture();
   const mode = modeOfDir(root) || defaultMode();
+  // Read off the deployed loop skill; no config fallback — `balanced` is the engine's default.
+  const trust = trustOfDir(root) || 'balanced';
   // A rebuild that defaulted the pack selection would re-emit an install into a constitution
   // its owner did not choose — and in one direction that is not merely surprising: dropping
   // the process pack takes the commit/push consent RULES out of AGENT.md while
@@ -213,7 +216,7 @@ export function installProfile(host, scope, root) {
   const excludeRules = excludedRulesOfDir(root);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules);
+    PACK_ORDER, excludeRules, trust);
   // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
   // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
   // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
@@ -221,7 +224,7 @@ export function installProfile(host, scope, root) {
   if (scope === 'global') argv.push('--config-dir', root);
   return {
     host, scope, root, state: installState(root, host, scope),
-    emit, theme, footprint, posture, mode, doctrines, excludeRules, argv,
+    emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, argv,
   };
 }
 

@@ -391,10 +391,10 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
   theme.POSTURE_BODY = registerBody(cfg, theme, 'postures', cfg.posture ?? 'peer', 'peer');
   theme.MODE_BODY = registerBody(cfg, theme, 'modes', cfg.mode ?? 'direct', 'direct');
-  // The loop skill's default trust preset. ponytail: fixed at the engine's default until the
-  // `--trust` flag lands and makes it configurable; the loop skill is its only reader.
-  theme.TRUST = 'balanced';
-  theme.TRUST_LABEL = 'Balanced';
+  // The loop skill's default trust preset (`--trust`), raw for `--preset` and capitalised for
+  // the `Default trust preset: **<Label>**` line `trustOfDir` reads back off an install.
+  theme.TRUST = cfg.trust ?? 'balanced';
+  theme.TRUST_LABEL = theme.TRUST[0].toUpperCase() + theme.TRUST.slice(1);
   // The doctrines pair is threaded, not read off `cfg`: `footprint` is a per-RENDER value
   // (`renderAll`'s option, and the same cfg renders both ways in one process), so parking it
   // on cfg would make the terse/full choice sticky across calls. An options object rather

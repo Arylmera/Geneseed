@@ -2283,6 +2283,42 @@ test('the deploy command validates its pack list the same way the install comman
   } finally { sb.cleanup(); }
 });
 
+test('the deploy and install commands forward a valid loop trust preset, and only a valid one', () => {
+  // The same boundary posture and mode cross: a picked preset reaches the argv, a bogus one
+  // never does, and the default elides — so a form that sends nothing builds `balanced`.
+  const sb = makeSandbox();
+  try {
+    const at = (body) => apiDeployCmd(neutral(), { host: 'opencode', path: sb.path, ...body })
+      .cmd.map(String);
+    assert.equal(after$(at({ trust: 'prudent' }), '--trust'), 'prudent');
+    assert.equal(after$(at({ trust: 'aggressive' }), '--trust'), 'aggressive');
+    assert.ok(!at({ trust: 'balanced' }).includes('--trust'));
+    assert.ok(!at({}).includes('--trust'));
+    assert.ok(!at({ trust: 'reckless' }).includes('--trust'));
+  } finally { sb.cleanup(); }
+  withThreeInstalls(({ st, cl }) => {
+    const cmd = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
+    assert.equal(after$(cmd({ trust: 'prudent' }), '--trust'), 'prudent');
+    // No pick and no deployed loop skill: the install keeps (here: gets) the default.
+    assert.ok(!cmd({}).includes('--trust'));
+    assert.ok(!cmd({ trust: '../evil' }).includes('--trust'));
+  });
+});
+
+test('the installs payload carries the trust presets and each install\'s own', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    const state = neutral();
+    assert.deepEqual(apiInstalls(state).trusts, ['prudent', 'balanced', 'aggressive']);
+    // No loop skill deployed in this seeded install: unknown, as `mode` is null on no lead.
+    assert.equal(rowFor(state, root).trust, null);
+    fs.mkdirSync(path.join(root, 'skills', 'loop'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'skills', 'loop', 'SKILL.md'),
+      '# loop\n\nDefault trust preset: **Prudent**\n');
+    assert.equal(rowFor(state, root).trust, 'prudent');
+  });
+});
+
 test('a bogus deploy theme falls back to the state theme', () => {
   const sb = makeSandbox();
   try {

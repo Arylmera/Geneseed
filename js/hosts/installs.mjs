@@ -230,6 +230,27 @@ function leadOfDir(d, names) {
 export const postureOfDir = (d) => leadOfDir(d, discoverNames('postures', 'peer'));
 export const modeOfDir = (d) => leadOfDir(d, discoverNames('modes', 'direct'));
 
+/**
+ * The loop skill's default trust preset, read back off a deployed install — `null` when no
+ * loop skill is deployed there.
+ *
+ * CARRIED BY THE SKILL, NOT BY A CARRIER: `--trust` is the one build axis with zero always-on
+ * footprint, so it is not in AGENT.md to be found. The skill renders a literal
+ * `Default trust preset: **<Label>**` line, and this scans the places an emit lands it: the
+ * native layer (`skills/loop/SKILL.md`, in the root itself for a global install and under the
+ * host's `projectMarker` for a project one) and the plain bundle (`skills/loop.md`).
+ */
+const TRUST_RE = /^Default trust preset: \*\*(Prudent|Balanced|Aggressive)\*\*/m;
+export function trustOfDir(d) {
+  for (const base of ['', ...HOSTS.map((h) => h.projectMarker)]) {
+    for (const rel of [['skills', 'loop', 'SKILL.md'], ['skills', 'loop.md']]) {
+      const m = TRUST_RE.exec(readMaybe(path.join(d, base, ...rel)) ?? '');
+      if (m) return m[1].toLowerCase();
+    }
+  }
+  return null;
+}
+
 /** The `Active packs:` marker line the template emits, in one of the five carriers. */
 const ACTIVE_PACKS_RE = /^Active packs:[ \t]*(.+?)[ \t]*$/m;
 

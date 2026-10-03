@@ -19,10 +19,10 @@ import { cellId, argvFor } from '../helpers/golden.mjs';
 
 const DOC = loadMatrix();
 
-// 14 themes x 9 emits x 2 footprints = 252, plus 9 cells on the extra axes (posture, mode,
-// doctrines), and 9 lean-to-full deletion cells.
+// 14 themes x 9 emits x 2 footprints = 252, plus 11 cells on the extra axes (posture, mode,
+// trust, doctrines), and 9 lean-to-full deletion cells.
 test('the exported matrix is the matrix', () => {
-  assert.equal(DOC.cells.length, 261);
+  assert.equal(DOC.cells.length, 263);
   assert.equal(DOC.deletion_cells.length, 9);
 });
 
@@ -48,6 +48,8 @@ test('argv carries the optional axes only when the cell has them', () => {
     ['--theme', 'neutral', '--emit', 'claude', '--footprint', 'lean', '--out', '/o']);
   assert.ok(argvFor({ ...base, posture: 'strict' }, '/o').includes('--posture'));
   assert.ok(argvFor({ ...base, mode: 'foreman' }, '/o').includes('--mode'));
+  assert.deepEqual(argvFor({ ...base, trust: 'prudent' }, '/o').slice(-2), ['--trust', 'prudent']);
+  assert.equal(cellId({ ...base, trust: 'aggressive' }), 'neutral/claude/lean/aggressive');
   assert.ok(!argvFor(base, '/o').includes('--posture'));
   // The same asymmetry on the way out: an empty list is spelled `none`, because the driver
   // refuses a bare `--doctrines ` as a usage error rather than reading it as "no packs".
@@ -99,7 +101,7 @@ test('--cli selects this platform\'s CLI matrix, and its narrowing flags narrow 
 
 test('every narrowing flag selects fewer cells, and none selects none', () => {
   const full = selectCells(DOC, parseArgs([]));
-  assert.equal(full.length, 261);
+  assert.equal(full.length, 263);
   for (const argv of [['--quick'], ['--emits', 'claude'], ['--only', 'neutral/claude'],
     ['--limit', '5'], ['--shard', '0/4']]) {
     const got = selectCells(DOC, parseArgs(argv));
