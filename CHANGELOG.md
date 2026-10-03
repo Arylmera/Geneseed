@@ -8,12 +8,44 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.12.0] — 2026-10-03
+
+**Upgrading:** re-emit after installing (`geneseed rebuild-all`) to get the `loop` and
+`brick-forge` skills, the loop-branch git-gate rule and the amended consent doctrine; then
+`geneseed web restart` for the Loops page.
+
 ### Added
+- **Loops** — work a requirement in small validated iterations on a `loop/*` branch. A loop is a
+  graph of reusable **bricks** (13 shipped in `src/bricks/`; templates `bugfix`, `refactor`,
+  `feature` in `src/loops/`), or a graph the model composes from the catalogue. Your own bricks
+  live in `$XDG_CONFIG_HOME/geneseed/` or a repo's `.geneseed/`, and override shipped ones by name.
+- **`geneseed loop check|init|next|score|record|decide`** — a deterministic state machine: the
+  model only reports outcomes. Each iteration's risk is the max of its declared actions' weights,
+  re-scored on the real diff before commit; `LOOP.md` holds the state and every iteration commit
+  carries `Loop-*` trailers. Ceilings: 20 iterations, 2 empty diffs, one re-split of an exhausted
+  inner ring.
+- **`--trust prudent|balanced|aggressive`** build axis (default balanced, also in the console's
+  install form) — how much a loop may do before it stops: silent (trailers only), soft (listed for
+  review at the end), or blocking (the run ends and `geneseed loop decide` resumes it).
+- **`loop` and `brick-forge` skills.**
+- **Console: Loops page** — templates drawn as rings (inner rings for apply ⇄ test and review ⇄
+  fix, a gate before the first code-changing step), every brick with its source and origin, and
+  catalogue problems.
 - **Documentation for loops** (`docs/concepts/loops.md`): bricks, templates and the three
   origins, the trust presets and the three validation levels, `LOOP.md` and its trailers, the
   `loop/*` branch exemption and why merging always asks, and the `geneseed loop` actions table.
   Cross-linked from `foreman-mode.md`; `glossary.md` gains `brick`, `iteration`, `loop` and
   `trust preset`.
+
+### Changed
+- **Consent Before Push**: a launched loop's batch covers commit and push on its own `loop/*`
+  branch, in a fixed set of command forms (`git commit -F <file>`, `git push <remote> HEAD:<loop
+  branch>`); anything else asks, the final commit asks, and merging never belongs to the batch.
+  Enforced by the git gate on Claude Code, Bob and OpenClaude, and by `geneseed-guard` on OpenCode.
+
+### Fixed
+- **`geneseed web stop|restart|status --port N`** act on that port only; a stop aimed at a test
+  instance no longer shuts down the console recorded on another port (#175).
 
 ## [3.11.0] — 2026-10-03
 
