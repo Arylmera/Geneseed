@@ -123,6 +123,26 @@ describe('Loops', () => {
     expect(off.getAttribute('aria-disabled')).toBe('true')
   })
 
+  // A brick or template the catalogue skipped is named on the page, on both tabs, or a team's
+  // broken override would simply be missing with nothing saying why.
+  it('names the files the catalogue skipped', async () => {
+    api.loops.mockImplementation(() =>
+      Promise.resolve({
+        ...PAYLOAD,
+        problems: ['bricks/broken.md (project): broken: outcomes is empty'],
+      }),
+    )
+    render(<Loops tab="bricks" />)
+    const notice = await screen.findByRole('status', { name: /skipped/ })
+    expect(notice.textContent).toContain('bricks/broken.md (project): broken: outcomes is empty')
+  })
+
+  it('shows no notice when the catalogue is clean', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('The smallest loop.')
+    expect(screen.queryByRole('status', { name: /skipped/ })).toBeNull()
+  })
+
   it('says so when the catalogue cannot be read', async () => {
     api.loops.mockImplementation(() => Promise.reject(new Error('boom')))
     render(<Loops tab="templates" />)

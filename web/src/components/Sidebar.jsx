@@ -13,6 +13,8 @@ const NAV = [
     hash: '#/laws',
     page: 'laws',
     label: 'Constitution',
+    // The phone tab bar's cell is 60px at 360px wide; "Constitution" is not.
+    short: 'Laws',
     icon: 'law',
     // Every entry the page lists: the ethos sections, the invariants (a retired one an older
     // install still lists is counted too), and the doctrine rules.
@@ -167,7 +169,7 @@ export function TabBar({ route }) {
           aria-current={route.page === n.page ? 'page' : undefined}
         >
           <Icon name={n.icon} />
-          {n.label}
+          {n.short || n.label}
         </a>
       ))}
     </nav>

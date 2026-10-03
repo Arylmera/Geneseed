@@ -2,7 +2,7 @@ import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 
-import Sidebar from '../components/Sidebar.jsx'
+import Sidebar, { TabBar } from '../components/Sidebar.jsx'
 
 const overview = {
   counts: {
@@ -67,5 +67,23 @@ describe('Sidebar', () => {
     expect(v.textContent).toContain('clean')
     expect(v.querySelector('div:nth-child(2) b').textContent).toBe('2')
     expect(screen.getByRole('button', { name: /switch voice|imperial/i })).toBeTruthy()
+  })
+})
+
+// The phone bar: the same six pages as the rail. At 360px each cell is 60px, so the one
+// label that cannot fit at 11px (Constitution) carries its short name; the rail keeps the full one.
+describe('TabBar', () => {
+  it('carries the six pages, Constitution shortened to fit a phone cell', () => {
+    render(<TabBar route={{ page: 'loops' }} />)
+    const links = [...document.querySelectorAll('nav.tabbar a')]
+    expect(links.map((a) => a.textContent)).toEqual([
+      'Overview',
+      'Laws',
+      'Library',
+      'Loops',
+      'Personal',
+      'Installs',
+    ])
+    expect(links[3].getAttribute('aria-current')).toBe('page')
   })
 })

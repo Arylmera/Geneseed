@@ -2931,6 +2931,14 @@ test('the loops endpoint lists templates, bricks and overrides from the install 
       { origin: 'project', description: 'Team apply.', effect: 'mutate', agent: 'developer',
         skill: null, outcomes: ['pass'], body: 'Do it our way.', available: true });
     assert.deepEqual(overridden, ['apply (project, overrides shipped)']);
+    // A malformed project brick is skipped by the catalogue — and SAID, not dropped silently.
+    fs.writeFileSync(path.join(bricks, 'broken.md'), '---\nname: broken\neffect: maybe\n---\n');
+    assert.deepEqual(apiLoops(webState('neutral', sb.path)).problems, [
+      'bricks/broken.md (project): broken: description is empty',
+      'bricks/broken.md (project): broken: effect must be read or mutate, not "maybe"',
+      'bricks/broken.md (project): broken: exactly one of agent or skill',
+      'bricks/broken.md (project): broken: outcomes is empty',
+    ]);
     assert.ok(rows.every((b, i) => i === 0 || rows[i - 1].name < b.name), 'bricks sorted by name');
     assert.equal(STATE_ROUTES['/api/loops'], apiLoops);
     // The rail badge: the three shipped templates, counted on the overview it already polls.

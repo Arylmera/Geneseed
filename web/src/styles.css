@@ -2698,11 +2698,13 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
   .nav-scrim { display: block; position: fixed; inset: 0; z-index: 39; padding: 0; border: 0;
     background: rgba(0,0,0,.55); cursor: pointer; }
   .page { padding: 18px 16px 150px; }
-  .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed;
+  /* One column per NAV entry, however many there are: a fixed repeat(N) wraps the N+1th. */
+  .tabbar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: fixed;
     left: 0; right: 0; bottom: 0; z-index: 25; height: 64px; background: var(--bg-2);
     border-top: 1px solid var(--line); }
   .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 3px; min-width: 0; color: var(--text-3); font-size: 11px; font-weight: 600; }
+    gap: 3px; min-width: 0; color: var(--text-3); font-size: 11px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; }
   .tabbar a.on { color: var(--accent-text); }
   .tabbar .glyph { width: 20px; height: 20px; }
   .console { bottom: 64px; }
@@ -2835,6 +2837,8 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
   white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .loop-brick summary { cursor: pointer; }
+.loop-problems { margin-bottom: 16px; border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.loop-problems ul { margin: 0; padding-left: 18px; }
 
 .lr-ring { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
 .lr-inner { fill: color-mix(in srgb, var(--good) 6%, transparent);

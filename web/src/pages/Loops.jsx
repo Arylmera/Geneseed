@@ -54,6 +54,27 @@ function BrickCard({ brick, name, override, full }) {
   )
 }
 
+// The files the catalogue skipped (bad frontmatter, not JSON, misnamed), on every tab: a
+// broken team override would otherwise just be missing, with nothing saying why.
+function Problems({ problems }) {
+  if (!problems?.length) return null
+  const n = problems.length
+  return (
+    <div className="panel loop-problems" role="status" aria-label="Catalogue files skipped">
+      <b className="t-warn">
+        {n} catalogue {n === 1 ? 'problem' : 'problems'}: these files were skipped
+      </b>
+      <ul className="panel-note">
+        {problems.map((p) => (
+          <li key={p} className="mono">
+            {p}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function Templates({ data, item }) {
   const { templates, bricks, overridden } = data
   if (!templates.length) {
@@ -148,6 +169,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
         </span>
       </Tabs>
       <ErrorState error={error} style={{ margin: '0 0 12px' }} />
+      <Problems problems={data?.problems} />
       {!data ? (
         error ? null : (
           <Loading />
