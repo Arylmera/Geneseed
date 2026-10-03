@@ -321,3 +321,22 @@ test('F5: scoreDiff rejects a non-array contracts field', () => {
   s.contracts = 'not-an-array';
   assert.throws(() => scoreDiff(s, [file('src/a.js')]), /LOOP\.md: contracts must be a list of file paths/);
 });
+
+// F6 (Task 5 controller amendment): the read-only-unit-reaches-head path in `recordOutcome`
+// calls `finishUnit(state, false)`, which can itself hit the iteration ceiling and stop the
+// loop — the return value must report that stop, not the head node `finishUnit` was about to
+// set. A one-node self-looping read brick with a ceiling of 1 hits the stop on its first entry.
+test('F6: a read-only unit that re-enters the head and hits the iteration ceiling reports the stop', () => {
+  const bricks = new Map([brick('identify', 'read', ['loop', 'done'])]);
+  const graph = {
+    name: 'g', description: 'd', nodes: ['identify'], start: 'identify',
+    edges: [
+      { from: 'identify', on: 'loop', to: 'identify' }, { from: 'identify', on: 'done', to: '$close' },
+    ],
+    loops: [{ name: 'iterations', nodes: ['identify'], max: 1, iteration: true }],
+  };
+  const s = initState({ title: 't', requirement: 'r', graph, preset: 'balanced' });
+  assert.equal(s.iteration, 1);
+  assert.deepEqual(recordOutcome(s, bricks, 'loop'), { stopped: 'iteration ceiling of 1 reached' });
+  assert.equal(s.status, 'stopped');
+});

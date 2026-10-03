@@ -267,8 +267,10 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
   if (edge.to === h) {
     if (mutated) { state.pendingVerify = true; state.node = h; return { verify: true }; }
     // A read-only setup brick (no mutate visited) closes without asking for a diff score.
+    // `finishUnit` can itself hit the iteration ceiling and stop the loop — report that, not
+    // the head it was about to land on.
     finishUnit(state, false);
-    return { node: state.node };
+    return state.status === 'stopped' ? { stopped: state.reason } : { node: state.node };
   }
   state.counters[edge.to] = (state.counters[edge.to] ?? 0) + 1;
   const { allowed, loop } = allowedEntries(state.graph, edge.to);

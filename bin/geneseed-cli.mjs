@@ -149,6 +149,10 @@ const VERBS = {
   catalog: () => import('../js/build/catalog.mjs').then((m) => m.cmdCatalog),
   mcp: () => import('../js/hosts/mcp.mjs').then((m) => m.cmdMcp),
   memory: () => import('../js/maintain/memory.mjs').then((m) => m.cmdMemory),
+  // Task 5. A fourth native verb: there was never a Python subparser for a state machine that
+  // lives entirely inside this port, so — like the three above — it has no recorded cell to
+  // compare against, only the absolute gates named beside it in `NATIVE`.
+  loop: () => import('../js/loop/cli.mjs').then((m) => m.cmdLoop),
 };
 
 function die(code, msg) {
