@@ -198,17 +198,18 @@ function wizardJobs() {
  */
 function summaryCases() {
   return [
-    // opencode-global with the AGENT.md present: the ok row, the platform hint, the LSP rows.
+    // opencode-global with the AGENT.md present: the ok row and the LSP rows.
     ['pirate', 'opencode-global', null, null, true],
     // ...and with `ok` false, the only row that can say "build failed".
     ['pirate', 'opencode-global', null, null, false],
     // A bundle: the "point your tool" row AND the global-install warning.
     ['neutral', 'files', 'some/bundle', null, true],
-    // A project emit: no LSP rows (not an `opencode` prefix), and the warning still fires.
+    // A Claude project emit: no LSP rows (not an `opencode` prefix), and no OpenCode warning —
+    // OpenCode's global install does not shadow a Claude one.
     ['imperial', 'claude', 'repo', 'repo', true],
     // An `opencode` PROJECT emit — the prefix match, so the LSP rows come back.
     ['cyberpunk', 'opencode', 'repo', 'repo', true],
-    // `out` unset on a non-global emit falls back to the literal "Harness".
+    // `out` unset on a project emit falls back to the current directory.
     ['neutral', 'bob', null, null, true],
   ].map((args) => ({ fn: 'setup_summary_lines', args }))
     .concat([{ fn: 'installed_defaults', args: [] }]);

@@ -50,9 +50,10 @@ import { discoverNames, PACK_ORDER } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
-import { GLOBAL_MANIFEST, opencodeConfigDir } from '../hosts/hosts.mjs';
+import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
-  defaultMode, defaultPosture, defaultTheme, installedDefaults, themeFiles,
+  claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, installedDefaults,
+  readJsonMaybe, themeFiles,
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
@@ -457,39 +458,77 @@ export function lspPrereqs() {
     + "SDKMAN `sdk install java 21-tem`, or your distro's package"]];
 }
 
+/** The name each host goes by on screen — the same four labels `hostTools` prints. */
+const TOOL_NAME = {
+  opencode: 'OpenCode', claude: 'Claude Code', bob: 'IBM Bob', openclaude: 'OpenClaude',
+};
+
+/**
+ * Where an emit put its root file, and — for the Claude-shaped hosts — its hooks.
+ *
+ * READ BACK, NOT RE-SPELLED: the placements differ by host and scope (Bob global's preamble is
+ * `rules/geneseed.md`, a Claude project's CLAUDE.md sits beside `.claude/`, a project's hooks go
+ * to `settings.local.json`, Bob global's to `settings/settings.json`), and the emit already
+ * records each one in the install's manifest (`managed.claude_md`, `settings_file`,
+ * `settings_hooks`). A summary that recomputed them would be a second owner of every rule.
+ */
+function emitFacts(emit, out) {
+  const [host, scope] = EMIT_HOST_SCOPE.get(emit) ?? ['files', 'project'];
+  if (host === 'files' || host === 'opencode') {
+    const dir = emit === 'opencode-global' ? opencodeConfigDir() : resolveOut(out || 'Harness');
+    return { host, rootFile: path.join(dir, 'AGENT.md') };
+  }
+  const spec = HOSTS.find((h) => h.host === host);
+  const cfg = claudeCfg(scope === 'global' ? spec.configDir() : resolveOut(out || '.'), scope, host);
+  const managed = readJsonMaybe(path.join(cfg, GLOBAL_MANIFEST))?.managed ?? {};
+  const rootFile = managed.claude_md?.rel
+    ? path.resolve(cfg, managed.claude_md.rel)
+    : path.join(cfg, host === 'bob' ? path.join('rules', 'geneseed.md') : spec.agentFile);
+  return {
+    host,
+    rootFile,
+    settings: managed.settings_file ? path.join(cfg, managed.settings_file) : null,
+    hookGroups: Array.isArray(managed.settings_hooks) ? managed.settings_hooks.length : 0,
+  };
+}
+
 /**
  * `_harness_setup._setup_summary_lines` — the post-build report as `[kind, text]` rows,
  * `kind` being ok | warn | info.
  *
  * `ok` is the build's own success, so the first row is the only one that can say "build
- * failed"; every later row assumes a tree on disk. The global-install warning is the row
- * with real behaviour in it: a bundle or project emit made while an OpenCode GLOBAL install
- * exists is loaded by nothing, and saying so is the difference between a wizard and a form.
+ * failed"; every later row assumes a tree on disk. HOST-AWARE since the install-hardening
+ * pass: it used to know only OpenCode's AGENT.md, so a successful claude-global install ended
+ * on "expected AGENT.md … but it is not there" and "start a NEW OpenCode session". The
+ * global-install warning is the row with real behaviour in it: a bundle or project emit made
+ * while an OpenCode GLOBAL install exists is loaded by nothing, and saying so is the
+ * difference between a wizard and a form.
  */
 export function setupSummaryLines(theme, emit, out, root, ok) {
-  const agentMd = emit === 'opencode-global'
-    ? path.join(opencodeConfigDir(), 'AGENT.md')
-    : path.join(resolveOut(out || 'Harness'), 'AGENT.md');
+  const f = emitFacts(emit, out ?? root);
+  const name = path.basename(f.rootFile);
   const lines = [];
-  if (ok && existsSync(agentMd)) {
-    lines.push(['ok', `AGENT.md written to ${agentMd}`]);
+  if (ok && existsSync(f.rootFile)) {
+    lines.push(['ok', `${name} written to ${f.rootFile}`]);
   } else if (ok) {
-    lines.push(['warn', `expected AGENT.md at ${agentMd} but it is not there`]);
+    lines.push(['warn', `expected ${name} at ${f.rootFile} but it is not there`]);
   } else {
     lines.push(['warn', 'build failed — see the output above']);
   }
-  if (emit === 'opencode-global') {
-    const cfgDir = opencodeConfigDir();
-    const hint = process.platform === 'win32'
-      ? `learn plugin: $env:GENESEED_HARNESS = "${cfgDir}"  (persist: setx GENESEED_HARNESS "${cfgDir}")`
-      : 'learn plugin: export GENESEED_HARNESS="$HOME/.config/opencode"';
-    lines.push(['info', hint]);
-  } else if (emit === 'files') {
-    lines.push(['info', `point your tool's instructions at ${agentMd}`]);
+  if (ok && f.settings) {
+    lines.push(['ok', `${f.hookGroups} hook groups wired in ${f.settings}`]);
+    if (!process.env.GENESEED_LLM) {
+      lines.push(['info', 'memory learning is off until you set GENESEED_LLM '
+        + '(see docs/reference/environment.md)']);
+    }
+  }
+  if (emit === 'files') {
+    lines.push(['info', `point your tool's instructions at ${f.rootFile}`]);
   }
   try {
     const cfg = opencodeConfigDir();
-    if (emit !== 'opencode-global' && existsSync(path.join(cfg, GLOBAL_MANIFEST))) {
+    // Only for an emit OpenCode itself would load — a Claude or Bob install is not shadowed.
+    if (['opencode', 'files'].includes(emit) && existsSync(path.join(cfg, GLOBAL_MANIFEST))) {
       lines.push(['warn', `a global install exists at ${cfg} — OpenCode loads THAT, `
         + `not this build; re-run with 'opencode-global' to change it`]);
     }
@@ -500,7 +539,12 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
       lines.push(present ? ['ok', `${label} present`] : ['warn', `${label} missing — ${hint}`]);
     }
   }
-  lines.push(['info', `theme is now '${theme}' — start a NEW OpenCode session for the new voice`]);
+  const tool = TOOL_NAME[f.host];
+  lines.push(['info', tool
+    ? `theme is now '${theme}' — start a NEW ${tool} session to load it`
+    : `theme is now '${theme}' — start a NEW session in your tool to load it`]);
+  lines.push(['info', 'what was installed and what each piece does: '
+    + 'https://github.com/Arylmera/Geneseed/blob/main/docs/understand/on-your-machine.md']);
   return lines;
 }
 
