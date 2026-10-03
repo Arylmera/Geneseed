@@ -54,6 +54,8 @@
 // table below now holds one LOADER per row (`() => import(…).then(m => m.cmdX)`), so a verb
 // loads its slice of the tree and no other verb's. The spawn allow-list gate still sees the
 // whole graph: `tests/unit/hook_cli.test.mjs`'s `importClosure` follows both import spellings.
+// FIRST, before anything it could fail to run: an old Node gets one sentence, not a stack trace.
+import '../js/lib/node-floor.mjs';
 import { cliSpec, printHelp, printVerbList } from '../js/ui/cli.mjs';
 import { parseIntStrict } from '../js/lib/text.mjs';
 import { printErr } from '../js/lib/fs.mjs';

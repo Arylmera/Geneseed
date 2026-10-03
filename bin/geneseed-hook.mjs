@@ -37,6 +37,8 @@
  * every Geneseed hook returns 0 and signals through stdout — so "did nothing" and "worked"
  * are the same observation.
  */
+// FIRST, before anything it could fail to run: an old Node gets one sentence, not a stack trace.
+import '../js/lib/node-floor.mjs';
 import { cmdContext, cmdGitGate, cmdRuleGate, cmdToolGate, cmdLearn } from '../js/hosts/hooks.mjs';
 // Not a new module on the hot path: `js/hosts/hooks.mjs` above already imports
 // `js/lib/fs.mjs`, so this edge names a file the process has already loaded.
