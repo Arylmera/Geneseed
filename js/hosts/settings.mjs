@@ -484,6 +484,18 @@ export function hookShimPath(platform = process.platform) {
 }
 
 /**
+ * The paths the machine's hook shim names that are gone — `[]` when the shim is absent or live.
+ *
+ * Cheap on purpose: `status`, the doctor and EVERY CLI run call it (the run-time warning in
+ * `bin/geneseed-cli.mjs`), because a dead shim disables every hook of every Claude-shaped
+ * install and nothing else would say so. An absent shim is not dead — a checkout that has never
+ * emitted owns none — and an unreadable one is reported by the doctor, not here.
+ */
+export function shimDead() {
+  try { return shimDeadPaths(readText(hookShimPath())); } catch { return []; }
+}
+
+/**
  * `_build_settings._hook_shim_body`, with the two volatile values INJECTED.
  *
  * This is the one function in the unit whose Python output is legitimately

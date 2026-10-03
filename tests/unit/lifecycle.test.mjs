@@ -275,7 +275,9 @@ test('status carries the gates: bypass visibility and the ledger counted by rule
       '',
     ].join('\n'));
     let g = gateSummary([dir]);
-    assert.deepEqual(g, { standing_down: [], asks: { 'law-4': 1, 'process-5': 2 }, total: 3 });
+    assert.deepEqual(g, {
+      standing_down: [], asks: { 'law-4': 1, 'process-5': 2 }, total: 3, dead: [],
+    });
 
     // The bypass: an excludes entry covering cwd names the install as standing down.
     fs.writeFileSync(path.join(dir, 'excludes.json'),

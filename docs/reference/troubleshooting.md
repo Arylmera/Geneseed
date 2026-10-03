@@ -107,6 +107,12 @@ works from any directory. See [Run anywhere](../guides/run-anywhere.md).
 
 The agent loads its rules, but nothing is enforced and no memory is written — on Claude Code, Bob or OpenClaude.
 
+Every `geneseed` command now says so first, on stderr:
+
+> `[geneseed] ⚠ hooks are off on this machine: the hook shim points at <path>, which no longer exists. Fix: geneseed rebuild-all`
+
+and the `gates` row of `geneseed status` reads `DEAD — hook shim points at <path>; run: geneseed rebuild-all`. A script that must not see the line can set `GENESEED_NO_SHIM_CHECK=1`.
+
 **Cause.** Almost always a **stale hook shim**. Your tool's settings call `geneseed-hook` through one small script, `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows), which holds the absolute path of your Geneseed folder. Move or delete that folder and the shim points at nothing: the hooks still fire, fail, and every gate goes silently dead. `geneseed doctor` reports it as:
 
 > `[shim] <path> pointed at <old path>, which does not exist — every hook in every install was dead (the checkout most likely moved).`

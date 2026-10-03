@@ -73,6 +73,7 @@ import {
   defaultTheme, installedDefaults, installTargets, manifestIsClaude, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
+import { shimDead } from '../hosts/settings.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
@@ -208,7 +209,9 @@ export function gateSummary(cfgDirs) {
       total += 1;
     }
   }
-  return { standing_down: standingDown, asks, total };
+  // `dead` is the machine shim's missing targets: every gate below is armed on paper and never
+  // runs, so it outranks `armed` in the row.
+  return { standing_down: standingDown, asks, total, dead: shimDead() };
 }
 
 /** `_harness_status._status_data`. */
@@ -350,7 +353,9 @@ export function statusLines(d, color = false) {
   // panels carry no `gates` key and must render unchanged.
   if (d.gates) {
     const g = d.gates;
-    const armed = g.standing_down.length
+    const armed = g.dead?.length
+      ? `DEAD — hook shim points at ${g.dead.join(', ')}; run: geneseed rebuild-all`
+      : g.standing_down.length
       ? `STANDING DOWN for this cwd (excludes.json in ${g.standing_down.join(', ')})`
       : 'armed';
     const byRule = Object.entries(g.asks).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
