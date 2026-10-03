@@ -11,7 +11,16 @@
  *
  * UNITS. Work closes into a commit whenever the graph re-enters the iteration loop's head, so
  * setup work before the loop (a reproduction test) is its own unit — iteration 0 — and never
- * pollutes iteration 1's write set.
+ * pollutes iteration 1's write set. Every cycle inside a unit is bounded by re-entry counting:
+ * `counters` is keyed by node name (not loop name), incremented on every transition into a
+ * non-terminal, non-head node, and capped at `1 + the largest max of a non-iteration loop
+ * containing that node` (or just `1` — no re-entry at all — when no such loop covers it). That
+ * bounds a cycle through a node the model forgot to put in an inner loop (a sibling brick
+ * looping back into a retry node it isn't declared inside), not only the loop the author
+ * remembered to declare. LOOP.md itself — the engine's own state file, rewritten by every CLI
+ * action — is excluded from every score and every read-brick porcelain check: it is never part
+ * of the work being scored, and including it would make every action's own bookkeeping look
+ * like an undeclared file touch.
  */
 import { declaredRisk, actualRisk, decide, worst, PRESETS, DEFAULT_PRESET } from './score.mjs';
 import { iterationLoop, ENGINE_MAX_ITERATIONS } from './graph.mjs';
@@ -19,6 +28,8 @@ import { iterationLoop, ENGINE_MAX_ITERATIONS } from './graph.mjs';
 const BEGIN = '<!-- loop-state:begin -->';
 const END = '<!-- loop-state:end -->';
 export const VERIFY_COMMAND = 'git add -A && git diff --cached --numstat | geneseed loop score --diff';
+export const LOOP_FILE = 'LOOP.md';
+const slash = (p) => String(p).replaceAll('\\', '/');
 
 export function renderLoopFile(state) {
   return `# Loop — ${state.title}\n\n${state.requirement}\n\n`
@@ -29,7 +40,7 @@ export function renderLoopFile(state) {
 
 export function parseLoopFile(text) {
   const t = String(text).replace(/\r\n/g, '\n');
-  const a = t.indexOf(BEGIN); const b = t.indexOf(END);
+  const a = t.indexOf(BEGIN); const b = t.lastIndexOf(END);
   if (a < 0 || b < a) throw new Error('LOOP.md has no loop-state block');
   const inner = t.slice(a + BEGIN.length, b).replace(/^\s*```json\s*/, '').replace(/\s*```\s*$/, '');
   return JSON.parse(inner);
@@ -80,7 +91,7 @@ export function trailers(state) {
     `Loop-Risk-Declared: ${fmt(declared)}`,
     `Loop-Risk-Actual: ${fmt(state.current.actual ?? declared)}`,
     `Loop-Threshold: ${state.preset} ${fmt(silent)}/${fmt(soft)}`,
-    `Loop-Decision: ${state.current.decision ?? 'silent'}`,
+    `Loop-Decision: ${state.current.decision ?? 'silent'}${state.current.amended ? ' (amended)' : ''}`,
     `Loop-Tests: ${state.tests}`,
   ].join('\n');
 }
@@ -154,14 +165,21 @@ export function scoreDeclared(state, { actions = null, writeSet = null, intent =
 export function scoreDiff(state, files) {
   assertRunning(state);
   if (!state.pendingVerify) throw new Error('no iteration to verify: `geneseed loop next` has not asked for one');
-  if (!files.length) {
+  if (!Array.isArray(state.contracts) || state.contracts.some((c) => typeof c !== 'string')) {
+    throw new Error('LOOP.md: contracts must be a list of file paths');
+  }
+  const scored = files.filter((f) => slash(f.file) !== LOOP_FILE);
+  if (!scored.length) {
+    // A closing unit (reached $close with a mutate already visited) finishes as done even
+    // when this is its second empty diff in a row: there is nothing left to retry into.
+    if (state.closing) { finishUnit(state, false); return { empty: true, commit: false }; }
     state.emptyStreak += 1;
     if (state.emptyStreak >= 2) return stop(state, 'two consecutive iterations produced no diff');
     finishUnit(state, false);
     return { empty: true, commit: false };
   }
   state.emptyStreak = 0;
-  const { score, reasons } = actualRisk(state.current.declared ?? 0, files, {
+  const { score, reasons } = actualRisk(state.current.declared ?? 0, scored, {
     writeSet: state.card?.writeSet ?? [], contracts: state.contracts ?? [], overrides: state.graph.weights,
   });
   const decision = decide(score, state.preset);
@@ -186,6 +204,35 @@ function exhaust(state, loop) {
   return { discard: true, resplit: true };
 }
 
+// How many times node `v` may be entered in one unit: 1, plus the largest `max` of any
+// non-iteration loop that declares it — or just 1 (no re-entry) when no loop covers it.
+function allowedEntries(graph, v) {
+  const iteration = iterationLoop(graph);
+  let widest = null;
+  for (const m of graph.loops) {
+    if (m === iteration || !m.nodes.includes(v)) continue;
+    if (!widest || m.max > widest.max) widest = m;
+  }
+  return { allowed: widest ? 1 + widest.max : 1, loop: widest };
+}
+
+// Porcelain lines are `XY <path>`; strip the 2-char status + space, slash-normalise, drop
+// LOOP.md rows (the engine rewrites it on every action — it is never part of the scored work).
+function filterPorcelain(porcelain) {
+  const lines = porcelain.split(/\r?\n/).filter((line) => {
+    if (!line) return false;
+    const path = line.slice(3).replace(/^"|"$/g, '');
+    return slash(path) !== LOOP_FILE;
+  });
+  return lines.join('\n').trimEnd();
+}
+
+// Setup work (iteration 0, graph.start outside the iteration loop) is its own unit; rejecting
+// it has nowhere to retry back into, so it stops the loop instead of looping to the head.
+function isSetupUnit(state) {
+  return state.iteration === 0 && !iterationLoop(state.graph).nodes.includes(state.graph.start);
+}
+
 export function recordOutcome(state, bricks, outcome, { card = null, porcelain = null } = {}) {
   assertRunning(state);
   if (state.pendingVerify) throw new Error('the iteration is closed: run `geneseed loop score --diff` first');
@@ -198,10 +245,11 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
   if (brick.effect === 'mutate' && !state.validated) {
     throw new Error(`${from} modifies code: run \`geneseed loop score --declared\` before it, then record`);
   }
-  if (brick.effect === 'read' && porcelain !== null && porcelain !== state.snapshot) {
+  const filteredPorcelain = porcelain === null ? null : filterPorcelain(porcelain);
+  if (brick.effect === 'read' && filteredPorcelain !== null && filteredPorcelain !== state.snapshot) {
     return stop(state, `read-brick-wrote: ${from} changed the working tree`);
   }
-  if (porcelain !== null) state.snapshot = porcelain;
+  if (filteredPorcelain !== null) state.snapshot = filteredPorcelain;
   if (card) state.card = card;
   if (from === 'test') state.tests = outcome;
   state.visited.push(from);
@@ -216,16 +264,15 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
     return { done: true };
   }
   const h = head(state);
-  if (edge.to === h && from !== h) {
-    state.pendingVerify = true; state.node = h;
-    return { verify: true };
+  if (edge.to === h) {
+    if (mutated) { state.pendingVerify = true; state.node = h; return { verify: true }; }
+    // A read-only setup brick (no mutate visited) closes without asking for a diff score.
+    finishUnit(state, false);
+    return { node: state.node };
   }
-  const loop = iterationLoop(state.graph);
-  for (const m of state.graph.loops) {
-    if (m === loop || edge.to !== m.nodes[0] || !m.nodes.includes(from)) continue;
-    state.counters[m.name] = (state.counters[m.name] ?? 0) + 1;
-    if (state.counters[m.name] > m.max) return exhaust(state, m);
-  }
+  state.counters[edge.to] = (state.counters[edge.to] ?? 0) + 1;
+  const { allowed, loop } = allowedEntries(state.graph, edge.to);
+  if (state.counters[edge.to] > allowed) return exhaust(state, loop ?? { name: edge.to, max: 0 });
   state.node = edge.to;
   return { node: edge.to };
 }
@@ -241,7 +288,8 @@ export function decideAwaiting(state, bricks, verdict, note = '') {
   }
   if (kind === 'declared') {
     if (verdict === 'ok') return { resumed: true };
-    if (verdict === 'amend') { state.card = { ...state.card, amend: note }; return { resumed: true }; }
+    if (verdict === 'amend') { state.card = { ...state.card, amend: note }; state.current.amended = true; return { resumed: true }; }
+    if (isSetupUnit(state)) return stop(state, `setup rejected${note ? `: ${note}` : ''}`);
     resetUnit(state); state.node = head(state);
     return { dropped: true };
   }
@@ -250,9 +298,14 @@ export function decideAwaiting(state, bricks, verdict, note = '') {
   state.pendingVerify = false; state.closing = false;
   if (verdict === 'amend') {
     state.card = { ...state.card, amend: note };
+    // The user intervened: the decision stands as blocking, said so, and the retry budget
+    // for this unit restarts (reset counters) now that the amendment changes what it does.
+    state.current = { declared: state.current.declared, decision: 'blocking', amended: true };
+    state.counters = {};
     state.node = iterationLoop(state.graph).nodes.find((n) => bricks.get(n)?.effect === 'mutate') ?? head(state);
     return { resumed: true };
   }
+  if (isSetupUnit(state)) return stop(state, `setup rejected${note ? `: ${note}` : ''}`);
   resetUnit(state); state.node = head(state); state.snapshot = '';
   return { discard: true };
 }

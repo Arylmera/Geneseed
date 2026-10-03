@@ -163,3 +163,158 @@ test('trailers format', () => {
   assert.equal(trailers(s), 'Loop-Iteration: 3\nLoop-Bricks: identify,apply,test\nLoop-Risk-Declared: 0.4\n'
     + 'Loop-Risk-Actual: 0.4\nLoop-Threshold: balanced 0.2/0.6\nLoop-Decision: soft\nLoop-Tests: pass');
 });
+
+// --- Fix round 1 -----------------------------------------------------------------------------
+
+// F1: a node outside every non-iteration loop still bounds its re-entry (here `review`, which
+// `apply-test` does not cover) — the bug was `review --fail--> apply` looping forever because
+// the old counters only fired for an edge whose SOURCE was inside the inner loop. The fix keys
+// `counters` by the TARGET node, so this path is bounded even though `review` was never
+// declared inside `apply-test`. NOTE: because `review` has no covering loop of its own, its
+// own cap is 1 (no re-entry) — the fix-brief's "6 repeats" framing does not hold arithmetically
+// once `review`'s re-entries are counted; this is the actual, rule-conforming behaviour.
+test('F1: a cycle through a node with no covering inner loop is still bounded', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' });    // apply -> test
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'review' });  // test -> review, entry 1 (allowed: 1)
+  assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'apply' });   // review -> apply, entry 2 (allowed: 6)
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' });    // apply -> test, entry 2 (allowed: 6)
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'),                      // test -> review, entry 2 > allowed 1: exhaust
+    { discard: true, resplit: true });
+  assert.equal(s.node, 'identify'); assert.equal(s.resplit, true);
+});
+
+// F1: dropping the `from !== h` condition bounds an edge from the head back into itself.
+test('F1: an edge from the iteration head back into itself closes the unit, not an infinite loop', () => {
+  const bricks = new Map([
+    brick('identify', 'read', ['loop', 'done']), brick('apply', 'mutate', ['pass']),
+  ]);
+  const graph = {
+    name: 'g', description: 'd', nodes: ['identify', 'apply'], start: 'identify',
+    edges: [
+      { from: 'identify', on: 'loop', to: 'identify' }, { from: 'identify', on: 'done', to: '$close' },
+      { from: 'apply', on: 'pass', to: '$close' },
+    ],
+    loops: [{ name: 'iterations', nodes: ['identify', 'apply'], max: 20, iteration: true }],
+  };
+  const s = initState({ title: 't', requirement: 'r', graph, preset: 'balanced' });
+  assert.equal(s.iteration, 1); // start is inside the iteration loop
+  assert.deepEqual(recordOutcome(s, bricks, 'loop'), { node: 'identify' });
+  assert.equal(s.iteration, 2); // the self-edge closed the unit instead of looping forever
+});
+
+// F2: LOOP.md is dropped from the scored diff before the write-set check and the empty check.
+test('F2: scoreDiff drops LOOP.md rows before the write-set check and scoring', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  const result = scoreDiff(s, [file('LOOP.md'), file('src/a.js')]);
+  assert.equal(result.commit, true);
+  assert.match(result.trailers, /Loop-Risk-Declared: 0\.4\nLoop-Risk-Actual: 0\.4/);
+});
+
+test('F2: a diff of only LOOP.md counts as empty', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  assert.deepEqual(scoreDiff(s, [file('LOOP.md')]), { empty: true, commit: false });
+});
+
+test('F2: a read-brick porcelain that only touches LOOP.md does not stop the loop', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1; s.snapshot = '';
+  assert.deepEqual(recordOutcome(s, BRICKS, 'more', { card, porcelain: ' M LOOP.md' }), { node: 'apply' });
+});
+
+// F3: rejecting the setup unit (iteration 0, start outside the iteration loop) stops the loop —
+// there is no "back to the head" to reset into.
+test('F3: rejecting the setup unit stops the loop instead of resetting it', () => {
+  const s = start(); // node: 'reproduce', iteration: 0
+  assert.deepEqual(scoreDeclared(s, { actions: ['architecture'], writeSet: ['t.js'] }).decision, 'blocking');
+  assert.deepEqual(decideAwaiting(s, BRICKS, 'no', 'wrong bug'), { stopped: 'setup rejected: wrong bug' });
+  assert.equal(s.status, 'stopped');
+});
+
+// F4: an amended actual verdict keeps the decision at blocking and says so in the trailers; the
+// retry budget (counters) restarts since the user changed what the unit does.
+test('F4: an amended actual verdict renders "blocking (amended)" in the trailers', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card });
+  scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  assert.deepEqual(scoreDiff(s, [file('src/a.js'), file('src/b.js')]),
+    { score: 0.8, decision: 'blocking', reasons: ['outside the write set: src/b.js'], commit: false });
+  assert.deepEqual(decideAwaiting(s, BRICKS, 'amend', 'keep b.js out'), { resumed: true });
+  assert.deepEqual(s.counters, {});
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' });
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'review' });
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { verify: true });
+  const c = scoreDiff(s, [file('src/a.js')]);
+  assert.equal(c.commit, true);
+  assert.match(c.trailers, /Loop-Risk-Actual: 0\.4/);
+  assert.match(c.trailers, /Loop-Decision: blocking \(amended\)/);
+});
+
+// F5: a unit that reaches the head with no mutate node visited (a read-only setup brick) closes
+// without a verify step — it never touched the tree, so there is nothing to diff.
+test('F5: a read-only setup unit closes without asking for a diff score', () => {
+  const bricks = new Map([
+    brick('plan', 'read', ['pass']), brick('identify', 'read', ['more', 'done']),
+    brick('apply', 'mutate', ['pass']), brick('test', 'read', ['pass']),
+  ]);
+  const graph = {
+    name: 'g', description: 'd', nodes: ['plan', 'identify', 'apply', 'test'], start: 'plan',
+    edges: [
+      { from: 'plan', on: 'pass', to: 'identify' },
+      { from: 'identify', on: 'more', to: 'apply' }, { from: 'identify', on: 'done', to: '$close' },
+      { from: 'apply', on: 'pass', to: 'test' }, { from: 'test', on: 'pass', to: 'identify' },
+    ],
+    loops: [{ name: 'iterations', nodes: ['identify', 'apply', 'test'], max: 20, iteration: true }],
+  };
+  const s = initState({ title: 't', requirement: 'r', graph, preset: 'balanced' });
+  assert.equal(s.iteration, 0);
+  assert.deepEqual(recordOutcome(s, bricks, 'pass'), { node: 'identify' });
+  assert.equal(s.iteration, 1);
+});
+
+// F5: an empty diff on a closing unit finishes it as done, even mid-way through a would-be
+// two-empty-iterations stop.
+test('F5: an empty diff on a closing unit finishes it as done, not as a stop', () => {
+  const bricks = new Map([
+    brick('identify', 'read', ['more', 'done']), brick('apply', 'mutate', ['pass']),
+  ]);
+  const graph = {
+    name: 'g', description: 'd', nodes: ['identify', 'apply'], start: 'identify',
+    edges: [
+      { from: 'identify', on: 'more', to: 'apply' }, { from: 'identify', on: 'done', to: '$close' },
+      { from: 'apply', on: 'pass', to: '$close' },
+    ],
+    loops: [{ name: 'iterations', nodes: ['identify', 'apply'], max: 20, iteration: true }],
+  };
+  const s = initState({ title: 't', requirement: 'r', graph, preset: 'balanced' });
+  s.node = 'identify'; s.iteration = 1; s.emptyStreak = 1; // would stop on a plain 2nd empty diff
+  recordOutcome(s, bricks, 'more', { card: { actions: ['logic'], writeSet: ['a.js'], intent: 'x' } });
+  scoreDeclared(s);
+  assert.deepEqual(recordOutcome(s, bricks, 'pass'), { verify: true });
+  assert.equal(s.closing, true);
+  assert.deepEqual(scoreDiff(s, []), { empty: true, commit: false });
+  assert.equal(s.status, 'done');
+});
+
+// F5: parseLoopFile must find the LAST end marker, so a title/requirement that happens to
+// contain the literal marker text still parses.
+test('F5: parseLoopFile uses the last end marker, tolerating one earlier in the title', () => {
+  const s = start();
+  s.title = 'fix <!-- loop-state:end --> rendering';
+  const text = renderLoopFile(s);
+  assert.deepEqual(parseLoopFile(text), s);
+});
+
+// F5: a malformed `contracts` field fails loudly instead of silently miscomputing risk.
+test('F5: scoreDiff rejects a non-array contracts field', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  s.contracts = 'not-an-array';
+  assert.throws(() => scoreDiff(s, [file('src/a.js')]), /LOOP\.md: contracts must be a list of file paths/);
+});
