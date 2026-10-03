@@ -24,6 +24,7 @@ const bugfix = () => ({
   loops: [
     { name: 'iterations', nodes: ['identify', 'apply', 'test', 'review'], max: 20, iteration: true },
     { name: 'apply-test', nodes: ['apply', 'test'], max: 5 },
+    { name: 'review-fix', nodes: ['apply', 'test', 'review'], max: 3 },
   ],
 });
 
@@ -66,6 +67,16 @@ test('rule 4 — every cycle lies inside a declared loop with a max', () => {
   g.loops[0].nodes = ['identify', 'review'];
   assert.deepEqual(checkGraph(g, BRICKS), [
     'cycle apply, identify, review, test has no declared loop around it',
+  ]);
+});
+
+test('rule 4b — a cycle inside an iteration that never reaches the head needs its own inner loop', () => {
+  const g = bugfix(); g.loops = g.loops.filter((l) => l.name !== 'review-fix');
+  // apply/test alone are still bounded by apply-test; review -> apply is not covered by any
+  // non-iteration loop once review-fix is gone, even though the whole-unit SCC check (rule 4)
+  // is satisfied by the iteration loop itself.
+  assert.deepEqual(checkGraph(g, BRICKS), [
+    'cycle apply, review, test inside an iteration has no inner loop around it',
   ]);
 });
 

@@ -11,6 +11,13 @@
  *
  * Problems are returned in a fixed order — per node, per edge, per outcome, then loops — so a
  * test can write the expected list out instead of sorting it.
+ *
+ * WHY A CYCLE INSIDE AN ITERATION NEEDS ITS OWN LOOP. The whole-SCC check (rule 4) is satisfied
+ * by the iteration loop alone, since every node in an iteration is reachable from every other —
+ * but the runtime gives a node outside every *inner* loop exactly one entry per iteration (no
+ * re-entry at all), so a cycle that never reaches the iteration head and is not inside its own
+ * declared inner loop would hit that "max of 0" path by construction, not by a model's mistake.
+ * The static check has to refuse that graph, not just the ones the runtime would loop forever on.
  */
 import { WEIGHTS } from './score.mjs';
 
@@ -105,6 +112,17 @@ export function checkGraph(graph, bricks) {
   for (const comp of components(nodes, edges)) {
     const covered = loops.some((l) => comp.every((n) => (l.nodes ?? []).includes(n)));
     if (!covered) problems.push(`cycle ${comp.join(', ')} has no declared loop around it`);
+  }
+  // rule 4b — a cycle that never reaches the iteration head needs its own non-iteration loop
+  const iterationLoops = loops.filter((l) => l.iteration === true);
+  if (iterationLoops.length === 1) {
+    const [iteration] = iterationLoops;
+    const head = iteration.nodes?.[0];
+    const innerEdges = edges.filter((e) => e.to !== head);
+    for (const comp of components(nodes, innerEdges)) {
+      const covered = loops.some((l) => l !== iteration && comp.every((n) => (l.nodes ?? []).includes(n)));
+      if (!covered) problems.push(`cycle ${comp.join(', ')} inside an iteration has no inner loop around it`);
+    }
   }
   // template weight overrides
   for (const k of Object.keys(graph.weights ?? {})) {

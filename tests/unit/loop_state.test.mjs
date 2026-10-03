@@ -25,6 +25,7 @@ const bugfix = () => ({
   loops: [
     { name: 'iterations', nodes: ['identify', 'apply', 'test', 'review'], max: 20, iteration: true },
     { name: 'apply-test', nodes: ['apply', 'test'], max: 5 },
+    { name: 'review-fix', nodes: ['apply', 'test', 'review'], max: 3 },
   ],
 });
 const start = (preset = 'balanced') => initState({ title: 't', requirement: 'r', graph: bugfix(), preset });
@@ -166,23 +167,25 @@ test('trailers format', () => {
 
 // --- Fix round 1 -----------------------------------------------------------------------------
 
-// F1: a node outside every non-iteration loop still bounds its re-entry (here `review`, which
-// `apply-test` does not cover) — the bug was `review --fail--> apply` looping forever because
-// the old counters only fired for an edge whose SOURCE was inside the inner loop. The fix keys
-// `counters` by the TARGET node, so this path is bounded even though `review` was never
-// declared inside `apply-test`. NOTE: because `review` has no covering loop of its own, its
-// own cap is 1 (no re-entry) — the fix-brief's "6 repeats" framing does not hold arithmetically
-// once `review`'s re-entries are counted; this is the actual, rule-conforming behaviour.
-test('F1: a cycle through a node with no covering inner loop is still bounded', () => {
+// F1 (fix round 2 — G2): the fixture now declares `review-fix` ([apply, test, review], max 3),
+// an explicit inner loop around the review -> apply cycle (a graph rule, not a runtime one: G1
+// in js/loop/graph.mjs now refuses this cycle at `checkGraph` time when no such loop exists).
+// `apply`/`test`'s budget is 1 + max(apply-test.max=5, review-fix.max=3) = 6, unchanged from
+// before `review-fix` existed; `review`'s budget is 1 + review-fix.max = 4, new.
+test('F1: review -> apply is bounded by its own declared inner loop (review-fix, max 3)', () => {
   const s = start(); s.node = 'identify'; s.iteration = 1;
   recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
-  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' });    // apply -> test
-  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'review' });  // test -> review, entry 1 (allowed: 1)
-  assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'apply' });   // review -> apply, entry 2 (allowed: 6)
-  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' });    // apply -> test, entry 2 (allowed: 6)
-  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'),                      // test -> review, entry 2 > allowed 1: exhaust
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' }); // apply -> test, entry 1
+  for (let i = 0; i < 4; i += 1) {
+    assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'review' }); // test -> review, entries 1..4
+    assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'apply' });  // review -> apply, entries 2..5
+    if (i < 3) assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' }); // apply -> test, entries 2..4
+  }
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' }); // apply -> test, entry 5 (allowed: 6, ok)
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'),                   // test -> review, entry 5 > allowed 4: exhaust
     { discard: true, resplit: true });
   assert.equal(s.node, 'identify'); assert.equal(s.resplit, true);
+  assert.deepEqual(s.notes, ['iteration 1: review-fix exhausted its max of 3; re-split once']);
 });
 
 // F1: dropping the `from !== h` condition bounds an edge from the head back into itself.
