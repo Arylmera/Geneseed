@@ -64,6 +64,10 @@ async function action(name, opts) {
 // source body), and which project or global brick overrides a shipped one.
 
 const loops = () => get('/api/loops')
+// The Active tab: every loop `geneseed loop init` registered, its LOOP.md re-read per call;
+// and the one write the page makes, a loop's preset (404 on an unknown root or preset).
+const activeLoops = () => get('/api/loops/active')
+const setLoopPreset = (root, preset) => post('/api/loops/preset', { root, preset })
 
 // ── MCP ─────────────────────────────────────────────────────────────────────
 // MCP server wiring: list configured targets/servers, and toggle one on or off
@@ -148,6 +152,8 @@ const excludeMutate = (action, path) => post('/api/excludes', { action, path })
 
 export const api = {
   loops,
+  activeLoops,
+  setLoopPreset,
   overview,
   recent,
   activity,

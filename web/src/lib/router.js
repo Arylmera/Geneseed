@@ -18,13 +18,14 @@ export const PAGES = {
 // The pages that carry tabs, and their tab ids in display order. The first id is the
 // tab a bare `#/personal` or `#/installs` opens on, and the one an unknown tab falls to.
 export const TABS = {
-  loops: ['templates', 'bricks'],
+  loops: ['templates', 'bricks', 'active'],
   personal: ['rules', 'profile', 'memory', 'notebook'],
   installs: ['hosts', 'edits', 'doctor', 'server'],
 }
 export const TAB_LABELS = {
   templates: 'Templates',
   bricks: 'Bricks',
+  active: 'Active',
   rules: 'Rules',
   profile: 'Profile',
   memory: 'Memory',

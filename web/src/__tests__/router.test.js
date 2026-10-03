@@ -21,6 +21,7 @@ const TABLE = [
   ['#/library', { page: 'library' }],
   ['#/loops', { page: 'loops', tab: 'templates' }],
   ['#/loops/bricks', { page: 'loops', tab: 'bricks' }],
+  ['#/loops/active', { page: 'loops', tab: 'active' }],
   // Loops' Templates tab carries the selected template.
   ['#/loops/templates/bugfix', { page: 'loops', tab: 'templates', item: 'bugfix' }],
   ['#/docs', { page: 'docs', item: '' }],
