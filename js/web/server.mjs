@@ -200,9 +200,11 @@ export async function cmdWeb(args) {
   const port = args.port === null ? 4747 : parseIntStrict(args.port);
   const openBrowser = !args.noBrowser;
   if (args.action === 'start') return startDaemon(args.theme, port, openBrowser);
-  if (args.action === 'stop') return stopDaemon(args.theme);
-  if (args.action === 'restart') return restartDaemon(args.theme, port, openBrowser);
-  if (args.action === 'status') return statusDaemon(args.theme);
+  // Only an EXPLICIT --port scopes these three to one daemon; absent, they act on the record.
+  const named = args.port === null ? null : port;
+  if (args.action === 'stop') return stopDaemon(args.theme, named);
+  if (args.action === 'restart') return restartDaemon(args.theme, named, openBrowser);
+  if (args.action === 'status') return statusDaemon(args.theme, named);
   return serve({ theme: args.theme, port, openBrowser, daemon: args.daemonInternal });
 }
 

@@ -748,6 +748,11 @@ handler falls back to `index.html` at 200 with `text/html`, and the browser repo
 "no running server recorded" and exits 0, and `web restart` starts a *second* daemon. Recovery is
 to kill every pid on the port, then `geneseed web start`.
 
+`--port N` on `web stop|restart|status` names *which* daemon: the verb acts only if the record is
+on N, and refuses (exit 1, nothing sent) when it names another port. A test instance on another
+port is therefore stopped with `--port`, never with a bare `web stop` — that one stops whatever
+the record names, usually the live console on 4747.
+
 ---
 
 ## 10 — What to settle before the next wave

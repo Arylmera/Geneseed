@@ -267,9 +267,42 @@ export async function startDaemon(theme, port, openBrowser = true) {
   return 1;
 }
 
-export async function stopDaemon(theme = null) {
+/**
+ * `--port` NAMES WHICH DAEMON, and the record holds only one. With no `--port` (`port` null)
+ * the verbs act on whatever the record names, as they always have. With one, they act only if
+ * the record is on that port: `stop --port 4791` once POSTed shutdown to the recorded url and
+ * stopped the console on 4747. So a record on another port is refused — no request sent, record
+ * left in place — and a server answering on the named port that is NOT the record is explained,
+ * because its token is not on record and there is nothing to guess it from.
+ *
+ * Null when the verb may go ahead; otherwise the exit code, already explained on stdout.
+ */
+async function portRefusal(st, port, verb) {
+  if (port === null || port === undefined) return null;
+  const recorded = isTruthy(st) && isTruthy(st.url) ? Number(st.port) : null;
+  if (recorded === port) return null;
+  if (recorded !== null) {
+    if (verb === 'status') {
+      printOut(`[web] not running on port ${port} (the recorded daemon is on port ${recorded}).\n`);
+    } else {
+      printOut(`[web] the recorded daemon is on port ${recorded}, not ${port} — not touching it.\n`);
+      printOut(`      \`geneseed web ${verb} --port ${recorded}\` (or no --port) ${verb}s that one.\n`);
+    }
+  }
+  if (await probe(`http://127.0.0.1:${port}`)) {
+    printOut(`[web] a server answers on port ${port} but is not the recorded daemon, so its `
+      + 'token is unknown — stop it from its own page (Stop) or end its process.\n');
+    return 1;
+  }
+  // Nothing recorded and nothing on the named port: the verb's own no-daemon arm says so.
+  return recorded === null ? null : 1;
+}
+
+export async function stopDaemon(theme = null, port = null) {
   const { target } = webState(theme);
   const st = readDaemon(target);
+  const refused = await portRefusal(st, port, 'stop');
+  if (refused !== null) return refused;
   if (!isTruthy(st) || !isTruthy(st.url)) {
     // NO `clearDaemon` HERE — deliberately asymmetric with `liveDaemon`/`statusDaemon`,
     // which DO delete a record naming no url. Unifying the two would delete a file this
@@ -287,8 +320,10 @@ export async function stopDaemon(theme = null) {
   return 0;
 }
 
-export async function statusDaemon(theme = null) {
+export async function statusDaemon(theme = null, port = null) {
   const { target } = webState(theme);
+  const refused = await portRefusal(readDaemon(target), port, 'status');
+  if (refused !== null) return refused;
   const st = await liveDaemon(target);
   if (st) {
     printOut(`[web] running on ${st.url}  (theme: ${none(st.theme)}, pid ${none(st.pid)})\n`);
@@ -322,19 +357,22 @@ export async function bounceDaemonIfRunning(theme, log, { onlyIfStale = false } 
     return;
   }
   try {
-    await restartDaemon(theme, 4747, false, true);
+    await restartDaemon(theme, null, false, true);
   } catch (e) {
     log(`[geneseed] ⚠️  could not refresh the web daemon (${e && e.message ? e.message : e}) — \`geneseed web restart\` manually if it was running.`);
   }
 }
 
-export async function restartDaemon(theme = null, port = 4747, openBrowser = true,
+/** `port` null keeps the recorded daemon's port (4747 if none); see `portRefusal`. */
+export async function restartDaemon(theme = null, port = null, openBrowser = true,
   onlyIfRunning = false) {
   const { target } = webState(theme);
   const st = readDaemon(target);
+  const refused = await portRefusal(st, port, 'restart');
+  if (refused !== null) return refused;
   const live = (await liveDaemon(target)) !== null;
   if (onlyIfRunning && !live) return 0;
-  const usePort = (st && isTruthy(st.port) ? st.port : null) || port;
+  const usePort = port ?? ((st && isTruthy(st.port) ? st.port : null) || 4747);
   let open = openBrowser;
   if (live) {
     // A live daemon means a tab is already open on this (preserved) port and will

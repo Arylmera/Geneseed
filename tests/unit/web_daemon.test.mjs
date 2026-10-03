@@ -28,7 +28,7 @@
  * a declaration is not a dispatcher — is left visible rather than quietly satisfied.
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -38,7 +38,7 @@ import { fileURLToPath } from 'node:url';
 import { cliSpec } from '../../js/ui/cli.mjs';
 import { POST_INLINE } from '../../js/web/routes.mjs';
 import {
-  codeStamp, daemonStale, statusDaemon, writeDaemon, STALE_LINE,
+  codeStamp, daemonStale, readDaemon, writeDaemon, STALE_LINE,
 } from '../../js/web/daemon.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
@@ -315,30 +315,188 @@ test('a record is stale unless it carries the stamp on disk now', () => {
 
 test('web status says OLD code when the running daemon is stale', async () => {
   // A live answer is all `probe` asks for; the record is what decides the second line.
-  const srv = http.createServer((_q, r) => { r.end('ok'); });
-  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
-  const sb = makeSandbox('webstale-');
-  const saved = process.env.OPENCODE_CONFIG_DIR;
-  process.env.OPENCODE_CONFIG_DIR = sb.path;
-  const write = process.stdout.write;
-  let out = '';
+  //
+  // IN A CHILD, NOT BY SWAPPING `process.stdout.write`: the swap held across an `await` and ate
+  // the runner's own reports, so this file used to report ONE test of fourteen — a failure in
+  // any of the thirteen before it would have vanished with them. `inSandbox` is below.
+  const live = await fakeConsole();
   try {
-    const url = `http://127.0.0.1:${srv.address().port}`;
-    for (const [code, stale] of [[undefined, true], [codeStamp(), false]]) {
-      writeDaemon(sb.path, { pid: 1, port: srv.address().port, url, theme: 'neutral', code });
-      out = '';
-      process.stdout.write = (c) => { out += c; return true; };
-      try { assert.equal(await statusDaemon('neutral'), 0); } finally {
-        process.stdout.write = write;
+    await inSandbox(async (dir, run) => {
+      for (const [code, stale] of [[undefined, true], [codeStamp(), false]]) {
+        writeDaemon(dir, { pid: 1, port: live.port, url: live.url, theme: 'neutral', code });
+        const r = await run(['status']);
+        assert.equal(r.code, 0, r.out);
+        assert.equal(r.out.includes(STALE_LINE), stale, r.out);
       }
-      assert.equal(out.includes(STALE_LINE), stale, out);
-    }
+    });
     assert.equal(STALE_LINE,
       '[web] running OLD code (started before the last upgrade) — geneseed web restart');
+  } finally { await live.close(); }
+});
+
+// ---------------------------------------------------------------------------------------------
+// `--port` names WHICH daemon. The record holds one daemon; a `stop --port 4791` used to POST
+// shutdown to whatever url the record named, which stopped the developer's console on 4747.
+// The rule the rows below write out: with no `--port` the verb acts on the record, as it always
+// did; with `--port N` it acts only if the record is on N. A record on another port is refused
+// (exit 1, no request sent, record left in place), and a server answering on N that is NOT the
+// record is explained rather than guessed at — its token is not on record, so nothing here can
+// stop it.
+//
+// THE REAL CLI, IN A CHILD, because `--port` absent and `--port 4747` are different inputs only
+// at `cmdWeb` — and because capturing `process.stdout` across awaits in-process also swallows
+// the test runner's own reporting. The record lives in a sandbox (`OPENCODE_CONFIG_DIR`), the
+// "daemons" are fake servers in this process, so nothing here can reach a real console.
+
+/** A fake console: answers `/api/ping`, counts `/api/shutdown`, never actually stops. */
+async function fakeConsole() {
+  const hits = [];
+  const srv = http.createServer((q, r) => { hits.push(q.url); r.end('{}'); });
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  const { port } = srv.address();
+  return {
+    port, url: `http://127.0.0.1:${port}`,
+    shutdowns: () => hits.filter((h) => h === '/api/shutdown').length,
+    close: () => new Promise((r) => { srv.closeAllConnections(); srv.close(r); }),
+  };
+}
+
+/** A port nothing answers on, asked for rather than guessed. */
+async function deadPort() {
+  const srv = http.createServer();
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  const { port } = srv.address();
+  await new Promise((r) => { srv.close(r); });
+  return port;
+}
+
+/** `fn(dir, run)` against a sandboxed record; `run(argv)` is `geneseed web …argv`. */
+async function inSandbox(fn) {
+  const sb = makeSandbox('webport-');
+  const env = { ...cellEnv(path.join(sb.path, 'home')), OPENCODE_CONFIG_DIR: sb.path };
+  // ASYNC, NOT spawnSync: the fake consoles answer from this process's event loop.
+  const run = (argv) => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [CLI, 'web', ...argv, '--theme', 'neutral'],
+      { cwd: ROOT, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('error', reject);
+    // printOut writes CRLF on Windows; the expectations below are written once, in LF.
+    child.on('close', (code) => resolve({ code, out: out.replace(/\r\n/g, '\n') }));
+  });
+  try {
+    return await fn(sb.path, run);
   } finally {
-    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR;
-    else process.env.OPENCODE_CONFIG_DIR = saved;
     sb.cleanup();
-    await new Promise((r) => { srv.close(r); });
   }
+}
+
+const recordOn = (dir, c) => writeDaemon(dir, {
+  pid: 4242, port: c.port, url: c.url, token: 't', theme: 'neutral', code: codeStamp(),
+});
+
+const UNRECORDED = (port) => `[web] a server answers on port ${port} but is not the recorded `
+  + 'daemon, so its token is unknown — stop it from its own page (Stop) or end its process.\n';
+
+test('web stop --port refuses when the recorded daemon is on another port', async () => {
+  const live = await fakeConsole();
+  const other = await deadPort();
+  try {
+    await inSandbox(async (dir, run) => {
+      recordOn(dir, live);
+      const { code, out } = await run(['stop', '--port', String(other)]);
+      assert.equal(code, 1, out);
+      assert.equal(out,
+        `[web] the recorded daemon is on port ${live.port}, not ${other} — not touching it.\n`
+        + `      \`geneseed web stop --port ${live.port}\` (or no --port) stops that one.\n`);
+      assert.equal(live.shutdowns(), 0, 'a shutdown was sent to the daemon on the other port');
+      assert.equal(readDaemon(dir)?.port, live.port, 'the other daemon\'s record was touched');
+    });
+  } finally { await live.close(); }
+});
+
+test('web stop --port on the recorded port stops it, and no --port still does', async () => {
+  for (const withPort of [true, false]) {
+    const live = await fakeConsole();
+    try {
+      await inSandbox(async (dir, run) => {
+        recordOn(dir, live);
+        const { code, out } = await run(withPort ? ['stop', '--port', String(live.port)]
+          : ['stop']);
+        assert.equal(code, 0, out);
+        assert.equal(out, '[web] stopped (pid 4242).\n');
+        assert.equal(live.shutdowns(), 1);
+        assert.equal(readDaemon(dir), null, 'the stopped daemon\'s record was left behind');
+      });
+    } finally { await live.close(); }
+  }
+});
+
+test('web stop --port explains a server that answers but is not recorded', async () => {
+  // Two shapes, one answer: no record at all, and a record on a third port (which is refused
+  // first, then the stray on N explained). Either way nothing is sent to anyone.
+  const stray = await fakeConsole();
+  const recorded = await fakeConsole();
+  try {
+    for (const withRecord of [false, true]) {
+      await inSandbox(async (dir, run) => {
+        if (withRecord) recordOn(dir, recorded);
+        const { code, out } = await run(['stop', '--port', String(stray.port)]);
+        assert.equal(code, 1, out);
+        assert.equal(out, withRecord
+          ? `[web] the recorded daemon is on port ${recorded.port}, not ${stray.port} — not `
+            + `touching it.\n      \`geneseed web stop --port ${recorded.port}\` (or no --port) `
+            + `stops that one.\n${UNRECORDED(stray.port)}`
+          : UNRECORDED(stray.port));
+        assert.equal(stray.shutdowns() + recorded.shutdowns(), 0);
+      });
+    }
+  } finally { await stray.close(); await recorded.close(); }
+});
+
+test('web stop --port with nothing recorded and nothing answering is a no-op', async () => {
+  const port = await deadPort();
+  await inSandbox(async (_dir, run) => {
+    const { code, out } = await run(['stop', '--port', String(port)]);
+    assert.equal(code, 0, out);
+    assert.equal(out, '[web] no running server recorded.\n');
+  });
+});
+
+test('web status --port reports only the daemon on that port', async () => {
+  const live = await fakeConsole();
+  const other = await deadPort();
+  try {
+    await inSandbox(async (dir, run) => {
+      recordOn(dir, live);
+      let r = await run(['status', '--port', String(other)]);
+      assert.equal(r.code, 1, r.out);
+      assert.equal(r.out,
+        `[web] not running on port ${other} (the recorded daemon is on port ${live.port}).\n`);
+      assert.equal(readDaemon(dir)?.port, live.port, 'status --port cleared another record');
+      r = await run(['status', '--port', String(live.port)]);
+      assert.equal(r.code, 0, r.out);
+      assert.equal(r.out, `[web] running on ${live.url}  (theme: neutral, pid 4242)\n`);
+    });
+  } finally { await live.close(); }
+});
+
+test('web restart --port refuses when the recorded daemon is on another port', async () => {
+  // REFUSED BEFORE ANYTHING STARTS — which is also what makes this row safe to run: a restart
+  // that got past the guard would spawn a detached daemon.
+  const live = await fakeConsole();
+  const other = await deadPort();
+  try {
+    await inSandbox(async (dir, run) => {
+      recordOn(dir, live);
+      const { code, out } = await run(['restart', '--port', String(other), '--no-browser']);
+      assert.equal(code, 1, out);
+      assert.equal(out,
+        `[web] the recorded daemon is on port ${live.port}, not ${other} — not touching it.\n`
+        + `      \`geneseed web restart --port ${live.port}\` (or no --port) restarts that one.\n`);
+      assert.equal(live.shutdowns(), 0);
+      assert.equal(readDaemon(dir)?.port, live.port);
+    });
+  } finally { await live.close(); }
 });
