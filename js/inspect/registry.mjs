@@ -17,15 +17,30 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync } from 'n
 import path from 'node:path';
 import os from 'node:os';
 
-import { expanduser } from '../hosts/hosts.mjs';
+import { expanduser, resolvePath } from '../hosts/hosts.mjs';
 import { writeText, isFile, isDir } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
-import { toPlatformPath } from '../lib/paths.mjs';
+import { toPlatformPath, within } from '../lib/paths.mjs';
 
 /** `_install_registry._path()` — `$XDG_CONFIG_HOME/geneseed/installs.json`. */
 function registryPath() {
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   return path.join(base, 'geneseed', 'installs.json');
+}
+
+/**
+ * Is `root` a scratch install — inside the OS temp dir while the registry is not?
+ *
+ * Agent sessions emit into scratchpads under `%TEMP%`; recorded, each one is rebuilt by every
+ * `rebuild-all` and listed by every `status` for as long as the folder survives. The second
+ * clause is what keeps every test and golden cell meaningful: their registry lives in a
+ * sandbox under the temp dir too, so their temp roots are not scratch RELATIVE TO IT.
+ * `within` is case-insensitive on win32, so `C:\Users\X\AppData\Local\Temp` and its
+ * lower-cased spelling are one directory.
+ */
+export function isScratchRoot(root, registryFile) {
+  const tmp = resolvePath(os.tmpdir());
+  return within(resolvePath(root), tmp) && !within(resolvePath(registryFile), tmp);
 }
 
 function registryLoad() {
@@ -59,6 +74,7 @@ export function registryRecord(dir) {
   try {
     let root;
     try { root = realpathSync.native(dir); } catch { root = path.resolve(dir); }
+    if (isScratchRoot(root, registryPath())) return;
     const cur = registryLoad();
     if (!cur.includes(root)) registrySave([...cur, root]);
   } catch { /* a registry hiccup must never fail a build */ }
@@ -75,6 +91,7 @@ export function registryRecord(dir) {
  */
 export function registryRoots() {
   const original = registryLoad();
+  const file = registryPath();
   const out = [];
   const kept = [];
   const seen = new Set();
@@ -96,7 +113,7 @@ export function registryRoots() {
     let key;
     try { key = existsSync(root) ? realpathSync.native(root) : root; } catch { key = root; }
     if (seen.has(key)) continue;
-    if (isDir(root) && isFile(path.join(root, '.geneseed-emit'))) {
+    if (isDir(root) && isFile(path.join(root, '.geneseed-emit')) && !isScratchRoot(root, file)) {
       seen.add(key);
       kept.push(root);
       out.push(root);
