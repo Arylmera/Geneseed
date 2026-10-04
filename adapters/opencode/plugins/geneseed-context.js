@@ -580,7 +580,7 @@ async function walkWikiDir(dir, depth, acc) {
 // entry on a large vault would otherwise inject thousands of listing lines. Beyond
 // the cap the listing truncates with a visible count and the agent explores the
 // folders on demand instead.
-const WIKI_LAZY_LIMIT = Number(process.env.GENESEED_WIKI_LAZY_LIMIT || 200)
+const WIKI_LAZY_LIMIT = envNum("GENESEED_WIKI_LAZY_LIMIT", 200)
 
 // Parse wiki.jsonc into renderable wikis: [{ name, root, desc, conventions, inbox,
 // protected, eager:[{rel,abs,desc}], lazy:[...], truncated }]. Entry paths resolve
@@ -765,16 +765,19 @@ async function resolveBlock(root) {
   return { block: await buildBlock(sets, wikis, commands, await sessionFiles(harness)), src }
 }
 
-// Per-process cache of the rendered block text for the transform path (root is fixed
-// per plugin instance). Recomputed at most once per TTL so doc edits are picked up.
-let _blockCache = { text: null, at: 0 }
+// Per-INSTANCE cache of the rendered block text for the transform path: the caller owns
+// `cache`, one per plugin instance, because root is fixed per instance but one OpenCode
+// process can serve several directories — a module-level cache served project A's
+// context into B for a whole TTL. Recomputed at most once per TTL so doc edits are
+// picked up.
 const BLOCK_TTL_MS = 30000
-async function cachedBlockText(root) {
+async function cachedBlockText(root, cache) {
   const now = Date.now()
-  if (_blockCache.text !== null && now - _blockCache.at < BLOCK_TTL_MS) return _blockCache.text
+  if (cache.text !== null && now - cache.at < BLOCK_TTL_MS) return cache.text
   let text = ""
   try { const { block } = await resolveBlock(root); text = block?.text || "" } catch {}
-  _blockCache = { text, at: now }
+  cache.text = text
+  cache.at = now
   return text
 }
 
@@ -797,6 +800,7 @@ export const GeneseedContext = async (ctx) => {
   const { client } = ctx
   const done = new Set()
   const root = repoRoot(ctx)
+  const blockCache = { text: null, at: 0 }
 
   // Visible delivery — post the block as a noReply session message. Used when
   // GENESEED_CONTEXT_VISIBLE forces it, and by the transform fallback below.
@@ -927,7 +931,7 @@ export const GeneseedContext = async (ctx) => {
         const present = output.messages.some((m) =>
           (m?.parts ?? []).some((p) => typeof p?.text === "string" && p.text.includes(MARKER)))
         if (present) return
-        const cached = await cachedBlockText(root)
+        const cached = await cachedBlockText(root, blockCache)
         if (!cached) return
         // Model line is request-specific (kept out of the cache): prefer the live
         // transcript on this request, fall back to $GENESEED_MODEL.

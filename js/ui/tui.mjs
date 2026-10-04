@@ -21,13 +21,11 @@
  * deleted the day the real one crossed, would be a second user interface and not a port.
  *
  * WHAT DOES CROSS is the alignment contract — the functions below that decide what a row
- * looks like before any curses call is made. They have no caller in this file yet, and that
- * is deliberate and dated: **P7c is the due date**, when `_tui_loop` and the eighteen
- * screens of `_harness_tui_views.py` arrive and consume them. They are here now because they
- * are the half that can be gated exhaustively, and `tests/test_pure_function_parity.py`
- * gates every one of them in both glyph modes. Deleting any of them turns that gate red —
- * this port has shipped code before whose absence nothing would have noticed, and these are
- * not that.
+ * looks like: display width, fitting, glyph tiers, the catalogue's entries and detail lines.
+ * Each has a caller outside this file (the catalogue, the status panel, the web console).
+ * The panel itself was REJECTED, not deferred, so the helpers that existed only for it —
+ * the spinner, the wordmark, scroll clamping, the progress bar and the theme preview/flair
+ * readers — were deleted rather than kept waiting for a screen that will not come.
  *
  * WHAT IS DELIBERATELY NOT HERE: `_bx` (its non-ASCII arm returned `curses.ACS_*` chtype
  * ints, which belonged with the window) and every `(stdscr, curses, pal)` drawing helper.
@@ -41,10 +39,6 @@
  * Anything that needs wrapping wraps THAT. `_parse_laws`, `load_registry`, `entity_status` and
  * `_tui_inventory` crossed in P6c and live in `js/inspect/inventory.mjs`.
  */
-import path from 'node:path';
-
-import { THEMES } from '../build/source.mjs';
-import { readJsonMaybe } from '../hosts/installs.mjs';
 import { splitLines } from '../lib/udiff.mjs';
 import { printOut } from '../lib/fs.mjs';
 
@@ -58,7 +52,6 @@ import { printOut } from '../lib/fs.mjs';
 const TUI_ASCII = !!process.env.GENESEED_TUI_ASCII;
 const TUI_PLAIN = !!process.env.GENESEED_TUI_PLAIN;
 const TUI_EMOJI = !(TUI_ASCII || TUI_PLAIN);
-const TUI_ANIM = TUI_EMOJI;
 
 /** `_glyphs` — the one glyph table for the whole TUI, unicode or ASCII stand-ins. */
 export function glyphs(asciiMode) {
@@ -267,106 +260,6 @@ const MARKS = {
 export function mark(kind) {
   const [emoji, sym, asc] = Object.hasOwn(MARKS, kind) ? MARKS[kind] : ['•', '·', '-'];
   return TUI_ASCII ? asc : (TUI_EMOJI ? emoji : sym);
-}
-
-const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
-
-/** `_spin` — one spinner frame for tick `i`; a static dot in the non-animated tiers. */
-export function spin(i) {
-  if (!TUI_ANIM) return TUI_ASCII ? '-' : '·';
-  const frames = TUI_ASCII ? '|/-\\' : SPIN;
-  // `frames[i % len]` on the reference indexes CODE POINTS; the braille frames are BMP so
-  // UTF-16 indexing agrees, but spelling it through `[...frames]` keeps that an argument
-  // about the data rather than a coincidence. Python's `%` on a negative `i` returns a
-  // non-negative remainder and JavaScript's does not, so the modulo is corrected.
-  const f = [...frames];
-  return f[((i % f.length) + f.length) % f.length];
-}
-
-const LOGO_FONT = {
-  G: [' ### ', '#    ', '# ## ', '#  # ', ' ### '],
-  E: ['#### ', '#    ', '###  ', '#    ', '#### '],
-  N: ['#   #', '##  #', '# # #', '#  ##', '#   #'],
-  S: [' ####', '#    ', ' ### ', '    #', '#### '],
-  D: ['###  ', '#  # ', '#   #', '#  # ', '###  '],
-};
-
-/** `_logo_lines` — the GENESEED wordmark as 5 text rows. */
-export function logoLines() {
-  const ink = TUI_ASCII ? '#' : '█';
-  const rows = [];
-  for (let r = 0; r < 5; r += 1) {
-    rows.push([...'GENESEED'].map((c) => LOGO_FONT[c][r].replaceAll('#', ink)).join(' '));
-  }
-  return rows;
-}
-
-// ---- layout maths --------------------------------------------------------------------
-
-/** `_clamp` — clamp a scroll offset so [top, top+viewH) stays inside `total`. */
-export function clamp(top, total, viewH) {
-  return Math.max(0, Math.min(top, Math.max(0, total - viewH)));
-}
-
-const BAR_EIGHTHS = ' ▏▎▍▌▋▊▉█';
-
-/** `_progress_bar` — a determinate bar exactly `width` display columns wide. */
-export function progressBar(frac, width = 24) {
-  const f = Math.max(0.0, Math.min(1.0, frac));
-  if (TUI_ASCII) {
-    const filled = roundHalfEven(f * width);
-    return '#'.repeat(filled) + '-'.repeat(width - filled);
-  }
-  const eighths = roundHalfEven(f * width * 8);
-  const full = Math.floor(eighths / 8);
-  const rem = eighths % 8;
-  if (full >= width) return '█'.repeat(width);
-  return '█'.repeat(full) + [...BAR_EIGHTHS][rem] + ' '.repeat(width - full - 1);
-}
-
-/**
- * `round()` — Python rounds HALF TO EVEN and `Math.round` rounds half UP, and this is the
- * one place in the file where that shows: a bar at exactly 0.5 of a cell is the frontier
- * case the eighths resolution exists to draw, and `round(0.5)` is 0 there and 1 here.
- */
-function roundHalfEven(x) {
-  const f = Math.floor(x);
-  const d = x - f;
-  if (d > 0.5) return f + 1;
-  if (d < 0.5) return f;
-  return f % 2 === 0 ? f : f + 1;
-}
-
-// ---- theme reads ---------------------------------------------------------------------
-
-/** `_theme_preview` — right-panel preview rows for a theme, as (kind, text) pairs. */
-export function themePreview(key) {
-  const data = readJsonMaybe(path.join(THEMES, `${key}.json`));
-  if (!data || typeof data !== 'object') return [['dim', '(no preview available)']];
-  const lines = [['title', key], ['', '']];
-  if (data.TAGLINE) lines.push(['dim', data.TAGLINE], ['', '']);
-  if (data.LOADED_SIGIL) lines.push(['ok', data.LOADED_SIGIL], ['', '']);
-  if (data.VOICE) lines.push(['', `Voice — ${data.VOICE}`], ['', '']);
-  if (data.LEX_SEALED_SECRETS) lines.push(['', `e.g.  Rule I — ${data.LEX_SEALED_SECRETS}`]);
-  if (data.BENEDICTION) lines.push(['', ''], ['dim', data.BENEDICTION]);
-  return lines;
-}
-
-/** `_theme_flair` — the voice elements the setup chrome speaks in once a theme is chosen. */
-export function themeFlair(theme) {
-  const data = readJsonMaybe(path.join(THEMES, `${theme}.json`)) || {};
-  const banner = data.BANNER ?? '';
-  return {
-    accent: data.ACCENT ?? 'cyan',
-    tagline: data.TAGLINE ?? '',
-    sigil: data.LOADED_SIGIL ?? '',
-    // `str.splitlines()` — `js/lib/udiff.mjs`' twin, already gated. It answers `[]` for
-    // the empty string where `''.split('\n')` answers `['']`, which would put a blank row
-    // in the banner of every theme that omits one; and its boundary set is Python's rather
-    // than `\s`, which P6d measured apart.
-    banner: splitLines(banner),
-    benediction: data.BENEDICTION ?? '',
-  };
 }
 
 // ---- the inventory's two consumers ----------------------------------------------------

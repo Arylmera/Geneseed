@@ -22,8 +22,8 @@
  * still the right shape; only its explanation moved. The alternative that was considered and
  * refused: building a numbered line-menu out of `js/maintain/setup.mjs`'s `askChoice`. That is not a
  * port of `_main_menu` — it is a THIRD user interface, differing from the reference on every
- * screen, unreachable from every cell (no cell has a TTY), and it would have to be deleted
- * the day P7c lands the real panel. The fallback is the reference's own contract for "no
+ * screen, unreachable from every cell (no cell has a TTY), for a panel that was rejected
+ * outright rather than deferred. The fallback is the reference's own contract for "no
  * full-screen menu available here"; a new UI would not be.
  *
  * `cmd_home` is the default for a bare `geneseed`, and it crosses WHOLE. Its two arms are
@@ -32,10 +32,9 @@
  *
  * `_web_first_ok`'s FIVE REFUSALS ARE THE PAYLOAD, and only two of them are reachable from a
  * cell: a cell's stdin is a pipe, so `isTTY` is false and everything past it is dead. The
- * other three (SSH, the Linux display server, the browser) are gated by the corpus in
- * `tests/test_pure_function_parity.py`, which drives this function with `isTTY` FAKED — the
- * one input no cell can vary. See that file's P7a section for what it reaches and what it
- * declares.
+ * other three (SSH, the Linux display server, the browser) are gated by
+ * `tests/unit/web_first.test.mjs`, which drives this function through
+ * `tests/fixtures/pure_probe.mjs` with `isTTY` FAKED — the one input no cell can vary.
  */
 import { printOut, printErr } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
@@ -93,13 +92,8 @@ export function cmdMenu() {
   // The reference's own `except Exception` arm, with a reason that is permanent here rather
   // than machine-dependent. stderr, and CRLF on Windows, because `sys.stderr.write` does.
   //
-  // P7b CORRECTED THE REASON RATHER THAN THE ARM. This module's header said the fallback was
-  // reached because "`import curses` fails on stock Windows Python", and P7b measured that
-  // to be false where it matters: `rituals/_harness_core.py` installs `rituals/_winterm.py`
-  // as `sys.modules["curses"]` when the stdlib module is missing, so the reference opens its
-  // panel on this machine and `tests/test_tui_boundary.py` drives it doing so. What is
-  // missing is on THIS side — there is no window implementation in the port — and that is
-  // what the message now says.
+  // The reason is on THIS side: there is no window implementation, by decision, and that is
+  // what the message says (`tests/unit/no_panel.test.mjs` keeps it so).
   // NOTHING TO POINT AT ANY MORE. The message used to end by sending the reader at the
   // Python panel, and P2 took the pointer out rather than re-aiming it: the panel it named
   // is the Python this migration deletes, and a refusal that sends a user to a file which

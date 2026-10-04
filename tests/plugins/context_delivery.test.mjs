@@ -129,3 +129,22 @@ test("GENESEED_CONTEXT_INJECT=off: no delivery in any form", async () => {
   assert.equal(client.prompts.length, 0)
   assert.equal(output.messages.length, 1)
 })
+
+// One OpenCode process can serve several directories, each with its own plugin instance
+// from the SAME module. The transform's block cache belongs to the instance: a module-level
+// cache served the first project's context into the second for the whole 30 s TTL.
+test("two instances in one process each get their own project's block", async () => {
+  const other = path.join(tmp, "other")
+  await fs.mkdir(other, { recursive: true })
+  await fs.writeFile(path.join(other, "README.md"), "# Other Repo\nhello\n")
+  const mod = await import(`${PLUGIN}?case=two-roots`)
+  const a = await mod.default({ directory: repo, client: stubClient() })
+  const b = await mod.default({ directory: other, client: stubClient() })
+  const outA = { messages: [userMsg("sa")] }
+  await a["experimental.chat.messages.transform"]({}, outA)
+  const outB = { messages: [userMsg("sb")] }
+  await b["experimental.chat.messages.transform"]({}, outB)
+  assert.match(outA.messages[0].parts[0].text, /# Delivery Repo/)
+  assert.match(outB.messages[0].parts[0].text, /# Other Repo/)
+  assert.doesNotMatch(outB.messages[0].parts[0].text, /# Delivery Repo/)
+})

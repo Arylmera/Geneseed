@@ -67,11 +67,40 @@ function shouldNotify({ now, lastUserMs, parentID, title, minMs }) {
 
 // AppleScript double-quoted string literal.
 function asStr(s) { return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"' }
-// PowerShell single-quoted string literal (escape ' by doubling).
-function psStr(s) { return "'" + String(s).replace(/'/g, "''") + "'" }
 
-function spawnDetached(cmd, args) {
-  const child = spawn(cmd, args, { stdio: "ignore", detached: true })
+// The notifier invocation for a platform, as data. Exported (via the factory) for tests.
+// Windows passes title and body through the environment, never through the -Command
+// text: PowerShell treats U+2018-U+201B as quote characters too, so escaping ASCII '
+// alone let a model-generated session title like  x’;Start-Process calc;’  close the
+// literal and run code. An env var is read as a value and never parsed as script.
+function notifyCommand(platform, title, body) {
+  if (platform === "darwin") {
+    return { cmd: "osascript", args: ["-e", `display notification ${asStr(body)} with title ${asStr(title)}`] }
+  }
+  if (platform === "win32") {
+    const script =
+      "Add-Type -AssemblyName System.Windows.Forms;" +
+      "Add-Type -AssemblyName System.Drawing;" +
+      "$n=New-Object System.Windows.Forms.NotifyIcon;" +
+      "$n.Icon=[System.Drawing.SystemIcons]::Information;$n.Visible=$true;" +
+      "$n.ShowBalloonTip(5000,$env:GS_T,$env:GS_B,[System.Windows.Forms.ToolTipIcon]::Info);" +
+      "Start-Sleep -Seconds 6;$n.Dispose()"
+    return {
+      cmd: "powershell",
+      args: ["-NoProfile", "-NonInteractive", "-Command", script],
+      env: { GS_T: String(title), GS_B: String(body) },
+    }
+  }
+  return { cmd: "notify-send", args: [title, body] }
+}
+
+// windowsHide: without it a detached PowerShell opens a visible console window that
+// sits on screen for the six seconds the balloon needs.
+function spawnDetached({ cmd, args, env }) {
+  const child = spawn(cmd, args, {
+    stdio: "ignore", detached: true, windowsHide: true,
+    env: env ? { ...process.env, ...env } : process.env,
+  })
   child.on("error", (e) => log(`spawn ${cmd} failed: ${e?.message ?? e}`))   // e.g. notifier not installed
   child.unref()
 }
@@ -79,20 +108,7 @@ function spawnDetached(cmd, args) {
 // Best-effort native notification; every failure is swallowed.
 function deliver(title, body) {
   try {
-    if (process.platform === "darwin") {
-      spawnDetached("osascript", ["-e", `display notification ${asStr(body)} with title ${asStr(title)}`])
-    } else if (process.platform === "win32") {
-      const script =
-        "Add-Type -AssemblyName System.Windows.Forms;" +
-        "Add-Type -AssemblyName System.Drawing;" +
-        "$n=New-Object System.Windows.Forms.NotifyIcon;" +
-        "$n.Icon=[System.Drawing.SystemIcons]::Information;$n.Visible=$true;" +
-        `$n.ShowBalloonTip(5000,${psStr(title)},${psStr(body)},[System.Windows.Forms.ToolTipIcon]::Info);` +
-        "Start-Sleep -Seconds 6;$n.Dispose()"
-      spawnDetached("powershell", ["-NoProfile", "-NonInteractive", "-Command", script])
-    } else {
-      spawnDetached("notify-send", [title, body])
-    }
+    spawnDetached(notifyCommand(process.platform, title, body))
   } catch (err) {
     log(`deliver failed: ${err?.message ?? err}`)
   }
@@ -137,6 +153,6 @@ export const GeneseedNotify = async ({ client }) => {
 // ponytail: OpenCode treats every export as a plugin and rejects non-functions; a
 // bare helper export crashes startup or logs "not a function". Hang the test helpers
 // off the factory instead — reachable via `import`, invisible to the loader.
-Object.assign(GeneseedNotify, { lastUserMs, shouldNotify })
+Object.assign(GeneseedNotify, { lastUserMs, shouldNotify, notifyCommand })
 
 export default GeneseedNotify

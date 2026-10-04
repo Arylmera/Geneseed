@@ -74,18 +74,25 @@ function globMd(dir) {
     && isFile(path.join(dir, n)));
 }
 
+/** Stems that name the store's own files, never a fact — `MEMORY` is the index itself. */
+const RESERVED_STEMS = new Set(['memory', 'readme']);
+
 /** `_existing_slugs` — slugs already stored, so learn never re-emits a known fact. */
 export function existingSlugs(memDir) {
-  const skip = new Set(['memory', 'readme']);
-  return new Set(globMd(memDir).map(stem).filter((s) => !skip.has(s.toLowerCase())));
+  return new Set(globMd(memDir).map(stem).filter((s) => !RESERVED_STEMS.has(s.toLowerCase())));
 }
 
 /**
  * `_write_memories` — split the model output into files, write each NEW one, and append a
  * pointer line to MEMORY.md. `existing` is MUTATED, so a reply carrying the same slug
  * twice writes it once.
+ *
+ * A reserved stem is refused (`name: MEMORY` would overwrite the index), and names compare
+ * LOWERCASE: on Windows and macOS `User-Prefs.md` and `user-prefs.md` are one file, so a
+ * case variant of a stored slug would overwrite it.
  */
 export function writeMemories(modelOutput, memDir, existing) {
+  const taken = new Set([...existing].map((s) => s.toLowerCase()));
   const written = [];
   const indexLines = [];
   for (let chunk of modelOutput.split(FILE_SEP_RE)) {
@@ -93,9 +100,11 @@ export function writeMemories(modelOutput, memDir, existing) {
     if (!chunk || chunk.toUpperCase() === 'NOTHING') continue;
     const [fm] = frontmatter(chunk);
     const name = fmGet(fm, 'name').trim();
-    if (!MEMORY_SLUG_RE.test(name) || existing.has(name)) continue;
+    const key = name.toLowerCase();
+    if (!MEMORY_SLUG_RE.test(name) || RESERVED_STEMS.has(key) || taken.has(key)) continue;
     writeText(path.join(memDir, `${name}.md`), `${chunk.replace(/\n+$/, '')}\n`);
     existing.add(name);
+    taken.add(key);
     written.push(name);
     const desc = fmGet(fm, 'description').trim();
     indexLines.push(`- [${name}](${name}.md)${desc ? ` \u2014 ${desc}` : ''}`);
@@ -147,7 +156,7 @@ export function memoryDropIndex(memDir, name) {
  * the user's to keep).
  */
 export function consolidateMemory(memDir) {
-  const skip = new Set(['memory', 'readme']);
+  const skip = RESERVED_STEMS;
   const facts = new Map();
   for (const name of sortPaths(globMd(memDir))) {
     const s = stem(name);

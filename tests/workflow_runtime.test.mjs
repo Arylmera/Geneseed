@@ -230,6 +230,32 @@ test("isolated agents run in their own worktrees, and a file two of them changed
   cleanup()
 })
 
+// Two runs of one long-named workflow on the same day differ only in the time at the END of
+// their run id. The tag is the whole id, so the second run's branch is new even while the
+// first run's kept worktree still holds its own; a tag cut to 32 characters made both runs
+// `geneseed-wf/research-plan-implement-20261004-1-a`, and the second `worktree add -b`
+// failed. Kept worktrees sit under <root>/.geneseed/worktrees/ (not the OS temp dir, whose
+// cleaners delete unmerged work), and the state dir ignores itself so status stays clean.
+test("a second same-day run gets its own branch, and worktrees live under .geneseed/", async () => {
+  const { dir: repo, cleanup } = tempRepo()
+  const runs = ["research-plan-implement-20261004-101500", "research-plan-implement-20261004-101501"]
+  const kept = []
+  for (const runId of runs) {
+    const client = editingClient({ a: [["a.txt", `${runId}\n`]] })
+    const rt = createRuntime({ client, directory: repo, git, runId })
+    assert.equal(await rt.agent("a task", { label: "a", isolation: "worktree" }), "done")
+    kept.push(...rt.worktrees())
+  }
+  assert.deepEqual(kept.map((w) => w.branch), runs.map((id) => `geneseed-wf/${id}-1-a`))
+  for (const w of kept) {
+    assert.equal(path.relative(path.join(repo, ".geneseed", "worktrees"), w.dir), `${w.branch.slice(12)}`)
+  }
+  assert.equal(fs.readFileSync(path.join(repo, ".geneseed", ".gitignore"), "utf8"), "*\n")
+  assert.equal(gitSync(["status", "--porcelain"], repo), "")
+  for (const w of kept) gitSync(["worktree", "remove", "--force", w.dir], repo)
+  cleanup()
+})
+
 test("isolation without a git executor fails the agent and never runs it in the shared tree", async () => {
   const client = editingClient({})
   const rt = createRuntime({ client, directory: os.tmpdir() })
