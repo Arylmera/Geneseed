@@ -2,9 +2,8 @@
 
 > {{DESC_PROSE}}
 
-**Trigger:** about to hand a human written prose — a commit body, PR description,
-doc, code comment, {{MEMORY}} note, or a written reply — and it should read like a
-person wrote it, not a model.
+**Trigger:** about to hand a human written prose (a commit body, PR description, doc,
+code comment, {{MEMORY}} note, or reply) that should read as a person's, not a model's.
 
 ## Procedure
 1. Draft for content first, fix voice on a second pass — don't self-censor while

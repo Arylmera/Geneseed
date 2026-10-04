@@ -2,7 +2,7 @@
 
 > {{DESC_PONYTAIL}}
 
-**Trigger:** the user says "ponytail", "be lazy", "lazy mode", "simplest/minimal solution", "yagni", "do less", or "shortest path", or complains about over-engineering, bloat, boilerplate, or needless dependencies. Sets a build *mode* that persists across the session, not a one-shot edit — off by default until invoked. Off again on "stop ponytail" / "normal mode". For restructuring code that already exists use [refactor](refactor.md); to critique an artifact use [roast-me](roast-me.md).
+**Trigger:** the user says "ponytail", "be lazy", "lazy mode", "yagni" or "do less", or complains about over-engineering, bloat, or needless dependencies. Also "simplest/minimal solution", "shortest path", or a complaint about boilerplate. Sets a build *mode* that persists across the session, not a one-shot edit — off by default until invoked. Off again on "stop ponytail" / "normal mode". For restructuring code that already exists use [refactor](refactor.md); to critique an artifact use [roast-me](roast-me.md).
 
 ## Procedure
 1. Set the intensity. Ponytail is **off by default**; invoking it turns it on at **full** unless a level is named. **lite** — build what's asked, name the lazier alternative in one line, user picks. **full** — the ladder enforced, shortest diff, shortest explanation. **ultra** — YAGNI extremist, ship the one-liner and challenge the rest of the requirement in the same breath. Switch any time with `/ponytail lite|full|ultra|off` (on OpenCode this command persists the level for the geneseed-ponytail plugin; `off` stops it).

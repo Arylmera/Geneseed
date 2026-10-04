@@ -4,7 +4,7 @@
 
 <!-- invocation: user -->
 
-**Trigger:** the user wants to *learn* something and asks you to teach — "teach me X",
+**Trigger:** the user wants to *learn* something and asks to be taught. Phrases: "teach me X",
 "get me up to speed on X", "this is confusing, break it down", "explain this passage",
 "how do I get to X in N days". Three shapes, picked from the ask: a **crash course**
 (from zero to functional, fast), a **decode** (confusing material handed over, make it

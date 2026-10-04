@@ -4,8 +4,8 @@
 
 <!-- invocation: user -->
 
-**Trigger:** the user wants to *learn while building* rather than be handed finished code —
-"learn mode", "turn on learning", "I want to understand what we build", "let me design it,
+**Trigger:** the user wants to *learn while building* rather than be handed finished code.
+Phrases: "learn mode", "turn on learning", "I want to understand what we build", "let me design it,
 you write it". Also "pause learning" / "resume learning" / "stop learn mode". To be taught a
 topic outside a build, use the [teach {{SKILL}}](teach.md); to have knowledge tested, the
 [quiz {{SKILL}}](quiz.md).

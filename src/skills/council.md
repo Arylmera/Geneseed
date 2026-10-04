@@ -2,7 +2,7 @@
 
 > {{DESC_COUNCIL}}
 
-**Trigger:** the user asks to "convene a council", "debate this", "argue both sides", "stress-test this decision", or wants a change, plan, or claim challenged from several points of view before committing to it.
+**Trigger:** the user asks to "convene a council", "debate this", or "argue both sides", or wants a decision stress-tested from several points of view. A change, plan, or claim all qualify, as long as it is challenged before committing to it.
 
 ## Procedure
 1. Frame the motion in one line — the exact decision, change, or claim under debate — and name what it feeds (a choice to make, a design to accept, a discussion to settle). Ground it in the real artifact and the project's own docs ({{DOCTRINE:read-the-docs-first}}) so the council argues the actual thing; if the motion is unclear or bundles several questions, split it and ask once, then proceed.

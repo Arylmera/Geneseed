@@ -2,7 +2,7 @@
 
 > {{DESC_GIT_ARCHAEOLOGY}}
 
-**Trigger:** you need to learn something *from* the history — when a regression was
+**Trigger:** something must be learned *from* the history — when a regression was
 introduced, who last touched a line and why, or where a symbol or string entered the
 codebase. Read-only: this {{SKILL}} investigates, it does not change history (to repair
 or rewrite, use git-rescue.md; to write a new commit, use commit.md).

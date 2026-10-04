@@ -3,9 +3,9 @@
 > {{DESC_RESEARCHER}}
 
 ## When to dispatch
-- A question needs answers from *outside* the repository — the open web, a
-  vendor's docs, an upgrade guide, a specification — and you want the verified
-  findings, not the pages, in your context ({{DOCTRINE:context-economy}}).
+- A question needs verified answers from *outside* the repository. The open web, a
+  vendor's docs, an upgrade guide, a specification: the main context gets the verified
+  findings, not the pages ({{DOCTRINE:context-economy}}).
 - The research {{SKILL}} is running and the host can run subagents: this seat
   does the fetching and cross-checking so the main context stays small.
 - A migrate, forge-mcp, or ingest run needs a spec or changelog read before

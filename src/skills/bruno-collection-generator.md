@@ -3,9 +3,9 @@
 > {{DESC_BRUNO_COLLECTION_GENERATOR}}
 
 **Trigger:** creating, converting, or reorganising a [Bruno](https://www.usebruno.com/)
-collection — requests, folders, environments, request docs — from backend routes, an
-OpenAPI snippet, pasted API docs, curl commands, or a plain endpoint list, as `.bru`
-files or OpenCollection YAML.
+collection as `.bru` files or OpenCollection YAML. The collection covers requests,
+folders, environments and request docs; the source can be backend routes, an OpenAPI
+snippet, pasted API docs, curl commands, or a plain endpoint list.
 
 ## Procedure
 1. Gather the inputs, and state every assumption you fill in ({{LAW:echo-the-intent}}): the source

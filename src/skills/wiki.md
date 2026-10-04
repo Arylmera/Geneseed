@@ -2,9 +2,9 @@
 
 > {{DESC_WIKI}}
 
-**Trigger:** a task needs knowledge the user keeps in their machine-wide
-knowledge base (declared in `wiki.jsonc`, AGENT.md §8), or the work has produced
-a durable, cross-project fact worth writing back into it.
+**Trigger:** a task needs the user's machine-wide knowledge base, or has produced a
+durable cross-project fact worth writing back. The knowledge base is declared in
+`wiki.jsonc` (AGENT.md §8).
 
 ## Procedure
 

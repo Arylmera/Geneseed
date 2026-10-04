@@ -2,10 +2,10 @@
 
 > {{DESC_WORKFLOW}}
 
-**Trigger:** a task that benefits from *deterministic* multi-agent orchestration — a
-fan-out across independent units, a staged find→verify pipeline, a fresh-context
-handoff between phases, or a loop that accumulates to a target — **and** the host
-exposes a workflow tool. When it does not, use [parallel-agents](parallel-agents.md)
+**Trigger:** a task benefits from *deterministic* multi-agent orchestration **and** the
+host exposes a workflow tool. The shapes: a fan-out across independent units, a staged
+find→verify pipeline, a fresh-context handoff between phases, or a loop that accumulates
+to a target. When the host has no workflow tool, use [parallel-agents](parallel-agents.md)
 or [council](council.md) instead — those are *model-driven*; this {{SKILL}} is
 *code-driven*.
 

@@ -3,9 +3,9 @@
 > {{DESC_THEME}}
 <!-- invocation: user -->
 
-**Trigger:** the user wants their own OpenCode colour theme — "make me a theme",
-"create a custom theme", "I want my own colours", "a theme that matches <brand>", "a
-darker/transparent version of <theme>", or asks to tweak the shipped colours. For
+**Trigger:** the user wants their own OpenCode colour theme, or asks to tweak the shipped
+colours. Phrases: "make me a theme", "create a custom theme", "I want my own colours", "a
+theme that matches my brand", "a darker/transparent version of this theme". For
 changing the agent's *voice* (imperial, pirate…) that is a different concept — point
 them at `--theme` / the setup wizard, not this {{SKILL}}.
 

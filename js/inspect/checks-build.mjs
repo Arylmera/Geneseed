@@ -81,6 +81,34 @@ export function checkBuild(themeName, out, isVendored = isVendoredPath) {
       problems.push(`[${themeName}] unresolved token ${tok} in ${rel}`);
     }
     for (const p of linkProblems(md, text, outAbs, rel)) problems.push(`[${themeName}] ${p}`);
+    for (const p of descriptionProblems(text, rel)) problems.push(`[${themeName}] ${p}`);
+  }
+  return problems;
+}
+
+/**
+ * The `description:` of an emitted native skill or agent, held to Anthropic's skill-authoring
+ * rules — it is the ONLY text a host routes on, so a defect here is a skill that silently
+ * never fires. Three arms: a `…` ending is `withWhen`'s mid-sentence fallback (the trigger
+ * was cut, cure it with a shorter first trigger sentence); an XML-looking tag is rejected
+ * outright by the Agent Skills spec; a first/second-person pronoun is the point-of-view drift
+ * the spec warns degrades discovery, since the text is injected into the system prompt.
+ * The pronoun arm reads only the `Use when:` half, and skips quoted user phrases ("teach me
+ * X" is what the user types, not the description's voice): the purpose half is the theme's
+ * persona copy ("Make your own OpenCode theme"), authored per theme on purpose.
+ * Files without frontmatter (every bundle `.md`, AGENT.md) carry no description and pass.
+ */
+const DESC_LINE_RE = /^---\n(?:.*\n)*?description: (".*")\n(?:.*\n)*?---\n/;
+export function descriptionProblems(text, rel) {
+  const m = text.match(DESC_LINE_RE);
+  if (!m) return [];
+  const desc = parseJson(m[1]);
+  const problems = [];
+  if (desc.endsWith('…')) problems.push(`description cut mid-sentence in ${rel} — shorten the first trigger sentence`);
+  if (/<\/?[A-Za-z][^>]*>/.test(desc)) problems.push(`description carries an XML-like tag in ${rel}`);
+  const when = desc.split(' Use when: ')[1] ?? '';
+  if (/\b(I|I'm|me|my|you|you're|your)\b/i.test(when.replace(/"[^"]*"|\bI\/O\b/g, ''))) {
+    problems.push(`description's "Use when" is not in the third person in ${rel}`);
   }
   return problems;
 }
