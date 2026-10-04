@@ -19,7 +19,7 @@ import { readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readText, isFile, isDir } from '../lib/fs.mjs';
-import { frontmatter } from '../hosts/hooks.mjs';
+import { frontmatter } from '../hosts/memory-files.mjs';
 import { SRC } from '../build/source.mjs';
 import { checkGraph } from './graph.mjs';
 

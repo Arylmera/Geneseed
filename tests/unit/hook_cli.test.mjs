@@ -450,13 +450,15 @@ test('the vacuity check reports each kind of broken expectation', () => {
 // which entry point's walk should expect a row, and all seven rows say `cli` — so the filter
 // selected every row and filtered nothing, which is a partition with one side and the exact defect
 // this file catches in three other places. Dropping it changes no assertion: the CLI walk already
-// compared against all seven. The hook entry's own single spawn is gated by name below, which is
-// what the column's one interesting row (`hooks.mjs`, delegated) was pointing at anyway.
+// compared against all seven. The hook entry's own single spawn is gated by name below.
+//
+// ⚠ THE HOOK MODULE'S ROW IS GONE, AND THAT IS THE POINT. `js/hosts/hooks.mjs` sat here because
+// the CLI reached it — `js/web/api.mjs`, `js/web/actions.mjs`, `js/maintain/memory.mjs` and
+// `js/loop/catalog.mjs` imported it for `frontmatter`/`memoryDropIndex` alone — not because the
+// CLI ever spawned the model. Those helpers now live in `js/hosts/memory-files.mjs`, which does
+// not spawn, and `learn`'s spawn lives in `js/hosts/hooks-learn.mjs`, which the CLI cannot reach;
+// the equality below is what says so.
 const ALLOWED_SPAWNS = {
-  'hosts/hooks.mjs': {
-    gatedBy: 'the only spawn in the hook entry is the model CLI',
-    what: '`$GENESEED_LLM` — the model CLI `learn` shells out to',
-  },
   'inspect/checks-authoring.mjs': {
     binding: '{ spawnSync }',
     calls: 1,
@@ -593,23 +595,31 @@ test('the only spawn in the hook entry is the model CLI', () => {
   // The property is that there is exactly ONE spawn site and it is the model CLI, which is what
   // makes the dynamic half below meaningful: an absolute-path `spawn('C:/Python313/python.exe')`
   // never consults PATH and so would never notice that PATH lost anything.
-  const text = read('js', 'hosts', 'hooks.mjs');
+  const text = read('js', 'hosts', 'hooks-learn.mjs');
   // THE IMPORT, not a scan for call sites. A `\bexec\s*\(` scan matches every `SOME_RE.exec(...)`
   // in the file — it fired on three of them — and would still miss `cp.exec()` behind a namespace
   // import. Naming the one binding that may be imported closes both.
   const imports = [...text.matchAll(/import\s+(.+?)\s+from\s+'node:child_process'/g)]
     .map((m) => m[1]);
   assert.deepEqual(imports, ['{ spawnSync }'],
-    `js/hosts/hooks.mjs imports ${imports} from child_process; exactly one binding is allowed`);
+    `js/hosts/hooks-learn.mjs imports ${imports} from child_process; exactly one binding is allowed`);
   assert.equal((text.match(/(?<![.\w])spawnSync\s*\(/g) ?? []).length, 1,
-    'js/hosts/hooks.mjs has more than one spawnSync call site');
+    'js/hosts/hooks-learn.mjs has more than one spawnSync call site');
   assert.ok(text.includes('const argv = splitWords(llm);'),
     'the one spawn no longer takes its command from $GENESEED_LLM');
   // The entry point must not spawn either — and again the check is the IMPORT, not the word: a
   // scan for the string fired on the module docblock, which explains at length why the DRIVER may
   // not have one.
   assert.ok(!importsChildProcess(read(...HOOK.split('/'))),
-    `${HOOK} imports child_process; only js/hosts/hooks.mjs's model CLI may`);
+    `${HOOK} imports child_process; only js/hosts/hooks-learn.mjs's model CLI may`);
+  // TRANSITIVE, because the verbs are dynamic imports one module deep: the per-file checks above
+  // would not notice a gate or `context` module growing a spawn of its own. The walk follows the
+  // entry's literal `import('…')` specifiers, so this is every module any hook verb can load.
+  const spawners = [...importClosure(path.join(ROOT, ...HOOK.split('/')))]
+    .filter((f) => importsChildProcess(readFileSync(f, 'utf8')))
+    .map((f) => path.relative(ROOT, f).replaceAll('\\', '/'));
+  assert.deepEqual(spawners, ['js/hosts/hooks-learn.mjs'],
+    'a hook verb other than learn reaches child_process — the gates run on every tool call');
 });
 
 test('the CLI entry reaches child_process only where it is declared', () => {
@@ -636,8 +646,8 @@ test('the CLI entry reaches child_process only where it is declared', () => {
 
 test('the web module tree spawns only from the declared modules', () => {
   // A TRANSITIVE WALK FROM `js/web/server.mjs` WOULD PROVE THE WRONG THING: that graph reaches
-  // `js/inspect/checks-authoring.mjs`, `js/maintain/setup.mjs` and `js/hosts/hooks.mjs`, three modules that legitimately spawn and
-  // are declared above. An equality over it would either fail or re-declare all three here, which
+  // `js/inspect/checks-authoring.mjs` and `js/maintain/setup.mjs`, two modules that legitimately spawn and
+  // are declared above. An equality over it would either fail or re-declare both here, which
   // puts one module's decision in two files. So this is a DIRECTORY scan keyed on the `web/`
   // prefix — every spawning file under `js/web/` has a row.
   const dir = path.join(ROOT, 'js', 'web');
@@ -663,14 +673,6 @@ test('each declared module spawns only what its row declares', () => {
   // second call site reusing the binding to start an interpreter would satisfy a count alone.
   let checked = 0;
   for (const [rel, spec] of Object.entries(ALLOWED_SPAWNS)) {
-    if (spec.gatedBy) {
-      // A DELEGATED ROW names the test that owns its argv instead of repeating the literals.
-      // Checked rather than trusted: a pointer at a test that no longer exists asserts nothing.
-      assert.ok(read('tests', 'unit', 'hook_cli.test.mjs').includes(`test('${spec.gatedBy}'`),
-        `js/${rel} delegates its argv assertion to a test named ${JSON.stringify(spec.gatedBy)}, `
-        + 'which is not in this file — the delegation is the whole gate');
-      continue;
-    }
     const text = read('js', ...rel.split('/'));
     const imports = [...text.matchAll(/import\s+(.+?)\s+from\s+'node:child_process'/g)]
       .map((m) => m[1]);

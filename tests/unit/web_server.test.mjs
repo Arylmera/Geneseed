@@ -367,16 +367,16 @@ test('the declared surface is the one the dispatcher uses', async () => {
     // cannot answer 200 here: this probe's dist root is 'nowhere', so a fall-through is a 404.)
     assert.equal(await hit('GET', '/api/recent'), 200,
       'GET /api/recent must answer — a 404 means the declaration is not dispatched on');
-    // An empty body names no `root`, which `setLoopPreset` refuses as an unknown loop before it
-    // ever writes anything — a READ-ONLY refusal, unlike `apiLoopsActive` (GET `/api/loops`'s
+    // An empty body names no `preset`, which `apiLoopsPresetMutate` refuses FIRST — before it
+    // reads the registry at all, so a READ-ONLY refusal, unlike `apiLoopsActive` (GET `/api/loops`'s
     // sibling), which this probe deliberately does not drive for the same reason it never drove
     // `/api/loops`: a real poll can write the DEVELOPER's own `loops.json` (a pruned stale row),
     // and this probe runs against the real machine config, not a sandbox.
-    // `apiLoopsPresetMutate` turns the throw into `NotFound`, which the outer catch maps to 404,
-    // proving the route reaches `setLoopPreset` rather than answering from the table alone.
+    // The refusal is a `NotFound`, which the outer catch maps to 404, proving the route reaches
+    // `apiLoopsPresetMutate` rather than answering from the table alone.
     assert.equal(await hit('POST', '/api/loops/preset', 'tok'), 404,
-      'POST /api/loops/preset: an empty body names no root, so it must reach setLoopPreset and '
-      + 'raise NotFound');
+      'POST /api/loops/preset: an empty body names no preset, so it must reach '
+      + 'apiLoopsPresetMutate and raise NotFound');
     assert.equal(await hit('POST', '/api/excludes', 'tok'), 409,
       'a table POST must answer, and an empty body is the 409 arm of the convention — the '
       + 'control for the refusals below');

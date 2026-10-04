@@ -282,7 +282,7 @@ const SHIPS = [
   ['js/', 'the port'],
   ['src/', 'the product: what a bundle is rendered from'],
   ['themes/', 'render.loadTheme reads these; a themeless install renders nothing'],
-  ['adapters/', 'js/build/driver.mjs, js/hosts/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
+  ['adapters/', 'js/build/driver.mjs, js/hosts/hooks-learn.mjs and js/web/docs.mjs all read ROOT/adapters'],
   ['docs/reference/', "js/web/docs.mjs serves it; the console's Reference pages ARE these files"],
   ['docs/_groups.json', 'js/web/docs.mjs reads it; without it the Docs tab has no groups and shows nothing'],
   ['docs/understand/', "js/web/docs.mjs serves it; the console's Understand track IS these files"],
