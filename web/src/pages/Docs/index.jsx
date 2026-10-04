@@ -7,6 +7,7 @@ import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import FilterInput from '../../components/FilterInput.jsx'
 import { GroupedRows, walkRows, useActiveRowInView } from '../../components/LibRows.jsx'
+import ClassChips from '../../components/ClassChips.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
 import CliPage from './CliPage.jsx'
 import Glossary from './Glossary.jsx'
@@ -76,6 +77,19 @@ export function filterRows(rows, q) {
   return rows.filter((r) => `${r.title} ${r.name} ${r.desc}`.toLowerCase().includes(ql))
 }
 
+// The part's sections as chips (ClassChips), in the order docRows already groups them —
+// first appearance in the page list, same as the `● SECTION` headings above the list.
+// Exported for the test that pins it.
+export function partSections(rows) {
+  const order = []
+  const n = new Map()
+  for (const r of rows) {
+    if (!n.has(r.group)) order.push(r.group)
+    n.set(r.group, (n.get(r.group) || 0) + 1)
+  }
+  return order.map((g) => ({ key: g, label: g, n: n.get(g), c: 'var(--accent)' }))
+}
+
 // The Docs, in the Library's three panes: a rail of parts (the docs folders) with their page
 // counts, the part's pages grouped by section, and the page with its breadcrumb, its outline
 // in the margin and Previous / Next within its section. The address is still `#/docs/<id>`,
@@ -135,15 +149,20 @@ export default function Docs({ page, overview, onAction }) {
   }, [onTrack, pageData, pageId])
   const seen = onTrack ? [...readSeen(), pageId] : []
 
-  // Filter text belongs to one part: drop it when the open page moves to another.
+  // Filter text and the section chip both belong to one part: drop them when the open
+  // page moves to another.
   const [q, setQ] = useState('')
+  const [sec, setSec] = useState('all')
   const [seenPart, setSeenPart] = useState(part?.id)
   if (part?.id !== seenPart) {
     setSeenPart(part?.id)
     setQ('')
+    setSec('all')
   }
   const rows = docRows(part)
-  const shown = filterRows(rows, q)
+  const cats = partSections(rows)
+  const pool = sec === 'all' ? rows : rows.filter((r) => r.group === sec)
+  const shown = filterRows(pool, q)
   const rowsRef = useActiveRowInView([part?.id, pageId])
 
   if (error) return <ErrorState error={error} />
@@ -190,11 +209,18 @@ export default function Docs({ page, overview, onAction }) {
             <b>
               {part?.label}{' '}
               <span className="mono dim">
-                {q.trim() ? `${shown.length} of ${rows.length}` : rows.length || ''}
+                {q.trim() ? `${shown.length} of ${pool.length}` : pool.length || ''}
               </span>
             </b>
             {onTrack && <TrackProgress pages={part.pages} seen={seen} />}
           </div>
+          <ClassChips
+            label="Sections"
+            total={rows.length}
+            cats={cats}
+            cat={sec}
+            onChange={setSec}
+          />
           <FilterInput
             value={q}
             onChange={setQ}

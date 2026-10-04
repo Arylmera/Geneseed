@@ -9,6 +9,7 @@ import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import { GroupedRows, walkRows, useActiveRowInView } from '../components/LibRows.jsx'
+import ClassChips from '../components/ClassChips.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
@@ -209,46 +210,16 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
       <div
         className={`library${lock ? ' locked' : ''}${isSkills && skillSplit.cats.length > 1 ? ' has-banner' : ''}`}
       >
-        {isSkills && skillSplit.cats.length > 1 && (
+        {isSkills && (
           // Skill types as a banner across the whole card: the classes are the first way to
           // cut 50-odd skills, so they get the width, not a wrapped corner of the list column.
-          <div className="skill-banner" role="group" aria-label="Skill types">
-            <div className="skill-banner-row">
-              <span className="skill-banner-label">Skill types</span>
-              <div className="skill-cats">
-                <button
-                  type="button"
-                  className={`skill-cat${cat === 'all' ? ' on' : ''}`}
-                  aria-pressed={cat === 'all'}
-                  onClick={() => setCat('all')}
-                >
-                  All <span className="cn">{items.length}</span>
-                </button>
-                {skillSplit.cats.map(({ key, label: cl, n, c }) => (
-                  <button
-                    type="button"
-                    key={key}
-                    className={`skill-cat${cat === key ? ' on' : ''}`}
-                    aria-pressed={cat === key}
-                    style={{ '--cc': c }}
-                    onClick={() => setCat(key)}
-                  >
-                    <span className="cdot" aria-hidden="true" />
-                    {cl} <span className="cn">{n}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="skill-mix" aria-hidden="true">
-              {skillSplit.cats.map(({ key, n, c }) => (
-                <span
-                  key={key}
-                  className={cat === 'all' || cat === key ? '' : 'dim'}
-                  style={{ '--cc': c, flexGrow: n }}
-                />
-              ))}
-            </div>
-          </div>
+          <ClassChips
+            label="Skill types"
+            total={items.length}
+            cats={skillSplit.cats}
+            cat={cat}
+            onChange={setCat}
+          />
         )}
         {lock ? null : (
           <aside className="lib-kinds" aria-label="Library kinds">
