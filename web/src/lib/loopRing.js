@@ -39,6 +39,16 @@ export const ENTRY_TO = r1(pt(205).x - 6)
 // ponytail: text width estimated at 6.4px a character (11px UI font); measuring needs a DOM.
 const textW = (s) => s.length * 6.4
 
+// A node's name, drawn centred on it, as a box; `clashes` is any new name meeting another one.
+const nameBox = (n) => ({ x: n.x - textW(n.name) / 2, y: n.y - 7, w: textW(n.name), h: 14 })
+const meets = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+const clashes = (fresh, placed) =>
+  fresh.some((a, i) =>
+    [...fresh.slice(i + 1), ...placed.filter((p) => !p.gate)].some((b) =>
+      meets(nameBox(a), nameBox(b)),
+    ),
+  )
+
 // A brick's human gate as words — the marker's accessible title and the brick card's tag. A
 // gate limited by `gateOn` stops only on those outcomes, so the label names them.
 export function humanGate(brick) {
@@ -115,8 +125,15 @@ export function layoutLoop(graph, bricks = []) {
       const c = pt(hs.a + (pair ? (k ? 18 : -18) : 0), R + (pair ? 54 : 44))
       const away = Math.atan2(c.y - hp.y, c.x - hp.x) * (180 / Math.PI) // head → centre
       const own = l.nodes.filter((n) => claimed.get(n) === l)
-      own.forEach((n, j) => {
-        const p = pt(away + (j - (own.length - 1) / 2) * 60, IR, c)
+      // Own nodes fan out around the far side of the circle, `step` degrees apart: wide enough
+      // that two nodes clear each other with air between them (a chord of 2·NR + 12 on IR:
+      // 101°, so 105°), then 5° wider at a time while a name — wider than its node — would
+      // still run into another's.
+      const spread = (step) =>
+        own.map((n, j) => ({ name: n, ...pt(away + (j - (own.length - 1) / 2) * step, IR, c) }))
+      let step = 105
+      while (step < 150 && clashes(spread(step), nodes)) step += 5
+      spread(step).forEach(({ name: n, ...p }) => {
         nodes.push({
           name: n,
           ...p,

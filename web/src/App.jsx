@@ -263,7 +263,11 @@ export default function App() {
             onSwitch={refresh}
           />
           <main className="page" id="main" tabIndex={-1}>
-            <div className={route.page === 'library' ? 'pad pad-wide' : 'pad'}>
+            <div
+              className={
+                route.page === 'library' || route.page === 'loops' ? 'pad pad-wide' : 'pad'
+              }
+            >
               <Suspense fallback={<Loading />}>
                 {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. A page reachable from
                   several routes (the Library from `#/skills`, `#/section/memory` and

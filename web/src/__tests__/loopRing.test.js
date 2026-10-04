@@ -271,3 +271,96 @@ describe('layoutLoop — human gates', () => {
     expect(humans(l)).toEqual([['c', 'Human gate']])
   })
 })
+
+// api-endpoint, as `/api/loops` hands it over: apply heads two inner loops, and review-fix (the
+// five-node one) owns two nodes of its own — bruno-test and security-scan (test is apply-test's,
+// review closes the iteration). Spread 60° apart on a 44px circle they sat 44px apart, less than
+// one node's diameter, so the console drew them on top of each other.
+const API_ENDPOINT = {
+  name: 'api-endpoint',
+  nodes: ['plan', 'identify', 'apply', 'test', 'bruno-test', 'security-scan', 'review'],
+  start: 'plan',
+  edges: [
+    { from: 'plan', on: 'pass', to: 'identify' },
+    { from: 'identify', on: 'more', to: 'apply' },
+    { from: 'identify', on: 'done', to: '$close' },
+    { from: 'apply', on: 'pass', to: 'test' },
+    { from: 'test', on: 'pass', to: 'bruno-test' },
+    { from: 'test', on: 'fail', to: 'apply' },
+    { from: 'bruno-test', on: 'pass', to: 'security-scan' },
+    { from: 'bruno-test', on: 'fail', to: '$stop' },
+    { from: 'security-scan', on: 'pass', to: 'review' },
+    { from: 'security-scan', on: 'fail', to: 'apply' },
+    { from: 'review', on: 'pass', to: 'identify' },
+    { from: 'review', on: 'fail', to: 'apply' },
+  ],
+  loops: [
+    {
+      name: 'iterations',
+      nodes: ['identify', 'apply', 'test', 'bruno-test', 'security-scan', 'review'],
+      max: 20,
+      iteration: true,
+    },
+    { name: 'apply-test', nodes: ['apply', 'test'], max: 5 },
+    {
+      name: 'review-fix',
+      nodes: ['apply', 'test', 'bruno-test', 'security-scan', 'review'],
+      max: 3,
+    },
+  ],
+}
+const API_BRICKS = [
+  ...BRICKS,
+  { name: 'plan', effect: 'read' },
+  { name: 'bruno-test', effect: 'mutate' },
+  { name: 'security-scan', effect: 'read' },
+]
+
+describe('layoutLoop — a crowded inner circle', () => {
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
+  // A node's name is drawn centred on it, 11.5px semibold: ~6.4px a character, 14px tall.
+  const box = (n) => ({ x: n.x - n.name.length * 3.2, w: n.name.length * 6.4, y: n.y - 7, h: 14 })
+  const meets = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+  // review-fix's circle is the pair's second, centred (369.7, 311.9); its two own nodes fan out
+  // either side of the head→centre direction (77.9°), 105° apart — the first 5° step whose chord
+  // (2·44·sin 52.5° ≈ 70px) leaves 12px of air between two 28px nodes; their names clear too.
+  it('puts review-fix’s own nodes on its circle, 105° apart, and test on apply-test’s', () => {
+    const l = layoutLoop(API_ENDPOINT, API_BRICKS)
+    expect(l.mode).toBe('ring')
+    expect(ringNames(l)).toEqual(['identify', 'validate', 'apply', 'review'])
+    const inner = l.nodes.filter((n) => n.inner).map((n) => n.name)
+    expect(inner).toEqual(['test', 'bruno-test', 'security-scan'])
+    expect(at(l, 'test')).toEqual([462.3, 210.7, 28])
+    expect(at(l, 'bruno-test')).toEqual([409.5, 330.7, 28])
+    expect(at(l, 'security-scan')).toEqual([341.2, 345.4, 28])
+  })
+
+  // No two nodes overlap: every pair (the ⛨ gate aside, it is smaller and between two ring
+  // slots) is at least two node radii (56px) apart, centre to centre.
+  it('keeps every pair of nodes at least two radii apart', () => {
+    const l = layoutLoop(API_ENDPOINT, API_BRICKS)
+    const ns = l.nodes.filter((n) => !n.gate)
+    for (const a of ns) {
+      for (const b of ns) {
+        if (a !== b) expect(dist(a, b), `${a.name} ↔ ${b.name}`).toBeGreaterThanOrEqual(56)
+      }
+    }
+    const [bruno, scan] = ['bruno-test', 'security-scan'].map((n) =>
+      l.nodes.find((x) => x.name === n),
+    )
+    expect(dist(bruno, scan)).toBeGreaterThanOrEqual(2 * 28)
+  })
+
+  // Names wider than their node (security-scan is ~83px across a 56px node) must not run into
+  // each other either: no two name boxes intersect.
+  it('keeps the node names from colliding', () => {
+    const l = layoutLoop(API_ENDPOINT, API_BRICKS)
+    const ns = l.nodes.filter((n) => !n.gate)
+    for (const a of ns) {
+      for (const b of ns) {
+        if (a !== b) expect(meets(box(a), box(b)), `${a.name} ↔ ${b.name}`).toBe(false)
+      }
+    }
+  })
+})

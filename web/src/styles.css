@@ -2816,38 +2816,37 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
    The ring reads three tokens: the accent is the iteration (the big turn), --good the inner
    retries, --warn the ⛨ validate gate — the mockup's blue / green / yellow, retinted by every
    voice and by light mode. */
-.loop-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px; margin-bottom: 16px; }
-.loop-tpl { gap: 6px; color: var(--text); }
-.loop-tpl:hover { border-color: var(--line-2); }
-.loop-tpl.on { border-color: var(--accent-line); background: var(--accent-soft); }
-.loop-graph { align-items: center; }
-.loop-rules { align-self: stretch; margin: 4px 0 0; padding-left: 18px; }
+.loop-graph { min-width: 0; }
+.loop-rules { margin: 0; padding-left: 18px; max-width: 76ch; font-size: 13.5px; color: var(--text-2); }
+.loop-rules li + li { margin-top: 4px; }
 .loop-ring { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto;
   font-family: var(--font-ui); }
-/* Loops › Active: a card per registered loop. Awaiting borders in --warn (it needs the user);
-   finished/unreadable reuse the brick's .dimmed. */
-.loop-run { gap: 6px; }
-.loop-run.on { border-color: var(--accent-line); background: var(--accent-soft); }
-.loop-run.awaiting { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
-.loop-run.dimmed { opacity: .55; }
-.loop-run-title { font-weight: 700; color: var(--text); margin-right: 4px; }
-.loop-run-title:hover { color: var(--accent-text); }
 .loop-run-wait { margin: 0; font-size: 12.5px; }
 .loop-run-preset { display: flex; align-items: center; gap: 8px; }
 .loop-history { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); }
-.loop-h2 { margin: 22px 0 10px; font-size: 15px; font-weight: 700; }
-.loop-bricks { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px; }
-.loop-brick { gap: 6px; scroll-margin-top: calc(var(--topbar-h) + 12px); }
+.loop-h2 { margin: 10px 0 0; font-size: 15px; font-weight: 700; }
+/* A template's bricks as compact rows (the Library's list rhythm); `.on` is the brick whose ring
+   node was just clicked, mutate reads as the warn tag. */
+.loop-brick-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line);
+  border-radius: var(--r-md); overflow: hidden; }
+.loop-brick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 14px;
+  border-bottom: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px);
+  transition: background .2s; }
+.loop-brick:last-child { border-bottom: 0; }
+.loop-brick.on { background: var(--accent-soft); }
 .loop-brick.dimmed { opacity: .55; }
-.loop-brick-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.loop-brick-head b { margin-right: 4px; }
-.loop-brick-desc { margin: 0; color: var(--text-2); }
-.loop-brick-src { margin: 8px 0 0; padding: 10px 12px; max-height: 320px; overflow: auto;
+.loop-brick b { min-width: 9em; font-size: 13.5px; }
+.loop-brick b a { color: var(--text); }
+.loop-brick b a:hover { color: var(--accent-text); }
+.loop-brick .mono { font-size: 12px; }
+.loop-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 18px;
+  margin: 0; font-size: 13.5px; }
+.loop-facts dt { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-3); align-self: center; }
+.loop-facts dd { margin: 0; overflow-wrap: anywhere; }
+.loop-brick-src { margin: 0; padding: 10px 12px; max-height: 480px; overflow: auto;
   white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); }
-.loop-brick summary { cursor: pointer; }
 .loop-problems { margin-bottom: 16px; border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
 .loop-problems ul { margin: 0; padding-left: 18px; }
 
