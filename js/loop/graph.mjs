@@ -23,6 +23,8 @@ import { WEIGHTS } from './score.mjs';
 
 export const TERMINALS = new Set(['$close', '$stop']);
 export const ENGINE_MAX_ITERATIONS = 20;
+/** A template's optional `category`, in the order the console's Loops list shows them. */
+export const CATEGORIES = ['architecture', 'tests', 'development', 'refactoring', 'day-to-day'];
 
 export function iterationLoop(graph) {
   return (graph.loops ?? []).find((l) => l.iteration === true);
@@ -152,6 +154,10 @@ export function checkGraph(graph, bricks) {
   const rules = graph.rules;
   if (rules !== undefined && !(Array.isArray(rules) && rules.every((r) => typeof r === 'string' && r.trim()))) {
     problems.push('rules: must be a list of non-empty strings');
+  }
+  // optional catalogue shelf: the console groups templates by it, an absent one under OTHER
+  if (graph.category !== undefined && !CATEGORIES.includes(graph.category)) {
+    problems.push(`category: must be one of ${CATEGORIES.join(', ')}`);
   }
   return problems;
 }

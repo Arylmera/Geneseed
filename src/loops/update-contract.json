@@ -1,6 +1,7 @@
 {
   "name": "update-contract",
   "description": "Change an interface with live consumers — an API, a schema, an event — as expand, migrate one consumer per iteration, contract: plan it for the user to review, then apply, test, check old and new consumers, and review.",
+  "category": "architecture",
   "rules": [
     "Contract files (OpenAPI, AsyncAPI, protobuf, Avro, GraphQL schemas, Flyway and Liquibase migrations) stop for a human by default; a stop on one is expected, not a failure.",
     "`geneseed loop init --contracts <globs>` appends more contract globs, and LOOP.md's `contracts` can be trimmed."

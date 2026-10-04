@@ -1,6 +1,7 @@
 {
   "name": "ci-repair",
   "description": "Read the branch's failing CI checks, fix one code failure per iteration, test, and push, until CI is green or only flaky or infra failures remain.",
+  "category": "day-to-day",
   "nodes": ["ci-triage", "ci-fix", "test"],
   "start": "ci-triage",
   "edges": [

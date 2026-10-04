@@ -1,6 +1,7 @@
 {
   "name": "legacy-refactor",
   "description": "Confirm the suite is green, pin the code's current behaviour with characterization tests in their own commit, then refactor behind that net: apply, test, and review, until the requirement is met.",
+  "category": "refactoring",
   "nodes": ["baseline-green", "characterize", "identify", "apply", "test", "review"],
   "start": "baseline-green",
   "edges": [

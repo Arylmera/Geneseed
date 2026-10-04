@@ -1,6 +1,7 @@
 {
   "name": "remove-dead-code",
   "description": "Confirm the suite is green, then remove one coherent group of unused code per iteration — exports, classes, files, retired flags — test it, and review it. Deletions score soft, not blocking.",
+  "category": "refactoring",
   "rules": [
     "Each card's intent cites the proof it is unused: the requirement's tool output (knip, ts-prune, vulture, PMD or IntelliJ inspections) and a reference search (git grep over code AND resources) for reflection, DI by name, Spring bean names and config.",
     "Generated sources do not count as unused.",

@@ -1,6 +1,7 @@
 {
   "name": "bugfix",
   "description": "Reproduce the bug with a failing test, then iterate: apply the fix, test, and review, until the requirement is met and the reproduction passes.",
+  "category": "development",
   "nodes": ["reproduce", "identify", "apply", "test", "review"],
   "start": "reproduce",
   "edges": [

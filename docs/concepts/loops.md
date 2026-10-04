@@ -228,6 +228,11 @@ with a retry, contract edits stop for a human by design) is visible to whichever
 including `review`, which checks the diff against it. A graph with no `rules`, or an empty list,
 omits the field; there is no fallback to `description`.
 
+A template may also carry a **`category`** — one of `architecture`, `tests`, `development`,
+`refactoring`, `day-to-day` — the shelf the console's Loops page files it under, in that order.
+It is optional (a template without one is listed under *Other*); `geneseed loop check` refuses
+any other value.
+
 ## Java notes for the newer bricks
 
 - **`mutation-check`** (`legacy-tests`) prefers PIT on a Maven build: `mvn test-compile

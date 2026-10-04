@@ -136,3 +136,17 @@ test('rules is absent, or a list of non-empty strings', () => {
   assert.deepEqual(checkGraph({ ...bugfix(), rules: ['ok', '  '] }, BRICKS), ['rules: must be a list of non-empty strings']);
   assert.deepEqual(checkGraph({ ...bugfix(), rules: [3] }, BRICKS), ['rules: must be a list of non-empty strings']);
 });
+
+// `category` sorts a template into the console's Loops list (architecture, tests, development,
+// refactoring, day-to-day — in that order on the page). Absent is fine: the page files it under
+// OTHER. Any other value, or a non-string, is refused by name with the allowed five listed.
+test('category is absent, or one of the five', () => {
+  for (const c of ['architecture', 'tests', 'development', 'refactoring', 'day-to-day']) {
+    assert.deepEqual(checkGraph({ ...bugfix(), category: c }, BRICKS), [], c);
+  }
+  const refused = ['category: must be one of architecture, tests, development, refactoring, day-to-day'];
+  assert.deepEqual(checkGraph({ ...bugfix(), category: 'misc' }, BRICKS), refused);
+  assert.deepEqual(checkGraph({ ...bugfix(), category: 'Tests' }, BRICKS), refused);
+  assert.deepEqual(checkGraph({ ...bugfix(), category: '' }, BRICKS), refused);
+  assert.deepEqual(checkGraph({ ...bugfix(), category: ['tests'] }, BRICKS), refused);
+});

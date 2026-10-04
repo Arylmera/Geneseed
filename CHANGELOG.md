@@ -12,6 +12,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 bricks' note files.
 
 ### Added
+- **Template `category`** — `architecture`, `tests`, `development`, `refactoring` or `day-to-day`;
+  every shipped template carries one, and the console's Loops page groups templates by it.
 - **Five loop templates** — `tdd` (plan, then write each failing test before the code that passes
   it), `legacy-tests` (pin undocumented behaviour with characterization tests, mutation-checked,
   production code untouched), `legacy-refactor` (pin current behaviour once, then refactor behind

@@ -2930,6 +2930,14 @@ test('the loops endpoint lists templates, bricks and overrides from the install 
     // The graph is passed whole, so a template's `rules` reach the page with it.
     assert.deepEqual(templates.find((t) => t.name === 'legacy-tests').graph.rules,
       ['Tests only: production code is never touched.']);
+    // `category` is passed through on the graph too: the page groups templates by it.
+    assert.deepEqual(Object.fromEntries(templates.map((t) => [t.name, t.graph.category])), {
+      'api-endpoint': 'development', 'architecture-decision': 'architecture', bugfix: 'development',
+      'ci-repair': 'day-to-day', 'deps-upgrade': 'day-to-day', 'enforce-architecture-rule': 'architecture',
+      feature: 'development', 'fix-flaky-tests': 'tests', 'legacy-refactor': 'refactoring',
+      'legacy-tests': 'tests', refactor: 'refactoring', 'remove-dead-code': 'refactoring',
+      'spec-first-feature': 'development', tdd: 'tests', 'update-contract': 'architecture',
+    });
     const apply = rows.find((b) => b.name === 'apply');
     assert.deepEqual(
       { origin: apply.origin, description: apply.description, effect: apply.effect,
