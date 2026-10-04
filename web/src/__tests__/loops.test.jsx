@@ -263,6 +263,16 @@ describe('Loops › Active', () => {
     expect(waiting.textContent).toContain("Answer in the agent's session.")
   })
 
+  it('names the brick a human gate waits on', async () => {
+    show([{ ...WAITING, awaiting: { kind: 'gate', node: 'adr-draft', outcome: 'pass' } }])
+    render(<Loops tab="active" />)
+    await screen.findByText('Split the parser')
+    const waiting = document.querySelector('.loop-run.awaiting')
+    expect(waiting.querySelector('.loop-run-wait').textContent).toBe(
+      "Awaiting gate at adr-draft — Answer in the agent's session.",
+    )
+  })
+
   it('shows finished and unreadable loops muted, with their status and no picker', async () => {
     show([RUN, DONE, { ...DONE, root: 'C:/w/bad', title: 'Broken', status: 'unreadable' }])
     render(<Loops tab="active" />)

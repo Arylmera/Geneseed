@@ -41,7 +41,11 @@ function RunCard({ loop, on, onPreset }) {
           </span>
           {loop.awaiting ? (
             <p className="loop-run-wait t-warn">
-              <b>Awaiting {loop.awaiting.kind}</b> — Answer in the agent&apos;s session.
+              <b>
+                Awaiting {loop.awaiting.kind}
+                {loop.awaiting.kind === 'gate' ? ` at ${loop.awaiting.node}` : ''}
+              </b>{' '}
+              — Answer in the agent&apos;s session.
             </p>
           ) : null}
           <label className="panel-note loop-run-preset">

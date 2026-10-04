@@ -104,7 +104,32 @@ export function parseNumstat(text) {
 
 const slash = (p) => p.replaceAll('\\', '/');
 
-export function actualRisk(declared, files, { writeSet = [], contracts = [], overrides = {} } = {}) {
+// The one glob dialect of the loop — a template's `contracts` and `ignoreDeletions`, and LOOP.md's
+// own `contracts`. `*` and `?` stay inside a path segment; `**` crosses segments, and `**/` may
+// match no directory at all, so `**/yarn.lock` covers the root one too. Both sides are
+// slash-normalised first, so a backslash is a separator, never an escape. Hand-rolled because
+// this module may import nothing but node builtins (see the docblock above); a plain path is a
+// glob that matches only itself, so exact-path contracts keep working.
+export function globMatch(pattern, file) {
+  const g = slash(String(pattern));
+  let re = '';
+  for (let i = 0; i < g.length; i += 1) {
+    const c = g[i];
+    if (c === '*' && g[i + 1] === '*') {
+      i += 1;
+      if (g[i + 1] === '/') { i += 1; re += '(?:.*/)?'; } else re += '.*';
+    } else if (c === '*') re += '[^/]*';
+    else if (c === '?') re += '[^/]';
+    else re += c.replace(/[.+^${}()|[\]]/g, '\\$&');
+  }
+  return new RegExp(`^${re}$`).test(slash(String(file)));
+}
+
+const matchesAny = (globs, file) => globs.some((g) => globMatch(g, file));
+
+export function actualRisk(declared, files, {
+  writeSet = [], contracts = [], ignoreDeletions = [], overrides = {},
+} = {}) {
   const w = { ...WEIGHTS, ...overrides };
   let score = declared;
   const reasons = [];
@@ -114,13 +139,13 @@ export function actualRisk(declared, files, { writeSet = [], contracts = [], ove
     score = Math.max(score, 0.8);
     reasons.push(`outside the write set: ${outside.map((f) => slash(f.file)).join(', ')}`);
   }
-  const deleted = files.reduce((n, f) => n + f.deleted, 0);
+  // ignoreDeletions only leaves the deletion count: the write-set check above still saw the file.
+  const deleted = files.filter((f) => !matchesAny(ignoreDeletions, f.file)).reduce((n, f) => n + f.deleted, 0);
   if (deleted > DELETION_LINES) {
     score = Math.max(score, w.delete);
     reasons.push(`${deleted} lines deleted`);
   }
-  const contractSet = new Set(contracts.map(slash));
-  const hit = files.filter((f) => contractSet.has(slash(f.file)));
+  const hit = files.filter((f) => matchesAny(contracts, f.file));
   if (hit.length) {
     score = Math.max(score, w.api);
     reasons.push(`contract files: ${hit.map((f) => slash(f.file)).join(', ')}`);

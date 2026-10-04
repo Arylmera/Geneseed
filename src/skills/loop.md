@@ -44,7 +44,9 @@ Repeat `geneseed loop next` and act on its JSON:
 
 - **`{awaiting}`** — a person must decide. Present it: `launch` → the graph in `LOOP.md`;
   `declared` → the card, its score and the threshold; `actual` → `git diff --cached` and the
-  `reasons`. Then **end the run** and wait. On their answer:
+  `reasons`; `gate` → what `node` produced (the file its `note` names, or `git diff`), the
+  `note` and the `outcome` it reported — `amend` re-runs that brick with their note. Then
+  **end the run** and wait. On their answer:
   `geneseed loop decide --verdict ok|no|amend --note "<their words>"` and continue.
 - **`{verify, run}`** — run exactly the `run` command it prints.
 - **`{node, validate: true}`** — score the card before the brick runs:
@@ -71,8 +73,9 @@ What `score --diff`, `decide` and `record` print back:
   keeping `LOOP.md`: `git stash -u -m loop-discarded -- . :^LOOP.md` (never `git stash push` —
   the word `push` trips the git gate mid-run).
 - **`{done: true}`**, **`{empty}`**, **`{resumed}`**, **`{dropped}`**, **`{node}`**, **`{verify}`**,
-  **`{stopped}`**, a declared score, and any result with `commit: false` (a blocking diff score
-  included — it surfaces as `{awaiting}`) — call `next` again.
+  **`{awaiting}`** (a gate), **`{stopped}`**, a declared score, and any result with
+  `commit: false` (a blocking diff score included — it surfaces as `{awaiting}`) — call `next`
+  again.
 - **`{error}`** — read it; it names the step you skipped (`score --declared` before a mutate
   brick, `score --diff` before `record`). Do the step, never edit the state block to get past it.
   An `{error}` from `record` that mentions JSON means the shell mangled the card's quotes: retry

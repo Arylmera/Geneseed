@@ -69,12 +69,11 @@ so the gap is visible in `LOOP.md` rather than just absent from it.
 checks (`gh run list --commit`), and with no run for that commit it reports `done` with a note
 rather than treating a branch CI never touched as green.
 
-`deps-upgrade` lowers its `delete` weight from the default 0.8 to 0.4, because a lockfile
-regenerating under a bump deletes and re-adds hundreds of lines with no risk in them — at the
-default weight that churn alone would push every iteration to a blocking score. The trade-off is
-a real deletion elsewhere in the same diff (a dropped file, a removed API) scores lower than it
-would under `bugfix` or `feature`; `deps-upgrade` leans on `review` and `deps-audit` to catch what
-the lowered weight no longer flags on its own.
+`deps-upgrade` lists lockfiles under `ignoreDeletions` (`**/package-lock.json`, `**/yarn.lock`,
+`**/pnpm-lock.yaml`, `**/*.lock`, `**/gradle.lockfile`): a lockfile regenerating under a bump deletes
+and re-adds hundreds of lines with no risk in them, so those lines stay out of the deleted-lines
+count. Everything else keeps the default `delete` weight, and a lockfile outside the iteration's
+write set still escalates like any other file.
 
 ## Notes: what survives an iteration
 

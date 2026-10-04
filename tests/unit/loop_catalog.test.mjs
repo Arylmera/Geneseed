@@ -45,6 +45,17 @@ test('parseBrick names every malformed field', () => {
   ]);
 });
 
+// `gate: human` is the only gate a brick may declare; it lands on the brick (and so in the
+// `loop check` listing) only when present, so a brick without one reads exactly as before.
+test('parseBrick reads gate: human and refuses any other gate value', () => {
+  const { brick, problems } = parseBrick(brickMd('adr-draft', 'agent: tester\ngate: human'), 'shipped');
+  assert.deepEqual(problems, []);
+  assert.equal(brick.gate, 'human');
+  assert.equal(Object.hasOwn(parseBrick(brickMd('lint'), 'shipped').brick, 'gate'), false);
+  assert.deepEqual(parseBrick(brickMd('x', 'agent: tester\ngate: robot'), 'shipped').problems,
+    ['x: gate must be human, not "robot"']);
+});
+
 test('userLoopsDir follows XDG_CONFIG_HOME', () => {
   assert.equal(userLoopsDir(), path.join(tmp, 'xdg', 'geneseed'));
 });

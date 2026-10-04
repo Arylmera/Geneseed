@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  WEIGHTS, PRESETS, declaredRisk, parseNumstat, actualRisk, decide, worst,
+  WEIGHTS, PRESETS, declaredRisk, parseNumstat, actualRisk, decide, worst, globMatch,
 } from '../../js/loop/score.mjs';
 
 test('the weights are the approved taxonomy', () => {
@@ -101,4 +101,55 @@ test('numstat expands renames into both paths and decodes C-quoted paths', () =>
   assert.deepEqual(parseNumstat(`0\t0\t${String.raw`"caf\303\251.js" => "b.js"`}`), [
     { file: 'b.js', added: 0, deleted: 0 }, { file: 'café.js', added: 0, deleted: 0 },
   ]);
+});
+
+// One glob dialect serves `contracts` and `ignoreDeletions`: `*` and `?` stay inside one path
+// segment, `**` crosses segments (`**/` may also match no directory at all), and both sides are
+// slash-normalised. A plain path is a glob that matches only itself, so an exact-path contract
+// written before globs existed keeps working. Regex metacharacters in a path are literal.
+test('globMatch: *, ? and ** over slash-normalised paths', () => {
+  for (const [pattern, file, expected] of [
+    ['api/openapi.yaml', 'api/openapi.yaml', true],
+    ['api/openapi.yaml', 'api/openapi.yml', false],
+    ['api/*.yaml', 'api/openapi.yaml', true],
+    ['api/*.yaml', 'api/v2/openapi.yaml', false],
+    ['api/**/*.yaml', 'api/openapi.yaml', true],
+    ['api/**/*.yaml', 'api/v2/deep/openapi.yaml', true],
+    ['**/package-lock.json', 'package-lock.json', true],
+    ['**/package-lock.json', 'web/package-lock.json', true],
+    ['**/*.lock', 'Cargo.lock', true],
+    ['**/*.lock', 'a/b/yarn.lock', true],
+    ['**/*.lock', 'a/b/yarn.locks', false],
+    ['src/**', 'src/a/b.js', true],
+    ['src/**', 'lib/a.js', false],
+    ['v?.json', 'v1.json', true],
+    ['v?.json', 'v/.json', false],
+    ['a+b(c).js', 'a+b(c).js', true],
+    ['api\\*.yaml', 'api\\openapi.yaml', true],
+    ['api\\*.yaml', 'api/v2\\openapi.yaml', false],
+  ]) assert.equal(globMatch(pattern, file), expected, `${pattern} ~ ${file}`);
+});
+
+test('contracts are globs: a matching file raises to the api weight, a plain path still matches', () => {
+  const f = (file) => ({ file, added: 1, deleted: 0 });
+  assert.deepEqual(actualRisk(0.4, [f('proto/v1/user.proto'), f('src/a.js')],
+    { writeSet: ['proto/v1/user.proto', 'src/a.js'], contracts: ['proto/**/*.proto'] }),
+  { score: 0.8, reasons: ['contract files: proto/v1/user.proto'] });
+  assert.deepEqual(actualRisk(0.4, [f('src/a.js')], { writeSet: ['src/a.js'], contracts: ['proto/**/*.proto'] }),
+    { score: 0.4, reasons: [] });
+});
+
+// ignoreDeletions takes matching files out of the >20 deleted-lines count only: a lockfile that
+// sheds 900 lines inside the write set is silent, but the same lockfile outside the write set
+// still escalates through the write-set rule, and an ignored file never hides another file's
+// deletions.
+test('ignoreDeletions: matching files do not count toward the deletion rule, the write set still applies', () => {
+  const f = (file, deleted) => ({ file, added: 1, deleted });
+  const ignoreDeletions = ['**/package-lock.json', '**/*.lock'];
+  assert.deepEqual(actualRisk(0.4, [f('package-lock.json', 900), f('src/a.js', 5)],
+    { writeSet: ['package-lock.json', 'src/a.js'], ignoreDeletions }), { score: 0.4, reasons: [] });
+  assert.deepEqual(actualRisk(0.4, [f('web/yarn.lock', 900)], { writeSet: [], ignoreDeletions }),
+    { score: 0.8, reasons: ['outside the write set: web/yarn.lock'] });
+  assert.deepEqual(actualRisk(0.2, [f('package-lock.json', 900), f('src/a.js', 21)],
+    { writeSet: ['package-lock.json', 'src/a.js'], ignoreDeletions }), { score: 0.8, reasons: ['21 lines deleted'] });
 });

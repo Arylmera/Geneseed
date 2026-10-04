@@ -158,6 +158,21 @@ test('an unknown preset is refused by init', () => {
   } finally { sb.cleanup(); }
 });
 
+// G5: `init --contracts` (comma-separated, trimmed) appends to the graph's own `contracts`.
+test('init --contracts appends globs after the template\'s own contracts', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    const graphFile = path.join(sb.path, 'g.json');
+    writeFileSync(graphFile, JSON.stringify({ ...JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../src/loops/bugfix.json'), 'utf8')), contracts: ['api/**'] }));
+    const r = run(sb.path, ['init', '--title', 't', '--requirement', 'r', '--graph', graphFile, '--contracts', 'proto/*.proto, schema.sql']);
+    assert.equal(r.code, 0);
+    const text = readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8');
+    assert.deepEqual(JSON.parse(text.slice(text.indexOf('```json') + 7, text.lastIndexOf('```'))).contracts,
+      ['api/**', 'proto/*.proto', 'schema.sql']);
+  } finally { sb.cleanup(); }
+});
+
 test('every state action refuses outside a git repository', () => {
   const sb = makeSandbox('loopcli-');
   try {

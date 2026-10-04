@@ -115,3 +115,14 @@ test('I3 — the iteration is entered only at its head (the first node listed)',
     'edge reproduce --pass--> identify enters the iteration at identify, not at its head apply',
   ]);
 });
+
+// `contracts` and `ignoreDeletions` are optional graph-level lists of globs; present, each must
+// be an array of non-empty strings — a bare string or an empty entry is refused by name.
+test('contracts and ignoreDeletions must be lists of non-empty glob strings', () => {
+  assert.deepEqual(checkGraph({ ...bugfix(), contracts: ['api/**'], ignoreDeletions: ['**/*.lock'] }, BRICKS), []);
+  assert.deepEqual(checkGraph({ ...bugfix(), contracts: 'api/**', ignoreDeletions: ['**/*.lock', ''] }, BRICKS), [
+    'contracts: must be a list of non-empty glob strings',
+    'ignoreDeletions: must be a list of non-empty glob strings',
+  ]);
+  assert.deepEqual(checkGraph({ ...bugfix(), contracts: [3] }, BRICKS), ['contracts: must be a list of non-empty glob strings']);
+});
