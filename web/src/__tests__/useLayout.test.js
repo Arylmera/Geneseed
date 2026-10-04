@@ -19,8 +19,8 @@ describe('resolveLayout', () => {
       expect(resolveLayout(id)).toBe(id)
   })
 
-  // 'auto' used to mean "the lens this skin was drawn around", and useLocalStorage persists
-  // the default on first render, so nearly every browser holds a stored 'auto'. The new
+  // 'auto' used to mean "the lens this skin was drawn around", and useLocalStorage used to
+  // persist the default on first render, so nearly every browser holds a stored 'auto'. The new
   // Overview is the console for everyone, so a stored 'auto' reads as the Overview; so do
   // an unknown id and nothing at all.
   it('reads auto, an unknown id and an empty store as the Overview', () => {

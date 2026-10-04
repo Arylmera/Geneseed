@@ -5,8 +5,7 @@ import { useAsync } from '../../hooks/useAsync.js'
 import { useHarness, HARNESSES, docsHostOf } from '../../hooks/useHarness.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
-import FilterInput from '../../components/FilterInput.jsx'
-import { GroupedRows, walkRows, useActiveRowInView } from '../../components/LibRows.jsx'
+import { GroupedRows, LibList, filterRows } from '../../components/LibRows.jsx'
 import RailCats, { groupsOf } from '../../components/RailCats.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
 import CliPage from './CliPage.jsx'
@@ -67,14 +66,6 @@ export function docRows(part) {
     group: p.section || 'General',
     groupC: 'var(--accent)',
   }))
-}
-
-// The filter: title and description, as in the Library (plus the id, which is what a link
-// to the page says).
-export function filterRows(rows, q) {
-  const ql = (q || '').trim().toLowerCase()
-  if (!ql) return rows
-  return rows.filter((r) => `${r.title} ${r.name} ${r.desc}`.toLowerCase().includes(ql))
 }
 
 // The Docs, in the Library's three panes: a rail of parts (the docs folders) with their page
@@ -150,7 +141,6 @@ export default function Docs({ page, overview, onAction }) {
   const cats = groupsOf(rows)
   const pool = sec === 'all' ? rows : rows.filter((r) => r.group === sec)
   const shown = filterRows(pool, q)
-  const rowsRef = useActiveRowInView([part?.id, pageId])
 
   if (error) return <ErrorState error={error} />
 
@@ -202,51 +192,36 @@ export default function Docs({ page, overview, onAction }) {
           </nav>
         </aside>
 
-        <section className="lib-list" aria-label={part?.label || 'Docs'}>
-          <div className="lib-list-head">
-            <b>
-              {part?.label}{' '}
-              <span className="mono dim">
-                {q.trim() ? `${shown.length} of ${pool.length}` : pool.length || ''}
-              </span>
-            </b>
-            {onTrack && <TrackProgress pages={part.pages} seen={seen} />}
-          </div>
-          <FilterInput
-            value={q}
-            onChange={setQ}
-            placeholder={`Filter ${(part?.label || 'docs').toLowerCase()}`}
-            label={`Filter ${part?.label || 'docs'}`}
-          />
-          <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
-            {!menu ? (
-              <Loading label="Loading docs…" />
-            ) : (
-              <GroupedRows
-                rows={shown}
-                activeName={pageId}
-                hrefOf={(r) => docHref(r.name)}
-                pills={
-                  onTrack
-                    ? (r) =>
-                        seen.includes(r.name) && r.name !== pageId ? (
-                          <span className="docs-read-mark">
-                            <span aria-hidden="true">✓</span>
-                            <span className="sr-only">read</span>
-                          </span>
-                        ) : null
-                    : undefined
-                }
-              />
-            )}
-            {q.trim() && shown.length === 0 && (
-              <div className="empty" style={{ padding: 32 }}>
-                <div className="big">No matches</div>
-                Nothing in {(part?.label || 'docs').toLowerCase()} matches “{q.trim()}”.
-              </div>
-            )}
-          </div>
-        </section>
+        <LibList
+          label={part?.label || 'Docs'}
+          count={q.trim() ? `${shown.length} of ${pool.length}` : pool.length || ''}
+          extra={onTrack && <TrackProgress pages={part.pages} seen={seen} />}
+          q={q}
+          onQ={setQ}
+          matched={shown.length}
+          inView={[part?.id, pageId]}
+        >
+          {!menu ? (
+            <Loading label="Loading docs…" />
+          ) : (
+            <GroupedRows
+              rows={shown}
+              activeName={pageId}
+              hrefOf={(r) => docHref(r.name)}
+              pills={
+                onTrack
+                  ? (r) =>
+                      seen.includes(r.name) && r.name !== pageId ? (
+                        <span className="docs-read-mark">
+                          <span aria-hidden="true">✓</span>
+                          <span className="sr-only">read</span>
+                        </span>
+                      ) : null
+                  : undefined
+              }
+            />
+          )}
+        </LibList>
 
         <article className="lib-reader docs-reader" aria-label="Page">
           {place.page && (

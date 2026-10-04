@@ -8,7 +8,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 vi.mock('../api/index.js', () => ({ api: { docs: vi.fn(), docsPage: vi.fn() } }))
 vi.mock('../lib/router.js', () => ({ go: vi.fn() }))
 
-import Docs, { docRows, filterRows } from '../pages/Docs/index.jsx'
+import Docs, { docRows } from '../pages/Docs/index.jsx'
+import { filterRows } from '../components/LibRows.jsx'
 import { api } from '../api/index.js'
 
 // Sections arrive grouped (the server's bySection): Install, then General.

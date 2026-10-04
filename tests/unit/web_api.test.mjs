@@ -1775,12 +1775,12 @@ test('the default harness is the emitted host', () => {
   }
 });
 
-// The server's family table and the console's host table (lib/hosts.js, its `docs` column)
-// must agree, or the selector would offer a host whose pages the server files elsewhere.
+// The server's family table, and the console's host table naming the same hosts: the
+// selector must not offer a host the server cannot file pages for.
 test('the docs families match the console host table', () => {
   assert.deepEqual(HOST_FAMILY, { opencode: 'opencode', claude: 'claude', openclaude: 'claude',
     bob: 'claude' });
-  assert.deepEqual(Object.fromEntries(HOSTS.map((h) => [h.id, h.docs])), HOST_FAMILY);
+  assert.deepEqual(HOSTS.map((h) => h.id).sort(), [...HARNESSES].sort());
 });
 
 // A tag names a host or the Claude family: `claude` shows to the three Claude-engine hosts, a
@@ -2769,6 +2769,19 @@ test('the about payload reports this install own origin and its GitHub flag', ()
   const od = originDisplay();
   assert.equal(body.repo, od.url);
   assert.equal(body.repo_is_github, Boolean(od.githubSlug));
+});
+
+// The About page's build rows read `version.installed_fp`, `version.source_fp` and
+// `version.verdict`. The payload used to read a `version` key the status snapshot does not
+// have, so all three were always empty. A source checkout always has a fingerprint, and the
+// verdict is always one of versionVerdict's sentences — never absent.
+test('the about payload carries the build fingerprints and the verdict', () => {
+  const { version } = apiDocsPage(neutral(), 'about', 'opencode');
+  assert.deepEqual(Object.keys(version), ['installed_fp', 'source_fp', 'verdict']);
+  assert.equal(typeof version.source_fp, 'string');
+  assert.ok(version.source_fp.length > 0, 'the source fingerprint is empty');
+  assert.equal(typeof version.verdict, 'string');
+  assert.ok(version.verdict.length > 0, 'the version verdict is empty');
 });
 
 // ---------------------------------------------------------------------------------------------

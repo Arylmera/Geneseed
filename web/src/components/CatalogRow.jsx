@@ -2,14 +2,12 @@ import React from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 
-// One expandable catalog row, shared by Laws' LawRow (invariants + doctrine rules) and
-// Skills' SkillRow: both lazy-load their full body via /api/item/<kind>/<addr> the first
-// time they open (cached on subsequent toggles) and share the same disclosure-button +
-// expand-panel shape. Per-page differences — the numeral column, the doctrine toggle
-// switch, the body renderer (LawText vs full Markdown) — stay with the caller via props;
-// this owns only the fetch/open lifecycle and the expand wrapper.
+// One expandable row of the constitution table (Laws' LawRow: invariants, doctrine rules,
+// the ethos): it lazy-loads its full body via /api/item/law/<addr> the first time it opens
+// (cached on subsequent toggles) under a disclosure button. The row's columns, the doctrine
+// toggle switch and the body renderer stay with the caller via props; this owns only the
+// fetch/open lifecycle and the expand wrapper.
 export default function CatalogRow({
-  kind,
   addr,
   isOpen,
   onToggle,
@@ -17,16 +15,15 @@ export default function CatalogRow({
   style,
   head,
   toggleCol = null,
-  expandClassName = 'law-expand',
   renderBody,
   srcLine,
 }) {
   const { data: detail } = useAsync(
-    () => (isOpen ? api.item(kind, addr) : Promise.resolve(null)),
+    () => (isOpen ? api.item('law', addr) : Promise.resolve(null)),
     [isOpen, addr],
   )
   const expand = isOpen && (
-    <div className={expandClassName}>
+    <div className="law-expand">
       {detail ? renderBody(detail) : <p className="dim">Loading…</p>}
       <div className="law-srcline">{srcLine}</div>
     </div>

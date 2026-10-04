@@ -25,6 +25,23 @@ describe('Margin', () => {
     expect(hrefs).toEqual(['#two-words', '#sub-part'])
   })
 
+  // The outline prints what the reader sees in the heading, not its markdown source.
+  it('strips inline markdown from the outline titles', () => {
+    const body = [
+      '## The `geneseed` CLI',
+      '## **Bold** and *italic*',
+      '## See [the guide](https://example.com/g)',
+      '### A [[skill]] and snake_case',
+    ].join('\n')
+    const { container } = render(<Margin body={body} glossaryRows={[]} />)
+    expect(texts(container, '.docs-toc a')).toEqual([
+      'The geneseed CLI',
+      'Bold and italic',
+      'See the guide',
+      'A skill and snake_case',
+    ])
+  })
+
   it('needs a whole word: Webhooks is not a hook', () => {
     expect(glossaryHits('Webhooks fire.', ROWS)).toEqual([])
   })
