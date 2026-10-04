@@ -16,7 +16,7 @@ Each iteration is one commit on `loop/<slug>`, pushed as it lands. Work done bef
 | **soft** | The commit lands, and the final report lists it under "to review". |
 | **blocking** | The agent stops and asks you before anything is committed. |
 
-### When it asks you
+## When it asks you
 
 The agent ends its turn and shows you what it is waiting on:
 
@@ -34,7 +34,7 @@ Answer in the agent's session, in your own words:
 
 The agent passes your answer on as `geneseed loop decide --verdict ok|no|amend --note "<your words>"`. The console never answers for you.
 
-### Where to watch
+## Where to watch
 
 - **Console: Loops › Active.** Every registered loop, awaiting ones first: the branch, `iteration N / max`, the current node on its ring, what an awaiting loop waits on, and the iteration history.
 - **`LOOP.md`** at the worktree root: the title, the requirement, the preset, the contracts, the notes the bricks left, and the engine's state.
