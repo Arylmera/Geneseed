@@ -1244,8 +1244,9 @@ test('an EXISTING opencode.json has its git gate re-wired when the pack comes ba
     for (const k of ['git commit*', 'git push*']) {
       assert.ok(!(k in bashOf()), `${k} was wired into a build whose process pack is off`);
     }
-    for (const k of ['rm -rf *', 'git push --force*', 'git push -f*', 'git reset --hard*',
-      'git clean -f*', 'git branch -D*', 'git checkout -- *']) {
+    for (const k of ['rm -rf *', 'git push --force*', 'git push -f*', 'git push *--force*',
+      'git push * -f*', 'git push *+*', 'git reset --hard*', 'git reset * --hard*',
+      'git clean -f*', 'git clean * -f*', 'git branch -D*', 'git checkout -- *']) {
       assert.equal(bashOf()[k], 'ask', `${k} is Law IV's and rides no pack toggle`);
     }
 

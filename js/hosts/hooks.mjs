@@ -595,10 +595,14 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 // says a rule in a prompt is a request and a rule at a boundary is a constraint; before this
 // regex the harness enforced one doctrine rule and no law. `checkout --` is listed because it
 // reverts to the INDEX and eats unstaged work; `checkout <branch>` is not. `clean -f` matches
-// any flag cluster carrying `f` (`-fd`, `-xf`) and never `-n`. `push --force*` trips this gate
-// rather than process 5's so the stronger reason is the one the user reads.
+// any flag cluster carrying `f` (`-fd`, `-xf`), in any position (`clean -d -f`), and never `-n`.
+// `reset`, `clean` and `push` take their flags ANYWHERE after the verb (`reset -q --hard`,
+// `push -f origin main`), so each reads `[^\n]*` up to the flag rather than requiring it next.
+// A forced push is `--force*`, a `-f` cluster, or a `+refspec` (`push origin +main`) — the last
+// is a force push with no flag at all. `push --force*` trips this gate rather than process 5's
+// so the stronger reason is the one the user reads.
 const DESTRUCTIVE_GIT_RE =
-  /\bgit\b[^\n]*\b(?:reset\s+--hard|clean\s+-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\s+[^\n]*--force)/;
+  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S))/;
 
 // `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
 // false allow publishes. So the exemption holds only when the ENTIRE command is built from
@@ -867,9 +871,11 @@ function ruleGateTarget(p, root) {
 
 // Law I's boundary half. High-precision vendor prefixes only — a generic "looks like entropy"
 // scan would fire on every hash and lockfile, and a gate that cries wolf gets allow-listed.
-// `.env*` is exempt because Law I names it as the place a secret may live.
+// `.env*` is exempt because Law I names it as the place a secret may live. `sk-ant-` takes `_`:
+// Anthropic keys are base64url, and a key whose first `_` fell inside the first 20 characters
+// slipped through. GitHub's classic `ghp_` tokens really are alphanumeric only.
 const SECRET_RE =
-  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
 
 function ruleGate(args) {
@@ -879,11 +885,14 @@ function ruleGate(args) {
 
 function ruleDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
-  const p = ti.file_path || ti.path || '';
+  // NotebookEdit names its target `notebook_path`; the settings matcher routes it here too.
+  const p = ti.file_path || ti.path || ti.notebook_path || '';
   if (typeof p !== 'string' || !p) return 0;
-  // Write carries `content`, Edit carries `new_string`; either can plant a credential.
-  const body = [ti.content, ti.new_string]
-    .find((v) => typeof v === 'string') || '';
+  // Write carries `content`, Edit `new_string`, NotebookEdit `new_source`, MultiEdit an
+  // `edits[]` of `new_string`s — every one can plant a credential, so every one is scanned.
+  const edits = Array.isArray(ti.edits) ? ti.edits.map((e) => e && e.new_string) : [];
+  const body = [ti.content, ti.new_string, ti.new_source, ...edits]
+    .filter((v) => typeof v === 'string').join('\n');
   if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
     return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
       + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
@@ -923,6 +932,10 @@ export const cmdToolGate = guardGate(toolGate, 'tool-gate');
 const FRONTMATTER_RE = /^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
 const FILE_SEP_RE = /^---FILE---[^\S\n]*$/m;
 const AGENT_NAME_RE = /^[a-z][a-z0-9-]{1,40}$/;
+// A memory `name:` becomes a FILENAME and the model writes it, so it is a plain slug or
+// nothing — no separator, no `..`, no drive. Looser than AGENT_NAME_RE on purpose: a memory
+// slug is a phrase (case and length vary), and a refused one is a fact silently lost.
+const MEMORY_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 const MAX_AGENT_BULLETS = 100;
 const MAX_NOTES_CHARS = 16000;
 // Host payloads name the finished subagent inconsistently; try each.
@@ -1122,7 +1135,7 @@ export function writeMemories(modelOutput, memDir, existing) {
     if (!chunk || chunk.toUpperCase() === 'NOTHING') continue;
     const [fm] = frontmatter(chunk);
     const name = fmGet(fm, 'name').trim();
-    if (!name || existing.has(name)) continue;
+    if (!MEMORY_SLUG_RE.test(name) || existing.has(name)) continue;
     writeText(path.join(memDir, `${name}.md`), `${chunk.replace(/\n+$/, '')}\n`);
     existing.add(name);
     written.push(name);
@@ -1232,7 +1245,8 @@ function runLlm(llm, prompt) {
     : String(s).replaceAll('\r\n', '\n').replaceAll('\r', '\n'));
   return {
     stdout: universal(proc.stdout),
-    stderr: universal(proc.stderr),
+    stderr: proc.error ? `[learn] could not run ${argv[0]}: ${proc.error.message}\n`
+      : universal(proc.stderr),
     // A spawn that never started is Python's FileNotFoundError, which propagates there;
     // here it surfaces as a non-zero code with the reason on stderr rather than a stack.
     returncode: proc.error ? 1 : (proc.status === null ? 1 : proc.status),

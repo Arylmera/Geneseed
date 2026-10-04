@@ -111,6 +111,38 @@ test('writeMemories writes the new fact, skips the duplicate and indexes both', 
   });
 });
 
+// The `name:` is the model's, and it becomes a filename. A name that is not a plain slug — a
+// `../` climb, a separator, an absolute path — is refused outright, so nothing lands outside
+// the store; the plain-slug sibling in the same reply is still written.
+test('writeMemories refuses a name that is not a plain slug', () => {
+  withDir((d) => {
+    const store = path.join(d, 'memory');
+    fs.mkdirSync(store);
+    const fact = (name) => `---\nname: ${name}\ndescription: x\n---\nbody\n`;
+    const out = ['../escaped', 'sub/dir', '/abs', '..', 'Fine_Slug-2'].map(fact)
+      .join('---FILE---\n');
+    assert.deepEqual(writeMemories(out, store, new Set()), ['Fine_Slug-2']);
+    assert.ok(!fs.existsSync(path.join(d, 'escaped.md')), 'a ../ name wrote outside the store');
+    assert.deepEqual(fs.readdirSync(store).sort(), ['Fine_Slug-2.md', 'MEMORY.md']);
+  });
+});
+
+// A model CLI that cannot be spawned at all leaves no stderr of its own, so `learn` must say
+// why it exits 1 — a silent non-zero is exactly what a Stop hook's user cannot debug.
+test('learn names the model CLI it could not run', () => {
+  withDir((d) => {
+    const notes = path.join(d, 'notes.txt');
+    fs.writeFileSync(notes, 'a note worth distilling\n');
+    const proc = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed-hook.mjs'),
+      'learn', '--memory', path.join(d, 'memory'), notes], {
+      encoding: 'utf8', windowsHide: true,
+      env: { ...process.env, GENESEED_LLM: 'geneseed-no-such-model-cli --flag' } });
+    assert.equal(proc.status, 1);
+    assert.equal(proc.stdout, '');
+    assert.match(proc.stderr, /^\[learn\] could not run geneseed-no-such-model-cli: /m);
+  });
+});
+
 // `NOTHING` is the model's way of saying it found no durable fact. It must write NO files at
 // all — not an empty index, which would look like a store that had been cleared.
 test('a NOTHING answer writes no files', () => {
