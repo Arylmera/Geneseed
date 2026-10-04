@@ -3,11 +3,8 @@
  *
  * This is the half of the emit that edits files the USER co-owns: the JSONC reader, the
  * `opencode.json` / `settings.json` merges, the hook shim, the managed-block machinery and
- * the integrity check. It is the last unit of the generator to cross, and the reason it is
- * last is that it is also the unit the RUNTIME drives: eleven of its names have a consumer
- * outside the emit tree, ten of them in `rituals/_harness_mcp.py` (remerge, deactivate,
- * reactivate, uninstall), two in `rituals/_harness_exclude.py`, one in
- * Every emit and every lifecycle verb goes through this module:
+ * the integrity check — and it is the unit the RUNTIME drives as well as the emit. Every
+ * emit and every lifecycle verb goes through this module:
  * `js/build/emit-opencode.mjs` and `js/build/emit-claude.mjs` wire the host config,
  * `js/maintain/uninstall.mjs` and `js/maintain/migrate.mjs` drive the unwire and the shim
  * migration, `js/inspect/checks-repo.mjs` reads `shimDeadPaths` for the doctor, and
@@ -302,8 +299,17 @@ function warnCommentedJsonc(target, agentPath, permission,
   }
 }
 
-/** `_build_settings._atomic_write_json`. Throws on failure, as the Python does. */
+/**
+ * `_build_settings._atomic_write_json` — the ONE atomic JSON writer: pretty JSON through a
+ * sibling temp file and a rename, creating the parent directory first. Throws on failure, as
+ * the Python does, and never leaves the temp file behind.
+ *
+ * Every config this codebase rewrites goes through it — settings, `opencode.json`, MCP
+ * configs, the install manifest — because a plain write that dies half-way through leaves a
+ * truncated file where the user's config was.
+ */
 export function atomicWriteJson(p, config) {
+  mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.geneseed-tmp`;
   writeText(tmp, `${jsonDumpsIndent(config)}\n`);
   try {
@@ -617,10 +623,10 @@ function shimIsLive(p) {
  * cmd.exe, 127 under sh) and take both gates down with them.
  */
 export function hookPrefix({ runner, entry, platform = process.platform } = {}) {
-  // NOT a default. `runner`/`entry` have no computable fallback on this side — the child's
-  // own `process.execPath` is node and the hooks it wires are Python — and the failure mode
-  // of letting them through undefined is the worst kind this unit has: `hookShimBody` bakes
-  // `"undefined" "undefined" %*`, the shim is rewritten with it, every hook in the install
+  // NOT a default. `runner`/`entry` have no computable fallback on this side — this process's
+  // own `process.execPath` is whichever node ran the EMIT, not a runner anyone chose — and
+  // the failure mode of letting them through undefined is the worst kind this unit has:
+  // `hookShimBody` bakes `"undefined" "undefined" %*`, the shim is rewritten with it, every hook in the install
   // dies, and because the hooks signal through stdout and return 0 on every path, nothing
   // reports it. The shim is also excluded from golden's byte comparison by name, so no
   // acceptance gate would catch it either. Throw where it is cheap to see.
@@ -755,6 +761,40 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
 }
 
 /**
+ * An existing settings file read for a read-modify-write: `[config, hadComments]`, or `null`
+ * after saying on stderr why the file must NOT be rewritten.
+ *
+ * Every refusal is the same refusal `mergeOpencodeJson` makes, for the same reason: the merge
+ * starts from `{}` when it has nothing to start from, and `atomicWriteJson` would then
+ * replace the user's file with Geneseed's keys alone. A syntax error, valid JSON that is not
+ * an object (`[]`), and a file that exists but cannot be read are all "nothing to start
+ * from", and none of them is the user's consent to be overwritten.
+ */
+function readSettingsForMerge(p, consequence) {
+  let loaded;
+  let hadComments;
+  try {
+    [loaded, hadComments] = readJsonc(readText(p));
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+    process.stderr.write(`[geneseed] WARN: could not read ${p} (${e.message}) — NOT `
+      + `touching it. ${consequence}\n`);
+    return null;
+  }
+  if (loaded === null) {
+    process.stderr.write(`[geneseed] ${path.basename(p)} is not valid JSON — NOT `
+      + `rewriting it (fix the syntax, then re-run). ${consequence}\n`);
+    return null;
+  }
+  if (!isDict(loaded)) {
+    process.stderr.write(`[geneseed] ${path.basename(p)} is not a JSON object — NOT `
+      + `rewriting it (fix the file, then re-run). ${consequence}\n`);
+    return null;
+  }
+  return [loaded, hadComments];
+}
+
+/**
  * `_build_settings._merge_claude_settings` — returns `[target, managed]`.
  *
  * Surgical: every other key and the user's own hook entries survive. `priorHooks` is the
@@ -777,18 +817,9 @@ export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hoo
   let config = {};
   let hadComments = false;
   if (existsSync(p)) {
-    try {
-      const [loaded, hc] = readJsonc(readText(p));
-      hadComments = hc;
-      if (loaded === null) {
-        process.stderr.write(`[geneseed] ${path.basename(p)} is not valid JSON — NOT `
-          + 'rewriting it (fix the syntax, then re-run). Hooks were not wired.\n');
-        return [p, prior];
-      }
-      if (isDict(loaded)) config = loaded;
-    } catch (e) {
-      if (!isOsError(e)) throw e;
-    }
+    const loaded = readSettingsForMerge(p, 'Hooks were not wired.');
+    if (!loaded) return [p, prior];
+    [config, hadComments] = loaded;
   }
   let hooks = get(config, 'hooks');
   if (!isDict(hooks)) hooks = {};
@@ -832,17 +863,9 @@ export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hoo
       + 'adapters/claude-code/settings.json.\n');
     return [p, prior];
   }
-  // The `else` is DEAD on both sides and reproduced rather than dropped: `canonical` always
-  // carries at least three events, so by the time control reaches here `hooks` is never empty. A
-  // mutation keeping the empty block instead of deleting it is the one of thirty-three that
-  // stays green, and it stays green because there is nothing to detect — recorded the way
-  // `themed_rel` is, so "the gate cannot see it" and "there is nothing to see" keep their
-  // distance. NOT the way `lstripNewlines` is: that one looked unobservable for two phases
-  // and turned out to be mutation M7, killed by `golden.mjs --idempotent` through
-  // `managedBlockWrite`'s `updated` branch, which only a RE-emit reaches.
-  if (Object.keys(hooks).length) config.hooks = hooks;
-  else delete config.hooks;
-  mkdirSync(path.dirname(p), { recursive: true });
+  // Never empty here: `canonical` always carries at least three events, and every one of them
+  // was just written into `hooks`.
+  config.hooks = hooks;
   atomicWriteJson(p, config);
   return [p, managedNow];
 }
@@ -897,18 +920,9 @@ export function wireClaudeExcludes(p, excludes) {
   let config = {};
   let hadComments = false;
   if (existsSync(p)) {
-    try {
-      const [loaded, hc] = readJsonc(readText(p));
-      hadComments = hc;
-      if (loaded === null) {
-        process.stderr.write(`[geneseed] ${path.basename(p)} is not valid JSON — NOT `
-          + 'rewriting it (fix the syntax, then re-run). Excludes were not wired.\n');
-        return [];
-      }
-      if (isDict(loaded)) config = loaded;
-    } catch (e) {
-      if (!isOsError(e)) throw e;
-    }
+    const loaded = readSettingsForMerge(p, 'Excludes were not wired.');
+    if (!loaded) return [];
+    [config, hadComments] = loaded;
   }
   let cur = get(config, 'claudeMdExcludes');
   if (!Array.isArray(cur)) cur = [];
@@ -922,7 +936,6 @@ export function wireClaudeExcludes(p, excludes) {
   }
   cur.push(...added);
   config.claudeMdExcludes = cur;
-  mkdirSync(path.dirname(p), { recursive: true });
   try {
     atomicWriteJson(p, config);
   } catch (e) {

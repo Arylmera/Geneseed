@@ -393,6 +393,32 @@ test('a global uninstall removes what it owns and keeps the memory store', () =>
   });
 });
 
+test('an owned entry that climbs out of the install is never unlinked', () => {
+  // THE MANIFEST IS A FILE ON DISK, not a promise, and uninstall is the verb that DELETES what
+  // it lists. Deactivate already refused an `owned` entry resolving outside its root; uninstall
+  // did not, so `../outside/victim.md` was unlinked and the ancestor prune then climbed from
+  // `outside/` — a walk that never meets the install dir — removing the emptied `outside/` too.
+  // The in-root entry beside it is the positive control: the guard filters, it does not stop.
+  withDir((d) => {
+    const cfg = path.join(d, 'cfg');
+    const outside = path.join(d, 'outside');
+    fs.mkdirSync(cfg);
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'victim.md'), 'not geneseed\'s', 'utf8');
+    fs.writeFileSync(path.join(cfg, 'mine.md'), 'geneseed\'s', 'utf8');
+    fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST),
+      JSON.stringify({ owned: ['../outside/victim.md', 'mine.md'] }), 'utf8');
+
+    const summary = uninstallGlobal(cfg, false);
+
+    assert.equal(fs.readFileSync(path.join(outside, 'victim.md'), 'utf8'), 'not geneseed\'s',
+      'uninstall unlinked a file outside the install because the manifest named it');
+    assert.ok(!fs.existsSync(path.join(cfg, 'mine.md')), 'the in-root owned file survived');
+    assert.equal(summary.removed, 1);
+    assert.deepEqual(summary.failed, []);
+  });
+});
+
 test('archiving memory MOVES the store and never deletes a fact', () => {
   withDir((d) => {
     const cfg = globalInstall(d);
