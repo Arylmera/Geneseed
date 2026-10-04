@@ -296,9 +296,19 @@ function subCounts(state, body) {
  */
 export const HOST_FAMILY = { opencode: 'opencode', claude: 'claude', openclaude: 'claude', bob: 'claude' };
 export const HARNESSES = Object.keys(HOST_FAMILY);
-/** A page or block tagged `tag` shows to `host`. Untagged content shows to every host. */
-export const harnessShows = (tag, host) => !tag || tag === host || tag === HOST_FAMILY[host];
-const HARNESS_OPEN_RE = /^\s*<!--\s*harness:(opencode|claude|openclaude|bob)\s*-->\s*$/;
+/**
+ * A page or block tagged `tag` shows to `host`. Untagged content shows to every host. One tag
+ * names a host or a family; a LIST names hosts exactly, no family widening, because picking
+ * some hosts of a family is the only thing a list says that one tag cannot:
+ * `["claude", "openclaude"]` is Claude Code and OpenClaude, not Bob.
+ */
+export const harnessShows = (tag, host) => (Array.isArray(tag)
+  ? tag.includes(host)
+  : !tag || tag === host || tag === HOST_FAMILY[host]);
+/** A block's tag: `claude` alone, or `claude,openclaude` — the list, read as above. */
+const harnessTag = (raw) => (raw.includes(',') ? raw.split(/\s*,\s*/) : raw);
+const HOST_ID = '(?:opencode|claude|openclaude|bob)';
+const HARNESS_OPEN_RE = new RegExp(String.raw`^\s*<!--\s*harness:(${HOST_ID}(?:\s*,\s*${HOST_ID})*)\s*-->\s*$`);
 const HARNESS_CLOSE_RE = /^\s*<!--\s*\/harness\s*-->\s*$/;
 /**
  * The cheap presence test for the early-out. It must never be NARROWER than the open
@@ -349,7 +359,8 @@ export function harnessBlocksBalanced(lines) {
  * the marker; the console has already filtered the block to the reader's host, so there the
  * label only repeats what the host selector says, and it goes with the marker.
  */
-const HOST_LABEL_RE = /^\s*\*\((OpenCode|Claude Code|OpenClaude|IBM Bob) only\)\*\s*$/;
+const HOST_NAME = '(?:OpenCode|Claude Code|OpenClaude|IBM Bob)';
+const HOST_LABEL_RE = new RegExp(String.raw`^\s*\*\(${HOST_NAME}(?: and ${HOST_NAME})* only\)\*\s*$`);
 
 export function stripHarnessBlocks(body, harnessName) {
   if (!HARNESS_HINT_RE.test(body)) return body;
@@ -369,7 +380,7 @@ export function stripHarnessBlocks(body, harnessName) {
     }
     if (!inFence) {
       const m = HARNESS_OPEN_RE.exec(line);
-      if (m) { keep = harnessShows(m[1], harnessName); afterOpen = true; continue; }
+      if (m) { keep = harnessShows(harnessTag(m[1]), harnessName); afterOpen = true; continue; }
       if (HARNESS_CLOSE_RE.test(line)) { keep = true; continue; }
       if (labelSlot && HOST_LABEL_RE.test(line)) continue;
     }

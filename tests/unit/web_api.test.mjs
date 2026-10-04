@@ -34,6 +34,7 @@ import {
 import {
   apiDocs, apiDocsPage, docCounts, docGroups, docSources, rewriteDocLinks, parseMapTable,
   parseGlossaryTable, normHarness, stripHarnessBlocks, harnessBlocksBalanced, HOST_FAMILY,
+  HARNESSES, harnessShows,
 } from '../../js/web/docs.mjs';
 import { HOSTS } from '../../web/src/lib/hosts.js';
 import {
@@ -1798,21 +1799,53 @@ test('a harness block shows to its host, and a claude block to the whole family'
   assert.ok(harnessBlocksBalanced(body.split('\n')));
 });
 
-test('a page tagged for a host shows to that host, a claude page to the family', () => {
+// A LIST names hosts exactly, with no family widening: `claude` inside a list is Claude Code,
+// not the family, so `["claude", "openclaude"]` leaves Bob out. A block says the same list as
+// `<!--harness:claude,openclaude-->`.
+test('a list of hosts shows to exactly those hosts, page or block', () => {
+  const shows = (tag) => HARNESSES.filter((h) => harnessShows(tag, h));
+  assert.deepEqual(shows(['claude', 'openclaude']), ['claude', 'openclaude']);
+  assert.deepEqual(shows(['opencode', 'bob']), ['opencode', 'bob']);
+  assert.deepEqual(shows('claude'), ['claude', 'openclaude', 'bob']);
+  assert.deepEqual(shows(undefined), ['opencode', 'claude', 'openclaude', 'bob']);
+  const body = 'shared\n<!--harness:claude, openclaude-->\n*(Claude Code and OpenClaude only)*\n'
+    + 'two hosts\n<!--/harness-->\ntail';
+  const kept = (host) => stripHarnessBlocks(body, host).split('\n');
+  assert.deepEqual(kept('claude'), ['shared', 'two hosts', 'tail']);
+  assert.deepEqual(kept('openclaude'), ['shared', 'two hosts', 'tail']);
+  assert.deepEqual(kept('bob'), ['shared', 'tail']);
+  assert.deepEqual(kept('opencode'), ['shared', 'tail']);
+});
+
+test('each host sees its own machine page, and Bob not the Claude Code one', () => {
   const idsFor = (hn) => new Set(apiDocs(neutral(), hn).groups.flatMap((g) => g.pages.map((p) => p.id)));
-  // machine-claude is tagged `claude`; machine-opencode `opencode`; machine-bob is untagged
-  // (it also covers the plain AGENT.md bundle, whose readers default to the OpenCode docs).
+  // machine-claude is tagged ["claude", "openclaude"]; machine-opencode `opencode`; machine-bob
+  // is untagged (it also covers the plain AGENT.md bundle, whose readers default to the
+  // OpenCode docs).
   const want = {
     opencode: ['machine-opencode', 'machine-bob'],
     claude: ['machine-claude', 'machine-bob'],
     openclaude: ['machine-claude', 'machine-bob'],
-    bob: ['machine-claude', 'machine-bob'],
+    bob: ['machine-bob'],
   };
   const all = ['machine-opencode', 'machine-claude', 'machine-bob'];
   for (const [hn, ids] of Object.entries(want)) {
     const vis = idsFor(hn);
     assert.deepEqual(all.filter((id) => vis.has(id)), all.filter((id) => ids.includes(id)), hn);
   }
+});
+
+// The Understand track, read top to bottom, per host: the shared pages in `order`, with the
+// host's own machine page(s) between "What lands on your machine" and "Taking it back out".
+test('the Understand track reads in order for each host', () => {
+  const track = (hn) => apiDocs(neutral(), hn).groups.find((g) => g.id === 'understand')
+    .pages.map((p) => p.id);
+  const head = ['harness', 'on-your-machine'];
+  const tail = ['take-it-out', 'a-day', 'enforced-vs-asked'];
+  assert.deepEqual(track('opencode'), [...head, 'machine-opencode', 'machine-bob', ...tail]);
+  assert.deepEqual(track('claude'), [...head, 'machine-claude', 'machine-bob', ...tail]);
+  assert.deepEqual(track('openclaude'), [...head, 'machine-claude', 'machine-bob', ...tail]);
+  assert.deepEqual(track('bob'), [...head, 'machine-bob', ...tail]);
 });
 
 test('a harness block keeps the matching host and drops the other', () => {

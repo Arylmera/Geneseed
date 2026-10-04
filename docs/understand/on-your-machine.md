@@ -23,8 +23,8 @@ Token costs are for the default *lean* footprint. Before you type anything, a se
 - [On OpenCode](machine-opencode.md): the plugins and the `opencode.json` entries, piece by piece.
 
 <!--/harness-->
-<!--harness:claude-->
-*(Claude Code only)*
+<!--harness:claude,openclaude-->
+*(Claude Code and OpenClaude only)*
 
 - [On Claude Code and OpenClaude](machine-claude.md): the hooks in `settings.json`, piece by piece.
 

@@ -3,7 +3,7 @@ group: understand
 order: 4
 title: "On Claude Code and OpenClaude"
 kind: "map"
-harness: "claude"
+harness: ["claude", "openclaude"]
 section: "On your machine"
 description: "Every file and hook a Claude Code or OpenClaude install writes: what it does, what it costs, how to turn it off."
 ---
