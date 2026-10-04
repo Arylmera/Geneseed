@@ -26,7 +26,7 @@ import { GLOBAL_MANIFEST, resolvePath } from '../hosts/hosts.mjs';
 import { isFile, printOut } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
 import { parseIntStrict } from '../lib/text.mjs';
-import { promptLine } from '../maintain/setup.mjs';
+import { promptLine } from '../lib/prompt.mjs';
 import { webState } from './state.mjs';
 import { clearDaemon, codeStamp, openUrl, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
 import { makeHandler } from './handler.mjs';

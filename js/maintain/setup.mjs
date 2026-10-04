@@ -31,17 +31,17 @@
  * and a cell's stdin is a pipe. So the whole wizard is unreachable from the acceptance
  * matrix in the same way `_confirm` was in P5h — except that here it is not one branch, it
  * is the verb. The `setup/*` cells therefore gate the REFUSAL, absolutely and on both sides,
- * and everything past it is gated as a CORPUS in `tests/test_pure_function_parity.py`.
+ * and everything past it is gated as a CORPUS in `tests/unit/wizard.test.mjs`.
  *
  * The corpus is a new shape and the brief predicted the reason: a corpus over a stdin reader
- * needs a SEEDED FD, not a string. `tests/fixtures/pure_probe.{py,mjs}` are run with stdin
- * redirected from a file of answers and their WHOLE stdout compared — so the prompts, the
+ * needs a SEEDED FD, not a string. `tests/fixtures/pure_probe.mjs` is run with stdin
+ * redirected from a file of answers and its WHOLE stdout compared — so the prompts, the
  * numbered menus, the default markers, the `About to run:` line and the returned selection
  * are all one byte comparison. That is a stricter gate than a cell would have been, because
  * a cell could not have varied the answers at all.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { main as driverMain, resolveOut } from '../build/driver.mjs';
@@ -57,131 +57,9 @@ import {
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
+import { ask, askChoice, confirm } from '../lib/prompt.mjs';
 import { parseIntStrict } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-
-// --------------------------------------------------------------------------------------
-// the three readers
-// --------------------------------------------------------------------------------------
-
-/**
- * `_harness_setup._ask` — `input(f"{prompt}{suffix}: ").strip()`, or the default at EOF.
- *
- * WHY IT READS A BYTE AT A TIME. Node has no synchronous line read: `readFileSync(0)` blocks
- * until EOF rather than until Enter, so a wizard built on it would hang on a real terminal
- * until the user pressed Ctrl-D. Reading fd 0 one byte at a time to the first `\n` is what
- * `input()` does, and it is the only synchronous shape that stops where Enter stops. The
- * body arrived in P5h inside `js/maintain/uninstall.mjs`'s `confirm`; `setup` is the second caller,
- * so it moved to where the Python's own owner is — `_harness_setup` — and `confirm` is built
- * on it here exactly as `_confirm` is built on `_ask` there.
- *
- * The EOF branch is the one a piped caller sees, and it agrees with Python by two different
- * routes that happen to produce one answer: `input()` RAISES `EOFError` and the `except`
- * returns the default, while a zero-length read here leaves `line` empty and `|| dflt` does
- * the same. A partial line with no trailing newline is not EOF to either — Python returns
- * the characters and so does this.
- *
- * `.trim()` is `str.strip()` in every case but U+FEFF, which JS counts as whitespace and
- * Python does not; that is a standing item of this port and not this function's to settle.
- */
-export function ask(prompt, dflt = '') {
-  const suffix = dflt ? ` [${dflt}]` : '';
-  // `input()` writes its prompt to stdout with no newline — nothing for `printOut` to
-  // translate, and it must NOT gain one.
-  process.stdout.write(`${prompt}${suffix}: `);
-  // `?? ''` because `readLine` reports EOF-with-nothing-read as null since P6h; `_ask`
-  // catches `EOFError` and returns the default, which is what the empty string produces
-  // here through `|| dflt`. The two routes to one answer are the docblock's own point.
-  const ans = (readLine() ?? '').trim();
-  return ans || dflt;
-}
-
-/**
- * `input(prompt)` with EOF told apart from an empty line — `null` where Python RAISES.
- *
- * `ask` above cannot express that difference and does not need to: its EOF and its empty
- * answer both mean "take the default". `_web_server.serve`'s npm prompt is the first
- * caller where they differ, and they differ dangerously — `""` is in its accepted set, so
- * a port that read EOF as an empty line would answer YES to "run npm install now?" on
- * every non-interactive run. The reference catches `(EOFError, KeyboardInterrupt)` and
- * answers "n"; this returns null so the caller can.
- *
- * No `.trim()`: `input()` does not strip, and both callers strip for themselves.
- */
-export function promptLine(prompt) {
-  process.stdout.write(prompt);
-  return readLine();
-}
-
-/**
- * Fd 0 to the first `\n`, dropping a `\r` before it — the CRLF a Windows console sends.
- *
- * THE BYTES ARE COLLECTED AND DECODED ONCE, and that is a fix rather than a style. The
- * version this arrived as decoded EACH BYTE on its own — `buf.toString('utf8', 0, n)` inside
- * the loop — which turns every multi-byte character into two or three U+FFFD. It was
- * invisible for a phase because its only caller was `confirm`, whose answer is `y` or `n`;
- * the wizard's first non-ASCII answer is what exposed it, and the corpus caught it on the
- * first run. Scanning for the terminators a byte at a time is still correct: `\n` and `\r`
- * are ASCII, and no continuation byte of a UTF-8 sequence is below 0x80.
- */
-function readLine() {
-  const buf = Buffer.alloc(1);
-  const bytes = [];
-  let eof = false;
-  for (;;) {
-    let n = 0;
-    try { n = readSync(0, buf, 0, 1, null); } catch { eof = true; break; }
-    if (n === 0) { eof = true; break; }
-    if (buf[0] === 0x0a) break;
-    if (buf[0] !== 0x0d) bytes.push(buf[0]);
-  }
-  // NULL ONLY FOR THE EMPTY EOF, which is the one case `input()` raises on. A partial line
-  // with no trailing newline is not EOF to Python — it returns the characters — and the
-  // `bytes.length` test is what keeps that arm returning a string here too.
-  if (eof && bytes.length === 0) return null;
-  return Buffer.from(bytes).toString('utf8');
-}
-
-/** `_harness_setup._confirm` — `_ask` with a Y/n suffix; the default on an empty answer. */
-export function confirm(prompt, dflt = true) {
-  const ans = ask(`${prompt} (${dflt ? 'Y/n' : 'y/N'})`).toLowerCase();
-  return ans === '' ? dflt : ans[0] === 'y';
-}
-
-/**
- * `_harness_setup._ask_choice` — a numbered menu; the chosen KEY, or the default.
- *
- * THREE THINGS ABOUT THE FALLBACK ORDER, all of them observable and none of them obvious:
- *
- *   * The key match lives in Python's `except ValueError`, so an answer that PARSES as an
- *     integer never reaches it. `99` against a five-option menu returns the default; it does
- *     not go looking for an option literally named `99`.
- *   * An in-range index wins, a parsed out-of-range index falls to the default, and only an
- *     UNPARSEABLE answer is matched against the keys. `parseIntStrict` is what separates the second
- *     case from the third, and it is not `Number()` — see its own docblock.
- *   * The default's index is computed with `next(...)` and no fallback, so a default that is
- *     not in `options` raises `StopIteration` on the reference. That is reachable (a
- *     deployed install can carry a theme this checkout no longer ships) and it is mirrored
- *     as a throw rather than smoothed over: the two implementations must fail in the same
- *     place, and a silent `-1` here would be a divergence dressed as robustness.
- */
-export function askChoice(prompt, options, dflt) {
-  printOut(`\n${prompt}:\n`);
-  options.forEach(([key, desc], i) => {
-    const label = desc ? `${key} — ${desc}` : key;
-    printOut(`  ${i + 1}) ${label}${key === dflt ? '   (default)' : ''}\n`);
-  });
-  const defaultIdx = options.findIndex(([k]) => k === dflt);
-  if (defaultIdx < 0) throw new Error(`StopIteration: no option named ${dflt}`);
-  const raw = ask('Choose', String(defaultIdx + 1));
-  const idx = parseIntStrict(raw);
-  if (idx !== null) {
-    if (idx >= 1 && idx <= options.length) return options[idx - 1][0];
-  } else {
-    for (const [key] of options) if (raw === key) return key;
-  }
-  return dflt;
-}
 
 // --------------------------------------------------------------------------------------
 // the option tables
@@ -372,7 +250,7 @@ export function collectSetupLines() {
   const mode = askChoice('Mode', modeOptions(), inst.mode || defaultMode());
   const doctrines = askDoctrines(inst.doctrines);
   const emit = askChoice('Install mode', EMIT_OPTIONS, inst.emit || 'opencode-global');
-  const footprint = askChoice('Footprint', FOOTPRINT_OPTIONS.map(([k, d]) => [k, d]),
+  const footprint = askChoice('Footprint', FOOTPRINT_OPTIONS,
     inst.footprint || 'lean');
   let out = null;
   let root = null;
@@ -430,8 +308,8 @@ export function javaMajorOk(versionOutput, minimum = 21) {
  * `_harness_setup._lsp_prereqs` — `(label, present, hint)` for what OpenCode cannot install
  * for itself. Today that is a JDK 21+ for `jdtls`; the JS-runtime servers self-download.
  *
- * THE SECOND SPAWN ON THIS ENTRY POINT, and the reason `test_the_cli_reaches_child_process_\
- * only_where_it_is_declared` became a TABLE. `js/inspect/doctor.mjs` was the sole allowed importer
+ * THE SECOND SPAWN ON THIS ENTRY POINT, and the reason `ALLOWED_SPAWNS` in
+ * `tests/unit/hook_cli.test.mjs` became a TABLE. `js/inspect/doctor.mjs` was the sole allowed importer
  * for one binding and one argv; this is the second, and the port's rule is that the second
  * instance of anything turns a special case into a table cross-checked against the source.
  * The argv is asserted literally there, so an allow-list entry cannot be reused to start an
@@ -572,7 +450,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
  * command the reader can type, and names one that survives the deletion.
  *
  * `theme_anim.play_line` USED TO BE THE SECOND, and P7c crossed it — `js/ui/anim.mjs`, gated by
- * `_theme_anim_cases()` in `tests/test_pure_function_parity.py`. The bare `catch` around it
+ * the theme-animation jobs in `tests/unit/wizard.test.mjs`. The bare `catch` around it
  * is the reference's own, labelled there "cosmetic only — never block a successful install",
  * and it is kept for the same reason: the animation runs AFTER the build has already
  * succeeded, so nothing it can do may change the exit code.

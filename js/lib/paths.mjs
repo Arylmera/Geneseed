@@ -73,10 +73,14 @@ export function comparePaths(a, b) {
  * `_install_move_list` in `js/maintain/uninstall.mjs` \u2014 a CLI-level module that must not import the
  * web tree to reach it. Beside `normcase`, which is the thing it is actually about.
  * `js/web/api.mjs` re-exports it so its existing importers are unchanged.
+ *
+ * TRAILING SEPARATORS ARE STRIPPED FROM `parent` FIRST. A root is the one path whose canonical
+ * spelling ends in one — `D:\` and `/` — and splitting it leaves an empty last segment that no
+ * child's segment equals, so nothing was ever `within` a drive root or `/`.
  */
 export function within(child, parent) {
   const c = normcase(child).split(/[\\/]/);
-  const p = normcase(parent).split(/[\\/]/);
+  const p = normcase(parent).replace(/[\\/]+$/, '').split(/[\\/]/);
   return p.length <= c.length && p.every((seg, i) => c[i] === seg);
 }
 
@@ -100,8 +104,8 @@ export function within(child, parent) {
  * NOT reproduced, and named here rather than left as a gap nobody wrote down: `//` and
  * `///x` on WINDOWS, where `PureWindowsPath` answers `\\` and `\\\x` and this answers `\`
  * and `\x`. Those are incomplete UNC prefixes and matching them needs ntpath's share-name
- * parsing; both inputs are kept OUT of the corpus in `tests/test_pure_function_parity.py`
- * instead of sitting in it wrong.
+ * parsing; both inputs were kept OUT of the retired parity corpus instead of sitting in it
+ * wrong.
  *
  * The root's separators are still rewritten ONE AT A TIME, never `replace(/[\\/]+/g, sep)`:
  * a UNC root's leading pair is part of it, so collapsing runs turns `//server/share/x` into
@@ -143,7 +147,8 @@ export function toPlatformPath(s) {
  * `context` cell varies it, and changing it in this phase would be an ungated edit to a verb
  * that crossed three phases ago. Recorded in the spec's "Still owed" with this reproduction.
  *
- * Gated by a corpus in `tests/test_pure_function_parity.py`: no cell can vary the shape.
+ * It was gated by a corpus in the retired `tests/test_pure_function_parity.py`; nothing has
+ * replaced it, and no CLI test can vary the shape.
  */
 export function isAbsolutePath(s) {
   if (process.platform !== 'win32') return s.startsWith('/');
@@ -166,27 +171,21 @@ export function isAbsolutePath(s) {
  * PATH-removal refutation is aimed at, and the reason this is a real lookup rather than one
  * line of "we are node, we know where node is".
  *
- * The Windows half is the part with behaviour in it, and three of its four rules were
- * MEASURED against CPython 3.13 rather than assumed. `PATHEXT` supplies the suffixes, and the
+ * The Windows half is the part with behaviour in it, and its suffix rules were MEASURED
+ * against CPython 3.13 rather than assumed. `PATHEXT` supplies the suffixes, and the
  * returned path carries PATHEXT's OWN SPELLING of the extension rather than the file's
  * (`zzcmd.CMD` for a `zzcmd.cmd` on disk). An extension already in that set means the command
- * is spelled in full. An EMPTY PATH entry is not skipped either: `join('', cmd)` is a
- * relative path, and Python answers with one.
+ * is spelled in full.
  *
- * THE FOURTH RULE IS THE CURRENT DIRECTORY, and it was measured on a machine that could not
- * see it. `shutil.which` prepends `os.curdir` to the search — even to a `path=` given
- * explicitly — when `_winapi.NeedCurrentDirectoryForExePath` says so, and that Win32 call
- * answers TRUE unless `NoDefaultCurrentDirectoryInExePath` is DEFINED in the environment.
- * Git Bash and this repo's developer machine both define it, so the reference answered None
- * there and the first draft's "the current directory is NOT prepended — it was until 3.12"
- * described an environment variable it had mistaken for a version change. GitHub's Windows
- * runner does not define it: the reference answered `.\\geneseed.CMD` for a `geneseed` looked
- * up beside the repo root, this returned null, and the parity corpus said so on the first CI
- * run. The variable is an INPUT, so it is read here rather than baked, and
- * `test_the_curdir_rule_agrees_in_both_environment_states` runs the corpus with it both ways.
- *
- * Gated as a pure function over a seeded directory in `tests/test_pure_function_parity.py`:
- * a cell can only ever observe the one answer this machine's PATH gives.
+ * THE CURRENT DIRECTORY IS NEVER SEARCHED IMPLICITLY, and here this departs from
+ * `shutil.which` on purpose. The reference prepends `os.curdir` on Windows unless
+ * `NoDefaultCurrentDirectoryInExePath` is defined, and answers an EMPTY PATH entry (a
+ * trailing `;` is routine) with a cwd-relative path. Every caller SPAWNS what this returns —
+ * `git` from `upgrade`, `java` from `setup`, `node` from the doctor, `npm` from the web server
+ * — from whatever directory the user is in, so a `git.exe` committed to an untrusted clone ran
+ * the moment `geneseed upgrade` was typed inside it. Both routes are closed; a `.` the user
+ * wrote into PATH themselves is still honoured, because that is their choice and not ours.
+ * Gated in `tests/unit/lib_primitives.test.mjs`.
  */
 export function which(cmd, searchPath = null) {
   const win = process.platform === 'win32';
@@ -209,14 +208,9 @@ export function which(cmd, searchPath = null) {
   // then spawns. Measured: the corpus case with a posix-spelled directory was the one that
   // differed, and `path.join` had rewritten the whole path rather than appending to it.
   const joinRaw = (dir, name) => (
-    dir === '' || /[\\/]$/.test(dir) || (win && dir.endsWith(':'))
+    /[\\/]$/.test(dir) || (win && dir.endsWith(':'))
       ? dir + name : dir + path.sep + name);
-  const dirs = (searchPath ?? process.env.PATH ?? '').split(path.delimiter);
-  // `NeedCurrentDirectoryForExePath(cmd)`: TRUE — so `.` goes in FRONT — unless the variable
-  // is defined. Only reachable with a separator-free `cmd`, which is the only way execution
-  // gets this far. Inserted before the dedupe, exactly where `shutil.which` inserts it, so a
-  // PATH that already names `.` is searched once.
-  if (win && process.env.NoDefaultCurrentDirectoryInExePath === undefined) dirs.unshift('.');
+  const dirs = (searchPath ?? process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
   const seen = new Set();
   for (const dir of dirs) {
     const key = win ? dir.toLowerCase() : dir;

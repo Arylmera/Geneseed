@@ -48,7 +48,7 @@ import {
 import path from 'node:path';
 
 import { hookRunnerEntry } from '../hosts/shim.mjs';
-import { confirm } from './setup.mjs';
+import { confirm } from '../lib/prompt.mjs';
 import {
   claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, excludedRulesOfDir, installKind,
   installState,

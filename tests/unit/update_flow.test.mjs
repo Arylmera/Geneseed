@@ -160,6 +160,37 @@ test('an up-to-date checkout still rebuilds, and still returns 0', async () => {
   assert.ok(!isEmpty(out), 'an up-to-date upgrade skipped the rebuild');
 });
 
+test('an upgrade re-emits an opencode-global install on its OWN footprint and excluded rules', async () => {
+  // The bundle rebuild used to pass only --out/--theme/--emit, so the generator's defaults won:
+  // footprint `lean`, and packs/rules from `harness.config.json`. The install was rewritten as the
+  // default, markers and all, and `rebuild-all` right after read those rewritten markers back —
+  // so a `full`, rule-excluded install came out of every upgrade lean with the rule switched on.
+  const cfg = path.join(sb.path, 'opencode-cfg');
+  const saved = process.env.OPENCODE_CONFIG_DIR;
+  process.env.OPENCODE_CONFIG_DIR = cfg;
+  try {
+    const built = spawnSync(process.execPath, [path.join(CO, 'bin', 'build-driver.mjs'),
+      '--emit', 'opencode-global', '--footprint', 'full', '--exclude-rules', 'process 5'],
+    { cwd: CO, encoding: 'utf8', windowsHide: true });
+    assert.equal(built.status, 0, `fixture: the install did not build\n${built.stderr}`);
+    const footprint = () => fs.readFileSync(path.join(cfg, '.geneseed-footprint'), 'utf8').trim();
+    const carrier = () => fs.readFileSync(path.join(cfg, 'AGENT.md'), 'utf8');
+    assert.equal(footprint(), 'full');
+    assert.match(carrier(), /^Excluded rules: process 5$/m,
+      'fixture: the install carries no excluded rule, so this arm is about nothing');
+    freshOut('axes');
+
+    const rc = await U.upgrade(null, null);
+    assert.equal(rc, 0);
+    assert.equal(footprint(), 'full', 'the upgrade reset a full install to the default footprint');
+    assert.match(carrier(), /^Excluded rules: process 5$/m,
+      'the upgrade switched back on a rule the install had excluded');
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+    else process.env.OPENCODE_CONFIG_DIR = saved;
+  }
+});
+
 test('a pulled source that fails the doctor returns 1 and leaves no bundle', async () => {
   // `test_doctor_fail_returns_1_no_rebuild`, and the fault is a real one the doctor really
   // rejects — a theme missing a template key, which is the theme-parity gate — rather than a
@@ -182,4 +213,17 @@ test('a pulled source that fails the doctor returns 1 and leaves no bundle', asy
     'the rollback did not land back on the previous commit');
   assert.ok(isEmpty(out),
     `the bundle was rebuilt from a source tree that had just been rolled back: ${fs.readdirSync(out)}`);
+});
+
+test('bootstrap exits 1 over a failed update even when the setup it hands off to succeeds', async () => {
+  // Rides on the broken tip the doctor arm above left upstream, so the update step fails again.
+  // `setup` still runs — the user asked for it — but its exit code used to become bootstrap's,
+  // so a script saw 0 over an update that never happened. The real `setup` exits 1 off a
+  // terminal, which would hide that, so the handoff is a stand-in that succeeds.
+  freshOut('bootstrap');
+  let handedOff = false;
+  const rc = await U.cmdBootstrap({ noSetup: false },
+    { handoff: () => { handedOff = true; return 0; } });
+  assert.ok(handedOff, 'a failed update skipped the setup handoff the user asked for');
+  assert.equal(rc, 1, "a failed update was reported through setup's exit code");
 });

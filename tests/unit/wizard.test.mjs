@@ -149,6 +149,10 @@ function wizardJobs() {
       // ...and the same menu answered `1`, which inverts the pair. Two cases that swap under the
       // mutation and cannot both be right by accident.
       ['ask_choice', ['Pick', NUMERIC_OPTS, '1']]], '2\n1\n'],
+    // A default that is not on the menu — a deployed theme this checkout no longer ships.
+    ['ask-choice-stale-default', [['ask_choice', ['Pick', OPTS, 'retired']],
+      ['ask_choice', ['Pick', OPTS, 'retired']], ['ask_choice', ['Pick', OPTS, 'retired']]],
+    '\n9\n'],
     // ---- and the wizard itself, six ways through it.
     // Every sequence below carries a FOURTH answer, between mode and the install mode: the
     // Doctrine-packs gate. It is the one question with two levels, so the count of answers a
@@ -325,6 +329,16 @@ test('a numeric key is resolved as an index and not as a key', () => {
   assert.deepEqual(runs()['ask-choice-numeric-keys'].results, ['1', '2'],
     '`2` was resolved as the option NAMED 2 rather than as the second index, so the key match is '
     + 'running before the int parse');
+});
+
+test('a default that is not on the menu falls back to option 1 instead of crashing', () => {
+  // `setup` pre-selects from the DEPLOYED install, so a `.geneseed-theme` naming a theme this
+  // checkout no longer ships reaches `askChoice` as its default. Every fallback arm — Enter, a
+  // parsed out-of-range index, EOF — must answer with a key that IS on the menu, the first one;
+  // it used to throw `StopIteration` and take the whole wizard down before its first question.
+  assert.deepEqual(runs()['ask-choice-stale-default'].results, ['alpha', 'alpha', 'alpha']);
+  assert.match(runs()['ask-choice-stale-default'].text, /1\) alpha[^\n]*\(default\)/,
+    'the fallback is chosen silently — option 1 is not marked as the default');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -522,7 +536,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 15, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 16, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {
