@@ -3,6 +3,8 @@ group: understand
 order: 1
 title: "What a harness is"
 kind: "concept"
+section: "Start here"
+description: "Git hooks, CI and a runbook, but for your AI agent: what a harness is and why you would want one."
 ---
 Your coding agent starts every session knowing nothing about how you work. It does not know that you never push without looking at the diff first, that secrets live in `.env`, or that this repo's docs explain the build. You tell it again, or it guesses.
 

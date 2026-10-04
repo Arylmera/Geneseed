@@ -1,10 +1,12 @@
 ---
 group: guides
-order: 2
+order: 10
 title: "Choose your setup"
 kind: "concept"
+section: "Set up"
+description: "The voice and working style: theme, posture and mode, and where the other setup choices are."
 ---
-The setup wizard asks a handful of questions before it builds. Every one has a safe default, so you can accept them all and move on. This page says what each one changes, so you can pick on purpose, and how to change it later.
+The setup wizard asks a handful of questions before it builds. Every one has a safe default, so you can accept them all and move on. Three pages say what each one changes, so you can pick on purpose: this one covers the voice and how the agent works with you; [Doctrine packs and single rules](setup-doctrines.md) covers which practices bind; [Footprint, loop trust and changing later](setup-footprint.md) covers the token cost, how far a loop goes, and how to change any of it.
 
 All of these choices are made **at build time**. The build writes them into the files your agent loads. Nothing switches at runtime. Rebuilds, re-themes and upgrades keep each install's choices, because they are recorded in small marker files beside the install.
 
@@ -52,83 +54,6 @@ geneseed build --emit opencode-global --mode direct    # back to the default
 
 More in [Foreman mode](../concepts/foreman-mode.md).
 
-## Loop trust: how far a loop goes before it asks
-
-The `loop` skill scores every change it validates and stops to ask once the score passes a threshold. `--trust` sets the preset the skill starts a loop with; the user can still name another one per loop.
-
-- **prudent**: asks early, on anything past a rename.
-- **balanced** *(default)*: logic changes and new files pass with a note; API changes and deletions stop.
-- **aggressive**: only an architecture-level change stops the loop.
-
-The preset lives in the `loop` skill only, so it costs nothing in the always-on instructions.
-
-```
-geneseed build --emit opencode-global --trust prudent
-```
-
-## Doctrine packs: which practices bind
-
-The harness's rules come in tiers (see [Rules](../concepts/rules.md)). The Ethos and the Rules are always on. The **doctrines** are practices rather than principles, and they ship as packs you choose:
-
-| Pack | What it governs |
-| --- | --- |
-| **craft** | how code is written: reuse first, house conventions, docs updated in the same change, the smallest diff |
-| **rigor** | how work is proven: idempotence, honest tests, cover-and-verify, gates that can actually fail |
-| **ops** | how the machine is driven: tool discovery, commands that return, complete teardowns |
-| **process** | how a session runs: planning, context economy, docs first, bounded loops, and consent before every commit and push |
-| **comms** | how answers are presented: stable reference codes on tracked items, and a diagram or table only where it earns its place |
-
-Every pack is enabled by default. To keep only some packs, or none:
-
-```
-geneseed build --emit opencode-global --doctrines craft,rigor   # two packs
-geneseed build --emit opencode-global --doctrines none          # Ethos and Rules only
-```
-
-The packs always load in the same order (craft, rigor, ops, process, comms), whatever order you type them in. A pack you leave out still ships on disk under `doctrines/`, so you can read it before you turn it on. A clone can set its own default in `harness.config.json` with a `doctrines` array.
-
-**Dropping `process` changes what the machine does, not only what the agent reads.** The *Consent Before Push* rule in that pack is enforced at the tool boundary as well as in the prose:
-
-- On Claude Code and OpenClaude, the git hook stays wired but stops asking before a commit or push.
-- On OpenCode, a fresh install no longer gets the `git commit*` and `git push*` ask entries in `opencode.json`. On an existing install, entries that are already there are left in place and reported, because Geneseed cannot tell its own entries from ones you typed.
-
-The refusals of destructive git and `rm -rf` belong to the always-on Rules, not to the pack, so they stay in every build. See [Enforced vs. asked](../understand/enforced-vs-asked.md).
-
-## One rule at a time
-
-A pack is all-or-nothing. `--exclude-rules` drops single doctrine rules instead. It takes rule addresses, written `<pack> <n>` or `<pack>.<n>`:
-
-```
-geneseed build --emit opencode-global --exclude-rules "process 7"
-geneseed build --emit opencode-global --exclude-rules "process 5,craft 2"
-geneseed build --emit opencode-global --exclude-rules none
-```
-
-The number in an address is the rule's position in its pack, so it can change if a rule is added or removed. To see the current addresses, pass an address that does not exist: the build refuses it and lists every valid address. The web console's **Constitution** page has one switch per rule. You stage the changes there and apply them in a single rebuild.
-
-Excluding *Consent Before Push* (`process 5` today) takes the commit and push consent gate with it, exactly as dropping the whole `process` pack does. The console and the wizard both warn you before applying it. A pack whose every rule is excluded drops out of the build entirely. See [Exclusions](../concepts/exclusions.md) for excluding whole folders instead.
-
-## Footprint: how much loads every turn
-
-Footprint controls how much of the rules text sits inside `AGENT.md`, which is loaded on every turn. It changes the token cost, not which rules apply:
-
-- **lean** *(default)*: each rule appears in a hand-written short form, with a pointer to the full text. The full text ships beside `AGENT.md`, and the agent reads it when a rule's nuance matters.
-- **full**: every rule's complete text and rationale is inline. This costs the most tokens. It can help a smaller model, which applies a rule's nuance more reliably when the reasoning is always in front of it.
-
-```
-geneseed build --emit opencode-global --footprint full
-```
-
-Both footprints install the same agents, skills, hooks and plugins. More in [Footprint](../concepts/footprint.md).
-
-## Changing a choice later
-
-You have three ways to change a choice:
-
-- **Re-run the wizard** with `geneseed setup`. It pre-selects what the install already has, so holding Enter cannot widen a set you narrowed on purpose. The wizard does not ask about single rules, but it keeps any rule exclusions already in place.
-- **Use the web console** (`geneseed web`). **Settings** and the **Harnesses** page change theme, footprint and the rest per install. **Constitution** toggles packs and rules.
-- **Run the build yourself.** Watch out: a flag you leave out takes the *generator's* default, not your install's current value. `geneseed status --json` prints, for every install, the exact `geneseed build` command that rebuilds it as it is. Start from that command and change the one flag you want.
-
 ---
 
-**Next:** [Verify it works](verify.md)
+**Next:** [Doctrine packs and single rules](setup-doctrines.md)

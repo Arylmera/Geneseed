@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 6
+order: 14
 title: "Project context"
 kind: "concept"
+section: "Set up"
+description: "Choose which of a repo's docs the agent loads."
 ---
 At the start of every session, the harness shows the agent your repo's own documentation. Usually you have nothing to configure. This page explains what gets loaded and what each choice costs, so you know when to override it.
 
@@ -84,4 +86,4 @@ By default, the plugin delivers the context invisibly. It prepends the context t
 - `GENESEED_DEBUG=1` logs what was discovered and how it was delivered.
 <!--/harness-->
 
-All the knobs are listed in [Environment](../reference/environment.md). For knowledge that belongs to you rather than to one repo, see [Wiki](wiki.md).
+All the knobs are listed in [Context and memory variables](../reference/env-context.md). For knowledge that belongs to you rather than to one repo, see [Wiki](wiki.md).

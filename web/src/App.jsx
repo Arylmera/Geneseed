@@ -200,7 +200,7 @@ export default function App() {
     ),
     activity: () =>
       route.item ? <ActivityDetail key={route.item} sid={route.item} /> : <Activity />,
-    docs: () => <Docs page={route.item} query={query} onAction={runAction} overview={overview} />,
+    docs: () => <Docs page={route.item} onAction={runAction} overview={overview} />,
   }
 
   return (
@@ -264,9 +264,7 @@ export default function App() {
           />
           <main className="page" id="main" tabIndex={-1}>
             <div
-              className={
-                route.page === 'library' || route.page === 'loops' ? 'pad pad-wide' : 'pad'
-              }
+              className={['library', 'loops', 'docs'].includes(route.page) ? 'pad pad-wide' : 'pad'}
             >
               <Suspense fallback={<Loading />}>
                 {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. A page reachable from

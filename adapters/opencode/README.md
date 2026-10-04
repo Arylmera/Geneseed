@@ -1,6 +1,6 @@
 # 🔌 OpenCode adapter
 
-> [← Back to README](../../README.md) · [Install guide](../../docs/guides/install.md) · [How OpenCode loads](HOW-OPENCODE-LOADS.md) · [Global harness spec](GLOBAL-HARNESS-SPEC.md)
+> [← Back to README](../../README.md) · [Install guide](../../docs/guides/install-opencode.md) · [How OpenCode loads](HOW-OPENCODE-LOADS.md) · [Global harness spec](GLOBAL-HARNESS-SPEC.md)
 
 [OpenCode](https://opencode.ai) is `AGENTS.md`-native and has first-class
 **subagents** and **commands**, so Geneseed fits it cleanly. Pick the depth you
@@ -468,9 +468,9 @@ OpenCode runs, so the command has to resolve — the `uvx` form above needs only
 call). No uv? `pipx install markitdown-mcp` and swap the command to `["markitdown-mcp"]`.
 Or drop the block entirely — the skill falls back to a CLI converter (MarkItDown /
 Pandoc / Docling) and never installs one silently. Listed but not connecting? The
-command isn't on PATH — see [the MCP guide](../../docs/guides/mcp.md).
+command isn't on PATH — see [Model, agent and MCP problems](../../docs/reference/troubleshoot-tools.md).
 Full runbook, including the corporate-TLS (`UV_SYSTEM_CERTS`) step and the OCR extras:
-[the MCP guide](../../docs/guides/mcp.md).
+[the MarkItDown guide](../../docs/guides/mcp-markitdown.md).
 
 ## Optional add-on — git-worktree isolation (third-party, not vendored)
 

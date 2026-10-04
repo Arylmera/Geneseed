@@ -13,7 +13,7 @@
  *
  * THE `?harness=` QUERY PARAM IS the Docs selector, and it is the ONLY input to these
  * endpoints that is not the checkout itself — the one thing a test can vary. Every
- * filtering rule below is exercised by sending both values over one page.
+ * filtering rule below is exercised by sending each host over one page.
  */
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -105,7 +105,7 @@ export function docGroups() {
     if (group === undefined) continue;
     const order = Object.hasOwn(meta, 'order') ? meta.order : 0;
     delete meta.order;
-    const page = { id, rel, ...meta };
+    const page = { id, rel, ...meta, section: sectionOf(meta) };
     if (body.trim()) page.body = body.replace(/\n+$/, '');
     group.pages.push([order, page]);
   }
@@ -113,13 +113,42 @@ export function docGroups() {
   for (const g of groups) {
     const entry = byId.get(g.id);
     // STABLE sort: equal orders keep filename order.
-    entry.pages = entry.pages
+    entry.pages = bySection(entry.pages
       .map((pair, i) => [pair[0], i, pair[1]])
       .sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]))
-      .map((t) => t[2]);
+      .map((t) => t[2]));
     out.push(entry);
   }
   return out;
+}
+
+/** The heading a page without a `section:` is listed under, inside its part. */
+export const GENERAL_SECTION = 'General';
+
+/**
+ * A page's `section:` frontmatter, or `General`. Anything but a non-empty string falls back
+ * rather than throwing — `tests/unit/docs_tree.test.mjs` is where a bad value goes red.
+ */
+export function sectionOf(meta) {
+  const s = meta.section;
+  return typeof s === 'string' && s.trim() ? s.trim() : GENERAL_SECTION;
+}
+
+/**
+ * Pages already in `order:` order, regrouped so each section's pages sit together.
+ *
+ * SECTION ORDER IS THE SMALLEST `order:` AMONG ITS PAGES — which, on a list already sorted by
+ * order, is simply the order in which sections first appear. Within a section the pages keep
+ * their `order:` order. One rule for the list, the breadcrumb and prev/next alike, so the
+ * console never shows two orders for one part.
+ */
+export function bySection(pages) {
+  const runs = new Map();
+  for (const p of pages) {
+    if (!runs.has(p.section)) runs.set(p.section, []);
+    runs.get(p.section).push(p);
+  }
+  return [...runs.values()].flat();
 }
 
 // ---- markdown tables as data ------------------------------------------------------------
@@ -259,8 +288,27 @@ function subCounts(state, body) {
 
 // ---- harness filtering -----------------------------------------------------------------
 
-const HARNESSES = ['opencode', 'claude'];
-const HARNESS_OPEN_RE = /^\s*<!--\s*harness:(opencode|claude)\s*-->\s*$/;
+/**
+ * The Docs selector names a HOST; a tag names a host or a FAMILY. Bob and OpenClaude emit
+ * through the Claude engine, so a `claude` tag (page or block) is the Claude family and shows
+ * to all three of them, while `bob` / `openclaude` narrow to the one host. The same mapping as
+ * the console's host table (`web/src/lib/hosts.js`, its `docs` column).
+ */
+export const HOST_FAMILY = { opencode: 'opencode', claude: 'claude', openclaude: 'claude', bob: 'claude' };
+export const HARNESSES = Object.keys(HOST_FAMILY);
+/**
+ * A page or block tagged `tag` shows to `host`. Untagged content shows to every host. One tag
+ * names a host or a family; a LIST names hosts exactly, no family widening, because picking
+ * some hosts of a family is the only thing a list says that one tag cannot:
+ * `["claude", "openclaude"]` is Claude Code and OpenClaude, not Bob.
+ */
+export const harnessShows = (tag, host) => (Array.isArray(tag)
+  ? tag.includes(host)
+  : !tag || tag === host || tag === HOST_FAMILY[host]);
+/** A block's tag: `claude` alone, or `claude,openclaude` — the list, read as above. */
+const harnessTag = (raw) => (raw.includes(',') ? raw.split(/\s*,\s*/) : raw);
+const HOST_ID = '(?:opencode|claude|openclaude|bob)';
+const HARNESS_OPEN_RE = new RegExp(String.raw`^\s*<!--\s*harness:(${HOST_ID}(?:\s*,\s*${HOST_ID})*)\s*-->\s*$`);
 const HARNESS_CLOSE_RE = /^\s*<!--\s*\/harness\s*-->\s*$/;
 /**
  * The cheap presence test for the early-out. It must never be NARROWER than the open
@@ -272,7 +320,9 @@ const HARNESS_HINT_RE = /<!--\s*harness:/;
 export function normHarness(value, state) {
   const v = (value || '').trim().toLowerCase();
   if (HARNESSES.includes(v)) return v;
-  return /^(claude|openclaude)/.test(String(state.emit || '')) ? 'claude' : 'opencode';
+  // Emit names start with their host id (`claude-global`, `bob`, …); `files` reads OpenCode's.
+  const emit = String(state.emit || '');
+  return HARNESSES.find((h) => emit.startsWith(h)) || 'opencode';
 }
 
 /**
@@ -309,7 +359,8 @@ export function harnessBlocksBalanced(lines) {
  * the marker; the console has already filtered the block to the reader's host, so there the
  * label only repeats what the host selector says, and it goes with the marker.
  */
-const HOST_LABEL_RE = /^\s*\*\((OpenCode|Claude Code) only\)\*\s*$/;
+const HOST_NAME = '(?:OpenCode|Claude Code|OpenClaude|IBM Bob)';
+const HOST_LABEL_RE = new RegExp(String.raw`^\s*\*\(${HOST_NAME}(?: and ${HOST_NAME})* only\)\*\s*$`);
 
 export function stripHarnessBlocks(body, harnessName) {
   if (!HARNESS_HINT_RE.test(body)) return body;
@@ -329,7 +380,7 @@ export function stripHarnessBlocks(body, harnessName) {
     }
     if (!inFence) {
       const m = HARNESS_OPEN_RE.exec(line);
-      if (m) { keep = m[1] === harnessName; afterOpen = true; continue; }
+      if (m) { keep = harnessShows(harnessTag(m[1]), harnessName); afterOpen = true; continue; }
       if (HARNESS_CLOSE_RE.test(line)) { keep = true; continue; }
       if (labelSlot && HOST_LABEL_RE.test(line)) continue;
     }
@@ -353,8 +404,8 @@ function splitLines(s) {
 function visibleGroups(harnessName) {
   const groups = [];
   for (const g of docGroups()) {
-    if (g.harness && g.harness !== harnessName) continue;
-    const pages = g.pages.filter((p) => !p.harness || p.harness === harnessName);
+    if (!harnessShows(g.harness, harnessName)) continue;
+    const pages = g.pages.filter((p) => harnessShows(p.harness, harnessName));
     if (pages.length) groups.push({ ...g, pages });
   }
   return groups;
@@ -510,7 +561,8 @@ export function apiDocs(state, harnessName = null) {
   const groups = visibleGroups(hn).map((g) => ({
     id: g.id,
     label: g.label,
-    pages: g.pages.map((p) => ({ id: p.id, title: p.title, kind: p.kind })),
+    pages: g.pages.map((p) => ({ id: p.id, title: p.title, kind: p.kind, section: p.section,
+      ...(typeof p.description === 'string' ? { description: p.description } : {}) })),
   }));
   return { groups, harness: hn };
 }

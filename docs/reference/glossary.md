@@ -1,8 +1,10 @@
 ---
 group: reference
-order: 3
+order: 20
 title: "Glossary"
 kind: "glossary"
+section: "Glossary & about"
+description: "Every Geneseed word you won't find in a programming glossary, with a dev analogy."
 ---
 Every word Geneseed uses that you would not find in a general programming glossary. The console shows this table in your installed theme's voice beside the neutral words; on GitHub you read the neutral ones.
 

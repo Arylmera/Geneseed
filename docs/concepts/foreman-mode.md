@@ -1,8 +1,10 @@
 ---
 group: concepts
-order: 10
+order: 15
 title: "Foreman mode"
 kind: "concept"
+section: "Working together"
+description: "Direct or foreman: whether the session does the work or hands it to a crew."
 link: {"hash": "#/harness", "label": "Set the mode in Harness →"}
 ---
 **Mode** decides how work gets executed in a session. Two modes ship: **direct**, the default, where the agent does every task itself, and **foreman**, where the session hands substantial tasks to a crew of [agents](agents.md) and keeps talking to you while they work.

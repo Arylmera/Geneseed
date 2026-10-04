@@ -1,8 +1,10 @@
 ---
 group: concepts
-order: 4
+order: 5
 title: "Skills"
 kind: "concept"
+section: "Harness"
+description: "Written playbooks the agent follows for a repeatable task."
 link: {"hash": "#/section/skills", "label": "Browse the catalog →"}
 ---
 A **skill** is a repeatable workflow written as a markdown playbook: when it applies, the steps, and what "done" looks like. The agent reads the playbook before acting, so a task it has a skill for is done the same careful way every time instead of improvised.

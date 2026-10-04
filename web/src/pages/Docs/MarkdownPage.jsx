@@ -55,19 +55,20 @@ export function extractToc(body) {
   return out
 }
 
-// State-aware overlay: on the install guide, the H3 for the deployed emit is
-// highlighted and scrolled to, so the guide opens on the reader's own path.
-// Matched by slug, so a heading that drifts from this text simply goes unlit.
-const INSTALL_HEADING_BY_EMIT = {
-  'opencode-global': 'OpenCode, global (recommended)',
-  opencode: 'OpenCode, per-repo',
-  'claude-global': 'Claude Code',
-  claude: 'Claude Code',
-  'openclaude-global': 'OpenClaude',
-  openclaude: 'OpenClaude',
-  'bob-global': 'Bob',
-  bob: 'Bob',
-  files: 'Any AGENT.md tool',
+// State-aware overlay. The install guide is a section of pages, one per host: the deployed
+// emit names its host's page and, where that page has one heading per scope, the heading.
+// On the Install hub the list item linking to the reader's page is lit; on the host page the
+// scope's H2. Matched by link and by slug, so a page or heading that drifts simply goes unlit.
+const INSTALL_BY_EMIT = {
+  'opencode-global': ['install-opencode', 'Global (recommended)'],
+  opencode: ['install-opencode', 'Per repo'],
+  'claude-global': ['install-claude-code'],
+  claude: ['install-claude-code'],
+  'openclaude-global': ['install-openclaude'],
+  openclaude: ['install-openclaude'],
+  'bob-global': ['install-bob'],
+  bob: ['install-bob'],
+  files: ['install-agent-md'],
 }
 
 // A blockquote that opens on **You already know this:** is a dev analogy, styled as
@@ -131,17 +132,21 @@ export default function MarkdownPage({ page, overview, onAction }) {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [html, page.anchor])
 
-  // Install overlay: outline and scroll to the H3 that matches the deployed emit.
+  // Install overlay: outline the reader's own path. Outline only — never scroll to it: the
+  // page opens at its top like every other, and the reader finds their path lit.
   useEffect(() => {
     const el = ref.current
-    if (!el || page.id !== 'install') return
+    if (!el) return
     el.querySelectorAll('.docs-here').forEach((n) => n.classList.remove('docs-here'))
-    const want = INSTALL_HEADING_BY_EMIT[overview?.emit]
-    if (!want) return
-    const h = [...el.querySelectorAll('h3')].find((n) => slug(n.textContent || '') === slug(want))
-    if (!h) return
-    h.classList.add('docs-here')
-    h.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    const [target, heading] = INSTALL_BY_EMIT[overview?.emit] || []
+    if (!target) return
+    let lit = null
+    if (page.id === 'install') {
+      lit = el.querySelector(`a[href="#/docs/${target}"]`)?.closest('li')
+    } else if (page.id === target && heading) {
+      lit = [...el.querySelectorAll('h2')].find((n) => slug(n.textContent || '') === slug(heading))
+    }
+    lit?.classList.add('docs-here')
   }, [html, page.id, overview?.emit])
 
   // "Try this" buttons — wired only for pages where a safe action is obvious.

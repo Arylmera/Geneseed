@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 7
+order: 15
 title: "Connect your wiki"
 kind: "concept"
+section: "Set up"
+description: "Give the agent your own notes, machine-wide."
 ---
 If you keep a personal knowledge base on this machine, such as an Obsidian vault or any folder of interlinked markdown, you can declare it once. The agent then reads from it and writes to it while following your own structure. This is optional. Until you declare a wiki, the feature stays off.
 

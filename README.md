@@ -41,7 +41,7 @@ A hand-written instructions file is prose the model may or may not honour, copie
 - **Costs are measured, not guessed.** Zero runtime dependencies. The hook path loads in about 14 ms per tool call. The default *lean* footprint keeps the always-on context small and puts the full rationale one read away — the numbers are in [docs/token-footprint.md](docs/token-footprint.md).
 - **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
 
-This page is the overview. **New to agent harnesses?** Start with [Understand](docs/understand/harness.md) — four short pages on what a harness is, what lands on your machine, what changes in your day, and what is enforced versus only asked. Everything else — every install path, configuration knob, and troubleshooting step — is in the **[documentation](docs/README.md)**, which the web console also renders.
+This page is the overview. **New to agent harnesses?** Start with [Understand](docs/understand/harness.md) — a short course on what a harness is, what lands on your machine, what changes in your day, and what is enforced versus only asked. Everything else — every install path, configuration knob, and troubleshooting step — is in the **[documentation](docs/README.md)**, which the web console also renders.
 
 ---
 
@@ -199,7 +199,7 @@ Pick with `--theme NAME` or via the setup wizard; upgrades remember it. More in 
 
 ### 🪶 Footprint (lean vs full)
 
-A second per-install dial sets how much of the constitution the root file carries *inline* every turn — a token-cost knob, not a change to which Rules apply. **lean** (the default) carries each rule's hand-written short form and points to the full text on disk; **full** inlines every rule with its rationale. Every rule is in force either way. More in [Footprint](docs/concepts/footprint.md) and [Choose your setup](docs/guides/choose-your-setup.md).
+A second per-install dial sets how much of the constitution the root file carries *inline* every turn — a token-cost knob, not a change to which Rules apply. **lean** (the default) carries each rule's hand-written short form and points to the full text on disk; **full** inlines every rule with its rationale. Every rule is in force either way. More in [Footprint](docs/concepts/footprint.md) and [Footprint, loop trust and changing later](docs/guides/setup-footprint.md).
 
 ---
 

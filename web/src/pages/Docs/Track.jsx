@@ -1,10 +1,13 @@
 import React from 'react'
 import { go } from '../../lib/router.js'
 
-// The Understand group read as a course: numbered steps with progress in the sidebar and a
-// prev/next bar under the article. Progress is the reader's own, in localStorage only —
-// the ids of the understand pages they have opened. The Overview's "New here?" card reads
-// the same key.
+// Where a docs page sits, and the prev/next bar under it. Every page has a part (the folder:
+// Understand, Guides, Concepts, Reference) and a section inside it (`section:` frontmatter,
+// General when absent); the menu already lists a part's pages section by section.
+//
+// The Understand part is also a course: its progress is the reader's own, in localStorage
+// only — the ids of the understand pages they have opened. The Overview's "New here?" card
+// reads the same key.
 export const SEEN_KEY = 'geneseed-understand-seen'
 export const TRACK_GROUP = 'understand'
 
@@ -37,53 +40,47 @@ export function trackNav(menu, pageId) {
   return { prev: pages[i - 1] || null, next: pages[i + 1] || after?.pages[0] || null }
 }
 
+// The page's part, section and page record, or nulls when the menu does not list it.
+export function placeOf(menu, pageId) {
+  for (const part of menu?.groups || []) {
+    const page = part.pages.find((p) => p.id === pageId)
+    if (page) return { part, section: page.section || 'General', page }
+  }
+  return { part: null, section: null, page: null }
+}
+
+// Previous / Next: within the page's section — except on the Understand track, which is read
+// as one course across its sections and leaves for the next part at its end (trackNav).
+export function pageNav(menu, pageId) {
+  const { part, section } = placeOf(menu, pageId)
+  if (!part) return { prev: null, next: null }
+  if (part.id === TRACK_GROUP) return trackNav(menu, pageId)
+  const pages = part.pages.filter((p) => (p.section || 'General') === section)
+  const i = pages.findIndex((p) => p.id === pageId)
+  return { prev: pages[i - 1] || null, next: pages[i + 1] || null }
+}
+
 const open = (id) => go(`#/docs/${encodeURIComponent(id)}`)
 
-export default function Track({ menu, pageId, seen }) {
-  const groups = menu?.groups || []
-  const track = groups.find((g) => g.id === TRACK_GROUP)
-  if (!track) return null
-  const done = track.pages.filter((p) => seen.includes(p.id)).length
+// The track's progress line: how many understand pages the reader has opened.
+export function TrackProgress({ pages, seen }) {
+  const done = pages.filter((p) => seen.includes(p.id)).length
   return (
-    <div className="track">
-      <div className="docs-group-head">{track.label}</div>
-      <div
-        className="track-prog"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={track.pages.length}
-        aria-valuenow={done}
-      >
-        <i style={{ width: `${(done / (track.pages.length || 1)) * 100}%` }} />
-      </div>
-      {track.pages.map((p, i) => {
-        const state = p.id === pageId ? 'on' : seen.includes(p.id) ? 'done' : ''
-        return (
-          <button
-            key={p.id}
-            className={`track-step ${state}`}
-            aria-current={state === 'on' ? 'page' : undefined}
-            onClick={() => open(p.id)}
-          >
-            <span className="track-n">{state === 'done' ? '✓' : i + 1}</span>
-            <span>{p.title}</span>
-          </button>
-        )
-      })}
-      <div className="docs-group-head track-after">After the track</div>
-      {groups
-        .filter((g) => g.id !== TRACK_GROUP && g.pages.length)
-        .map((g) => (
-          <button key={g.id} className="track-link" onClick={() => open(g.pages[0].id)}>
-            {g.label} <span className="mono dim">{g.pages.length}</span>
-          </button>
-        ))}
+    <div
+      className="track-prog"
+      role="progressbar"
+      aria-label="Pages read"
+      aria-valuemin={0}
+      aria-valuemax={pages.length}
+      aria-valuenow={done}
+    >
+      <i style={{ width: `${(done / (pages.length || 1)) * 100}%` }} />
     </div>
   )
 }
 
-export function TrackBar({ menu, pageId }) {
-  const { prev, next } = trackNav(menu, pageId)
+export function PageBar({ menu, pageId }) {
+  const { prev, next } = pageNav(menu, pageId)
   if (!prev && !next) return null
   return (
     <div className="track-bar">

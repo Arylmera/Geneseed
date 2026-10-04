@@ -111,7 +111,7 @@ export function useSearchIndex(rev = 0) {
               sortKey: 110,
               title: p.title,
               desc: g.label,
-              hay: `${p.title || ''} ${p.id || ''} ${g.label || ''}`.toLowerCase(),
+              hay: `${p.title || ''} ${p.id || ''} ${g.label || ''} ${p.section || ''} ${p.description || ''}`.toLowerCase(),
               route: `#/docs/${encodeURIComponent(p.id)}`,
             })
           }

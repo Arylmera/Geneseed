@@ -519,7 +519,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
     lines.push(['ok', `${f.hookGroups} hook groups wired in ${f.settings}`]);
     if (!process.env.GENESEED_LLM) {
       lines.push(['info', 'memory learning is off until you set GENESEED_LLM '
-        + '(see docs/reference/environment.md)']);
+        + '(see docs/reference/env-context.md)']);
     }
   }
   if (emit === 'files') {

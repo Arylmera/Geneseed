@@ -67,8 +67,32 @@ bricks' note files.
   not only the iteration head, so a template-wide proviso is visible everywhere, including to
   `review`. `description` stays the catalogue blurb and is never sent as rules. The shipped
   templates' instructions moved out of their descriptions into `rules`.
+- **A guide to running a loop** — `docs/guides/run-a-loop.md`, `loop-running.md` and
+  `loop-finish.md`: what you need, how to ask, which template for which job, the trust preset,
+  answering a blocking score or a human gate, watching, stopping, merging, driving the engine by
+  hand, and a symptom table.
+- **Console: rendered brick view** — the Loops page's Bricks reader renders a brick's body as
+  markdown under its facts (effect, outcomes, gate), with the raw source one click away.
 
 ### Changed
+- **Docs in the Library layout** — the console's Docs tab is a rail of parts (Understand, Guides,
+  Concepts, Reference), a filterable list grouped by section, and a reader with a breadcrumb,
+  the page's outline and Previous / Next within its section. Pages carry a new `section` and
+  `description` in their frontmatter.
+- **Long doc pages split into short ones**, each a section of its part: the install guide (one
+  page per host, from a clone, without the wizard), what lands on your machine (one page per
+  host, taking it back out), troubleshooting (installing, hooks, updating, doctor, web console),
+  the OpenCode plugins (one page per plugin), loops (templates, bricks, notes and rules, risk,
+  human gates, contracts, the loop branch) and the run-a-loop guide. The `geneseed loop` actions
+  table moved to Reference. Then the rest of the long ones: choose your setup (voice and working
+  style · doctrine packs and single rules · footprint, loop trust and changing later), MCP servers
+  (a hub, one page per preset, reading non-markdown docs; the won't-connect checklist moved to
+  Troubleshooting), hooks (the hooks · gates, settings and the shim), environment variables (the
+  context and memory ones on their own page; plugin switches live on each plugin's page), the
+  host capability matrix, and which loop template. Every first page keeps its old address.
+- **The Understand track has more pages** — what lands on your machine is now one page per host
+  plus taking it back out, so a returning reader's "New here?" progress shows the new steps
+  as unread.
 - **Console Loops page in the Library layout** — a rail (Templates · Bricks · Active, with
   counts) replaces the tabs; each section is a filterable list grouped like the Library's
   (templates by `category`, bricks by origin, active loops by status, awaiting first) beside a
@@ -84,6 +108,10 @@ bricks' note files.
   than declaring the whole repo writable.
 
 ### Fixed
+- **The install page no longer scrolls on open** — the reader's own host is lit (its link on the
+  Install page, its scope's heading on the OpenCode page) without moving the page.
+- The bricks README link on the loops page pointed at a repository that does not exist; the
+  console's wiki button opened a docs page that does not exist.
 - A read-setup brick's plan or review findings no longer vanish between steps — `record --note`
   / `--note-file` writes them into `LOOP.md`'s notes instead of leaving them in the brick's own,
   discarded context.

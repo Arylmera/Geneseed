@@ -103,7 +103,7 @@ export default function ManifestDoc({ manifest, body, name }) {
             markdown the agent reads from and writes back to. Declare one in{' '}
             <code className="mono">wiki.jsonc</code> to switch it on.
           </p>
-          <a className="btn ghost sm" href="#/docs/configure-wiki">
+          <a className="btn ghost sm" href="#/docs/wiki">
             How to configure a wiki
           </a>
           <RawSource body={body} />

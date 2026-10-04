@@ -3,6 +3,8 @@ group: guides
 order: 9
 title: "Run geneseed from anywhere"
 kind: "concept"
+section: "Install"
+description: "Put the geneseed command on your PATH from a clone."
 ---
 **Installed from npm? You have nothing to do.** `npm install -g geneseed` already puts `geneseed`, `geneseed-build` and `geneseed-hook` on your `PATH`.
 

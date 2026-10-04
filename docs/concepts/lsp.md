@@ -3,6 +3,8 @@ group: concepts
 order: 13
 title: "Code intelligence (LSP, OpenCode)"
 kind: "concept"
+section: "Configuration"
+description: "Language servers on OpenCode, so the agent sees real diagnostics."
 ---
 OpenCode can run **language servers** — the same Language Server Protocol servers your editor uses — so the agent sees real diagnostics, type errors and definitions, not just text. Geneseed turns this on for every language OpenCode ships a server for.
 

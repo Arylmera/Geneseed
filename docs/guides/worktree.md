@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 12
+order: 30
 title: "Add git-worktree isolation"
 kind: "concept"
+section: "OpenCode extras"
+description: "Add the optional third-party git-worktree isolation to OpenCode."
 harness: "opencode"
 ---
 This is a third-party, optional OpenCode plugin. Geneseed does not ship it or install it.

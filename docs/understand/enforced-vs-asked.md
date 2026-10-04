@@ -1,8 +1,10 @@
 ---
 group: understand
-order: 4
+order: 8
 title: "Enforced vs. asked"
 kind: "concept"
+section: "Day to day"
+description: "What is guaranteed by code, and what the model is only asked to do."
 ---
 Geneseed gives your agent two kinds of instruction, and it matters which kind you are relying on.
 

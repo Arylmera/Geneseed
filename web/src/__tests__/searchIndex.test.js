@@ -52,6 +52,34 @@ describe('useSearchIndex', () => {
     ])
   })
 
+  // A docs page is found by what its list row shows: its section and its description too,
+  // not only its title and id.
+  it('searches a docs page by its section and description', async () => {
+    api.docs.mockResolvedValueOnce({
+      groups: [
+        {
+          label: 'Guides',
+          pages: [
+            {
+              id: 'mcp-gitlab',
+              title: 'GitLab',
+              section: 'Set up',
+              description: 'Merge requests from the agent.',
+            },
+          ],
+        },
+      ],
+    })
+    const { result } = renderHook(() => useSearchIndex(0))
+    let entries
+    await act(async () => {
+      entries = await result.current.prime()
+    })
+    const hay = entries.find((e) => e.kind === 'Docs').hay
+    expect(hay).toContain('set up')
+    expect(hay).toContain('merge requests from the agent.')
+  })
+
   it('drops the index when the data revision moves, so the next search re-reads', async () => {
     const { result, rerender } = renderHook(({ rev }) => useSearchIndex(rev), {
       initialProps: { rev: 0 },

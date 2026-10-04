@@ -1,8 +1,10 @@
 ---
 group: concepts
-order: 2
+order: 3
 title: "Rules (the constitution)"
 kind: "concept"
+section: "Harness"
+description: "The constitution: the standing rules every session carries, in laws and doctrine packs."
 link: {"hash": "#/laws", "label": "Browse the constitution →"}
 ---
 The **constitution** is the set of standing rules the agent carries into every session. It is authored in `src/`, rendered into the instructions file your host reads (`AGENT.md`, `CLAUDE.md` or `AGENTS.md`), and comes in layers that differ in one thing: whether you can turn them off.
@@ -37,7 +39,7 @@ When two instructions disagree, the higher one wins.
 | **process** | how a session runs — planning, context economy, docs first, bounded loops, consent before every commit and push |
 | **comms** | how answers are presented — stable reference codes on tracked items, a diagram or table only where it earns its place |
 
-All of them are on by default. This install built in {N_PACKS_ACTIVE}, carrying {N_DOCTRINE_RULES} rules between them. You choose packs at build time with `--doctrines`, or drop single rules with `--exclude-rules`; the how-to is in [Choose your setup](../guides/choose-your-setup.md).
+All of them are on by default. This install built in {N_PACKS_ACTIVE}, carrying {N_DOCTRINE_RULES} rules between them. You choose packs at build time with `--doctrines`, or drop single rules with `--exclude-rules`; the how-to is in [Doctrine packs and single rules](../guides/setup-doctrines.md).
 
 A pack you leave out **still ships**: every pack file lands under `doctrines/` beside the instructions file whether or not it was built in. A rule that cites an inactive pack still resolves on disk, and you can read the alternatives before turning one on. An inactive pack loses its binding force, not its availability.
 

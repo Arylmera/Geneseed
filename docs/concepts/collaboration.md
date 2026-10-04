@@ -1,8 +1,10 @@
 ---
 group: concepts
-order: 9
+order: 14
 title: "Collaboration"
 kind: "concept"
+section: "Working together"
+description: "Register, contract, how firmly a memory binds, and who you are."
 ---
 Beside the [rules](rules.md), a few pieces shape *how* the agent works with you: the register it speaks in, the contract between you, how firmly a memory binds, and who you are. All of them are plain text in the install, so they reach every host unchanged.
 

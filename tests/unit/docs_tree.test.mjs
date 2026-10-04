@@ -8,7 +8,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from '../../js/build/source.mjs';
-import { docSources, parseMapTable, stripHarnessBlocks } from '../../js/web/docs.mjs';
+import {
+  bySection, docSources, parseMapTable, sectionOf, stripHarnessBlocks,
+} from '../../js/web/docs.mjs';
 
 const pages = () => docSources()
   .map((s) => ({ ...s, text: fs.readFileSync(path.join(ROOT, s.rel), 'utf8') }));
@@ -29,14 +31,24 @@ function relativeLinks(text, rel) {
   return out;
 }
 
-/** GitHub hides `<!--harness:x-->`, so the line after it must say which host the block is for. */
-const HOST_LABEL = { opencode: '*(OpenCode only)*', claude: '*(Claude Code only)*' };
+/**
+ * GitHub hides `<!--harness:x-->`, so the line after it must say which hosts the block is for:
+ * `*(Claude Code only)*` for one, `*(Claude Code and OpenClaude only)*` for the list
+ * `<!--harness:claude,openclaude-->`, names in the marker's order.
+ */
+const HOST_NAME = { opencode: 'OpenCode', claude: 'Claude Code', openclaude: 'OpenClaude', bob: 'IBM Bob' };
+const HOSTS = Object.keys(HOST_NAME);
+const hostLabel = (ids) => `*(${ids.map((id) => HOST_NAME[id]).join(' and ')} only)*`;
 function unlabelledHarnessBlocks(text) {
   const lines = text.split('\n');
   const bad = [];
   lines.forEach((line, i) => {
-    const m = /^\s*<!--\s*harness:(opencode|claude)\s*-->\s*$/.exec(line);
-    if (m && (lines[i + 1] ?? '').trim() !== HOST_LABEL[m[1]]) bad.push(i + 1);
+    const m = /^\s*<!--\s*harness:([a-z, ]+?)\s*-->\s*$/.exec(line);
+    if (!m) return;
+    const ids = m[1].split(/\s*,\s*/);
+    if (!ids.every((id) => HOSTS.includes(id)) || (lines[i + 1] ?? '').trim() !== hostLabel(ids)) {
+      bad.push(i + 1);
+    }
   });
   return bad;
 }
@@ -44,11 +56,44 @@ function unlabelledHarnessBlocks(text) {
 /** A frontmatter value, raw. */
 const front = (text, key) => (new RegExp(`^${key}:\\s*"?([^"\\n]*)"?\\s*$`, 'm').exec(text) ?? [])[1];
 
+/**
+ * A `harness:` tag the server would not recognise. `harnessShows` compares it to the host and
+ * its family, so a typo matches nothing and hides the page from every host, silently. The
+ * value is JSON, as every frontmatter value is (`docFrontmatter`): one host id as a string, or
+ * a non-empty JSON array of distinct host ids (`["claude", "openclaude"]`) naming those hosts
+ * exactly. `[claude, openclaude]` is not JSON, would reach the server as one raw string that
+ * matches no host, and is refused here.
+ */
+const BAD_HARNESS = (text) => {
+  const raw = /^harness:(.*)$/m.exec(text.split('\n---\n')[0])?.[1].trim();
+  if (raw === undefined) return false;
+  let v;
+  try { v = JSON.parse(raw); } catch { return true; }
+  if (typeof v === 'string') return !HOSTS.includes(v);
+  return !Array.isArray(v) || !v.length || new Set(v).size !== v.length
+    || !v.every((id) => HOSTS.includes(id));
+};
+
 test('each gate fails on a page that breaks it', () => {
   assert.deepEqual(relativeLinks('[a](../concepts/x.md#y)\n```\n[b](z.md)\n```', 'docs/guides/i.md'),
     ['docs/concepts/x.md']);
   assert.deepEqual(unlabelledHarnessBlocks('<!--harness:claude-->\nhooks\n<!--/harness-->'), [1]);
   assert.deepEqual(unlabelledHarnessBlocks('<!--harness:claude-->\n*(Claude Code only)*\n'), []);
+  assert.deepEqual(unlabelledHarnessBlocks('<!--harness:bob-->\n*(IBM Bob only)*\n'), []);
+  assert.deepEqual(unlabelledHarnessBlocks('<!--harness:bob-->\n*(Claude Code only)*\n'), [1]);
+  assert.equal(BAD_HARNESS('---\ngroup: guides\nharness: "bob"\n---\nx'), false);
+  assert.equal(BAD_HARNESS('---\ngroup: guides\n---\nx'), false);
+  assert.equal(BAD_HARNESS('---\ngroup: guides\nharness: "copilot"\n---\nx'), true);
+  assert.equal(BAD_HARNESS('---\nharness: ["claude", "openclaude"]\n---\nx'), false);
+  assert.equal(BAD_HARNESS('---\nharness: [claude, openclaude]\n---\nx'), true);
+  assert.equal(BAD_HARNESS('---\nharness: "claude, openclaude"\n---\nx'), true);
+  assert.equal(BAD_HARNESS('---\nharness: ["claude", "copilot"]\n---\nx'), true);
+  assert.equal(BAD_HARNESS('---\nharness: []\n---\nx'), true);
+  assert.equal(BAD_HARNESS('---\nharness: ["bob", "bob"]\n---\nx'), true);
+  assert.deepEqual(unlabelledHarnessBlocks(
+    '<!--harness:claude,openclaude-->\n*(Claude Code and OpenClaude only)*\n'), []);
+  assert.deepEqual(unlabelledHarnessBlocks('<!--harness:claude,openclaude-->\n*(Claude Code only)*\n'), [1]);
+  assert.deepEqual(unlabelledHarnessBlocks('<!--harness:claude,copilot-->\n*(Claude Code only)*\n'), [1]);
   assert.equal(front('---\ngroup: guides\nkind: "map"\n---', 'kind'), 'map');
 });
 
@@ -70,17 +115,23 @@ test('no count token in understand/ or guides/ — GitHub would show it raw', ()
   }
 });
 
+test('every harness: tag names a host the selector offers', () => {
+  for (const { rel, text } of pages()) {
+    assert.ok(!BAD_HARNESS(text), `${rel}: its harness: tag is not a host id or a JSON list of them`);
+  }
+});
+
 test('every harness block opens with a visible host label', () => {
   for (const { rel, text } of pages()) {
     assert.deepEqual(unlabelledHarnessBlocks(text), [],
-      `${rel}: a <!--harness:x--> line must be followed by ${Object.values(HOST_LABEL).join(' or ')}`);
+      `${rel}: a <!--harness:x--> line must name hosts and be followed by ${hostLabel(['claude'])} or the like`);
   }
 });
 
 test('every map page parses for each host', () => {
   for (const { rel, text } of pages()) {
     if (front(text, 'kind') !== 'map') continue;
-    for (const host of ['opencode', 'claude']) {
+    for (const host of ['opencode', 'claude', 'openclaude', 'bob']) {
       assert.ok(parseMapTable(stripHarnessBlocks(text, host)),
         `${rel} has no well-formed map table for ${host}`);
     }
@@ -94,4 +145,48 @@ test('every page names a group that _groups.json declares', () => {
     const text = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     assert.ok(groups.has(front(text, 'group')), `${rel} names group "${front(text, 'group')}"`);
   }
+});
+
+// `section:` (and `description:`) are optional; when present each must be a non-empty string.
+// The server reads anything else as "no section", so a typo would quietly file the page under
+// General — this is the gate that says so instead. Read through the server's own parser shape:
+// a JSON scalar, or the raw text when it is not JSON.
+const BAD_SECTION = (text) => {
+  const raw = (/^section:[ \t]*(.*)$/m.exec(text.split('\n---\n')[0]) ?? [])[1];
+  if (raw === undefined) return false;
+  let v;
+  try { v = JSON.parse(raw.trim()); } catch { v = raw.trim(); }
+  return !(typeof v === 'string' && v.trim());
+};
+
+test('the section gate fails on a page that breaks it', () => {
+  assert.equal(BAD_SECTION('---\ngroup: guides\nsection: Install\n---\nx'), false);
+  assert.equal(BAD_SECTION('---\ngroup: guides\nsection: "Install"\n---\nx'), false);
+  assert.equal(BAD_SECTION('---\ngroup: guides\n---\nx'), false);
+  assert.equal(BAD_SECTION('---\ngroup: guides\nsection: ""\n---\nx'), true);
+  assert.equal(BAD_SECTION('---\ngroup: guides\nsection: 3\n---\nx'), true);
+});
+
+test('every page section, where present, is a non-empty string', () => {
+  for (const { rel, text } of pages()) {
+    assert.ok(!BAD_SECTION(text), `${rel}: section: must be a non-empty string`);
+  }
+});
+
+// Section order is the smallest `order:` among a section's pages; a page with no section is
+// filed under General; inside a section the pages keep their order. Pages arrive sorted by
+// order, so: Install (order 1) leads, General (order 2) next, Loops (order 3) last, and
+// install-bob (order 4) joins Install rather than starting a second Install run.
+test('bySection groups by section, sections by their smallest order', () => {
+  const p = (id, meta) => ({ id, section: sectionOf(meta) });
+  const sorted = [
+    p('quick', { section: 'Install' }),
+    p('verify', {}),
+    p('loop-start', { section: 'Loops' }),
+    p('install-bob', { section: ' Install ' }),
+    p('mcp', { section: '' }),
+  ];
+  assert.deepEqual(bySection(sorted).map((x) => `${x.section}/${x.id}`), [
+    'Install/quick', 'Install/install-bob', 'General/verify', 'General/mcp', 'Loops/loop-start',
+  ]);
 });

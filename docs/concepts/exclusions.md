@@ -1,8 +1,10 @@
 ---
 group: concepts
-order: 11
+order: 12
 title: "Exclusions"
 kind: "concept"
+section: "Configuration"
+description: "Two ways to switch things off: one rule, or every hook in a folder."
 link: {"hash": "#/harness", "label": "Manage in Harness →"}
 ---
 Geneseed has two different ways to switch something off, and they work at different scales:
@@ -52,4 +54,4 @@ The finer switch removes a single doctrine rule from an install while keeping th
 geneseed build --emit claude-global --exclude-rules "process 7"
 ```
 
-The install records it (`Excluded rules: process 7` beside its pack list) and every rebuild and upgrade keeps it. The always-on Rules and the Ethos cannot be excluded. Picking packs and rules is covered in [Choose your setup](../guides/choose-your-setup.md); what the layers are is in [Rules](rules.md).
+The install records it (`Excluded rules: process 7` beside its pack list) and every rebuild and upgrade keeps it. The always-on Rules and the Ethos cannot be excluded. Picking packs and rules is covered in [Doctrine packs and single rules](../guides/setup-doctrines.md); what the layers are is in [Rules](rules.md).

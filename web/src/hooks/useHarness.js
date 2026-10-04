@@ -2,26 +2,24 @@ import { useLocalStorage } from './useLocalStorage.js'
 import { HOSTS } from '../lib/hosts.js'
 
 const HARNESS_KEY = 'geneseed-harness'
-// The Docs carry two families — OpenCode's, and Claude Code's, which Bob and
-// OpenClaude share since both emit through the Claude engine. The selector offers
-// the hosts that head a family (lib/hosts.js's `docs` column).
-export const HARNESSES = HOSTS.filter((h) => h.docs === h.id).map(({ id, label }) => ({
-  id,
-  label,
-}))
+// The Docs selector names each host. A page or block tagged with a host shows to that host;
+// one tagged `claude` is the Claude-engine family and shows to Claude Code, Bob and
+// OpenClaude alike (lib/hosts.js's `docs` column; the server applies the same rule).
+export const HARNESSES = HOSTS.map(({ id, label }) => ({ id, label }))
 
-// Which host the Docs are filtered for. Persisted to localStorage. With nothing stored
-// it follows the deployed install (`fallback`, from `docsHostOf(overview.emit)`), else
-// OpenCode, the server's own default. The server hides the other host's pages and strips
-// its inline blocks; this hook is just the selector state.
+// Which host the Docs are filtered for. Persisted to localStorage; a value stored before the
+// selector named four hosts ('opencode' / 'claude') is still a host id, so it stays valid.
+// With nothing stored it follows the deployed install (`fallback`, from
+// `docsHostOf(overview.emit)`), else OpenCode, the server's own default. The server hides the
+// other hosts' pages and strips their inline blocks; this hook is just the selector state.
 export function useHarness(fallback = 'opencode') {
   return useLocalStorage(HARNESS_KEY, (v) => (HARNESSES.some((h) => h.id === v) ? v : fallback))
 }
 
-// The Docs family an emit target reads. Emit names start with their host id
+// The host an emit target installs into. Emit names start with their host id
 // (`claude-global`, `openclaude`, …); `files` and unknown emits read the OpenCode pages,
 // the server's default.
 export function docsHostOf(emit) {
   const e = String(emit || '')
-  return HOSTS.find((h) => e.startsWith(h.id))?.docs || 'opencode'
+  return HOSTS.find((h) => e.startsWith(h.id))?.id || 'opencode'
 }

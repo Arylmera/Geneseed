@@ -33,8 +33,10 @@ import {
 } from '../../js/web/activity.mjs';
 import {
   apiDocs, apiDocsPage, docCounts, docGroups, docSources, rewriteDocLinks, parseMapTable,
-  parseGlossaryTable, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
+  parseGlossaryTable, normHarness, stripHarnessBlocks, harnessBlocksBalanced, HOST_FAMILY,
+  HARNESSES, harnessShows,
 } from '../../js/web/docs.mjs';
+import { HOSTS } from '../../web/src/lib/hosts.js';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
   apiInstallCmd, apiSelectView, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
@@ -1754,11 +1756,96 @@ for (const [expected, populate, npm, interactive] of PLANS) {
 
 test('the harness name defaults and validates', () => {
   const st = neutral();
-  assert.equal(normHarness('claude', st), 'claude');
-  assert.equal(normHarness('opencode', st), 'opencode');
+  for (const host of ['opencode', 'claude', 'openclaude', 'bob']) {
+    assert.equal(normHarness(host, st), host);
+  }
   // Junk and null fall back to the install's own default rather than throwing.
-  assert.ok(['opencode', 'claude'].includes(normHarness('nonsense', st)));
-  assert.ok(['opencode', 'claude'].includes(normHarness(null, st)));
+  assert.ok(['opencode', 'claude', 'openclaude', 'bob'].includes(normHarness('nonsense', st)));
+  assert.ok(['opencode', 'claude', 'openclaude', 'bob'].includes(normHarness(null, st)));
+});
+
+// With no choice sent, the default is the host the install was emitted for — the host itself,
+// not its family: a Bob install opens on Bob's docs. `files` and unknown emits read OpenCode's.
+test('the default harness is the emitted host', () => {
+  for (const [emit, host] of [['opencode-global', 'opencode'], ['opencode', 'opencode'],
+    ['claude-global', 'claude'], ['claude', 'claude'], ['openclaude-global', 'openclaude'],
+    ['openclaude', 'openclaude'], ['bob-global', 'bob'], ['bob', 'bob'], ['files', 'opencode'],
+    ['', 'opencode']]) {
+    assert.equal(normHarness(null, { emit }), host, emit);
+  }
+});
+
+// The server's family table and the console's host table (lib/hosts.js, its `docs` column)
+// must agree, or the selector would offer a host whose pages the server files elsewhere.
+test('the docs families match the console host table', () => {
+  assert.deepEqual(HOST_FAMILY, { opencode: 'opencode', claude: 'claude', openclaude: 'claude',
+    bob: 'claude' });
+  assert.deepEqual(Object.fromEntries(HOSTS.map((h) => [h.id, h.docs])), HOST_FAMILY);
+});
+
+// A tag names a host or the Claude family: `claude` shows to the three Claude-engine hosts, a
+// host tag only to that host, `opencode` only to OpenCode. Inline blocks follow the same rule.
+test('a harness block shows to its host, and a claude block to the whole family', () => {
+  const body = 'shared\n'
+    + '<!--harness:claude-->\nfamily\n<!--/harness-->\n'
+    + '<!--harness:bob-->\nbob only\n<!--/harness-->\n'
+    + '<!--harness:openclaude-->\nopenclaude only\n<!--/harness-->\n'
+    + '<!--harness:opencode-->\nopencode only\n<!--/harness-->\ntail';
+  const kept = (host) => stripHarnessBlocks(body, host).split('\n');
+  assert.deepEqual(kept('opencode'), ['shared', 'opencode only', 'tail']);
+  assert.deepEqual(kept('claude'), ['shared', 'family', 'tail']);
+  assert.deepEqual(kept('openclaude'), ['shared', 'family', 'openclaude only', 'tail']);
+  assert.deepEqual(kept('bob'), ['shared', 'family', 'bob only', 'tail']);
+  assert.ok(harnessBlocksBalanced(body.split('\n')));
+});
+
+// A LIST names hosts exactly, with no family widening: `claude` inside a list is Claude Code,
+// not the family, so `["claude", "openclaude"]` leaves Bob out. A block says the same list as
+// `<!--harness:claude,openclaude-->`.
+test('a list of hosts shows to exactly those hosts, page or block', () => {
+  const shows = (tag) => HARNESSES.filter((h) => harnessShows(tag, h));
+  assert.deepEqual(shows(['claude', 'openclaude']), ['claude', 'openclaude']);
+  assert.deepEqual(shows(['opencode', 'bob']), ['opencode', 'bob']);
+  assert.deepEqual(shows('claude'), ['claude', 'openclaude', 'bob']);
+  assert.deepEqual(shows(undefined), ['opencode', 'claude', 'openclaude', 'bob']);
+  const body = 'shared\n<!--harness:claude, openclaude-->\n*(Claude Code and OpenClaude only)*\n'
+    + 'two hosts\n<!--/harness-->\ntail';
+  const kept = (host) => stripHarnessBlocks(body, host).split('\n');
+  assert.deepEqual(kept('claude'), ['shared', 'two hosts', 'tail']);
+  assert.deepEqual(kept('openclaude'), ['shared', 'two hosts', 'tail']);
+  assert.deepEqual(kept('bob'), ['shared', 'tail']);
+  assert.deepEqual(kept('opencode'), ['shared', 'tail']);
+});
+
+test('each host sees its own machine page, and Bob not the Claude Code one', () => {
+  const idsFor = (hn) => new Set(apiDocs(neutral(), hn).groups.flatMap((g) => g.pages.map((p) => p.id)));
+  // machine-claude is tagged ["claude", "openclaude"]; machine-opencode `opencode`; machine-bob
+  // is untagged (it also covers the plain AGENT.md bundle, whose readers default to the
+  // OpenCode docs).
+  const want = {
+    opencode: ['machine-opencode', 'machine-bob'],
+    claude: ['machine-claude', 'machine-bob'],
+    openclaude: ['machine-claude', 'machine-bob'],
+    bob: ['machine-bob'],
+  };
+  const all = ['machine-opencode', 'machine-claude', 'machine-bob'];
+  for (const [hn, ids] of Object.entries(want)) {
+    const vis = idsFor(hn);
+    assert.deepEqual(all.filter((id) => vis.has(id)), all.filter((id) => ids.includes(id)), hn);
+  }
+});
+
+// The Understand track, read top to bottom, per host: the shared pages in `order`, with the
+// host's own machine page(s) between "What lands on your machine" and "Taking it back out".
+test('the Understand track reads in order for each host', () => {
+  const track = (hn) => apiDocs(neutral(), hn).groups.find((g) => g.id === 'understand')
+    .pages.map((p) => p.id);
+  const head = ['harness', 'on-your-machine'];
+  const tail = ['take-it-out', 'a-day', 'enforced-vs-asked'];
+  assert.deepEqual(track('opencode'), [...head, 'machine-opencode', 'machine-bob', ...tail]);
+  assert.deepEqual(track('claude'), [...head, 'machine-claude', 'machine-bob', ...tail]);
+  assert.deepEqual(track('openclaude'), [...head, 'machine-claude', 'machine-bob', ...tail]);
+  assert.deepEqual(track('bob'), [...head, 'machine-bob', ...tail]);
 });
 
 test('a harness block keeps the matching host and drops the other', () => {
@@ -1812,21 +1899,40 @@ test('host-specific pages and groups appear only under their host', () => {
   const idsFor = (hn) => new Set(apiDocs(neutral(), hn).groups.flatMap((g) => g.pages.map((p) => p.id)));
   const oc = idsFor('opencode');
   const cc = idsFor('claude');
+  const bob = idsFor('bob');
+  const ocl = idsFor('openclaude');
   // A page tagged `harness:` exists for one host only (a how-to that cannot run elsewhere); the
   // four groups are shared, and so are reference pages a reader comparing hosts needs — hooks,
   // LSP and the plugin reference say their host in the title instead.
   for (const id of ['headless', 'worktree']) {
     assert.ok(oc.has(id), `${id} missing under opencode`);
     assert.ok(!cc.has(id), `${id} leaks under claude`);
+    assert.ok(!bob.has(id) && !ocl.has(id), `${id} leaks under a Claude-engine host`);
   }
   for (const id of ['hooks', 'lsp', 'opencode-plugins']) {
     assert.ok(oc.has(id) && cc.has(id), `${id} must show under both hosts`);
   }
 });
 
+// The console's list groups a part's pages under `● SECTION` headings straight from this
+// payload, so every page must carry its section, and one section's pages must arrive together:
+// a section split in two would print its heading twice.
+test('the docs menu carries each page section, one run per section', () => {
+  for (const g of apiDocs(neutral(), 'opencode').groups) {
+    const runs = [];
+    for (const p of g.pages) {
+      assert.ok(typeof p.section === 'string' && p.section, `${p.id} has no section`);
+      if (runs.at(-1) !== p.section) runs.push(p.section);
+    }
+    assert.equal(runs.length, new Set(runs).size, `${g.id}: a section is split in two`);
+  }
+});
+
 test('the docs endpoint echoes the resolved harness', () => {
   assert.equal(apiDocs(neutral(), 'claude').harness, 'claude');
   assert.equal(apiDocs(neutral(), 'opencode').harness, 'opencode');
+  assert.equal(apiDocs(neutral(), 'bob').harness, 'bob');
+  assert.equal(apiDocs(neutral(), 'openclaude').harness, 'openclaude');
 });
 
 test('a docs page strips for its host', () => {
@@ -1921,9 +2027,34 @@ test('no unsubstituted count placeholder survives rendering', () => {
 });
 
 // Anti-drift, and the reason it exists: "six plugins" went stale when activity landed. A new
-// adapters/opencode/plugins/geneseed-<name>.js must ship its own section of the plugins
-// reference page, and a mention in the README and SHIPPED.md rows.
-test('every plugin ships a reference section and its README/SHIPPED rows', () => {
+// adapters/opencode/plugins/geneseed-<name>.js must ship its own reference page —
+// docs/reference/plugin-<name>.md, titled geneseed-<name> — linked from the plugins overview, and a
+// mention in the README and SHIPPED.md rows. One page per plugin (the long overview was split
+// into a section), so the gate asks for the page AND the overview's link to it: a page nothing
+// links to is a page the overview reader never finds.
+function pluginDocProblems(names, pages, overview) {
+  const titleById = new Map(pages.map((p) => [p.id, p.title]));
+  const out = [];
+  for (const name of names) {
+    if (titleById.get(`plugin-${name}`) !== `geneseed-${name}`) {
+      out.push(`geneseed-${name} has no reference page`);
+    } else if (!overview.includes(`](#/docs/plugin-${name})`)) {
+      out.push(`geneseed-${name} is not linked from the plugins overview`);
+    }
+  }
+  return out;
+}
+
+test('the plugin page gate fails on a missing page, a wrong title and a missing link', () => {
+  const pages = [{ id: 'plugin-a', title: 'geneseed-a' }, { id: 'plugin-b', title: 'b' }];
+  assert.deepEqual(pluginDocProblems(['a', 'b', 'c'], pages, '[x](#/docs/plugin-a)'), [
+    'geneseed-b has no reference page', 'geneseed-c has no reference page']);
+  assert.deepEqual(pluginDocProblems(['a'], pages, 'no links'),
+    ['geneseed-a is not linked from the plugins overview']);
+  assert.deepEqual(pluginDocProblems(['a'], pages, '[x](#/docs/plugin-a)'), []);
+});
+
+test('every plugin ships a reference page and its README/SHIPPED rows', () => {
   const st = neutral();
   const pluginDir = path.join(ROOT, 'adapters', 'opencode', 'plugins');
   const names = fs.readdirSync(pluginDir)
@@ -1933,6 +2064,9 @@ test('every plugin ships a reference section and its README/SHIPPED rows', () =>
   assert.ok(names.length > 0, 'no plugins found — wrong directory?');
 
   const overview = apiDocsPage(st, 'opencode-plugins', 'opencode').body;
+  const pages = docGroups().flatMap((g) => g.pages);
+  assert.deepEqual(pluginDocProblems(names, pages, overview), []);
+
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   const shipped = fs.readFileSync(path.join(ROOT, 'SHIPPED.md'), 'utf8');
   const row = /plugins \(([^)]*)\)/.exec(shipped);
@@ -1940,10 +2074,6 @@ test('every plugin ships a reference section and its README/SHIPPED rows', () =>
   const shippedNames = new Set(row[1].split(',').map((s) => s.trim()));
 
   for (const name of names) {
-    assert.ok(overview.includes(`
-## geneseed-${name}
-`),
-      `geneseed-${name} has no section on the plugins reference page`);
     assert.ok(readme.includes(`geneseed-${name}`),
       `geneseed-${name} missing from the README plugins row`);
     assert.ok(shippedNames.has(name), `'${name}' missing from the SHIPPED.md plugins list`);
@@ -1957,7 +2087,7 @@ test('every plugin ships a reference section and its README/SHIPPED rows', () =>
 test('concept counts are substituted live from the inventory', () => {
   const st = neutral();
   const inv = st.inventory;
-  for (const hn of ['opencode', 'claude']) {
+  for (const hn of ['opencode', 'claude', 'openclaude', 'bob']) {
     for (const g of apiDocs(st, hn).groups) {
       for (const p of g.pages) {
         const body = apiDocsPage(st, p.id, hn).body || '';
@@ -1976,7 +2106,7 @@ test('concept counts are substituted live from the inventory', () => {
 test('no cross-harness dead links', () => {
   const st = neutral();
   const dead = [];
-  for (const hn of ['opencode', 'claude']) {
+  for (const hn of ['opencode', 'claude', 'openclaude', 'bob']) {
     const menu = apiDocs(st, hn);
     const visible = new Set(menu.groups.flatMap((g) => g.pages.map((p) => p.id)));
     for (const g of menu.groups) {

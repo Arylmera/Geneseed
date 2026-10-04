@@ -6,8 +6,9 @@
 // all four. One row per host now; the order is the deploy form's option order.
 //
 //   label         — the name the deploy form's host picker shows
-//   docs          — which Docs family the host reads. Bob and OpenClaude emit through
-//                   the Claude engine, so they share Claude Code's pages
+//   docs          — which Docs family the host belongs to. Bob and OpenClaude emit through
+//                   the Claude engine, so a page tagged `claude` shows to them too
+//                   (js/web/docs.mjs's HOST_FAMILY is the server's copy of this column)
 //   deployAdds    — what a per-repo deploy puts into the folder (the deploy form's note)
 //   removeProject — what `remove` deletes from a per-repo install
 //   removeGlobal  — what `remove` deletes from the global (config-dir) install

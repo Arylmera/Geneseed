@@ -48,22 +48,26 @@ describe('host facts', () => {
 })
 
 describe('docs host', () => {
-  it('offers the two docs families', () => {
+  it('offers every host, by its own label', () => {
     expect(HARNESSES).toEqual([
       { id: 'opencode', label: 'OpenCode' },
       { id: 'claude', label: 'Claude Code' },
+      { id: 'bob', label: 'BOB (IBM)' },
+      { id: 'openclaude', label: 'OpenClaude' },
     ])
   })
 
-  // Bob and OpenClaude emit through the Claude engine and read Claude's pages.
+  // The selector defaults to the host the install was emitted for — the host itself, not its
+  // family; the server shows a `claude`-tagged page to Bob and OpenClaude anyway.
   it.each([
     ['opencode', 'opencode'],
     ['opencode-global', 'opencode'],
     ['claude', 'claude'],
     ['claude-global', 'claude'],
-    ['bob-global', 'claude'],
-    ['bob', 'claude'],
-    ['openclaude-global', 'claude'],
+    ['bob-global', 'bob'],
+    ['bob', 'bob'],
+    ['openclaude-global', 'openclaude'],
+    ['openclaude', 'openclaude'],
     ['files', 'opencode'],
     [undefined, 'opencode'],
   ])('emit %s reads the %s docs', (emit, docs) => {

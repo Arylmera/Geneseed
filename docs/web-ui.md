@@ -113,7 +113,9 @@ streams the output of background jobs and keeps their history across reloads.
   twice — landing you on the Rules page.
 - **Loops** (`#/loops`) — the loop catalogue `geneseed loop` runs from, read-only, laid out
   like the Library: a rail of sections (**Templates**, **Bricks**, **Active**, each with its
-  count; `#/loops/<section>/<item>` opens an entry), a filterable list, and a reader.
+  count; `#/loops/<section>/<item>` opens an entry), with the selected section's groups
+  nested under it in the rail (template categories, brick origins, run statuses — pick one to
+  narrow the list), a filterable list, and a reader.
   **Templates** are grouped by their `category` (architecture, tests, development,
   refactoring, day-to-day, then *Other*), a *human gate* pill on any that stops for you. The
   reader draws the selected template as a ring: the iteration turning clockwise from its head,
@@ -124,7 +126,8 @@ streams the output of background jobs and keeps their history across reloads.
   cleanly (more than eight iteration steps, a node in more than three loops) falls back to
   left-to-right boxes. **Bricks** are grouped by origin (project / global / shipped), pilled
   for *mutate*, *human gate*, what they override and *unavailable*; the reader shows the
-  frontmatter facts, why an unavailable brick is unavailable, and its source. Templates and
+  frontmatter facts (outcomes as pills, availability with its reason), then the body rendered as
+  markdown, with a **View source** toggle for the file as parsed, frontmatter and all. Templates and
   Bricks read `GET /api/loops`, resolved from the selected install's root, so a project
   install shows its `.geneseed/` bricks and templates. **Active** is every loop
   `geneseed loop init` registered on this machine (`GET /api/loops/active`, polled every
@@ -138,11 +141,17 @@ streams the output of background jobs and keeps their history across reloads.
   the fingerprint it loaded — if an agent session changed the file first, your edit stays
   on screen and a second Save replaces the newer version.
 - **Skills** (`#/skills`) and **Agents** (`#/agents`) — the deployed catalogue, each entry
-  with its purpose line and full spec.
+  with its purpose line and full spec. While Skills is selected, its skill types sit nested
+  under it in the rail, each with its count, above a thin bar of their shares; pick one to
+  narrow the list.
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
-  reference (generated from the harness argument parser), and a glossary, grouped into
-  Get started / Core concepts / How-to / MCP servers / Plugins / Reference / Deeper. Filtered
-  for one host family (OpenCode, or Claude Code — which Bob and OpenClaude share); with no
+  reference (generated from the harness argument parser), and a glossary, in the Library's
+  three panes: the parts (Understand / Guides / Concepts / Reference) with their page counts,
+  the open part's sections nested under it in the rail (pick one to narrow the list), the
+  part's pages under their sections with a filter, and the page with its breadcrumb,
+  outline and Previous / Next within the section. Filtered for one host (OpenCode, Claude
+  Code, Bob or OpenClaude; Claude-family pages show to all three Claude-engine hosts, a page
+  tagged with a list of hosts only to those); with no
   choice stored it follows the deployed install.
 
 ### 🩺 Care
