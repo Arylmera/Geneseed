@@ -16,9 +16,9 @@ bricks' note files.
   it), `legacy-tests` (pin undocumented behaviour with characterization tests, mutation-checked,
   production code untouched), `legacy-refactor` (pin current behaviour once, then refactor behind
   that net), `deps-upgrade` (upgrade one package or group per iteration, breaking changes read
-  before the bump, a lowered `delete` weight so lockfile churn doesn't force a blocking score),
-  and `ci-repair` (triage the current commit's failing CI checks and fix one code failure per
-  iteration).
+  before the bump, lockfiles excluded from the deletion count so their churn doesn't force a
+  blocking score), and `ci-repair` (triage the current commit's failing CI checks and fix one
+  code failure per iteration).
 - **Five bricks** backing the templates above — `red-test`, `characterize`, `mutation-check`
   (reports `unavailable` rather than a silent `pass` when no mutation tool is on the stack),
   `upgrade-scout`, `ci-triage` (reports `done` rather than green when CI has no run for HEAD).
@@ -35,6 +35,43 @@ bricks' note files.
   its iteration history. A per-loop preset picker (`POST /api/loops/preset`) rewrites `LOOP.md`'s
   `preset`, applying from the next score on — the tab's only write; no `decide` and no relaunch
   from the page. Only loops launched on this version or later are registered.
+
+- **Seven more loop templates** — `architecture-decision` (one ADR per decision, challenged by a
+  skeptic brick, reviewed by the user), `enforce-architecture-rule` (encode a rule as a test with
+  an allowlist of today's violations, fix one violation per iteration), `update-contract` (expand,
+  migrate one consumer per iteration, contract, with contract files gated for a human by default),
+  `spec-first-feature` (write the spec first, build one task per iteration, closed by an
+  independent `done-check`), `api-endpoint` (plan, apply, test, a Bruno request and a security
+  review per endpoint), `remove-dead-code` (confirm green, delete one coherent unused group per
+  iteration, deletions scored soft) and `fix-flaky-tests` (confirm by repeated runs, fix the root
+  cause per iteration, never a retry or a sleep).
+- **Nine bricks** backing the templates above — `adr-draft`, `adr-challenge`, `fitness-define`,
+  `migration-plan`, `spec`, `done-check`, `compat-check`, `flake-repro`, `flake-check`.
+- **Human gates** — a brick's frontmatter can carry `gate: human` (optionally `gateOn:
+  <outcomes>`), holding its transition for a person regardless of preset or score. `geneseed loop
+  decide --verdict ok|no|amend` answers it: `ok` follows the reported outcome (a held failure
+  still stops), `no` stops the loop, `amend` re-runs the brick with a note and restarts its ring
+  budget, capped at 3 amends per brick per iteration. A passed gate is named under the closing
+  commit's new `Loop-Gates` trailer; the console's Active tab shows a gated loop the same way it
+  shows one `awaiting` a score decision.
+- **Template `contracts` and `ignoreDeletions` globs** — `contracts` names interface/schema files
+  that always escalate a touching iteration to at least the `api` risk weight; copied from the
+  template at `loop init`, extendable with `--contracts` or by hand in `LOOP.md`.
+  `ignoreDeletions` excludes matched files from the >20-deleted-lines escalation only — the write
+  set still applies to them.
+- **`rules` on every node** — `geneseed loop next` hands the template's own `description` as
+  `rules` to every brick it runs, not only the iteration head, so a template-wide proviso is
+  visible everywhere, including to `review`.
+
+### Changed
+- **`feature`** now closes through an independent `done-check` — it maps every requirement to a
+  passing test before `$close` instead of trusting the iterations that already ran.
+- **`deps-upgrade`** marks lockfiles with `ignoreDeletions` instead of a lowered `delete` weight,
+  so lockfile churn stays out of the deletion count without lowering the weight for any other
+  deletion in the same iteration.
+- **Write-set entries accept globs** when they have at least one literal path segment (a tool's
+  generated store, say); a wildcard-only entry (`**`, `**/*.java`) still matches nothing rather
+  than declaring the whole repo writable.
 
 ### Fixed
 - A read-setup brick's plan or review findings no longer vanish between steps — `record --note`
