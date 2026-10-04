@@ -165,6 +165,22 @@ test('every state action refuses outside a git repository', () => {
   } finally { sb.cleanup(); }
 });
 
+// record --note: a finding a brick must not lose (a read setup brick's plan, a review's fail
+// findings) appended to LOOP.md's notes, exactly `iteration N (node): <note>`.
+test('record --note appends "iteration N (node): note" to LOOP.md notes', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    const r = run(sb.path, ['record', '--outcome', 'pass', '--note', 'x'], '?? test/r.test.js\n');
+    assert.deepEqual(r.out, { verify: true });
+    const loopmd = readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8');
+    assert.match(loopmd, /"notes": \[\s*"iteration 0 \(reproduce\): x"\s*\]/);
+  } finally { sb.cleanup(); }
+});
+
 // M1: `decide` closes a unit through the CLI too — a diff with a file outside the write set
 // escalates to blocking (0.8 > balanced's 0.6), `decide --verdict ok` commits it at that actual
 // score, and the message file it names carries the setup unit's trailers byte for byte.

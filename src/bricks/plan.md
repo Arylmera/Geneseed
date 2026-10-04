@@ -9,9 +9,10 @@ Read the requirement and survey the code it touches. Split the work into an orde
 small iterations, each one sized to a single `identify` card — one testable change apiece.
 
 Do not edit any code; this brick only plans it. Report `pass` with a card whose intent carries
-the ordered list, one iteration per line, so it lands in LOOP.md's notes for `identify` to work
-through one at a time:
+the ordered list, one iteration per line:
 {"intent": "<iteration 1>\n<iteration 2>\n...", "writeSet": [], "actions": []}
+The card does not survive into `identify` on its own — record the same list with
+`geneseed loop record --outcome pass --note "<the ordered list>"` so it lands in LOOP.md's notes.
 
 If the requirement cannot be split — it is already one atomic change — say so in the intent and
 let the loop proceed with a single iteration.

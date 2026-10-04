@@ -136,7 +136,9 @@ const ACTIONS = {
     if (!args.outcome) throw new Error('record needs --outcome');
     const card = args.card ? JSON.parse(args.card) : null;
     const raw = stdin();
-    return withState((s, b) => recordOutcome(s, b, args.outcome, { card, porcelain: raw ? raw.replace(/\r\n/g, '\n').trimEnd() : null }));
+    return withState((s, b) => recordOutcome(s, b, args.outcome, {
+      card, porcelain: raw ? raw.replace(/\r\n/g, '\n').trimEnd() : null, note: args.note ?? '',
+    }));
   },
   decide(args) {
     // X6: same ordering as `score --diff` above.

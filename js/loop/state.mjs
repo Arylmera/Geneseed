@@ -292,7 +292,7 @@ function isSetupUnit(state) {
   return state.iteration === 0 && !iterationLoop(state.graph).nodes.includes(state.graph.start);
 }
 
-export function recordOutcome(state, bricks, outcome, { card = null, porcelain = null } = {}) {
+export function recordOutcome(state, bricks, outcome, { card = null, porcelain = null, note = '' } = {}) {
   assertRunning(state);
   if (state.pendingVerify) throw new Error('the iteration is closed: run `geneseed loop score --diff` first');
   const from = state.node;
@@ -311,6 +311,12 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
   if (filteredPorcelain !== null) state.snapshot = filteredPorcelain;
   if (card) state.card = card;
   if (from === 'test') state.tests = outcome;
+  // A finding a brick needs to survive the unit (the ordered plan `plan` produced, `review`'s
+  // `fail` findings) — pushed before the transition below, so it lands in `notes` even when
+  // this call closes the unit, re-splits, or stops the loop. `notes` is never reset mid-run
+  // (only `exhaust`'s own push and `decideAwaiting` add to it otherwise), so it survives
+  // `resetUnit`/`finishUnit` the same way the research's fact 1 says a card does not.
+  if (note) state.notes.push(`iteration ${state.iteration} (${from}): ${note}`);
   state.visited.push(from);
 
   const edge = state.graph.edges.find((e) => e.from === from && e.on === outcome);

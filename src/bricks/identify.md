@@ -10,7 +10,7 @@ branch). If the requirement is fully met and the suite is green, report `done`.
 
 Otherwise pick the SMALLEST next change that moves the requirement forward and can be tested on
 its own. Report `more` with a card, as JSON:
-{"intent": "<one line>", "writeSet": ["<every file you expect to touch>"],
+{"intent": "<one line>", "writeSet": ["<every file ANY brick this iteration writes, tests/docs too>"],
  "actions": ["<each of: format, imports, rename, logic, new-file, api, delete, architecture>"]}
 
 Declare every action honestly: the diff is scored again before commit, and anything outside the

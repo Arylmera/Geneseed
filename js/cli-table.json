@@ -846,7 +846,7 @@
           "names": ["--note"],
           "dest": "note",
           "metavar": null,
-          "help": "a note attached to the verdict, written into LOOP.md",
+          "help": "a note attached to a record or a decide verdict, written into LOOP.md so it survives the unit",
           "choices": null,
           "default": null,
           "required": false,
