@@ -21,6 +21,7 @@
 | [Upgrade](guides/upgrade.md) | Getting a new version onto every install |
 | [Uninstall](guides/uninstall.md) | Removing an install — and what stays behind |
 | [Project context](guides/project-context.md) | Choosing which of a repo's docs the agent loads |
+| [Run a loop](guides/run-a-loop.md) | Working a requirement as small, validated, committed iterations |
 | [Connect your wiki](guides/wiki.md) | Giving the agent your own notes, machine-wide |
 | [MCP servers](guides/mcp.md) | MarkItDown, GitLab, Filesystem — and reading non-markdown docs |
 | [Run geneseed from anywhere](guides/run-anywhere.md) | Putting the CLI on your PATH from a clone |

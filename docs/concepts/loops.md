@@ -5,6 +5,8 @@ title: "Loops"
 kind: "concept"
 link: {"hash": "#/docs/reference/cli", "label": "geneseed loop --help →"}
 ---
+To run one, see [Run a loop](../guides/run-a-loop.md).
+
 A **loop** is a requirement worked as small, validated, committed iterations instead of one long
 turn. `geneseed loop` is the state machine: it decides every transition, ceiling, score and stop,
 and hands the agent one node at a time to run. The `loop` [skill](skills.md) is the only thing
