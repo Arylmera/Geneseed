@@ -408,7 +408,8 @@ const GATE_MAX_AMENDS = 3;
  * The answer to a held `gate: human` transition. Every verdict leaves a note — with or without
  * the user's words — so the run's notes say each gate was answered and how. `ok` follows the held
  * edge and lists the node under the unit's `Loop-Gates`; `no` stops; `amend` re-runs the same
- * node with the note in `notes` (its `validated` untouched — a mutate gate need not re-score),
+ * node with the note in `notes` (its `validated` untouched — a mutate gate need not re-score —
+ * and its `counters` reset),
  * `GATE_MAX_AMENDS` times per node per iteration (`gateAmends` is keyed `node@iteration` and never
  * reset, so the next iteration's card — a new ADR, say — gets its own budget), and the next
  * one stops: three rounds of review that did not converge are a conversation, not a loop.
@@ -420,6 +421,9 @@ function decideGate(state, bricks, verdict, note, { node, outcome }) {
     const key = `${node}@${state.iteration}`;
     state.gateAmends = { ...state.gateAmends, [key]: (state.gateAmends?.[key] ?? 0) + 1 };
     if (state.gateAmends[key] > GATE_MAX_AMENDS) return stop(state, `gate amended ${GATE_MAX_AMENDS} times at ${node}`);
+    // As an `actual` amend: the amendment changes what the unit does, so the ring budget
+    // restarts; the amend cap above still bounds the unit.
+    state.counters = {};
     state.node = node;
     return { resumed: true };
   }

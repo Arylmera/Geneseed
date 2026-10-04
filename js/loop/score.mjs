@@ -141,9 +141,12 @@ export function actualRisk(declared, files, {
   let score = declared;
   const reasons = [];
   // A write-set entry is a glob too (a plain path matches itself): a tool's generated store,
-  // ArchUnit's archunit_store/**, cannot be named file by file before the tool writes it.
+  // ArchUnit's archunit_store/**, cannot be named file by file before the tool writes it. Only an
+  // entry with a literal segment globs: a wildcard-only one (`**`, `**/*.java`) would declare the
+  // whole repo, so it stays exact-match — matching nothing, the diff fails closed.
   const inSet = new Set(writeSet.map(slash));
-  const outside = files.filter((f) => !inSet.has(slash(f.file)) && !matchesAny(writeSet, f.file));
+  const globs = writeSet.filter((g) => globPath(g).split('/').some((seg) => seg && !/[*?]/.test(seg)));
+  const outside = files.filter((f) => !inSet.has(slash(f.file)) && !matchesAny(globs, f.file));
   if (outside.length) {
     score = Math.max(score, 0.8);
     reasons.push(`outside the write set: ${outside.map((f) => slash(f.file)).join(', ')}`);

@@ -58,6 +58,14 @@ test('actual risk only ever RAISES the declared score', () => {
     { writeSet: ['**/archunit_store/**', 'src/a.js'] }), { score: 0.4, reasons: [] });
   assert.deepEqual(actualRisk(0.4, [f('src/b.js')], { writeSet: ['src/*.ts'] }),
     { score: 0.8, reasons: ['outside the write set: src/b.js'] });
+  // ...but only an entry with a literal segment globs: a wildcard-only entry (`**`, `**/*`) would
+  // declare the whole repo, so it stays exact-match, matches nothing, and the diff fails closed.
+  const app = 'src/main/java/App.java';
+  for (const g of ['**', '*', '**/*', '**/*.java']) {
+    assert.deepEqual(actualRisk(0.4, [f(app)], { writeSet: [g] }),
+      { score: 0.8, reasons: [`outside the write set: ${app}`] }, g);
+  }
+  assert.deepEqual(actualRisk(0.4, [f(app)], { writeSet: ['src/**'] }), { score: 0.4, reasons: [] });
   // declared higher than any escalation: declared wins
   assert.equal(actualRisk(0.9, [f('b.js')], { writeSet: [] }).score, 0.9);
 });

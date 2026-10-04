@@ -10,6 +10,7 @@ import {
   renderLoopFile, parseLoopFile, writeLoopFile, trailers, renameWithRetry,
 } from '../../js/loop/state.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
+import { loadCatalog } from '../../js/loop/catalog.mjs';
 
 const brick = (name, effect, outcomes) => [name, { name, effect, outcomes, agent: 'tester', skill: null, body: `do ${name}`, available: true }];
 const BRICKS = new Map([
@@ -670,6 +671,27 @@ test('G2: gateOn holds only its listed outcomes', () => {
   assert.deepEqual(recordOutcome(s, B, 'fail'), { stopped: 'draft reported fail' });
   const t = gstart();
   assert.deepEqual(recordOutcome(t, B, 'pass').awaiting, { kind: 'gate', node: 'draft', outcome: 'pass' });
+});
+
+// A gate amend restarts the unit's ring budget, as an `actual` amend does: the amendment changes
+// what the unit does. architecture-decision: 2 real challenge failures + 2 amends (each routed
+// back through adr-draft) would exceed challenge-fix's max 3 without the reset — no re-split now.
+test('G2: a gate amend restarts the ring budget; architecture-decision survives 2 fails + 2 amends', () => {
+  const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  const s = initState({ title: 't', requirement: 'r', graph: templates.get('architecture-decision') });
+  recordOutcome(s, bricks, 'more', { card: { intent: 'ADR', writeSet: ['docs/adr/0001-x.md'], actions: ['new-file'] } });
+  scoreDeclared(s);
+  for (let i = 0; i < 2; i += 1) { recordOutcome(s, bricks, 'pass'); recordOutcome(s, bricks, 'fail'); }   // 2 real fails
+  for (let i = 0; i < 2; i += 1) {
+    assert.deepEqual(recordOutcome(s, bricks, 'pass'), { node: 'adr-challenge' });                         // adr-draft
+    assert.equal(recordOutcome(s, bricks, 'pass').awaiting.kind, 'gate');
+    assert.deepEqual(decideAwaiting(s, bricks, 'amend', `amend ${i}`), { resumed: true });
+    assert.deepEqual(s.counters, {});
+    assert.deepEqual(recordOutcome(s, bricks, 'fail'), { node: 'adr-draft' });                            // the amendment is a finding
+  }
+  assert.equal(s.resplit, false);
+  recordOutcome(s, bricks, 'pass'); recordOutcome(s, bricks, 'pass');
+  assert.deepEqual(decideAwaiting(s, bricks, 'ok'), { verify: true });
 });
 
 // A gate passed twice in one unit is listed once, as Loop-Bricks lists a node once.
