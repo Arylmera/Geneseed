@@ -197,10 +197,10 @@ test('the driver classifies every emit', () => {
   // "crossed" and "refused with exit 3"; all nine crossed, the set equalled `EMITS`, and the
   // refusal it guarded was unreachable — so both went.) An unknown value is refused one layer up,
   // by the parser's choice check, and that IS exercised below.
-  const text = read('js', 'build', 'driver.mjs');
+  const text = read('js', 'build', 'args.mjs');
   const listed = jsStringList(text, 'const EMITS = [');
   assert.deepEqual([...listed].sort(), [...EMITS].sort(),
-    'js/build/driver.mjs offers a different set of --emit choices than this file freezes; a tenth '
+    'js/build/args.mjs offers a different set of --emit choices than this file freezes; a tenth '
     + 'emit needs a row here and a cell of its own somewhere');
   const r = runDriver(['--emit', 'no-such-host', '--out', 'X']);
   assert.equal(r.status, 2, `--emit no-such-host was not refused: ${r.stdout.slice(0, 200)}`);
@@ -210,7 +210,7 @@ test('the driver classifies every emit', () => {
 /** The quoted tokens of a JS array literal opened by `marker`. */
 function jsStringList(text, marker) {
   const i = text.indexOf(marker);
-  assert.notEqual(i, -1, `js/build/driver.mjs no longer contains ${JSON.stringify(marker)}`);
+  assert.notEqual(i, -1, `js/build/args.mjs no longer contains ${JSON.stringify(marker)}`);
   const body = text.slice(i + marker.length, text.indexOf(']', i));
   return new Set([...body.matchAll(/'([^']+)'/g)].map((m) => m[1]));
 }
@@ -676,13 +676,13 @@ test('--help names every flag the parser takes', () => {
   // gave the reference the flag for free, and this hand-rolled parser fell through to
   // `unrecognized arguments: --help` and exit 2. A gate that only ever runs inputs both
   // implementations were built for cannot see a flag one of them does not have.
-  const text = read('js', 'build', 'driver.mjs');
+  const text = read('js', 'build', 'args.mjs');
   assert.deepEqual(objectKeys(text, 'const VALUED = {'), VALUED_FLAGS.map((f) => f[0]),
-    'js/build/driver.mjs\'s VALUED table and this file\'s frozen list disagree — the help text '
+    'js/build/args.mjs\'s VALUED table and this file\'s frozen list disagree — the help text '
     + 'renders straight out of that table, so a flag missing from BOTH would otherwise be '
     + 'invisible to every gate in the repo');
   assert.deepEqual(objectKeys(text, 'const FLAGS = {'), BARE_FLAGS.map((f) => f[0]),
-    'js/build/driver.mjs\'s FLAGS table and this file\'s frozen list disagree');
+    'js/build/args.mjs\'s FLAGS table and this file\'s frozen list disagree');
 
   const said = help('--help').stdout;
   for (const [flag, dest, value, parsed = value] of VALUED_FLAGS) {
@@ -710,7 +710,7 @@ test('--help names every flag the parser takes', () => {
 /** The quoted keys of a JS object literal opened by `decl`, in source order. */
 function objectKeys(text, decl) {
   const at = text.indexOf(decl);
-  assert.notEqual(at, -1, `js/build/driver.mjs no longer contains ${JSON.stringify(decl)}`);
+  assert.notEqual(at, -1, `js/build/args.mjs no longer contains ${JSON.stringify(decl)}`);
   const body = text.slice(at + decl.length, text.indexOf('};', at));
   return [...body.matchAll(/'(-{1,2}[a-z-]+)'\s*:/g)].map((m) => m[1]);
 }
