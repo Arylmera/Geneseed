@@ -36,7 +36,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, PACK_ORDER, THEMES, discoverNames } from '../build/source.mjs';
-import { GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
+import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
@@ -453,7 +453,7 @@ export function installKind(root) {
 
 /** `_harness_mcp._install_state` — 'active' | 'disabled' | 'absent'. */
 export function installState(root, host = 'opencode', scope = 'global') {
-  if (['claude', 'bob', 'openclaude'].includes(host)) return claudeState(root, scope, host);
+  if (CLAUDE_STYLE.includes(host)) return claudeState(root, scope, host);
   if (isDir(path.join(root, DISABLED_STASH))) return 'disabled';
   return installKind(root) !== null ? 'active' : 'absent';
 }

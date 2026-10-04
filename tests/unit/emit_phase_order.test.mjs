@@ -182,17 +182,20 @@ test('no wiring call escapes a WIRE-marked function', () => {
   // negative about a call that did not happen on the path a test drove. The reference derived the
   // wiring set with `ast` rather than hand-listing it, on the argument that "a hand-list contains
   // exactly the names someone remembered, which is how `_opencode_target` went unmeasured for
-  // three phases". Same derivation here, over `js/hosts/settings.mjs`.
-  const settings = readFileSync(path.join(ROOT, 'js', 'hosts', 'settings.mjs'), 'utf8');
+  // three phases". Same derivation here, over `js/hosts/settings.mjs` AND `js/hosts/shim.mjs` —
+  // the shim writer moved out in 2026-10, and a walk over one file would quietly have lost it.
+  const sources = ['settings.mjs', 'shim.mjs']
+    .map((f) => readFileSync(path.join(ROOT, 'js', 'hosts', f), 'utf8'));
   const MUTATORS = /\b(writeText|writeFileSync|renameSync|rmSync|mkdirSync|unlinkSync|chmodSync|atomicWriteJson)\s*\(/;
-  const fns = [...settings.matchAll(/^export function (\w+)\(/gm)].map((m) => m[1]);
+  const fnsOf = (text) => [...text.matchAll(/^export function (\w+)\(/gm)].map((m) => m[1]);
+  const fns = sources.flatMap(fnsOf);
   assert.ok(fns.length > 10, `only ${fns.length} exported settings functions found`);
   const bodyOf = (text, name) => {
     const at = text.indexOf(`export function ${name}(`);
     const next = text.slice(at + 1).search(/^export (?:function|const)/m);
     return next < 0 ? text.slice(at) : text.slice(at, at + 1 + next);
   };
-  const wiring = fns.filter((n) => MUTATORS.test(bodyOf(settings, n)));
+  const wiring = sources.flatMap((t) => fnsOf(t).filter((n) => MUTATORS.test(bodyOf(t, n))));
   assert.ok(wiring.length >= 4,
     `only ${wiring.length} settings routines mutate the filesystem — the derivation has gone `
     + 'stale, and an empty set makes every check below pass');

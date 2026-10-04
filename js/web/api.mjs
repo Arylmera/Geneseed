@@ -18,7 +18,7 @@ import { sourceReleaseVersion } from '../hosts/opencode.mjs';
 import { diffCollect } from '../inspect/diff.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
-import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState, installTargets,
   installedDefaults, modeOfDir, trustOfDir,
@@ -731,7 +731,7 @@ export const apiExcludes = () => excludesSnapshot();
  * nested-marker host cannot silently read the bare root.
  */
 export function viewCfg(host, scope, root) {
-  if (scope === 'project' && ['claude', 'bob', 'openclaude'].includes(host)) {
+  if (scope === 'project' && CLAUDE_STYLE.includes(host)) {
     return path.join(root, HOSTS.find((h) => h.host === host).projectMarker);
   }
   return root;

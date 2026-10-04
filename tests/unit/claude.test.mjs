@@ -29,7 +29,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
-import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../js/build/driver.mjs';
+import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate } from '../../js/maintain/migrate.mjs';
 import {
@@ -46,9 +46,8 @@ import {
 import {
   doctrinesOfDir, excludedRulesOfDir, installState, installTargets, manifestIsClaude,
 } from '../../js/hosts/installs.mjs';
-import {
-  hookShimPath, GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings,
-} from '../../js/hosts/settings.mjs';
+import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
+import { hookRunnerEntry, hookShimPath } from '../../js/hosts/shim.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
@@ -747,7 +746,7 @@ test('a re-emit prunes a pre---root git-gate group instead of stacking beside it
     const settings = path.join(cfg, 'settings.json');
     fs.writeFileSync(settings, JSON.stringify({ hooks: { PreToolUse: [oldGroup] } }));
 
-    captured(() => mergeClaudeSettings(settings, 'global',
+    captured(() => mergeClaudeSettings(settings,
       [{ event: 'PreToolUse', group: oldGroup }], hookRunnerEntry()));
 
     const data = readJson(settings);
@@ -839,13 +838,13 @@ test('a re-emit with the process pack off UNWIRES the consent gate it previously
     const settings = path.join(cfg, 'settings.json');
     fs.writeFileSync(settings, '{}');
 
-    const [, claimed] = captured(() => mergeClaudeSettings(settings, 'global', null,
+    const [, claimed] = captured(() => mergeClaudeSettings(settings, null,
       hookRunnerEntry(), ['craft', 'process']));
     const wired = readJson(settings).hooks.PreToolUse
       .flatMap((g) => g.hooks.map((h) => h.command));
     assert.ok(wired.some(consentGate), `the first emit wired no consent gate: ${wired}`);
 
-    captured(() => mergeClaudeSettings(settings, 'global', claimed, hookRunnerEntry(), ['craft']));
+    captured(() => mergeClaudeSettings(settings, claimed, hookRunnerEntry(), ['craft']));
     const after = readJson(settings).hooks.PreToolUse
       .flatMap((g) => g.hooks.map((h) => h.command));
     assert.ok(!after.some(consentGate),

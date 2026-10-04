@@ -293,7 +293,7 @@ function withFault(faults, fn) {
  * path taken from the environment rather than from `--out` — so this gate baked
  * `<fixture>/bin/geneseed-hook.mjs` into the developer's real `~/.geneseed/bin/geneseed-hook`,
  * and killed every hook in every install on the machine the moment the fixture was cleaned up.
- * Reproduced twice in one session. `js/hosts/settings.mjs`'s `ephemeralCheckout` now refuses the
+ * Reproduced twice in one session. `js/hosts/shim.mjs`'s `ephemeralCheckout` now refuses the
  * hijack from the other end as well; this is the near half, and it is the one that keeps a
  * FIRST-ever emit on a machine (no shim yet, nothing to protect) from writing a temp path.
  */

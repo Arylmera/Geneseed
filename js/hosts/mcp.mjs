@@ -26,19 +26,19 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { bobConfigDir, resolvePath } from './hosts.mjs';
+import { CLAUDE_STYLE, bobConfigDir, resolvePath } from './hosts.mjs';
 import { installState, installTargets } from './installs.mjs';
-import { printOut, printErr, readText } from '../lib/fs.mjs';
-import { isDict, parseJson } from '../lib/json.mjs';
+import { printOut, printErr } from '../lib/fs.mjs';
+import { isDict } from '../lib/json.mjs';
 import { padEndToWidth } from '../lib/text.mjs';
-import { atomicWriteJson, opencodeTarget, readJsonc } from './settings.mjs';
+import { atomicWriteJson, loadJsonObject, opencodeTarget } from './settings.mjs';
 
 
 /** `dict.get(key, default)`. */
 const dget = (obj, key, dflt) => (isDict(obj) && Object.hasOwn(obj, key) ? obj[key] : dflt);
 
 /** The hosts whose MCP config is strict JSON under `mcpServers`, with no `enabled` flag. */
-const FLAGLESS = ['claude', 'bob', 'openclaude'];
+const FLAGLESS = CLAUDE_STYLE;
 
 /**
  * `_harness_mcp._MCP_PRESETS` — the ready-to-wire servers the MCP screen can toggle.
@@ -169,35 +169,14 @@ export function mcpSetEnabled(config, name, enabled, host = 'opencode') {
  * version of this note said otherwise, and `generate.test.mjs` pins the string-aware case.)
  */
 export function mcpLoad(p, host = 'opencode') {
-  if (!existsSync(p)) return {};
-  let text;
-  try {
-    text = readText(p);
-  } catch {
-    return {};
-  }
-  if (FLAGLESS.includes(host)) {
-    let data;
-    try {
-      data = parseJson(text);
-    } catch {
-      return {};
-    }
-    return isDict(data) ? data : {};
-  }
-  const [data] = readJsonc(text);
-  return isDict(data) ? data : {};
+  const { state, data } = loadJsonObject(p, { strict: FLAGLESS.includes(host) });
+  return state === 'ok' ? data : {};
 }
 
 /** `_mcp_commented` — an existing `.jsonc` that carries comments, which must not be rewritten. */
 export function mcpCommented(p) {
-  if (path.extname(p) !== '.jsonc' || !existsSync(p)) return false;
-  try {
-    const [, had] = readJsonc(readText(p));
-    return had;
-  } catch {
-    return false;
-  }
+  if (path.extname(p) !== '.jsonc') return false;
+  return loadJsonObject(p).hadComments;
 }
 
 /** `_mcp_save` — pretty JSON, written ATOMICALLY. The one writer, under its MCP name. */

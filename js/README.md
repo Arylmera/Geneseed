@@ -68,14 +68,15 @@ user co-owns, and the hook verbs those emitted configs then run.
 
 | module | owns |
 |---|---|
-| `hosts.mjs` | The four host config dirs (opencode/claude/bob/openclaude), plus `resolvePath`/`expanduser` |
+| `hosts.mjs` | The four host config dirs (opencode/claude/bob/openclaude), their `family` (`CLAUDE_STYLE`), plus `resolvePath`/`expanduser` |
 | `hooks.mjs` | The gate verbs, run on every tool call: `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Bob), plus `ask`/the gate ledger/`guardGate`. `--host` picks the verdict dialect |
 | `hooks-context.mjs` | The `context` verb — SessionStart: session files plus the repo's context docs |
 | `hooks-learn.mjs` | The `learn` verb — Stop/SubagentStop/PreCompact distiller; the hook path's ONE spawn (`$GENESEED_LLM`) |
 | `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`) |
 | `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate. No spawn: the CLI and web console import it |
 | `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `currentBranch`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate and `js/loop/cli.mjs`'s commit-message writer |
-| `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json`; owns the hook shim and the managed blocks |
+| `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json` (one `loadJsonObject` reader for all of them) and the managed blocks |
+| `shim.mjs` | The machine-wide hook shim: its path, body, liveness (`shimDead`, read on every CLI run), `hookPrefix`/`hookRunnerEntry`. Kept cheap to import |
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |
 | `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |

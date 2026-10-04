@@ -9,7 +9,7 @@
 import path from 'node:path';
 import { PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC } from '../build/source.mjs';
 import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
-import { hookShimPath, shimDeadPaths } from '../hosts/settings.mjs';
+import { hookShimPath, shimDeadPaths } from '../hosts/shim.mjs';
 import { readText } from '../lib/fs.mjs';
 import { formatRepr, formatValue } from '../lib/json.mjs';
 import { splitLines } from '../lib/udiff.mjs';

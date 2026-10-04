@@ -302,7 +302,7 @@ async function main(argv) {
   // that binary is never reached, and its import graph is paid on every tool call.
   if (process.env.GENESEED_NO_SHIM_CHECK !== '1' && verb !== 'help'
     && !argv.some((t) => t === '-h' || t === '--help')) {
-    const { shimDead } = await import('../js/hosts/settings.mjs');
+    const { shimDead } = await import('../js/hosts/shim.mjs');
     const dead = shimDead();
     if (dead.length) {
       printErr(`[geneseed] ⚠ hooks are off on this machine: the hook shim points at `

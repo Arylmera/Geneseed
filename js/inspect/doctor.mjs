@@ -32,7 +32,7 @@
 import path from 'node:path';
 import { emitGlobalInto, emitProjectInto, main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
-import { resolvePath } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, resolvePath } from '../hosts/hosts.mjs';
 import { installedDefaults, themeFiles } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut } from '../lib/fs.mjs';
@@ -143,7 +143,7 @@ export function globalEmitProblems(themeName) {
  * skills one level deeper than a bundle does.
  */
 export function claudeBobEmitProblems(themeName) {
-  return emitProblemsOver(['claude', 'bob', 'openclaude'], (tmp, label) => {
+  return emitProblemsOver(CLAUDE_STYLE, (tmp, label) => {
     const root = path.join(tmp, 'root');
     return {
       label: `${themeName} ${label}`,

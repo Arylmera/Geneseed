@@ -47,20 +47,20 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
-import { hookRunnerEntry } from '../build/driver.mjs';
+import { hookRunnerEntry } from '../hosts/shim.mjs';
 import { confirm } from './setup.mjs';
 import {
   claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, excludedRulesOfDir, installKind,
   installState,
-  registeredTargets, readMaybe, DISABLED_STASH,
+  registeredTargets, DISABLED_STASH,
 } from '../hosts/installs.mjs';
 import {
-  GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
+  CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
-  mergeClaudeSettings, opencodeTarget, readJsonc,
+  loadJsonObject, mergeClaudeSettings, opencodeTarget,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes, unwireClaudeSettings,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
@@ -68,9 +68,6 @@ import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs
 import { comparePaths, isAbsolutePath, within } from '../lib/paths.mjs';
 
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
-
-/** The Claude-STYLE hosts — one manifest shape, one reversal. Spelled once. */
-const CLAUDE_STYLE = ['claude', 'bob', 'openclaude'];
 
 /**
  * `shutil.rmtree(p, ignore_errors=True)`.
@@ -224,13 +221,9 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
  */
 export function unmergeOpencodeJson(p, entry) {
   const target = opencodeTarget(p);
-  if (!existsSync(target)) return false;
-  let cfg;
-  let hadComments;
-  const text = readMaybe(target);
-  if (text === null) return false;             // the Python's `except OSError: return False`
-  [cfg, hadComments] = readJsonc(text);
-  if (!isDict(cfg)) return false;
+  // Absent, unreadable (the Python's `except OSError: return False`) or not an object: decline.
+  const { state, data: cfg, hadComments } = loadJsonObject(target);
+  if (state !== 'ok') return false;
   const instr = cfg.instructions;
   if (!Array.isArray(instr) || !instr.includes(entry)) return false;
   if (path.extname(target) === '.jsonc' && hadComments) {
@@ -678,7 +671,7 @@ export function cmdUninstall(args) {
   const data = installDataDir(root, host, scope);
   const stores = ['memory', 'notebook'].filter((n) => isDir(path.join(data, n)));
   printOut(`[uninstall] target: ${root} (${host}:${scope})\n`);
-  if (['claude', 'bob', 'openclaude'].includes(host)) {
+  if (CLAUDE_STYLE.includes(host)) {
     printOut('[uninstall] removes: agents/, skills/, markers, the '
       + `${hostSpec(host).agentFile} managed block, and Geneseed's `
       + 'settings.json hooks/excludes (your own keys/hooks are kept).\n');
@@ -824,10 +817,8 @@ function installReaddEntry(target, entry) {
     atomicWriteJson(target, { $schema: 'https://opencode.ai/config.json', instructions: [entry] });
     return true;
   }
-  let raw;
-  try { raw = readText(target); } catch { return false; }   // except OSError
-  const [cfg, hadComments] = readJsonc(raw);
-  if (!isDict(cfg)) return false;
+  const { state, data: cfg, hadComments } = loadJsonObject(target);
+  if (state !== 'ok') return false;            // unreadable (except OSError), or not an object
   const instr = Array.isArray(cfg.instructions) ? cfg.instructions : [];
   if (indexOfDeepEqual(instr, entry) >= 0) return false;
   if (path.extname(target) === '.jsonc' && hadComments) {
@@ -1041,7 +1032,7 @@ function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   const excluded = excludedRulesOfDir(root).length ? excludedRulesOfDir(root)
     : excludedRulesOfDir(cfg);
   // `host` reaches the group builder: a Bob reactivate must re-wire Gemini-named groups.
-  const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed), 'global',
+  const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed),
     managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host, cfg);
   // `and data` — a manifest that did not parse is not one to write back.
   if (!deepEquals(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {

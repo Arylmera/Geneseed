@@ -2,13 +2,14 @@
  * `_build_settings.py` in Node — the host-config WIRING layer.
  *
  * This is the half of the emit that edits files the USER co-owns: the JSONC reader, the
- * `opencode.json` / `settings.json` merges, the hook shim, the managed-block machinery and
- * the integrity check — and it is the unit the RUNTIME drives as well as the emit. Every
- * emit and every lifecycle verb goes through this module:
- * `js/build/emit-opencode.mjs` and `js/build/emit-claude.mjs` wire the host config,
- * `js/maintain/uninstall.mjs` and `js/maintain/migrate.mjs` drive the unwire and the shim
- * migration, `js/inspect/checks-repo.mjs` reads `shimDeadPaths` for the doctor, and
- * `js/web/api.mjs` borrows the same readers for the console.
+ * `opencode.json` / `settings.json` merges, the managed-block machinery and the integrity
+ * check — and it is the unit the RUNTIME drives as well as the emit. Every emit and every
+ * lifecycle verb goes through this module: `js/build/emit-opencode.mjs` and
+ * `js/build/emit-claude.mjs` wire the host config, `js/maintain/uninstall.mjs` drives the
+ * unwire, `js/hosts/mcp.mjs` and `js/maintain/migrate.mjs` read through `loadJsonObject`, and
+ * `js/web/api.mjs` borrows the same readers for the console. The hook SHIM the merged hooks
+ * call lives in `./shim.mjs`, split out so the CLI's every-run dead-shim check need not load
+ * this module.
  *
  * THE STDOUT RULE BINDS HARDEST HERE. The hooks this module writes signal their verdict as
  * a JSON object on stdout and return 0 on EVERY path (`|| exit 0` is not what it looks
@@ -33,18 +34,14 @@
  * Fixing it means parsing into a Map and threading that through every accessor, which is a
  * much larger change than the defect.
  */
-import {
-  chmodSync, existsSync, mkdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { readText, writeText, isOsError } from '../lib/fs.mjs';
 import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals, formatRepr,
   indexOfDeepEqual, get, has, isDict,
 } from '../lib/json.mjs';
-import { expanduser } from './hosts.mjs';
+import { SHIM_MARK, hookPrefix } from './shim.mjs';
 import { stripWhitespace, stripWhitespaceEnd } from '../lib/text.mjs';
 
 const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
@@ -270,6 +267,46 @@ export function readJsonc(text) {
 }
 
 /**
+ * A config file read as a JSON OBJECT, classified rather than decided:
+ * `{ state, data, hadComments }`, `state` one of
+ * - `'absent'`     — no file at `p`
+ * - `'unreadable'` — it exists and the read threw (`error` carries why)
+ * - `'invalid'`    — it does not parse (`data` null)
+ * - `'notObject'`  — it parses, to something that is not an object (`[]`, `3`)
+ * - `'ok'`         — `data` is the object.
+ *
+ * ONE READER, MANY POLICIES. Ten call sites had each restated read → `readJsonc` → `isDict`, and
+ * their refusal rules had drifted: some warned, some returned `false`, some swallowed a
+ * non-OS throw. The reading is the same everywhere and lives here; what a state MEANS stays at
+ * the caller, because it really does differ — a merge must refuse to rewrite a file it could
+ * not read, an unwire just declines, an integrity check reports. `hadComments` is reported in
+ * every state that got as far as the text, since `mcpCommented` asks it of files that do not
+ * parse.
+ *
+ * `strict` reads plain JSON (`parseJson`) — comments and trailing commas are then `'invalid'`.
+ * The Claude-style MCP configs are strict by contract (see `mcpLoad`).
+ */
+export function loadJsonObject(p, { strict = false } = {}) {
+  if (!existsSync(p)) return { state: 'absent', data: null, hadComments: false };
+  let text;
+  try {
+    text = readText(p);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+    return { state: 'unreadable', data: null, hadComments: false, error: e };
+  }
+  let data;
+  let hadComments = false;
+  if (strict) {
+    try { data = parseJson(text); } catch { data = null; }
+  } else {
+    [data, hadComments] = readJsonc(text);
+  }
+  if (data === null) return { state: 'invalid', data, hadComments };
+  return { state: isDict(data) ? 'ok' : 'notObject', data, hadComments };
+}
+
+/**
  * `_build_settings._warn_commented_jsonc`. Prints to STDOUT — the Python's own choice.
  *
  * `permission` is THREE-STATE, not a boolean: `'add'` for a file with no `permission` key,
@@ -330,28 +367,20 @@ export function atomicWriteJson(p, config) {
 export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = []) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
-  let hadComments = false;
-  if (existsSync(target)) {
-    let raw;
-    try {
-      raw = readText(target);
-    } catch (e) {
-      if (!isOsError(e)) throw e;
-      process.stderr.write(`[geneseed] WARN: could not read ${target} (${e.message}) `
-        + `— NOT touching it. Add ${jsonDumps(agentPath)} to its "instructions" array by `
-        + "hand once it's readable again.\n");
-      return target;
-    }
-    const [loaded, hc] = readJsonc(raw);
-    hadComments = hc;
-    if (loaded === null || !isDict(loaded)) {
-      process.stderr.write(`[geneseed] ${path.basename(target)} is not a JSON object — NOT `
-        + `rewriting it (fix the file, then re-run). Add ${jsonDumps(agentPath)} to its `
-        + '"instructions" once repaired.\n');
-      return target;
-    }
-    config = loaded;
+  const { state, data, hadComments, error } = loadJsonObject(target);
+  if (state === 'unreadable') {
+    process.stderr.write(`[geneseed] WARN: could not read ${target} (${error.message}) `
+      + `— NOT touching it. Add ${jsonDumps(agentPath)} to its "instructions" array by `
+      + "hand once it's readable again.\n");
+    return target;
   }
+  if (state === 'invalid' || state === 'notObject') {
+    process.stderr.write(`[geneseed] ${path.basename(target)} is not a JSON object — NOT `
+      + `rewriting it (fix the file, then re-run). Add ${jsonDumps(agentPath)} to its `
+      + '"instructions" once repaired.\n');
+    return target;
+  }
+  if (state === 'ok') config = data;
   if (!has(config, '$schema')) config.$schema = OPENCODE_SCHEMA;
   let instr = get(config, 'instructions');
   if (!Array.isArray(instr)) instr = [];
@@ -428,240 +457,6 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
 // `EACCES: permission denied, open 'C:\x\y'`. The two cannot be made to agree, so the parity
 // gate does not drive a cell through a real fs failure — it exercises the branch with an
 // injectable failure instead and compares everything except the OS's own wording.
-
-// ---- the hook shim ----------------------------------------------------------------
-// `|| exit 0` on the emitted commands does NOT mean "ignore failures": git-gate and
-// rule-gate return 0 on EVERY path and signal their verdict as a JSON object on stdout.
-// The `|| exit 0` is there because a hook that fails to LAUNCH (a moved checkout, a dead
-// interpreter) must not block the tool call. A stray byte on stdout — a cmd.exe command
-// echo, a "created ~/.geneseed" notice — corrupts that JSON and the gate stops gating
-// while still reporting success. Hence `@echo off`, and a shim that prints nothing.
-//
-// The marker lives in the FILENAME, not the directory: GENESEED_HOME relocates the dir,
-// and a relocated install's hooks must stay recognisable to `GENESEED_HOOK_SNIFF`.
-export const SHIM_MARK = 'geneseed-hook';
-
-/**
- * `_build_settings._SHIM_ARGV` — the tokens in a shim body that are NOT paths.
- *
- * `shimProblems` reads every quoted token back out of the body and requires each to name an
- * existing file. On Windows that is exactly the two baked paths (`%*` is bare); on POSIX the
- * body forwards argv as `"$@"`, quoted, so both implementations' `doctor` reported a healthy
- * shim as dead on every Linux and macOS host. A defect the port faithfully inherited, and
- * one no Windows cell could see.
- */
-export const SHIM_ARGV = new Set(['$@', '%*']);
-
-/**
- * Every quoted token in a shim body that names a path which is not there — empty is healthy.
- *
- * ONE OWNER, because the rule has two consumers now and a second copy is a second place for the
- * `"$@"` defect above to come back: `js/inspect/checks-repo.mjs` turns this into the `[shim] … does not
- * exist` report, and `hookPrefix` reads it to decide whether the shim already on disk is worth
- * protecting from a checkout that will not outlive the emit.
- */
-export function shimDeadPaths(body) {
-  return [...body.matchAll(/"([^"]+)"/g)].map((m) => m[1])
-    .filter((q) => !SHIM_ARGV.has(q) && !existsSync(q));
-}
-
-/** `_SHIM_REL`, with the platform as an argument.
- *
- * Python computes it at IMPORT time from `sys.platform`, which is what makes the other
- * platform's branch unreachable on any one machine. Taking it as a parameter is what lets
- * the parity gate compare both branches in one run (Python's side is reachable because
- * `_hook_shim_body` reads `sys.platform` at CALL time). */
-export function shimRel(platform = process.platform) {
-  return ['bin', SHIM_MARK + (platform === 'win32' ? '.cmd' : '')];
-}
-
-/**
- * `_build_settings._shim_home`.
- *
- * `expanduser` is `js/hosts/hosts.mjs`'s — GENESEED_HOME is user-set, same as any config-dir
- * env var there, so a `~user` value here has the identical failure mode (a hook shim written
- * under a literal `~user` directory) and gets the identical refusal. This module used to carry
- * a private "same guard" twin; the two had drifted (this one's refusal message dropped the
- * parenthetical explaining WHY), which is exactly the kind of divergence one owner prevents.
- */
-export function shimHome() {
-  const env = process.env.GENESEED_HOME;
-  return env ? expanduser(env) : path.join(os.homedir(), '.geneseed');
-}
-
-/** `_build_settings._hook_shim_path`. */
-export function hookShimPath(platform = process.platform) {
-  return path.join(shimHome(), ...shimRel(platform));
-}
-
-/**
- * The paths the machine's hook shim names that are gone — `[]` when the shim is absent or live.
- *
- * Cheap on purpose: `status`, the doctor and EVERY CLI run call it (the run-time warning in
- * `bin/geneseed-cli.mjs`), because a dead shim disables every hook of every Claude-shaped
- * install and nothing else would say so. An absent shim is not dead — a checkout that has never
- * emitted owns none — and an unreadable one is reported by the doctor, not here.
- */
-export function shimDead() {
-  try { return shimDeadPaths(readText(hookShimPath())); } catch { return []; }
-}
-
-/**
- * `_build_settings._hook_shim_body`, with the two volatile values INJECTED.
- *
- * This is the one function in the unit whose Python output is legitimately
- * runtime-dependent: it bakes `sys.executable` and `<checkout>/rituals/harness.py`, and a
- * Node twin at GA bakes `process.execPath` and a different entry point. Golden already
- * refuses to compare the emitted shim for that reason (`_SHIM_GLOB`) and asserts
- * `_shim_health` instead.
- *
- * So the answer here is NOT "skip it". Taking `runner`, `entry` and `platform` as arguments
- * makes the BODY a pure function of three inputs, which is what lets
- * `tests/unit/hook_form.test.mjs` assert BOTH platform shapes absolutely in one run on
- * whichever host it happens to be on: the `@echo off`, the CRLF, `exit /b` vs `exec`, the
- * quoting that keeps `--root "<cfg>"` intact. What it does not prove is WHICH values the
- * driver passes — that is `bin/build-driver.mjs`'s `hookRunnerEntry()`, gated separately.
- */
-export function hookShimBody(runner, entry, platform = process.platform) {
-  if (platform === 'win32') {
-    // Bare `exit /b` propagates the LIVE errorlevel; `%ERRORLEVEL%` would expand at parse
-    // time and return a stale one. Never plain `exit` — that kills the parent cmd.exe, so
-    // the emitted `|| exit 0` would never get to evaluate.
-    return '@echo off\r\n'
-      + 'rem Generated by Geneseed - do not edit. Rewritten on every emit.\r\n'
-      + 'setlocal\r\n'
-      + `"${runner}" "${entry}" %*\r\n`
-      + 'exit /b\r\n';
-  }
-  return '#!/bin/sh\n'
-    + '# Generated by Geneseed - do not edit. Rewritten on every emit.\n'
-    + `exec "${runner}" "${entry}" "$@"\n`;
-}
-
-/**
- * `_build_settings._write_hook_shim` — create or refresh the shim, or null on failure.
- *
- * The path and body are arguments for the same reason `hookShimBody`'s two values are: the
- * routine itself has no runtime dependency at all once they are supplied, so all of it is
- * comparable — the unchanged-content fast path (a Windows shim a hook is executing right
- * now cannot be replaced), the newline-folded comparison that makes that fast path
- * reachable, the pid-suffixed temp name that keeps concurrent emits from unlinking each
- * other's file, and the chmod.
- */
-export function writeHookShim(p, body, platform = process.platform) {
-  try {
-    // Newline-normalised: the body carries explicit CRLF on Windows but `read_text()`
-    // translates back to `\n`, so a raw `===` would never match and the "unchanged" fast
-    // path — the whole point of this branch — would never be taken.
-    if (existsSync(p) && statSync(p).isFile()
-        && readText(p).replaceAll('\r\n', '\n') === body.replaceAll('\r\n', '\n')) {
-      return p;
-    }
-    mkdirSync(path.dirname(p), { recursive: true });
-    const tmp = `${p}.${process.pid}.tmp`;
-    // `newline=''` on the Python side: raw, so the CRLF in the body survives verbatim.
-    writeFileSync(tmp, body, 'utf8');
-    if (platform !== 'win32') chmodSync(tmp, 0o755);
-    renameSync(tmp, p);
-    return p;
-  } catch (e) {
-    if (!isOsError(e)) throw e;
-    return null;
-  }
-}
-
-/** The OS temp root, resolved once. `.native` because a Windows `TEMP` can be an 8.3 alias —
- * the same trap `tests/helpers/sandbox.mjs` documents, reached from the other side. */
-const TMP_REAL = (() => {
-  try { return realpathSync.native(os.tmpdir()); } catch { return os.tmpdir(); }
-})();
-
-/** Is `child` inside `parent`? `path.relative` compares case-insensitively on win32. */
-function isUnder(child, parent) {
-  const rel = path.relative(parent, child);
-  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-}
-
-/**
- * Will the checkout holding `entry` outlive the emit that is baking it into the shim?
- *
- * TWO SHAPES, and both are in `docs/extending.md` §5.3 because both have really happened on this
- * repo: a copied checkout under the OS temp root — the `copyCheckout` fixture, which builds its
- * copy from `git ls-files` and therefore carries no `.git` at all, so only the temp root
- * identifies it — and a git WORKTREE, whose `.git` is a FILE pointing at the main checkout
- * rather than a directory. A plain checkout and an npm install are neither, and keep the
- * ownership they have always had.
- *
- * `tmpRoot` IS A PARAMETER for the reason `shimRel`'s `platform` is: with the real temp root
- * baked in, the second rule is unreachable in a test — anything a test can build under `mkdtemp`
- * has already answered true on the first — so the worktree arm could only ever be exercised by
- * whichever kind of checkout the run happened to sit in.
- */
-export function ephemeralCheckout(entry, tmpRoot = TMP_REAL) {
-  let real = entry;
-  try { real = realpathSync.native(entry); } catch { /* not there yet — test the literal */ }
-  if (isUnder(real, tmpRoot)) return true;
-  // `<checkout>/bin/geneseed-hook.mjs` — the one shape `hookRunnerEntry` produces.
-  try { return statSync(path.join(path.dirname(path.dirname(real)), '.git')).isFile(); } catch {
-    return false;
-  }
-}
-
-/** Does the shim already on disk still name paths that all exist? */
-function shimIsLive(p) {
-  try { return statSync(p).isFile() && shimDeadPaths(readText(p)).length === 0; } catch {
-    return false;
-  }
-}
-
-/**
- * `_build_settings._hook_prefix` — the `<runner> <entrypoint>` every emitted hook starts
- * with, falling back to the pre-shim direct form when the shim cannot be written.
- *
- * The fallback is strictly no worse than the old behaviour and far better than emitting
- * commands naming a shim that does not exist — those fail on every hook (9009 under
- * cmd.exe, 127 under sh) and take both gates down with them.
- */
-export function hookPrefix({ runner, entry, platform = process.platform } = {}) {
-  // NOT a default. `runner`/`entry` have no computable fallback on this side — this process's
-  // own `process.execPath` is whichever node ran the EMIT, not a runner anyone chose — and
-  // the failure mode of letting them through undefined is the worst kind this unit has:
-  // `hookShimBody` bakes `"undefined" "undefined" %*`, the shim is rewritten with it, every hook in the install
-  // dies, and because the hooks signal through stdout and return 0 on every path, nothing
-  // reports it. The shim is also excluded from golden's byte comparison by name, so no
-  // acceptance gate would catch it either. Throw where it is cheap to see.
-  if (!runner || !entry) {
-    throw new Error('hookPrefix: runner and entry are required — the emitted hook shim '
-      + 'bakes them, and there is no correct value to guess from inside Node');
-  }
-  const p = hookShimPath(platform);
-  // ⚠ A DISPOSABLE CHECKOUT DOES NOT GET TO CLAIM THE MACHINE-WIDE SHIM. The shim has no
-  // per-install component, so the last checkout to emit owns EVERY install's hooks — and when
-  // that checkout is a test sandbox or a git worktree, deleting it kills hooks machine-wide with
-  // nothing to report it: hooks signal through stdout and return 0 on every path, and this file
-  // is excluded from the byte corpora by name. Measured twice in one session, from
-  // `tests/unit/harness.test.mjs`'s copied-checkout fixture; `docs/extending.md` §5.3 carries
-  // the worktree half.
-  //
-  // KEEP, NOT REFUSE, and that distinction is what makes this safe to add here rather than at
-  // each call site. Returning the existing shim path leaves the emitted hook command
-  // byte-identical to what a normal emit writes; taking the fallback below instead would move a
-  // hook command in every recorded bundle. The install being emitted then runs the DURABLE
-  // checkout's entry — which is exactly what last-writer-wins already handed every other install
-  // on the machine, so nothing is lost by it.
-  //
-  // ONLY A SHIM THAT STILL RESOLVES IS PROTECTED. An absent or already-dead one is no worse for
-  // being rewritten from here, and a sandboxed `GENESEED_HOME` (every emit test, every cell) has
-  // none — so the suite's own emits are unaffected and this cannot go green by silently
-  // skipping the write.
-  if (ephemeralCheckout(entry) && shimIsLive(p)) return `"${p}"`;
-  const shim = writeHookShim(p, hookShimBody(runner, entry, platform), platform);
-  if (shim !== null) return `"${shim}"`;
-  process.stderr.write(`[geneseed] WARN: could not write the hook shim at ${p} — emitting `
-    + 'hooks that call the interpreter directly. They will break if this checkout moves; '
-    + 're-run the build to repair them.\n');
-  return `"${runner}" "${entry}"`;
-}
 
 /**
  * `_build_settings._claude_hook_groups` — Geneseed's Claude hooks, keyed by event.
@@ -768,30 +563,28 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
  * starts from `{}` when it has nothing to start from, and `atomicWriteJson` would then
  * replace the user's file with Geneseed's keys alone. A syntax error, valid JSON that is not
  * an object (`[]`), and a file that exists but cannot be read are all "nothing to start
- * from", and none of them is the user's consent to be overwritten.
+ * from", and none of them is the user's consent to be overwritten. An ABSENT file is the one
+ * real empty start: `[{}, false]`.
  */
 function readSettingsForMerge(p, consequence) {
-  let loaded;
-  let hadComments;
-  try {
-    [loaded, hadComments] = readJsonc(readText(p));
-  } catch (e) {
-    if (!isOsError(e)) throw e;
-    process.stderr.write(`[geneseed] WARN: could not read ${p} (${e.message}) — NOT `
+  const { state, data, hadComments, error } = loadJsonObject(p);
+  if (state === 'absent') return [{}, false];
+  if (state === 'unreadable') {
+    process.stderr.write(`[geneseed] WARN: could not read ${p} (${error.message}) — NOT `
       + `touching it. ${consequence}\n`);
     return null;
   }
-  if (loaded === null) {
+  if (state === 'invalid') {
     process.stderr.write(`[geneseed] ${path.basename(p)} is not valid JSON — NOT `
       + `rewriting it (fix the syntax, then re-run). ${consequence}\n`);
     return null;
   }
-  if (!isDict(loaded)) {
+  if (state === 'notObject') {
     process.stderr.write(`[geneseed] ${path.basename(p)} is not a JSON object — NOT `
       + `rewriting it (fix the file, then re-run). ${consequence}\n`);
     return null;
   }
-  return [loaded, hadComments];
+  return [data, hadComments];
 }
 
 /**
@@ -803,24 +596,18 @@ function readSettingsForMerge(p, consequence) {
  * that a re-emit stacks the new group beside the stale one and `learn` runs twice per Stop.
  * `managed` is the complete current claim set, so unwire removes exactly those.
  *
- * `scope` is accepted and unused, exactly as in the Python.
- *
  * `cfgDir` is the install's own dir — what the hooks carry as `--root` and under which
  * `memory/` lives. It is NOT always `dirname(p)`: Bob's global settings file is nested
  * (`~/.bob/settings/settings.json`), and deriving the root from it pointed every global Bob
  * hook at `~/.bob/settings` — memory learned where nothing reads it, excludes missed, and a
  * global that never stood down for a project install.
  */
-export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hookOpts = {},
+export function mergeClaudeSettings(p, priorHooks = null, hookOpts = {},
   doctrines = null, excluded = [], host = 'claude', cfgDir = path.dirname(p)) {
   const prior = (priorHooks || []).filter(isDict);
-  let config = {};
-  let hadComments = false;
-  if (existsSync(p)) {
-    const loaded = readSettingsForMerge(p, 'Hooks were not wired.');
-    if (!loaded) return [p, prior];
-    [config, hadComments] = loaded;
-  }
+  const loaded = readSettingsForMerge(p, 'Hooks were not wired.');
+  if (!loaded) return [p, prior];
+  const [config, hadComments] = loaded;
   let hooks = get(config, 'hooks');
   if (!isDict(hooks)) hooks = {};
   const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host);
@@ -877,16 +664,11 @@ export function mergeClaudeSettings(p, _scope = 'global', priorHooks = null, hoo
  * can report reality instead of assuming success.
  */
 export function unwireClaudeSettings(p, added) {
-  if (!existsSync(p) || !added || !added.length) return false;
-  let loaded;
-  let hadComments;
-  try {
-    [loaded, hadComments] = readJsonc(readText(p));
-  } catch (e) {
-    if (!isOsError(e)) throw e;
-    return false;
-  }
-  if (hadComments || !isDict(loaded)) return false;
+  if (!added || !added.length) return false;
+  // Every state but a comment-free object declines: an unwire never rewrites what it could not
+  // read whole, and a commented file would lose its comments.
+  const { state, data: loaded, hadComments } = loadJsonObject(p);
+  if (state !== 'ok' || hadComments) return false;
   const hooks = get(loaded, 'hooks');
   if (!isDict(hooks)) return false;
   for (const rec of added) {
@@ -917,13 +699,9 @@ export function unwireClaudeSettings(p, added) {
 export function wireClaudeExcludes(p, excludes) {
   const want = (excludes || []).filter(Boolean);
   if (!want.length) return [];
-  let config = {};
-  let hadComments = false;
-  if (existsSync(p)) {
-    const loaded = readSettingsForMerge(p, 'Excludes were not wired.');
-    if (!loaded) return [];
-    [config, hadComments] = loaded;
-  }
+  const loaded = readSettingsForMerge(p, 'Excludes were not wired.');
+  if (!loaded) return [];
+  const [config, hadComments] = loaded;
   let cur = get(config, 'claudeMdExcludes');
   if (!Array.isArray(cur)) cur = [];
   const added = want.filter((e) => indexOfDeepEqual(cur, e) < 0);
@@ -950,16 +728,9 @@ export function wireClaudeExcludes(p, excludes) {
 
 /** `_build_settings._unwire_claude_excludes`. */
 export function unwireClaudeExcludes(p, excludes) {
-  if (!existsSync(p) || !excludes || !excludes.length) return;
-  let loaded;
-  let hadComments;
-  try {
-    [loaded, hadComments] = readJsonc(readText(p));
-  } catch (e) {
-    if (!isOsError(e)) throw e;
-    return;
-  }
-  if (hadComments || !isDict(loaded)) return;
+  if (!excludes || !excludes.length) return;
+  const { state, data: loaded, hadComments } = loadJsonObject(p);
+  if (state !== 'ok' || hadComments) return;
   const cur = get(loaded, 'claudeMdExcludes');
   if (!Array.isArray(cur)) return;
   for (const e of excludes) {
@@ -983,71 +754,6 @@ export function unwireClaudeExcludes(p, excludes) {
 // to the orphan scan — the one place a stranded hook can still surface — so cleanup would
 // silently leave live hooks behind in every config emitted before the shim landed.
 export const GENESEED_HOOK_SNIFF = ['harness.py', SHIM_MARK];
-
-// P10d. `GENESEED_HOOK_SNIFF` answers "is this hook Geneseed's?". A MIGRATION needs the other
-// question — "is this Geneseed's OLD one?" — and the two are not the same sniff.
-//
-// THREE SHAPES ARE IN THE WILD, AND TWO OF THEM ARE IDENTICAL IN THE SETTINGS FILE:
-//   1. legacy-direct  the command itself names `harness.py` (pre-shim, P0 and earlier)
-//   2. shim-python    the command names the shim; the shim BODY runs python + harness.py
-//   3. shim-node      the command names the shim; the shim BODY runs node + the .mjs entry
-//
-// 2 and 3 differ ONLY inside the shim body. A classifier reading the host config alone would
-// call a fully-unmigrated machine "already migrated" — silently — and `migrate` would no-op on
-// exactly the installs it exists for. The shim body is a REQUIRED input, not a refinement.
-const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
-
-/**
- * `_build_settings._migrate_shape` — 'legacy' | 'current' | 'none'.
- *
- * PURE — and currently reached only END TO END, by the `migrate/a-node-baked-shim-reads-as-current`
- * cell. No unit corpus drives it directly, which is worth knowing before trusting it.
- * 'none' is not a fault: a user's own settings.json may carry three hand-written hooks
- * and no Geneseed entry. That must read as
- * "nothing to migrate" rather than "unrecognised", or `migrate` refuses on the commonest
- * config on any machine.
- */
-export function migrateShape(commands, shimBody) {
-  if (commands.some((c) => c.includes('harness.py'))) return 'legacy';
-  if (commands.some((c) => c.includes(SHIM_MARK))) {
-    return shimBody.includes(SHIM_ENTRY_MARK) ? 'current' : 'legacy';
-  }
-  return 'none';
-}
-
-/**
- * `_build_settings._autostart_paths` — where a hand-written web-daemon autostart entry lives.
- *
- * NOTHING IN THIS REPOSITORY HAS EVER WRITTEN ONE — the install guide tells the user to create them
- * by hand, and no .py/.mjs/.sh/.cmd in the tree contains `vbs`, `LaunchAgents` or `plist`. So
- * `migrate` REPORTS a stale one and never rewrites it, on the rule `settingsIntegrityCheck`
- * already states: an entry the manifest does not claim is "possibly user-authored; left alone".
- *
- * Both platforms' paths on both platforms, deliberately — the scan is a read that misses
- * harmlessly, and returning only the host platform's would make the macOS arm unreachable
- * from the Windows machine this port is developed on: an ungated branch dressed as a fork.
- */
-export function autostartPaths() {
-  const home = os.homedir();
-  return [
-    path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu',
-      'Programs', 'Startup', 'geneseed-web.vbs'),
-    path.join(home, 'Library', 'LaunchAgents', 'dev.geneseed.web.plist'),
-  ];
-}
-
-/**
- * `_build_settings._autostart_stale` — the entry names a Geneseed launcher somewhere else.
- *
- * Weak in one direction and strict in the other on purpose: it fires only when the file
- * mentions geneseed at all (an unrelated Startup entry is never named), and clears only when
- * the CURRENT root appears verbatim. A false positive costs one printed line; a false negative
- * leaves a login task pointing at a checkout npm is about to make stale.
- */
-export function autostartStale(text, root) {
-  if (!text.toLowerCase().includes('geneseed')) return false;
-  return !text.includes(root) && !text.includes(root.replaceAll('\\', '/'));
-}
 
 /** `_build_settings._settings_hook_groups` — flatten `hooks` to [event, group] pairs. */
 function settingsHookGroups(loaded) {
@@ -1078,22 +784,19 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
     return problems;
   };
   const m = isDict(managed) ? managed : {};
-  if (!existsSync(p)) {
+  const { state, data: loaded, error } = loadJsonObject(p);
+  if (state === 'absent') {
     if (expect === 'present') {
       problems.push(`${p}: file does not exist, but hooks/excludes were supposed to be `
         + 'wired into it');
     }
     return flush();
   }
-  let loaded;
-  try {
-    [loaded] = readJsonc(readText(p));
-  } catch (e) {
-    if (!isOsError(e)) throw e;
-    problems.push(`${p}: could not read the file (${e.message})`);
+  if (state === 'unreadable') {
+    problems.push(`${p}: could not read the file (${error.message})`);
     return flush();
   }
-  if (!isDict(loaded)) {
+  if (state !== 'ok') {
     problems.push(`${p}: not a JSON object — cannot verify hooks/excludes`);
     return flush();
   }

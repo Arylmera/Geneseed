@@ -469,7 +469,7 @@ export const MUTATIONS = [
   {
     id: 'M26',
     name: 'emit the shim path even when the shim could not be written',
-    file: 'js/hosts/settings.mjs',
+    file: 'js/hosts/shim.mjs',
     find: '  if (shim !== null) return `"${shim}"`;',
     replace: '  if (true) return `"${shim}"`;',
     gate: UNIT,
@@ -483,7 +483,7 @@ export const MUTATIONS = [
   {
     id: 'M27',
     name: 'drop the POSIX argv placeholder from the shim exemption',
-    file: 'js/hosts/settings.mjs',
+    file: 'js/hosts/shim.mjs',
     find: "export const SHIM_ARGV = new Set(['$@', '%*']);",
     replace: "export const SHIM_ARGV = new Set(['%*']);",
     gate: UNIT,

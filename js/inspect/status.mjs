@@ -73,7 +73,7 @@ import {
   defaultTheme, installedDefaults, installTargets, manifestIsClaude, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
-import { shimDead } from '../hosts/settings.mjs';
+import { shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
