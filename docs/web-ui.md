@@ -124,7 +124,8 @@ streams the output of background jobs and keeps their history across reloads.
   cleanly (more than eight iteration steps, a node in more than three loops) falls back to
   left-to-right boxes. **Bricks** are grouped by origin (project / global / shipped), pilled
   for *mutate*, *human gate*, what they override and *unavailable*; the reader shows the
-  frontmatter facts, why an unavailable brick is unavailable, and its source. Templates and
+  frontmatter facts (outcomes as pills, availability with its reason), then the body rendered as
+  markdown, with a **View source** toggle for the file as parsed, frontmatter and all. Templates and
   Bricks read `GET /api/loops`, resolved from the selected install's root, so a project
   install shows its `.geneseed/` bricks and templates. **Active** is every loop
   `geneseed loop init` registered on this machine (`GET /api/loops/active`, polled every

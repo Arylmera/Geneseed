@@ -5,6 +5,7 @@ import ErrorState from '../components/ErrorState.jsx'
 import Loading from '../components/Loading.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import RingGraph from '../components/RingGraph.jsx'
+import Markdown from '../components/Markdown.jsx'
 import { GroupedRows, walkRows, useActiveRowInView } from '../components/LibRows.jsx'
 import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
 import { humanGate } from '../lib/loopRing.js'
@@ -170,13 +171,45 @@ function TemplateDetail({ t, bricks, overridden }) {
   )
 }
 
-function BrickDetail({ b }) {
-  const facts = [
+// The brick file as the catalogue parsed it, frontmatter then body, for "View source". Rebuilt
+// from the parsed fields (js/loop/catalog.mjs parseBrick) rather than sent raw: `/api/loops`
+// carries only the parse, and the parse is what the engine runs. Exported for its test.
+export function brickSource(b) {
+  const fm = [
+    ['name', b.name],
+    ['description', b.description],
     ['effect', b.effect],
     [b.agent ? 'agent' : 'skill', b.agent || b.skill],
-    ['outcomes', b.outcomes.join(' · ')],
-    ['gate', humanGate(b) ? humanGate(b).toLowerCase() : 'none'],
+    ['gate', b.gate],
+    ['gateOn', b.gateOn?.join(', ')],
+    ['outcomes', b.outcomes.join(', ')],
+  ].filter(([, v]) => v)
+  return `---\n${fm.map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n${b.body}`
+}
+
+function BrickDetail({ b }) {
+  const [raw, setRaw] = useState(false)
+  const facts = [
+    ['effect', tag(b.effect === 'mutate' ? 'warn' : '', b.effect)],
+    [
+      b.agent ? 'agent' : 'skill',
+      <span key="who" className="mono">
+        {b.agent || b.skill}
+      </span>,
+    ],
+    ['outcomes', b.outcomes.map((o) => tag('', o))],
+    ['gate', humanGate(b) ? tag('human', humanGate(b).toLowerCase()) : 'none'],
     ['origin', b.override ? `${b.origin}, ${b.override}` : b.origin],
+    [
+      'available',
+      b.available === false ? (
+        <span key="why" className="t-warn">
+          no — {b.reason}
+        </span>
+      ) : (
+        'yes'
+      ),
+    ],
   ]
   return (
     <>
@@ -187,7 +220,6 @@ function BrickDetail({ b }) {
       <h2 className="reader-title">{b.name}</h2>
       {b.description ? <p className="reader-lede">{b.description}</p> : null}
       <p className="mono dim reader-src">bricks/{b.name}.md</p>
-      {b.available === false ? <p className="t-warn">Unavailable: {b.reason}</p> : null}
       <dl className="loop-facts">
         {facts.map(([k, v]) => (
           <React.Fragment key={k}>
@@ -197,9 +229,25 @@ function BrickDetail({ b }) {
         ))}
       </dl>
       <hr className="hr" />
-      <pre className="loop-brick-src" aria-label="Source">
-        {b.body}
-      </pre>
+      <div className="row gap-8 loop-src-bar">
+        <button
+          type="button"
+          className="btn ghost sm"
+          aria-expanded={raw}
+          onClick={() => setRaw(!raw)}
+        >
+          {raw ? 'Hide source' : 'View source'}
+        </button>
+      </div>
+      {raw ? (
+        <pre className="loop-brick-src" aria-label="Source">
+          {brickSource(b)}
+        </pre>
+      ) : (
+        <div className="lib-doc detail-doc">
+          <Markdown body={b.body} />
+        </div>
+      )}
     </>
   )
 }

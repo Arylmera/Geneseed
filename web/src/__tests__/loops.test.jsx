@@ -266,12 +266,12 @@ describe('Loops — bricks', () => {
     expect(pills('identify')).toEqual([])
   })
 
-  // The reader: the frontmatter facts, the reason an unavailable brick cannot run, its source.
-  it('shows a brick’s facts, why it is unavailable, and its source', async () => {
+  // The reader: the frontmatter facts — outcomes as one pill each, availability with the reason
+  // an unavailable brick cannot run — then its body rendered, not raw.
+  it('shows a brick’s facts, why it is unavailable, and its rendered body', async () => {
     render(<Loops tab="bricks" item="lint" />)
     await screen.findByText('Body of lint.')
     expect(reader().querySelector('.reader-title').textContent).toBe('lint')
-    expect(reader().textContent).toContain('Unavailable: skill lint is not shipped')
     const facts = [...reader().querySelectorAll('.loop-facts dt')].map((dt) => [
       dt.textContent,
       dt.nextElementSibling.textContent,
@@ -279,11 +279,76 @@ describe('Loops — bricks', () => {
     expect(facts).toEqual([
       ['effect', 'read'],
       ['agent', 'developer'],
-      ['outcomes', 'pass · fail'],
+      ['outcomes', 'passfail'],
       ['gate', 'none'],
       ['origin', 'shipped'],
+      ['available', 'no — skill lint is not shipped'],
     ])
-    expect(reader().querySelector('pre.loop-brick-src').textContent).toBe('Body of lint.')
+    expect(text('.loop-facts dd .tag', reader())).toEqual(['read', 'pass', 'fail'])
+    expect(reader().querySelector('.markdown p').textContent).toBe('Body of lint.')
+    expect(reader().querySelector('pre.loop-brick-src')).toBeNull()
+  })
+
+  // The body is markdown: blank lines split paragraphs, backticks become <code>, a dash list a
+  // list, stars emphasis — the user's example brick, with a Maven command and an Awaitility call.
+  it('renders the body as markdown: paragraphs, inline code, lists, emphasis', async () => {
+    const body = [
+      'Run `mvn test -Dtest=<Class>#<method>` first.',
+      '',
+      'Never sleep — use `await().atMost(…).until(…)`, *always*.',
+      '',
+      '- one',
+      '- two',
+    ].join('\n')
+    api.loops.mockImplementation(() =>
+      Promise.resolve({ ...PAYLOAD, bricks: [brick('flaky', 'mutate', { body })] }),
+    )
+    render(<Loops tab="bricks" item="flaky" />)
+    await waitFor(() => expect(reader().querySelector('.markdown')).not.toBeNull())
+    const md = reader().querySelector('.markdown')
+    expect(text('p', md)).toEqual([
+      'Run mvn test -Dtest=<Class>#<method> first.',
+      'Never sleep — use await().atMost(…).until(…), always.',
+    ])
+    expect(text('code', md)).toEqual([
+      'mvn test -Dtest=<Class>#<method>',
+      'await().atMost(…).until(…)',
+    ])
+    expect(text('li', md)).toEqual(['one', 'two'])
+    expect(text('em', md)).toEqual(['always'])
+    // mutate is the highlighted effect
+    expect(reader().querySelector('.loop-facts dd .tag.warn').textContent).toBe('mutate')
+  })
+
+  // "View source" swaps the rendered body for the file as parsed — frontmatter, then the body
+  // verbatim — and back; the button says which state it is in through aria-expanded.
+  it('toggles the raw source, frontmatter and body', async () => {
+    render(<Loops tab="bricks" item="review" />)
+    await screen.findByText('Body of review.')
+    const btn = screen.getByRole('button', { name: 'View source' })
+    expect(btn.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(btn)
+    expect(btn.getAttribute('aria-expanded')).toBe('true')
+    expect(btn.textContent).toBe('Hide source')
+    expect(reader().querySelector('pre.loop-brick-src').textContent).toBe(
+      [
+        '---',
+        'name: review',
+        'description: review does its step.',
+        'effect: read',
+        'agent: developer',
+        'gate: human',
+        'gateOn: pass',
+        'outcomes: pass, fail',
+        '---',
+        'Body of review.',
+      ].join('\n'),
+    )
+    expect(reader().querySelector('.markdown')).toBeNull()
+    fireEvent.click(btn)
+    expect(btn.getAttribute('aria-expanded')).toBe('false')
+    expect(reader().querySelector('pre.loop-brick-src')).toBeNull()
+    expect(reader().querySelector('.markdown p').textContent).toBe('Body of review.')
   })
 
   // An overridden brick's origin fact names what it overrides; a gated one names its gate.

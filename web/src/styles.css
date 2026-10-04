@@ -2843,7 +2843,9 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
   margin: 0; font-size: 13.5px; }
 .loop-facts dt { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-3); align-self: center; }
-.loop-facts dd { margin: 0; overflow-wrap: anywhere; }
+.loop-facts dd { margin: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px;
+  align-items: center; }
+.loop-src-bar { margin-bottom: 12px; }
 .loop-brick-src { margin: 0; padding: 10px 12px; max-height: 480px; overflow: auto;
   white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px;
   background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); }
