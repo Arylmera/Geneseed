@@ -181,6 +181,53 @@ test('record --note appends "iteration N (node): note" to LOOP.md notes', () => 
   } finally { sb.cleanup(); }
 });
 
+// record --note-file: a multi-line note (plan's ordered list) or one that mentions
+// git commit/push can't go on the command line — `--note-file` reads it from a file instead,
+// CRLF-folded and trailing-whitespace trimmed, same as the porcelain read from stdin.
+test('record --note-file round-trips a multi-line, CRLF note exactly into LOOP.md notes', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    const noteFile = path.join(sb.path, 'note.txt');
+    writeFileSync(noteFile, 'iteration 1: do the thing\r\niteration 2: do the other thing\r\n\r\n');
+    const r = run(sb.path, ['record', '--outcome', 'pass', '--note-file', noteFile], '?? test/r.test.js\n');
+    assert.deepEqual(r.out, { verify: true });
+    const loopmd = readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8');
+    assert.match(loopmd, /"notes": \[\s*"iteration 0 \(reproduce\): iteration 1: do the thing\\niteration 2: do the other thing"\s*\]/);
+  } finally { sb.cleanup(); }
+});
+
+test('record --note and --note-file together is an error', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    const noteFile = path.join(sb.path, 'note.txt');
+    writeFileSync(noteFile, 'x');
+    const r = run(sb.path, ['record', '--outcome', 'pass', '--note', 'y', '--note-file', noteFile], '?? test/r.test.js\n');
+    assert.equal(r.code, 1);
+    assert.equal(r.out.error, 'record takes --note or --note-file, not both');
+  } finally { sb.cleanup(); }
+});
+
+test('record --note-file naming an unreadable file is an error', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    const r = run(sb.path, ['record', '--outcome', 'pass', '--note-file', path.join(sb.path, 'missing.txt')], '?? test/r.test.js\n');
+    assert.equal(r.code, 1);
+    assert.match(r.out.error, /cannot read --note-file/);
+  } finally { sb.cleanup(); }
+});
+
 // M1: `decide` closes a unit through the CLI too — a diff with a file outside the write set
 // escalates to blocking (0.8 > balanced's 0.6), `decide --verdict ok` commits it at that actual
 // score, and the message file it names carries the setup unit's trailers byte for byte.

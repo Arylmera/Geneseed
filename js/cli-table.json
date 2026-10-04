@@ -854,6 +854,19 @@
           "is_flag": false,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": ["--note-file"],
+          "dest": "note_file",
+          "metavar": null,
+          "help": "record's note read from this file instead of the command line (CRLF folded, trimmed) — for a multi-line note or one that mentions git commit/push",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []

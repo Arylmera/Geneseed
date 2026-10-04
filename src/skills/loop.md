@@ -54,8 +54,9 @@ Repeat `geneseed loop next` and act on its JSON:
 - **`{node}`** — run the brick: dispatch its `agent` (or follow its `skill`) with the `prompt`,
   the `card` and the `notes`. Then report the outcome, one of its `outcomes`:
   `git status --porcelain | geneseed loop record --outcome <outcome>` — `identify` adds
-  `--card '<card json>'` when it reports `more`; add `--note "<finding>"` to carry a finding a
-  read brick must not lose (`plan`'s ordered list, `review`'s `fail` findings) into `notes`.
+  `--card '<card json>'` when it reports `more`; carry a finding a read brick must not lose
+  (`plan`'s ordered list, `review`'s `fail` findings) into `notes` with `--note "<short, one
+  line, no git command in it>"`, or `--note-file <path>` for anything longer or mentioning git.
 - **`{terminal: "$close"}`** — see *The end*. **`{terminal: "$stop"}`** — report the `reason`
   and the `summary`, and leave the branch as it is.
 
