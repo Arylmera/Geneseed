@@ -35,14 +35,9 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:
 import path from 'node:path';
 
 import { main as driverMain } from '../build/driver.mjs';
-import { PACK_ORDER, ROOT } from '../build/source.mjs';
-import {
-  EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  footprintOfDir, installState, installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
-  trustOfDir,
-} from '../hosts/installs.mjs';
-import { DEFAULT_EMIT, setupBuildArgs } from '../build/generate.mjs';
-import { DEFAULT_PRESET } from '../loop/score.mjs';
+import { ROOT } from '../build/source.mjs';
+import { EMIT_HOST_SCOPE, installState, installTargets, readMaybe } from '../hosts/installs.mjs';
+import { installProfile } from '../build/generate.mjs';
 import {
   autostartPaths, autostartStale, hookShimPath, migrateShape, readJsonc, shimHome,
 } from '../hosts/settings.mjs';
@@ -210,21 +205,13 @@ export function cmdMigrate(args = {}) {
     try { rmSync(stash, { recursive: true, force: true }); } catch { /* nothing to undo */ }
   };
 
-  // Step 3 — re-emit, in each install's OWN six values. Same reads as `cmdRebuildAll`, and
-  // the pack selection is the sixth: leaving it out re-emitted a narrowed install at whatever
-  // `harness.config.json` said, which WIDENS a constitution its owner had cut down (and, the
-  // other way, can strip the consent gate). `null` — a pre-marker carrier, which on a MIGRATION
-  // is the common case and not the rare one — resolves to ALL packs through
-  // `doctrinesForBuild`, never to `harness.config.json`, which is what makes it fail-closed.
+  // Step 3 — re-emit, in each install's OWN values: `installProfile`, the one reading
+  // `rebuild-all` and `status` share. This loop hand-copied it once and drifted twice — it
+  // passed the excluded rules as `null` (re-admitting every rule an owner switched off,
+  // `process 5` among them) and dropped `--config-dir`, so a global found through
+  // `CLAUDE_CONFIG_DIR`/`OPENCODE_CONFIG_DIR` re-emitted into the DEFAULT dir instead.
   for (const r of rows) {
-    const marker = r.marker && (EMIT_HOST_SCOPE.get(r.marker) ?? ['', ''])[0] === r.host
-      ? r.marker : '';
-    const emit = marker || DEFAULT_EMIT.get(`${r.host} ${r.scope}`) || 'opencode-global';
-    const theme = themeOfDir(r.root) || defaultTheme();
-    const out = r.scope === 'global' ? null : r.root;
-    const argv = setupBuildArgs(theme, emit, out, out, footprintOfDir(r.root),
-      postureOfDir(r.root) || defaultPosture(), modeOfDir(r.root) || defaultMode(),
-      doctrinesForBuild(r.root), PACK_ORDER, null, trustOfDir(r.root) || DEFAULT_PRESET);
+    const { emit, theme, argv } = installProfile(r.host, r.scope, r.root);
     const label = `${r.host}:${r.scope} (${r.root})`;
     printOut(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
     let rc = 1;

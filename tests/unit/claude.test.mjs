@@ -31,6 +31,7 @@ import { createHash } from 'node:crypto';
 
 import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../js/build/driver.mjs';
 import { rebuildAll } from '../../js/build/generate.mjs';
+import { cmdMigrate } from '../../js/maintain/migrate.mjs';
 import {
   globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES,
 } from '../../js/hosts/hooks.mjs';
@@ -43,7 +44,7 @@ import {
   uninstallGlobal, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
 import {
-  doctrinesOfDir, installState, installTargets, manifestIsClaude,
+  doctrinesOfDir, excludedRulesOfDir, installState, installTargets, manifestIsClaude,
 } from '../../js/hosts/installs.mjs';
 import {
   hookShimPath, GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings,
@@ -888,12 +889,47 @@ function capturedOut(fn) {
 }
 
 /** A global install through the PUBLIC entry, so markers and the registry are written too. */
-function cliGlobalEmit(kind) {
+function cliGlobalEmit(kind, extra = []) {
   const r = spawnSync(process.execPath,
-    [path.join(String(ROOT), 'bin', 'build-driver.mjs'), '--emit', kind, '--theme', 'neutral'],
+    [path.join(String(ROOT), 'bin', 'build-driver.mjs'), '--emit', kind, '--theme', 'neutral',
+      ...extra],
     { cwd: String(ROOT), encoding: 'utf8', env: process.env, maxBuffer: 1 << 26, windowsHide: true });
   assert.equal(r.status, 0, `${kind} emit failed (${r.status}): ${(r.stderr || '').slice(-800)}`);
 }
+
+// `migrate` re-emits each install in its OWN values, and the excluded rules are one of them. It
+// hand-copied `installProfile` and passed them as `null`, so the re-emit fell back to
+// `harness.config.json` and handed back `process 5` — a rule its owner had switched off.
+test('migrate keeps the excluded rules of an install excluded', () => {
+  withDir((d) => {
+    const savedEnv = {};
+    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR']) {
+      savedEnv[v] = process.env[v];
+    }
+    process.env.OPENCODE_CONFIG_DIR = path.join(d, 'oc-cfg');
+    process.env.BOB_CONFIG_DIR = path.join(d, 'bob-none');
+    process.env.OPENCLAUDE_CONFIG_DIR = path.join(d, 'openclaude-none');
+    try {
+      cliGlobalEmit('opencode-global', ['--exclude-rules', 'process 5']);
+      const ocCfg = opencodeConfigDir();
+      assert.deepEqual(excludedRulesOfDir(ocCfg), ['process.5'], 'the emit did not exclude');
+
+      const [rc, out, err] = capturedOut(() => cmdMigrate({}));
+
+      assert.equal(rc, 0, `migrate failed:
+${out}
+${err}`);
+      assert.ok(out.includes('re-emitting opencode:global'), `migrate re-emitted nothing:
+${out}`);
+      assert.deepEqual(excludedRulesOfDir(ocCfg), ['process.5'],
+        'migrate re-admitted the excluded rule');
+    } finally {
+      for (const [v, val] of Object.entries(savedEnv)) {
+        if (val === undefined) delete process.env[v]; else process.env[v] = val;
+      }
+    }
+  });
+});
 
 test('rebuild-all rebuilds every active install, survives one failing, and creates none', () => {
   withDir((d) => {

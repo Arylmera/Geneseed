@@ -24,7 +24,7 @@ import { spawnSync } from 'node:child_process';
 
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { ROOT } from '../../js/build/source.mjs';
-import { postureOfDir, modeOfDir, doctrinesOfDir } from '../../js/hosts/installs.mjs';
+import { postureOfDir, modeOfDir, doctrinesOfDir, excludedRulesOfDir } from '../../js/hosts/installs.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';
@@ -41,13 +41,14 @@ test.after(() => { restoreProcessHome(); });
  * exercises the flags the user actually reaches — `driverMain` in-process would share this
  * process's module state with the `diffCollect` call under test.
  */
-function install(d, { posture, mode, doctrines }) {
+function install(d, { posture, mode, doctrines, excludeRules }) {
   const gcfg = path.join(d, 'gcfg');
   fs.mkdirSync(gcfg, { recursive: true });
   const argv = ['--emit', 'opencode-global', '--theme', 'neutral'];
   if (posture) argv.push('--posture', posture);
   if (mode) argv.push('--mode', mode);
   if (doctrines) argv.push('--doctrines', doctrines);
+  if (excludeRules) argv.push('--exclude-rules', excludeRules);
   const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv], {
     cwd: ROOT,
     encoding: 'utf8',
@@ -132,6 +133,18 @@ test('a freshly-built install with the packs NARROWED reports no drift', () => {
     assert.deepEqual(doctrinesOfDir(gcfg), [], 'the emit did not deploy an empty selection');
     assert.deepEqual(rels(diffCollect({ target: gcfg }).files), [],
       '`--doctrines none` was reported as a local edit');
+  });
+});
+
+test('a freshly-built install with a rule EXCLUDED reports no drift', () => {
+  // The second doctrine axis, and the same scar again: `emitGlobalInto` took no `excludeRules`,
+  // so `expected` re-stated `process 5` and the install's AGENT.md (rule text and its
+  // `Excluded rules:` marker line) read as a local edit no rebuild could clear.
+  withDir((d) => {
+    const gcfg = install(d, { excludeRules: 'process 5' });
+    assert.deepEqual(excludedRulesOfDir(gcfg), ['process.5'], 'the emit did not exclude the rule');
+    assert.deepEqual(rels(diffCollect({ target: gcfg }).files), [],
+      'the excluded rule was reported as a local edit');
   });
 });
 

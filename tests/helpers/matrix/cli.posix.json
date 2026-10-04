@@ -3767,7 +3767,10 @@
       "bin": "cli",
       "expect": [
         "[theme] wrote geneseed-mine-transparent.json to",
-        "(or /theme geneseed-mine-transparent)"
+        "[theme] select in OpenCode with: /theme geneseed-mine-transparent"
+      ],
+      "expect_absent": [
+        "(or /theme"
       ],
       "expect_files": [
         "home/.config/opencode/themes/geneseed-mine-transparent.json"

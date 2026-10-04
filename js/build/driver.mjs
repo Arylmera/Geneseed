@@ -144,8 +144,19 @@ function configDefaults() {
       if (data.excludeRules !== undefined) {
         if (Array.isArray(data.excludeRules)
           && data.excludeRules.every((x) => typeof x === 'string')) {
-          d.excludeRules = [...new Set(data.excludeRules.map((x) => x.replace(/[ \t]+/, '.')))]
-            .sort();
+          // ⚠ AND EVERY ID IS CHECKED, as `--exclude-rules` checks its own: an unknown id
+          // passed through lands in the `Excluded rules:` marker, `rebuild-all` hands it back
+          // as a flag, and `parseExcludeRules` dies on it — every rebuild of that install,
+          // forever. Unknown ids are dropped with a WARN; the known ones still bind.
+          const known = knownRuleIds();
+          const ids = data.excludeRules.map((x) => x.trim().replace(/[ \t]+/, '.'));
+          const unknown = ids.filter((id) => !known.includes(id));
+          if (unknown.length) {
+            process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" names `
+              + `unknown rule(s) ${unknown.map((id) => `'${id.replace('.', ' ')}'`).join(', ')}`
+              + ' — ignoring them.\n');
+          }
+          d.excludeRules = [...new Set(ids.filter((id) => known.includes(id)))].sort();
         } else {
           process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" is `
             + 'not a list of rule addresses — excluding nothing.\n');
@@ -396,7 +407,8 @@ function parseArgs(argv, defaults) {
 /**
  * The generator's OWN flag surface, for the one consumer that is not this driver.
  *
- * `geneseed validate` takes `--theme/--emit/--out/--root/--footprint/-v` — the reference's
+ * `geneseed validate` takes every render flag but `--sync-themes`/`--config-dir` (it refuses
+ * those two, and prints its own `-h` before this parser can print the generator's) — the reference's
  * `--validate-only` reads exactly the flags `build.py`'s parser already produced, so the port
  * hands the CLI this parser rather than a second one beside it. That is not tidiness: a
  * hand-rolled copy would have its own `--target` alias, its own `choices` lists and its own
@@ -1015,14 +1027,36 @@ const PROJECT_EMITS = {
   opencode: emitOpencode,
 };
 
-export function emitProjectInto(host, { theme, out, root, footprint = 'full', doctrines = null }) {
+/**
+ * The five render axes every `*Into` takes, folded into one `cfg` — the drift readers pass what
+ * the deployment says, `validate` passes its flags.
+ *
+ * EACH IS OMITTED WHEN NULL, never passed through, because `null` is "no opinion" and only
+ * `makeCfg`'s own defaults are the fail-closed answers: `peer`/`direct`/the default preset, ALL
+ * packs (`doctrinesOfDir` answers `null` for "no marker", which must not render as `[]`), and
+ * NO exclusions (a list of rules taken away defaults to taking nothing away). The posture and
+ * mode readers return `null` for "undetectable" too, which an explicit `posture: null` would
+ * carry straight past the parameter default.
+ */
+function axesCfg({ posture, mode, trust, doctrines, excludeRules }) {
+  return makeCfg({
+    ...(posture ? { posture } : {}), ...(mode ? { mode } : {}), ...(trust ? { trust } : {}),
+    ...(doctrines ? { doctrines } : {}), ...(excludeRules ? { excludeRules } : {}),
+  });
+}
+
+export function emitProjectInto(host, {
+  theme, out, root, footprint = 'full', posture = null, mode = null, trust = null,
+  doctrines = null, excludeRules = null,
+}) {
   const emit = PROJECT_EMITS[host];
-  // `doctrines` rides the same rail posture and mode ride into `emitGlobalInto`, and for the
-  // same reason: a drift reader that renders `expected` at the DEFAULT pack set reports the
-  // whole doctrines section as edited on every narrowed install. `null` means "no opinion" and
-  // `makeCfg` renders all four, which is what every validation caller wants.
-  return withPlatformNewlines(() => emit(makeCfg(doctrines ? { doctrines } : {}),
-    { theme, footprint, root }, out));
+  // The axes ride the same rail into every `*Into`, and for the same reason: a drift reader
+  // that renders `expected` at the DEFAULT pack set reports the whole doctrines section as
+  // edited on every narrowed install, and `validate --doctrines craft` that ignored its flag
+  // checked an all-packs render nobody asked for.
+  return withPlatformNewlines(() => emit(
+    axesCfg({ posture, mode, trust, doctrines, excludeRules }), { theme, footprint, root }, out,
+  ));
 }
 
 /**
@@ -1033,14 +1067,17 @@ export function emitProjectInto(host, { theme, out, root, footprint = 'full', do
  * `nativeCatalog: false` is that three-positional call's signature default, inherited here
  * exactly as `run` inherits it below.
  */
-export function buildInto({ theme, out, footprint = 'lean' }) {
-  return withPlatformNewlines(
-    () => build(makeCfg(), theme, out, { footprint, nativeCatalog: false }),
-  );
+export function buildInto({
+  theme, out, footprint = 'lean', posture = null, mode = null, trust = null, doctrines = null,
+  excludeRules = null,
+}) {
+  return withPlatformNewlines(() => build(axesCfg({ posture, mode, trust, doctrines, excludeRules }),
+    theme, out, { footprint, nativeCatalog: false }));
 }
 
 export function emitGlobalInto(host, {
   theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
+  excludeRules = null,
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -1050,25 +1087,15 @@ export function emitGlobalInto(host, {
   // emit's STDOUT and lets its stderr through (the Python's `redirect_stdout` does exactly
   // that), so an untranslated WARN from `warnBobGlobalOverProject` would reach the user's
   // terminal with the wrong bytes on the one stream the caller deliberately does not hide.
-  // POSTURE AND MODE TRAVEL WITH THE RENDER, and the `|| default` is load-bearing:
-  // `postureOfDir` returns null for "no install / undetectable", which `makeCfg`'s parameter
-  // default would NOT catch. Callers that pass nothing keep the reference's behaviour of
-  // rendering at `peer`/`direct`; the drift readers pass what the deployment actually says,
-  // because rendering `expected` at the defaults reports AGENT.md as edited on every install
-  // that chose a register — the same scar the footprint left in `diffCollect`, one axis over.
-  return withPlatformNewlines(
-    () => emit(
-      // THE PACK SELECTION RIDES THE SAME RAIL, with one difference: `doctrinesOfDir` answers
-      // `null` for "no marker / undetectable", and that must render at ALL packs rather than
-      // at `[]`, so the key is OMITTED instead of passed through — `makeCfg`'s own default is
-      // the fail-closed answer and an explicit `doctrines: null` would not reach it.
-      makeCfg({
-        posture: posture || 'peer', mode: mode || 'direct', trust: trust || DEFAULT_PRESET,
-        ...(doctrines ? { doctrines } : {}),
-      }),
-      { theme, footprint, root: null, cfgDir }, out,
-    ),
-  );
+  // ALL FIVE AXES TRAVEL WITH THE RENDER (see `axesCfg`). Callers that pass nothing keep the
+  // reference's behaviour of rendering at `peer`/`direct`; the drift readers pass what the
+  // deployment actually says, because rendering `expected` at the defaults reports AGENT.md as
+  // edited on every install that chose a register, narrowed its packs or excluded a rule —
+  // the same scar the footprint left in `diffCollect`, one axis over each time.
+  return withPlatformNewlines(() => emit(
+    axesCfg({ posture, mode, trust, doctrines, excludeRules }),
+    { theme, footprint, root: null, cfgDir }, out,
+  ));
 }
 
 /**

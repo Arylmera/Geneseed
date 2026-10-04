@@ -78,10 +78,12 @@ after(webFixtureTeardown);
 // because the config dir was a function argument; the port resolves it from the environment,
 // which is the same path a user's `geneseed build` takes. `--out` is the source bundle, `cfg`
 // is where the install lands.
-function emitInto(cfg, { footprint = 'full', theme = 'neutral', out = null } = {}) {
+function emitInto(cfg, {
+  footprint = 'full', theme = 'neutral', out = null, extra = [],
+} = {}) {
   const proc = spawnSync(process.execPath,
     [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode-global',
-      '--theme', theme, '--footprint', footprint, '--out', out || `${cfg}-bundle`],
+      '--theme', theme, '--footprint', footprint, '--out', out || `${cfg}-bundle`, ...extra],
     { cwd: ROOT, encoding: 'utf8', windowsHide: true,
       env: { ...process.env, OPENCODE_CONFIG_DIR: cfg } });
   assert.equal(proc.status, 0, `emit into ${cfg} failed:\n${proc.stdout}\n${proc.stderr}`);
@@ -513,6 +515,28 @@ test('restore keeps a lean install lean', () => {
     assert.ok(fs.statSync(path.join(cfg, 'laws', 'universal.md')).isFile());
     assert.equal(fs.readFileSync(agent, 'utf8'), leanAgent,
       'restore did not put the lean AGENT.md back byte for byte');
+  } finally { sb.cleanup(); }
+});
+
+// Restore renders its expected copy WITHOUT the install's excluded rules. Rendered with them, a
+// restored AGENT.md re-states `process 5` while the hooks still lack its gate — prompt and
+// boundary disagreeing by a write. The restored file must equal the excluded render byte for byte.
+test('restore keeps an excluded rule excluded', () => {
+  const sb = makeSandbox();
+  try {
+    const cfg = emitInto(path.join(sb.path, 'cfg'), { extra: ['--exclude-rules', 'process 5'] });
+    const agent = path.join(cfg, 'AGENT.md');
+    const built = fs.readFileSync(agent, 'utf8');
+    assert.match(built, /^Excluded rules: process 5$/m, 'the emit did not exclude the rule');
+    fs.writeFileSync(agent, `${built}
+local edit
+`);
+
+    const res = apiRestore(webState('neutral', cfg), ['AGENT.md']);
+
+    assert.deepEqual(res.errors, []);
+    assert.equal(fs.readFileSync(agent, 'utf8'), built,
+      'restore re-admitted the excluded rule into AGENT.md');
   } finally { sb.cleanup(); }
 });
 

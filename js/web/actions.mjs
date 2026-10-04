@@ -811,6 +811,9 @@ export function apiRestore(state, files) {
       // behind it — prompt and boundary disagreeing by a WRITE, the write-side twin of the
       // read-side hole `diffCollect` had (and the reason the panel offered the file at all).
       doctrines: doctrinesForBuild(target),
+      // The excluded rules for the same boundary reason: without them a restored AGENT.md
+      // re-states a rule whose hook gate the install deliberately left unwired.
+      excludeRules: excludedRulesOfDir(target),
     }));
     for (const raw of (isTruthy(files) ? files : [])) {
       const rel = stripWhitespace(formatValue(raw).replace(/\\/g, '/')).replace(/^\/+/, '');

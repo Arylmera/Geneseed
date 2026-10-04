@@ -521,6 +521,46 @@ test('verbose lists paths where quiet lists counts only', () => {
   });
 });
 
+test('validate renders at the axes it was given, read back off the sandbox', () => {
+  // `validate` parsed --posture/--mode/--doctrines/--exclude-rules and then dropped them, so
+  // `validate --doctrines craft` checked an all-packs render. The `rendered at` line is read
+  // off the sandbox carrier, not echoed from the flags, so it can only name what was rendered.
+  // Two emits: the `files` bundle and a per-repo host, which went through two different
+  // `*Into` functions.
+  withDir((d) => {
+    for (const emit of ['files', 'claude']) {
+      const r = validateRun(d, ['--theme', 'neutral', '--emit', emit, '--posture', 'artisan',
+        '--mode', 'foreman', '--doctrines', 'craft,process', '--exclude-rules', 'process 5']);
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      assert.ok(r.stdout.includes('[validate-only] rendered at posture=artisan mode=foreman '
+        + 'packs=craft,process excluded=process 5'), `${emit}:\n${r.stdout}`);
+    }
+  });
+});
+
+test('validate refuses the two generator flags a dry run cannot honour', () => {
+  // --sync-themes writes the live themes dir and --config-dir names a real install dir; a
+  // sandboxed check that accepted either would claim to have checked something it never touched.
+  withDir((d) => {
+    for (const flag of [['--sync-themes'], ['--config-dir', path.join(d, 'cfg')]]) {
+      const r = validateRun(d, ['--theme', 'neutral', ...flag]);
+      assert.equal(r.status, 2, `${flag[0]} was accepted:\n${r.stdout}`);
+      assert.match(r.stderr, new RegExp(`validate does not take ${flag[0]}`));
+      assert.ok(!r.stdout.includes('would write'), `${flag[0]} still rendered`);
+    }
+  });
+});
+
+test('validate --help prints its own usage, not the generator\'s', () => {
+  // The borrowed parser's `-h` printed `usage: geneseed-build …`, listing the two flags above.
+  withDir((d) => {
+    const r = validateRun(d, ['--help']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^usage: geneseed validate /);
+    assert.ok(!r.stdout.includes('geneseed-build ['), r.stdout);
+  });
+});
+
 test('the sandbox scan catches an unresolved token and a dead link', () => {
   // The target-specific half, independent of the doctor: whatever the source tree looks like,
   // what was just RENDERED has to survive its own scan.
