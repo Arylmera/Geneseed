@@ -2,9 +2,9 @@
 
 > {{DESC_RULE}}
 
-**Trigger:** anything the user wants to outlive this session — a standing rule of
-their own ("always…", "never…", "from now on…", "make that a rule") or a durable
-fact ("remember that…", "note that…", "keep in mind…"). Also fires when a
+**Trigger:** the user says "always…", "never…", "from now on…" or "remember that…".
+Anything the user wants to outlive this session counts: a standing rule ("make that a
+rule") or a durable fact ("note that…", "keep in mind…"). Also fires when a
 `feedback` {{MEMORY}} lesson keeps recurring and deserves promotion, or when
 `user-rules.md` needs review — a trial rule past its date, a stale rule, a bloated
 set. Nothing reaches `user-rules.md` or {{MEMORY}} except through here ({{DOCTRINE:persist-insight}}).

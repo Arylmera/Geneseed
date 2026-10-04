@@ -2,9 +2,9 @@
 
 > {{DESC_RESEARCH}}
 
-**Trigger:** a question needs current, external, or wide-ranging information that is
-not in this repository or your own knowledge — facts to gather and verify from the
-open web.
+**Trigger:** a question needs current, external, or wide-ranging facts that are neither
+in this repository nor in the model's own knowledge. They are gathered and verified from
+the open web.
 
 **Requires:** a host web-search or web-fetch capability ({{DOCTRINE:tool-discovery}}) — without one,
 stop and report it ({{LAW:surface-failures}}); never substitute recall for verified research.

@@ -2,10 +2,9 @@
 
 > {{DESC_PROFILE}}
 
-**Trigger:** the user wants the agent to know who they are — "set up my profile",
-"create my profile", "update my profile" — a fresh install whose `PROFILE.md` is
-still the untouched stub, or an existing profile visibly contradicts how the user
-now works.
+**Trigger:** the user wants the agent to know who they are, or `PROFILE.md` is still
+the untouched stub. Phrases: "set up my profile", "create my profile", "update my
+profile". Also when an existing profile visibly contradicts how the user now works.
 
 ## Procedure
 1. Locate `PROFILE.md` beside the deployed AGENT.md and read it ({{LAW:verify-before-asserting}} — the

@@ -39,5 +39,65 @@
     { "query": "Make a loop brick that runs our Playwright suite and reports pass or fail", "should_trigger": true },
     { "query": "Our tests run through make check, adapt the test brick for this project", "should_trigger": true },
     { "query": "Write a new skill for generating changelogs", "should_trigger": false }
+  ],
+  "ci-fix": [
+    { "query": "The GitHub Actions run on my PR is red, fix it", "should_trigger": true },
+    { "query": "CI is failing on main since the last merge", "should_trigger": true },
+    { "query": "Add a CI workflow that runs the linter", "should_trigger": false },
+    { "query": "What does a CI pipeline do?", "should_trigger": false }
+  ],
+  "research": [
+    { "query": "What changed in the latest Vite major release? Check the official sources", "should_trigger": true },
+    { "query": "Find out which open-source licences allow use in a commercial SaaS, with sources", "should_trigger": true },
+    { "query": "Where is the config loader in this repo?", "should_trigger": false },
+    { "query": "Rename the variable foo to count", "should_trigger": false }
+  ],
+  "security-audit": [
+    { "query": "I added a login endpoint with JWT tokens, is this safe?", "should_trigger": true },
+    { "query": "Threat model the new file upload route before we ship", "should_trigger": true },
+    { "query": "Make the login button blue", "should_trigger": false },
+    { "query": "Explain what XSS stands for", "should_trigger": false }
+  ],
+  "worktree": [
+    { "query": "Start the payment refactor in an isolated copy, don't touch my checkout", "should_trigger": true },
+    { "query": "git status shows changes I did not make, another session is editing this repo", "should_trigger": true },
+    { "query": "Commit my changes on this branch", "should_trigger": false },
+    { "query": "What is a git branch?", "should_trigger": false }
+  ],
+  "handoff": [
+    { "query": "My context is almost full, snapshot where we are so a fresh session can resume", "should_trigger": true },
+    { "query": "I'm stopping for today mid-task, write up the state for tomorrow", "should_trigger": true },
+    { "query": "Write the README for this project", "should_trigger": false },
+    { "query": "Summarise this article", "should_trigger": false }
+  ],
+  "fresh-eyes": [
+    { "query": "You say it's done; get an independent sign-off that it meets the original spec", "should_trigger": true },
+    { "query": "Before merging, have someone with fresh eyes check this actually solves the ticket", "should_trigger": true },
+    { "query": "Review this diff for bugs", "should_trigger": false },
+    { "query": "Roast my landing page", "should_trigger": false }
+  ],
+  "review-response": [
+    { "query": "Here are the review comments on my PR, go through them and apply what's right", "should_trigger": true },
+    { "query": "The reviewer says this function leaks a file handle; address the feedback", "should_trigger": true },
+    { "query": "Review my PR", "should_trigger": false },
+    { "query": "Write a code review checklist", "should_trigger": false }
+  ],
+  "rule": [
+    { "query": "From now on, always run the linter before committing", "should_trigger": true },
+    { "query": "Remember that the staging database is read-only", "should_trigger": true },
+    { "query": "What rules does ESLint enforce by default?", "should_trigger": false },
+    { "query": "Add a validation rule to the signup form", "should_trigger": false }
+  ],
+  "ponytail": [
+    { "query": "This is over-engineered, give me the simplest solution that works", "should_trigger": true },
+    { "query": "ponytail mode please", "should_trigger": true },
+    { "query": "Add full error handling and retries to the importer", "should_trigger": false },
+    { "query": "Explain the YAGNI principle's history", "should_trigger": false }
+  ],
+  "council": [
+    { "query": "Convene a council on whether we should migrate to Postgres", "should_trigger": true },
+    { "query": "Debate this: monorepo or multiple repos? Argue both sides", "should_trigger": true },
+    { "query": "Migrate the users table to Postgres", "should_trigger": false },
+    { "query": "List the pros of Postgres", "should_trigger": false }
   ]
 }

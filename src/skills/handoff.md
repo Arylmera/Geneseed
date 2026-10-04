@@ -2,7 +2,7 @@
 
 > {{DESC_HANDOFF}}
 
-**Trigger:** the context window is filling, a session is ending mid-task, or you're passing work to another agent or developer.
+**Trigger:** the context window is filling, a session is ending mid-task, or work is passing to another agent or developer.
 
 ## Procedure
 1. Capture the state in the worklog (`WORKLOG.md` or the task's plan file): the goal, what's done, the step in progress, and the exact next step.

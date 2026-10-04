@@ -4,7 +4,7 @@
 
 <!-- invocation: user -->
 
-**Trigger:** the user wants what they know *tested*, not explained — "drill me on X",
+**Trigger:** the user wants what they know *tested*, not explained. Phrases: "drill me on X",
 "quiz me until it sticks", "let me explain X to you and catch me", "I think I already
 know X, prove me wrong", "find the holes in what I know". Three shapes, picked from the
 ask: a **drill** (practise until reflex), a **feynman** (explain it back, get caught on

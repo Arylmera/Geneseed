@@ -3,8 +3,8 @@
 > {{DESC_EXPLORER}}
 
 ## When to dispatch
-- A question needs sweeping many files or directories, but you only want the
-  conclusion — not the file contents in your context.
+- A question needs sweeping many files or directories, but only the conclusion
+  belongs in the main context — not the file contents.
 - Locating where something lives, how a subsystem fits together, or gathering
   facts scattered across the repo.
 - Your main context is small and the expensive reading should happen elsewhere.

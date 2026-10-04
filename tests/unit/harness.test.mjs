@@ -25,7 +25,7 @@ import {
   countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt, authoringProblems,
   doctrineMetaProblems,
 } from '../../js/inspect/checks-authoring.mjs';
-import { themeParityProblems, renderedProblems } from '../../js/inspect/checks-build.mjs';
+import { themeParityProblems, renderedProblems, descriptionProblems } from '../../js/inspect/checks-build.mjs';
 import {
   themesToCheck, globalEmitProblems, claudeBobEmitProblems,
 } from '../../js/inspect/doctor.mjs';
@@ -34,7 +34,7 @@ import {
   consolidateMemory,
 } from '../../js/hosts/hooks.mjs';
 import { memoryFactCount } from '../../js/inspect/status.mjs';
-import { stripSkillBodyLinks } from '../../js/hosts/native.mjs';
+import { stripSkillBodyLinks, agentDescription } from '../../js/hosts/native.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { themeOfDir } from '../../js/hosts/installs.mjs';
 import { LAW_CLASS, LAW_CLASSES } from '../../js/inspect/inventory.mjs';
@@ -141,6 +141,44 @@ test('readNotes passes raw text through and returns non-transcript JSON verbatim
 
 test('the shipped themes are in parity', () => {
   assert.deepEqual(themeParityProblems(), []);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Emitted descriptions — the only text a host routes a skill or an agent on.
+//
+// The rules are Anthropic's skill-authoring ones: never cut mid-sentence (the `…` fallback),
+// no XML-looking tag, and a third-person `Use when:` half. The purpose half is the theme's
+// persona copy and may say "your"; a quoted user phrase may say anything.
+
+const fm = (desc) => `---\nname: x\ndescription: ${JSON.stringify(desc)}\n---\n\nbody\n`;
+const DESCRIPTION_CASES = [
+  ['a clean description passes', 'Do X. Use when: the user asks for X.', []],
+  ['the persona half may address the reader', 'Make your own X. Use when: the user wants X.', []],
+  ['a quoted user phrase is not the voice', 'Do X. Use when: the user says "teach me X".', []],
+  ['"I/O" is not a pronoun', 'Audit. Use when: a change touches file I/O.', []],
+  ['the mid-sentence fallback is reported', 'Do X. Use when: a very long clause…', ['cut mid-sentence']],
+  ['an XML-like tag is reported', 'Do X. Use when: the user names <brand>.', ['XML-like tag']],
+  ['a second-person trigger is reported', 'Do X. Use when: you are inside a pane.', ['third person']],
+];
+for (const [name, desc, want] of DESCRIPTION_CASES) {
+  test(`descriptionProblems: ${name}`, () => {
+    const got = descriptionProblems(fm(desc), 'f.md');
+    assert.equal(got.length, want.length, got.join('; '));
+    want.forEach((w, i) => assert.ok(got[i].includes(w), got[i]));
+  });
+}
+
+test('descriptionProblems ignores a file with no frontmatter', () => {
+  assert.deepEqual(descriptionProblems('# AGENT.md\n\n> description: "you…"\n', 'AGENT.md'), []);
+});
+
+// An agent's WHEN is the first bullet of its "When to dispatch" list, continuation lines and
+// all, links reduced to their text, cut to its first sentence; no list means purpose only.
+test('agentDescription appends the first dispatch bullet as "Use when:"', () => {
+  const spec = '# Agent: t\n\n> Writes tests.\n\n## When to dispatch\n'
+    + '- A fix needs [coverage](x.md) before\n  it merges. Then more.\n- Second bullet.\n';
+  assert.equal(agentDescription(spec), 'Writes tests. Use when: A fix needs coverage before it merges.');
+  assert.equal(agentDescription('# Agent: t\n\n> Writes tests.\n'), 'Writes tests.');
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -2,9 +2,9 @@
 
 > {{DESC_CI_FIX}}
 
-**Trigger:** a CI run, pipeline job, or pre-merge check is red — on a PR you opened, a
-branch you are on, or one the user points you at — or the user says "CI is failing",
-"fix the build", "why is the pipeline red". The [debug {{SKILL}}](debug.md) drives
+**Trigger:** a CI run, pipeline job, or pre-merge check is red, or the user says "CI is
+failing", "fix the build", "why is the pipeline red". The red run can be on a PR the agent
+opened, the branch it is on, or one the user points at. The [debug {{SKILL}}](debug.md) drives
 the root-causing once the failure reproduces locally; this {{SKILL}} gets it there and
 gets the fix back through the same gate.
 

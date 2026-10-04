@@ -2,8 +2,8 @@
 
 > {{DESC_REVIEW_RESPONSE}}
 
-**Trigger:** you have received review feedback — from a human or another agent — and
-are about to act on it.
+**Trigger:** review feedback has arrived — from a human or another agent — and is about
+to be acted on.
 
 ## Procedure
 1. Read every comment in full before changing anything. Group related comments.

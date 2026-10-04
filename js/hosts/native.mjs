@@ -149,12 +149,50 @@ function triggerOf(text) {
  * 900-char cap the catalogue weighed 22k chars (~5.6k tokens) across 51 skills, three times
  * the figure the footprint page quoted. The first sentence says WHEN; the later sentences
  * disambiguate, and the body — read as soon as the skill is chosen — still carries them.
- * Cut at the last sentence end inside the cap, never mid-word.
+ * Cut at the last sentence end inside the cap, never mid-word. The `…` fallback (no sentence
+ * end inside the cap) is a truncated routing signal: `checkBuild` reports it as a doctor
+ * failure, so the cure is a shorter first trigger sentence in the source, never a wider cap.
  */
 const DESCRIPTION_CAP = 320;
 function skillDescription(text) {
-  const desc = descOf(text);
-  const trig = triggerOf(text);
+  return withWhen(descOf(text), triggerOf(text));
+}
+
+/**
+ * The `## When to dispatch` section's FIRST bullet, flattened like `triggerOf` — the agent's
+ * WHEN. Claude Code delegates on the subagent `description:` alone, and a purpose line
+ * ("Writes, runs, and diagnoses tests.") says what an agent does but never when to hand it
+ * work; the dispatch list carried that, in a body the router never reads.
+ */
+function dispatchOf(text) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((ln) => /^##\s+When to dispatch\b/.test(ln.trim()));
+  if (start < 0) return '';
+  const para = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const s = lines[i].trim();
+    if (!para.length) {
+      if (s.startsWith('- ')) para.push(s.slice(2));
+      else if (s.startsWith('#')) break;
+      continue;
+    }
+    if (s === '' || s.startsWith('- ') || s.startsWith('#')) break;
+    para.push(s);
+  }
+  return para.join(' ')
+    .replace(HTML_COMMENT_RE, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The emitted `description:` of an agent — purpose + its first dispatch condition. */
+export function agentDescription(text) {
+  return withWhen(descOf(text), dispatchOf(text));
+}
+
+/** Purpose + ` Use when: ` + the first sentence of `trig`, capped — see `skillDescription`. */
+function withWhen(desc, trig) {
   if (!trig) return desc;
   const first = trig.match(/^.*?[.;](?=\s|$)/);
   const full = `${desc} Use when: ${first ? first[0] : trig}`;
@@ -302,7 +340,7 @@ const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
  * Bash keeps the unmarked line byte-identical to what it was before the webfetch marker existed.
  */
 function claudeAgentFrontmatter(stem, text, overrides) {
-  const fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
+  const fm = [`name: ${stem}`, `description: ${jsonDumps(agentDescription(text))}`];
   const ov = agentOverride(overrides, stem);
   if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
   if (isReadonly(text)) {
@@ -316,7 +354,7 @@ function claudeAgentFrontmatter(stem, text, overrides) {
 
 /** `_build_emit._opencode_agent_frontmatter`. */
 function opencodeAgentFrontmatter(stem, text, overrides, theme = null) {
-  const fm = [`description: ${jsonDumps(descOf(text))}`, 'mode: subagent'];
+  const fm = [`description: ${jsonDumps(agentDescription(text))}`, 'mode: subagent'];
   fm.push(`color: ${agentColor(stem, theme)}`);
   pushOverrideLines(fm, agentOverride(overrides, stem));
   if (isReadonly(text)) {

@@ -2,10 +2,10 @@
 
 > {{DESC_CONSOLIDATE_MEMORY}}
 
-**Trigger:** the {{MEMORY}} index has grown past what a session can usefully read
-(~40 lines), two entries say the same or opposite things, a memory names a file, flag,
-or command that no longer exists, a `feedback` lesson keeps recurring, or the user
-says "clean up memory", "consolidate", "what do you actually remember". Also worth a
+**Trigger:** the {{MEMORY}} index has outgrown one useful read (~40 lines) or holds
+duplicate, contradictory, or stale entries. Stale means a memory naming a file, flag, or
+command that no longer exists; a `feedback` lesson that keeps recurring counts too, as
+does the user saying "clean up memory", "consolidate", "what do you actually remember". Also worth a
 pass after a release or a large refactor, when many recorded facts just changed. The
 [rule {{SKILL}}](rule.md) writes one memory or one rule; this {{SKILL}} tends the
 whole set. The user's wiki is out of scope — that is the [wiki {{SKILL}}](wiki.md).

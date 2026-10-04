@@ -3,9 +3,9 @@
 > {{DESC_BRUNO_TEST_WRITER}}
 
 **Trigger:** writing, reviewing, or strengthening tests for a [Bruno](https://www.usebruno.com/)
-request or collection — assertions, `tests` blocks, pre-request and post-response
-scripts, request chaining, schema checks, edge cases — in `.bru` files or
-OpenCollection YAML.
+request or collection in `.bru` files or OpenCollection YAML. Covers assertions, `tests`
+blocks, pre-request and post-response scripts, request chaining, schema checks, and
+edge cases.
 
 ## Procedure
 1. Understand the request or collection first: method, path, auth, body, headers,

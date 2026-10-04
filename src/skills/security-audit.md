@@ -2,10 +2,10 @@
 
 > {{DESC_SECURITY_AUDIT}}
 
-**Trigger:** a change touches the security surface — authentication, authorisation,
-session or token handling, input from outside the trust boundary, file or shell
-access, cryptography, secrets, a new dependency, a network-facing endpoint — or the
-user asks for a "security review", "threat model", or "is this safe". The
+**Trigger:** a change touches the security surface, or the user asks for a "security
+review", "threat model", or "is this safe". The surface: authentication, authorisation,
+session or token handling, input from outside the trust boundary, file or shell access,
+cryptography, secrets, a new dependency, a network-facing endpoint. The
 [geneseed-code-review {{SKILL}}](geneseed-code-review.md) reviews a diff for
 correctness first; this one asks a different question of the same diff: *how would
 this be attacked, and what does it leak*. Run both before shipping anything on the
