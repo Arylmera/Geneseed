@@ -34,7 +34,7 @@ import { readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
-import { PACK_ORDER, readPackText, resolveRuleIds } from './source.mjs';
+import { PACK_ORDER, readPackText, resolveRuleIds, ruleCanon } from './source.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
@@ -86,7 +86,7 @@ const CATALOG_BLOCK_RE =
 // truncation — the objection `docs/token-footprint.md` raised against terse-ing the
 // Ontology ("four orphan sentences") is answered by authoring the short form, not
 // generating it. Same marker grammar as CATALOG so the two stay learnable as one idea.
-const LEAN_BLOCK_RE =
+export const LEAN_BLOCK_RE =
   /[ \t]*<!-- LEAN:begin -->\n(?<full>[\s\S]*?)[ \t]*<!-- LEAN:else -->\n(?<lean>[\s\S]*?)[ \t]*<!-- LEAN:end -->\n/g;
 
 /**
@@ -184,7 +184,7 @@ function resolveLean(text, footprint) {
  * match is a corner both engines implement, and the leading '' Python produces when the
  * text starts with a heading is load-bearing (it becomes `blocks[0]`, the preamble).
  */
-function splitAtLawHeadings(text) {
+export function splitAtLawHeadings(text) {
   const out = [];
   let start = 0;
   for (let i = 0; i < text.length; i++) {
@@ -310,12 +310,8 @@ function activeDoctrines(cfg) {
   // interpret. Dropped here rather than in `doctrinesBody` so `DOCTRINES_LIST` — the
   // `Active packs:` marker a later reader parses back — agrees with what was rendered.
   const excluded = new Set(cfg.excludeRules ?? []);
-  const survives = (pack) => {
-    const ids = [...readPackText(path.join(dir, `${pack}.md`))
-      .matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)]
-      .map((m) => `${m[1]}.${Number(m[2])}`);
-    return ids.some((id) => !excluded.has(id));
-  };
+  const { rules } = ruleCanon(cfg.src);
+  const survives = (pack) => rules.some((r) => r.pack === pack && !excluded.has(`${pack}.${r.n}`));
   return PACK_ORDER.filter((p) => wanted.includes(p)).filter(survives);
 }
 

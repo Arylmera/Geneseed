@@ -34,10 +34,10 @@ import { parseJson } from '../lib/json.mjs';
  * `_harness_tui.LAW_HEADING_RE` — a heading in the RENDERED laws file, e.g.
  * `### Rule IV — Deletion Is Deliberate`.
  *
- * Not `js/inspect/checks-authoring.mjs`'s `LAW_HEADING_RE`, which matches the `{{LAW}}` token in the
- * unrendered source. Two patterns, two inputs, two names in Python as well.
+ * The rendered side only: the unrendered source declares a rule as `{{LAW:<id>}} <Name>`, and
+ * `ruleCanon` in `js/build/source.mjs` is what reads that.
  */
-export const LAW_HEADING_RE = /^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$/;
+const LAW_HEADING_RE = /^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$/;
 
 /**
  * A heading in a RENDERED doctrine pack, e.g. `### Doctrine craft 1 — Automate Repetition`.
@@ -52,7 +52,7 @@ export const LAW_HEADING_RE = /^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$/;
  * `([a-z]+)` refuses `Rule I`'s uppercase numeral, and `([IVXLCDM]+)` refuses a lowercase pack
  * id. Measured across all fourteen themes — zero cross-matches either way.
  */
-export const DOCTRINE_HEADING_RE = /^###\s+\S+\s+([a-z]+)\s+(\d+)\s+[—-]\s+(.+?)\s*$/;
+const DOCTRINE_HEADING_RE = /^###\s+\S+\s+([a-z]+)\s+(\d+)\s+[—-]\s+(.+?)\s*$/;
 
 /**
  * A section heading in the RENDERED ontology, e.g. `#### Telos`.

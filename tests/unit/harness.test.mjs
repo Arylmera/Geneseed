@@ -22,7 +22,7 @@ import {
   LEARN_PROMPT_HEAD, frontmatter, readNotes, existingSlugs, writeMemories,
 } from '../../js/hosts/hooks.mjs';
 import {
-  countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt, authoringProblems,
+  countTableProblems, proseMirrorProblems, lawMetaProblems, authoringProblems,
   doctrineMetaProblems,
 } from '../../js/inspect/checks-authoring.mjs';
 import { themeParityProblems, renderedProblems, descriptionProblems } from '../../js/inspect/checks-build.mjs';
@@ -639,38 +639,6 @@ ${r.stderr}`);
     'the marker did not carry exactly the known exclusion');
 });
 
-test('the gate holds knownRuleIds to the rules the pack files actually define', () => {
-  // ⚠ TWO READERS OF ONE DIRECTORY. `constitutionProblems` walks the pack files to validate
-  // citations; `knownRuleIds` walks them to decide what `--exclude-rules` accepts. Nothing but
-  // this equality stops them drifting, and the drift is not cosmetic in either direction: an
-  // enumerator that offers a rule the build cannot drop puts a dead switch in the console, and
-  // one that omits a live rule makes that rule unswitchable while the flag's own error message
-  // lists a set the user can see it is missing from.
-  //
-  // Planted in the ENUMERATOR rather than in the source, because a fault in a pack file moves
-  // both readers together and proves nothing about their agreement.
-  const checkout = fs.readFileSync(path.join(ROOT, 'js', 'build', 'source.mjs'), 'utf8');
-  const anchor = "      if (m[1] === pack) out.push(`${pack}.${Number(m[2])}`);";
-  assert.ok(checkout.includes(anchor),
-    'the knownRuleIds body moved — re-aim this fault before trusting the result');
-
-  // Offers less than the source defines: skip every rule numbered 1.
-  const short = withFault(
-    { 'js/build/source.mjs': checkout.replace(anchor,
-      "      if (m[1] === pack && m[2] !== '1') out.push(`${pack}.${Number(m[2])}`);") },
-    (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(short.some((p) => p.includes('craft 1') && p.includes('knownRuleIds')),
-    `a rule the enumerator dropped went unflagged: ${JSON.stringify(short)}`);
-
-  // ...and the other direction, which a containment check in one direction would miss.
-  const long = withFault(
-    { 'js/build/source.mjs': checkout.replace(anchor,
-      `${anchor}\n      if (m[2] === '1') out.push(\`\${pack}.99\`);`) },
-    (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(long.some((p) => p.includes('craft 99') && p.includes('no pack file defines')),
-    `a rule the enumerator invented went unflagged: ${JSON.stringify(long)}`);
-});
-
 test('the gate flags a hook-gated rule moving out from under its hook', () => {
   // ⚠ THE HOOKS ARE THE ONE PLACE A NUMBER IS STILL A KEY. The hook path cannot read the canon on
   // every tool call, so its ledger keys (`process-5`), `settings.mjs`'s CONSENT_RULE and the
@@ -822,9 +790,8 @@ test('the count gate really reads the onboarding pages the prose arms are about'
   // `{N_LAWS}` / `{N_AGENTS}` / `{N_SKILLS}` tokens and therefore cannot drift; what is left
   // to catch is a page that spells a count as a LITERAL, so that is the fault planted here.
   //
-  // ABSOLUTE ABOUT THE COUNT, deliberately vague about the rest of the sentence: the message's
-  // wording is frozen by the recorded primitive corpus and names a module that no longer
-  // exists, so asserting on it would gate a stale word rather than the property.
+  // ABSOLUTE ABOUT THE COUNT, deliberately vague about the rest of the sentence: the wording
+  // is prose, and asserting on it would gate a phrasing rather than the property.
   const problems = withFault({
     'docs/concepts/zzz-fixture-probe.md': '9 capability specialists — alpha, beta.\n',
   }, (root) => gate(root, 'm.countTableProblems()'));
@@ -840,12 +807,13 @@ const lawIds = () => [...fs.readFileSync(path.join(SRC, 'laws', 'universal.md'),
   .matchAll(/^### \{\{LAW:([a-z0-9-]+)\}\} /gm)].map((m) => m[1]);
 /** The numerals those laws render with — their positions, written out. */
 const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-const lawNumerals = () => lawIds().map((_, i) => ROMANS[i]);
+/** The laws as `ruleCanon` hands them to the gate: position, rendered numeral, id. */
+const lawRules = (ids = lawIds()) => ids.map((id, i) => ({ n: i + 1, label: ROMANS[i], id }));
 
 test('every law carries a LAW_META principle', () => {
   // The live check against the real tree. Laws XXXVI and XXXVII shipped without one and
   // rendered with a blank description; this is the gate for it.
-  assert.deepEqual(lawMetaProblems(lawNumerals(), LAW_CLASS, LAW_CLASSES, lawIds()), []);
+  assert.deepEqual(lawMetaProblems(lawRules(), LAW_CLASS, LAW_CLASSES), []);
 });
 
 test('the LAW_META gate flags a row pinned to a different rule than its number now holds', () => {
@@ -854,7 +822,7 @@ test('the LAW_META gate flags a row pinned to a different rule than its number n
   // sides of that swap, so only the pin could tell. Shift the ids by one and every row is wrong.
   const ids = lawIds();
   const shifted = [...ids.slice(1), ids[0]];
-  const problems = lawMetaProblems(lawNumerals(), LAW_CLASS, LAW_CLASSES, shifted);
+  const problems = lawMetaProblems(lawRules(shifted), LAW_CLASS, LAW_CLASSES);
   assert.ok(problems.some((x) => x.includes("LAW_META[1] is pinned to 'sealed-secrets'")
     && x.includes(`'${shifted[0]}'`)), JSON.stringify(problems));
 });
@@ -878,7 +846,7 @@ test('the LAW_META gate reads the real literal, wrapped rows included', () => {
   const block = /^const LAW_META = \{$([\s\S]*?)^\}/m.exec(text);
   assert.ok(block, 'LAW_META literal not found in Laws.jsx');
   const rows = block[1].split(/\n(?=\s*\d+:)/).filter((s) => s.trim());
-  assert.equal(rows.length, lawNumerals().length,
+  assert.equal(rows.length, lawIds().length,
     'LAW_META has a different number of rows than universal.md has laws');
   assert.ok(rows.some((r) => r.trim().split('\n').length > 1),
     'no LAW_META row is reflowed across lines any more, so the check above has stopped '
@@ -888,23 +856,16 @@ test('the LAW_META gate reads the real literal, wrapped rows included', () => {
 
 test('the LAW_META gate flags a missing row, a stale row and a class disagreement', () => {
   const klass = { I: 'security', II: 'process', XL: 'craft' };
+  const I = { n: 1, label: 'I', id: lawIds()[0] };
   // XL has no LAW_META row at all — the exact Law XXXVI/XXXVII failure.
-  assert.ok(lawMetaProblems(['I', 'XL'], klass, LAW_CLASSES)
+  assert.ok(lawMetaProblems([I, { n: 40, label: 'XL', id: 'forty' }], klass, LAW_CLASSES)
     .some((x) => x.includes('XL') && x.includes('LAW_META')));
   // Rule 2 exists in LAW_META but universal.md no longer carries it.
-  assert.ok(lawMetaProblems(['I'], klass, LAW_CLASSES)
+  assert.ok(lawMetaProblems([I], klass, LAW_CLASSES)
     .some((x) => x.includes('lists rule 2')));
   // LAW_META's class must agree with the server-side LAW_CLASS.
-  assert.ok(lawMetaProblems(['I'], { I: 'comms' }, LAW_CLASSES)
+  assert.ok(lawMetaProblems([I], { I: 'comms' }, LAW_CLASSES)
     .some((x) => x.includes('LAW_META[1]') && x.includes('comms')));
-});
-
-test('roman numerals bridge to LAW_META\'s arabic keys', () => {
-  for (const [roman, n] of [['I', 1], ['IV', 4], ['IX', 9], ['XXXV', 35], ['XXXVI', 36],
-    ['XXXVII', 37], ['XL', 40]]) {
-    assert.equal(romanToInt(roman), n, roman);
-  }
-  assert.equal(romanToInt('nope'), 0);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -1661,6 +1622,17 @@ test('the module map gate sees a module nobody documented, and a row for a modul
     (root) => gate(root, 'm.moduleMapProblems()'));
   assert.ok(dangling.some((p) => p.includes('ghost.mjs') && p.includes('does not exist')),
     `a row for a missing module went unreported: ${JSON.stringify(dangling)}`);
+
+  // A row is an address IN ITS FOLDER'S SECTION, not a basename anywhere on the page.
+  // `registry.mjs` lives in both js/inspect/ and js/loop/; dropping the loop row while the
+  // inspect row stays must still leave js/loop/registry.mjs undocumented. Keyed by basename,
+  // the inspect row answered for both and this went unreported.
+  const loopRow = /^\| `registry\.mjs` \| `loops\.json`.*\n/m;
+  assert.ok(loopRow.test(map), 'js/README.md no longer has the loop registry row this fault drops');
+  const sameName = withFault({ 'js/README.md': map.replace(loopRow, '') },
+    (root) => gate(root, 'm.moduleMapProblems()'));
+  assert.ok(sameName.some((p) => p.includes('js/loop/registry.mjs') && p.includes('no row')),
+    `a module documented only under another folder's heading went unreported: ${JSON.stringify(sameName)}`);
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -1,13 +1,9 @@
 /**
- * The generator driver — flag parsing, the nine emit targets, and the per-host emit orchestration.
+ * The generator driver — the nine emit targets and the per-host emit orchestration (flag parsing
+ * is `args.mjs`).
  * `bin/build-driver.mjs` (`geneseed-build`) is only its entry; this module is what the CLI verbs
  * (`build`, `setup`, `migrate`, `doctor`, `diff`, `validate`, the web console) import. It lived in
  * `bin/` until 2026-09, which made nine `js/` modules import upward from a binary.
- *
- * P4 adds a driver; it does not replace one. `build.py` is ALSO the `import build` facade
- * that 19 `rituals/` modules read 55 distinct names from, and ~11 sites spawn
- * `[sys.executable, build.py, ...]`. None of those flip here: the Python CLI has to
- * survive this phase intact, and every gate that drives it keeps driving it.
  *
  * WHAT THIS FILE ORIGINATES, AND WHY THAT IS THE PHASE'S WHOLE POINT.
  * Every phase since P2d has asked one question at the process boundary: which values does
@@ -39,7 +35,6 @@ import {
   unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
-import { parseArgs as nodeParseArgs } from 'node:util';
 import { build, phaseLog } from './bundle.mjs';
 import { emitClaudeRender } from './emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from './emit-opencode.mjs';
@@ -58,25 +53,22 @@ import {
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg. golden.py's 259 cells all build one, which is what made the move safe.
 import {
-  ROOT, CONFIG, discoverNames, makeCfg, PACK_ORDER, knownRuleIds,
+  ROOT, makeCfg,
 } from './source.mjs';
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
 // registry to find every install it must re-emit, and a CLI verb may not reach into a driver
 // for a reader. See js/inspect/registry.mjs.
 import { registryRecord, registryRoots } from '../inspect/registry.mjs';
-// The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
-// what lets it sit inside this driver's total `child_process` ban.
-import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 
 // P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
 // of textual surgery over committed files with a corpus of its own, and it is the half of the
 // maintainer pair that needs nothing this driver is banned from having.
 import { syncThemes } from './themes.mjs';
+import { configDefaults, die, parseArgs } from './args.mjs';
 
-/** The nine `--emit` choices: a plain bundle, then a project and a global emit per host. */
-const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
-  'bob', 'bob-global', 'openclaude', 'openclaude-global'];
+export { parseDriverArgs } from './args.mjs';
+
 
 /** `_build_emit.PRIMARY_AGENT_SRC`. */
 const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
@@ -102,362 +94,6 @@ const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orc
  *  reference does not expand `~` here, and a bare `~` is a legal directory name. */
 export function resolveOut(raw) {
   return resolvePath(path.resolve(process.cwd(), raw));
-}
-
-/**
- * build.py:307-321 — the three defaults that come from `harness.config.json`.
- *
- * The corrupt-file branch is reproduced including its imprecision: the warning says only
- * "using theme 'neutral'", but the branch also resets posture and mode. Matching the
- * Python text matters more than fixing it here, because the two CLIs' stderr is compared
- * byte-for-byte by `tests/golden.py` (:316).
- */
-function configDefaults() {
-  const d = {
-    theme: 'neutral', posture: 'peer', mode: 'direct', trust: DEFAULT_PRESET,
-    doctrines: [...PACK_ORDER], excludeRules: [],
-  };
-  if (!existsSync(CONFIG)) return d;
-  try {
-    const data = JSON.parse(readFileSync(CONFIG, 'utf8'));
-    if (data && typeof data === 'object' && !Array.isArray(data)) {
-      if (data.theme !== undefined) d.theme = data.theme;
-      if (data.posture !== undefined) d.posture = data.posture;
-      if (data.mode !== undefined) d.mode = data.mode;
-      // `doctrines` is the only config key that is a LIST, so it is the only one that can be
-      // the right type and still nonsense. A bad value warns and falls back to all packs
-      // rather than dying: this file is hand-editable, and a typo here must not brick every
-      // rebuild of an install whose AGENT.md is otherwise fine. `[]` is a legitimate value
-      // (no packs) and must survive the check — hence an explicit Array test, not truthiness.
-      if (data.doctrines !== undefined) {
-        const known = discoverNames('doctrines', PACK_ORDER[0]);
-        if (Array.isArray(data.doctrines) && data.doctrines.every((x) => known.includes(x))) {
-          d.doctrines = PACK_ORDER.filter((p) => data.doctrines.includes(p));
-        } else {
-          process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "doctrines" is not a `
-            + 'list of known pack names — using all packs.\n');
-        }
-      }
-      // The second axis, read the same forgiving way and defaulting the OTHER direction: a
-      // bad value excludes NOTHING, because the safe answer for a list of things to take
-      // away is to take nothing away. Same reasoning as `doctrines` defaulting to all.
-      if (data.excludeRules !== undefined) {
-        if (Array.isArray(data.excludeRules)
-          && data.excludeRules.every((x) => typeof x === 'string')) {
-          // ⚠ AND EVERY ID IS CHECKED, as `--exclude-rules` checks its own: an unknown id
-          // passed through lands in the `Excluded rules:` marker, `rebuild-all` hands it back
-          // as a flag, and `parseExcludeRules` dies on it — every rebuild of that install,
-          // forever. Unknown ids are dropped with a WARN; the known ones still bind.
-          const known = knownRuleIds();
-          const ids = data.excludeRules.map((x) => x.trim().replace(/[ \t]+/, '.'));
-          const unknown = ids.filter((id) => !known.includes(id));
-          if (unknown.length) {
-            process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" names `
-              + `unknown rule(s) ${unknown.map((id) => `'${id.replace('.', ' ')}'`).join(', ')}`
-              + ' — ignoring them.\n');
-          }
-          d.excludeRules = [...new Set(ids.filter((id) => known.includes(id)))].sort();
-        } else {
-          process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" is `
-            + 'not a list of rule addresses — excluding nothing.\n');
-        }
-      }
-    }
-  } catch {
-    process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} is unreadable — `
-      + "using theme 'neutral'.\n");
-  }
-  return d;
-}
-
-/**
- * The parser's tables, at MODULE scope so `usage` reads the same two objects the loop below
- * dispatches on. They were local to `parseArgs` until `-h` arrived; a help text listing its
- * own private copy of the flags is a second source that drifts silently the first time a
- * flag is added to one and not the other, and nothing downstream would say so.
- */
-const VALUED = {
-  '--theme': 'theme', '--posture': 'posture', '--mode': 'mode', '--trust': 'trust',
-  '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules',
-  '--out': 'out', '--target': 'out', '--emit': 'emit',
-  '--footprint': 'footprint', '--root': 'root', '--config-dir': 'cfgDir',
-};
-const FLAGS = {
-  '--sync-themes': 'syncThemes', '--validate-only': 'validateOnly',
-  '-v': 'verbose', '--verbose': 'verbose',
-};
-
-/**
- * `util.parseArgs`'s own option table, DERIVED from `VALUED`/`FLAGS` rather than typed out a
- * second time — a hand-written twin is exactly the anti-drift failure this module's docblock
- * already names for `usage()`. Every `VALUED` entry is `type: 'string'` (so a bare `--flag
- * value` form is captured as one token instead of leaking `value` as an orphan positional);
- * every long `FLAGS` entry is `type: 'boolean'`. `-v` gets `short: 'v'` for the same reason
- * `-h` deliberately does NOT get one below `PARSE_OPTIONS` — see `parseArgs`'s docblock.
- */
-const PARSE_OPTIONS = Object.fromEntries([
-  ...Object.keys(VALUED).map((f) => [f.slice(2), { type: 'string' }]),
-  ...Object.keys(FLAGS).filter((f) => f.startsWith('--')).map((f) => [f.slice(2), { type: 'boolean' }]),
-]);
-PARSE_OPTIONS.verbose = { type: 'boolean', short: 'v' };
-
-/** `token.name` (dashes stripped, short aliases folded in) -> this file's `args` key. */
-const VALUED_BY_NAME = Object.fromEntries(Object.keys(VALUED).map((f) => [f.slice(2), VALUED[f]]));
-const FLAG_BY_NAME = Object.fromEntries(
-  Object.keys(FLAGS).filter((f) => f.startsWith('--')).map((f) => [f.slice(2), FLAGS[f]]),
-);
-
-/**
- * The five flags `choice` validates, as ONE table for the same anti-drift reason.
- *
- * A function and not a constant because two of the five read the checkout: `discoverNames`
- * scans `postures/` and `modes/`, so the answer depends on the source tree this driver is
- * standing in and cannot be frozen at import.
- *
- * `--doctrines` is DELIBERATELY not a sixth row. Every consumer of this table treats an
- * entry as one value drawn from a closed list — `choice` refuses anything else, and
- * `usage`'s metavar prints the list as the whole legal surface. `--doctrines` takes a comma
- * LIST plus the sentinel `none`, so a row here would have refused `craft,rigor` outright and
- * advertised a metavar that lies. It is validated by `parseDoctrines` instead and prints the
- * plain `DOCTRINES` metavar, exactly as `--theme` (also open-ended) already does.
- */
-function choicesFor() {
-  return {
-    '--emit': EMITS,
-    '--footprint': ['lean', 'full'],
-    '--posture': discoverNames('postures', 'peer'),
-    '--mode': discoverNames('modes', 'direct'),
-    '--trust': Object.keys(PRESETS),
-  };
-}
-
-/**
- * `--doctrines craft,rigor` / `--doctrines none` -> the cfg's pack array.
- *
- * Normalised into `PACK_ORDER` rather than kept in the order typed, which also dedupes: the
- * rendered `Active packs:` line is a MARKER a later reader parses back out of a deployed
- * carrier, and a marker whose contents depend on argument order is one that compares unequal
- * to itself. Validation is against DISCOVERY, not `PACK_ORDER`, so the refusal names the
- * packs the checkout actually has; a discovered pack missing from `PACK_ORDER` is a
- * different fault and `js/build/render.mjs` refuses the whole build for it.
- */
-/**
- * `--exclude-rules "process 7,craft 3"` (or `process.7`) -> the cfg's exclusion array.
- *
- * BOTH SPELLINGS ACCEPTED ON THE WAY IN, ONE ON THE WAY OUT. The carrier's marker line and
- * every citation in the corpus spell a rule `process 7`; the console's deep link and the
- * catalogue spell it `process.7`. A flag that took only one of them would be wrong for
- * whichever half of the documentation the reader had open, so it takes either and normalises
- * to the dotted form the code compares.
- *
- * ⚠ VALIDATED AGAINST THE PACK FILES, NOT A RANGE. `process 9` and `craft 0` are both
- * refusals, and so is a pack this checkout does not ship — an exclusion that names nothing is
- * a typo that would otherwise take away nothing in silence, which is the failure this flag
- * can least afford: the user asked for a rule to STOP binding and it would keep binding.
- * Sorted, deduped, for the same marker-stability reason `--doctrines` is.
- */
-function parseExcludeRules(value) {
-  const s = value.trim();
-  if (s === 'none' || s === '') return [];
-  const known = knownRuleIds();
-  const out = [];
-  for (const raw of s.split(',').map((x) => x.trim()).filter(Boolean)) {
-    const id = raw.replace(/[ \t]+/, '.');
-    if (!known.includes(id)) {
-      die(2, `argument --exclude-rules: invalid choice: '${raw}' (choose from `
-        + `${known.map((c) => `'${c.replace('.', ' ')}'`).join(', ')}, or 'none')`);
-    }
-    out.push(id);
-  }
-  return [...new Set(out)].sort();
-}
-
-function parseDoctrines(value) {
-  const s = value.trim();
-  const known = discoverNames('doctrines', PACK_ORDER[0]);
-  if (s === 'none') return [];
-  const names = s.split(',').map((x) => x.trim()).filter(Boolean);
-  if (!names.length) {
-    die(2, "argument --doctrines: expected a comma-separated list of packs, or 'none'");
-  }
-  for (const n of names) {
-    if (!known.includes(n)) {
-      die(2, `argument --doctrines: invalid choice: '${n}' (choose from `
-        + `${known.map((c) => `'${c}'`).join(', ')}, or 'none')`);
-    }
-  }
-  return PACK_ORDER.filter((p) => names.includes(p));
-}
-
-/**
- * `-h/--help` — the flag argparse handed the reference for free and this hand-rolled parser
- * did not, so the two entry points disagreed: the reference printed usage and exited 0 while
- * `geneseed-build --help` died with `unrecognized arguments: --help` and exit 2.
- *
- * NO CELL COULD SEE IT. `golden.py`'s `_argv` builds every cell out of the render flags and
- * never emits `--help`, so the byte comparison only ever ran inputs both implementations
- * were built for — a flag missing from one side is invisible to a gate that never passes it.
- * `test_the_help_text_names_every_flag_the_reference_takes` is the gate, and it reads
- * `build.py`'s `add_argument` calls rather than this file, so it fails on drift from EITHER
- * side rather than agreeing with whichever one it was copied from.
- *
- * The text is deliberately NOT argparse's byte-for-byte. Reproducing its wrapping would put
- * a hand-written copy of the reference's output in a file no gate compares, which is the
- * drift this whole docblock is about; the surface here is the npx one, in the same class as
- * the `--sync-themes` and `--validate-only` refusals that already answer differently.
- */
-function usage() {
-  const choices = choicesFor();
-  const metavar = (flag) => (choices[flag]
-    ? `{${choices[flag].join(',')}}`
-    : VALUED[flag].toUpperCase());
-  const valued = Object.keys(VALUED);
-  const bare = Object.keys(FLAGS);
-  return [
-    `usage: geneseed-build [-h] ${[...valued.map((f) => `[${f} ${metavar(f)}]`),
-      ...bare.map((f) => `[${f}]`)].join(' ')}`,
-    '',
-    'Render the Geneseed harness for a theme.',
-    '',
-    'options:',
-    '  -h, --help',
-    ...valued.map((f) => `  ${f} ${metavar(f)}`),
-    ...bare.map((f) => `  ${f}`),
-    '',
-  ].join('\n');
-}
-
-/**
- * argparse's `--flag value` and `--flag=value`, plus the `--target` alias for `--out` — the
- * SPLITTING now done by `util.parseArgs({tokens: true})`, with every choice/mutex/wording
- * decision this function made before P6 (Task 4) still made HERE, unmoved.
- *
- * `strict: false` is load-bearing twice: it lets an unrecognized flag surface as a token this
- * walk can refuse in its OWN words rather than node's, and it is what makes a value-taking
- * flag (`type: 'string'` in `PARSE_OPTIONS`) swallow the very next raw argument even when that
- * argument itself looks like a flag — `--theme --posture peer` sets `theme` to the literal
- * string `"--posture"` and leaves `peer` a stray token, exactly as the hand-rolled version
- * being replaced did with its own `argv[i += 1]`. That is not a bug this port inherited by
- * accident: it is the one shape `parseArgs`'s tokenizer reproduces for free, and reproducing
- * anything smarter (a lookahead that refuses to swallow a flag-shaped value) would be new
- * behaviour, not a preserved one.
- *
- * `-h` DELIBERATELY IS NOT `PARSE_OPTIONS.help`'s short alias. Declaring one would make
- * `parseArgs` fold a bundled `-vh` into two tokens — `verbose` then `help` — and print the
- * help text for a cluster the original parser refused outright as one unrecognized argument.
- * Detecting help by re-reading `argv[tok.index]` for the literal text `-h`/`--help` keeps the
- * ORIGINAL equality check (`tok === '-h' || tok === '--help'`) intact no matter how `parseArgs`
- * privately tokenizes the cluster, and `argv[tok.index]` is what recovers that literal text
- * for every refusal below — `tok.name`/`tok.rawName` are `parseArgs`'s own canonicalisation and
- * would print `-b`/`-o`/`-g`/`-u`/`-s` for a bundle like `-bogus` where the original parser (and
- * this one) refuses the whole typed token, `-bogus`, once.
- */
-function parseArgs(argv, defaults) {
-  const args = {
-    theme: defaults.theme, posture: defaults.posture, mode: defaults.mode,
-    trust: defaults.trust,
-    doctrines: defaults.doctrines,
-    excludeRules: defaults.excludeRules,
-    out: 'Harness', emit: 'files', footprint: 'lean', root: null,
-    syncThemes: false, validateOnly: false, verbose: false,
-  };
-  const { tokens } = nodeParseArgs({
-    args: argv, options: PARSE_OPTIONS, allowPositionals: true, strict: false, tokens: true,
-  });
-  for (const tok of tokens) {
-    if (tok.kind === 'option' && tok.value === undefined
-      && (argv[tok.index] === '-h' || argv[tok.index] === '--help')) {
-      process.stdout.write(usage());
-      // The same marker `die` throws, with a SUCCESS code: help is not a refusal, and
-      // `main`'s catch is what turns either into this process's exit status. A bare
-      // `process.exit(0)` here would be the P5f bug in reverse — it takes `rebuild-all`'s
-      // loop with it, and skips the stdout flush the text was just written to.
-      const e = new Error('help');
-      e.exitCode = 0;
-      throw e;
-    }
-    if (tok.kind === 'option' && VALUED_BY_NAME[tok.name] !== undefined) {
-      if (tok.value === undefined) die(2, `argument ${tok.rawName}: expected one argument`);
-      args[VALUED_BY_NAME[tok.name]] = tok.value;
-      continue;
-    }
-    // `tok.value === undefined` excludes `--sync-themes=x` from matching here — a store_true
-    // flag never took `=` in the hand-rolled version either, because its `FLAGS[tok]` lookup
-    // keyed on the WHOLE typed token (equals sign and all), never on the split-off flag name.
-    // `parseArgs` always sets a `value` KEY on every option token (`undefined` when none was
-    // given), so this must compare the VALUE, not `'value' in tok` — the key is always there.
-    if (tok.kind === 'option' && tok.value === undefined && FLAG_BY_NAME[tok.name] !== undefined) {
-      args[FLAG_BY_NAME[tok.name]] = true;
-      continue;
-    }
-    // Every other shape — an unrecognized option, a bare positional, or `--` (which `parseArgs`
-    // always treats as a terminator but this parser never did) — refuses with the literal text
-    // typed at that argv position, matching the original's `unrecognized arguments: ${tok}`.
-    die(2, `unrecognized arguments: ${argv[tok.index]}`);
-  }
-  const choices = choicesFor();
-  for (const flag of Object.keys(choices)) choice(flag, args[VALUED[flag]], choices[flag]);
-  // Only when the flag was actually PASSED is this a string; left at its default it is
-  // already the array `configDefaults` built, and re-parsing an array would stringify it.
-  if (typeof args.doctrines === 'string') args.doctrines = parseDoctrines(args.doctrines);
-  if (typeof args.excludeRules === 'string') args.excludeRules = parseExcludeRules(args.excludeRules);
-  return args;
-}
-
-/**
- * The generator's OWN flag surface, for the one consumer that is not this driver.
- *
- * `geneseed validate` takes every render flag but `--sync-themes`/`--config-dir` (it refuses
- * those two, and prints its own `-h` before this parser can print the generator's) — the reference's
- * `--validate-only` reads exactly the flags `build.py`'s parser already produced, so the port
- * hands the CLI this parser rather than a second one beside it. That is not tidiness: a
- * hand-rolled copy would have its own `--target` alias, its own `choices` lists and its own
- * `-h`, and `test_the_help_text_names_every_flag_the_reference_takes` gates only this one.
- *
- * `withPlatformNewlines` because the refusal and `-h` paths WRITE: called from `bin/build-driver.mjs`
- * they sit inside `main`'s funnel, and called from the CLI binary they would not.
- */
-export function parseDriverArgs(argv) {
-  return withPlatformNewlines(() => parseArgs(argv, configDefaults()));
-}
-
-function choice(flag, value, allowed) {
-  if (!allowed.includes(value)) {
-    die(2, `argument ${flag}: invalid choice: '${value}' `
-      + `(choose from ${allowed.map((c) => `'${c}'`).join(', ')})`);
-  }
-}
-
-/**
- * argparse's error exit — a THROW since P5f, where it used to be `process.exit(code)`.
- *
- * `harness rebuild-all` re-emits every active install and its whole contract is "continue
- * past a failure so one broken install never blocks the rest". The Python gets that for free:
- * each rebuild is a SUBPROCESS, and a child that exits 2 hands back a return code. Here the
- * driver is a module in the same process, so `process.exit` would take the loop, the CLI and
- * every remaining install with it — the one place where importing rather than spawning is not
- * transparent, and it turns a per-install failure into a total one.
- *
- * The marker is `exitCode`, the SAME one `assertSourceComplete` and `effectiveTheme` already
- * use, and the first draft of this used a second name so that only `die` would be converted
- * — on the argument that an incomplete source should keep its stack. That draft was wrong,
- * and `rebuild-all/one-broken-install-does-not-stop-the-rest` is what said so: a
- * `.geneseed-theme` naming a theme that does not exist makes `effectiveTheme` refuse, and
- * with only `die` converted the refusal propagated out of the loop and the remaining
- * installs were never rebuilt. `main` is standing in for a PROCESS, and a process boundary
- * turns every deliberate refusal into an exit code — the narrower rule was a distinction
- * with no principle behind it.
- *
- * One behaviour improves as a side effect, and it is worth naming rather than discovering
- * later: `process.exit` terminates without flushing a pending stdout write, so a refusal on
- * a slow pipe could lose output it had already produced. Returning through `main` lets Node
- * drain normally.
- */
-function die(code, msg) {
-  process.stderr.write(`geneseed: error: ${msg}\n`);
-  const e = new Error(msg);
-  e.exitCode = code;
-  throw e;
 }
 
 /**
@@ -742,7 +378,7 @@ function emitOpencodeGlobal(cfg, args, out) {
   const rendered = emitOpencodeGlobalRender(
     { ...cfg, primaryAgentSrc: PRIMARY_AGENT_SRC },
     {
-      theme: args.theme, cfgDir, out: out === null ? null : out,
+      theme: args.theme, cfgDir, out,
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
       oldOwned, agentPath,
     });
@@ -792,10 +428,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // measured `null` instead of an assumed one.
   const rendered = emitClaudeRender(cfg, {
     theme: args.theme, cfgDir, claudeMd, scope, host,
-    out: out === null ? null : out,
+    out,
     footprint: args.footprint, nativeCatalog: hostCatalogsNatively(host),
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
-    ...(hookOpts ? { hookOpts } : {}),
+    hookOpts,
   });
   const { owned, stats, memStatus, nbStatus, managed } = rendered;
 
@@ -840,117 +476,86 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
 }
 
 /**
- * `_build_global.emit_claude_global` — into Claude Code's global config dir (~/.claude).
+ * The six Claude-shaped emits — Claude, Bob and OpenClaude, each per-repo and global — as one
+ * body and a table. They differ only in where the config dir is, what the instruction carrier
+ * is called and where it sits, and the one summary line each prints; everything else is
+ * `emitClaudeCore`.
  *
- * `hookRunnerEntry()` is still called BEFORE the engine, though it can no longer refuse:
- * the shape stayed after P5b deleted the refusal so that a future value which CAN fail is
- * decided while nothing has been written, rather than behind a half-rendered config dir.
- */
-function emitClaudeGlobal(cfg, args, out) {
-  const cfgDir = args.cfgDir ?? claudeConfigDir();
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'claude', out,
-    hookOpts,
-  });
-  // "Hooks call the harness by absolute path", not `harness.py` — and this one was already
-  // WRONG on this side rather than merely about to be: P5b made this driver bake `<node>
-  // bin/geneseed-hook.mjs` into the hooks it writes, so the sentence named a file its own
-  // emit does not use. The two drivers bake different entries and printed the same claim;
-  // the neutral wording is true of both, and stays true when only one is left. It is frozen
-  // in the `claude-global` cells' recorded stdout, which is why it moves here rather than in
-  // the deletion phase, which may not move a recorded byte.
-  process.stdout.write(`[geneseed] claude-global -> ${cfgDir}: ${r.nAgents} subagents, `
-    + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
-    + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
-    + '~/.claude/plugins is never touched. Hooks call the harness by absolute path; set '
-    + 'GENESEED_HARNESS only to relocate memory.\n');
-  return cfgDir;
-}
-
-/** `_build_global.emit_claude` — per-repo: CLAUDE.md at the root + a `.claude/` layer. */
-function emitClaude(cfg, args, out) {
-  const root = args.root ? resolveOut(args.root) : out;
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir: path.join(root, '.claude'), claudeMd: path.join(root, 'CLAUDE.md'),
-    scope: 'project', host: 'claude', out, hookOpts,
-  });
-  process.stdout.write(`[geneseed] claude (folder) -> ${root}: CLAUDE.md + .claude/ `
-    + `(${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
-    + `settings.json), ${r.memStatus}, ${r.nbStatus}.\n`);
-}
-
-/**
- * OpenClaude global — `~/.openclaude` (or `$OPENCLAUDE_CONFIG_DIR`). The Claude emit with
- * another config dir: OpenClaude is a Claude Code fork that reads neither `~/.claude` nor
- * `CLAUDE_CONFIG_DIR`, so a Claude install is invisible to it and it needs its own.
- */
-function emitOpenclaudeGlobal(cfg, args, out) {
-  const cfgDir = args.cfgDir ?? openclaudeConfigDir();
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'openclaude', out,
-    hookOpts,
-  });
-  process.stdout.write(`[geneseed] openclaude-global -> ${cfgDir}: ${r.nAgents} subagents, `
-    + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
-    + `${r.memStatus}, ${r.nbStatus}. MCP servers go in .openclaude.json.\n`);
-  return cfgDir;
-}
-
-/**
- * OpenClaude per-repo — everything under `.openclaude/`, the preamble included. OpenClaude
- * reads the root CLAUDE.md only when the repo has no AGENTS.md, but `.openclaude/CLAUDE.md`
- * always; keeping the root untouched also lets a Claude Code install share the repo.
- */
-function emitOpenclaude(cfg, args, out) {
-  const root = args.root ? resolveOut(args.root) : out;
-  const cfgDir = path.join(root, '.openclaude');
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'project', host: 'openclaude', out,
-    hookOpts,
-  });
-  process.stdout.write(`[geneseed] openclaude (folder) -> ${root}: .openclaude/ `
-    + `(CLAUDE.md, ${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
-    + `settings.local.json), ${r.memStatus}, ${r.nbStatus}.\n`);
-}
-
-/**
- * `_build_global.emit_bob_global` — into Bob's global config dir (~/.bob).
+ * `configDir` set = a GLOBAL emit: the target is `args.cfgDir` (the `--config-dir` / `diff`
+ * override) or the host's resolved dir, the carrier lives inside it, and the dir is returned
+ * for the caller to record. Unset = PER-REPO: the target is `<root>/<layer>`, and the carrier
+ * sits at the root unless `carrierInLayer` says otherwise.
  *
- * The warning fires BEFORE the emit, matching the Python order: it is about a state this
- * emit is at the point of creating, so printing it afterwards would describe the situation
- * as though the operator had already chosen it.
+ * `hookRunnerEntry()` is still called BEFORE the engine, though it can no longer refuse: the
+ * shape stayed after P5b deleted the refusal so that a future value which CAN fail is decided
+ * while nothing has been written, rather than behind a half-rendered config dir. `before` runs
+ * after it and before the emit — Bob's global warning is about a state this emit is at the
+ * point of creating, so printing it afterwards would describe it as already chosen.
  */
-function emitBobGlobal(cfg, args, out) {
-  const cfgDir = args.cfgDir ?? bobConfigDir();
-  const hookOpts = hookRunnerEntry();
-  warnBobGlobalOverProject();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'AGENTS.md'), scope: 'global', host: 'bob', out,
-    hookOpts,
-  });
-  process.stdout.write(`[geneseed] bob-global -> ${cfgDir}: ${r.nAgents} subagents, `
-    + `${r.nSkills} skills, rules/geneseed.md (Bob's always-injected channel; a global `
-    + 'AGENTS.md is not auto-loaded, so none is written), '
-    + `${r.nHooks} hook group(s), settings.json, ${r.memStatus}, ${r.nbStatus}.\n`);
-  return cfgDir;
-}
+const CLAUDE_SHAPED = {
+  'claude-global': {
+    host: 'claude', configDir: claudeConfigDir, carrier: 'CLAUDE.md',
+    // "Hooks call the harness by absolute path": the hooks bake `<node> bin/geneseed-hook.mjs`.
+    summary: (at, r) => `[geneseed] claude-global -> ${at}: ${r.nAgents} subagents, `
+      + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
+      + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
+      + '~/.claude/plugins is never touched. Hooks call the harness by absolute path; set '
+      + 'GENESEED_HARNESS only to relocate memory.\n',
+  },
+  // Per-repo: CLAUDE.md at the root + a `.claude/` layer.
+  claude: {
+    host: 'claude', layer: '.claude', carrier: 'CLAUDE.md',
+    summary: (at, r) => `[geneseed] claude (folder) -> ${at}: CLAUDE.md + .claude/ `
+      + `(${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
+      + `settings.json), ${r.memStatus}, ${r.nbStatus}.\n`,
+  },
+  // `~/.openclaude` (or `$OPENCLAUDE_CONFIG_DIR`). OpenClaude is a Claude Code fork that reads
+  // neither `~/.claude` nor `CLAUDE_CONFIG_DIR`, so a Claude install is invisible to it.
+  'openclaude-global': {
+    host: 'openclaude', configDir: openclaudeConfigDir, carrier: 'CLAUDE.md',
+    summary: (at, r) => `[geneseed] openclaude-global -> ${at}: ${r.nAgents} subagents, `
+      + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
+      + `${r.memStatus}, ${r.nbStatus}. MCP servers go in .openclaude.json.\n`,
+  },
+  // Everything under `.openclaude/`, the preamble included. OpenClaude reads the root CLAUDE.md
+  // only when the repo has no AGENTS.md, but `.openclaude/CLAUDE.md` always; keeping the root
+  // untouched also lets a Claude Code install share the repo.
+  openclaude: {
+    host: 'openclaude', layer: '.openclaude', carrier: 'CLAUDE.md', carrierInLayer: true,
+    summary: (at, r) => `[geneseed] openclaude (folder) -> ${at}: .openclaude/ `
+      + `(CLAUDE.md, ${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
+      + `settings.local.json), ${r.memStatus}, ${r.nbStatus}.\n`,
+  },
+  'bob-global': {
+    host: 'bob', configDir: bobConfigDir, carrier: 'AGENTS.md', before: warnBobGlobalOverProject,
+    summary: (at, r) => `[geneseed] bob-global -> ${at}: ${r.nAgents} subagents, `
+      + `${r.nSkills} skills, rules/geneseed.md (Bob's always-injected channel; a global `
+      + 'AGENTS.md is not auto-loaded, so none is written), '
+      + `${r.nHooks} hook group(s), settings.json, ${r.memStatus}, ${r.nbStatus}.\n`,
+  },
+  // Per-repo: AGENTS.md at the root + a `.bob/` layer.
+  bob: {
+    host: 'bob', layer: '.bob', carrier: 'AGENTS.md',
+    summary: (at, r) => `[geneseed] bob (folder) -> ${at}: AGENTS.md + .bob/ `
+      + `(${r.nAgents} subagents, ${r.nSkills} skills, rules/geneseed.md shadow stub, `
+      + `${r.nHooks} hook group(s), settings.json), ${r.memStatus}, ${r.nbStatus}.\n`,
+  },
+};
 
-/** `_build_global.emit_bob` — per-repo: AGENTS.md at the root + a `.bob/` layer. */
-function emitBob(cfg, args, out) {
-  const root = args.root ? resolveOut(args.root) : out;
+/** One row of `CLAUDE_SHAPED` as an emit — the `(cfg, args, out)` shape every dispatch takes. */
+const claudeShaped = (name) => (cfg, args, out) => {
+  const { host, configDir, layer, carrier, carrierInLayer, before, summary } = CLAUDE_SHAPED[name];
+  const root = configDir ? null : (args.root ? resolveOut(args.root) : out);
+  const cfgDir = configDir ? (args.cfgDir ?? configDir()) : path.join(root, layer);
+  const claudeMd = path.join(configDir || carrierInLayer ? cfgDir : root, carrier);
   const hookOpts = hookRunnerEntry();
+  before?.();
   const r = emitClaudeCore(cfg, args, {
-    cfgDir: path.join(root, '.bob'), claudeMd: path.join(root, 'AGENTS.md'),
-    scope: 'project', host: 'bob', out, hookOpts,
+    cfgDir, claudeMd, scope: configDir ? 'global' : 'project', host, out, hookOpts,
   });
-  process.stdout.write(`[geneseed] bob (folder) -> ${root}: AGENTS.md + .bob/ `
-    + `(${r.nAgents} subagents, ${r.nSkills} skills, rules/geneseed.md shadow stub, `
-    + `${r.nHooks} hook group(s), settings.json), ${r.memStatus}, ${r.nbStatus}.\n`);
-}
+  process.stdout.write(summary(root ?? cfgDir, r));
+  return configDir ? cfgDir : undefined;
+};
 
 /**
  * build.py:437-466 — the POST stage, which writes markers and records the install and
@@ -996,9 +601,9 @@ function writeMarkers(markerDir, emit, footprint) {
  */
 const GLOBAL_EMITS = {
   opencode: emitOpencodeGlobal,
-  claude: emitClaudeGlobal,
-  bob: emitBobGlobal,
-  openclaude: emitOpenclaudeGlobal,
+  claude: claudeShaped('claude-global'),
+  bob: claudeShaped('bob-global'),
+  openclaude: claudeShaped('openclaude-global'),
 };
 
 /**
@@ -1020,10 +625,10 @@ const GLOBAL_EMITS = {
  * three-positional call leaves in place, inherited here rather than re-decided.
  */
 const PROJECT_EMITS = {
-  claude: emitClaude, bob: emitBob, openclaude: emitOpenclaude,
+  claude: claudeShaped('claude'), bob: claudeShaped('bob'), openclaude: claudeShaped('openclaude'),
   // P2. `opencode` joins the three for `cmdValidate`, which has to be able to render EVERY
   // `--emit` choice into its sandbox and not only the three doctor already scans. Its call
-  // shape is `emitClaude`'s exactly — `(cfg, args, out)` — so the row is the whole change.
+  // shape is the Claude-shaped emits' exactly — `(cfg, args, out)` — so the row is the whole change.
   opencode: emitOpencode,
 };
 
@@ -1140,8 +745,8 @@ function run(argv) {
   if (args.syncThemes) return syncThemes() ? 1 : 0;
   // `--validate-only` is NOT, and cannot be: its source-tree half is the doctor, and
   // `js/inspect/checks-authoring.mjs` starts a process (`node --check` over the OpenCode plugins). This driver
-  // is under a transitive ban on reaching any such module, gated twice — by a source grep in
-  // `tests/test_node_cli_parity.py` and by an import walk in `tests/test_hook_cli_parity.py`.
+  // is under a transitive ban on reaching any such module, gated by an import walk in
+  // `tests/unit/hook_cli.test.mjs` ("the generator driver still reaches no child-process module").
   // So the tool crossed onto the CLI binary, which already carries the doctor, and this flag
   // points at it rather than silently building for real into the caller's `--out`.
   if (args.validateOnly) {

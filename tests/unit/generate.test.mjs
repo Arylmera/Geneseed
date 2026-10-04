@@ -20,7 +20,8 @@ import {
   isVendoredPath, loadAgentOverrides, writeNativeLayer, descBlockProblem,
   validateIsVendored, VENDORED_SKILL_DIRS,
 } from '../../js/hosts/native.mjs';
-import { cmdValidate, validateSandboxProblems } from '../../js/inspect/validate.mjs';
+import { cmdValidate } from '../../js/inspect/validate.mjs';
+import { checkBuild } from '../../js/inspect/checks-build.mjs';
 import { syncThemes } from '../../js/build/themes.mjs';
 import { writeText } from '../../js/lib/fs.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
@@ -567,7 +568,7 @@ test('the sandbox scan catches an unresolved token and a dead link', () => {
   withDir((d) => {
     fs.writeFileSync(path.join(d, 'AGENT.md'),
       'unresolved {{NOT_A_REAL_TOKEN}} and a [dead link](missing/file.md)\n');
-    const problems = validateSandboxProblems(d);
+    const problems = checkBuild('files', d, validateIsVendored);
     assert.ok(problems.some((p) => p.includes('unresolved token')), problems.join('\n'));
     assert.ok(problems.some((p) => p.includes('dead link')), problems.join('\n'));
   });
@@ -630,7 +631,7 @@ test('the hermeticity scan survives an 8.3 short-form sandbox root', (t) => {
 
     fs.writeFileSync(path.join(d, 'workflow.md'), 'see [council](council.md)\n');
     fs.writeFileSync(path.join(d, 'council.md'), '# council\n');
-    assert.deepEqual(validateSandboxProblems(short), []);
+    assert.deepEqual(checkBuild('files', short, validateIsVendored), []);
   });
 });
 

@@ -1,6 +1,6 @@
 # `js/` — the module map
 
-Sixty-one modules in eight folders. This page is the address book: **what each one owns**, and
+Sixty-six modules in eight folders. This page is the address book: **what each one owns**, and
 **which file to open first** for a given task. It is not documentation of behaviour — every module
 has a docblock for that, and the docblock is the thing to read before editing.
 
@@ -46,7 +46,8 @@ as a per-host install at project or global scope.
 | `emit-common.mjs` | Constants, tree walkers, and the three writers BOTH global emits share. Decides no host |
 | `stubs.mjs` | Write-once seed files: context, wiki, rules, excludes, profile, `.gitignore`, memory/notebook indexes |
 | `version.mjs` | The release marker: fingerprint the sources, read/compare/write an install's version, warn on downgrade |
-| `driver.mjs` | The generator driver: `--emit`/`--theme`/`--footprint` flag parsing, the nine emit targets, per-host emit orchestration, the prune and the manifest. `bin/build-driver.mjs` is only its entry |
+| `driver.mjs` | The generator driver: the nine emit targets, per-host emit orchestration, the prune and the manifest. `bin/build-driver.mjs` is only its entry |
+| `args.mjs` | The generator's flag surface: `harness.config.json` defaults, the `--emit`/`--theme`/`--footprint` parse tables and choices, `-h`, and `die` (a throw, so `rebuild-all` survives one bad install) |
 | `generate.mjs` | CLI verbs `build`, `prompt`, `theme`, `rebuild-all` — the thin face over `driver.mjs` |
 | `catalog.mjs` | `geneseed catalog` — prints the shipped roster. Classifies nothing itself |
 | `themes.mjs` | Maintainer-only `--sync-themes`: inserts `_TEMPLATE.json`'s missing keys into the committed themes |
@@ -92,8 +93,10 @@ Everything that inspects an already-built or already-deployed harness and report
 | `doctor.mjs` | The `geneseed doctor` **driver** only: picks themes, runs the checks, prints the verdict |
 | `checks-build.mjs` | Gates over what the build PRODUCED: links, tokens, theme parity, OpenCode colours, bundle drift |
 | `checks-repo.mjs` | Gates over the repo's own records: `registry.json`, committed secrets, the hook shim, vendored pins |
-| `checks-authoring.mjs` | Self-consistency: law/doctrine metadata, constitution numbering, the counts README and the web quote |
-| `scan.mjs` | The shared walk/sort/strip/test primitives all three `checks-*` use. Owns no judgement itself |
+| `checks-authoring.mjs` | `authoringProblems`, the aggregate self-consistency gate: spec purpose lines, the learn-prompt literal, `node --check` over the plugins (the doctor's one spawn), then the groups below |
+| `checks-constitution.mjs` | The constitution: rule declarations and citations, LEAN blocks, `HOOK_PINNED`, theme vocabulary, the console's `LAW_META`/`DOCTRINE_META` |
+| `checks-counts.mjs` | The hand-written counts: AGENT.md tables, README badges and prose, `SHIPPED.md`, held against `src/` |
+| `scan.mjs` | The shared walk/sort/strip/test primitives every `checks-*` uses. Owns no judgement itself |
 | `validate.mjs` | The `--validate-only` verb: renders a sandbox, scans it for tokens and dead links, own exit contract |
 | `inventory.mjs` | The one catalog walk and its taxonomy tables, read by status, the TUI and the web console |
 | `status.mjs` | `geneseed status` and `version` — the panel data, counts, accent colour, version verdict |

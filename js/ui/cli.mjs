@@ -430,18 +430,6 @@ export function cliCommand(verb) {
 }
 
 /**
- * `<verb> --help` for whichever binary asked, or `null` for a verb the table does not
- * describe — the caller already owns that refusal and its message.
- *
- * ONE OWNER FOR TWO ENTRIES. `bin/geneseed-hook.mjs` carries the four hook verbs and
- * `bin/geneseed-cli.mjs` the rest of the table, and
- * `test_the_two_entry_points_carry_disjoint_verb_sets` keeps them from learning each other's
- * tables — so the help each prints has to come from here rather than from a copy in each.
- *
- * CRLF ON WINDOWS for `die`'s reason: argparse writes through a Python text stream, which
- * translates, and this text lands in the same terminals and the same pipes as that one.
- */
-/**
  * `geneseed --help` — every verb with its one-line help, from the same table the per-verb help
  * reads. `verbs` is the entry's own dispatch list, so the listing can name nothing the entry
  * would refuse; a verb the table does not describe still appears, with no help line.
@@ -460,6 +448,18 @@ export function printVerbList(prog, verbs, extra = {}) {
   return 0;
 }
 
+/**
+ * `<verb> --help` for whichever binary asked, or `null` for a verb the table does not
+ * describe — the caller already owns that refusal and its message.
+ *
+ * ONE OWNER FOR TWO ENTRIES. `bin/geneseed-hook.mjs` carries the four hook verbs and
+ * `bin/geneseed-cli.mjs` the rest of the table, and
+ * `test_the_two_entry_points_carry_disjoint_verb_sets` keeps them from learning each other's
+ * tables — so the help each prints has to come from here rather than from a copy in each.
+ *
+ * CRLF ON WINDOWS for `die`'s reason: argparse writes through a Python text stream, which
+ * translates, and this text lands in the same terminals and the same pipes as that one.
+ */
 export function printHelp(prog, verb) {
   const cmd = cliCommand(verb);
   if (cmd === null) return null;

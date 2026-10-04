@@ -222,7 +222,8 @@ export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process', 'comms'];
  * The ONE enumerator, for the same arithmetic reason `PACK_ORDER` is one array: the CLI
  * flag, the console's trust boundary and the doctor all have to close `--exclude-rules`
  * against the SAME set, and a second copy is a set that drifts by one rule the day a pack
- * grows. Read from the UNRENDERED source (`### {{DOCTRINE}} <pack> <n>`) rather than from a
+ * grows. Read off `ruleCanon` — the same declarations, in the same order, that the render
+ * numbers its headings from and the doctor validates citations against — rather than from a
  * built tree, because an address is a property of the source and the rendered heading is
  * themed — fourteen spellings of a thing that must compare equal to itself.
  *
@@ -232,16 +233,7 @@ export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process', 'comms'];
  * were ever out of order, and disagree in the direction that reads as correct.
  */
 export function knownRuleIds() {
-  const out = [];
-  for (const pack of PACK_ORDER) {
-    const file = path.join(SRC, 'doctrines', `${pack}.md`);
-    let text = '';
-    try { text = readPackText(file); } catch { continue; }
-    for (const m of text.matchAll(/^### \{\{DOCTRINE\}\} ([a-z]+) (\d+)\b/gm)) {
-      if (m[1] === pack) out.push(`${pack}.${Number(m[2])}`);
-    }
-  }
-  return out;
+  return ruleCanon(SRC).rules.filter((r) => r.kind === 'DOCTRINE').map((r) => `${r.pack}.${r.n}`);
 }
 
 /**

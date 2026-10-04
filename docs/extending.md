@@ -336,7 +336,7 @@ render — no citation moves, because none names a number. Then:
 3. Its `LEX_<ID>`/`DOC_<ID>` key in all fifteen theme files (the equality arm names each).
 4. The number-keyed tables, which the doctor checks against the canon: `LAW_CLASS`
    (`js/inspect/inventory.mjs`), `LAW_META`/`DOCTRINE_META` (their id pins fail on every shifted
-   row), and — only if a hook-gated rule moved — `HOOK_PINNED` in `checks-authoring.mjs` names the
+   row), and — only if a hook-gated rule moved — `HOOK_PINNED` in `checks-constitution.mjs` names the
    ledger keys, `CONSENT_RULE` and `HOOK_GATED` to move with it. `--exclude-rules` addresses are
    `<pack>.<n>` too, and an install that excluded a shifted doctrine rule excludes its neighbour
    after a re-emit: prefer appending in a pack, and say so in the CHANGELOG when you cannot.

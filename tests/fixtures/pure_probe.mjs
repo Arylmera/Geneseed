@@ -16,7 +16,7 @@ import {
 import { fenceFor, setupBuildArgs } from '../../js/build/generate.mjs';
 import { cmpKey } from '../../js/inspect/diff.mjs';
 import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/hosts/native.mjs';
-import { proseMirrorProblems, romanToInt } from '../../js/inspect/checks-authoring.mjs';
+import { proseMirrorProblems } from '../../js/inspect/checks-authoring.mjs';
 import { themesToCheck } from '../../js/inspect/doctor.mjs';
 import { capitalize } from '../../js/hosts/installs.mjs';
 import { writeText } from '../../js/lib/fs.mjs';
@@ -114,7 +114,6 @@ const FNS = {
   py_capitalize: (a) => capitalize(a[0]),
   setup_build_args: (a) => setupBuildArgs(...a),
   themes_to_check: (a) => themesToCheck(...a),
-  roman_to_int: (a) => romanToInt(a[0]),
   desc_block_problem: (a) => descBlockProblem(a[0]),
   // `skill_stems` is a `set` on the reference side and a `Set` here; JSON carries a list.
   prose_mirror_problems: (a) => proseMirrorProblems(a[0], a[1], a[2], new Set(a[3]), a[4]),
