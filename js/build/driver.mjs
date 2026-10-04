@@ -4,11 +4,6 @@
  * (`build`, `setup`, `migrate`, `doctor`, `diff`, `validate`, the web console) import. It lived in
  * `bin/` until 2026-09, which made nine `js/` modules import upward from a binary.
  *
- * P4 adds a driver; it does not replace one. `build.py` is ALSO the `import build` facade
- * that 19 `rituals/` modules read 55 distinct names from, and ~11 sites spawn
- * `[sys.executable, build.py, ...]`. None of those flip here: the Python CLI has to
- * survive this phase intact, and every gate that drives it keeps driving it.
- *
  * WHAT THIS FILE ORIGINATES, AND WHY THAT IS THE PHASE'S WHOLE POINT.
  * Every phase since P2d has asked one question at the process boundary: which values does
  * the CHILD resolve, and which does the parent decide and send? P3c's answer for `cfgDir`
@@ -232,16 +227,6 @@ function choicesFor() {
 }
 
 /**
- * `--doctrines craft,rigor` / `--doctrines none` -> the cfg's pack array.
- *
- * Normalised into `PACK_ORDER` rather than kept in the order typed, which also dedupes: the
- * rendered `Active packs:` line is a MARKER a later reader parses back out of a deployed
- * carrier, and a marker whose contents depend on argument order is one that compares unequal
- * to itself. Validation is against DISCOVERY, not `PACK_ORDER`, so the refusal names the
- * packs the checkout actually has; a discovered pack missing from `PACK_ORDER` is a
- * different fault and `js/build/render.mjs` refuses the whole build for it.
- */
-/**
  * `--exclude-rules "process 7,craft 3"` (or `process.7`) -> the cfg's exclusion array.
  *
  * BOTH SPELLINGS ACCEPTED ON THE WAY IN, ONE ON THE WAY OUT. The carrier's marker line and
@@ -272,6 +257,16 @@ function parseExcludeRules(value) {
   return [...new Set(out)].sort();
 }
 
+/**
+ * `--doctrines craft,rigor` / `--doctrines none` -> the cfg's pack array.
+ *
+ * Normalised into `PACK_ORDER` rather than kept in the order typed, which also dedupes: the
+ * rendered `Active packs:` line is a MARKER a later reader parses back out of a deployed
+ * carrier, and a marker whose contents depend on argument order is one that compares unequal
+ * to itself. Validation is against DISCOVERY, not `PACK_ORDER`, so the refusal names the
+ * packs the checkout actually has; a discovered pack missing from `PACK_ORDER` is a
+ * different fault and `js/build/render.mjs` refuses the whole build for it.
+ */
 function parseDoctrines(value) {
   const s = value.trim();
   const known = discoverNames('doctrines', PACK_ORDER[0]);
@@ -294,12 +289,10 @@ function parseDoctrines(value) {
  * did not, so the two entry points disagreed: the reference printed usage and exited 0 while
  * `geneseed-build --help` died with `unrecognized arguments: --help` and exit 2.
  *
- * NO CELL COULD SEE IT. `golden.py`'s `_argv` builds every cell out of the render flags and
- * never emits `--help`, so the byte comparison only ever ran inputs both implementations
- * were built for — a flag missing from one side is invisible to a gate that never passes it.
- * `test_the_help_text_names_every_flag_the_reference_takes` is the gate, and it reads
- * `build.py`'s `add_argument` calls rather than this file, so it fails on drift from EITHER
- * side rather than agreeing with whichever one it was copied from.
+ * NO GOLDEN CELL CAN SEE IT: every cell is built out of the render flags and never passes
+ * `--help`, and a flag missing from one side is invisible to a gate that never passes it.
+ * `tests/unit/node_driver.test.mjs` is the gate, and it checks a hand-written flag table rather
+ * than one scraped from this file, so it fails on drift instead of agreeing by construction.
  *
  * The text is deliberately NOT argparse's byte-for-byte. Reproducing its wrapping would put
  * a hand-written copy of the reference's output in a file no gate compares, which is the
@@ -742,7 +735,7 @@ function emitOpencodeGlobal(cfg, args, out) {
   const rendered = emitOpencodeGlobalRender(
     { ...cfg, primaryAgentSrc: PRIMARY_AGENT_SRC },
     {
-      theme: args.theme, cfgDir, out: out === null ? null : out,
+      theme: args.theme, cfgDir, out,
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
       oldOwned, agentPath,
     });
@@ -792,10 +785,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // measured `null` instead of an assumed one.
   const rendered = emitClaudeRender(cfg, {
     theme: args.theme, cfgDir, claudeMd, scope, host,
-    out: out === null ? null : out,
+    out,
     footprint: args.footprint, nativeCatalog: hostCatalogsNatively(host),
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
-    ...(hookOpts ? { hookOpts } : {}),
+    hookOpts,
   });
   const { owned, stats, memStatus, nbStatus, managed } = rendered;
 
@@ -840,117 +833,86 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
 }
 
 /**
- * `_build_global.emit_claude_global` — into Claude Code's global config dir (~/.claude).
+ * The six Claude-shaped emits — Claude, Bob and OpenClaude, each per-repo and global — as one
+ * body and a table. They differ only in where the config dir is, what the instruction carrier
+ * is called and where it sits, and the one summary line each prints; everything else is
+ * `emitClaudeCore`.
  *
- * `hookRunnerEntry()` is still called BEFORE the engine, though it can no longer refuse:
- * the shape stayed after P5b deleted the refusal so that a future value which CAN fail is
- * decided while nothing has been written, rather than behind a half-rendered config dir.
- */
-function emitClaudeGlobal(cfg, args, out) {
-  const cfgDir = args.cfgDir ?? claudeConfigDir();
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'claude', out,
-    hookOpts,
-  });
-  // "Hooks call the harness by absolute path", not `harness.py` — and this one was already
-  // WRONG on this side rather than merely about to be: P5b made this driver bake `<node>
-  // bin/geneseed-hook.mjs` into the hooks it writes, so the sentence named a file its own
-  // emit does not use. The two drivers bake different entries and printed the same claim;
-  // the neutral wording is true of both, and stays true when only one is left. It is frozen
-  // in the `claude-global` cells' recorded stdout, which is why it moves here rather than in
-  // the deletion phase, which may not move a recorded byte.
-  process.stdout.write(`[geneseed] claude-global -> ${cfgDir}: ${r.nAgents} subagents, `
-    + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
-    + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
-    + '~/.claude/plugins is never touched. Hooks call the harness by absolute path; set '
-    + 'GENESEED_HARNESS only to relocate memory.\n');
-  return cfgDir;
-}
-
-/** `_build_global.emit_claude` — per-repo: CLAUDE.md at the root + a `.claude/` layer. */
-function emitClaude(cfg, args, out) {
-  const root = args.root ? resolveOut(args.root) : out;
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir: path.join(root, '.claude'), claudeMd: path.join(root, 'CLAUDE.md'),
-    scope: 'project', host: 'claude', out, hookOpts,
-  });
-  process.stdout.write(`[geneseed] claude (folder) -> ${root}: CLAUDE.md + .claude/ `
-    + `(${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
-    + `settings.json), ${r.memStatus}, ${r.nbStatus}.\n`);
-}
-
-/**
- * OpenClaude global — `~/.openclaude` (or `$OPENCLAUDE_CONFIG_DIR`). The Claude emit with
- * another config dir: OpenClaude is a Claude Code fork that reads neither `~/.claude` nor
- * `CLAUDE_CONFIG_DIR`, so a Claude install is invisible to it and it needs its own.
- */
-function emitOpenclaudeGlobal(cfg, args, out) {
-  const cfgDir = args.cfgDir ?? openclaudeConfigDir();
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'openclaude', out,
-    hookOpts,
-  });
-  process.stdout.write(`[geneseed] openclaude-global -> ${cfgDir}: ${r.nAgents} subagents, `
-    + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
-    + `${r.memStatus}, ${r.nbStatus}. MCP servers go in .openclaude.json.\n`);
-  return cfgDir;
-}
-
-/**
- * OpenClaude per-repo — everything under `.openclaude/`, the preamble included. OpenClaude
- * reads the root CLAUDE.md only when the repo has no AGENTS.md, but `.openclaude/CLAUDE.md`
- * always; keeping the root untouched also lets a Claude Code install share the repo.
- */
-function emitOpenclaude(cfg, args, out) {
-  const root = args.root ? resolveOut(args.root) : out;
-  const cfgDir = path.join(root, '.openclaude');
-  const hookOpts = hookRunnerEntry();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'project', host: 'openclaude', out,
-    hookOpts,
-  });
-  process.stdout.write(`[geneseed] openclaude (folder) -> ${root}: .openclaude/ `
-    + `(CLAUDE.md, ${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
-    + `settings.local.json), ${r.memStatus}, ${r.nbStatus}.\n`);
-}
-
-/**
- * `_build_global.emit_bob_global` — into Bob's global config dir (~/.bob).
+ * `configDir` set = a GLOBAL emit: the target is `args.cfgDir` (the `--config-dir` / `diff`
+ * override) or the host's resolved dir, the carrier lives inside it, and the dir is returned
+ * for the caller to record. Unset = PER-REPO: the target is `<root>/<layer>`, and the carrier
+ * sits at the root unless `carrierInLayer` says otherwise.
  *
- * The warning fires BEFORE the emit, matching the Python order: it is about a state this
- * emit is at the point of creating, so printing it afterwards would describe the situation
- * as though the operator had already chosen it.
+ * `hookRunnerEntry()` is still called BEFORE the engine, though it can no longer refuse: the
+ * shape stayed after P5b deleted the refusal so that a future value which CAN fail is decided
+ * while nothing has been written, rather than behind a half-rendered config dir. `before` runs
+ * after it and before the emit — Bob's global warning is about a state this emit is at the
+ * point of creating, so printing it afterwards would describe it as already chosen.
  */
-function emitBobGlobal(cfg, args, out) {
-  const cfgDir = args.cfgDir ?? bobConfigDir();
-  const hookOpts = hookRunnerEntry();
-  warnBobGlobalOverProject();
-  const r = emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd: path.join(cfgDir, 'AGENTS.md'), scope: 'global', host: 'bob', out,
-    hookOpts,
-  });
-  process.stdout.write(`[geneseed] bob-global -> ${cfgDir}: ${r.nAgents} subagents, `
-    + `${r.nSkills} skills, rules/geneseed.md (Bob's always-injected channel; a global `
-    + 'AGENTS.md is not auto-loaded, so none is written), '
-    + `${r.nHooks} hook group(s), settings.json, ${r.memStatus}, ${r.nbStatus}.\n`);
-  return cfgDir;
-}
+const CLAUDE_SHAPED = {
+  'claude-global': {
+    host: 'claude', configDir: claudeConfigDir, carrier: 'CLAUDE.md',
+    // "Hooks call the harness by absolute path": the hooks bake `<node> bin/geneseed-hook.mjs`.
+    summary: (at, r) => `[geneseed] claude-global -> ${at}: ${r.nAgents} subagents, `
+      + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
+      + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
+      + '~/.claude/plugins is never touched. Hooks call the harness by absolute path; set '
+      + 'GENESEED_HARNESS only to relocate memory.\n',
+  },
+  // Per-repo: CLAUDE.md at the root + a `.claude/` layer.
+  claude: {
+    host: 'claude', layer: '.claude', carrier: 'CLAUDE.md',
+    summary: (at, r) => `[geneseed] claude (folder) -> ${at}: CLAUDE.md + .claude/ `
+      + `(${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
+      + `settings.json), ${r.memStatus}, ${r.nbStatus}.\n`,
+  },
+  // `~/.openclaude` (or `$OPENCLAUDE_CONFIG_DIR`). OpenClaude is a Claude Code fork that reads
+  // neither `~/.claude` nor `CLAUDE_CONFIG_DIR`, so a Claude install is invisible to it.
+  'openclaude-global': {
+    host: 'openclaude', configDir: openclaudeConfigDir, carrier: 'CLAUDE.md',
+    summary: (at, r) => `[geneseed] openclaude-global -> ${at}: ${r.nAgents} subagents, `
+      + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
+      + `${r.memStatus}, ${r.nbStatus}. MCP servers go in .openclaude.json.\n`,
+  },
+  // Everything under `.openclaude/`, the preamble included. OpenClaude reads the root CLAUDE.md
+  // only when the repo has no AGENTS.md, but `.openclaude/CLAUDE.md` always; keeping the root
+  // untouched also lets a Claude Code install share the repo.
+  openclaude: {
+    host: 'openclaude', layer: '.openclaude', carrier: 'CLAUDE.md', carrierInLayer: true,
+    summary: (at, r) => `[geneseed] openclaude (folder) -> ${at}: .openclaude/ `
+      + `(CLAUDE.md, ${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
+      + `settings.local.json), ${r.memStatus}, ${r.nbStatus}.\n`,
+  },
+  'bob-global': {
+    host: 'bob', configDir: bobConfigDir, carrier: 'AGENTS.md', before: warnBobGlobalOverProject,
+    summary: (at, r) => `[geneseed] bob-global -> ${at}: ${r.nAgents} subagents, `
+      + `${r.nSkills} skills, rules/geneseed.md (Bob's always-injected channel; a global `
+      + 'AGENTS.md is not auto-loaded, so none is written), '
+      + `${r.nHooks} hook group(s), settings.json, ${r.memStatus}, ${r.nbStatus}.\n`,
+  },
+  // Per-repo: AGENTS.md at the root + a `.bob/` layer.
+  bob: {
+    host: 'bob', layer: '.bob', carrier: 'AGENTS.md',
+    summary: (at, r) => `[geneseed] bob (folder) -> ${at}: AGENTS.md + .bob/ `
+      + `(${r.nAgents} subagents, ${r.nSkills} skills, rules/geneseed.md shadow stub, `
+      + `${r.nHooks} hook group(s), settings.json), ${r.memStatus}, ${r.nbStatus}.\n`,
+  },
+};
 
-/** `_build_global.emit_bob` — per-repo: AGENTS.md at the root + a `.bob/` layer. */
-function emitBob(cfg, args, out) {
-  const root = args.root ? resolveOut(args.root) : out;
+/** One row of `CLAUDE_SHAPED` as an emit — the `(cfg, args, out)` shape every dispatch takes. */
+const claudeShaped = (name) => (cfg, args, out) => {
+  const { host, configDir, layer, carrier, carrierInLayer, before, summary } = CLAUDE_SHAPED[name];
+  const root = configDir ? null : (args.root ? resolveOut(args.root) : out);
+  const cfgDir = configDir ? (args.cfgDir ?? configDir()) : path.join(root, layer);
+  const claudeMd = path.join(configDir || carrierInLayer ? cfgDir : root, carrier);
   const hookOpts = hookRunnerEntry();
+  before?.();
   const r = emitClaudeCore(cfg, args, {
-    cfgDir: path.join(root, '.bob'), claudeMd: path.join(root, 'AGENTS.md'),
-    scope: 'project', host: 'bob', out, hookOpts,
+    cfgDir, claudeMd, scope: configDir ? 'global' : 'project', host, out, hookOpts,
   });
-  process.stdout.write(`[geneseed] bob (folder) -> ${root}: AGENTS.md + .bob/ `
-    + `(${r.nAgents} subagents, ${r.nSkills} skills, rules/geneseed.md shadow stub, `
-    + `${r.nHooks} hook group(s), settings.json), ${r.memStatus}, ${r.nbStatus}.\n`);
-}
+  process.stdout.write(summary(root ?? cfgDir, r));
+  return configDir ? cfgDir : undefined;
+};
 
 /**
  * build.py:437-466 — the POST stage, which writes markers and records the install and
@@ -996,9 +958,9 @@ function writeMarkers(markerDir, emit, footprint) {
  */
 const GLOBAL_EMITS = {
   opencode: emitOpencodeGlobal,
-  claude: emitClaudeGlobal,
-  bob: emitBobGlobal,
-  openclaude: emitOpenclaudeGlobal,
+  claude: claudeShaped('claude-global'),
+  bob: claudeShaped('bob-global'),
+  openclaude: claudeShaped('openclaude-global'),
 };
 
 /**
@@ -1020,10 +982,10 @@ const GLOBAL_EMITS = {
  * three-positional call leaves in place, inherited here rather than re-decided.
  */
 const PROJECT_EMITS = {
-  claude: emitClaude, bob: emitBob, openclaude: emitOpenclaude,
+  claude: claudeShaped('claude'), bob: claudeShaped('bob'), openclaude: claudeShaped('openclaude'),
   // P2. `opencode` joins the three for `cmdValidate`, which has to be able to render EVERY
   // `--emit` choice into its sandbox and not only the three doctor already scans. Its call
-  // shape is `emitClaude`'s exactly — `(cfg, args, out)` — so the row is the whole change.
+  // shape is the Claude-shaped emits' exactly — `(cfg, args, out)` — so the row is the whole change.
   opencode: emitOpencode,
 };
 
@@ -1140,8 +1102,8 @@ function run(argv) {
   if (args.syncThemes) return syncThemes() ? 1 : 0;
   // `--validate-only` is NOT, and cannot be: its source-tree half is the doctor, and
   // `js/inspect/checks-authoring.mjs` starts a process (`node --check` over the OpenCode plugins). This driver
-  // is under a transitive ban on reaching any such module, gated twice — by a source grep in
-  // `tests/test_node_cli_parity.py` and by an import walk in `tests/test_hook_cli_parity.py`.
+  // is under a transitive ban on reaching any such module, gated by an import walk in
+  // `tests/unit/hook_cli.test.mjs` ("the generator driver still reaches no child-process module").
   // So the tool crossed onto the CLI binary, which already carries the doctor, and this flag
   // points at it rather than silently building for real into the caller's `--out`.
   if (args.validateOnly) {

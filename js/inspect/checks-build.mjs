@@ -17,7 +17,7 @@ import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
 import { readText, withDiscardableStderr } from '../lib/fs.mjs';
 import { parseJson, formatRepr } from '../lib/json.mjs';
 import {
-  ABS_LINK_RE, LINK_RE, TOKEN_RE, has, isDir, isFile, rglob, stemOf, stripCode, within,
+  ABS_LINK_RE, LINK_RE, TOKEN_RE, has, isDir, isFile, rglob, sortedUnique, stemOf, stripCode, within,
 } from './scan.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 
@@ -75,9 +75,9 @@ export function checkBuild(themeName, out, isVendored = isVendoredPath) {
     const rel = path.relative(outAbs, md);
     if (isVendored(rel)) continue;
     const text = readText(md);
-    // `set(TOKEN_RE.findall(text))` — Python iterates the set in ITS order, and the whole
-    // list is sorted by `_doctor_collect` before printing, so only uniqueness travels.
-    for (const tok of new Set(text.match(TOKEN_RE) ?? [])) {
+    // Sorted per file: `doctorCollect` re-sorts everything anyway, but `validate` prints these
+    // in the order they come back.
+    for (const tok of sortedUnique(text.match(TOKEN_RE) ?? [])) {
       problems.push(`[${themeName}] unresolved token ${tok} in ${rel}`);
     }
     for (const p of linkProblems(md, text, outAbs, rel)) problems.push(`[${themeName}] ${p}`);

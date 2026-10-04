@@ -36,7 +36,7 @@ const FENCE_RE = /```[\s\S]*?```/g;
 const INLINE_CODE_RE = /`[^`]*`/g;
 const COMMENT_RE = /<!--[\s\S]*?-->/g;
 
-/** `_harness_core.strip_code` — fenced blocks, inline code and HTML comments, in that order. */
+/** `_harness_core.strip_code` — fenced blocks, then HTML comments, then inline code, in that order. */
 export function stripCode(text) {
   return text.replace(FENCE_RE, '').replace(COMMENT_RE, '').replace(INLINE_CODE_RE, '');
 }

@@ -14,8 +14,9 @@
 import path from 'node:path';
 import {
   CONFIG, DOCS, DOC_FOLDERS, PACK_ORDER, PLUGIN_SRC, RETIRED_RULE_IDS, ROOT, RULE_ID_RE, SRC, THEMES, canonFiles,
-  knownRuleIds, ruleCanon, titleKey,
+  ruleCanon, titleKey,
 } from '../build/source.mjs';
+import { LEAN_BLOCK_RE, splitAtLawHeadings } from '../build/render.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
 import { descBlockProblem, firstBlockquote } from '../hosts/native.mjs';
 import { readText } from '../lib/fs.mjs';
@@ -31,23 +32,18 @@ import { NOTE, globSorted, has, isDir, isFile, rglob, srcStems } from './scan.mj
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 
-const ROMAN_VALUES = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
-
 /**
- * `_harness_build._roman_to_int`. Law headings number in Roman and the web ledger keys its
- * per-rule copy by the Arabic equivalent, so the gate has to bridge the two. 0 on an
- * unparseable numeral, which surfaces as a gate problem rather than a crash.
+ * The body of `const <name> = { … }` in the web Laws page — the one file out of `web/src` the
+ * doctor reads. Answers `[body, null]`, or `[null, problem]` when the page is unreadable or the
+ * literal is gone (`missing` is that problem's text).
  */
-export function romanToInt(num) {
-  let total = 0;
-  let prev = 0;
-  for (const ch of [...num.toUpperCase()].reverse()) {
-    const v = ROMAN_VALUES[ch];
-    if (v === undefined) return 0;
-    total += v < prev ? -v : v;
-    prev = Math.max(prev, v);
+function lawsPageLiteral(name, missing) {
+  let text;
+  try { text = readText(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx')); } catch (e) {
+    return [null, `[authoring] web/src/pages/Laws.jsx unreadable: ${e.message}`];
   }
-  return total;
+  const block = new RegExp(`^const ${name} = \\{$([\\s\\S]*?)^\\}$`, 'm').exec(text);
+  return block ? [block[1], null] : [null, missing];
 }
 
 /**
@@ -76,25 +72,17 @@ const LAW_META_ROW =
  * description and the wrong class chip, while everything upstream is fine. That is exactly
  * how two laws shipped description-less.
  */
-export function lawMetaProblems(lawNums, lawClass, lawClasses, lawIds = null) {
-  const page = path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx');
-  let text;
-  try { text = readText(page); } catch (e) {
-    return [`[authoring] web/src/pages/Laws.jsx unreadable: ${e.message}`];
-  }
-  const block = /^const LAW_META = \{$([\s\S]*?)^\}$/m.exec(text);
-  if (!block) {
-    return ['[authoring] LAW_META literal not found in web/src/pages/Laws.jsx — the web '
-      + 'Laws ledger\'s Principle column would have no gate'];
-  }
+export function lawMetaProblems(lawRules, lawClass, lawClasses) {
+  const [block, refusal] = lawsPageLiteral('LAW_META', '[authoring] LAW_META literal not found '
+    + "in web/src/pages/Laws.jsx — the web Laws ledger's Principle column would have no gate");
+  if (refusal) return [refusal];
   const meta = new Map();
-  for (const m of block[1].matchAll(LAW_META_ROW)) {
+  for (const m of block.matchAll(LAW_META_ROW)) {
     meta.set(Number(m[1]), [m[3], m[5], m[7]]);
   }
   const problems = [];
   const seen = new Set();
-  for (const [i, roman] of lawNums.entries()) {
-    const n = romanToInt(roman);
+  for (const { n, label: roman, id } of lawRules) {
     seen.add(n);
     if (!meta.has(n)) {
       problems.push(`[authoring] laws/universal.md rule ${roman} (${n}) has no row in `
@@ -103,9 +91,9 @@ export function lawMetaProblems(lawNums, lawClass, lawClasses, lawIds = null) {
       continue;
     }
     const [klass, principle, pin] = meta.get(n);
-    if (lawIds && pin !== lawIds[i]) {
+    if (pin !== id) {
       problems.push(`[authoring] LAW_META[${n}] is pinned to '${pin ?? '(no id)'}' but rule ${roman} is `
-        + `'${lawIds[i]}' — the rows no longer follow the canon's order, so this principle `
+        + `'${id}' — the rows no longer follow the canon's order, so this principle `
         + 'describes a different law');
     }
     if (!principle.trim()) {
@@ -145,18 +133,12 @@ const DOCTRINE_META_ROW =
  * the pack it came from, which would colour the row and label its chip with the wrong pack.
  */
 export function doctrineMetaProblems(addrs, ids = null) {
-  const page = path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx');
-  let text;
-  try { text = readText(page); } catch (e) {
-    return [`[authoring] web/src/pages/Laws.jsx unreadable: ${e.message}`];
-  }
-  const block = /^const DOCTRINE_META = \{$([\s\S]*?)^\}$/m.exec(text);
-  if (!block) {
-    return ['[authoring] DOCTRINE_META literal not found in web/src/pages/Laws.jsx — the '
-      + "console's doctrine rows would have no gate on their Principle column"];
-  }
+  const [block, refusal] = lawsPageLiteral('DOCTRINE_META', '[authoring] DOCTRINE_META literal not '
+    + "found in web/src/pages/Laws.jsx — the console's doctrine rows would have no gate on their "
+    + 'Principle column');
+  if (refusal) return [refusal];
   const meta = new Map();
-  for (const m of block[1].matchAll(DOCTRINE_META_ROW)) meta.set(m[2], [m[4], m[6], m[8]]);
+  for (const m of block.matchAll(DOCTRINE_META_ROW)) meta.set(m[2], [m[4], m[6], m[8]]);
   const problems = [];
   const seen = new Set();
   for (const [i, addr] of addrs.entries()) {
@@ -241,13 +223,13 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
 
   for (const m of web.matchAll(/(\d+) universal (?:laws|Rules)/g)) {
     if (Number(m[1]) !== laws) {
-      problems.push(`[authoring] _web_core prose says '${m[1]} universal laws/Rules' but `
+      problems.push(`[authoring] docs/ prose says '${m[1]} universal laws/Rules' but `
         + `src has ${laws}`);
     }
   }
   for (const m of web.matchAll(/(\d+) capability specialists/g)) {
     if (Number(m[1]) !== agents) {
-      problems.push(`[authoring] _web_core prose says '${m[1]} capability specialists' but `
+      problems.push(`[authoring] docs/ prose says '${m[1]} capability specialists' but `
         + `src has ${agents}`);
     }
   }
@@ -258,19 +240,15 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
   if (m) {
     const listedN = (m[2].match(/\[\[[^\]]+\]\]/g) ?? []).length;
     if (Number(m[1]) !== listedN) {
-      problems.push(`[authoring] _web_core says '${m[1]} repeatable workflows' `
+      problems.push(`[authoring] docs/ says '${m[1]} repeatable workflows' `
         + `but its wikilink list has ${listedN}`);
     }
   }
 
-  // ⚠ THE ABSENCE OF THIS TRIPLE IS CHECKED BY THE CALLER, NOT HERE, AND THAT IS FORCED RATHER
-  // THAN CHOSEN. This arm is satisfiable by DELETING THE SENTENCE — no match, no problem, green
-  // — which is a gate failing open. The obvious fix is an `else` right here, and it cannot go
-  // here: `prose_mirror_problems` is one of the pure functions recorded in
-  // `tests/__snapshots__/primitives/`, the recording holds a case that passes an EMPTY `shipped`
-  // and expects `[]`, and there is no recorder left to re-bless it. So the presence check lives
-  // in `countTableProblems`, which is not recorded — beside the read that already knows whether
-  // the file could be opened at all, which is where it reads better anyway.
+  // ⚠ THE ABSENCE OF THIS TRIPLE IS CHECKED BY THE CALLER, NOT HERE. This arm is satisfiable by
+  // DELETING THE SENTENCE — no match, no problem, green — which is a gate failing open. The
+  // presence check lives in `countTableProblems`, beside the read that already knows whether
+  // the file could be opened at all; an empty `shipped` here means "nothing to compare".
   const s = /(\d+) laws, (\d+) agents, (\d+) skills/.exec(shipped);
   if (s) {
     for (const [got, want, label] of [[s[1], laws, 'laws'], [s[2], agents, 'agents'],
@@ -311,31 +289,6 @@ export const HOOK_PINNED = {
 };
 
 /**
- * The LEAN block grammar, and the heading split, both duplicated from `js/build/render.mjs`.
- *
- * Deliberately duplicated rather than imported: both are module-private
- * there, and exporting them so one gate could borrow them would widen the renderer's surface
- * for a reader that only needs to know the shape. Two literals, one paragraph apart from the
- * rule they encode, is cheaper than a seam.
- */
-const LEAN_BLOCK_RE =
-  /[ \t]*<!-- LEAN:begin -->\n([\s\S]*?)[ \t]*<!-- LEAN:else -->\n([\s\S]*?)[ \t]*<!-- LEAN:end -->\n/g;
-
-/** `### ` at line start — the same cut `splitAtLawHeadings` makes, and for the same addresses. */
-function leanRuleBlocks(text) {
-  const out = [];
-  let start = 0;
-  for (let i = 0; i < text.length; i++) {
-    if ((i === 0 || text[i - 1] === '\n') && text.startsWith('### ', i)) {
-      out.push(text.slice(start, i));
-      start = i;
-    }
-  }
-  out.push(text.slice(start));
-  return out.slice(1);                        // drop the lead chunk: the file's preamble
-}
-
-/**
  * Every authored rule carries exactly one LEAN block, and both halves say something.
  *
  * ⚠ `resolveLean` IS A REPLACE OVER A MARKER PAIR, WHICH MAKES IT A NO-OP ON MARKERLESS TEXT.
@@ -366,9 +319,10 @@ export function leanBlockProblems() {
         + 'its full body at the lean footprint, unannounced');
       continue;
     }
-    for (const block of leanRuleBlocks(text)) {
-      // The address as the SOURCE spells it — `{{LAW}} II`, `{{DOCTRINE}} craft 1` — because
-      // that is the string an author greps for, and the rendered spelling is fourteen strings.
+    // `.slice(1)` drops the lead chunk — the file's preamble, which declares no rule.
+    for (const block of splitAtLawHeadings(text).slice(1)) {
+      // The declaration as the SOURCE spells it — `{{LAW:<id>}} <Name>` — because that is the
+      // string an author greps for, and the rendered spelling is fourteen strings.
       const heading = block.slice(0, block.indexOf('\n') === -1 ? undefined : block.indexOf('\n'));
       const addr = heading.replace(/^###\s+/, '').split(/\s+[—-]\s+/)[0].trim();
       const found = [...block.matchAll(LEAN_BLOCK_RE)];
@@ -486,26 +440,6 @@ export function constitutionProblems() {
   // the SOURCE and a rule added to a pack file is caught the same day, not when someone
   // notices a blank description in the browser.
   problems.push(...doctrineMetaProblems([...rules.keys()], [...rules.values()].map((r) => r.id)));
-
-  // ---- `--exclude-rules` closes against the SAME rules this walk just found.
-  //
-  // `knownRuleIds` is what the CLI flag, the console's trust boundary and every wizard prompt
-  // validate an address against; the walk above is what the constitution actually renders.
-  // Two readers of one directory is the shape that lets a rule be authored, rendered, cited —
-  // and rejected by the only flag that can switch it off, with `invalid choice` naming a set
-  // that visibly contains it. An equality, not containment: a stale id in the enumerator is a
-  // rule the console offers a switch for and the build cannot drop.
-  const enumerated = knownRuleIds();
-  const walked = [...rules.keys()];
-  for (const id of enumerated.filter((i) => !walked.includes(i))) {
-    problems.push(`[authoring] knownRuleIds() offers '${id.replace('.', ' ')}', which no pack `
-      + 'file defines — --exclude-rules accepts an address the build cannot drop');
-  }
-  for (const id of walked.filter((i) => !enumerated.includes(i))) {
-    problems.push(`[authoring] doctrine ${id.replace('.', ' ')} is defined but knownRuleIds() `
-      + 'does not offer it — --exclude-rules refuses a rule that exists, and the console has '
-      + 'no switch for it');
-  }
 
   // ---- every citation in src/ is by id, and every id resolves.
   //
@@ -714,15 +648,14 @@ export function countTableProblems() {
       problems.push(`[authoring] laws/universal.md rule ${num} has no class in LAW_CLASS`);
     }
   }
-  // `sorted(LAW_CLASS.items())` — by the Roman numeral as a STRING, which is what Python
-  // sorts here; the messages are re-sorted by `doctorCollect` anyway, so only the set travels.
+  // Sorted by the Roman numeral as a STRING; `doctorCollect` re-sorts every message anyway.
   for (const num of Object.keys(LAW_CLASS).sort()) {
     if (!LAW_CLASSES.includes(LAW_CLASS[num])) {
       problems.push(`[authoring] LAW_CLASS['${num}'] = '${LAW_CLASS[num]}' is not a known `
         + `class ${formatRepr(LAW_CLASSES)}`);
     }
   }
-  problems.push(...lawMetaProblems(lawNums, LAW_CLASS, LAW_CLASSES, lawRules.map((r) => r.id)));
+  problems.push(...lawMetaProblems(lawRules, LAW_CLASS, LAW_CLASSES));
 
   // WHAT SHIPS, NOT WHAT IS FLAT. A folder skill (`src/skills/<name>/SKILL.md`, vendored with
   // its scripts or references) ships exactly like a flat one, so the badge, the README list and
@@ -737,8 +670,6 @@ export function countTableProblems() {
     skills: shippedSkills.size,
     laws: lawNums.length,
     themes: themeFiles().length,
-    // Last on purpose: the badge loop below walks this object in insertion order and the
-    // message sequence is compared byte for byte against the Python implementation.
     plugins: existsSync(PLUGIN_SRC)
       ? readdirSync(PLUGIN_SRC).filter((f) => f.startsWith('geneseed-') && f.endsWith('.js')).length
       : 0,
@@ -747,9 +678,7 @@ export function countTableProblems() {
   try { readme = readText(path.join(ROOT, 'README.md')); } catch { return problems; }
   // ⚠ PRESENCE FIRST, THEN THE VALUE — the same absence arm the SHIPPED triple needed, for the
   // same reason: `if (m && …)` is green when there is no badge, so deleting a badge silences its
-  // own gate. The `continue` keeps the loop's MESSAGE ORDER intact, which is load-bearing (see
-  // the `plugins`-is-last comment above): a missing badge reports in its own slot rather than
-  // reordering the ones after it.
+  // own gate.
   for (const [key, n] of Object.entries(counts)) {
     const m = new RegExp(`badge/${key}-(\\d+)`).exec(readme);
     if (!m) {
@@ -770,8 +699,7 @@ export function countTableProblems() {
   // cannot drift; what these arms still catch is a maintainer typing the NUMBER into a page
   // instead of the token, which is the drift that reaches a reader.
   //
-  // MEASURED BEFORE AND AFTER: zero problems either way on the shipped tree, so no recorded
-  // byte moves. `web` stays fail-soft — a missing docs tree is not an authoring fault.
+  // `web` stays fail-soft — a missing docs tree is not an authoring fault.
   let web = '';
   try {
     web = DOC_FOLDERS
@@ -779,22 +707,14 @@ export function countTableProblems() {
         ? globSorted(path.join(DOCS, f), (n) => n.endsWith('.md')) : []))
       .map(readText).join('\n');
   } catch { web = ''; }
-  // ⚠ NOT FAIL-SOFT, UNLIKE `web` ABOVE, AND THE ASYMMETRY IS THE POINT. A missing `docs/web`
-  // tree is not an authoring fault — a checkout can legitimately lack it. SHIPPED.md is a
-  // tracked, shipped file that this function asserts the CONTENT of, so an unreadable one is
-  // indistinguishable from a deleted claim: swallowing it into `''` used to hand the triple arm
-  // an empty string and turn a hard read failure into a silent pass.
-  // ⚠ NOT FAIL-SOFT, UNLIKE `web` ABOVE, AND THE ASYMMETRY IS THE POINT. A missing `docs/web`
-  // tree is not an authoring fault — a checkout can legitimately lack it. SHIPPED.md is a
-  // tracked, shipped file whose CONTENT this function asserts, so an unreadable one was
+  // ⚠ NOT FAIL-SOFT, UNLIKE `web` ABOVE, AND THE ASYMMETRY IS THE POINT. A missing docs tree
+  // is not an authoring fault — a checkout can legitimately lack it. SHIPPED.md is a tracked,
+  // shipped file whose CONTENT this function asserts, so an unreadable one was
   // indistinguishable from a deleted claim: swallowing it into `''` handed the triple arm an
   // empty string and turned a hard read failure into a silent pass.
   //
-  // AND THE PRESENCE OF THE TRIPLE IS CHECKED HERE rather than inside `proseMirrorProblems`,
-  // which is where it belongs by subject and cannot go by construction — that function is
-  // recorded in `tests/__snapshots__/primitives/` with a case that passes an empty `shipped` and
-  // expects `[]`, and nothing can re-bless a recording whose recorder is deleted. This is the
-  // caller, it is not recorded, and it already owns the question "could the file be read".
+  // AND THE PRESENCE OF THE TRIPLE IS CHECKED HERE rather than inside `proseMirrorProblems`:
+  // this is the caller that already owns the question "could the file be read".
   let shipped;
   try {
     shipped = readText(path.join(ROOT, 'SHIPPED.md'));
@@ -809,32 +729,6 @@ export function countTableProblems() {
   }
   problems.push(...proseMirrorProblems(readme, web, counts, shippedSkills, shipped));
   return problems;
-}
-
-/** `_harness_core.LEARN_PROMPT_HEAD`'s extraction regex — one owner, two readers. */
-const LEARN_PROMPT_RE = /const LEARN_PROMPT_HEAD = `([\s\S]*?)`/;
-
-/**
- * `_harness_core._load_learn_prompt_head` — the distil instructions, read out of the plugin.
- *
- * The single source of truth is the OpenCode plugin, the artifact that ships to the primary
- * runtime, so the CLI extracts it at load time rather than carrying a copy. Reproduced here
- * rather than imported from `js/hosts/hooks.mjs`, which this entry may not reach: `learn` spawns the
- * model CLI, and the allow-list below names ONE call site.
- *
- * The fallback matters as much as the extraction. It is what makes the drift arm of
- * `_authoring_problems` unreachable — both the loaded copy and the checked literal come from
- * one file through one regex, so a reference can never disagree with itself. A port that
- * hardcoded the prompt WOULD disagree, which is what
- * `doctor/the-loaded-copy-follows-the-plugin-rather-than-a-constant` exists to catch.
- */
-function loadLearnPromptHead() {
-  try {
-    const m = LEARN_PROMPT_RE.exec(readText(path.join(PLUGIN_SRC, 'geneseed-learn.js')));
-    if (m) return m[1];
-  } catch { /* OSError — fall through */ }
-  return 'Distil at most one durable, reusable memory from the notes below. '
-    + 'When in doubt, output exactly: NOTHING.';
 }
 
 /**
@@ -879,25 +773,21 @@ export function authoringProblems() {
       }
     }
   }
-  const plugin = path.join(PLUGIN_SRC, 'geneseed-learn.js');
-  let m = null;
-  try { m = LEARN_PROMPT_RE.exec(readText(plugin)); } catch { m = null; }
-  if (!m) {
-    // "the harness", not `harness.py`: both implementations load this literal, and the file
-    // the old wording named is the one this migration deletes. Moved on both sides at once —
-    // these two strings are byte-compared by the live doctor comparison.
+  // The learn plugin is the single source of the distil prompt: `js/hosts/hooks.mjs` extracts
+  // it at load time rather than carrying a copy, and falls back to a stub when it cannot — so
+  // the literal must stay extractable.
+  let learn = '';
+  try { learn = readText(path.join(PLUGIN_SRC, 'geneseed-learn.js')); } catch { learn = ''; }
+  if (!/const LEARN_PROMPT_HEAD = `[\s\S]*?`/.test(learn)) {
     problems.push('[authoring] LEARN_PROMPT_HEAD literal not found in '
       + 'geneseed-learn.js — the harness would fall back (single source broken)');
-  } else if (m[1] !== loadLearnPromptHead()) {
-    problems.push('[authoring] LEARN_PROMPT_HEAD drifted between geneseed-learn.js '
-      + "and the harness's loaded copy");
   }
   const node = which('node');
   if (node) {
     for (const js of globSorted(PLUGIN_SRC, (n) => n.endsWith('.js'))) {
       // THE ONE SPAWN. `node --check` and nothing else — see the module header, and
       // the `inspect/checks-authoring.mjs` row of the spawn allow-list in
-// `tests/unit/hook_cli.test.mjs`, which names this argv literally.
+      // `tests/unit/hook_cli.test.mjs`, which names this argv literally.
       // `NO_WINDOW` because the reference's `run()` folds `CREATE_NO_WINDOW` into every
       // CAPTURING spawn and this is one — and because this loop is the burst a user sees:
       // one console window per plugin, every time the web daemon runs the doctor.

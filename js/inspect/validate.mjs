@@ -13,12 +13,12 @@ import {
   doctrinesOfDir, excludedRulesOfDir, modeOfDir, postureOfDir,
 } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
-import { printOut, printErr, readText } from '../lib/fs.mjs';
+import { printOut, printErr } from '../lib/fs.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
-import { linkProblems } from './checks-build.mjs';
+import { checkBuild } from './checks-build.mjs';
 import { cmdDoctor } from './doctor.mjs';
-import { TOKEN_RE, isDir, isFile, rglob, sortedUnique, withTempDir, within } from './scan.mjs';
+import { isDir, isFile, rglob, withTempDir, within } from './scan.mjs';
 
 // --------------------------------------------------------------------------------------
 // validate  —  the generator's `--validate-only`, on this binary because it runs the doctor
@@ -39,37 +39,6 @@ export const VALIDATE_USAGE = [
   '--config-dir.',
   '',
 ].join('\n');
-
-/**
- * `build._validate_sandbox_problems` — the unresolved-token / dead-link / non-hermetic-link
- * scan over an already-rendered sandbox tree.
- *
- * A NEAR-TWIN OF `checkBuild` ABOVE, AND DELIBERATELY NOT IT, because the reference is two
- * functions and they differ in three observable ways: the token list is `sorted(set(...))`
- * here and bare `set(...)` there, the message carries no `[theme]` prefix (the caller adds
- * `[emit]` instead), and an unreadable file is SKIPPED rather than raised. Python duplicates
- * the loop because `build.py` cannot import the harness tree; here the two live in one file
- * and the two now sit one file apart (`checkBuild` is in `checks-build.mjs`); the
- * duplication is eight lines — every primitive underneath (`rglob`, `stripCode`,
- * `linkProblems`, `readText`) is the shared one, which is the half that could actually drift.
- */
-export function validateSandboxProblems(sandbox) {
-  const out = resolvePath(sandbox);
-  const problems = [];
-  for (const md of rglob(out)) {
-    if (!md.endsWith('.md') || !isFile(md)) continue;
-    const rel = path.relative(out, md);
-    if (validateIsVendored(rel)) continue;
-    let text;
-    // `except (OSError, UnicodeDecodeError): continue` — binary or unreadable, nothing here.
-    try { text = readText(md); } catch { continue; }
-    for (const tok of sortedUnique(text.match(TOKEN_RE) ?? [])) {
-      problems.push(`unresolved token ${tok} in ${rel}`);
-    }
-    problems.push(...linkProblems(md, text, out, rel));
-  }
-  return problems;
-}
 
 /**
  * `subprocess.run(..., capture_output=True, text=True)` around an IN-PROCESS call.
@@ -214,9 +183,9 @@ export function cmdValidate(args) {
         printOut(`  would write: ${path.relative(base, p)}\n`);
       }
     }
-    for (const d of scanDirs) {
-      for (const p of validateSandboxProblems(d)) problems.push(`[${emit}] ${p}`);
-    }
+    // The doctor's own per-tree scan, prefixed with the emit instead of a theme, and with the
+    // vendored shape every host depth can produce — a sandbox may hold a per-repo native layer.
+    for (const d of scanDirs) problems.push(...checkBuild(emit, d, validateIsVendored));
     return scanDirs;
   }, 'geneseed-validate-');
   if (scan === null) return 1;

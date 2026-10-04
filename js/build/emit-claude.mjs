@@ -40,7 +40,7 @@ import { existsSync, mkdirSync } from 'node:fs';
  * Six emits route through here — claude, bob and openclaude at both scopes — so this one
  * job is what puts two thirds of the matrix on the seam.
  *
- * `claudeMdText` is the payload's one item that is not a file this process wrote. WIRE
+ * `claudeMdText` is the one product of this render that is not a file it writes. WIRE
  * needs the managed block's text, and that text is a RENDER (`prefixedAgentText`
  * re-renders AGENT.md with every store dir prefixed), so it is computed here and merged
  * there. `emitOpencodeRender` needed nothing of the kind — its wired file is derived from
@@ -174,8 +174,6 @@ export function emitClaudeRender(cfg, job) {
     stats: { nAgents, nSkills },
     memStatus,
     nbStatus,
-    hasAgentText: agentText !== null,
-    claudeMdText,
     managed,
   };
 }
