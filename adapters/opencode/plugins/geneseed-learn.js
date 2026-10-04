@@ -251,6 +251,11 @@ function parseFrontmatter(chunk) {
   return fm
 }
 
+// A memory `name:` becomes a FILENAME and the model writes it, so it is a plain slug or
+// nothing — no separator, no `..`, no drive. The same rule as MEMORY_SLUG_RE in
+// js/hosts/hooks.mjs, inlined because this file ships standalone.
+const MEMORY_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/
+
 async function writeMemories(output, memDir, existing) {
   const written = []
   const indexLines = []
@@ -259,7 +264,7 @@ async function writeMemories(output, memDir, existing) {
     if (!chunk || chunk.toUpperCase() === "NOTHING") continue
     const fm = parseFrontmatter(chunk)
     const name = (fm.name || "").trim()
-    if (!name || existing.has(name)) continue
+    if (!MEMORY_SLUG_RE.test(name) || existing.has(name)) continue
     await fs.writeFile(path.join(memDir, `${name}.md`), chunk.replace(/\n+$/, "") + "\n", "utf8")
     existing.add(name)
     written.push(name)
@@ -392,5 +397,9 @@ export const GeneseedLearn = async ({ client }) => {
     },
   }
 }
+
+// OpenCode treats every export as a plugin and rejects non-functions; hang the test
+// helpers off the factory instead — reachable via import, invisible to the loader.
+Object.assign(GeneseedLearn, { writeMemories })
 
 export default GeneseedLearn

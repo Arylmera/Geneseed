@@ -12,13 +12,15 @@
  * matter.
  */
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { hookRunnerEntry } from '../../js/build/driver.mjs';
-import { GENESEED_HOOK_SNIFF, mergeClaudeSettings, readJsonc } from '../../js/hosts/settings.mjs';
+import {
+  GENESEED_HOOK_SNIFF, mergeClaudeSettings, readJsonc, wireClaudeExcludes,
+} from '../../js/hosts/settings.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 import { jsonDumpsCompact } from '../../js/lib/json.mjs';
 
@@ -149,6 +151,59 @@ test('a settings file that is not JSON at all is refused, not overwritten', () =
     sb.cleanup();
   }
 });
+
+// THE OTHER TWO WAYS A SETTINGS FILE GIVES THE MERGE NOTHING TO START FROM. Both merges began
+// from `{}` and fell through to it here, so `atomicWriteJson` replaced the user's file with
+// Geneseed's keys alone: valid JSON that is not an object, and a path that exists but cannot be
+// read (a DIRECTORY named settings.json is the read error every platform can produce). The rule
+// is `mergeOpencodeJson`'s — refuse, say why on stderr, leave the path exactly as it was — and
+// each row states the phrase that says why. The merges' "nothing written" answers are the
+// caller's prior claims (hooks) and `[]` (excludes).
+const UNSTARTABLE = [
+  { name: 'a JSON array', seed: (p) => writeFileSync(p, '[]\n', 'utf8'),
+    says: /settings\.json is not a JSON object — NOT rewriting it/ },
+  { name: 'a JSON string', seed: (p) => writeFileSync(p, '"hooks"\n', 'utf8'),
+    says: /settings\.json is not a JSON object — NOT rewriting it/ },
+  { name: 'an unreadable path', seed: (p) => mkdirSync(p),
+    says: /could not read .*settings\.json .*— NOT touching it/ },
+];
+
+for (const row of UNSTARTABLE) {
+  test(`a settings file that is ${row.name} is refused by both merges, not overwritten`, () => {
+    const sb = makeSandbox('jsonc-unstartable-');
+    try {
+      const p = path.join(sb.path, 'settings.json');
+      row.seed(p);
+      const before = statSync(p).isDirectory() ? 'dir' : readFileSync(p, 'utf8');
+      const prior = [{ event: 'Stop', group: { hooks: [] } }];
+      const [hooksAnswer, hooksErr] = stderrOf(
+        () => mergeClaudeSettings(p, 'global', prior, hookRunnerEntry()));
+      const [excludesAnswer, excludesErr] = stderrOf(
+        () => wireClaudeExcludes(p, ['/elsewhere/CLAUDE.md']));
+      assert.equal(statSync(p).isDirectory() ? 'dir' : readFileSync(p, 'utf8'), before,
+        `${row.name} was rewritten — the user's file replaced by Geneseed's keys alone`);
+      assert.deepEqual(hooksAnswer, [p, prior]);
+      assert.deepEqual(excludesAnswer, []);
+      assert.match(hooksErr, row.says);
+      assert.match(hooksErr, /Hooks were not wired/);
+      assert.match(excludesErr, row.says);
+      assert.match(excludesErr, /Excludes were not wired/);
+    } finally {
+      sb.cleanup();
+    }
+  });
+}
+
+function stderrOf(fn) {
+  const errs = [];
+  const real = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (c) => { errs.push(String(c)); return true; };
+  try {
+    return [fn(), errs.join('')];
+  } finally {
+    process.stderr.write = real;
+  }
+}
 
 test('every state the reference matrix required by name still has an owner', () => {
   // THE COVERAGE CLAIM, RE-AIMED. The reference asserted its own cell list still contained ten

@@ -11,12 +11,6 @@
  * `_mcp_install_targets`, `_mcp_known_names` and `_mcp_meta` are 168 lines of Python, all
  * new. The endpoints on top of them are the small half.
  *
- * AND `settings.mjs`'s ATOMIC WRITE IS NOT THIS ONE. `atomicWriteJson` is
- * `_build_settings._atomic_write_json`; `_mcp_save` is a different function with a different
- * temp suffix (`.tmp`, not `.geneseed-tmp`) that also creates the parent directory. Reusing
- * the first would be right until the moment a write fails, which is the moment the temp
- * file's name becomes the only evidence of what happened.
- *
  * THE ROUND TRIP IS THE HAZARD, and it is why every read here goes through `parseJson`.
  * `_mcp_save` rewrites the WHOLE config, not the servers map — and for a Claude global
  * install that config is `~/.claude.json`, which holds projects and history far beyond MCP
@@ -28,16 +22,16 @@
  * the wrapper rather than testing `typeof v === 'object'`. Python's `isinstance(x, dict)` is
  * false for a float; the JS twin has to be false for its wrapper.
  */
-import { existsSync, mkdirSync, renameSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { bobConfigDir, resolvePath } from './hosts.mjs';
 import { installState, installTargets } from './installs.mjs';
-import { printOut, printErr, readText, writeText } from '../lib/fs.mjs';
-import { isDict, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
+import { printOut, printErr, readText } from '../lib/fs.mjs';
+import { isDict, parseJson } from '../lib/json.mjs';
 import { padEndToWidth } from '../lib/text.mjs';
-import { opencodeTarget, readJsonc } from './settings.mjs';
+import { atomicWriteJson, opencodeTarget, readJsonc } from './settings.mjs';
 
 
 /** `dict.get(key, default)`. */
@@ -206,18 +200,9 @@ export function mcpCommented(p) {
   }
 }
 
-/**
- * `_mcp_save` — pretty JSON, written ATOMICALLY through a sibling temp file.
- *
- * Not `atomicWriteJson`: that is `_build_settings._atomic_write_json`, whose temp file is
- * named `.geneseed-tmp` and which does not create the parent directory. Two Python
- * functions, two twins.
- */
+/** `_mcp_save` — pretty JSON, written ATOMICALLY. The one writer, under its MCP name. */
 export function mcpSave(p, config) {
-  mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  writeText(tmp, `${jsonDumpsIndent(config)}\n`);
-  renameSync(tmp, p);
+  atomicWriteJson(p, config);
 }
 
 /**

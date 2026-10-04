@@ -57,14 +57,14 @@ import {
 import {
   GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
-import { mcpCommented } from '../hosts/mcp.mjs';
+import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
-  managedBlockRead, managedBlockRemove, managedBlockWrite,
+  atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   mergeClaudeSettings, opencodeTarget, readJsonc,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes, unwireClaudeSettings,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
-import { indexOfDeepEqual, jsonDumps, jsonDumpsIndent, deepEquals } from '../lib/json.mjs';
+import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
 import { comparePaths, isAbsolutePath, within } from '../lib/paths.mjs';
 
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
@@ -154,11 +154,15 @@ function pruneAncestors(start, stop) {
  * failure strings) differ in the root and in the label, which are the two arguments. The
  * `victim.is_file()` guard is load-bearing rather than defensive: a manifest entry naming a
  * directory is SKIPPED, not recursed into, and `removed` counts only what actually went.
+ *
+ * `ownedWithin` first, the same containment boundary deactivate draws: the manifest is a file
+ * on disk, and without it an `owned` entry of `../../.bashrc` was unlinked — and the prune
+ * then climbed from ITS parent, which never meets `base`, removing empty directories as it went.
  */
 function unlinkOwned(base, owned, label = '') {
   let removed = 0;
   const failed = [];
-  for (const rel of owned) {
+  for (const rel of ownedWithin(base, owned)) {
     const victim = path.join(base, rel);
     try {
       if (isFile(victim)) {
@@ -175,6 +179,23 @@ function unlinkOwned(base, owned, label = '') {
     }
   }
   return [removed, failed];
+}
+
+/**
+ * The manifest rels that resolve INSIDE `base` — the one security boundary every walk over
+ * `owned` goes through (uninstall, both deactivates).
+ *
+ * `path.resolve(rroot, r)` and NOT `path.join`, which is the one line here that is a security
+ * boundary rather than a translation. The Python is `(rroot / r).resolve()`, and pathlib's
+ * `/` REPLACES the base when the right operand is absolute — so a manifest entry naming
+ * `C:/evil.md` resolves outside the root and `_within` rejects it. `path.join` would have
+ * concatenated it into `<root>/C:/evil.md`, which passes containment and would then be acted
+ * on. `path.resolve` has pathlib's semantics for exactly this case, and collapses `..`
+ * besides, which is why the guard runs on the resolved path rather than the lexical one.
+ */
+function ownedWithin(base, rels) {
+  const rroot = resolvePath(base);
+  return rels.filter((r) => r && within(resolvePath(path.resolve(rroot, r)), rroot));
 }
 
 /** The two WARNs every reversal prints when an owned file survives. Identical in all three. */
@@ -209,7 +230,7 @@ export function unmergeOpencodeJson(p, entry) {
   const text = readMaybe(target);
   if (text === null) return false;             // the Python's `except OSError: return False`
   [cfg, hadComments] = readJsonc(text);
-  if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) return false;
+  if (!isDict(cfg)) return false;
   const instr = cfg.instructions;
   if (!Array.isArray(instr) || !instr.includes(entry)) return false;
   if (path.extname(target) === '.jsonc' && hadComments) {
@@ -218,7 +239,7 @@ export function unmergeOpencodeJson(p, entry) {
     return false;
   }
   cfg.instructions = instr.filter((i) => i !== entry);
-  writeText(target, `${jsonDumpsIndent(cfg)}\n`);
+  atomicWriteJson(target, cfg);
   return true;
 }
 
@@ -269,8 +290,7 @@ function claudeMdPath(cfg, managed) {
 
 /** A manifest's `managed` map, or `{}` — the Python's `isinstance(..., dict)` guard. */
 function managedOf(man) {
-  const mg = man.managed;
-  return typeof mg === 'object' && mg !== null && !Array.isArray(mg) ? mg : {};
+  return isDict(man.managed) ? man.managed : {};
 }
 
 /** A manifest's `owned` list, or `[]`. */
@@ -340,22 +360,6 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode') {
 }
 
 /**
- * `_harness_mcp._mcp_load`, reduced to the OpenCode arm.
- *
- * The Claude arm (`.mcp.json`, `~/.claude.json`, parsed STRICTLY — see `mcpLoad` in
- * js/hosts/mcp.mjs for why) lives with the MCP catalog. `installAgentEntry` is this port's only caller and passes
- * no host, so porting the branch would ship an unreachable arm with no cell and no partition
- * to be part of — the criterion this port decides keep-vs-delete by.
- */
-function mcpLoadOpencode(p) {
-  if (!existsSync(p)) return {};
-  const text = readMaybe(p);
-  if (text === null) return {};
-  const [data] = readJsonc(text);
-  return typeof data === 'object' && data !== null && !Array.isArray(data) ? data : {};
-}
-
-/**
  * `_harness_mcp._install_agent_entry` — the `instructions` entry to drop.
  *
  * A global install wires the ABSOLUTE posix path; a project install wires the relative
@@ -367,7 +371,7 @@ export function installAgentEntry(root, kind) {
   if (kind === 'global') {
     return path.join(root, 'AGENT.md').split(path.sep).join('/');
   }
-  const cfg = mcpLoadOpencode(opencodeTarget(path.join(root, 'opencode.json')));
+  const cfg = mcpLoad(opencodeTarget(path.join(root, 'opencode.json')));
   return installAgentEntryOf(cfg.instructions);
 }
 
@@ -646,22 +650,6 @@ function printOtherHostHits(root, removedHost) {
 }
 
 /**
- * `_harness_setup._confirm`, and the only interactive read this verb makes.
- *
- * MOVED TO `js/maintain/setup.mjs` IN P5i, where the Python's own owner is: `_confirm` lives in
- * `_harness_setup` beside the `_ask` it is built on, and `setup` is its second caller. The
- * body stayed here for one phase because a helper with one caller is not shared yet; the
- * rule this port uses is that the SECOND owner is what moves it, and a byte gate is what
- * licenses the move.
- *
- * UNREACHABLE FROM EVERY CELL, restated because moving it does not change that: `cmdUninstall`
- * only reaches it when stdin is a TTY, and the harness gives every cell a pipe. What the
- * cells DO gate is the branch beside it — the non-interactive refusal — which is why that one
- * has an `expect` naming its wording. It is now gated positively too, by the stdin-seeded
- * corpus P5i added for the wizard.
- */
-
-/**
  * `_harness_mcp.cmd_uninstall`.
  *
  * The printing is the loud half and the deletions are the quiet one; the cells gate both. The
@@ -810,17 +798,7 @@ function installRelive(root) {
   return isFile(path.join(root, 'AGENT.md'));
 }
 
-/**
- * `_harness_mcp._install_move_list` — the rels to move aside, `_within`-guarded.
- *
- * `path.resolve(rroot, r)` and NOT `path.join`, which is the one line here that is a security
- * boundary rather than a translation. The Python is `(rroot / r).resolve()`, and pathlib's
- * `/` REPLACES the base when the right operand is absolute — so a manifest entry naming
- * `C:/evil.md` resolves outside the root and `_within` rejects it. `path.join` would have
- * concatenated it into `<root>/C:/evil.md`, which passes containment and would then be MOVED.
- * `path.resolve` has pathlib's semantics for exactly this case, and collapses `..` besides,
- * which is why the guard runs on the resolved path rather than the lexical one.
- */
+/** `_harness_mcp._install_move_list` — the rels to move aside, `ownedWithin`-guarded. */
 function installMoveList(root, kind) {
   let rels;
   if (kind === 'project') {
@@ -828,8 +806,7 @@ function installMoveList(root, kind) {
   } else {
     rels = ownedOf(claudeReadManifest(root)).filter((r) => r !== VERSION_MARKER);
   }
-  const rroot = resolvePath(root);
-  return rels.filter((r) => r && within(resolvePath(path.resolve(rroot, r)), rroot));
+  return ownedWithin(root, rels);
 }
 
 /**
@@ -844,16 +821,13 @@ function installMoveList(root, kind) {
  */
 function installReaddEntry(target, entry) {
   if (!existsSync(target)) {
-    mkdirSync(path.dirname(target), { recursive: true });
-    writeText(target, `${jsonDumpsIndent({
-      $schema: 'https://opencode.ai/config.json', instructions: [entry],
-    })}\n`);
+    atomicWriteJson(target, { $schema: 'https://opencode.ai/config.json', instructions: [entry] });
     return true;
   }
   let raw;
   try { raw = readText(target); } catch { return false; }   // except OSError
   const [cfg, hadComments] = readJsonc(raw);
-  if (typeof cfg !== 'object' || cfg === null || Array.isArray(cfg)) return false;
+  if (!isDict(cfg)) return false;
   const instr = Array.isArray(cfg.instructions) ? cfg.instructions : [];
   if (indexOfDeepEqual(instr, entry) >= 0) return false;
   if (path.extname(target) === '.jsonc' && hadComments) {
@@ -862,7 +836,7 @@ function installReaddEntry(target, entry) {
     return false;
   }
   cfg.instructions = [...instr, entry];
-  writeText(target, `${jsonDumpsIndent(cfg)}\n`);
+  atomicWriteJson(target, cfg);
   return true;
 }
 
@@ -1073,10 +1047,8 @@ function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   if (!deepEquals(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
     managed.settings_hooks = claims;
     data.managed = managed;
-    const tmp = path.join(cfg, `${GLOBAL_MANIFEST}.tmp`);
     try {
-      writeText(tmp, `${jsonDumpsIndent(data)}\n`);
-      renameSync(tmp, path.join(cfg, GLOBAL_MANIFEST));
+      atomicWriteJson(path.join(cfg, GLOBAL_MANIFEST), data);
     } catch { /* except OSError: pass */ }
   }
 }
@@ -1093,9 +1065,7 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
   const man = claudeReadManifest(cfg);
   const managed = managedOf(man);
   const stash = path.join(cfg, DISABLED_STASH, host);
-  const rroot = resolvePath(cfg);
-  const rels = ownedOf(man).filter((r) => r && r !== VERSION_MARKER
-    && within(resolvePath(path.resolve(rroot, r)), rroot));
+  const rels = ownedWithin(cfg, ownedOf(man).filter((r) => r !== VERSION_MARKER));
   const { done, failed } = moveAll(cfg, stash, rels);
   if (failed) {
     cleanHostStash(cfg, host);
@@ -1129,9 +1099,7 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
   const stash = path.join(cfg, DISABLED_STASH, host);
   const blockFile = path.join(stash, '_claude_md_block.txt');
   const reliveManifest = claudeReadManifest(cfg);
-  // `.get("managed") or {}` — an `or`, not an isinstance guard, and the difference is
-  // observable on a manifest whose `managed` is `null`.
-  const reliveManaged = reliveManifest.managed || {};
+  const reliveManaged = managedOf(reliveManifest);
   let relive = managedBlockRead(claudeMdPath(cfg, reliveManaged)) !== null;
   // Bob GLOBAL writes no managed AGENTS.md block — its preamble carrier is the owned
   // `rules/geneseed.md`, so a live copy of THAT is the relive signal there. Without this arm
@@ -1149,7 +1117,7 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
   }
   const { leftovers, moved } = restoreAll(stash, cfg, '_claude_md_block.txt');
   if (leftovers.length) return { ok: false, failed: leftovers, moved };
-  const managed = claudeReadManifest(cfg).managed || {};
+  const managed = managedOf(claudeReadManifest(cfg));
   // ⚠ THE CARRIER IS RESTORED BEFORE THE HOOKS ARE RE-MERGED, AND THE ORDER IS LOAD-BEARING.
   // `remergeClaudeHooks` reads the install's pack selection back off the carrier, and on a
   // Claude-style host that selection lives inside the MANAGED BLOCK — which the deactivate

@@ -39,7 +39,7 @@ import { CONFIG, PACK_ORDER, THEMES, discoverNames } from '../build/source.mjs';
 import { GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
-import { formatRepr } from '../lib/json.mjs';
+import { formatRepr, isDict } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 
 /**
@@ -394,7 +394,7 @@ export function excludedRulesOfDir(d) {
 /** `_harness_mcp._claude_read_manifest`. */
 export function claudeReadManifest(cfgDir) {
   const data = readJsonMaybe(path.join(cfgDir, GLOBAL_MANIFEST));
-  return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  return isDict(data) ? data : {};
 }
 
 /**
@@ -403,8 +403,7 @@ export function claudeReadManifest(cfgDir) {
  * Claude-style reversal.
  */
 export function manifestIsClaude(cfgDir) {
-  const mg = claudeReadManifest(cfgDir).managed;
-  return typeof mg === 'object' && mg !== null && !Array.isArray(mg);
+  return isDict(claudeReadManifest(cfgDir).managed);
 }
 
 /** `_harness_mcp._EMIT_HOST_SCOPE` — a marker's emit name fixes (host, scope). */
