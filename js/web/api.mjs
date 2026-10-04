@@ -123,7 +123,7 @@ export function apiInstalls(state) {
       footprint: footprintOfDir(root),
       posture: postureOfDir(root),
       mode: modeOfDir(root),
-      trust: trustOfDir(root),
+      trust: trustOfDir(root, host),
       selected: samePath(viewCfg(host, scope, root), state.target),
     });
   }

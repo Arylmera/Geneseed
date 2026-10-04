@@ -177,7 +177,7 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
       // makes explicit rather than leaving to `makeCfg`'s parameter default two layers down.
       posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
       // The loop skill's preset, or its `Default trust preset:` line reads as edited.
-      trust: trustOfDir(dir),
+      trust: trustOfDir(dir, host),
       // The excluded rules, or an install built `--exclude-rules "process 5"` reads its
       // carrier as drift: `expected` would re-state the rule the deployment took away.
       excludeRules: excludedRulesOfDir(dir),
