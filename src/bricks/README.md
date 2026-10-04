@@ -29,4 +29,6 @@ override rather than hiding it.
 Start from `_template.md`, or ask the `brick-forge` skill to draft one for an agent or skill you
 already have. Keep the body to 4-10 lines of direct instruction, and end it with how the model
 should choose among the outcomes you declared — that sentence is what turns a vague brief into a
-loop that actually terminates.
+loop that actually terminates. If the brick finds something the next brick needs, write it to a
+file in the OS temp directory and report that file's path with the outcome — the loop skill
+records it as a note.

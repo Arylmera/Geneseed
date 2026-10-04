@@ -12,4 +12,5 @@ Report `red` if it fails FOR THE REASON the intent states — not an import erro
 broken fixture in the test itself.
 Report `green` if it already passes: the behaviour exists, so keep the test as coverage.
 Report `untestable` if no seam lets a test reach the behaviour without changing production code
-first, naming what blocks it.
+first, naming what blocks it. If the card's `writeSet` names no test file, report `untestable`
+and say so.

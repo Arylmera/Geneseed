@@ -83,17 +83,19 @@ classified CI failure — that the next brick needs but the outcome string alone
 `geneseed loop record --note "<text>"` (or `--note-file <path>` for anything multi-line or that
 mentions `git commit`/`push`, which a shell argument can't carry safely) appends it to `LOOP.md`'s
 notes, so it survives into the next node and the next iteration instead of evaporating with the
-brick's own context. Several of the new bricks write their findings to a temp file and report
-its path specifically so the brick (or the skill recording on its behalf) can pass it to
-`--note-file` rather than losing it between steps.
+brick's own context. The brick never records a note itself — a brick only ever reports its
+outcome, plus the path to a file it wrote; the loop skill records it with `--note-file` on the
+brick's behalf. This applies to `plan` and `review` as much as to the newer bricks: any `read`
+brick whose finding the next brick needs writes it to a file in the OS temp directory and reports
+that file's path with the outcome.
 
 ## Bricks, templates, and the three origins
 
 A **brick** is a markdown file: YAML-ish frontmatter (`name`, `description`, `effect` — `read` or
 `mutate` — exactly one of `agent` or `skill`, and `outcomes`) plus a 4-10 line prose body. The
 model never sees the file; `geneseed loop next` hands it the body as the prompt. A **loop
-template** (`bugfix`, `feature`, `refactor`, or one composed by hand) is the graph JSON that wires
-bricks together.
+template** — a shipped template (see the table above) or one composed by hand — is the graph JSON
+that wires bricks together.
 
 Both are looked up across three origins, each able to override the one before it **by name**:
 
@@ -190,7 +192,7 @@ merges for you.
 | `init` | writes a fresh `LOOP.md` from a template or graph file, under a title, requirement and trust preset |
 | `next` | the only driver of the cycle — returns the next thing to do: run a node, score a card, answer an `awaiting`, or a terminal |
 | `score` | scores a declared card (`--declared`) before a mutate node runs, or the real diff (`--diff`, numstat piped on stdin) before a commit |
-| `record` | records a brick's reported outcome and advances the graph; `--note` carries a finding (a read brick's plan or review findings) into `LOOP.md`'s notes so it survives the unit |
+| `record` | records a brick's reported outcome and advances the graph; `--note` or `--note-file <path>` carries a finding (a read brick's plan or review findings) into `LOOP.md`'s notes so it survives the unit |
 | `decide` | answers an `awaiting` validation with a verdict and a note |
 
 Run `geneseed loop --help` for the full flag list.

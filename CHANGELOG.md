@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+**Upgrading:** re-emit (`geneseed rebuild-all`) so the installed `loop` skill records the
+bricks' note files.
+
 ### Added
 - **Five loop templates** — `tdd` (plan, then write each failing test before the code that passes
   it), `legacy-tests` (pin undocumented behaviour with characterization tests, mutation-checked,
