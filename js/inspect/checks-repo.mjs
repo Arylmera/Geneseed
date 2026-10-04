@@ -313,11 +313,20 @@ export function moduleMapProblems() {
       + 'checks-repo.mjs asserts it describes every module under js/'];
   }
 
-  // A row is `| `name.mjs` | … |`. Reading the CODE SPAN and not the whole line keeps a module
-  // named in a "Before editing" paragraph from counting as a row.
-  const documented = new Set(
-    [...text.matchAll(/^\|\s*`([a-z0-9-]+\.mjs)`\s*\|/gm)].map((m) => m[1]),
-  );
+  // A row is `| `name.mjs` | … |`, and it documents `<folder>/name.mjs` for the folder whose
+  // `## `js/<folder>/`` heading it sits under. Keyed by basename alone, a row answered for every
+  // folder holding that name — catalog.mjs, cli.mjs and registry.mjs each live in two — so a
+  // deleted module stayed "documented" by its namesake's row. Reading the CODE SPAN and not the
+  // whole line keeps a module named in a "Before editing" paragraph from counting as a row.
+  const documented = new Set();
+  let folder = null;
+  for (const line of text.split('\n')) {
+    const heading = /^## `js\/([a-z0-9-]+)\/`/.exec(line);
+    if (heading) { folder = heading[1]; continue; }
+    if (line.startsWith('## ')) { folder = null; continue; }
+    const row = /^\|\s*`([a-z0-9-]+\.mjs)`\s*\|/.exec(line);
+    if (row && folder) documented.add(`${folder}/${row[1]}`);
+  }
 
   const onDisk = new Set();
   const jsDir = path.join(String(ROOT), 'js');
@@ -328,7 +337,7 @@ export function moduleMapProblems() {
     // that only knew `/` finds ONE part on Windows and therefore zero modules — which is what
     // the vacuity guard below caught the first time this ran.
     const parts = path.relative(jsDir, rel).replaceAll('\\', '/').split('/');
-    if (parts.length === 2) onDisk.add(parts[1]);
+    if (parts.length === 2) onDisk.add(parts.join('/'));
   }
 
   if (onDisk.size < 30) {
@@ -344,7 +353,7 @@ export function moduleMapProblems() {
   }
   for (const mod of [...documented].sort()) {
     if (!onDisk.has(mod)) {
-      problems.push(`[authoring] js/README.md has a row for ${mod}, which does not exist — the map `
+      problems.push(`[authoring] js/README.md has a row for js/${mod}, which does not exist — the map `
         + 'sends a reader to a file that is not there');
     }
   }

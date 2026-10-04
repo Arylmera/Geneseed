@@ -1661,6 +1661,17 @@ test('the module map gate sees a module nobody documented, and a row for a modul
     (root) => gate(root, 'm.moduleMapProblems()'));
   assert.ok(dangling.some((p) => p.includes('ghost.mjs') && p.includes('does not exist')),
     `a row for a missing module went unreported: ${JSON.stringify(dangling)}`);
+
+  // A row is an address IN ITS FOLDER'S SECTION, not a basename anywhere on the page.
+  // `registry.mjs` lives in both js/inspect/ and js/loop/; dropping the loop row while the
+  // inspect row stays must still leave js/loop/registry.mjs undocumented. Keyed by basename,
+  // the inspect row answered for both and this went unreported.
+  const loopRow = /^\| `registry\.mjs` \| `loops\.json`.*\n/m;
+  assert.ok(loopRow.test(map), 'js/README.md no longer has the loop registry row this fault drops');
+  const sameName = withFault({ 'js/README.md': map.replace(loopRow, '') },
+    (root) => gate(root, 'm.moduleMapProblems()'));
+  assert.ok(sameName.some((p) => p.includes('js/loop/registry.mjs') && p.includes('no row')),
+    `a module documented only under another folder's heading went unreported: ${JSON.stringify(sameName)}`);
 });
 
 // ---------------------------------------------------------------------------------------------
