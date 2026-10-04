@@ -34,18 +34,19 @@ test('check over the shipped catalogue is clean, and lists templates and bricks'
     assert.equal(r.code, 0);
     assert.equal(r.out.ok, true);
     assert.deepEqual(r.out.problems, []);
-    assert.deepEqual(r.out.templates, ['bugfix', 'ci-repair', 'deps-upgrade', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd']);
+    assert.deepEqual(r.out.templates, ['architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd', 'update-contract']);
     assert.deepEqual(r.out.overridden, []);
     assert.deepEqual(r.out.bricks.map((b) => b.name), [
-      'apply', 'baseline-green', 'bruno-test', 'characterize', 'ci-fix', 'ci-triage', 'deps-audit',
-      'docs-update', 'identify', 'lint', 'mutation-check', 'plan', 'red-test', 'reproduce', 'review',
-      'security-scan', 'test', 'upgrade-scout',
+      'adr-challenge', 'adr-draft', 'apply', 'baseline-green', 'bruno-test', 'characterize', 'ci-fix',
+      'ci-triage', 'compat-check', 'deps-audit', 'docs-update', 'fitness-define', 'identify', 'lint',
+      'migration-plan', 'mutation-check', 'plan', 'red-test', 'reproduce', 'review', 'security-scan',
+      'test', 'upgrade-scout',
     ]);
-    assert.deepEqual(r.out.bricks[0], {
+    assert.deepEqual(r.out.bricks[2], {
       name: 'apply', description: "Implement the current card's intent, touching only its declared write set.",
       effect: 'mutate', agent: 'developer', skill: null, outcomes: ['pass'], origin: 'shipped', available: true,
     });
-    assert.deepEqual(r.out.bricks[2], {
+    assert.deepEqual(r.out.bricks[4], {
       name: 'bruno-test', description: 'Write or update Bruno requests for the endpoints this iteration touched.',
       effect: 'mutate', agent: null, skill: 'bruno-test-writer', outcomes: ['pass', 'fail'], origin: 'shipped', available: true,
     });

@@ -1,0 +1,25 @@
+{
+  "name": "update-contract",
+  "description": "Change an interface with live consumers — an API, a schema, an event — as expand, migrate one consumer per iteration, contract: plan it for the user to review, then apply, test, check old and new consumers, and review. Name the contract files (API specs, schema migrations, event schemas) with `geneseed loop init --contracts <globs>` so the expand and contract steps stop for a human.",
+  "nodes": ["migration-plan", "identify", "apply", "test", "compat-check", "review"],
+  "start": "migration-plan",
+  "edges": [
+    { "from": "migration-plan", "on": "pass", "to": "identify" },
+    { "from": "migration-plan", "on": "fail", "to": "$stop" },
+    { "from": "identify", "on": "more", "to": "apply" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "test" },
+    { "from": "test", "on": "pass", "to": "compat-check" },
+    { "from": "test", "on": "fail", "to": "apply" },
+    { "from": "compat-check", "on": "pass", "to": "review" },
+    { "from": "compat-check", "on": "fail", "to": "apply" },
+    { "from": "review", "on": "pass", "to": "identify" },
+    { "from": "review", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "apply", "test", "compat-check", "review"], "max": 20, "iteration": true },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "review-fix", "nodes": ["apply", "test", "compat-check", "review"], "max": 3 }
+  ],
+  "contracts": []
+}

@@ -1,0 +1,24 @@
+{
+  "name": "enforce-architecture-rule",
+  "description": "Confirm the suite is green, encode the requirement's architecture rule as a test with an allowlist of today's violations for the user to review, then fix one violation per iteration — removing its allowlist entry — test, and review, until the allowlist is empty.",
+  "nodes": ["baseline-green", "fitness-define", "identify", "apply", "test", "review"],
+  "start": "baseline-green",
+  "edges": [
+    { "from": "baseline-green", "on": "pass", "to": "fitness-define" },
+    { "from": "baseline-green", "on": "fail", "to": "$stop" },
+    { "from": "fitness-define", "on": "pass", "to": "identify" },
+    { "from": "fitness-define", "on": "fail", "to": "$stop" },
+    { "from": "identify", "on": "more", "to": "apply" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "test" },
+    { "from": "test", "on": "pass", "to": "review" },
+    { "from": "test", "on": "fail", "to": "apply" },
+    { "from": "review", "on": "pass", "to": "identify" },
+    { "from": "review", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "apply", "test", "review"], "max": 20, "iteration": true },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "review-fix", "nodes": ["apply", "test", "review"], "max": 3 }
+  ]
+}
