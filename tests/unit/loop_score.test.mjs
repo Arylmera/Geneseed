@@ -127,6 +127,15 @@ test('globMatch: *, ? and ** over slash-normalised paths', () => {
     ['a+b(c).js', 'a+b(c).js', true],
     ['api\\*.yaml', 'api\\openapi.yaml', true],
     ['api\\*.yaml', 'api/v2\\openapi.yaml', false],
+    // a leading `./` or `/` on either side is dropped: paths are repo-relative
+    ['./api/*.proto', 'api/user.proto', true],
+    ['/api/*.proto', 'api/user.proto', true],
+    ['api/*.proto', './api/user.proto', true],
+    ['.github/*.yml', '.github/ci.yml', true],
+    // runs of `**/` and of `*` collapse before compiling
+    ['**/**/**/x', 'x', true],
+    ['**/**/**/x', 'a/b/c/x', true],
+    ['a***.js', 'a/b.js', true],
   ]) assert.equal(globMatch(pattern, file), expected, `${pattern} ~ ${file}`);
 });
 
@@ -152,4 +161,13 @@ test('ignoreDeletions: matching files do not count toward the deletion rule, the
     { score: 0.8, reasons: ['outside the write set: web/yarn.lock'] });
   assert.deepEqual(actualRisk(0.2, [f('package-lock.json', 900), f('src/a.js', 21)],
     { writeSet: ['package-lock.json', 'src/a.js'], ignoreDeletions }), { score: 0.8, reasons: ['21 lines deleted'] });
+});
+
+// Collapsed wildcards keep a stacked pattern from backtracking: `**/**/**/x` against a deep
+// path that ends in a near miss answers at once (the bound is generous; uncollapsed it is not).
+test('globMatch: a stacked ** pattern fails fast on a deep near miss', () => {
+  const deep = `${'a/'.repeat(40)}y`;
+  const t0 = performance.now();
+  assert.equal(globMatch('**/**/**/**/**/**/x', deep), false);
+  assert.ok(performance.now() - t0 < 200);
 });

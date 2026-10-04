@@ -647,6 +647,16 @@ test('G2: a ring exhausted by the held edge re-splits only after ok', () => {
   assert.deepEqual(decideAwaiting(s, GB, 'ok'), { discard: true, resplit: true });
 });
 
+// A gate passed twice in one unit is listed once, as Loop-Bricks lists a node once.
+test('G2: a gate passed twice in one unit appears once in Loop-Gates', () => {
+  const s = gstart(); atWrite(s);
+  recordOutcome(s, GB, 'fail'); decideAwaiting(s, GB, 'ok');             // write -> write
+  recordOutcome(s, GB, 'pass');
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { verify: true });
+  assert.match(scoreDiff(s, [file('src/a.js')]).trailers, /\nLoop-Gates: write$/);
+  assert.deepEqual(s.history.at(-1).gates, ['write']);
+});
+
 // G5: a template's `contracts` globs are copied into the state at init, followed by any extra
 // ones `loop init --contracts` passes; the diff score matches them as globs.
 test('G5: graph contracts are copied at init, extra ones appended, and match as globs', () => {

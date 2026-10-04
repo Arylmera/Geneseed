@@ -421,6 +421,6 @@ function decideGate(state, bricks, verdict, note, { node, outcome }) {
     state.node = node;
     return { resumed: true };
   }
-  state.current.gates = [...(state.current.gates ?? []), node];
+  state.current.gates = [...new Set([...(state.current.gates ?? []), node])];   // once each, as Loop-Bricks
   return transition(state, bricks, node, state.graph.edges.find((e) => e.from === node && e.on === outcome));
 }

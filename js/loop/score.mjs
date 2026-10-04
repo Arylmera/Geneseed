@@ -110,8 +110,15 @@ const slash = (p) => p.replaceAll('\\', '/');
 // slash-normalised first, so a backslash is a separator, never an escape. Hand-rolled because
 // this module may import nothing but node builtins (see the docblock above); a plain path is a
 // glob that matches only itself, so exact-path contracts keep working.
+// A leading `./` or `/` is dropped on both sides: every path here is repo-relative.
+// ponytail: runs of `**/` and `*` collapse first, so stacked wildcards cannot compound; what
+// remains is the regex engine's backtracking over several separate `**` (O(n^k) on a near miss).
+// Patterns come from the template author or the user, never from untrusted input — a linear
+// matcher is the upgrade if that ever changes.
+const globPath = (p) => slash(String(p)).replace(/^(?:\.?\/)+/, '');
+
 export function globMatch(pattern, file) {
-  const g = slash(String(pattern));
+  const g = globPath(pattern).replace(/\*{3,}/g, '**').replace(/(?:\*\*\/){2,}/g, '**/');
   let re = '';
   for (let i = 0; i < g.length; i += 1) {
     const c = g[i];
@@ -122,7 +129,7 @@ export function globMatch(pattern, file) {
     else if (c === '?') re += '[^/]';
     else re += c.replace(/[.+^${}()|[\]]/g, '\\$&');
   }
-  return new RegExp(`^${re}$`).test(slash(String(file)));
+  return new RegExp(`^${re}$`).test(globPath(file));
 }
 
 const matchesAny = (globs, file) => globs.some((g) => globMatch(g, file));
