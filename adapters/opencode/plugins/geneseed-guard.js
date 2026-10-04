@@ -119,8 +119,10 @@ const SECRET_WARN_RE = [/(^|\/)\.env(\.[\w.-]+)?$/i]
 // Catastrophic, effectively irreversible shell → BLOCK. Both Unix and Windows shells,
 // since OpenCode runs natively on Windows and the agent may emit cmd / PowerShell.
 const SHELL_BLOCK_RE = [
-  /\brm\s+-[a-z]*r[a-z]*f?[a-z]*\s+(--no-preserve-root\s+)?\/(\s|$)/, // rm -rf /
-  /\brm\s+-[a-z]*r[a-z]*f?[a-z]*\s+~(\/)?(\s|$)/,                     // rm -rf ~
+  // rm -rf /, ~, /*, ~/* — flags may be split (-r -f), long (--recursive), or end with
+  // `--`; the lookahead insists one of them recurses. The target must be the root or
+  // home itself (optionally globbed), so `rm -rf /tmp/x` and `rm -rf ./build` pass.
+  /\brm\s+(?=(?:(?:-[a-zA-Z]+|--[a-z-]*)\s+)*?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\s)(?:(?:-[a-zA-Z]+|--[a-z-]*)\s+)+(?:\/|~\/?)\*?(\s|$)/,
   /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,                         // fork bomb
   /\bmkfs\.\w+\s+\/dev\//,                                            // format a device
   /\bdd\b[^\n]*\bof=\/dev\/(sd|nvme|hd|disk)/,                        // dd over a raw disk
@@ -409,7 +411,7 @@ export const GeneseedGuard = async (ctx) => {
   return {
     "tool.execute.before": async (input, output) => {
       if (OFF) return
-      if (await sovereignBypass(process.cwd())) return
+      if (await sovereignBypass(root())) return
       const tool = (input?.tool || input?.name || "").toLowerCase()
       const args = output?.args || input?.args || {}
       // `rule` is the ledger key, spelled as js/hosts/hooks.mjs spells it (`law-1`,

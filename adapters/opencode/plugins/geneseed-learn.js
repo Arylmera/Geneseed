@@ -29,8 +29,9 @@
 //   3. ./memory  or  ./Harness/memory   (when the bundle is inside the project)
 // If none resolve, it logs once and does nothing — it never blocks a session.
 //
-// It is intentionally conservative: trivial sessions are skipped, each session is
-// processed at most once per process, and any error is swallowed.
+// It is intentionally conservative: trivial sessions are skipped, one session never
+// has two distils in flight at once (a continued session re-distils after its next
+// quiet window — see TIMING), and any error is swallowed.
 
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
@@ -155,19 +156,20 @@ const AGENT_NAME_RE = /^[a-z][a-z0-9-]{1,40}$/
 const MAX_AGENT_BULLETS = 100 // hard cap, oldest dropped; no pruning heuristics
 
 // SINGLE SOURCE — the harness extracts this exact literal (see LEARN_PROMPT_HEAD).
-export const AGENT_LESSON_PROMPT = `The notes below are one subagent dispatch ("agent run").
+// Not exported: OpenCode calls every export as a plugin factory, and a string is not one.
+const AGENT_LESSON_PROMPT = `The notes below are one subagent dispatch ("agent run").
 Output AT MOST ONE line: a durable lesson about how this agent should operate on a
 FUTURE, unrelated dispatch (a boundary that proved wrong, an input it always needs,
 a method that worked). Task residue ("fixed X", file names, ticket detail) is NOT a
 lesson. If there is none — the overwhelmingly common case — output exactly: NOTHING.`
 
-export function resolveAgentName(meta) {
+function resolveAgentName(meta) {
   const raw = meta?.agent ?? meta?.agentName ?? meta?.agentID ?? null
   const name = typeof raw === "string" ? raw.trim().toLowerCase() : null
   return name && AGENT_NAME_RE.test(name) ? name : null
 }
 
-export async function appendAgentLesson(memDir, agent, lesson) {
+async function appendAgentLesson(memDir, agent, lesson) {
   const dir = path.join(memDir, "agents")
   await fs.mkdir(dir, { recursive: true })
   const file = path.join(dir, `${agent}.md`)
@@ -211,8 +213,12 @@ function envModel() {
   return null
 }
 
+// Stems that name the store's own files, never a fact: `MEMORY` is the index, so a model
+// that emitted `name: MEMORY` would overwrite it.
+const RESERVED_STEMS = new Set(["memory", "readme"])
+
 async function existingSlugs(memDir) {
-  const skip = new Set(["memory", "readme"])
+  const skip = RESERVED_STEMS
   try {
     const entries = await fs.readdir(memDir)
     return new Set(
@@ -256,7 +262,10 @@ function parseFrontmatter(chunk) {
 // js/hosts/hooks.mjs, inlined because this file ships standalone.
 const MEMORY_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/
 
+// Compared lowercase: on a case-insensitive filesystem (Windows, macOS) `User-Prefs`
+// and `user-prefs` are the same file, so a case variant would overwrite a stored fact.
 async function writeMemories(output, memDir, existing) {
+  const taken = new Set([...existing].map((s) => s.toLowerCase()))
   const written = []
   const indexLines = []
   for (let chunk of output.split(/^---FILE---\s*$/m)) {
@@ -264,9 +273,11 @@ async function writeMemories(output, memDir, existing) {
     if (!chunk || chunk.toUpperCase() === "NOTHING") continue
     const fm = parseFrontmatter(chunk)
     const name = (fm.name || "").trim()
-    if (!MEMORY_SLUG_RE.test(name) || existing.has(name)) continue
+    const key = name.toLowerCase()
+    if (!MEMORY_SLUG_RE.test(name) || RESERVED_STEMS.has(key) || taken.has(key)) continue
     await fs.writeFile(path.join(memDir, `${name}.md`), chunk.replace(/\n+$/, "") + "\n", "utf8")
     existing.add(name)
+    taken.add(key)
     written.push(name)
     const desc = (fm.description || "").trim()
     indexLines.push(`- [${name}](${name}.md)` + (desc ? ` — ${desc}` : ""))
@@ -280,14 +291,19 @@ async function writeMemories(output, memDir, existing) {
   return written
 }
 
-export const GeneseedLearn = async ({ client }) => {
+export const GeneseedLearn = async (ctx) => {
+  const { client } = ctx ?? {}
   const ours = new Set()       // throwaway distil sessions — never mine our own output
   const timers = new Map()     // sid -> debounce timer, re-armed on each idle
   const inFlight = new Set()   // sid currently being distilled (guards against overlap)
   let warnedNoDir = false
 
+  // The session root, as guard and context use it — not process.cwd(), which is the
+  // directory OpenCode was launched from and need not be the project being served.
+  const root = ctx?.worktree || ctx?.directory || process.cwd()
+
   async function runDistill(sid) {
-    if (await sovereignBypass(process.cwd())) return
+    if (await sovereignBypass(root)) return
     if (inFlight.has(sid)) return   // a run is already underway; the next idle re-arms
     inFlight.add(sid)
     try {
@@ -400,6 +416,6 @@ export const GeneseedLearn = async ({ client }) => {
 
 // OpenCode treats every export as a plugin and rejects non-functions; hang the test
 // helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedLearn, { writeMemories })
+Object.assign(GeneseedLearn, { writeMemories, resolveAgentName, appendAgentLesson })
 
 export default GeneseedLearn

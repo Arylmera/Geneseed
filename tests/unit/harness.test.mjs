@@ -126,6 +126,23 @@ test('writeMemories refuses a name that is not a plain slug', () => {
   });
 });
 
+// `MEMORY` and `README` (any case) name the store's own files — `name: MEMORY` would replace
+// the index — so they are refused. And a stored slug is matched case-insensitively, because on
+// Windows and macOS `User-Prefs.md` IS `user-prefs.md`: the variant would overwrite the fact.
+test('writeMemories refuses reserved stems and case variants of a stored slug', () => {
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'MEMORY.md'), '# Memory Index\n- [user-prefs](user-prefs.md)\n');
+    fs.writeFileSync(path.join(d, 'user-prefs.md'), 'original\n');
+    const fact = (name) => `---\nname: ${name}\ndescription: x\n---\nbody\n`;
+    const out = ['MEMORY', 'memory', 'Readme', 'User-Prefs', 'fresh', 'FRESH'].map(fact)
+      .join('---FILE---\n');
+    assert.deepEqual(writeMemories(out, d, existingSlugs(d)), ['fresh']);
+    assert.equal(fs.readFileSync(path.join(d, 'user-prefs.md'), 'utf8'), 'original\n');
+    assert.match(fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8'),
+      /^# Memory Index\r?\n- \[user-prefs\]\(user-prefs\.md\)\r?\n- \[fresh\]/);  // CRLF on win32
+  });
+});
+
 // A model CLI that cannot be spawned at all leaves no stderr of its own, so `learn` must say
 // why it exits 1 — a silent non-zero is exactly what a Stop hook's user cannot debug.
 test('learn names the model CLI it could not run', () => {

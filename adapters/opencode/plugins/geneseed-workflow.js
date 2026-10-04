@@ -14,7 +14,9 @@
 // written to `.geneseed/workflow-runs/<runId>.log`. Every failure is contained and
 // reported, never thrown into the session.
 //
-// Quiet by default; GENESEED_DEBUG=1 logs to stderr. GENESEED_WORKFLOWS_DIR overrides
+// One stderr line at load (the banner below — it is how a restart shows the tool
+// registered, or warns that it could not); everything else is quiet unless
+// GENESEED_DEBUG=1. GENESEED_WORKFLOWS_DIR overrides
 // where saved workflows are loaded from.
 
 import { execFile } from "node:child_process"

@@ -84,6 +84,32 @@ test("still blocks rm -rf / (no regression)", async () => {
   assert.equal(await blocked("bash", { command: "rm -rf /" }), true)
 })
 
+// A recursive rm whose target is the filesystem root or the home dir — bare, globbed, or
+// after a `--` / split flags — is blocked. Bare `rm -rf /` GNU rm refuses on its own; the
+// globbed and `~` forms it does not. Any narrower target is ordinary work and passes.
+for (const [command, want] of [
+  ["rm -rf /*", true],
+  ["rm -rf ~/*", true],
+  ["rm -rf ~", true],
+  ["rm -rf ~/", true],
+  ["rm -rf -- /", true],
+  ["rm -r -f /", true],
+  ["rm -f -r /*", true],
+  ["rm --recursive --force /", true],
+  ["rm -Rf /", true],
+  ["rm -rf --no-preserve-root /", true],
+  ["cd x && rm -rf /* ", true],
+  ["rm -rf ./build", false],
+  ["rm -rf /tmp/x", false],
+  ["rm -rf ~/projects/old", false],
+  ["rm -rf build/*", false],
+  ["rm -f /", false],            // not recursive: rm refuses a directory without -r
+]) {
+  test(`rm root/home guard: ${JSON.stringify(command)} -> ${want ? "blocked" : "allowed"}`, async () => {
+    assert.equal(await blocked("bash", { command }), want)
+  })
+}
+
 // ---- protected wiki folders (AGENT.md §8) --------------------------------------
 
 test("blocks a write under a protected wiki folder", async () => {

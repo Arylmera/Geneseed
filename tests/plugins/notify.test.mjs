@@ -1,13 +1,13 @@
 // Tests for the notify plugin's decision logic — the pure `shouldNotify` gate and the
 // `lastUserMs` transcript reader. The actual OS notification (spawn) is a side effect
-// and is not unit-tested; all the meaningful logic lives in these two helpers. Run
+// is not unit-tested; `notifyCommand` pins what would be spawned. Run
 // from the Geneseed root:
 //   node --test tests/plugins/notify.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import GeneseedNotify from "../../adapters/opencode/plugins/geneseed-notify.js"
-const { shouldNotify, lastUserMs } = GeneseedNotify
+const { shouldNotify, lastUserMs, notifyCommand } = GeneseedNotify
 
 const MIN = 30_000
 
@@ -61,4 +61,31 @@ test("lastUserMs: picks the latest user message's created time across time shape
 test("lastUserMs: null when there is no user message or bad input", () => {
   assert.equal(lastUserMs([{ info: { role: "assistant", time: { created: 5 } } }]), null)
   assert.equal(lastUserMs(null), null)
+})
+
+// Windows delivery: the title and body reach PowerShell only through GS_T / GS_B, never
+// inside the -Command text. PowerShell treats U+2018-U+201B as quotes as well as ASCII ',
+// so a session title carrying one of them used to close the string literal and run the
+// rest as script. Each row is a title that must appear verbatim in env and nowhere in args.
+for (const title of [
+  "x’;Start-Process calc;’",   // U+2019 right single quote
+  "x‘;Start-Process calc;‘",   // U+2018 left single quote
+  "x';Start-Process calc;'",             // ASCII quote (the case doubling already caught)
+  "$(Start-Process calc)",               // subexpression
+]) {
+  test(`notifyCommand(win32): ${JSON.stringify(title)} travels in env, not in the script`, () => {
+    const { cmd, args, env } = notifyCommand("win32", "Geneseed", `Done: ${title}`)
+    assert.equal(cmd, "powershell")
+    assert.equal(env.GS_B, `Done: ${title}`)
+    assert.equal(env.GS_T, "Geneseed")
+    assert.ok(!args.join(" ").includes("Start-Process calc"), "payload leaked into -Command")
+    assert.match(args.at(-1), /ShowBalloonTip\(5000,\$env:GS_T,\$env:GS_B,/)
+  })
+}
+
+test("notifyCommand: macOS and Linux keep their argv shape and carry no env", () => {
+  assert.deepEqual(notifyCommand("linux", "T", "B"), { cmd: "notify-send", args: ["T", "B"] })
+  const mac = notifyCommand("darwin", "T", 'say "hi"')
+  assert.equal(mac.cmd, "osascript")
+  assert.deepEqual(mac.args, ["-e", 'display notification "say \\"hi\\"" with title "T"'])
 })

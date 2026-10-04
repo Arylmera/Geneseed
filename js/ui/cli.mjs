@@ -31,13 +31,9 @@
  * a file filtered for the page breaks the CLI, and a file in `cliSpec`'s shape cannot render
  * the docs. It stays exactly what the argparse walk produced.
  *
- * WHAT USED TO GUARD IT, AND WHAT DOES NOW. While the parser existed, `cliReferenceProblems()`
- * hashed `rituals/harness.py` and doctor reported drift on both binaries. That digest was over
- * a file this migration deletes, so it is gone; `tests/test_cli_reference.py` holds the
- * argparse-vs-table comparison, and it can only ever cover the rows argparse HAS: `catalog`,
- * `mcp` and `memory` never had a subparser and are outside it by construction. The successor
- * that checks the WHOLE table, and outlives the parser, is `tests/unit/cli_table.test.mjs`;
- * after that the table is simply the source of truth and is edited directly.
+ * WHAT GUARDS IT. The Python parser it was walked from is gone, and with it every comparison
+ * against argparse; the table is now simply the source of truth and is edited directly.
+ * `tests/unit/cli_table.test.mjs` checks the WHOLE table.
  *
  * THE COST, NAMED: this entry cannot parse anything without this file. `js/build/source.mjs`
  * already reads `harness.config.json` at import for every render, so a tracked data document
@@ -48,6 +44,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from '../build/source.mjs';
+import { printOut } from '../lib/fs.mjs';
 import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 
 const CLI_JSON = path.join(ROOT, 'js', 'cli-table.json');
@@ -181,9 +178,8 @@ const WORDSEP = new RegExp(
  * `drop_whitespace`, `break_long_words` and `break_on_hyphens` all on, and the text already
  * whitespace-collapsed and stripped by the caller.
  *
- * ponytail: lives here rather than in `js/lib/` because `formatHelp` is its only consumer.
- * `rituals/_harness_tui*.py` calls `textwrap.wrap` in seven places and is declared unported;
- * move this when that changes, not before.
+ * ponytail: lives here rather than in `js/lib/` because `formatHelp` is its only consumer;
+ * move it when a second one appears, not before.
  */
 export function wrapText(text, width) {
   const chunks = text.split(WORDSEP).filter(Boolean).reverse();
@@ -443,8 +439,7 @@ export function printVerbList(prog, verbs, extra = {}) {
     `A bare \`${prog}\` runs \`home\`. \`${prog} <command> --help\` describes one command.`, '',
     'commands:'];
   for (const n of names) lines.push(`  ${n.padEnd(pad)}${helpOf.get(n) || ''}`.trimEnd());
-  const text = `${lines.join('\n')}\n`;
-  process.stdout.write(process.platform === 'win32' ? text.replaceAll('\n', '\r\n') : text);
+  printOut(`${lines.join('\n')}\n`);
   return 0;
 }
 
@@ -453,18 +448,16 @@ export function printVerbList(prog, verbs, extra = {}) {
  * describe — the caller already owns that refusal and its message.
  *
  * ONE OWNER FOR TWO ENTRIES. `bin/geneseed-hook.mjs` carries the four hook verbs and
- * `bin/geneseed-cli.mjs` the rest of the table, and
- * `test_the_two_entry_points_carry_disjoint_verb_sets` keeps them from learning each other's
+ * `bin/geneseed-cli.mjs` the rest of the table, and `tests/unit/hook_cli.test.mjs`'s
+ * "the two entry points carry disjoint verb sets" keeps them from learning each other's
  * tables — so the help each prints has to come from here rather than from a copy in each.
  *
- * CRLF ON WINDOWS for `die`'s reason: argparse writes through a Python text stream, which
- * translates, and this text lands in the same terminals and the same pipes as that one.
+ * CRLF ON WINDOWS through `printOut`, the one funnel every CLI print takes.
  */
 export function printHelp(prog, verb) {
   const cmd = cliCommand(verb);
   if (cmd === null) return null;
-  const text = formatHelp(cmd, `${prog} ${verb}`, helpWidth());
-  process.stdout.write(process.platform === 'win32' ? text.replaceAll('\n', '\r\n') : text);
+  printOut(formatHelp(cmd, `${prog} ${verb}`, helpWidth()));
   return 0;
 }
 

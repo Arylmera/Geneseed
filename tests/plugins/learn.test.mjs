@@ -5,7 +5,8 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import path from "node:path"
-import GeneseedLearn, { resolveAgentName, appendAgentLesson } from "../../adapters/opencode/plugins/geneseed-learn.js"
+import GeneseedLearn from "../../adapters/opencode/plugins/geneseed-learn.js"
+const { resolveAgentName, appendAgentLesson } = GeneseedLearn
 import { makeSandbox } from "../helpers/sandbox.mjs";
 
 test("resolveAgentName: reads agent from session meta, rejects garbage", () => {
@@ -57,4 +58,20 @@ test("writeMemories: refuses a name that is not a plain slug, writes one that is
     "a memory was written outside the memory dir")
   assert.deepEqual((await fs.readdir(memDir)).sort(),
     ["MEMORY.md", ...accepted.map((n) => `${n}.md`)].sort())
+})
+
+// The twin of the harness rule (tests/unit/harness.test.mjs): `MEMORY` / `README` in any case
+// name the store's own files and are refused, and a stored slug matches case-insensitively —
+// on Windows and macOS `User-Prefs.md` and `user-prefs.md` are the same file.
+test("writeMemories: refuses reserved stems and case variants of a stored slug", async () => {
+  const memDir = makeSandbox("gs-learn-").path
+  await fs.writeFile(path.join(memDir, "MEMORY.md"), "# Memory Index\n- [user-prefs](user-prefs.md)\n")
+  await fs.writeFile(path.join(memDir, "user-prefs.md"), "original\n")
+  const chunk = (name) => `---\nname: ${name}\ndescription: d\n---\nbody`
+  const output = ["MEMORY", "memory", "Readme", "User-Prefs", "fresh", "FRESH"].map(chunk).join("\n---FILE---\n")
+  const written = await GeneseedLearn.writeMemories(output, memDir, new Set(["user-prefs"]))
+  assert.deepEqual(written, ["fresh"])
+  assert.equal(await fs.readFile(path.join(memDir, "user-prefs.md"), "utf8"), "original\n")
+  assert.match(await fs.readFile(path.join(memDir, "MEMORY.md"), "utf8"),
+    /^# Memory Index\n- \[user-prefs\]\(user-prefs\.md\)\n- \[fresh\]/)
 })

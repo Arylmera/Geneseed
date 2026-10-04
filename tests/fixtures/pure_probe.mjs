@@ -49,8 +49,7 @@ import {
 } from '../../js/web/docs.mjs';
 import { webFirstOk } from '../../js/ui/menu.mjs';
 import {
-  clamp, detailLines, dwidth, fit, glyphs, icon, logoLines, mark, progressBar, spin,
-  themeFlair, themePreview, truncd, tuiEntries,
+  detailLines, dwidth, fit, glyphs, icon, mark, truncd, tuiEntries,
 } from '../../js/ui/tui.mjs';
 import { animOk, artFor, height, place, playLine, tile } from '../../js/ui/anim.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -189,12 +188,6 @@ const FNS = {
   fit: (a) => fit(a[0], a[1]),
   icon: (a) => icon(a[0]),
   mark: (a) => mark(a[0]),
-  spin: (a) => spin(a[0]),
-  logo_lines: () => logoLines(),
-  clamp: (a) => clamp(a[0], a[1], a[2]),
-  progress_bar: (a) => progressBar(...a),
-  theme_preview: (a) => themePreview(a[0]),
-  theme_flair: (a) => themeFlair(a[0]),
   tui_entries: (a) => tuiEntries(a[0]),
   detail_lines: (a) => detailLines(a[0], a[1], a[2]),
   // The exhaustive one — see the reference probe's comment. `String.fromCodePoint` is the

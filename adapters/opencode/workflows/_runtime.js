@@ -16,6 +16,7 @@
 // authoring convention — imported modules cannot have their globals shadowed — not a
 // hard sandbox guard. See docs/specs/2026-06-09-opencode-workflow-primitive.md.
 
+import { promises as fs } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 
@@ -189,14 +190,23 @@ async function runChildSession(client, { prompt, agent, model, title, directory 
 // the runtime never merges, commits, or deletes work. `git(argv, cwd)` is injected by the
 // plugin so this file stays pure and testable. The worktree has no untracked files from
 // the root (no node_modules, no .env): an agent that must run the project installs first.
-const slug = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "agent"
+//
+// Worktrees live under <root>/.geneseed/worktrees/ beside the run traces, NOT in the OS
+// temp dir: a kept worktree is unmerged work, and temp cleaners delete it. The state dir
+// gets a `*` .gitignore of its own (never overwriting one already there), so neither the
+// worktrees nor the traces show up as untracked files in the project.
+const fullSlug = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+const slug = (t) => fullSlug(t).slice(0, 32) || "agent"
 
 export async function isolate(git, root, name) {
   if (typeof git !== "function") throw new Error("worktree isolation unavailable — no git executor")
   if (!root) throw new Error("worktree isolation unavailable — unknown working dir")
   const base = (await git(["rev-parse", "HEAD"], root)).trim()
   const branch = `geneseed-wf/${name}`
-  const dir = path.join(os.tmpdir(), "geneseed-wf", name)
+  const state = path.join(root, ".geneseed")
+  await fs.mkdir(path.join(state, "worktrees"), { recursive: true })
+  await fs.writeFile(path.join(state, ".gitignore"), "*\n", { flag: "wx" }).catch(() => {})
+  const dir = path.join(state, "worktrees", name)
   await git(["worktree", "add", "-b", branch, dir, base], root)
   return { dir, branch, base }
 }
@@ -224,7 +234,10 @@ export function overlaps(worktrees) {
 export function createRuntime(ctx) {
   const { client, directory, worktree, log: sink, git } = ctx
   const root = worktree || directory
-  const runTag = slug(ctx.runId || "run")
+  // The WHOLE run id, never truncated: it ends in the run's time, and cutting it to the
+  // label slug's 32 characters left two same-day runs of a long-named workflow with one
+  // tag — the second run's `worktree add -b` then hit the first run's kept branch.
+  const runTag = fullSlug(ctx.runId || "run") || "run"
   const worktrees = []
   const args = ctx.args || {}
   const cap = ctx.concurrency || concurrencyCap()

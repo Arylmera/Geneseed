@@ -1,11 +1,11 @@
 // `tests/test_harness.py`'s `TuiHelperTests` — the drawing helpers that OUTLIVED the panel.
 //
-// The screen is dropped and `tests/unit/no_panel.test.mjs` keeps it dropped, but nine of these
-// eleven tests are not about a screen at all. `dwidth`, `fit`, `truncd`, `clamp`, `glyphs`,
-// `icon`, `mark`, `spin`, `logoLines` and `progressBar` are column arithmetic and glyph tiers,
-// and they still have callers: the status panel pads its box with them, `setup` draws with
-// them, and every one of them is a place a wrong answer becomes a misaligned frame on somebody
-// else's terminal.
+// The screen is dropped and `tests/unit/no_panel.test.mjs` keeps it dropped, but these tests are
+// not about a screen at all. `dwidth`, `fit`, `truncd`, `glyphs`, `icon` and `mark` are column
+// arithmetic and glyph tiers, and they still have callers: the status panel pads its box with
+// them, the catalogue aligns with them, and every one of them is a place a wrong answer becomes
+// a misaligned frame on somebody else's terminal. `spin`, `logoLines`, `clamp` and
+// `progressBar` had no caller once the panel was rejected, and went with their tests.
 //
 // TWO RETIRE, both genuinely screen-only:
 //   * `_clear_frame(win)` takes a CURSES WINDOW and asserts it was sent `erase()` then
@@ -14,7 +14,7 @@
 //     `wrapLines` crossed; the web console reflows in CSS.
 //
 // THE MONKEYPATCH BECOMES DISCOVERY, and the port's own docblock already said how. The
-// reference reaches into `_spin.__globals__` and `_progress_bar.__globals__` to flip
+// reference reached into module globals to flip
 // `_TUI_ANIM`/`_TUI_ASCII`, because both are module constants read once at import. The port
 // reads them from the ENVIRONMENT at import for exactly the same reason — so a tier is chosen
 // by starting a process with `GENESEED_TUI_ASCII` / `GENESEED_TUI_PLAIN` set, and the module
@@ -26,7 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
-  glyphs, GLYPH, dwidth, truncd, fit, logoLines, clamp, progressBar,
+  glyphs, GLYPH, dwidth, truncd, fit,
 } from '../../js/ui/tui.mjs';
 import { CATALOG_KINDS } from '../../js/build/catalog.mjs';
 
@@ -60,17 +60,6 @@ const ASCII = { GENESEED_TUI_ASCII: '1', GENESEED_TUI_PLAIN: '' };
 const PLAIN = { GENESEED_TUI_ASCII: '', GENESEED_TUI_PLAIN: '1' };
 
 const isAscii = (s) => [...s].every((c) => c.codePointAt(0) < 128);
-
-// ---------------------------------------------------------------------------------------------
-// Scroll arithmetic.
-
-test('clamp keeps the window inside the list', () => {
-  assert.equal(clamp(0, 5, 10), 0);
-  assert.equal(clamp(7, 5, 10), 0, 'a list shorter than the view must pin to the top');
-  assert.equal(clamp(0, 100, 10), 0);
-  assert.equal(clamp(95, 100, 10), 90, 'the last window must be full, not ragged');
-  assert.equal(clamp(-4, 100, 10), 0, 'a negative offset must never survive');
-});
 
 // ---------------------------------------------------------------------------------------------
 // Glyph tiers.
@@ -119,12 +108,6 @@ test('fit pads and truncates by display width, never by string length', () => {
   assert.equal(truncd('x', 0), '');
 });
 
-test('the logo is a rectangular block', () => {
-  const rows = logoLines();
-  assert.equal(rows.length, 5);
-  assert.equal(new Set(rows.map(dwidth)).size, 1, 'the logo rows are not all one width');
-});
-
 // ---------------------------------------------------------------------------------------------
 // The tiers, each in its own process.
 
@@ -160,37 +143,18 @@ test('every icon is one double-width codepoint in the emoji tier', () => {
     + 'falling back to the bullet');
 });
 
-test('the ascii tier is pure ascii for icons, marks and the spinner', () => {
+test('the ascii tier is pure ascii for icons and marks', () => {
   const out = inTier(ASCII,
     `({icons: ${JSON.stringify(CATALOG_ICONS)}.map(m.icon),`
     + ' marks: ["pending","edited","added","missing","mcp_on","mcp_off","mcp_absent"]'
-    + '.map(m.mark), spin: m.spin(3), bar: m.progressBar(0.5, 10)})');
-  for (const s of [...out.icons, ...out.marks, out.spin, out.bar]) {
+    + '.map(m.mark)})');
+  for (const s of [...out.icons, ...out.marks]) {
     assert.ok(isAscii(s), `ascii tier emitted ${JSON.stringify(s)}`);
   }
   // The mark keys must EXIST — `mark()` falls back to a bullet for an unknown kind, so a
   // deleted key would still answer, in ascii, and pass the purity check above on its own.
   assert.equal(new Set(out.marks).size > 1, true,
     'every mark answered the same glyph — the table has lost its keys and is falling back');
-  assert.equal(out.bar.length, 10);
-  assert.ok([...out.bar].every((c) => '#-'.includes(c)), out.bar);
-});
-
-test('the spinner is static when motion is off, and whirls when it is on', () => {
-  // The calm tiers must not emit a braille frame: `spin` has to be tick-INDEPENDENT there, or
-  // a per-keypress redraw flickers.
-  //
-  // FOUR CONSECUTIVE TICKS, not two, and the widening came from `test_pure_function_parity.py`'s
-  // `TheDisplayTiersAreThreeAndTheCorpusReachesTwo` on its way here: two frames prove the emoji
-  // tier is not CONSTANT, four prove it is not a two-frame blink either, and the calm tiers owe
-  // the same run length or "static" is asserted over a shorter window than "moving".
-  assert.deepEqual(inTier(PLAIN, '[0,1,2,3].map(m.spin)'), ['·', '·', '·', '·'],
-    'the plain tier animated');
-  assert.deepEqual(inTier(ASCII, '[0,1,2,3].map(m.spin)'), ['-', '-', '-', '-'],
-    'the ascii tier animated');
-  const anim = inTier(EMOJI, '[0,1,2,3].map(m.spin)');
-  assert.equal(new Set(anim).size, 4, `the emoji tier repeated a frame in four ticks: ${anim}`);
-  for (const f of anim) assert.ok('⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'.includes(f), JSON.stringify(f));
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -209,41 +173,16 @@ test('each tier answers with its own glyphs', () => {
   // `mark('ok')` is here and nowhere else in this file: the ascii-purity test above sweeps
   // pending/edited/added/missing and the three mcp keys, so the one mark the status panel uses
   // most had no tier assertion at all.
-  assert.deepEqual(inTier(EMOJI, "[m.icon('agent'), m.mark('ok'), m.spin(1)]"),
-    ['🤖', '✅', '⠙']);
-  // `·`, not a braille frame: the animation flag follows the EMOJI tier, so PLAIN is a CALM tier
-  // and not merely a de-emojified one. The reference's first draft of this row asserted `⠙` here
-  // — its own expectation contradicting the tier contract asserted two tests below it.
-  assert.deepEqual(inTier(PLAIN, "[m.icon('agent'), m.mark('ok'), m.spin(1)]"),
-    ['◆', '✓', '·']);
-  assert.deepEqual(inTier(ASCII, "[m.icon('agent'), m.mark('ok'), m.spin(1)]"),
-    ['@', '+', '-']);
+  assert.deepEqual(inTier(EMOJI, "[m.icon('agent'), m.mark('ok')]"), ['🤖', '✅']);
+  assert.deepEqual(inTier(PLAIN, "[m.icon('agent'), m.mark('ok')]"), ['◆', '✓']);
+  assert.deepEqual(inTier(ASCII, "[m.icon('agent'), m.mark('ok')]"), ['@', '+']);
 });
 
 test('the three tiers are three and not two', () => {
   // The control the row above needs: if PLAIN collapsed onto either neighbour the assertions
   // would still read as three named tiers while the code had two.
-  const answer = (tier) => inTier(tier, "[m.icon('agent'), m.mark('ok'), m.spin(1)]");
+  const answer = (tier) => inTier(tier, "[m.icon('agent'), m.mark('ok')]");
   const [emoji, plain, ascii] = [answer(EMOJI), answer(PLAIN), answer(ASCII)];
   assert.notDeepEqual(emoji, plain, 'the plain tier collapsed onto the emoji tier');
   assert.notDeepEqual(plain, ascii, 'the plain tier collapsed onto the ascii tier');
-});
-
-test('the logo changes ink with the tier', () => {
-  // And the axis is narrower than the tier: the logo is drawn in blocks in BOTH non-ascii tiers,
-  // so this is the one place the three-way partition is really a two-way one. Measured rather
-  // than assumed — the reference asserted only the emoji and ascii ends.
-  const row = (tier) => inTier(tier, 'm.logoLines()[0]');
-  assert.ok(row(EMOJI).includes('█'), row(EMOJI));
-  assert.ok(row(PLAIN).includes('█'), 'the plain tier drew the logo in ascii ink');
-  assert.ok(row(ASCII).includes('#'), row(ASCII));
-  assert.ok(!row(ASCII).includes('█'), 'the ascii tier drew the logo in block ink');
-});
-
-test('the progress bar is exactly its width at every fraction', () => {
-  // Sub-cell (eighths) fills are the interesting ones: the bar must stay exactly `width`
-  // display columns at any fraction, or it drifts the layout around it as it fills.
-  for (const frac of [0.0, 0.03, 0.1, 0.5, 0.99, 1.0]) {
-    assert.equal(dwidth(progressBar(frac, 24)), 24, `fraction ${frac}`);
-  }
 });

@@ -3,8 +3,8 @@
  *
  * P7c, and the one leftover of that phase that is NOT the declared curses panel. P5i ported
  * `_setup_lines` and left this out with a note — "belongs to P7 with the rest of the terminal
- * layer" — and the rest of the terminal layer turned out to be the panel, which stays
- * declared (`tests/test_tui_boundary.py` says why, and asserts it). This module is the part
+ * layer" — and the rest of the terminal layer turned out to be the panel, which was rejected
+ * (`tests/unit/no_panel.test.mjs` asserts it stays gone). This module is the part
  * that has nothing to do with curses: it draws on the ORDINARY terminal, with cursor-up
  * escapes and a sleep, and its only caller is a function that already crossed.
  *
@@ -23,16 +23,12 @@
  * needed — which is fortunate, because it is a `child_process` spawn and this port is barred
  * from those. The consequence is that the reference's `except Exception: return False` arm
  * around it has no counterpart here. That arm needs `cmd.exe` to be unlaunchable on a machine
- * that has already reached an interactive wizard, and `anim_ok` is compared over ten
- * environments in `tests/test_pure_function_parity.py` — none of which can produce it on
- * either side.
+ * that has already reached an interactive wizard.
  *
- * WHAT GATES IT. `tests/__snapshots__/primitives/{posix,win32}.json`, replayed by
- * `tests/snapshot/pure_snapshot.test.mjs`: `art_for` over every key plus the prototype-chain
- * names, `_place`/`_tile`/`_height` over their arithmetic, `anim_ok` over its whole decision
- * table, and `play_line` itself over 24 environments — captured on the reference side through
- * a real `TextIOWrapper`, so the CRLF translation is inside the recording rather than outside
- * it. There is no recorder left, so a red run means these functions moved, never the corpus.
+ * WHAT GATES IT. Little, now: the recorded snapshot corpus that replayed `art_for`, `_place`,
+ * `_tile`, `_height`, `anim_ok` and `play_line` is gone with the reference.
+ * `tests/unit/wizard.test.mjs` asserts the wizard still plays the animation, and in the right
+ * place; `tests/unit/no_panel.test.mjs` that this file is the one allowed its cursor escapes.
  */
 import { printOut } from '../lib/fs.mjs';
 import { parseIntStrict, codePointLength, padEndToWidth } from '../lib/text.mjs';
@@ -235,7 +231,7 @@ export function place(row, x, width) {
  * Python turns into an empty string and `String.repeat` turns into a RangeError, hence the
  * clamp. And `phase % len(tile)` is non-negative in Python for a positive divisor while
  * JavaScript keeps the sign of the dividend, so a negative phase indexes off the front of the
- * string instead of wrapping to the end. `_spin` had the same trap in P7b.
+ * string instead of wrapping to the end.
  */
 export function tile(tileStr, width, phase = 0) {
   if (!tileStr) return '';

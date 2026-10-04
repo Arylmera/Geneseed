@@ -4,7 +4,7 @@
 // WHAT THE DROPPED PANEL TOOK AND WHAT IT DID NOT, because this block straddles the line and
 // getting it wrong in either direction loses coverage or invents it:
 //
-//   * `setupBuildArgs`, `setupSummaryLines`, `javaMajorOk`, `lspPrereqs`, `themeFlair`,
+//   * `setupBuildArgs`, `setupSummaryLines`, `javaMajorOk`, `lspPrereqs`,
 //     `tuiInventory`, `tuiEntries` and `detailLines` ALL CROSSED. The last four live in
 //     `js/ui/tui.mjs` and `js/inspect/inventory.mjs` — the module refuses to open a SCREEN, it did not
 //     stop being where the shared helpers live, and the web console is their caller now.
@@ -25,7 +25,7 @@ import { setupBuildArgs } from '../../js/build/generate.mjs';
 import {
   doctrineOptions, hostTools, javaMajorOk, lspPrereqs, setupSummaryLines,
 } from '../../js/maintain/setup.mjs';
-import { themeFlair, tuiEntries, detailLines } from '../../js/ui/tui.mjs';
+import { tuiEntries, detailLines } from '../../js/ui/tui.mjs';
 import { catalogLines } from '../../js/build/catalog.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 import { doctrinesForBuild, doctrinesOfDir, themeFiles } from '../../js/hosts/installs.mjs';
@@ -285,35 +285,6 @@ test('the wizard menu lists every shipped pack, in narrative order, each with a 
   // to say what it costs, asserted so it cannot quietly stop saying it.
   const process$ = opts.find(([n]) => n === 'process');
   assert.match(process$[1], /consent gate on every commit and push/);
-});
-
-// ---------------------------------------------------------------------------------------------
-// The wizard's voice. The theme is picked first, and everything after it speaks in that voice.
-
-const VALID_ACCENTS = new Set(['cyan', 'yellow', 'red', 'green', 'magenta', 'blue', 'white']);
-
-test('every theme supplies a full set of flair', () => {
-  // Parity: each theme must give the wizard a usable voice, not blanks.
-  const names = themeNames();
-  assert.ok(names.length > 1, `only ${names.length} themes found — this loop proves nothing`);
-  for (const t of names) {
-    const f = themeFlair(t);
-    assert.ok(VALID_ACCENTS.has(f.accent), `${t}: accent ${JSON.stringify(f.accent)}`);
-    assert.ok(f.tagline, `${t}: no tagline`);
-    assert.ok(f.sigil, `${t}: no sigil`);
-    assert.ok(f.banner.length && f.banner.every((ln) => typeof ln === 'string'),
-      `${t}: banner is ${JSON.stringify(f.banner)}`);
-    assert.ok(f.benediction, `${t}: no benediction`);
-  }
-});
-
-test('an unknown theme degrades safely rather than throwing', () => {
-  const f = themeFlair('no-such-theme');
-  assert.equal(f.accent, 'cyan');
-  assert.equal(f.tagline, '');
-  // `[]`, not `['']` — `splitLines` on the empty string, which is the difference between a
-  // themeless banner and a banner made of one blank row.
-  assert.deepEqual(f.banner, []);
 });
 
 // ---------------------------------------------------------------------------------------------
