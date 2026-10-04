@@ -94,9 +94,14 @@ const consentRuleOn = (d, excluded = []) =>
  * `clean -f`, `branch -D`, `checkout --`) stay in EVERY build: they are Law IV's territory —
  * an always-on invariant — not the process pack's. They mirror `DESTRUCTIVE_GIT_RE` in
  * js/hosts/hooks.mjs, so Claude's git-gate and OpenCode's permission ask about the same acts;
- * before, OpenCode only logged the last four.
+ * before, OpenCode only logged the last four. A glob is not a regex, so the mirror is the
+ * closest glob for each act rather than an exact copy: the `* ` forms catch a flag that comes
+ * after other words (`push origin -f`, `reset -q --hard`, `clean -d -f`) and `git push *+*`
+ * a `+refspec` force push. The regex stays the stricter reader — it also sees a flag cluster
+ * with `f` not first (`clean -d -xf`), which a glob cannot say without matching `--exclude=f`.
  */
-const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git reset --hard*', 'git clean -f*',
+const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 'git push * -f*',
+  'git push *+*', 'git reset --hard*', 'git reset * --hard*', 'git clean -f*', 'git clean * -f*',
   'git branch -D*', 'git checkout -- *'];
 
 function defaultPermission(doctrines = null, excluded = []) {

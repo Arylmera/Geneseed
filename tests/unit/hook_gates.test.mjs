@@ -262,15 +262,32 @@ test('a destructive git verb asks under Deletion Is Deliberate', () => {
     'git branch -D feature',
     'git checkout -- src/',
     'git push --force-with-lease',
-    'cd /repo && git reset --hard origin/main']) {
+    'cd /repo && git reset --hard origin/main',
+    // The flag need not follow the verb, and a `+refspec` is a force push with no flag at all.
+    // Each of these slipped past when the regex wanted `--hard`/`-f`/`--force` right after it.
+    'git push -f origin main',
+    'git push origin -f',
+    'git push origin +main',
+    'git reset -q --hard',
+    'git clean -d -f',
+    'git clean -d -xf']) {
     const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
     assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
   }
 });
 
+test('an ordinary push is not a force push, so with consent off it defers', () => {
+  // `--no-consent` takes process 5 out, so only Law IV could ask: a `-u`, a `--follow-tags`
+  // (an `f` after `--`, not a `-f` cluster) and a plain refspec are not destructive.
+  for (const cmd of ['git push', 'git push origin main', 'git push -u origin feature',
+    'git push --follow-tags', 'git push origin HEAD:main']) {
+    assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), extra: ['--no-consent'] }), cmd);
+  }
+});
+
 test('a soft reset, a -d branch delete, a plain checkout and a dry-run clean defer', () => {
   for (const cmd of ['git reset --soft HEAD~1', 'git branch -d merged', 'git checkout main',
-    'git clean -n']) {
+    'git clean -n', 'git clean -n -d', 'git reset --soft HEAD -q']) {
     assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
   }
 });
@@ -288,6 +305,8 @@ test('a credential-shaped write asks under Sealed Secrets', () => {
     'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef012345',
     'github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123',
     'sk-ant-api03-abcdefghijklmnopqrstuvwxyz',
+    // base64url: an `_` inside the first 20 characters once cut the match short.
+    'sk-ant-api03-abcdefghij_klmnopqrstuvwxyz-0123',
     'xoxb-1234567890-abcdefghij',
     '-----BEGIN RSA PRIVATE KEY-----'];
   for (const s of shapes) {
@@ -298,6 +317,26 @@ test('a credential-shaped write asks under Sealed Secrets', () => {
   // Edit sends `new_string`, not `content`.
   askDecision(hookRun('rule-gate',
     { stdin: contentPayload('src/a.py', 'AKIAIOSFODNN7EXAMPLE', 'new_string') }), 'new_string');
+});
+
+test('MultiEdit and NotebookEdit carrying a credential ask too', () => {
+  // The settings matcher routes both here. MultiEdit puts its text in `edits[].new_string` —
+  // the secret sits in the SECOND edit, so a gate reading only the first still misses it — and
+  // NotebookEdit names its file `notebook_path` and its text `new_source`.
+  const multi = JSON.stringify({ tool_name: 'MultiEdit', tool_input: { file_path: 'src/a.js',
+    edits: [{ old_string: 'a', new_string: 'b' },
+      { old_string: 'c', new_string: 'const k = "AKIAIOSFODNN7EXAMPLE";' }] } });
+  const note = JSON.stringify({ tool_name: 'NotebookEdit', tool_input: {
+    notebook_path: 'nb/a.ipynb', cell_id: 'x', new_source: 'key = "AKIAIOSFODNN7EXAMPLE"' } });
+  for (const [what, stdin] of [['MultiEdit', multi], ['NotebookEdit', note]]) {
+    const dec = askDecision(hookRun('rule-gate', { stdin }), what);
+    assert.ok(dec.permissionDecisionReason.includes('Sealed Secrets'), dec.permissionDecisionReason);
+  }
+  // The control: the same shapes with clean text defer.
+  assertDefers(hookRun('rule-gate', { stdin: multi.replace('AKIAIOSFODNN7EXAMPLE', 'x') }),
+    'clean MultiEdit');
+  assertDefers(hookRun('rule-gate', { stdin: note.replace('AKIAIOSFODNN7EXAMPLE', 'x') }),
+    'clean NotebookEdit');
 });
 
 // ---------------------------------------------------------------------------------------------
