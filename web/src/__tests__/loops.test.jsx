@@ -114,6 +114,57 @@ describe('Loops', () => {
     expect(screen.queryByRole('list', { name: 'Rules every brick follows' })).toBeNull()
   })
 
+  // A `gate: human` brick is marked on the ring — a person badge whose title says when the user
+  // is asked, distinct from the engine's ⛨ validate gate — and tagged on its card. spec gates
+  // every outcome and is a setup step (the badge rides on its entry label); challenge gates on
+  // pass only. Entry badges are drawn before node badges.
+  it('marks human-gated bricks on the ring and on their cards', async () => {
+    const graph = {
+      name: 'gated',
+      nodes: ['spec', 'identify', 'apply', 'challenge'],
+      start: 'spec',
+      edges: [
+        { from: 'spec', on: 'pass', to: 'identify' },
+        { from: 'identify', on: 'more', to: 'apply' },
+        { from: 'identify', on: 'done', to: '$close' },
+        { from: 'apply', on: 'pass', to: 'challenge' },
+        { from: 'challenge', on: 'pass', to: 'identify' },
+      ],
+      loops: [
+        { name: 'iterations', nodes: ['identify', 'apply', 'challenge'], max: 5, iteration: true },
+      ],
+    }
+    api.loops.mockImplementation(() =>
+      Promise.resolve({
+        templates: [{ name: 'gated', description: 'Gated loop.', origin: 'shipped', graph }],
+        bricks: [
+          brick('apply', 'mutate'),
+          brick('challenge', 'read', { gate: 'human', gateOn: ['pass'] }),
+          brick('identify', 'read'),
+          brick('spec', 'mutate', { gate: 'human' }),
+        ],
+        overridden: [],
+      }),
+    )
+    render(<Loops tab="templates" />)
+    await screen.findByText('Gated loop.')
+    const svg = document.querySelector('svg.loop-ring')
+    expect([...svg.querySelectorAll('.lr-human title')].map((t) => t.textContent)).toEqual([
+      'Human gate',
+      'Human gate on pass',
+    ])
+    expect(svg.querySelectorAll('.lr-gate')).toHaveLength(1)
+    expect(svg.querySelector('.lr-gate title').textContent).toMatch(/^validate/)
+    expect(screen.getByRole('button', { name: 'challenge brick, human gate on pass' })).toBeTruthy()
+    const tag = (n) => document.querySelector(`#brick-${n} .tag.human`)?.textContent ?? null
+    expect(['spec', 'identify', 'apply', 'challenge'].map(tag)).toEqual([
+      'human gate',
+      null,
+      null,
+      'human gate on pass',
+    ])
+  })
+
   it('scrolls to the brick card when its node is clicked', async () => {
     render(<Loops tab="templates" />)
     await screen.findByText('The smallest loop.')

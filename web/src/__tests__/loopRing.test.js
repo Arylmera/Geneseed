@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { layoutLoop } from '../lib/loopRing.js'
+import { humanGate, layoutLoop } from '../lib/loopRing.js'
 
 // The shipped templates, as `/api/loops` hands them over (src/loops/*.json), and the
 // effect of each brick they use — the only brick field the layout reads.
@@ -118,10 +118,11 @@ describe('layoutLoop — the ring', () => {
   })
 
   // Setup enters from the left at 205° (y = 190 + 110·sin 205° = 143.5); `done → close`
-  // leaves from the node that owns the $close edge, ending 200 right and 30 up of it.
+  // leaves from the node that owns the $close edge, ending 200 right and 30 up of it. An
+  // entry carries `human` like a node does: null, reproduce has no human gate.
   it('enters with the setup nodes and exits from the head', () => {
     const l = layoutLoop(BUGFIX, BRICKS)
-    expect(l.entry).toEqual([{ name: 'reproduce', x: 40, y: 143.5 }])
+    expect(l.entry).toEqual([{ name: 'reproduce', x: 40, y: 143.5, human: null }])
     expect(l.exit).toEqual(expect.objectContaining({ from: 'identify', x: 460, y: 50 }))
   })
 
@@ -165,5 +166,108 @@ describe('layoutLoop — flow fallback', () => {
       loops: [...BUGFIX.loops, { name: 'extra', nodes: ['apply', 'review'], max: 2 }],
     }
     expect(layoutLoop(graph, BRICKS).mode).toBe('flow')
+  })
+})
+
+// The shipped templates with a human gate, as `/api/loops` hands them over: adr-challenge
+// stops for the user only when it passes (gateOn: ['pass']); spec stops on every outcome.
+const ADR = {
+  name: 'architecture-decision',
+  nodes: ['identify', 'adr-draft', 'adr-challenge'],
+  start: 'identify',
+  edges: [
+    { from: 'identify', on: 'more', to: 'adr-draft' },
+    { from: 'identify', on: 'done', to: '$close' },
+    { from: 'adr-draft', on: 'pass', to: 'adr-challenge' },
+    { from: 'adr-challenge', on: 'pass', to: 'identify' },
+    { from: 'adr-challenge', on: 'fail', to: 'adr-draft' },
+  ],
+  loops: [
+    {
+      name: 'iterations',
+      nodes: ['identify', 'adr-draft', 'adr-challenge'],
+      max: 8,
+      iteration: true,
+    },
+    { name: 'challenge-fix', nodes: ['adr-draft', 'adr-challenge'], max: 3 },
+  ],
+}
+const SPEC_FIRST = {
+  name: 'spec-first-feature',
+  nodes: ['spec', 'identify', 'apply', 'test', 'review', 'done-check'],
+  start: 'spec',
+  edges: [
+    { from: 'spec', on: 'pass', to: 'identify' },
+    { from: 'spec', on: 'fail', to: '$stop' },
+    { from: 'identify', on: 'more', to: 'apply' },
+    { from: 'identify', on: 'done', to: 'done-check' },
+    { from: 'apply', on: 'pass', to: 'test' },
+    { from: 'test', on: 'pass', to: 'review' },
+    { from: 'test', on: 'fail', to: 'apply' },
+    { from: 'review', on: 'pass', to: 'identify' },
+    { from: 'review', on: 'fail', to: 'apply' },
+    { from: 'done-check', on: 'pass', to: '$close' },
+    { from: 'done-check', on: 'fail', to: 'identify' },
+  ],
+  loops: [
+    {
+      name: 'iterations',
+      nodes: ['identify', 'apply', 'test', 'review', 'done-check'],
+      max: 20,
+      iteration: true,
+    },
+    { name: 'apply-test', nodes: ['apply', 'test'], max: 5 },
+    { name: 'review-fix', nodes: ['apply', 'test', 'review'], max: 3 },
+  ],
+}
+const GATED = [
+  ...BRICKS,
+  { name: 'adr-draft', effect: 'mutate' },
+  { name: 'adr-challenge', effect: 'read', gate: 'human', gateOn: ['pass'] },
+  { name: 'spec', effect: 'mutate', gate: 'human' },
+  { name: 'done-check', effect: 'read' },
+]
+const humans = (l) => [...l.nodes, ...l.entry].filter((n) => n.human).map((n) => [n.name, n.human])
+
+describe('layoutLoop — human gates', () => {
+  // The label is the marker's accessible title: a gate on every outcome is "Human gate"; a
+  // gate limited by gateOn names those outcomes. No gate, or another kind, is no marker.
+  it('labels a brick by its human gate', () => {
+    expect(humanGate({ gate: 'human' })).toBe('Human gate')
+    expect(humanGate({ gate: 'human', gateOn: ['pass'] })).toBe('Human gate on pass')
+    expect(humanGate({ gate: 'human', gateOn: ['pass', 'fail'] })).toBe('Human gate on pass, fail')
+    expect(humanGate({ gate: 'human', gateOn: [] })).toBe('Human gate')
+    expect(humanGate({})).toBe(null)
+    expect(humanGate(undefined)).toBe(null)
+  })
+
+  // architecture-decision: only adr-challenge carries the marker, on pass; the engine's
+  // validate gate before adr-draft is a separate node and never a human one.
+  it('marks adr-challenge in architecture-decision, on pass', () => {
+    const l = layoutLoop(ADR, GATED)
+    expect(humans(l)).toEqual([['adr-challenge', 'Human gate on pass']])
+    expect(l.nodes.find((n) => n.name === 'validate').human).toBe(null)
+  })
+
+  // spec-first-feature: spec is a setup step (it enters from the left), so the marker rides
+  // on its entry; nothing on the ring is human-gated.
+  it('marks the spec setup step in spec-first-feature', () => {
+    const l = layoutLoop(SPEC_FIRST, GATED)
+    expect(humans(l)).toEqual([['spec', 'Human gate']])
+    expect(l.entry).toEqual([{ name: 'spec', x: 40, y: 143.5, human: 'Human gate' }])
+  })
+
+  // Flow mode carries the marker too: the same nine-node iteration with its third node gated.
+  it('marks a human-gated node in flow mode', () => {
+    const nodes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
+    const graph = {
+      name: 'long',
+      nodes,
+      start: 'a',
+      edges: nodes.map((n, i) => ({ from: n, on: 'pass', to: nodes[(i + 1) % 9] })),
+      loops: [{ name: 'iterations', nodes, max: 20, iteration: true }],
+    }
+    const l = layoutLoop(graph, [{ name: 'c', effect: 'read', gate: 'human' }])
+    expect(humans(l)).toEqual([['c', 'Human gate']])
   })
 })

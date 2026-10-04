@@ -14,10 +14,11 @@
 // head collide), or an inner loop whose head left the ring. Left-to-right, each loop a box.
 //
 // layoutLoop(graph, bricks) -> { mode, width, height, center, nodes, arcs, inner, entry, exit }
-//   nodes  [{ name, x, y, r, effect, gate, inner }]   gate: the engine's ⛨ validate step
+//   nodes  [{ name, x, y, r, effect, gate, inner, human }]   gate: the engine's ⛨ validate step
 //   arcs   [{ d, kind: 'ring' | 'inner' | 'flow' }]
 //   inner  ring: [{ loop, cx, cy, r, label, lx, ly, anchor }]   flow: [{ loop, label, box }]
-//   entry  [{ name, x, y }]   exit { from, x, y, d } | null
+//   entry  [{ name, x, y, human }]   exit { from, x, y, d } | null
+//   human  the brick's `gate: human` as its marker's title (humanGate), or null
 
 const C = { x: 260, y: 190 }
 const R = 110
@@ -38,15 +39,24 @@ export const ENTRY_TO = r1(pt(205).x - 6)
 // ponytail: text width estimated at 6.4px a character (11px UI font); measuring needs a DOM.
 const textW = (s) => s.length * 6.4
 
+// A brick's human gate as words — the marker's accessible title and the brick card's tag. A
+// gate limited by `gateOn` stops only on those outcomes, so the label names them.
+export function humanGate(brick) {
+  if (brick?.gate !== 'human') return null
+  return brick.gateOn?.length ? `Human gate on ${brick.gateOn.join(', ')}` : 'Human gate'
+}
+
 export function layoutLoop(graph, bricks = []) {
-  const effectOf = (n) => bricks.find((b) => b.name === n)?.effect ?? null
+  const brickOf = (n) => bricks.find((b) => b.name === n)
+  const effectOf = (n) => brickOf(n)?.effect ?? null
+  const humanOf = (n) => humanGate(brickOf(n))
   const loops = graph.loops || []
   const it = loops.find((l) => l.iteration)
-  if (!it || it.nodes.length > 8) return flow(graph, effectOf)
+  if (!it || it.nodes.length > 8) return flow(graph, effectOf, humanOf)
   const depth = Math.max(...graph.nodes.map((n) => loops.filter((l) => l.nodes.includes(n)).length))
   const inner = loops.filter((l) => l !== it)
   if (depth > 3 || inner.some((l) => !l.nodes.every((n) => it.nodes.includes(n)))) {
-    return flow(graph, effectOf)
+    return flow(graph, effectOf, humanOf)
   }
 
   const head = it.nodes[0]
@@ -58,7 +68,9 @@ export function layoutLoop(graph, bricks = []) {
     }
   }
   const ring = it.nodes.filter((n) => !claimed.has(n))
-  if (ring.length < 2 || inner.some((l) => claimed.has(l.nodes[0]))) return flow(graph, effectOf)
+  if (ring.length < 2 || inner.some((l) => claimed.has(l.nodes[0]))) {
+    return flow(graph, effectOf, humanOf)
+  }
 
   // Ring slots, clockwise from the top; the gate goes at the midpoint before the iteration's
   // first mutate node (the engine validates once per iteration, before that node).
@@ -80,6 +92,7 @@ export function layoutLoop(graph, bricks = []) {
     effect: s.gate ? null : effectOf(s.name),
     gate: !!s.gate,
     inner: false,
+    human: s.gate ? null : humanOf(s.name),
   }))
   const arcs = slots.map((s, i) => {
     const next = slots[(i + 1) % slots.length]
@@ -104,7 +117,15 @@ export function layoutLoop(graph, bricks = []) {
       const own = l.nodes.filter((n) => claimed.get(n) === l)
       own.forEach((n, j) => {
         const p = pt(away + (j - (own.length - 1) / 2) * 60, IR, c)
-        nodes.push({ name: n, ...p, r: NR, effect: effectOf(n), gate: false, inner: true })
+        nodes.push({
+          name: n,
+          ...p,
+          r: NR,
+          effect: effectOf(n),
+          gate: false,
+          inner: true,
+          human: humanOf(n),
+        })
       })
       const back = away + 180 // centre → head
       arcs.push({ d: arc(IR, pt(back + 42, IR, c), pt(back + 138, IR, c)), kind: 'inner' })
@@ -135,7 +156,12 @@ export function layoutLoop(graph, bricks = []) {
   // Setup enters from the left at 205°, the last setup step nearest the ring.
   const ey = pt(205).y
   const setup = graph.nodes.filter((n) => !it.nodes.includes(n))
-  const entry = setup.map((name, i) => ({ name, x: 40, y: r1(ey - 44 * (setup.length - 1 - i)) }))
+  const entry = setup.map((name, i) => ({
+    name,
+    x: 40,
+    y: r1(ey - 44 * (setup.length - 1 - i)),
+    human: humanOf(name),
+  }))
 
   const closer = graph.edges.find((e) => e.to === '$close')?.from
   const cp = nodes.find((n) => n.name === closer)
@@ -177,7 +203,7 @@ export function layoutLoop(graph, bricks = []) {
 // Left to right in declaration order; each declared loop a box around its nodes, nested loops
 // inside bigger ones (16px more air per loop they contain), `max N` above, the return arrow
 // along its bottom edge.
-function flow(graph, effectOf) {
+function flow(graph, effectOf, humanOf) {
   const loops = graph.loops || []
   const padOf = (l) =>
     36 + 16 * loops.filter((o) => o !== l && o.nodes.every((n) => l.nodes.includes(n))).length
@@ -191,6 +217,7 @@ function flow(graph, effectOf) {
     effect: effectOf(n),
     gate: false,
     inner: false,
+    human: humanOf(n),
   }))
   const arcs = graph.nodes.slice(1).map((n, i) => ({
     d: `M${xs.get(graph.nodes[i]) + NR},${Y} L${xs.get(n) - NR - 4},${Y}`,

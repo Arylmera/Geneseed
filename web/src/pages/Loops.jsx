@@ -6,6 +6,7 @@ import ErrorState from '../components/ErrorState.jsx'
 import Loading from '../components/Loading.jsx'
 import RingGraph from '../components/RingGraph.jsx'
 import ActiveLoops from '../components/ActiveLoops.jsx'
+import { humanGate } from '../lib/loopRing.js'
 
 const enc = encodeURIComponent
 
@@ -39,6 +40,9 @@ function BrickCard({ brick, name, override, full }) {
         <span className="tag">{brick.agent || brick.skill}</span>
         <span className="tag">{brick.origin}</span>
         {override ? <span className="tag acc">{override}</span> : null}
+        {humanGate(brick) ? (
+          <span className="tag human">{humanGate(brick).toLowerCase()}</span>
+        ) : null}
       </div>
       <p className="loop-brick-desc">{brick.description}</p>
       <p className="panel-note">outcomes: {brick.outcomes.join(' · ')}</p>
