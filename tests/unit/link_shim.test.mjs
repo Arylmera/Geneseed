@@ -60,6 +60,23 @@ test('unlink still removes a LEGACY symlink install', { skip: !unix }, () => {
   }
 });
 
+test('link refuses to replace a FOREIGN geneseed, as unlink refuses to remove one',
+  { skip: !unix }, () => {
+    // npm's own bin link and a stranger's program both sit at this name. Link used to delete
+    // whatever was there before writing; the two verbs now share one judgement of "ours".
+    const dir = sandbox();
+    const foreign = path.join(dir, 'geneseed');
+    try {
+      writeFileSync(foreign, '#!/bin/sh\necho not ours\n');
+      assert.equal(cmdLink({ dir }), 1);
+      assert.equal(readFileSync(foreign, 'utf-8'), '#!/bin/sh\necho not ours\n',
+        'link overwrote a file it did not write');
+      rmSync(foreign);
+      assert.equal(cmdLink({ dir }), 0);
+      assert.equal(cmdLink({ dir }), 0, 'link refused to refresh its OWN shim');
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
 test('unlink leaves a FOREIGN geneseed alone', { skip: !unix }, () => {
   const dir = sandbox();
   const saved = process.env.PATH;

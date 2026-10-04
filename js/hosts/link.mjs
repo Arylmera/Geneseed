@@ -57,8 +57,8 @@
  * never needs to:
  *
  *   * `winUserPathScript` is PURE — the escaping, the split and the idempotence live there
- *     and `tests/test_win_user_path.py` runs it over a corpus (apostrophes, trailing
- *     separators, UNC roots) against the Python twin, byte for byte.
+ *     and `tests/unit/win_user_path.test.mjs` runs it over a corpus of hazards (apostrophes,
+ *     typographic quotes, trailing separators, UNC roots) and asserts each property absolutely.
  *   * `cmdLink` SHORT-CIRCUITS when the bin dir is already on `PATH`, so a cell that seeds
  *     `PATH` with its own sandboxed bin dir exercises the whole verb and never spawns.
  *   * `cmdUnlink` has no such short-circuit, so its cells seed a `PATH` with no `powershell`
@@ -84,6 +84,8 @@ import { printOut, printErr, writeText } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 
 const IS_WIN = process.platform === 'win32';
+/** What `cmdUnlink` recognises a written Unix launcher by — see `isOurLauncher`. */
+const SHIM_MARKER = 'GENESEED_LINK_SHIM';
 
 /** `_harness_lifecycle._win_bin_dir`. */
 function winBinDir() {
@@ -97,12 +99,18 @@ function winBinDir() {
  * `_harness_lifecycle._win_user_path_script` — the PowerShell one-liner, built but not run.
  *
  * Every quoting hazard in this verb is in this string, which is why it is a separate
- * function on both sides: `''` is PowerShell's single-quote escape, the `;` split drops
+ * function: `''` is PowerShell's single-quote escape, the `;` split drops
  * empty segments so a trailing separator cannot append an empty entry, and `-notcontains`
  * is what makes `link` idempotent.
+ *
+ * THE ESCAPE COVERS FIVE CHARACTERS, NOT ONE. PowerShell also reads the typographic quotes
+ * U+2018–U+201B as single quotes, so one of them left bare in a directory name closes the
+ * string exactly as `'` does and turns the rest of the path into code. Each is doubled with
+ * ITSELF — `‘‘` is the escape for `‘` — which is what PowerShell's own `CodeGeneration.
+ * EscapeSingleQuotedStringContent` does.
  */
 export function winUserPathScript(action, directory) {
-  const d = directory.replaceAll("'", "''");   // PS single-quote escape (O'Brien)
+  const d = directory.replace(/['‘-‛]/g, '$&$&');   // PS single-quote escape (O'Brien)
   if (action === 'add') {
     return `$d='${d}';`
       + "$p=[Environment]::GetEnvironmentVariable('Path','User');"
@@ -141,6 +149,45 @@ function winUserPath(action, directory) {
   return r.status === 0;
 }
 
+/**
+ * Is `dir` one of the ENTRIES of a Windows PATH string?
+ *
+ * Entry-wise, not a substring test: `…\Geneseed\bin` is a substring of `…\Geneseed\bin2` and of
+ * `…\Geneseed\bin\old`, and a substring hit skipped the registry write while the shim's own dir
+ * stayed off PATH. Trailing separators and case are both noise on Windows.
+ */
+export function winPathHas(pathEnv, dir) {
+  const norm = (s) => s.replace(/[\\/]+$/, '').toLowerCase();
+  const want = norm(dir);
+  return pathEnv.split(';').some((e) => e && norm(e) === want);
+}
+
+/**
+ * The Unix launcher's text. Single-quoted, never double: inside `"…"` the shell still expands
+ * `$`, backticks and `\`, so an install path holding any of them ran as code each time
+ * `geneseed` started. `'\''` is the one escape single quotes need.
+ */
+export function unixShimText(exe, entry) {
+  const q = (s) => `'${s.replaceAll("'", "'\\''")}'`;
+  return `#!/bin/sh\n# ${SHIM_MARKER}\nexec ${q(exe)} ${q(entry)} "$@"\n`;
+}
+
+/**
+ * Is the file at `f` a launcher `geneseed link` made? Two shapes exist on disk. (a) A symlink,
+ * judged by `os.readlink(f)` raw, then `.name` — NOT a resolved path: the question is whether
+ * the link's own target BASENAME is `geneseed`, so a symlink pointing at some other program
+ * that happens to sit in a `geneseed` directory is left alone. That is every install made
+ * before the shim. (b) A regular file carrying the marker — never "any regular file called
+ * geneseed", which would be npm's own bin link or a stranger's program.
+ *
+ * ONE OWNER FOR BOTH VERBS. `unlink` always refused what is not ours; `link` used to delete
+ * whatever sat at its destination before writing, so the two disagreed about the same file.
+ */
+function isOurLauncher(f) {
+  if (isSymlink(f)) return path.basename(readlinkSync(f)) === 'geneseed';
+  return existsSync(f) && (readMaybe(f) ?? '').includes(SHIM_MARKER);
+}
+
 /** `_harness_lifecycle.cmd_link` — put `geneseed` on PATH so it runs from any directory. */
 export function cmdLink(args) {
   const here = ROOT;
@@ -159,8 +206,7 @@ export function cmdLink(args) {
       return 1;
     }
     printOut(`geneseed: wrote shim ${shim}\n`);
-    const on_path = (process.env.PATH || '').toLowerCase().includes(bindir.toLowerCase());
-    if (on_path || winUserPath('add', bindir)) {
+    if (winPathHas(process.env.PATH || '', bindir) || winUserPath('add', bindir)) {
       printOut(`geneseed: '${bindir}' is on your user PATH — open a NEW terminal, then run \`geneseed\`.\n`);
     } else {
       printOut(`geneseed: add '${bindir}' to your PATH manually, then run \`geneseed\` from anywhere.\n`);
@@ -174,8 +220,8 @@ export function cmdLink(args) {
   // PATH=` line) as well as comparing it against `PATH.split(os.pathsep)`, so an argument
   // that is not already normalised diverges in three places at once. A trailing slash is the
   // cheapest one: `str(Path('/x/bin/'))` is `/x/bin` and the raw string is not.
-  // `harness_golden`'s `link/an-explicit-dir-argument-is-used-instead-of-the-default` passes
-  // one, and it is the cell that found this.
+  // The retired cell `link/an-explicit-dir-argument-is-used-instead-of-the-default` passed
+  // one, and it is what found this.
   let targetDir = args.dir ? toPlatformPath(args.dir) : null;
   if (targetDir === null) {
     const local = path.join(os.homedir(), '.local', 'bin');
@@ -191,16 +237,23 @@ export function cmdLink(args) {
   try {
     mkdirSync(targetDir, { recursive: true });
     // `dest.is_symlink() or dest.exists()` — the first half is what catches a BROKEN
-    // symlink, which `existsSync` follows and reports absent.
-    if (isSymlink(dest) || existsSync(dest)) rmSync(dest, { force: true });
+    // symlink, which `existsSync` follows and reports absent. Only OUR launcher is replaced:
+    // anything else there — npm's own bin link, a stranger's program — is refused, the same
+    // judgement `cmdUnlink` makes about the same file.
+    if (isSymlink(dest) || existsSync(dest)) {
+      if (!isOurLauncher(dest)) {
+        printErr(`geneseed: ${dest} exists and is not a launcher geneseed wrote — leaving it `
+          + 'alone. Remove it yourself, or pick another dir: geneseed link <dir>\n');
+        return 1;
+      }
+      rmSync(dest, { force: true });
+    }
     // A WRITTEN SHIM, not a symlink to `ROOT/geneseed`. The bash launcher execs a Python
     // interpreter, so symlinking it puts Python on PATH from the Node verb. The Windows
-    // arm above has always written a shim; this is the same shape. `GENESEED_LINK_SHIM`
-    // is the marker `cmdUnlink` recognises — without it, unlink cannot tell our file from
+    // arm above has always written a shim; this is the same shape. `SHIM_MARKER`
+    // is what `cmdUnlink` recognises — without it, unlink cannot tell our file from
     // a stranger's and would have to refuse every regular file, which is a no-op.
-    writeText(dest, '#!/bin/sh\n'
-      + '# GENESEED_LINK_SHIM\n'
-      + `exec "${process.execPath}" "${entry}" "$@"\n`);
+    writeText(dest, unixShimText(process.execPath, entry));
     chmodSync(dest, 0o755);
   } catch (e) {
     printErr(`geneseed: could not write ${dest} (${asOsError(e)}) — pick a writable dir: `
@@ -246,15 +299,7 @@ export function cmdUnlink() {
     if (seen.has(d)) continue;
     seen.add(d);
     const f = path.join(d, 'geneseed');
-    // TWO shapes, because two shapes exist on disk. (a) `os.readlink(f)` raw, then `.name`
-    // — NOT a resolved path: the reference asks whether the link's own target BASENAME is
-    // `geneseed`, so a symlink pointing at some other program that happens to sit in a
-    // `geneseed` directory is left alone. That is every install made before the shim.
-    // (b) a regular file we wrote, identified by its marker — never "any regular file
-    // called geneseed", which would delete a stranger's program.
-    const ours = (isSymlink(f) && path.basename(readlinkSync(f)) === 'geneseed')
-      || (!isSymlink(f) && existsSync(f) && (readMaybe(f) ?? '').includes('GENESEED_LINK_SHIM'));
-    if (ours) {
+    if (isOurLauncher(f)) {
       try {
         rmSync(f);
         printOut(`geneseed: removed ${f}\n`);

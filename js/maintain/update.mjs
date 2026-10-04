@@ -1,10 +1,8 @@
 /**
  * Self-update: `git pull` the install's own origin, validate, rebuild.
  *
- * The verb this whole port exists for. Every other subcommand can be Python for one more
- * release; `upgrade` is the one operation a "no Python needed" install cannot delegate,
- * because a Node install that shelled out to the Python harness to update itself
- * would have Python as a hard dependency of the only command a user MUST be able to run.
+ * The one operation a user MUST always be able to run: every other verb can be broken by a bad
+ * release, and this is the verb that fetches the fix.
  *
  * WHY THIS MODULE SPAWNS, AND WHY THE ARGUMENT IS NOT THE JOB RUNNER'S. `js/web/jobs.mjs`
  * re-executes this program for ISOLATION — a synchronous verb in the daemon's event loop
@@ -15,21 +13,23 @@
  * the modules this process loaded before the merge — it would validate the old source, pass,
  * and then render the old source into the bundle, reporting success. That is not a slower
  * version of the right answer, it is the wrong one. So `runDoctor`, `rebuildBundle` and
- * `rebuildInstalls` each start a fresh interpreter over the tree as it now is, exactly as the
- * reference does, and `_ALLOWED_SPAWNS` in `tests/test_hook_cli_parity.py` carries the argv.
+ * `rebuildInstalls` each start a fresh interpreter over the tree as it now is, and
+ * `ALLOWED_SPAWNS` in `tests/unit/hook_cli.test.mjs` carries the argv. The same reason is why
+ * the two modules this file reaches lazily (`js/build/generate.mjs`, `js/web/daemon.mjs`) are
+ * loaded BEFORE the pull and not at their call sites: an `import()` after the merge would mix
+ * pulled files with the ones already cached, and a renamed export kills the upgrade mid-way.
  *
  * `git` is the fourth spawn and the plainest: there is no git library in the Node stdlib,
  * and the port will not vendor one. Every git call goes through the `gitRun` seam —
  * which-guarded, credential-redacted, and it never throws.
  *
- * WHAT THE GATE CANNOT SEE, stated rather than implied. `upgrade/*` in
- * `tests/harness_golden.py` runs each arm against a private clone of a bare origin the
- * fixture builds, so no cell can reach a network — which is a safety property and a blind
+ * WHAT THE GATE CANNOT SEE, stated rather than implied. `tests/unit/update_git.test.mjs` and
+ * `tests/unit/update_flow.test.mjs` run each arm against a private clone of a bare origin the
+ * fixture builds, so no test can reach a network — which is a safety property and a blind
  * spot at once: `git fetch --progress` over a local path prints NOTHING, so
  * `fetchStreaming`'s reader, its phase filter and its 15s heartbeat are reachable in every
- * cell and varied in none. The phase filter is gated as a corpus in
- * `tests/test_pure_function_parity.py`; the heartbeat and the hard deadline are gated by
- * neither and are declared in the P8a handoff.
+ * run and varied in none. The phase filter is gated over a recorded transcript in
+ * `tests/unit/update_git.test.mjs`; the heartbeat and the hard deadline are gated by nothing.
  *
  * ALSO HERE, SINCE P8b: `syncSelf`/`cmdSyncSelf` and the bootstrap step runner
  * (`cmdBootstrap`, `bootstrapPlain`) at the bottom of this file. Still NOT here: `main`, the
@@ -47,10 +47,9 @@ import { ROOT } from '../build/source.mjs';
 import { exportImprovements, flushExportNotes } from '../inspect/diff.mjs';
 import { opencodeConfigDir } from '../hosts/hosts.mjs';
 import { appendText, copyFile, printOut, printErr, readText, writeText } from '../lib/fs.mjs';
-import { toPlatformPath, which } from '../lib/paths.mjs';
+import { comparePaths, toPlatformPath, which } from '../lib/paths.mjs';
 import { WHITESPACE, parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { bounceDaemonIfRunning } from '../web/daemon.mjs';
 
 /**
  * `_CREDS_RE` / `_redact_url_creds` — strip a `user[:token]@` userinfo out of any URL in
@@ -262,7 +261,7 @@ export function killTree(child) {
  * times and universal-newline decoding turns every `\r` repaint into its own line, so
  * without this a 30-second fetch writes a thousand lines into the install log. No cell can
  * reach it — a local-path fetch prints nothing at all — so
- * `tests/test_pure_function_parity.py` runs it over a recorded fetch transcript instead.
+ * `tests/unit/update_git.test.mjs` runs it over a recorded fetch transcript instead.
  *
  * Returns `[linesToLog, lastPhase]`, splitting the reference's loop from its side effects.
  */
@@ -366,13 +365,19 @@ export async function fetchStreaming(log = null) {
 
 /**
  * `_measure_upstream(log)` — Phase B: fetch (streamed), then classify. Returns
- * `[code, behind, err]` with `code` ∈ {ready, fetch_failed, unrelated, diverged, uptodate}.
+ * `[code, behind, err]` with `code` ∈ {ready, fetch_failed, no_upstream, unrelated, diverged,
+ * uptodate}.
+ *
+ * `no_upstream` HERE, AFTER PREFLIGHT SAID THERE WAS ONE: the fetch itself can take it away.
+ * An upstream branch deleted on the remote, fetched with `fetch.prune`, leaves `@{u}` naming
+ * nothing — both counts then fail, and read as two zeros they said "already up to date".
  */
 export async function measureUpstream(log = null) {
   const [rc, err] = await fetchStreaming(log);
   if (rc !== 0) return ['fetch_failed', 0, err];
-  const [, aheadRaw] = gitRun(['rev-list', '--count', '@{u}..HEAD']);
-  const [, behindRaw] = gitRun(['rev-list', '--count', 'HEAD..@{u}']);
+  const [arc, aheadRaw] = gitRun(['rev-list', '--count', '@{u}..HEAD']);
+  const [brc, behindRaw] = gitRun(['rev-list', '--count', 'HEAD..@{u}']);
+  if (arc !== 0 || brc !== 0) return ['no_upstream', 0, ''];
   const ahead = countOccurrences(aheadRaw);
   const behind = countOccurrences(behindRaw);
   if (ahead > 0) {
@@ -419,16 +424,31 @@ export function runDoctor(cand) {
   return [r.status === 0, universal(r.stdout) + universal(r.stderr)];
 }
 
-/** `_pull_and_validate(log)` — fast-forward to `@{u}`, then doctor-gate with exact rollback. */
+/**
+ * `_pull_and_validate(log)` — fast-forward to `@{u}`, then doctor-gate with exact rollback.
+ *
+ * `collision` ONLY WHEN GIT SAYS SO. A fast-forward can fail for other reasons — a lock file, a
+ * permission, a merge refused outright — and calling every one an untracked-file collision
+ * sent the user hunting for a file that is not there, with an info exit (3) over an error.
+ *
+ * THE ROLLBACK IS `reset --keep`, NEVER `--hard`. The doctor window lasts up to 300 s, and an
+ * edit made in the checkout meanwhile is a tracked edit `--hard` would destroy without a word.
+ * `--keep` refuses instead when such an edit touches a file the rollback must change; that
+ * refusal is reported as itself — the user is left on the pulled commit, with the command to
+ * finish the rollback — rather than as a rollback that did not happen.
+ */
 export function pullAndValidate(log) {
   const [rc0, old] = gitRun(['rev-parse', 'HEAD']);
   if (rc0 !== 0 || !old) return [false, 'not_git', 'could not read HEAD'];
   log('[geneseed] fast-forwarding to upstream ...');
   const [rc1, , err] = gitRun(['merge', '--ff-only', '@{u}'], { timeout: 60 });
   if (rc1 !== 0) {
-    return [false, 'collision',
-      'Update blocked — a new upstream file collides with a local untracked '
-      + 'file. Move or remove it, then update.\n' + err];
+    if (/would be overwritten/.test(err)) {
+      return [false, 'collision',
+        'Update blocked — a new upstream file collides with a local untracked '
+        + 'file. Move or remove it, then update.\n' + err];
+    }
+    return [false, 'merge_failed', `Update failed — could not fast-forward to upstream.\n${err}`];
   }
   const [rc2, pulled] = gitRun(['log', '--oneline', '--no-decorate', '-20', `${old}..HEAD`]);
   if (rc2 === 0 && pulled) {
@@ -439,8 +459,15 @@ export function pullAndValidate(log) {
   const [passed, output] = runDoctor(ROOT);
   log(output.replace(/\n+$/, ''));
   if (!passed) {
-    gitRun(['reset', '--hard', old], { timeout: 60 });
+    const [rc3, , rerr] = gitRun(['reset', '--keep', old], { timeout: 60 });
     for (const line of DOCTOR_LEGEND) log(line);
+    if (rc3 !== 0) {
+      return [false, 'doctor_fail',
+        'the pulled source FAILS validation, and the rollback was REFUSED — a file it must '
+        + 'restore was edited while the doctor ran, and those edits were kept. You are still '
+        + `on the pulled commit; save your edits, then roll back with: git reset --keep ${old}\n`
+        + rerr];
+    }
     return [false, 'doctor_fail',
       'the pulled source FAILS validation — rolled back to the previous commit. '
       + 'Fix the problems listed above.'];
@@ -505,8 +532,9 @@ export function markerTheme(cfg, out) {
 }
 
 /**
- * `_config_theme(here)` — the theme the LOCAL `harness.config.json` asks for, captured
- * before SYNC overwrites it with upstream's. Fallback only; a bundle marker still wins.
+ * `_config_theme(here)` — the theme the checkout's `harness.config.json` asks for. Fallback
+ * only; a bundle marker still wins. Read before the pull, but nothing local is at stake: the
+ * file is tracked and `preflight` refuses a dirty tree, so the value read is the committed one.
  */
 export function configTheme(here) {
   try {
@@ -518,11 +546,16 @@ export function configTheme(here) {
 /**
  * `_migrate_stray_bundle` — move host state (context.json, memory/) from an OLD in-folder
  * bundle to the canonical sibling `out` BEFORE rebuilding, then drop the stray.
+ *
+ * "IS `out` THE STRAY ITSELF?" IS A PATH COMPARISON, NOT A STRING ONE. `GENESEED_OUT` is typed
+ * by a user, so on Windows `c:\x\Geneseed\harness` is the same directory as the stray and was a
+ * different string: the rescue was skipped as "nothing to move into", and the `rmSync` at the
+ * bottom then deleted the LIVE bundle — memory/ and context.json with it.
  */
 export function migrateStrayBundle(here, out, log) {
   const stray = path.join(String(here), 'Harness');
   const outStr = String(out);
-  if (outStr === stray) return;
+  if (comparePaths(path.resolve(outStr), path.resolve(stray)) === 0) return;
   try { if (!statSync(stray).isDirectory()) return; } catch { return; }
   mkdirSync(outStr, { recursive: true });
   const ctx = path.join(stray, 'context.json');
@@ -560,14 +593,39 @@ async function drainStdout() {
 }
 
 /**
- * `_rebuild_bundle` — render the bundle from the (already-updated) source and bounce a
- * running web daemon. Returns the build subprocess returncode (0 = ok).
+ * The flags that re-emit the install at `dir` on its OWN axes — footprint, posture, mode,
+ * trust, doctrine packs, excluded rules — or `[]` when no build ever wrote a marker there.
+ *
+ * WITHOUT THEM THE REBUILD RESETS THE INSTALL. The generator's defaults are not the install's:
+ * a missing `--footprint` is `lean`, and posture, mode, packs and excluded rules come from
+ * `harness.config.json`. So a `full`, mentor, narrowed or rule-excluded install was re-emitted
+ * as the config default — markers included — and `rebuild-all` right after reads those
+ * rewritten markers back through `installProfile`, so the loss stuck. `installProfile` is the
+ * one reader of an install's axes; this takes its answer rather than growing a second one.
+ *
+ * Only the TAIL of the argv is kept: theme and emit are `upgrade`'s to decide (a theme argument
+ * may override the marker), and `setupBuildArgs` opens with exactly those four tokens when it
+ * is given no out and no root.
  */
-export async function rebuildBundle(here, out, theme, emit, rootDir, log) {
+export async function installAxes(dir, { installProfile, setupBuildArgs }) {
+  if (!existsSync(path.join(String(dir), '.geneseed-emit'))) return [];
+  const p = installProfile('opencode', 'global', String(dir));
+  return setupBuildArgs('', 'files', null, null, p.footprint, p.posture, p.mode, p.doctrines,
+    undefined, p.excludeRules, p.trust).slice(4);
+}
+
+/**
+ * `_rebuild_bundle` — render the bundle from the (already-updated) source and bounce a
+ * running web daemon. Returns the build subprocess returncode (0 = ok). `axes` is
+ * `installAxes` of the target, read before the pull; `bounce` is the daemon module's
+ * `bounceDaemonIfRunning`, loaded before the pull for the reason the file header gives.
+ */
+export async function rebuildBundle(here, out, theme, emit, rootDir, log, axes, bounce) {
   const buildArgs = ['--out', String(out)];
   if (theme) buildArgs.push('--theme', theme);
   if (emit === 'opencode') buildArgs.push('--emit', 'opencode', '--root', String(rootDir));
   else if (emit === 'opencode-global') buildArgs.push('--emit', 'opencode-global');
+  buildArgs.push(...axes);
   log(`[geneseed] rebuilding bundle -> ${out} (theme: ${theme || 'config default'}, emit: ${emit}) ...`);
   await drainStdout();
   // THE GENERATOR, RE-EXECUTED. `js/build/generate.mjs`'s `cmdBuild` calls `driverMain` in-process
@@ -580,7 +638,7 @@ export async function rebuildBundle(here, out, theme, emit, rootDir, log) {
   // If a web daemon is running, bounce it so the new source and the freshly rebuilt web/dist
   // take effect — otherwise the open PWA keeps hitting the old code. The web-job exception
   // (`upgrade/the-web-job-marker-...` gates it) lives with the helper.
-  await bounceDaemonIfRunning(theme, log);
+  await bounce(theme, log);
   return 0;
 }
 
@@ -636,6 +694,12 @@ export async function upgrade(ref = null, themeArg = null) {
     return p.kind === 'info' ? 3 : 1;
   }
 
+  // Loaded and read BEFORE the pull — see the file header for why the imports cannot wait, and
+  // `installAxes` for why the target's own axes must be carried into the rebuild.
+  const [generate, { bounceDaemonIfRunning }] = await Promise.all([
+    import('../build/generate.mjs'), import('../web/daemon.mjs')]);
+  const axes = await installAxes(emit === 'opencode-global' ? cfg : out, generate);
+
   log(`[geneseed] fetching from origin (git: ${which('git') || 'git'}, `
     + `timeout: ${fetchTimeout()}s) ...`);
   const [code, behind, err] = await measureUpstream(log);
@@ -646,6 +710,10 @@ export async function upgrade(ref = null, themeArg = null) {
       + 'daemon likely lacks your shell\'s environment (VPN/proxy vars, SSO or '
       + 'Kerberos credentials). Restart it from that terminal: `geneseed web restart`.');
     return 1;
+  }
+  if (code === 'no_upstream') {
+    log(`[geneseed] ${PRE_MSG.no_upstream[1]}`);
+    return 3;
   }
   if (code === 'unrelated') {
     log('[geneseed] Upstream history was rewritten; back up local work, then re-clone '
@@ -676,7 +744,8 @@ export async function upgrade(ref = null, themeArg = null) {
   } catch (e) {
     log(`[geneseed] ⚠️  could not migrate the old in-folder bundle (${e && e.message ? e.message : e}) — continuing.`);
   }
-  let rc = await rebuildBundle(here, out, theme, emit, rootDir, log);
+  let rc = await rebuildBundle(here, out, theme, emit, rootDir, log, axes,
+    bounceDaemonIfRunning);
   if (rc !== 0) {
     log(`[geneseed][E-BUILD] ✗ the bundle build FAILED (theme: ${theme || 'default'}, emit: ${emit}).`);
     return 1;
@@ -886,13 +955,19 @@ function reexec(argv) {
  * `flushExportNotes()` runs BEFORE the handoff, deliberately: the re-exec replaces this process
  * and the update step's own improvements notice has scrolled past (or, under the reference's
  * curses arm, died with the alternate screen).
+ *
+ * A FAILED UPDATE STILL EXITS 1 AFTER THE HANDOFF. `setup` still runs — the user asked for it,
+ * and it can repair what the update could not — but its exit code used to become bootstrap's,
+ * so a script saw 0 over an update that never happened. `handoff` is the seam a test needs:
+ * the real `setup` exits 1 off a terminal, which would make the two answers indistinguishable.
  */
-export async function cmdBootstrap(args) {
+export async function cmdBootstrap(args, { handoff = reexec } = {}) {
   const failed = await bootstrapPlain();
   flushExportNotes();
   if (!args.noSetup) {
-    return reexec([process.execPath,
+    const rc = handoff([process.execPath,
       path.join(String(ROOT), 'bin', 'geneseed-cli.mjs'), 'setup']);
+    return failed ? 1 : rc;
   }
   // Scripted `bootstrap --no-setup` must not exit 0 over a failed update.
   return failed ? 1 : 0;

@@ -168,6 +168,32 @@ test('the migration never clobbers state the canonical bundle already has', () =
   });
 });
 
+// When `out` IS the stray under another spelling, there is nothing to migrate and nothing to drop:
+// the "stray" is the live bundle. A string compare missed every other spelling of the same
+// directory, skipped the rescue, and then deleted the bundle — memory/ and context.json with it.
+// A `.` segment is a second spelling on every platform; a case change is one on Windows only.
+const SAME_DIR_SPELLINGS = [
+  ['a dot segment', (stray) => `${path.dirname(stray)}${path.sep}.${path.sep}Harness`],
+  ...(process.platform === 'win32'
+    ? [['another case', (stray) => stray.toUpperCase()]] : []),
+];
+for (const [name, spell] of SAME_DIR_SPELLINGS) {
+  test(`a GENESEED_OUT that is the stray under ${name} is left alone, never deleted`, () => {
+    withCfgOut((cfg, out, root) => {
+      const here = path.join(root, 'Geneseed');
+      const stray = path.join(here, 'Harness');
+      fs.mkdirSync(path.join(stray, 'memory'), { recursive: true });
+      fs.writeFileSync(path.join(stray, 'memory', 'MEMORY.md'), '# live');
+      const spelled = spell(stray);
+      assert.notEqual(spelled, stray, 'the fixture spells the directory the same way');
+
+      migrateStrayBundle(here, spelled, () => {});
+      assert.equal(fs.readFileSync(path.join(stray, 'memory', 'MEMORY.md'), 'utf8'), '# live',
+        'the live bundle was deleted as a stray of itself');
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------------------------
 // Credentials in a git error — `RedactCredsTests`.
 //

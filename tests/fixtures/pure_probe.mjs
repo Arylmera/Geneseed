@@ -34,9 +34,9 @@ import { expanduser, resolvePath } from '../../js/hosts/hosts.mjs';
 import { installedDefaults } from '../../js/hosts/installs.mjs';
 import { installAgentEntryOf } from '../../js/maintain/uninstall.mjs';
 import {
-  ask, askChoice, collectSetupLines, confirm, javaMajorOk, modeOptions, postureOptions,
-  promptLine, setupSummaryLines, themeOptions,
+  collectSetupLines, javaMajorOk, modeOptions, postureOptions, setupSummaryLines, themeOptions,
 } from '../../js/maintain/setup.mjs';
+import { ask, askChoice, confirm, promptLine } from '../../js/lib/prompt.mjs';
 import { unifiedDiff, splitLines } from '../../js/lib/udiff.mjs';
 import { stampMinute } from '../../js/web/state.mjs';
 import { daemonArgs, restartArgs } from '../../js/web/daemon.mjs';

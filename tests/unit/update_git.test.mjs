@@ -236,6 +236,24 @@ test('a fetch that fails is fetch_failed, and the reason is carried out', async 
   } finally { git(CO, 'remote', 'set-url', 'origin', ORIGIN); }
 });
 
+test('an upstream deleted on the remote and pruned by the fetch is no_upstream, not up to date', async () => {
+  // Preflight saw an upstream; the fetch itself removed it. Both `rev-list` counts then FAIL, and
+  // read as two zeros they reported "already up to date" over a branch that no longer exists.
+  git(CO, 'checkout', '-q', '-b', 'side');
+  git(CO, 'push', '-q', '-u', 'origin', 'side');
+  git(CO, 'config', 'fetch.prune', 'true');
+  try {
+    git(OTHER, 'push', '-q', 'origin', '--delete', 'side');
+    const [code, behind] = await U.measureUpstream();
+    assert.equal(code, 'no_upstream');
+    assert.equal(behind, 0);
+  } finally {
+    git(CO, 'config', '--unset', 'fetch.prune');
+    git(CO, 'checkout', '-q', 'main');
+    git(CO, 'branch', '-qD', 'side');
+  }
+});
+
 // ---------------------------------------------------------------------------------------------
 // `PullAndValidateTests` — fast-forward, doctor-gate, roll back exactly.
 //
@@ -326,6 +344,50 @@ test('a pulled source that fails the doctor is rolled back to the exact previous
   assert.ok(!fs.existsSync(path.join(CO2, 'A-FILE-THAT-SHOULD-NOT-EXIST')));
   const restored = JSON.parse(fs.readFileSync(path.join(CO2, 'themes', 'neutral.json'), 'utf8'));
   assert.ok('VOICE' in restored, 'the rollback left the broken theme in the working tree');
+});
+
+test('a fast-forward refused for another reason is an error, not an untracked collision', () => {
+  // A local commit makes `--ff-only` refuse with git's "Not possible to fast-forward" — no file
+  // collides with anything. Calling it a collision sent the user looking for a file that is not
+  // there, under an info exit.
+  commit(CO2, 'local-only.txt');
+  try {
+    const [ok, code, msg] = U2.pullAndValidate(() => {});
+    assert.equal(ok, false);
+    assert.equal(code, 'merge_failed');
+    assert.doesNotMatch(msg, /collides/);
+  } finally { git(CO2, 'reset', '-q', '--hard', 'HEAD~1'); }
+});
+
+test('a rollback that would destroy an edit made during the doctor is refused, and says so', () => {
+  // The doctor window lasts up to 300 s. Here the pulled doctor ITSELF edits a file the rollback
+  // must restore — the deterministic stand-in for a user saving into the checkout meanwhile.
+  // `reset --hard` destroyed that edit and printed "rolled back"; `--keep` refuses, the edit
+  // survives, the checkout stays on the pulled commit, and the message says which happened.
+  // Rides on the broken-theme tip the rollback test above left upstream.
+  const cli = path.join(OTHER2, 'bin', 'geneseed-cli.mjs');
+  fs.writeFileSync(cli, "import { appendFileSync } from 'node:fs';\n"
+    + "appendFileSync(new URL(import.meta.url), '// edited while the doctor ran\\n');\n"
+    + 'process.exit(1);\n');
+  git(OTHER2, 'add', '-A');
+  git(OTHER2, 'commit', '-qm', 'a doctor that edits the checkout');
+  git(OTHER2, 'push', '-q');
+  git(CO2, 'fetch', '-q');
+
+  const before = git(CO2, 'rev-parse', 'HEAD');
+  try {
+    const [ok, code, msg] = U2.pullAndValidate(() => {});
+    assert.equal(ok, false);
+    assert.equal(code, 'doctor_fail');
+    assert.match(msg, /rollback was REFUSED/);
+    assert.equal(git(CO2, 'rev-parse', 'HEAD'), git(CO2, 'rev-parse', 'origin/main'),
+      'a refused rollback still moved HEAD');
+    assert.match(fs.readFileSync(path.join(CO2, 'bin', 'geneseed-cli.mjs'), 'utf8'),
+      /edited while the doctor ran/, 'the edit made during the doctor window was destroyed');
+  } finally {
+    // The tests below drive the copy's CLI, which this one replaced: put the healthy tree back.
+    git(CO2, 'reset', '-q', '--hard', before);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------

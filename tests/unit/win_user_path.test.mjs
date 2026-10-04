@@ -41,7 +41,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { winUserPathScript } from '../../js/hosts/link.mjs';
+import { unixShimText, winPathHas, winUserPathScript } from '../../js/hosts/link.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 // THE DIRECTORIES THIS SCRIPT HAS TO SURVIVE. Each one is a hazard, not a sample: an
@@ -72,6 +72,37 @@ test('an apostrophe is doubled and never left bare', () => {
   // early and execute the tail.
   const head = script.split(';', 1)[0];
   assert.equal((head.match(/'/g) ?? []).length % 2, 0, `unbalanced quoting in ${head}`);
+});
+
+test('a typographic quote is doubled too, because PowerShell reads it as one', () => {
+  // U+2018–U+201B are single quotes to PowerShell's tokenizer, so a bare one closes the string
+  // exactly as `'` does. Each is escaped by doubling ITSELF, not by an ASCII `'`.
+  for (const q of ['\u2018', '\u2019', '\u201a', '\u201b']) {
+    const script = winUserPathScript('add', `C:\\Users\\O${q}Brien\\bin`);
+    assert.ok(script.startsWith(`$d='C:\\Users\\O${q}${q}Brien\\bin';`),
+      `U+${q.codePointAt(0).toString(16)} was not doubled: ${script.slice(0, 60)}`);
+  }
+});
+
+test('the already-on-PATH check matches whole entries, not substrings', () => {
+  // A substring hit on `…\bin2` or `…\bin\old` skipped the registry write while the shim's own dir
+  // was never on PATH. Case and a trailing separator are noise on Windows; a prefix is not a match.
+  const dir = 'C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin';
+  const rows = [
+    ['C:\\Windows;C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin', true],
+    ['c:\\users\\DEV\\appdata\\local\\geneseed\\BIN\\;C:\\Windows', true],
+    ['C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin2;C:\\Windows', false],
+    ['C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin\\old', false],
+    ['', false],
+  ];
+  for (const [pathEnv, want] of rows) assert.equal(winPathHas(pathEnv, dir), want, pathEnv);
+});
+
+test('the Unix shim single-quotes its paths, so nothing in them expands', () => {
+  // Inside double quotes the shell still expands `$`, backticks and `\`, so an install under a
+  // directory named `$(touch x)` ran it on every `geneseed`. `'\''` is the only escape needed.
+  assert.equal(unixShimText('/opt/no$de/bin/node', "/home/o'brien/`x`/cli.mjs"),
+    "#!/bin/sh\n# GENESEED_LINK_SHIM\nexec '/opt/no$de/bin/node' '/home/o'\\''brien/`x`/cli.mjs' \"$@\"\n");
 });
 
 test('add is idempotent and drops empty segments', () => {

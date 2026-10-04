@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 
 import { parseJson, jsonDumpsIndent, jsonDumpsCompact, isDict } from '../../js/lib/json.mjs';
 import { isDir, isFile } from '../../js/lib/fs.mjs';
+import { which, within } from '../../js/lib/paths.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -171,3 +172,54 @@ test('isFile and isDir answer false, not throw, for a path through a file', () =
     sb.cleanup();
   }
 });
+
+// `which` NEVER finds a program just because it sits in the current directory. Every caller spawns
+// what it returns (`git` from `upgrade`, `java` from `setup`, …), so a `git.exe` committed to an
+// untrusted clone would run the moment a verb was typed inside it. Two routes reached the cwd: the
+// `.` Windows prepends unless `NoDefaultCurrentDirectoryInExePath` is defined, and an EMPTY PATH
+// entry, which joins to a cwd-relative name on every platform. Both are closed; a directory that
+// IS on the search path is still found, which is the positive control.
+test('which never searches the current directory unless PATH names it', () => {
+  const sb = makeSandbox('gs-which-');
+  const elsewhere = makeSandbox('gs-which-empty-');
+  const savedCwd = process.cwd();
+  const savedVar = process.env.NoDefaultCurrentDirectoryInExePath;
+  const name = process.platform === 'win32' ? 'zzplanted.cmd' : 'zzplanted';
+  try {
+    fs.writeFileSync(path.join(sb.path, name), process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n');
+    fs.chmodSync(path.join(sb.path, name), 0o755);
+    delete process.env.NoDefaultCurrentDirectoryInExePath;
+    process.chdir(sb.path);
+    assert.equal(which('zzplanted', elsewhere.path), null,
+      'a program in the cwd was found though the search path does not name the cwd');
+    assert.equal(which('zzplanted', `${elsewhere.path}${path.delimiter}`), null,
+      'an empty PATH entry resolved to the current directory');
+    assert.ok(which('zzplanted', sb.path), 'a program ON the search path was not found');
+  } finally {
+    process.chdir(savedCwd);
+    if (savedVar === undefined) delete process.env.NoDefaultCurrentDirectoryInExePath;
+    else process.env.NoDefaultCurrentDirectoryInExePath = savedVar;
+    sb.cleanup();
+    elsewhere.cleanup();
+  }
+});
+
+// `within` over a ROOT parent. A drive root and `/` are the only canonical spellings that end in a
+// separator, and the split left an empty last segment no child could match — so nothing was ever
+// inside `D:\` or `/`. The negative rows keep the strip from turning into a prefix match.
+const WITHIN_ROWS = process.platform === 'win32' ? [
+  ['D:\\x\\y', 'D:\\', true],
+  ['d:/x', 'D:\\', true],
+  ['D:\\x', 'D:\\x\\', true],
+  ['E:\\x', 'D:\\', false],
+  ['D:\\xy', 'D:\\x', false],
+] : [
+  ['/x/y', '/', true],
+  ['/x', '/x/', true],
+  ['/xy', '/x', false],
+];
+for (const [child, parent, want] of WITHIN_ROWS) {
+  test(`within(${child}, ${parent}) is ${want}`, () => {
+    assert.equal(within(child, parent), want);
+  });
+}
