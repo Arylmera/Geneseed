@@ -1,10 +1,12 @@
 /**
  * WHAT THE WEB API ANSWERS — as a declaration, separate from the dispatcher that honours it.
  *
- * Two tables and two inline lists. They are not documentation: `tests/unit/web_server.test.mjs`
- * holds their union against a surface list written out in the test, and probes the real handler,
- * because a declaration is not a dispatcher — a route can be declared here and missing from the
- * dispatch, and nothing but a probe notices.
+ * Four tables and two inline lists. The two GET tables (`STATE_ROUTES`, `PREFIX_ROUTES`) used
+ * to live in `api.mjs`, which made it import every route module that also imported it. None of
+ * this is documentation: `tests/unit/web_server.test.mjs` holds their union against a surface
+ * list written out in the test, and probes the real handler, because a declaration is not a
+ * dispatcher — a route can be declared here and missing from the dispatch, and nothing but a
+ * probe notices.
  *
  * This file used to also carry the Python→Node port's NOT_PORTED / DECLINED partition — five
  * sets, all empty once the port finished. They were deleted when the port bookkeeping retired
@@ -15,8 +17,15 @@
  * expose X?", which has nothing to do with sockets, daemons or gzip.
  */
 import { formatValue, isTruthy, parseJson } from '../lib/json.mjs';
-import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcpToggle, apiMemoryDelete, apiProfileSave, apiRulesMutate, apiRulesPromote, apiSelectView } from './actions.mjs';
-import { apiActivityToggle } from './activity.mjs';
+import { percentDecode } from '../lib/text.mjs';
+import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMcpToggle, apiMemoryDelete, apiSelectView } from './actions.mjs';
+import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
+import {
+  apiDiff, apiDoctor, apiExcludes, apiInstalls, apiLoops, apiLoopsActive, apiOverview,
+  apiRecent, apiSetup, apiThemes,
+} from './api.mjs';
+import { NotFound, apiCatalog, apiItem } from './catalog.mjs';
+import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote } from './user-files.mjs';
 
 /**
  * The POSTs this daemon answers — and this table IS the dispatch, not a declaration beside
@@ -102,3 +111,49 @@ export function readJsonBody(buf) {
   return (obj !== null && typeof obj === 'object' && obj.constructor === Object) ? obj : {};
 }
 
+/**
+ * The prefix routes — path in, response out.
+ *
+ * `percentDecode` and not `decodeURIComponent`: the JS builtin throws a `URIError` on a `%`
+ * that is not an escape, where this shell instead answers a 404 naming the literal text.
+ */
+export const PREFIX_ROUTES = [
+  ['/api/catalog/', (state, p) => apiCatalog(state, p.split('/').pop())],
+  // /api/item/<type>/<name> — TYPE has no slash, the NAME keeps its slashes so a wiki
+  // page's relpath survives. A missing name is a 404 here rather than a 500 two frames down.
+  ['/api/item/', (state, p) => {
+    const m = /^\/api\/item\/([^/]+)\/(.+)$/.exec(p);
+    if (!m) throw new NotFound(p);
+    return apiItem(state, m[1], percentDecode(m[2]));
+  }],
+  // The sid is passed through unquoted — `apiActivityDetail`'s safe-name scheme is what
+  // makes the lookup safe, rather than a check out here.
+  ['/api/activity/', (state, p) => apiActivityDetail(
+    state, percentDecode(p.slice('/api/activity/'.length)))],
+];
+
+/**
+ * A literal path to `api_X(state)`, table-keyed rather than a chain of `if`s — the reason
+ * it is a table is `tests/unit/web_server.test.mjs`'s cross-check, which requires this
+ * table plus `PREFIX_ROUTES` and `GET_INLINE` to equal a surface list written out in the
+ * test, so a route cannot appear or vanish unenumerated.
+ */
+export const STATE_ROUTES = {
+  '/api/overview': apiOverview,
+  '/api/recent': apiRecent,
+  '/api/themes': apiThemes,
+  '/api/setup': apiSetup,
+  '/api/doctor': apiDoctor,
+  '/api/installs': apiInstalls,
+  '/api/excludes': apiExcludes,
+  '/api/profile': apiProfile,
+  '/api/diff': apiDiff,
+  '/api/activity': apiActivity,
+  // `/api/rules` must exist as a PAIR with its POST: `apiRulesMutate` splices `parseRules`'
+  // line indices, and the fingerprint every mutation must send back is what this GET
+  // answers — a daemon whose POST worked and whose GET 501'd would have no way to obtain one.
+  '/api/rules': apiRules,
+  '/api/mcp': apiMcp,
+  '/api/loops': apiLoops,
+  '/api/loops/active': apiLoopsActive,
+};

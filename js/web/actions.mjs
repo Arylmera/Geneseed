@@ -1,6 +1,6 @@
 /**
- * The web console's WRITES — the mutating endpoints, plus the two GETs that belong beside
- * them.
+ * The web console's WRITES — the mutating endpoints, plus the one GET that belongs beside them
+ * (`apiMcp`). The fingerprint-guarded rules and profile editors are `user-files.mjs`.
  *
  * `{cmd: [...]}`, returned by `apiInstallCmd` and `apiDeployCmd` below, IS A FUNCTION'S
  * RETURN TYPE, NOT A RESPONSE BODY: the dispatcher hands it straight to the job runner in
@@ -41,34 +41,53 @@ import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
-import { frontmatter, memoryDropIndex } from '../hosts/memory-files.mjs';
 import {
   CLAUDE_STYLE, HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState,
-  installTargets, modeOfDir, postureOfDir, readMaybe, trustOfDir,
+  installTargets, modeOfDir, postureOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
   mcpMeta, mcpPresetBlock, mcpSave, mcpSetEnabled, mcpState,
 } from '../hosts/mcp.mjs';
-import { readText, writeText, isFile, isDir } from '../lib/fs.mjs';
+import { readText, isFile, isDir } from '../lib/fs.mjs';
 import { parseJson, formatRepr, formatValue, isTruthy } from '../lib/json.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { normcase } from '../lib/paths.mjs';
-import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
+import { normcase, within } from '../lib/paths.mjs';
+import { stripWhitespace } from '../lib/text.mjs';
+import { memoryDelete } from '../maintain/memory.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
-import { splitLines } from '../lib/udiff.mjs';
-import {
-  NotFound, deployed, emitChoices, fingerprint, themeChoices, viewCfg, within,
-} from './api.mjs';
+import { emitChoices, themeChoices, viewCfg } from './api.mjs';
+import { NotFound, deployed, memoryDir } from './catalog.mjs';
 
-const bget = (body, key, dflt = null) => (isDict(body) && Object.hasOwn(body, key)
+/** One body field, `dflt` when the body is not an object or does not carry the key. */
+export const bget = (body, key, dflt = null) => (isDict(body) && Object.hasOwn(body, key)
   ? body[key] : dflt);
 
-const strOr = (v) => (isTruthy(v) ? formatValue(v) : '');
+export const strOr = (v) => (isTruthy(v) ? formatValue(v) : '');
+
+/**
+ * A request body's LIST field closed against `known()` member by member, re-ordered through
+ * `order()`, or `null` for "said nothing usable" — the shared shape of the two doctrine axes
+ * below. `norm` rewrites a member before the check (the rule axis accepts `process 7`).
+ *
+ * `known`/`order` are thunks so a body that names nothing never pays for discovery.
+ */
+function bodyList(body, key, known, order = known, norm = (n) => n) {
+  const raw = bget(body, key);
+  if (Array.isArray(raw) && !raw.length) return [];
+  const names = Array.isArray(raw) ? raw
+    : (typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(Boolean) : null);
+  if (names === null || !names.length) return null;
+  if (names.length === 1 && names[0] === 'none') return [];
+  const ids = names.map((n) => (typeof n === 'string' ? norm(n) : n));
+  const ok = known();
+  if (!ids.every((n) => typeof n === 'string' && ok.includes(n))) return null;
+  return order().filter((id) => ids.includes(id));
+}
 
 /**
  * A request body's `doctrines` -> a normalised pack list, or `null` for "said nothing usable".
@@ -89,15 +108,8 @@ const strOr = (v) => (isTruthy(v) ? formatValue(v) : '');
  * `none`/`[]` both mean the deliberate empty selection — a real configuration, not a rejection.
  */
 function bodyDoctrines(body) {
-  const raw = bget(body, 'doctrines');
-  if (Array.isArray(raw) && !raw.length) return [];
-  const names = Array.isArray(raw) ? raw
-    : (typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(Boolean) : null);
-  if (names === null || !names.length) return null;
-  if (names.length === 1 && names[0] === 'none') return [];
-  const known = discoverNames('doctrines', PACK_ORDER[0]);
-  if (!names.every((n) => typeof n === 'string' && known.includes(n))) return null;
-  return PACK_ORDER.filter((p) => names.includes(p));
+  return bodyList(body, 'doctrines', () => discoverNames('doctrines', PACK_ORDER[0]),
+    () => PACK_ORDER);
 }
 
 /**
@@ -114,47 +126,44 @@ function bodyDoctrines(body) {
  * selection: "exclude nothing", which is a real answer and NOT the same as not saying.
  */
 function bodyExcludeRules(body) {
-  const raw = bget(body, 'excludeRules');
-  if (Array.isArray(raw) && !raw.length) return [];
-  const names = Array.isArray(raw) ? raw
-    : (typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(Boolean) : null);
-  if (names === null || !names.length) return null;
-  if (names.length === 1 && names[0] === 'none') return [];
-  const known = knownRuleIds();
-  const ids = names.map((n) => (typeof n === 'string' ? n.trim().replace(/[ \t]+/, '.') : n));
-  if (!ids.every((n) => typeof n === 'string' && known.includes(n))) return null;
-  return known.filter((id) => ids.includes(id));
-}
-
-/** Splits on runs of `WHITESPACE` (not `\s`), dropping empty strings. */
-const splitWords = (s) => s.split(new RegExp(`[${WHITESPACE}]+`)).filter(Boolean);
-
-/** Today's date, LOCAL (not UTC) — this is a user-facing date, not a wire timestamp. */
-function todayIso(d = new Date()) {
-  const p2 = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+  return bodyList(body, 'excludeRules', knownRuleIds, knownRuleIds,
+    (n) => n.trim().replace(/[ \t]+/, '.'));
 }
 
 /**
- * `today` and `today + n days`, from ONE sample of the clock.
+ * The five scalar axes of a build request — theme, footprint, posture, mode, trust — each
+ * taken from the body only when it names a value this checkout ships, else from `dflt`. The
+ * SAME allowlist for `apiInstallCmd` and `apiDeployCmd`; they differ only in their defaults (the
+ * install's own markers, versus a fresh deploy's). A bogus body value never reaches the argv.
+ */
+function bodyAxes(body, dflt) {
+  const pick = (key, ok) => { const v = bget(body, key); return ok(v) ? v : dflt[key]; };
+  return {
+    theme: pick('theme', (v) => themeChoices().some((c) => c.name === v)),
+    footprint: pick('footprint', (v) => v === 'lean' || v === 'full'),
+    posture: pick('posture', (v) => discoverNames('postures', 'peer').includes(v)),
+    mode: pick('mode', (v) => discoverNames('modes', 'direct').includes(v)),
+    trust: pick('trust', (v) => Object.keys(PRESETS).includes(v)),
+  };
+}
+
+/**
+ * The DETECTED install a body's (host, path) pair names — `[host, scope, root]` — or a
+ * `NotFound`. THE ALLOWLIST three endpoints share (view select, rebuild, deactivate/remove), and
+ * one copy of it: two copies of a security check drift, and the copy that drifts is the one
+ * nobody re-read.
  *
- * Two separate `new Date()` calls would let the provenance line and the expiry land on
- * either side of a midnight that fell between them — a one-run-in-86400 disagreement, which
- * is the worst kind to debug.
+ * The pair is SERIALISED into the key rather than concatenated with a separator: the path comes
+ * straight out of a request body, and any separator it could contain would let one pair
+ * impersonate another. `findLast` keeps the old Map's last-write-wins on a duplicate pair.
  */
-function promoteDates(days) {
-  const d = new Date();
-  const today = todayIso(d);
-  d.setDate(d.getDate() + days);
-  return [today, todayIso(d)];
+function detectedInstall(body) {
+  const want = JSON.stringify([strOr(bget(body, 'host')), strOr(bget(body, 'path'))]);
+  const hit = installTargets()
+    .findLast(([host, , root]) => JSON.stringify([host, String(root)]) === want);
+  if (hit === undefined) throw new NotFound('unknown install (host, path)');
+  return hit;
 }
-
-/**
- * Strict equality on the RAW body value, not run through `strOr` first. `strOr(0)` folds to
- * `''` (0 is falsy), which would wrongly equal an absent file's `''` fingerprint and let a
- * client send `"fingerprint": 0` and overwrite regardless of what is actually on disk.
- */
-const fpMatches = (got, want) => typeof got === 'string' && got === want;
 
 // ---- OS-native folder picker ---------------------------------------------------------------
 
@@ -262,278 +271,7 @@ export function apiPickFolder(done) {
   return done({ error: 'no native folder dialog on this platform' });
 }
 
-// ---- user rules (user-rules.md) ----------------------------------------------------------
-
-export const RULES_FILE = 'user-rules.md';
-const rulesPath = (state) => path.join(state.target, RULES_FILE);
-
-/**
- * `## R<n> — Title`, anchored at column 0 so a rule body's fenced code and the stub's
- * indented format example never parse as rules.
- *
- * The whitespace classes are `WHITESPACE`, not `\s`: this pattern runs over a HAND-EDITED
- * file, which is where a non-breaking space actually turns up. `\S` is its complement for
- * the same reason.
- *
- * `\d` IS LEFT ASCII, and that is a declared divergence rather than an oversight, unlike
- * `ruleFields` below which uses `\p{Nd}`. No theme seeds a non-ASCII rule id, no build
- * writes one, and the web editor cannot produce one either — it writes `R<n>` itself from
- * `max(ids) + 1`. Widening this to match would only move the gap one line down, to whatever
- * parses the captured digits back into a number.
- */
-const RULE_HEAD_RE = new RegExp(
-  `^##[${WHITESPACE}]+R(\\d+)[${WHITESPACE}]*[—–-]+[${WHITESPACE}]*`
-  + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
-);
-
-/** Advisory only; nothing blocks past it. */
-const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
-
-const META_RE = new RegExp(`^\\((.+)\\)[${WHITESPACE}]*$`);
-
-/** `{}` when the line is body rather than metadata. */
-function parseRuleMeta(line) {
-  const m = META_RE.exec(stripWhitespace(line));
-  if (!m) return {};
-  const meta = {};
-  for (const part of m[1].split('|')) {
-    const at = part.indexOf(':');
-    if (at < 0) continue;               // `partition` with no separator — not a pair
-    const key = stripWhitespace(part.slice(0, at)).toLowerCase().replaceAll(' ', '_');
-    if (['scope', 'source', 'trial_until'].includes(key)) {
-      meta[key] = stripWhitespace(part.slice(at + 1));
-    }
-  }
-  return meta;
-}
-
-/**
- * `user-rules.md` parsed to `[rules, warnings]`.
- *
- * Every rule carries its `start`/`end` LINE INDICES, which is what lets `apiRulesMutate`
- * splice exactly one block and leave every other byte of the user's file — prose,
- * formatting, hand-written sections — untouched.
- */
-export function parseRules(text) {
-  const lines = splitLines(text);
-  const rules = [];
-  const warnings = [];
-  const seen = new Set();
-  for (let idx = 0; idx < lines.length; idx += 1) {
-    const m = RULE_HEAD_RE.exec(lines[idx]);
-    if (!m) continue;
-    let end = lines.length;
-    for (let j = idx + 1; j < lines.length; j += 1) {
-      if (lines[j].startsWith('## ')) { end = j; break; }
-    }
-    const rid = Number(m[1]);
-    if (seen.has(rid)) warnings.push(`duplicate rule id R${rid}`);
-    seen.add(rid);
-    let k = idx + 1;
-    while (k < end && !stripWhitespace(lines[k])) k += 1;
-    const meta = k < end ? parseRuleMeta(lines[k]) : {};
-    if (Object.keys(meta).length) k += 1;
-    rules.push({
-      id: rid,
-      title: m[2],
-      scope: Object.hasOwn(meta, 'scope') ? meta.scope : 'project',
-      source: Object.hasOwn(meta, 'source') ? meta.source : '',
-      trial_until: Object.hasOwn(meta, 'trial_until') ? meta.trial_until : '',
-      body: stripWhitespace(lines.slice(k, end).join('\n')),
-      start: idx,
-      end,
-    });
-  }
-  return [rules, warnings];
-}
-
-export function apiRules(state) {
-  const p = rulesPath(state);
-  if (!isFile(p)) {
-    return { exists: false, path: p, rules: [], warnings: [], fingerprint: '',
-      stats: { rules: 0, lines: 0, tokens: 0, ...RULES_BUDGET } };
-  }
-  const text = readMaybe(p) ?? '';
-  const [rules, warnings] = parseRules(text);
-  const today = todayIso();
-  const out = rules.map((r) => ({
-    id: r.id, title: r.title, scope: r.scope, source: r.source,
-    trial_until: r.trial_until,
-    status: r.trial_until ? 'trial' : 'active',
-    overdue: Boolean(r.trial_until) && r.trial_until < today,
-    body: r.body,
-  }));
-  return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text),
-    // CODE POINTS, not `String.length` (UTF-16 units) — an emoji in a rule body would
-    // otherwise put the token estimate off.
-    stats: { rules: rules.length, lines: splitLines(text).length,
-      tokens: Math.floor(codePointLength(text) / 4), ...RULES_BUDGET } };
-}
-
-function rulesRead(state) {
-  const p = rulesPath(state);
-  return [p, isFile(p) ? (readMaybe(p) ?? '') : ''];
-}
-
-function ruleBlock(rid, title, scope, source, trialUntil, body) {
-  const meta = [`scope: ${scope}`];
-  if (source) meta.push(`source: ${source}`);
-  if (trialUntil) meta.push(`trial until: ${trialUntil}`);
-  return `## R${rid} — ${title}\n(${meta.join(' | ')})\n${stripWhitespace(body)}\n`;
-}
-
-/**
- * Validate and normalise a rule's writable fields. Throws (→ the shell's JSON 500 carrying
- * the message) on an unusable rule.
- *
- * `\p{Nd}` here and not `\d`, unlike `RULE_HEAD_RE` above: this is a pure predicate over a
- * string that stays a string, so accepting any Unicode decimal digit costs nothing and
- * needs no numeric parse afterward.
- */
-function ruleFields(body) {
-  const title = splitWords(strOr(bget(body, 'title'))).join(' ');
-  const text = stripWhitespace(strOr(bget(body, 'body')));
-  if (!title) throw new Error('a rule needs a title');
-  if (!text) throw new Error('a rule needs body text');
-  let scope = bget(body, 'scope');
-  if (scope !== 'user' && scope !== 'project') scope = 'project';
-  const source = splitWords(strOr(bget(body, 'source'))).join(' ');
-  const trial = stripWhitespace(strOr(bget(body, 'trial_until')));
-  if (trial && !/^\p{Nd}{4}-\p{Nd}{2}-\p{Nd}{2}$/u.test(trial)) {
-    throw new Error('trial until must be YYYY-MM-DD');
-  }
-  return [title, text, scope, source, trial];
-}
-
-/**
- * Coerces whatever `id` came out of the parsed body into an integer, or throws
- * `NotFound('rule id')`. Handles a decimal string (surrounding whitespace stripped), a
- * boolean, a bare number (truncated), and a `JsonNumber`-shaped value via its `valueOf()` —
- * whatever `parseJson` could have produced for this field.
- */
-function ruleId(v) {
-  if (typeof v === 'string') {
-    const s = stripWhitespace(v);
-    if (!/^[+-]?\d+$/.test(s)) throw new NotFound('rule id');
-    return Number(s);
-  }
-  if (typeof v === 'boolean') return v ? 1 : 0;
-  if (typeof v === 'number') return Math.trunc(v);
-  if (v !== null && v !== undefined && typeof v.valueOf === 'function'
-      && typeof v.valueOf() === 'number') {
-    return Math.trunc(v.valueOf());
-  }
-  throw new NotFound('rule id');
-}
-
-/**
- * Add / update / delete on user-rules.md.
- *
- * EVERY MUTATION REQUIRES THE FINGERPRINT OF THE CONTENT THE CLIENT LAST READ. An agent
- * session may be editing the same file mid-flight, so a stale write returns `ok: false`
- * (which the shell maps to 409) and the client re-fetches — it never clobbers. The fresh
- * fingerprint comes back in the response so a client can chain edits without a re-fetch.
- */
-export function apiRulesMutate(state, body) {
-  const op = bget(body, 'op');
-  if (op !== 'add' && op !== 'update' && op !== 'delete') {
-    throw new NotFound(`rules op ${formatRepr(op)}`);
-  }
-  const [p, original] = rulesRead(state);
-  let text = original;
-  if (!fpMatches(bget(body, 'fingerprint', ''), fingerprint(text))) {
-    return { ok: false, error: 'conflict',
-      detail: 'user-rules.md changed since you loaded it — reloading' };
-  }
-  const [rules] = parseRules(text);
-  let rid;
-  let next;
-  if (op === 'add') {
-    const [title, rtext, scope, source, trial] = ruleFields(body);
-    rid = rules.reduce((mx, r) => (r.id > mx ? r.id : mx), 0) + 1;
-    if (!text) text = '# User rules\n';
-    next = `${text.replace(/\n+$/, '')}\n\n${ruleBlock(rid, title, scope, source, trial, rtext)}`;
-  } else {
-    rid = ruleId(bget(body, 'id'));
-    const target = rules.find((r) => r.id === rid);
-    if (target === undefined) throw new NotFound(`rule R${rid}`);
-    const lines = splitLines(text);
-    if (op === 'update') {
-      const [title, rtext, scope, source, trial] = ruleFields(body);
-      const block = ruleBlock(rid, title, scope, source, trial, rtext);
-      lines.splice(target.start, target.end - target.start,
-        ...splitLines(block.replace(/\n+$/, '')));
-    } else {
-      // delete — also swallow ONE preceding blank separator line, or repeated deletes leave
-      // a growing run of blank lines in the user's file.
-      let start = target.start;
-      if (start > 0 && !stripWhitespace(lines[start - 1])) start -= 1;
-      lines.splice(start, target.end - start);
-    }
-    next = `${lines.join('\n').replace(/\n+$/, '')}\n`;
-  }
-  writeText(p, next);
-  return { ok: true, op, id: rid, fingerprint: fingerprint(next) };
-}
-
-/**
- * One memory fact promoted into a trial rule. The provenance line and the month of
- * probation are the rule this endpoint owns, and both are DATES read from the real clock —
- * not destamped, since destamping would erase exactly the thing being recorded.
- */
-export function apiRulesPromote(state, body) {
-  const name = strOr(bget(body, 'name'));
-  const d = memoryDir(state);
-  if (!isDir(d)) throw new NotFound('memory store');
-  if (!name || name.includes('/') || name.includes('\\')
-      || name === 'MEMORY' || name === 'README') {
-    throw new NotFound(name);
-  }
-  const src = path.join(d, `${name}.md`);
-  if (!isFile(src)) throw new NotFound(name);
-  const [fm, memBody] = frontmatter(readMaybe(src) ?? '');
-  const fmName = fm.has('name') ? fm.get('name') : name;
-  const fmDesc = fm.has('description') ? fm.get('description') : '';
-  const [today, trial] = promoteDates(30);
-  const res = apiRulesMutate(state, {
-    op: 'add',
-    fingerprint: bget(body, 'fingerprint', ''),
-    title: isTruthy(bget(body, 'title')) ? bget(body, 'title') : fmName,
-    body: isTruthy(bget(body, 'body')) ? bget(body, 'body')
-      : (stripWhitespace(memBody) || fmDesc),
-    scope: bget(body, 'scope'),
-    source: `memory ${name}, promoted ${today}`,
-    trial_until: trial,
-  });
-  if (isTruthy(res.ok) && isTruthy(bget(body, 'delete_memory'))) {
-    apiMemoryDelete(state, name);
-    res.deleted_memory = name;
-  }
-  return res;
-}
-
-// ---- PROFILE.md --------------------------------------------------------------------------
-
-/** The whole file, fingerprint-guarded like the rules above. */
-export function apiProfileSave(state, body) {
-  const p = path.join(state.target, 'PROFILE.md');
-  const cur = isFile(p) ? (readMaybe(p) ?? '') : '';
-  if (!fpMatches(bget(body, 'fingerprint', ''), fingerprint(cur))) {
-    return { ok: false, error: 'conflict',
-      detail: 'PROFILE.md changed since you loaded it — reloading' };
-  }
-  let next = strOr(bget(body, 'text'));
-  if (next && !next.endsWith('\n')) next += '\n';
-  writeText(p, next);
-  // The fingerprint of what is ON DISK, which is not the fingerprint of what was SENT once
-  // the newline has been appended — and the client chains its next save off this value.
-  return { ok: true, path: p, fingerprint: fingerprint(next) };
-}
-
 // ---- memory ------------------------------------------------------------------------------
-
-/** Always `<target>/memory` — never the CWD-scanning resolver. */
-const memoryDir = (state) => path.join(state.target, 'memory');
 
 /**
  * One fact file, and its line in the MEMORY.md index.
@@ -547,14 +285,10 @@ const memoryDir = (state) => path.join(state.target, 'memory');
 export function apiMemoryDelete(state, name) {
   const d = memoryDir(state);
   if (!isDir(d)) throw new NotFound('memory store');
-  if (!name || name.includes('/') || name.includes('\\')
-      || name === 'MEMORY' || name === 'README') {
-    throw new NotFound(name);
-  }
-  const p = path.join(d, `${name}.md`);
-  if (!isFile(p)) throw new NotFound(name);
-  unlinkSync(p);
-  memoryDropIndex(d, name);
+  // `memoryDelete` is the `geneseed memory rm` engine, and its reserved-name check is
+  // CASE-FOLDED: this endpoint's own compared `MEMORY` exactly, so on Windows and macOS `memory`
+  // resolved to MEMORY.md, passed, and deleted the index the agent reads at session start.
+  if (!memoryDelete(d, name)) throw new NotFound(name);
   state.refresh();
   return { deleted: name };
 }
@@ -724,15 +458,7 @@ export function apiMcpToggle(state, body) {
  * pair impersonate another in a lookup whose whole job is to be an allowlist.
  */
 export function apiSelectView(state, body) {
-  const known = new Map();
-  for (const [host, scope, root] of installTargets()) {
-    known.set(JSON.stringify([host, String(root)]), [host, scope, root]);
-  }
-  const hit = known.get(JSON.stringify(
-    [strOr(bget(body, 'host')), strOr(bget(body, 'path'))],
-  ));
-  if (hit === undefined) throw new NotFound('unknown install (host, path)');
-  const [host, scope, root] = hit;
+  const [host, scope, root] = detectedInstall(body);
   state.selectView(viewCfg(host, scope, root), root);
   return { ok: true, target: state.target, theme: state.theme, emit: state.emit };
 }
@@ -870,33 +596,15 @@ const EMIT_FOR = new Map([
  * matters and what the argv head is.
  */
 export function apiInstallCmd(state, body) {
-  const known = new Map();
-  for (const [host, scope, root] of installTargets()) {
-    known.set(JSON.stringify([host, String(root)]), [host, scope, root]);
-  }
-  const hit = known.get(JSON.stringify(
-    [strOr(bget(body, 'host')), strOr(bget(body, 'path'))],
-  ));
-  if (hit === undefined) throw new NotFound('unknown install (host, path)');
-  const [host, scope, root] = hit;
+  const [host, scope, root] = detectedInstall(body);
   if (installState(root, host, scope) === 'disabled') {
     return { error: 'install is disabled — reactivate it before (re)building' };
   }
   const emit = EMIT_FOR.get(`${host} ${scope}`);
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
-  const themes = new Set(themeChoices().map((c) => c.name));
-  const bt = bget(body, 'theme');
-  const theme = themes.has(bt) ? bt : state.theme;
-  const bfp = bget(body, 'footprint');
-  const fp = (bfp === 'lean' || bfp === 'full') ? bfp : footprintOfDir(root);
-  const bpos = bget(body, 'posture');
-  const pos = discoverNames('postures', 'peer').includes(bpos)
-    ? bpos : (postureOfDir(root) || 'peer');
-  const bmode = bget(body, 'mode');
-  const mode = discoverNames('modes', 'direct').includes(bmode)
-    ? bmode : (modeOfDir(root) || 'direct');
-  const btrust = bget(body, 'trust');
-  const trust = Object.keys(PRESETS).includes(btrust) ? btrust : (trustOfDir(root) || DEFAULT_PRESET);
+  const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {
+    theme: state.theme, footprint: footprintOfDir(root), posture: postureOfDir(root) || 'peer',
+    mode: modeOfDir(root) || 'direct', trust: trustOfDir(root) || DEFAULT_PRESET });
   // Unspecified means "keep what this install already has", exactly as theme, footprint,
   // posture and mode above do — a rebuild through the console is not a place to silently
   // re-decide the constitution. ⚠ AND A CARRIER WITH NO `Active packs:` MARKER (a pre-2.3
@@ -929,15 +637,7 @@ export function apiInstallCmd(state, body) {
  * in the web tree.
  */
 export function apiInstallToggle(state, body) {
-  const known = new Map();
-  for (const [host, scope, root] of installTargets()) {
-    known.set(JSON.stringify([host, String(root)]), [host, scope, root]);
-  }
-  const hit = known.get(JSON.stringify(
-    [strOr(bget(body, 'host')), strOr(bget(body, 'path'))],
-  ));
-  if (hit === undefined) throw new NotFound('unknown install (host, path)');
-  const [host, scope, root] = hit;
+  const [host, scope, root] = detectedInstall(body);
   const action = bget(body, 'action');
   let res;
   if (action === 'deactivate') {
@@ -999,17 +699,10 @@ export function apiDeployCmd(state, body) {
   if (cfgdirs.has(root)) {
     return { error: "that's a host global config dir — use its existing row to build a global install" };
   }
-  const themes = new Set(themeChoices().map((c) => c.name));
-  const bt = bget(body, 'theme');
-  const theme = themes.has(bt) ? bt : state.theme;
-  const bfp = bget(body, 'footprint');
-  const fp = (bfp === 'lean' || bfp === 'full') ? bfp : 'full';   // a fresh deploy is full
-  const bpos = bget(body, 'posture');
-  const pos = discoverNames('postures', 'peer').includes(bpos) ? bpos : 'peer';
-  const bmode = bget(body, 'mode');
-  const mode = discoverNames('modes', 'direct').includes(bmode) ? bmode : 'direct';
-  const btrust = bget(body, 'trust');
-  const trust = Object.keys(PRESETS).includes(btrust) ? btrust : DEFAULT_PRESET;
+  // A fresh deploy is full, at the default register, mode and trust.
+  const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {
+    theme: state.theme, footprint: 'full', posture: 'peer', mode: 'direct',
+    trust: DEFAULT_PRESET });
   // Same resolution as `apiInstallCmd` above, and for the same reason: the console's Deploy
   // form sends host/path/theme/footprint/posture/mode and NO pack selection, and nothing stops
   // it landing on a directory that already holds an install. Taking `bodyDoctrines` alone left

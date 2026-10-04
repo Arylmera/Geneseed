@@ -2,12 +2,9 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-const restart = vi.fn(() => Promise.resolve())
-vi.mock('../api/index.js', () => ({ api: { restart: (...a) => restart(...a) } }))
-const reload = vi.fn()
+const restartAndReload = vi.fn(() => Promise.resolve())
 vi.mock('../hooks/waitForServer.js', () => ({
-  RESTART_POLL_INTERVAL_MS: 1000,
-  waitForServerThenReload: (...a) => reload(...a),
+  restartAndReload: (...a) => restartAndReload(...a),
 }))
 
 import Dashboard from '../pages/Dashboard/index.jsx'
@@ -41,8 +38,21 @@ describe('the stale-console banner', () => {
     show(true)
     expect(screen.getByText(TEXT)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Restart' }))
-    await waitFor(() => expect(restart).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(reload).toHaveBeenCalledWith(1000))
+    await waitFor(() => expect(restartAndReload).toHaveBeenCalledTimes(1))
+  })
+
+  // A refusal (a foreground `geneseed web`, or a running job) is shown, and the button comes
+  // back — it used to be swallowed as "the connection dropped" and the page reloaded anyway.
+  it('says why when the server refuses to restart', async () => {
+    restartAndReload.mockRejectedValueOnce(
+      Object.assign(new Error('foreground server: restart it from its terminal'), { status: 409 }),
+    )
+    show(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Restart' }))
+    await waitFor(() =>
+      expect(screen.getByText('foreground server: restart it from its terminal')).toBeTruthy(),
+    )
+    expect(screen.getByRole('button', { name: 'Restart' }).disabled).toBe(false)
   })
 
   it('is absent when the server is current', () => {

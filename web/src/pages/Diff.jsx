@@ -87,6 +87,14 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       </div>
     )
 
+  if (!data.diffable)
+    return (
+      <div className="empty">
+        <div className="big">No drift check for this install</div>
+        The drift check covers global installs only.
+      </div>
+    )
+
   const files = data.files
   const editedCount = files.filter((f) => f.status === 'edited').length
   const addedCount = files.filter((f) => f.status === 'added').length

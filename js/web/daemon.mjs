@@ -11,7 +11,7 @@
  */
 import { printOut, writeText } from '../lib/fs.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
-import { webState } from './api.mjs';
+import { webState } from './state.mjs';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, mkdirSync, openSync, readFileSync, unlinkSync } from 'node:fs';
@@ -190,11 +190,18 @@ export function restartArgs(theme) {
 
 /**
  * A detached `web restart`, so the new server survives the exit of the very process asking
- * for it. Called by POST `/api/restart`.
+ * for it. Called by POST `/api/restart` and after a successful update job.
+ *
+ * ONLY FROM THE DAEMON THE RECORD NAMES — `false`, and nothing spawned, otherwise. A plain
+ * `geneseed web` serves in the foreground and writes no record, so `web restart` found nothing
+ * to stop, started a fresh daemon on 4747 while this process still held it, lost the bind,
+ * fell back to a random port, and left a background console nobody had asked for.
  */
 export function requestRestart(theme) {
   const target = webState(theme).target;
+  if (readDaemon(target)?.pid !== process.pid) return false;
   spawnDetached(restartArgs(theme), join(target, '.geneseed-web.log'));
+  return true;
 }
 
 /**
@@ -315,6 +322,14 @@ export async function stopDaemon(theme = null, port = null) {
     printOut(`[web] stopped (pid ${none(st.pid)}).\n`);
     return 0;
   }
+  // A FAILED SHUTDOWN IS NOT A DEAD SERVER. The POST times out at 3 s, a synchronous handler
+  // (a doctor run) can hold the event loop longer, and a console with a job running answers
+  // 409 — deleting the record then left a live daemon nothing could find again.
+  if (await probe(st.url)) {
+    printOut(`[web] the server on ${st.url} did not stop (pid ${none(st.pid)}) — it may be `
+      + 'busy with a job; try again once it finishes.\n');
+    return 1;
+  }
   clearDaemon(target);
   printOut('[web] no live server (cleared a stale record).\n');
   return 0;
@@ -378,7 +393,10 @@ export async function restartDaemon(theme = null, port = null, openBrowser = tru
     // A live daemon means a tab is already open on this (preserved) port and will
     // reconnect on its own — no need to open a fresh browser window here.
     open = false;
-    await stopDaemon(theme);
+    // A daemon that refused to stop is still on the port: starting another would find it live
+    // and report "already running" over a restart that never happened.
+    const stopped = await stopDaemon(theme);
+    if (stopped !== 0) return stopped;
     for (let i = 0; i < 50; i += 1) {
        
       if (!await probe(`http://127.0.0.1:${usePort}`, 0.2)) break;

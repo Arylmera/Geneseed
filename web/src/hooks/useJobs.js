@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/index.js'
-import { waitForServerThenReload } from './waitForServer.js'
+import { serverPid, waitForServerThenReload } from './waitForServer.js'
 
 // How often the running job is polled for fresh output while the console streams.
 const JOB_POLL_INTERVAL_MS = 600
@@ -46,6 +46,10 @@ export function useJobs({ onFinish, onError } = {}) {
     // Update jobs end with the server restarting itself to load the pulled
     // code, so the poller can lose it mid-bounce — reconnect instead of dying.
     const isUpdate = runs.find((r) => r.id === activeId)?.action === 'update'
+    // The pid of the server running the update, so the reload waits for the NEW one — the old
+    // server answers pings for a moment after it queues its own restart.
+    let oldPid = null
+    if (isUpdate) serverPid().then((pid) => (oldPid = pid))
     const t = setInterval(async () => {
       // A hidden tab has nobody watching the stream — skip the round-trip and
       // let the first tick after visibilitychange catch the console up.
@@ -72,7 +76,7 @@ export function useJobs({ onFinish, onError } = {}) {
           if (isUpdate) {
             // The restart is already queued server-side; give it a beat to go
             // down, then reload once it answers again.
-            waitForServerThenReload(2000)
+            waitForServerThenReload(2000, oldPid)
             return
           }
           // Every action re-emits the harness (never the served web assets), so a soft
@@ -81,10 +85,13 @@ export function useJobs({ onFinish, onError } = {}) {
           onFinish?.(j.status)
         }
       } catch {
+        // Only an UPDATE expects the server to go away under the poller (its post-update
+        // bounce): stop, wait for the new one, reload — the job's final state is in its
+        // history. Any other job keeps polling: one failed tick (a slow doctor holding the
+        // event loop) used to stop the stream for good, leaving the run stuck on 'running'.
+        if (!isUpdate) return
         clearInterval(t)
-        // Server went away under the poller (the post-update bounce): wait for
-        // it to come back and reload — the job's final state is in its history.
-        if (isUpdate) waitForServerThenReload(0)
+        waitForServerThenReload(0, oldPid)
       }
     }, JOB_POLL_INTERVAL_MS)
     return () => clearInterval(t)

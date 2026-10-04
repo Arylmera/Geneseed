@@ -62,6 +62,13 @@ describe('http get/post', () => {
     await expect(api.rulesMutate({ op: 'add' })).rejects.toThrow(/reload the page/)
   })
 
+  // 'forbidden host' is a Host-header refusal (DNS rebinding), not a stale token — reloading the
+  // page would not fix it, so it must not be explained as one.
+  it('relays a foreign-Host refusal as itself, not as a stale token', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(errResp(403, { error: 'forbidden host' })))
+    await expect(api.rulesMutate({ op: 'add' })).rejects.toThrow(/^forbidden host$/)
+  })
+
   it('posts with the token header and a JSON body', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({ ok: true })))
     await api.mcpToggle('/cfg', 'srv', true)
