@@ -1,0 +1,25 @@
+{
+  "name": "deps-upgrade",
+  "description": "Confirm the suite is green, then upgrade one package or group per iteration: read its breaking changes, bump and adapt, test, audit, and review, until every named package is upgraded.",
+  "nodes": ["baseline-green", "upgrade-scout", "apply", "test", "deps-audit", "review"],
+  "start": "baseline-green",
+  "edges": [
+    { "from": "baseline-green", "on": "pass", "to": "upgrade-scout" },
+    { "from": "baseline-green", "on": "fail", "to": "$stop" },
+    { "from": "upgrade-scout", "on": "more", "to": "apply" },
+    { "from": "upgrade-scout", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "test" },
+    { "from": "test", "on": "pass", "to": "deps-audit" },
+    { "from": "test", "on": "fail", "to": "apply" },
+    { "from": "deps-audit", "on": "pass", "to": "review" },
+    { "from": "deps-audit", "on": "fail", "to": "apply" },
+    { "from": "review", "on": "pass", "to": "upgrade-scout" },
+    { "from": "review", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["upgrade-scout", "apply", "test", "deps-audit", "review"], "max": 20, "iteration": true },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "review-fix", "nodes": ["apply", "test", "deps-audit", "review"], "max": 3 }
+  ],
+  "weights": { "delete": 0.4 }
+}

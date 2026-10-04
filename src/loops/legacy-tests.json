@@ -1,0 +1,25 @@
+{
+  "name": "legacy-tests",
+  "description": "Confirm the suite is green, then pin legacy behaviour one change point at a time: characterization tests, a run, and a mutation check that proves they bite. Production code is never touched.",
+  "nodes": ["baseline-green", "identify", "characterize", "test", "mutation-check"],
+  "start": "baseline-green",
+  "edges": [
+    { "from": "baseline-green", "on": "pass", "to": "identify" },
+    { "from": "baseline-green", "on": "fail", "to": "$stop" },
+    { "from": "identify", "on": "more", "to": "characterize" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "characterize", "on": "pass", "to": "test" },
+    { "from": "characterize", "on": "fail", "to": "$stop" },
+    { "from": "test", "on": "pass", "to": "mutation-check" },
+    { "from": "test", "on": "fail", "to": "characterize" },
+    { "from": "mutation-check", "on": "pass", "to": "identify" },
+    { "from": "mutation-check", "on": "fail", "to": "characterize" },
+    { "from": "mutation-check", "on": "unavailable", "to": "identify" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "characterize", "test", "mutation-check"], "max": 20, "iteration": true },
+    { "name": "write-run", "nodes": ["characterize", "test"], "max": 3 },
+    { "name": "kill-mutants", "nodes": ["characterize", "test", "mutation-check"], "max": 3 }
+  ],
+  "weights": { "new-file": 0.2 }
+}

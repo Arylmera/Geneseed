@@ -2921,7 +2921,7 @@ test('the loops endpoint lists templates, bricks and overrides from the install 
     fs.writeFileSync(path.join(bricks, 'apply.md'), '---\nname: apply\ndescription: Team apply.\n'
       + 'effect: mutate\nagent: developer\noutcomes: pass\n---\nDo it our way.\n');
     const { templates, bricks: rows, overridden } = apiLoops(webState('neutral', sb.path));
-    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'feature', 'refactor']);
+    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'ci-repair', 'deps-upgrade', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd']);
     const bugfix = templates[0];
     assert.equal(bugfix.origin, 'shipped');
     assert.equal(bugfix.graph.start, 'reproduce');
@@ -2945,8 +2945,8 @@ test('the loops endpoint lists templates, bricks and overrides from the install 
     ]);
     assert.ok(rows.every((b, i) => i === 0 || rows[i - 1].name < b.name), 'bricks sorted by name');
     assert.equal(STATE_ROUTES['/api/loops'], apiLoops);
-    // The rail badge: the three shipped templates, counted on the overview it already polls.
-    assert.equal(apiOverview(webState('neutral', sb.path)).counts.loops, 3);
+    // The rail badge: the eight shipped templates, counted on the overview it already polls.
+    assert.equal(apiOverview(webState('neutral', sb.path)).counts.loops, 8);
   } finally {
     if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
     else process.env.XDG_CONFIG_HOME = prevXdg;
@@ -2967,7 +2967,7 @@ test('the loops endpoint reports graph problems in a template, as loop check doe
     const graph = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/loops/bugfix.json'), 'utf8'));
     fs.writeFileSync(path.join(loops, 'team.json'), JSON.stringify({ ...graph, name: 'team', weights: { vibes: 1 } }));
     const { templates, problems } = apiLoops(webState('neutral', sb.path));
-    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'feature', 'refactor', 'team']);
+    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'ci-repair', 'deps-upgrade', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd', 'team']);
     assert.deepEqual(problems, ['loops/team: weights: vibes is not an action']);
   } finally {
     if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;

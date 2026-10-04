@@ -34,11 +34,12 @@ test('check over the shipped catalogue is clean, and lists templates and bricks'
     assert.equal(r.code, 0);
     assert.equal(r.out.ok, true);
     assert.deepEqual(r.out.problems, []);
-    assert.deepEqual(r.out.templates, ['bugfix', 'feature', 'refactor']);
+    assert.deepEqual(r.out.templates, ['bugfix', 'ci-repair', 'deps-upgrade', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd']);
     assert.deepEqual(r.out.overridden, []);
     assert.deepEqual(r.out.bricks.map((b) => b.name), [
-      'apply', 'baseline-green', 'bruno-test', 'ci-fix', 'deps-audit', 'docs-update', 'identify',
-      'lint', 'plan', 'reproduce', 'review', 'security-scan', 'test',
+      'apply', 'baseline-green', 'bruno-test', 'characterize', 'ci-fix', 'ci-triage', 'deps-audit',
+      'docs-update', 'identify', 'lint', 'mutation-check', 'plan', 'red-test', 'reproduce', 'review',
+      'security-scan', 'test', 'upgrade-scout',
     ]);
     assert.deepEqual(r.out.bricks[0], {
       name: 'apply', description: "Implement the current card's intent, touching only its declared write set.",
