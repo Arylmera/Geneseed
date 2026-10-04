@@ -21,7 +21,7 @@
  */
 import { WEIGHTS } from './score.mjs';
 
-export const TERMINALS = new Set(['$close', '$stop']);
+const TERMINALS = new Set(['$close', '$stop']);
 export const ENGINE_MAX_ITERATIONS = 20;
 /** A template's optional `category`, in the order the console's Loops list shows them. */
 export const CATEGORIES = ['architecture', 'tests', 'development', 'refactoring', 'day-to-day'];

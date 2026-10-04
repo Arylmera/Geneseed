@@ -7,7 +7,8 @@
  * WRITER CONVENTIONS, mirrored from `js/inspect/registry.mjs` (`installs.json`'s own registry)
  * on purpose rather than invented fresh: `jsonDumpsIndent` because these rows are absolute
  * paths and a username carrying an accent writes one here (ensure_ascii matters); a
- * `<file>.tmp` + `renameSync` so a crash mid-write cannot leave `loops.json` half-written where
+ * `<file>.tmp` + `renameWithRetry` (LOOP.md's own atomic rename, retried on a transient Windows
+ * lock) so a crash mid-write cannot leave `loops.json` half-written where
  * the NEXT read would see valid-but-truncated JSON instead of either the old file or the new
  * one; and every public function swallows its own errors — a registry hiccup must never fail
  * `loop init`, and a corrupt `loops.json` must read back as empty rather than throw. The one
@@ -28,20 +29,20 @@
  * re-`init`ed) clears it, so a stale finished-window never survives into a loop that is running
  * again.
  *
- * `recordLoop` and `activeLoops`/`setLoopPreset` never call each other's normalisation by
- * accident: both resolve a root through `realpathSync.native` (falling back to `path.resolve`
- * for a root that no longer exists) and compare with `normcase` — the same case-folding
- * `js/lib/paths.mjs` uses everywhere a Windows path is compared — so a loop launched from a
- * differently-cased spelling of the same worktree is still one row, not two.
+ * `recordLoop` and `setLoopPreset` resolve the root they are given the same way — `normalize`:
+ * `realpathSync.native`, falling back to `path.resolve` for a root that no longer exists — and
+ * compare it with `normcase`, the same case-folding `js/lib/paths.mjs` uses everywhere a Windows
+ * path is compared, so a loop launched from a differently-cased spelling of the same worktree is
+ * still one row, not two. `activeLoops` compares nothing: it reads each row's root as stored.
  */
-import { readFileSync, mkdirSync, realpathSync, renameSync } from 'node:fs';
+import { readFileSync, mkdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { userLoopsDir } from './catalog.mjs';
 import { writeText, readText, isDir, isFile } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
-import { parseLoopFile, writeLoopFile, LOOP_FILE } from './state.mjs';
+import { parseLoopFile, writeLoopFile, renameWithRetry, reviewOf, LOOP_FILE } from './state.mjs';
 import { PRESETS } from './score.mjs';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -65,7 +66,7 @@ function save(loops) {
     mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.tmp`;
     writeText(tmp, `${jsonDumpsIndent({ loops })}\n`);
-    renameSync(tmp, file);
+    renameWithRetry(tmp, file);
   } catch {
     /* best-effort: a registry hiccup must never fail init or a read */
   }
@@ -76,12 +77,6 @@ function normalize(dir) {
 }
 
 const sameRoot = (a, b) => normcase(a) === normcase(b);
-
-/** The soft-decision iterations of `state.history` — the same shape `state.mjs`'s own
- * end-of-run `summary()` reports, so a card and a finished-loop review read the same fields. */
-function reviewOf(state) {
-  return state.history.filter((h) => h.decision === 'soft').map((h) => ({ iteration: h.iteration, intent: h.intent }));
-}
 
 function runningRow(entry, state) {
   return {

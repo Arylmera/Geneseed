@@ -43,9 +43,9 @@ import { iterationLoop, ENGINE_MAX_ITERATIONS } from './graph.mjs';
 
 const BEGIN = '<!-- loop-state:begin -->';
 const END = '<!-- loop-state:end -->';
-export const VERIFY_COMMAND = 'git add -A && git diff --cached --numstat | geneseed loop score --diff';
+const VERIFY_COMMAND = 'git add -A && git diff --cached --numstat | geneseed loop score --diff';
 export const LOOP_FILE = 'LOOP.md';
-export const LOOP_FILE_TMP = `${LOOP_FILE}.tmp`;
+const LOOP_FILE_TMP = `${LOOP_FILE}.tmp`;
 const slash = (p) => String(p).replaceAll('\\', '/');
 
 export function renderLoopFile(state) {
@@ -101,7 +101,11 @@ export function parseLoopFile(text) {
 const head = (state) => iterationLoop(state.graph).nodes[0];
 const fmt = (n) => Number(n).toFixed(1);
 
-/** `contracts`: extra globs (`loop init --contracts`), appended after the graph's own. */
+/**
+ * `contracts`: extra globs (`loop init --contracts`), appended after the graph's own. Every
+ * field the engine ever writes is listed here, `gateAmends` included (`decideGate` still reads
+ * it with `?.`, for a LOOP.md written before it was listed).
+ */
 export function initState({ title, requirement, graph, preset = DEFAULT_PRESET, contracts = [] }) {
   if (!Object.hasOwn(PRESETS, preset)) throw new Error(`unknown preset ${JSON.stringify(preset)}`);
   const loop = iterationLoop(graph);
@@ -111,7 +115,7 @@ export function initState({ title, requirement, graph, preset = DEFAULT_PRESET, 
     iteration: loop.nodes.includes(graph.start) ? 1 : 0,
     card: null, validated: false, pendingVerify: false, closing: false, counters: {},
     resplit: false, emptyStreak: 0, snapshot: '', visited: [], tests: 'n/a', current: {},
-    notes: [], history: [],
+    notes: [], history: [], gateAmends: {},
   };
   if (preset === 'prudent') { state.status = 'awaiting'; state.awaiting = { kind: 'launch' }; }
   return state;
@@ -127,12 +131,14 @@ function resetUnit(state) {
   state.current = {}; state.tests = 'n/a';
 }
 
+/** The soft-decision iterations of `state.history` — what the end-of-run summary and the
+ * registry's Active-tab row both call `review`, so the two read the same fields. */
+export function reviewOf(state) {
+  return state.history.filter((h) => h.decision === 'soft').map((h) => ({ iteration: h.iteration, intent: h.intent }));
+}
+
 function summary(state) {
-  return {
-    iterations: state.history.length,
-    review: state.history.filter((h) => h.decision === 'soft').map((h) => ({ iteration: h.iteration, intent: h.intent })),
-    notes: state.notes,
-  };
+  return { iterations: state.history.length, review: reviewOf(state), notes: state.notes };
 }
 
 export function trailers(state) {
@@ -296,13 +302,31 @@ function filterPorcelain(porcelain) {
 
 // Setup work (iteration 0, graph.start outside the iteration loop) is its own unit; rejecting
 // it has nowhere to retry back into, so it stops the loop instead of looping to the head.
+// Iteration 0 alone says so: `initState` starts at 0 only when graph.start is outside the
+// iteration loop, and `iteration` only ever counts up from there.
 function isSetupUnit(state) {
-  return state.iteration === 0 && !iterationLoop(state.graph).nodes.includes(state.graph.start);
+  return state.iteration === 0;
+}
+
+const isStringList = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+
+// A card arrives from the model as JSON (`record --card`), so its shape is checked before
+// anything is stored: a string `writeSet` stored here only throws later, inside `score --diff`,
+// with `pendingVerify` already set — and `score --declared` refuses while that is set, so
+// nothing could get the loop moving again.
+function cardProblem(card) {
+  if (typeof card !== 'object' || Array.isArray(card)) return 'the card must be a JSON object';
+  if (!isStringList(card.actions)) return "the card's actions must be a list of strings";
+  if (!isStringList(card.writeSet)) return "the card's writeSet must be a list of strings";
+  if (card.intent != null && typeof card.intent !== 'string') return "the card's intent must be a string";
+  return null;
 }
 
 export function recordOutcome(state, bricks, outcome, { card = null, porcelain = null, note = '' } = {}) {
   assertRunning(state);
   if (state.pendingVerify) throw new Error('the iteration is closed: run `geneseed loop score --diff` first');
+  const problem = card === null ? null : cardProblem(card);
+  if (problem) throw new Error(problem);
   const from = state.node;
   const brick = bricks.get(from);
   if (!brick) throw new Error(`no brick named ${from} in the catalogue`);
@@ -323,7 +347,7 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
   // `fail` findings) — pushed before the transition below, so it lands in `notes` even when
   // this call closes the unit, re-splits, or stops the loop. `notes` is never reset mid-run
   // (only `exhaust`'s own push and `decideAwaiting` add to it otherwise), so it survives
-  // `resetUnit`/`finishUnit` the same way the research's fact 1 says a card does not.
+  // `resetUnit`/`finishUnit` — which a card does not: `resetUnit` clears it.
   if (note) state.notes.push(`iteration ${state.iteration} (${from}): ${note}`);
   state.visited.push(from);
 

@@ -775,3 +775,37 @@ test('next hands the graph rules to every brick; no rules or empty rules, no key
   const u = initState({ title: 't', requirement: 'r', graph: { ...bugfix(), rules: [] } });
   assert.equal(Object.hasOwn(nextStep(u, BRICKS), 'rules'), false);
 });
+
+// A card is the model's JSON, so recordOutcome checks its shape before it stores anything:
+// `actions` and `writeSet` are lists of strings, `intent` (when given) a string. A string
+// writeSet used to be stored as-is and only throw inside `score --diff`, with pendingVerify
+// already set — a wedged loop `score --declared` then refuses to touch. Each row: the card, the
+// refusal, and the state left byte-identical (nothing moved, not even the snapshot).
+test('recordOutcome refuses a malformed card before mutating anything', () => {
+  const rows = [
+    ['["logic"]', 'the card must be a JSON object'],
+    ['{"intent":"x","writeSet":"src/a.js","actions":["logic"]}', "the card's writeSet must be a list of strings"],
+    ['{"intent":"x","actions":["logic"]}', "the card's writeSet must be a list of strings"],
+    ['{"intent":"x","writeSet":["src/a.js"],"actions":"logic"}', "the card's actions must be a list of strings"],
+    ['{"intent":"x","writeSet":["src/a.js",3],"actions":["logic"]}', "the card's writeSet must be a list of strings"],
+    ['{"intent":7,"writeSet":["src/a.js"],"actions":["logic"]}', "the card's intent must be a string"],
+  ];
+  for (const [json, message] of rows) {
+    const s = start();
+    scoreDeclared(s, { actions: ['new-file'], writeSet: ['test/a.test.js'], intent: 'reproduce' });
+    recordOutcome(s, BRICKS, 'pass', { porcelain: '?? test/a.test.js' });
+    scoreDiff(s, [file('test/a.test.js')]);
+    const before = JSON.stringify(s);
+    assert.throws(() => recordOutcome(s, BRICKS, 'more', { card: JSON.parse(json), porcelain: ' M x' }), { message }, json);
+    assert.equal(JSON.stringify(s), before, json);
+  }
+});
+
+// isSetupUnit is `iteration === 0`: initState starts at 0 only when graph.start is outside the
+// iteration loop, and starts at 1 (never 0) when it is inside — this row pins that half.
+test('initState starts at iteration 1 when graph.start is the iteration head, and lists gateAmends', () => {
+  const g = { ...bugfix(), start: 'identify' };
+  const s = initState({ title: 't', requirement: 'r', graph: g });
+  assert.equal(s.iteration, 1);
+  assert.deepEqual(s.gateAmends, {});
+});

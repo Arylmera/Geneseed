@@ -117,8 +117,10 @@ export function loadCatalog({
   return { bricks, templates, problems, overridden: overridden.sort() };
 }
 
-export function catalogProblems(opts = {}) {
-  const { bricks, templates, problems } = loadCatalog(opts);
+/** `catalog`: an already-loaded `loadCatalog(opts)`, for a caller that needs the catalogue
+ * itself too — passing it saves reading every brick and template twice. */
+export function catalogProblems(opts = {}, catalog = loadCatalog(opts)) {
+  const { bricks, templates, problems } = catalog;
   const out = [...problems];
   for (const [name, graph] of [...templates].sort(([a], [b]) => (a < b ? -1 : 1))) {
     out.push(...checkGraph(graph, bricks).map((p) => `loops/${name}: ${p}`));

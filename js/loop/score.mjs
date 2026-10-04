@@ -29,7 +29,7 @@ export const PRESETS = Object.freeze({
 export const DEFAULT_PRESET = 'balanced';
 
 /** More deleted lines than this in one iteration counts as a code deletion. */
-export const DELETION_LINES = 20;
+const DELETION_LINES = 20;
 
 const RANK = { silent: 0, soft: 1, blocking: 2 };
 
