@@ -604,7 +604,7 @@ export function apiInstallCmd(state, body) {
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
   const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {
     theme: state.theme, footprint: footprintOfDir(root), posture: postureOfDir(root) || 'peer',
-    mode: modeOfDir(root) || 'direct', trust: trustOfDir(root) || DEFAULT_PRESET });
+    mode: modeOfDir(root) || 'direct', trust: trustOfDir(root, host) || DEFAULT_PRESET });
   // Unspecified means "keep what this install already has", exactly as theme, footprint,
   // posture and mode above do — a rebuild through the console is not a place to silently
   // re-decide the constitution. ⚠ AND A CARRIER WITH NO `Active packs:` MARKER (a pre-2.3
