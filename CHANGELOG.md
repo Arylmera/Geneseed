@@ -8,6 +8,45 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.14.0] — 2026-10-04
+
+**Upgrading:** re-emit (`geneseed rebuild-all`) so installed hooks pick up the gate fixes and the
+per-verb hook modules; then `geneseed web restart`.
+
+### Security
+- **Sealed Secrets gate** — `sk-ant-` keys containing `_` (base64url, most real keys) no longer
+  slip past; `MultiEdit` (`edits[].new_string`) and `NotebookEdit` (`notebook_path`/`new_source`)
+  are now scanned like `Write`/`Edit`.
+- **Destructive-git gate** — catches `git push -f`, `git push origin +main`, `git reset -q --hard`
+  and `git clean -d -f` (flags anywhere after the verb); `LAW_IV_BASH` mirrors it.
+- **Memory names** — a model-written memory `name:` that is not a plain slug is refused instead
+  of becoming a path outside the memory dir (Claude `learn` hook and the OpenCode learn plugin).
+- **Uninstall** — manifest paths are contained to the install dir before unlinking (as deactivate
+  already did); empty-directory pruning stops at the base.
+
+### Fixed
+- `--exclude-rules` is carried through every re-render: `geneseed diff` no longer reports drift on
+  an install with excluded rules, console Restore and `geneseed migrate` no longer re-admit them,
+  and `validate` honours every render axis. Unknown ids in `harness.config.json` now warn and are
+  dropped instead of breaking every later rebuild.
+- Claude `settings.json` that is not a JSON object, or unreadable, is refused instead of
+  overwritten; every JSON config write is atomic.
+- Loop: a malformed `record --card` is refused before it can wedge the loop; `check` resolves
+  bricks from the git root; `next` no longer rewrites `LOOP.md`; a clean tree is recognised.
+- Console: the Docs host selector follows the deployed install instead of sticking to OpenCode;
+  the About page shows the installed and source fingerprints; the outline strips inline markdown.
+- `theme --transparent-only` names the file it wrote; `validate --help` prints its own usage.
+- Doctor's module-map check keys by folder, so twin module names can no longer hide a missing row.
+- `learn` reports on stderr when it cannot start the model CLI.
+
+### Changed
+- The hook binary loads one verb's module per call (`hooks.mjs` gates, `hooks-context.mjs`,
+  `hooks-learn.mjs`): gate cold import ~16 → ~10 ms, on every tool call. The memory-file helpers
+  live in the no-spawn `memory-files.mjs`, so the CLI no longer reaches `child_process`.
+- Internal splits: `js/hosts/shim.mjs`, `js/build/args.mjs`, `checks-constitution.mjs`,
+  `checks-counts.mjs`; one JSON-object reader and one `CLAUDE_STYLE` host list; dead code and
+  Python-era comments removed.
+
 ## [3.13.0] — 2026-10-04
 
 **Upgrading:** re-emit (`geneseed rebuild-all`) so the installed `loop` skill knows the new
