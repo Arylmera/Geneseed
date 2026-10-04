@@ -58,18 +58,6 @@
     { "query": "Make the login button blue", "should_trigger": false },
     { "query": "Explain what XSS stands for", "should_trigger": false }
   ],
-  "teach": [
-    { "query": "Teach me Rust ownership from zero, I have a week", "should_trigger": true },
-    { "query": "This paper on CRDTs is confusing, break it down for me", "should_trigger": true },
-    { "query": "Quiz me on Rust ownership until it sticks", "should_trigger": false },
-    { "query": "Fix the borrow checker error in main.rs", "should_trigger": false }
-  ],
-  "quiz": [
-    { "query": "Drill me on SQL joins until I get them right", "should_trigger": true },
-    { "query": "I think I already know Kubernetes networking, prove me wrong", "should_trigger": true },
-    { "query": "Teach me SQL joins from scratch", "should_trigger": false },
-    { "query": "Write a SQL query joining users and orders", "should_trigger": false }
-  ],
   "worktree": [
     { "query": "Start the payment refactor in an isolated copy, don't touch my checkout", "should_trigger": true },
     { "query": "git status shows changes I did not make, another session is editing this repo", "should_trigger": true },

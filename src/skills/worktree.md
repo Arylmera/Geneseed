@@ -2,8 +2,8 @@
 
 > {{DESC_WORKTREE}}
 
-**Trigger:** work must not share a working tree with what is already in flight. That
-covers a [pipeline](pipeline.md) crew needing its own tree, a second task starts while the first
+**Trigger:** the user says "worktree" or "isolate this", or work must not share the
+checkout with work in flight. That covers a [pipeline](pipeline.md) crew needing its own tree, a second task starts while the first
 is uncommitted, another agent or session is editing this checkout, a risky migration
 or rewrite needs a disposable copy, or the user says "worktree", "isolate this",
 "don't touch my checkout". Also the first thing to reach for when `git status` shows

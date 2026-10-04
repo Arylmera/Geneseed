@@ -2,10 +2,10 @@
 
 > {{DESC_GIT_RESCUE}}
 
-**Trigger:** the repository is in a broken or messy state, or history is to be
-deliberately rewritten (interactive rebase, squash, amend). Broken or messy means a bad
-rebase/merge/reset, lost commits, a detached HEAD, a half-finished operation, or work
-stranded in a stash. For
+**Trigger:** commits are lost, a rebase/merge/reset went wrong, or history is to be
+deliberately rewritten (interactive rebase, squash, amend). The repository can also be
+messy in other ways: a detached HEAD, a half-finished operation, or work stranded in a
+stash. For
 finding *when/why* something changed without altering history, use git-archaeology.md.
 
 ## Procedure
