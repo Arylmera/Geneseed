@@ -5,7 +5,9 @@
  *
  * NO SPAWN. The CLI's closure may not start processes, so git is the model's job: it pipes
  * `git diff --cached --numstat` into `score --diff` and `git status --porcelain` into `record`.
- * stdin is read only when it is not a TTY — a hand-run `geneseed loop record` must not hang.
+ * stdin is read only when it is not a TTY — a hand-run `geneseed loop record` must not hang —
+ * and a TTY reads as `null`, "no porcelain given", never as `''`: an empty pipe is a CLEAN
+ * tree, and a clean tree is exactly the snapshot a read brick's check must compare against.
  *
  * NO `--file`. `state.mjs`'s `LOOP_FILE` constant is the ROOT-RELATIVE path the engine filters
  * out of every diff and porcelain check, so LOOP.md has to live at the git root of the worktree
@@ -27,7 +29,7 @@ import {
 import { recordLoop } from './registry.mjs';
 
 const emit = (obj) => { printOut(`${JSON.stringify(obj)}\n`); return obj.error || obj.ok === false ? 1 : 0; };
-const stdin = () => (process.stdin.isTTY ? '' : readFileSync(0, 'utf8'));
+const stdin = () => (process.stdin.isTTY ? null : readFileSync(0, 'utf8'));
 const list = (s) => (s ? String(s).split(',').map((x) => x.trim()).filter(Boolean) : null);
 
 function requireRoot() {
@@ -58,14 +60,17 @@ function writeCommitMessage(root, gitdir, result) {
   return { ...result, message_file: file.replaceAll('\\', '/') };
 }
 
-function withState(fn) {
+/** `write: false` for a read-only action (`next`): rewriting LOOP.md there would change
+ * nothing, and would race the Active tab's preset picker (`registry.mjs`'s `setLoopPreset`) —
+ * a preset it saved between this read and the rewrite would be silently undone. */
+function withState(fn, { write = true } = {}) {
   const root = requireRoot();
   const file = path.join(root, LOOP_FILE);
   if (!isFile(file)) throw new Error(`${file} does not exist — run \`geneseed loop init\` first`);
   const state = parseLoopFile(readText(file));
   const { bricks } = loadCatalog({ projectRoot: root });
   const result = fn(state, bricks);
-  writeLoopFile(file, state);
+  if (write) writeLoopFile(file, state);
   return result;
 }
 
@@ -79,26 +84,30 @@ function resolveGraph(spec, catalog) {
 
 const ACTIONS = {
   check(args) {
+    // The project level of the catalogue is `<git root>/.geneseed/`, as for `init` and `next`,
+    // so a check run from a subdirectory sees the same bricks and templates they will.
+    const root = gitRootOf(process.cwd()) ?? process.cwd();
     if (args.brick) {
       const { problems } = parseBrick(readText(path.resolve(args.brick)), 'checked');
       return { ok: !problems.length, problems };
     }
     if (args.graph) {
-      const catalog = loadCatalog({ projectRoot: process.cwd() });
+      const catalog = loadCatalog({ projectRoot: root });
       const problems = checkGraph(resolveGraph(args.graph, catalog), catalog.bricks);
       return { ok: !problems.length, problems };
     }
     // The bare check doubles as the catalogue LISTING the loop skill composes a free graph
     // from — frontmatter only: a brick's body reaches the model through `next`, for the node
     // the engine chose, never as a menu.
-    const problems = catalogProblems({ projectRoot: process.cwd() });
-    const { bricks, templates, overridden } = loadCatalog({ projectRoot: process.cwd() });
+    const catalog = loadCatalog({ projectRoot: root });
+    const problems = catalogProblems({ projectRoot: root }, catalog);
+    const { bricks, templates, overridden } = catalog;
     const byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
     return {
       ok: !problems.length, problems,
       templates: [...templates.keys()].sort(byName),
       bricks: [...bricks.values()].sort((a, b) => byName(a.name, b.name))
-        .map(({ body, available, reason, ...b }) => ({ ...b, available, ...(reason ? { reason } : {}) })),
+        .map(({ body, reason, ...b }) => ({ ...b, ...(reason ? { reason } : {}) })),
       overridden,
     };
   },
@@ -121,14 +130,14 @@ const ACTIONS = {
     recordLoop({ root, branch: currentBranch(root), title: args.title });
     return { file, graph: graph.name, preset: state.preset, status: state.status };
   },
-  next: () => withState((s, b) => nextStep(s, b)),
+  next: () => withState((s, b) => nextStep(s, b), { write: false }),
   score(args) {
     if (args.diff) {
       // X6: resolve (and validate) the gitdir BEFORE withState runs the state change, so a
       // malformed `.git` file errors without advancing the loop.
       const root = requireRoot();
       const gitdir = gitDirOf(root);
-      return writeCommitMessage(root, gitdir, withState((s) => scoreDiff(s, parseNumstat(stdin()))));
+      return writeCommitMessage(root, gitdir, withState((s) => scoreDiff(s, parseNumstat(stdin() ?? ''))));
     }
     if (!args.declared) throw new Error('score needs --declared or --diff');
     return withState((s) => scoreDeclared(s, {
@@ -150,10 +159,15 @@ const ACTIONS = {
       }
       note = raw.replace(/\r\n/g, '\n').trimEnd();
     }
-    const card = args.card ? JSON.parse(args.card) : null;
+    let card = null;
+    if (args.card) {
+      try { card = JSON.parse(args.card); } catch (e) {
+        throw new Error(`--card is not valid JSON: ${e.message}`, { cause: e });
+      }
+    }
     const porcelain = stdin();
     return withState((s, b) => recordOutcome(s, b, args.outcome, {
-      card, porcelain: porcelain ? porcelain.replace(/\r\n/g, '\n').trimEnd() : null, note,
+      card, porcelain: porcelain === null ? null : porcelain.replace(/\r\n/g, '\n').trimEnd(), note,
     }));
   },
   decide(args) {

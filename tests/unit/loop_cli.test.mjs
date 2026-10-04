@@ -269,3 +269,122 @@ test('M1: a blocking actual diff, answered with decide --verdict ok, commits thr
     assert.equal(readFileSync(msgFile, 'utf8').replace(/\r\n/g, '\n'), `loop(loop): iteration 0 — reproduce\n\n${trailers}\n`);
   } finally { sb.cleanup(); }
 });
+
+const SRC = path.resolve(import.meta.dirname, '../../src');
+// Runs the shipped bugfix template through its setup unit (reproduce, committed as iteration 0),
+// leaving the loop at `identify`, iteration 1, on a clean tree.
+const pastSetup = (root) => {
+  run(root, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+  run(root, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+  run(root, ['record', '--outcome', 'pass'], '?? test/r.test.js\n');
+  assert.equal(run(root, ['score', '--diff'], '12\t0\ttest/r.test.js\n').out.commit, true);
+};
+
+// `record --card` refuses before LOOP.md moves: malformed JSON says so (the skill retries on an
+// error that mentions JSON), and a card of the wrong shape names the field. Before this, a
+// string writeSet was stored and only threw `writeSet.map is not a function` at `score --diff`,
+// after pendingVerify was set — a loop nothing could move again.
+test('record --card refuses malformed JSON and a wrong-shaped card without touching LOOP.md', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    pastSetup(sb.path);
+    const before = readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8');
+    const bad = run(sb.path, ['record', '--outcome', 'more', '--card', '{intent: x}'], '');
+    assert.equal(bad.code, 1);
+    assert.match(bad.out.error, /^--card is not valid JSON: /);
+    const shape = run(sb.path, ['record', '--outcome', 'more', '--card', '{"intent":"x","writeSet":"src/a.js","actions":["logic"]}'], '');
+    assert.deepEqual(shape, { code: 1, out: { error: "the card's writeSet must be a list of strings" }, err: '' });
+    assert.equal(readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8'), before);
+  } finally { sb.cleanup(); }
+});
+
+// `next` only reads: it must not rewrite LOOP.md (a rewrite would undo a preset the Active tab
+// saved in between). A line appended after the state block survives a `next` untouched.
+test('next leaves LOOP.md byte-identical', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    const file = path.join(sb.path, 'LOOP.md');
+    writeFileSync(file, `${readFileSync(file, 'utf8')}\nhand-written line\n`);
+    const before = readFileSync(file, 'utf8');
+    assert.equal(run(sb.path, ['next']).out.node, 'reproduce');
+    assert.equal(readFileSync(file, 'utf8'), before);
+  } finally { sb.cleanup(); }
+});
+
+// An empty pipe is a CLEAN tree, not "no porcelain given": a read brick (`test`) that leaves
+// the tree clean after `apply` dirtied it reverted the work, and the read-brick check must see
+// that. Before, '' read as null and the check was skipped — the loop moved on to `review`.
+test('an empty porcelain pipe is a clean tree: a read brick that reverted the work stops the loop', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    pastSetup(sb.path);
+    run(sb.path, ['record', '--outcome', 'more', '--card', '{"intent":"fix","writeSet":["src/a.js"],"actions":["logic"]}'], '');
+    run(sb.path, ['score', '--declared']);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], ' M src/a.js\n').out, { node: 'test' });
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], '').out,
+      { stopped: 'read-brick-wrote: test changed the working tree' });
+  } finally { sb.cleanup(); }
+});
+
+// The commit message's two fallbacks: a branch outside `loop/*` names the loop `loop`, and a
+// card with no intent names the unit `setup`. A one-ring graph reaches a commit in four calls.
+test('LOOP_COMMIT_MSG falls back to loop(loop) off a loop/* branch, and to "setup" with no intent', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    writeFileSync(path.join(sb.path, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    const graph = path.join(sb.path, 'ring.json');
+    writeFileSync(graph, JSON.stringify({
+      name: 'ring', description: 'd', nodes: ['identify', 'apply'], start: 'identify',
+      edges: [
+        { from: 'identify', on: 'more', to: 'apply' }, { from: 'identify', on: 'done', to: '$close' },
+        { from: 'apply', on: 'pass', to: 'identify' },
+      ],
+      loops: [{ name: 'iterations', nodes: ['identify', 'apply'], max: 5, iteration: true }],
+    }));
+    assert.equal(run(sb.path, ['init', '--title', 't', '--requirement', 'r', '--graph', graph]).code, 0);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'more', '--card', '{"writeSet":["src/a.js"],"actions":["logic"]}'], '').out,
+      { node: 'apply' });
+    run(sb.path, ['score', '--declared']);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], ' M src/a.js\n').out, { verify: true });
+    const scored = run(sb.path, ['score', '--diff'], '3\t1\tsrc/a.js\n').out;
+    assert.equal(scored.commit, true);
+    assert.equal(scored.intent, null);
+    assert.equal(readFileSync(path.join(sb.path, '.git', 'LOOP_COMMIT_MSG'), 'utf8').replace(/\r\n/g, '\n'),
+      `loop(loop): iteration 1 — setup\n\n${scored.trailers}\n`);
+  } finally { sb.cleanup(); }
+});
+
+test('check --graph names an unknown template', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    assert.deepEqual(run(sb.path, ['check', '--graph', 'nope']), { code: 1, out: { error: 'no loop template named "nope"' }, err: '' });
+  } finally { sb.cleanup(); }
+});
+
+// `check` reads the project catalogue at the GIT ROOT's `.geneseed/`, as `init` and `next` do,
+// so run from a subdirectory it still sees a project brick and a project template. The graph
+// `mine` is bugfix with `apply` swapped for the project brick `myapply`: before, from `sub/`,
+// the template was unknown and the .json path failed on `myapply`.
+test('check from a subdirectory sees the git root\'s project bricks and templates', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    const sub = path.join(sb.path, 'sub');
+    for (const d of ['sub', '.geneseed/bricks', '.geneseed/loops']) mkdirSync(path.join(sb.path, d), { recursive: true });
+    writeFileSync(path.join(sb.path, '.geneseed/bricks/myapply.md'),
+      readFileSync(path.join(SRC, 'bricks/apply.md'), 'utf8').replace('name: apply', 'name: myapply'));
+    const bugfix = readFileSync(path.join(SRC, 'loops/bugfix.json'), 'utf8');
+    writeFileSync(path.join(sb.path, '.geneseed/loops/mine.json'),
+      bugfix.replace('"name": "bugfix"', '"name": "mine"').replaceAll('"apply"', '"myapply"'));
+    const ok = { code: 0, out: { ok: true, problems: [] }, err: '' };
+    assert.deepEqual(run(sub, ['check', '--brick', '../.geneseed/bricks/myapply.md']), ok);
+    assert.deepEqual(run(sub, ['check', '--graph', 'mine']), ok);
+    assert.deepEqual(run(sub, ['check', '--graph', '../.geneseed/loops/mine.json']), ok);
+    assert.ok(run(sub, ['check']).out.templates.includes('mine'));
+  } finally { sb.cleanup(); }
+});
