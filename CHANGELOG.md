@@ -54,8 +54,9 @@ bricks' note files.
   decide --verdict ok|no|amend` answers it: `ok` follows the reported outcome (a held failure
   still stops), `no` stops the loop, `amend` re-runs the brick with a note and restarts its ring
   budget, capped at 3 amends per brick per iteration. A passed gate is named under the closing
-  commit's new `Loop-Gates` trailer; the console's Active tab shows a gated loop the same way it
-  shows one `awaiting` a score decision.
+  commit's new `Loop-Gates` trailer. In the console, a gated brick carries a person badge on the
+  loop ring ("Human gate", or "Human gate on pass") and a "human gate" tag in its rows, and the
+  Active section shows a gated loop as `Awaiting gate at <node>`.
 - **Template `contracts` and `ignoreDeletions` globs** — `contracts` names interface/schema files
   that always escalate a touching iteration to at least the `api` risk weight; copied from the
   template at `loop init`, extendable with `--contracts` or by hand in `LOOP.md`.
@@ -68,6 +69,11 @@ bricks' note files.
   templates' instructions moved out of their descriptions into `rules`.
 
 ### Changed
+- **Console Loops page in the Library layout** — a rail (Templates · Bricks · Active, with
+  counts) replaces the tabs; each section is a filterable list grouped like the Library's
+  (templates by `category`, bricks by origin, active loops by status, awaiting first) beside a
+  detail pane: the ring, the template's `rules`, and its bricks as compact rows that a click on a
+  ring node highlights. Inner-ring nodes no longer overlap (`api-endpoint`).
 - **`feature`** now closes through an independent `done-check` — it maps every requirement to a
   passing test before `$close` instead of trusting the iterations that already ran.
 - **`deps-upgrade`** marks lockfiles with `ignoreDeletions` instead of a lowered `delete` weight,
