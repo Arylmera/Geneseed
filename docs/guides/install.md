@@ -33,7 +33,7 @@ Next: [Verify it works](verify.md). To see what the install just wrote, read [Wh
 - **Node 22.3 or newer.** This is the only hard requirement. Geneseed has zero runtime dependencies, and nothing it installs needs a second interpreter.
 - **Your agent tool**: OpenCode (recommended), Claude Code, IBM Bob, OpenClaude, or any tool that reads a root instructions file.
 - **git**, for a clone only. A clone updates itself with `git pull`.
-- *Optional:* a document converter (MarkItDown, Pandoc or Docling) if you want the agent to read PDFs and Office files. See [MCP servers](mcp.md#reading-non-markdown-docs).
+- *Optional:* a document converter (MarkItDown, Pandoc or Docling) if you want the agent to read PDFs and Office files. See [Reading non-markdown docs](read-non-markdown.md).
 
 ## Install paths, one per host
 

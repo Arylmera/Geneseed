@@ -199,7 +199,7 @@ Pick with `--theme NAME` or via the setup wizard; upgrades remember it. More in 
 
 ### 🪶 Footprint (lean vs full)
 
-A second per-install dial sets how much of the constitution the root file carries *inline* every turn — a token-cost knob, not a change to which Rules apply. **lean** (the default) carries each rule's hand-written short form and points to the full text on disk; **full** inlines every rule with its rationale. Every rule is in force either way. More in [Footprint](docs/concepts/footprint.md) and [Choose your setup](docs/guides/choose-your-setup.md).
+A second per-install dial sets how much of the constitution the root file carries *inline* every turn — a token-cost knob, not a change to which Rules apply. **lean** (the default) carries each rule's hand-written short form and points to the full text on disk; **full** inlines every rule with its rationale. Every rule is in force either way. More in [Footprint](docs/concepts/footprint.md) and [Footprint, loop trust and changing later](docs/guides/setup-footprint.md).
 
 ---
 

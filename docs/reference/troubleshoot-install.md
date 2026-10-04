@@ -2,7 +2,7 @@
 group: reference
 kind: "concept"
 section: "Troubleshooting"
-order: 5
+order: 6
 title: "Install problems"
 description: "Node missing or too old, setup without a terminal, tools not detected, command not found."
 ---

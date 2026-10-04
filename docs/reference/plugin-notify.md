@@ -2,11 +2,11 @@
 group: reference
 kind: "concept"
 section: "OpenCode plugins"
-order: 15
+order: 17
 title: "geneseed-notify"
 description: "A desktop notification when a long turn finishes."
 ---
-One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed in [Environment variables](environment.md).
+One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](environment.md) points here for its switches.
 
 **What it does.** Sends a native desktop notification when the agent finishes a long turn, so you can start a run, walk away, and be called back. macOS uses `osascript`, Linux `notify-send` (install `libnotify` if nothing appears), Windows a PowerShell balloon.
 

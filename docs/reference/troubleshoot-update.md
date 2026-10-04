@@ -2,7 +2,7 @@
 group: reference
 kind: "concept"
 section: "Troubleshooting"
-order: 7
+order: 9
 title: "Update problems"
 description: "Every refusal geneseed upgrade can print, and its fix."
 ---

@@ -2,7 +2,7 @@
 group: reference
 kind: "concept"
 section: "OpenCode plugins"
-order: 10
+order: 12
 title: "OpenCode plugins"
 description: "What the OpenCode plugins are, how they install, and the folders that silence them."
 ---

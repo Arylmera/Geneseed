@@ -1,6 +1,6 @@
 ---
 group: reference
-order: 19
+order: 21
 title: "About — version, license, links"
 kind: "about"
 section: "Glossary & about"

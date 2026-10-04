@@ -1,6 +1,6 @@
 ---
 group: reference
-order: 18
+order: 20
 title: "Glossary"
 kind: "glossary"
 section: "Glossary & about"

@@ -2,7 +2,7 @@
 group: reference
 kind: "concept"
 section: "Troubleshooting"
-order: 9
+order: 11
 title: "Web console problems"
 description: "A missing web/dist, a console that looks broken after an upgrade, no deployed harness."
 ---

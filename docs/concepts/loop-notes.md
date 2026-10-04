@@ -2,7 +2,7 @@
 group: concepts
 kind: "concept"
 section: "Loops"
-order: 17
+order: 19
 title: "Notes and rules"
 description: "What survives an iteration in LOOP.md's notes, and the rules a template hands every brick."
 ---

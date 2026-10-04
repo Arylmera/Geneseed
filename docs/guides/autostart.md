@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 21
+order: 27
 title: "Start the web console at login"
 kind: "concept"
 section: "Keep it running"

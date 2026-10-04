@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 9
+order: 11
 title: "Themes"
 kind: "concept"
 section: "Configuration"

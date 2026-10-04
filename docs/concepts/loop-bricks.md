@@ -2,7 +2,7 @@
 group: concepts
 kind: "concept"
 section: "Loops"
-order: 16
+order: 18
 title: "Bricks and their origins"
 description: "What a brick is, how templates wire bricks, and how project and global bricks override shipped ones."
 ---

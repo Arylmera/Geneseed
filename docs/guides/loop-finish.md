@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 18
+order: 24
 title: "Finish a loop"
 kind: "concept"
 section: "Loops"

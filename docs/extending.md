@@ -413,7 +413,7 @@ The `geneseed-` prefix and the `.js` suffix are mechanically load-bearing: the b
    both). The count in the overview's intro renders from `{N_PLUGINS}`.
 3. `docs/understand/machine-opencode.md` — a row in the OpenCode map table (Piece · What it does
    for you · Kind · Cost · Turn it off). **Hand-written and ungated** beyond the table parsing.
-4. `docs/concepts/hosts.md` — check the capability matrix still tells the truth.
+4. `docs/concepts/host-matrix.md` — check the capability matrix still tells the truth.
 5. `README.md` — **three** sites: the badge, the `N plugins` prose, and the 🔌 Plugins row.
 6. `SHIPPED.md` — the bare name inside `plugins (…)`; that list must equal the directory exactly,
    in both directions (`tests/unit/web_api.test.mjs:1655`).

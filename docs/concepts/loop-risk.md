@@ -2,7 +2,7 @@
 group: concepts
 kind: "concept"
 section: "Loops"
-order: 18
+order: 20
 title: "Risk, trust and validation levels"
 description: "How a loop scores a change, the trust presets, and the silent, soft and blocking levels."
 ---

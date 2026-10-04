@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 6
+order: 8
 title: "Memory"
 kind: "markdown"
 section: "Memory"

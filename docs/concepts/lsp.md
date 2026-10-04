@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 11
+order: 13
 title: "Code intelligence (LSP, OpenCode)"
 kind: "concept"
 section: "Configuration"

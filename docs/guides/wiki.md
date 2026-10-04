@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 13
+order: 15
 title: "Connect your wiki"
 kind: "concept"
 section: "Set up"

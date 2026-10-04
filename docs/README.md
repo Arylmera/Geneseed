@@ -21,12 +21,12 @@
 | Install | [OpenCode](guides/install-opencode.md) · [Claude Code](guides/install-claude-code.md) · [OpenClaude](guides/install-openclaude.md) · [IBM Bob](guides/install-bob.md) · [Any AGENT.md tool](guides/install-agent-md.md) | Installing for one host, global or per repo |
 | Install | [Without the wizard](guides/install-scripted.md) | A script, a CI job, a shell with no terminal |
 | Install | [Run geneseed from anywhere](guides/run-anywhere.md) | Putting the CLI on your PATH from a clone |
-| Set up | [Choose your setup](guides/choose-your-setup.md) | Theme, doctrine packs, one rule at a time, footprint, posture, mode |
+| Set up | [Choose your setup](guides/choose-your-setup.md) · [Doctrine packs and single rules](guides/setup-doctrines.md) · [Footprint, loop trust and changing later](guides/setup-footprint.md) | Theme, posture, mode; doctrine packs and single rules; footprint, loop trust, changing a choice |
 | Set up | [Verify it works](guides/verify.md) | Right after installing, or when something feels off |
 | Set up | [Project context](guides/project-context.md) | Choosing which of a repo's docs the agent loads |
 | Set up | [Connect your wiki](guides/wiki.md) | Giving the agent your own notes, machine-wide |
-| Set up | [MCP servers](guides/mcp.md) | MarkItDown, GitLab, Filesystem — and reading non-markdown docs |
-| Loops | [Run a loop](guides/run-a-loop.md) · [While a loop runs](guides/loop-running.md) · [Finish a loop](guides/loop-finish.md) | Working a requirement as small, validated, committed iterations |
+| Set up | [MCP servers](guides/mcp.md) · [MarkItDown](guides/mcp-markitdown.md) · [GitLab](guides/mcp-gitlab.md) · [Filesystem](guides/mcp-filesystem.md) · [Reading non-markdown docs](guides/read-non-markdown.md) | Where the config lives, the three presets, and reading PDF and Office files |
+| Loops | [Run a loop](guides/run-a-loop.md) · [Which loop template](guides/loop-which-template.md) · [While a loop runs](guides/loop-running.md) · [Finish a loop](guides/loop-finish.md) | Working a requirement as small, validated, committed iterations |
 | Keep it running | [Upgrade](guides/upgrade.md) | Getting a new version onto every install |
 | Keep it running | [Migrate from a clone to npm](guides/migrate.md) | Moving an old clone install to the npm package |
 | Keep it running | [Start the web console at login](guides/autostart.md) | Keeping the console running |
@@ -36,7 +36,7 @@
 
 ## 3 · Concepts
 
-**Harness** — [Hosts](concepts/hosts.md) · [Rules](concepts/rules.md) · [Agents](concepts/agents.md) · [Skills](concepts/skills.md) · [Hooks](concepts/hooks.md)
+**Harness** — [Hosts](concepts/hosts.md) · [What each host automates](concepts/host-matrix.md) · [Rules](concepts/rules.md) · [Agents](concepts/agents.md) · [Skills](concepts/skills.md) · [Hooks](concepts/hooks.md) · [Hook gates, settings and the shim](concepts/hook-gates.md)
 
 **Memory** — [Memory](concepts/memory.md) · [Notebook](concepts/notebook.md)
 
@@ -48,9 +48,9 @@
 
 ## 4 · Reference
 
-**CLI & environment** — [CLI](reference/cli.md) · [Loop actions](reference/loop-actions.md) · [Environment variables](reference/environment.md)
+**CLI & environment** — [CLI](reference/cli.md) · [Loop actions](reference/loop-actions.md) · [Environment variables](reference/environment.md) · [Context and memory variables](reference/env-context.md)
 
-**Troubleshooting** (by symptom) — [Overview](reference/troubleshooting.md) · [Install](reference/troubleshoot-install.md) · [Hooks, context and memory](reference/troubleshoot-hooks.md) · [Updating](reference/troubleshoot-update.md) · [Doctor findings](reference/troubleshoot-doctor.md) · [Web console](reference/troubleshoot-web.md)
+**Troubleshooting** (by symptom) — [Overview](reference/troubleshooting.md) · [Install](reference/troubleshoot-install.md) · [Hooks, context and memory](reference/troubleshoot-hooks.md) · [Model, agents and MCP](reference/troubleshoot-tools.md) · [Updating](reference/troubleshoot-update.md) · [Doctor findings](reference/troubleshoot-doctor.md) · [Web console](reference/troubleshoot-web.md)
 
 **OpenCode plugins** — [Overview](reference/opencode-plugins.md) · [context](reference/plugin-context.md) · [guard](reference/plugin-guard.md) · [learn](reference/plugin-learn.md) · [workflow](reference/plugin-workflow.md) · [notify](reference/plugin-notify.md) · [ponytail](reference/plugin-ponytail.md) · [activity](reference/plugin-activity.md)
 

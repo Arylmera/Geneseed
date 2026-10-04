@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 8
+order: 10
 title: "Footprint (lean vs full)"
 kind: "concept"
 section: "Configuration"

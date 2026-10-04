@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 3
+order: 4
 title: "Agents"
 kind: "concept"
 section: "Harness"

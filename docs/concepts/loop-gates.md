@@ -2,7 +2,7 @@
 group: concepts
 kind: "concept"
 section: "Loops"
-order: 19
+order: 21
 title: "Human gates"
 description: "Bricks that hold for a person whatever the score, and how ok, no and amend answer them."
 ---

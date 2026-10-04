@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 17
+order: 23
 title: "While a loop runs"
 kind: "concept"
 section: "Loops"

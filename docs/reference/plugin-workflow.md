@@ -2,11 +2,11 @@
 group: reference
 kind: "concept"
 section: "OpenCode plugins"
-order: 14
+order: 16
 title: "geneseed-workflow"
 description: "Adds a workflow tool that runs saved orchestration scripts."
 ---
-One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed in [Environment variables](environment.md).
+One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](environment.md) points here for its switches.
 
 **What it does.** Registers one tool, `workflow`, that runs saved orchestration scripts. The script — not the model — drives the control flow: the deterministic counterpart of the `council` and `parallel-agents` skills.
 

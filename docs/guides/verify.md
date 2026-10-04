@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 11
+order: 13
 title: "Verify it works"
 kind: "concept"
 section: "Set up"

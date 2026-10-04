@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 7
+order: 9
 title: "Notebook"
 kind: "markdown"
 section: "Memory"

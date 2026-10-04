@@ -84,7 +84,12 @@ bricks' note files.
   host, taking it back out), troubleshooting (installing, hooks, updating, doctor, web console),
   the OpenCode plugins (one page per plugin), loops (templates, bricks, notes and rules, risk,
   human gates, contracts, the loop branch) and the run-a-loop guide. The `geneseed loop` actions
-  table moved to Reference.
+  table moved to Reference. Then the rest of the long ones: choose your setup (voice and working
+  style · doctrine packs and single rules · footprint, loop trust and changing later), MCP servers
+  (a hub, one page per preset, reading non-markdown docs; the won't-connect checklist moved to
+  Troubleshooting), hooks (the hooks · gates, settings and the shim), environment variables (the
+  context and memory ones on their own page; plugin switches live on each plugin's page), the
+  host capability matrix, and which loop template. Every first page keeps its old address.
 - **The Understand track has more pages** — what lands on your machine is now one page per host
   plus taking it back out, so a returning reader's "New here?" progress shows the new steps
   as unread.

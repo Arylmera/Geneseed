@@ -2,7 +2,7 @@
 group: reference
 kind: "concept"
 section: "Troubleshooting"
-order: 8
+order: 10
 title: "Doctor findings"
 description: "Unresolved tokens, a drifted Harness bundle, an unreadable registry.json."
 ---

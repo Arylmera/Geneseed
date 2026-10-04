@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 24
+order: 30
 title: "Add git-worktree isolation"
 kind: "concept"
 section: "OpenCode extras"

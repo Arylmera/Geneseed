@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 20
+order: 26
 title: "Migrate from a clone to npm"
 kind: "concept"
 section: "Keep it running"

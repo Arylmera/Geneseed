@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 4
+order: 5
 title: "Skills"
 kind: "concept"
 section: "Harness"

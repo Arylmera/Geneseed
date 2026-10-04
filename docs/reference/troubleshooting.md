@@ -2,7 +2,7 @@
 group: reference
 kind: "concept"
 section: "Troubleshooting"
-order: 4
+order: 5
 title: "Troubleshooting"
 description: "Problems organised by what you see, and the first command to run."
 ---
@@ -18,6 +18,7 @@ geneseed doctor
 
 - [Install problems](troubleshoot-install.md): Node, `setup`, `command not found`.
 - [Hook, context and memory problems](troubleshoot-hooks.md): hooks that stop firing, missing project docs, no memory.
+- [Model, agent and MCP problems](troubleshoot-tools.md): no model for learn, a read-only agent, ignored PDFs, an MCP server that will not connect.
 - [Update problems](troubleshoot-update.md): when `geneseed upgrade` refuses to run.
 - [Doctor findings](troubleshoot-doctor.md): what `geneseed doctor` reports, and the fix.
 - [Web console problems](troubleshoot-web.md): a missing build, a stale page, no deployed harness.

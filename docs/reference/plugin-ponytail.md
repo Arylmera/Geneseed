@@ -2,11 +2,11 @@
 group: reference
 kind: "concept"
 section: "OpenCode plugins"
-order: 16
+order: 18
 title: "geneseed-ponytail"
 description: "An opt-in minimal-code mode, re-applied every turn."
 ---
-One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed in [Environment variables](environment.md).
+One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](environment.md) points here for its switches.
 
 **What it does.** Holds an opt-in minimal-code mode: once on, it appends the "laziest solution that works" ruleset to the system prompt **every turn**, so the agent doesn't drift back to over-building mid-session. It is the sustained form of the `ponytail` skill, and it is not part of the [rules](../concepts/rules.md): nothing about it applies until you switch it on.
 

@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 22
+order: 28
 title: "Uninstall"
 kind: "concept"
 section: "Keep it running"

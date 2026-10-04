@@ -2,11 +2,11 @@
 group: reference
 kind: "concept"
 section: "OpenCode plugins"
-order: 17
+order: 19
 title: "geneseed-activity"
 description: "Feeds the web console's Activity view, one small file per session."
 ---
-One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed in [Environment variables](environment.md).
+One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](environment.md) points here for its switches.
 
 **What it does.** Feeds the web console's **Activity** view: one small JSON file per session under `activity/` beside OpenCode's config, recording what the session is doing — phase, model, token and cost totals, files touched, plan, last error. The console reads and prunes those files; the two only meet on disk, so a crash on either side never blocks a session.
 

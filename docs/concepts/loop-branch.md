@@ -2,7 +2,7 @@
 group: concepts
 kind: "concept"
 section: "Loops"
-order: 21
+order: 23
 title: "LOOP.md, trailers and the loop branch"
 description: "The loop's state file, the trailers on every commit, the loop/* branch exemption, and the console's view."
 ---

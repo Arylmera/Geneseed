@@ -2,7 +2,7 @@
 group: concepts
 kind: "concept"
 section: "Loops"
-order: 20
+order: 22
 title: "Contracts and ignored deletions"
 description: "The contract globs that always raise risk, the deletions a template ignores, and the glob dialect."
 ---

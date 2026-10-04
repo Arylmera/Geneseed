@@ -2,7 +2,7 @@
 group: reference
 kind: "concept"
 section: "Troubleshooting"
-order: 6
+order: 7
 title: "Hook, context and memory problems"
 description: "Hooks that stopped firing, no readiness sigil, project docs not loaded, no memory written."
 ---
@@ -96,30 +96,4 @@ export GENESEED_HARNESS=~/.config/opencode
 **Confirm.** About a minute after the session goes quiet, stderr shows `[geneseed-learn] wrote N memory file(s): …` or a `skipped:` reason. Total silence means the plugin did not load.
 <!--/harness-->
 
-## `could not determine a model`
-
-**Cause.** The learn step could not read which model the session used.
-
-**Fix.** Give it a fallback:
-
-```bash
-export GENESEED_MODEL=provider/model
-```
-
-**Confirm.** The next session end writes memory instead of logging the message.
-
-## A read-only agent won't run a command
-
-**Cause.** By design: read-only agents are denied the shell. The few that must run read-only commands (the reviewer, security) are allowed it in their own spec.
-
-**Fix.** Hand the task to an agent that can run commands, or run it yourself. See [Agents](../concepts/agents.md).
-
-## PDFs and Office documents are ignored
-
-**Cause.** Agents read text. Binary documents need converting first.
-
-**Fix.** Use the `ingest` skill with a converter installed (MarkItDown, Pandoc or Docling), or wire MarkItDown as an MCP server — see [MCP servers](../guides/mcp.md).
-
-## An MCP server is listed but won't connect
-
-See [MCP servers](../guides/mcp.md) — each server has its own checks there.
+Model, read-only agent, document and MCP problems are on [their own page](troubleshoot-tools.md).

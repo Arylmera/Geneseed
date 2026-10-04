@@ -2,7 +2,7 @@
 group: concepts
 kind: "concept"
 section: "Loops"
-order: 14
+order: 16
 title: "Loops"
 link: {"hash":"#/docs/loop-actions","label":"The geneseed loop actions →"}
 description: "What a loop is, the ring of bricks it runs, and how it differs from foreman mode."

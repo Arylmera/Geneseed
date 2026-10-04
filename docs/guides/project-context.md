@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 12
+order: 14
 title: "Project context"
 kind: "concept"
 section: "Set up"
@@ -86,4 +86,4 @@ By default, the plugin delivers the context invisibly. It prepends the context t
 - `GENESEED_DEBUG=1` logs what was discovered and how it was delivered.
 <!--/harness-->
 
-All the knobs are listed in [Environment](../reference/environment.md). For knowledge that belongs to you rather than to one repo, see [Wiki](wiki.md).
+All the knobs are listed in [Context and memory variables](../reference/env-context.md). For knowledge that belongs to you rather than to one repo, see [Wiki](wiki.md).

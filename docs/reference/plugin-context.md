@@ -2,11 +2,11 @@
 group: reference
 kind: "concept"
 section: "OpenCode plugins"
-order: 11
+order: 13
 title: "geneseed-context"
 description: "Puts your project docs, rules, profile, memory index and wiki in front of the agent."
 ---
-One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed in [Environment variables](environment.md).
+One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed in [Context and memory variables](env-context.md).
 
 **What it does.** Puts your project's documentation (and your machine wiki) into the agent's context before your first turn, so the agent never has to be trusted to read it. It needs **no per-repo file**: it discovers docs by convention.
 

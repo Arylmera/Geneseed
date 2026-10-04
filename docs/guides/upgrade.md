@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 19
+order: 25
 title: "Upgrade"
 kind: "concept"
 section: "Keep it running"

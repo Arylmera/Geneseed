@@ -393,7 +393,7 @@ function summaryAfterEmit(emit, extraEnv = {}) {
 const NEXT = 'what was installed and what each piece does: '
   + 'https://github.com/Arylmera/Geneseed/blob/main/docs/understand/on-your-machine.md';
 const LEARN_OFF = 'memory learning is off until you set GENESEED_LLM '
-  + '(see docs/reference/environment.md)';
+  + '(see docs/reference/env-context.md)';
 const p = (...s) => path.join('<H>', ...s);
 
 // The end of setup names the file each host really loads, where it really is, the hooks a

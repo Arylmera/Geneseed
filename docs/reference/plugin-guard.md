@@ -2,11 +2,11 @@
 group: reference
 kind: "concept"
 section: "OpenCode plugins"
-order: 12
+order: 14
 title: "geneseed-guard"
 description: "Blocks credential files, catastrophic commands and protected wiki writes before they run."
 ---
-One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed in [Environment variables](environment.md).
+One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](environment.md) points here for its switches.
 
 **What it does.** Enforces the safety rules at the tool boundary — before a tool call runs, not after. High-confidence patterns only, so legitimate work is not caught.
 
