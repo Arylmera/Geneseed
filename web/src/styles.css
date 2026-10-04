@@ -829,9 +829,19 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 
 /* ============================== DOCS PAGE ============================ */
 /* The Docs reuse the Library's three panes (.library: rail of parts, list of pages grouped
-   by section, the page). The reader pane holds the breadcrumb, then the article beside its
+   by section, the page). The reader pane holds the breadcrumb, then the article and its
    margin (outline + terms). `overflow: clip`, not the Library's `hidden`, so the margin's
-   sticky still sticks to the page scroller. */
+   sticky still sticks to the page scroller.
+   The reader's width is the docs' whole point, so the layout follows the width the page is
+   given, not the viewport: `.docs-wrap` is a size container and the tiers below are
+   container queries (they add no fourth media breakpoint). From 1422px of page (a viewport
+   of ~1740px) the three panes stand side by side, list narrowed to 280px (the rail keeps
+   its 232px: the harness switch needs them), with the margin beside the article:
+   1422 - 232 - 280 - 72 padding - 238 margin = 600px of article. Below
+   that and down to where the 1180px media tier takes over, the parts sit above the list in
+   one 280px column and the margin folds above the article (outline only): a 1366px window
+   reads ~700px of article. Under 869px of page the media tiers govern as before. */
+.docs-wrap { container: docs / inline-size; }
 .library.docs-lib { overflow: clip; }
 .docs-lib .lib-kinds .seg { align-self: flex-start; margin: 0 8px; }
 .docs-lib .lib-kinds .seg button { white-space: nowrap; }
@@ -842,7 +852,9 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 .docs-crumbs a { color: var(--text-2); }
 .docs-crumbs a:hover { color: var(--accent); }
 .docs-crumbs [aria-current] { color: var(--text); }
-.docs-read { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 28px;
+/* One column unless the wide container tier below sets the margin beside the article; in
+   one column the outline leads the page and the glossary cards stay out of the way. */
+.docs-read { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px;
   align-items: start; }
 /* In-page TOC for long markdown pages. Sits as a soft chip-board above the
    body so it scrolls away with the content, not as a sticky sidebar (the
@@ -871,16 +883,26 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 }
 
 .docs-article { min-width: 0; }
-.docs-margin { position: sticky; top: 16px; display: grid; gap: 16px; }
+.docs-margin { position: static; order: -1; top: 16px; display: grid; gap: 16px; }
 .docs-margin .docs-toc { margin: 0; }
-.docs-gloss { display: grid; gap: 8px; }
+.docs-gloss { display: none; gap: 8px; }
 .docs-gloss-card { border: 1px solid var(--line); background: var(--surface);
   border-radius: var(--r-sm); padding: 10px 12px; }
 .docs-gloss-card b { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
 .docs-gloss-card p { margin: 4px 0 0; font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
-@media (max-width: 960px) {
-  .docs-read { grid-template-columns: minmax(0, 1fr); }
-  .docs-margin { position: static; }
+/* The tiers (see .docs-wrap above), after the base rules so they win the cascade. */
+@container docs (min-width: 1422px) {
+  .library.docs-lib { grid-template-columns: 232px minmax(0, 280px) minmax(0, 1fr); }
+  .docs-read { grid-template-columns: minmax(0, 1fr) 210px; }
+  .docs-margin { position: sticky; order: 0; }
+  .docs-gloss { display: grid; }
+}
+@container docs (min-width: 869px) and (max-width: 1421.98px) {
+  .library.docs-lib { grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-rows: auto 1fr; }
+  .docs-lib .lib-kinds { grid-area: 1 / 1; border-bottom: 1px solid var(--line); }
+  .docs-lib .lib-list { grid-area: 2 / 1; }
+  .docs-lib .lib-reader { grid-area: 1 / 2 / 3 / 3; padding: 28px; }
 }
 
 /* The Understand track's progress line, and the prev/next bar under every page. */

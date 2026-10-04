@@ -149,116 +149,118 @@ export default function Docs({ page, overview, onAction }) {
   if (error) return <ErrorState error={error} />
 
   return (
-    <div className="library docs-lib">
-      <aside className="lib-kinds" aria-label="Docs parts">
-        <div className="lib-title">
-          <h1 className="h">Docs</h1>
-          <span className="dim">How it works, and how to use it</span>
-        </div>
-        {/* Harness selector — filters the menu and per-page config to the chosen
-            host (OpenCode vs Claude Code). Persists across reloads. */}
-        <Seg aria-label="Harness">
-          {HARNESSES.map((h) => (
-            <button
-              key={h.id}
-              className={harness === h.id ? 'on' : ''}
-              onClick={() => setHarness(h.id)}
-              aria-pressed={harness === h.id}
-            >
-              {h.label}
-            </button>
-          ))}
-        </Seg>
-        <nav className="kind-list" aria-label="Parts">
-          {(menu?.groups || []).map((g) => (
-            <a
-              key={g.id}
-              href={g.pages[0] ? docHref(g.pages[0].id) : '#/docs'}
-              className={part?.id === g.id ? 'on' : ''}
-              aria-current={part?.id === g.id ? 'page' : undefined}
-            >
-              {g.label}
-              <span className="mono dim">{g.pages.length}</span>
-            </a>
-          ))}
-        </nav>
-      </aside>
-
-      <section className="lib-list" aria-label={part?.label || 'Docs'}>
-        <div className="lib-list-head">
-          <b>
-            {part?.label}{' '}
-            <span className="mono dim">
-              {q.trim() ? `${shown.length} of ${rows.length}` : rows.length || ''}
-            </span>
-          </b>
-          {onTrack && <TrackProgress pages={part.pages} seen={seen} />}
-        </div>
-        <FilterInput
-          value={q}
-          onChange={setQ}
-          placeholder={`Filter ${(part?.label || 'docs').toLowerCase()}`}
-          label={`Filter ${part?.label || 'docs'}`}
-        />
-        <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
-          {!menu ? (
-            <Loading label="Loading docs…" />
-          ) : (
-            <GroupedRows
-              rows={shown}
-              activeName={pageId}
-              hrefOf={(r) => docHref(r.name)}
-              pills={
-                onTrack
-                  ? (r) =>
-                      seen.includes(r.name) && r.name !== pageId ? (
-                        <span className="docs-read-mark" aria-label="read">
-                          ✓
-                        </span>
-                      ) : null
-                  : undefined
-              }
-            />
-          )}
-          {q.trim() && shown.length === 0 && (
-            <div className="empty" style={{ padding: 32 }}>
-              <div className="big">No matches</div>
-              Nothing in {(part?.label || 'docs').toLowerCase()} matches “{q.trim()}”.
-            </div>
-          )}
-        </div>
-      </section>
-
-      <article className="lib-reader docs-reader" aria-label="Page">
-        {place.page && (
-          <nav className="docs-crumbs mono" aria-label="Breadcrumb">
-            <a href={docHref(place.part.pages[0].id)}>{place.part.label}</a>
-            <span aria-hidden="true">›</span>
-            <a
-              href={docHref(
-                place.part.pages.find((p) => (p.section || 'General') === place.section).id,
-              )}
-            >
-              {place.section}
-            </a>
-            <span aria-hidden="true">›</span>
-            <span aria-current="page">{place.page.title}</span>
-          </nav>
-        )}
-        <div className="docs-read">
-          <div className="docs-article">
-            <PageView
-              key={`${pageId}|${harness}`}
-              data={pageLoading ? null : pageData}
-              error={pageError}
-              overview={overview}
-              onAction={onAction}
-            />
-            {!pageLoading && <PageBar menu={menu} pageId={pageId} />}
+    <div className="docs-wrap">
+      <div className="library docs-lib">
+        <aside className="lib-kinds" aria-label="Docs parts">
+          <div className="lib-title">
+            <h1 className="h">Docs</h1>
+            <span className="dim">How it works, and how to use it</span>
           </div>
-          {!pageLoading && <Margin body={pageData?.body} glossaryRows={glossary?.rows} />}
-        </div>
-      </article>
+          {/* Harness selector — filters the menu and per-page config to the chosen
+            host (OpenCode vs Claude Code). Persists across reloads. */}
+          <Seg aria-label="Harness">
+            {HARNESSES.map((h) => (
+              <button
+                key={h.id}
+                className={harness === h.id ? 'on' : ''}
+                onClick={() => setHarness(h.id)}
+                aria-pressed={harness === h.id}
+              >
+                {h.label}
+              </button>
+            ))}
+          </Seg>
+          <nav className="kind-list" aria-label="Parts">
+            {(menu?.groups || []).map((g) => (
+              <a
+                key={g.id}
+                href={g.pages[0] ? docHref(g.pages[0].id) : '#/docs'}
+                className={part?.id === g.id ? 'on' : ''}
+                aria-current={part?.id === g.id ? 'page' : undefined}
+              >
+                {g.label}
+                <span className="mono dim">{g.pages.length}</span>
+              </a>
+            ))}
+          </nav>
+        </aside>
+
+        <section className="lib-list" aria-label={part?.label || 'Docs'}>
+          <div className="lib-list-head">
+            <b>
+              {part?.label}{' '}
+              <span className="mono dim">
+                {q.trim() ? `${shown.length} of ${rows.length}` : rows.length || ''}
+              </span>
+            </b>
+            {onTrack && <TrackProgress pages={part.pages} seen={seen} />}
+          </div>
+          <FilterInput
+            value={q}
+            onChange={setQ}
+            placeholder={`Filter ${(part?.label || 'docs').toLowerCase()}`}
+            label={`Filter ${part?.label || 'docs'}`}
+          />
+          <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
+            {!menu ? (
+              <Loading label="Loading docs…" />
+            ) : (
+              <GroupedRows
+                rows={shown}
+                activeName={pageId}
+                hrefOf={(r) => docHref(r.name)}
+                pills={
+                  onTrack
+                    ? (r) =>
+                        seen.includes(r.name) && r.name !== pageId ? (
+                          <span className="docs-read-mark" aria-label="read">
+                            ✓
+                          </span>
+                        ) : null
+                    : undefined
+                }
+              />
+            )}
+            {q.trim() && shown.length === 0 && (
+              <div className="empty" style={{ padding: 32 }}>
+                <div className="big">No matches</div>
+                Nothing in {(part?.label || 'docs').toLowerCase()} matches “{q.trim()}”.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <article className="lib-reader docs-reader" aria-label="Page">
+          {place.page && (
+            <nav className="docs-crumbs mono" aria-label="Breadcrumb">
+              <a href={docHref(place.part.pages[0].id)}>{place.part.label}</a>
+              <span aria-hidden="true">›</span>
+              <a
+                href={docHref(
+                  place.part.pages.find((p) => (p.section || 'General') === place.section).id,
+                )}
+              >
+                {place.section}
+              </a>
+              <span aria-hidden="true">›</span>
+              <span aria-current="page">{place.page.title}</span>
+            </nav>
+          )}
+          <div className="docs-read">
+            <div className="docs-article">
+              <PageView
+                key={`${pageId}|${harness}`}
+                data={pageLoading ? null : pageData}
+                error={pageError}
+                overview={overview}
+                onAction={onAction}
+              />
+              {!pageLoading && <PageBar menu={menu} pageId={pageId} />}
+            </div>
+            {!pageLoading && <Margin body={pageData?.body} glossaryRows={glossary?.rows} />}
+          </div>
+        </article>
+      </div>
     </div>
   )
 }
