@@ -8,8 +8,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-**Upgrading:** re-emit (`geneseed rebuild-all`) so the installed `loop` skill records the
-bricks' note files.
+## [3.13.0] — 2026-10-04
+
+**Upgrading:** re-emit (`geneseed rebuild-all`) so the installed `loop` skill knows the new
+templates, human gates and note files; then `geneseed web restart` (and a hard reload) for the
+new Loops and Docs pages.
 
 ### Added
 - **Template `category`** — `architecture`, `tests`, `development`, `refactoring` or `day-to-day`;
@@ -75,6 +78,14 @@ bricks' note files.
   markdown under its facts (effect, outcomes, gate), with the raw source one click away.
 
 ### Changed
+- **Categories nest under the selected rail entry** — on the Library (skill types), Docs
+  (sections) and Loops (template categories, brick origins, run statuses) pages, a selected
+  entry's categories open in the rail beneath it, with counts and a share bar, replacing the
+  full-width banner above the page.
+- **The Docs selector names all four hosts** — OpenCode, Claude Code, OpenClaude and IBM Bob. A
+  page or inline block tagged with a family still shows to every host in it; a page can now name
+  several hosts (`harness: ["claude", "openclaude"]`), so Bob no longer sees the Claude Code /
+  OpenClaude machine page.
 - **Docs in the Library layout** — the console's Docs tab is a rail of parts (Understand, Guides,
   Concepts, Reference), a filterable list grouped by section, and a reader with a breadcrumb,
   the page's outline and Previous / Next within its section. Pages carry a new `section` and
@@ -108,6 +119,8 @@ bricks' note files.
   than declaring the whole repo writable.
 
 ### Fixed
+- **Skill and agent descriptions follow the skill-authoring rules** — no trigger sentence is cut
+  mid-way in any theme, and no description carries XML-like tags (#179).
 - **The install page no longer scrolls on open** — the reader's own host is lit (its link on the
   Install page, its scope's heading on the OpenCode page) without moving the page.
 - The bricks README link on the loops page pointed at a repository that does not exist; the
