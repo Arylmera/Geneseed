@@ -10,9 +10,9 @@ On OpenCode, Geneseed's automation runs as {N_PLUGINS} plugins: small JavaScript
 
 > **You already know this:** a plugin is a git hook for your agent — code that runs on an event (session start, before a tool call, session idle), not text the model may or may not follow.
 
-Every plugin installs in the same step as the rest of the harness: `geneseed setup`, or `geneseed build --emit opencode-global` (global, into `~/.config/opencode/plugins/`) / `--emit opencode` (per-repo, into `.opencode/plugins/`). Installing by hand is covered in [Install](../guides/install.md). Keep **one** copy of each: OpenCode loads two local copies of the same plugin twice.
+Every plugin installs in the same step as the rest of the harness: `geneseed setup`, or `geneseed build --emit opencode-global` (global, into `~/.config/opencode/plugins/`) / `--emit opencode` (per-repo, into `.opencode/plugins/`). Installing by hand is covered in [Install on OpenCode](../guides/install-opencode.md). Keep **one** copy of each: OpenCode loads two local copies of the same plugin twice.
 
-Every plugin swallows its own errors — none can block or crash a session. Each variable below is also listed in [Environment variables](environment.md).
+Every plugin swallows its own errors — none can block or crash a session. Each plugin's page lists the variables that tune it.
 
 ## The plugins
 

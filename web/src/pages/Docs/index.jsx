@@ -213,8 +213,9 @@ export default function Docs({ page, overview, onAction }) {
                   onTrack
                     ? (r) =>
                         seen.includes(r.name) && r.name !== pageId ? (
-                          <span className="docs-read-mark" aria-label="read">
-                            ✓
+                          <span className="docs-read-mark">
+                            <span aria-hidden="true">✓</span>
+                            <span className="sr-only">read</span>
                           </span>
                         ) : null
                     : undefined

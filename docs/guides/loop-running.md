@@ -31,6 +31,7 @@ Answer in the agent's session, in your own words:
 | ok / go ahead | It continues. On a gate held on a failure, ok follows that failure's edge, which usually stops the loop. |
 | no | The loop stops at that node. |
 | amend, with a note ("keep the old field until v3") | The same brick runs again with your note added to `LOOP.md`. A gate can be amended three times per iteration; a fourth amend stops the loop. |
+| amend, at the `prudent` launch prompt | The loop stops ("graph to amend") with your note: nothing has run yet, so ask again for the loop you want. |
 
 The agent passes your answer on as `geneseed loop decide --verdict ok|no|amend --note "<your words>"`. The console never answers for you.
 

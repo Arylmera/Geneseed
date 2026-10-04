@@ -85,6 +85,9 @@ bricks' note files.
   the OpenCode plugins (one page per plugin), loops (templates, bricks, notes and rules, risk,
   human gates, contracts, the loop branch) and the run-a-loop guide. The `geneseed loop` actions
   table moved to Reference.
+- **The Understand track has more pages** — what lands on your machine is now one page per host
+  plus taking it back out, so a returning reader's "New here?" progress shows the new steps
+  as unread.
 - **Console Loops page in the Library layout** — a rail (Templates · Bricks · Active, with
   counts) replaces the tabs; each section is a filterable list grouped like the Library's
   (templates by `category`, bricks by origin, active loops by status, awaiting first) beside a
