@@ -7,6 +7,7 @@ import FilterInput from '../components/FilterInput.jsx'
 import RingGraph from '../components/RingGraph.jsx'
 import Markdown from '../components/Markdown.jsx'
 import { GroupedRows, walkRows, useActiveRowInView } from '../components/LibRows.jsx'
+import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
 import { humanGate } from '../lib/loopRing.js'
 
@@ -28,6 +29,8 @@ const CATEGORY = {
   'day-to-day': 'Day-to-day',
 }
 const ORIGIN = { project: 'Project', global: 'Global', shipped: 'Shipped' }
+// What the categories under each section in the rail are, for a screen reader.
+const RAIL_LABEL = { templates: 'Categories', bricks: 'Origins', active: 'Statuses' }
 // Loops › Active by what they need from you: awaiting (it waits on the user) first, then the
 // running ones, then those over, and last the ones with nothing left to show.
 const STATUS = [
@@ -305,11 +308,15 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
   const { data, error } = useAsync(() => api.loops(), [dataRev], 'loops')
   const runs = useActiveLoops()
   const [q, setQ] = useState('')
-  // Filter text belongs to one section: drop it when the route moves to another.
+  // The group picked under the section in the rail ('all' or a group heading).
+  const [cat, setCat] = useState('all')
+  // Filter text and the picked group belong to one section: drop them when the route moves
+  // to another.
   const [seenTab, setSeenTab] = useState(tab)
   if (tab !== seenTab) {
     setSeenTab(tab)
     setQ('')
+    setCat('all')
   }
   const rowsRef = useActiveRowInView([tab, item])
 
@@ -322,10 +329,14 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           ? brickRows(data.bricks, data.overridden)
           : templateRows(data.templates, data.bricks))
   const rows = all || []
+  // The section's groups (template shelves, brick origins, run statuses) as the rail's
+  // categories under it; picking one narrows the list, and the filter narrows within it.
+  const cats = groupsOf(rows)
+  const pool = cat === 'all' ? rows : rows.filter((r) => r.group === cat)
   const ql = q.trim().toLowerCase()
   const shown = ql
-    ? rows.filter((r) => `${r.title || ''} ${r.name} ${r.desc || ''}`.toLowerCase().includes(ql))
-    : rows
+    ? pool.filter((r) => `${r.title || ''} ${r.name} ${r.desc || ''}`.toLowerCase().includes(ql))
+    : pool
   // The routed entry, or the first row (Active: the first live one) so the list and the
   // reader always agree.
   const sel =
@@ -359,15 +370,25 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           </div>
           <nav className="kind-list" aria-label="Sections">
             {SECTIONS.map(([k, l]) => (
-              <a
-                key={k}
-                href={`#/loops/${k}`}
-                className={tab === k ? 'on' : ''}
-                aria-current={tab === k ? 'page' : undefined}
-              >
-                {l}
-                <span className="mono dim">{counts[k] ?? ''}</span>
-              </a>
+              <React.Fragment key={k}>
+                <a
+                  href={`#/loops/${k}`}
+                  className={tab === k ? 'on' : ''}
+                  aria-current={tab === k ? 'page' : undefined}
+                >
+                  {l}
+                  <span className="mono dim">{counts[k] ?? ''}</span>
+                </a>
+                {tab === k && (
+                  <RailCats
+                    label={RAIL_LABEL[k]}
+                    total={rows.length}
+                    cats={cats}
+                    cat={cat}
+                    onChange={setCat}
+                  />
+                )}
+              </React.Fragment>
             ))}
           </nav>
         </aside>
@@ -377,7 +398,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
             <b>
               {label}{' '}
               <span className="mono dim">
-                {ql ? `${shown.length} of ${rows.length}` : all ? rows.length : ''}
+                {ql ? `${shown.length} of ${pool.length}` : all ? pool.length : ''}
               </span>
             </b>
           </div>

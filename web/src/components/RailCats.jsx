@@ -43,3 +43,16 @@ export default function RailCats({ label, total, cats, cat, onChange }) {
     </div>
   )
 }
+
+// A grouped list's groups as categories, in the order the list already shows them (first
+// appearance, same as its `● GROUP` headings), each with its row count. Used where the groups
+// have no colour of their own (Docs sections, Loops shelves): the accent, as on the headings.
+export function groupsOf(rows) {
+  const order = []
+  const n = new Map()
+  for (const r of rows) {
+    if (!n.has(r.group)) order.push(r.group)
+    n.set(r.group, (n.get(r.group) || 0) + 1)
+  }
+  return order.map((g) => ({ key: g, label: g, n: n.get(g), c: 'var(--accent)' }))
+}

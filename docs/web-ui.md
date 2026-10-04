@@ -113,7 +113,9 @@ streams the output of background jobs and keeps their history across reloads.
   twice — landing you on the Rules page.
 - **Loops** (`#/loops`) — the loop catalogue `geneseed loop` runs from, read-only, laid out
   like the Library: a rail of sections (**Templates**, **Bricks**, **Active**, each with its
-  count; `#/loops/<section>/<item>` opens an entry), a filterable list, and a reader.
+  count; `#/loops/<section>/<item>` opens an entry), with the selected section's groups
+  nested under it in the rail (template categories, brick origins, run statuses — pick one to
+  narrow the list), a filterable list, and a reader.
   **Templates** are grouped by their `category` (architecture, tests, development,
   refactoring, day-to-day, then *Other*), a *human gate* pill on any that stops for you. The
   reader draws the selected template as a ring: the iteration turning clockwise from its head,

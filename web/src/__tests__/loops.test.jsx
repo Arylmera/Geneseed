@@ -114,6 +114,63 @@ describe('Loops — the rail', () => {
   })
 })
 
+// The selected section's groups nest under it in the rail (components/RailCats.jsx): All, then
+// each group present with its count, in list order. Picking one narrows the list to it (its
+// heading stays), the filter narrows within it, and moving to another section resets to All.
+describe('Loops — categories in the rail', () => {
+  const cats = () =>
+    [...document.querySelectorAll('.rail-cats button')].map((b) =>
+      [...b.querySelectorAll('span:not(.cdot)')].map((x) => x.textContent).join(' '),
+    )
+
+  it('nests the template categories under Templates only, after its link', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('Record a decision.', { selector: '.reader-lede' })
+    expect(cats()).toEqual(['All 5', 'Architecture 1', 'Tests 1', 'Development 2', 'Other 1'])
+    const nav = screen.getByRole('navigation', { name: 'Sections' })
+    expect(nav.querySelectorAll('.rail-cats').length).toBe(1)
+    expect(nav.querySelector('a[aria-current="page"]').nextElementSibling).toBe(
+      screen.getByRole('list', { name: 'Categories' }).parentElement,
+    )
+    // One bar segment per category, grown by its count.
+    expect(text('.rail-cats .rail-mix span').length).toBe(4)
+    expect([...document.querySelectorAll('.rail-mix span')].map((s) => s.style.flexGrow)).toEqual([
+      '1',
+      '1',
+      '2',
+      '1',
+    ])
+  })
+
+  it('narrows to the picked category, combines with the filter, and All restores', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('Record a decision.', { selector: '.reader-lede' })
+    fireEvent.click(screen.getByRole('button', { name: /^Development/ }))
+    expect(screen.getByRole('button', { name: /^Development/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(listed()).toEqual(['# Development', 'gated', 'tiny'])
+    fireEvent.change(screen.getByLabelText('Filter Templates'), { target: { value: 'tiny' } })
+    expect(listed()).toEqual(['# Development', 'tiny'])
+    fireEvent.change(screen.getByLabelText('Filter Templates'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: /^All/ }))
+    expect(listed().length).toBe(9)
+  })
+
+  it('shows the brick origins under Bricks, and resets on the way back', async () => {
+    const { rerender } = render(<Loops tab="templates" />)
+    await screen.findByText('Record a decision.', { selector: '.reader-lede' })
+    fireEvent.click(screen.getByRole('button', { name: /^Tests/ }))
+    rerender(<Loops tab="bricks" />)
+    await screen.findByText('Do it our way.')
+    expect(cats()).toEqual(['All 5', 'Project 1', 'Global 1', 'Shipped 3'])
+    expect(screen.getByRole('list', { name: 'Origins' })).toBeTruthy()
+    rerender(<Loops tab="templates" />)
+    await waitFor(() => expect(listed().length).toBe(9))
+    expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
 describe('Loops — templates', () => {
   // Grouped by category in shelf order (architecture, tests, development, refactoring,
   // day-to-day — an empty shelf prints no heading), then Other for a template without one; by
@@ -492,6 +549,16 @@ describe('Loops › Active', () => {
     ).toEqual(['tag warn', 'tag acc', 'tag', 'tag bad'])
     expect(runRow('C:/w/fix-login').querySelector('.lr-desc').textContent).toBe('loop/fix-login')
     expect(text('.kind-list a')).toEqual(['Templates5', 'Bricks5', 'Active4'])
+    // The statuses present nest under Active in the rail; Done · stopped has no run here.
+    expect(text('.rail-cats .rc-name')).toEqual([
+      'All',
+      'Awaiting',
+      'Running',
+      'Finished · unreadable',
+    ])
+    expect(screen.getByRole('list', { name: 'Statuses' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Finished/ }))
+    expect(listed()).toEqual(['# Finished · unreadable', 'An old loop', 'Broken'])
   })
 
   // The reader: status, branch, iteration of max (the graph's iteration loop's 7) and node, the
