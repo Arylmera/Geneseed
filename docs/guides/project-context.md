@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 6
+order: 12
 title: "Project context"
 kind: "concept"
+section: "Set up"
+description: "Choose which of a repo's docs the agent loads."
 ---
 At the start of every session, the harness shows the agent your repo's own documentation. Usually you have nothing to configure. This page explains what gets loaded and what each choice costs, so you know when to override it.
 

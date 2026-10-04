@@ -3,6 +3,8 @@ group: concepts
 order: 2
 title: "Rules (the constitution)"
 kind: "concept"
+section: "Harness"
+description: "The constitution: the standing rules every session carries, in laws and doctrine packs."
 link: {"hash": "#/laws", "label": "Browse the constitution →"}
 ---
 The **constitution** is the set of standing rules the agent carries into every session. It is authored in `src/`, rendered into the instructions file your host reads (`AGENT.md`, `CLAUDE.md` or `AGENTS.md`), and comes in layers that differ in one thing: whether you can turn them off.

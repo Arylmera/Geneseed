@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 13
+order: 20
 title: "Migrate from a clone to npm"
 kind: "concept"
+section: "Keep it running"
+description: "Move an old clone install to the npm package."
 ---
 If you installed Geneseed by cloning the repository and now want to use the npm package, one command moves every install you already have, without touching your own settings.
 

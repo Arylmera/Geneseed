@@ -1,8 +1,10 @@
 ---
 group: concepts
-order: 12
+order: 9
 title: "Themes"
 kind: "concept"
+section: "Configuration"
+description: "The agent's voice and the words the harness uses, never its structure."
 ---
 A **theme** changes the agent's *voice* and the words the harness uses for its own parts. It never changes structure: the same rules, in the same order, with the same files, folders and links, whatever theme you pick.
 

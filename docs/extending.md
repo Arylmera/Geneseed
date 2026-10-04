@@ -408,9 +408,10 @@ The `geneseed-` prefix and the `.js` suffix are mechanically load-bearing: the b
 1. `adapters/opencode/plugins/geneseed-<name>.js` — ESM, zero dependencies. The factory-export
    convention is real (OpenCode requires it) but **ungated**; the only generic gate on plugin
    source is `node --check` (the one spawn in `authoringProblems`).
-2. `docs/reference/opencode-plugins.md` — a `## geneseed-<name>` section (gated: every plugin
-   file needs one). The count in its intro renders from `{N_PLUGINS}`.
-3. `docs/understand/on-your-machine.md` — a row in the OpenCode map table (Piece · What it does
+2. `docs/reference/plugin-<name>.md` — one page titled `geneseed-<name>`, `section: "OpenCode plugins"`,
+   linked from the list in `docs/reference/opencode-plugins.md` (gated: every plugin file needs
+   both). The count in the overview's intro renders from `{N_PLUGINS}`.
+3. `docs/understand/machine-opencode.md` — a row in the OpenCode map table (Piece · What it does
    for you · Kind · Cost · Turn it off). **Hand-written and ungated** beyond the table parsing.
 4. `docs/concepts/hosts.md` — check the capability matrix still tells the truth.
 5. `README.md` — **three** sites: the badge, the `N plugins` prose, and the 🔌 Plugins row.
@@ -444,7 +445,8 @@ throws). The same file is what GitHub shows, so write for both
   a sub-part of its folder in the console's list, breadcrumb and Previous / Next; without one it
   sits under **General**. Sections order by the smallest `order` among their pages, pages within
   a section by `order` (`bySection` in `js/web/docs.mjs`). `description` (optional) is the
-  list row's second line.
+  list row's second line. Keep a page to about 700 words: a longer one becomes a section of
+  short pages, each standing alone (its own intro line, links to its siblings).
 - `kind` ∈ `markdown | concept | map | glossary | about | cli`; anything else 404s. `map` is a
   concept page whose Piece/Kind/Cost table the console turns into the clickable map.
 - `harness: "claude"|"opencode"` hides the page from the other host — keep it for how-tos that
@@ -620,7 +622,7 @@ only, at best, on its presence.
 | Per-law Principle lines | `web/src/pages/Laws.jsx` | presence and class only, never accuracy |
 | 588 themed constitution titles (42 keys × 14 voices) — `LEX_<ID>` (one per law), `DOC_<ID>` (one per doctrine rule), `PACK_<NAME>` | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
 | The README keyword enumerations | `README.md`, `docs/concepts/rules.md` | nothing |
-| The per-host map of what lands on a machine | `docs/understand/on-your-machine.md` | table shape only, never accuracy |
+| The per-host map of what lands on a machine | `docs/understand/machine-opencode.md`, `docs/understand/machine-claude.md` | table shape only, never accuracy |
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |
 | `THEME_BLURBS` (8 of 14), `ART` (8 of 14) | `js/maintain/setup.mjs`, `js/ui/anim.mjs` | nothing — missing entries fall back silently |
 | `LOADED_SIGIL` uniqueness | `themes/*.json` | nothing, and it is load-bearing for theme detection |

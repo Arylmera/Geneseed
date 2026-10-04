@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 2
+order: 10
 title: "Choose your setup"
 kind: "concept"
+section: "Set up"
+description: "Theme, doctrine packs, single rules, footprint, posture and mode, one question at a time."
 ---
 The setup wizard asks a handful of questions before it builds. Every one has a safe default, so you can accept them all and move on. This page says what each one changes, so you can pick on purpose, and how to change it later.
 

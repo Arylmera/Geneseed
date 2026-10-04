@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 10
+order: 21
 title: "Start the web console at login"
 kind: "concept"
+section: "Keep it running"
+description: "Keep the web console running from login."
 ---
 The web console is the only long-running Geneseed process. `geneseed web start` launches it as a background process on `127.0.0.1:4747` and returns immediately. A login item that runs this command once, with `--no-browser`, leaves the console ready whenever you open [http://127.0.0.1:4747](http://127.0.0.1:4747).
 

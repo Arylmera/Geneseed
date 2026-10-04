@@ -3,6 +3,8 @@ group: concepts
 order: 3
 title: "Agents"
 kind: "concept"
+section: "Harness"
+description: "The specialists the main session can hand work to."
 link: {"hash": "#/section/agents", "label": "Browse the catalog →"}
 ---
 An **agent** is a specialist the main session can hand a piece of work to. Each one is a markdown file with its own instructions, installed where your host looks for subagents (`agents/` in the install). It runs in its own context and returns a result, so its reading and searching does not fill your conversation.

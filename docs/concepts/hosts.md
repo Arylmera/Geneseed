@@ -3,6 +3,8 @@ group: concepts
 order: 1
 title: "Hosts"
 kind: "concept"
+section: "Harness"
+description: "The AI coding tools Geneseed installs into, and what each one can enforce."
 ---
 A **host** is the AI coding tool Geneseed installs into — OpenCode, Claude Code, Bob or OpenClaude. Geneseed does not run the model; the host does. Geneseed writes the files the host reads (the instructions file, agents, skills) and, where the host allows it, wires small programs that run around the agent's actions. The *content* is the same on every host. What differs is how much of it the host lets Geneseed **automate** — check in code before an action — rather than only **ask** of the model in prose.
 

@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 5
+order: 22
 title: "Uninstall"
 kind: "concept"
+section: "Keep it running"
+description: "Remove an install, and what stays behind."
 ---
 `geneseed uninstall` removes one install at a time. It deletes only what Geneseed wrote and keeps anything you would not be able to rebuild.
 

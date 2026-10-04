@@ -1,8 +1,10 @@
 ---
 group: reference
-order: 2
+order: 3
 title: "Environment variables"
 kind: "concept"
+section: "CLI & environment"
+description: "Every environment variable Geneseed reads, grouped by what it changes."
 ---
 Every environment variable Geneseed reads, grouped by what it changes. None is required: an install works with all of them unset. Set one in your shell profile (or your tool's environment) when you need to move a default.
 

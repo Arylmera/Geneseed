@@ -3,6 +3,8 @@ group: concepts
 order: 5
 title: "Hooks (Claude Code, Bob, OpenClaude)"
 kind: "concept"
+section: "Harness"
+description: "The commands Claude Code, Bob and OpenClaude run at fixed moments, and what each gate does."
 ---
 A **hook** is a command your host runs at a fixed moment — when a session starts, before a tool call, when the agent finishes. On Claude Code, Bob and OpenClaude, hooks are how Geneseed does anything *in code* rather than in prose: load your project's docs, stop a risky command for your confirmation, save what was learned.
 
@@ -90,7 +92,7 @@ Every build rewrites the shim, so moving the checkout and running one build repa
 geneseed doctor
 ```
 
-See [Troubleshooting](../reference/troubleshooting.md).
+See [Hook, context and memory problems](../reference/troubleshoot-hooks.md).
 
 ### Cost
 

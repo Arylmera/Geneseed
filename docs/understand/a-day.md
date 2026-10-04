@@ -1,8 +1,10 @@
 ---
 group: understand
-order: 3
+order: 7
 title: "A day with the harness"
 kind: "concept"
+section: "Day to day"
+description: "The moments you will actually meet: a push that asks first, a skill, a delegation, a memory."
 ---
 After the install you talk to your tool the way you always did. What changes is what the agent already knows when you start, and what happens at a few specific moments. Here are four of them.
 

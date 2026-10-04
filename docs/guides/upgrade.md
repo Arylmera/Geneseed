@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 4
+order: 19
 title: "Upgrade"
 kind: "concept"
+section: "Keep it running"
+description: "Get a new version onto every install, and keep your local edits."
 ---
 Upgrading happens in two steps: get the new Geneseed, then rebuild every install from it. Editing or updating Geneseed changes nothing on your machine until something rebuilds. The route depends on how you installed.
 

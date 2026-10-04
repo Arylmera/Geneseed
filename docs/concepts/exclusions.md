@@ -1,8 +1,10 @@
 ---
 group: concepts
-order: 11
+order: 10
 title: "Exclusions"
 kind: "concept"
+section: "Configuration"
+description: "Two ways to switch things off: one rule, or every hook in a folder."
 link: {"hash": "#/harness", "label": "Manage in Harness →"}
 ---
 Geneseed has two different ways to switch something off, and they work at different scales:

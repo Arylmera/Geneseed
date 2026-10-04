@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 11
+order: 23
 title: "Run in CI / headless"
 kind: "concept"
+section: "OpenCode extras"
+description: "Run OpenCode with the harness in CI, without a terminal."
 harness: "opencode"
 ---
 Once the harness is installed for OpenCode (global or per repo), OpenCode can run **non-interactively**, without its terminal UI. The harness's rules, agents and skills then apply in scripts and pipelines too:

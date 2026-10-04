@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 8
+order: 14
 title: "MCP servers"
 kind: "concept"
+section: "Set up"
+description: "Wire MarkItDown, GitLab and Filesystem MCP servers, and read non-markdown docs."
 ---
 MCP (Model Context Protocol) servers give your agent extra tools: converting a PDF, opening a merge request, reading files outside the repo. Geneseed ships three ready-made server **presets** (MarkItDown, GitLab and Filesystem) that you can switch on without writing JSON by hand.
 

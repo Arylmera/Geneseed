@@ -1,8 +1,10 @@
 ---
 group: guides
-order: 3
+order: 11
 title: "Verify it works"
 kind: "concept"
+section: "Set up"
+description: "Check an install works, right after installing or when something feels off."
 ---
 Four checks, from quickest to most thorough. The first one alone tells you whether the harness loaded.
 

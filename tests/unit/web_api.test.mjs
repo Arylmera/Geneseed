@@ -1935,9 +1935,34 @@ test('no unsubstituted count placeholder survives rendering', () => {
 });
 
 // Anti-drift, and the reason it exists: "six plugins" went stale when activity landed. A new
-// adapters/opencode/plugins/geneseed-<name>.js must ship its own section of the plugins
-// reference page, and a mention in the README and SHIPPED.md rows.
-test('every plugin ships a reference section and its README/SHIPPED rows', () => {
+// adapters/opencode/plugins/geneseed-<name>.js must ship its own reference page —
+// docs/reference/plugin-<name>.md, titled geneseed-<name> — linked from the plugins overview, and a
+// mention in the README and SHIPPED.md rows. One page per plugin (the long overview was split
+// into a section), so the gate asks for the page AND the overview's link to it: a page nothing
+// links to is a page the overview reader never finds.
+function pluginDocProblems(names, pages, overview) {
+  const titleById = new Map(pages.map((p) => [p.id, p.title]));
+  const out = [];
+  for (const name of names) {
+    if (titleById.get(`plugin-${name}`) !== `geneseed-${name}`) {
+      out.push(`geneseed-${name} has no reference page`);
+    } else if (!overview.includes(`](#/docs/plugin-${name})`)) {
+      out.push(`geneseed-${name} is not linked from the plugins overview`);
+    }
+  }
+  return out;
+}
+
+test('the plugin page gate fails on a missing page, a wrong title and a missing link', () => {
+  const pages = [{ id: 'plugin-a', title: 'geneseed-a' }, { id: 'plugin-b', title: 'b' }];
+  assert.deepEqual(pluginDocProblems(['a', 'b', 'c'], pages, '[x](#/docs/plugin-a)'), [
+    'geneseed-b has no reference page', 'geneseed-c has no reference page']);
+  assert.deepEqual(pluginDocProblems(['a'], pages, 'no links'),
+    ['geneseed-a is not linked from the plugins overview']);
+  assert.deepEqual(pluginDocProblems(['a'], pages, '[x](#/docs/plugin-a)'), []);
+});
+
+test('every plugin ships a reference page and its README/SHIPPED rows', () => {
   const st = neutral();
   const pluginDir = path.join(ROOT, 'adapters', 'opencode', 'plugins');
   const names = fs.readdirSync(pluginDir)
@@ -1947,6 +1972,9 @@ test('every plugin ships a reference section and its README/SHIPPED rows', () =>
   assert.ok(names.length > 0, 'no plugins found — wrong directory?');
 
   const overview = apiDocsPage(st, 'opencode-plugins', 'opencode').body;
+  const pages = docGroups().flatMap((g) => g.pages);
+  assert.deepEqual(pluginDocProblems(names, pages, overview), []);
+
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   const shipped = fs.readFileSync(path.join(ROOT, 'SHIPPED.md'), 'utf8');
   const row = /plugins \(([^)]*)\)/.exec(shipped);
@@ -1954,10 +1982,6 @@ test('every plugin ships a reference section and its README/SHIPPED rows', () =>
   const shippedNames = new Set(row[1].split(',').map((s) => s.trim()));
 
   for (const name of names) {
-    assert.ok(overview.includes(`
-## geneseed-${name}
-`),
-      `geneseed-${name} has no section on the plugins reference page`);
     assert.ok(readme.includes(`geneseed-${name}`),
       `geneseed-${name} missing from the README plugins row`);
     assert.ok(shippedNames.has(name), `'${name}' missing from the SHIPPED.md plugins list`);
