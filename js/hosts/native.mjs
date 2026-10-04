@@ -3,7 +3,7 @@
  *
  * A faithful translation of `_build_emit._write_native_layer` and the frontmatter
  * builders it dispatches to. Capability specs become host-native subagents and skills:
- * one dialect per host (OpenCode / Claude Code), vendored skill folders copied
+ * one agent dialect per host family (OpenCode / Claude Code), vendored skill folders copied
  * through verbatim, authoring templates shipped flat.
  *
  * WHY THIS IS THE HARD HALF. `js/build/render.mjs` is a pure function of `src/` and `themes/`;
@@ -15,8 +15,7 @@
  *   2. Claim-on-create decides which files get written AT ALL: a target that already
  *      exists and was not in the previous manifest belongs to the user, and is skipped
  *      with a warning. So the output is a function of what is already on disk.
- *   3. Three host dialects diverge inside one loop — including a FILENAME change
- *      (`<name>.agent.md`) that drags a link rewrite along with it.
+ *   3. Two agent dialects diverge inside one loop, on the same filenames.
  *
  * None of the three is reachable from the golden harness's happy path: golden emits into
  * a fresh tree with an empty overrides stub. `tests/unit/user_files.test.mjs` drives
@@ -32,9 +31,10 @@ import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
+import { relPosix } from '../lib/text.mjs';
 
 /** What a folder skill writes where it needs its own directory — see `writeNativeLayer`. */
-export const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
+const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
 
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
 export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report', 'explain-changes']);
@@ -108,11 +108,6 @@ export function firstBlockquote(text) {
   return '';
 }
 
-/** `_build_emit.desc_of`. */
-export function descOf(text) {
-  return firstBlockquote(text);
-}
-
 /**
  * The `**Trigger:**` paragraph of a skill, flattened to one line — markdown links reduced
  * to their text, HTML comments dropped, whitespace collapsed. '' when the skill has none.
@@ -155,7 +150,7 @@ function triggerOf(text) {
  */
 const DESCRIPTION_CAP = 320;
 function skillDescription(text) {
-  return withWhen(descOf(text), triggerOf(text));
+  return withWhen(firstBlockquote(text), triggerOf(text));
 }
 
 /**
@@ -188,7 +183,7 @@ function dispatchOf(text) {
 
 /** The emitted `description:` of an agent — purpose + its first dispatch condition. */
 export function agentDescription(text) {
-  return withWhen(descOf(text), dispatchOf(text));
+  return withWhen(firstBlockquote(text), dispatchOf(text));
 }
 
 /** Purpose + ` Use when: ` + the first sentence of `trig`, capped — see `skillDescription`. */
@@ -299,11 +294,9 @@ function given(v) {
  * `Object.prototype` for an agent named `constructor`, `toString` or `valueOf`, and would
  * hand back a function where Python hands back `None`.
  *
- * Known divergence, recorded rather than papered over: where the value is present but is
- * NOT an object (a user writing `"reviewer": "haiku"` instead of
- * `"reviewer": {"model": "haiku"}`), Python raises AttributeError and aborts the emit
- * while this returns undefined for every key and emits no override lines. Not a byte
- * difference on any path the gate covers — a difference in which malformed input crashes.
+ * A value that is present but NOT an object (`"reviewer": "haiku"` instead of
+ * `"reviewer": {"model": "haiku"}`) never reaches here from a file: `loadAgentOverrides`
+ * warns and drops it. A caller handing one in directly gets no override lines.
  */
 function agentOverride(overrides, stem) {
   return (Object.hasOwn(overrides, stem) && overrides[stem]) || {};
@@ -366,13 +359,36 @@ function opencodeAgentFrontmatter(stem, text, overrides, theme = null) {
   return fm;
 }
 
-/** `_build_emit._load_agent_overrides`. */
+/** The keys the OpenCode dialect renders. Claude's honours `model` alone — see `writeNativeLayer`. */
+const OVERRIDE_KEYS = ['model', 'temperature', 'variant', 'steps'];
+
+/**
+ * '' when `v` may be written into a frontmatter line, else why not.
+ *
+ * Each value lands VERBATIM after `key: `, so a string carrying a line break writes frontmatter
+ * keys of its own (`"haiku\npermission: allow"`), and anything `formatValue` cannot render — a
+ * boolean, a list, an object — threw a bare TypeError that aborted the emit with a stack trace
+ * naming nothing the user wrote.
+ */
+function overrideProblem(v) {
+  if (typeof v === 'string') return /[\r\n\u2028\u2029]/.test(v) ? 'contains a line break' : '';
+  // `parseJson` yields exactly one object `isDict` refuses: its number wrapper.
+  const isNumber = typeof v === 'object' && v !== null && !Array.isArray(v) && !isDict(v);
+  if (isNumber && Number.isFinite(+v)) return '';
+  return 'is not a string or a finite number';
+}
+
+/**
+ * `_build_emit._load_agent_overrides`, with every value that would break the frontmatter
+ * dropped and named on stderr — the user's file, so a bad entry is a warning, never an abort.
+ */
 export function loadAgentOverrides(base) {
+  const file = path.join(base, 'agent-overrides.json');
   let data;
   try {
     // parseJson, not JSON.parse: the override values are rendered with `formatValue`, which
     // needs the int/float distinction the raw literal carries and `JSON.parse` discards.
-    data = parseJson(readText(path.join(base, 'agent-overrides.json')));
+    data = parseJson(readText(file));
   } catch {
     // Missing or malformed => no overrides, so agents inherit the host model.
     // Wider than Python's `except (OSError, json.JSONDecodeError)` by one case: a file
@@ -382,12 +398,72 @@ export function loadAgentOverrides(base) {
     return {};
   }
   const agents = isDict(data) ? data.agents : null;
-  return isDict(agents) ? agents : {};
+  if (!isDict(agents)) return {};
+  // In place: `data` is a fresh parse, and deleting keeps a `__proto__`-named entry an own
+  // property, where copying into a new object would assign a prototype instead.
+  for (const [stem, entry] of Object.entries(agents)) {
+    if (entry === null) continue;
+    if (!isDict(entry)) {
+      warn(`[geneseed] WARN: ${file}: agents.${stem} is not an object — skipped`);
+      delete agents[stem];
+      continue;
+    }
+    for (const key of OVERRIDE_KEYS) {
+      if (!given(entry[key])) continue;
+      const why = overrideProblem(entry[key]);
+      if (!why) continue;
+      warn(`[geneseed] WARN: ${file}: agents.${stem}.${key} ${why} — skipped`);
+      delete entry[key];
+    }
+  }
+  return agents;
 }
 
-/** `Path.relative_to(base).as_posix()`. */
-function relPosix(base, target) {
-  return path.relative(base, target).split(path.sep).join('/');
+/**
+ * Warn once per override key the Claude dialect drops. The seeded `agent-overrides.json`
+ * advertises all four keys on every host, and Claude Code's agent frontmatter takes `model`
+ * only — so a `temperature` set there was silently a no-op.
+ */
+function warnClaudeIgnored(overrides) {
+  const ignored = new Set();
+  for (const entry of Object.values(overrides)) {
+    if (!isDict(entry)) continue;
+    for (const key of OVERRIDE_KEYS.slice(1)) if (given(entry[key])) ignored.add(key);
+  }
+  for (const key of ignored) {
+    warn(`[geneseed] WARN: agent-overrides.json sets '${key}', which Claude-family hosts do `
+      + "not support — only 'model' is applied");
+  }
+}
+
+/**
+ * Claim-on-create, as a closure over one emit's prior manifest: `claim(dest)` is true when
+ * `dest` may be (over)written, false for a pre-existing file no previous emit owned — the
+ * user's, left alone, named on stderr, and kept out of the manifest by the caller.
+ *
+ * Its own function because every writer whose path lands in `owned` needs it, and uninstall
+ * deletes what `owned` names: the OpenCode command and primary-agent writers pushed their
+ * paths without it, so uninstall removed a user's own `command/commit.md`. ONE closure per
+ * emit, shared by all of them, so the pre-manifest header still prints once.
+ *
+ * `oldOwned === null` (or no `cfg`) is a caller doing no ownership at all: claim everything.
+ */
+export function claimer(oldOwned, cfg, manifestExisted = true) {
+  const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
+  let headerPrinted = false;
+  return (dest) => {
+    if (oldSet === null || cfg === null || !existsSync(dest)) return true;
+    const rel = relPosix(cfg, dest);
+    if (oldSet.has(rel)) return true;
+    if (!manifestExisted && !headerPrinted) {
+      warn('[geneseed] first emit over a pre-manifest install — existing files '
+        + 'are treated as yours');
+      headerPrinted = true;
+    }
+    warn(`[geneseed] kept your existing ${rel} — skipped Geneseed's copy to avoid `
+      + 'clobbering it');
+    return false;
+  };
 }
 
 /**
@@ -406,6 +482,9 @@ function relPosix(base, target) {
  * has the placeholder replaced by the answer. Only vendored folders carry the placeholder — a
  * flat skill has no siblings to point at.
  *
+ * `opts.claim` — a `claimer` closure the caller shares with its other writers; built from
+ * `oldOwned`/`cfg`/`manifestExisted` when absent.
+ *
  * Returns `{ nAgents, nSkills, written }` — Python's 3-tuple, with `written` as absolute
  * paths in write order.
  *
@@ -419,30 +498,13 @@ function relPosix(base, target) {
  */
 export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, {
   host = 'opencode', oldOwned = null, cfg = null, manifestExisted = true,
-  theme = null, src, skillDirOf = null,
+  theme = null, src, skillDirOf = null, claim = claimer(oldOwned, cfg, manifestExisted),
 } = {}) {
   const ov = overrides || {};
-  const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
+  if (host === 'claude') warnClaudeIgnored(ov);
   let nAgents = 0;
   let nSkills = 0;
   const written = [];
-  let headerPrinted = false;
-
-  // True -> ok to (over)write; false -> a pre-existing file we never owned, so it is the
-  // user's: leave it, warn, and keep it out of the manifest.
-  const claim = (dest) => {
-    if (oldSet === null || cfg === null || !existsSync(dest)) return true;
-    const rel = relPosix(cfg, dest);
-    if (oldSet.has(rel)) return true;
-    if (!manifestExisted && !headerPrinted) {
-      warn('[geneseed] first emit over a pre-manifest install — existing files '
-        + 'are treated as yours');
-      headerPrinted = true;
-    }
-    warn(`[geneseed] kept your existing ${rel} — skipped Geneseed's copy to avoid `
-      + 'clobbering it');
-    return false;
-  };
 
   const write = (dest, text) => {
     mkdirSync(path.dirname(dest), { recursive: true });
@@ -498,13 +560,9 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let dest;
     let kind;
     if (folder === 'agents') {
-      if (host === 'claude') {
-        fm = claudeAgentFrontmatter(stem, text, ov);
-        dest = path.join(agentsDir, `${stem}.md`);
-      } else {
-        fm = opencodeAgentFrontmatter(stem, text, ov, theme);
-        dest = path.join(agentsDir, `${stem}.md`);
-      }
+      fm = host === 'claude' ? claudeAgentFrontmatter(stem, text, ov)
+        : opencodeAgentFrontmatter(stem, text, ov, theme);
+      dest = path.join(agentsDir, `${stem}.md`);
       kind = 'agent';
     } else {
       // Skills are BYTE-IDENTICAL across hosts: name + description, body link-stripped.

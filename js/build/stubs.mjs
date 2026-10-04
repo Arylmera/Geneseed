@@ -9,8 +9,9 @@
  */
 import path from 'node:path';
 import { writeText } from '../lib/fs.mjs';
+import { isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
-import { isDir } from './emit-common.mjs';
+import { EXCLUDES_FILE } from '../hosts/hosts.mjs';
 import { existsSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
@@ -102,8 +103,8 @@ usually one promoted from a recurring memory. Review it by that date, then
 graduate it (remove the marker) or demote it back to memory.
 `;
 
-/** `_build_render.EXCLUDES_FILE`. */
-export const EXCLUDES_FILE = 'excludes.json';
+// Owned by `js/hosts/hosts.mjs` (the hook reads it there); re-exported for `js/inspect/excludes.mjs`.
+export { EXCLUDES_FILE };
 
 /**
  * `_build_render.EXCLUDES_STUB` — one long line, exactly as Python spells it.
@@ -232,8 +233,8 @@ export const ensureProfileStub = stubWriter(PROFILE_FILE, PROFILE_STUB);
 
 /**
  * `_build_render.ensure_excludes_stub` — the sovereign-repo list, seeded once and NEVER
- * overwritten. Reachable only from the Claude-shaped emits, which is why it arrived with
- * `emitClaudeRender` rather than with the bundle stubs beside it.
+ * overwritten. Called by every GLOBAL emit — the Claude-shaped ones and opencode-global —
+ * since that is where the hook looks for it.
  */
 export const ensureExcludesStub = stubWriter(EXCLUDES_FILE, EXCLUDES_STUB);
 

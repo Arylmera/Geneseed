@@ -31,6 +31,7 @@ import { trustOfDir } from '../../js/hosts/installs.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { colorThemeFiles } from '../../js/hosts/opencode.mjs';
+import { installUninstall } from '../../js/maintain/uninstall.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
 // ⚠ FIRST. These emit IN PROCESS, and the hook-shim writer targets the ENVIRONMENT's home rather
@@ -322,6 +323,11 @@ test('the primary and command layers are emitted only when their env vars ask fo
   //
   // A PARTITION, not a presence check: the same emit is run twice and the DIFFERENCE is the
   // claim, so a layer that shipped unconditionally fails just as loudly as one that never ships.
+  //
+  // SEVEN commands, one per `COMMAND_SET` entry. `/code-review` was missing from this list for
+  // as long as its skill had been `geneseed-code-review`: the set named the old skill, the
+  // lookup missed, and the command was dropped without a word — the list here was written
+  // from the output rather than from the set. The command keeps its short name.
   const filesUnder = (d) => {
     const out = [];
     const walk = (dir) => {
@@ -351,16 +357,55 @@ test('the primary and command layers are emitted only when their env vars ask fo
   assert.ok(off.length > 100, `only ${off.length} files in a default emit, so the diff is thin`);
   assert.deepEqual(added, [
     '.opencode/agents/orchestrator.md',
+    '.opencode/command/code-review.md',
     '.opencode/command/commit.md',
     '.opencode/command/debug.md',
     '.opencode/command/plan.md',
     '.opencode/command/research.md',
     '.opencode/command/review-response.md',
     '.opencode/command/ship.md',
-  ], 'the opt-in layers no longer add exactly the primary agent and the six commands');
+  ], 'the opt-in layers no longer add exactly the primary agent and the seven commands');
   // And nothing is REMOVED by turning them on: these layers add, they do not replace.
   assert.deepEqual(off.filter((f) => !on.includes(f)), [],
     'turning the opt-in layers on removed a file the default emit writes');
+});
+
+test("a user's own command/ and orchestrator file survive the opt-in emit and the uninstall", () => {
+  // The command and primary-agent writers pushed every path they wrote into `owned` WITHOUT the
+  // claim-on-create check the native layer applies — so a user's own `command/commit.md` was
+  // overwritten, recorded as Geneseed's, and then deleted by `uninstall`. Same rule as the
+  // native layer: a file that exists and no previous manifest owned is the user's.
+  withDir((d) => {
+    const mine = {
+      [path.join(d, '.opencode', 'command', 'commit.md')]: 'MY COMMIT COMMAND\n',
+      [path.join(d, '.opencode', 'command', 'ponytail.md')]: 'MY PONYTAIL\n',
+      [path.join(d, '.opencode', 'agents', 'orchestrator.md')]: 'MY ORCHESTRATOR\n',
+    };
+    for (const [p, body] of Object.entries(mine)) {
+      mkdirSync(path.dirname(p), { recursive: true });
+      writeFileSync(p, body, 'utf8');
+    }
+    for (const k of ['GENESEED_PRIMARY', 'GENESEED_COMMANDS']) process.env[k] = '1';
+    let err;
+    try {
+      [, , err] = emitOpencode('neutral', path.join(d, 'bundle'), d);
+    } finally {
+      for (const k of ['GENESEED_PRIMARY', 'GENESEED_COMMANDS']) delete process.env[k];
+    }
+    const owned = readJson(d, '.opencode', GLOBAL_MANIFEST).owned;
+    for (const rel of ['command/commit.md', 'command/ponytail.md', 'agents/orchestrator.md']) {
+      assert.ok(!owned.includes(rel), `${rel} is the user's, yet the manifest claims it`);
+      assert.match(err, new RegExp(`kept your existing ${rel}`), `${rel} was kept silently`);
+    }
+    // The positive control: the commands the user did NOT have are still Geneseed's.
+    assert.ok(owned.includes('command/plan.md'));
+    quiet(() => installUninstall(d, 'opencode', 'project', 'keep'));
+    for (const [p, body] of Object.entries(mine)) {
+      assert.equal(read(p), body, `uninstall deleted or changed the user's ${p}`);
+    }
+    assert.ok(!existsSync(path.join(d, '.opencode', 'command', 'plan.md')),
+      'uninstall left a command Geneseed did write');
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -456,6 +501,25 @@ test('trustOfDir finds a project install\'s loop skill under the host\'s own dir
     assert.equal(rc, 0);
     assert.ok(existsSync(path.join(d, '.claude', ...LOOP_SKILL)));
     assert.equal(trustOfDir(d), 'aggressive');
+  });
+});
+
+test('trustOfDir(d, host) reads only that host\'s project dir', () => {
+  // A repo with BOTH `.opencode/` and `.claude/`: without the host, the scan takes HOSTS order
+  // and OpenCode answers first — so the Claude row of a dual-host repo reported, and a rebuild
+  // re-emitted, OpenCode's preset. With it, each row reads its own skill.
+  withDir((d) => {
+    const skill = (marker, label) => {
+      const p = path.join(d, marker, ...LOOP_SKILL);
+      mkdirSync(path.dirname(p), { recursive: true });
+      writeFileSync(p, `Default trust preset: **${label}**\n`, 'utf8');
+    };
+    skill('.opencode', 'Prudent');
+    skill('.claude', 'Aggressive');
+    assert.equal(trustOfDir(d, 'claude'), 'aggressive');
+    assert.equal(trustOfDir(d, 'opencode'), 'prudent');
+    assert.equal(trustOfDir(d, 'bob'), null, 'bob has no loop skill here');
+    assert.equal(trustOfDir(d), 'prudent', 'no host: HOSTS order, as every old caller had');
   });
 });
 
