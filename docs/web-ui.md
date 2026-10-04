@@ -124,7 +124,8 @@ streams the output of background jobs and keeps their history across reloads.
   loop `geneseed loop init` registered on this machine (`GET /api/loops/active`, polled every
   5 s): a card per loop with its branch, status, `iteration N / max`, current node and a
   preset picker (`POST /api/loops/preset`, the page's only write); a loop awaiting a decision
-  is highlighted with what it waits on (launch / declared / actual) — the answer is given in
+  is highlighted with what it waits on (launch / declared / actual / a human gate, with its
+  node) — the answer is given in
   the agent's session, never here; finished and unreadable loops are muted. Selecting a card
   draws its ring with the current node filled, and its iteration history under it.
 - **Profile** (`#/profile`) — `PROFILE.md` beside the deployed AGENT.md: who you are and

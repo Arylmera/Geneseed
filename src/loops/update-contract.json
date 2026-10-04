@@ -23,6 +23,6 @@
   ],
   "contracts": [
     "**/openapi*.yaml", "**/openapi*.yml", "**/openapi*.json", "**/asyncapi*.yaml", "**/*.proto", "**/*.avsc",
-    "**/*.graphqls", "**/db/migration/**", "**/db/changelog/**"
+    "**/*.graphqls", "**/*.graphql", "**/asyncapi*.yml", "**/asyncapi*.json", "**/db/migration/**", "**/db/changelog/**"
   ]
 }

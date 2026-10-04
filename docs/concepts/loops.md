@@ -179,9 +179,10 @@ committed or counted against a ring budget while it waits.
   changes what the unit does. A node can be amended at most 3 times per iteration — the 4th
   amend stops the loop instead: three rounds that didn't converge are a conversation, not a loop.
 
-Every closing commit that passed a gate names it under `Loop-Gates` (see below); one run of
-`geneseed loop next` on the console's **Active** tab shows a gated loop the same way it shows a
-score `awaiting` — highlighted with what it's waiting on.
+Every closing commit that passed a gate names it under `Loop-Gates` (see below). The console's
+**Active** tab shows a gated loop as `Awaiting gate at <node>`, the same way it shows a score
+`awaiting`. A gate passed in a read-only setup unit leaves its approval as a note in `LOOP.md`,
+not a trailer — that unit closes without a commit.
 
 ## Contracts and ignored deletions
 
@@ -303,7 +304,7 @@ The console's **Loops › Active** tab (`GET /api/loops/active`, polled every fe
 registry and shows one card per loop: branch, status (`running`, `awaiting`, `done`, `stopped`,
 `finished`, or `unreadable` if `LOOP.md` fails to parse), `iteration N / max`, and its current
 node. A loop `awaiting` a decision is highlighted with what it's waiting on — the launch, the
-declared score, or the actual score — but **the answer is given in the agent's session**, with
+declared score, the actual score, or a human gate (with its node) — but **the answer is given in the agent's session**, with
 `geneseed loop decide`, never from the page. A finished loop (`LOOP.md` removed) is kept, muted,
 for 7 days after first being seen finished, then dropped. Selecting a card draws its ring with the
 current node filled, with the iteration history (declared, actual, decision, tests) underneath.

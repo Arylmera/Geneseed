@@ -57,7 +57,8 @@ Repeat `geneseed loop next` and act on its JSON:
 - **`{node, validate: true}`** — score the card before the brick runs:
   `geneseed loop score --declared` (the card the iteration head recorded), or for a setup brick with no
   card `geneseed loop score --declared --actions <kinds> --write-set <files> --intent <label>`
-  (`spec`: `--actions new-file --write-set specs/**`).
+  (`spec`: `--actions new-file --write-set 'specs/**'`).
+  Single-quote any glob in `--write-set` (safe in bash and PowerShell; unquoted, the shell expands it).
   `blocking` turns into an `{awaiting}` on the next `next`.
 - **`{node}`** — run the brick: dispatch its `agent` (or follow its `skill`) with the `prompt`,
   the `card`, the `notes` and the template's `rules`. Then report the outcome, one of its `outcomes`:

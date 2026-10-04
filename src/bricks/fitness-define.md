@@ -11,7 +11,8 @@ own tools first: ArchUnit for Java (a `FreezingArchRule`, whose violation store 
 allowlist), then dependency-cruiser, import-linter, eslint-plugin-boundaries or size-limit.
 Record today's violations in an allowlist beside the test so the suite stays green — each later
 iteration removes one entry. Touch only the test, its allowlist and the tool's test-scoped setup,
-and declare the tool's generated store as a glob in the write set (`**/archunit_store/**`).
+and declare the tool's generated store as a glob in the write set (`--write-set '**/archunit_store/**'`
+— single-quote it, the same as any glob in `--write-set`).
 
 The user reviews the rule before the loop continues: write the rule in one sentence, the test's
 path, the allowlist's path and its entry count to a file in the OS temp directory and report that
