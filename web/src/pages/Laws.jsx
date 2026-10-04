@@ -247,7 +247,6 @@ function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
   )
   return (
     <CatalogRow
-      kind="law"
       addr={law.addr}
       isOpen={isOpen}
       onToggle={onToggle}

@@ -291,11 +291,20 @@ function subCounts(state, body) {
 /**
  * The Docs selector names a HOST; a tag names a host or a FAMILY. Bob and OpenClaude emit
  * through the Claude engine, so a `claude` tag (page or block) is the Claude family and shows
- * to all three of them, while `bob` / `openclaude` narrow to the one host. The same mapping as
- * the console's host table (`web/src/lib/hosts.js`, its `docs` column).
+ * to all three of them, while `bob` / `openclaude` narrow to the one host. `name` is how a
+ * host-only passage's visible label spells the host. One row per host: the family table, the
+ * host list and both marker patterns below are read off it.
  */
-export const HOST_FAMILY = { opencode: 'opencode', claude: 'claude', openclaude: 'claude', bob: 'claude' };
-export const HARNESSES = Object.keys(HOST_FAMILY);
+const DOC_HOSTS = {
+  opencode: { family: 'opencode', name: 'OpenCode' },
+  claude: { family: 'claude', name: 'Claude Code' },
+  openclaude: { family: 'claude', name: 'OpenClaude' },
+  bob: { family: 'claude', name: 'IBM Bob' },
+};
+export const HOST_FAMILY = Object.fromEntries(
+  Object.entries(DOC_HOSTS).map(([id, h]) => [id, h.family]));
+export const HARNESSES = Object.keys(DOC_HOSTS);
+const anyOf = (words) => `(?:${words.join('|')})`;
 /**
  * A page or block tagged `tag` shows to `host`. Untagged content shows to every host. One tag
  * names a host or a family; a LIST names hosts exactly, no family widening, because picking
@@ -307,7 +316,7 @@ export const harnessShows = (tag, host) => (Array.isArray(tag)
   : !tag || tag === host || tag === HOST_FAMILY[host]);
 /** A block's tag: `claude` alone, or `claude,openclaude` — the list, read as above. */
 const harnessTag = (raw) => (raw.includes(',') ? raw.split(/\s*,\s*/) : raw);
-const HOST_ID = '(?:opencode|claude|openclaude|bob)';
+const HOST_ID = anyOf(HARNESSES);
 const HARNESS_OPEN_RE = new RegExp(String.raw`^\s*<!--\s*harness:(${HOST_ID}(?:\s*,\s*${HOST_ID})*)\s*-->\s*$`);
 const HARNESS_CLOSE_RE = /^\s*<!--\s*\/harness\s*-->\s*$/;
 /**
@@ -328,9 +337,9 @@ export function normHarness(value, state) {
 /**
  * Every open has a matching close, with no nesting.
  *
- * A marker inside a ``` fence is example text, not a marker (the same rule `sliceSection`
- * uses). Its purpose is to FAIL OPEN: an unbalanced marker leaves the body untouched, so a
- * typo can never blank the rest of a page.
+ * A marker inside a ``` fence is example text, not a marker (the same rule the frontend's
+ * outline uses). Its purpose is to FAIL OPEN: an unbalanced marker leaves the body untouched,
+ * so a typo can never blank the rest of a page.
  *
  * EXPORTED FOR THE AUTHORING GATE, in the shape `installAgentEntryOf` established: failing
  * open means a typo is INVISIBLE in the rendered output — the page simply shows everything,
@@ -359,7 +368,7 @@ export function harnessBlocksBalanced(lines) {
  * the marker; the console has already filtered the block to the reader's host, so there the
  * label only repeats what the host selector says, and it goes with the marker.
  */
-const HOST_NAME = '(?:OpenCode|Claude Code|OpenClaude|IBM Bob)';
+const HOST_NAME = anyOf(Object.values(DOC_HOSTS).map((h) => h.name));
 const HOST_LABEL_RE = new RegExp(String.raw`^\s*\*\(${HOST_NAME}(?: and ${HOST_NAME})* only\)\*\s*$`);
 
 export function stripHarnessBlocks(body, harnessName) {
@@ -411,16 +420,14 @@ function visibleGroups(harnessName) {
   return groups;
 }
 
-// ---- slugs and section slicing ----------------------------------------------------------
+// ---- heading slugs -----------------------------------------------------------------------
 
 const SLUG_STRIP_RE = new RegExp(`[^a-z0-9${WHITESPACE}-]`, 'g');
 const SLUG_WS_RE = new RegExp(`[${WHITESPACE}]+`, 'g');
 const SLUG_DASH_RE = /-+/g;
-const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
 
 /**
- * The same rules the frontend's `slug()` uses, so a registry `anchor` written against a
- * heading matches the id the renderer assigns.
+ * The same rules the frontend's `slug()` uses for the id it gives a rendered heading.
  *
  * `WHITESPACE` and `stripWhitespace` rather than `\s` and `trim()` — see `WHITESPACE`'s own
  * docblock for the measured set of characters where this matters.
@@ -429,45 +436,6 @@ export function slugifyHeading(text) {
   let s = stripWhitespace(text.toLowerCase()).replace(SLUG_STRIP_RE, '');
   s = s.replace(SLUG_WS_RE, '-').replace(SLUG_DASH_RE, '-');
   return s.replace(/^-+|-+$/g, '');
-}
-
-/**
- * The body trimmed to one heading's section.
- *
- * Returns `[body, ok]`; `ok === false` (with the ORIGINAL body) when the anchor is
- * missing, so the caller falls back to the whole document. An H1 slice stops at the first
- * H2 — `max(level, 2)` — so it captures an intro paragraph rather than the whole file.
- */
-export function sliceSection(body, anchor) {
-  const lines = splitLines(body);
-  let start = -1;
-  let startLevel = 0;
-  let inFence = false;
-  for (let i = 0; i < lines.length; i += 1) {
-    const ln = lines[i];
-    if (ln.startsWith('```')) { inFence = !inFence; continue; }
-    if (inFence) continue;
-    const m = HEADING_RE.exec(ln);
-    if (!m) continue;
-    if (slugifyHeading(m[2]) === anchor) {
-      start = i;
-      startLevel = Math.max(m[1].length, 2);
-      break;
-    }
-  }
-  if (start < 0) return [body, false];
-  const out = [lines[start]];
-  inFence = false;
-  for (let j = start + 1; j < lines.length; j += 1) {
-    const ln = lines[j];
-    if (ln.startsWith('```')) { inFence = !inFence; out.push(ln); continue; }
-    if (inFence) { out.push(ln); continue; }
-    const m = HEADING_RE.exec(ln);
-    if (m && m[1].length <= startLevel) break;
-    out.push(ln);
-  }
-  while (out.length && out[out.length - 1].trim() === '') out.pop();
-  return [`${out.join('\n')}\n`, true];
 }
 
 // ---- the endpoints -----------------------------------------------------------------------
@@ -523,23 +491,20 @@ function glossary(state, page) {
  * what gates the github-shaped deep links in the UI. Both come from `originDisplay()`,
  * which shells out to `git remote get-url` (the `git` row in `ALLOWED_SPAWNS`).
  *
- * `version` IS NOT WHAT IT LOOKS LIKE, and it is the shape this page has always had rather than
- * a shortcut here. It reads a `version` key off the status snapshot and THERE IS NO SUCH KEY —
- * the snapshot spells the fingerprints `source_fp` / `installed_fp` / `version_verdict`. So the
- * field is `{}`, always, and `sd.version || {}` reproduces the EXPRESSION rather than the
- * constant: if the key ever appears, the page gains it without another edit.
+ * `version` carries the status snapshot's fingerprints under the names the About page reads.
+ * It used to read a `version` key the snapshot never had, so the page's build rows were
+ * always empty; the snapshot spells them `installed_fp` / `source_fp` / `version_verdict`.
  *
  * THERE IS NO INTERPRETER FIELD, and the absence is deliberate — see `apiSetup` in
  * `api.mjs`, which spells the same absence for the same reason.
- *
- * `statusData()` is called for one dead field, and deliberately: this page has always paid that
- * cost, and skipping it would answer faster in a way no gate measures and no user asked for.
  */
 function about(state) {
   const sd = statusData();
   const od = originDisplay();
   return {
-    version: sd.version || {},
+    version: {
+      installed_fp: sd.installed_fp, source_fp: sd.source_fp, verdict: sd.version_verdict,
+    },
     theme: state.theme,
     emit: state.emit,
     deployed: deployed(state),
@@ -590,18 +555,10 @@ export function apiDocsPage(state, pageId, harnessName = null) {
  */
 const KIND_ROUTES = {
   markdown: (state, pageId, page, hn) => {
-    let body = readDocSource(page.source);
-    let anchor = page.anchor ?? null;
-    // A successful slice drops the anchor: the heading is already at the top, so the
-    // client must not also try to scroll to it.
-    if (anchor && page.slice) {
-      const [sliced, ok] = sliceSection(body, anchor);
-      body = sliced;
-      if (ok) anchor = null;
-    }
-    body = rewriteDocLinks(stripHarnessBlocks(body, hn), page.source, idsByRel());
+    const body = rewriteDocLinks(stripHarnessBlocks(readDocSource(page.source), hn),
+      page.source, idsByRel());
     return { id: pageId, title: page.title, kind: 'markdown', body,
-      source: page.source, anchor, links: resolveLinks(state, body) };
+      source: page.source, links: resolveLinks(state, body) };
   },
   concept: (state, pageId, page, hn) => {
     const body = rewriteDocLinks(subCounts(state, stripHarnessBlocks(page.body ?? '', hn)),

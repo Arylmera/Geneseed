@@ -391,9 +391,10 @@ Two traps worth knowing before you write the spec:
   re-opens bash on all three hosts (OpenCode gates it to `ask`), and `<!-- webfetch: allow -->`
   re-opens web fetch — the researcher is the one spec that carries it.
 - **The console has a fourth, ungated copy of the skill taxonomy.** `SKILL_CATS` in
-  `web/src/pages/Skills.jsx:19` mirrors `SKILL_CLASS` with nothing comparing them (contrast
+  `web/src/lib/lawCats.js` mirrors `SKILL_CLASS` with nothing comparing them (contrast
   `LAW_META`, which *is* cross-checked). Inventing a new *category* means editing that file —
-  which drags in the `web/dist` rebuild — and an unknown category renders as Build with no warning.
+  which drags in the `web/dist` rebuild — and an unknown category lands under Personal in the
+  Library (`splitSkills` in `web/src/pages/Library.jsx`) with no warning.
 
 
 ---
@@ -462,8 +463,7 @@ throws). The same file is what GitHub shows, so write for both
   passage for several hosts lists them, `<!--harness:claude,openclaude-->`, labelled
   `*(Claude Code and OpenClaude only)*` (names in the marker's order, joined by *and*).
 - No `{N_*}` token in `understand/` or `guides/` — GitHub would show it raw.
-- `kind: "markdown"` pulls from a repo file via `source:`, traversal-guarded, optionally sliced to
-  one section with `anchor:` + `slice: true`.
+- `kind: "markdown"` pulls from a repo file via `source:`, traversal-guarded.
 
 Inline `<!-- harness:claude -->` blocks strip per host and **fail open** on an unbalanced marker —
 the page renders, wrong, with nothing red.

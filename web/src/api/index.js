@@ -113,11 +113,12 @@ const restart = () => post('/api/restart')
 
 // ── Docs ────────────────────────────────────────────────────────────────────
 // Docs surface: the menu (groups + pages) and one page at a time. The page
-// payload's `kind` decides how the frontend renders it (markdown, cli, specs,
-// glossary, about, concept) — the server's docs-page endpoint sets it.
+// payload's `kind` decides how the frontend renders it (markdown, concept, map,
+// cli, glossary, about) — the server's docs-page endpoint sets it.
 
-// `harness` ('opencode' | 'claude') filters the menu and strips the other
-// host's inline blocks server-side. Omitted → server uses the installed default.
+// `harness` (a host id: 'opencode' | 'claude' | 'openclaude' | 'bob') filters the
+// menu and strips the other hosts' inline blocks server-side. Omitted → server
+// uses the installed default.
 const hq = (harness) => (harness ? `?harness=${encodeURIComponent(harness)}` : '')
 
 const docs = (harness) => get(`/api/docs${hq(harness)}`)

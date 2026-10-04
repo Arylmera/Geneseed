@@ -8,17 +8,15 @@ import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
-import { GroupedRows, walkRows, useActiveRowInView } from '../components/LibRows.jsx'
+import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
-import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 import AgentGlyph from '../components/AgentGlyph.jsx'
 
 // The on-disk source path for a given (section, name), for the reader's source line when
 // the item payload carries none. Informational only; it drives no fetch.
 function libSource(sec, name) {
-  if (sec === 'agents' || sec === 'skills') return `${sec}/${name}.md`
   if (sec === 'memory') return `memory/${name}`
   if (sec === 'notebook') return `notebook/${name}`
   if (sec === 'wiki') return `wiki.jsonc`
@@ -43,15 +41,6 @@ function EmptyDoc({ section, source }) {
 const resolveSec = (s, lock) => lock || (s && LIBRARY_ORDER.includes(s) ? s : LIBRARY_ORDER[0])
 const enc = encodeURIComponent
 
-// The Library: what the agent knows, in three panes. The kinds column picks a section
-// (skills, agents, memory, notebook, wiki, setup files), the list pane lists it, the
-// reader renders the selected entry straight from its source file. Routing:
-//   #/library, #/skills, #/agents, #/section/<kind>  -> kind selected
-//   #/item/<type>/<name>                              -> kind + entry selected
-//
-// Personal's Memory and Notebook tabs render this same component with `lock` (one kind,
-// no kinds column) and `base` (the tab's own address, `#/personal/memory`), so an entry
-// opened there stays on the Personal page.
 // Skills in class order, each row tagged with its class and the header it sits under, plus
 // the classes present with their counts (the rail's categories). Exported for the test that pins it.
 export function splitSkills(items) {
@@ -70,6 +59,15 @@ export function splitSkills(items) {
   return { rows, cats }
 }
 
+// The Library: what the agent knows, in three panes. The kinds column picks a section
+// (skills, agents, memory, notebook, wiki, setup files), the list pane lists it, the
+// reader renders the selected entry straight from its source file. Routing:
+//   #/library, #/skills, #/agents, #/section/<kind>  -> kind selected
+//   #/item/<type>/<name>                              -> kind + entry selected
+//
+// Personal's Memory and Notebook tabs render this same component with `lock` (one kind,
+// no kinds column) and `base` (the tab's own address, `#/personal/memory`), so an entry
+// opened there stays on the Personal page.
 export default function Library({ overview, section, selected, dataRev, lock, base }) {
   const confirm = useConfirm()
   const [sec, setSec] = useState(() => resolveSec(section, lock))
@@ -137,18 +135,12 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   // Skills are never capped: a class header must not promise rows the cap then hides.
   const CAP = isSkills ? Infinity : 50
   const ql = q.trim().toLowerCase()
-  const matches = ql
-    ? pool.filter((it) =>
-        `${it.title || ''} ${it.name || ''} ${it.desc || ''}`.toLowerCase().includes(ql),
-      )
-    : pool.slice(0, CAP)
+  const matches = ql ? filterRows(pool, ql) : pool.slice(0, CAP)
   // A class category narrows on purpose, so it does not pull the active entry back in.
   const shown =
     !ql && cat === 'all' && activeName && !matches.some((it) => it.name === activeName)
       ? [...matches, ...items.filter((it) => it.name === activeName)]
       : matches
-
-  const rowsRef = useActiveRowInView([sec, selected])
 
   const itemHref = (it) =>
     base ? `${base}/${enc(it.name)}` : `#/item/${it.type || SECTIONS[sec].type}/${enc(it.name)}`
@@ -248,42 +240,27 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
           </aside>
         )}
 
-        <section className="lib-list" aria-label={label}>
-          <div className="lib-list-head">
-            <b>
-              {label}{' '}
-              <span className="mono dim">
-                {ql ? `${matches.length} of ${pool.length}` : pool.length}
-              </span>
-            </b>
-          </div>
-          <FilterInput
-            value={q}
-            onChange={setQ}
-            placeholder={`Filter ${label.toLowerCase()}`}
-            label={`Filter ${label}`}
-          />
-          <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
-            <GroupedRows rows={shown} activeName={activeItem?.name} hrefOf={itemHref} />
-            {!ql && items.length > CAP && (
-              <div className="lib-more">
-                Showing {CAP} of {items.length}; type to search the rest.
-              </div>
-            )}
-            {ql && matches.length === 0 && (
-              <div className="empty" style={{ padding: 32 }}>
-                <div className="big">No matches</div>
-                Nothing in {label.toLowerCase()} matches “{q.trim()}”.
-              </div>
-            )}
-            {catalog?.section === sec && items.length === 0 && (
-              <div className="empty" style={{ padding: 32 }}>
-                <div className="big">Nothing here yet</div>
-                Once the harness produces entries they appear here.
-              </div>
-            )}
-          </div>
-        </section>
+        <LibList
+          label={label}
+          count={ql ? `${matches.length} of ${pool.length}` : pool.length}
+          q={q}
+          onQ={setQ}
+          matched={matches.length}
+          inView={[sec, selected]}
+        >
+          <GroupedRows rows={shown} activeName={activeItem?.name} hrefOf={itemHref} />
+          {!ql && items.length > CAP && (
+            <div className="lib-more">
+              Showing {CAP} of {items.length}; type to search the rest.
+            </div>
+          )}
+          {catalog?.section === sec && items.length === 0 && (
+            <div className="empty" style={{ padding: 32 }}>
+              <div className="big">Nothing here yet</div>
+              Once the harness produces entries they appear here.
+            </div>
+          )}
+        </LibList>
 
         <article className="lib-reader" aria-label="Entry">
           {activeItem ? (

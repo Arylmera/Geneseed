@@ -20,16 +20,17 @@ function slug(s, fallbackIdx = 0) {
   return `h-${fallbackIdx}-${cleaned || 'section'}`
 }
 
-// querySelector that swallows DOMExceptions from invalid selectors — the page
-// shouldn't take down the right pane just because one heading slug came out
-// shaped weird.
-function safeQuery(root, selector) {
-  if (!root || !selector) return null
-  try {
-    return root.querySelector(selector)
-  } catch {
-    return null
-  }
+// A heading's source as the reader sees it: links and wikilinks down to their text, code
+// spans and bold/italic markers dropped. The outline used to print the raw source —
+// backticks, asterisks, whole URLs. Single underscores stay: they are snake_case far more
+// often than emphasis in these docs.
+export function plainTitle(src) {
+  return src
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\*\*|__/g, '')
+    .replace(/\*([^*\s][^*]*)\*/g, '$1')
 }
 
 // Pull the H2/H3 outline from the markdown source so the TOC can anchor-link
@@ -49,7 +50,7 @@ export function extractToc(body) {
     const m = ln.match(/^(##|###)\s+(.+?)\s*$/)
     if (m) {
       idx += 1
-      out.push({ level: m[1].length, title: m[2], id: slug(m[2], idx) })
+      out.push({ level: m[1].length, title: plainTitle(m[2]), id: slug(m[2], idx) })
     }
   }
   return out
@@ -122,16 +123,6 @@ export default function MarkdownPage({ page, overview, onAction }) {
     return () => el.removeEventListener('click', onClick)
   }, [html])
 
-  // Scroll to the page's declared anchor (e.g. README "install" section) once
-  // the HTML is in the DOM. Wrapped in safeQuery so a future bad anchor can
-  // never throw past us.
-  useEffect(() => {
-    const target = page.anchor
-    if (!target) return
-    const el = safeQuery(ref.current, `#${CSS.escape(target)}`)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [html, page.anchor])
-
   // Install overlay: outline the reader's own path. Outline only — never scroll to it: the
   // page opens at its top like every other, and the reader finds their path lit.
   useEffect(() => {
@@ -156,7 +147,6 @@ export default function MarkdownPage({ page, overview, onAction }) {
     tryActions.push({ label: 'Rebuild', action: 'build' })
   }
   if (page.id === 'verify') tryActions.push({ label: 'Run doctor', action: 'doctor' })
-  if (page.id === 'self-improve') tryActions.push({ label: 'Open diff', hash: '#/diff' })
   if (page.id === 'upgrade') tryActions.push({ label: 'Update', action: 'update' })
 
   return (

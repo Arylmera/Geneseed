@@ -1,8 +1,51 @@
 import React, { useEffect, useRef } from 'react'
 import StatusBadge from './StatusBadge.jsx'
+import FilterInput from './FilterInput.jsx'
 
-// The list pane's rows, shared by the Library and the Loops page (both three-pane: a rail of
-// sections, this list, a reader).
+// The list pane, shared by the Library, the Loops page and the Docs (all three-pane: a rail
+// of sections, this list, a reader): the pane itself (LibList), its rows, and the filter.
+
+// The filter: a plain substring over title, name (what a link says) and description, any case.
+export function filterRows(rows, q) {
+  const ql = (q || '').trim().toLowerCase()
+  if (!ql) return rows
+  return rows.filter((r) =>
+    `${r.title || ''} ${r.name || ''} ${r.desc || ''}`.toLowerCase().includes(ql),
+  )
+}
+
+// The middle pane: a head naming the list with its count (`extra` beside it), the filter box,
+// and the scroller holding the caller's rows (`children`), arrow-key walkable and keeping the
+// active row in view (`inView` is what moves it: the section and the selection). `matched` is
+// how many rows the filter left, so a filter that leaves none says so.
+export function LibList({ label, count, extra, q, onQ, matched, inView, children }) {
+  const rowsRef = useActiveRowInView(inView)
+  return (
+    <section className="lib-list" aria-label={label}>
+      <div className="lib-list-head">
+        <b>
+          {label} <span className="mono dim">{count}</span>
+        </b>
+        {extra}
+      </div>
+      <FilterInput
+        value={q}
+        onChange={onQ}
+        placeholder={`Filter ${label.toLowerCase()}`}
+        label={`Filter ${label}`}
+      />
+      <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
+        {children}
+        {q.trim() && matched === 0 && (
+          <div className="empty" style={{ padding: 32 }}>
+            <div className="big">No matches</div>
+            Nothing in {label.toLowerCase()} matches “{q.trim()}”.
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
 
 // One row in the list pane: a real link, so it opens in a new tab, reads as navigation to
 // assistive tech, and arrow keys can walk the list (walkRows below). `children` are pills

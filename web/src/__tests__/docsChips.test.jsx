@@ -166,6 +166,20 @@ describe('Docs host selector', () => {
     expect(pressed().textContent).toBe('Claude Code')
   })
 
+  // The page first renders behind the boot splash with no overview yet. That render's
+  // 'opencode' default must not be stored as a choice: once the overview arrives the
+  // selector follows the install, and only a click writes the key.
+  it('follows the install once the overview arrives, storing nothing until a click', async () => {
+    const { rerender } = render(<Docs page="clone" overview={null} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
+    expect(pressed().textContent).toBe('OpenCode')
+    rerender(<Docs page="clone" overview={{ emit: 'bob-global' }} />)
+    await waitFor(() => expect(pressed().textContent).toBe('BOB (IBM)'))
+    expect(localStorage.getItem('geneseed-harness')).toBe(null)
+    fireEvent.click(screen.getByRole('button', { name: 'OpenClaude' }))
+    expect(localStorage.getItem('geneseed-harness')).toBe('openclaude')
+  })
+
   it('asks the server for the chosen host', async () => {
     render(<Docs page="clone" overview={{}} />)
     await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))

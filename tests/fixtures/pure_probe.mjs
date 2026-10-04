@@ -45,7 +45,7 @@ import {
   fetchPhases, parseOrigin, countOccurrences, redactUrlCreds,
 } from '../../js/maintain/update.mjs';
 import {
-  sliceSection, slugifyHeading, stripHarnessBlocks,
+  slugifyHeading, stripHarnessBlocks,
 } from '../../js/web/docs.mjs';
 import { webFirstOk } from '../../js/ui/menu.mjs';
 import {
@@ -158,8 +158,6 @@ const FNS = {
   daemon_args: (a) => daemonArgs(a[0], a[1]),
   restart_args: (a) => restartArgs(a[0]),
   slugify_heading: (a) => slugifyHeading(a[0]),
-  // `tuple` on the reference side, a two-element list over JSON.
-  slice_section: (a) => sliceSection(a[0], a[1]),
   strip_harness_blocks: (a) => stripHarnessBlocks(a[0], a[1]),
   setup_summary_lines: (a) => setupSummaryLines(...a),
   // The stdin readers. Their PROMPTS are stdout, which is why the wizard job is compared as

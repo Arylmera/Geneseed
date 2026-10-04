@@ -6,9 +6,6 @@
 // all four. One row per host now; the order is the deploy form's option order.
 //
 //   label         — the name the deploy form's host picker shows
-//   docs          — which Docs family the host belongs to. Bob and OpenClaude emit through
-//                   the Claude engine, so a page tagged `claude` shows to them too
-//                   (js/web/docs.mjs's HOST_FAMILY is the server's copy of this column)
 //   deployAdds    — what a per-repo deploy puts into the folder (the deploy form's note)
 //   removeProject — what `remove` deletes from a per-repo install
 //   removeGlobal  — what `remove` deletes from the global (config-dir) install
@@ -16,7 +13,6 @@ export const HOSTS = [
   {
     id: 'opencode',
     label: 'OpenCode',
-    docs: 'opencode',
     deployAdds: '.opencode/ + AGENT.md',
     removeProject: '.opencode/ + AGENT.md + the bundle',
     removeGlobal:
@@ -25,7 +21,6 @@ export const HOSTS = [
   {
     id: 'claude',
     label: 'Claude Code',
-    docs: 'claude',
     deployAdds: '.claude/ + CLAUDE.md',
     removeProject: '.claude/ + the CLAUDE.md block',
     removeGlobal: "~/.claude's agents/skills + the CLAUDE.md block + settings hooks",
@@ -33,7 +28,6 @@ export const HOSTS = [
   {
     id: 'bob',
     label: 'BOB (IBM)',
-    docs: 'claude',
     deployAdds: '.bob/ + AGENTS.md',
     removeProject: '.bob/ + the AGENTS.md block',
     removeGlobal: "~/.bob's agents/skills + the AGENTS.md block + settings hooks",
@@ -41,7 +35,6 @@ export const HOSTS = [
   {
     id: 'openclaude',
     label: 'OpenClaude',
-    docs: 'claude',
     deployAdds: '.openclaude/ + its CLAUDE.md',
     removeProject: '.openclaude/ + its CLAUDE.md block',
     removeGlobal: "~/.openclaude's agents/skills + the CLAUDE.md block + settings hooks",

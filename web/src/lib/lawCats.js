@@ -1,10 +1,8 @@
 // The constitution's colour vocabulary — one class per invariant, one colour per
-// doctrine pack. Shared, because three taxonomies now paint with it: the Laws
-// ledger's chips and rows, the Journal dashboard's constitution map, and Skills'
-// own SKILL_CATS — a different set of keys and labels over the SAME six hues
-// (CAT_HUES below), which is why the "SKILL_CATS is a fourth, ungated taxonomy
-// copy" README debris bullet was really about the hues never being shared, not
-// about the labels — Skills legitimately needs its own label per class.
+// doctrine pack. Shared, because three taxonomies paint with it: the Laws ledger's chips
+// and rows, the Journal dashboard's constitution map, and the Library's skill classes
+// (SKILL_CATS below) — a different set of keys and labels over the SAME six hues
+// (CAT_HUES), so the skill classes legitimately carry their own labels.
 //
 // SPLIT OUT OF Laws.jsx RATHER THAN IMPORTED FROM IT. The Dashboard ships in the
 // app shell (it is the landing route, App.jsx says why), so a dashboard component

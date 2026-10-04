@@ -99,10 +99,15 @@ export function webState(theme = null, target = null) {
   st.root = st.target;
   st.theme = theme || themeOfDir(st.target) || 'neutral';
   st.emit = installedDefaults().emit || 'opencode-global';
-  st.footprint = footprintOfDir(st.target);      // 'full' when no marker
-  st.posture = postureOfDir(st.target) || 'peer';
-  st.mode = modeOfDir(st.target) || 'direct';
-  st.trust = trustOfDir(st.target) || DEFAULT_PRESET;
+  // The install's sigils, each defaulted when its marker is absent (footprint to 'full').
+  // Read from the ROOT, where every emit writes them.
+  const readMarkers = () => {
+    st.footprint = footprintOfDir(st.root);
+    st.posture = postureOfDir(st.root) || 'peer';
+    st.mode = modeOfDir(st.root) || 'direct';
+    st.trust = trustOfDir(st.root) || DEFAULT_PRESET;
+  };
+  readMarkers();
 
   Object.defineProperty(st, 'inventory', {
     get() {
@@ -156,10 +161,7 @@ export function webState(theme = null, target = null) {
     st.root = root || target;
     st.theme = themeOfDir(st.root) || themeOfDir(st.target) || 'neutral';
     st.emit = st.detectEmit();
-    st.footprint = footprintOfDir(st.root);
-    st.posture = postureOfDir(st.root) || 'peer';
-    st.mode = modeOfDir(st.root) || 'direct';
-    st.trust = trustOfDir(st.root) || DEFAULT_PRESET;
+    readMarkers();
     st._inv = null;
     st._doctor = null;
   };
@@ -168,10 +170,7 @@ export function webState(theme = null, target = null) {
     st._doctor = null;
     st.theme = themeOfDir(st.root) || themeOfDir(st.target) || st.theme;
     st.emit = st.detectEmit() || st.emit;
-    st.footprint = footprintOfDir(st.root);
-    st.posture = postureOfDir(st.root) || 'peer';
-    st.mode = modeOfDir(st.root) || 'direct';
-    st.trust = trustOfDir(st.root) || DEFAULT_PRESET;
+    readMarkers();
   };
   return st;
 }
@@ -800,13 +799,11 @@ export function apiOverview(state) {
     buildEpoch = Math.floor(ms / 1000);
   }
   // Which detected install the current view points at, so the dashboard's footprint hero
-  // can re-emit exactly it. Mirrors `viewCfg`'s rule, spelled out separately here.
+  // can re-emit exactly it.
   let install = null;
   for (const [host, scope, root] of installTargets()) {
-    const data = (scope === 'project' && ['claude', 'bob', 'openclaude'].includes(host))
-      ? path.join(root, HOSTS.find((h) => h.host === host).projectMarker) : root;
     try {
-      if (samePath(data, state.target)) {
+      if (samePath(viewCfg(host, scope, root), state.target)) {
         install = { host, scope, path: root, footprint: footprintOfDir(root) };
         break;
       }

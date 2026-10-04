@@ -3,22 +3,18 @@ import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import ErrorState from '../components/ErrorState.jsx'
 import Loading from '../components/Loading.jsx'
-import FilterInput from '../components/FilterInput.jsx'
 import RingGraph from '../components/RingGraph.jsx'
 import Markdown from '../components/Markdown.jsx'
-import { GroupedRows, walkRows, useActiveRowInView } from '../components/LibRows.jsx'
+import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
 import { humanGate } from '../lib/loopRing.js'
+import { TABS, TAB_LABELS } from '../lib/router.js'
 
 const enc = encodeURIComponent
 
-// The rail's sections, in order; each is a `#/loops/<id>` tab of the router (lib/router.js).
-const SECTIONS = [
-  ['templates', 'Templates'],
-  ['bricks', 'Bricks'],
-  ['active', 'Active'],
-]
+// The rail's sections, in order: the router's `#/loops/<id>` tabs, under their tab labels.
+const SECTIONS = TABS.loops.map((k) => [k, TAB_LABELS[k]])
 // A template's `category` (js/loop/graph.mjs CATEGORIES) -> its list heading, in shelf order;
 // a template without one goes last, under Other. The headings are uppercased by `.lib-group`.
 const CATEGORY = {
@@ -318,7 +314,6 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
     setQ('')
     setCat('all')
   }
-  const rowsRef = useActiveRowInView([tab, item])
 
   const bricks = data?.bricks || []
   const all =
@@ -333,10 +328,8 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
   // categories under it; picking one narrows the list, and the filter narrows within it.
   const cats = groupsOf(rows)
   const pool = cat === 'all' ? rows : rows.filter((r) => r.group === cat)
-  const ql = q.trim().toLowerCase()
-  const shown = ql
-    ? pool.filter((r) => `${r.title || ''} ${r.name} ${r.desc || ''}`.toLowerCase().includes(ql))
-    : pool
+  const ql = q.trim()
+  const shown = filterRows(pool, ql)
   // The routed entry, or the first row (Active: the first live one) so the list and the
   // reader always agree.
   const sel =
@@ -393,46 +386,31 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           </nav>
         </aside>
 
-        <section className="lib-list" aria-label={label}>
-          <div className="lib-list-head">
-            <b>
-              {label}{' '}
-              <span className="mono dim">
-                {ql ? `${shown.length} of ${pool.length}` : all ? pool.length : ''}
-              </span>
-            </b>
-          </div>
-          <FilterInput
-            value={q}
-            onChange={setQ}
-            placeholder={`Filter ${label.toLowerCase()}`}
-            label={`Filter ${label}`}
-          />
-          <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
-            {!all ? (
-              err ? null : (
-                <Loading />
-              )
-            ) : rows.length === 0 ? (
-              <div className="empty" style={{ padding: 32 }}>
-                {EMPTY[tab]}
-              </div>
-            ) : (
-              <GroupedRows
-                rows={shown}
-                activeName={sel?.name}
-                hrefOf={(r) => `#/loops/${tab}/${enc(r.name)}`}
-                pills={PILLS[tab]}
-              />
-            )}
-            {ql && shown.length === 0 && (
-              <div className="empty" style={{ padding: 32 }}>
-                <div className="big">No matches</div>
-                Nothing in {label.toLowerCase()} matches “{q.trim()}”.
-              </div>
-            )}
-          </div>
-        </section>
+        <LibList
+          label={label}
+          count={ql ? `${shown.length} of ${pool.length}` : all ? pool.length : ''}
+          q={q}
+          onQ={setQ}
+          matched={shown.length}
+          inView={[tab, item]}
+        >
+          {!all ? (
+            err ? null : (
+              <Loading />
+            )
+          ) : rows.length === 0 ? (
+            <div className="empty" style={{ padding: 32 }}>
+              {EMPTY[tab]}
+            </div>
+          ) : (
+            <GroupedRows
+              rows={shown}
+              activeName={sel?.name}
+              hrefOf={(r) => `#/loops/${tab}/${enc(r.name)}`}
+              pills={PILLS[tab]}
+            />
+          )}
+        </LibList>
 
         <article className="lib-reader" aria-label="Entry">
           {!sel ? null : tab === 'active' ? (

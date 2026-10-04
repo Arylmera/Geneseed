@@ -433,15 +433,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .lineage-step .ld { color: var(--text-2); font-size: 13px; }
 .lineage-step .ltag { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); margin-top: 2px; }
 
-/* ===================== DOCS TWO-PANE (the old Library grid) =========== */
-.lib { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
-/* The chip-bar above picks the section; the list pane's head just labels it. */
-.lib-head { display: flex; align-items: baseline; gap: 8px; padding: 13px 16px;
-  border-bottom: 1px solid var(--line); }
-.lib-head-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--text-2); }
-.lib-head-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
-  font-variant-numeric: tabular-nums; }
+/* ===================== LIST-PANE ROWS (Library, Loops, Docs) ========= */
 .lib-filter { width: 100%; box-sizing: border-box; background: var(--surface);
   color: var(--text); border: 0; border-bottom: 1px solid var(--line);
   padding: 10px 16px; font-family: var(--font-mono); font-size: 12px; }
@@ -663,7 +655,6 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 
 @media (max-width: 1180px) {
   .hero { grid-template-columns: 1fr; }
-  .lib { grid-template-columns: 1fr; }
 }
 
 /* ============================ LIGHT MODE ============================== */
@@ -698,7 +689,6 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   opacity: .7;
 }
 .app.light .atmos::after { opacity: .015; }
-.app.light .rail { background: linear-gradient(180deg, #FBFDFA, #F3F6F2); }
 .app.light .topbar { background: color-mix(in srgb, var(--bg) 82%, transparent); }
 .app.light .card { background: linear-gradient(180deg, #FBFDFC, var(--surface-2)); }
 .app.light .sprout { filter: none; }
@@ -2135,8 +2125,6 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
    Wherever a .glide is present the per-item highlight stands down, so a container
    without one keeps its old look untouched. Positioned at 0,0 and moved by transform. */
 .glide { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; opacity: 0; }
-.rail > .glide { border-radius: var(--r-sm);
-  background: linear-gradient(90deg, var(--accent-soft), transparent 88%); }
 
 .seg:has(> .glide) { position: relative; }
 .seg > .glide { background: var(--accent); border-radius: 5px; }
