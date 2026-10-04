@@ -1,10 +1,11 @@
 {
-  "name": "feature",
-  "description": "Plan the feature into ordered iterations, then build each one: apply, test, and review, until the plan is complete — and an independent done-check maps every requirement to a passing test before the loop closes.",
-  "nodes": ["plan", "identify", "apply", "test", "review", "done-check"],
-  "start": "plan",
+  "name": "spec-first-feature",
+  "description": "Write the feature's spec first — specs/<slug>/spec.md with EARS acceptance criteria and an ordered task list — for the user to review (open questions wait for the user's answers), commit it, then build one task per iteration: apply, test, review. identify's done is verified by an independent done-check that maps every criterion to a passing test.",
+  "nodes": ["spec", "identify", "apply", "test", "review", "done-check"],
+  "start": "spec",
   "edges": [
-    { "from": "plan", "on": "pass", "to": "identify" },
+    { "from": "spec", "on": "pass", "to": "identify" },
+    { "from": "spec", "on": "fail", "to": "$stop" },
     { "from": "identify", "on": "more", "to": "apply" },
     { "from": "identify", "on": "done", "to": "done-check" },
     { "from": "apply", "on": "pass", "to": "test" },

@@ -5,7 +5,8 @@
 **Trigger:** the user asks to run a loop, or to work a requirement in small validated
 iterations, each one committed on its own; or names a loop template (`bugfix`, `refactor`,
 `feature`, `tdd`, `legacy-tests`, `legacy-refactor`, `deps-upgrade`, `ci-repair`,
-`architecture-decision`, `enforce-architecture-rule`, `update-contract`).
+`architecture-decision`, `enforce-architecture-rule`, `update-contract`, `spec-first-feature`,
+`api-endpoint`, `remove-dead-code`, `fix-flaky-tests`).
 
 Default trust preset: **{{TRUST_LABEL}}**
 

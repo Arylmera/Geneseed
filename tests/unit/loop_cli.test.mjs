@@ -34,13 +34,13 @@ test('check over the shipped catalogue is clean, and lists templates and bricks'
     assert.equal(r.code, 0);
     assert.equal(r.out.ok, true);
     assert.deepEqual(r.out.problems, []);
-    assert.deepEqual(r.out.templates, ['architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd', 'update-contract']);
+    assert.deepEqual(r.out.templates, ['api-endpoint', 'architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'fix-flaky-tests', 'legacy-refactor', 'legacy-tests', 'refactor', 'remove-dead-code', 'spec-first-feature', 'tdd', 'update-contract']);
     assert.deepEqual(r.out.overridden, []);
     assert.deepEqual(r.out.bricks.map((b) => b.name), [
       'adr-challenge', 'adr-draft', 'apply', 'baseline-green', 'bruno-test', 'characterize', 'ci-fix',
-      'ci-triage', 'compat-check', 'deps-audit', 'docs-update', 'fitness-define', 'identify', 'lint',
-      'migration-plan', 'mutation-check', 'plan', 'red-test', 'reproduce', 'review', 'security-scan',
-      'test', 'upgrade-scout',
+      'ci-triage', 'compat-check', 'deps-audit', 'docs-update', 'done-check', 'fitness-define',
+      'flake-check', 'flake-repro', 'identify', 'lint', 'migration-plan', 'mutation-check', 'plan',
+      'red-test', 'reproduce', 'review', 'security-scan', 'spec', 'test', 'upgrade-scout',
     ]);
     assert.deepEqual(r.out.bricks[2], {
       name: 'apply', description: "Implement the current card's intent, touching only its declared write set.",

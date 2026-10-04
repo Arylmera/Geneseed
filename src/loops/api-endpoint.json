@@ -1,0 +1,26 @@
+{
+  "name": "api-endpoint",
+  "description": "Build an HTTP API feature (a Spring MVC controller, say) one endpoint change per iteration: plan, apply, test, write or update the endpoint's Bruno request, run a security review, and review. The card's write set names the .bru requests too. An OpenAPI spec change blocks for a human by default; LOOP.md's contracts can be trimmed.",
+  "nodes": ["plan", "identify", "apply", "test", "bruno-test", "security-scan", "review"],
+  "start": "plan",
+  "edges": [
+    { "from": "plan", "on": "pass", "to": "identify" },
+    { "from": "identify", "on": "more", "to": "apply" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "test" },
+    { "from": "test", "on": "pass", "to": "bruno-test" },
+    { "from": "test", "on": "fail", "to": "apply" },
+    { "from": "bruno-test", "on": "pass", "to": "security-scan" },
+    { "from": "bruno-test", "on": "fail", "to": "$stop" },
+    { "from": "security-scan", "on": "pass", "to": "review" },
+    { "from": "security-scan", "on": "fail", "to": "apply" },
+    { "from": "review", "on": "pass", "to": "identify" },
+    { "from": "review", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "apply", "test", "bruno-test", "security-scan", "review"], "max": 20, "iteration": true },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "review-fix", "nodes": ["apply", "test", "bruno-test", "security-scan", "review"], "max": 3 }
+  ],
+  "contracts": ["**/openapi*.yaml", "**/openapi*.yml", "**/openapi*.json", "**/swagger*.yaml", "**/swagger*.yml", "**/swagger*.json"]
+}

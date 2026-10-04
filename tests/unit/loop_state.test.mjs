@@ -725,3 +725,39 @@ test('G6: a graph\'s ignoreDeletions keeps a lockfile\'s deletions out of the co
   scoreDeclared(s); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
   assert.equal(scoreDiff(s, [file('package-lock.json', 900)]).commit, true);
 });
+
+// done-check verifies identify's `done` (feature, spec-first-feature): `fail` goes back to the
+// head as a read-only unit — no commit, one iteration spent, its note kept for identify; `pass`
+// closes the loop.
+test('feature: identify done is verified by done-check; fail costs one iteration, pass closes', () => {
+  const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  const s = initState({ title: 't', requirement: 'r', graph: templates.get('feature') });
+  recordOutcome(s, bricks, 'pass');                                                 // plan
+  assert.equal(s.iteration, 1);
+  assert.deepEqual(recordOutcome(s, bricks, 'done'), { node: 'done-check' });
+  assert.deepEqual(recordOutcome(s, bricks, 'fail', { note: '/tmp/unmet.txt' }), { node: 'identify' });
+  assert.equal(s.iteration, 2);
+  assert.deepEqual(s.history, []);
+  assert.deepEqual(s.notes, ['iteration 1 (done-check): /tmp/unmet.txt']);
+  recordOutcome(s, bricks, 'done');
+  assert.deepEqual(recordOutcome(s, bricks, 'pass'), { done: true });
+  assert.equal(s.status, 'done');
+});
+
+// spec-first-feature's spec is a human gate on both outcomes: a `fail` (open questions) waits so
+// the user can answer them with `amend`; the spec that passes is committed as iteration 0.
+test('spec-first-feature: the spec gate holds fail for answers, then commits the passed spec', () => {
+  const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  const s = initState({ title: 't', requirement: 'r', graph: templates.get('spec-first-feature') });
+  scoreDeclared(s, { actions: ['new-file'], writeSet: ['specs/x/spec.md'] });
+  assert.deepEqual(recordOutcome(s, bricks, 'fail', { note: '/tmp/q.txt' }).awaiting,
+    { kind: 'gate', node: 'spec', outcome: 'fail', note: '/tmp/q.txt' });
+  assert.deepEqual(decideAwaiting(s, bricks, 'amend', 'EUR only'), { resumed: true });
+  assert.equal(s.node, 'spec');
+  assert.equal(recordOutcome(s, bricks, 'pass').awaiting.kind, 'gate');
+  assert.deepEqual(decideAwaiting(s, bricks, 'ok'), { verify: true });
+  const r = scoreDiff(s, [file('specs/x/spec.md')]);
+  assert.equal(r.commit, true);
+  assert.match(r.trailers, /\nLoop-Gates: spec$/);
+  assert.equal(s.node, 'identify');
+});

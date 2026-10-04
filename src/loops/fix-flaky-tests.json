@@ -1,0 +1,25 @@
+{
+  "name": "fix-flaky-tests",
+  "description": "Confirm the suspected flaky tests by 20 repeated runs, then fix one per iteration at its root cause — shared state, ordering, time, concurrency — never with a retry, a sleep or a longer timeout; re-confirm it with 20 runs, test, and review. A test that fails every run is a bug for bugfix; one that never fails is not fixed.",
+  "nodes": ["flake-repro", "identify", "apply", "flake-check", "test", "review"],
+  "start": "flake-repro",
+  "edges": [
+    { "from": "flake-repro", "on": "flaky", "to": "identify" },
+    { "from": "flake-repro", "on": "stable", "to": "$stop" },
+    { "from": "flake-repro", "on": "broken", "to": "$stop" },
+    { "from": "identify", "on": "more", "to": "apply" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "flake-check" },
+    { "from": "flake-check", "on": "stable", "to": "test" },
+    { "from": "flake-check", "on": "flaky", "to": "apply" },
+    { "from": "test", "on": "pass", "to": "review" },
+    { "from": "test", "on": "fail", "to": "apply" },
+    { "from": "review", "on": "pass", "to": "identify" },
+    { "from": "review", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "apply", "flake-check", "test", "review"], "max": 10, "iteration": true },
+    { "name": "stabilise", "nodes": ["apply", "flake-check"], "max": 4 },
+    { "name": "review-fix", "nodes": ["apply", "flake-check", "test", "review"], "max": 3 }
+  ]
+}

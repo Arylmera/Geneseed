@@ -114,10 +114,10 @@ test('catalogProblems runs checkGraph over every template and prefixes it', () =
 // ---------------------------------------------------------------------------------------------
 // The shipped catalogue — the real `src/bricks` and `src/loops` this package ships.
 
-test('the shipped catalogue is clean and carries exactly the eleven shipped templates', () => {
+test('the shipped catalogue is clean and carries exactly the fifteen shipped templates', () => {
   assert.deepEqual(catalogProblems({ projectRoot: null, globalLevel: false }), []);
   const { templates } = loadCatalog({ projectRoot: null, globalLevel: false });
-  assert.deepEqual([...templates.keys()].sort(), ['architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd', 'update-contract']);
+  assert.deepEqual([...templates.keys()].sort(), ['api-endpoint', 'architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'fix-flaky-tests', 'legacy-refactor', 'legacy-tests', 'refactor', 'remove-dead-code', 'spec-first-feature', 'tdd', 'update-contract']);
 });
 
 test('globalLevel: false ignores a global brick entirely', () => {
