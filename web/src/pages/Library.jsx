@@ -9,7 +9,7 @@ import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import { GroupedRows, walkRows, useActiveRowInView } from '../components/LibRows.jsx'
-import ClassChips from '../components/ClassChips.jsx'
+import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
@@ -53,7 +53,7 @@ const enc = encodeURIComponent
 // no kinds column) and `base` (the tab's own address, `#/personal/memory`), so an entry
 // opened there stays on the Personal page.
 // Skills in class order, each row tagged with its class and the header it sits under, plus
-// the classes present with their counts (the chips). Exported for the test that pins it.
+// the classes present with their counts (the rail's categories). Exported for the test that pins it.
 export function splitSkills(items) {
   const catOf = (it) => (SKILL_CATS[it.klass] ? it.klass : 'personal')
   const rows = SKILL_CAT_ORDER.flatMap((k) =>
@@ -74,7 +74,7 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   const confirm = useConfirm()
   const [sec, setSec] = useState(() => resolveSec(section, lock))
   const [q, setQ] = useState('')
-  // The skill class chip ('all' or a SKILL_CATS key). Skills only; reset with the kind.
+  // The skill class picked under Skills in the rail ('all' or a SKILL_CATS key). Skills only; reset with the kind.
   const [cat, setCat] = useState('all')
   // A failed memory action (promote, forget), shown in the page's error slot until the
   // next one.
@@ -127,8 +127,9 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   const counts = overview?.counts || {}
 
   // Skills are divided by class, as the old Skills page did: listed class by class under a
-  // header, with a chip per class to narrow to one. A skill the registry does not know is
-  // yours (`personal`), outside the taxonomy, so it gets its own chip only when one exists.
+  // header, with a category per class under Skills in the rail to narrow to one. A skill the
+  // registry does not know is yours (`personal`), outside the taxonomy, so it gets its own
+  // category only when one exists.
   const pool = isSkills ? skillSplit.rows.filter((it) => cat === 'all' || it.cat === cat) : items
 
   // Render-cap the list so a big kind (a wiki vault is the case that bites) doesn't paint
@@ -141,7 +142,7 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
         `${it.title || ''} ${it.name || ''} ${it.desc || ''}`.toLowerCase().includes(ql),
       )
     : pool.slice(0, CAP)
-  // A class chip narrows on purpose, so it does not pull the active entry back in.
+  // A class category narrows on purpose, so it does not pull the active entry back in.
   const shown =
     !ql && cat === 'all' && activeName && !matches.some((it) => it.name === activeName)
       ? [...matches, ...items.filter((it) => it.name === activeName)]
@@ -207,20 +208,7 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   return (
     <>
       {err ? <ErrorState error={err} style={{ margin: '0 0 12px' }} /> : null}
-      <div
-        className={`library${lock ? ' locked' : ''}${isSkills && skillSplit.cats.length > 1 ? ' has-banner' : ''}`}
-      >
-        {isSkills && (
-          // Skill types as a banner across the whole card: the classes are the first way to
-          // cut 50-odd skills, so they get the width, not a wrapped corner of the list column.
-          <ClassChips
-            label="Skill types"
-            total={items.length}
-            cats={skillSplit.cats}
-            cat={cat}
-            onChange={setCat}
-          />
-        )}
+      <div className={`library${lock ? ' locked' : ''}`}>
         {lock ? null : (
           <aside className="lib-kinds" aria-label="Library kinds">
             <div className="lib-title">
@@ -234,15 +222,27 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
             </div>
             <nav className="kind-list" aria-label="Kinds">
               {LIBRARY_ORDER.map((k) => (
-                <a
-                  key={k}
-                  href={`#/section/${k}`}
-                  className={sec === k ? 'on' : ''}
-                  aria-current={sec === k ? 'page' : undefined}
-                >
-                  {SECTIONS[k].label}
-                  <span className="mono dim">{counts[k] ?? ''}</span>
-                </a>
+                <React.Fragment key={k}>
+                  <a
+                    href={`#/section/${k}`}
+                    className={sec === k ? 'on' : ''}
+                    aria-current={sec === k ? 'page' : undefined}
+                  >
+                    {SECTIONS[k].label}
+                    <span className="mono dim">{counts[k] ?? ''}</span>
+                  </a>
+                  {/* The skill classes, nested under Skills while it is the selected kind:
+                    they cut this kind's list only, so they sit with it, not across the card. */}
+                  {k === sec && isSkills && (
+                    <RailCats
+                      label="Skill types"
+                      total={items.length}
+                      cats={skillSplit.cats}
+                      cat={cat}
+                      onChange={setCat}
+                    />
+                  )}
+                </React.Fragment>
               ))}
             </nav>
           </aside>

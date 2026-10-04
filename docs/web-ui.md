@@ -139,13 +139,17 @@ streams the output of background jobs and keeps their history across reloads.
   the fingerprint it loaded — if an agent session changed the file first, your edit stays
   on screen and a second Save replaces the newer version.
 - **Skills** (`#/skills`) and **Agents** (`#/agents`) — the deployed catalogue, each entry
-  with its purpose line and full spec.
+  with its purpose line and full spec. While Skills is selected, its skill types sit nested
+  under it in the rail, each with its count, above a thin bar of their shares; pick one to
+  narrow the list.
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
   reference (generated from the harness argument parser), and a glossary, in the Library's
   three panes: the parts (Understand / Guides / Concepts / Reference) with their page counts,
-  the part's pages under their sections with a filter, and the page with its breadcrumb,
+  the open part's sections nested under it in the rail (pick one to narrow the list), the
+  part's pages under their sections with a filter, and the page with its breadcrumb,
   outline and Previous / Next within the section. Filtered for one host (OpenCode, Claude
-  Code, Bob or OpenClaude; Claude-family pages show to all three Claude-engine hosts); with no
+  Code, Bob or OpenClaude; Claude-family pages show to all three Claude-engine hosts, a page
+  tagged with a list of hosts only to those); with no
   choice stored it follows the deployed install.
 
 ### 🩺 Care

@@ -7,7 +7,7 @@ import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import FilterInput from '../../components/FilterInput.jsx'
 import { GroupedRows, walkRows, useActiveRowInView } from '../../components/LibRows.jsx'
-import ClassChips from '../../components/ClassChips.jsx'
+import RailCats from '../../components/RailCats.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
 import CliPage from './CliPage.jsx'
 import Glossary from './Glossary.jsx'
@@ -77,7 +77,7 @@ export function filterRows(rows, q) {
   return rows.filter((r) => `${r.title} ${r.name} ${r.desc}`.toLowerCase().includes(ql))
 }
 
-// The part's sections as chips (ClassChips), in the order docRows already groups them —
+// The part's sections as the rail's categories under it (RailCats), in the order docRows already groups them —
 // first appearance in the page list, same as the `● SECTION` headings above the list.
 // Exported for the test that pins it.
 export function partSections(rows) {
@@ -149,7 +149,7 @@ export default function Docs({ page, overview, onAction }) {
   }, [onTrack, pageData, pageId])
   const seen = onTrack ? [...readSeen(), pageId] : []
 
-  // Filter text and the section chip both belong to one part: drop them when the open
+  // Filter text and the picked section both belong to one part: drop them when the open
   // page moves to another.
   const [q, setQ] = useState('')
   const [sec, setSec] = useState('all')
@@ -191,15 +191,26 @@ export default function Docs({ page, overview, onAction }) {
           </Seg>
           <nav className="kind-list" aria-label="Parts">
             {(menu?.groups || []).map((g) => (
-              <a
-                key={g.id}
-                href={g.pages[0] ? docHref(g.pages[0].id) : '#/docs'}
-                className={part?.id === g.id ? 'on' : ''}
-                aria-current={part?.id === g.id ? 'page' : undefined}
-              >
-                {g.label}
-                <span className="mono dim">{g.pages.length}</span>
-              </a>
+              <React.Fragment key={g.id}>
+                <a
+                  href={g.pages[0] ? docHref(g.pages[0].id) : '#/docs'}
+                  className={part?.id === g.id ? 'on' : ''}
+                  aria-current={part?.id === g.id ? 'page' : undefined}
+                >
+                  {g.label}
+                  <span className="mono dim">{g.pages.length}</span>
+                </a>
+                {/* The open part's sections, nested under it: they cut this part's list. */}
+                {part?.id === g.id && (
+                  <RailCats
+                    label="Sections"
+                    total={rows.length}
+                    cats={cats}
+                    cat={sec}
+                    onChange={setSec}
+                  />
+                )}
+              </React.Fragment>
             ))}
           </nav>
         </aside>
@@ -214,13 +225,6 @@ export default function Docs({ page, overview, onAction }) {
             </b>
             {onTrack && <TrackProgress pages={part.pages} seen={seen} />}
           </div>
-          <ClassChips
-            label="Sections"
-            total={rows.length}
-            cats={cats}
-            cat={sec}
-            onChange={setSec}
-          />
           <FilterInput
             value={q}
             onChange={setQ}

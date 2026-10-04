@@ -2,10 +2,11 @@ import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// The section chip row above a part's list (ClassChips, shared with the Library's skill
-// classes): "All" plus one chip per section with its page count, narrowing the list to one
-// section. Markup/classes/ARIA come from components/ClassChips.jsx; see library.test.jsx
-// for the Library side of the same component.
+// The open part's sections, nested under it in the rail (RailCats, shared with the Library's
+// skill classes): "All" plus one row per section with its page count, narrowing the list to
+// one section. Only the open part carries them; a part of one section carries none.
+// Markup/classes/ARIA come from components/RailCats.jsx; see library.test.jsx for the
+// Library side of the same component.
 vi.mock('../api/index.js', () => ({ api: { docs: vi.fn(), docsPage: vi.fn() } }))
 vi.mock('../lib/router.js', () => ({ go: vi.fn() }))
 
@@ -49,13 +50,53 @@ afterEach(() => vi.clearAllMocks())
 
 const texts = (sel) => [...document.querySelectorAll(sel)].map((n) => n.textContent)
 const chipNames = () =>
-  [...document.querySelectorAll('.skill-cat')].map((b) => b.textContent.replace(/\s+/g, ' '))
+  [...document.querySelectorAll('.rail-cats button')].map((b) =>
+    [...b.querySelectorAll('span:not(.cdot)')].map((x) => x.textContent).join(' '),
+  )
 
-describe('Docs section chips', () => {
+describe('Docs sections in the rail', () => {
   it('shows All and each section of the part, with their counts', async () => {
     render(<Docs page="clone" overview={{}} />)
     await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
     expect(chipNames()).toEqual(['All 3', 'Install 2', 'General 1'])
+  })
+
+  it('nests them under the open part only, after its link in Tab order', async () => {
+    render(<Docs page="clone" overview={{}} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
+    const nav = screen.getByRole('navigation', { name: 'Parts' })
+    expect(nav.querySelectorAll('.rail-cats').length).toBe(1)
+    const list = screen.getByRole('list', { name: 'Sections' })
+    // The tab stops in document order: Guides, its three sections, then Concepts.
+    const stops = [...nav.querySelectorAll('a, button')].map((n) =>
+      n.tagName === 'A' ? n.firstChild.textContent : n.querySelector('.rc-name').textContent,
+    )
+    expect(stops).toEqual(['Guides', 'All', 'Install', 'General', 'Concepts'])
+    expect(nav.querySelector('a[aria-current="page"]').nextElementSibling).toBe(list.parentElement)
+  })
+
+  it('shows none for a part of a single section', async () => {
+    api.docs.mockResolvedValue({
+      ...MENU,
+      groups: [
+        MENU.groups[0],
+        {
+          id: 'ref',
+          label: 'Reference',
+          pages: [{ id: 'r', title: 'R', kind: 'concept', section: 'Only' }],
+        },
+      ],
+    })
+    render(<Docs page="r" overview={{}} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name')).toEqual(['R']))
+    expect(document.querySelector('.rail-cats')).toBeNull()
+  })
+
+  it('sizes the share bar by each section page count', async () => {
+    render(<Docs page="clone" overview={{}} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
+    const segs = [...document.querySelectorAll('.rail-mix span')]
+    expect(segs.map((s) => s.style.flexGrow)).toEqual(['2', '1'])
   })
 
   it('narrows the list to the clicked section', async () => {

@@ -154,7 +154,8 @@ describe('Library', () => {
 })
 
 // Skills are divided by class, as the old Skills page was: listed class by class in the
-// SKILL_CATS order under a header, with a chip per class present. A klass the registry does
+// SKILL_CATS order under a header, with a category per class present nested under Skills in
+// the rail. A klass the registry does
 // not know lands in `personal`, outside the taxonomy.
 describe('skill classes', () => {
   const SKILLS = [
@@ -182,16 +183,30 @@ describe('skill classes', () => {
     ])
   })
 
-  it('heads the list by class and narrows to one class with its chip', async () => {
+  const railNames = () =>
+    [...document.querySelectorAll('.rail-cats button')].map((b) =>
+      [...b.querySelectorAll('span:not(.cdot)')].map((x) => x.textContent).join(' '),
+    )
+
+  it('heads the list by class and narrows to one class from the rail', async () => {
     api.catalog.mockImplementation((section) =>
       Promise.resolve({ section, items: section === 'skills' ? SKILLS : [] }),
     )
     render(<Library section="skills" overview={overview({ skills: 5 })} />)
-    await waitFor(() => expect(document.querySelector('.skill-cats')).toBeTruthy())
-    // The types are a banner across the whole card, not a corner of the list column.
-    const banner = document.querySelector('.skill-banner')
-    expect(banner.parentElement.classList.contains('library')).toBe(true)
-    expect(banner.closest('.lib-list')).toBeNull()
+    await waitFor(() => expect(document.querySelector('.rail-cats')).toBeTruthy())
+    // The types sit in the rail, right after Skills, and nowhere else: no banner over the card.
+    const nav = screen.getByRole('navigation', { name: 'Kinds' })
+    const list = screen.getByRole('list', { name: 'Skill types' })
+    expect(nav.querySelector('a[aria-current="page"]').nextElementSibling).toBe(list.parentElement)
+    expect(document.querySelectorAll('.rail-cats').length).toBe(1)
+    expect(railNames()).toEqual(['All 5', 'Design 1', 'Build 2', 'Ship 1', 'Personal 1'])
+    // The share bar: one segment per class, grown by its count.
+    expect([...document.querySelectorAll('.rail-mix span')].map((s) => s.style.flexGrow)).toEqual([
+      '1',
+      '2',
+      '1',
+      '1',
+    ])
     expect([...document.querySelectorAll('.lib-group')].map((g) => g.textContent)).toEqual([
       'Design',
       'Build',
@@ -199,11 +214,33 @@ describe('skill classes', () => {
       'Personal',
     ])
     fireEvent.click(screen.getByRole('button', { name: /^Build/ }))
+    expect(screen.getByRole('button', { name: /^Build/ }).getAttribute('aria-pressed')).toBe('true')
     expect([...document.querySelectorAll('.lib-row')].length).toBe(2)
     expect([...document.querySelectorAll('.lib-group')].map((g) => g.textContent)).toEqual([
       'Build',
     ])
     fireEvent.click(screen.getByRole('button', { name: /^All/ }))
     expect([...document.querySelectorAll('.lib-row')].length).toBe(5)
+  })
+
+  it('shows no categories under another kind, and resets to All on the way back', async () => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items: section === 'skills' ? SKILLS : [{ name: 'tester', title: 'Tester' }],
+      }),
+    )
+    const { rerender } = render(<Library section="skills" overview={overview({ skills: 5 })} />)
+    await waitFor(() => expect(document.querySelector('.rail-cats')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /^Ship/ }))
+    expect([...document.querySelectorAll('.lib-row')].length).toBe(1)
+
+    rerender(<Library section="agents" overview={overview({ skills: 5 })} />)
+    await waitFor(() => expect(screen.getAllByText('Tester').length).toBeGreaterThan(0))
+    expect(document.querySelector('.rail-cats')).toBeNull()
+
+    rerender(<Library section="skills" overview={overview({ skills: 5 })} />)
+    await waitFor(() => expect([...document.querySelectorAll('.lib-row')].length).toBe(5))
+    expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
   })
 })
