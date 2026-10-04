@@ -32,7 +32,9 @@ that…".
    <4-10 lines of direct instructions, ending with exactly how to choose among the outcomes>
    ```
 
-   No double-brace tokens in the body: the loop hands it to the model raw.
+   No double-brace tokens in the body: the loop hands it to the model raw. If the brick finds
+   something the next brick needs, have it write that to a file in the OS temp directory and
+   report the path with the outcome — the loop skill records it as a note.
 3. **Overriding by name** — a project or global brick named like a shipped one replaces it in
    every template. That is allowed; say so to the user. `geneseed loop check` lists overrides under `overridden`.
 4. **Check it:** `geneseed loop check --brick <path>` (this file alone), then

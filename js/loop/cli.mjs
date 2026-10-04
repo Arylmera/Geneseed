@@ -134,9 +134,24 @@ const ACTIONS = {
   },
   record(args) {
     if (!args.outcome) throw new Error('record needs --outcome');
+    if (args.note && args.noteFile) throw new Error('record takes --note or --note-file, not both');
+    let note = args.note ?? '';
+    if (args.noteFile) {
+      // A note too long for a shell argument, or one that mentions `git … commit`/`push` (and
+      // would otherwise sit inside the command line GIT_GATE_RE matches whole), goes through a
+      // file instead — never through the shell at all. CRLF-folded and trimmed the same way the
+      // porcelain stdin below is, so a Windows-authored file round-trips identically.
+      let raw;
+      try { raw = readText(path.resolve(args.noteFile)); } catch (e) {
+        throw new Error(`cannot read --note-file ${args.noteFile}: ${e.message}`, { cause: e });
+      }
+      note = raw.replace(/\r\n/g, '\n').trimEnd();
+    }
     const card = args.card ? JSON.parse(args.card) : null;
-    const raw = stdin();
-    return withState((s, b) => recordOutcome(s, b, args.outcome, { card, porcelain: raw ? raw.replace(/\r\n/g, '\n').trimEnd() : null }));
+    const porcelain = stdin();
+    return withState((s, b) => recordOutcome(s, b, args.outcome, {
+      card, porcelain: porcelain ? porcelain.replace(/\r\n/g, '\n').trimEnd() : null, note,
+    }));
   },
   decide(args) {
     // X6: same ordering as `score --diff` above.

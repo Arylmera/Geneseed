@@ -1,0 +1,25 @@
+{
+  "name": "legacy-refactor",
+  "description": "Confirm the suite is green, pin the code's current behaviour with characterization tests in their own commit, then refactor behind that net: apply, test, and review, until the requirement is met.",
+  "nodes": ["baseline-green", "characterize", "identify", "apply", "test", "review"],
+  "start": "baseline-green",
+  "edges": [
+    { "from": "baseline-green", "on": "pass", "to": "characterize" },
+    { "from": "baseline-green", "on": "fail", "to": "$stop" },
+    { "from": "characterize", "on": "pass", "to": "identify" },
+    { "from": "characterize", "on": "fail", "to": "$stop" },
+    { "from": "identify", "on": "more", "to": "apply" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "test" },
+    { "from": "test", "on": "pass", "to": "review" },
+    { "from": "test", "on": "fail", "to": "apply" },
+    { "from": "review", "on": "pass", "to": "identify" },
+    { "from": "review", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "apply", "test", "review"], "max": 20, "iteration": true },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "review-fix", "nodes": ["apply", "test", "review"], "max": 3 }
+  ],
+  "weights": { "logic": 0.6 }
+}

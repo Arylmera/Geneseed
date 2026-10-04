@@ -22,10 +22,11 @@ report. One cycle through the graph back to its head is an **iteration**; the gr
 array names every cycle that is allowed to exist, each with a `max` number of times a node inside
 it may be re-entered. Picture it as rings: the outer ring is the iteration itself (plan, apply,
 test, review, back to plan), and inner rings sit inside it for retries (apply failed its test, try
-`apply` again without going all the way back around). The three shipped templates —
-`bugfix`, `feature`, `refactor` — all nest a short `apply`↔`test` retry ring inside the iteration
-ring, and `bugfix` and `feature` nest a second, wider `apply`↔`test`↔`review` ring
-(`review-fix`) around that.
+`apply` again without going all the way back around). The shipped templates that center on
+`apply` — `bugfix`, `feature`, `refactor`, `tdd`, `legacy-refactor`, `deps-upgrade` — all nest a
+short `apply`↔`test` retry ring inside the iteration ring, and most nest a second, wider
+`review-fix` ring around that. `legacy-tests` and `ci-repair` have no `apply` at all: the first
+only ever writes tests, the second repairs CI directly through `ci-fix`.
 
 Work closes into a commit whenever the graph re-enters the iteration loop's head — so any setup
 work before the loop starts (reproducing a bug, say) is its own unit, numbered iteration 0, kept
@@ -42,13 +43,59 @@ all gets exactly 1 — no re-entry — which is also why **every cycle inside an
 named inner loop** in the graph JSON: `geneseed loop check` (and `loop init`, which runs the same
 check) refuses a graph with an undeclared cycle inside an iteration, before a single node runs.
 
+## The shipped templates
+
+| template | purpose | when to use |
+|---|---|---|
+| `bugfix` | reproduce, fix, test, review a defect | a reported bug with a reproduction step |
+| `feature` | plan, then build and review in small iterations | new behaviour with no existing test pinning it |
+| `refactor` | restructure behind the existing tests, no behaviour change | the tests already cover the code you're moving |
+| `tdd` | plan, then write each failing test before the code that passes it | you want the test written first, every iteration |
+| `legacy-tests` | pin undocumented behaviour with characterization tests, mutation-checked, production code untouched | code with no tests and no spec, before anyone risks changing it |
+| `legacy-refactor` | pin current behaviour once with characterization tests, then refactor behind that net | the refactor target has no tests yet but will get changed |
+| `deps-upgrade` | upgrade one package or group per iteration: read breaking changes, bump, adapt, audit | a dependency bump that needs to land as reviewable steps, not one big diff |
+| `ci-repair` | triage failing CI checks for the current commit and fix one code failure per iteration | a red CI run on a `loop/*` branch that needs to go green |
+
+`legacy-tests` and `legacy-refactor` both open on `baseline-green` — the suite must already be
+green before either template pins anything, and `baseline-green` reporting `fail` stops the loop
+rather than characterizing a change no one can tell from existing breakage.
+
+`mutation-check`, inside `legacy-tests`, needs a mutation tool on the stack (Stryker, PIT, mutmut,
+cargo-mutants) to prove the new characterization tests actually bite. With none configured it
+reports `unavailable` rather than a silent `pass` — and still writes a note saying what it checked,
+so the gap is visible in `LOOP.md` rather than just absent from it.
+
+`ci-repair` needs CI to actually run on `loop/*` branches; `ci-triage` keys off the HEAD commit's
+checks (`gh run list --commit`), and with no run for that commit it reports `done` with a note
+rather than treating a branch CI never touched as green.
+
+`deps-upgrade` lowers its `delete` weight from the default 0.8 to 0.4, because a lockfile
+regenerating under a bump deletes and re-adds hundreds of lines with no risk in them — at the
+default weight that churn alone would push every iteration to a blocking score. The trade-off is
+a real deletion elsewhere in the same diff (a dropped file, a removed API) scores lower than it
+would under `bugfix` or `feature`; `deps-upgrade` leans on `review` and `deps-audit` to catch what
+the lowered weight no longer flags on its own.
+
+## Notes: what survives an iteration
+
+A `read` brick can find something worth keeping — a plan, a review finding, a mutation gap, a
+classified CI failure — that the next brick needs but the outcome string alone can't carry.
+`geneseed loop record --note "<text>"` (or `--note-file <path>` for anything multi-line or that
+mentions `git commit`/`push`, which a shell argument can't carry safely) appends it to `LOOP.md`'s
+notes, so it survives into the next node and the next iteration instead of evaporating with the
+brick's own context. The brick never records a note itself — a brick only ever reports its
+outcome, plus the path to a file it wrote; the loop skill records it with `--note-file` on the
+brick's behalf. This applies to `plan` and `review` as much as to the newer bricks: any `read`
+brick whose finding the next brick needs writes it to a file in the OS temp directory and reports
+that file's path with the outcome.
+
 ## Bricks, templates, and the three origins
 
 A **brick** is a markdown file: YAML-ish frontmatter (`name`, `description`, `effect` — `read` or
 `mutate` — exactly one of `agent` or `skill`, and `outcomes`) plus a 4-10 line prose body. The
 model never sees the file; `geneseed loop next` hands it the body as the prompt. A **loop
-template** (`bugfix`, `feature`, `refactor`, or one composed by hand) is the graph JSON that wires
-bricks together.
+template** — a shipped template (see the table above) or one composed by hand — is the graph JSON
+that wires bricks together.
 
 Both are looked up across three origins, each able to override the one before it **by name**:
 
@@ -145,7 +192,7 @@ merges for you.
 | `init` | writes a fresh `LOOP.md` from a template or graph file, under a title, requirement and trust preset |
 | `next` | the only driver of the cycle — returns the next thing to do: run a node, score a card, answer an `awaiting`, or a terminal |
 | `score` | scores a declared card (`--declared`) before a mutate node runs, or the real diff (`--diff`, numstat piped on stdin) before a commit |
-| `record` | records a brick's reported outcome and advances the graph |
+| `record` | records a brick's reported outcome and advances the graph; `--note` or `--note-file <path>` carries a finding (a read brick's plan or review findings) into `LOOP.md`'s notes so it survives the unit |
 | `decide` | answers an `awaiting` validation with a verdict and a note |
 
 Run `geneseed loop --help` for the full flag list.

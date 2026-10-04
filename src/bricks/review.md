@@ -15,3 +15,5 @@ Report `pass` if the diff is a faithful, scoped implementation of the card.
 
 Report `fail` with concrete findings — `file:line`, what is wrong, what to do instead — if the
 diff drifts from the intent, touches an undeclared file, or leaves an obvious defect behind.
+The outcome alone does not carry the findings to `apply` — write them to a file in the OS temp
+directory (never inside the worktree) and report that file's path with the outcome.

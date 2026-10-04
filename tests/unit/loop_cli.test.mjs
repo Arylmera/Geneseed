@@ -34,11 +34,12 @@ test('check over the shipped catalogue is clean, and lists templates and bricks'
     assert.equal(r.code, 0);
     assert.equal(r.out.ok, true);
     assert.deepEqual(r.out.problems, []);
-    assert.deepEqual(r.out.templates, ['bugfix', 'feature', 'refactor']);
+    assert.deepEqual(r.out.templates, ['bugfix', 'ci-repair', 'deps-upgrade', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd']);
     assert.deepEqual(r.out.overridden, []);
     assert.deepEqual(r.out.bricks.map((b) => b.name), [
-      'apply', 'baseline-green', 'bruno-test', 'ci-fix', 'deps-audit', 'docs-update', 'identify',
-      'lint', 'plan', 'reproduce', 'review', 'security-scan', 'test',
+      'apply', 'baseline-green', 'bruno-test', 'characterize', 'ci-fix', 'ci-triage', 'deps-audit',
+      'docs-update', 'identify', 'lint', 'mutation-check', 'plan', 'red-test', 'reproduce', 'review',
+      'security-scan', 'test', 'upgrade-scout',
     ]);
     assert.deepEqual(r.out.bricks[0], {
       name: 'apply', description: "Implement the current card's intent, touching only its declared write set.",
@@ -162,6 +163,69 @@ test('every state action refuses outside a git repository', () => {
   try {
     const r = run(sb.path, ['next']);
     assert.equal(r.code, 1); assert.deepEqual(r.out, { error: 'not inside a git repository' });
+  } finally { sb.cleanup(); }
+});
+
+// record --note: a finding a brick must not lose (a read setup brick's plan, a review's fail
+// findings) appended to LOOP.md's notes, exactly `iteration N (node): <note>`.
+test('record --note appends "iteration N (node): note" to LOOP.md notes', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    const r = run(sb.path, ['record', '--outcome', 'pass', '--note', 'x'], '?? test/r.test.js\n');
+    assert.deepEqual(r.out, { verify: true });
+    const loopmd = readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8');
+    assert.match(loopmd, /"notes": \[\s*"iteration 0 \(reproduce\): x"\s*\]/);
+  } finally { sb.cleanup(); }
+});
+
+// record --note-file: a multi-line note (plan's ordered list) or one that mentions
+// git commit/push can't go on the command line — `--note-file` reads it from a file instead,
+// CRLF-folded and trailing-whitespace trimmed, same as the porcelain read from stdin.
+test('record --note-file round-trips a multi-line, CRLF note exactly into LOOP.md notes', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    const noteFile = path.join(sb.path, 'note.txt');
+    writeFileSync(noteFile, 'iteration 1: do the thing\r\niteration 2: do the other thing\r\n\r\n');
+    const r = run(sb.path, ['record', '--outcome', 'pass', '--note-file', noteFile], '?? test/r.test.js\n');
+    assert.deepEqual(r.out, { verify: true });
+    const loopmd = readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8');
+    assert.match(loopmd, /"notes": \[\s*"iteration 0 \(reproduce\): iteration 1: do the thing\\niteration 2: do the other thing"\s*\]/);
+  } finally { sb.cleanup(); }
+});
+
+test('record --note and --note-file together is an error', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    const noteFile = path.join(sb.path, 'note.txt');
+    writeFileSync(noteFile, 'x');
+    const r = run(sb.path, ['record', '--outcome', 'pass', '--note', 'y', '--note-file', noteFile], '?? test/r.test.js\n');
+    assert.equal(r.code, 1);
+    assert.equal(r.out.error, 'record takes --note or --note-file, not both');
+  } finally { sb.cleanup(); }
+});
+
+test('record --note-file naming an unreadable file is an error', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    run(sb.path, ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix']);
+    run(sb.path, ['next']);
+    run(sb.path, ['score', '--declared', '--actions', 'new-file', '--write-set', 'test/r.test.js', '--intent', 'reproduce']);
+    const r = run(sb.path, ['record', '--outcome', 'pass', '--note-file', path.join(sb.path, 'missing.txt')], '?? test/r.test.js\n');
+    assert.equal(r.code, 1);
+    assert.match(r.out.error, /cannot read --note-file/);
   } finally { sb.cleanup(); }
 });
 

@@ -478,3 +478,52 @@ test('renameWithRetry does not retry a non-transient error, and still removes th
     assert.ok(!existsSync(tmp));
   } finally { sb.cleanup(); }
 });
+
+// --- record --note: findings that survive the unit --------------------------------------------
+
+// A setup read brick's output is otherwise dropped (`finishUnit` → `resetUnit` clears `card`,
+// and only `decideAwaiting`/`exhaust` push to `notes`). `recordOutcome`'s `note` option is the
+// fix: pushed before the transition, so a read-only setup unit's note is still in `notes` after
+// it closes into iteration 1, and the next brick's `next` result hands it back.
+test('N1: a note on a read setup brick survives the unit close, and next returns it', () => {
+  const bricks = new Map([
+    brick('plan', 'read', ['pass']), brick('identify', 'read', ['more', 'done']),
+    brick('apply', 'mutate', ['pass']), brick('test', 'read', ['pass']),
+  ]);
+  const graph = {
+    name: 'g', description: 'd', nodes: ['plan', 'identify', 'apply', 'test'], start: 'plan',
+    edges: [
+      { from: 'plan', on: 'pass', to: 'identify' },
+      { from: 'identify', on: 'more', to: 'apply' }, { from: 'identify', on: 'done', to: '$close' },
+      { from: 'apply', on: 'pass', to: 'test' }, { from: 'test', on: 'pass', to: 'identify' },
+    ],
+    loops: [{ name: 'iterations', nodes: ['identify', 'apply', 'test'], max: 20, iteration: true }],
+  };
+  const s = initState({ title: 't', requirement: 'r', graph, preset: 'balanced' });
+  assert.equal(s.iteration, 0);
+  assert.deepEqual(recordOutcome(s, bricks, 'pass', { note: 'iteration 1\niteration 2' }), { node: 'identify' });
+  assert.equal(s.iteration, 1); // the setup unit closed (read-only: no diff to score)
+  assert.deepEqual(s.notes, ['iteration 0 (plan): iteration 1\niteration 2']);
+  assert.deepEqual(nextStep(s, bricks).notes, ['iteration 0 (plan): iteration 1\niteration 2']);
+});
+
+// A `review` `fail`'s findings are otherwise lost — `apply` only gets `card` and `notes`, and
+// nothing stores what `review` found. `--note` on the `record` that reports `fail` is how those
+// findings reach `apply`'s `next` result.
+test('N2: a note on review fail reaches apply\'s next result', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' });   // apply -> test
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'review' }); // test -> review
+  assert.deepEqual(recordOutcome(s, BRICKS, 'fail', { note: 'src/a.js:10 off by one' }), { node: 'apply' });
+  assert.deepEqual(s.notes, ['iteration 1 (review): src/a.js:10 off by one']);
+  assert.deepEqual(nextStep(s, BRICKS).notes, ['iteration 1 (review): src/a.js:10 off by one']);
+});
+
+// No note passed (the default `''`) pushes nothing — every prior scenario's exact `notes` arrays
+// stay exact, not silently prefixed with an empty entry.
+test('N3: recordOutcome with no note pushes nothing to notes', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card });
+  assert.deepEqual(s.notes, []);
+});
