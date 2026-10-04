@@ -43,7 +43,7 @@ import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
 import { frontmatter, memoryDropIndex } from '../hosts/memory-files.mjs';
 import {
-  HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
+  CLAUDE_STYLE, HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
@@ -677,7 +677,7 @@ export function apiMcpToggle(state, body) {
     return { ok: false, error: 'config holds comments — edit it by hand to keep them' };
   }
   let cfg;
-  if (['claude', 'bob', 'openclaude'].includes(host)) {
+  if (CLAUDE_STYLE.includes(host)) {
     if (isFile(p)) {
       let parsed;
       try {
