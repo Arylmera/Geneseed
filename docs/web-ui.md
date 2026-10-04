@@ -141,8 +141,10 @@ streams the output of background jobs and keeps their history across reloads.
 - **Skills** (`#/skills`) and **Agents** (`#/agents`) — the deployed catalogue, each entry
   with its purpose line and full spec.
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
-  reference (generated from the harness argument parser), and a glossary, grouped into
-  Get started / Core concepts / How-to / MCP servers / Plugins / Reference / Deeper. Filtered
+  reference (generated from the harness argument parser), and a glossary, in the Library's
+  three panes: the parts (Understand / Guides / Concepts / Reference) with their page counts,
+  the part's pages under their sections with a filter, and the page with its breadcrumb,
+  outline and Previous / Next within the section. Filtered
   for one host family (OpenCode, or Claude Code — which Bob and OpenClaude share); with no
   choice stored it follows the deployed install.
 

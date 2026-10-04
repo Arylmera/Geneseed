@@ -440,6 +440,11 @@ throws). The same file is what GitHub shows, so write for both
 (`docFrontmatter` in `js/web/docs.mjs`):
 
 - `group` must match an id in `docs/_groups.json` — gated by `docs_tree.test.mjs`.
+- `section` (optional, a non-empty string — gated by `docs_tree.test.mjs`) files the page under
+  a sub-part of its folder in the console's list, breadcrumb and Previous / Next; without one it
+  sits under **General**. Sections order by the smallest `order` among their pages, pages within
+  a section by `order` (`bySection` in `js/web/docs.mjs`). `description` (optional) is the
+  list row's second line.
 - `kind` ∈ `markdown | concept | map | glossary | about | cli`; anything else 404s. `map` is a
   concept page whose Piece/Kind/Cost table the console turns into the clickable map.
 - `harness: "claude"|"opencode"` hides the page from the other host — keep it for how-tos that

@@ -1,18 +1,23 @@
-import React, { useMemo, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { api } from '../../api/index.js'
 import { go } from '../../lib/router.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import { useHarness, HARNESSES, docsHostOf } from '../../hooks/useHarness.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
+import FilterInput from '../../components/FilterInput.jsx'
+import { GroupedRows, walkRows, useActiveRowInView } from '../../components/LibRows.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
 import CliPage from './CliPage.jsx'
 import Glossary from './Glossary.jsx'
 import MapPage from './MapPage.jsx'
 import Margin from './Margin.jsx'
-import Track, { TrackBar, TRACK_GROUP, markSeen, readSeen } from './Track.jsx'
+import { PageBar, TrackProgress, TRACK_GROUP, markSeen, placeOf, readSeen } from './Track.jsx'
 import About from './About.jsx'
 import Seg from '../../components/Seg.jsx'
+
+const enc = encodeURIComponent
+const docHref = (id) => `#/docs/${enc(id)}`
 
 // Resolve a router page id to a default — empty hash lands on the first page
 // of the first group so the right pane is never blank.
@@ -50,16 +55,33 @@ function PageView({ data, error, overview, onAction }) {
   }
 }
 
-// Which group contains a given page id — the one the sidebar treats as current.
-function groupOfPage(menu, pageId) {
-  if (!menu || !pageId) return null
-  for (const g of menu.groups) {
-    if (g.pages.some((p) => p.id === pageId)) return g
-  }
-  return null
+// A part's pages as list rows: a `● SECTION` heading each time the section changes (the menu
+// already lists a part section by section), the page's description as the row's second line.
+// Exported for the test that pins it.
+export function docRows(part) {
+  return (part?.pages || []).map((p) => ({
+    name: p.id,
+    title: p.title,
+    desc: p.description || '',
+    group: p.section || 'General',
+    groupC: 'var(--accent)',
+  }))
 }
 
-export default function Docs({ page, query, overview, onAction }) {
+// The filter: title and description, as in the Library (plus the id, which is what a link
+// to the page says).
+export function filterRows(rows, q) {
+  const ql = (q || '').trim().toLowerCase()
+  if (!ql) return rows
+  return rows.filter((r) => `${r.title} ${r.name} ${r.desc}`.toLowerCase().includes(ql))
+}
+
+// The Docs, in the Library's three panes: a rail of parts (the docs folders) with their page
+// counts, the part's pages grouped by section, and the page with its breadcrumb, its outline
+// in the margin and Previous / Next within its section. The address is still `#/docs/<id>`,
+// so every cross-link, search hit and bookmark lands where it always did; a part is opened
+// through its first page.
+export default function Docs({ page, overview, onAction }) {
   const [harness, setHarness] = useHarness(docsHostOf(overview?.emit))
   const { data: menu, error } = useAsync(() => api.docs(harness), [harness])
   const pageId = page || defaultPageId(menu)
@@ -87,12 +109,23 @@ export default function Docs({ page, query, overview, onAction }) {
     const visible = menu.groups.some((g) => g.pages.some((p) => p.id === pageId))
     if (!visible) {
       const def = defaultPageId(menu)
-      if (def && def !== pageId) go(`#/docs/${encodeURIComponent(def)}`)
+      if (def && def !== pageId) go(docHref(def))
     }
   }, [menu, pageId])
-  const activeGroup = groupOfPage(menu, pageId) || menu?.groups?.[0]
-  const onTrack = activeGroup?.id === TRACK_GROUP
-  const q = (query || '').toLowerCase().trim()
+
+  // A page opens at its top. The scroller outlives the route, so without this the next page
+  // would open wherever the last one was left. Which element scrolls depends on the layout:
+  // `main#main` in the app shell, the document itself in the others — reset both.
+  useEffect(() => {
+    const doc = document.scrollingElement || document.documentElement
+    for (const el of [document.getElementById('main'), doc]) {
+      if (el) el.scrollTop = 0
+    }
+  }, [pageId])
+
+  const place = placeOf(menu, pageId)
+  const part = place.part || menu?.groups?.[0] || null
+  const onTrack = part?.id === TRACK_GROUP
 
   // Opening an understand page counts it as read — the track's progress and the
   // Overview's "New here?" card both read this. The render counts the open page
@@ -102,41 +135,28 @@ export default function Docs({ page, query, overview, onAction }) {
   }, [onTrack, pageData, pageId])
   const seen = onTrack ? [...readSeen(), pageId] : []
 
-  // Without a query the sidebar lists every group with its pages (the Handbook);
-  // with one it filters across all of them, matching a page by its own title or id
-  // or by its group's label.
-  const groups = useMemo(() => {
-    if (!menu) return []
-    if (!q) return menu.groups
-    return menu.groups
-      .map((g) => ({
-        ...g,
-        pages: g.pages.filter(
-          (p) =>
-            p.title.toLowerCase().includes(q) ||
-            g.label.toLowerCase().includes(q) ||
-            p.id.toLowerCase().includes(q),
-        ),
-      }))
-      .filter((g) => g.pages.length > 0)
-  }, [menu, q])
+  // Filter text belongs to one part: drop it when the open page moves to another.
+  const [q, setQ] = useState('')
+  const [seenPart, setSeenPart] = useState(part?.id)
+  if (part?.id !== seenPart) {
+    setSeenPart(part?.id)
+    setQ('')
+  }
+  const rows = docRows(part)
+  const shown = filterRows(rows, q)
+  const rowsRef = useActiveRowInView([part?.id, pageId])
 
   if (error) return <ErrorState error={error} />
 
   return (
-    <>
-      <div className="head-row mb-16">
-        <div>
-          <div className="eyebrow">documentation</div>
+    <div className="library docs-lib">
+      <aside className="lib-kinds" aria-label="Docs parts">
+        <div className="lib-title">
           <h1 className="h">Docs</h1>
-          <p className="sub">
-            Start with Understand, then guides, concepts and reference. Pages and config that differ
-            by host are filtered to your selected harness.
-          </p>
+          <span className="dim">How it works, and how to use it</span>
         </div>
         {/* Harness selector — filters the menu and per-page config to the chosen
-            host (OpenCode vs Claude Code). Persists across reloads. Same .seg
-            control the Dashboard uses, so the two surfaces feel coherent. */}
+            host (OpenCode vs Claude Code). Persists across reloads. */}
         <Seg aria-label="Harness">
           {HARNESSES.map((h) => (
             <button
@@ -149,48 +169,96 @@ export default function Docs({ page, query, overview, onAction }) {
             </button>
           ))}
         </Seg>
-      </div>
-      <div className="docs-hb">
-        <nav className="card docs-nav" aria-label="Docs pages">
-          {onTrack && !q ? (
-            <Track menu={menu} pageId={pageId} seen={seen} />
+        <nav className="kind-list" aria-label="Parts">
+          {(menu?.groups || []).map((g) => (
+            <a
+              key={g.id}
+              href={g.pages[0] ? docHref(g.pages[0].id) : '#/docs'}
+              className={part?.id === g.id ? 'on' : ''}
+              aria-current={part?.id === g.id ? 'page' : undefined}
+            >
+              {g.label}
+              <span className="mono dim">{g.pages.length}</span>
+            </a>
+          ))}
+        </nav>
+      </aside>
+
+      <section className="lib-list" aria-label={part?.label || 'Docs'}>
+        <div className="lib-list-head">
+          <b>
+            {part?.label}{' '}
+            <span className="mono dim">
+              {q.trim() ? `${shown.length} of ${rows.length}` : rows.length || ''}
+            </span>
+          </b>
+          {onTrack && <TrackProgress pages={part.pages} seen={seen} />}
+        </div>
+        <FilterInput
+          value={q}
+          onChange={setQ}
+          placeholder={`Filter ${(part?.label || 'docs').toLowerCase()}`}
+          label={`Filter ${part?.label || 'docs'}`}
+        />
+        <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
+          {!menu ? (
+            <Loading label="Loading docs…" />
           ) : (
-            groups.map((g) => (
-              <div key={g.id} className="docs-group">
-                <div className="docs-group-head">{g.label}</div>
-                {g.pages.map((p) => (
-                  <button
-                    key={p.id}
-                    className={`lib-row ${pageId === p.id ? 'on' : ''}`}
-                    aria-current={pageId === p.id ? 'page' : undefined}
-                    onClick={() => go(`#/docs/${encodeURIComponent(p.id)}`)}
-                  >
-                    <div className="lr-name">{p.title}</div>
-                  </button>
-                ))}
-              </div>
-            ))
+            <GroupedRows
+              rows={shown}
+              activeName={pageId}
+              hrefOf={(r) => docHref(r.name)}
+              pills={
+                onTrack
+                  ? (r) =>
+                      seen.includes(r.name) && r.name !== pageId ? (
+                        <span className="docs-read-mark" aria-label="read">
+                          ✓
+                        </span>
+                      ) : null
+                  : undefined
+              }
+            />
           )}
-          {groups.length === 0 && menu && (
+          {q.trim() && shown.length === 0 && (
             <div className="empty" style={{ padding: 32 }}>
               <div className="big">No matches</div>
-              Try another search.
+              Nothing in {(part?.label || 'docs').toLowerCase()} matches “{q.trim()}”.
             </div>
           )}
-          {!menu && <Loading label="Loading docs…" />}
-        </nav>
-        <div className="card docs-article">
-          <PageView
-            key={`${pageId}|${harness}`}
-            data={pageLoading ? null : pageData}
-            error={pageError}
-            overview={overview}
-            onAction={onAction}
-          />
-          {onTrack && !pageLoading && <TrackBar menu={menu} pageId={pageId} />}
         </div>
-        {!pageLoading && <Margin body={pageData?.body} glossaryRows={glossary?.rows} />}
-      </div>
-    </>
+      </section>
+
+      <article className="lib-reader docs-reader" aria-label="Page">
+        {place.page && (
+          <nav className="docs-crumbs mono" aria-label="Breadcrumb">
+            <a href={docHref(place.part.pages[0].id)}>{place.part.label}</a>
+            <span aria-hidden="true">›</span>
+            <a
+              href={docHref(
+                place.part.pages.find((p) => (p.section || 'General') === place.section).id,
+              )}
+            >
+              {place.section}
+            </a>
+            <span aria-hidden="true">›</span>
+            <span aria-current="page">{place.page.title}</span>
+          </nav>
+        )}
+        <div className="docs-read">
+          <div className="docs-article">
+            <PageView
+              key={`${pageId}|${harness}`}
+              data={pageLoading ? null : pageData}
+              error={pageError}
+              overview={overview}
+              onAction={onAction}
+            />
+            {!pageLoading && <PageBar menu={menu} pageId={pageId} />}
+          </div>
+          {!pageLoading && <Margin body={pageData?.body} glossaryRows={glossary?.rows} />}
+        </div>
+      </article>
+    </div>
   )
 }

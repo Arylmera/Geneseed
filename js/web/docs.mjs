@@ -105,7 +105,7 @@ export function docGroups() {
     if (group === undefined) continue;
     const order = Object.hasOwn(meta, 'order') ? meta.order : 0;
     delete meta.order;
-    const page = { id, rel, ...meta };
+    const page = { id, rel, ...meta, section: sectionOf(meta) };
     if (body.trim()) page.body = body.replace(/\n+$/, '');
     group.pages.push([order, page]);
   }
@@ -113,13 +113,42 @@ export function docGroups() {
   for (const g of groups) {
     const entry = byId.get(g.id);
     // STABLE sort: equal orders keep filename order.
-    entry.pages = entry.pages
+    entry.pages = bySection(entry.pages
       .map((pair, i) => [pair[0], i, pair[1]])
       .sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]))
-      .map((t) => t[2]);
+      .map((t) => t[2]));
     out.push(entry);
   }
   return out;
+}
+
+/** The heading a page without a `section:` is listed under, inside its part. */
+export const GENERAL_SECTION = 'General';
+
+/**
+ * A page's `section:` frontmatter, or `General`. Anything but a non-empty string falls back
+ * rather than throwing — `tests/unit/docs_tree.test.mjs` is where a bad value goes red.
+ */
+export function sectionOf(meta) {
+  const s = meta.section;
+  return typeof s === 'string' && s.trim() ? s.trim() : GENERAL_SECTION;
+}
+
+/**
+ * Pages already in `order:` order, regrouped so each section's pages sit together.
+ *
+ * SECTION ORDER IS THE SMALLEST `order:` AMONG ITS PAGES — which, on a list already sorted by
+ * order, is simply the order in which sections first appear. Within a section the pages keep
+ * their `order:` order. One rule for the list, the breadcrumb and prev/next alike, so the
+ * console never shows two orders for one part.
+ */
+export function bySection(pages) {
+  const runs = new Map();
+  for (const p of pages) {
+    if (!runs.has(p.section)) runs.set(p.section, []);
+    runs.get(p.section).push(p);
+  }
+  return [...runs.values()].flat();
 }
 
 // ---- markdown tables as data ------------------------------------------------------------
@@ -510,7 +539,8 @@ export function apiDocs(state, harnessName = null) {
   const groups = visibleGroups(hn).map((g) => ({
     id: g.id,
     label: g.label,
-    pages: g.pages.map((p) => ({ id: p.id, title: p.title, kind: p.kind })),
+    pages: g.pages.map((p) => ({ id: p.id, title: p.title, kind: p.kind, section: p.section,
+      ...(typeof p.description === 'string' ? { description: p.description } : {}) })),
   }));
   return { groups, harness: hn };
 }

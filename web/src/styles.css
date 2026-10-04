@@ -828,18 +828,22 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 .narrow-lg { max-width: 860px; }
 
 /* ============================== DOCS PAGE ============================ */
-/* The Docs view reuses the .lib two-pane grid. The left sub-nav is grouped:
-   each .docs-group is a section, with a small uppercase label above its rows.
-   The right pane uses .detail-doc + .markdown — the same styling the Library
-   item view uses, so the typography stays consistent. */
-.docs-group { padding: 6px 0 4px; }
-.docs-group + .docs-group { border-top: 1px solid var(--line); }
-.docs-group-head {
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em;
-  text-transform: uppercase; color: var(--text-3);
-  padding: 10px 16px 6px;
-}
-
+/* The Docs reuse the Library's three panes (.library: rail of parts, list of pages grouped
+   by section, the page). The reader pane holds the breadcrumb, then the article beside its
+   margin (outline + terms). `overflow: clip`, not the Library's `hidden`, so the margin's
+   sticky still sticks to the page scroller. */
+.library.docs-lib { overflow: clip; }
+.docs-lib .lib-kinds .seg { align-self: flex-start; margin: 0 8px; }
+.docs-lib .lib-kinds .seg button { white-space: nowrap; }
+.docs-lib .lib-list-head .track-prog { margin: 10px 0 0; }
+.docs-read-mark { color: var(--good); font-size: 12px; }
+.docs-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px;
+  color: var(--text-3); }
+.docs-crumbs a { color: var(--text-2); }
+.docs-crumbs a:hover { color: var(--accent); }
+.docs-crumbs [aria-current] { color: var(--text); }
+.docs-read { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 28px;
+  align-items: start; }
 /* In-page TOC for long markdown pages. Sits as a soft chip-board above the
    body so it scrolls away with the content, not as a sticky sidebar (the
    right pane is already narrow). */
@@ -866,12 +870,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   border: 1px solid var(--accent-line);
 }
 
-/* The Handbook: page list · article · margin. At 1180px the margin drops under the
-   article; at 960px everything stacks into one column. */
-.docs-hb { display: grid; grid-template-columns: 250px minmax(0, 1fr) 230px; gap: 20px;
-  align-items: start; }
-.docs-nav { overflow: auto; max-height: calc(100vh - 200px); position: sticky; top: 16px; }
-.docs-article { padding: 22px 26px; min-height: 320px; min-width: 0; }
+.docs-article { min-width: 0; }
 .docs-margin { position: sticky; top: 16px; display: grid; gap: 16px; }
 .docs-margin .docs-toc { margin: 0; }
 .docs-gloss { display: grid; gap: 8px; }
@@ -879,35 +878,15 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   border-radius: var(--r-sm); padding: 10px 12px; }
 .docs-gloss-card b { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
 .docs-gloss-card p { margin: 4px 0 0; font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
-@media (max-width: 1180px) {
-  .docs-hb { grid-template-columns: 220px minmax(0, 1fr); }
-  .docs-margin { grid-column: 2; position: static; }
-}
 @media (max-width: 960px) {
-  .docs-hb { grid-template-columns: 1fr; }
-  .docs-margin { grid-column: auto; }
-  .docs-nav { position: static; max-height: 320px; }
+  .docs-read { grid-template-columns: minmax(0, 1fr); }
+  .docs-margin { position: static; }
 }
 
-/* The Understand track: numbered steps with a progress line, and the prev/next bar. */
-.track { padding-bottom: 8px; }
-.track-prog { height: 3px; margin: 0 16px 8px; border-radius: 99px; background: var(--surface-3);
-  overflow: hidden; }
+/* The Understand track's progress line, and the prev/next bar under every page. */
+.track-prog { height: 3px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
 .track-prog i { display: block; height: 100%; background: var(--accent);
   transition: width .3s cubic-bezier(.22,1,.36,1); }
-.track-step, .track-link { display: flex; align-items: center; gap: 10px; width: 100%;
-  text-align: left; padding: 9px 16px; border: 0; background: transparent; cursor: pointer;
-  font: inherit; font-size: 13.5px; color: var(--text-2); }
-.track-step:hover, .track-link:hover { background: var(--surface-2); color: var(--text); }
-.track-step.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.track-n { flex: none; display: grid; place-items: center; width: 22px; height: 22px;
-  border-radius: 50%; border: 1px solid var(--line-2); font-family: var(--font-mono);
-  font-size: 11px; }
-.track-step.on .track-n { border-color: var(--accent); background: var(--accent);
-  color: var(--accent-ink); }
-.track-step.done .track-n { border-color: var(--good); color: var(--good); }
-.track-after { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 14px; }
-.track-link { justify-content: space-between; font-size: 13px; }
 .track-bar { display: flex; justify-content: space-between; gap: 10px; margin-top: 28px;
   padding-top: 16px; border-top: 1px solid var(--line); }
 

@@ -8,7 +8,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from '../../js/build/source.mjs';
-import { docSources, parseMapTable, stripHarnessBlocks } from '../../js/web/docs.mjs';
+import {
+  bySection, docSources, parseMapTable, sectionOf, stripHarnessBlocks,
+} from '../../js/web/docs.mjs';
 
 const pages = () => docSources()
   .map((s) => ({ ...s, text: fs.readFileSync(path.join(ROOT, s.rel), 'utf8') }));
@@ -94,4 +96,48 @@ test('every page names a group that _groups.json declares', () => {
     const text = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     assert.ok(groups.has(front(text, 'group')), `${rel} names group "${front(text, 'group')}"`);
   }
+});
+
+// `section:` (and `description:`) are optional; when present each must be a non-empty string.
+// The server reads anything else as "no section", so a typo would quietly file the page under
+// General — this is the gate that says so instead. Read through the server's own parser shape:
+// a JSON scalar, or the raw text when it is not JSON.
+const BAD_SECTION = (text) => {
+  const raw = (/^section:[ \t]*(.*)$/m.exec(text.split('\n---\n')[0]) ?? [])[1];
+  if (raw === undefined) return false;
+  let v;
+  try { v = JSON.parse(raw.trim()); } catch { v = raw.trim(); }
+  return !(typeof v === 'string' && v.trim());
+};
+
+test('the section gate fails on a page that breaks it', () => {
+  assert.equal(BAD_SECTION('---\ngroup: guides\nsection: Install\n---\nx'), false);
+  assert.equal(BAD_SECTION('---\ngroup: guides\nsection: "Install"\n---\nx'), false);
+  assert.equal(BAD_SECTION('---\ngroup: guides\n---\nx'), false);
+  assert.equal(BAD_SECTION('---\ngroup: guides\nsection: ""\n---\nx'), true);
+  assert.equal(BAD_SECTION('---\ngroup: guides\nsection: 3\n---\nx'), true);
+});
+
+test('every page section, where present, is a non-empty string', () => {
+  for (const { rel, text } of pages()) {
+    assert.ok(!BAD_SECTION(text), `${rel}: section: must be a non-empty string`);
+  }
+});
+
+// Section order is the smallest `order:` among a section's pages; a page with no section is
+// filed under General; inside a section the pages keep their order. Pages arrive sorted by
+// order, so: Install (order 1) leads, General (order 2) next, Loops (order 3) last, and
+// install-bob (order 4) joins Install rather than starting a second Install run.
+test('bySection groups by section, sections by their smallest order', () => {
+  const p = (id, meta) => ({ id, section: sectionOf(meta) });
+  const sorted = [
+    p('quick', { section: 'Install' }),
+    p('verify', {}),
+    p('loop-start', { section: 'Loops' }),
+    p('install-bob', { section: ' Install ' }),
+    p('mcp', { section: '' }),
+  ];
+  assert.deepEqual(bySection(sorted).map((x) => `${x.section}/${x.id}`), [
+    'Install/quick', 'Install/install-bob', 'General/verify', 'General/mcp', 'Loops/loop-start',
+  ]);
 });

@@ -1824,6 +1824,20 @@ test('host-specific pages and groups appear only under their host', () => {
   }
 });
 
+// The console's list groups a part's pages under `● SECTION` headings straight from this
+// payload, so every page must carry its section, and one section's pages must arrive together:
+// a section split in two would print its heading twice.
+test('the docs menu carries each page section, one run per section', () => {
+  for (const g of apiDocs(neutral(), 'opencode').groups) {
+    const runs = [];
+    for (const p of g.pages) {
+      assert.ok(typeof p.section === 'string' && p.section, `${p.id} has no section`);
+      if (runs.at(-1) !== p.section) runs.push(p.section);
+    }
+    assert.equal(runs.length, new Set(runs).size, `${g.id}: a section is split in two`);
+  }
+});
+
 test('the docs endpoint echoes the resolved harness', () => {
   assert.equal(apiDocs(neutral(), 'claude').harness, 'claude');
   assert.equal(apiDocs(neutral(), 'opencode').harness, 'opencode');
