@@ -843,8 +843,9 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
    reads ~700px of article. Under 869px of page the media tiers govern as before. */
 .docs-wrap { container: docs / inline-size; }
 .library.docs-lib { overflow: clip; }
-.docs-lib .lib-kinds .seg { align-self: flex-start; margin: 0 8px; }
-.docs-lib .lib-kinds .seg button { white-space: nowrap; }
+/* Four hosts in a 232px rail: two by two, the glide moving in both directions. */
+.docs-lib .lib-kinds .seg { display: grid; grid-template-columns: 1fr 1fr; margin: 0 8px; }
+.docs-lib .lib-kinds .seg button { white-space: nowrap; padding: 6px 8px; }
 .docs-lib .lib-list-head .track-prog { margin: 10px 0 0; }
 .docs-read-mark { color: var(--good); font-size: 12px; }
 .docs-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px;

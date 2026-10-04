@@ -33,8 +33,9 @@ import {
 } from '../../js/web/activity.mjs';
 import {
   apiDocs, apiDocsPage, docCounts, docGroups, docSources, rewriteDocLinks, parseMapTable,
-  parseGlossaryTable, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
+  parseGlossaryTable, normHarness, stripHarnessBlocks, harnessBlocksBalanced, HOST_FAMILY,
 } from '../../js/web/docs.mjs';
+import { HOSTS } from '../../web/src/lib/hosts.js';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
   apiInstallCmd, apiSelectView, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
@@ -1754,11 +1755,64 @@ for (const [expected, populate, npm, interactive] of PLANS) {
 
 test('the harness name defaults and validates', () => {
   const st = neutral();
-  assert.equal(normHarness('claude', st), 'claude');
-  assert.equal(normHarness('opencode', st), 'opencode');
+  for (const host of ['opencode', 'claude', 'openclaude', 'bob']) {
+    assert.equal(normHarness(host, st), host);
+  }
   // Junk and null fall back to the install's own default rather than throwing.
-  assert.ok(['opencode', 'claude'].includes(normHarness('nonsense', st)));
-  assert.ok(['opencode', 'claude'].includes(normHarness(null, st)));
+  assert.ok(['opencode', 'claude', 'openclaude', 'bob'].includes(normHarness('nonsense', st)));
+  assert.ok(['opencode', 'claude', 'openclaude', 'bob'].includes(normHarness(null, st)));
+});
+
+// With no choice sent, the default is the host the install was emitted for — the host itself,
+// not its family: a Bob install opens on Bob's docs. `files` and unknown emits read OpenCode's.
+test('the default harness is the emitted host', () => {
+  for (const [emit, host] of [['opencode-global', 'opencode'], ['opencode', 'opencode'],
+    ['claude-global', 'claude'], ['claude', 'claude'], ['openclaude-global', 'openclaude'],
+    ['openclaude', 'openclaude'], ['bob-global', 'bob'], ['bob', 'bob'], ['files', 'opencode'],
+    ['', 'opencode']]) {
+    assert.equal(normHarness(null, { emit }), host, emit);
+  }
+});
+
+// The server's family table and the console's host table (lib/hosts.js, its `docs` column)
+// must agree, or the selector would offer a host whose pages the server files elsewhere.
+test('the docs families match the console host table', () => {
+  assert.deepEqual(HOST_FAMILY, { opencode: 'opencode', claude: 'claude', openclaude: 'claude',
+    bob: 'claude' });
+  assert.deepEqual(Object.fromEntries(HOSTS.map((h) => [h.id, h.docs])), HOST_FAMILY);
+});
+
+// A tag names a host or the Claude family: `claude` shows to the three Claude-engine hosts, a
+// host tag only to that host, `opencode` only to OpenCode. Inline blocks follow the same rule.
+test('a harness block shows to its host, and a claude block to the whole family', () => {
+  const body = 'shared\n'
+    + '<!--harness:claude-->\nfamily\n<!--/harness-->\n'
+    + '<!--harness:bob-->\nbob only\n<!--/harness-->\n'
+    + '<!--harness:openclaude-->\nopenclaude only\n<!--/harness-->\n'
+    + '<!--harness:opencode-->\nopencode only\n<!--/harness-->\ntail';
+  const kept = (host) => stripHarnessBlocks(body, host).split('\n');
+  assert.deepEqual(kept('opencode'), ['shared', 'opencode only', 'tail']);
+  assert.deepEqual(kept('claude'), ['shared', 'family', 'tail']);
+  assert.deepEqual(kept('openclaude'), ['shared', 'family', 'openclaude only', 'tail']);
+  assert.deepEqual(kept('bob'), ['shared', 'family', 'bob only', 'tail']);
+  assert.ok(harnessBlocksBalanced(body.split('\n')));
+});
+
+test('a page tagged for a host shows to that host, a claude page to the family', () => {
+  const idsFor = (hn) => new Set(apiDocs(neutral(), hn).groups.flatMap((g) => g.pages.map((p) => p.id)));
+  // machine-claude is tagged `claude`; machine-opencode `opencode`; machine-bob is untagged
+  // (it also covers the plain AGENT.md bundle, whose readers default to the OpenCode docs).
+  const want = {
+    opencode: ['machine-opencode', 'machine-bob'],
+    claude: ['machine-claude', 'machine-bob'],
+    openclaude: ['machine-claude', 'machine-bob'],
+    bob: ['machine-claude', 'machine-bob'],
+  };
+  const all = ['machine-opencode', 'machine-claude', 'machine-bob'];
+  for (const [hn, ids] of Object.entries(want)) {
+    const vis = idsFor(hn);
+    assert.deepEqual(all.filter((id) => vis.has(id)), all.filter((id) => ids.includes(id)), hn);
+  }
 });
 
 test('a harness block keeps the matching host and drops the other', () => {
@@ -1812,12 +1866,15 @@ test('host-specific pages and groups appear only under their host', () => {
   const idsFor = (hn) => new Set(apiDocs(neutral(), hn).groups.flatMap((g) => g.pages.map((p) => p.id)));
   const oc = idsFor('opencode');
   const cc = idsFor('claude');
+  const bob = idsFor('bob');
+  const ocl = idsFor('openclaude');
   // A page tagged `harness:` exists for one host only (a how-to that cannot run elsewhere); the
   // four groups are shared, and so are reference pages a reader comparing hosts needs — hooks,
   // LSP and the plugin reference say their host in the title instead.
   for (const id of ['headless', 'worktree']) {
     assert.ok(oc.has(id), `${id} missing under opencode`);
     assert.ok(!cc.has(id), `${id} leaks under claude`);
+    assert.ok(!bob.has(id) && !ocl.has(id), `${id} leaks under a Claude-engine host`);
   }
   for (const id of ['hooks', 'lsp', 'opencode-plugins']) {
     assert.ok(oc.has(id) && cc.has(id), `${id} must show under both hosts`);
@@ -1841,6 +1898,8 @@ test('the docs menu carries each page section, one run per section', () => {
 test('the docs endpoint echoes the resolved harness', () => {
   assert.equal(apiDocs(neutral(), 'claude').harness, 'claude');
   assert.equal(apiDocs(neutral(), 'opencode').harness, 'opencode');
+  assert.equal(apiDocs(neutral(), 'bob').harness, 'bob');
+  assert.equal(apiDocs(neutral(), 'openclaude').harness, 'openclaude');
 });
 
 test('a docs page strips for its host', () => {
@@ -1995,7 +2054,7 @@ test('every plugin ships a reference page and its README/SHIPPED rows', () => {
 test('concept counts are substituted live from the inventory', () => {
   const st = neutral();
   const inv = st.inventory;
-  for (const hn of ['opencode', 'claude']) {
+  for (const hn of ['opencode', 'claude', 'openclaude', 'bob']) {
     for (const g of apiDocs(st, hn).groups) {
       for (const p of g.pages) {
         const body = apiDocsPage(st, p.id, hn).body || '';
@@ -2014,7 +2073,7 @@ test('concept counts are substituted live from the inventory', () => {
 test('no cross-harness dead links', () => {
   const st = neutral();
   const dead = [];
-  for (const hn of ['opencode', 'claude']) {
+  for (const hn of ['opencode', 'claude', 'openclaude', 'bob']) {
     const menu = apiDocs(st, hn);
     const visible = new Set(menu.groups.flatMap((g) => g.pages.map((p) => p.id)));
     for (const g of menu.groups) {

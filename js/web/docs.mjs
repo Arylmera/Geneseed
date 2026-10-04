@@ -13,7 +13,7 @@
  *
  * THE `?harness=` QUERY PARAM IS the Docs selector, and it is the ONLY input to these
  * endpoints that is not the checkout itself — the one thing a test can vary. Every
- * filtering rule below is exercised by sending both values over one page.
+ * filtering rule below is exercised by sending each host over one page.
  */
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -288,8 +288,17 @@ function subCounts(state, body) {
 
 // ---- harness filtering -----------------------------------------------------------------
 
-const HARNESSES = ['opencode', 'claude'];
-const HARNESS_OPEN_RE = /^\s*<!--\s*harness:(opencode|claude)\s*-->\s*$/;
+/**
+ * The Docs selector names a HOST; a tag names a host or a FAMILY. Bob and OpenClaude emit
+ * through the Claude engine, so a `claude` tag (page or block) is the Claude family and shows
+ * to all three of them, while `bob` / `openclaude` narrow to the one host. The same mapping as
+ * the console's host table (`web/src/lib/hosts.js`, its `docs` column).
+ */
+export const HOST_FAMILY = { opencode: 'opencode', claude: 'claude', openclaude: 'claude', bob: 'claude' };
+export const HARNESSES = Object.keys(HOST_FAMILY);
+/** A page or block tagged `tag` shows to `host`. Untagged content shows to every host. */
+export const harnessShows = (tag, host) => !tag || tag === host || tag === HOST_FAMILY[host];
+const HARNESS_OPEN_RE = /^\s*<!--\s*harness:(opencode|claude|openclaude|bob)\s*-->\s*$/;
 const HARNESS_CLOSE_RE = /^\s*<!--\s*\/harness\s*-->\s*$/;
 /**
  * The cheap presence test for the early-out. It must never be NARROWER than the open
@@ -301,7 +310,9 @@ const HARNESS_HINT_RE = /<!--\s*harness:/;
 export function normHarness(value, state) {
   const v = (value || '').trim().toLowerCase();
   if (HARNESSES.includes(v)) return v;
-  return /^(claude|openclaude)/.test(String(state.emit || '')) ? 'claude' : 'opencode';
+  // Emit names start with their host id (`claude-global`, `bob`, …); `files` reads OpenCode's.
+  const emit = String(state.emit || '');
+  return HARNESSES.find((h) => emit.startsWith(h)) || 'opencode';
 }
 
 /**
@@ -338,7 +349,7 @@ export function harnessBlocksBalanced(lines) {
  * the marker; the console has already filtered the block to the reader's host, so there the
  * label only repeats what the host selector says, and it goes with the marker.
  */
-const HOST_LABEL_RE = /^\s*\*\((OpenCode|Claude Code) only\)\*\s*$/;
+const HOST_LABEL_RE = /^\s*\*\((OpenCode|Claude Code|OpenClaude|IBM Bob) only\)\*\s*$/;
 
 export function stripHarnessBlocks(body, harnessName) {
   if (!HARNESS_HINT_RE.test(body)) return body;
@@ -358,7 +369,7 @@ export function stripHarnessBlocks(body, harnessName) {
     }
     if (!inFence) {
       const m = HARNESS_OPEN_RE.exec(line);
-      if (m) { keep = m[1] === harnessName; afterOpen = true; continue; }
+      if (m) { keep = harnessShows(m[1], harnessName); afterOpen = true; continue; }
       if (HARNESS_CLOSE_RE.test(line)) { keep = true; continue; }
       if (labelSlot && HOST_LABEL_RE.test(line)) continue;
     }
@@ -382,8 +393,8 @@ function splitLines(s) {
 function visibleGroups(harnessName) {
   const groups = [];
   for (const g of docGroups()) {
-    if (g.harness && g.harness !== harnessName) continue;
-    const pages = g.pages.filter((p) => !p.harness || p.harness === harnessName);
+    if (!harnessShows(g.harness, harnessName)) continue;
+    const pages = g.pages.filter((p) => harnessShows(p.harness, harnessName));
     if (pages.length) groups.push({ ...g, pages });
   }
   return groups;

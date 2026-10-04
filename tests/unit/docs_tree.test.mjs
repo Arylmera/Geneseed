@@ -32,12 +32,15 @@ function relativeLinks(text, rel) {
 }
 
 /** GitHub hides `<!--harness:x-->`, so the line after it must say which host the block is for. */
-const HOST_LABEL = { opencode: '*(OpenCode only)*', claude: '*(Claude Code only)*' };
+const HOST_LABEL = {
+  opencode: '*(OpenCode only)*', claude: '*(Claude Code only)*',
+  openclaude: '*(OpenClaude only)*', bob: '*(IBM Bob only)*',
+};
 function unlabelledHarnessBlocks(text) {
   const lines = text.split('\n');
   const bad = [];
   lines.forEach((line, i) => {
-    const m = /^\s*<!--\s*harness:(opencode|claude)\s*-->\s*$/.exec(line);
+    const m = /^\s*<!--\s*harness:(opencode|claude|openclaude|bob)\s*-->\s*$/.exec(line);
     if (m && (lines[i + 1] ?? '').trim() !== HOST_LABEL[m[1]]) bad.push(i + 1);
   });
   return bad;
@@ -46,11 +49,25 @@ function unlabelledHarnessBlocks(text) {
 /** A frontmatter value, raw. */
 const front = (text, key) => (new RegExp(`^${key}:\\s*"?([^"\\n]*)"?\\s*$`, 'm').exec(text) ?? [])[1];
 
+/**
+ * A `harness:` tag the server would not recognise. `harnessShows` compares it to the host and
+ * its family, so a typo matches nothing and hides the page from every host, silently.
+ */
+const BAD_HARNESS = (text) => {
+  const v = front(text.split('\n---\n')[0], 'harness');
+  return v !== undefined && !['opencode', 'claude', 'openclaude', 'bob'].includes(v);
+};
+
 test('each gate fails on a page that breaks it', () => {
   assert.deepEqual(relativeLinks('[a](../concepts/x.md#y)\n```\n[b](z.md)\n```', 'docs/guides/i.md'),
     ['docs/concepts/x.md']);
   assert.deepEqual(unlabelledHarnessBlocks('<!--harness:claude-->\nhooks\n<!--/harness-->'), [1]);
   assert.deepEqual(unlabelledHarnessBlocks('<!--harness:claude-->\n*(Claude Code only)*\n'), []);
+  assert.deepEqual(unlabelledHarnessBlocks('<!--harness:bob-->\n*(IBM Bob only)*\n'), []);
+  assert.deepEqual(unlabelledHarnessBlocks('<!--harness:bob-->\n*(Claude Code only)*\n'), [1]);
+  assert.equal(BAD_HARNESS('---\ngroup: guides\nharness: "bob"\n---\nx'), false);
+  assert.equal(BAD_HARNESS('---\ngroup: guides\n---\nx'), false);
+  assert.equal(BAD_HARNESS('---\ngroup: guides\nharness: "copilot"\n---\nx'), true);
   assert.equal(front('---\ngroup: guides\nkind: "map"\n---', 'kind'), 'map');
 });
 
@@ -72,6 +89,12 @@ test('no count token in understand/ or guides/ — GitHub would show it raw', ()
   }
 });
 
+test('every harness: tag names a host the selector offers', () => {
+  for (const { rel, text } of pages()) {
+    assert.ok(!BAD_HARNESS(text), `${rel}: harness "${front(text, 'harness')}" is not a host id`);
+  }
+});
+
 test('every harness block opens with a visible host label', () => {
   for (const { rel, text } of pages()) {
     assert.deepEqual(unlabelledHarnessBlocks(text), [],
@@ -82,7 +105,7 @@ test('every harness block opens with a visible host label', () => {
 test('every map page parses for each host', () => {
   for (const { rel, text } of pages()) {
     if (front(text, 'kind') !== 'map') continue;
-    for (const host of ['opencode', 'claude']) {
+    for (const host of ['opencode', 'claude', 'openclaude', 'bob']) {
       assert.ok(parseMapTable(stripHarnessBlocks(text, host)),
         `${rel} has no well-formed map table for ${host}`);
     }

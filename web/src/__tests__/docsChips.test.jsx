@@ -88,3 +88,47 @@ describe('Docs section chips', () => {
     expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
   })
 })
+
+// The host selector names the four hosts (lib/hosts.js), defaults to the deployed install's
+// own host, and a stored choice from the two-family selector is still honoured.
+describe('Docs host selector', () => {
+  const hostButtons = () => [...document.querySelectorAll('.lib-kinds .seg button')]
+  const pressed = () => hostButtons().find((b) => b.getAttribute('aria-pressed') === 'true')
+
+  it('lists the four hosts', async () => {
+    render(<Docs page="clone" overview={{}} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
+    expect(hostButtons().map((b) => b.textContent)).toEqual([
+      'OpenCode',
+      'Claude Code',
+      'BOB (IBM)',
+      'OpenClaude',
+    ])
+  })
+
+  it.each([
+    ['bob-global', 'BOB (IBM)', 'bob'],
+    ['openclaude', 'OpenClaude', 'openclaude'],
+    ['claude-global', 'Claude Code', 'claude'],
+    ['files', 'OpenCode', 'opencode'],
+  ])('an install emitted as %s opens on %s', async (emit, label, host) => {
+    render(<Docs page="clone" overview={{ emit }} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
+    expect(pressed().textContent).toBe(label)
+    expect(api.docs).toHaveBeenCalledWith(host)
+  })
+
+  it('keeps a choice stored by the old two-family selector', async () => {
+    localStorage.setItem('geneseed-harness', 'claude')
+    render(<Docs page="clone" overview={{ emit: 'bob' }} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
+    expect(pressed().textContent).toBe('Claude Code')
+  })
+
+  it('asks the server for the chosen host', async () => {
+    render(<Docs page="clone" overview={{}} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
+    fireEvent.click(screen.getByRole('button', { name: 'OpenClaude' }))
+    await waitFor(() => expect(api.docs).toHaveBeenCalledWith('openclaude'))
+  })
+})

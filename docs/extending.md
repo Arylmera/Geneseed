@@ -449,10 +449,12 @@ throws). The same file is what GitHub shows, so write for both
   short pages, each standing alone (its own intro line, links to its siblings).
 - `kind` ∈ `markdown | concept | map | glossary | about | cli`; anything else 404s. `map` is a
   concept page whose Piece/Kind/Cost table the console turns into the clickable map.
-- `harness: "claude"|"opencode"` hides the page from the other host — keep it for how-tos that
-  cannot run elsewhere; a reference page says its host in its title instead.
+- `harness: "opencode"|"claude"|"openclaude"|"bob"` hides the page from the other hosts — keep it
+  for how-tos that cannot run elsewhere; a reference page says its host in its title instead.
+  `claude` is the Claude-engine family: it shows to Claude Code, OpenClaude and Bob alike.
 - Link pages with relative `.md` links; the console rewrites them to `#/docs/<id>`. A host-only
-  passage is `<!--harness:x-->` + a visible `*(OpenCode only)*` / `*(Claude Code only)*` line.
+  passage is `<!--harness:x-->` + a visible `*(OpenCode only)*` / `*(Claude Code only)*` /
+  `*(OpenClaude only)*` / `*(IBM Bob only)*` line, with the same family rule as pages.
 - No `{N_*}` token in `understand/` or `guides/` — GitHub would show it raw.
 - `kind: "markdown"` pulls from a repo file via `source:`, traversal-guarded, optionally sliced to
   one section with `anchor:` + `slice: true`.

@@ -144,8 +144,8 @@ streams the output of background jobs and keeps their history across reloads.
   reference (generated from the harness argument parser), and a glossary, in the Library's
   three panes: the parts (Understand / Guides / Concepts / Reference) with their page counts,
   the part's pages under their sections with a filter, and the page with its breadcrumb,
-  outline and Previous / Next within the section. Filtered
-  for one host family (OpenCode, or Claude Code — which Bob and OpenClaude share); with no
+  outline and Previous / Next within the section. Filtered for one host (OpenCode, Claude
+  Code, Bob or OpenClaude; Claude-family pages show to all three Claude-engine hosts); with no
   choice stored it follows the deployed install.
 
 ### 🩺 Care

@@ -175,8 +175,8 @@ export default function Docs({ page, overview, onAction }) {
             <h1 className="h">Docs</h1>
             <span className="dim">How it works, and how to use it</span>
           </div>
-          {/* Harness selector — filters the menu and per-page config to the chosen
-            host (OpenCode vs Claude Code). Persists across reloads. */}
+          {/* Host selector — filters the menu and per-page config to the chosen host (one
+            button per host in lib/hosts.js). Persists across reloads. */}
           <Seg aria-label="Harness">
             {HARNESSES.map((h) => (
               <button
