@@ -56,7 +56,7 @@ export function extractToc(body) {
 }
 
 // State-aware overlay: on the install guide, the H3 for the deployed emit is
-// highlighted and scrolled to, so the guide opens on the reader's own path.
+// highlighted, so the reader's own path stands out.
 // Matched by slug, so a heading that drifts from this text simply goes unlit.
 const INSTALL_HEADING_BY_EMIT = {
   'opencode-global': 'OpenCode, global (recommended)',
@@ -131,7 +131,9 @@ export default function MarkdownPage({ page, overview, onAction }) {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [html, page.anchor])
 
-  // Install overlay: outline and scroll to the H3 that matches the deployed emit.
+  // Install overlay: outline the H3 that matches the deployed emit. Outline only — never
+  // scroll to it: the page opens at its top like every other, and the reader finds their
+  // own path lit when they reach it.
   useEffect(() => {
     const el = ref.current
     if (!el || page.id !== 'install') return
@@ -141,7 +143,6 @@ export default function MarkdownPage({ page, overview, onAction }) {
     const h = [...el.querySelectorAll('h3')].find((n) => slug(n.textContent || '') === slug(want))
     if (!h) return
     h.classList.add('docs-here')
-    h.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }, [html, page.id, overview?.emit])
 
   // "Try this" buttons — wired only for pages where a safe action is obvious.

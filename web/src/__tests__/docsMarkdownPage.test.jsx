@@ -1,6 +1,6 @@
 import React from 'react'
 import { render } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import MarkdownPage from '../pages/Docs/MarkdownPage.jsx'
 
 // Two DOM passes MarkdownPage makes after the body lands: on the install guide the H3 for
@@ -15,6 +15,22 @@ describe('MarkdownPage', () => {
       <MarkdownPage page={{ id: 'install', body: INSTALL }} overview={{ emit: 'claude-global' }} />,
     )
     expect(lit(container)).toEqual(['Claude Code'])
+  })
+
+  // The outline is a highlight, never a jump: the guide opens at its top like every page.
+  it('does not scroll to the lit heading on open', () => {
+    const spy = vi.fn()
+    const had = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = spy
+    try {
+      const { container } = render(
+        <MarkdownPage page={{ id: 'install', body: INSTALL }} overview={{ emit: 'bob' }} />,
+      )
+      expect(lit(container)).toEqual(['Bob'])
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      Element.prototype.scrollIntoView = had
+    }
   })
 
   it('outlines nothing for an emit with no heading, or on another page', () => {
