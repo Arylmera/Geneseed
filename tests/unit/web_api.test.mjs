@@ -2927,6 +2927,9 @@ test('the loops endpoint lists templates, bricks and overrides from the install 
     assert.equal(bugfix.graph.start, 'reproduce');
     assert.equal(bugfix.graph.loops[0].name, 'iterations');
     assert.equal(typeof bugfix.description, 'string');
+    // The graph is passed whole, so a template's `rules` reach the page with it.
+    assert.deepEqual(templates.find((t) => t.name === 'legacy-tests').graph.rules,
+      ['Tests only: production code is never touched.']);
     const apply = rows.find((b) => b.name === 'apply');
     assert.deepEqual(
       { origin: apply.origin, description: apply.description, effect: apply.effect,

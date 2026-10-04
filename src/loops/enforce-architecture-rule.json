@@ -1,6 +1,9 @@
 {
   "name": "enforce-architecture-rule",
-  "description": "Confirm the suite is green, encode the requirement's architecture rule as a test with an allowlist of today's violations for the user to review, then fix one violation per iteration — removing its allowlist entry — test, and review, until the allowlist is empty.",
+  "description": "Confirm the suite is green, encode the requirement's architecture rule as a test with an allowlist of today's violations for the user to review, then fix one violation per iteration, test, and review, until the allowlist is empty.",
+  "rules": [
+    "Each fix removes its violation's allowlist entry in the same iteration."
+  ],
   "nodes": ["baseline-green", "fitness-define", "identify", "apply", "test", "review"],
   "start": "baseline-green",
   "edges": [

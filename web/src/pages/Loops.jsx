@@ -110,6 +110,13 @@ function Templates({ data, item }) {
       </div>
       <div className="panel loop-graph">
         <RingGraph graph={sel.graph} bricks={bricks} onSelect={toCard} />
+        {sel.graph.rules?.length ? (
+          <ul className="loop-rules panel-note" aria-label="Rules every brick follows">
+            {sel.graph.rules.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        ) : null}
       </div>
       <h2 className="loop-h2">Bricks in {sel.name}</h2>
       <div className="loop-bricks">

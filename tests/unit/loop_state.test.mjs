@@ -762,14 +762,16 @@ test('spec-first-feature: the spec gate holds fail for answers, then commits the
   assert.equal(s.node, 'identify');
 });
 
-// A template's rules live in its description (remove-dead-code's cited proof, fix-flaky-tests'
+// A template's rules are its own `rules` array (remove-dead-code's cited proof, fix-flaky-tests'
 // "no retries"): `next` hands them to every brick as `rules`, not only to identify through
-// LOOP.md. A graph with no description (an older composed graph) has no `rules` key at all.
-test('next hands the graph description to every brick as rules; no description, no key', () => {
-  const s = start();
-  assert.equal(nextStep(s, BRICKS).rules, 'd');
-  const { description, ...bare } = bugfix();
-  assert.equal(description, 'd');
-  const t = initState({ title: 't', requirement: 'r', graph: bare });
+// LOOP.md. The description is only the catalogue blurb and is never sent as rules: a graph with
+// no `rules`, or an empty one, has no `rules` key at all.
+test('next hands the graph rules to every brick; no rules or empty rules, no key; never the description', () => {
+  const s = initState({ title: 't', requirement: 'r', graph: { ...bugfix(), rules: ['cite the proof', 'no retries'] } });
+  assert.deepEqual(nextStep(s, BRICKS).rules, ['cite the proof', 'no retries']);
+  const t = start();
+  assert.equal(t.graph.description, 'd');
   assert.equal(Object.hasOwn(nextStep(t, BRICKS), 'rules'), false);
+  const u = initState({ title: 't', requirement: 'r', graph: { ...bugfix(), rules: [] } });
+  assert.equal(Object.hasOwn(nextStep(u, BRICKS), 'rules'), false);
 });

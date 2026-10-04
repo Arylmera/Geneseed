@@ -148,5 +148,10 @@ export function checkGraph(graph, bricks) {
       problems.push(`${k}: must be a list of non-empty glob strings`);
     }
   }
+  // optional instruction list every brick receives through `loop next`
+  const rules = graph.rules;
+  if (rules !== undefined && !(Array.isArray(rules) && rules.every((r) => typeof r === 'string' && r.trim()))) {
+    problems.push('rules: must be a list of non-empty strings');
+  }
   return problems;
 }

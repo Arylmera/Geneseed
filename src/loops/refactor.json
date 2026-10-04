@@ -1,6 +1,9 @@
 {
   "name": "refactor",
-  "description": "Confirm the suite is green before touching anything, then iterate on the shape of the code alone. Tests are not edited by this template — a refactor that needs a different test is a behaviour change, not a refactor.",
+  "description": "Confirm the suite is green before touching anything, then iterate on the shape of the code alone.",
+  "rules": [
+    "Tests are not edited: a refactor that needs a different test is a behaviour change, not a refactor."
+  ],
   "nodes": ["baseline-green", "identify", "apply", "test"],
   "start": "baseline-green",
   "edges": [

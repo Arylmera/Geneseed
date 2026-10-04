@@ -59,9 +59,11 @@ bricks' note files.
   template at `loop init`, extendable with `--contracts` or by hand in `LOOP.md`.
   `ignoreDeletions` excludes matched files from the >20-deleted-lines escalation only — the write
   set still applies to them.
-- **`rules` on every node** — `geneseed loop next` hands the template's own `description` as
-  `rules` to every brick it runs, not only the iteration head, so a template-wide proviso is
-  visible everywhere, including to `review`.
+- **`rules` on every node** — a template may carry `rules`, a list of one-line instructions
+  (`loop check` refuses anything else); `geneseed loop next` hands them to every brick it runs,
+  not only the iteration head, so a template-wide proviso is visible everywhere, including to
+  `review`. `description` stays the catalogue blurb and is never sent as rules. The shipped
+  templates' instructions moved out of their descriptions into `rules`.
 
 ### Changed
 - **`feature`** now closes through an independent `done-check` — it maps every requirement to a

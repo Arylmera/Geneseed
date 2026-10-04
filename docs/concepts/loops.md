@@ -212,13 +212,21 @@ literal (non-`*`/`?`) path segment — a wildcard-only entry like `**` or `**/*.
 otherwise declare the whole repo as writable, so it's left to match nothing instead and the
 check fails closed.
 
-## `rules`: the template's description, on every step
+## `description` and `rules`: what a template is for, and what every brick must do
 
-`geneseed loop next` hands the template's own `description` field to every node as `rules` — not
-only the iteration head that reads `LOOP.md` — so a template-wide proviso (cite your deletion
-proof, a flaky test is never fixed with a retry, contract edits stop for a human by design) is
-visible to whichever brick runs, including `review`, which checks the diff against it. A graph
-with no `description` omits the field rather than sending an empty one.
+A template's JSON carries two prose fields, and they are never confused:
+
+- **`description`** — the catalogue blurb: what the template is for and when to pick it. The
+  `loop` skill and the console read it to choose a template; no brick ever receives it.
+- **`rules`** — optional, a list of one-line instructions every brick of this loop must follow
+  (`["Each card's intent cites the proof it is unused: …", "Generated sources do not count as
+  unused."]`). `geneseed loop check` refuses anything but a list of non-empty strings.
+
+`geneseed loop next` hands the template's `rules` to every node — not only the iteration head that
+reads `LOOP.md` — so a template-wide proviso (cite your deletion proof, a flaky test is never fixed
+with a retry, contract edits stop for a human by design) is visible to whichever brick runs,
+including `review`, which checks the diff against it. A graph with no `rules`, or an empty list,
+omits the field; there is no fallback to `description`.
 
 ## Java notes for the newer bricks
 

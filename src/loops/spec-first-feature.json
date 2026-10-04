@@ -1,6 +1,10 @@
 {
   "name": "spec-first-feature",
-  "description": "Write the feature's spec first — specs/<slug>/spec.md with EARS acceptance criteria and an ordered task list — for the user to review (open questions wait for the user's answers), commit it, then build one task per iteration: apply, test, review. identify's done is verified by an independent done-check that maps every criterion to a passing test.",
+  "description": "Write the feature's spec first — specs/<slug>/spec.md with EARS acceptance criteria and an ordered task list — for the user to review, commit it, then build it task by task: apply, test, review. An independent done-check maps every criterion to a passing test before the loop closes.",
+  "rules": [
+    "One spec task per iteration, in the spec's order.",
+    "Open questions in the spec wait for the user's answers; never answer them yourself."
+  ],
   "nodes": ["spec", "identify", "apply", "test", "review", "done-check"],
   "start": "spec",
   "edges": [

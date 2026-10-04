@@ -1,6 +1,9 @@
 {
   "name": "architecture-decision",
-  "description": "Record one architecture decision record per decision the requirement names: pick the next undocumented decision (the card's write set is its ADR file), draft it, have a skeptic attack it, and let the user review the ADR that survives, until every decision is recorded as Proposed.",
+  "description": "Record one architecture decision record per decision the requirement names: draft it, have a skeptic attack it, and let the user review the ADR that survives, until every decision is recorded as Proposed.",
+  "rules": [
+    "Pick the next undocumented decision; the card's write set is its ADR file."
+  ],
   "nodes": ["identify", "adr-draft", "adr-challenge"],
   "start": "identify",
   "edges": [

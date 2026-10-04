@@ -40,7 +40,12 @@ const GRAPH = {
 }
 const PAYLOAD = {
   templates: [
-    { name: 'tiny', description: 'The smallest loop.', origin: 'shipped', graph: GRAPH },
+    {
+      name: 'tiny',
+      description: 'The smallest loop.',
+      origin: 'shipped',
+      graph: { ...GRAPH, rules: ['Cite the proof it is unused.', 'Never retry a flaky test.'] },
+    },
     {
       name: 'other',
       description: 'Another.',
@@ -91,6 +96,22 @@ describe('Loops', () => {
     render(<Loops tab="templates" item="other" />)
     await screen.findByText('Another.')
     expect(document.querySelector('.loop-tpl.on b').textContent).toBe('other')
+  })
+
+  // A template's `rules` (what every brick must do) are listed under its graph, in order; a
+  // template with none (`other`) shows no list, and the description is never repeated there.
+  it('lists the template rules under the graph, and nothing when there are none', async () => {
+    const { unmount } = render(<Loops tab="templates" />)
+    await screen.findByText('The smallest loop.')
+    const list = screen.getByRole('list', { name: 'Rules every brick follows' })
+    expect([...list.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'Cite the proof it is unused.',
+      'Never retry a flaky test.',
+    ])
+    unmount()
+    render(<Loops tab="templates" item="other" />)
+    await screen.findByText('Another.')
+    expect(screen.queryByRole('list', { name: 'Rules every brick follows' })).toBeNull()
   })
 
   it('scrolls to the brick card when its node is clicked', async () => {

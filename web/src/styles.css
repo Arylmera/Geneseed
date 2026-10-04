@@ -2821,6 +2821,7 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
 .loop-tpl:hover { border-color: var(--line-2); }
 .loop-tpl.on { border-color: var(--accent-line); background: var(--accent-soft); }
 .loop-graph { align-items: center; }
+.loop-rules { align-self: stretch; margin: 4px 0 0; padding-left: 18px; }
 .loop-ring { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto;
   font-family: var(--font-ui); }
 /* Loops › Active: a card per registered loop. Awaiting borders in --warn (it needs the user);

@@ -126,3 +126,13 @@ test('contracts and ignoreDeletions must be lists of non-empty glob strings', ()
   ]);
   assert.deepEqual(checkGraph({ ...bugfix(), contracts: [3] }, BRICKS), ['contracts: must be a list of non-empty glob strings']);
 });
+
+// `rules` is the optional list of instructions every brick of the loop follows (the description
+// is only the catalogue blurb). Absent is fine; present, it must be an array of non-empty strings.
+test('rules is absent, or a list of non-empty strings', () => {
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: ['cite the proof it is unused'] }, BRICKS), []);
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: [] }, BRICKS), []);
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: 'cite the proof' }, BRICKS), ['rules: must be a list of non-empty strings']);
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: ['ok', '  '] }, BRICKS), ['rules: must be a list of non-empty strings']);
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: [3] }, BRICKS), ['rules: must be a list of non-empty strings']);
+});

@@ -17,6 +17,7 @@ its own — when the branch has `specs/*/spec.md`, its next unfinished task. If 
 
 Declare every action honestly: the diff is scored again before commit, and anything outside the
 write set or under-declared escalates to a blocking stop. If LOOP.md's notes say the previous
-attempt was re-split, make this card strictly smaller than that one.
+attempt was re-split, make this card strictly smaller than that one. The card obeys every
+instruction in the template's `rules` (e.g. its intent cites the proof that code is unused).
 
 Never edit, create or delete any file: this brick only reads.

@@ -1,6 +1,10 @@
 {
   "name": "fix-flaky-tests",
-  "description": "Confirm the suspected flaky tests by 20 repeated runs, then fix one per iteration at its root cause — shared state, ordering, time, concurrency — never with a retry, a sleep or a longer timeout; re-confirm it with 20 runs, test, and review. A test that fails every run is a bug for bugfix; one that never fails is not fixed.",
+  "description": "Confirm the suspected flaky tests by 20 repeated runs, then fix one per iteration at its root cause, re-confirm it with 20 runs, test, and review.",
+  "rules": [
+    "Fix at the root cause — shared state, ordering, time, concurrency — never with a retry, a sleep or a longer timeout.",
+    "A test that fails every run is a bug for the bugfix template; one that never fails is not fixed."
+  ],
   "nodes": ["flake-repro", "identify", "apply", "flake-check", "test", "review"],
   "start": "flake-repro",
   "edges": [

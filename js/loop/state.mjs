@@ -195,8 +195,9 @@ export function nextStep(state, bricks) {
     skill: brick.skill, outcomes: brick.outcomes, prompt: brick.body, card: state.card,
     notes: state.notes, validate: brick.effect === 'mutate' && !state.validated,
     // The template's own rules (a cited proof before a deletion, no retries as a flake fix) are
-    // in its description; every brick gets them, not only the head that reads LOOP.md.
-    ...(state.graph.description ? { rules: state.graph.description } : {}),
+    // its `rules` list; every brick gets them, not only the head that reads LOOP.md. Never the
+    // description: that is the catalogue blurb, and sending it would dilute the rules.
+    ...(state.graph.rules?.length ? { rules: state.graph.rules } : {}),
   };
 }
 
