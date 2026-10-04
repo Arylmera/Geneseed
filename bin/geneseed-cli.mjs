@@ -58,7 +58,7 @@
 import '../js/lib/node-floor.mjs';
 import { cliSpec, printHelp, printVerbList } from '../js/ui/cli.mjs';
 import { parseIntStrict } from '../js/lib/text.mjs';
-import { printErr } from '../js/lib/fs.mjs';
+import { printErr, printOut } from '../js/lib/fs.mjs';
 
 /**
  * The verbs this entry answers — and, since P10c, NOTHING ELSE ABOUT THEM.
@@ -327,9 +327,14 @@ async function main(argv) {
   if (verb === 'validate') {
     // Lazy for the same reason the table rows are — `parseDriverArgs` alone drags the whole
     // generator driver in, and every OTHER verb was paying for it.
-    const [{ cmdValidate }, { parseDriverArgs }] = await Promise.all([
+    const [{ cmdValidate, VALIDATE_USAGE }, { parseDriverArgs }] = await Promise.all([
       import('../js/inspect/validate.mjs'), import('../js/build/driver.mjs'),
     ]);
+    // Before the borrowed parser, whose own `-h` prints the GENERATOR's usage.
+    if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
+      printOut(VALIDATE_USAGE);
+      return 0;
+    }
     try {
       return cmdValidate(parseDriverArgs(argv.slice(1)));
     } catch (e) {

@@ -171,7 +171,7 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
  * A pre-marker install still has a (host, scope), which is what the walk found it by, so it
  * is rebuilt in its own mode rather than defaulted to OpenCode.
  */
-export const DEFAULT_EMIT = new Map([
+const DEFAULT_EMIT = new Map([
   ['opencode global', 'opencode-global'], ['opencode project', 'opencode'],
   ['claude global', 'claude-global'], ['claude project', 'claude'],
   ['bob global', 'bob-global'], ['bob project', 'bob'],
@@ -483,7 +483,10 @@ export function cmdTheme(args) {
     written.push(dest);
   }
   printOut(`[theme] wrote ${written.map((p) => path.basename(p)).join(', ')} to ${destDir}\n`);
-  printOut(`[theme] select in OpenCode with: /theme ${full}`
-    + (args.solidOnly ? '' : `  (or /theme ${full}-transparent)`) + '\n');
+  // The hint names what was WRITTEN: `--transparent-only` writes no `${full}.json`, and a
+  // hint selecting it would point OpenCode at a theme that does not exist.
+  const [first, ...rest] = written.map((p) => path.basename(p, '.json'));
+  printOut(`[theme] select in OpenCode with: /theme ${first}`
+    + rest.map((n) => `  (or /theme ${n})`).join('') + '\n');
   return 0;
 }

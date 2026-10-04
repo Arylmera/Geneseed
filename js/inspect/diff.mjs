@@ -45,7 +45,7 @@ import {
   GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, footprintOfDir, modeOfDir, postureOfDir,
+  EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir, footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
@@ -178,6 +178,9 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
       posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
       // The loop skill's preset, or its `Default trust preset:` line reads as edited.
       trust: trustOfDir(dir),
+      // The excluded rules, or an install built `--exclude-rules "process 5"` reads its
+      // carrier as drift: `expected` would re-state the rule the deployment took away.
+      excludeRules: excludedRulesOfDir(dir),
     }));
     // The one place a render depends on WHERE it is installed: a global Bob emit writes each
     // folder skill's absolute directory into its SKILL.md (see `writeNativeLayer`), so the

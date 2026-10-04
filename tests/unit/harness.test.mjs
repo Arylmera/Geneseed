@@ -580,6 +580,33 @@ test('the gate flags an unknown pack in the build default, and NOTES a narrowed 
     'the note predicate now swallows real problems');
 });
 
+test('an unknown rule id in the build default is dropped with a WARN, not written', () => {
+  // `--exclude-rules` refuses an unknown id; `harness.config.json` did not check at all. The id
+  // went into the `Excluded rules:` marker, `rebuild-all` passed it back as a flag, and the flag
+  // parser died on it — every rebuild of that install, forever. So: the known id still binds,
+  // the unknown one is named on stderr, and the marker carries only the known one.
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'harness.config.json'), 'utf8'));
+  const r = withFault(
+    { 'harness.config.json': JSON.stringify({ ...cfg, excludeRules: ['process 5', 'nosuch 9'] }) },
+    (root) => {
+      GATE_HOME ??= makeSandbox('gs-gatehome-');
+      const cfgDir = path.join(GATE_HOME.path, 'xr-cfg');
+      const proc = spawnSync(process.execPath, [path.join(root, 'bin', 'build-driver.mjs'),
+        '--emit', 'opencode-global', '--theme', 'neutral', '--config-dir', cfgDir,
+        '--out', path.join(GATE_HOME.path, 'xr-bundle')], {
+        cwd: root, encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true,
+        env: { ...process.env, ...homeOverrides(GATE_HOME.path) },
+      });
+      const agent = path.join(cfgDir, 'AGENT.md');
+      return { ...proc, agent: fs.existsSync(agent) ? fs.readFileSync(agent, 'utf8') : '' };
+    });
+  assert.equal(r.status, 0, `the emit failed:
+${r.stderr}`);
+  assert.match(r.stderr, /"excludeRules" names unknown rule\(s\) 'nosuch 9' — ignoring them\./);
+  assert.match(r.agent, /^Excluded rules: process 5$/m,
+    'the marker did not carry exactly the known exclusion');
+});
+
 test('the gate holds knownRuleIds to the rules the pack files actually define', () => {
   // ⚠ TWO READERS OF ONE DIRECTORY. `constitutionProblems` walks the pack files to validate
   // citations; `knownRuleIds` walks them to decide what `--exclude-rules` accepts. Nothing but

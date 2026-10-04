@@ -9,6 +9,9 @@
 import path from 'node:path';
 import { buildInto, emitGlobalInto, emitProjectInto } from '../build/driver.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
+import {
+  doctrinesOfDir, excludedRulesOfDir, modeOfDir, postureOfDir,
+} from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut, printErr, readText } from '../lib/fs.mjs';
 import { comparePaths } from '../lib/paths.mjs';
@@ -20,6 +23,22 @@ import { TOKEN_RE, isDir, isFile, rglob, sortedUnique, withTempDir, within } fro
 // --------------------------------------------------------------------------------------
 // validate  —  the generator's `--validate-only`, on this binary because it runs the doctor
 // --------------------------------------------------------------------------------------
+
+/**
+ * `validate --help`. Its own text, because the parser it borrows is the generator's and that
+ * parser's `-h` prints `usage: geneseed-build …` — naming `--sync-themes`/`--config-dir`, which
+ * this verb refuses, under a program name the user did not type.
+ */
+export const VALIDATE_USAGE = [
+  'usage: geneseed validate [-h] [--theme THEME] [--emit EMIT] [--out OUT] [--root ROOT]',
+  '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
+  '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES] [-v]',
+  '',
+  "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
+  "Takes the generator's render flags (see geneseed-build --help) except --sync-themes and",
+  '--config-dir.',
+  '',
+].join('\n');
 
 /**
  * `build._validate_sandbox_problems` — the unresolved-token / dead-link / non-hermetic-link
@@ -109,6 +128,17 @@ function captureStreams(fn) {
  * contract absolutely — this verb is deliberately outside the verb table, so nothing else does.
  */
 export function cmdValidate(args) {
+  // Two generator flags with no meaning in a dry run, refused rather than silently ignored:
+  // `--sync-themes` WRITES into the live themes dir, and `--config-dir` names a real install dir
+  // while every render here goes to a sandbox — accepting either would claim a check of
+  // something this verb never touches.
+  for (const [flag, set] of [['--sync-themes', args.syncThemes], ['--config-dir', args.cfgDir]]) {
+    if (set) {
+      printErr(`geneseed: error: validate does not take ${flag} — it renders into a sandbox `
+        + 'and writes nothing real; run `geneseed validate --help` for what it takes\n');
+      return 2;
+    }
+  }
   const problems = [];
   const scan = withTempDir((tmpRaw) => {
     // `.resolve()` mirrors `_check_build`'s: on Windows a temp dir can come back in 8.3
@@ -122,7 +152,13 @@ export function cmdValidate(args) {
     const sandbox = args.root ? path.join(root, 'bundle') : root;
     const cfgDir = path.join(tmp, 'cfg');
     const emit = args.emit;
-    const opts = { theme: args.theme, footprint: args.footprint };
+    // THE FIVE RENDER AXES TRAVEL WITH THE DRY RUN. They were parsed and then dropped, so
+    // `validate --doctrines craft` checked an all-packs render — a pass that said nothing
+    // about the build the operator was about to run.
+    const opts = {
+      theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
+      trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
+    };
     let scanDirs;
     try {
       if (emit.endsWith('-global')) {
@@ -158,6 +194,14 @@ export function cmdValidate(args) {
       .sort(comparePaths);
     printOut(`[validate-only] theme=${args.theme} emit=${emit} `
       + `footprint=${args.footprint}\n`);
+    // READ BACK OFF THE RENDER, not echoed from `args`: this line is the proof the axes reached
+    // the sandbox, which an echo of the flags would print just as happily if they had not.
+    const at = scanDirs[0];
+    const packs = doctrinesOfDir(at);
+    const excluded = excludedRulesOfDir(at);
+    printOut(`[validate-only] rendered at posture=${postureOfDir(at) ?? '?'} `
+      + `mode=${modeOfDir(at) ?? '?'} packs=${packs ? packs.join(',') || 'none' : '?'} `
+      + `excluded=${excluded.map((id) => id.replace('.', ' ')).join(', ') || 'none'}\n`);
     printOut(`[validate-only] would write ${written.length} file(s) under ${args.out}`
       + (args.root ? ` (root ${args.root})` : '')
       + ' — nothing was actually written (sandboxed).\n');
