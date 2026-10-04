@@ -1,6 +1,6 @@
 {
   "name": "api-endpoint",
-  "description": "Build an HTTP API feature (a Spring MVC controller, say) one endpoint change per iteration: plan, apply, test, write or update the endpoint's Bruno request, run a security review, and review. The card's write set names the .bru requests too. An OpenAPI spec change blocks for a human by default; LOOP.md's contracts can be trimmed.",
+  "description": "Build an HTTP API feature (a Spring MVC controller, say) one endpoint change per iteration: plan, apply, test, write or update the endpoint's Bruno request, run a security review, and review. The card's write set names the .bru requests too. An OpenAPI or Swagger spec edit stops for a human by design; the aggressive preset or trimming LOOP.md's contracts relaxes it.",
   "nodes": ["plan", "identify", "apply", "test", "bruno-test", "security-scan", "review"],
   "start": "plan",
   "edges": [

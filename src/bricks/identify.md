@@ -9,7 +9,9 @@ Read the requirement and the loop's history (LOOP.md, `git log --format=%(traile
 branch). If the requirement is fully met and the suite is green, report `done`.
 
 Otherwise pick the SMALLEST next change that moves the requirement forward and can be tested on
-its own. Report `more` with a card, as JSON:
+its own — when the branch has `specs/*/spec.md`, its next unfinished task. If the latest note is
+`done-check`'s unmet criteria, report `more` with a card for one of them, never `done`. Report
+`more` with a card, as JSON:
 {"intent": "<one line>", "writeSet": ["<every file ANY brick this iteration writes, tests/docs too>"],
  "actions": ["<each of: format, imports, rename, logic, new-file, api, delete, architecture>"]}
 

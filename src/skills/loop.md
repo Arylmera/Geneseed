@@ -48,16 +48,19 @@ Repeat `geneseed loop next` and act on its JSON:
 - **`{awaiting}`** — a person must decide. Present it: `launch` → the graph in `LOOP.md`;
   `declared` → the card, its score and the threshold; `actual` → `git diff --cached` and the
   `reasons`; `gate` → what `node` produced (the file its `note` names, or `git diff`), the
-  `note` and the `outcome` it reported — `amend` re-runs that brick with their note. Then
+  `note` and the `outcome` it reported — `ok` follows the outcome the brick reported (on a held
+  `fail` it stops; to continue, `amend` with your answers), `amend` re-runs that brick with their
+  note. Then
   **end the run** and wait. On their answer:
   `geneseed loop decide --verdict ok|no|amend --note "<their words>"` and continue.
 - **`{verify, run}`** — run exactly the `run` command it prints.
 - **`{node, validate: true}`** — score the card before the brick runs:
   `geneseed loop score --declared` (the card the iteration head recorded), or for a setup brick with no
-  card `geneseed loop score --declared --actions <kinds> --write-set <files> --intent <label>`.
+  card `geneseed loop score --declared --actions <kinds> --write-set <files> --intent <label>`
+  (`spec`: `--actions new-file --write-set specs/**`).
   `blocking` turns into an `{awaiting}` on the next `next`.
 - **`{node}`** — run the brick: dispatch its `agent` (or follow its `skill`) with the `prompt`,
-  the `card` and the `notes`. Then report the outcome, one of its `outcomes`:
+  the `card`, the `notes` and the template's `rules`. Then report the outcome, one of its `outcomes`:
   `git status --porcelain | geneseed loop record --outcome <outcome>` — the iteration head
   (`identify`, `upgrade-scout`, `ci-triage`) adds `--card '<card json>'` when it reports `more`;
   a brick that reports a note file's path gets `--note-file <path>`, so its finding lands in

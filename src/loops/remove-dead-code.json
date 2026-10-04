@@ -20,5 +20,5 @@
     { "name": "review-fix", "nodes": ["apply", "test", "review"], "max": 3 }
   ],
   "weights": { "delete": 0.5 },
-  "ignoreDeletions": ["**/generated/**", "**/generated-sources/**", "**/target/**", "**/build/**"]
+  "ignoreDeletions": ["**/generated/**", "**/generated-sources/**", "**/target/**", "**/build/generated/**"]
 }

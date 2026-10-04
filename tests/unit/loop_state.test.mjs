@@ -761,3 +761,15 @@ test('spec-first-feature: the spec gate holds fail for answers, then commits the
   assert.match(r.trailers, /\nLoop-Gates: spec$/);
   assert.equal(s.node, 'identify');
 });
+
+// A template's rules live in its description (remove-dead-code's cited proof, fix-flaky-tests'
+// "no retries"): `next` hands them to every brick as `rules`, not only to identify through
+// LOOP.md. A graph with no description (an older composed graph) has no `rules` key at all.
+test('next hands the graph description to every brick as rules; no description, no key', () => {
+  const s = start();
+  assert.equal(nextStep(s, BRICKS).rules, 'd');
+  const { description, ...bare } = bugfix();
+  assert.equal(description, 'd');
+  const t = initState({ title: 't', requirement: 'r', graph: bare });
+  assert.equal(Object.hasOwn(nextStep(t, BRICKS), 'rules'), false);
+});
