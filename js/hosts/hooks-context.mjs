@@ -8,6 +8,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { readText, printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
+import { relPosix } from '../lib/text.mjs';
 import { resolvePath, sovereignBypass } from './hosts.mjs';
 import { isFile, isDir, selfAndParents, sortPaths, listDir } from './hooks-prims.mjs';
 
@@ -177,7 +178,7 @@ function disp(pathStr, root) {
       !== path.parse(path.resolve(root)).root.toLowerCase()) {
     return pathStr;
   }
-  return path.relative(root, pathStr).split(path.sep).join('/');
+  return relPosix(root, pathStr);
 }
 
 

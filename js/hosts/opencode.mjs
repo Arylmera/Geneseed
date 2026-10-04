@@ -16,18 +16,21 @@
  *
  * TWO STREAMS, AND THE SPLIT IS NOT TIDY. `_warn_if_overrides_stale` prints to STDOUT
  * while every warning in `js/hosts/native.mjs` goes to stderr. That is the Python's own
- * inconsistency and it is reproduced, not corrected: the parity gate compares both
- * specification, and `tests/unit/agent_overrides.test.mjs` pins the stale notice to stdout.
- * It is safe because this is the
- * generator's CLI, which prints progress to stdout by design — unlike a hook path, where
- * a stray stdout byte silently disarms a blocking gate.
+ * inconsistency and it is reproduced, not corrected: `tests/unit/agent_overrides.test.mjs`
+ * pins the stale notice to stdout. It is safe because this is the generator's CLI, which
+ * prints progress to stdout by design — unlike a hook path, where a stray stdout byte
+ * silently disarms a blocking gate.
  */
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { writeText, readText, copyFile } from '../lib/fs.mjs';
 import { jsonDumps, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
-import { descOf, stripSkillBodyLinks, pushOverrideLines } from './native.mjs';
+import { sourceReleaseVersion } from '../build/version.mjs';
+import { firstBlockquote, stripSkillBodyLinks, pushOverrideLines } from './native.mjs';
+
+// Re-exported for `js/web/api.mjs` and the tests, which import it from here.
+export { sourceReleaseVersion };
 
 /** ANSI colour-name -> integer (0-7). Mirrors `_build_emit._ANSI`. */
 const ANSI = {
@@ -94,9 +97,17 @@ const AGENT_OVERRIDES_STUB = {
   },
 };
 
-/** Mirrors `_build_emit.COMMAND_SET` — the hot skills worth a one-keystroke trigger. */
-const COMMAND_SET = ['commit', 'plan', 'code-review', 'review-response',
-  'ship', 'debug', 'research'];
+/**
+ * `_build_emit.COMMAND_SET` — the hot skills worth a one-keystroke trigger, as command name ->
+ * skill name. A map, not a list, because the two can differ: `code-review` became
+ * `geneseed-code-review` (so it no longer shadows a host built-in) while the command stays
+ * `/code-review`. As a list the renamed entry missed its skill and was dropped in silence, so a
+ * missing skill is now a thrown error in `writeCommandLayer`.
+ */
+const COMMAND_SET = {
+  commit: 'commit', plan: 'plan', 'code-review': 'geneseed-code-review',
+  'review-response': 'review-response', ship: 'ship', debug: 'debug', research: 'research',
+};
 
 /** Mirrors `_build_emit.PONYTAIL_COMMAND_BODY`. */
 const PONYTAIL_COMMAND_BODY =
@@ -111,22 +122,6 @@ function truthyEnv(name) {
   // `str.lower()` and `toLowerCase()` disagree on a few code points (dotted/dotless I
   // among them); the accepted values are ASCII, so the sets coincide here.
   return ['1', 'on', 'true', 'yes'].includes((process.env[name] || '').toLowerCase());
-}
-
-/**
- * `_build_core.source_release_version`. It reads `cfg.config`, so it takes `cfg` rather than
- * importing core — and it stayed HERE when core landed as `js/build/source.mjs`, which is why
- * `js/build/version.mjs` reaches back into the OpenCode module for it.
- */
-export function sourceReleaseVersion(cfg) {
-  try {
-    const data = parseJson(readText(cfg.config));
-    const v = data && typeof data === 'object' && !Array.isArray(data) ? data.version : null;
-    if (typeof v === 'string' && v) return v;
-  } catch {
-    // OSError / JSONDecodeError — degrade to "not newer" rather than raising.
-  }
-  return '0.0.0';
 }
 
 const GRAY = 8;
@@ -181,7 +176,6 @@ export function writeTheme(themesDir, themeName, theme) {
   return dest;
 }
 
-/** `_build_emit._color_theme_json`. */
 /**
  * `_build_emit._PALETTE_ROLES` — every role some slot reads, as a set.
  *
@@ -192,6 +186,7 @@ export function writeTheme(themesDir, themeName, theme) {
  */
 export const PALETTE_ROLES = new Set(Object.values(SLOT_ROLE));
 
+/** `_build_emit._color_theme_json`. */
 export function colorThemeJson(palette, transparent) {
   const t = {};
   for (const [slot, role] of Object.entries(SLOT_ROLE)) {
@@ -272,8 +267,16 @@ export function ensureAgentOverridesStub(cfg, base) {
   writeText(dest, `${jsonDumpsIndent(stub, { ensureAscii: false })}\n`);
 }
 
-/** `_build_emit._write_primary_agent` — the opt-in `mode: primary` orchestrator. */
-export function writePrimaryAgent(cfg, agentsDir, overrides) {
+/**
+ * `_build_emit._write_primary_agent` — the opt-in `mode: primary` orchestrator.
+ *
+ * `claim` is `claimer`'s closure from `js/hosts/native.mjs`, and this and the two command
+ * writers below take it for the reason `writeNativeLayer` does: their paths are pushed into
+ * `owned`, and uninstall deletes what `owned` names — so writing over a user's own
+ * `command/commit.md` without the check made uninstall delete it. Default: claim everything,
+ * for a caller with no manifest to consult.
+ */
+export function writePrimaryAgent(cfg, agentsDir, overrides, claim = () => true) {
   if (!truthyEnv('GENESEED_PRIMARY') || !existsSync(cfg.primaryAgentSrc)
       || !statSync(cfg.primaryAgentSrc).isFile()) {
     return null;
@@ -286,13 +289,14 @@ export function writePrimaryAgent(cfg, agentsDir, overrides) {
     && overrides.orchestrator) || {};
   pushOverrideLines(fm, ov);
   const dest = path.join(agentsDir, 'orchestrator.md');
+  if (!claim(dest)) return null;
   mkdirSync(path.dirname(dest), { recursive: true });
   writeText(dest, `---\n${fm.join('\n')}\n---\n\n${body}`);
   return dest;
 }
 
 /** `_build_emit._write_command_layer` — the opt-in /slash commands. */
-export function writeCommandLayer(cfg, items, commandDir) {
+export function writeCommandLayer(cfg, items, commandDir, claim = () => true) {
   if (!truthyEnv('GENESEED_COMMANDS')) return [];
   const byName = new Map();
   for (const { text, src } of items) {
@@ -304,12 +308,15 @@ export function writeCommandLayer(cfg, items, commandDir) {
     }
   }
   const written = [];
-  for (const name of COMMAND_SET) {
-    const text = byName.get(name);
-    if (text === undefined) continue;
-    const desc = descOf(text);
-    const body = stripSkillBodyLinks(text.replace(/^\n+/, ''));
+  for (const [name, skill] of Object.entries(COMMAND_SET)) {
+    const text = byName.get(skill);
+    if (text === undefined) {
+      throw new Error(`COMMAND_SET: /${name} runs skill '${skill}', which src/skills/ does not have`);
+    }
     const dest = path.join(commandDir, `${name}.md`);
+    if (!claim(dest)) continue;
+    const desc = firstBlockquote(text);
+    const body = stripSkillBodyLinks(text.replace(/^\n+/, ''));
     mkdirSync(path.dirname(dest), { recursive: true });
     writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${body}`);
     written.push(dest);
@@ -317,9 +324,10 @@ export function writeCommandLayer(cfg, items, commandDir) {
   return written;
 }
 
-/** `_build_emit._write_ponytail_command` — registered UNCONDITIONALLY. */
-export function writePonytailCommand(commandDir) {
+/** `_build_emit._write_ponytail_command` — registered UNCONDITIONALLY; null when the user's. */
+export function writePonytailCommand(commandDir, claim = () => true) {
   const dest = path.join(commandDir, 'ponytail.md');
+  if (!claim(dest)) return null;
   mkdirSync(path.dirname(dest), { recursive: true });
   const desc = 'Set the ponytail minimal-code level for the session: lite | full | ultra | off';
   writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${PONYTAIL_COMMAND_BODY}`);

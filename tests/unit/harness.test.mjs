@@ -1288,6 +1288,31 @@ test('theme detection falls back to a global Bob\'s rules sigil', () => {
   });
 });
 
+test('a theme marker that is a path, not a name, is ignored', () => {
+  // The marker's value becomes `<themes>/<name>.json` in `loadTheme`, so a path in it loaded
+  // any `.json` as a theme — `../harness.config` resolves to the repo's own config. A value
+  // that is not a plain name (or is a `_` scaffold) reads as no marker at all.
+  for (const bad of ['../harness.config', 'sub/imperial', '..\\x', '_TEMPLATE']) {
+    withDir((d) => {
+      fs.writeFileSync(path.join(d, '.geneseed-theme'), `${bad}\n`, 'utf8');
+      assert.equal(themeOfDir(d), null, `marker ${JSON.stringify(bad)} was trusted`);
+    });
+  }
+  // A plain name that is merely UNKNOWN is still returned, so the render refuses it loudly
+  // (`status/a-bogus-theme-marker-refuses-like-the-generator`) instead of hiding a typo.
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, '.geneseed-theme'), 'nosuchtheme\n', 'utf8');
+    assert.equal(themeOfDir(d), 'nosuchtheme');
+  });
+  // …and falls through to the sigil scan, as a missing marker does.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    generate(['--emit', 'files', '--theme', 'imperial', '--out', out], path.join(d, 'home'));
+    fs.writeFileSync(path.join(out, '.geneseed-theme'), '../harness.config\n', 'utf8');
+    assert.equal(themeOfDir(out), 'imperial');
+  });
+});
+
 test('theme detection is null when nothing says', () => {
   withDir((d) => {
     assert.equal(themeOfDir(d), null);

@@ -1170,6 +1170,56 @@ test('agent overrides are absent, parsed, or malformed — never fatal', () => {
   });
 });
 
+test('an override value that would break the frontmatter is warned about and dropped', () => {
+  // Each value is written VERBATIM after `key: `. A boolean or a list made `formatValue` throw
+  // a bare TypeError and abort the emit; a string with a newline wrote frontmatter keys of its
+  // own. Only a newline-free string or a finite number is taken; the rest is named and skipped.
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'agent-overrides.json'), JSON.stringify({ agents: {
+      reviewer: { model: 'x/y\npermission: allow', temperature: true, steps: [20], variant: 'high' },
+      tester: 'haiku',
+      explorer: { model: 'a/b', steps: 20 },
+    } }));
+    let ov;
+    const err = captured(() => { ov = loadAgentOverrides(d); })[2];
+    for (const bad of ['agents.reviewer.model contains a line break',
+      'agents.reviewer.temperature is not a string or a finite number',
+      'agents.reviewer.steps is not a string or a finite number',
+      'agents.tester is not an object']) {
+      assert.ok(err.includes(bad), `no warning: ${bad}\n${err}`);
+    }
+    assert.ok(err.includes(path.join(d, 'agent-overrides.json')), 'the warning names no file');
+    native(d, ov);                                     // must not throw
+    const reviewer = read(d, 'agents', 'reviewer.md');
+    assert.ok(!reviewer.includes('permission: allow\n'), 'the injected key reached frontmatter');
+    assert.ok(!/^model:/m.test(reviewer) && !/^temperature:/m.test(reviewer));
+    assert.match(reviewer, /^variant: high$/m, 'a valid sibling value was dropped with the bad ones');
+    assert.match(read(d, 'agents', 'explorer.md'), /^steps: 20$/m);
+  });
+});
+
+test('a Claude-family emit warns once per override key it cannot apply', () => {
+  // The seeded stub advertises model/temperature/variant/steps on every host, and Claude Code's
+  // agent frontmatter takes `model` only: the other three were silent no-ops there.
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'agent-overrides.json'), JSON.stringify({ agents: {
+      reviewer: { model: 'haiku', temperature: 0.1, steps: 5 },
+      tester: { temperature: 0.2 },
+    } }));
+    const ov = loadAgentOverrides(d);
+    const [, , err] = captured(() => writeNativeLayer(itemsOf(), path.join(d, 'agents'),
+      path.join(d, 'skills'), ov, { host: 'claude', src: cfg().src }));
+    assert.equal(err.split("sets 'temperature'").length - 1, 1, err);
+    assert.equal(err.split("sets 'steps'").length - 1, 1, err);
+    assert.ok(!err.includes("sets 'model'") && !err.includes("sets 'variant'"), err);
+    assert.match(read(d, 'agents', 'reviewer.md'), /^model: haiku$/m);
+    // OpenCode renders all four, so it says nothing.
+    const [, , quiet] = captured(() => writeNativeLayer(itemsOf(), path.join(d, 'oc', 'agents'),
+      path.join(d, 'oc', 'skills'), ov, { host: 'opencode', src: cfg().src }));
+    assert.ok(!quiet.includes('Claude-family'), quiet);
+  });
+});
+
 test('an override emits model and temperature only where one is set', () => {
   withDir((d) => {
     // THE OVERRIDES COME THROUGH THE PRODUCT'S OWN READER, and that is not decoration. A
@@ -1215,6 +1265,12 @@ test('the primary agent and the command layer are opt-in', () => {
       assert.match(fs.readFileSync(p, 'utf8'), /mode: primary/);
       const cmds = writeCommandLayer(c, items, path.join(d, 'command'));
       assert.ok(cmds.some((x) => path.basename(x) === 'commit.md'));
+      // The command keeps its short name while running the renamed skill.
+      assert.ok(cmds.some((x) => path.basename(x) === 'code-review.md'));
+      // A command whose skill is gone is an error, not a silently missing command.
+      const without = items.filter((i) => path.basename(i.src) !== 'geneseed-code-review.md');
+      assert.throws(() => writeCommandLayer(c, without, path.join(d, 'command2')),
+        /\/code-review runs skill 'geneseed-code-review'/);
     } finally {
       for (const [k, v] of Object.entries(before)) {
         if (v === undefined) delete process.env[k]; else process.env[k] = v;

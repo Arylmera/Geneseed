@@ -9,6 +9,8 @@
  * set than `String.trim`'s, `parseIntStrict` accepts what `Number()` does not and rejects what
  * it does, and `percentDecode` leaves a bad escape alone where `decodeURIComponent` throws.
  */
+import path from 'node:path';
+
 /**
  * `len(s)` — CODE POINTS, where `String.length` counts UTF-16 units.
  *
@@ -179,3 +181,13 @@ export function percentDecode(s) {
   return res;
 }
 
+/**
+ * `Path.relative_to(base).as_posix()` — `target` relative to `base`, always `/`-separated.
+ *
+ * Here, not in `js/build/emit-common.mjs`, because the hook path (`js/hosts/hooks-context.mjs`)
+ * needs it too and must not pay for the render module to get it; this module imports nothing
+ * but `node:path`. It had been defined four times.
+ */
+export function relPosix(base, target) {
+  return path.relative(base, target).split(path.sep).join('/');
+}

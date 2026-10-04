@@ -208,14 +208,13 @@ export function openclaudeConfigDir() {
 }
 
 /**
- * `_build_global.HOSTS`, reduced to the two columns a non-emitting caller needs, and IN ITS
- * ORDER — opencode, claude, bob, openclaude.
+ * `_build_global.HOSTS` — one row per host, IN ITS ORDER: opencode, claude, bob, openclaude.
+ * A new host is one row here; `EMIT_HOST_SCOPE` (`js/hosts/installs.mjs`) and `CLAUDE_STYLE`
+ * below are derived from it.
  *
  * An array rather than an object because the order is observable output, not an
  * implementation detail: `harness exclude add` walks it and prints one message per host, so
- * a reordering is a diff in stderr. (`emit_global` and `native_catalog` stay out;
- * `bin/build-driver.mjs` receives those decisions from its own dispatch rather than reading a
- * table.)
+ * a reordering is a diff in stderr.
  *
  * `projectMarker` joined in P5f. `_install_targets` asks "does this cwd carry a project
  * install of host H", and `_claude_cfg` asks "which subdir holds a project install's
@@ -232,13 +231,16 @@ export function openclaudeConfigDir() {
  * `family` joined in 2026-10: `'claude'` for every host emitted through the Claude-shaped
  * engine — one manifest shape, one `settings.json` hook wiring, one strict-JSON `mcpServers`
  * config, one reversal. The list had been spelled out by hand in ten places, one of which
- * ignored the named constant right above it; a fifth host is now one row here.
+ * ignored the named constant right above it.
+ *
+ * `catalog` — does the host list every skill and agent to the model by itself? See
+ * `hostCatalogsNatively` below for what it decides and why it is split per kind.
  */
 export const HOSTS = [
-  { host: 'opencode', family: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode', agentFile: 'AGENT.md' },
-  { host: 'claude', family: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md' },
-  { host: 'bob', family: 'claude', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md' },
-  { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md' },
+  { host: 'opencode', family: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode', agentFile: 'AGENT.md', catalog: { skills: true, agents: true } },
+  { host: 'claude', family: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true } },
+  { host: 'bob', family: 'claude', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md', catalog: { skills: true, agents: false } },
+  { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true } },
 ];
 
 /** The Claude-STYLE hosts (`family: 'claude'`), in `HOSTS` order. Test with `.includes(host)`. */
@@ -248,12 +250,11 @@ export const CLAUDE_STYLE = HOSTS.filter((h) => h.family === 'claude').map((h) =
  * `_build_global.host_catalogs_natively` — does `host` list every skill and agent to the
  * model by itself?
  *
- * The third column of `HOSTS`, and the reason the docblock above no longer says
- * `native_catalog` stays out: `doctor`'s `_rendered_problems` has to know, because a host
+ * `HOSTS`' `catalog` column. `doctor`'s `_rendered_problems` has to know, because a host
  * that catalogues natively gets AGENT.md's tables collapsed to a pointer and comparing the
  * portable shape against its bundle reports AGENT.md stale on every run forever. It is a
- * column and not a set literal so that the capability is still declared in exactly one place
- * — the Python's own reason for the helper.
+ * column and not a set literal so that the capability is declared in exactly one place
+ * — the Python's own reason for the helper. The driver reads it through this function too.
  *
  * Unknown host -> false, which is the shape that KEEPS the tables. The value arrives from a
  * user-editable `.geneseed-emit` marker, so an unrecognised one must degrade to the portable
@@ -264,19 +265,12 @@ export const CLAUDE_STYLE = HOSTS.filter((h) => h.family === 'claude').map((h) =
  * single boolean was wrong both ways: `false` shipped the §4 Skills table on top of a
  * catalogue Bob already had (~1.7k tokens twice), `true` would have stripped the §3 Agents
  * table that is Bob's ONLY agent catalogue. Each CATALOG block in AGENT.md names its kind and
- * resolves against its own flag. Mirrored in
- * `bin/build-driver.mjs` (which cannot import this module's spawning neighbours).
+ * resolves against its own flag.
+ *
+ * Returns `{ skills, agents }` for a known host, `false` for an unknown one.
  */
-const NATIVE_CATALOG = {
-  opencode: { skills: true, agents: true },
-  claude: { skills: true, agents: true },
-  bob: { skills: true, agents: false },
-  openclaude: { skills: true, agents: true },
-};
-
-/** `{ skills, agents }` for a known host, `false` for an unknown one. */
 export function hostCatalogsNatively(host) {
-  return NATIVE_CATALOG[host] || false;
+  return HOSTS.find((h) => h.host === host)?.catalog || false;
 }
 
 /** `_harness_learn.MEMORY_DIR_NAMES` — the neutral name and the imperial theme's. */

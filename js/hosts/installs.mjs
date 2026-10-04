@@ -162,12 +162,26 @@ function firstCarrier(d, probe, fallback = null) {
   return fallback;
 }
 
-/** `_harness_setup._theme_of_dir` — the marker, else the sigil in one of five carriers. */
+/**
+ * A marker value that can only name a file directly in the themes dir: no separator, no `..`,
+ * and not a `_`-prefixed scaffold.
+ */
+const THEME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/**
+ * `_harness_setup._theme_of_dir` — the marker, else the sigil in one of five carriers.
+ *
+ * The marker's value becomes `<themes>/<name>.json` in `loadTheme`, so a path in it
+ * (`../harness.config`) loaded any `.json` as a theme. A value that is not a plain name falls
+ * through to the sigil scan, as a missing marker does. A plain name that is not shipped is
+ * still RETURNED: `loadTheme` then refuses it loudly, which `status`/`rebuild-all`/`migrate`
+ * cells pin ("unknown theme 'nosuchtheme'"), rather than a typo going unnoticed.
+ */
 export function themeOfDir(d) {
   const marker = path.join(d, '.geneseed-theme');
   if (isFile(marker)) {
     const name = (readMaybe(marker) ?? '').trim();
-    if (name) return name;
+    if (THEME_NAME_RE.test(name)) return name;
   }
   return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined);
 }
@@ -239,10 +253,15 @@ export const modeOfDir = (d) => leadOfDir(d, discoverNames('modes', 'direct'));
  * `Default trust preset: **<Label>**` line, and this scans the places an emit lands it: the
  * native layer (`skills/loop/SKILL.md`, in the root itself for a global install and under the
  * host's `projectMarker` for a project one) and the plain bundle (`skills/loop.md`).
+ *
+ * `host` narrows the project dirs to that host's own: in a repo carrying `.opencode/` AND
+ * `.claude/`, the Claude row otherwise read OpenCode's preset, since OpenCode comes first in
+ * `HOSTS`. Without it every host's dir is tried, in `HOSTS` order — the caller that has no host.
  */
 const TRUST_RE = /^Default trust preset: \*\*(Prudent|Balanced|Aggressive)\*\*/m;
-export function trustOfDir(d) {
-  for (const base of ['', ...HOSTS.map((h) => h.projectMarker)]) {
+export function trustOfDir(d, host = null) {
+  const rows = host === null ? HOSTS : HOSTS.filter((h) => h.host === host);
+  for (const base of ['', ...rows.map((h) => h.projectMarker)]) {
     for (const rel of [['skills', 'loop', 'SKILL.md'], ['skills', 'loop.md']]) {
       const m = TRUST_RE.exec(readMaybe(path.join(d, base, ...rel)) ?? '');
       if (m) return m[1].toLowerCase();
@@ -406,13 +425,13 @@ export function manifestIsClaude(cfgDir) {
   return isDict(claudeReadManifest(cfgDir).managed);
 }
 
-/** `_harness_mcp._EMIT_HOST_SCOPE` — a marker's emit name fixes (host, scope). */
-export const EMIT_HOST_SCOPE = new Map([
-  ['opencode', ['opencode', 'project']], ['opencode-global', ['opencode', 'global']],
-  ['claude', ['claude', 'project']], ['claude-global', ['claude', 'global']],
-  ['bob', ['bob', 'project']], ['bob-global', ['bob', 'global']],
-  ['openclaude', ['openclaude', 'project']], ['openclaude-global', ['openclaude', 'global']],
-]);
+/**
+ * `_harness_mcp._EMIT_HOST_SCOPE` — a marker's emit name fixes (host, scope). Derived from
+ * `HOSTS`, whose emit names are `<host>` and `<host>-global`, so a new host is one row there.
+ */
+export const EMIT_HOST_SCOPE = new Map(HOSTS.flatMap(({ host }) => [
+  [host, [host, 'project']], [`${host}-global`, [host, 'global']],
+]));
 
 /** `_harness_mcp._emit_host_scope_of` — `root`'s own marker, resolved, or null. */
 export function emitHostScopeOf(root) {

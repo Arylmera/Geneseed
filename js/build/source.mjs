@@ -38,7 +38,7 @@ import { DEFAULT_PRESET } from '../loop/score.mjs';
  * on raw or folded text, so one behaviour serves both.
  */
 const _packTexts = new Map();
-export function readRawText(file) {
+function readRawText(file) {
   const key = path.resolve(file);
   const mtime = statSync(file).mtimeMs;
   const hit = _packTexts.get(key);

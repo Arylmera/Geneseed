@@ -14,10 +14,11 @@ import {
   unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes,
 } from '../hosts/settings.mjs';
 import { writeText } from '../lib/fs.mjs';
-import { isTruthy } from '../lib/json.mjs';
+import { get, isDict, isTruthy } from '../lib/json.mjs';
+import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, phaseLog } from './bundle.mjs';
 import {
-  get, globalMemory, globalNotebook, isDict, relPosix, shipLeanLaws, stripCapabilityLinks,
+  globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
 import { renderAll, renderFile } from './render.mjs';
 import {

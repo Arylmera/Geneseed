@@ -12,9 +12,9 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import { copyFile, readText, writeText } from '../lib/fs.mjs';
+import { copyFile, isDir, isFile, readText, writeText } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson, formatReprAscii, isTruthy } from '../lib/json.mjs';
-import { OWNED_SRC_DIRS, SRC_DIRS_MARKER, TMPL_SPEC_RE, isDir, isFile } from './emit-common.mjs';
+import { OWNED_SRC_DIRS, SRC_DIRS_MARKER, TMPL_SPEC_RE } from './emit-common.mjs';
 import { SRC_DIR_TOKENS, renderAll } from './render.mjs';
 import {
   ensureBundleGitignore, ensureContextStub, ensureMemoryIndex, ensureNotebookIndex,
@@ -115,13 +115,6 @@ function safePriorDirName(out, priorName) {
 // ---------------------------------------------------------------------------
 
 /**
- * `_build_render.build` — render the bundle into `out`.
- *
- * `out` arrives as the STRING Python already resolved, and is echoed into the progress
- * lines verbatim: Python interpolates `str(Path)`, which is backslash-separated on
- * Windows, and re-deriving it here would differ by separator in every message.
- */
-/**
  * THE PHASE BOUNDARY MARKER — T8, and the whole of what this port owes
  * `tests/test_emit_phase_order.py`.
  *
@@ -156,6 +149,13 @@ export function phaseLog(phase) {
   process.stderr.write(`[geneseed:phase] ${phase}\n`);
 }
 
+/**
+ * `_build_render.build` — render the bundle into `out`.
+ *
+ * `out` arrives as the STRING Python already resolved, and is echoed into the progress
+ * lines verbatim: Python interpolates `str(Path)`, which is backslash-separated on
+ * Windows, and re-deriving it here would differ by separator in every message.
+ */
 export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog = false } = {}) {
   phaseLog('RENDER');
   const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog });

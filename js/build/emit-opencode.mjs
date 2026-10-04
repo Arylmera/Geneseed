@@ -8,16 +8,17 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import { loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
+import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import {
   copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
   writePonytailCommand, writePrimaryAgent, writeTheme,
 } from '../hosts/opencode.mjs';
 import { mergeOpencodeJson } from '../hosts/settings.mjs';
-import { readText, writeText } from '../lib/fs.mjs';
+import { isFile, readText, writeText } from '../lib/fs.mjs';
+import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, build, phaseLog } from './bundle.mjs';
 import {
-  globalMemory, globalNotebook, isFile, relPosix, shipLeanLaws, stripCapabilityLinks,
+  globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
 import { renderAll } from './render.mjs';
 import {
@@ -56,17 +57,20 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   } = opts;
   ensureAgentOverridesStub(cfg, overridesDir);
   const overrides = loadAgentOverrides(overridesDir);
+  // One claim for every writer below whose path lands in `owned` — see `claimer`.
+  const claim = claimer(oldOwned, dir, manifestExisted);
 
   const { nAgents, nSkills, written } = writeNativeLayer(
     items, path.join(dir, 'agents'), path.join(dir, 'skills'), overrides,
-    { host: 'opencode', oldOwned, cfg: dir, manifestExisted, theme, src: cfg.src });
+    { host: 'opencode', theme, src: cfg.src, claim });
   for (const p of written) owned.push(relPosix(dir, p));
 
-  const primary = writePrimaryAgent(cfg, path.join(dir, 'agents'), overrides);
+  const primary = writePrimaryAgent(cfg, path.join(dir, 'agents'), overrides, claim);
   if (primary) owned.push(relPosix(dir, primary));
 
-  const commands = writeCommandLayer(cfg, items, path.join(dir, 'command'));
-  commands.push(writePonytailCommand(path.join(dir, 'command')));   // always-on /ponytail
+  const commands = writeCommandLayer(cfg, items, path.join(dir, 'command'), claim);
+  const ponytail = writePonytailCommand(path.join(dir, 'command'), claim);   // always-on /ponytail
+  if (ponytail) commands.push(ponytail);
   for (const p of commands) owned.push(relPosix(dir, p));
 
   owned.push(relPosix(dir, writeTheme(path.join(dir, 'themes'), themeName, theme)));
@@ -97,7 +101,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
  * manifest is the DRIVER's stage: it reads the file, hands the prior claim in, and prunes
  * and rewrites it after this returns. One owner of the file, and this function is not it.
  *
- * `nativeCatalog` likewise arrives decided. It is `HOSTS['opencode']['native_catalog']` from
+ * `nativeCatalog` likewise arrives decided. It is `hostCatalogsNatively('opencode')` from
  * `js/hosts/hosts.mjs`, resolved by the driver before the call; passing the decision rather
  * than re-reading the registry keeps one owner of it.
  */

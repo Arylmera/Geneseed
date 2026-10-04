@@ -10,17 +10,10 @@
  * `emit-claude.mjs` do that; `bundle.mjs` renders the bundle they read from.
  */
 import path from 'node:path';
-import { copyFile, writeText, isFile, isDir } from '../lib/fs.mjs';
-import { get, isDict } from '../lib/json.mjs';
+import { copyFile, writeText, isDir } from '../lib/fs.mjs';
+import { relPosix } from '../lib/text.mjs';
 import { SRC_DIR_TOKENS, destRel } from './render.mjs';
 import { mkdirSync, readdirSync, cpSync } from 'node:fs';
-
-// `isFile`/`isDir`/`get`/`isDict` are owned by `js/lib` now (single owner across `hosts/`,
-// `build/`, `inspect/` and `web/` — layering forbids `build/` reaching into `inspect/scan.mjs`
-// for them, so `js/lib` is the one home both sides can reach). Re-exported here so this
-// module's own existing callers (`emit-claude.mjs`, `emit-opencode.mjs`, `version.mjs`,
-// `bundle.mjs`) keep importing them from `./emit-common.mjs` unchanged.
-export { isFile, isDir, get, isDict };
 
 /** `_build_render.SRC_DIRS_MARKER`. */
 export const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
@@ -77,11 +70,6 @@ export function rglobFiles(root) {
   return readdirSync(root, { recursive: true, withFileTypes: true })
     .filter((d) => d.isFile() && !d.parentPath.split(path.sep).includes('__pycache__'))
     .map((d) => path.join(d.parentPath, d.name));
-}
-
-/** `p.relative_to(base).as_posix()`. */
-export function relPosix(base, p) {
-  return path.relative(base, p).split(path.sep).join('/');
 }
 
 /**

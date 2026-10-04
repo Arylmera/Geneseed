@@ -8,9 +8,11 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import { sourceReleaseVersion } from '../hosts/opencode.mjs';
 import { readText, writeText } from '../lib/fs.mjs';
-import { isDir, relPosix, rglobFiles } from './emit-common.mjs';
+import { parseJson } from '../lib/json.mjs';
+import { isDir } from '../lib/fs.mjs';
+import { relPosix } from '../lib/text.mjs';
+import { rglobFiles } from './emit-common.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
@@ -130,6 +132,23 @@ export function versionIsNewer(a, b) {
     if (x !== y) return x > y;
   }
   return false;
+}
+
+/**
+ * `_build_core.source_release_version` — the release this checkout would install. It reads
+ * `cfg.config`, so it takes `cfg`. It lived in `js/hosts/opencode.mjs` for no better reason
+ * than that the first caller was there; every reader since asks a version question, so it
+ * lives with them. `js/hosts/opencode.mjs` re-exports it for its older importers.
+ */
+export function sourceReleaseVersion(cfg) {
+  try {
+    const data = parseJson(readText(cfg.config));
+    const v = data && typeof data === 'object' && !Array.isArray(data) ? data.version : null;
+    if (typeof v === 'string' && v) return v;
+  } catch {
+    // OSError / JSONDecodeError — degrade to "not newer" rather than raising.
+  }
+  return '0.0.0';
 }
 
 /** `_build_render._warn_if_downgrade` — STDOUT, matching the Python. */

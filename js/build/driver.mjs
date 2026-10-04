@@ -42,6 +42,7 @@ import { settingsIntegrityCheck } from '../hosts/settings.mjs';
 import { hookRunnerEntry } from '../hosts/shim.mjs';
 import { writeText, withPlatformNewlines, isFile } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
+import { relPosix } from '../lib/text.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
 // that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
@@ -149,10 +150,10 @@ function warnBobGlobalOverProject() {
  * would be written into `opencode.json`'s instruction path.
  */
 function relUnder(out, root) {
-  const rel = path.relative(root, out);
+  const rel = relPosix(root, out);
   if (rel === '' || rel === '.') return '';
   if (rel.startsWith('..') || path.isAbsolute(rel)) return '';
-  return rel.split(path.sep).join('/');
+  return rel;
 }
 
 /**

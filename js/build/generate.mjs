@@ -202,7 +202,7 @@ export function installProfile(host, scope, root) {
   const posture = postureOfDir(root) || defaultPosture();
   const mode = modeOfDir(root) || defaultMode();
   // Read off the deployed loop skill; no config fallback — `DEFAULT_PRESET` is the engine's.
-  const trust = trustOfDir(root) || DEFAULT_PRESET;
+  const trust = trustOfDir(root, host) || DEFAULT_PRESET;
   // A rebuild that defaulted the pack selection would re-emit an install into a constitution
   // its owner did not choose — and in one direction that is not merely surprising: dropping
   // the process pack takes the commit/push consent RULES out of AGENT.md while
