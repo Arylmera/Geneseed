@@ -30,8 +30,6 @@ export const LAW_CATS = {
   comms: { label: 'Communication', c: CAT_HUES.comms },
 }
 
-export const LAW_CAT_ORDER = ['security', 'verify', 'process', 'craft', 'context', 'comms']
-
 // A doctrine rule's class IS its pack — there is no second taxonomy over one. Colours only; the
 // pack's NAME and blurb are themed and come from the API, so they are never transcribed here.
 export const PACK_CATS = {

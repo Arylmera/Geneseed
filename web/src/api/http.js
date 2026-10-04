@@ -14,7 +14,7 @@ async function fail(r) {
   // start, so a tab left open across a `web restart` 403s on every mutation with a
   // bare "forbidden" — which reads as "the save silently did nothing". Say what it is.
   const msg =
-    r.status === 403 && (body.error || '').startsWith('forbidden')
+    r.status === 403 && body.error === 'forbidden'
       ? 'the web server restarted since this page loaded — reload the page, then re-apply your edit'
       : body.error || body.message || r.statusText
   const err = new Error(msg)

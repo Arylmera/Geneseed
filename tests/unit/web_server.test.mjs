@@ -30,11 +30,13 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { PREFIX_ROUTES, STATE_ROUTES, webState } from '../../js/web/api.mjs';
 import { KINDS } from '../../js/web/docs.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
 import { makeHandler } from '../../js/web/handler.mjs';
-import { GET_INLINE, POST_INLINE, POST_ROUTES, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
+import {
+  GET_INLINE, POST_INLINE, POST_ROUTES, POST_ROUTES_CONVENTION, PREFIX_ROUTES, STATE_ROUTES,
+} from '../../js/web/routes.mjs';
+import { webState } from '../../js/web/state.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { webFixture, webFixtureTeardown } from '../helpers/web_fixture.mjs';
 
@@ -285,6 +287,50 @@ test('a rejected POST does not poison the next request on the same connection', 
   }
 });
 
+test('/api/ping names the process, so a restarting client can tell old from new', async () => {
+  // The old server keeps answering pings after `/api/restart` returns 200; a client that
+  // reloaded on the first ping landed back on it. The pid is what it waits to see change.
+  const r = await request('GET', '/api/ping');
+  assert.deepEqual(JSON.parse(r.body.toString('utf8')),
+    { ok: true, theme: 'neutral', pid: process.pid });
+});
+
+/** One POST whose declared length may exceed what is sent; resolves on the response. */
+function rawPost(urlPath, { token, declared, send }) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port: PORT, method: 'POST', path: urlPath,
+      timeout: 10_000, agent: false,
+      headers: { Host: `127.0.0.1:${PORT}`, 'X-Geneseed-Token': token,
+        'Content-Type': 'application/json', 'Content-Length': String(declared) } }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => { req.destroy(); resolve({ status: res.statusCode,
+        headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }); });
+    });
+    req.on('timeout', () => { req.destroy(new Error(`POST ${urlPath} timed out`)); });
+    // The server may answer and close before the body is written — that is the point.
+    req.on('error', (e) => (e.code === 'ECONNRESET' || e.code === 'EPIPE' ? null : reject(e)));
+    req.write(send);
+  });
+}
+
+test('a refused POST is answered before its body arrives', async () => {
+  // The guards need no body, so they must not wait for one: a wrong token with a body that is
+  // declared and never sent answers 403 at once. Before, the handler buffered the WHOLE body
+  // first — a request that never finished sending held it forever, and a large one was read
+  // into memory only to be refused.
+  const r = await rawPost('/api/rules', { token: 'wrong-token', declared: 100_000, send: '{' });
+  assert.equal(r.status, 403);
+});
+
+test('a POST body over the cap is refused on its declared length', async () => {
+  // 1 MiB + 1 byte, with the right token: 413, and the connection closed rather than drained.
+  // Before, it was buffered whole and handed to the route.
+  const r = await rawPost('/api/rules', { token: TOKEN, declared: 1024 * 1024 + 1, send: '{' });
+  assert.equal(r.status, 413);
+  assert.equal(r.headers.connection, 'close');
+});
+
 test('every table-driven GET route answers', async () => {
   // The plain GET routes are a map of path -> api function. A typo in a key or a handler that no
   // longer takes just `state` turns into a 404 or a 500 at runtime, so walk the table itself
@@ -350,8 +396,8 @@ test('the declared surface is the one the dispatcher uses', async () => {
   const h = {};
   // `'nowhere'` for dist and a fresh JobManager with no history path: this probe must not write a
   // job file into the developer's install.
-  const srv = http.createServer(makeHandler(webState('neutral'), new JobManager(), 'tok',
-    'nowhere', h));
+  const jm = new JobManager();
+  const srv = http.createServer(makeHandler(webState('neutral'), jm, 'tok', 'nowhere', h));
   h.srv = srv;
   await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
   const base = `http://127.0.0.1:${srv.address().port}`;
@@ -412,6 +458,22 @@ test('the declared surface is the one the dispatcher uses', async () => {
     assert.equal(await hit('GET', '/api/docs/page/about'), 200,
       'the `about` kind runs `git remote get-url` through originDisplay(), so this is also the '
       + 'probe that says the docs tree may reach the module the spawn allow-list declares');
+    // `/api/restart`'s REFUSALS are reachable, and its success arm is not: this server is not
+    // the daemon the record names (no test server ever is), so it must refuse rather than spawn
+    // a `web restart` that would find no record and start a stray daemon on 4747.
+    const restart = await fetch(`${base}/api/restart`, { method: 'POST', body: '{}',
+      headers: { 'X-Geneseed-Token': 'tok', 'Content-Type': 'application/json' } });
+    assert.equal(restart.status, 409);
+    assert.deepEqual(await restart.json(),
+      { error: 'foreground server: restart it from its terminal' });
+    // A RUNNING JOB BLOCKS BOTH: it is not persisted, so stopping under it orphans the child
+    // and loses its record. `_busy` is set by hand — starting a real job would spawn one.
+    jm._busy = true;
+    assert.equal(await hit('POST', '/api/shutdown', 'tok'), 409,
+      '/api/shutdown accepted while a job runs');
+    assert.equal(await hit('POST', '/api/restart', 'tok'), 409,
+      '/api/restart accepted while a job runs');
+    jm._busy = false;
     // LAST, always: this one stops the server, and every probe after it would fail with an
     // ECONNRESET that reads like a routing bug.
     assert.equal(await hit('POST', '/api/shutdown', 'tok'), 200, 'the shell\'s own POST answers');

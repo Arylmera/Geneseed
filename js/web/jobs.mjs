@@ -210,8 +210,13 @@ export class JobManager {
     }
   }
 
+  /**
+   * Persist the newest `HISTORY_MAX` finished jobs — and DROP the rest from memory too. The
+   * file was always capped; `_jobs` was not, so a daemon left running for weeks held every job
+   * it ever ran, each with up to `MEM_CAP` chars of output. Memory now holds what the file
+   * holds, plus whatever is running (which `_run` saves again when it finishes).
+   */
   _saveHistory() {
-    if (!this._historyPath) return;
     const jobs = [...this._jobs.values()].filter((j) => j.status !== 'running')
       .map((j) => ({ ...j }));
     // STABLE sort matters: two jobs started inside the same clock tick keep insertion
@@ -219,9 +224,22 @@ export class JobManager {
     jobs.sort((a, b) => (Number(a.started ?? 0) || 0) - (Number(b.started ?? 0) || 0));
     const kept = jobs.slice(-JobManager.HISTORY_MAX)
       .map((j) => ({ ...j, output: tailChars(String(j.output), JobManager.OUTPUT_CAP) }));
+    const keep = new Set(kept.map((j) => String(j.id)));
+    for (const [id, j] of this._jobs) {
+      if (j.status !== 'running' && !keep.has(id)) this._jobs.delete(id);
+    }
+    if (!this._historyPath) return;
     try {
       writeText(this._historyPath, jsonDumpsCompact(kept, { bareInts: true }));
     } catch { /* a console that cannot persist its history still runs */ }
+  }
+
+  /**
+   * A job is running. `/api/shutdown` and `/api/restart` refuse while it is: a running job is
+   * not persisted, and stopping the server under it orphans the child and loses its record.
+   */
+  get busy() {
+    return this._busy;
   }
 
   /** Last `n` jobs, oldest first — the order the console appends in. */

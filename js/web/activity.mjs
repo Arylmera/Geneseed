@@ -40,7 +40,7 @@ import { readText, writeText, isDir, isFile } from '../lib/fs.mjs';
 import { parseJson, isTruthy } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
-import { NotFound, stemOf } from './api.mjs';
+import { NotFound, stemOf } from './catalog.mjs';
 
 /**
  * A session whose writer is gone, or that has not been touched in this long, is pruned.

@@ -22,10 +22,12 @@ import http from 'node:http';
 import { localHost, makeHandler } from '../../js/web/handler.mjs';
 import { buildPlan } from '../../js/web/server.mjs';
 import {
-  NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
-  apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup, viewCfg, wikiItems,
-  STATE_ROUTES, apiLoops, apiLoopsActive,
+  apiOverview, apiDiff, apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup,
+  viewCfg, apiLoops, apiLoopsActive,
 } from '../../js/web/api.mjs';
+import { NotFound, apiCatalog, apiItem, specDesc, wikiItems } from '../../js/web/catalog.mjs';
+import { webState } from '../../js/web/state.mjs';
+import { apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE } from '../../js/web/user-files.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
 import {
@@ -40,7 +42,7 @@ import { HOSTS } from '../../web/src/lib/hosts.js';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
   apiInstallCmd, apiSelectView, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
-  apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE, apiLoopsPresetMutate,
+  apiLoopsPresetMutate, apiMemoryDelete,
 } from '../../js/web/actions.mjs';
 import { installState, themeOfDir, installTargets } from '../../js/hosts/installs.mjs';
 import {
@@ -56,7 +58,7 @@ import { normcase } from '../../js/lib/paths.mjs';
 import { DOC_FOLDERS } from '../../js/build/source.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
-import { POST_ROUTES, POST_ROUTES_CONVENTION } from '../../js/web/routes.mjs';
+import { POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES } from '../../js/web/routes.mjs';
 import { recordLoop } from '../../js/loop/registry.mjs';
 import { initState, renderLoopFile } from '../../js/loop/state.mjs';
 import { PRESETS } from '../../js/loop/score.mjs';
@@ -2969,11 +2971,12 @@ test('promote moves a memory into a trial rule', () => {
 });
 
 // The name comes out of a request body and is joined onto the memory dir, so a separator or a
-// `..` would be an arbitrary-file read. `MEMORY` is in the list because the index is not a fact.
+// `..` would be an arbitrary-file read. `MEMORY` is in the list because the index is not a fact,
+// in every case: on Windows and macOS `memory` opens MEMORY.md, and `delete_memory` deletes it.
 test('promote rejects traversal and index names', () => {
   withRules((box) => {
     fs.mkdirSync(path.join(box.cfg, 'memory'), { recursive: true });
-    for (const bad of ['', 'a/b', '..\\x', 'MEMORY']) {
+    for (const bad of ['', 'a/b', '..\\x', 'MEMORY', 'memory', 'Readme']) {
       assert.throws(() => apiRulesPromote(box.state, { name: bad, fingerprint: '' }), NotFound,
         `${JSON.stringify(bad)} resolved instead of 404ing`);
     }
@@ -3277,4 +3280,81 @@ test('POST /api/loops/preset is wired through POST_ROUTES with the handler\'s No
   assert.equal(POST_ROUTES.get('/api/loops/preset')[0], apiLoopsPresetMutate);
   assert.equal(POST_ROUTES_CONVENTION['/api/loops/preset'], false,
     'this route never returns {ok: false} — both refusals throw NotFound instead');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The memory-delete guard is CASE-FOLDED. On Windows and the default macOS filesystem
+// `memory.md` IS `MEMORY.md`, so a guard comparing `MEMORY` exactly let `memory` through and
+// deleted the index the agent reads at session start. Every spelling of a reserved name is a
+// 404 and leaves both reserved files in place; a real fact still deletes. (On a case-sensitive
+// filesystem the lowercase names 404 for a second reason — no such file — and the row still
+// holds.)
+test('memory delete refuses every case of the reserved names', () => {
+  const sb = makeSandbox();
+  try {
+    const mem = path.join(sb.path, 'memory');
+    fs.mkdirSync(mem, { recursive: true });
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'), '# Memory Index\n- [a](a.md) — x\n');
+    fs.writeFileSync(path.join(mem, 'README.md'), 'the store\n');
+    fs.writeFileSync(path.join(mem, 'a.md'), 'a fact\n');
+    const st = webState('neutral', sb.path);
+    for (const bad of ['MEMORY', 'memory', 'Memory', 'README', 'readme']) {
+      assert.throws(() => apiMemoryDelete(st, bad), NotFound, `${bad} was not refused`);
+    }
+    assert.ok(fs.existsSync(path.join(mem, 'MEMORY.md')), 'the index was deleted');
+    assert.ok(fs.existsSync(path.join(mem, 'README.md')), 'the store README was deleted');
+    assert.deepEqual(apiMemoryDelete(st, 'a'), { deleted: 'a' });
+    assert.equal(fs.existsSync(path.join(mem, 'a.md')), false);
+  } finally { sb.cleanup(); }
+});
+
+// `/api/item/config/<name>` is a GET — no token — so it may open only the two manifests the
+// catalogue lists. Before the allowlist, any flat top-level name read: the daemon record (which
+// carries the CSRF token) and the host's settings.json among them.
+test('a config item outside the listed manifests is a 404', () => {
+  const sb = makeSandbox();
+  try {
+    fs.writeFileSync(path.join(sb.path, '.geneseed-web.json'), '{"token":"secret"}');
+    fs.writeFileSync(path.join(sb.path, 'settings.json'), '{}');
+    fs.writeFileSync(path.join(sb.path, 'context.json'), '{"context":[]}');
+    const st = webState('neutral', sb.path);
+    for (const name of ['.geneseed-web.json', 'settings.json', 'AGENT.md']) {
+      assert.throws(() => apiItem(st, 'config', name), NotFound, `${name} was served`);
+    }
+    assert.equal(apiItem(st, 'config', 'context.json').name, 'context.json',
+      'the control: a listed manifest still opens');
+  } finally { sb.cleanup(); }
+});
+
+// `deployed` is whether an install is there; `diffable` is whether the drift check can run on
+// it. A PROJECT install is the first and not the second (diffCollect re-renders global emits
+// only), and the page used to call it "No deployed harness".
+test('a project install is deployed but not diffable', () => {
+  const sb = makeSandbox();
+  try {
+    fs.writeFileSync(path.join(sb.path, GLOBAL_MANIFEST),
+      JSON.stringify({ scope: 'project', owned: [] }));
+    const res = apiDiff(webState('neutral', sb.path));
+    assert.equal(res.deployed, true);
+    assert.equal(res.diffable, false);
+    assert.deepEqual(res.files, []);
+  } finally { sb.cleanup(); }
+});
+
+// The history FILE was always capped at HISTORY_MAX; the in-memory map was not, so a daemon
+// running for weeks kept every job it ever ran. Memory now holds what the file holds, plus any
+// running job — which is never dropped, because nothing would then finish it.
+test('the job map is trimmed to the persisted history', () => {
+  const jm = new JobManager();
+  for (let i = 0; i < JobManager.HISTORY_MAX + 5; i += 1) {
+    jm._jobs.set(`j${i}`, { id: `j${i}`, action: 'doctor', status: 'done', output: '',
+      returncode: 0, started: i, duration: 0 });
+  }
+  jm._jobs.set('live', { id: 'live', action: 'build', status: 'running', output: '',
+    returncode: null, started: 0, duration: null });
+  jm._saveHistory();
+  assert.equal(jm._jobs.size, JobManager.HISTORY_MAX + 1);
+  assert.ok(jm._jobs.has('live'), 'the running job was dropped');
+  assert.equal(jm._jobs.has('j4'), false, 'the oldest finished jobs were kept');
+  assert.ok(jm._jobs.has(`j${JobManager.HISTORY_MAX + 4}`), 'the newest finished job was dropped');
 });

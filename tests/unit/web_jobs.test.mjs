@@ -37,7 +37,7 @@ import {
   INLINE_ACTIONS, PORTED_ACTIONS, actionCommands,
 } from '../../js/web/jobs.mjs';
 import { apiDeployCmd } from '../../js/web/actions.mjs';
-import { webState } from '../../js/web/api.mjs';
+import { webState } from '../../js/web/state.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));

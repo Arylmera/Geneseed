@@ -153,8 +153,8 @@ test('the restart dispatch is read from source, because probing it costs a daemo
   // now stated directly.
   const text = handlerSource();
   assert.ok(text.includes("if (path === '/api/restart') {"), 'no /api/restart branch');
-  assert.ok(text.includes('requestRestart(state.theme);'),
-    'the /api/restart branch no longer calls requestRestart');
+  assert.ok(text.includes('if (!requestRestart(state.theme)) {'),
+    'the /api/restart branch no longer calls requestRestart, or ignores its refusal');
   assert.ok(text.includes('{ restarting: true }'), 'the /api/restart branch answers differently');
   assert.match(daemonSource(),
     /export function requestRestart\([\s\S]{0,400}?spawnDetached\(restartArgs\(theme\)/,
@@ -453,6 +453,31 @@ test('web stop --port explains a server that answers but is not recorded', async
       });
     }
   } finally { await stray.close(); await recorded.close(); }
+});
+
+test('web stop keeps the record of a server that refused to stop', async () => {
+  // A failed shutdown POST is not a dead server: a console with a job running answers 409, and
+  // a synchronous handler can outlast the 3 s timeout. The record used to be deleted anyway,
+  // leaving a live daemon nothing could find again. Exit 1, record kept, the reason printed.
+  const hits = [];
+  const srv = http.createServer((q, r) => {
+    hits.push(q.url);
+    r.statusCode = q.url === '/api/shutdown' ? 409 : 200;
+    r.end('{}');
+  });
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  const { port } = srv.address();
+  const busy = { port, url: `http://127.0.0.1:${port}` };
+  try {
+    await inSandbox(async (dir, run) => {
+      recordOn(dir, busy);
+      const { code, out } = await run(['stop']);
+      assert.equal(code, 1, out);
+      assert.equal(out, `[web] the server on ${busy.url} did not stop (pid 4242) — it may be `
+        + 'busy with a job; try again once it finishes.\n');
+      assert.equal(readDaemon(dir)?.port, port, 'the record of a live daemon was deleted');
+    });
+  } finally { await new Promise((r) => { srv.closeAllConnections(); srv.close(r); }); }
 });
 
 test('web stop --port with nothing recorded and nothing answering is a no-op', async () => {

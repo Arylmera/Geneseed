@@ -202,10 +202,13 @@ the deployed harness as JSON.
 | module | owns |
 |---|---|
 | `server.mjs` | `serve()`/`cmdWeb`: UI-build precheck, socket bind, token mint, daemon record wiring |
-| `routes.mjs` | Route DECLARATION only: the `POST_ROUTES` table and the ported/unported/declined sets |
-| `handler.mjs` | One function per request: dispatch, gzip, Host/CSRF guards, static SPA fallback |
-| `api.mjs` | `WebState` plus every GET read endpoint; owns `STATE_ROUTES`, `PREFIX_ROUTES`, `NotFound` |
-| `actions.mjs` | The mutating endpoints — rules, profile, memory, MCP, excludes — plus install/deploy argv |
+| `routes.mjs` | The route tables — `STATE_ROUTES`, `PREFIX_ROUTES`, `POST_ROUTES` (+ its 409 column) — and the inline lists |
+| `handler.mjs` | One function per request: dispatch, gzip, Host/CSRF guards and body cap (before the body is read), static SPA fallback |
+| `state.mjs` | `webState` — the resolved install view every endpoint reads, with its cached inventory and doctor |
+| `catalog.mjs` | The Library read model: inventory, constitution tiers, memory/notebook/wiki/config items, `apiCatalog`/`apiItem`, `NotFound` |
+| `api.mjs` | The dashboard and settings reads: overview, recent, themes, setup, doctor, diff, installs, excludes, loops |
+| `user-files.mjs` | The fingerprint-guarded editors for `user-rules.md` (incl. memory promotion) and `PROFILE.md`, read and write |
+| `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv |
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |
 | `jobs.mjs` | `JobManager` and the action→argv table. The only module here that spawns job children |
 | `docs.mjs` | The Docs tab: the `docs/<folder>/` page registry, `?harness=` filtering, link rewriting, the six page kinds |

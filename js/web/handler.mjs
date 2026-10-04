@@ -16,19 +16,15 @@ import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { parseIntStrict, percentDecode } from '../lib/text.mjs';
 import { preflight } from '../maintain/update.mjs';
 import { apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildOverride, mcpTargetPaths } from './actions.mjs';
-import { NotFound, PREFIX_ROUTES, STATE_ROUTES } from './api.mjs';
+import { NotFound } from './catalog.mjs';
 import { openUrl, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands } from './jobs.mjs';
-import { POST_ROUTES, readJsonBody } from './routes.mjs';
+import { POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, readJsonBody } from './routes.mjs';
 import { isFile } from '../lib/fs.mjs';
 import { readFileSync, statSync } from 'node:fs';
 import { basename, dirname, extname, join, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
-
-// `isFile` is owned by `js/lib/fs.mjs` now (single owner). Re-exported here so
-// `js/web/server.mjs`'s existing `import { isFile, ... } from './handler.mjs'` keeps working.
-export { isFile };
 
 /**
  * DNS-rebinding guard. `h.split(":", 1)[0]` keeps everything before the FIRST colon, so
@@ -44,6 +40,15 @@ export function localHost(host) {
 const GZIP_TYPES = ['application/json', 'text/', 'image/svg+xml',
   'application/manifest+json', 'application/javascript'];
 const GZIP_MIN = 1024;
+
+/**
+ * The largest POST body read, in bytes. Every real body is a few KB of JSON (a rule, a profile,
+ * a path); without a cap any web page could `no-cors` POST an arbitrary blob and this process
+ * would buffer all of it before the token check refused it.
+ */
+export const MAX_BODY = 1024 * 1024;
+
+const BUSY = { error: 'a job is running — wait for it to finish (or cancel it) first' };
 
 const CTYPES = {
   '.html': 'text/html', '.js': 'text/javascript',
@@ -126,7 +131,11 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   function doGet(req, res, path, ae) {
     const route = STATE_ROUTES[path];
     if (route !== undefined) return sendJson(res, route(state), 200, ae);
-    if (path === '/api/ping') return sendJson(res, { ok: true, theme: state.theme }, 200, ae);
+    // `pid` is what a restarting client waits on: the OLD server keeps answering this ping for
+    // a moment after `/api/restart` returns, and a reload onto it fetches the old token.
+    if (path === '/api/ping') {
+      return sendJson(res, { ok: true, theme: state.theme, pid: process.pid }, 200, ae);
+    }
     for (const [prefix, handler] of PREFIX_ROUTES) {
       if (path.startsWith(prefix)) return sendJson(res, handler(state, path), 200, ae);
     }
@@ -148,14 +157,22 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     return serveStatic(res, path, ae);
   }
 
-  function doPost(req, res, path, ae, body) {
+  /** The Host and token guards, answered BEFORE a byte of the body is read. `true` = refused. */
+  function refusePost(req, res, ae) {
     if (!localHost(req.headers.host)) {
-      return sendJson(res, { error: 'forbidden host' }, 403, ae);
+      sendJson(res, { error: 'forbidden host' }, 403, ae);
+      return true;
     }
     if (req.headers['x-geneseed-token'] !== token) {
-      return sendJson(res, { error: 'forbidden' }, 403, ae);
+      sendJson(res, { error: 'forbidden' }, 403, ae);
+      return true;
     }
+    return false;
+  }
+
+  function doPost(req, res, path, ae, body) {
     if (path === '/api/shutdown') {
+      if (jm.busy) return sendJson(res, BUSY, 409, ae);
       // The one POST route the SHELL owns. It must answer BEFORE it stops, so closing is
       // deferred to `res.on('finish', ...)` so the response flushes first.
       // `closeAllConnections` is the other half: `close()` alone waits for idle keep-alive
@@ -167,18 +184,17 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       return sendJson(res, { stopping: true }, 200, ae);
     }
     if (path === '/api/restart') {
-      // THE ONE ROUTE IN THIS FILE NO TEST MAY REACH, and it is declared rather than probed.
-      // `requestRestart` spawns a DETACHED `web restart`, which stops whatever daemon the
-      // record names and starts a fresh one that outlives the caller. Actually driving this
-      // route from a test would either stop the test's own server or, worse, orphan a real
-      // daemon that binds 4747 and serves the checkout forever in the developer's own
-      // environment.
-      //
-      // So the gate asserts this dispatches to `requestRestart(state.theme)` directly rather
-      // than by hitting the route through a live request — a declaration is not normally
-      // enough to stand in for a dispatcher, but here probing the dispatcher costs more than
-      // the assurance is worth.
-      requestRestart(state.theme);
+      // THE SUCCESS ARM NO TEST MAY REACH. `requestRestart` spawns a DETACHED `web restart`,
+      // which stops whatever daemon the record names and starts a fresh one that outlives the
+      // caller — driven from a test, it would orphan a real daemon on 4747 in the developer's
+      // own environment. Its two REFUSALS are reachable and probed: a running job (409, it
+      // would be orphaned), and a server that is not the recorded daemon (409, see
+      // `requestRestart`) — which a test's server never is.
+      if (jm.busy) return sendJson(res, BUSY, 409, ae);
+      if (!requestRestart(state.theme)) {
+        return sendJson(res,
+          { error: 'foreground server: restart it from its terminal' }, 409, ae);
+      }
       return sendJson(res, { restarting: true }, 200, ae);
     }
     if (path === '/api/reveal') {
@@ -277,6 +293,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         return sendJson(res,
           { precondition: pre.code, kind: pre.kind, message: pre.message }, 422, ae);
       }
+      // `requestRestart` declines on a foreground server, which then shows its stale banner.
       const jid = jm.start('update', actionCommands('update'), (rc) => {
         state.refresh();
         if (rc === 0) requestRestart(state.theme);
@@ -336,12 +353,19 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         }
       }
       if (req.method === 'POST') {
-        // The body is drained before routing regardless of what the route needs it for:
-        // `readJsonBody` needs the bytes for a real POST body, and Node's own HTTP parser
-        // owns the message boundary anyway — unread bytes are discarded when the response
-        // ends rather than mis-parsed as the next request line, so this is where the bytes
-        // have to come from either way.
+        // GUARDS FIRST, BODY SECOND. The Host and token checks need no body, so they answer
+        // before one is read — a refused request is DISCARDED (`resume`, nothing buffered), never
+        // collected. A body over `MAX_BODY` is refused on its declared length, and the socket is
+        // closed rather than drained. Otherwise the body is buffered before routing regardless
+        // of what the route needs it for: Node's parser owns the message boundary, so unread
+        // bytes are discarded when the response ends rather than mis-parsed as the next request.
+        if (refusePost(req, res, ae)) return req.resume();
         const length = parseIntStrict(String(req.headers['content-length'] ?? '')) ?? 0;
+        if (length > MAX_BODY) {
+          res.setHeader('Connection', 'close');
+          sendJson(res, { error: `request body over ${MAX_BODY} bytes` }, 413, ae);
+          return req.resume();
+        }
         return readBody(req, length, (buf) => {
           req._body = buf;
           try {
