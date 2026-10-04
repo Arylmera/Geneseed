@@ -36,7 +36,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { parseDriverArgs } from '../../js/build/driver.mjs';
-import { GENESEED_HOOK_SNIFF, SHIM_MARK } from '../../js/hosts/settings.mjs';
+import { GENESEED_HOOK_SNIFF } from '../../js/hosts/settings.mjs';
+import { SHIM_MARK } from '../../js/hosts/shim.mjs';
 import { walkFiles } from '../helpers/golden.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 

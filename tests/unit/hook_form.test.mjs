@@ -29,12 +29,12 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { hookRunnerEntry } from '../../js/build/driver.mjs';
 import { shimProblems } from '../../js/inspect/checks-repo.mjs';
+import { GENESEED_HOOK_SNIFF, claudeHookGroups } from '../../js/hosts/settings.mjs';
 import {
-  GENESEED_HOOK_SNIFF, SHIM_ARGV, claudeHookGroups, ephemeralCheckout, hookPrefix, hookShimBody,
-  hookShimPath, writeHookShim,
-} from '../../js/hosts/settings.mjs';
+  SHIM_ARGV, ephemeralCheckout, hookPrefix, hookRunnerEntry, hookShimBody, hookShimPath,
+  writeHookShim,
+} from '../../js/hosts/shim.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 

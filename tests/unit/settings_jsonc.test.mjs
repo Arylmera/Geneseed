@@ -17,9 +17,10 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { hookRunnerEntry } from '../../js/build/driver.mjs';
+import { hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import {
-  GENESEED_HOOK_SNIFF, mergeClaudeSettings, readJsonc, wireClaudeExcludes,
+  GENESEED_HOOK_SNIFF, loadJsonObject, mergeClaudeSettings, readJsonc, unwireClaudeSettings,
+  wireClaudeExcludes,
 } from '../../js/hosts/settings.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 import { jsonDumpsCompact } from '../../js/lib/json.mjs';
@@ -99,6 +100,69 @@ test('readJsonc answers the table, row for row', () => {
   }
 });
 
+// WHAT `loadJsonObject` ANSWERS — the one reader every settings/opencode/MCP read-modify-write
+// goes through. It classifies and never decides, so each row is the STATE a file lands in;
+// what a state means (refuse and warn, decline quietly, report) stays with each caller and is
+// pinned by that caller's own tests. `hadComments` is reported even for a file that does not
+// parse, because `mcpCommented` asks it of exactly those. `strict` is the Claude-style MCP read:
+// plain JSON only, so the commented row is `invalid` there. A DIRECTORY at the path is the read
+// error every platform can produce.
+const LOAD_STATES = [
+  { name: 'no file', seed: null, state: 'absent', comments: false },
+  { name: 'a directory', seed: 'dir', state: 'unreadable', comments: false },
+  { name: 'a syntax error', seed: '{ not json at all', state: 'invalid', comments: false },
+  { name: 'the literal null', seed: 'null', state: 'invalid', comments: false },
+  { name: 'an unterminated comment', seed: '{"a": 1 /* oops', state: 'invalid', comments: true },
+  { name: 'a JSON array', seed: '[]', state: 'notObject', comments: false },
+  { name: 'a JSON string', seed: '"hooks"', state: 'notObject', comments: false },
+  { name: 'an object', seed: '{"a": 1}', state: 'ok', comments: false, data: '{"a": 1}' },
+  { name: 'a commented object', seed: '// mine\n{"a": 1,}', state: 'ok', comments: true,
+    data: '{"a": 1}', strictState: 'invalid' },
+];
+
+test('loadJsonObject classifies every state, row for row', () => {
+  const sb = makeSandbox('jsonc-load-');
+  try {
+    LOAD_STATES.forEach((row, i) => {
+      const p = path.join(sb.path, `f${i}.json`);
+      if (row.seed === 'dir') mkdirSync(p);
+      else if (row.seed !== null) writeFileSync(p, row.seed, 'utf8');
+      const got = loadJsonObject(p);
+      assert.equal(got.state, row.state, `${row.name}: wrong state`);
+      assert.equal(got.hadComments, row.comments, `${row.name}: wrong hadComments`);
+      if (row.data) assert.equal(jsonDumpsCompact(got.data), row.data, `${row.name}: wrong data`);
+      if (row.state === 'unreadable') assert.ok(got.error?.code, `${row.name}: no OS error carried`);
+      assert.equal(loadJsonObject(p, { strict: true }).state, row.strictState ?? row.state,
+        `${row.name}: wrong strict state`);
+    });
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the unwires decline every state but a comment-free object, and touch nothing', () => {
+  // The unwire's policy over those states, stated: anything it cannot read whole, or would strip
+  // comments from, is left exactly as found and answered `false` — it never warns, because the
+  // integrity check after it is what reports a group that lingered.
+  const sb = makeSandbox('jsonc-unwire-');
+  try {
+    const rec = [{ event: 'Stop', group: { hooks: [] } }];
+    LOAD_STATES.filter((r) => r.state !== 'ok' || r.comments).forEach((row, i) => {
+      const p = path.join(sb.path, `u${i}.json`);
+      if (row.seed === 'dir') mkdirSync(p);
+      else if (row.seed !== null) writeFileSync(p, row.seed, 'utf8');
+      const [answer, err] = stderrOf(() => unwireClaudeSettings(p, rec));
+      assert.equal(answer, false, `${row.name}: the unwire claimed to have rewritten it`);
+      assert.equal(err, '', `${row.name}: the unwire printed`);
+      if (row.seed !== null && row.seed !== 'dir') {
+        assert.equal(readFileSync(p, 'utf8'), row.seed, `${row.name}: rewritten`);
+      }
+    });
+  } finally {
+    sb.cleanup();
+  }
+});
+
 test('user hooks in the file survive the merge', () => {
   // A CELL THE REFERENCE'S MATRIX REQUIRED BY NAME (`claude/user-hooks-survive`) AND THAT NO
   // NODE GATE OWNED — checked before claiming it did. The merge writes Geneseed's groups into a
@@ -110,7 +174,7 @@ test('user hooks in the file survive the merge', () => {
     const mine = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine' }] };
     writeFileSync(p, `${JSON.stringify({ model: 'opus', hooks: { PreToolUse: [mine] } }, null, 2)}\n`,
       'utf8');
-    mergeClaudeSettings(p, 'global', null, hookRunnerEntry());
+    mergeClaudeSettings(p, null, hookRunnerEntry());
     const after = JSON.parse(readFileSync(p, 'utf8'));
     assert.equal(after.model, 'opus', 'an unrelated user key was dropped by the merge');
     const kept = (after.hooks.PreToolUse ?? []).filter(
@@ -138,7 +202,7 @@ test('a settings file that is not JSON at all is refused, not overwritten', () =
     const real = process.stderr.write.bind(process.stderr);
     process.stderr.write = (c) => { errs.push(String(c)); return true; };
     try {
-      mergeClaudeSettings(p, 'global', null, hookRunnerEntry());
+      mergeClaudeSettings(p, null, hookRunnerEntry());
     } finally {
       process.stderr.write = real;
     }
@@ -177,7 +241,7 @@ for (const row of UNSTARTABLE) {
       const before = statSync(p).isDirectory() ? 'dir' : readFileSync(p, 'utf8');
       const prior = [{ event: 'Stop', group: { hooks: [] } }];
       const [hooksAnswer, hooksErr] = stderrOf(
-        () => mergeClaudeSettings(p, 'global', prior, hookRunnerEntry()));
+        () => mergeClaudeSettings(p, prior, hookRunnerEntry()));
       const [excludesAnswer, excludesErr] = stderrOf(
         () => wireClaudeExcludes(p, ['/elsewhere/CLAUDE.md']));
       assert.equal(statSync(p).isDirectory() ? 'dir' : readFileSync(p, 'utf8'), before,

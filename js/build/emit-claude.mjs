@@ -262,7 +262,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   // travels from `cfg` rather than being re-read off the deployment: this is the emit that
   // DECIDES the install's packs, so the marker on disk is still the previous build's.
   const [, managedHooks] = mergeClaudeSettings(
-    settingsPath, scope, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
+    settingsPath, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
     doctrines, excludeRules, host, cfgDir,
   );
   managed.settings_hooks = managedHooks;

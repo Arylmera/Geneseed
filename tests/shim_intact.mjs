@@ -21,7 +21,7 @@
  * something that does not.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { hookShimPath, shimDeadPaths } from '../js/hosts/settings.mjs';
+import { hookShimPath, shimDeadPaths } from '../js/hosts/shim.mjs';
 
 const p = hookShimPath();
 if (!existsSync(p)) {

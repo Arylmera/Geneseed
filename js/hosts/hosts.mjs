@@ -228,13 +228,21 @@ export function openclaudeConfigDir() {
  * block`). It is a column and not a literal in the message for the reason every other column
  * here is one — Bob answers `AGENTS.md` while Claude answers `CLAUDE.md`, and
  * a host added later must not need the message edited to stay true.
+ *
+ * `family` joined in 2026-10: `'claude'` for every host emitted through the Claude-shaped
+ * engine — one manifest shape, one `settings.json` hook wiring, one strict-JSON `mcpServers`
+ * config, one reversal. The list had been spelled out by hand in ten places, one of which
+ * ignored the named constant right above it; a fifth host is now one row here.
  */
 export const HOSTS = [
-  { host: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode', agentFile: 'AGENT.md' },
-  { host: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md' },
-  { host: 'bob', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md' },
-  { host: 'openclaude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md' },
+  { host: 'opencode', family: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode', agentFile: 'AGENT.md' },
+  { host: 'claude', family: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md' },
+  { host: 'bob', family: 'claude', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md' },
+  { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md' },
 ];
+
+/** The Claude-STYLE hosts (`family: 'claude'`), in `HOSTS` order. Test with `.includes(host)`. */
+export const CLAUDE_STYLE = HOSTS.filter((h) => h.family === 'claude').map((h) => h.host);
 
 /**
  * `_build_global.host_catalogs_natively` — does `host` list every skill and agent to the

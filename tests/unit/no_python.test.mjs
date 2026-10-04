@@ -123,24 +123,28 @@ const RULES = [
 // A blanket "`js/hosts/settings.mjs` is exempt" would permit the next Python filename to enter that
 // module in silence, and this file's whole subject is a thing entering in silence. So a row is
 // a file, the rule, the exact matched text, HOW MANY TIMES it occurs, and why it is allowed to.
-// The count is not decoration: both live sites in `js/hosts/settings.mjs` match the same six
-// characters, so a row without one would cover a third site nobody argued for. That is
+// The count is not decoration: the two live sites (`js/hosts/settings.mjs`, `js/hosts/shim.mjs`)
+// match the same six characters, so a row without one would cover a second site in either
+// file nobody argued for. That is
 // the retired corpus gate's rule — "a new SITE for an already-declared spelling adds no
 // row and would otherwise arrive in silence" — applied to source instead of to a recording.
 // ---------------------------------------------------------------------------------------------
 
 const PERMITTED = [
-  ['js/hosts/settings.mjs', 'PY_LITERAL', "'harness.py'", 2,
+  ['js/hosts/settings.mjs', 'PY_LITERAL', "'harness.py'", 1,
     'LEGACY-INSTALL DETECTION, and it must keep working precisely BECAUSE the file is gone. '
-    + 'Two sites, one string, two different questions. `GENESEED_HOOK_SNIFF` answers "is this '
-    + "hook Geneseed's?\" and carries the pre-shim direct form (an interpreter plus a checkout "
-    + 'path) alongside the shim mark; `doctor` uses it to find stranded hooks, and dropping the '
-    + 'legacy entry makes every not-yet-migrated install invisible to the orphan scan. '
-    + '`migrateShape` answers the other question — "is this Geneseed\'s OLD one?" — and reads '
-    + 'the same substring to classify a config as `legacy`. Neither runs Python or points at a '
-    + 'file: they RECOGNISE a string a previous version of this tool wrote into a config on a '
-    + "user's machine, and that string does not stop existing when this repository stops "
-    + 'shipping the file it names.'],
+    + '`GENESEED_HOOK_SNIFF` answers "is this hook Geneseed\'s?" and carries the pre-shim '
+    + 'direct form (an interpreter plus a checkout path) alongside the shim mark; `doctor` uses '
+    + 'it to find stranded hooks, and dropping the legacy entry makes every not-yet-migrated '
+    + 'install invisible to the orphan scan. It runs no Python and points at no file: it '
+    + 'RECOGNISES a string a previous version of this tool wrote into a config on a user\'s '
+    + 'machine, and that string does not stop existing when this repository stops shipping the '
+    + 'file it names.'],
+  ['js/hosts/shim.mjs', 'PY_LITERAL', "'harness.py'", 1,
+    'LEGACY-INSTALL DETECTION, the other question: `migrateShape` asks "is this Geneseed\'s OLD '
+    + 'hook?" and reads the same substring to classify a config as `legacy`. Recognition of a '
+    + 'string already on a user\'s machine, not an invocation — the settings.mjs row\'s reason, '
+    + 'split with the function when the shim cluster moved out in 2026-10.'],
 ];
 
 const permitKey = (rel, rule, text) => `${rel} ${rule} ${text}`;

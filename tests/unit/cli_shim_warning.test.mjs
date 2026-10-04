@@ -12,7 +12,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { ROOT } from '../../js/build/source.mjs';
-import { hookShimPath, shimDead } from '../../js/hosts/settings.mjs';
+import { hookShimPath, shimDead } from '../../js/hosts/shim.mjs';
 import { gateSummary, statusLines, statusData } from '../../js/inspect/status.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
 

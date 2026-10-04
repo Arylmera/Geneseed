@@ -36,11 +36,13 @@ import path from 'node:path';
 
 import { main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
+import { CLAUDE_STYLE } from '../hosts/hosts.mjs';
 import { EMIT_HOST_SCOPE, installState, installTargets, readMaybe } from '../hosts/installs.mjs';
 import { installProfile } from '../build/generate.mjs';
 import {
-  autostartPaths, autostartStale, hookShimPath, migrateShape, readJsonc, shimHome,
-} from '../hosts/settings.mjs';
+  autostartPaths, autostartStale, hookShimPath, migrateShape, shimHome,
+} from '../hosts/shim.mjs';
+import { loadJsonObject } from '../hosts/settings.mjs';
 import { writeText, printOut, printErr } from '../lib/fs.mjs';
 
 /** Every emit name the generator answers to — the set an unrecognised marker is NOT in. */
@@ -56,21 +58,20 @@ const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
  * host-parity rule asks for.
  */
 function hookSettingsFile(root, host, scope) {
-  if (!['claude', 'bob', 'openclaude'].includes(host)) return null;
+  if (!CLAUDE_STYLE.includes(host)) return null;
   const name = scope === 'project' && host !== 'bob' ? 'settings.local.json' : 'settings.json';
   return path.join(root, name);
 }
 
 /** Every hook command string in a settings file, or [] when it cannot be read or parsed. */
 function hookCommandsOf(file) {
-  // `readJsonc`, NOT `JSON.parse`. A hand-edited settings.json with comments and a trailing
-  // comma is the one shape no machine in this project writes, and strict JSON rejects it —
+  // `loadJsonObject` (JSONC), NOT `JSON.parse`. A hand-edited settings.json with comments and a
+  // trailing comma is the one shape no machine in this project writes, and strict JSON rejects it —
   // which would classify a wired install as `none` and make `migrate` skip the machine
   // silently. `mergeClaudeSettings` already reads through comments for exactly this reason.
   // Found by the JSONC corpus fixture; a generated fixture would have hidden it.
-  let loaded;
-  try { [loaded] = readJsonc(readFileSync(file, 'utf8')); } catch { return []; }
-  if (!loaded || typeof loaded !== 'object') return [];
+  const { state, data: loaded } = loadJsonObject(file);
+  if (state !== 'ok') return [];
   const hooks = loaded.hooks;
   if (!hooks || typeof hooks !== 'object') return [];
   const out = [];

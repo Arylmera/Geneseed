@@ -39,6 +39,7 @@ import { build, phaseLog } from './bundle.mjs';
 import { emitClaudeRender } from './emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from './emit-opencode.mjs';
 import { settingsIntegrityCheck } from '../hosts/settings.mjs';
+import { hookRunnerEntry } from '../hosts/shim.mjs';
 import { writeText, withPlatformNewlines, isFile } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
@@ -94,55 +95,6 @@ const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orc
  *  reference does not expand `~` here, and a bare `~` is a legal directory name. */
 export function resolveOut(raw) {
   return resolvePath(path.resolve(process.cwd(), raw));
-}
-
-/**
- * `_build_settings._hook_runner_entry()`'s two values — this driver's answer, which since
- * P5b is NOT Python's.
- *
- * The Python original returns `sys.executable` and `<checkout>/rituals/harness.py`: the
- * interpreter running `build.py`, and the harness it will hand `%*` to. This driver returns
- * `process.execPath` and `<checkout>/bin/geneseed-hook.mjs`, because the four verbs the
- * emitted hooks invoke — context, git-gate, rule-gate, learn — are now Node, and an install
- * this driver emits therefore needs no Python at all for its hooks.
- *
- * WHAT THIS RETIRED, AND WHY IT IS A DELETION. Until this phase the function was
- * `hookOptsOrDie`: it scanned PATH for an interpreter and refused the four Claude-shaped
- * emits with exit 4 when it found none, because writing a shim that names a nonexistent
- * interpreter silently disables every hook in the install. Both halves are gone. `runner` is
- * `process.execPath` — the node already running this file, which by construction exists —
- * so there is nothing left to discover and no way for discovery to fail. P4e kept the
- * unreachable exit-3 branch because `test_the_node_driver_classifies_every_emit` asserts a
- * partition it belongs to; nothing asserts a partition over this one, so keeping it would
- * be keeping code no test can reach for no stated reason.
- *
- * THE SHIM IS MACHINE-WIDE, AND THAT IS THE DECISION THIS PHASE ACTUALLY TOOK.
- * `hookShimPath()` is `$GENESEED_HOME`-or-`~/.geneseed` + `bin/geneseed-hook[.cmd]`, with no
- * per-install component: every emit of every install on the machine rewrites the same file,
- * and every install's hooks execute it. While both drivers baked Python that was invisible,
- * because last-writer-wins wrote the same thing. It is observable now — a machine whose last
- * emit ran through this file has EVERY install's hooks running under Node, including
- * installs the Python driver wrote, and the reverse.
- *
- * That is correct exactly while the two entry points answer the same verbs the same way, so
- * the gate that used to be a formality is now load-bearing:
- * `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` reads the emitter's wiring
- * and `bin/geneseed-hook.mjs`'s VERBS table and requires them EQUAL — a wired verb the entry
- * lacks is a dead hook on every install on the machine, not just this one. The alternative
- * considered and rejected was a per-driver shim path: the path is baked into every already
- * emitted hook command, so changing it makes every existing install's hooks stale until
- * re-emit, which is P10's migration arriving five phases early.
- *
- * EXPORTED SINCE P6i, because the emitter is no longer its only caller.
- * `js/maintain/uninstall.mjs`'s `remergeClaudeHooks` re-merges the canonical hooks when a disabled
- * Claude install is turned back on, and `mergeClaudeSettings` refuses to guess the pair —
- * correctly. There is exactly one right answer on this side and it is this function, so the
- * second caller imports it rather than restating two lines that must never drift: a
- * reactivate whose shim path differed from the emitter's would wire hooks pointing at a file
- * the emitter never writes.
- */
-export function hookRunnerEntry() {
-  return { runner: process.execPath, entry: path.join(ROOT, 'bin', 'geneseed-hook.mjs') };
 }
 
 /**
