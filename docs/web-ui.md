@@ -111,22 +111,28 @@ streams the output of background jobs and keeps their history across reloads.
   **Promote to rule** control turns a recurring lesson into a trial rule in
   `user-rules.md` — provenance recorded, the source fact deleted so it isn't loaded
   twice — landing you on the Rules page.
-- **Loops** (`#/loops`) — the loop catalogue `geneseed loop` runs from, read-only.
-  **Templates** draws the selected template as a ring: the iteration turning clockwise from
-  its head, each inner retry loop hung outside on its head node, the ⛨ *validate* gate the
-  engine adds before the first mutate step, setup entering from the left and `done → close`
-  leaving from the head; a card per brick sits under it, and clicking a node scrolls to its
-  card. A graph a ring cannot draw cleanly (more than eight iteration steps, a node in more
-  than three loops) falls back to left-to-right boxes. **Bricks** lists every brick with its
-  origin (shipped / global / project), what it overrides, why it is unavailable, and its
-  source. Templates and Bricks read `GET /api/loops`, resolved from the selected install's
-  root, so a project install shows its `.geneseed/` bricks and templates. **Active** is every
-  loop `geneseed loop init` registered on this machine (`GET /api/loops/active`, polled every
-  5 s): a card per loop with its branch, status, `iteration N / max`, current node and a
-  preset picker (`POST /api/loops/preset`, the page's only write); a loop awaiting a decision
-  is highlighted with what it waits on (launch / declared / actual) — the answer is given in
-  the agent's session, never here; finished and unreadable loops are muted. Selecting a card
-  draws its ring with the current node filled, and its iteration history under it.
+- **Loops** (`#/loops`) — the loop catalogue `geneseed loop` runs from, read-only, laid out
+  like the Library: a rail of sections (**Templates**, **Bricks**, **Active**, each with its
+  count; `#/loops/<section>/<item>` opens an entry), a filterable list, and a reader.
+  **Templates** are grouped by their `category` (architecture, tests, development,
+  refactoring, day-to-day, then *Other*), a *human gate* pill on any that stops for you. The
+  reader draws the selected template as a ring: the iteration turning clockwise from its head,
+  each inner retry loop hung outside on its head node, the ⛨ *validate* gate the engine adds
+  before the first mutate step, setup entering from the left and `done → close` leaving from
+  the head; its `rules` follow, then a compact row per brick (effect, agent or skill, outcomes,
+  human gate), and clicking a node scrolls to and lights its row. A graph a ring cannot draw
+  cleanly (more than eight iteration steps, a node in more than three loops) falls back to
+  left-to-right boxes. **Bricks** are grouped by origin (project / global / shipped), pilled
+  for *mutate*, *human gate*, what they override and *unavailable*; the reader shows the
+  frontmatter facts, why an unavailable brick is unavailable, and its source. Templates and
+  Bricks read `GET /api/loops`, resolved from the selected install's root, so a project
+  install shows its `.geneseed/` bricks and templates. **Active** is every loop
+  `geneseed loop init` registered on this machine (`GET /api/loops/active`, polled every
+  5 s), grouped awaiting, running, done/stopped, finished/unreadable; the reader shows its
+  branch, `iteration N / max`, current node and a preset picker (`POST /api/loops/preset`,
+  the page's only write), what an awaiting loop waits on (launch / declared / actual / a
+  human gate, with its node) — the answer is given in the agent's session, never here — and
+  its ring with the current node filled, with its iteration history under it.
 - **Profile** (`#/profile`) — `PROFILE.md` beside the deployed AGENT.md: who you are and
   how you like to work. Opens rendered; **Edit** is a whole-file editor. The save carries
   the fingerprint it loaded — if an agent session changed the file first, your edit stays

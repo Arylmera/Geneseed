@@ -47,8 +47,19 @@ export function parseBrick(text, origin) {
   if (!agent === !skill) problems.push(`${name}: exactly one of agent or skill`);
   const outcomes = get('outcomes').split(',').map((s) => s.trim()).filter(Boolean);
   if (!outcomes.length) problems.push(`${name}: outcomes is empty`);
+  // `gate: human` holds the transition after this brick until the user answers (state.mjs).
+  // Present on the brick only when declared, so an ungated brick's shape is unchanged.
+  const gate = get('gate');
+  if (gate && gate !== 'human') problems.push(`${name}: gate must be human, not ${JSON.stringify(gate)}`);
+  // `gateOn` narrows the gate to the outcomes it lists; any other outcome follows its edge ungated.
+  const gateOn = get('gateOn').split(',').map((s) => s.trim()).filter(Boolean);
+  if (gateOn.length && gate !== 'human') problems.push(`${name}: gateOn needs gate: human`);
+  for (const o of gateOn) if (!outcomes.includes(o)) problems.push(`${name}: gateOn ${o} is not one of its outcomes`);
   return {
-    brick: { name, description, effect, agent, skill, outcomes, body: body.trim(), origin },
+    brick: {
+      name, description, effect, agent, skill, outcomes, ...(gate ? { gate } : {}),
+      ...(gateOn.length ? { gateOn } : {}), body: body.trim(), origin,
+    },
     problems,
   };
 }

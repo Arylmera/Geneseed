@@ -1,0 +1,22 @@
+{
+  "name": "architecture-decision",
+  "description": "Record one architecture decision record per decision the requirement names: draft it, have a skeptic attack it, and let the user review the ADR that survives, until every decision is recorded as Proposed.",
+  "category": "architecture",
+  "rules": [
+    "Pick the next undocumented decision; the card's write set is its ADR file."
+  ],
+  "nodes": ["identify", "adr-draft", "adr-challenge"],
+  "start": "identify",
+  "edges": [
+    { "from": "identify", "on": "more", "to": "adr-draft" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "adr-draft", "on": "pass", "to": "adr-challenge" },
+    { "from": "adr-challenge", "on": "pass", "to": "identify" },
+    { "from": "adr-challenge", "on": "fail", "to": "adr-draft" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "adr-draft", "adr-challenge"], "max": 8, "iteration": true },
+    { "name": "challenge-fix", "nodes": ["adr-draft", "adr-challenge"], "max": 3 }
+  ],
+  "weights": { "new-file": 0.2, "architecture": 0.2 }
+}

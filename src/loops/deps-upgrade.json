@@ -1,6 +1,10 @@
 {
   "name": "deps-upgrade",
   "description": "Confirm the suite is green, then upgrade one package or group per iteration: read its breaking changes, bump and adapt, test, audit, and review, until every named package is upgraded.",
+  "category": "day-to-day",
+  "rules": [
+    "The card's write set names the manifest, the lockfile and every file the bump adapts."
+  ],
   "nodes": ["baseline-green", "upgrade-scout", "apply", "test", "deps-audit", "review"],
   "start": "baseline-green",
   "edges": [
@@ -21,5 +25,5 @@
     { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
     { "name": "review-fix", "nodes": ["apply", "test", "deps-audit", "review"], "max": 3 }
   ],
-  "weights": { "delete": 0.4 }
+  "ignoreDeletions": ["**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml", "**/*.lock", "**/gradle.lockfile"]
 }

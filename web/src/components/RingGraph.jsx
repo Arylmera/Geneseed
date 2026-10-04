@@ -1,10 +1,24 @@
 import React from 'react'
 import { ENTRY_TO, layoutLoop } from '../lib/loopRing.js'
 
+// A `gate: human` brick's marker: a small person badge (not the validate gate's filled ⛨
+// shield), centred at (x, y), its title saying when the user is asked.
+function HumanBadge({ x, y, label }) {
+  return (
+    <g className="lr-human">
+      <title>{label}</title>
+      <circle cx={x} cy={y} r="9" />
+      <circle cx={x} cy={y - 2.4} r="2.6" className="lr-human-fig" />
+      <path d={`M${x - 4.6},${y + 5.6} a4.6,4.6 0 0 1 9.2,0 Z`} className="lr-human-fig" />
+    </g>
+  )
+}
+
 // A loop template drawn as its ring (lib/loopRing.js does the geometry): the iteration as
 // the big clockwise turn, inner retries hung on their head, the ⛨ validate gate the engine
 // inserts before the first mutate step, setup entering from the left and `done → close`
-// leaving from the head. Every colour is a class in styles.css (`.lr-*`) reading the
+// leaving from the head. A `gate: human` brick wears a person badge (HumanBadge) — on its node,
+// or beside its setup label. Every colour is a class in styles.css (`.lr-*`) reading the
 // console's tokens, so light mode and every accent retint it with no code here.
 //
 // A node is a button: `onSelect(name)` is the page scrolling to that brick's card.
@@ -86,6 +100,7 @@ export default function RingGraph({ graph, bricks, onSelect, highlight }) {
               <text x={e.x} y={e.y + 18} className="lr-sub">
                 setup · 1×
               </text>
+              {e.human ? <HumanBadge x={e.x - 14} y={e.y - 14} label={e.human} /> : null}
             </g>
           ))}
         </g>
@@ -110,7 +125,7 @@ export default function RingGraph({ graph, bricks, onSelect, highlight }) {
             aria-current={n.name === highlight ? 'step' : undefined}
             role="button"
             tabIndex={0}
-            aria-label={`${n.name} brick`}
+            aria-label={`${n.name} brick${n.human ? `, ${n.human.toLowerCase()}` : ''}`}
             onClick={pick(n.name)}
             onKeyDown={pick(n.name)}
           >
@@ -118,6 +133,9 @@ export default function RingGraph({ graph, bricks, onSelect, highlight }) {
             <text x={n.x} y={n.y + 4} textAnchor="middle">
               {n.name}
             </text>
+            {n.human ? (
+              <HumanBadge x={n.x + n.r * 0.74} y={n.y - n.r * 0.74} label={n.human} />
+            ) : null}
           </g>
         ),
       )}

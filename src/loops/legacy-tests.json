@@ -1,6 +1,10 @@
 {
   "name": "legacy-tests",
-  "description": "Confirm the suite is green, then pin legacy behaviour one change point at a time: characterization tests, a run, and a mutation check that proves they bite. Production code is never touched.",
+  "description": "Confirm the suite is green, then pin legacy behaviour one change point at a time: characterization tests, a run, and a mutation check that proves they bite.",
+  "category": "tests",
+  "rules": [
+    "Tests only: production code is never touched."
+  ],
   "nodes": ["baseline-green", "identify", "characterize", "test", "mutation-check"],
   "start": "baseline-green",
   "edges": [

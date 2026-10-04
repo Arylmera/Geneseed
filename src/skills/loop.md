@@ -4,7 +4,9 @@
 
 **Trigger:** the user asks to run a loop, or to work a requirement in small validated
 iterations, each one committed on its own; or names a loop template (`bugfix`, `refactor`,
-`feature`, `tdd`, `legacy-tests`, `legacy-refactor`, `deps-upgrade`, `ci-repair`).
+`feature`, `tdd`, `legacy-tests`, `legacy-refactor`, `deps-upgrade`, `ci-repair`,
+`architecture-decision`, `enforce-architecture-rule`, `update-contract`, `spec-first-feature`,
+`api-endpoint`, `remove-dead-code`, `fix-flaky-tests`).
 
 Default trust preset: **{{TRUST_LABEL}}**
 
@@ -36,7 +38,8 @@ action prints one JSON object — act on its keys, never on your own reading of 
    Write it to `<name>.json` in the OS temp directory — never inside the worktree, where it would
    be scored and committed — and validate it: `geneseed loop check --graph <file>`.
 4. `geneseed loop init --title "<title>" --requirement "<requirement>" --graph <template|file> --preset {{TRUST}}`.
-   A refused graph prints `problems` — fix them and retry.
+   Add `--contracts <globs>` naming the interface or schema files the requirement changes when
+   the template's defaults do not cover them. A refused graph prints `problems` — fix them and retry.
 
 ## The cycle
 
@@ -44,15 +47,21 @@ Repeat `geneseed loop next` and act on its JSON:
 
 - **`{awaiting}`** — a person must decide. Present it: `launch` → the graph in `LOOP.md`;
   `declared` → the card, its score and the threshold; `actual` → `git diff --cached` and the
-  `reasons`. Then **end the run** and wait. On their answer:
+  `reasons`; `gate` → what `node` produced (the file its `note` names, or `git diff`), the
+  `note` and the `outcome` it reported — `ok` follows the outcome the brick reported (on a held
+  `fail` it stops; to continue, `amend` with your answers), `amend` re-runs that brick with their
+  note. Then
+  **end the run** and wait. On their answer:
   `geneseed loop decide --verdict ok|no|amend --note "<their words>"` and continue.
 - **`{verify, run}`** — run exactly the `run` command it prints.
 - **`{node, validate: true}`** — score the card before the brick runs:
   `geneseed loop score --declared` (the card the iteration head recorded), or for a setup brick with no
-  card `geneseed loop score --declared --actions <kinds> --write-set <files> --intent <label>`.
+  card `geneseed loop score --declared --actions <kinds> --write-set <files> --intent <label>`
+  (`spec`: `--actions new-file --write-set 'specs/**'`).
+  Single-quote any glob in `--write-set` (safe in bash and PowerShell; unquoted, the shell expands it).
   `blocking` turns into an `{awaiting}` on the next `next`.
 - **`{node}`** — run the brick: dispatch its `agent` (or follow its `skill`) with the `prompt`,
-  the `card` and the `notes`. Then report the outcome, one of its `outcomes`:
+  the `card`, the `notes` and the template's `rules`. Then report the outcome, one of its `outcomes`:
   `git status --porcelain | geneseed loop record --outcome <outcome>` — the iteration head
   (`identify`, `upgrade-scout`, `ci-triage`) adds `--card '<card json>'` when it reports `more`;
   a brick that reports a note file's path gets `--note-file <path>`, so its finding lands in
@@ -71,8 +80,9 @@ What `score --diff`, `decide` and `record` print back:
   keeping `LOOP.md`: `git stash -u -m loop-discarded -- . :^LOOP.md` (never `git stash push` —
   the word `push` trips the git gate mid-run).
 - **`{done: true}`**, **`{empty}`**, **`{resumed}`**, **`{dropped}`**, **`{node}`**, **`{verify}`**,
-  **`{stopped}`**, a declared score, and any result with `commit: false` (a blocking diff score
-  included — it surfaces as `{awaiting}`) — call `next` again.
+  **`{awaiting}`** (a gate), **`{stopped}`**, a declared score, and any result with
+  `commit: false` (a blocking diff score included — it surfaces as `{awaiting}`) — call `next`
+  again.
 - **`{error}`** — read it; it names the step you skipped (`score --declared` before a mutate
   brick, `score --diff` before `record`). Do the step, never edit the state block to get past it.
   An `{error}` from `record` that mentions JSON means the shell mangled the card's quotes: retry

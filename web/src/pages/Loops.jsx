@@ -1,13 +1,42 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
-import Tabs from '../components/Tabs.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import Loading from '../components/Loading.jsx'
+import FilterInput from '../components/FilterInput.jsx'
 import RingGraph from '../components/RingGraph.jsx'
-import ActiveLoops from '../components/ActiveLoops.jsx'
+import { GroupedRows, walkRows, useActiveRowInView } from '../components/LibRows.jsx'
+import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
+import { humanGate } from '../lib/loopRing.js'
 
 const enc = encodeURIComponent
+
+// The rail's sections, in order; each is a `#/loops/<id>` tab of the router (lib/router.js).
+const SECTIONS = [
+  ['templates', 'Templates'],
+  ['bricks', 'Bricks'],
+  ['active', 'Active'],
+]
+// A template's `category` (js/loop/graph.mjs CATEGORIES) -> its list heading, in shelf order;
+// a template without one goes last, under Other. The headings are uppercased by `.lib-group`.
+const CATEGORY = {
+  architecture: 'Architecture',
+  tests: 'Tests',
+  development: 'Development',
+  refactoring: 'Refactoring',
+  'day-to-day': 'Day-to-day',
+}
+const ORIGIN = { project: 'Project', global: 'Global', shipped: 'Shipped' }
+// Loops › Active by what they need from you: awaiting (it waits on the user) first, then the
+// running ones, then those over, and last the ones with nothing left to show.
+const STATUS = [
+  ['awaiting', 'Awaiting'],
+  ['running', 'Running'],
+  ['done', 'Done · stopped'],
+  ['stopped', 'Done · stopped'],
+  ['finished', 'Finished · unreadable'],
+  ['unreadable', 'Finished · unreadable'],
+]
 
 // "apply (project, overrides shipped)" -> "overrides shipped", for the brick it names. A
 // brick overridden twice (project over global over shipped) reports the last word.
@@ -16,46 +45,166 @@ function overrideOf(overridden, name) {
   return row ? /(overrides \w+)\)$/.exec(row)?.[1] : null
 }
 
-// One brick: what it does to the tree (mutate highlighted — the step the engine validates
-// before), who runs it, where it comes from, how it can end. `full` (the Bricks tab) adds
-// why an unavailable brick is unavailable and its source.
-function BrickCard({ brick, name, override, full }) {
+// Stable-sort `items` into `order`'s groups, tagging each row with its heading.
+const grouped = (items, keyOf, order) =>
+  order.flatMap(([k, label]) =>
+    items.filter((it) => keyOf(it) === k).map((it) => ({ ...it, group: label })),
+  )
+
+// The three lists as rows for the list pane (`name` is the row's id, `title` what it prints,
+// `desc` its one line). Exported for the test that pins their order.
+export function templateRows(templates, bricks) {
+  const gated = new Set(bricks.filter((b) => b.gate === 'human').map((b) => b.name))
+  const rows = templates.map((t) => ({
+    ...t,
+    desc: t.description,
+    human: t.graph.nodes.some((n) => gated.has(n)),
+  }))
+  const cat = (t) => (CATEGORY[t.graph.category] ? t.graph.category : 'other')
+  return grouped(rows, cat, [...Object.entries(CATEGORY), ['other', 'Other']])
+}
+export function brickRows(bricks, overridden) {
+  const rows = bricks.map((b) => ({
+    ...b,
+    desc: b.description,
+    override: overrideOf(overridden, b.name),
+  }))
+  return grouped(rows, (b) => b.origin, Object.entries(ORIGIN))
+}
+export function activeRows(loops) {
+  const rows = loops.map((l) => ({ ...l, name: l.root, desc: l.branch }))
+  return grouped(rows, (l) => l.status, STATUS)
+}
+
+const tag = (cls, text) => (
+  <span key={text} className={`tag${cls ? ` ${cls}` : ''}`}>
+    {text}
+  </span>
+)
+const PILLS = {
+  templates: (t) => (t.human ? tag('human', 'human gate') : null),
+  bricks: (b) => [
+    b.effect === 'mutate' ? tag('warn', 'mutate') : null,
+    humanGate(b) ? tag('human', 'human gate') : null,
+    b.override ? tag('acc', b.override) : null,
+    b.available === false ? tag('bad', 'unavailable') : null,
+  ],
+  active: (l) => tag(TONE[l.status], l.status),
+}
+
+// One brick of a template, as a compact row: name, effect (mutate highlighted — the step the
+// engine validates before), who runs it, how it can end, and its human gate. `on` is the brick
+// whose ring node was just clicked.
+function BrickLine({ name, brick, override, on }) {
+  const cls = `loop-brick${on ? ' on' : ''}${!brick || brick.available === false ? ' dimmed' : ''}`
   if (!brick) {
     return (
-      <div className="panel loop-brick dimmed" id={`brick-${name}`}>
+      <li className={cls} id={`brick-${name}`}>
         <b>{name}</b>
-        <p className="panel-note">Not in the catalogue: this template cannot run as is.</p>
-      </div>
+        <span className="panel-note">Not in the catalogue: this template cannot run as is.</span>
+      </li>
     )
   }
   return (
-    <div
-      className={`panel loop-brick${brick.available === false ? ' dimmed' : ''}`}
-      id={`brick-${brick.name}`}
-    >
-      <div className="loop-brick-head">
-        <b>{brick.name}</b>
-        <span className={`tag${brick.effect === 'mutate' ? ' warn' : ''}`}>{brick.effect}</span>
-        <span className="tag">{brick.agent || brick.skill}</span>
-        <span className="tag">{brick.origin}</span>
-        {override ? <span className="tag acc">{override}</span> : null}
-      </div>
-      <p className="loop-brick-desc">{brick.description}</p>
-      <p className="panel-note">outcomes: {brick.outcomes.join(' · ')}</p>
-      {full && brick.available === false ? (
-        <p className="panel-note t-warn">Unavailable: {brick.reason}</p>
-      ) : null}
-      {full ? (
-        <details>
-          <summary className="panel-note">Source</summary>
-          <pre className="loop-brick-src">{brick.body}</pre>
-        </details>
-      ) : null}
-    </div>
+    <li className={cls} id={`brick-${name}`}>
+      <b>
+        <a href={`#/loops/bricks/${enc(name)}`}>{name}</a>
+      </b>
+      {tag(brick.effect === 'mutate' ? 'warn' : '', brick.effect)}
+      <span className="mono dim">{brick.agent || brick.skill}</span>
+      <span className="panel-note">{brick.outcomes.join(' · ')}</span>
+      {humanGate(brick) ? tag('human', humanGate(brick).toLowerCase()) : null}
+      {override ? tag('acc', override) : null}
+    </li>
   )
 }
 
-// The files the catalogue skipped (bad frontmatter, not JSON, misnamed), on every tab: a
+function TemplateDetail({ t, bricks, overridden }) {
+  const [lit, setLit] = useState(null)
+  const byName = new Map(bricks.map((b) => [b.name, b]))
+  const toRow = (name) => {
+    setLit(name)
+    document
+      .getElementById(`brick-${name}`)
+      ?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+  }
+  return (
+    <>
+      <div className="reader-tags">
+        <span className="tag acc">Template</span>
+        {CATEGORY[t.graph.category] ? tag('', CATEGORY[t.graph.category]) : null}
+        {t.human ? tag('human', 'human gate') : null}
+      </div>
+      <h2 className="reader-title">{t.name}</h2>
+      {t.description ? <p className="reader-lede">{t.description}</p> : null}
+      <p className="mono dim reader-src">
+        loops/{t.name}.json · {t.origin}
+      </p>
+      <hr className="hr" />
+      <div className="loop-graph">
+        <RingGraph graph={t.graph} bricks={bricks} onSelect={toRow} />
+      </div>
+      {t.graph.rules?.length ? (
+        <>
+          <h3 className="loop-h2">Rules</h3>
+          <ul className="loop-rules" aria-label="Rules every brick follows">
+            {t.graph.rules.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      <h3 className="loop-h2">Bricks</h3>
+      <ul className="loop-brick-list" aria-label={`Bricks in ${t.name}`}>
+        {t.graph.nodes.map((n) => (
+          <BrickLine
+            key={n}
+            name={n}
+            brick={byName.get(n)}
+            override={overrideOf(overridden, n)}
+            on={lit === n}
+          />
+        ))}
+      </ul>
+    </>
+  )
+}
+
+function BrickDetail({ b }) {
+  const facts = [
+    ['effect', b.effect],
+    [b.agent ? 'agent' : 'skill', b.agent || b.skill],
+    ['outcomes', b.outcomes.join(' · ')],
+    ['gate', humanGate(b) ? humanGate(b).toLowerCase() : 'none'],
+    ['origin', b.override ? `${b.origin}, ${b.override}` : b.origin],
+  ]
+  return (
+    <>
+      <div className="reader-tags">
+        <span className="tag acc">Brick</span>
+        {PILLS.bricks(b)}
+      </div>
+      <h2 className="reader-title">{b.name}</h2>
+      {b.description ? <p className="reader-lede">{b.description}</p> : null}
+      <p className="mono dim reader-src">bricks/{b.name}.md</p>
+      {b.available === false ? <p className="t-warn">Unavailable: {b.reason}</p> : null}
+      <dl className="loop-facts">
+        {facts.map(([k, v]) => (
+          <React.Fragment key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </React.Fragment>
+        ))}
+      </dl>
+      <hr className="hr" />
+      <pre className="loop-brick-src" aria-label="Source">
+        {b.body}
+      </pre>
+    </>
+  )
+}
+
+// The files the catalogue skipped (bad frontmatter, not JSON, misnamed), on every section: a
 // broken team override would otherwise just be missing, with nothing saying why.
 function Problems({ problems }) {
   if (!problems?.length) return null
@@ -76,108 +225,156 @@ function Problems({ problems }) {
   )
 }
 
-function Templates({ data, item }) {
-  const { templates, bricks, overridden } = data
-  if (!templates.length) {
-    return (
-      <div className="empty">
-        <div className="big">No templates</div>
-        Add one under <code className="mono">.geneseed/loops/</code> in the repo.
-      </div>
-    )
-  }
-  const sel = templates.find((t) => t.name === item) || templates[0]
-  const byName = new Map(bricks.map((b) => [b.name, b]))
-  const toCard = (name) =>
-    document
-      .getElementById(`brick-${name}`)
-      ?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
-  return (
+const EMPTY = {
+  templates: (
     <>
-      <div className="loop-templates">
-        {templates.map((t) => (
-          <a
-            key={t.name}
-            href={`#/loops/templates/${enc(t.name)}`}
-            className={`panel loop-tpl${t === sel ? ' on' : ''}`}
-            aria-current={t === sel ? 'true' : undefined}
-          >
-            <b>{t.name}</b>
-            <span className="panel-note">{t.description}</span>
-            <span className="tag">{t.origin}</span>
-          </a>
-        ))}
-      </div>
-      <div className="panel loop-graph">
-        <RingGraph graph={sel.graph} bricks={bricks} onSelect={toCard} />
-      </div>
-      <h2 className="loop-h2">Bricks in {sel.name}</h2>
-      <div className="loop-bricks">
-        {sel.graph.nodes.map((n) => (
-          <BrickCard key={n} name={n} brick={byName.get(n)} override={overrideOf(overridden, n)} />
-        ))}
-      </div>
+      <div className="big">No templates</div>
+      Add one under <code className="mono">.geneseed/loops/</code> in the repo.
     </>
-  )
+  ),
+  bricks: (
+    <>
+      <div className="big">No bricks</div>
+      Add one under <code className="mono">.geneseed/bricks/</code> in the repo.
+    </>
+  ),
+  active: (
+    <>
+      <div className="big">No loops yet</div>
+      Start one with <code className="mono">geneseed loop init</code> in a worktree, or ask the
+      agent to run a loop. It shows up here while it runs.
+    </>
+  ),
 }
 
-function Bricks({ data }) {
-  if (!data.bricks.length) {
-    return (
-      <div className="empty">
-        <div className="big">No bricks</div>
-        Add one under <code className="mono">.geneseed/bricks/</code> in the repo.
-      </div>
-    )
-  }
-  return (
-    <div className="loop-bricks">
-      {data.bricks.map((b) => (
-        <BrickCard
-          key={b.name}
-          name={b.name}
-          brick={b}
-          override={overrideOf(data.overridden, b.name)}
-          full
-        />
-      ))}
-    </div>
-  )
-}
-
-// The Loops page: the templates `geneseed loop` runs, drawn as rings, and the bricks they are
-// built from — files (src/, the user's config dir, the repo's .geneseed/), read-only here, and
-// this page shows which one won. "Active" is the live-run view (components/ActiveLoops.jsx):
-// it does not wait on the catalogue, which it only borrows bricks from for the ring's gate.
+// The Loops page, in the Library's three panes: a rail of sections (Templates, Bricks, Active),
+// the section's list — filtered, grouped (a template by category, a brick by origin, a run by
+// status) — and the selected entry. Templates and bricks are files (src/, the user's config
+// dir, the repo's .geneseed/), read-only here; Active is the live-run view, polled, and does
+// not wait on the catalogue, which it only borrows bricks from for the ring's gate. Routing:
+// `#/loops`, `#/loops/<section>`, `#/loops/<section>/<item>` (a run's item is its root).
 export default function Loops({ tab = 'templates', item, dataRev }) {
   const { data, error } = useAsync(() => api.loops(), [dataRev], 'loops')
+  const runs = useActiveLoops()
+  const [q, setQ] = useState('')
+  // Filter text belongs to one section: drop it when the route moves to another.
+  const [seenTab, setSeenTab] = useState(tab)
+  if (tab !== seenTab) {
+    setSeenTab(tab)
+    setQ('')
+  }
+  const rowsRef = useActiveRowInView([tab, item])
+
+  const bricks = data?.bricks || []
+  const all =
+    tab === 'active'
+      ? runs.loops && activeRows(runs.loops)
+      : data &&
+        (tab === 'bricks'
+          ? brickRows(data.bricks, data.overridden)
+          : templateRows(data.templates, data.bricks))
+  const rows = all || []
+  const ql = q.trim().toLowerCase()
+  const shown = ql
+    ? rows.filter((r) => `${r.title || ''} ${r.name} ${r.desc || ''}`.toLowerCase().includes(ql))
+    : rows
+  // The routed entry, or the first row (Active: the first live one) so the list and the
+  // reader always agree.
+  const sel =
+    rows.find((r) => r.name === item) ||
+    (tab === 'active' ? rows.find(live) || rows[0] : rows[0]) ||
+    null
+  const counts = {
+    templates: data?.templates.length,
+    bricks: data?.bricks.length,
+    active: runs.loops?.length,
+  }
+  const total = (counts.templates ?? 0) + (counts.bricks ?? 0) + (counts.active ?? 0)
+  const share = (n) => `${total ? ((n ?? 0) / total) * 100 : 0}%`
+  const label = SECTIONS.find(([k]) => k === tab)[1]
+  const err = tab === 'active' ? runs.error : error
+
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="h">Loops</h1>
-          <p className="sub">Templates the loop engine runs, and the bricks they are built from.</p>
-        </div>
-      </div>
-      <Tabs
-        page="loops"
-        current={tab}
-        label="Loops"
-        badges={data ? { templates: data.templates.length, bricks: data.bricks.length } : {}}
-      />
-      <ErrorState error={error} style={{ margin: '0 0 12px' }} />
+      <ErrorState error={err} style={{ margin: '0 0 12px' }} />
       <Problems problems={data?.problems} />
-      {tab === 'active' ? (
-        <ActiveLoops item={item} bricks={data?.bricks || []} />
-      ) : !data ? (
-        error ? null : (
-          <Loading />
-        )
-      ) : tab === 'bricks' ? (
-        <Bricks data={data} />
-      ) : (
-        <Templates data={data} item={item} />
-      )}
+      <div className="library">
+        <aside className="lib-kinds" aria-label="Loops sections">
+          <div className="lib-title">
+            <h1 className="h">Loops</h1>
+            <span className="dim">What the engine runs</span>
+          </div>
+          <div className="stackbar thin" aria-hidden="true">
+            <span className="sb-invariants" style={{ width: share(counts.templates) }} />
+            <span className="sb-doctrines" style={{ width: share(counts.bricks) }} />
+            <span className="sb-rest" style={{ width: share(counts.active) }} />
+          </div>
+          <nav className="kind-list" aria-label="Sections">
+            {SECTIONS.map(([k, l]) => (
+              <a
+                key={k}
+                href={`#/loops/${k}`}
+                className={tab === k ? 'on' : ''}
+                aria-current={tab === k ? 'page' : undefined}
+              >
+                {l}
+                <span className="mono dim">{counts[k] ?? ''}</span>
+              </a>
+            ))}
+          </nav>
+        </aside>
+
+        <section className="lib-list" aria-label={label}>
+          <div className="lib-list-head">
+            <b>
+              {label}{' '}
+              <span className="mono dim">
+                {ql ? `${shown.length} of ${rows.length}` : all ? rows.length : ''}
+              </span>
+            </b>
+          </div>
+          <FilterInput
+            value={q}
+            onChange={setQ}
+            placeholder={`Filter ${label.toLowerCase()}`}
+            label={`Filter ${label}`}
+          />
+          <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
+            {!all ? (
+              err ? null : (
+                <Loading />
+              )
+            ) : rows.length === 0 ? (
+              <div className="empty" style={{ padding: 32 }}>
+                {EMPTY[tab]}
+              </div>
+            ) : (
+              <GroupedRows
+                rows={shown}
+                activeName={sel?.name}
+                hrefOf={(r) => `#/loops/${tab}/${enc(r.name)}`}
+                pills={PILLS[tab]}
+              />
+            )}
+            {ql && shown.length === 0 && (
+              <div className="empty" style={{ padding: 32 }}>
+                <div className="big">No matches</div>
+                Nothing in {label.toLowerCase()} matches “{q.trim()}”.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <article className="lib-reader" aria-label="Entry">
+          {!sel ? null : tab === 'active' ? (
+            <ActiveDetail loop={sel} bricks={bricks} onPreset={runs.onPreset} />
+          ) : tab === 'bricks' ? (
+            <BrickDetail b={sel} />
+          ) : (
+            <TemplateDetail key={sel.name} t={sel} bricks={bricks} overridden={data.overridden} />
+          )}
+        </article>
+      </div>
     </>
   )
 }

@@ -1,66 +1,40 @@
 import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { usePoll } from '../hooks/usePoll.js'
-import ErrorState from './ErrorState.jsx'
-import Loading from './Loading.jsx'
 import RingGraph from './RingGraph.jsx'
 
-const enc = encodeURIComponent
 const POLL_MS = 5000
 const PRESETS = ['prudent', 'balanced', 'aggressive']
 // running reads as the accent (live), awaiting as a warning (it needs the user), unreadable
 // as an error; done/stopped/finished are plain — over, nothing to act on.
-const TONE = { running: 'acc', awaiting: 'warn', unreadable: 'bad' }
+export const TONE = { running: 'acc', awaiting: 'warn', unreadable: 'bad' }
 // A live row carries LOOP.md's state; a `finished` (LOOP.md gone) or `unreadable` row carries
 // only its identity, so it has no graph, iteration or preset to show.
-const live = (l) => !!l.graph
+export const live = (l) => !!l.graph
 
-function RunCard({ loop, on, onPreset }) {
-  const it = live(loop) ? (loop.graph.loops || []).find((x) => x.iteration) : null
-  const cls = `panel loop-run${on ? ' on' : ''}${loop.status === 'awaiting' ? ' awaiting' : ''}${live(loop) ? '' : ' dimmed'}`
-  return (
-    <div className={cls}>
-      <div className="loop-brick-head">
-        <a
-          className="loop-run-title"
-          href={`#/loops/active/${enc(loop.root)}`}
-          aria-current={on ? 'true' : undefined}
-        >
-          {loop.title}
-        </a>
-        <span className={`tag${TONE[loop.status] ? ` ${TONE[loop.status]}` : ''}`}>
-          {loop.status}
-        </span>
-      </div>
-      <span className="panel-note mono">{loop.branch}</span>
-      {live(loop) ? (
-        <>
-          <span className="panel-note">
-            iteration {loop.iteration}
-            {it ? ` / ${it.max}` : ''} · at {loop.node}
-          </span>
-          {loop.awaiting ? (
-            <p className="loop-run-wait t-warn">
-              <b>Awaiting {loop.awaiting.kind}</b> — Answer in the agent&apos;s session.
-            </p>
-          ) : null}
-          <label className="panel-note loop-run-preset">
-            preset
-            <select
-              className="sel"
-              aria-label={`Preset for ${loop.title}`}
-              value={loop.preset}
-              onChange={(e) => onPreset(loop.root, e.target.value)}
-            >
-              {PRESETS.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
-            </select>
-          </label>
-        </>
-      ) : null}
-    </div>
+// Loops › Active's read: every loop `geneseed loop init` registered on this machine, polled.
+// LOOP.md is the only state, so the page writes exactly one thing — a loop's preset — and leaves
+// every decision to the agent's session running the loop (see the spec's out-of-scope list).
+// Polled by the page itself, on every section: the rail counts the active loops.
+export function useActiveLoops() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+  const [rev, setRev] = useState(0)
+  usePoll(
+    (alive) =>
+      api.activeLoops().then(
+        (d) => alive() && (setData(d), setError(null)),
+        (e) => alive() && setError(e.message),
+      ),
+    POLL_MS,
+    [rev],
   )
+  const onPreset = (root, preset) =>
+    api.setLoopPreset(root, preset).then(
+      () => setRev((r) => r + 1),
+      (e) => setError(e.message),
+    )
+  return { loops: data?.loops ?? null, error, onPreset }
 }
 
 function History({ history }) {
@@ -92,59 +66,66 @@ function History({ history }) {
   )
 }
 
-// Loops › Active: every loop `geneseed loop init` registered on this machine, polled. LOOP.md
-// is the only state, so the page writes exactly one thing — a loop's preset — and leaves every
-// decision to the agent's session that is running the loop (see the spec's out-of-scope list).
+// The reader pane for one registered loop: where it stands, what it waits on, its preset (the
+// one thing the page writes), its ring with the current node lit, and its iteration history.
 // `bricks` come from the catalogue the page already read: the ring needs each brick's effect to
 // place the ⛨ validate gate.
-export default function ActiveLoops({ item, bricks }) {
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [rev, setRev] = useState(0)
-  usePoll(
-    (alive) =>
-      api.activeLoops().then(
-        (d) => alive() && (setData(d), setError(null)),
-        (e) => alive() && setError(e.message),
-      ),
-    POLL_MS,
-    [rev],
-  )
-  const onPreset = (root, preset) =>
-    api.setLoopPreset(root, preset).then(
-      () => setRev((r) => r + 1),
-      (e) => setError(e.message),
-    )
-
-  if (!data) return error ? <ErrorState error={error} /> : <Loading />
-  const { loops } = data
-  if (!loops.length) {
-    return (
-      <div className="empty">
-        <div className="big">No loops yet</div>
-        Start one with <code className="mono">geneseed loop init</code> in a worktree, or ask the
-        agent to run a loop. It shows up here while it runs.
-      </div>
-    )
-  }
-  const sel = loops.find((l) => l.root === item && live(l)) || loops.find(live)
+export function ActiveDetail({ loop, bricks, onPreset }) {
+  const it = live(loop) ? (loop.graph.loops || []).find((x) => x.iteration) : null
   return (
     <>
-      <ErrorState error={error} style={{ margin: '0 0 12px' }} />
-      <div className="loop-templates">
-        {loops.map((l) => (
-          <RunCard key={l.root} loop={l} on={l === sel} onPreset={onPreset} />
-        ))}
+      <div className="reader-tags">
+        <span className="tag acc">Active loop</span>
+        <span className={`tag${TONE[loop.status] ? ` ${TONE[loop.status]}` : ''}`}>
+          {loop.status}
+        </span>
       </div>
-      {sel ? (
+      <h2 className="reader-title">{loop.title}</h2>
+      <p className="mono dim reader-src">
+        {loop.branch} · {loop.root}
+      </p>
+      {live(loop) ? (
         <>
-          <div className="panel loop-graph">
-            <RingGraph graph={sel.graph} bricks={bricks} highlight={sel.node} />
+          <p className="reader-lede">
+            Iteration {loop.iteration}
+            {it ? ` / ${it.max}` : ''} · at {loop.node}
+          </p>
+          {loop.awaiting ? (
+            <p className="loop-run-wait t-warn">
+              <b>
+                Awaiting {loop.awaiting.kind}
+                {loop.awaiting.kind === 'gate' ? ` at ${loop.awaiting.node}` : ''}
+              </b>{' '}
+              — Answer in the agent&apos;s session.
+            </p>
+          ) : null}
+          <label className="panel-note loop-run-preset">
+            preset
+            <select
+              className="sel"
+              aria-label={`Preset for ${loop.title}`}
+              value={loop.preset}
+              onChange={(e) => onPreset(loop.root, e.target.value)}
+            >
+              {PRESETS.map((p) => (
+                <option key={p}>{p}</option>
+              ))}
+            </select>
+          </label>
+          <hr className="hr" />
+          <div className="loop-graph">
+            <RingGraph graph={loop.graph} bricks={bricks} highlight={loop.node} />
           </div>
-          <h2 className="loop-h2">Iterations of {sel.title}</h2>
-          <History history={sel.history} />
+          <h3 className="loop-h2">Iterations</h3>
+          <History history={loop.history} />
         </>
-      ) : null}
+      ) : (
+        <p className="reader-lede">
+          {loop.status === 'unreadable'
+            ? 'Its LOOP.md cannot be read, so there is no state to show.'
+            : 'Its LOOP.md is gone: the loop closed and its state went with it.'}
+        </p>
+      )}
     </>
   )
 }

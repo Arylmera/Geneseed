@@ -2,9 +2,10 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// The Loops page over a fixture `/api/loops` payload: the template cards, the ring for the
-// selected one with a card per brick, the Bricks tab with its sources, and the Active tab's
-// link (its own suite is below). The ring's geometry is lib/loopRing.js's suite; this one pins the page.
+// The Loops page in the Library's three panes, over fixture `/api/loops` and
+// `/api/loops/active` payloads: the rail of sections with their counts, each section's list —
+// filtered, grouped, pilled — and the reader for the selected entry. The ring's geometry is
+// lib/loopRing.js's suite; this one pins the page.
 vi.mock('../api/index.js', () => ({
   api: { loops: vi.fn(), activeLoops: vi.fn(), setLoopPreset: vi.fn() },
 }))
@@ -38,20 +39,39 @@ const GRAPH = {
   ],
   loops: [{ name: 'iterations', nodes: ['identify', 'apply'], max: 7, iteration: true }],
 }
+const tpl = (name, description, category, extra = {}) => ({
+  name,
+  description,
+  origin: 'shipped',
+  graph: { ...GRAPH, name, ...(category ? { category } : {}), ...extra },
+})
+// Five templates, sorted by name as the endpoint sends them: two in development, one in tests,
+// one in architecture, one with no category. `gated` runs `review`, a human-gated brick.
 const PAYLOAD = {
   templates: [
-    { name: 'tiny', description: 'The smallest loop.', origin: 'shipped', graph: GRAPH },
-    {
-      name: 'other',
-      description: 'Another.',
-      origin: 'project',
-      graph: { ...GRAPH, name: 'other' },
-    },
+    tpl('adr', 'Record a decision.', 'architecture'),
+    tpl('gated', 'Stops for you.', 'development', {
+      nodes: ['setup', 'identify', 'apply', 'review'],
+      edges: [
+        ...GRAPH.edges.slice(0, 3),
+        { from: 'apply', on: 'pass', to: 'review' },
+        { from: 'review', on: 'pass', to: 'identify' },
+      ],
+      loops: [
+        { name: 'iterations', nodes: ['identify', 'apply', 'review'], max: 7, iteration: true },
+      ],
+    }),
+    tpl('loose', 'No shelf.', undefined),
+    tpl('other', 'Another.', 'tests'),
+    tpl('tiny', 'The smallest loop.', 'development', {
+      rules: ['Cite the proof it is unused.', 'Never retry a flaky test.'],
+    }),
   ],
   bricks: [
     brick('apply', 'mutate', { origin: 'project', body: 'Do it our way.' }),
     brick('identify', 'read'),
     brick('lint', 'read', { available: false, reason: 'skill lint is not shipped' }),
+    brick('review', 'read', { origin: 'global', gate: 'human', gateOn: ['pass'] }),
     brick('setup', 'read'),
   ],
   overridden: ['apply (project, overrides shipped)'],
@@ -60,71 +80,229 @@ const PAYLOAD = {
 beforeEach(() => {
   clearAsyncCache()
   api.loops.mockImplementation(() => Promise.resolve(PAYLOAD))
+  api.activeLoops.mockImplementation(() => Promise.resolve({ loops: [] }))
 })
 afterEach(() => vi.clearAllMocks())
 
-describe('Loops', () => {
-  it('lists the templates and draws the first one with a card per brick', async () => {
+const text = (sel, root = document) => [...root.querySelectorAll(sel)].map((e) => e.textContent)
+// The list pane in reading order: a heading as `# Heading`, a row as its name.
+const listed = () =>
+  [...document.querySelectorAll('.lib-rows .lib-group, .lib-rows .lib-row')].map((e) =>
+    e.classList.contains('lib-group')
+      ? `# ${e.textContent}`
+      : e.querySelector('.lr-name').firstChild.textContent,
+  )
+const reader = () => document.querySelector('.lib-reader')
+
+describe('Loops — the rail', () => {
+  // The Library's rail: the page title and its line, then one link per section with its count.
+  // Active counts the registered runs (none here); the routed section is the current one, and
+  // the old tab strip is gone.
+  it('names the page and lists its three sections with their counts', async () => {
     render(<Loops tab="templates" />)
-    expect(await screen.findByText('The smallest loop.')).toBeTruthy()
-    const cards = [...document.querySelectorAll('.loop-tpl b')].map((b) => b.textContent)
-    expect(cards).toEqual(['tiny', 'other'])
-    expect(document.querySelector('.loop-tpl.on b').textContent).toBe('tiny')
-    // The ring: centre text, the gate before apply (its only mutate node), the setup entry.
-    const svg = document.querySelector('svg.loop-ring')
+    await screen.findByText('The smallest loop.')
+    const rail = screen.getByRole('complementary', { name: 'Loops sections' })
+    expect(rail.querySelector('h1').textContent).toBe('Loops')
+    expect(rail.textContent).toContain('What the engine runs')
+    await waitFor(() =>
+      expect(text('.kind-list a', rail)).toEqual(['Templates5', 'Bricks5', 'Active0']),
+    )
+    expect(rail.querySelector('a[aria-current="page"]').getAttribute('href')).toBe(
+      '#/loops/templates',
+    )
+    expect(document.querySelector('nav.tabs')).toBeNull()
+  })
+})
+
+describe('Loops — templates', () => {
+  // Grouped by category in shelf order (architecture, tests, development, refactoring,
+  // day-to-day — an empty shelf prints no heading), then Other for a template without one; by
+  // name within a shelf. The first row is the one on display when none is routed.
+  it('groups the templates by category, Other last, and opens the first', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('Record a decision.', { selector: '.reader-lede' })
+    expect(listed()).toEqual([
+      '# Architecture',
+      'adr',
+      '# Tests',
+      'other',
+      '# Development',
+      'gated',
+      'tiny',
+      '# Other',
+      'loose',
+    ])
+    expect(document.querySelector('.lib-row.on').getAttribute('href')).toBe('#/loops/templates/adr')
+    expect(reader().querySelector('.reader-title').textContent).toBe('adr')
+  })
+
+  // A template running any `gate: human` brick wears the pill; the rest wear none.
+  it('pills a template that stops for a human', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('Stops for you.')
+    const pill = (n) =>
+      document.querySelector(`a[href="#/loops/templates/${n}"] .tag.human`)?.textContent ?? null
+    expect(['adr', 'gated', 'tiny'].map(pill)).toEqual([null, 'human gate', null])
+  })
+
+  // Substring over name and description, any case; headings follow the rows that survive.
+  it('filters by name or description', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('The smallest loop.')
+    const box = screen.getByLabelText('Filter Templates')
+    fireEvent.change(box, { target: { value: 'SMALL' } })
+    expect(listed()).toEqual(['# Development', 'tiny'])
+    expect(document.querySelector('.lib-list-head').textContent).toBe('Templates 1 of 5')
+    fireEvent.change(box, { target: { value: 'oth' } })
+    expect(listed()).toEqual(['# Tests', 'other'])
+    fireEvent.change(box, { target: { value: 'zzz' } })
+    expect(screen.getByText('No matches')).toBeTruthy()
+  })
+
+  // The reader: name, description, the ring (centre text, the ⛨ gate before apply — its only
+  // mutate node — and the setup entry), the rules, then one compact row per brick in graph
+  // order: mutate as the warn tag, who runs it, its outcomes, the override.
+  it('shows the routed template: ring, rules, then its bricks as rows', async () => {
+    render(<Loops tab="templates" item="tiny" />)
+    await screen.findByText('Cite the proof it is unused.')
+    expect(document.querySelector('.lib-row.on').getAttribute('href')).toBe(
+      '#/loops/templates/tiny',
+    )
+    expect(reader().querySelector('.reader-title').textContent).toBe('tiny')
+    expect(reader().querySelector('.reader-lede').textContent).toBe('The smallest loop.')
+    const svg = reader().querySelector('svg.loop-ring')
     expect(svg.textContent).toContain('iterations · max 7')
     expect(svg.querySelectorAll('.lr-gate')).toHaveLength(1)
     expect(svg.textContent).toContain('setup · 1×')
-    // One card per node, in graph order; mutate highlighted; the override said.
-    const brickCards = [...document.querySelectorAll('.loop-brick')]
-    expect(brickCards.map((c) => c.querySelector('b').textContent)).toEqual([
-      'setup',
-      'identify',
-      'apply',
-    ])
+    const rules = screen.getByRole('list', { name: 'Rules every brick follows' })
+    expect(text('li', rules)).toEqual(['Cite the proof it is unused.', 'Never retry a flaky test.'])
+    const rows = screen.getByRole('list', { name: 'Bricks in tiny' })
+    expect(text('li > b', rows)).toEqual(['setup', 'identify', 'apply'])
     const apply = document.getElementById('brick-apply')
     expect(apply.querySelector('.tag.warn').textContent).toBe('mutate')
-    expect(apply.textContent).toContain('overrides shipped')
+    expect(apply.textContent).toContain('developer')
+    expect(apply.textContent).toContain('pass · fail')
+    expect(apply.querySelector('.tag.acc').textContent).toBe('overrides shipped')
   })
 
-  it('opens the routed template', async () => {
+  it('shows no rules list for a template without rules', async () => {
     render(<Loops tab="templates" item="other" />)
-    await screen.findByText('Another.')
-    expect(document.querySelector('.loop-tpl.on b').textContent).toBe('other')
+    await screen.findByText('Another.', { selector: '.reader-lede' })
+    expect(screen.queryByRole('list', { name: 'Rules every brick follows' })).toBeNull()
   })
 
-  it('scrolls to the brick card when its node is clicked', async () => {
-    render(<Loops tab="templates" />)
-    await screen.findByText('The smallest loop.')
-    const card = document.getElementById('brick-identify')
-    card.scrollIntoView = vi.fn()
+  // A `gate: human` brick is marked on the ring — a person badge whose title says when the user
+  // is asked, distinct from the engine's ⛨ validate gate — and tagged on its row.
+  it('marks a human-gated brick on the ring and on its row', async () => {
+    render(<Loops tab="templates" item="gated" />)
+    await screen.findByText('Stops for you.', { selector: '.reader-lede' })
+    const svg = reader().querySelector('svg.loop-ring')
+    expect(text('.lr-human title', svg)).toEqual(['Human gate on pass'])
+    expect(svg.querySelector('.lr-gate title').textContent).toMatch(/^validate/)
+    expect(screen.getByRole('button', { name: 'review brick, human gate on pass' })).toBeTruthy()
+    const tag = (n) => document.querySelector(`#brick-${n} .tag.human`)?.textContent ?? null
+    expect(['setup', 'identify', 'apply', 'review'].map(tag)).toEqual([
+      null,
+      null,
+      null,
+      'human gate on pass',
+    ])
+  })
+
+  // Clicking a ring node (or Enter on it) scrolls its row into view and lights it, one at a time.
+  it('scrolls to and highlights the brick row when its node is picked', async () => {
+    render(<Loops tab="templates" item="tiny" />)
+    await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+    const row = document.getElementById('brick-identify')
+    row.scrollIntoView = vi.fn()
     fireEvent.click(screen.getByRole('button', { name: 'identify brick' }))
-    expect(card.scrollIntoView).toHaveBeenCalled()
+    expect(row.scrollIntoView).toHaveBeenCalled()
+    expect(text('.loop-brick.on > b')).toEqual(['identify'])
+    fireEvent.keyDown(screen.getByRole('button', { name: 'apply brick' }), { key: 'Enter' })
+    expect(text('.loop-brick.on > b')).toEqual(['apply'])
   })
 
-  it('lists every brick with its source, dimming the unavailable one with its reason', async () => {
+  // The list is keyboard-walkable like the Library's: arrows move focus between row links.
+  it('walks the rows with the arrow keys', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('Record a decision.', { selector: '.reader-lede' })
+    const links = [...document.querySelectorAll('.lib-row')]
+    links[0].focus()
+    fireEvent.keyDown(links[0], { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(links[1])
+    fireEvent.keyDown(links[1], { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(links[0])
+  })
+
+  it('has an empty state with where-to-add advice', async () => {
+    api.loops.mockImplementation(() =>
+      Promise.resolve({ templates: [], bricks: [], overridden: [] }),
+    )
+    render(<Loops tab="templates" />)
+    expect(await screen.findByText('No templates')).toBeTruthy()
+  })
+})
+
+describe('Loops — bricks', () => {
+  // Grouped by origin — project, global, shipped — by name within each; pills for mutate, a
+  // human gate, an override, and an unavailable brick.
+  it('groups the bricks by origin with their pills', async () => {
     render(<Loops tab="bricks" />)
     await screen.findByText('Do it our way.')
-    const names = [...document.querySelectorAll('.loop-brick b')].map((b) => b.textContent)
-    expect(names).toEqual(['apply', 'identify', 'lint', 'setup'])
-    const lint = document.getElementById('brick-lint')
-    expect(lint.classList.contains('dimmed')).toBe(true)
-    expect(lint.textContent).toContain('Unavailable: skill lint is not shipped')
-    expect(document.getElementById('brick-apply').querySelector('pre').textContent).toBe(
-      'Do it our way.',
+    expect(listed()).toEqual([
+      '# Project',
+      'apply',
+      '# Global',
+      'review',
+      '# Shipped',
+      'identify',
+      'lint',
+      'setup',
+    ])
+    const pills = (n) => text(`a[href="#/loops/bricks/${n}"] .tag`)
+    expect(pills('apply')).toEqual(['mutate', 'overrides shipped'])
+    expect(pills('review')).toEqual(['human gate'])
+    expect(pills('lint')).toEqual(['unavailable'])
+    expect(pills('identify')).toEqual([])
+  })
+
+  // The reader: the frontmatter facts, the reason an unavailable brick cannot run, its source.
+  it('shows a brick’s facts, why it is unavailable, and its source', async () => {
+    render(<Loops tab="bricks" item="lint" />)
+    await screen.findByText('Body of lint.')
+    expect(reader().querySelector('.reader-title').textContent).toBe('lint')
+    expect(reader().textContent).toContain('Unavailable: skill lint is not shipped')
+    const facts = [...reader().querySelectorAll('.loop-facts dt')].map((dt) => [
+      dt.textContent,
+      dt.nextElementSibling.textContent,
+    ])
+    expect(facts).toEqual([
+      ['effect', 'read'],
+      ['agent', 'developer'],
+      ['outcomes', 'pass · fail'],
+      ['gate', 'none'],
+      ['origin', 'shipped'],
+    ])
+    expect(reader().querySelector('pre.loop-brick-src').textContent).toBe('Body of lint.')
+  })
+
+  // An overridden brick's origin fact names what it overrides; a gated one names its gate.
+  it('names the override and the gate in the facts', async () => {
+    const { unmount } = render(<Loops tab="bricks" item="apply" />)
+    await screen.findByText('Do it our way.')
+    expect(reader().querySelector('.loop-facts').textContent).toContain(
+      'originproject, overrides shipped',
     )
+    unmount()
+    render(<Loops tab="bricks" item="review" />)
+    await screen.findByText('Body of review.')
+    expect(reader().querySelector('.loop-facts').textContent).toContain('gatehuman gate on pass')
   })
+})
 
-  it('shows Active as a tab link beside Templates and Bricks', async () => {
-    render(<Loops tab="templates" />)
-    await screen.findByText('The smallest loop.')
-    const tabs = [...document.querySelectorAll('nav.tabs a')].map((a) => a.textContent)
-    expect(tabs).toEqual(['Templates2', 'Bricks4', 'Active'])
-    expect(document.querySelector('nav.tabs .tab-off')).toBeNull()
-  })
-
-  // A brick or template the catalogue skipped is named on the page, on both tabs, or a team's
-  // broken override would simply be missing with nothing saying why.
+describe('Loops — the catalogue', () => {
+  // A brick or template the catalogue skipped is named on the page, on every section, or a
+  // team's broken override would simply be missing with nothing saying why.
   it('names the files the catalogue skipped', async () => {
     api.loops.mockImplementation(() =>
       Promise.resolve({
@@ -148,20 +326,12 @@ describe('Loops', () => {
     render(<Loops tab="templates" />)
     expect(await screen.findByText(/boom/)).toBeTruthy()
   })
-
-  it('has an empty state with nowhere-to-add advice', async () => {
-    api.loops.mockImplementation(() =>
-      Promise.resolve({ templates: [], bricks: [], overridden: [] }),
-    )
-    render(<Loops tab="templates" />)
-    expect(await screen.findByText('No templates')).toBeTruthy()
-  })
 })
 
-// The Active tab over a fixture `/api/loops/active` payload: one card per registered loop,
-// read off its LOOP.md. Live rows carry the state; finished and unreadable rows carry only
-// their identity and are shown muted. The selected card draws its graph's ring with the node
-// the loop stands on highlighted, and the iteration history under it.
+// Loops › Active over a fixture `/api/loops/active` payload: one row per registered loop, read
+// off its LOOP.md. Live rows carry the state; finished and unreadable rows carry only their
+// identity. The selected run draws its graph's ring with the node it stands on highlighted,
+// and the iteration history under it.
 const RUN = {
   root: 'C:/w/fix-login',
   branch: 'loop/fix-login',
@@ -220,6 +390,8 @@ const DONE = {
 
 describe('Loops › Active', () => {
   const show = (loops) => api.activeLoops.mockImplementation(() => Promise.resolve({ loops }))
+  const runRow = (root) =>
+    document.querySelector(`a[href="#/loops/active/${encodeURIComponent(root)}"]`)
 
   // A failed read rejects with an Error object (api/http.js `fail`); the page must show its
   // message, not hand the object to React — a console on an older server (no
@@ -232,50 +404,91 @@ describe('Loops › Active', () => {
     expect(await screen.findByText('not found: /api/loops/active')).toBeTruthy()
   })
 
-  it('renders one card per loop with its branch, status, iteration, preset and node', async () => {
-    show([RUN, WAITING, DONE])
+  // Grouped by what they need from you: awaiting, running, done/stopped, finished/unreadable.
+  // A row prints the title, its status pill (awaiting warn, running accent, finished plain,
+  // unreadable bad) and its branch; the rail counts every registered run.
+  it('groups the runs by status, awaiting first, with their status pills', async () => {
+    const BAD = { ...DONE, root: 'C:/w/bad', title: 'Broken', status: 'unreadable' }
+    show([RUN, DONE, WAITING, BAD])
     render(<Loops tab="active" />)
-    await screen.findByText('Fix the login bug')
-    const cards = [...document.querySelectorAll('.loop-run')]
-    expect(cards.map((c) => c.querySelector('.loop-run-title').textContent)).toEqual([
-      'Fix the login bug',
+    await screen.findByText('Split the parser', { selector: '.reader-title' })
+    expect(listed()).toEqual([
+      '# Awaiting',
       'Split the parser',
+      '# Running',
+      'Fix the login bug',
+      '# Finished · unreadable',
       'An old loop',
+      'Broken',
     ])
-    const run = cards[0]
-    expect(run.textContent).toContain('loop/fix-login')
-    expect(run.querySelector('.tag.acc').textContent).toBe('running')
-    // max is the graph's iteration loop's `max` (7 in GRAPH).
-    expect(run.textContent).toContain('iteration 3 / 7')
-    expect(run.textContent).toContain('at apply')
-    expect(screen.getByLabelText('Preset for Fix the login bug').value).toBe('balanced')
+    const pill = (root) => runRow(root).querySelector('.tag')
+    expect(
+      ['C:/w/refactor', 'C:/w/fix-login', 'C:/w/old', 'C:/w/bad'].map((r) => pill(r).className),
+    ).toEqual(['tag warn', 'tag acc', 'tag', 'tag bad'])
+    expect(runRow('C:/w/fix-login').querySelector('.lr-desc').textContent).toBe('loop/fix-login')
+    expect(text('.kind-list a')).toEqual(['Templates5', 'Bricks5', 'Active4'])
   })
 
-  it('highlights an awaiting loop with what it waits on and where to answer', async () => {
+  // The reader: status, branch, iteration of max (the graph's iteration loop's 7) and node, the
+  // preset, the ring with the current node lit, and the history.
+  it('draws the routed run with its state, current node and history', async () => {
+    show([RUN, WAITING])
+    render(<Loops tab="active" item="C:/w/fix-login" />)
+    await screen.findByText('Guard the null user')
+    expect(runRow('C:/w/fix-login').classList.contains('on')).toBe(true)
+    expect(reader().querySelector('.reader-title').textContent).toBe('Fix the login bug')
+    expect(text('.reader-tags .tag', reader())).toEqual(['Active loop', 'running'])
+    expect(reader().textContent).toContain('loop/fix-login')
+    expect(reader().textContent).toContain('Iteration 3 / 7 · at apply')
+    expect(screen.getByLabelText('Preset for Fix the login bug').value).toBe('balanced')
+    expect(text('svg.loop-ring .lr-node.current')).toEqual(['apply'])
+    const rows = [...document.querySelectorAll('.loop-history tbody tr')].map((tr) =>
+      text('td', tr),
+    )
+    expect(rows).toEqual([
+      ['1', 'Guard the null user', '2', '3', 'silent', 'pass'],
+      ['2', 'Rework the session check', '6', '6', 'soft', 'fail'],
+    ])
+  })
+
+  it('says what an awaiting run waits on and where to answer', async () => {
     show([RUN, WAITING])
     render(<Loops tab="active" />)
-    await screen.findByText('Split the parser')
-    const [run, waiting] = document.querySelectorAll('.loop-run')
-    expect(run.classList.contains('awaiting')).toBe(false)
-    expect(waiting.classList.contains('awaiting')).toBe(true)
-    expect(waiting.querySelector('.tag.warn').textContent).toBe('awaiting')
-    expect(waiting.textContent).toContain('Awaiting declared')
-    expect(waiting.textContent).toContain("Answer in the agent's session.")
+    await screen.findByText('Split the parser', { selector: '.reader-title' })
+    expect(reader().querySelector('.loop-run-wait').textContent).toBe(
+      "Awaiting declared — Answer in the agent's session.",
+    )
   })
 
-  it('shows finished and unreadable loops muted, with their status and no picker', async () => {
-    show([RUN, DONE, { ...DONE, root: 'C:/w/bad', title: 'Broken', status: 'unreadable' }])
+  it('names the brick a human gate waits on', async () => {
+    show([{ ...WAITING, awaiting: { kind: 'gate', node: 'adr-draft', outcome: 'pass' } }])
     render(<Loops tab="active" />)
-    await screen.findByText('An old loop')
-    const [, done, bad] = document.querySelectorAll('.loop-run')
-    expect(done.classList.contains('dimmed')).toBe(true)
-    expect(done.querySelector('.tag').textContent).toBe('finished')
-    expect(done.querySelector('select')).toBeNull()
-    expect(bad.classList.contains('dimmed')).toBe(true)
-    expect(bad.querySelector('.tag.bad').textContent).toBe('unreadable')
+    await screen.findByText('Split the parser', { selector: '.reader-title' })
+    expect(reader().querySelector('.loop-run-wait').textContent).toBe(
+      "Awaiting gate at adr-draft — Answer in the agent's session.",
+    )
   })
 
-  it('posts a preset change and reads the loops again', async () => {
+  // With none routed, the first live run is shown: a finished one has no state to draw, and
+  // sorts below the running one even when the endpoint lists it first.
+  it('selects the first live run when none is routed', async () => {
+    show([DONE, RUN])
+    render(<Loops tab="active" />)
+    await screen.findByText('Fix the login bug', { selector: '.reader-title' })
+    expect(runRow('C:/w/fix-login').classList.contains('on')).toBe(true)
+    expect(text('svg.loop-ring .lr-node.current')).toEqual(['apply'])
+  })
+
+  it('shows a finished run as its identity, with no picker and no ring', async () => {
+    show([RUN, DONE])
+    render(<Loops tab="active" item="C:/w/old" />)
+    await screen.findByText('An old loop', { selector: '.reader-title' })
+    expect(reader().textContent).toContain('LOOP.md is gone')
+    expect(reader().querySelector('select')).toBeNull()
+    expect(reader().querySelector('svg')).toBeNull()
+  })
+
+  it('posts a preset change and reads the runs again', async () => {
     show([RUN])
     api.setLoopPreset.mockImplementation(() => Promise.resolve({ ok: true, loop: RUN }))
     render(<Loops tab="active" />)
@@ -286,37 +499,7 @@ describe('Loops › Active', () => {
     await waitFor(() => expect(api.activeLoops).toHaveBeenCalledTimes(2))
   })
 
-  it('draws the selected loop with its current node highlighted, and its history', async () => {
-    show([RUN, WAITING])
-    render(<Loops tab="active" item="C:/w/fix-login" />)
-    await screen.findByText('Fix the login bug')
-    expect(document.querySelector('.loop-run.on .loop-run-title').textContent).toBe(
-      'Fix the login bug',
-    )
-    const current = document.querySelectorAll('svg.loop-ring .lr-node.current')
-    expect([...current].map((n) => n.textContent)).toEqual(['apply'])
-    const rows = [...document.querySelectorAll('.loop-history tbody tr')].map((tr) =>
-      [...tr.querySelectorAll('td')].map((td) => td.textContent),
-    )
-    expect(rows).toEqual([
-      ['1', 'Guard the null user', '2', '3', 'silent', 'pass'],
-      ['2', 'Rework the session check', '6', '6', 'soft', 'fail'],
-    ])
-  })
-
-  it('selects the first live loop when none is routed', async () => {
-    show([DONE, WAITING])
-    render(<Loops tab="active" />)
-    await screen.findByText('Split the parser')
-    expect(document.querySelector('.loop-run.on .loop-run-title').textContent).toBe(
-      'Split the parser',
-    )
-    const current = document.querySelectorAll('svg.loop-ring .lr-node.current')
-    expect([...current].map((n) => n.textContent)).toEqual(['identify'])
-  })
-
   it('explains how to start a loop when none is registered', async () => {
-    show([])
     render(<Loops tab="active" />)
     expect(await screen.findByText('No loops yet')).toBeTruthy()
     expect(document.querySelector('.empty').textContent).toContain('geneseed loop init')

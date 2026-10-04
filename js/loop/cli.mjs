@@ -111,7 +111,10 @@ const ACTIONS = {
     const graph = resolveGraph(args.graph, catalog);
     const problems = checkGraph(graph, catalog.bricks);
     if (problems.length) return { error: 'the graph does not pass loop check', problems };
-    const state = initState({ title: args.title, requirement: args.requirement, graph, preset: args.preset || DEFAULT_PRESET });
+    const state = initState({
+      title: args.title, requirement: args.requirement, graph, preset: args.preset || DEFAULT_PRESET,
+      contracts: list(args.contracts) ?? [],
+    });
     writeLoopFile(file, state);
     // Best-effort: the registry is how the Active tab discovers this loop, but a registry
     // hiccup must never fail the init the loop itself just succeeded at.

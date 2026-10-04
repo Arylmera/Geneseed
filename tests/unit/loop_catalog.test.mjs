@@ -45,6 +45,30 @@ test('parseBrick names every malformed field', () => {
   ]);
 });
 
+// `gate: human` is the only gate a brick may declare; it lands on the brick (and so in the
+// `loop check` listing) only when present, so a brick without one reads exactly as before.
+test('parseBrick reads gate: human and refuses any other gate value', () => {
+  const { brick, problems } = parseBrick(brickMd('adr-draft', 'agent: tester\ngate: human'), 'shipped');
+  assert.deepEqual(problems, []);
+  assert.equal(brick.gate, 'human');
+  assert.equal(Object.hasOwn(parseBrick(brickMd('lint'), 'shipped').brick, 'gate'), false);
+  assert.deepEqual(parseBrick(brickMd('x', 'agent: tester\ngate: robot'), 'shipped').problems,
+    ['x: gate must be human, not "robot"']);
+});
+
+// `gateOn` narrows a gate to the outcomes it lists (the rest pass straight through). It means
+// nothing without `gate: human`, and every value must be one of the brick's own outcomes.
+test('parseBrick reads gateOn as a list, only with gate: human and only of its own outcomes', () => {
+  const { brick, problems } = parseBrick(brickMd('adr-challenge', 'agent: skeptic\ngate: human\ngateOn: pass'), 'shipped');
+  assert.deepEqual(problems, []);
+  assert.deepEqual(brick.gateOn, ['pass']);
+  assert.equal(Object.hasOwn(parseBrick(brickMd('y', 'agent: tester\ngate: human'), 'shipped').brick, 'gateOn'), false);
+  assert.deepEqual(parseBrick(brickMd('x', 'agent: tester\ngateOn: pass'), 'shipped').problems,
+    ['x: gateOn needs gate: human']);
+  assert.deepEqual(parseBrick(brickMd('x', 'agent: tester\ngate: human\ngateOn: pass, maybe'), 'shipped').problems,
+    ['x: gateOn maybe is not one of its outcomes']);
+});
+
 test('userLoopsDir follows XDG_CONFIG_HOME', () => {
   assert.equal(userLoopsDir(), path.join(tmp, 'xdg', 'geneseed'));
 });
@@ -90,10 +114,10 @@ test('catalogProblems runs checkGraph over every template and prefixes it', () =
 // ---------------------------------------------------------------------------------------------
 // The shipped catalogue — the real `src/bricks` and `src/loops` this package ships.
 
-test('the shipped catalogue is clean and carries exactly the eight shipped templates', () => {
+test('the shipped catalogue is clean and carries exactly the fifteen shipped templates', () => {
   assert.deepEqual(catalogProblems({ projectRoot: null, globalLevel: false }), []);
   const { templates } = loadCatalog({ projectRoot: null, globalLevel: false });
-  assert.deepEqual([...templates.keys()].sort(), ['bugfix', 'ci-repair', 'deps-upgrade', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd']);
+  assert.deepEqual([...templates.keys()].sort(), ['api-endpoint', 'architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'fix-flaky-tests', 'legacy-refactor', 'legacy-tests', 'refactor', 'remove-dead-code', 'spec-first-feature', 'tdd', 'update-contract']);
 });
 
 test('globalLevel: false ignores a global brick entirely', () => {

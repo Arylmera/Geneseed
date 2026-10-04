@@ -23,6 +23,8 @@ import { WEIGHTS } from './score.mjs';
 
 export const TERMINALS = new Set(['$close', '$stop']);
 export const ENGINE_MAX_ITERATIONS = 20;
+/** A template's optional `category`, in the order the console's Loops list shows them. */
+export const CATEGORIES = ['architecture', 'tests', 'development', 'refactoring', 'day-to-day'];
 
 export function iterationLoop(graph) {
   return (graph.loops ?? []).find((l) => l.iteration === true);
@@ -140,6 +142,22 @@ export function checkGraph(graph, bricks) {
   // template weight overrides
   for (const k of Object.keys(graph.weights ?? {})) {
     if (!Object.hasOwn(WEIGHTS, k)) problems.push(`weights: ${k} is not an action`);
+  }
+  // optional glob lists (score.mjs's `globMatch` reads them)
+  for (const k of ['contracts', 'ignoreDeletions']) {
+    const v = graph[k];
+    if (v !== undefined && !(Array.isArray(v) && v.every((g) => typeof g === 'string' && g.trim()))) {
+      problems.push(`${k}: must be a list of non-empty glob strings`);
+    }
+  }
+  // optional instruction list every brick receives through `loop next`
+  const rules = graph.rules;
+  if (rules !== undefined && !(Array.isArray(rules) && rules.every((r) => typeof r === 'string' && r.trim()))) {
+    problems.push('rules: must be a list of non-empty strings');
+  }
+  // optional catalogue shelf: the console groups templates by it, an absent one under OTHER
+  if (graph.category !== undefined && !CATEGORIES.includes(graph.category)) {
+    problems.push(`category: must be one of ${CATEGORIES.join(', ')}`);
   }
   return problems;
 }

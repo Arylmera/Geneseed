@@ -55,6 +55,17 @@ check) refuses a graph with an undeclared cycle inside an iteration, before a si
 | `legacy-refactor` | pin current behaviour once with characterization tests, then refactor behind that net | the refactor target has no tests yet but will get changed |
 | `deps-upgrade` | upgrade one package or group per iteration: read breaking changes, bump, adapt, audit | a dependency bump that needs to land as reviewable steps, not one big diff |
 | `ci-repair` | triage failing CI checks for the current commit and fix one code failure per iteration | a red CI run on a `loop/*` branch that needs to go green |
+| `architecture-decision` | draft one ADR per decision the requirement names, challenged by a skeptic brick, reviewed by the user | a design choice worth recording before (or instead of) any code changes |
+| `enforce-architecture-rule` | encode an architecture rule as a test with an allowlist of today's violations, then fix one violation per iteration | a rule the codebase should hold everywhere but doesn't yet |
+| `update-contract` | change an interface with live consumers as expand, migrate one consumer per iteration, contract | an API, schema or event change that can't break existing callers in one step |
+| `spec-first-feature` | write the feature's spec (EARS criteria, ordered tasks) for review, then build one task per iteration | a feature whose acceptance criteria are worth pinning down before any code |
+| `api-endpoint` | plan, build, test, write a Bruno request and security-review one endpoint change per iteration | an HTTP API feature where each endpoint needs its own exercised request and a security pass |
+| `remove-dead-code` | confirm the suite is green, then delete one coherent group of unused code per iteration, test, review | code a tool (knip, ts-prune, vulture, PMD…) and a reference search say is unused |
+| `fix-flaky-tests` | confirm flakiness by repeated runs, then fix one test's root cause per iteration — never a retry or a sleep | a test that fails only sometimes, not every run |
+
+`feature` and `spec-first-feature` both end with an independent `done-check`: before `$close`, it
+maps every acceptance criterion to a passing test (or a stated manual check) and reports `fail`
+with what's missing rather than trusting the iterations that already ran.
 
 `legacy-tests` and `legacy-refactor` both open on `baseline-green` — the suite must already be
 green before either template pins anything, and `baseline-green` reporting `fail` stops the loop
@@ -69,12 +80,11 @@ so the gap is visible in `LOOP.md` rather than just absent from it.
 checks (`gh run list --commit`), and with no run for that commit it reports `done` with a note
 rather than treating a branch CI never touched as green.
 
-`deps-upgrade` lowers its `delete` weight from the default 0.8 to 0.4, because a lockfile
-regenerating under a bump deletes and re-adds hundreds of lines with no risk in them — at the
-default weight that churn alone would push every iteration to a blocking score. The trade-off is
-a real deletion elsewhere in the same diff (a dropped file, a removed API) scores lower than it
-would under `bugfix` or `feature`; `deps-upgrade` leans on `review` and `deps-audit` to catch what
-the lowered weight no longer flags on its own.
+`deps-upgrade` lists lockfiles under `ignoreDeletions` (`**/package-lock.json`, `**/yarn.lock`,
+`**/pnpm-lock.yaml`, `**/*.lock`, `**/gradle.lockfile`): a lockfile regenerating under a bump deletes
+and re-adds hundreds of lines with no risk in them, so those lines stay out of the deleted-lines
+count. Everything else keeps the default `delete` weight, and a lockfile outside the iteration's
+write set still escalates like any other file.
 
 ## Notes: what survives an iteration
 
@@ -148,11 +158,102 @@ Three levels follow from where the score lands:
   answer with `geneseed loop decide --verdict ok|no|amend`. Amending a verdict marks the decision
   `blocking (amended)` in the trailers rather than silently rewriting it to something else.
 
+## Human gates
+
+A brick can hold for a person regardless of preset or score, independent of the risk machinery
+above: its frontmatter carries `gate: human`, optionally narrowed with `gateOn: <outcomes>` (no
+`gateOn` holds on every outcome the brick can report). `adr-challenge` (holds on `pass` — a
+drafted ADR that survived its skeptic), `fitness-define`, `migration-plan` and `spec` all gate
+this way: the loop reports `{awaiting}` with `kind: "gate"` before the edge that outcome would
+normally follow is taken at all — **the gate holds the whole transition**, so nothing is scored,
+committed or counted against a ring budget while it waits.
+
+`geneseed loop decide --verdict ok|no|amend` answers it:
+
+- **`ok`** follows the edge the brick's reported outcome actually points to. On a brick gated on
+  more than one outcome, a held `fail` still routes through its own edge on `ok` — which is
+  usually `$stop` — so `ok` on a held failure stops the loop, it doesn't wave it through.
+- **`no`** stops the loop at that node.
+- **`amend`** re-runs the same brick with your note appended to `LOOP.md`'s notes, so the next
+  run of that brick sees it; the node's re-entry (ring) budget restarts, since the amendment
+  changes what the unit does. A node can be amended at most 3 times per iteration — the 4th
+  amend stops the loop instead: three rounds that didn't converge are a conversation, not a loop.
+
+Every closing commit that passed a gate names it under `Loop-Gates` (see below). The console's
+**Active** tab shows a gated loop as `Awaiting gate at <node>`, the same way it shows a score
+`awaiting`. A gate passed in a read-only setup unit leaves its approval as a note in `LOOP.md`,
+not a trailer — that unit closes without a commit.
+
+## Contracts and ignored deletions
+
+A template may declare `contracts`: globs for the interface or schema files whose *shape* a
+change can break, not just the implementation behind it — `update-contract` and
+`api-endpoint` ship defaults (OpenAPI/Swagger/AsyncAPI specs, `.proto`, `.avsc`, GraphQL schemas,
+Flyway/Liquibase migrations). They're copied into `LOOP.md`'s own `contracts` at `loop init`;
+`loop init --contracts <globs>` appends more, and the list is editable by hand in `LOOP.md`
+afterward, applying from the next score on. Touching a file any of these globs match raises the
+*actual* score to at least the **api** weight (0.8) regardless of the declared card — a contract
+edit is never silent.
+
+A template may also declare `ignoreDeletions`: globs excluded from the ">20 deleted lines"
+escalation rule only. `deps-upgrade` lists lockfiles this way (`**/package-lock.json`,
+`**/yarn.lock`, `**/pnpm-lock.yaml`, `**/*.lock`, `**/gradle.lockfile`) because a lockfile
+regenerating under a bump deletes and re-adds hundreds of lines with no risk in them;
+`remove-dead-code` ignores generated output (`**/generated/**`, `**/generated-sources/**`,
+`**/target/**`, `**/build/generated/**`) for the same reason. A file matched by `ignoreDeletions`
+is still subject to the write-set check — it must still be declared or match a write-set glob, it
+just doesn't count toward the deletion total.
+
+Both lists, and the write set, share one hand-rolled glob dialect (no dependency — this module
+imports only node builtins): `*` and `?` stay inside one path segment, `**` crosses segments and
+`**/` may match zero directories (so `**/yarn.lock` also covers the root one); there is no brace
+expansion (`{a,b}`). A write-set entry is matched as a glob too, but only when it has at least one
+literal (non-`*`/`?`) path segment — a wildcard-only entry like `**` or `**/*.java` would
+otherwise declare the whole repo as writable, so it's left to match nothing instead and the
+check fails closed.
+
+## `description` and `rules`: what a template is for, and what every brick must do
+
+A template's JSON carries two prose fields, and they are never confused:
+
+- **`description`** — the catalogue blurb: what the template is for and when to pick it. The
+  `loop` skill and the console read it to choose a template; no brick ever receives it.
+- **`rules`** — optional, a list of one-line instructions every brick of this loop must follow
+  (`["Each card's intent cites the proof it is unused: …", "Generated sources do not count as
+  unused."]`). `geneseed loop check` refuses anything but a list of non-empty strings.
+
+`geneseed loop next` hands the template's `rules` to every node — not only the iteration head that
+reads `LOOP.md` — so a template-wide proviso (cite your deletion proof, a flaky test is never fixed
+with a retry, contract edits stop for a human by design) is visible to whichever brick runs,
+including `review`, which checks the diff against it. A graph with no `rules`, or an empty list,
+omits the field; there is no fallback to `description`.
+
+A template may also carry a **`category`** — one of `architecture`, `tests`, `development`,
+`refactoring`, `day-to-day` — the shelf the console's Loops page files it under, in that order.
+It is optional (a template without one is listed under *Other*); `geneseed loop check` refuses
+any other value.
+
+## Java notes for the newer bricks
+
+- **`mutation-check`** (`legacy-tests`) prefers PIT on a Maven build: `mvn test-compile
+  org.pitest:pitest-maven:mutationCoverage -DtargetClasses=<fq.Class*>
+  -DreportsDirectory=<OS temp dir> -DtimestampedReports=false`, and needs `pitest-junit5-plugin`
+  on the classpath under JUnit 5; on Gradle, the `info.solidsoft.pitest` plugin's `pitest` task.
+  With neither configured it reports `unavailable` rather than adding the plugin itself or a
+  silent `pass`.
+- **`fitness-define`** (`enforce-architecture-rule`) reaches for ArchUnit first on Java — a
+  `FreezingArchRule`, whose violation store doubles as the allowlist of today's violations —
+  before dependency-cruiser, import-linter, eslint-plugin-boundaries or size-limit elsewhere.
+- **`migration-plan`** (`update-contract`) treats Pact or Spring Cloud Contract, where the repo
+  already records consumer contracts, as the check `compat-check` runs against each step rather
+  than only the consumers' own test suites.
+
 ## `LOOP.md` and its trailers
 
 `LOOP.md`, at the worktree root, is both the human-readable record (title, requirement, and the
 rule that you may edit `preset` or `contracts` there) and the engine's own JSON state block. Every
-closing commit carries seven trailers, read straight off that state:
+closing commit carries a fixed set of trailers, read straight off that state — `Loop-Gates` only
+when the unit passed at least one human gate:
 
 ```
 Loop-Iteration: <n>
@@ -162,6 +263,7 @@ Loop-Risk-Actual: <score>
 Loop-Threshold: <preset> <silent>/<soft>
 Loop-Decision: silent | soft | blocking[ (amended)]
 Loop-Tests: <what the loop was told about test state>
+Loop-Gates: <every node whose gate passed this unit, deduplicated>
 ```
 
 ## The `loop/*` branch, and why merge always asks
@@ -215,7 +317,7 @@ The console's **Loops › Active** tab (`GET /api/loops/active`, polled every fe
 registry and shows one card per loop: branch, status (`running`, `awaiting`, `done`, `stopped`,
 `finished`, or `unreadable` if `LOOP.md` fails to parse), `iteration N / max`, and its current
 node. A loop `awaiting` a decision is highlighted with what it's waiting on — the launch, the
-declared score, or the actual score — but **the answer is given in the agent's session**, with
+declared score, the actual score, or a human gate (with its node) — but **the answer is given in the agent's session**, with
 `geneseed loop decide`, never from the page. A finished loop (`LOOP.md` removed) is kept, muted,
 for 7 days after first being seen finished, then dropped. Selecting a card draws its ring with the
 current node filled, with the iteration history (declared, actual, decision, tests) underneath.

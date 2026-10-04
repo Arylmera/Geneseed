@@ -2921,12 +2921,23 @@ test('the loops endpoint lists templates, bricks and overrides from the install 
     fs.writeFileSync(path.join(bricks, 'apply.md'), '---\nname: apply\ndescription: Team apply.\n'
       + 'effect: mutate\nagent: developer\noutcomes: pass\n---\nDo it our way.\n');
     const { templates, bricks: rows, overridden } = apiLoops(webState('neutral', sb.path));
-    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'ci-repair', 'deps-upgrade', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd']);
-    const bugfix = templates[0];
+    assert.deepEqual(templates.map((t) => t.name), ['api-endpoint', 'architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'fix-flaky-tests', 'legacy-refactor', 'legacy-tests', 'refactor', 'remove-dead-code', 'spec-first-feature', 'tdd', 'update-contract']);
+    const bugfix = templates.find((t) => t.name === 'bugfix');
     assert.equal(bugfix.origin, 'shipped');
     assert.equal(bugfix.graph.start, 'reproduce');
     assert.equal(bugfix.graph.loops[0].name, 'iterations');
     assert.equal(typeof bugfix.description, 'string');
+    // The graph is passed whole, so a template's `rules` reach the page with it.
+    assert.deepEqual(templates.find((t) => t.name === 'legacy-tests').graph.rules,
+      ['Tests only: production code is never touched.']);
+    // `category` is passed through on the graph too: the page groups templates by it.
+    assert.deepEqual(Object.fromEntries(templates.map((t) => [t.name, t.graph.category])), {
+      'api-endpoint': 'development', 'architecture-decision': 'architecture', bugfix: 'development',
+      'ci-repair': 'day-to-day', 'deps-upgrade': 'day-to-day', 'enforce-architecture-rule': 'architecture',
+      feature: 'development', 'fix-flaky-tests': 'tests', 'legacy-refactor': 'refactoring',
+      'legacy-tests': 'tests', refactor: 'refactoring', 'remove-dead-code': 'refactoring',
+      'spec-first-feature': 'development', tdd: 'tests', 'update-contract': 'architecture',
+    });
     const apply = rows.find((b) => b.name === 'apply');
     assert.deepEqual(
       { origin: apply.origin, description: apply.description, effect: apply.effect,
@@ -2945,8 +2956,8 @@ test('the loops endpoint lists templates, bricks and overrides from the install 
     ]);
     assert.ok(rows.every((b, i) => i === 0 || rows[i - 1].name < b.name), 'bricks sorted by name');
     assert.equal(STATE_ROUTES['/api/loops'], apiLoops);
-    // The rail badge: the eight shipped templates, counted on the overview it already polls.
-    assert.equal(apiOverview(webState('neutral', sb.path)).counts.loops, 8);
+    // The rail badge: the fifteen shipped templates, counted on the overview it already polls.
+    assert.equal(apiOverview(webState('neutral', sb.path)).counts.loops, 15);
   } finally {
     if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
     else process.env.XDG_CONFIG_HOME = prevXdg;
@@ -2967,7 +2978,7 @@ test('the loops endpoint reports graph problems in a template, as loop check doe
     const graph = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/loops/bugfix.json'), 'utf8'));
     fs.writeFileSync(path.join(loops, 'team.json'), JSON.stringify({ ...graph, name: 'team', weights: { vibes: 1 } }));
     const { templates, problems } = apiLoops(webState('neutral', sb.path));
-    assert.deepEqual(templates.map((t) => t.name), ['bugfix', 'ci-repair', 'deps-upgrade', 'feature', 'legacy-refactor', 'legacy-tests', 'refactor', 'tdd', 'team']);
+    assert.deepEqual(templates.map((t) => t.name), ['api-endpoint', 'architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'fix-flaky-tests', 'legacy-refactor', 'legacy-tests', 'refactor', 'remove-dead-code', 'spec-first-feature', 'tdd', 'team', 'update-contract']);
     assert.deepEqual(problems, ['loops/team: weights: vibes is not an action']);
   } finally {
     if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;

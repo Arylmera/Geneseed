@@ -735,6 +735,19 @@
           "hidden": false
         },
         {
+          "names": ["--contracts"],
+          "dest": "contracts",
+          "metavar": null,
+          "help": "comma-separated contract globs appended to the template's own (init)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
           "names": ["--declared"],
           "dest": "declared",
           "metavar": null,

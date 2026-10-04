@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { Icon } from '../components/Icon.jsx'
@@ -8,6 +8,7 @@ import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
+import { GroupedRows, walkRows, useActiveRowInView } from '../components/LibRows.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
@@ -22,24 +23,6 @@ function libSource(sec, name) {
   if (sec === 'wiki') return `wiki.jsonc`
   if (sec === 'config') return name
   return `${sec}/${name}.md`
-}
-
-// One row in the list pane: a real link, so it opens in a new tab, reads as navigation to
-// assistive tech, and arrow keys can walk the list (onRowsKey below).
-function LibRow({ item, isOpen, href }) {
-  return (
-    <a
-      className={`lib-row${isOpen ? ' on' : ''}`}
-      href={href}
-      aria-current={isOpen ? 'true' : undefined}
-    >
-      <span className="lr-name">
-        {item.title || item.name}
-        <StatusBadge status={item.status} />
-      </span>
-      {item.desc ? <span className="lr-desc">{item.desc}</span> : null}
-    </a>
-  )
 }
 
 // A wiki or config entry that is a convention rather than a document of its own. The
@@ -95,7 +78,6 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   // A failed memory action (promote, forget), shown in the page's error slot until the
   // next one.
   const [actionErr, setActionErr] = useState('')
-  const rowsRef = useRef(null)
 
   // Follow the route's section, and drop any filter text so it doesn't carry across kinds.
   // Adjusted during render against the last-seen prop, not in an effect.
@@ -164,30 +146,10 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
       ? [...matches, ...items.filter((it) => it.name === activeName)]
       : matches
 
-  // Keep the active row in view inside the list scroller, without scrollIntoView (which
-  // would also scroll the page), and only when it is genuinely off-screen: re-centering a
-  // row that was just clicked moves the list under the cursor.
-  useEffect(() => {
-    const box = rowsRef.current
-    const el = box?.querySelector('.lib-row.on')
-    if (!el || !box) return
-    const top = el.offsetTop
-    if (top >= box.scrollTop && top + el.clientHeight <= box.scrollTop + box.clientHeight) return
-    box.scrollTop = Math.max(0, top - box.clientHeight / 2 + el.clientHeight / 2)
-  }, [sec, selected])
+  const rowsRef = useActiveRowInView([sec, selected])
 
   const itemHref = (it) =>
     base ? `${base}/${enc(it.name)}` : `#/item/${it.type || SECTIONS[sec].type}/${enc(it.name)}`
-
-  // Arrow keys walk the list; Enter follows the focused link.
-  const onRowsKey = (e) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    const rows = [...(rowsRef.current?.querySelectorAll('.lib-row') || [])]
-    const idx = rows.indexOf(document.activeElement)
-    if (idx === -1) return
-    e.preventDefault()
-    rows[e.key === 'ArrowDown' ? Math.min(idx + 1, rows.length - 1) : Math.max(idx - 1, 0)]?.focus()
-  }
 
   const onForget = async () => {
     const name = activeItem?.name
@@ -330,35 +292,8 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
             placeholder={`Filter ${label.toLowerCase()}`}
             label={`Filter ${label}`}
           />
-          <div className="lib-rows" ref={rowsRef} onKeyDown={onRowsKey}>
-            {(() => {
-              // A small header each time the row's group changes: a wiki page's vault, or a
-              // skill's class. Kinds without groups render no headers.
-              let lastGroup = null
-              const out = []
-              for (const it of shown) {
-                if (it.group && it.group !== lastGroup) {
-                  lastGroup = it.group
-                  out.push(
-                    <div className="lib-group" key={`g-${it.group}`}>
-                      {it.groupC ? (
-                        <span className="cdot" style={{ '--cc': it.groupC }} aria-hidden="true" />
-                      ) : null}
-                      {it.group}
-                    </div>,
-                  )
-                }
-                out.push(
-                  <LibRow
-                    key={it.name}
-                    item={it}
-                    isOpen={activeItem?.name === it.name}
-                    href={itemHref(it)}
-                  />,
-                )
-              }
-              return out
-            })()}
+          <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
+            <GroupedRows rows={shown} activeName={activeItem?.name} hrefOf={itemHref} />
             {!ql && items.length > CAP && (
               <div className="lib-more">
                 Showing {CAP} of {items.length}; type to search the rest.

@@ -115,3 +115,38 @@ test('I3 — the iteration is entered only at its head (the first node listed)',
     'edge reproduce --pass--> identify enters the iteration at identify, not at its head apply',
   ]);
 });
+
+// `contracts` and `ignoreDeletions` are optional graph-level lists of globs; present, each must
+// be an array of non-empty strings — a bare string or an empty entry is refused by name.
+test('contracts and ignoreDeletions must be lists of non-empty glob strings', () => {
+  assert.deepEqual(checkGraph({ ...bugfix(), contracts: ['api/**'], ignoreDeletions: ['**/*.lock'] }, BRICKS), []);
+  assert.deepEqual(checkGraph({ ...bugfix(), contracts: 'api/**', ignoreDeletions: ['**/*.lock', ''] }, BRICKS), [
+    'contracts: must be a list of non-empty glob strings',
+    'ignoreDeletions: must be a list of non-empty glob strings',
+  ]);
+  assert.deepEqual(checkGraph({ ...bugfix(), contracts: [3] }, BRICKS), ['contracts: must be a list of non-empty glob strings']);
+});
+
+// `rules` is the optional list of instructions every brick of the loop follows (the description
+// is only the catalogue blurb). Absent is fine; present, it must be an array of non-empty strings.
+test('rules is absent, or a list of non-empty strings', () => {
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: ['cite the proof it is unused'] }, BRICKS), []);
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: [] }, BRICKS), []);
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: 'cite the proof' }, BRICKS), ['rules: must be a list of non-empty strings']);
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: ['ok', '  '] }, BRICKS), ['rules: must be a list of non-empty strings']);
+  assert.deepEqual(checkGraph({ ...bugfix(), rules: [3] }, BRICKS), ['rules: must be a list of non-empty strings']);
+});
+
+// `category` sorts a template into the console's Loops list (architecture, tests, development,
+// refactoring, day-to-day — in that order on the page). Absent is fine: the page files it under
+// OTHER. Any other value, or a non-string, is refused by name with the allowed five listed.
+test('category is absent, or one of the five', () => {
+  for (const c of ['architecture', 'tests', 'development', 'refactoring', 'day-to-day']) {
+    assert.deepEqual(checkGraph({ ...bugfix(), category: c }, BRICKS), [], c);
+  }
+  const refused = ['category: must be one of architecture, tests, development, refactoring, day-to-day'];
+  assert.deepEqual(checkGraph({ ...bugfix(), category: 'misc' }, BRICKS), refused);
+  assert.deepEqual(checkGraph({ ...bugfix(), category: 'Tests' }, BRICKS), refused);
+  assert.deepEqual(checkGraph({ ...bugfix(), category: '' }, BRICKS), refused);
+  assert.deepEqual(checkGraph({ ...bugfix(), category: ['tests'] }, BRICKS), refused);
+});

@@ -1,0 +1,30 @@
+{
+  "name": "remove-dead-code",
+  "description": "Confirm the suite is green, then remove one coherent group of unused code per iteration — exports, classes, files, retired flags — test it, and review it. Deletions score soft, not blocking.",
+  "category": "refactoring",
+  "rules": [
+    "Each card's intent cites the proof it is unused: the requirement's tool output (knip, ts-prune, vulture, PMD or IntelliJ inspections) and a reference search (git grep over code AND resources) for reflection, DI by name, Spring bean names and config.",
+    "Generated sources do not count as unused.",
+    "Public entry points belong in LOOP.md's contracts, not in a deletion."
+  ],
+  "nodes": ["baseline-green", "identify", "apply", "test", "review"],
+  "start": "baseline-green",
+  "edges": [
+    { "from": "baseline-green", "on": "pass", "to": "identify" },
+    { "from": "baseline-green", "on": "fail", "to": "$stop" },
+    { "from": "identify", "on": "more", "to": "apply" },
+    { "from": "identify", "on": "done", "to": "$close" },
+    { "from": "apply", "on": "pass", "to": "test" },
+    { "from": "test", "on": "pass", "to": "review" },
+    { "from": "test", "on": "fail", "to": "apply" },
+    { "from": "review", "on": "pass", "to": "identify" },
+    { "from": "review", "on": "fail", "to": "apply" }
+  ],
+  "loops": [
+    { "name": "iterations", "nodes": ["identify", "apply", "test", "review"], "max": 20, "iteration": true },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "review-fix", "nodes": ["apply", "test", "review"], "max": 3 }
+  ],
+  "weights": { "delete": 0.5 },
+  "ignoreDeletions": ["**/generated/**", "**/generated-sources/**", "**/target/**", "**/build/generated/**"]
+}

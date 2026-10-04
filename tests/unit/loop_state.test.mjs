@@ -10,6 +10,7 @@ import {
   renderLoopFile, parseLoopFile, writeLoopFile, trailers, renameWithRetry,
 } from '../../js/loop/state.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
+import { loadCatalog } from '../../js/loop/catalog.mjs';
 
 const brick = (name, effect, outcomes) => [name, { name, effect, outcomes, agent: 'tester', skill: null, body: `do ${name}`, available: true }];
 const BRICKS = new Map([
@@ -347,7 +348,7 @@ test('F5: scoreDiff rejects a non-array contracts field', () => {
   recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
   recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
   s.contracts = 'not-an-array';
-  assert.throws(() => scoreDiff(s, [file('src/a.js')]), /LOOP\.md: contracts must be a list of file paths/);
+  assert.throws(() => scoreDiff(s, [file('src/a.js')]), /LOOP\.md: contracts must be a list of file paths or globs/);
 });
 
 // F6 (Task 5 controller amendment): the read-only-unit-reaches-head path in `recordOutcome`
@@ -526,4 +527,251 @@ test('N3: recordOutcome with no note pushes nothing to notes', () => {
   const s = start(); s.node = 'identify'; s.iteration = 1;
   recordOutcome(s, BRICKS, 'more', { card });
   assert.deepEqual(s.notes, []);
+});
+
+// ---------------------------------------------------------------------------------------------
+// G2 — the human gate. A `gate: human` brick's outcome (and note) is recorded, then the
+// transition is HELD: `awaiting: {kind: 'gate', node, outcome, note?}` whatever the preset and
+// the score. `ok` follows the held edge; `no` stops; `amend` re-runs the same node (its
+// validation kept), at most 3 times per node per iteration (a new card gets its own 3). Every answer leaves a note; a passed gate
+// also lands in the unit's trailers (`Loop-Gates`) and history. ORDER on one mutate brick: the
+// declared score's blocking stop comes first, at its usual point before the brick runs; the
+// gate after its outcome; the diff's blocking stop after the gate releases the transition — so
+// nothing is scored, committed, re-split or stopped by the transition before the user answers.
+const GB = new Map([
+  ...BRICKS,
+  ['draft', { name: 'draft', effect: 'read', outcomes: ['pass', 'fail'], agent: 'architect', skill: null, gate: 'human', body: 'do draft', available: true }],
+  ['write', { name: 'write', effect: 'mutate', outcomes: ['pass', 'fail'], agent: 'developer', skill: null, gate: 'human', body: 'do write', available: true }],
+]);
+// setup: draft (read, gated); iterations: identify -> write (mutate, gated) -> identify,
+// with write's `fail` retrying itself inside the `rewrite` ring (max 1).
+const gated = () => ({
+  name: 'gated', description: 'd', nodes: ['draft', 'identify', 'write'], start: 'draft',
+  edges: [
+    { from: 'draft', on: 'pass', to: 'identify' }, { from: 'draft', on: 'fail', to: '$stop' },
+    { from: 'identify', on: 'more', to: 'write' }, { from: 'identify', on: 'done', to: '$close' },
+    { from: 'write', on: 'pass', to: 'identify' }, { from: 'write', on: 'fail', to: 'write' },
+  ],
+  loops: [
+    { name: 'iterations', nodes: ['identify', 'write'], max: 20, iteration: true },
+    { name: 'rewrite', nodes: ['write'], max: 1 },
+  ],
+});
+const gstart = (preset = 'balanced') => initState({ title: 't', requirement: 'r', graph: gated(), preset });
+const atWrite = (s, actions = ['logic']) => {
+  s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, GB, 'more', { card: { intent: 'w', writeSet: ['src/a.js'], actions } });
+  return scoreDeclared(s);
+};
+
+test('G2: a gate holds the transition; ok follows the held edge', () => {
+  const s = gstart();
+  assert.deepEqual(recordOutcome(s, GB, 'pass', { note: 'ADR at /tmp/adr.md' }),
+    { awaiting: { kind: 'gate', node: 'draft', outcome: 'pass', note: 'ADR at /tmp/adr.md' } });
+  assert.equal(s.status, 'awaiting'); assert.equal(s.node, 'draft'); assert.equal(s.iteration, 0);
+  assert.deepEqual(nextStep(s, GB), { awaiting: { kind: 'gate', node: 'draft', outcome: 'pass', note: 'ADR at /tmp/adr.md' }, preset: 'balanced' });
+  assert.throws(() => recordOutcome(s, GB, 'pass'), /the loop is awaiting, not running/);
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { node: 'identify' });
+  assert.equal(s.iteration, 1); assert.equal(s.status, 'running');
+  assert.deepEqual(s.notes, ['iteration 0 (draft): ADR at /tmp/adr.md', 'iteration 0 (gate at draft, ok)']);
+});
+
+test('G2: no stops with the gate named; ok on a held $stop edge stops as the brick reported', () => {
+  const s = gstart();
+  recordOutcome(s, GB, 'pass');
+  assert.deepEqual(s.awaiting, { kind: 'gate', node: 'draft', outcome: 'pass' });
+  assert.deepEqual(decideAwaiting(s, GB, 'no', 'wrong option'), { stopped: 'gate rejected at draft: wrong option' });
+  assert.deepEqual(s.notes, ['iteration 0 (gate at draft, no): wrong option']);
+  const t = gstart();
+  recordOutcome(t, GB, 'fail');
+  assert.equal(t.status, 'awaiting');
+  assert.deepEqual(decideAwaiting(t, GB, 'ok'), { stopped: 'draft reported fail' });
+  const u = gstart(); recordOutcome(u, GB, 'pass');
+  assert.deepEqual(decideAwaiting(u, GB, 'no'), { stopped: 'gate rejected at draft' });
+});
+
+test('G2: amend re-runs the same node, three times at most; the 4th amend stops', () => {
+  const s = gstart();
+  for (let i = 1; i <= 3; i += 1) {
+    recordOutcome(s, GB, 'pass');
+    assert.deepEqual(decideAwaiting(s, GB, 'amend', `tighten ${i}`), { resumed: true });
+    assert.equal(s.node, 'draft'); assert.equal(s.status, 'running');
+  }
+  recordOutcome(s, GB, 'pass');
+  assert.deepEqual(decideAwaiting(s, GB, 'amend', 'again'), { stopped: 'gate amended 3 times at draft' });
+  assert.deepEqual(s.notes, [
+    'iteration 0 (gate at draft, amend): tighten 1', 'iteration 0 (gate at draft, amend): tighten 2',
+    'iteration 0 (gate at draft, amend): tighten 3', 'iteration 0 (gate at draft, amend): again',
+  ]);
+});
+
+test('G2: an amended mutate gate keeps its validation, and the passed gate reaches the trailers', () => {
+  const s = gstart();
+  assert.equal(atWrite(s).decision, 'soft');
+  assert.deepEqual(recordOutcome(s, GB, 'pass').awaiting, { kind: 'gate', node: 'write', outcome: 'pass' });
+  decideAwaiting(s, GB, 'amend', 'rename it');
+  assert.equal(s.validated, true);
+  assert.equal(nextStep(s, GB).validate, false);
+  recordOutcome(s, GB, 'pass');                      // no second score --declared needed
+  // The held edge closes the unit: the diff is scored only now, after the answer.
+  assert.equal(s.pendingVerify, false);
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { verify: true });
+  const c = scoreDiff(s, [file('src/a.js')]);
+  assert.equal(c.trailers, [
+    'Loop-Iteration: 1', 'Loop-Bricks: identify,write', 'Loop-Risk-Declared: 0.4', 'Loop-Risk-Actual: 0.4',
+    'Loop-Threshold: balanced 0.2/0.6', 'Loop-Decision: soft', 'Loop-Tests: n/a', 'Loop-Gates: write',
+  ].join('\n'));
+  assert.deepEqual(s.history.at(-1).gates, ['write']);
+});
+
+test('G2: the gate fires under aggressive with a silent score', () => {
+  const s = gstart('aggressive');
+  assert.equal(atWrite(s, ['format']).decision, 'silent');
+  assert.equal(recordOutcome(s, GB, 'pass').awaiting.kind, 'gate');
+});
+
+test('G2: declared blocking first, then the gate, on the same brick', () => {
+  const s = gstart();
+  assert.equal(atWrite(s, ['api']).decision, 'blocking');
+  assert.equal(nextStep(s, GB).awaiting.kind, 'declared');
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { resumed: true });
+  assert.equal(recordOutcome(s, GB, 'pass').awaiting.kind, 'gate');
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { verify: true });
+});
+
+test('G2: a ring exhausted by the held edge re-splits only after ok', () => {
+  const s = gstart(); atWrite(s);                                           // identify -> write: entry 1 of 2
+  recordOutcome(s, GB, 'fail');
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { node: 'write' });       // entry 2 of 2 (rewrite max 1)
+  assert.deepEqual(recordOutcome(s, GB, 'fail').awaiting, { kind: 'gate', node: 'write', outcome: 'fail' });
+  assert.equal(s.resplit, false);
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { discard: true, resplit: true });
+});
+
+// The amend cap is per node PER ITERATION: the next iteration's card is a new draft with its
+// own three amends, so a long run is not stopped by amends spent on earlier, accepted units.
+test('G2: the amend cap resets for the same node in the next iteration', () => {
+  const s = gstart(); atWrite(s);
+  for (let i = 1; i <= 3; i += 1) { recordOutcome(s, GB, 'pass'); decideAwaiting(s, GB, 'amend', `a${i}`); }
+  recordOutcome(s, GB, 'pass');
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { verify: true });
+  scoreDiff(s, [file('src/a.js')]);
+  assert.equal(s.iteration, 2);
+  recordOutcome(s, GB, 'more', { card: { intent: 'w2', writeSet: ['src/a.js'], actions: ['logic'] } });
+  scoreDeclared(s);
+  recordOutcome(s, GB, 'pass');
+  assert.deepEqual(decideAwaiting(s, GB, 'amend', 'b1'), { resumed: true });
+  assert.deepEqual(s.gateAmends, { 'write@1': 3, 'write@2': 1 });
+});
+
+// `gateOn` holds only the listed outcomes: the rest follow their edge at once, ungated.
+test('G2: gateOn holds only its listed outcomes', () => {
+  const B = new Map([...GB, ['draft', { ...GB.get('draft'), gateOn: ['pass'] }]]);
+  const s = gstart();
+  assert.deepEqual(recordOutcome(s, B, 'fail'), { stopped: 'draft reported fail' });
+  const t = gstart();
+  assert.deepEqual(recordOutcome(t, B, 'pass').awaiting, { kind: 'gate', node: 'draft', outcome: 'pass' });
+});
+
+// A gate amend restarts the unit's ring budget, as an `actual` amend does: the amendment changes
+// what the unit does. architecture-decision: 2 real challenge failures + 2 amends (each routed
+// back through adr-draft) would exceed challenge-fix's max 3 without the reset — no re-split now.
+test('G2: a gate amend restarts the ring budget; architecture-decision survives 2 fails + 2 amends', () => {
+  const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  const s = initState({ title: 't', requirement: 'r', graph: templates.get('architecture-decision') });
+  recordOutcome(s, bricks, 'more', { card: { intent: 'ADR', writeSet: ['docs/adr/0001-x.md'], actions: ['new-file'] } });
+  scoreDeclared(s);
+  for (let i = 0; i < 2; i += 1) { recordOutcome(s, bricks, 'pass'); recordOutcome(s, bricks, 'fail'); }   // 2 real fails
+  for (let i = 0; i < 2; i += 1) {
+    assert.deepEqual(recordOutcome(s, bricks, 'pass'), { node: 'adr-challenge' });                         // adr-draft
+    assert.equal(recordOutcome(s, bricks, 'pass').awaiting.kind, 'gate');
+    assert.deepEqual(decideAwaiting(s, bricks, 'amend', `amend ${i}`), { resumed: true });
+    assert.deepEqual(s.counters, {});
+    assert.deepEqual(recordOutcome(s, bricks, 'fail'), { node: 'adr-draft' });                            // the amendment is a finding
+  }
+  assert.equal(s.resplit, false);
+  recordOutcome(s, bricks, 'pass'); recordOutcome(s, bricks, 'pass');
+  assert.deepEqual(decideAwaiting(s, bricks, 'ok'), { verify: true });
+});
+
+// A gate passed twice in one unit is listed once, as Loop-Bricks lists a node once.
+test('G2: a gate passed twice in one unit appears once in Loop-Gates', () => {
+  const s = gstart(); atWrite(s);
+  recordOutcome(s, GB, 'fail'); decideAwaiting(s, GB, 'ok');             // write -> write
+  recordOutcome(s, GB, 'pass');
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { verify: true });
+  assert.match(scoreDiff(s, [file('src/a.js')]).trailers, /\nLoop-Gates: write$/);
+  assert.deepEqual(s.history.at(-1).gates, ['write']);
+});
+
+// G5: a template's `contracts` globs are copied into the state at init, followed by any extra
+// ones `loop init --contracts` passes; the diff score matches them as globs.
+test('G5: graph contracts are copied at init, extra ones appended, and match as globs', () => {
+  const s = initState({ title: 't', requirement: 'r', graph: { ...bugfix(), contracts: ['api/**'] }, contracts: ['proto/*.proto'] });
+  assert.deepEqual(s.contracts, ['api/**', 'proto/*.proto']);
+  assert.deepEqual(start().contracts, []);
+  s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card: { ...card, writeSet: ['proto/u.proto'] } });
+  scoreDeclared(s); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  assert.deepEqual(scoreDiff(s, [file('proto/u.proto')]),
+    { score: 0.8, decision: 'blocking', reasons: ['contract files: proto/u.proto'], commit: false });
+});
+
+// G6: the graph's `ignoreDeletions` reaches the diff score.
+test('G6: a graph\'s ignoreDeletions keeps a lockfile\'s deletions out of the count', () => {
+  const s = initState({ title: 't', requirement: 'r', graph: { ...bugfix(), ignoreDeletions: ['**/package-lock.json'] } });
+  s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card: { ...card, writeSet: ['package-lock.json'] } });
+  scoreDeclared(s); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  assert.equal(scoreDiff(s, [file('package-lock.json', 900)]).commit, true);
+});
+
+// done-check verifies identify's `done` (feature, spec-first-feature): `fail` goes back to the
+// head as a read-only unit — no commit, one iteration spent, its note kept for identify; `pass`
+// closes the loop.
+test('feature: identify done is verified by done-check; fail costs one iteration, pass closes', () => {
+  const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  const s = initState({ title: 't', requirement: 'r', graph: templates.get('feature') });
+  recordOutcome(s, bricks, 'pass');                                                 // plan
+  assert.equal(s.iteration, 1);
+  assert.deepEqual(recordOutcome(s, bricks, 'done'), { node: 'done-check' });
+  assert.deepEqual(recordOutcome(s, bricks, 'fail', { note: '/tmp/unmet.txt' }), { node: 'identify' });
+  assert.equal(s.iteration, 2);
+  assert.deepEqual(s.history, []);
+  assert.deepEqual(s.notes, ['iteration 1 (done-check): /tmp/unmet.txt']);
+  recordOutcome(s, bricks, 'done');
+  assert.deepEqual(recordOutcome(s, bricks, 'pass'), { done: true });
+  assert.equal(s.status, 'done');
+});
+
+// spec-first-feature's spec is a human gate on both outcomes: a `fail` (open questions) waits so
+// the user can answer them with `amend`; the spec that passes is committed as iteration 0.
+test('spec-first-feature: the spec gate holds fail for answers, then commits the passed spec', () => {
+  const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  const s = initState({ title: 't', requirement: 'r', graph: templates.get('spec-first-feature') });
+  scoreDeclared(s, { actions: ['new-file'], writeSet: ['specs/x/spec.md'] });
+  assert.deepEqual(recordOutcome(s, bricks, 'fail', { note: '/tmp/q.txt' }).awaiting,
+    { kind: 'gate', node: 'spec', outcome: 'fail', note: '/tmp/q.txt' });
+  assert.deepEqual(decideAwaiting(s, bricks, 'amend', 'EUR only'), { resumed: true });
+  assert.equal(s.node, 'spec');
+  assert.equal(recordOutcome(s, bricks, 'pass').awaiting.kind, 'gate');
+  assert.deepEqual(decideAwaiting(s, bricks, 'ok'), { verify: true });
+  const r = scoreDiff(s, [file('specs/x/spec.md')]);
+  assert.equal(r.commit, true);
+  assert.match(r.trailers, /\nLoop-Gates: spec$/);
+  assert.equal(s.node, 'identify');
+});
+
+// A template's rules are its own `rules` array (remove-dead-code's cited proof, fix-flaky-tests'
+// "no retries"): `next` hands them to every brick as `rules`, not only to identify through
+// LOOP.md. The description is only the catalogue blurb and is never sent as rules: a graph with
+// no `rules`, or an empty one, has no `rules` key at all.
+test('next hands the graph rules to every brick; no rules or empty rules, no key; never the description', () => {
+  const s = initState({ title: 't', requirement: 'r', graph: { ...bugfix(), rules: ['cite the proof', 'no retries'] } });
+  assert.deepEqual(nextStep(s, BRICKS).rules, ['cite the proof', 'no retries']);
+  const t = start();
+  assert.equal(t.graph.description, 'd');
+  assert.equal(Object.hasOwn(nextStep(t, BRICKS), 'rules'), false);
+  const u = initState({ title: 't', requirement: 'r', graph: { ...bugfix(), rules: [] } });
+  assert.equal(Object.hasOwn(nextStep(u, BRICKS), 'rules'), false);
 });

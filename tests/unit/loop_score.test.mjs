@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  WEIGHTS, PRESETS, declaredRisk, parseNumstat, actualRisk, decide, worst,
+  WEIGHTS, PRESETS, declaredRisk, parseNumstat, actualRisk, decide, worst, globMatch,
 } from '../../js/loop/score.mjs';
 
 test('the weights are the approved taxonomy', () => {
@@ -53,6 +53,19 @@ test('actual risk only ever RAISES the declared score', () => {
     { score: 0.8, reasons: ['contract files: api/openapi.yaml'] });
   // backslash paths compare equal to forward-slash write sets (Windows)
   assert.equal(actualRisk(0.4, [f('src\\a.js')], { writeSet: ['src/a.js'] }).score, 0.4);
+  // a write-set entry is a glob too: a tool's generated store (ArchUnit's archunit_store/) is inside
+  assert.deepEqual(actualRisk(0.4, [f('src/test/resources/archunit_store/stored.rules'), f('src/a.js')],
+    { writeSet: ['**/archunit_store/**', 'src/a.js'] }), { score: 0.4, reasons: [] });
+  assert.deepEqual(actualRisk(0.4, [f('src/b.js')], { writeSet: ['src/*.ts'] }),
+    { score: 0.8, reasons: ['outside the write set: src/b.js'] });
+  // ...but only an entry with a literal segment globs: a wildcard-only entry (`**`, `**/*`) would
+  // declare the whole repo, so it stays exact-match, matches nothing, and the diff fails closed.
+  const app = 'src/main/java/App.java';
+  for (const g of ['**', '*', '**/*', '**/*.java']) {
+    assert.deepEqual(actualRisk(0.4, [f(app)], { writeSet: [g] }),
+      { score: 0.8, reasons: [`outside the write set: ${app}`] }, g);
+  }
+  assert.deepEqual(actualRisk(0.4, [f(app)], { writeSet: ['src/**'] }), { score: 0.4, reasons: [] });
   // declared higher than any escalation: declared wins
   assert.equal(actualRisk(0.9, [f('b.js')], { writeSet: [] }).score, 0.9);
 });
@@ -101,4 +114,73 @@ test('numstat expands renames into both paths and decodes C-quoted paths', () =>
   assert.deepEqual(parseNumstat(`0\t0\t${String.raw`"caf\303\251.js" => "b.js"`}`), [
     { file: 'b.js', added: 0, deleted: 0 }, { file: 'café.js', added: 0, deleted: 0 },
   ]);
+});
+
+// One glob dialect serves `contracts` and `ignoreDeletions`: `*` and `?` stay inside one path
+// segment, `**` crosses segments (`**/` may also match no directory at all), and both sides are
+// slash-normalised. A plain path is a glob that matches only itself, so an exact-path contract
+// written before globs existed keeps working. Regex metacharacters in a path are literal.
+test('globMatch: *, ? and ** over slash-normalised paths', () => {
+  for (const [pattern, file, expected] of [
+    ['api/openapi.yaml', 'api/openapi.yaml', true],
+    ['api/openapi.yaml', 'api/openapi.yml', false],
+    ['api/*.yaml', 'api/openapi.yaml', true],
+    ['api/*.yaml', 'api/v2/openapi.yaml', false],
+    ['api/**/*.yaml', 'api/openapi.yaml', true],
+    ['api/**/*.yaml', 'api/v2/deep/openapi.yaml', true],
+    ['**/package-lock.json', 'package-lock.json', true],
+    ['**/package-lock.json', 'web/package-lock.json', true],
+    ['**/*.lock', 'Cargo.lock', true],
+    ['**/*.lock', 'a/b/yarn.lock', true],
+    ['**/*.lock', 'a/b/yarn.locks', false],
+    ['src/**', 'src/a/b.js', true],
+    ['src/**', 'lib/a.js', false],
+    ['v?.json', 'v1.json', true],
+    ['v?.json', 'v/.json', false],
+    ['a+b(c).js', 'a+b(c).js', true],
+    ['api\\*.yaml', 'api\\openapi.yaml', true],
+    ['api\\*.yaml', 'api/v2\\openapi.yaml', false],
+    // a leading `./` or `/` on either side is dropped: paths are repo-relative
+    ['./api/*.proto', 'api/user.proto', true],
+    ['/api/*.proto', 'api/user.proto', true],
+    ['api/*.proto', './api/user.proto', true],
+    ['.github/*.yml', '.github/ci.yml', true],
+    // runs of `**/` and of `*` collapse before compiling
+    ['**/**/**/x', 'x', true],
+    ['**/**/**/x', 'a/b/c/x', true],
+    ['a***.js', 'a/b.js', true],
+  ]) assert.equal(globMatch(pattern, file), expected, `${pattern} ~ ${file}`);
+});
+
+test('contracts are globs: a matching file raises to the api weight, a plain path still matches', () => {
+  const f = (file) => ({ file, added: 1, deleted: 0 });
+  assert.deepEqual(actualRisk(0.4, [f('proto/v1/user.proto'), f('src/a.js')],
+    { writeSet: ['proto/v1/user.proto', 'src/a.js'], contracts: ['proto/**/*.proto'] }),
+  { score: 0.8, reasons: ['contract files: proto/v1/user.proto'] });
+  assert.deepEqual(actualRisk(0.4, [f('src/a.js')], { writeSet: ['src/a.js'], contracts: ['proto/**/*.proto'] }),
+    { score: 0.4, reasons: [] });
+});
+
+// ignoreDeletions takes matching files out of the >20 deleted-lines count only: a lockfile that
+// sheds 900 lines inside the write set is silent, but the same lockfile outside the write set
+// still escalates through the write-set rule, and an ignored file never hides another file's
+// deletions.
+test('ignoreDeletions: matching files do not count toward the deletion rule, the write set still applies', () => {
+  const f = (file, deleted) => ({ file, added: 1, deleted });
+  const ignoreDeletions = ['**/package-lock.json', '**/*.lock'];
+  assert.deepEqual(actualRisk(0.4, [f('package-lock.json', 900), f('src/a.js', 5)],
+    { writeSet: ['package-lock.json', 'src/a.js'], ignoreDeletions }), { score: 0.4, reasons: [] });
+  assert.deepEqual(actualRisk(0.4, [f('web/yarn.lock', 900)], { writeSet: [], ignoreDeletions }),
+    { score: 0.8, reasons: ['outside the write set: web/yarn.lock'] });
+  assert.deepEqual(actualRisk(0.2, [f('package-lock.json', 900), f('src/a.js', 21)],
+    { writeSet: ['package-lock.json', 'src/a.js'], ignoreDeletions }), { score: 0.8, reasons: ['21 lines deleted'] });
+});
+
+// Collapsed wildcards keep a stacked pattern from backtracking: `**/**/**/x` against a deep
+// path that ends in a near miss answers at once (the bound is generous; uncollapsed it is not).
+test('globMatch: a stacked ** pattern fails fast on a deep near miss', () => {
+  const deep = `${'a/'.repeat(40)}y`;
+  const t0 = performance.now();
+  assert.equal(globMatch('**/**/**/**/**/**/x', deep), false);
+  assert.ok(performance.now() - t0 < 200);
 });

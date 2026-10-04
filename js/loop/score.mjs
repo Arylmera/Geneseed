@@ -104,23 +104,60 @@ export function parseNumstat(text) {
 
 const slash = (p) => p.replaceAll('\\', '/');
 
-export function actualRisk(declared, files, { writeSet = [], contracts = [], overrides = {} } = {}) {
+// The one glob dialect of the loop — a template's `contracts` and `ignoreDeletions`, and LOOP.md's
+// own `contracts`. `*` and `?` stay inside a path segment; `**` crosses segments, and `**/` may
+// match no directory at all, so `**/yarn.lock` covers the root one too. Both sides are
+// slash-normalised first, so a backslash is a separator, never an escape. Hand-rolled because
+// this module may import nothing but node builtins (see the docblock above); a plain path is a
+// glob that matches only itself, so exact-path contracts keep working.
+// A leading `./` or `/` is dropped on both sides: every path here is repo-relative.
+// ponytail: runs of `**/` and `*` collapse first, so stacked wildcards cannot compound; what
+// remains is the regex engine's backtracking over several separate `**` (O(n^k) on a near miss).
+// Patterns come from the template author or the user, never from untrusted input — a linear
+// matcher is the upgrade if that ever changes.
+const globPath = (p) => slash(String(p)).replace(/^(?:\.?\/)+/, '');
+
+export function globMatch(pattern, file) {
+  const g = globPath(pattern).replace(/\*{3,}/g, '**').replace(/(?:\*\*\/){2,}/g, '**/');
+  let re = '';
+  for (let i = 0; i < g.length; i += 1) {
+    const c = g[i];
+    if (c === '*' && g[i + 1] === '*') {
+      i += 1;
+      if (g[i + 1] === '/') { i += 1; re += '(?:.*/)?'; } else re += '.*';
+    } else if (c === '*') re += '[^/]*';
+    else if (c === '?') re += '[^/]';
+    else re += c.replace(/[.+^${}()|[\]]/g, '\\$&');
+  }
+  return new RegExp(`^${re}$`).test(globPath(file));
+}
+
+const matchesAny = (globs, file) => globs.some((g) => globMatch(g, file));
+
+export function actualRisk(declared, files, {
+  writeSet = [], contracts = [], ignoreDeletions = [], overrides = {},
+} = {}) {
   const w = { ...WEIGHTS, ...overrides };
   let score = declared;
   const reasons = [];
+  // A write-set entry is a glob too (a plain path matches itself): a tool's generated store,
+  // ArchUnit's archunit_store/**, cannot be named file by file before the tool writes it. Only an
+  // entry with a literal segment globs: a wildcard-only one (`**`, `**/*.java`) would declare the
+  // whole repo, so it stays exact-match — matching nothing, the diff fails closed.
   const inSet = new Set(writeSet.map(slash));
-  const outside = files.filter((f) => !inSet.has(slash(f.file)));
+  const globs = writeSet.filter((g) => globPath(g).split('/').some((seg) => seg && !/[*?]/.test(seg)));
+  const outside = files.filter((f) => !inSet.has(slash(f.file)) && !matchesAny(globs, f.file));
   if (outside.length) {
     score = Math.max(score, 0.8);
     reasons.push(`outside the write set: ${outside.map((f) => slash(f.file)).join(', ')}`);
   }
-  const deleted = files.reduce((n, f) => n + f.deleted, 0);
+  // ignoreDeletions only leaves the deletion count: the write-set check above still saw the file.
+  const deleted = files.filter((f) => !matchesAny(ignoreDeletions, f.file)).reduce((n, f) => n + f.deleted, 0);
   if (deleted > DELETION_LINES) {
     score = Math.max(score, w.delete);
     reasons.push(`${deleted} lines deleted`);
   }
-  const contractSet = new Set(contracts.map(slash));
-  const hit = files.filter((f) => contractSet.has(slash(f.file)));
+  const hit = files.filter((f) => matchesAny(contracts, f.file));
   if (hit.length) {
     score = Math.max(score, w.api);
     reasons.push(`contract files: ${hit.map((f) => slash(f.file)).join(', ')}`);

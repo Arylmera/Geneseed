@@ -101,11 +101,12 @@ export function parseLoopFile(text) {
 const head = (state) => iterationLoop(state.graph).nodes[0];
 const fmt = (n) => Number(n).toFixed(1);
 
-export function initState({ title, requirement, graph, preset = DEFAULT_PRESET }) {
+/** `contracts`: extra globs (`loop init --contracts`), appended after the graph's own. */
+export function initState({ title, requirement, graph, preset = DEFAULT_PRESET, contracts = [] }) {
   if (!Object.hasOwn(PRESETS, preset)) throw new Error(`unknown preset ${JSON.stringify(preset)}`);
   const loop = iterationLoop(graph);
   const state = {
-    v: 1, title, requirement, preset, contracts: [], graph, node: graph.start,
+    v: 1, title, requirement, preset, contracts: [...(graph.contracts ?? []), ...contracts], graph, node: graph.start,
     status: 'running', awaiting: null, reason: null,
     iteration: loop.nodes.includes(graph.start) ? 1 : 0,
     card: null, validated: false, pendingVerify: false, closing: false, counters: {},
@@ -145,6 +146,7 @@ export function trailers(state) {
     `Loop-Threshold: ${state.preset} ${fmt(silent)}/${fmt(soft)}`,
     `Loop-Decision: ${state.current.decision ?? 'silent'}${state.current.amended ? ' (amended)' : ''}`,
     `Loop-Tests: ${state.tests}`,
+    ...(state.current.gates ? [`Loop-Gates: ${state.current.gates.join(',')}`] : []),
   ].join('\n');
 }
 
@@ -154,6 +156,7 @@ function finishUnit(state, committed) {
       iteration: state.iteration, bricks: [...new Set(state.visited)],
       declared: state.current.declared ?? 0, actual: state.current.actual ?? state.current.declared ?? 0,
       decision: state.current.decision ?? 'silent', tests: state.tests, intent: state.card?.intent ?? '',
+      ...(state.current.gates ? { gates: state.current.gates } : {}),
     });
   }
   // The unit is committed (or was empty): the tree is clean again, so the read-brick check
@@ -191,6 +194,10 @@ export function nextStep(state, bricks) {
     node: state.node, iteration: state.iteration, effect: brick.effect, agent: brick.agent,
     skill: brick.skill, outcomes: brick.outcomes, prompt: brick.body, card: state.card,
     notes: state.notes, validate: brick.effect === 'mutate' && !state.validated,
+    // The template's own rules (a cited proof before a deletion, no retries as a flake fix) are
+    // its `rules` list; every brick gets them, not only the head that reads LOOP.md. Never the
+    // description: that is the catalogue blurb, and sending it would dilute the rules.
+    ...(state.graph.rules?.length ? { rules: state.graph.rules } : {}),
   };
 }
 
@@ -222,7 +229,7 @@ export function scoreDiff(state, files) {
   assertRunning(state);
   if (!state.pendingVerify) throw new Error('no iteration to verify: `geneseed loop next` has not asked for one');
   if (!Array.isArray(state.contracts) || state.contracts.some((c) => typeof c !== 'string')) {
-    throw new Error('LOOP.md: contracts must be a list of file paths');
+    throw new Error('LOOP.md: contracts must be a list of file paths or globs');
   }
   const scored = files.filter((f) => slash(f.file) !== LOOP_FILE && slash(f.file) !== LOOP_FILE_TMP);
   if (!scored.length) {
@@ -236,7 +243,8 @@ export function scoreDiff(state, files) {
   }
   state.emptyStreak = 0;
   const { score, reasons } = actualRisk(state.current.declared ?? 0, scored, {
-    writeSet: state.card?.writeSet ?? [], contracts: state.contracts ?? [], overrides: state.graph.weights,
+    writeSet: state.card?.writeSet ?? [], contracts: state.contracts ?? [],
+    ignoreDeletions: state.graph.ignoreDeletions ?? [], overrides: state.graph.weights,
   });
   const decision = decide(score, state.preset);
   state.current.actual = score;
@@ -321,7 +329,23 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
 
   const edge = state.graph.edges.find((e) => e.from === from && e.on === outcome);
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);
-  if (edge.to === '$stop') return stop(state, `${from} reported ${outcome}`);
+  if (brick.gate === 'human' && (!brick.gateOn || brick.gateOn.includes(outcome))) {
+    state.status = 'awaiting';
+    state.awaiting = { kind: 'gate', node: from, outcome, ...(note ? { note } : {}) };
+    return { awaiting: state.awaiting };
+  }
+  return transition(state, bricks, from, edge);
+}
+
+/**
+ * Follow `edge` out of `from` — the second half of `recordOutcome`, and what `decide ok` runs on
+ * a held gate. THE GATE HOLDS THE WHOLE TRANSITION: whatever the edge would do (ask for the diff
+ * score, close the unit, stop, count a re-entry and exhaust a ring) happens only here, after the
+ * user's `ok` — never before it, so nothing is scored, committed, re-split or stopped by the
+ * transition while the gate waits. A held `$stop` edge still waits: the user may `amend` it.
+ */
+function transition(state, bricks, from, edge) {
+  if (edge.to === '$stop') return stop(state, `${from} reported ${edge.on}`);
   const mutated = state.visited.some((n) => bricks.get(n)?.effect === 'mutate');
   if (edge.to === '$close') {
     if (mutated) { state.closing = true; state.pendingVerify = true; return { verify: true }; }
@@ -347,8 +371,10 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
 export function decideAwaiting(state, bricks, verdict, note = '') {
   if (state.status !== 'awaiting') throw new Error('nothing is awaiting a decision');
   if (!['ok', 'no', 'amend'].includes(verdict)) throw new Error(`verdict must be ok, no or amend, not ${JSON.stringify(verdict)}`);
-  const { kind } = state.awaiting;
+  const held = state.awaiting;
+  const { kind } = held;
   state.awaiting = null; state.status = 'running';
+  if (kind === 'gate') return decideGate(state, bricks, verdict, note, held);
   if (note) state.notes.push(`iteration ${state.iteration} (${kind}, ${verdict}): ${note}`);
   if (kind === 'launch') {
     return verdict === 'ok' ? { resumed: true } : stop(state, `graph ${verdict === 'no' ? 'rejected' : 'to amend'}${note ? `: ${note}` : ''}`);
@@ -378,4 +404,33 @@ export function decideAwaiting(state, bricks, verdict, note = '') {
   if (isSetupUnit(state)) return stop(state, `setup rejected${note ? `: ${note}` : ''}`);
   resetUnit(state); state.node = head(state); state.snapshot = '';
   return { discard: true };
+}
+
+const GATE_MAX_AMENDS = 3;
+
+/**
+ * The answer to a held `gate: human` transition. Every verdict leaves a note — with or without
+ * the user's words — so the run's notes say each gate was answered and how. `ok` follows the held
+ * edge and lists the node under the unit's `Loop-Gates`; `no` stops; `amend` re-runs the same
+ * node with the note in `notes` (its `validated` untouched — a mutate gate need not re-score —
+ * and its `counters` reset),
+ * `GATE_MAX_AMENDS` times per node per iteration (`gateAmends` is keyed `node@iteration` and never
+ * reset, so the next iteration's card — a new ADR, say — gets its own budget), and the next
+ * one stops: three rounds of review that did not converge are a conversation, not a loop.
+ */
+function decideGate(state, bricks, verdict, note, { node, outcome }) {
+  state.notes.push(`iteration ${state.iteration} (gate at ${node}, ${verdict})${note ? `: ${note}` : ''}`);
+  if (verdict === 'no') return stop(state, `gate rejected at ${node}${note ? `: ${note}` : ''}`);
+  if (verdict === 'amend') {
+    const key = `${node}@${state.iteration}`;
+    state.gateAmends = { ...state.gateAmends, [key]: (state.gateAmends?.[key] ?? 0) + 1 };
+    if (state.gateAmends[key] > GATE_MAX_AMENDS) return stop(state, `gate amended ${GATE_MAX_AMENDS} times at ${node}`);
+    // As an `actual` amend: the amendment changes what the unit does, so the ring budget
+    // restarts; the amend cap above still bounds the unit.
+    state.counters = {};
+    state.node = node;
+    return { resumed: true };
+  }
+  state.current.gates = [...new Set([...(state.current.gates ?? []), node])];   // once each, as Loop-Bricks
+  return transition(state, bricks, node, state.graph.edges.find((e) => e.from === node && e.on === outcome));
 }

@@ -1,6 +1,7 @@
 {
   "name": "tdd",
   "description": "Plan the work, then build it test-first: each iteration writes a failing test, makes it pass, and reviews the diff, until the plan is complete.",
+  "category": "tests",
   "nodes": ["plan", "identify", "red-test", "apply", "test", "review"],
   "start": "plan",
   "edges": [
