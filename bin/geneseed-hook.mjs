@@ -27,9 +27,10 @@
  * component — so the last driver to emit anything on a machine owns every install's hooks,
  * including installs the other driver wrote. That is safe exactly while the two entry
  * points answer the same verbs identically, which is not a hope:
- * `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` pins the verb set to the
- * hooks the emitter wires, and `tests/harness_golden.py` runs this binary as a process
- * against the Python one on stdout, stderr, exit code and every file written.
+ * `tests/unit/hook_cli.test.mjs`'s "the hook entry carries exactly the verbs the emitter wires"
+ * pins the verb set to the hooks the emitter wires, and `node tests/golden.mjs --cli` runs
+ * this binary as a process with absolute assertions on stdout, stderr, exit code and every file
+ * written.
  *
  * The verb set is deliberately SMALL and refuses the rest by name. `harness.py` has 24
  * subparsers (25 invocable names — `update` is an alias of `upgrade`); a hook entry that
@@ -39,22 +40,29 @@
  */
 // FIRST, before anything it could fail to run: an old Node gets one sentence, not a stack trace.
 import '../js/lib/node-floor.mjs';
-import { cmdContext, cmdGitGate, cmdRuleGate, cmdToolGate, cmdLearn } from '../js/hosts/hooks.mjs';
-// Not a new module on the hot path: `js/hosts/hooks.mjs` above already imports
-// `js/lib/fs.mjs`, so this edge names a file the process has already loaded.
+// Not a new module on the hot path: every verb's module imports `js/lib/fs.mjs` too, so this
+// edge only loads early a file the process would load anyway.
 import { printErr } from '../js/lib/fs.mjs';
 
 // `--host` selects the verdict dialect (see js/hosts/hooks.mjs's header); the emitter bakes
 // it into the command for every host that is not Claude Code, so the hook never has to guess
 // its reader from the payload's shape.
+//
+// `load` is a DYNAMIC import per verb, so a process parses only its own verb's module: the gates
+// run on every tool call and must not pay for `context`'s discovery or `learn`'s spawn. The
+// specifiers stay literal strings — `tests/unit/hook_cli.test.mjs`'s import walk reads them.
 const HOSTED = { '--root': 'root', '--host': 'host' };
+const gates = () => import('../js/hosts/hooks.mjs');
 const VERBS = {
-  context: { fn: cmdContext, flags: HOSTED },
-  'git-gate': { fn: cmdGitGate, flags: HOSTED, switches: { '--no-consent': 'noConsent' } },
-  'rule-gate': { fn: cmdRuleGate, flags: HOSTED },
-  'tool-gate': { fn: cmdToolGate, flags: HOSTED },
+  context: { load: () => import('../js/hosts/hooks-context.mjs'), fn: 'cmdContext', flags: HOSTED },
+  'git-gate': {
+    load: gates, fn: 'cmdGitGate', flags: HOSTED, switches: { '--no-consent': 'noConsent' },
+  },
+  'rule-gate': { load: gates, fn: 'cmdRuleGate', flags: HOSTED },
+  'tool-gate': { load: gates, fn: 'cmdToolGate', flags: HOSTED },
   learn: {
-    fn: cmdLearn,
+    load: () => import('../js/hosts/hooks-learn.mjs'),
+    fn: 'cmdLearn',
     flags: { '--memory': 'memory' },
     switches: { '--consolidate': 'consolidate' },
     positional: 'file',
@@ -62,7 +70,7 @@ const VERBS = {
 };
 
 function die(code, msg) {
-  // CRLF on Windows, for the same reason `js/hosts/hooks.mjs`'s funnels translate: argparse
+  // CRLF on Windows, for the same reason the hook verbs' funnels translate: argparse
   // writes this line through `sys.stderr`, which does. `printErr` owns the `\n`-to-`os.linesep` rule.
   printErr(`geneseed-hook: error: ${msg}\n`);
   return code;
@@ -128,8 +136,7 @@ async function main(argv) {
   // argument. The four hook verbs are four of the reference's 26 and had the same gap.
   // `js/ui/cli.mjs` is imported HERE, not at the top: a static import cost every tool call
   // of every session a module parse (~3 ms of an ~12 ms controllable budget) for a branch
-  // only a human at a terminal ever takes. The hook path never awaits it, so `main` staying
-  // async-shaped costs the hot verbs nothing.
+  // only a human at a terminal ever takes.
   if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
     const { printHelp } = await import('../js/ui/cli.mjs');
     const rc = printHelp('geneseed-hook', verb);
@@ -137,7 +144,7 @@ async function main(argv) {
   }
   const parsed = parse(spec, argv.slice(1));
   if (parsed.error) return die(2, parsed.error);
-  return spec.fn(parsed.args);
+  return (await spec.load())[spec.fn](parsed.args);
 }
 
 main(process.argv.slice(2)).then((code) => { process.exitCode = code; });

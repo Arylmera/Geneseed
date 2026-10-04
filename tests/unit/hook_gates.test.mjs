@@ -179,6 +179,26 @@ test('guardGate: a throwing gate asks with the message and still exits 0', async
   assert.match(dec.permissionDecisionReason, /gate error — resolvePath refused ~user/);
 });
 
+// The ask document is a hand-written template since json.mjs left the gate path, so it must stay
+// BYTE-identical to the general serializer it replaced — Python's `json.dumps` spelling, whose
+// `ensure_ascii` writes every code unit past `~` as lowercase `\uXXXX` (an astral character as its
+// two surrogate halves), and `\n`/`\t`/`"`/`\` in their short escapes. Every gate reason carries
+// an em dash, so the non-ASCII rows are the ones that ship.
+test('askDecision is byte-identical to the compact json.dumps it replaced', async () => {
+  const { askDecision: render } = await import('../../js/hosts/hooks.mjs');
+  const { jsonDumpsCompact } = await import('../../js/lib/json.mjs');
+  for (const reason of ['plain', 'Geneseed (Consent Before Push) — every git commit',
+    'café à l’école', 'astral \u{1F600} pair', 'quote " slash \\ nl \n tab \t',
+    'ctl \u0001 del \u007f', '']) {
+    assert.equal(render(reason), `${jsonDumpsCompact({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: reason,
+      },
+    })}\n`, JSON.stringify(reason));
+  }
+  assert.ok(render('a — b').includes('a \\u2014 b'), 'the em dash must leave as \\u2014');
+});
+
 // ---------------------------------------------------------------------------------------------
 // The rule gate: a write to `user-rules.md`, to `MEMORY.md`, or to a markdown file inside THIS
 // install's `memory/`, asks — so the rule-vs-memory choice reaches the user.

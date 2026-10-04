@@ -69,7 +69,11 @@ user co-owns, and the hook verbs those emitted configs then run.
 | module | owns |
 |---|---|
 | `hosts.mjs` | The four host config dirs (opencode/claude/bob/openclaude), plus `resolvePath`/`expanduser` |
-| `hooks.mjs` | The verbs the emitted hooks run every session: `context`, `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Bob), `learn`. `--host` picks the verdict dialect |
+| `hooks.mjs` | The gate verbs, run on every tool call: `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Bob), plus `ask`/the gate ledger/`guardGate`. `--host` picks the verdict dialect |
+| `hooks-context.mjs` | The `context` verb — SessionStart: session files plus the repo's context docs |
+| `hooks-learn.mjs` | The `learn` verb — Stop/SubagentStop/PreCompact distiller; the hook path's ONE spawn (`$GENESEED_LLM`) |
+| `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`) |
+| `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate. No spawn: the CLI and web console import it |
 | `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `currentBranch`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate and `js/loop/cli.mjs`'s commit-message writer |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json`; owns the hook shim and the managed blocks |
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
@@ -78,9 +82,10 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `mcp.mjs` | MCP server presets, the per-host `mcpServers` config read/write, and toggle state |
 | `link.mjs` | `geneseed link`/`unlink` — the PATH shim, and the only Windows USER-Path registry edit |
 
-**Before editing:** `hooks.mjs` **is the hook path** — the verdict travels as JSON on stdout and
+**Before editing:** `hooks*.mjs` **are the hook path** — the verdict travels as JSON on stdout and
 every arm exits 0, so one stray printed byte turns a blocking gate silently permissive, and anything
-imported here is paid on every tool call. `hosts.mjs` is shared by the generator, the CLI and the
+`hooks.mjs` or `hooks-prims.mjs` imports is paid on every tool call. `bin/geneseed-hook.mjs` loads
+one verb's module per process, so keep context and learn code out of the gate module. `hosts.mjs` is shared by the generator, the CLI and the
 hook path, so it must stay free of `child_process`. `installs.mjs` reads through `readMaybe`, which
 folds CRLF — a bare `readFileSync` here is a bug.
 
@@ -223,7 +228,7 @@ and inline lists are held against a surface list written out in
 | a doctor check | `js/inspect/checks-{build,repo,authoring}.mjs` | register with `ran(...)` in `doctor.mjs`, then a PLANTED FAULT in `tests/unit/harness.test.mjs` |
 | a web endpoint | GET → `js/web/api.mjs`; POST → `js/web/actions.mjs` | declare it in `js/web/routes.mjs`; the partition test probes the real handler |
 | a CLI verb | `js/cli-table.json` — the table IS the parser | the `VERBS` row in `bin/geneseed-cli.mjs`, the row count in `cli_table.test.mjs`, `NATIVE` in **two** test files |
-| a hook verb | `js/hosts/hooks.mjs` | `claudeHookGroups` in `settings.mjs`, `VERBS` in `bin/geneseed-hook.mjs`. Keep the import graph tiny |
+| a hook verb | `js/hosts/hooks.mjs` (a gate) or its own `js/hosts/hooks-<verb>.mjs` | `claudeHookGroups` in `settings.mjs`, the `VERBS` row (with its `load`) in `bin/geneseed-hook.mjs`. Keep the import graph tiny |
 | a console doc page | `docs/<understand|guides|concepts|reference>/<id>.md` — the stem is the id | `docs/extending.md` §4c. Only `kind: "concept"` gets `{N_*}` substitution |
 | an OpenCode plugin | `adapters/opencode/plugins/geneseed-<name>.js` | `docs/extending.md` §4a — the `geneseed-` prefix is mechanically load-bearing |
 | to change a `js/lib/` primitive | `tests/fixtures/pure_probe.mjs` **first** | the docblock says which Node default it deliberately departs from — change that sentence too, or the next reader restores the default |

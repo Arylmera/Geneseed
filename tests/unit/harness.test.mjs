@@ -10,7 +10,7 @@
 //   3. retire it only by naming the gate that already covers it.
 //
 // AND CHECK FOR (3) FIRST, because the port has sometimes made a claim STRUCTURAL. The clearest
-// example is right below: `LEARN_PROMPT_HEAD`.
+// example is right below: `learnPromptHead()`.
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,9 +18,11 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
+import { learnPromptHead, readNotes, resolveAgentName } from '../../js/hosts/hooks-learn.mjs';
 import {
-  LEARN_PROMPT_HEAD, frontmatter, readNotes, existingSlugs, writeMemories,
-} from '../../js/hosts/hooks.mjs';
+  frontmatter, existingSlugs, writeMemories, memoryDropIndex, appendAgentLesson, consolidateMemory,
+} from '../../js/hosts/memory-files.mjs';
+import { discoverContext, resolveContextSets } from '../../js/hosts/hooks-context.mjs';
 import {
   countTableProblems, proseMirrorProblems, lawMetaProblems, authoringProblems,
   doctrineMetaProblems,
@@ -29,10 +31,6 @@ import { themeParityProblems, renderedProblems, descriptionProblems } from '../.
 import {
   themesToCheck, globalEmitProblems, claudeBobEmitProblems,
 } from '../../js/inspect/doctor.mjs';
-import {
-  memoryDropIndex, discoverContext, resolveContextSets, resolveAgentName, appendAgentLesson,
-  consolidateMemory,
-} from '../../js/hosts/hooks.mjs';
 import { memoryFactCount } from '../../js/inspect/status.mjs';
 import { stripSkillBodyLinks, agentDescription } from '../../js/hosts/native.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
@@ -48,7 +46,7 @@ import { copyCheckout } from '../helpers/cli_golden.mjs';
 // THE PARITY CLAIM RETIRED INTO THE ARCHITECTURE, and this is the shape to look for before
 // porting any "the two copies have not drifted" test. The reference kept its own copy of the
 // prompt and `PromptParityTests` existed to catch the two literals drifting apart. The port has
-// no second copy: `LEARN_PROMPT_HEAD` is EXTRACTED from the plugin's literal at load time via
+// no second copy: `learnPromptHead()` EXTRACTS the plugin's literal on first use via
 // `pluginLiteral()`, so drift is not something a test has to catch — there is nothing to drift
 // from. What survives is that the extraction still WORKS, which is a different and smaller
 // claim, and `js/inspect/checks-authoring.mjs`'s authoring check carries the rest.
@@ -57,7 +55,7 @@ test('the learn prompt is extracted from the plugin literal, not copied', () => 
   const js = fs.readFileSync(path.join(PLUGIN_SRC, 'geneseed-learn.js'), 'utf8');
   const m = /const LEARN_PROMPT_HEAD = `([\s\S]*?)`/.exec(js);
   assert.ok(m, 'could not find the LEARN_PROMPT_HEAD literal in the plugin');
-  assert.equal(LEARN_PROMPT_HEAD, m[1],
+  assert.equal(learnPromptHead(), m[1],
     'the extraction returned something other than the literal — silently, since a failed '
     + 'extraction degrades to a default rather than throwing');
 });
@@ -65,8 +63,9 @@ test('the learn prompt is extracted from the plugin literal, not copied', () => 
 // A failed extraction degrades rather than raising, so "we got a string" is not enough: an empty
 // or stub prompt would satisfy the row above if the regex ever stopped matching.
 test('the extracted prompt is substantive', () => {
-  assert.match(LEARN_PROMPT_HEAD, /NOTHING/);
-  assert.ok(LEARN_PROMPT_HEAD.length > 200, `prompt is ${LEARN_PROMPT_HEAD.length} chars`);
+  const head = learnPromptHead();
+  assert.match(head, /NOTHING/);
+  assert.ok(head.length > 200, `prompt is ${head.length} chars`);
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -40,7 +40,7 @@ test("appendAgentLesson: collapses whitespace in the lesson", async () => {
 })
 
 // A memory `name:` is MODEL OUTPUT and becomes a filename, so it is a plain slug or nothing —
-// the same rule the harness's own learn hook applies (MEMORY_SLUG_RE in js/hosts/hooks.mjs).
+// the same rule the harness's own learn hook applies (MEMORY_SLUG_RE in js/hosts/memory-files.mjs).
 // Each refused name below would have written outside the memory dir, or to a name no index
 // line could link; the accepted ones show the rule is a slug check, not a lowercase one.
 test("writeMemories: refuses a name that is not a plain slug, writes one that is", async () => {

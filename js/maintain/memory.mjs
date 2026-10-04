@@ -30,7 +30,7 @@
 import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { memoryDropIndex } from '../hosts/hooks.mjs';
+import { memoryDropIndex } from '../hosts/memory-files.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
 

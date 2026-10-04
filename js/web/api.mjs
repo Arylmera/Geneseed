@@ -24,7 +24,7 @@ import {
   installedDefaults, modeOfDir, trustOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
-import { frontmatter } from '../hosts/hooks.mjs';
+import { frontmatter } from '../hosts/memory-files.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import { activeLoops } from '../loop/registry.mjs';
@@ -951,7 +951,9 @@ export function apiRecent(state) {
  * layout needs `nodes`, `edges` and `loops` exactly as the engine reads them.
  */
 export function apiLoops(state) {
-  const { bricks, templates, overridden } = loadCatalog({ projectRoot: state.root });
+  const opts = { projectRoot: state.root };
+  const catalog = loadCatalog(opts);
+  const { bricks, templates, overridden } = catalog;
   const byName = ([a], [b]) => (a < b ? -1 : 1);
   return {
     templates: [...templates].sort(byName).map(([name, { origin, ...graph }]) => ({
@@ -962,7 +964,8 @@ export function apiLoops(state) {
     // A brick or template the catalogue skipped (bad frontmatter, not JSON, misnamed), and a
     // template that fails the graph rules: the page says so — the same list `loop check`
     // prints — or a team's broken override would just silently not be there.
-    problems: catalogProblems({ projectRoot: state.root }),
+    // The catalogue already loaded above, not a second read of every brick and template.
+    problems: catalogProblems(opts, catalog),
   };
 }
 

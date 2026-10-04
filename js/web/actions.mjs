@@ -27,7 +27,7 @@
  */
 import { spawn } from 'node:child_process';
 import {
-  accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, rmSync, unlinkSync,
+  accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,8 +40,8 @@ import { withStdoutSwallowed } from '../inspect/diff.mjs';
 import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
-import { setLoopPreset } from '../loop/registry.mjs';
-import { frontmatter, memoryDropIndex } from '../hosts/hooks.mjs';
+import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
+import { frontmatter, memoryDropIndex } from '../hosts/memory-files.mjs';
 import {
   HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
   opencodeConfigDir, resolvePath,
@@ -57,6 +57,7 @@ import {
 import { readText, writeText, isFile, isDir } from '../lib/fs.mjs';
 import { parseJson, formatRepr, formatValue, isTruthy } from '../lib/json.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
+import { normcase } from '../lib/paths.mjs';
 import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { splitLines } from '../lib/udiff.mjs';
@@ -582,24 +583,30 @@ export function apiExcludesMutate(state, body) {
 
 /**
  * The Active tab's one write: rewrite a registered worktree's `LOOP.md` `preset` field.
- * `setLoopPreset` throws for both refusals the brief requires `POST /api/loops/preset` to make —
- * a `root` the registry does not know (no arbitrary path writes) and a `preset` outside
- * `PRESETS` — and this is where those two throws are turned into the `NotFound` convention
- * every other mutating route here already answers in, so the handler's catch (`4xx`, not the
- * 500 a bare `Error` would fall to) covers this route the same way it covers `apiRulesMutate`'s
- * unknown id. Anything else `setLoopPreset` throws — a corrupt `LOOP.md` that fails to
- * parse, say — is not one of those two refusals and is rethrown as-is, so it falls through to
- * the handler's 500 instead of being misreported as "not found".
+ * `POST /api/loops/preset` makes two refusals — a `preset` outside `PRESETS` and a `root` that is
+ * not a running registered loop (no arbitrary path writes) — and both are decided HERE, as the
+ * `NotFound` every other mutating route answers in, so the handler's catch (`4xx`, not the 500 a
+ * bare `Error` would fall to) covers this route the way it covers `apiRulesMutate`'s unknown id.
+ *
+ * DECIDED, NOT RECOGNISED. This route used to call `setLoopPreset` and sort its throws by their
+ * MESSAGE text, so rewording an error in `js/loop/registry.mjs` would have turned a 404 into a
+ * 500 with no test of this file noticing. "Running" is `activeLoops`' word for it — registered,
+ * still a directory, `LOOP.md` present (a corrupt one included, so that it reaches the parse and
+ * fails there) — matched on the root the registry stores, which is the realpath. The preset is
+ * checked first: `activeLoops` may prune the registry, and a refused preset must touch nothing
+ * (`tests/unit/web_server.test.mjs` probes this route against the real machine's registry).
+ * Anything `setLoopPreset` still throws, a corrupt `LOOP.md` above all, is a 500.
  */
 export function apiLoopsPresetMutate(state, body) {
   const root = strOr(bget(body, 'root'));
   const preset = strOr(bget(body, 'preset'));
-  try {
-    return { ok: true, loop: setLoopPreset(root, preset) };
-  } catch (e) {
-    if (e.message === 'unknown loop' || e.message.startsWith('unknown preset ')) throw new NotFound(e.message);
-    throw e;
-  }
+  if (!Object.hasOwn(PRESETS, preset)) throw new NotFound(`unknown preset ${JSON.stringify(preset)}`);
+  let key;
+  try { key = realpathSync.native(root); } catch { key = path.resolve(root); }
+  const running = root && activeLoops().some((l) => l.status !== 'finished'
+    && normcase(l.root) === normcase(key));
+  if (!running) throw new NotFound('unknown loop');
+  return { ok: true, loop: setLoopPreset(root, preset) };
 }
 
 // ---- MCP ----------------------------------------------------------------------------------

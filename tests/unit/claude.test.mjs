@@ -34,7 +34,7 @@ import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate } from '../../js/maintain/migrate.mjs';
 import {
   globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES,
-} from '../../js/hosts/hooks.mjs';
+} from '../../js/hosts/hooks-context.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
   openclaudeConfigDir,

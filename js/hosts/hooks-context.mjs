@@ -1,0 +1,431 @@
+/**
+ * `context` — the SessionStart verb: inject the harness's session files and the repo's context
+ * docs. Runs once per session, so it is loaded only when the hook entry dispatches it; see
+ * `js/hosts/hooks.mjs`'s header for the contract every hook verb holds.
+ */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { readText, printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
+import { normcase, toPlatformPath } from '../lib/paths.mjs';
+import { resolvePath, sovereignBypass } from './hosts.mjs';
+import { isFile, isDir, selfAndParents, sortPaths, listDir } from './hooks-prims.mjs';
+
+/**
+ * `str(OSError)` — `[Errno N] strerror: 'filename'`, with the filename REPR'd.
+ *
+ * This is a compared string, not a log line: `cmd_context` prints it verbatim when an
+ * eager entry is missing, so `ENOENT: no such file or directory, open '…'` (Node's
+ * wording, Node's quoting, no errno) is a whole-line difference in that cell. Only the
+ * codes a verb here can actually raise are mapped; anything else falls back to Node's
+ * message, which is at least honest about being different.
+ */
+const _ERRNO = {
+  ENOENT: [2, 'No such file or directory'],
+  EACCES: [13, 'Permission denied'],
+  EISDIR: [21, 'Is a directory'],
+  ENOTDIR: [20, 'Not a directory'],
+  EPERM: [1, 'Operation not permitted'],
+};
+
+function asOsError(e, filename) {
+  const hit = _ERRNO[e && e.code];
+  if (!hit) return String((e && e.message) || e);
+  // Python reprs the filename, so a Windows path comes out with its backslashes doubled.
+  return `[Errno ${hit[0]}] ${hit[1]}: ${JSON.stringify(filename).replace(/^"|"$/g, "'")
+    .replace(/\\"/g, '"')}`;
+}
+
+/**
+ * `fnmatch.fnmatch(name, pattern)` — case-folded on Windows on BOTH sides, and `*` matches
+ * a separator (it is shell-glob semantics, not path-glob: `docs/*.md` really does select
+ * `docs/nested/deep.md`, in both implementations).
+ */
+function fnmatch(name, pattern) {
+  return fnTranslate(normcase(pattern)).test(normcase(name));
+}
+
+function fnTranslate(pat) {
+  let out = '';
+  for (let i = 0; i < pat.length; i += 1) {
+    const c = pat[i];
+    if (c === '*') { out += '[\\s\\S]*'; continue; }
+    if (c === '?') { out += '[\\s\\S]'; continue; }
+    if (c === '[') {
+      let j = i + 1;
+      if (pat[j] === '!') j += 1;
+      if (pat[j] === ']') j += 1;
+      while (j < pat.length && pat[j] !== ']') j += 1;
+      // An unterminated `[` is a LITERAL bracket in Python's translate, not an error.
+      if (j >= pat.length) { out += '\\['; continue; }
+      let body = pat.slice(i + 1, j).replaceAll('\\', '\\\\');
+      if (body.startsWith('!')) body = `^${body.slice(1)}`;
+      out += `[${body}]`;
+      i = j;
+      continue;
+    }
+    out += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^(?:${out})$`);
+}
+
+/**
+ * The host whose own root file counts as native — `--host` on the emitted command, `claude`
+ * when absent. Module state for the reason `./hooks.mjs`'s gates keep theirs: a hook process
+ * answers exactly one call, so it is set once at `cmdContext`'s entry.
+ */
+let HOST = 'claude';
+
+// Kept in step with adapters/opencode/plugins/geneseed-context.js, same as the Python.
+const EAGER_ROOT = ['AGENTS.md', 'AGENT.md', 'CLAUDE.md', '.cursorrules',
+  'README.md', 'CONTRIBUTING.md', 'user-rules.md', 'PROFILE.md'];
+const LAZY_DIRS = ['docs', 'doc', 'documentation', 'architecture', 'adr', 'ADR'];
+const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.next',
+  'target', '.venv', '__pycache__', '.opencode', '.harness']);
+
+// The root instruction file a host already loads by itself. Injecting it again pays the
+// whole harness twice per session — and was doing exactly that until 2026-09: every hooked
+// host had its own root in EAGER_ROOT. Other tools' roots stay eager (a repo carrying a
+// hand-written AGENTS.md is worth showing Claude Code); only the host's OWN is dropped.
+// The OpenCode context plugin carries the same rule for AGENT.md/AGENTS.md/CLAUDE.md.
+// OpenClaude's root file is AGENTS.md, or CLAUDE.md when AGENTS.md is absent — resolved
+// per repo in `discoverContext`, since which one it loads depends on what is on disk.
+const NATIVE_ROOT = {
+  claude: ['CLAUDE.md'], bob: ['AGENTS.md'],
+  openclaude: ['AGENTS.md', 'CLAUDE.md'],
+};
+
+// Eager injection budget: a root README of 40k chars was going out whole, every session and
+// every compaction, and cost more than the harness itself. Per-file cut at the last line
+// break under the cap; files that would push the total over the budget are listed lazy.
+const EAGER_FILE_BYTES = 16 * 1024;
+const EAGER_TOTAL_BYTES = 48 * 1024;
+
+// The files the root instruction file names for session start, relative to the HARNESS dir
+// (`--root`: `.claude/`, `.bob/`, a global config dir) — not to the repo root discovery walks,
+// which is why none of them reached a hooked host before 2026-10. Injected here so the read does
+// not depend on the model remembering it. `context.json` is not in the list: it is a manifest,
+// honoured by `resolveContextSets` (the harness dir is its last candidate). The OpenCode
+// context plugin carries the same list.
+const SESSION_FILES = ['user-rules.md', 'PROFILE.md', 'memory/MEMORY.md', 'anamnesis/MEMORY.md',
+  'notebook/NOTEBOOK.md', 'wiki.jsonc'];
+// SHA-256 of each seed body in `js/build/stubs.mjs` (`SESSION_SEEDS`), CRLF folded. A file still
+// byte-identical to its seed says nothing, so it is skipped rather than injected as noise.
+// Hashes, not an import: stubs.mjs pulls in the build's writers, and this module loads on every
+// tool call. tests/unit/claude.test.mjs gates this set, and the plugin's copy, against the seeds.
+const SEED_SHA256 = new Set([
+  '5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721', // user-rules.md
+  '29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816', // PROFILE.md
+  'cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8', // wiki.jsonc
+  '99c786049c260f6baf7aec68a5c0f59907861afe9b867da009440613bdddb907', // MEMORY.md
+  '9acb5c9d9cb5dac572104480f05b48cc144e676869bd60e86d8a15b1f6308184', // NOTEBOOK.md
+]);
+export { SESSION_FILES, SEED_SHA256 };
+
+/**
+ * The session files present under `hookRoot` and changed from their seed, as `{ rel, abs, text }`
+ * (text CRLF-folded, trailing newlines trimmed). `$GENESEED_WIKI` overrides the wiki declaration,
+ * as it does on OpenCode. A missing or unreadable file is simply absent — this is best-effort
+ * context, never a gate.
+ */
+export function sessionFiles(hookRoot) {
+  const found = [];
+  for (const rel of SESSION_FILES) {
+    let abs = path.join(hookRoot, rel);
+    if (rel === 'wiki.jsonc' && process.env.GENESEED_WIKI && isFile(process.env.GENESEED_WIKI)) {
+      abs = process.env.GENESEED_WIKI;
+    }
+    if (!isFile(abs)) continue;
+    let text;
+    try { text = readFileSync(abs, 'utf8').replace(/\r\n/g, '\n'); } catch { continue; }
+    if (SEED_SHA256.has(createHash('sha256').update(text).digest('hex'))) continue;
+    found.push({ rel, abs, text: text.replace(/\n+$/, '') });
+  }
+  return found;
+}
+
+const CLAUDE_MARKERS = ['.claude', '.bob', '.openclaude'];
+const GENESEED_MANIFEST = '.geneseed-manifest.json';
+
+/**
+ * `_global_hook_standing_down` — project-bypasses-global.
+ *
+ * A GLOBAL install's hook passes its own dir as `--root`; when a Geneseed PROJECT install
+ * of the SAME host sits at or above cwd, the project's hook injects and this one must not
+ * double up.
+ */
+export function globalHookStandingDown(hookRoot, cwd) {
+  const marker = path.basename(hookRoot);
+  if (!CLAUDE_MARKERS.includes(marker)) return false;
+  for (const d of selfAndParents(cwd)) {
+    const cand = path.join(d, marker);
+    if (isFile(path.join(cand, GENESEED_MANIFEST))) {
+      // Path equality, which is case-folded on Windows — `~/.claude` and `~/.Claude` are
+      // the same install there and two different ones on Linux.
+      return normcase(resolvePath(cand)) !== normcase(resolvePath(hookRoot));
+    }
+  }
+  return false;
+}
+
+/** `_disp` — relative to the repo root when it sits under it, else verbatim. */
+function disp(pathStr, root) {
+  // `os.path.relpath` raises ValueError across drives and the Python falls back to the
+  // path as given; `path.relative` silently returns an absolute path instead, which would
+  // print a DIFFERENT string rather than the same one.
+  if (path.parse(path.resolve(pathStr)).root.toLowerCase()
+      !== path.parse(path.resolve(root)).root.toLowerCase()) {
+    return pathStr;
+  }
+  return path.relative(root, pathStr).split(path.sep).join('/');
+}
+
+
+function rglobMd(dir, acc = []) {
+  for (const name of listDir(dir)) {
+    const full = path.join(dir, name);
+    if (isDir(full)) rglobMd(full, acc);
+    else if (isFile(full) && path.extname(name).toLowerCase() === '.md') acc.push(full);
+  }
+  return acc;
+}
+
+/**
+ * `_discover_context` — the no-manifest path, mirroring the OpenCode context plugin.
+ * Root entry docs are eager; other root markdown, the doc trees and monorepo package
+ * READMEs are lazy.
+ */
+export function discoverContext(root, host = HOST) {
+  const eager = new Map();
+  const lazy = new Map();
+  const native = host === 'openclaude' && isFile(path.join(root, 'AGENTS.md'))
+    ? ['AGENTS.md'] : NATIVE_ROOT[host] || [];
+  for (const full of sortPaths(listDir(root).map((n) => path.join(root, n)))) {
+    if (!isFile(full)) continue;
+    const name = path.basename(full);
+    if (native.includes(name)) continue;
+    if (EAGER_ROOT.includes(name)) eager.set(full, null);
+    else if (path.extname(name).toLowerCase() === '.md') lazy.set(full, null);
+  }
+  for (const d of LAZY_DIRS) {
+    const sub = path.join(root, d);
+    if (!isDir(sub)) continue;
+    for (const md of sortPaths(rglobMd(sub))) {
+      const parts = path.relative(root, md).split(/[\\/]/);
+      if (parts.some((part) => EXCLUDE_DIRS.has(part))) continue;
+      if (!eager.has(md) && !lazy.has(md)) lazy.set(md, null);
+    }
+  }
+  for (const group of ['packages', 'apps']) {
+    const base = path.join(root, group);
+    if (!isDir(base)) continue;
+    for (const pkg of sortPaths(listDir(base).map((n) => path.join(base, n)))) {
+      if (!isDir(pkg) || EXCLUDE_DIRS.has(path.basename(pkg))) continue;
+      const readme = path.join(pkg, 'README.md');
+      if (isFile(readme) && !eager.has(readme) && !lazy.has(readme)) lazy.set(readme, null);
+    }
+  }
+  return [
+    [...eager.keys()].map((p) => ({ path: p, description: '' })),
+    [...lazy.keys()].filter((p) => !eager.has(p)).map((p) => ({ path: p, description: '' })),
+  ];
+}
+
+/**
+ * `_resolve_context_sets` — an explicit manifest wins, `"extend": true` layers it on top
+ * of discovery, and an empty stub falls through to pure discovery.
+ *
+ * `recs` is a Map, not an object: JS reorders integer-like keys on a plain object, and
+ * these keys are absolute paths whose iteration order becomes the printed order.
+ */
+export function resolveContextSets(root, hookRoot = null) {
+  let manifest = null;
+  const env = process.env.GENESEED_CONTEXT;
+  if (env && isFile(env)) {
+    // `Path(env)`, and the label is printed — so the separators are folded exactly the
+    // way `str(Path(...))` folds them, or the source line differs by every slash in it.
+    manifest = toPlatformPath(env);
+  } else {
+    // The harness dir last: a repo's own manifest outranks the one seeded beside the install.
+    for (const cand of [path.join(root, '.harness', 'context.json'),
+      path.join(root, 'context.json'), ...(hookRoot ? [path.join(hookRoot, 'context.json')] : [])]) {
+      if (isFile(cand)) { manifest = cand; break; }
+    }
+  }
+
+  if (manifest === null) {
+    const [e, l] = discoverContext(root);
+    return [e, l, `auto-discovery [${root}]`];
+  }
+
+  let raw;
+  try {
+    raw = readText(manifest);
+  } catch (e) {
+    err(`[context] could not read ${manifest}: ${asOsError(e, manifest)}\n`);
+    return [[], [], String(manifest)];
+  }
+  let entries;
+  let extend;
+  try {
+    let data = JSON.parse(raw);
+    // Valid JSON of the wrong SHAPE, guarded on both sides — see the Python original. JS
+    // would not have thrown here (`[].context` is merely undefined), which is exactly why
+    // the guard is written out rather than left to fall out of the language: without it,
+    // the two CLIs disagree about a file a user really does hand-edit.
+    data = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+    entries = data.context || [];
+    if (!Array.isArray(entries)) entries = [];
+    extend = Boolean(data.extend);
+  } catch {
+    // See the Python original for why the decoder's own message is not quoted: the two
+    // engines disagree on the wording and on the offset, and V8 supplies no offset at all
+    // for the commonest shapes. Reporting the file is what the user needs; reporting
+    // WHICH decoder found it is what makes two implementations impossible.
+    err(`[context] ${manifest} is not valid JSON — no context was loaded `
+      + '(fix the syntax, then re-run).\n');
+    return [[], [], String(manifest)];
+  }
+
+  if (!entries.length && !extend) {
+    const [e, l] = discoverContext(root);
+    return [e, l, `auto-discovery [${root}] (empty ${path.basename(manifest)})`];
+  }
+
+  const recs = new Map();
+  const put = (pathStr, load, desc) => {
+    const prev = recs.get(pathStr);
+    recs.set(pathStr, { path: pathStr, load, description: desc || (prev ? prev.description : '') });
+  };
+
+  if (extend) {
+    const [de, dl] = discoverContext(root);
+    for (const x of de) put(x.path, 'eager', '');
+    for (const x of dl) put(x.path, 'lazy', '');
+  }
+
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const raw = typeof entry.path === 'string' ? entry.path.trim() : '';
+    if (!raw) continue;
+    const load = entry.load === undefined ? 'eager' : entry.load;
+    const desc = entry.description === undefined ? '' : entry.description;
+    if (raw.includes('*')) {
+      // A glob RECLASSIFIES files already known; it never pulls in new ones.
+      for (const [pathStr, rec] of [...recs.entries()]) {
+        if (fnmatch(disp(pathStr, root), raw)) put(pathStr, load, desc || rec.description);
+      }
+      continue;
+    }
+    const abs = path.isAbsolute(raw) ? raw : resolvePath(path.join(root, raw));
+    put(abs, load, desc);
+  }
+
+  const eager = [];
+  const lazy = [];
+  for (const r of recs.values()) {
+    (r.load === 'eager' ? eager : lazy).push({ path: r.path, description: r.description });
+  }
+  return [eager, lazy, String(manifest)];
+}
+
+/**
+ * Cut `text` at the last line break under EAGER_FILE_BYTES and say where the rest is — one rule
+ * for a session file and an eager doc alike. `where` finishes the sentence.
+ */
+function capEager(text, where) {
+  if (text.length <= EAGER_FILE_BYTES) return text;
+  const nl = text.lastIndexOf('\n', EAGER_FILE_BYTES);
+  return `${text.slice(0, nl > 0 ? nl : EAGER_FILE_BYTES)}\n`
+    + `[context] truncated at ${EAGER_FILE_BYTES / 1024} KB — read ${where}`;
+}
+
+export function cmdContext(args) {
+  HOST = (args && args.host) || 'claude';
+  // Discovery runs against the project root the hook was launched from — Claude runs
+  // SessionStart hooks with cwd = repo root — not the harness package dir.
+  // The only two `resolvePath` calls in this file whose argument can be a `~user` path the
+  // user typed — `$GENESEED_ROOT` and `--root` — and `resolvePath` expands, so both can now
+  // throw. Every other caller either builds its argument by `path.join` from an absolute
+  // root (so no leading tilde survives) or already sits inside a `try`. Refused input
+  // injects nothing, which is the same degrade as "nothing to load" below.
+  let root;
+  let hookRoot;
+  try {
+    ({ root, hookRoot } = withDiscardableStderr(() => ({
+      root: resolvePath(process.env.GENESEED_ROOT || process.cwd()),
+      hookRoot: args.root ? resolvePath(args.root) : null,
+    })));
+  } catch {
+    return 0;
+  }
+  if (hookRoot && sovereignBypass(hookRoot)) return 0;
+  if (hookRoot && !process.env.GENESEED_STACK_GLOBAL
+      && globalHookStandingDown(hookRoot, root)) return 0;
+  const session = hookRoot ? sessionFiles(hookRoot) : [];
+  // A session file discovery would also pick up (a `user-rules.md` at the repo root of an
+  // install whose harness dir IS the repo root) is injected once, in the session block.
+  const seen = new Set(session.map((s) => normcase(path.resolve(s.abs))));
+  const fresh = (e) => !seen.has(normcase(path.resolve(path.isAbsolute(e.path)
+    ? e.path : path.join(root, e.path))));
+  let [eager, lazy, source] = resolveContextSets(root, hookRoot);
+  eager = eager.filter(fresh);
+  lazy = lazy.filter(fresh);
+  if (!session.length && !eager.length && !lazy.length) {
+    err(`[context] nothing to load for ${root} `
+      + '(no docs discovered, no manifest entries).\n');
+    return 0;
+  }
+
+  const lines = [];
+  let spent = 0;
+  if (session.length) {
+    lines.push('=== SESSION FILES \u2014 your harness files, injected at session start '
+      + '(untouched seeds skipped) ===', '');
+    for (const s of session) {
+      const text = capEager(s.text, `${s.abs} on demand`);
+      spent += text.length;
+      lines.push(`----- ${s.rel} -----`, text, '');
+    }
+  }
+  if (eager.length || lazy.length) {
+    lines.push(`=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`, '');
+  }
+  const demoted = [];
+  for (const entry of eager) {
+    const p = entry.path === undefined ? '' : entry.path;
+    const desc = entry.description === undefined ? '' : entry.description;
+    const target = path.isAbsolute(p) ? p : path.join(root, p);
+    let text;
+    try {
+      text = readText(target).replace(/\n+$/, '');
+    } catch (e) {
+      lines.push(`----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`,
+        `[context] MISSING eager file: ${asOsError(e, target)}`, '');
+      continue;
+    }
+    text = capEager(text, `${disp(p, root)} on demand for the rest`);
+    if (spent + text.length > EAGER_TOTAL_BYTES) {
+      demoted.push(entry);
+      continue;
+    }
+    spent += text.length;
+    lines.push(`----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`, text, '');
+  }
+
+  if (lazy.length || demoted.length) {
+    lines.push('--- Lazy entries (load only when the task needs them) ---');
+    for (const entry of [...lazy, ...demoted]) {
+      const p = entry.path === undefined ? '' : entry.path;
+      const desc = entry.description === undefined ? '' : entry.description;
+      const over = demoted.includes(entry)
+        ? ` (eager, but over the ${EAGER_TOTAL_BYTES / 1024} KB session budget \u2014 read on demand)` : '';
+      lines.push(`  - ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''}${over}`);
+    }
+    lines.push('');
+  }
+
+  // Claude Code takes a SessionStart hook's plain stdout as context; Bob reads it the same way.
+  out(`${lines.join('\n')}\n`);
+  return 0;
+}
