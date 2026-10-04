@@ -56,6 +56,19 @@ test('parseBrick reads gate: human and refuses any other gate value', () => {
     ['x: gate must be human, not "robot"']);
 });
 
+// `gateOn` narrows a gate to the outcomes it lists (the rest pass straight through). It means
+// nothing without `gate: human`, and every value must be one of the brick's own outcomes.
+test('parseBrick reads gateOn as a list, only with gate: human and only of its own outcomes', () => {
+  const { brick, problems } = parseBrick(brickMd('adr-challenge', 'agent: skeptic\ngate: human\ngateOn: pass'), 'shipped');
+  assert.deepEqual(problems, []);
+  assert.deepEqual(brick.gateOn, ['pass']);
+  assert.equal(Object.hasOwn(parseBrick(brickMd('y', 'agent: tester\ngate: human'), 'shipped').brick, 'gateOn'), false);
+  assert.deepEqual(parseBrick(brickMd('x', 'agent: tester\ngateOn: pass'), 'shipped').problems,
+    ['x: gateOn needs gate: human']);
+  assert.deepEqual(parseBrick(brickMd('x', 'agent: tester\ngate: human\ngateOn: pass, maybe'), 'shipped').problems,
+    ['x: gateOn maybe is not one of its outcomes']);
+});
+
 test('userLoopsDir follows XDG_CONFIG_HOME', () => {
   assert.equal(userLoopsDir(), path.join(tmp, 'xdg', 'geneseed'));
 });

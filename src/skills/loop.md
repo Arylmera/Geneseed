@@ -4,7 +4,8 @@
 
 **Trigger:** the user asks to run a loop, or to work a requirement in small validated
 iterations, each one committed on its own; or names a loop template (`bugfix`, `refactor`,
-`feature`, `tdd`, `legacy-tests`, `legacy-refactor`, `deps-upgrade`, `ci-repair`).
+`feature`, `tdd`, `legacy-tests`, `legacy-refactor`, `deps-upgrade`, `ci-repair`,
+`architecture-decision`, `enforce-architecture-rule`, `update-contract`).
 
 Default trust preset: **{{TRUST_LABEL}}**
 
@@ -36,7 +37,8 @@ action prints one JSON object — act on its keys, never on your own reading of 
    Write it to `<name>.json` in the OS temp directory — never inside the worktree, where it would
    be scored and committed — and validate it: `geneseed loop check --graph <file>`.
 4. `geneseed loop init --title "<title>" --requirement "<requirement>" --graph <template|file> --preset {{TRUST}}`.
-   A refused graph prints `problems` — fix them and retry.
+   Add `--contracts <globs>` naming the interface or schema files the requirement changes when
+   the template's defaults do not cover them. A refused graph prints `problems` — fix them and retry.
 
 ## The cycle
 

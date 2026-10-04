@@ -1,6 +1,6 @@
 {
   "name": "update-contract",
-  "description": "Change an interface with live consumers — an API, a schema, an event — as expand, migrate one consumer per iteration, contract: plan it for the user to review, then apply, test, check old and new consumers, and review. Name the contract files (API specs, schema migrations, event schemas) with `geneseed loop init --contracts <globs>` so the expand and contract steps stop for a human.",
+  "description": "Change an interface with live consumers — an API, a schema, an event — as expand, migrate one consumer per iteration, contract: plan it for the user to review, then apply, test, check old and new consumers, and review. Contract files (OpenAPI, AsyncAPI, protobuf, Avro, GraphQL schemas, Flyway and Liquibase migrations) block for a human by default; `geneseed loop init --contracts <globs>` appends more, and LOOP.md's `contracts` can be trimmed.",
   "nodes": ["migration-plan", "identify", "apply", "test", "compat-check", "review"],
   "start": "migration-plan",
   "edges": [
@@ -21,5 +21,8 @@
     { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
     { "name": "review-fix", "nodes": ["apply", "test", "compat-check", "review"], "max": 3 }
   ],
-  "contracts": []
+  "contracts": [
+    "**/openapi*.yaml", "**/openapi*.yml", "**/openapi*.json", "**/asyncapi*.yaml", "**/*.proto", "**/*.avsc",
+    "**/*.graphqls", "**/db/migration/**", "**/db/changelog/**"
+  ]
 }

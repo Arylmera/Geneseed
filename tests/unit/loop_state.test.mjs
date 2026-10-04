@@ -532,7 +532,7 @@ test('N3: recordOutcome with no note pushes nothing to notes', () => {
 // G2 — the human gate. A `gate: human` brick's outcome (and note) is recorded, then the
 // transition is HELD: `awaiting: {kind: 'gate', node, outcome, note?}` whatever the preset and
 // the score. `ok` follows the held edge; `no` stops; `amend` re-runs the same node (its
-// validation kept), at most 3 times per node per run. Every answer leaves a note; a passed gate
+// validation kept), at most 3 times per node per iteration (a new card gets its own 3). Every answer leaves a note; a passed gate
 // also lands in the unit's trailers (`Loop-Gates`) and history. ORDER on one mutate brick: the
 // declared score's blocking stop comes first, at its usual point before the brick runs; the
 // gate after its outcome; the diff's blocking stop after the gate releases the transition — so
@@ -645,6 +645,31 @@ test('G2: a ring exhausted by the held edge re-splits only after ok', () => {
   assert.deepEqual(recordOutcome(s, GB, 'fail').awaiting, { kind: 'gate', node: 'write', outcome: 'fail' });
   assert.equal(s.resplit, false);
   assert.deepEqual(decideAwaiting(s, GB, 'ok'), { discard: true, resplit: true });
+});
+
+// The amend cap is per node PER ITERATION: the next iteration's card is a new draft with its
+// own three amends, so a long run is not stopped by amends spent on earlier, accepted units.
+test('G2: the amend cap resets for the same node in the next iteration', () => {
+  const s = gstart(); atWrite(s);
+  for (let i = 1; i <= 3; i += 1) { recordOutcome(s, GB, 'pass'); decideAwaiting(s, GB, 'amend', `a${i}`); }
+  recordOutcome(s, GB, 'pass');
+  assert.deepEqual(decideAwaiting(s, GB, 'ok'), { verify: true });
+  scoreDiff(s, [file('src/a.js')]);
+  assert.equal(s.iteration, 2);
+  recordOutcome(s, GB, 'more', { card: { intent: 'w2', writeSet: ['src/a.js'], actions: ['logic'] } });
+  scoreDeclared(s);
+  recordOutcome(s, GB, 'pass');
+  assert.deepEqual(decideAwaiting(s, GB, 'amend', 'b1'), { resumed: true });
+  assert.deepEqual(s.gateAmends, { 'write@1': 3, 'write@2': 1 });
+});
+
+// `gateOn` holds only the listed outcomes: the rest follow their edge at once, ungated.
+test('G2: gateOn holds only its listed outcomes', () => {
+  const B = new Map([...GB, ['draft', { ...GB.get('draft'), gateOn: ['pass'] }]]);
+  const s = gstart();
+  assert.deepEqual(recordOutcome(s, B, 'fail'), { stopped: 'draft reported fail' });
+  const t = gstart();
+  assert.deepEqual(recordOutcome(t, B, 'pass').awaiting, { kind: 'gate', node: 'draft', outcome: 'pass' });
 });
 
 // A gate passed twice in one unit is listed once, as Loop-Bricks lists a node once.

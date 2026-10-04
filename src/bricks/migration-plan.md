@@ -14,8 +14,8 @@ file.
 
 The user reviews the plan before the loop continues: write the steps, one per line, then the
 contract files, to a file in the OS temp directory and report that file's path with the outcome.
-Those files belong in LOOP.md's `contracts` (`geneseed loop init --contracts <globs>`), so the
-expand and contract steps stop for a human.
+Those files belong in LOOP.md's `contracts`, so the expand and contract steps stop for a human:
+the user adds any the template's defaults miss to LOOP.md's `contracts` before answering ok.
 
 Report `pass` with the plan. Report `fail` if no backward-compatible path exists, naming what
 forces the break.

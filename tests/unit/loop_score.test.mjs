@@ -53,6 +53,11 @@ test('actual risk only ever RAISES the declared score', () => {
     { score: 0.8, reasons: ['contract files: api/openapi.yaml'] });
   // backslash paths compare equal to forward-slash write sets (Windows)
   assert.equal(actualRisk(0.4, [f('src\\a.js')], { writeSet: ['src/a.js'] }).score, 0.4);
+  // a write-set entry is a glob too: a tool's generated store (ArchUnit's archunit_store/) is inside
+  assert.deepEqual(actualRisk(0.4, [f('src/test/resources/archunit_store/stored.rules'), f('src/a.js')],
+    { writeSet: ['**/archunit_store/**', 'src/a.js'] }), { score: 0.4, reasons: [] });
+  assert.deepEqual(actualRisk(0.4, [f('src/b.js')], { writeSet: ['src/*.ts'] }),
+    { score: 0.8, reasons: ['outside the write set: src/b.js'] });
   // declared higher than any escalation: declared wins
   assert.equal(actualRisk(0.9, [f('b.js')], { writeSet: [] }).score, 0.9);
 });

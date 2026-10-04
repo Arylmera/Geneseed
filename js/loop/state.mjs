@@ -325,7 +325,7 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
 
   const edge = state.graph.edges.find((e) => e.from === from && e.on === outcome);
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);
-  if (brick.gate === 'human') {
+  if (brick.gate === 'human' && (!brick.gateOn || brick.gateOn.includes(outcome))) {
     state.status = 'awaiting';
     state.awaiting = { kind: 'gate', node: from, outcome, ...(note ? { note } : {}) };
     return { awaiting: state.awaiting };
@@ -409,15 +409,17 @@ const GATE_MAX_AMENDS = 3;
  * the user's words — so the run's notes say each gate was answered and how. `ok` follows the held
  * edge and lists the node under the unit's `Loop-Gates`; `no` stops; `amend` re-runs the same
  * node with the note in `notes` (its `validated` untouched — a mutate gate need not re-score),
- * `GATE_MAX_AMENDS` times per node per run (`gateAmends` is never reset by a unit), and the next
+ * `GATE_MAX_AMENDS` times per node per iteration (`gateAmends` is keyed `node@iteration` and never
+ * reset, so the next iteration's card — a new ADR, say — gets its own budget), and the next
  * one stops: three rounds of review that did not converge are a conversation, not a loop.
  */
 function decideGate(state, bricks, verdict, note, { node, outcome }) {
   state.notes.push(`iteration ${state.iteration} (gate at ${node}, ${verdict})${note ? `: ${note}` : ''}`);
   if (verdict === 'no') return stop(state, `gate rejected at ${node}${note ? `: ${note}` : ''}`);
   if (verdict === 'amend') {
-    state.gateAmends = { ...state.gateAmends, [node]: (state.gateAmends?.[node] ?? 0) + 1 };
-    if (state.gateAmends[node] > GATE_MAX_AMENDS) return stop(state, `gate amended ${GATE_MAX_AMENDS} times at ${node}`);
+    const key = `${node}@${state.iteration}`;
+    state.gateAmends = { ...state.gateAmends, [key]: (state.gateAmends?.[key] ?? 0) + 1 };
+    if (state.gateAmends[key] > GATE_MAX_AMENDS) return stop(state, `gate amended ${GATE_MAX_AMENDS} times at ${node}`);
     state.node = node;
     return { resumed: true };
   }

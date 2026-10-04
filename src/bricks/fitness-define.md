@@ -10,11 +10,12 @@ Turn the requirement's architecture rule into an executable test in the suite, w
 own tools first: ArchUnit for Java (a `FreezingArchRule`, whose violation store is the
 allowlist), then dependency-cruiser, import-linter, eslint-plugin-boundaries or size-limit.
 Record today's violations in an allowlist beside the test so the suite stays green — each later
-iteration removes one entry. Touch only the test, its allowlist and the tool's test-scoped setup.
+iteration removes one entry. Touch only the test, its allowlist and the tool's test-scoped setup,
+and declare the tool's generated store as a glob in the write set (`**/archunit_store/**`).
 
 The user reviews the rule before the loop continues: write the rule in one sentence, the test's
 path, the allowlist's path and its entry count to a file in the OS temp directory and report that
 file's path with the outcome.
 
 Report `pass` once the test runs green with the allowlist in place. Report `fail` if the rule
-cannot be checked deterministically, naming what is ambiguous.
+cannot be checked deterministically, with the note file naming what is ambiguous.

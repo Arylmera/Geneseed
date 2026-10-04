@@ -140,8 +140,10 @@ export function actualRisk(declared, files, {
   const w = { ...WEIGHTS, ...overrides };
   let score = declared;
   const reasons = [];
+  // A write-set entry is a glob too (a plain path matches itself): a tool's generated store,
+  // ArchUnit's archunit_store/**, cannot be named file by file before the tool writes it.
   const inSet = new Set(writeSet.map(slash));
-  const outside = files.filter((f) => !inSet.has(slash(f.file)));
+  const outside = files.filter((f) => !inSet.has(slash(f.file)) && !matchesAny(writeSet, f.file));
   if (outside.length) {
     score = Math.max(score, 0.8);
     reasons.push(`outside the write set: ${outside.map((f) => slash(f.file)).join(', ')}`);
