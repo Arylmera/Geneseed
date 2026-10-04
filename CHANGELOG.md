@@ -9,6 +9,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **Five loop templates** — `tdd` (plan, then write each failing test before the code that passes
+  it), `legacy-tests` (pin undocumented behaviour with characterization tests, mutation-checked,
+  production code untouched), `legacy-refactor` (pin current behaviour once, then refactor behind
+  that net), `deps-upgrade` (upgrade one package or group per iteration, breaking changes read
+  before the bump, a lowered `delete` weight so lockfile churn doesn't force a blocking score),
+  and `ci-repair` (triage the current commit's failing CI checks and fix one code failure per
+  iteration).
+- **Five bricks** backing the templates above — `red-test`, `characterize`, `mutation-check`
+  (reports `unavailable` rather than a silent `pass` when no mutation tool is on the stack),
+  `upgrade-scout`, `ci-triage` (reports `done` rather than green when CI has no run for HEAD).
+- **`geneseed loop record --note` / `--note-file`** — carries a `read` brick's finding (a plan, a
+  review finding, a mutation gap, a CI classification) into `LOOP.md`'s notes so it survives into
+  the next brick and the next iteration; `--note-file` for anything multi-line or that mentions
+  `git commit`/`push`, which a shell argument can't carry safely.
 - **Console: Loops › Active tab** — every loop `geneseed loop init` has launched, discovered via a
   new **loop registry** (`$XDG_CONFIG_HOME/geneseed/loops.json`, identity only — `LOOP.md` stays
   the source of state) instead of a worktree scan. `GET /api/loops/active` reports each loop's
@@ -18,6 +32,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   its iteration history. A per-loop preset picker (`POST /api/loops/preset`) rewrites `LOOP.md`'s
   `preset`, applying from the next score on — the tab's only write; no `decide` and no relaunch
   from the page. Only loops launched on this version or later are registered.
+
+### Fixed
+- A read-setup brick's plan or review findings no longer vanish between steps — `record --note`
+  / `--note-file` writes them into `LOOP.md`'s notes instead of leaving them in the brick's own,
+  discarded context.
 
 ## [3.12.0] — 2026-10-03
 
