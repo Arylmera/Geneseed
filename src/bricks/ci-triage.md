@@ -1,16 +1,18 @@
 ---
 name: ci-triage
-description: Read the failing CI checks on this branch and pick one code failure to fix, or stop.
+description: Read the failing CI checks for this commit and pick one code failure to fix, or stop.
 effect: read
 agent: explorer
 outcomes: more, done
 ---
-Read the failing checks' LOGS for the current branch (`gh run view --log-failed`), waiting for a
-pending run to finish — never guess from a check's title. Classify each failure as code, flaky or
-infra. Never edit, create or delete any file: this brick only reads.
+Key on the commit, not the branch: `gh run list --commit <HEAD sha> --json databaseId,status,conclusion`,
+wait on a pending run with `gh run watch <id>`, then read `gh run view <id> --log-failed` — never
+guess from a check's title. Classify each failure as code, flaky or infra. Never edit any file.
+`ci-repair` needs CI to run on `loop/*` branches: with no run for HEAD, report `done` with the
+note "CI does not run for <sha>" — never as green.
 
-Write the classification, one failure per line, to a file in the OS temp directory and pass it
-as `--note-file <path>` with the outcome.
-Report `more` with a card for ONE code failure, passed as `--card`: {"intent": "<fix check X:
-cause>", "writeSet": ["<files the fix touches>"], "actions": ["<kinds>"]}.
-Report `done` when CI is green, or when only flaky or infra failures remain — naming them.
+Write the classification, one failure per line, to a file in the OS temp directory and report
+that file's path with the outcome. Report `more` with a card for ONE code failure:
+{"intent": "<fix check X: cause>", "writeSet": ["<files the fix touches>"],
+ "actions": ["<each of: format, imports, rename, logic, new-file, api, delete, architecture>"]}
+Report `done` when CI is green for HEAD, or only flaky or infra failures remain — naming them.

@@ -4,7 +4,7 @@
 
 **Trigger:** the user asks to run a loop, or to work a requirement in small validated
 iterations, each one committed on its own; or names a loop template (`bugfix`, `refactor`,
-`feature`).
+`feature`, `tdd`, `legacy-tests`, `legacy-refactor`, `deps-upgrade`, `ci-repair`).
 
 Default trust preset: **{{TRUST_LABEL}}**
 
@@ -48,15 +48,15 @@ Repeat `geneseed loop next` and act on its JSON:
   `geneseed loop decide --verdict ok|no|amend --note "<their words>"` and continue.
 - **`{verify, run}`** — run exactly the `run` command it prints.
 - **`{node, validate: true}`** — score the card before the brick runs:
-  `geneseed loop score --declared` (the card `identify` recorded), or for a setup brick with no
+  `geneseed loop score --declared` (the card the iteration head recorded), or for a setup brick with no
   card `geneseed loop score --declared --actions <kinds> --write-set <files> --intent <label>`.
   `blocking` turns into an `{awaiting}` on the next `next`.
 - **`{node}`** — run the brick: dispatch its `agent` (or follow its `skill`) with the `prompt`,
   the `card` and the `notes`. Then report the outcome, one of its `outcomes`:
-  `git status --porcelain | geneseed loop record --outcome <outcome>` — `identify` adds
-  `--card '<card json>'` when it reports `more`; carry a finding a read brick must not lose
-  (`plan`'s ordered list, `review`'s `fail` findings) into `notes` with `--note "<short, one
-  line, no git command in it>"`, or `--note-file <path>` for anything longer or mentioning git.
+  `git status --porcelain | geneseed loop record --outcome <outcome>` — the iteration head
+  (`identify`, `upgrade-scout`, `ci-triage`) adds `--card '<card json>'` when it reports `more`;
+  a brick that reports a note file's path gets `--note-file <path>`, so its finding lands in
+  `notes`; `--note "<short, one line, no git command>"` only for a note you write yourself.
 - **`{terminal: "$close"}`** — see *The end*. **`{terminal: "$stop"}`** — report the `reason`
   and the `summary`, and leave the branch as it is.
 
