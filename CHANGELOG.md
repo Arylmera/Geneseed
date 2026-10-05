@@ -8,6 +8,60 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.15.0] — 2026-10-05
+
+**Upgrading:** re-emit (`geneseed rebuild-all`) so OpenCode installs get the hardened plugins and
+the corrected command layer; then `geneseed web restart` (and a hard reload).
+
+### Security
+- **OpenCode notify plugin** — a session title containing a typographic quote (`’`) could close
+  the PowerShell string and run code; title and body now travel through environment variables,
+  and the notifier no longer opens a visible console window.
+- **OpenCode guard** — `rm -rf /*`, `rm -rf ~/*`, `rm -rf -- /` and `rm -r -f /` are blocked
+  (only bare `rm -rf /`, which GNU rm already refuses, was caught before).
+- **Memory names** — a model-written memory named `MEMORY`/`README`, or differing only in case
+  from an existing fact, is refused instead of overwriting the index or another fact (Claude
+  `learn` hook and OpenCode learn plugin); the console's delete endpoint compares the reserved
+  names case-insensitively.
+- **Web console** — POST requests are checked for Host and token before the body is read, and
+  bodies over 1 MiB are refused; `/api/item/config/<name>` serves only the known config files.
+- **No cwd lookups on Windows** — `git`, `java`, `taskkill` and `powershell` are resolved through
+  PATH only, never the current directory, so a binary planted in an untrusted clone can't run.
+- **`.geneseed-theme`** — a path-like marker value is refused instead of loading an arbitrary
+  `.json` file as a theme.
+
+### Fixed
+- **`geneseed upgrade` kept your settings** — it re-rendered an OpenCode install with only its
+  theme and emit, resetting footprint, posture, mode, doctrine packs and excluded rules to the
+  defaults; it now reads the install's own values before pulling. The doctor rollback uses
+  `reset --keep` (no longer discards edits made during the doctor run), a deleted upstream is
+  reported instead of "already up to date", and `bootstrap` exits 1 when the update failed.
+- OpenCode: `/code-review` is emitted again (the skill had been renamed); the command and
+  orchestrator files no longer overwrite — and then uninstall — a file you already had; the
+  learn plugin no longer exports non-functions; the context cache is per project; same-day
+  workflow runs no longer collide, and kept worktrees live under `.geneseed/worktrees/`.
+- `agent-overrides.json` values that are not plain strings or numbers are skipped with a warning
+  instead of crashing the emit or injecting frontmatter; Claude-family hosts warn about the keys
+  they ignore.
+- In a repo with both `.opencode/` and `.claude/`, each install reads its own loop trust preset.
+- Web console: Restart/update from a foreground `geneseed web` no longer orphans a daemon, the
+  page reloads against the new server, shutdown/restart wait for running jobs, `web stop` no
+  longer forgets a daemon that is still running, finished jobs are trimmed from memory, the Diff
+  page explains project installs, and job polling survives a dropped request.
+- `geneseed link` no longer deletes a `geneseed` it didn't create; the PATH check and quoting
+  are exact.
+- Exclusions follow one rule on every host: `..` and symlinks are resolved on both sides, so an
+  entry spelled through a link excludes the real folder and `exclude remove` can take back any
+  entry that excludes.
+- `geneseed setup` no longer crashes when the deployed theme is one this checkout doesn't ship.
+
+### Changed
+- `uninstall` loads 14 modules instead of 43 (prompts moved to `js/lib/prompt.mjs`); `update`
+  27 instead of 52; the web daemon 40 instead of 51.
+- Web server split along its seams (`routes.mjs`, `catalog.mjs`, `state.mjs`, `user-files.mjs`),
+  removing two import cycles; dead TUI helpers, undriven probe rows and stale comment pointers
+  to the former Python suite removed.
+
 ## [3.14.0] — 2026-10-04
 
 **Upgrading:** re-emit (`geneseed rebuild-all`) so installed hooks pick up the gate fixes and the
