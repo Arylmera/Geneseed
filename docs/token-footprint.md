@@ -35,11 +35,13 @@ pointer to the host's own inventory instead, ~1.9k tokens lighter. A session fil
 byte-identical to its seed is skipped — it says nothing — so a fresh install injects none
 of them; until 2026-10 the hook read them from the repo root, where a Claude-shaped install
 never puts them, and none reached the session at all. The
-eager-injection path is budget-capped identically everywhere — 16 KB per file
-(cut at a line break, with a marker saying so) and 48 KB per session (files past
-the budget are listed lazy with the reason) — so a 40k-character README no
-longer leaves whole every session, and growing Memory degrades every host the
-same way instead of one silently falling behind. The hook also **never injects
+eager-injection path is budget-capped on every host. The SessionStart hook (Claude Code,
+Bob, OpenClaude) keeps its whole payload under 9,000 characters: Claude Code persists a
+hook output past ~10k to a file and shows the model a 2 KB preview, so until 2026-10 a
+doc-heavy repo's context was cut off unannounced. Session files come first, eager docs
+are injected whole or listed lazy with the reason. The OpenCode plugin has no such cap
+and keeps 16 KB per file / 48 KB per session. Both fold a lazy listing: three or more
+docs in one folder become one `dir/ — N docs` line. The hook also **never injects
 the root file the host loads by itself** (`CLAUDE.md` on Claude Code,
 `AGENTS.md` on Bob, `AGENT.md`/`AGENTS.md`/`CLAUDE.md` on OpenCode):
 until 2026-09 it did, and the whole harness was paid twice per session.
@@ -106,11 +108,12 @@ token counter also includes, none of which Geneseed controls:
 2. **Your repo's docs, injected eagerly** — the context delivery
    (plugin on OpenCode, SessionStart hook on Claude Code / Bob / OpenClaude) discovers and
    injects `README.md`, `CONTRIBUTING.md`, and files under `docs/`, up to the
-   48 KB budget (≈12k tokens). A doc-heavy repo fills it.
+   budget: 9,000 characters for the whole hook payload (≈2.3k tokens), 48 KB on
+   OpenCode (≈12k tokens).
 3. **Wiki eager entries** plus the lazy listing of the rest, if a wiki is
    configured.
 4. **Grown Memory/Notebook** — the emitted starter set is ~1.2k, but both
-   accumulate with use (same 48 KB shared budget).
+   accumulate with use (same shared budget).
 5. **Other instruction files the host also loads** — a global install plus a
    per-repo install, a personal `~/.claude/CLAUDE.md`, or MCP servers each add
    their own share.

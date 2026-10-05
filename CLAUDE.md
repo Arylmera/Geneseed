@@ -88,6 +88,16 @@ every tool call of every session. And a stray `console.log` there does not warn 
 signal through stdout JSON and return 0 on every path, so a printed byte turns a blocking gate
 silently permissive.
 
+**A hook's stdout is capped by the host, not by us.** Claude Code saves a hook output past
+roughly 10k characters to a file and hands the model a 2 KB preview — no warning, everything
+after the cut is gone (observed 2026-10 on 16.5 KB and 25.6 KB SessionStart outputs; the exact
+threshold is undocumented). So `cmdContext` keeps its *whole* payload under `OUTPUT_BUDGET`
+(9 000), counting each line at +2 because stdout is `\r\n` on Windows — a line-per-entry listing
+overran by its line count before that. Measure a hook change with `node bin/geneseed-hook.mjs
+context --root <install> | wc -c`. The OpenCode plugin injects through the system prompt and
+has no such cap, which is why its budget stays 48 KB. The Claude hook injects `wiki.jsonc` as
+raw text and never renders wiki entries; the OpenCode plugin does — a known parity gap.
+
 **Adding any tracked file fails the packaging suite** until it has a row, with a written reason, in
 the SHIPS or WITHHELD partition of `tests/unit/package_manifest.test.mjs`.
 
