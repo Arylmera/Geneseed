@@ -98,6 +98,13 @@ context --root <install> | wc -c`. The OpenCode plugin injects through the syste
 has no such cap, which is why its budget stays 48 KB. The Claude hook injects `wiki.jsonc` as
 raw text and never renders wiki entries; the OpenCode plugin does — a known parity gap.
 
+**Uninstall never needs a backup, by construction.** A user's root file gets a delimited
+`<!-- BEGIN/END GENESEED -->` block (`managedBlockWrite`/`managedBlockRemove`,
+`js/hosts/settings.mjs`); settings and `opencode.json(c)` are merged key by key and refused when
+commented; skills, agents and `.gitignore` are claim-on-create (`claimer`, `js/hosts/native.mjs`)
+and uninstall deletes only manifest-owned paths. The user decided (2026-10) that this is enough —
+do not add a snapshot/restore layer.
+
 **Adding any tracked file fails the packaging suite** until it has a row, with a written reason, in
 the SHIPS or WITHHELD partition of `tests/unit/package_manifest.test.mjs`.
 
