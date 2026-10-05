@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- The context hook (Claude Code, Bob, OpenClaude) now keeps its whole output under 9,000 characters. Claude Code shows the model only a preview of a hook output past ~10k, so a doc-heavy repo lost its context silently — this repo's was 25.6 KB, now 2.5 KB. Eager docs that do not fit are listed lazy with the reason; the lazy listing folds three or more docs in one folder into `dir/ — N docs` and ends in a count if it is still too long. The OpenCode plugin folds its project listing the same way.
+
 ## [3.15.0] — 2026-10-05
 
 **Upgrading:** re-emit (`geneseed rebuild-all`) so OpenCode installs get the hardened plugins and

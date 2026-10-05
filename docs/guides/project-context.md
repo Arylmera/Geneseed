@@ -25,7 +25,7 @@ With no configuration, the context step finds these files:
 - **Lazy:** `docs/`, `doc/`, `documentation/`, `architecture/`, `adr/` and `ADR/`, monorepo `packages/*/README.md` and `apps/*/README.md`, and any other root `*.md`.
 - **Never scanned:** `node_modules`, `.git`, `dist`, `build`, `vendor`, `.next`, `target`, `.venv`, `__pycache__`, `.opencode` and `.harness`.
 
-Eager files share a 48 KB budget per session. An eager file that would go over the budget is listed instead, to be read on demand.
+On Claude Code, Bob and OpenClaude the whole injection stays under 9,000 characters, because Claude Code hands the model only a short preview of a hook output past about 10,000 and keeps the rest in a file. Your session files come first, then eager files whole; an eager file that does not fit is listed instead, to be read on demand. On OpenCode eager files share a 48 KB budget. On every host, three or more docs in one folder are listed as that folder with a count (`docs/guides/ — 30 docs`), not file by file.
 
 On OpenCode the context plugin does this work. On Claude Code, Bob and OpenClaude, the session-start hook does it (`geneseed-hook context`). Both read the same override file, described next.
 

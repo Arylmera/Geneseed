@@ -96,11 +96,22 @@ const NATIVE_ROOT = {
   openclaude: ['AGENTS.md', 'CLAUDE.md'],
 };
 
-// Eager injection budget: a root README of 40k chars was going out whole, every session and
-// every compaction, and cost more than the harness itself. Per-file cut at the last line
-// break under the cap; files that would push the total over the budget are listed lazy.
-const EAGER_FILE_BYTES = 16 * 1024;
-const EAGER_TOTAL_BYTES = 48 * 1024;
+// The whole payload's budget, in characters. Claude Code does not hand a hook's stdout to the
+// model past roughly 10k characters: it saves the output to a file and the model sees a 2 KB
+// preview, so everything after the cut is lost without a word. Observed 2026-10 (a 25.6 KB and
+// a 16.5 KB SessionStart output, both persisted); the exact threshold is not documented, hence
+// the margin. The old 48 KB eager budget never bound — the host's cap always cut first.
+// Priority inside the budget: session files (the user's own), then eager docs (whole, or
+// listed lazy), then the lazy listing, folded per directory and cut with a count.
+const OUTPUT_BUDGET = 9000;
+// Kept back from the eager docs so the lazy listing always has room to say what exists.
+const LAZY_RESERVE = 1500;
+// A directory with this many undescribed lazy files is listed once, with its count.
+const LAZY_FOLD_AT = 3;
+// What a line costs against the budget: its characters plus a terminator counted as two,
+// because stdout goes out as \r\n on Windows — a 144-line listing overran by 137 before this.
+// Multi-line text pays one more per inner line break, for the same reason.
+const cost = (s) => s.length + (s.match(/\n/g) || []).length + 2;
 
 // The files the root instruction file names for session start, relative to the HARNESS dir
 // (`--root`: `.claude/`, `.bob/`, a global config dir) — not to the repo root discovery walks,
@@ -331,14 +342,58 @@ export function resolveContextSets(root, hookRoot = null) {
 }
 
 /**
- * Cut `text` at the last line break under EAGER_FILE_BYTES and say where the rest is — one rule
- * for a session file and an eager doc alike. `where` finishes the sentence.
+ * Cut a session file at the last line break that fits `room` and say where the rest is. Only
+ * session files are cut: they are the user's own rules, and half of them beats none. An eager
+ * doc that does not fit is listed lazy instead — a README cut mid-section misleads.
  */
-function capEager(text, where) {
-  if (text.length <= EAGER_FILE_BYTES) return text;
-  const nl = text.lastIndexOf('\n', EAGER_FILE_BYTES);
-  return `${text.slice(0, nl > 0 ? nl : EAGER_FILE_BYTES)}\n`
-    + `[context] truncated at ${EAGER_FILE_BYTES / 1024} KB — read ${where}`;
+function capToRoom(text, room, where) {
+  if (cost(text) <= room) return text;
+  const marker = `\n[context] truncated (session budget) — read ${where}`;
+  let cut = text.length;
+  do cut = text.lastIndexOf('\n', cut - 1);
+  while (cut > 0 && cost(text.slice(0, cut) + marker) > room);
+  return `${cut > 0 ? text.slice(0, cut) : ''}${marker}`;
+}
+
+/**
+ * The lazy listing: a described entry gets its own line; undescribed entries sharing a parent
+ * directory are folded into one `dir/ — N docs` line once there are LAZY_FOLD_AT of them (a
+ * `docs/` tree of 186 files was 186 lines). Lines past `room` become one count line.
+ */
+function lazyLines(entries, root, room) {
+  const byDir = new Map();
+  for (const e of entries) {
+    const dir = path.dirname(disp(e.path, root));
+    // Root files stay listed one by one: there are few, and each name says what it is.
+    if (e.description || e.over || dir === '.') continue;
+    byDir.set(dir, (byDir.get(dir) || 0) + 1);
+  }
+  const lines = [];
+  const folded = new Set();
+  for (const e of entries) {
+    const shown = disp(e.path, root);
+    const dir = path.dirname(shown);
+    if (!e.description && !e.over && byDir.get(dir) >= LAZY_FOLD_AT) {
+      if (folded.has(dir)) continue;
+      folded.add(dir);
+      lines.push(`  - ${dir.replace(/\\/g, '/')}/ — ${byDir.get(dir)} docs`);
+      continue;
+    }
+    const why = e.over ? ' (eager, but over the session budget — read on demand)' : '';
+    lines.push(`  - ${shown}${e.description ? ` — ${e.description}` : ''}${why}`);
+  }
+  const kept = [];
+  let used = 0;
+  for (const [i, l] of lines.entries()) {
+    const tail = `  - … ${lines.length - i} more not listed (session budget)`;
+    if (used + cost(l) + (i < lines.length - 1 ? cost(tail) : 0) > room) {
+      kept.push(tail);
+      break;
+    }
+    kept.push(l);
+    used += cost(l);
+  }
+  return kept;
 }
 
 export function cmdContext(args) {
@@ -379,51 +434,46 @@ export function cmdContext(args) {
   }
 
   const lines = [];
+  // `spent` counts every character pushed, headers included: the budget is the host's cap on
+  // the whole payload, not on the file bodies alone.
   let spent = 0;
+  const push = (...ls) => { for (const l of ls) { lines.push(l); spent += cost(l); } };
   if (session.length) {
-    lines.push('=== SESSION FILES \u2014 your harness files, injected at session start '
+    push('=== SESSION FILES \u2014 your harness files, injected at session start '
       + '(untouched seeds skipped) ===', '');
     for (const s of session) {
-      const text = capEager(s.text, `${s.abs} on demand`);
-      spent += text.length;
-      lines.push(`----- ${s.rel} -----`, text, '');
+      const head = `----- ${s.rel} -----`;
+      push(head, capToRoom(s.text, OUTPUT_BUDGET - LAZY_RESERVE - spent - cost(head) - cost(''),
+        `${s.abs} on demand`), '');
     }
   }
   if (eager.length || lazy.length) {
-    lines.push(`=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`, '');
+    push(`=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`, '');
   }
   const demoted = [];
   for (const entry of eager) {
     const p = entry.path === undefined ? '' : entry.path;
     const desc = entry.description === undefined ? '' : entry.description;
     const target = path.isAbsolute(p) ? p : path.join(root, p);
+    const head = `----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`;
     let text;
     try {
       text = readText(target).replace(/\n+$/, '');
     } catch (e) {
-      lines.push(`----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`,
-        `[context] MISSING eager file: ${asOsError(e, target)}`, '');
+      push(head, `[context] MISSING eager file: ${asOsError(e, target)}`, '');
       continue;
     }
-    text = capEager(text, `${disp(p, root)} on demand for the rest`);
-    if (spent + text.length > EAGER_TOTAL_BYTES) {
-      demoted.push(entry);
+    if (spent + cost(head) + cost(text) + cost('') > OUTPUT_BUDGET - LAZY_RESERVE) {
+      demoted.push({ ...entry, over: true });
       continue;
     }
-    spent += text.length;
-    lines.push(`----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`, text, '');
+    push(head, text, '');
   }
 
   if (lazy.length || demoted.length) {
-    lines.push('--- Lazy entries (load only when the task needs them) ---');
-    for (const entry of [...lazy, ...demoted]) {
-      const p = entry.path === undefined ? '' : entry.path;
-      const desc = entry.description === undefined ? '' : entry.description;
-      const over = demoted.includes(entry)
-        ? ` (eager, but over the ${EAGER_TOTAL_BYTES / 1024} KB session budget \u2014 read on demand)` : '';
-      lines.push(`  - ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''}${over}`);
-    }
-    lines.push('');
+    const title = '--- Lazy entries (load only when the task needs them) ---';
+    push(title);
+    push(...lazyLines([...lazy, ...demoted], root, OUTPUT_BUDGET - spent - cost('')), '');
   }
 
   // Claude Code takes a SessionStart hook's plain stdout as context; Bob reads it the same way.

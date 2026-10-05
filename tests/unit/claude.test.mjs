@@ -1412,32 +1412,66 @@ test('the context verb is silent when it stands down, and the opt-out un-silence
   }));
 });
 
-test('an eager file is cut at 16 KB and the session budget demotes the rest to lazy', () => {
-  // Written out, not recorded: a 40k-char README was leaving whole on every session. The cut
-  // lands on a line break under the cap and says so; a file that would push the session over
-  // 48 KB is listed under the lazy entries with the reason, never silently dropped.
+test('the whole payload stays under 9 000 chars: an eager doc that does not fit is listed lazy', () => {
+  // Written out, not recorded: Claude Code persists a hook's stdout past ~10k chars to a file and
+  // shows the model a 2 KB preview, so a 25.6 KB payload lost everything after its first lines.
+  // The payload, headers included, stays under 9 000. An eager doc that does not fit whole is
+  // listed lazy with the reason — never cut mid-section, never silently dropped — and a small
+  // doc after it still fits.
   withDir((d) => {
     const line = 'x'.repeat(99) + '\n';
-    // Four 20 000-B eager files (AGENTS.md is another tool's root, so it stays eager under
-    // claude). Each is cut to ≤16 384 B plus a one-line marker, ~16.4 KB. Discovery order is
-    // case-folded: AGENTS, CONTRIBUTING, PROFILE, README, user-rules — three cut files plus the
-    // tiny PROFILE.md total ~49.1 KB, just under the 49 152-B budget, and the fourth does not fit.
-    for (const n of ['AGENTS.md', 'README.md', 'CONTRIBUTING.md', 'user-rules.md']) {
-      fs.writeFileSync(path.join(d, n), line.repeat(200), 'utf8');
-    }
+    // Discovery order is case-folded: AGENTS (4 000 B, fits), CONTRIBUTING (6 000 B, would pass
+    // the 7 500-char eager share), PROFILE (tiny, fits), README (6 000 B, does not fit either).
+    fs.writeFileSync(path.join(d, 'AGENTS.md'), line.repeat(40), 'utf8');
+    fs.writeFileSync(path.join(d, 'CONTRIBUTING.md'), line.repeat(60), 'utf8');
     fs.writeFileSync(path.join(d, 'PROFILE.md'), '# p\n', 'utf8');
+    fs.writeFileSync(path.join(d, 'README.md'), line.repeat(60), 'utf8');
     const prev = process.env.GENESEED_ROOT;
     process.env.GENESEED_ROOT = d;
     try {
       const [rc, out] = capturedOut(() => cmdContext({}));
       assert.equal(rc, 0);
-      const cuts = out.match(/\[context\] truncated at 16 KB/g) || [];
-      assert.equal(cuts.length, 3, `expected three cut files, got ${cuts.length}`);
-      assert.ok(/- user-rules\.md \(eager, but over the 48 KB session budget/.test(out),
-        'the over-budget file should be listed lazy with the reason');
-      assert.ok(out.includes('----- PROFILE.md -----'), 'the small file still fits');
-      assert.ok(!out.includes('----- user-rules.md -----'), 'the demoted file was injected anyway');
-      assert.ok(out.length < 48 * 1024 + 2048, `payload ${out.length} B is over budget`);
+      assert.ok(out.includes('----- AGENTS.md -----'), 'the first doc fits whole');
+      assert.ok(out.includes('----- PROFILE.md -----'), 'a small doc after a demoted one still fits');
+      for (const n of ['CONTRIBUTING.md', 'README.md']) {
+        assert.ok(!out.includes(`----- ${n} -----`), `${n} was injected over the budget`);
+        assert.ok(out.includes(`- ${n} (eager, but over the session budget`), `${n} not listed lazy`);
+      }
+      assert.ok(!out.includes('truncated'), 'an eager doc was cut instead of listed');
+      assert.ok(out.length < 9000, `payload ${out.length} chars is over budget`);
+    } finally {
+      if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
+    }
+  });
+});
+
+test('the lazy listing folds a directory of undescribed docs into one line, and cuts with a count', () => {
+  // A docs/ tree of 186 files was 186 lines. Three or more undescribed files sharing a parent
+  // directory become `dir/ — N docs`; two stay listed by name (the threshold, both sides); root
+  // files are never folded. A listing still too long for the budget ends in a count line.
+  withDir((d) => {
+    fs.mkdirSync(path.join(d, 'docs', 'many'), { recursive: true });
+    fs.mkdirSync(path.join(d, 'docs', 'two'), { recursive: true });
+    for (let i = 0; i < 5; i++) fs.writeFileSync(path.join(d, 'docs', 'many', `m${i}.md`), '# m\n');
+    for (let i = 0; i < 2; i++) fs.writeFileSync(path.join(d, 'docs', 'two', `t${i}.md`), '# t\n');
+    for (let i = 0; i < 3; i++) fs.writeFileSync(path.join(d, `NOTE${i}.md`), '# n\n');
+    const prev = process.env.GENESEED_ROOT;
+    process.env.GENESEED_ROOT = d;
+    try {
+      let [, out] = capturedOut(() => cmdContext({}));
+      assert.ok(out.includes('  - docs/many/ — 5 docs'), `five files not folded:\n${out}`);
+      assert.ok(!out.includes('m0.md'), 'a folded file was still listed by name');
+      assert.ok(out.includes('docs/two/t0.md') && out.includes('docs/two/t1.md'),
+        'two files were folded below the threshold');
+      assert.ok(out.includes('  - NOTE0.md'), 'a root file was folded');
+
+      // Over budget: 400 root files of ~60-char names cannot all be listed in 9 000 chars.
+      for (let i = 0; i < 400; i++) {
+        fs.writeFileSync(path.join(d, `${'n'.repeat(50)}${i}.md`), '# n\n');
+      }
+      [, out] = capturedOut(() => cmdContext({}));
+      assert.ok(/ {2}- … \d+ more not listed \(session budget\)/.test(out), 'no count line');
+      assert.ok(out.length < 9000, `payload ${out.length} chars is over budget`);
     } finally {
       if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
     }

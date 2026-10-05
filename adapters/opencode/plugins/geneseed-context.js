@@ -117,6 +117,8 @@ const MAX_DEPTH = 6
 // the head of each file (enough for an H1) rather than the whole thing — a large
 // docs/ tree must not cost one full-file read per entry on every session start.
 const LAZY_HEADING_LIMIT = envNum("GENESEED_LAZY_HEADINGS", 64)
+// Same threshold as the Claude hook's LAZY_FOLD_AT.
+const LAZY_FOLD_AT = 3
 const HEADING_SLICE_BYTES = 4096
 
 // Quiet by default — OpenCode surfaces a plugin's stderr in the UI (red text). Set
@@ -664,7 +666,7 @@ async function wikiSets() {
 // Render one eager+lazy set into `out`. The budget state (eager bytes, heading
 // reads) is SHARED across segments — project context and every wiki draw from the
 // same caps, so the whole block stays bounded no matter how many wikis are declared.
-async function renderSet(out, { eager, lazy }, state) {
+async function renderSet(out, { eager, lazy }, state, { fold = false } = {}) {
   const perFile = EAGER_FILE_KB * 1024
   const total = EAGER_TOTAL_KB * 1024
   const demoted = []
@@ -692,8 +694,26 @@ async function renderSet(out, { eager, lazy }, state) {
     state.injected++
   }
 
+  // The project listing folds like the Claude hook's (js/hosts/hooks-context.mjs): three or more
+  // undescribed docs sharing a parent directory become one `dir/ — N docs` line — a docs/ tree
+  // of 186 files was 186 lines on every session. Root files never fold. A wiki listing keeps its
+  // per-note headings: a vault is navigated by them, and it carries its own cap.
+  const byDir = new Map()
+  if (fold) {
+    for (const l of lazy) {
+      const dir = path.posix.dirname(l.rel.replace(/\\/g, "/"))
+      if (!l.desc && dir !== ".") byDir.set(dir, (byDir.get(dir) || 0) + 1)
+    }
+  }
+  const folded = new Set()
   const lazyLines = []
   for (const l of lazy) {
+    const dir = path.posix.dirname(l.rel.replace(/\\/g, "/"))
+    if (!l.desc && byDir.get(dir) >= LAZY_FOLD_AT) {
+      if (!folded.has(dir)) lazyLines.push(`  - ${dir}/ — ${byDir.get(dir)} docs`)
+      folded.add(dir)
+      continue
+    }
     let head = l.desc
     // Only crack open files we have no description for, and cap how many — bounded by
     // a head-slice read so a big docs/ tree stays cheap on every session start.
@@ -734,7 +754,7 @@ async function buildBlock(sets, wikis = [], commands = [], session = []) {
   }
 
   const proj = []
-  await renderSet(proj, sets, state)
+  await renderSet(proj, sets, state, { fold: true })
 
   if (commands.length) {
     proj.push("--- Project commands (runnable targets discovered in the repo root) ---")
