@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.16.0] — 2026-10-05
+
+**Upgrading:** re-emit (`geneseed rebuild-all`) so the context hook stays under Claude Code's output cap. To drop skills you never use, rebuild an install with `--exclude-skills <name,…>` (see [Exclusions](docs/concepts/exclusions.md)).
+
 ### Added
 
 - `--exclude-skills <name,…>` leaves skills you never use out of an install, on every host: their files, their catalogue rows and any OpenCode command that runs them. The install records the list on an `Excluded skills:` line, and `upgrade`, `rebuild-all`, `diff`, `setup` and the web console keep it. Unknown skills are refused, and so are the ten the harness links to by path. `status` shows `skills off: …`.
