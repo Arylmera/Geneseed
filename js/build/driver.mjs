@@ -91,7 +91,8 @@ const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orc
  *  It is invisible on a machine whose paths are already canonical, which is every machine
  *  this ran on until GitHub's Windows runner handed it a `C:\\Users\\RUNNER~1\\...` and the
  *  two CLIs printed the same directory under two different names — a 70-byte difference in a
- *  line compared BYTE for byte by `test_the_two_entry_points_agree_on_stdout_BYTES`. The
+ *  line the former Python suite compared BYTE for byte; `tests/unit/resolve_out.test.mjs` pins
+ *  it now. The
  *  argument to `resolvePath` is made absolute first so its `expanduser` cannot fire: the
  *  reference does not expand `~` here, and a bare `~` is a legal directory name. */
 export function resolveOut(raw) {
@@ -256,7 +257,7 @@ function projectSurvivors(emitName) {
  * RENDER and WIRE already ran in Node before P4; what lived only in Python was the stage
  * either side of them: reading the previous manifest (PRE), pruning what this layer no
  * longer owns, writing the manifest atomically, and the summary line. All five stages now
- * run in one process, in the order `test_emit_phase_order.py` pins for the Python twin:
+ * run in one process, in the order `tests/unit/emit_phase_order.test.mjs` pins:
  * RENDER -> WIRE -> PRUNE -> MANIFEST -> VERIFY (opencode has no VERIFY; it writes no
  * settings file of its own).
  */
@@ -512,9 +513,8 @@ const claudeShaped = (name) => (cfg, args, out) => {
 
 /**
  * build.py:437-466 — the POST stage, which writes markers and records the install and
- * wires NOTHING. `test_the_post_emit_stage_wires_nothing` classifies that stage on the
- * Python side; this is the same stage on this side, and it stays after the dispatch for
- * the same reason.
+ * wires NOTHING. `tests/unit/emit_phase_order.test.mjs`'s 'the post-emit marker stage wires
+ * nothing' classifies it, and that is why it stays after the dispatch.
  *
  * `writeText`, never `writeFileSync`: Python's `Path.write_text` opens in text mode with
  * `newline=None` and translates the trailing `\n` to CRLF on Windows. A marker written

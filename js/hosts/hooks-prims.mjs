@@ -23,8 +23,8 @@ import { comparePaths } from '../lib/paths.mjs';
 // none of that reached the hook, because a corpus finds what it is pointed at and nothing
 // named `pyStrPath` was. The consequence was live: `sovereignBypass` compares an
 // `excludes.json` entry against cwd, so a hand-edited `..` entry made the NODE hook stand
-// down for a repo Python still gates. `context/bypass-does-not-match-a-dotdot-entry` is
-// the cell.
+// down for a repo Python still gates. (Since the Python is gone, exclude entries resolve `..`
+// and symlinks on every host — `context/sovereign-bypass-matches-a-dotdot-entry` is the cell.)
 //
 // So the line is not "duplicate rather than couple" — it is "one owner for anything that
 // reproduces a language primitive, wherever it is used". `fs.mjs` carries no

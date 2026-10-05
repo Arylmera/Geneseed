@@ -81,7 +81,7 @@ import os from 'node:os';
 import { ROOT } from '../build/source.mjs';
 import { readMaybe } from './installs.mjs';
 import { printOut, printErr, writeText } from '../lib/fs.mjs';
-import { toPlatformPath } from '../lib/paths.mjs';
+import { toPlatformPath, which } from '../lib/paths.mjs';
 
 const IS_WIN = process.platform === 'win32';
 /** What `cmdUnlink` recognises a written Unix launcher by — see `isOurLauncher`. */
@@ -142,7 +142,11 @@ export function winUserPathScript(action, directory) {
  * false rather than crashing the verb.
  */
 function winUserPath(action, directory) {
-  const r = spawnSync('powershell',
+  // `which`, never a bare name: Windows resolves a bare name against the cwd first, and
+  // `which` never searches the cwd implicitly (see its docblock).
+  const ps = which('powershell');
+  if (!ps) return false;
+  const r = spawnSync(ps,
     ['-NoProfile', '-Command', winUserPathScript(action, directory)],
     { stdio: 'inherit', windowsHide: true });
   if (r.error) return false;

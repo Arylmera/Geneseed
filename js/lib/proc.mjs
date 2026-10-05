@@ -11,9 +11,9 @@
  * that module and six of its spawns used it, so the four spawn sites in `js/inspect/checks-authoring.mjs`,
  * `js/hosts/hooks.mjs`, `js/maintain/setup.mjs` and `js/hosts/link.mjs` each had to remember the flag on their
  * own. Two of them did not — and the miss is BYTE-INVISIBLE: a console window is not
- * something the CLI prints, so every recorded cell under `tests/__snapshots__/` stays green
- * while the windows pop. The property under test never reaches the comparison, which is why
- * a recorded corpus cannot be the gate here. A shared constant plus
+ * something the CLI prints, so every cell of `tests/golden.mjs --cli` stays green while the
+ * windows pop. The property under test never reaches the comparison, which is why a byte
+ * comparison cannot be the gate here. A shared constant plus
  * `tests/unit/spawn_hygiene.test.mjs` is what makes the next spawn site inherit the answer
  * instead of re-deciding it.
  *

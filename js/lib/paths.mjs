@@ -22,7 +22,7 @@ const { X_OK } = constants;
  * BMP), and `str.lower()` is not `toLowerCase()` for a handful of characters.
  *
  * THE SEPARATOR CONVERSION IS NOT OPTIONAL, and it was missing until the byte-bearing
- * corpus in `tests/test_pure_function_parity.py` asked. `ntpath.normcase` is
+ * corpus in the former Python parity suite asked. `ntpath.normcase` is
  * `s.replace('/', '\\').lower()`, and `PurePath._str_normcase` gets the same conversion for
  * free because `Path` has already done it — so BOTH readings of the reference fold slashes
  * and this did not. Every sort call site feeds it `path.join` output or a bare `readdir`
@@ -50,7 +50,7 @@ export const normcase = process.platform === 'win32'
  * a directory depth, and `golden.py` compared CONTENT rather than order. It became visible
  * the first time a full path list was PRINTED \u2014 `geneseed validate -v` \u2014 against a real
  * skills tree that happens to contain both `skills/geneseed/` and `skills/geneseed-code-review/`.
- * `tests/test_maintainer_tools_parity.py` found it and died with the reference it compared
+ * The former Python maintainer-tools test found it and died with the reference it compared
  * against. What HOLDS it now is `tests/unit/maintainer_tools.test.mjs`, and specifically its
  * `theme files are visited in THIS platform's Path collation order` test: it re-derives Python's
  * `sorted(Path)` order for the running platform instead of replaying a recording, so it cannot
@@ -90,7 +90,7 @@ export function within(child, parent) {
  * `Path` is `WindowsPath` on Windows and `PosixPath` everywhere else, and the two parsers
  * disagree about the two things below. A body that is right on one host is therefore wrong
  * on the other, which is exactly how this one passed a whole Windows suite and failed two
- * cases on the first Linux run of `tests/test_pure_function_parity.py`:
+ * cases on the first Linux run of the former Python pure-function parity suite:
  *
  *   * SEPARATORS. `ntpath` treats `\` and `/` alike; `posixpath` treats `\` as an ordinary
  *     filename character. `str(PurePosixPath('C:\\x\\bin\\'))` is that string VERBATIM —
@@ -147,7 +147,7 @@ export function toPlatformPath(s) {
  * `context` cell varies it, and changing it in this phase would be an ungated edit to a verb
  * that crossed three phases ago. Recorded in the spec's "Still owed" with this reproduction.
  *
- * It was gated by a corpus in the retired `tests/test_pure_function_parity.py`; nothing has
+ * It was gated by a corpus in the retired Python pure-function parity suite; nothing has
  * replaced it, and no CLI test can vary the shape.
  */
 export function isAbsolutePath(s) {

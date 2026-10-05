@@ -273,7 +273,8 @@ export function hookPrefix({ runner, entry, platform = process.platform } = {}) 
  * interpreter silently disables every hook in the install. Both halves are gone. `runner` is
  * `process.execPath` — the node already running this file, which by construction exists —
  * so there is nothing left to discover and no way for discovery to fail. P4e kept the
- * unreachable exit-3 branch because `test_the_node_driver_classifies_every_emit` asserts a
+ * unreachable exit-3 branch because 'the driver classifies every emit'
+ * (`tests/unit/node_driver.test.mjs`) asserts a
  * partition it belongs to; nothing asserts a partition over this one, so keeping it would
  * be keeping code no test can reach for no stated reason.
  *
@@ -287,7 +288,8 @@ export function hookPrefix({ runner, entry, platform = process.platform } = {}) 
  *
  * That is correct exactly while the two entry points answer the same verbs the same way, so
  * the gate that used to be a formality is now load-bearing:
- * `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` reads the emitter's wiring
+ * 'the hook entry carries exactly the verbs the emitter wires' (`tests/unit/hook_cli.test.mjs`)
+ * reads the emitter's wiring
  * and `bin/geneseed-hook.mjs`'s VERBS table and requires them EQUAL — a wired verb the entry
  * lacks is a dead hook on every install on the machine, not just this one. The alternative
  * considered and rejected was a per-driver shim path: the path is baked into every already

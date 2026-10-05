@@ -116,7 +116,7 @@ function safePriorDirName(out, priorName) {
 
 /**
  * THE PHASE BOUNDARY MARKER — T8, and the whole of what this port owes
- * `tests/test_emit_phase_order.py`.
+ * `tests/unit/emit_phase_order.test.mjs`.
  *
  * Every emit runs its stages in one order: RENDER* → WIRE* → PRUNE → MANIFEST → VERIFY. RENDER
  * writes files Geneseed owns wholesale; WIRE reconciles files the USER co-owns (the

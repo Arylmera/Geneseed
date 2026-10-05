@@ -56,7 +56,7 @@ import {
 import { readText, isFile, isDir } from '../lib/fs.mjs';
 import { parseJson, formatRepr, formatValue, isTruthy } from '../lib/json.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { normcase, within } from '../lib/paths.mjs';
+import { normcase, which, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { memoryDelete } from '../maintain/memory.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
@@ -254,7 +254,10 @@ function runPicker(cmd, args, done, resultOf) {
  */
 export function apiPickFolder(done) {
   if (process.platform === 'win32') {
-    return runPicker('powershell', ['-NoProfile', '-STA', '-Command', PICK_SCRIPT_WIN], done,
+    // `which`, never a bare name: Windows resolves a bare name against the cwd first.
+    const powershell = which('powershell');
+    if (!powershell) return done({ error: 'folder picker unavailable: powershell not on PATH' });
+    return runPicker(powershell, ['-NoProfile', '-STA', '-Command', PICK_SCRIPT_WIN], done,
       (code, out, err) => {
         if (code !== 0) return { error: (err || out).trim() || 'folder picker failed' };
         const p = out.trim();

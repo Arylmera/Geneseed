@@ -4,9 +4,9 @@
 // excluded for the guard but not for context. These tests hold every copy to the first one,
 // byte for byte, and hold every plugin file to OpenCode's loader contract.
 //
-// Deliberately NOT compared: js/hosts/hosts.mjs's own `sovereignBypass`, which resolves the
-// path with realpath where these copies use path.resolve. Which one is right is an open
-// decision; this file only keeps the plugins agreeing with each other.
+// js/hosts/hosts.mjs's `sovereignBypass` is the same RULE in the harness's own idiom, so it is
+// not compared byte for byte: both follow symlinks on both sides, and tests/unit/
+// excludes_guard.test.mjs holds the harness to a linked entry.
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync, readdirSync } from "node:fs"

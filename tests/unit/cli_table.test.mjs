@@ -5,7 +5,7 @@
  * That file's strongest gate walks `build_argparser()` and asserts the committed table equals it
  * field for field — 25 subparsers, 46 `add_argument` calls. It dies with argparse and NOTHING
  * replaces it: P4 is where the table stops having an oracle, and the honest record of that is
- * `tests/snapshot/cli_help.test.mjs`'s recorded corpus (frozen while the parser existed) plus this file,
+ * the former Python suite's recorded help corpus (retired with the parser) plus this file,
  * which checks every claim the table makes about the program that reads it.
  *
  * ⚠ THE ONE STATE WHERE THE TWO IMPLEMENTATIONS ANSWER DIFFERENTLY ON PURPOSE. The reference
@@ -102,7 +102,7 @@ test('the help width is the terminal width less two, and COLUMNS wins', () => {
   // `helpWidth()` against `shutil.get_terminal_size().columns - 2`. THE THIRD CALLER `parseIntStrict`'s
   // docblock did not have: `$COLUMNS` arrives however the shell set it, so this one strips
   // first — and the port had reached for `parseInt` in a tree that already owned `parseIntStrict` for
-  // exactly this. Every help assertion in `tests/snapshot/cli_help.test.mjs` runs at `COLUMNS=80`, so
+  // exactly this. Every help assertion in the former recorded help corpus ran at `COLUMNS=80`, so
   // both the env-parse branch and the fallback were exercised at one value each.
   const saved = process.env.COLUMNS;
   try {

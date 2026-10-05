@@ -34,25 +34,26 @@
  * became the second and third. Nothing about them changed in the move — the 166-cell
  * acceptance matrix is what licensed attempting it, `status`'s own eleven cells among them.
  *
- * WHAT NO CELL CAN REACH, and where it is gated instead. `tests/harness_golden.py`'s
- * status/version section carries the long form; the short form is that ROOT is not
+ * WHAT NO CELL CAN REACH, and where it is gated instead. The former Python matrix's
+ * status/version section carried the long form; the short form is that ROOT is not
  * redirectable across a process boundary, so three things here are unreachable from any
  * cell: `versionVerdict`'s "up to date" (needs a marker holding a fingerprint no cell can
  * know), `accentFor`'s cyan fallback (an unknown theme is refused upstream by
  * `effectiveTheme`), and the whole ANSI half of `statusLines` (`_color_enabled` is
  * `sys.stdout.isatty()`, and every harness captures stdout through a pipe). All three are
- * PURE FUNCTIONS of their arguments, so all three are gated as a corpus instead:
- * `tests/fixtures/pure_probe.mjs` calls them and `tests/snapshot/pure_snapshot.test.mjs`
- * replays that against `tests/__snapshots__/primitives/`. That was a third answer to the
- * colour question, which had been posed as a choice between shipping it ungated and not
- * shipping it.
+ * PURE FUNCTIONS of their arguments, so the former Python suite gated all three as a corpus
+ * instead — a third answer to the colour question, which had been posed as a choice between
+ * shipping it ungated and not shipping it. That corpus is gone: `tests/unit/lifecycle.test.mjs`
+ * now calls `versionVerdict` and both halves of `statusLines` directly, and nothing pins
+ * `accentFor`'s fallback.
  *
  * `manifestIsClaude` was a FOURTH until wave 2 of the P0/P1 review: it is only reached for
  * a candidate with no known host, and `ROOT/"Harness"` was ordered ahead of the sandbox's
  * own. Both ROOT-relative bundle candidates are gone from this walk and from
  * `installedDefaults`, so the only no-known-host candidate left is `cwd/"Harness"`, which
  * is inside the sandbox. It is reachable now; no cell seeds a manifest without an emit
- * marker, so it is still gated only by the corpus, and that is a gap rather than a wall.
+ * marker, so it is gated only by the direct calls in `tests/unit/claude.test.mjs`, and that is
+ * a gap rather than a wall.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -66,18 +67,14 @@ import {
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
-// three verbs now read them. `defaultTheme`, `manifestIsClaude` and `installedDefaults` are
-// re-exported below because `tests/fixtures/pure_probe.mjs` names this module for two of them
-// and a corpus that followed the code to its new file would stop testing the caller's view.
+// three verbs now read them.
 import {
-  defaultTheme, installedDefaults, installTargets, manifestIsClaude, readJsonMaybe, readMaybe,
+  defaultTheme, installedDefaults, installTargets, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
-
-export { defaultTheme, manifestIsClaude };
 
 // ---- version ---------------------------------------------------------------------------
 
@@ -331,13 +328,13 @@ export function statusLines(d, color = false) {
       + `(${d.facts} fact${d.facts === 1 ? '' : 's'})`],
     ['version', `${d.installed_fp || '(none)'}  ${DOT}  source ${d.source_fp}`],
   ];
-  // ⚠ A ROW, NOT A WIDER `components` LINE, AND THE REASON IS THAT THE CORPUS CANNOT BE
-  // RE-BLESSED. `statusLines` has 30 recorded cases per platform in
-  // `tests/__snapshots__/primitives/`, every one of them holding the box's exact bytes —
-  // including `17 agents · 47 skills · 37 laws` — and the recorder was Python and is gone.
-  // Touching `components` moves all 30; adding a row would too, since the box width is
-  // measured over `rows`. So the row is CONDITIONAL on a key the recorded arguments do not
-  // carry, exactly as `agent_md` below already is, and the recording renders unchanged.
+  // ⚠ A ROW, NOT A WIDER `components` LINE. When this landed, `statusLines` had 30 recorded
+  // cases per platform in the former Python suite's corpus, every one holding the box's exact
+  // bytes — including `17 agents · 47 skills · 37 laws` — and no recorder left to re-bless them.
+  // Touching `components` would have moved all 30; adding a row would too, since the box width
+  // is measured over `rows`. So the row is CONDITIONAL on a key those arguments did not carry,
+  // exactly as `agent_md` below already is. The corpus is gone; a caller without the key still
+  // gets the box it got before.
   //
   // It carries the two tiers `components` cannot: `components` counts the invariants as
   // `laws`, which is still true, and says nothing about the ontology or the packs.

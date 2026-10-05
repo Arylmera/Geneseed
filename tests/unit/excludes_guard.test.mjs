@@ -70,6 +70,24 @@ test('sovereignBypass is true inside an excluded tree, subdirectories included',
   } finally { sb.cleanup(); }
 });
 
+// AN ENTRY SPELLED THROUGH A LINK excludes the real directory: `cwd` is resolved through
+// symlinks/junctions, so the entry must be too, or a user who wrote the link path they
+// `cd` through sees the gates stay on. A junction because Windows creates one without
+// admin rights; on POSIX the type argument is ignored and a plain symlink is made.
+test('sovereignBypass follows a linked excludes entry to the real directory', () => {
+  const sb = makeSandbox();
+  try {
+    const real = path.join(sb.path, 'real-vault');
+    fs.mkdirSync(path.join(real, 'sub'), { recursive: true });
+    const link = path.join(sb.path, 'linked-vault');
+    fs.symlinkSync(real, link, 'junction');
+    const cfg = excludesCfg(sb.path, [link]);
+    inDir(path.join(real, 'sub'), () => {
+      assert.equal(sovereignBypass(cfg), true, 'a linked entry did not exclude its target');
+    });
+  } finally { sb.cleanup(); }
+});
+
 // THE PREFIX TRAP IS THE POINT of the sibling: `vault-sibling` starts with `vault`, so a guard
 // written as a bare `startswith` with no separator test excludes a directory nobody asked to
 // exclude — and the failure is SILENT, because being excluded means the hooks go quiet.

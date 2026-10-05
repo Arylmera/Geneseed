@@ -4,9 +4,11 @@
  * These are definitions, not an adaptation of somebody else's. Every rule below was
  * originally MEASURED against CPython, because the generator these functions serve had to
  * emit bytes indistinguishable from a Python one; that second party is gone and the rules
- * are not. What holds them now is the recorded corpora under `tests/__snapshots__/`, which
- * compare this module's output byte for byte and can never be re-recorded — so a rule here
- * is a frozen fact about what this tool emits, and changing one is a product change.
+ * are not. The recorded corpora that compared this module's output byte for byte went with
+ * the former Python suite; what holds the rules now is `tests/unit/lib_primitives.test.mjs`
+ * (`isFile`/`isDir`), `tests/unit/hook_cli.test.mjs`'s platform-newline count (the stream
+ * funnels), and for the rest only the per-function provenance below. A rule here is still a
+ * frozen fact about what this tool emits, and changing one is a product change.
  *
  * ⚠ NONE OF THESE IS THE NODE DEFAULT, AND THAT IS THE ONE THING TO KNOW BEFORE EDITING ONE.
  * Each is a deliberate divergence from the obvious one-liner, and the obvious one-liner is
@@ -107,10 +109,10 @@ export function copyFile(src, dest) {
  * its caller different BYTES than the Python one: measured at 176 vs 171 for one `context`
  * run before this existed.
  *
- * `harness_golden.py` structurally cannot see the difference — `subprocess` decodes with
- * universal newlines on the way back, folding both shapes to `\n` before any cell compares
- * them, the same shape as the shim's exclusion from `golden.py`. So the gate for it is
- * `test_the_two_entry_points_agree_on_stdout_BYTES`, which captures raw bytes. Moved here
+ * The CLI matrix structurally cannot see the difference — every cell decodes stdout with
+ * universal newlines, folding both shapes to `\n` before anything compares them. So the gate
+ * for it is `tests/unit/hook_cli.test.mjs`'s `every newline the entry points write is the
+ * platform's`, which counts raw bytes. Moved here
  * from `js/hosts/hooks.mjs` in P5c, when `js/inspect/excludes.mjs` became the second caller: a translation
  * that exists twice is a translation that can be fixed once.
  */
@@ -167,10 +169,9 @@ export function withDiscardableStderr(fn) {
  * `emitGlobalInto`.
  *
  * The item it closes: a plain `--emit files` handed its caller 104 bytes where `python
- * build.py` handed over 105, and `tests/golden.py`'s `text=True` capture folds both to the
- * same string. `test_the_two_entry_points_agree_on_stdout_BYTES` grew a `build` row (through
- * `harness build`, which calls this `main` in-process) and a `rebuild-all` row, and those are
- * what can see it.
+ * build.py` handed over 105, and a `text=True` capture folds both to the same string.
+ * `tests/unit/hook_cli.test.mjs`'s newline test carries a `build` row (through `geneseed
+ * build`, which calls this `main` in-process), and that is what can see it.
  *
  * A Buffer chunk passes through untouched: `writeText` owns file bytes and nothing on this
  * path writes binary to a stream, so translating one would be corrupting data rather than

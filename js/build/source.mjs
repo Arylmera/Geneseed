@@ -20,9 +20,9 @@
  * `capabilityLinkRe`'s equivalent override in `stripCapabilityLinks` had no producer either
  * and was deleted outright in the over-engineering cleanup, `cfg` param and all.
  *
- * The move is safe for the reason P5c's was: `tests/golden.py` drives `bin/build-driver.mjs`
- * over 259 cells and compares the tree byte-for-byte, and every one of them builds a cfg
- * from these paths. A depth error or a renamed key fails 259 cells, not zero.
+ * The move is safe for the reason P5c's was: `tests/golden.mjs` drives `bin/build-driver.mjs`
+ * over every emit configuration and requires each to render, and every one of them builds a
+ * cfg from these paths. A depth error or a renamed key fails every cell, not zero.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -160,8 +160,8 @@ export function resolveRuleIds(text, src = SRC) {
  * `_OWNED` redirect the suite uses is an in-process write, and no env var moves it
  * (`$GENESEED_ROOT` is `harness context`'s doc-discovery root — a different name for a
  * different job). Both implementations therefore answer from their own file's location,
- * which is what makes them comparable and what makes them unfenceable. See the
- * status/version section of `tests/harness_golden.py`.
+ * which is what made them comparable and what makes them unfenceable. See
+ * `js/inspect/status.mjs`'s header for what that leaves unreachable from any cell.
  */
 export const ROOT = path.resolve(import.meta.dirname, '../..');
 export const SRC = path.join(ROOT, 'src');

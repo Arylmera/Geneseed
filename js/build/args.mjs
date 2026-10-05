@@ -24,8 +24,8 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
  *
  * The corrupt-file branch is reproduced including its imprecision: the warning says only
  * "using theme 'neutral'", but the branch also resets posture and mode. Matching the
- * Python text matters more than fixing it here, because the two CLIs' stderr is compared
- * byte-for-byte by `tests/golden.py` (:316).
+ * Python text mattered more than fixing it here, because the two CLIs' stderr was compared
+ * byte-for-byte by the former Python golden harness; nothing pins the wording now.
  */
 export function configDefaults() {
   const d = {
@@ -325,7 +325,8 @@ export function parseArgs(argv, defaults) {
  * `--validate-only` reads exactly the flags `build.py`'s parser already produced, so the port
  * hands the CLI this parser rather than a second one beside it. That is not tidiness: a
  * hand-rolled copy would have its own `--target` alias, its own `choices` lists and its own
- * `-h`, and `test_the_help_text_names_every_flag_the_reference_takes` gates only this one.
+ * `-h`, and `tests/unit/node_driver.test.mjs`'s '--help names every flag the parser takes' gates only
+ * this one.
  *
  * `withPlatformNewlines` because the refusal and `-h` paths WRITE: called from `bin/build-driver.mjs`
  * they sit inside `main`'s funnel, and called from the CLI binary they would not.

@@ -9,25 +9,27 @@
  * WHY `build` IMPORTS THE DRIVER RATHER THAN SPAWNING IT. The Python is
  * `run([sys.executable, BUILD, *extra]).returncode` — a passthrough to a second process.
  * Reproducing that shape here would mean spawning `node bin/build-driver.mjs`, and
- * `test_the_cli_reaches_no_child_process_module` forbids it: the ban is transitive over this
- * entry's imports, and P5c's argument for keeping it is that `web`, `upgrade` and `setup`
- * will genuinely need to spawn, so the ban should outlive them rather than be dismantled by
- * a verb that does not. It is also the wrong shape on its own terms. Python needs a second
+ * `tests/unit/hook_cli.test.mjs`'s 'the CLI entry reaches child_process only where it is
+ * declared' forbids it: the check is transitive over this entry's imports and allow-lists only
+ * the modules that genuinely start processes — `web`, `upgrade`, `setup` — and P5c's argument
+ * for it is that the ban should outlive them rather than be dismantled by a verb that does not.
+ * It is also the wrong shape on its own terms. Python needs a second
  * process because `build.py` is a different PROGRAM; `bin/build-driver.mjs` is a module in this
  * one, and a Node CLI spawning a Node driver to do work it could do in-process is exactly
  * the passthrough the whole port has been removing. So the driver's `main` is exported and
  * called directly, and the observable contract — the tree, the streams, the exit code — is
- * what `build/*` in `tests/harness_golden.py` compares.
+ * what the `build/*` cells of `tests/golden.mjs --cli` assert.
  *
  * WHAT NO CELL CAN REACH HERE, stated rather than left implicit. `fenceFor`'s real arm is
  * unreachable from the matrix: measured over the whole rendered tree, the longest backtick
  * run in any source text is 3, so `max(4, longest + 1)` picks 4 for all 96 files, and a port
  * that hardcoded four backticks is byte-identical in every prompt cell. Reaching the other
  * arm needs a file in `src/`, and `src/` is the tree no fixture can redirect (P5d). It is
- * therefore gated as a pure function over a corpus in `tests/snapshot/pure_snapshot.test.mjs`, with the
- * unreachability measured in BOTH directions rather than asserted: one test proves the corpus
- * leaves the floor, and one re-renders every theme × posture × mode of the live tree and proves
- * `src/` still does not. The 96 above is one render — the sweep is 13 440 files.
+ * the former Python suite gated it as a pure function over a corpus, with the unreachability
+ * measured in BOTH directions rather than asserted: one test proved the corpus left the floor,
+ * and one re-rendered every theme × posture × mode of the live tree and proved `src/` still did
+ * not. The 96 above is one render — the sweep was 13 440 files. That suite is gone and no Node
+ * test calls `fenceFor`, so the real arm is pinned by nothing today.
  */
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -360,7 +362,9 @@ export function buildPrompt(cfg, themeName) {
  * Windows. At ~10,000 newlines in a 400 KB document that is the largest byte difference this
  * port could ship, and `harness_golden` can only see half of it — the FILE half is compared
  * directly, the stdout half is folded by `subprocess`'s universal-newline decode, which is
- * why `test_the_two_entry_points_agree_on_stdout_BYTES` grew a `prompt` row.
+ * why the former Python suite's stdout-bytes comparison grew a `prompt` row — kept today as
+ * a row of `tests/unit/hook_cli.test.mjs`'s 'every newline the entry points write is the
+ * platform's'.
  */
 export function cmdPrompt(args) {
   // `args.theme or "neutral"` — a literal in the Python, NOT the config's theme, so this

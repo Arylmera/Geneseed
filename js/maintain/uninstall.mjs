@@ -17,9 +17,9 @@
  * 2. AN EMPTY DIRECTORY WAS INVISIBLE TO EVERY CELL. The ancestor-climb prune is a quarter of
  *    this verb and `_snapshot` could not see it: a port that unlinked the files and left
  *    `skills/<name>/` behind was byte-identical everywhere. Closed by a `<dirs>` column in
- *    `tests/harness_golden.py`'s snapshot rather than a per-cell expectation, because one
- *    entry closes it for all 219 cells written before it existed — `cmdTheme`'s statement
- *    order sat in the same hole. The ABSOLUTE half is a different axis and is the sixth
+ *    the CLI matrix's snapshot (`tests/helpers/cli_golden.mjs`) rather than a per-cell
+ *    expectation, because one entry closes it for all 219 cells written before it existed —
+ *    `cmdTheme`'s statement order sat in the same hole. The ABSOLUTE half is a different axis and is the sixth
  *    expectation kind, `expect_absent_files`.
  * 3. `--archive-memory` TOUCHES THE MEMORY STORE, the one thing here a user cannot rebuild.
  *    It is why `_archive_store` MOVES and never deletes, and why the Python's `memory=delete`
@@ -374,7 +374,7 @@ export function installAgentEntry(root, kind) {
  * A cell can only ever observe the entries a seeded `opencode.json` holds, and the shape
  * that separates the two `is_absolute` rules is a Windows ROOTLESS path — which a cell CAN
  * seed but whose answer then only differs on one platform, in one branch, with no other
- * observable effect. `tests/test_pure_function_parity.py` drives the list directly.
+ * observable effect. The former Python corpus drove the list directly; nothing does now.
  */
 export function installAgentEntryOf(instr) {
   if (Array.isArray(instr)) {
@@ -732,9 +732,10 @@ export function cmdUninstall(args) {
 // ALL-OR-NOTHING IS THE PROPERTY, and it is the one a port breaks silently. A move that fails
 // puts every earlier move back and reports, leaving the install fully `active`; a port that
 // merely stopped on the failure would leave a half-gutted config dir that neither state
-// answers for. `tests/web_golden.py`'s `install/a-deactivate-whose-second-move-collides…`
-// drives it: a manifest naming a file AND its parent directory is the only shape a seeded
-// world can use to make the SECOND move collide.
+// answers for. `tests/unit/web_api.test.mjs`'s `deactivate rolls back on a failed move`
+// drives it with a file planted where the stash dir belongs, which fails the FIRST move; the
+// former web matrix's SECOND-move collision (a manifest naming a file AND its parent
+// directory) has no successor.
 
 /**
  * `_harness_mcp._move_tree` — move a file or dir, refusing an existing destination.
@@ -926,7 +927,7 @@ function restoreAll(stash, base, skip = null) {
  * The config edit is the LAST step and the only non-move mutation, so a move failure rolls
  * back cleanly with the `instructions` entry still intact. The prune climbs from each moved
  * file's PARENT so a `skills/<name>/` husk goes too — the half of this function no file
- * snapshot can see, and the reason `tests/web_golden.py` grew a `<dirs>` column in P6i.
+ * snapshot can see, and the reason the former web matrix grew a `<dirs>` column in P6i.
  */
 export function installDeactivate(root, host = 'opencode', scope = 'global') {
   if (CLAUDE_STYLE.includes(host)) return claudeDeactivate(root, scope, host);

@@ -871,10 +871,8 @@
       }
     },
     {
-      "expect": [
-        "PROJECT CONTEXT"
-      ],
-      "id": "context/sovereign-bypass-does-not-match-a-dotdot-entry",
+      "expect_silent": true,
+      "id": "context/sovereign-bypass-matches-a-dotdot-entry",
       "steps": [
         {
           "argv": [
@@ -2943,9 +2941,9 @@
     {
       "bin": "cli",
       "expect": [
-        "was not excluded"
+        "re-included."
       ],
-      "id": "exclude/remove-does-not-match-a-dotdot-entry",
+      "id": "exclude/remove-matches-a-dotdot-entry",
       "steps": [
         {
           "argv": [
@@ -8430,7 +8428,15 @@
         "\"rebuild\": \"geneseed build --theme imperial --emit opencode-global"
       ],
       "id": "status/json-names-every-install-and-the-command-that-rebuilds-it",
-      "steps": [{ "argv": ["status", "--json"], "cwd": "repo" }],
+      "steps": [
+        {
+          "argv": [
+            "status",
+            "--json"
+          ],
+          "cwd": "repo"
+        }
+      ],
       "world": {
         "home/.config/opencode/.geneseed-emit": "opencode-global\n",
         "home/.config/opencode/.geneseed-theme": "imperial\n",

@@ -33,7 +33,7 @@
 // has two distils in flight at once (a continued session re-distils after its next
 // quiet window — see TIMING), and any error is swallowed.
 
-import { promises as fs } from "node:fs"
+import { promises as fs, realpathSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
@@ -55,6 +55,16 @@ const norm = (p) => {
     raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))
   }
   let s = path.resolve(raw)
+  // Symlinks and junctions followed through the deepest existing ancestor (the rest appended),
+  // the rule js/hosts/hosts.mjs resolvePath applies: an exclude spelled through a link matches
+  // on every host, not only on Claude/Bob.
+  for (let cur = s, tail = []; ;) {
+    try { s = path.join(realpathSync.native(cur), ...tail); break } catch { /* walk up */ }
+    const up = path.dirname(cur)
+    if (up === cur) break
+    tail.unshift(path.basename(cur))
+    cur = up
+  }
   return process.platform === "win32" ? s.toLowerCase() : s
 }
 async function sovereignBypass(cwd) {

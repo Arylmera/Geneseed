@@ -22,11 +22,10 @@
  *   * **The diff algorithm.** A cell can produce ONE edited file and see one hunk. It cannot
  *     produce the shapes where `difflib`'s choices differ from any other diff's — ties, the
  *     recursion's alignment, and above all `autojunk`, which only engages at 200 lines and
- *     changes the hunks on every real harness file. Gated as a corpus —
- *     `tests/fixtures/pure_probe.mjs`'s `unified_diff` entry, replayed by
- *     `tests/snapshot/pure_snapshot.test.mjs` against `tests/__snapshots__/primitives/` —
- *     measured in both directions (28 of the 176 cases there disagree when `autojunk` is
- *     switched off, so the corpus is not describing a constant).
+ *     changes the hunks on every real harness file. The former Python suite gated it as a
+ *     corpus, measured in both directions (28 of its 176 cases disagreed when `autojunk` was
+ *     switched off). That corpus is gone and no Node test drives `unifiedDiff` directly, so
+ *     beyond the one hunk the `diff/--full-…` cell sees, nothing pins these shapes today.
  *   * **The timestamp.** `_write_improvements` names the file `improvements-%Y%m%d-%H%M%S.md`
  *     and stamps the report with `datetime.now()`, so the two implementations cannot write the
  *     same bytes across a second boundary — and a cell runs them in sequence, so the boundary

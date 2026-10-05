@@ -149,8 +149,8 @@ export function cmdValidate(args) {
       // which ends `raise SystemExit(res.get("exit", 1))` — an INTEGER — so every refusal
       // that crosses the seam arrives here as `SystemExit(1)` and `str(e)` is `'1'`, not the
       // sentence `load_theme` wrote on stderr on the way out. A port that printed `e.message`
-      // says `unknown theme 'x'` where the reference says `1`. The corpus in
-      // `tests/test_maintainer_tools_parity.py` is what found it; nothing else could.
+      // says `unknown theme 'x'` where the reference says `1`. The former Python
+      // cross-implementation corpus is what found it; nothing else could.
       if (e && e.exitCode !== undefined) {
         printOut(`[validate-only] render/emit FAILED for theme '${args.theme}' `
           + `emit '${emit}': ${e.exitCode}\n`);

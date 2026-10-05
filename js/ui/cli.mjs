@@ -10,7 +10,7 @@
  * copy in it.
  *
  * P10c's answer was to make the metadata DATA — generated into `cli.json` at the repo root by
- * `tests/gen_cli_reference.py` and read by both sides. P2 finishes the thought: the table is
+ * a since-deleted Python script and read by both sides. P2 finishes the thought: the table is
  * no longer GENERATED from anything, it is the OWNED document, and it lives here on a product
  * path because that is where a document npm ships belongs. `package.json`'s `files[]` already
  * carries `js/`, so it needs no row of its own, and nothing has to import out of `tests/`.
@@ -153,8 +153,8 @@ function actionInvocation(a, positional) {
 // hyphenated word into two chunks, so it can break a line inside `back-compat` where a
 // space-only wrap cannot. Measured before deciding: every help string then in the table disagreed
 // with a greedy wrap at some width, the widest at 175 — so "the branch is dead" was simply
-// false, and `test_the_ports_line_breaker_is_textwrap_at_every_width` said so on the run that
-// first asserted it. The rules are transcribed instead.
+// false, and the former Python suite's every-width comparison against `textwrap` said so on
+// the run that first asserted it. The rules are transcribed instead.
 //
 // Python's classes, spelled for a `u`-flagged JavaScript regex: `\w` is letters, numbers and
 // underscore; `[^\d\W]` is that minus the DECIMAL digits, which leaves the letter-ish half
@@ -306,7 +306,7 @@ function formatAction(a, positional, helpPosition, width) {
  * `parser.format_help()` for one subcommand, byte for byte with argparse.
  *
  * WHY THE PORT RENDERS THIS AT ALL. Task 10 compared the two implementations' `--help` for the
- * first time — `tests/harness_golden.py` has zero `--help` cells — and found the port answering
+ * first time — the former Python CLI matrix had zero `--help` cells — and found the port answering
  * `geneseed: error: unrecognized arguments: --help`, exit 2, on all 26 verbs. That is not the
  * declared wording divergence `parse`'s docblock reserves for argparse's ERROR text: it is the
  * absence of the surface, on the binary that survives the reference's deletion.
@@ -314,19 +314,19 @@ function formatAction(a, positional, helpPosition, width) {
  * `prog` IS AN ARGUMENT AND THAT IS THE ONE DELIBERATE DIVERGENCE. The reference names itself
  * `harness`, after the Python file this migration deletes; a user who typed `geneseed status
  * --help` is shown `usage: geneseed status`, which is also how every error this entry prints
- * already spells itself (`die`). `tests/__snapshots__/help/` freezes the reference's answers
- * and `tests/snapshot/cli_help.test.mjs` replays them through here with `prog` set to the reference's
- * own — so the layout is gated byte for byte and the rename is the only thing that moves.
+ * already spells itself (`die`). The former Python suite replayed the reference's recorded
+ * answers through here with `prog` set to the reference's own, so the layout was gated byte for
+ * byte and the rename was the only thing that moved. That corpus is gone; the layout is now
+ * pinned by the written-out `formatHelp` rows in `tests/unit/text_layout.test.mjs`.
  *
- * NOT EVERY VERB HAS A RECORDED ANSWER, AND THREE NEVER CAN. `catalog`, `mcp` and `memory` had
- * no subparser for the recorder to render from, so the corpus covers the verbs argparse
- * answered to and those three are held ABSOLUTELY instead — `tests/snapshot/cli_help.test.mjs` names
- * both populations (`RECORDED`, `NATIVE`) and fails a verb that falls into neither, which is
- * what keeps "no recorded text" from meaning "no gate".
+ * NOT EVERY VERB HAD A RECORDED ANSWER, AND THREE NEVER COULD. `catalog`, `mcp` and `memory` had
+ * no subparser for the recorder to render from, so they were held ABSOLUTELY instead — and
+ * `tests/unit/hook_cli.test.mjs`'s `NATIVE` list still names that population and fails a verb
+ * that falls into neither, which is what keeps "no recorded text" from meaning "no gate".
  *
  * The alias rides on the same argument: argparse gives `update` the parser object it built for
- * `upgrade`, so `harness.py update --help` prints `usage: harness upgrade`. The recorded prog
- * map reproduces that; the shipped call passes `geneseed update`, which is what the user typed.
+ * `upgrade`, so `harness.py update --help` printed `usage: harness upgrade`. The recorded prog
+ * map reproduced that; the shipped call passes `geneseed update`, which is what the user typed.
  *
  * `width` is argparse's `shutil.get_terminal_size().columns - 2`, passed in rather than read,
  * because a recorded help text whose wrap column came from the recorder's terminal is a corpus
@@ -403,12 +403,13 @@ export function formatHelp(cmd, prog, width) {
  *
  * `parseIntStrict`, NOT `Number.parseInt`, and the tree already owned it. `get_terminal_size` spells
  * this `int(os.environ['COLUMNS'])` inside `except (KeyError, ValueError)`, and `int` is not
- * `parseInt`. Measured against the reference over a corpus of `$COLUMNS` values
- * (`test_the_ports_help_width_is_shutil_get_terminal_size`): `COLUMNS=1_0` is 10 to Python and
+ * `parseInt`. Measured against the reference over a corpus of `$COLUMNS` values in the former
+ * Python suite (`tests/unit/cli_table.test.mjs`'s 'the help width is the terminal width less
+ * two, and COLUMNS wins' keeps a written-out part of it): `COLUMNS=1_0` is 10 to Python and
  * 1 to `parseInt`, `COLUMNS=٣` is 3 and NaN, `COLUMNS=' 80 '` is 80 and NaN. `COLUMNS=80abc`
  * is a ValueError to Python and 80 to `parseInt` — the same answer down a PIPE, where the
  * fallback is 80 either way, and a different one on any terminal that is not 80 wide, which is
- * why the corpus is the gate rather than a cell. A non-positive value falls through on both
+ * why a unit test is the gate rather than a cell. A non-positive value falls through on both
  * sides, which is Python's `if columns <= 0` and was already right here.
  *
  * `stripWhitespace` because THIS is the caller `parseIntStrict`'s docblock did not have: its other two

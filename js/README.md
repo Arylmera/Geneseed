@@ -236,4 +236,4 @@ and inline lists are held against a surface list written out in
 | a hook verb | `js/hosts/hooks.mjs` (a gate) or its own `js/hosts/hooks-<verb>.mjs` | `claudeHookGroups` in `settings.mjs`, the `VERBS` row (with its `load`) in `bin/geneseed-hook.mjs`. Keep the import graph tiny |
 | a console doc page | `docs/<understand|guides|concepts|reference>/<id>.md` — the stem is the id | `docs/extending.md` §4c. Only `kind: "concept"` gets `{N_*}` substitution |
 | an OpenCode plugin | `adapters/opencode/plugins/geneseed-<name>.js` | `docs/extending.md` §4a — the `geneseed-` prefix is mechanically load-bearing |
-| to change a `js/lib/` primitive | `tests/fixtures/pure_probe.mjs` **first** | the docblock says which Node default it deliberately departs from — change that sentence too, or the next reader restores the default |
+| to change a `js/lib/` primitive | `tests/unit/lib_primitives.test.mjs` **first** | the docblock says which Node default it deliberately departs from — change that sentence too, or the next reader restores the default |

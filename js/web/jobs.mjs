@@ -91,6 +91,7 @@ import { setupBuildArgs } from '../build/generate.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { isDict } from '../hosts/mcp.mjs';
 import { readText, writeText, isFile } from '../lib/fs.mjs';
+import { which } from '../lib/paths.mjs';
 import { jsonDumpsCompact, parseJson, isTruthy } from '../lib/json.mjs';
 
 /**
@@ -103,7 +104,10 @@ function killJobTree(child) {
   try {
     if (process.platform === 'win32') {
       // The one machine primitive with no Node equivalent — see this module's header.
-      spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)], {
+      // `which`, never a bare name (cwd-first on Windows); none on PATH → `child.kill()` below.
+      const taskkill = which('taskkill');
+      if (!taskkill) throw new Error('taskkill not on PATH');
+      spawnSync(taskkill, ['/T', '/F', '/PID', String(child.pid)], {
         timeout: 15000, windowsHide: true, stdio: 'ignore',
       });
     } else {

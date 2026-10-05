@@ -8,7 +8,8 @@
  * specific.
  *
  *   * GROWING `bin/geneseed-hook.mjs` weakens the gate the design now rests on.
- *     `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` asserts EQUALITY between
+ *     'the hook entry carries exactly the verbs the emitter wires' (`tests/unit/hook_cli.test.mjs`)
+ *     asserts EQUALITY between
  *     that file's table and the hooks `js/hosts/settings.mjs` wires, and P5b made it load-bearing:
  *     the shim is machine-wide (`~/.geneseed/bin/geneseed-hook[.cmd]`, no per-install
  *     component) and last-writer-wins, so a Node emit owns the hooks of installs Python
@@ -23,23 +24,24 @@
  *     no-op and a success are one observation.
  *   * `bin/build-driver.mjs` IS `build.py`'s `main()` — a different Python program from
  *     `rituals/harness.py`, not a different half of the same one. It parses generator FLAGS
- *     with a partition asserted over them (`test_the_node_driver_classifies_every_emit`),
- *     `tests/golden.py` drives it 259 times per run, and it is under a hard `child_process`
+ *     with a partition asserted over them ('the driver classifies every emit',
+ *     `tests/unit/node_driver.test.mjs`),
+ *     `tests/golden.mjs` drives it over every emit configuration, and it is under a hard `child_process`
  *     ban that is half the proof it is not a passthrough. `exclude` spawns nothing and would
  *     not have broken that ban — but `web`, `upgrade` and `setup` will, and the ban should
  *     outlive them rather than be dismantled by the first verb that does not need it.
  *
  * What this costs is what the P5b handoff predicted: a second acceptance matrix. It is paid
- * in `tests/harness_golden.py`, which now carries a `bin` per cell and takes `--new-cli`
- * beside `--new` — and it would have been paid identically by the `bin/build-driver.mjs` option,
+ * in `tests/golden.mjs --cli` (`tests/helpers/matrix/cli.<platform>.json`), which carries a
+ * `bin` per cell — and it would have been paid identically by the `bin/build-driver.mjs` option,
  * so it is not a discriminator between the two.
  *
  * THE VERB SET REFUSES THE REST BY NAME, exactly as the hook entry does. It carries 22 of the
  * 26 names the reference's parser answered to (25 subparsers, plus the alias) — the other
  * four are the hook verbs — and, since the three rows at the end of the table below, three
- * that the reference never had at all. `test_the_two_entry_points_carry_disjoint_verb_sets`
- * keeps the two tables from ever answering the same verb twice, since the shim bakes only one
- * of them.
+ * that the reference never had at all. 'the two entry points carry disjoint verb sets'
+ * (`tests/unit/hook_cli.test.mjs`) keeps the two tables from ever answering the same verb
+ * twice, since the shim bakes only one of them.
  *
  * P6h MADE THE DISPATCH ASYNCHRONOUS and put `js/web/` on this entry's import graph — LAZILY,
  * since the slim pass: every command module loads through its verb's thunk, so the graph is
@@ -73,9 +75,9 @@ import { printErr, printOut } from '../js/lib/fs.mjs';
  * hold: the FUNCTION.
  *
  * IT IS STILL A TABLE and still the DISPATCH rather than a declaration beside one.
- * `tests/test_hook_cli_parity.py` scrapes `const VERBS = {` for its three matrix gates, and
- * `main`'s refusal lists `Object.keys(VERBS)` IN THIS ORDER, which `harness_golden` cells
- * assert verbatim — the order is the old table's and is not alphabetical.
+ * `tests/unit/hook_cli.test.mjs` scrapes `const VERBS = {` for its matrix gates, and
+ * `main`'s refusal lists `Object.keys(VERBS)` IN THIS ORDER (no cell asserts the list
+ * verbatim any more) — the order is the old table's and is not alphabetical.
  *
  * FLATTENED TO `verb: fn` since Task 5, AND TO `verb: loader` since the lazy pass: every row
  * is now a thunk that imports the command's module and resolves to its function, so the one
@@ -104,9 +106,9 @@ const VERBS = {
   // `up.add_parser(..., aliases=["update"])`, reproduced in P8c as a ROW OF ITS OWN rather than
   // as an `aliases` field on the row above — because a field would be a DECLARATION and the
   // three matrix gates read this table as the DISPATCH (rule 7, and M23 is where it was
-  // learned). As a key it is a real verb: `test_every_entry_verb_is_a_real_harness_subcommand`
-  // reads argparse's aliases out of `harness.py` and finds it, and
-  // `test_the_matrix_covers_every_verb_it_claims` demands the `update/` cell group that proves
+  // learned). As a key it is a real verb: `tests/unit/hook_cli.test.mjs`'s 'every entry verb
+  // is a command the driver table dispatches' finds it in `js/cli-table.json`, and 'the matrix
+  // covers every verb each entry claims' demands the `update/` cell group that proves
   // it reaches `cmdUpgrade` — including the theme re-read, which is what separates it from
   // `sync-self`.
   //
@@ -129,8 +131,8 @@ const VERBS = {
   // exit code, and that arm crosses byte for byte. The panel behind it is P7c's;
   // `js/ui/tui.mjs`'s header argues why this entry falls back to `cmd_tui`'s own
   // panel-unavailable line rather than inventing a second full-screen UI, and
-  // `tests/test_tui_boundary.py` asserts that the arm it declares is genuinely unreachable
-  // here rather than merely untested.
+  // `tests/unit/no_panel.test.mjs` asserts that no panel lies behind it — the module paints
+  // nothing and refuses on a TTY too — rather than leaving that merely untested.
   tui: () => import('../js/ui/tui.mjs').then((m) => m.cmdTui),
   // THE THREE THAT NEVER HAD A PYTHON ORIGINAL, and they are last for that reason rather
   // than by alphabet: every row above is the twin of a subparser, and these three are not.
@@ -143,9 +145,9 @@ const VERBS = {
   // this change rather than after it. The recorded help corpus was rendered from a live
   // argparse object, and there was no subparser to render these from; the acceptance matrix
   // is a comparison of two implementations, and there is only one. So their gates are
-  // ABSOLUTE — `tests/snapshot/cli_help.test.mjs` splits the two populations by name and refuses a
-  // verb that falls into neither, and each has its own unit gate stating what it does rather
-  // than that it agrees.
+  // ABSOLUTE — `tests/unit/hook_cli.test.mjs`'s `NATIVE` list splits the two populations by
+  // name and refuses a verb that falls into neither, and each has its own unit gate stating
+  // what it does rather than that it agrees.
   catalog: () => import('../js/build/catalog.mjs').then((m) => m.cmdCatalog),
   mcp: () => import('../js/hosts/mcp.mjs').then((m) => m.cmdMcp),
   memory: () => import('../js/maintain/memory.mjs').then((m) => m.cmdMemory),
@@ -173,7 +175,7 @@ function die(code, msg) {
  *
  * The WORDING of an argparse failure is deliberately not reproduced — argparse prints a
  * usage block computed from the whole parser tree, and P5a set the precedent for the hook
- * entry: state the fault plainly, gate it absolutely in `test_hook_cli_parity.py`, and keep
+ * entry: state the fault plainly, gate it absolutely in `tests/unit/hook_cli.test.mjs`, and keep
  * it out of the compared matrix. What IS compared is every error the command's own body
  * raises, `exclude`'s missing-path refusal among them.
  */

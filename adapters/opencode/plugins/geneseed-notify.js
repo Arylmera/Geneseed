@@ -27,6 +27,7 @@
 // glob), exactly like the context, learn, guard, and workflow plugins.
 
 import { spawn } from "node:child_process"
+import path from "node:path"
 
 const MODE = (process.env.GENESEED_NOTIFY || "on").toLowerCase()
 const OFF = ["off", "0", "false", "no"].includes(MODE)
@@ -86,7 +87,8 @@ function notifyCommand(platform, title, body) {
       "$n.ShowBalloonTip(5000,$env:GS_T,$env:GS_B,[System.Windows.Forms.ToolTipIcon]::Info);" +
       "Start-Sleep -Seconds 6;$n.Dispose()"
     return {
-      cmd: "powershell",
+      // By absolute path: a bare "powershell" resolves against the cwd first on Windows.
+      cmd: path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
       args: ["-NoProfile", "-NonInteractive", "-Command", script],
       env: { GS_T: String(title), GS_B: String(body) },
     }
