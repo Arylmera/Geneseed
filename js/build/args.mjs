@@ -10,7 +10,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parseArgs as nodeParseArgs } from 'node:util';
 import { withPlatformNewlines } from '../lib/fs.mjs';
 import path from 'node:path';
-import { CONFIG, discoverNames, PACK_ORDER, knownRuleIds } from './source.mjs';
+import {
+  CONFIG, discoverNames, PACK_ORDER, knownRuleIds, knownSkillIds, linkedSkillIds,
+} from './source.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
 // what lets it sit inside this module's `child_process` ban.
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
@@ -30,7 +32,7 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
 export function configDefaults() {
   const d = {
     theme: 'neutral', posture: 'peer', mode: 'direct', trust: DEFAULT_PRESET,
-    doctrines: [...PACK_ORDER], excludeRules: [],
+    doctrines: [...PACK_ORDER], excludeRules: [], excludeSkills: [],
   };
   if (!existsSync(CONFIG)) return d;
   try {
@@ -93,7 +95,7 @@ export function configDefaults() {
  */
 const VALUED = {
   '--theme': 'theme', '--posture': 'posture', '--mode': 'mode', '--trust': 'trust',
-  '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules',
+  '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules', '--exclude-skills': 'excludeSkills',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
   '--footprint': 'footprint', '--root': 'root', '--config-dir': 'cfgDir',
 };
@@ -173,6 +175,33 @@ function parseExcludeRules(value) {
         + `${known.map((c) => `'${c.replace('.', ' ')}'`).join(', ')}, or 'none')`);
     }
     out.push(id);
+  }
+  return [...new Set(out)].sort();
+}
+
+/**
+ * `--exclude-skills "bruno-test-writer,openscad"` -> the cfg's skill exclusion array.
+ *
+ * Refused, by name: a skill this checkout does not ship (a typo would exclude nothing in
+ * silence), and a skill the constitution or another skill links to by path — excluding it
+ * would ship that link dead (`linkedSkillIds`). Sorted and deduped for marker stability.
+ */
+function parseExcludeSkills(value) {
+  const s = value.trim();
+  if (s === 'none' || s === '') return [];
+  const known = knownSkillIds();
+  const linked = linkedSkillIds();
+  const out = [];
+  for (const name of s.split(',').map((x) => x.trim()).filter(Boolean)) {
+    if (!known.includes(name)) {
+      die(2, `argument --exclude-skills: unknown skill '${name}' (choose from `
+        + `${known.filter((k) => !linked.includes(k)).join(', ')}, or 'none')`);
+    }
+    if (linked.includes(name)) {
+      die(2, `argument --exclude-skills: '${name}' cannot be excluded — the harness links to it `
+        + `by path (protected: ${linked.join(', ')})`);
+    }
+    out.push(name);
   }
   return [...new Set(out)].sort();
 }
@@ -271,6 +300,7 @@ export function parseArgs(argv, defaults) {
     trust: defaults.trust,
     doctrines: defaults.doctrines,
     excludeRules: defaults.excludeRules,
+    excludeSkills: defaults.excludeSkills ?? [],
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false,
   };
@@ -314,6 +344,7 @@ export function parseArgs(argv, defaults) {
   // already the array `configDefaults` built, and re-parsing an array would stringify it.
   if (typeof args.doctrines === 'string') args.doctrines = parseDoctrines(args.doctrines);
   if (typeof args.excludeRules === 'string') args.excludeRules = parseExcludeRules(args.excludeRules);
+  if (typeof args.excludeSkills === 'string') args.excludeSkills = parseExcludeSkills(args.excludeSkills);
   return args;
 }
 

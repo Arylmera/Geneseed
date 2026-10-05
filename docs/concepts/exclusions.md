@@ -4,18 +4,18 @@ order: 12
 title: "Exclusions"
 kind: "concept"
 section: "Configuration"
-description: "Two ways to switch things off: one rule, or every hook in a folder."
+description: "Three ways to switch things off: one rule, one skill, or every hook in a folder."
 link: {"hash": "#/harness", "label": "Manage in Harness →"}
 ---
-Geneseed has two different ways to switch something off, and they work at different scales:
+Geneseed has three ways to switch something off, and they work at different scales:
 
-| | Sovereign repo | Per-rule exclusion |
-| --- | --- | --- |
-| **Switches off** | the whole global install, inside one folder | one doctrine rule, everywhere the install applies |
-| **Scope** | a folder and everything under it | the install |
-| **Applies to** | **global** installs only | any install |
-| **Set with** | `geneseed exclude add <path>` | `--exclude-rules` at build time |
-| **Takes effect** | on the next tool call, no rebuild | on rebuild |
+| | Sovereign repo | Per-rule exclusion | Per-skill exclusion |
+| --- | --- | --- | --- |
+| **Switches off** | the whole global install, inside one folder | one doctrine rule, everywhere the install applies | one skill, everywhere the install applies |
+| **Scope** | a folder and everything under it | the install | the install |
+| **Applies to** | **global** installs only | any install | any install |
+| **Set with** | `geneseed exclude add <path>` | `--exclude-rules` at build time | `--exclude-skills` at build time |
+| **Takes effect** | on the next tool call, no rebuild | on rebuild | on rebuild |
 
 > **You already know this:** `.gitignore` versus disabling one lint rule. One makes a tool ignore a whole folder; the other keeps the tool running everywhere with one check turned off.
 
@@ -55,3 +55,15 @@ geneseed build --emit claude-global --exclude-rules "process 7"
 ```
 
 The install records it (`Excluded rules: process 7` beside its pack list) and every rebuild and upgrade keeps it. The always-on Rules and the Ethos cannot be excluded. Picking packs and rules is covered in [Doctrine packs and single rules](../guides/setup-doctrines.md); what the layers are is in [Rules](rules.md).
+
+### Per-skill exclusion — skills you never use
+
+Every installed skill costs a line in the host's skill listing, every session. Skills you never use can be left out of an install:
+
+```bash
+geneseed build --emit claude-global --exclude-skills "bruno-test-writer,bruno-collection-generator,react-view-transitions"
+```
+
+The skill's files are not written, its catalogue row goes, and an OpenCode `/command` that runs it goes too. The install records the list (`Excluded skills: …` under its skill section), and every rebuild and upgrade keeps it. `--exclude-skills none` puts them all back.
+
+A few skills cannot be excluded, because the harness itself links to them by path — `council`, `rule`, `skill-forge`, `workflow` and a handful more. The flag names them when it refuses one. Skills you installed yourself are not Geneseed's to exclude: remove those from the host's skills folder directly.

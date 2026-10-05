@@ -514,14 +514,15 @@ test('the summary job produces rows and not an empty list', () => {
     'the opencode PROJECT emit did not reach the LSP rows');
   assert.ok(!results[3].some(([, t]) => t.includes('Java 21+ (jdtls)')),
     'a claude emit reached the LSP rows, which are opencode-only');
-  // Seven keys, and the two doctrine ones are the only lists. `doctrines` distinguishes three
-  // states (null = no carrier said, [] = a carrier said `none`, a list = it named packs);
-  // `excludeRules` has only two, because its marker is written only when something IS excluded
-  // and its absence is therefore an answer. Both are present here for the same reason: the
-  // wizard's pack question must not fall through this walk to `cwd/Harness`.
+  // Eight keys, and the three exclusion/pack ones are the only lists. `doctrines` distinguishes
+  // three states (null = no carrier said, [] = a carrier said `none`, a list = it named packs);
+  // `excludeRules` and `excludeSkills` have only two, because their markers are written only
+  // when something IS excluded and their absence is therefore an answer — `[]` here, since this
+  // install excluded neither. All are present for the same reason: the wizard must not fall
+  // through this walk to `cwd/Harness`.
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
-    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: [],
+    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: [], excludeSkills: [],
   });
 });
 

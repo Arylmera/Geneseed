@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- `--exclude-skills <name,…>` leaves skills you never use out of an install, on every host: their files, their catalogue rows and any OpenCode command that runs them. The install records the list on an `Excluded skills:` line, and `upgrade`, `rebuild-all`, `diff`, `setup` and the web console keep it. Unknown skills are refused, and so are the ten the harness links to by path. `status` shows `skills off: …`.
+
 ### Fixed
 
 - The context hook (Claude Code, Bob, OpenClaude) now keeps its whole output under 9,000 characters. Claude Code shows the model only a preview of a hook output past ~10k, so a doc-heavy repo lost its context silently — this repo's was 25.6 KB, now 2.5 KB. Eager docs that do not fit are listed lazy with the reason; the lazy listing folds three or more docs in one folder into `dir/ — N docs` and ends in a count if it is still too long. The OpenCode plugin folds its project listing the same way.

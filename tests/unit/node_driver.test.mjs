@@ -83,6 +83,9 @@ const VALUED_FLAGS = [
   // message write an address — must bind the dotted one, or a value copied off a carrier is
   // rejected by the flag that wrote it.
   ['--exclude-rules', 'excludeRules', 'process 7,craft 2', ['craft.2', 'process.7']],
+  // Skills left out of the install: a comma list too, bound sorted so the marker it writes is
+  // stable whatever order the names were typed in.
+  ['--exclude-skills', 'excludeSkills', 'herdr,daydream', ['daydream', 'herdr']],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],

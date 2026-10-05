@@ -162,10 +162,31 @@ export function substitute(text, theme) {
 }
 
 /** `_build_render._resolve_catalogs`. */
-function resolveCatalogs(text, nativeCatalog) {
+function resolveCatalogs(text, nativeCatalog, excludeSkills = []) {
   // `true`/`false` still mean "both kinds", for the plain-bundle callers that pass a boolean.
   const nat = nativeCatalog === true ? { skills: true, agents: true } : (nativeCatalog || {});
-  return text.replace(CATALOG_BLOCK_RE, (_m, kind, table, pointer) => (nat[kind] ? pointer : table));
+  return text.replace(CATALOG_BLOCK_RE, (_m, kind, table, pointer) => (nat[kind] ? pointer
+    : kind === 'skills' ? dropExcludedSkillRows(table, excludeSkills) : table));
+}
+
+/**
+ * The skills catalogue table, minus the rows of `--exclude-skills` — a row naming a skill the
+ * install never wrote is a dead link. A folder skill's bullet runs onto indented continuation
+ * lines, which go with it. Only the plain bundle reaches this: every host emit replaces the
+ * table with the pointer to its own inventory.
+ */
+function dropExcludedSkillRows(table, excludeSkills) {
+  if (!excludeSkills.length) return table;
+  const names = excludeSkills.join('|');
+  const gone = new RegExp(`\\{\\{DIR_SKILLS\\}\\}/(?:${names})(?:\\.md|/SKILL\\.md)\\)`);
+  const out = [];
+  let dropping = false;
+  for (const line of table.split('\n')) {
+    if (dropping && /^[ \t]+\S/.test(line)) continue;
+    dropping = /^(?:\||- )/.test(line) && gone.test(line);
+    if (!dropping) out.push(line);
+  }
+  return out.join('\n');
 }
 
 /**
@@ -247,7 +268,7 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
     return inner;
   });
 
-  text = resolveCatalogs(text, nativeCatalog);
+  text = resolveCatalogs(text, nativeCatalog, cfg.excludeSkills ?? []);
   text = resolveLean(text, footprint);
   return substitute(text, theme);
 }
@@ -414,6 +435,11 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   theme.EXCLUDED_RULES_LINE = dropped.length
     ? `\nExcluded rules: ${dropped.map((id) => id.replace('.', ' ')).join(', ')}`
     : '';
+  // The skills twin, under the same contract: written only when something is excluded, so a
+  // default build stays byte-identical, and read back by `excludedSkillsOfDir`.
+  const skipped = [...(cfg.excludeSkills ?? [])].sort();
+  // It fills a template line of its own, so its value carries the blank line around it.
+  theme.EXCLUDED_SKILLS_LINE = skipped.length ? `\nExcluded skills: ${skipped.join(', ')}\n` : '';
   return theme;
 }
 
@@ -460,8 +486,12 @@ export function renderAll(cfg, themeName, {
 } = {}) {
   const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix });
   const items = [];
+  const skipped = new Set(cfg.excludeSkills ?? []);
   for (const file of sortedSourceFiles(cfg.src)) {
     const rel = path.relative(cfg.src, file);
+    // `--exclude-skills`: the one filter every host's emit and the plain bundle read through.
+    const sp = rel.split(path.sep);
+    if (sp[0] === 'skills' && sp.length >= 2 && skipped.has(sp[1].replace(/\.md$/, ''))) continue;
     const outRel = destRel(themedRel(rel, theme)).split(path.sep).join('/');  // as_posix()
     // The on-disk `laws/`, `ontology/` and `doctrines/` are the "complete text" the two lean
     // pointers promise — §1's and the Doctrines section's. They render at full whatever the

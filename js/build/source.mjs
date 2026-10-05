@@ -237,6 +237,40 @@ export function knownRuleIds() {
 }
 
 /**
+ * Every skill this checkout ships: a flat `skills/<name>.md` (authoring `_` files are not
+ * skills) or a vendored `skills/<name>/` folder. The one enumerator `--exclude-skills` closes
+ * against, for the reason `knownRuleIds` is one.
+ */
+export function knownSkillIds() {
+  const dir = path.join(SRC, 'skills');
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => !e.name.startsWith('_') && (e.isDirectory() || e.name.endsWith('.md')))
+    .map((e) => e.name.replace(/\.md$/, '')).sort();
+}
+
+/**
+ * The skills the constitution or another skill LINKS to by path (`{{DIR_SKILLS}}/<name>`),
+ * outside the §4 catalogue table. They cannot be excluded: the link would ship dead. Scanned,
+ * not listed, so a new link protects its target the day it is written.
+ */
+export function linkedSkillIds() {
+  const linked = new Set();
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (/\.(md|tmpl)$/.test(e.name)) {
+        const text = readFileSync(f, 'utf8')
+          .replace(/<!-- CATALOG:begin skills -->[\s\S]*?<!-- CATALOG:end -->/, '');
+        for (const m of text.matchAll(/\{\{DIR_SKILLS\}\}\/([a-z0-9-]+)/g)) linked.add(m[1]);
+      }
+    }
+  };
+  walk(SRC);
+  return [...linked].sort();
+}
+
+/**
  * `_build_core.js_cfg()`, originated rather than received.
  *
  * `posture` and `mode` are `_build_core`'s module defaults (`peer` / `direct`) unless a
@@ -250,7 +284,7 @@ export function knownRuleIds() {
  */
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
-  excludeRules = [],
+  excludeRules = [], excludeSkills = [],
 } = {}) {
   return {
     root: ROOT,
@@ -276,5 +310,7 @@ export function makeCfg({
     // is already absent, and dropping the exclusion would silently re-admit the rule the day
     // the pack came back.
     excludeRules: Array.isArray(excludeRules) ? [...excludeRules] : [],
+    // Skill names left out of this install — same "unspecified takes nothing away" default.
+    excludeSkills: Array.isArray(excludeSkills) ? [...excludeSkills] : [],
   };
 }

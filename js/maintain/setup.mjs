@@ -277,11 +277,18 @@ export function collectSetupLines() {
   // `setupBuildArgs` spell `--exclude-rules none`, and that string would land in the
   // "About to run:" line every recorded wizard probe compares byte for byte.
   const excludeRules = inst.excludeRules?.length ? inst.excludeRules : null;
+  // Skills left out are preserved the same way, and elide when there are none.
+  const excludeSkills = inst.excludeSkills?.length ? inst.excludeSkills : null;
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
-      excludeRules).join(' ')}\n`);
+      excludeRules, undefined, excludeSkills).join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
-  return { theme, posture, mode, doctrines, excludeRules, emit, out, root, footprint };
+  // The key only when there is something to carry, so a selection that excludes no skill is
+  // the same object it was before the flag existed.
+  return {
+    theme, posture, mode, doctrines, excludeRules, ...(excludeSkills ? { excludeSkills } : {}),
+    emit, out, root, footprint,
+  };
 }
 
 // --------------------------------------------------------------------------------------
@@ -463,7 +470,7 @@ export function setupLines() {
   }
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
-    doctrines = null, excludeRules = null,
+    doctrines = null, excludeRules = null, excludeSkills = null,
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, and the self-improvement loops
@@ -482,7 +489,7 @@ export function setupLines() {
   // runs must carry the pack selection the plan line just previewed, or the wizard would print
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
-    doctrineOptions().map(([n]) => n), excludeRules);
+    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills);
   printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {
