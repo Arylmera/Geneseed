@@ -617,7 +617,7 @@ export async function installAxes(dir, { installProfile, setupBuildArgs }) {
   if (!existsSync(path.join(String(dir), '.geneseed-emit'))) return [];
   const p = installProfile('opencode', 'global', String(dir));
   return setupBuildArgs('', 'files', null, null, p.footprint, p.posture, p.mode, p.doctrines,
-    undefined, p.excludeRules, p.trust).slice(4);
+    undefined, p.excludeRules, p.trust, p.excludeSkills).slice(4);
 }
 
 /**

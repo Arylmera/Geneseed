@@ -370,7 +370,8 @@ export function statusLines(d, color = false) {
     const packs = p.doctrines.length ? p.doctrines.join(',') : 'no packs';
     const excl = p.excludeRules?.length ? `excluding ${p.excludeRules.join(',')}` : 'no rules excluded';
     rows.push([`${p.host}:${p.scope}`, [p.state, p.theme, p.footprint, `${p.posture}/${p.mode}/${p.trust}`,
-      packs, excl].join(` ${DOT} `) + where]);
+      packs, excl, ...(p.excludeSkills?.length ? [`skills off: ${p.excludeSkills.join(',')}`] : [])]
+      .join(` ${DOT} `) + where]);
   }
 
   const labelW = Math.max(...rows.map(([k]) => codePointLength(k)));

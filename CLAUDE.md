@@ -105,6 +105,15 @@ commented; skills, agents and `.gitignore` are claim-on-create (`claimer`, `js/h
 and uninstall deletes only manifest-owned paths. The user decided (2026-10) that this is enough —
 do not add a snapshot/restore layer.
 
+**`--exclude-skills` filters in ONE place: `renderAll`** (`js/build/render.mjs`). Every host's
+emit, the command layer and the plain bundle read the filtered `items`, so a new host gets the
+exclusion for free — do not add a second filter in an emitter. The marker line
+(`Excluded skills:`) is written only when something is excluded, so default builds stay
+byte-identical; `excludedSkillsOfDir` reads it back and `setupBuildArgs` elides an empty list.
+Protected skills are *scanned*, not listed: `linkedSkillIds` (`js/build/source.mjs`) finds every
+`{{DIR_SKILLS}}/<name>` link outside the §4 catalogue table, so writing a new link protects its
+target automatically.
+
 **Adding any tracked file fails the packaging suite** until it has a row, with a written reason, in
 the SHIPS or WITHHELD partition of `tests/unit/package_manifest.test.mjs`.
 

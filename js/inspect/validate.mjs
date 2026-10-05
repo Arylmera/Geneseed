@@ -32,7 +32,8 @@ import { isDir, isFile, rglob, withTempDir, within } from './scan.mjs';
 export const VALIDATE_USAGE = [
   'usage: geneseed validate [-h] [--theme THEME] [--emit EMIT] [--out OUT] [--root ROOT]',
   '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
-  '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES] [-v]',
+  '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES]',
+  '                         [--exclude-skills SKILLS] [-v]',
   '',
   "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
   "Takes the generator's render flags (see geneseed-build --help) except --sync-themes and",
@@ -127,6 +128,7 @@ export function cmdValidate(args) {
     const opts = {
       theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
       trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
+      excludeSkills: args.excludeSkills,
     };
     let scanDirs;
     try {

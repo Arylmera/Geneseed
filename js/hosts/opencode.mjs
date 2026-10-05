@@ -309,6 +309,8 @@ export function writeCommandLayer(cfg, items, commandDir, claim = () => true) {
   }
   const written = [];
   for (const [name, skill] of Object.entries(COMMAND_SET)) {
+    // A command runs a skill; `--exclude-skills` took that skill out, so the command goes too.
+    if ((cfg.excludeSkills ?? []).includes(skill)) continue;
     const text = byName.get(skill);
     if (text === undefined) {
       throw new Error(`COMMAND_SET: /${name} runs skill '${skill}', which src/skills/ does not have`);

@@ -46,7 +46,8 @@ import {
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, footprintOfDir, installState,
+  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir,
+  installState,
   installTargets, modeOfDir, postureOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import {
@@ -550,6 +551,7 @@ export function apiRestore(state, files) {
       // The excluded rules for the same boundary reason: without them a restored AGENT.md
       // re-states a rule whose hook gate the install deliberately left unwired.
       excludeRules: excludedRulesOfDir(target),
+      excludeSkills: excludedSkillsOfDir(target),
     }));
     for (const raw of (isTruthy(files) ? files : [])) {
       const rel = stripWhitespace(formatValue(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
@@ -622,7 +624,7 @@ export function apiInstallCmd(state, body) {
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust);
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -716,6 +718,6 @@ export function apiDeployCmd(state, body) {
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust);
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

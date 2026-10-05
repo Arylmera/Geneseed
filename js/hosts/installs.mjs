@@ -35,7 +35,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { CONFIG, PACK_ORDER, THEMES, discoverNames } from '../build/source.mjs';
+import { CONFIG, PACK_ORDER, THEMES, discoverNames, knownSkillIds } from '../build/source.mjs';
 import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
@@ -408,6 +408,28 @@ export function excludedRulesOfDir(d) {
   }, []);
 }
 
+/** `Excluded skills: bruno-test-writer, daydream` — written only when something is excluded. */
+const EXCLUDED_SKILLS_RE = /^Excluded skills:[ \t]*(.+?)[ \t]*$/m;
+
+/**
+ * The skills a DEPLOYED install left out, read back so `upgrade`, `rebuild-all` and `diff`
+ * re-render the same set. Same semantics as `excludedRulesOfDir`: a missing line is `[]`
+ * (nothing excluded), and a name this checkout does not ship condemns the whole line to `[]`
+ * — re-admitting a skill is the safe direction, and the flag would refuse the name anyway.
+ */
+export function excludedSkillsOfDir(d) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    const m = EXCLUDED_SKILLS_RE.exec(text);
+    if (!m) return undefined;
+    const names = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+    const known = knownSkillIds();
+    if (!names.every((n) => known.includes(n))) return [];
+    return [...new Set(names)].sort();
+  }, []);
+}
+
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
 
 /** `_harness_mcp._claude_read_manifest`. */
@@ -554,7 +576,7 @@ export function installTargets() {
 export function installedDefaults() {
   const found = {
     theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
-    excludeRules: null,
+    excludeRules: null, excludeSkills: null,
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
@@ -596,6 +618,7 @@ export function installedDefaults() {
     // pre-selects. The cost of that choice is that "excludes nothing" and "no carrier" are
     // indistinguishable here, which is exactly what the marker itself already says.
     if (!found.excludeRules?.length) found.excludeRules = excludedRulesOfDir(base);
+    if (!found.excludeSkills?.length) found.excludeSkills = excludedSkillsOfDir(base);
   }
   return found;
 }

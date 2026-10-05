@@ -40,7 +40,7 @@ import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  excludedRulesOfDir, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
+  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
   readMaybe, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
@@ -97,7 +97,7 @@ function sysExit(msg) {
 const BUILD_FORWARD = [
   ['theme', '--theme'], ['emit', '--emit'], ['footprint', '--footprint'],
   ['posture', '--posture'], ['mode', '--mode'], ['trust', '--trust'], ['doctrines', '--doctrines'],
-  ['excludeRules', '--exclude-rules'], ['out', '--out'], ['root', '--root'],
+  ['excludeRules', '--exclude-rules'], ['excludeSkills', '--exclude-skills'], ['out', '--out'], ['root', '--root'],
   ['configDir', '--config-dir'],
 ];
 
@@ -140,7 +140,7 @@ export function cmdBuild(args) {
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null, trust = DEFAULT_PRESET) {
+  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -164,6 +164,10 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   if (Array.isArray(excludeRules)) {
     argv.push('--exclude-rules', excludeRules.length ? excludeRules.join(',') : 'none');
   }
+  // Skills elide when nothing is excluded: the driver's default IS nothing (no config key
+  // feeds it), so the flag's absence and `none` are the same answer, and every argv that
+  // excludes nothing stays the bytes it was before the flag existed.
+  if (excludeSkills?.length) argv.push('--exclude-skills', excludeSkills.join(','));
   return argv;
 }
 
@@ -217,9 +221,11 @@ export function installProfile(host, scope, root) {
   // dropped it would quietly hand back every rule its owner switched off, and `process 5` is
   // one of them. `null` (no marker) stays `null` so the argv omits the flag, as it always did.
   const excludeRules = excludedRulesOfDir(root);
+  // Skills left out stay left out: an upgrade that forgot them would put them all back.
+  const excludeSkills = excludedSkillsOfDir(root);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules, trust);
+    PACK_ORDER, excludeRules, trust, excludeSkills);
   // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
   // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
   // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
@@ -227,7 +233,7 @@ export function installProfile(host, scope, root) {
   if (scope === 'global') argv.push('--config-dir', root);
   return {
     host, scope, root, state: installState(root, host, scope),
-    emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, argv,
+    emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, excludeSkills, argv,
   };
 }
 
