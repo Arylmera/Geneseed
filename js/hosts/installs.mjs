@@ -107,8 +107,8 @@ export const defaultMode = () => configuredDefault('mode', 'direct');
  * `_build_render.theme_files` — shipped themes, `_`-prefixed scaffolds excluded.
  *
  * `dir` defaults to the checkout's own `themes/`, which is every caller but one: P2's
- * `syncThemes` is driven over a FIXTURE directory by the cross-implementation corpus in
- * `tests/test_maintainer_tools_parity.py`, because the tool it belongs to rewrites committed
+ * `syncThemes` is driven over a FIXTURE directory by the corpus in
+ * `tests/unit/maintainer_tools.test.mjs`, because the tool it belongs to rewrites committed
  * files and cannot be gated against the real ones. A parameter, not a second enumeration —
  * a scaffold mistaken for a theme is exactly what this function exists to prevent, once.
  *
@@ -224,7 +224,7 @@ export function footprintOfDir(d) {
  * the string, so a posture file named `Foreman` renders `**Foreman**` and one named `FOREMAN`
  * would be scanned for as `**Foreman**` by both implementations only if this reproduces the
  * lowercasing. Every shipped name is already lowercase, which is exactly why the difference
- * would go unnoticed — the corpus in `tests/test_pure_function_parity.py` is what covers it.
+ * would go unnoticed — the former Python corpus covered it, and no test drives it now.
  */
 export function capitalize(s) {
   return s.length ? s[0].toUpperCase() + s.slice(1).toLowerCase() : s;

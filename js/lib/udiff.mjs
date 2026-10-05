@@ -4,8 +4,9 @@
  * WHY A HAND-WRITTEN MATCHER RATHER THAN A LIBRARY. The diff is the ENTIRE user-visible
  * payload of `geneseed diff`: the hunks in `--full` and in the exported improvements file
  * are this file's output and nothing else's. A generic JS diff would produce a CORRECT diff
- * and a DIFFERENT one, and `tests/__snapshots__/primitives/` compares the hunks character
- * for character, so "also a valid diff" fails every cell. The alignment below IS the
+ * and a DIFFERENT one, and the former Python suite's corpus compared the hunks character for
+ * character, so "also a valid diff" failed every case (today only the `diff/--full-…` CLI cell
+ * compares hunks, and only one; see `js/inspect/diff.mjs`). The alignment below IS the
  * specification of what this tool prints, and three of its choices are choices no other
  * algorithm makes:
  *

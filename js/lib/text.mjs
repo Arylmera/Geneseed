@@ -52,8 +52,10 @@ export const padEndToWidth = (s, width) => s + ' '.repeat(Math.max(0, width - co
  * raw environment value do it — `js/ui/cli.mjs`'s `helpWidth` and `js/web/activity.mjs` wrap
  * the argument in `stripWhitespace` first.
  *
- * Gated by a corpus in `tests/test_pure_function_parity.py` — a primitive reproduction gets
- * one owner and a corpus, never a cell (P5c).
+ * Its own corpus retired with the Python suite — a primitive reproduction gets one owner and
+ * a corpus, never a cell (P5c) — so what reaches it now is only its callers' gates:
+ * `tests/unit/wizard.test.mjs`'s choice corpus and `tests/unit/web_daemon.test.mjs`'s
+ * non-integer port.
  */
 export function parseIntStrict(s) {
   if (typeof s !== 'string' || s === '') return null;
@@ -148,8 +150,8 @@ export function stripWhitespaceEnd(s) {
  * `Buffer.toString('utf-8')` substitutes U+FFFD for an undecodable sequence, which is
  * `errors='replace'`. The two decoders can disagree on HOW MANY replacement characters a
  * truncated multi-byte sequence yields — Python's maximal-subpart rule against WHATWG's —
- * and the corpus in `tests/test_pure_function_parity.py` is where that is measured rather
- * than assumed.
+ * and the former Python corpus is where that was measured rather than assumed; nothing
+ * measures it now.
  */
 const HEX_PAIR = /^[0-9A-Fa-f]{2}$/;
 

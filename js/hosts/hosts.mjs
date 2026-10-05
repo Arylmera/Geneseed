@@ -66,8 +66,12 @@ export function sovereignBypass(root) {
       // `withDiscardableStderr` because `expanduser` writes its refusal at the RAISE SITE
       // and this caller catches: the reference prints nothing here, so replaying the
       // message would be a stderr divergence on every hook call for one bad entry.
+      //
+      // `resolvePath`, the same resolution as `cwd` above: symlinks and junctions are followed on
+      // BOTH sides, so an entry spelled through a link matches the real directory the session
+      // stands in (and the OpenCode plugins' `norm` applies the identical rule).
       base = withDiscardableStderr(
-        () => normcase(toPlatformPath(expanduser(raw.trim()))).replace(/[\\/]+$/, ''));
+        () => normcase(resolvePath(raw.trim())).replace(/[\\/]+$/, ''));
     } catch {
       // PER ENTRY, and the loop continues. One unusable line in a file the USER hand-edits
       // must not decide the whole function — `expanduser` refuses a `~user` form, and the

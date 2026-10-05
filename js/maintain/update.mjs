@@ -247,8 +247,14 @@ export function countOccurrences(s) {
 export function killTree(child) {
   try {
     if (process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL');
-    else spawnSync('taskkill', ['/F', '/T', '/PID', String(child.pid)],
-      { encoding: 'utf8', timeout: 15000, ...NO_WINDOW });
+    else {
+      // `which`, never a bare name (a bare name resolves against the cwd first on Windows);
+      // no taskkill on PATH falls through to the `child.kill()` below.
+      const taskkill = which('taskkill');
+      if (!taskkill) throw new Error('taskkill not on PATH');
+      spawnSync(taskkill, ['/F', '/T', '/PID', String(child.pid)],
+        { encoding: 'utf8', timeout: 15000, ...NO_WINDOW });
+    }
   } catch {
     try { child.kill(); } catch { /* already gone */ }
   }

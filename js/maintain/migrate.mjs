@@ -3,9 +3,10 @@
  *
  * P10d, AND IT IS NOT A PORT. Every other module here reproduces a Python original byte for
  * byte; this verb is new behaviour on both sides, written twice in the same change so that
- * `tests/harness_golden.py` — a CROSS-IMPLEMENTATION gate — has a reference side at all. A
- * Node-only verb would have nothing to compare against, and `test_every_entry_verb_is_a_real_
- * harness_subcommand` plus `test_the_matrix_covers_every_verb_it_claims` would both fail it.
+ * the former Python CLI matrix — a CROSS-IMPLEMENTATION gate — had a reference side at all. A
+ * Node-only verb would have had nothing to compare against, and that suite's `test_every_entry_
+ * verb_is_a_real_harness_subcommand` plus `test_the_matrix_covers_every_verb_it_claims` would
+ * both have failed it.
  *
  * WHAT IT IS NOT: `rebuild-all`. That was the first answer and it was checked before being
  * discarded, because the re-emit really is the same engine and is reused rather than rewritten

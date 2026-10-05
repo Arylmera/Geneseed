@@ -35,7 +35,7 @@
  * **DO NOT WRITE A SECOND LINE BREAKER.** This block used to argue that `textwrap.wrap` was
  * "a second `difflib` — a stdlib payload with no Node twin". It has one since P1:
  * `wrapText` in `js/ui/cli.mjs`, written because `--help` was the caller that finally
- * required it, frozen at `tests/__snapshots__/textwrap.json` at every width from 11 to 198.
+ * required it, pinned by the written-out rows in `tests/unit/text_layout.test.mjs`.
  * Anything that needs wrapping wraps THAT. `_parse_laws`, `load_registry`, `entity_status` and
  * `_tui_inventory` crossed in P6c and live in `js/inspect/inventory.mjs`.
  */
@@ -268,13 +268,12 @@ export function mark(kind) {
  * `_tui_entries` — the ordered (kind, label, data) rows for the left list. `head` is a
  * section divider and is not selectable.
  *
- * ⚠ THE TWO NEW TIERS ARE GUARDED, AND THE GUARD IS NOT DEFENSIVENESS. This function has two
- * recorded cases per platform in `tests/__snapshots__/primitives/`, replayed under
- * `deepStrictEqual`, and their argument is a synthetic inventory carrying exactly
- * `{agents, skills, laws, theme}` — no recorder survives to re-bless them. Reading
- * `inv.doctrines.length` there THROWS; emitting a head unconditionally changes the recorded
- * result array. Keyed on presence, the recording renders byte-identical and a real inventory
- * gets all three tiers.
+ * ⚠ THE TWO NEW TIERS ARE GUARDED, AND THE GUARD IS NOT DEFENSIVENESS. When they landed, this
+ * function had two recorded cases per platform in the former Python suite's corpus, and their
+ * argument was a synthetic inventory carrying exactly `{agents, skills, laws, theme}`. Reading
+ * `inv.doctrines.length` on such an inventory THROWS; emitting a head unconditionally changes
+ * the result array. Keyed on presence, an inventory without the tiers renders as it always did
+ * and a real inventory gets all three tiers.
  *
  * The order is CONSTITUTIONAL and not alphabetical: ontology, then invariants, then doctrines
  * — the order they are read in, the order AGENT.md renders them, and the order the console's
@@ -328,12 +327,11 @@ export function tuiEntries(inv) {
  * because line 554 moves `sel` onto the first SELECTABLE row — but line 555 is
  * `if not selectable: sel = 0`, and row 0 is always the AGENTS header. So an inventory with
  * no agents, no skills AND no laws crashes the panel on its first frame instead of drawing
- * an empty state. `_TUI_INV_EMPTY` in `tests/test_pure_function_parity.py` is the corpus
+ * an empty state. `_TUI_INV_EMPTY` in the former Python parity suite is the corpus
  * entry that surfaced it. **P7c must not reproduce the crash when it ports `_tui_loop`** —
  * the fix is one `or []` at the call site, and it belongs in the same change as the port.
  *
- * Its only consumer with direct assertions is `tests/unit/setup.test.mjs`; tests/fixtures/pure_probe.mjs
- * also dispatches it to exercise wizard/web_first test scenarios.
+ * Its only consumer with direct assertions is `tests/unit/setup.test.mjs`.
  */
 export function detailLines(kind, label, data) {
   // The three constitutional tiers share one treatment — the label, a blank, then the body —

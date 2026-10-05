@@ -8,7 +8,7 @@
  *
  * WHY THIS HALF AND NOT MORE. The emits split into five stages —
  * RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY (see `_build_global._emit_claude_core`
- * and tests/test_emit_phase_order.py). RENDER produces files Geneseed owns wholesale;
+ * and tests/unit/emit_phase_order.test.mjs). RENDER produces files Geneseed owns wholesale;
  * WIRE reconciles files the user co-owns (settings.json, opencode.json, the CLAUDE.md
  * managed block) and lives in `js/hosts/settings.mjs`, driven from the two emit modules.
  * THIS module is only RENDER

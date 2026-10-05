@@ -17,12 +17,11 @@
  *     beside the cwd, then the global config dir — with `--memory` as the explicit override.
  *     `status` prints the answer of that same resolver, so the two agree about which store
  *     is "the" store.
- *   * THE RESERVED-NAME CHECK IS CASE-INSENSITIVE, WHICH THE ENDPOINT'S IS NOT. It compares
- *     `MEMORY` and `README` exactly. On a case-insensitive filesystem — which is every
- *     Windows install and the default macOS one — `rm memory` then resolves to the index
- *     file, passes the guard, and deletes the thing the agent reads at session start. This
- *     is a NARROWING of what the endpoint accepts, on a destructive path, and it is the one
- *     divergence in this file that is not about resolution.
+ *   * THE RESERVED-NAME CHECK IS CASE-INSENSITIVE, and the web endpoints use this one. On a
+ *     case-insensitive filesystem — every Windows install and the default macOS one — an
+ *     exact `MEMORY`/`README` compare let `rm memory` resolve to the index file, pass the
+ *     guard, and delete the thing the agent reads at session start. The endpoint once had
+ *     that exact compare; it now calls `memoryDelete` from here.
  *
  * `memoryDropIndex` is the hook module's, not a copy: writing the fact and unwriting its
  * index line are two halves of one format, and the half that writes lives there.

@@ -7,7 +7,8 @@
  * and each alone would be enough:
  *
  *   * The generator driver is under a hard `child_process` ban
- *     (`test_the_driver_imports_no_child_process_module`), which is half of the proof that
+ *     (`tests/unit/hook_cli.test.mjs`'s 'the generator driver still reaches no child-process
+ *     module'), which is half of the proof that
  *     it is a real implementation rather than a passthrough to `build.py`. `learn` MUST
  *     spawn — the whole verb is "hand these notes to whatever `$GENESEED_LLM` names".
  *     Putting it in that file means either breaking the gate or weakening it.
@@ -15,7 +16,8 @@
  *     the Python side; a Node twin needs its own, invoked as `<node> <this> context
  *     --root "<cfg>"`.
  *   * `bin/build-driver.mjs` parses generator FLAGS (`--emit`, `--theme`, `--footprint`), and
- *     `test_the_node_driver_classifies_every_emit` asserts a partition over them. Verbs
+ *     'the driver classifies every emit' (`tests/unit/node_driver.test.mjs`) asserts a
+ *     partition over them. Verbs
  *     are a different shape and would sit awkwardly inside that.
  *
  * WHAT BAKES THIS FILE, SINCE P5b. `bin/build-driver.mjs` writes `<node> <checkout>/bin/
@@ -123,7 +125,8 @@ async function main(argv) {
   if (!spec) {
     // "elsewhere", not a file name: naming `bin/geneseed-cli.mjs` here would mean this entry
     // carrying a copy of its sibling's verb table — the one thing
-    // `test_the_two_entry_points_carry_disjoint_verb_sets` exists to keep from happening.
+    // 'the two entry points carry disjoint verb sets' (`tests/unit/hook_cli.test.mjs`) exists to
+    // keep from happening.
     // The COMMAND is not a table: `geneseed` is this package's `bin` entry for the CLI
     // (package.json), it answers every non-hook verb, and it survives the deletion of the
     // interpreter-plus-script invocation this line used to print.

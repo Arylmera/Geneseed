@@ -75,7 +75,7 @@ for (const title of [
 ]) {
   test(`notifyCommand(win32): ${JSON.stringify(title)} travels in env, not in the script`, () => {
     const { cmd, args, env } = notifyCommand("win32", "Geneseed", `Done: ${title}`)
-    assert.equal(cmd, "powershell")
+    assert.match(cmd, /System32[\\/]WindowsPowerShell[\\/]v1\.0[\\/]powershell\.exe$/i)
     assert.equal(env.GS_B, `Done: ${title}`)
     assert.equal(env.GS_T, "Geneseed")
     assert.ok(!args.join(" ").includes("Start-Process calc"), "payload leaked into -Command")

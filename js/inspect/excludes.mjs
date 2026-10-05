@@ -78,14 +78,19 @@ const canon = (p) => resolvePath(p);
 /**
  * `_same` — is this stored entry the same folder as `repo`?
  *
- * `toPlatformPath` and not `path.normalize`: the latter collapses `a/../b` to `b`, and Python's
- * `Path()` does not, so a hand-edited entry carrying `..` matches here and would not match
- * there. Getting that backwards makes `exclude remove` unwire a repo the reference left
- * alone.
+ * Resolved like `repo` itself (`canon`: `..` collapsed, symlinks followed), the one rule the
+ * hook's `sovereignBypass` and the OpenCode plugins apply too — so an entry that EXCLUDES a
+ * folder is exactly the entry `exclude remove` can take back. It used to compare lexically,
+ * mirroring the former Python `Path()`, which made a hand-edited `<repo>/../repo` an entry the
+ * plugins honoured, the hook ignored, and `remove` could not find.
  */
 function same(stored, repo) {
   if (typeof stored !== 'string' || !stored) return false;
-  return normcase(toPlatformPath(stored)) === normcase(repo);
+  try {
+    return normcase(canon(stored)) === normcase(repo);
+  } catch {
+    return false;  // a `~user` form `expanduser` refuses names no folder
+  }
 }
 
 /**

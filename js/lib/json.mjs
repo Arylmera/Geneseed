@@ -5,8 +5,8 @@
  * These are definitions, not an adaptation of somebody else's; see `fs.mjs` for why the
  * measurements against CPython are recorded per function, and why NONE of these is the Node
  * default — the warning the retired `py` prefix used to carry now lives in each docblock.
- * A rule here is a frozen fact about what this tool emits — the corpora under
- * `tests/__snapshots__/` compare it byte for byte and can never be re-recorded.
+ * A rule here is a frozen fact about what this tool emits — the written-out tables in
+ * `tests/unit/lib_primitives.test.mjs` and `tests/unit/settings_jsonc.test.mjs` pin it.
  *
  * `JsonNumber` is why this module holds both the parser and the renderers: the wrapper is
  * created by `parseJson` and read by `formatValue`, `formatRepr`, `isTruthy` and `deepEquals`, so the
@@ -305,8 +305,8 @@ function escapeNonAscii(text) {
  * Indentation is what makes this tractable: passing `indent` switches Python's
  * separators from `(', ', ': ')` to `(',', ': ')`, which is exactly what
  * `JSON.stringify(v, null, 2)` emits. Verified rather than argued \u2014
- * `tests/test_opencode_extras_parity.py` compares both variants against Python over a
- * corpus of container shapes.
+ * the former Python suite compared both variants against Python over a corpus of container
+ * shapes; `tests/unit/lib_primitives.test.mjs` now pins only this writer's number spellings.
  */
 export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
   const text = JSON.stringify(value, null, 2);

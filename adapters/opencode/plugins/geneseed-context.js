@@ -52,7 +52,7 @@
 // opencode-global` and `--emit opencode` both place it for you. Keep ONE copy:
 // OpenCode dedups plugins by npm name+version only, so two local copies both load.
 
-import { promises as fs } from "node:fs"
+import { promises as fs, realpathSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
@@ -73,6 +73,16 @@ const norm = (p) => {
     raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))
   }
   let s = path.resolve(raw)
+  // Symlinks and junctions followed through the deepest existing ancestor (the rest appended),
+  // the rule js/hosts/hosts.mjs resolvePath applies: an exclude spelled through a link matches
+  // on every host, not only on Claude/Bob.
+  for (let cur = s, tail = []; ;) {
+    try { s = path.join(realpathSync.native(cur), ...tail); break } catch { /* walk up */ }
+    const up = path.dirname(cur)
+    if (up === cur) break
+    tail.unshift(path.basename(cur))
+    cur = up
+  }
   return process.platform === "win32" ? s.toLowerCase() : s
 }
 async function sovereignBypass(cwd) {

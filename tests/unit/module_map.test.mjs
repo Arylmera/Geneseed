@@ -40,14 +40,14 @@ const RECORDS = new Set(['CHANGELOG.md', 'docs/design-history.md']);
  *
  * A record is prose somebody could rewrite and chooses not to. These are RECORDED BYTES — the
  * answers a reference implementation gave, captured while it still existed, with no recorder left
- * to re-make them. `tests/__snapshots__/primitives/*.json` holds paths inside recorded INPUTS and
+ * to re-make them. `tests/helpers/matrix/*.json` holds paths inside recorded INPUTS and
  * outputs; editing one to satisfy this test would not fix a pointer, it would falsify the
  * measurement and silently re-bless a corpus.
  *
  * Found by this test on its first run, which is the argument for the exemption existing in
  * writing rather than as a glob somebody trimmed until the run went green.
  */
-const isFrozen = (rel) => rel.startsWith('tests/__snapshots__/') || rel.startsWith('tests/helpers/matrix/');
+const isFrozen = (rel) => rel.startsWith('tests/helpers/matrix/');
 
 const tracked = (...globs) => execFileSync('git', ['ls-files', ...globs],
   { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26 })

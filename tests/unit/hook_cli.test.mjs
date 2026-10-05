@@ -18,7 +18,7 @@
  *
  * THE ONE EXCEPTION IS `NATIVE`, and it is exactly the thing that cannot be derived: the verbs
  * that never had a CPython original and so can never have a recorded cell. See its docblock — it
- * is listed on purpose, and cross-checked against the sibling copy in `tests/snapshot/cli_help.test.mjs`.
+ * is listed on purpose, and and it is the only copy (the former recorded help corpus that held a sibling is retired).
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -155,8 +155,8 @@ const HERE = process.platform === 'win32' ? 'win32' : 'posix';
 const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 
 /**
- * ⚠ THE VERBS NO CELL CAN EVER COVER — the second instance of the hazard `tests/snapshot/cli_help.test.mjs`
- * names first, under the same name and for the same reason.
+ * ⚠ THE VERBS NO CELL CAN EVER COVER — the second instance of the hazard the former recorded help corpus
+ * named first, under the same name and for the same reason.
  *
  * A cell is a COMPARISON of two implementations. `catalog`, `mcp` and `memory` reached the product
  * through the web console and never had a subcommand, so `rituals/harness.py` has nothing to be
@@ -167,7 +167,7 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
  * So the equality below becomes TWO NAMED POPULATIONS rather than a weakened one. Listing the
  * native population by name is what keeps this a gate: an unnamed verb with no cells falls into
  * neither population and fails loudly, where a `covered ⊆ carried` containment would have let it
- * through ungated. What they are held to instead lives in `tests/snapshot/cli_help.test.mjs` (help layout)
+ * through ungated. What they are held to instead lives in `tests/unit/text_layout.test.mjs` (help layout)
  * and in the absolute gates of their own units — nothing here claims to gate their behaviour.
  * `loop` joined the original three later, under the same rule below rather than a new one: it
  * is a state machine with no Python original, so it has no cell to be compared against either.
@@ -475,7 +475,7 @@ const ALLOWED_SPAWNS = {
     binding: '{ spawnSync }',
     calls: 1,
     what: '`powershell -NoProfile -Command <script>` — the persistent USER Path',
-    literals: ["const r = spawnSync('powershell',",
+    literals: ["const r = spawnSync(ps,", "const ps = which('powershell');",
       "['-NoProfile', '-Command', winUserPathScript(action, directory)],"],
   },
   'maintain/update.mjs': {
@@ -485,7 +485,7 @@ const ALLOWED_SPAWNS = {
     what: '`git …` (the update transport), `taskkill /T` (a timed-out fetch\'s tree), and '
       + '`node bin/geneseed-{cli,}.mjs` re-executed over the PULLED source',
     literals: ["const exe = which('git');",
-      "spawnSync('taskkill', ['/F', '/T', '/PID', String(child.pid)]",
+      "spawnSync(taskkill, ['/F', '/T', '/PID', String(child.pid)],", "const taskkill = which('taskkill');",
       "[path.join(String(cand), 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle'],",
       "[path.join(String(here), 'bin', 'build-driver.mjs'), ...buildArgs],",
       "[path.join(String(here), 'bin', 'geneseed-cli.mjs'), 'rebuild-all'],",
@@ -520,7 +520,7 @@ const ALLOWED_SPAWNS = {
     calls: 1,
     spawnCalls: 1,
     what: '`node bin/geneseed-cli.mjs <verb>` (the job) and `taskkill /T` (its cancel)',
-    literals: ["spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)]",
+    literals: ["spawnSync(taskkill, ['/T', '/F', '/PID', String(child.pid)]", "const taskkill = which('taskkill');",
       'const NODE = () => process.execPath;',
       "const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');",
       "const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');",
@@ -538,7 +538,7 @@ const ALLOWED_SPAWNS = {
       + '`osascript -e <script>` (macOS, `choose folder`, ported verbatim from the deleted '
       + 'Python) — never both, and never anything built from the request: the endpoint takes '
       + 'no client input at all',
-    literals: ["return runPicker('powershell', ['-NoProfile', '-STA', '-Command', PICK_SCRIPT_WIN], done,",
+    literals: ["return runPicker(powershell, ['-NoProfile', '-STA', '-Command', PICK_SCRIPT_WIN], done,", "const powershell = which('powershell');",
       "return runPicker('osascript', ['-e', PICK_SCRIPT_MAC], done, (code, out, err) => {",
       'child = spawn(cmd, args, { ...NO_WINDOW });'],
   },
