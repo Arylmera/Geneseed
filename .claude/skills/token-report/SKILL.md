@@ -32,8 +32,9 @@ picking the most recently active source:
 | Claude Code | `~/.claude/projects/<slug>/*.jsonl` | exact usage per request |
 | IBM Bob | `~/.bob/projects/<slug>/*.jsonl` (Claude-shaped, `$BOB_CONFIG_DIR` honoured) | exact usage per request |
 | OpenCode | `~/.local/share/opencode/opencode.db` (SQLite, v1.2+; pre-1.2 falls back to `storage/` JSON files) | exact `tokens` per request; child sessions attributed as subagents |
+| OpenClaude | `~/.openclaude/projects/<slug>/*.jsonl` (Claude-shaped, `$OPENCLAUDE_CONFIG_DIR` honoured) | exact usage per request |
 
-Useful flags: `--host claude|bob|opencode` to force a host,
+Useful flags: `--host claude|bob|openclaude|opencode` to force a host,
 `--transcript <path>` / `--session <id>` for a specific session,
 `--limit <tokens>` for the context-window limit used in the % columns
 (default 200000), `--top <n>` for the heaviest-items list.

@@ -11,7 +11,7 @@ Once the harness is installed for OpenCode (global or per repo), OpenCode can ru
 
 ```
 opencode run "review the staged diff and list any correctness bugs"   # one shot, prints to stdout
-opencode run -m anthropic/claude-sonnet-4-5 "…"                       # pin a model for this run
+opencode run -m anthropic/claude-sonnet-5 "…"                         # pin a model for this run
 cat issue.md | opencode run "triage this and propose a fix plan"      # pipe input in
 ```
 
