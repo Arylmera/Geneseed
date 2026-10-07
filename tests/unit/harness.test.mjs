@@ -1096,6 +1096,19 @@ test('discovery treats AsciiDoc docs exactly like markdown ones', () => {
   });
 });
 
+test('document-project draws C4 L1-L3 only and points cross-container changes at L2', () => {
+  // C4 level 4 is the code itself: a hand-drawn class diagram only drifts, so the skill forbids
+  // it in words and never lists it among the architecture sections. And an agent about to change
+  // more than one container must be sent to the L2 diagram first — the pointer lives in the
+  // AGENTS.md template's "Before you change" item, which is what agents actually read.
+  const skill = fs.readFileSync(path.join(SRC, 'skills', 'document-project.md'), 'utf8');
+  assert.match(skill, /Never draw L4/);
+  assert.doesNotMatch(skill, /\(C4 L4\)/);
+  const before = skill.match(/\*\*Before you change…\*\*[\s\S]*?\n\n/);
+  assert.ok(before, 'the AGENTS.md template lost its "Before you change" item');
+  assert.match(before[0], /crosses\s+containers → read the L2 diagram/);
+});
+
 test('the OpenCode plugin discovers AsciiDoc docs like the hook does', () => {
   // The plugin ships on its own and cannot import the hook, so its copy of the rule is read
   // from source: the extension test accepts .adoc, every discovery arm goes through it, and
