@@ -45,9 +45,9 @@ export function gateAddress(key) {
 // The rules a hook enforces at the tool boundary, by catalog address. Transcribed from
 // js/hosts/hooks.mjs, whose `ask(args, <gate>, <id>, ...)` calls are the gates: Law I's
 // secret scan and process 1's persist check (rule-gate), Law IV's history rewrite and
-// process 5's commit/push consent (git-gate). __tests__/constitution.test.js reads that
-// file and fails when the two drift apart.
-export const HOOK_GATED = new Set(['I', 'IV', 'process.1', 'process.5'])
+// process 5's commit/push consent (git-gate), and rigor 5's protected checks (rule-gate).
+// __tests__/constitution.test.js reads that file and fails when the two drift apart.
+export const HOOK_GATED = new Set(['I', 'IV', 'process.1', 'process.5', 'rigor.5'])
 
 // "Enforced by" for one row: a hook gate, or the instruction text alone.
 export const enforcedBy = (addr) => (HOOK_GATED.has(addr) ? 'Hook gate' : 'Instruction')

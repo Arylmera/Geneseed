@@ -45,8 +45,8 @@ describe('gateAddress', () => {
 })
 
 describe('HOOK_GATED', () => {
-  it('names the four rules a hook enforces, and nothing else reads as a gate', () => {
-    expect([...HOOK_GATED].sort()).toEqual(['I', 'IV', 'process.1', 'process.5'])
+  it('names the five rules a hook enforces, and nothing else reads as a gate', () => {
+    expect([...HOOK_GATED].sort()).toEqual(['I', 'IV', 'process.1', 'process.5', 'rigor.5'])
     expect(enforcedBy('IV')).toBe('Hook gate')
     expect(enforcedBy('III')).toBe('Instruction')
   })

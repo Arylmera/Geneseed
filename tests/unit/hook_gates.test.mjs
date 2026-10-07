@@ -561,3 +561,54 @@ test('also asks: no LOOP.md, a LOOP.md without the state marker, or a shared bra
     finally { cleanup(); }
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// The sensor gate (External Gate): a project lists the checks its agent must not edit in
+// `.geneseed/protected-checks.txt`, one repo-relative path per line. A write at or under one
+// asks on Claude and blocks on Bob; everything else defers. The file is found by walking up
+// from the TARGET to the first `.git`, so a file above the repo protects nothing.
+
+function sensorRepo(sb, lines) {
+  const repo = path.join(sb.path, 'repo');
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  fs.mkdirSync(path.join(repo, '.geneseed'));
+  fs.writeFileSync(path.join(repo, '.geneseed', 'protected-checks.txt'), lines);
+  return repo;
+}
+
+test('a write under a protected check asks under External Gate; a near miss defers', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, '# checks the agent may not edit\r\ntests/\nci/verify.sh\n\n');
+    for (const p of [path.join(repo, 'tests', 'a.test.js'), path.join(repo, 'tests', 'deep', 'b.js'),
+      path.join(repo, 'ci', 'verify.sh')]) {
+      const dec = askDecision(hookRun('rule-gate', { stdin: writePayload(p) }), p);
+      assert.ok(dec.permissionDecisionReason.includes('External Gate'), dec.permissionDecisionReason);
+      assert.ok(dec.permissionDecisionReason.includes('protected-checks.txt'), dec.permissionDecisionReason);
+    }
+    for (const p of [path.join(repo, 'src', 'a.js'), path.join(repo, 'ci', 'verify.sh.bak'),
+      path.join(repo, 'testsuite', 'x.js'), path.join(repo, '.geneseed', 'other.md')]) ruleDefers(p);
+  } finally { sb.cleanup(); }
+});
+
+test('the list itself is protected, and Bob blocks rather than asks', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'tests/\n');
+    const list = path.join(repo, '.geneseed', 'protected-checks.txt');
+    askDecision(hookRun('rule-gate', { stdin: writePayload(list) }), list);
+    const r = hookRun('tool-gate', { stdin: writePayload(path.join(repo, 'tests', 'a.js')), host: 'bob' });
+    assert.equal(r.rc, 2, `bob: expected exit 2, got ${r.rc}`);
+  } finally { sb.cleanup(); }
+});
+
+test('no list in the repo protects nothing, even with one above the repo', () => {
+  const sb = makeSandbox();
+  try {
+    fs.mkdirSync(path.join(sb.path, '.geneseed'));
+    fs.writeFileSync(path.join(sb.path, '.geneseed', 'protected-checks.txt'), 'repo/tests/\n');
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    ruleDefers(path.join(repo, 'tests', 'a.js'));
+  } finally { sb.cleanup(); }
+});

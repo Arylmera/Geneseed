@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- Protected checks. List the checks and tests your agent is judged by in `.geneseed/protected-checks.txt` at the repo root, one path per line, and a write to any of them asks you first on Claude Code, is blocked on Bob and refused on OpenCode, citing *External Gate*. A check the agent can edit is not a check. Nothing changes until a project adds the file. Shell edits are not seen, so keep running the checks in CI.
+
 ### Changed
 
 - Loops repair once, then stop for you. The test repair rings of every shipped template (`apply-test`, `fix-test`, `write-run`, `stabilise`) are now `max: 1`: one repair, then the attempt is discarded for one fresh try, then the loop stops. A second revision makes code worse, not better — 0.82 correct after one revision, 0.673 after two ([arXiv 2607.24604](https://arxiv.org/abs/2607.24604)). A ring's `max` now binds its own repair edge even when a wider ring shares its nodes; before, `review-fix` (max 3) quietly let `apply-test` retry four times.

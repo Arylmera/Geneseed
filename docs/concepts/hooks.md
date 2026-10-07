@@ -36,6 +36,7 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 **rule-gate.** Runs before every file write.
 - Content that looks like a credential (a cloud access key, a GitHub or Anthropic token, a Slack token, a private-key block) going into any file other than `.env*` gets a prompt citing *Sealed Secrets*.
 - A write to `user-rules.md`, `MEMORY.md` or a file in the install's `memory/` gets a prompt citing *Persist Insight*: whether something is a standing rule or a fact to remember is your call, settled through the `rule` [skill](skills.md).
+- A write to a check the project protects gets a prompt citing *External Gate* (on Bob, it is blocked). A project opts in with `.geneseed/protected-checks.txt` at its git root: one repo-relative file or folder per line, `#` for comments — the checks and tests the agent is judged by. A check the agent can edit is not a check. The list protects itself. Only file-write tools are seen: a shell `sed -i` or redirect is not, so run the same checks in CI as the boundary that holds.
 - Ordinary edits pass untouched.
 
 **learn.** Takes the tail of the transcript and asks a model to distil what is worth keeping into one-fact-per-file entries under `memory/`, skipping duplicates. It needs `GENESEED_LLM` set to a model command, for example:

@@ -201,7 +201,7 @@ const BOB_DENY_EXIT = 2;
  * logs. `gate-error` is a warning too: a crashed gate that blocked every tool call would be
  * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
  */
-const BLOCK_RULES = new Set(['law-1', 'law-4']);
+const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5']);
 
 /**
  * THE GATE LEDGER — one JSON line per ask, nothing per defer.
@@ -358,6 +358,33 @@ const SECRET_RE =
   /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
 
+/**
+ * External Gate's boundary half: the checks an agent is judged by must sit outside what it can
+ * edit, or a failing check is one edit away from a passing one. A project opts in by listing
+ * them, one repo-relative path per line (`#` comments), in `.geneseed/protected-checks.txt` at
+ * its git root — found by walking up from the WRITE TARGET, not the cwd, so a session in one repo
+ * writing into another reads that other repo's list. The list protects itself. Returns the entry
+ * the path falls under, or null. ponytail: a write tool only — a shell `sed -i` or redirect is
+ * not seen here; CI running the checks is the boundary that holds against that.
+ */
+export const SENSOR_LIST = '.geneseed/protected-checks.txt';
+function protectedCheck(p) {
+  try {
+    const target = resolvePath(p);
+    const root = gitRootOf(path.dirname(target));
+    if (!root) return null;
+    const text = readFileSync(path.join(root, SENSOR_LIST), 'utf8');
+    // `normcase` folds case AND slashes on Windows, so both sides go through it, the trailing
+    // separator of the prefix included.
+    const rel = normcase(path.relative(root, target));
+    const entries = [SENSOR_LIST, ...text.split(/\r?\n/).map((l) => l.trim().replace(/[\\/]+$/, ''))
+      .filter((l) => l && !l.startsWith('#'))];
+    return entries.find((e) => rel === normcase(e) || rel.startsWith(normcase(`${e}/`))) ?? null;
+  } catch {
+    return null;   // no list (the common case) or an unreadable one: nothing is protected
+  }
+}
+
 function ruleGate(args) {
   if (sovereignBypass(args.root)) return 0;
   return ruleDecide(args, readPayload());
@@ -377,6 +404,12 @@ function ruleDecide(args, payload) {
     return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
       + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
       + 'tracked file.');
+  }
+  const sensor = protectedCheck(p);
+  if (sensor) {
+    return ask(args, 'rule-gate', 'rigor-5', `Geneseed (External Gate) — ${p} is a protected `
+      + `check (${sensor}, listed in ${SENSOR_LIST}). A check the agent can edit is not a `
+      + 'check: fix the code, not the check, unless the user asks for this edit.');
   }
   const target = ruleGateTarget(p, args.root);
   if (!target) return 0;

@@ -351,3 +351,18 @@ test("permission.ask: the command is read ONLY from input.metadata.command — a
     assert.equal(output.status, "ask")
   } finally { cleanup() }
 })
+
+// ---- protected checks (External Gate) ------------------------------------------
+// Same list as the Claude/Bob rule-gate reads: `.geneseed/protected-checks.txt` in the repo.
+// OpenCode has no ask tier, so a write there is refused outright; GENESEED_GUARD=off allows it.
+
+test("blocks a write under a protected check path, not beside it", async () => {
+  const repo = path.join(tmp, "sensed")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "# sensors\ntests/\n")
+  assert.equal(await blocked("write", { filePath: path.join(repo, "tests", "a.test.js") }), true)
+  assert.equal(await blocked("edit", { filePath: path.join(repo, ".geneseed", "protected-checks.txt") }), true)
+  assert.equal(await blocked("write", { filePath: path.join(repo, "testsuite", "a.js") }), false)
+  assert.equal(await blocked("write", { filePath: path.join(repo, "src", "a.js") }), false)
+})
