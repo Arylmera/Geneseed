@@ -21,6 +21,9 @@ brick's behalf. This applies to `plan` and `review` as much as to the newer bric
 brick whose finding the next brick needs writes it to a file in the OS temp directory and reports
 that file's path with the outcome.
 
+One exception keeps the verdict fresh: each `test` report replaces every earlier `test` note, so a
+repair reads only the findings for the code as it stands, never a trace from an older version.
+
 ## `description` and `rules`: what a template is for, and what every brick must do
 
 A template's JSON carries two prose fields, and they are never confused:

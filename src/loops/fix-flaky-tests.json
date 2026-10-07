@@ -24,7 +24,7 @@
   ],
   "loops": [
     { "name": "iterations", "nodes": ["identify", "apply", "flake-check", "test", "review"], "max": 10, "iteration": true },
-    { "name": "stabilise", "nodes": ["apply", "flake-check"], "max": 4 },
+    { "name": "stabilise", "nodes": ["apply", "flake-check"], "max": 1 },
     { "name": "review-fix", "nodes": ["apply", "flake-check", "test", "review"], "max": 3 }
   ]
 }

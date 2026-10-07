@@ -178,8 +178,14 @@ const FOOTPRINTS = ['full', 'lean'];
  * own description. Even those two rows overflow lean by 118. Measured `files` carrier after:
  * full 61_480 (inside 61_500, headroom 20), lean 38_656. `lean` raised by exactly that
  * overrun, 38_538 → 38_656, not rounded.
+ *
+ * BOTH RAISED 2026-10-07, for the verification bundle (arXiv 2607.24604, via Devoxx 2026):
+ * Bound the Loop gained one repair per check-and-repair loop and a verdict only on the final
+ * artifact, in both halves — an amendment, not a new rule; the engine half lives in
+ * `js/loop/state.mjs`. Both ceilings were already full (headroom 20 / 0). Measured `files`
+ * carrier after: full 61_715, lean 38_854 — each raised by exactly that, not rounded.
  */
-const CEILING = { full: 61_500, lean: 38_656 };
+const CEILING = { full: 61_715, lean: 38_854 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the

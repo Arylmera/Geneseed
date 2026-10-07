@@ -177,17 +177,19 @@ test('trailers format', () => {
 // `apply`/`test`'s budget is 1 + max(apply-test.max=5, review-fix.max=3) = 6, unchanged from
 // before `review-fix` existed; `review`'s budget is 1 + review-fix.max = 4, new.
 test('F1: review -> apply is bounded by its own declared inner loop (review-fix, max 3)', () => {
+  // Since the repair-ring counter, `max: 3` is three review repairs exactly, as
+  // docs/concepts/loops.md states it: the fourth review -> apply exhausts review-fix. The node
+  // budget alone let a fourth one through, because apply's budget is widened by apply-test.
   const s = start(); s.node = 'identify'; s.iteration = 1;
   recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
-  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' }); // apply -> test, entry 1
-  for (let i = 0; i < 4; i += 1) {
-    assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'review' }); // test -> review, entries 1..4
-    assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'apply' });  // review -> apply, entries 2..5
-    if (i < 3) assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' }); // apply -> test, entries 2..4
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' }); // apply -> test
+  for (let i = 0; i < 3; i += 1) {
+    assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'review' }); // test -> review
+    assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'apply' });  // review repair i+1
+    assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' });   // apply -> test
   }
-  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'test' }); // apply -> test, entry 5 (allowed: 6, ok)
-  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'),                   // test -> review, entry 5 > allowed 4: exhaust
-    { discard: true, resplit: true });
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass'), { node: 'review' });
+  assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { discard: true, resplit: true }); // 4th repair
   assert.equal(s.node, 'identify'); assert.equal(s.resplit, true);
   assert.deepEqual(s.notes, ['iteration 1: review-fix exhausted its max of 3; re-split once']);
 });
@@ -393,7 +395,9 @@ test('I1: exhausting an inner loop during setup stops the loop instead of jumpin
   g.loops.push({ name: 'repro', nodes: ['reproduce'], max: 2 });
   const s = initState({ title: 't', requirement: 'r', graph: g, preset: 'balanced' });
   scoreDeclared(s, { actions: ['new-file'], writeSet: ['test/a.test.js'], intent: 'reproduce' });
-  for (let i = 0; i < 3; i += 1) assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'reproduce' });
+  // `max: 2` is two repairs: the start node's first run is not a re-entry, and the repair-ring
+  // counter charges each reproduce -> reproduce edge to `repro`, so the third one exhausts it.
+  for (let i = 0; i < 2; i += 1) assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'reproduce' });
   assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { stopped: 'setup repro exhausted its max of 2' });
   assert.equal(s.status, 'stopped');
 });
@@ -808,4 +812,48 @@ test('initState starts at iteration 1 when graph.start is the iteration head, an
   const s = initState({ title: 't', requirement: 'r', graph: g });
   assert.equal(s.iteration, 1);
   assert.deepEqual(s.gateAmends, {});
+});
+
+// --- Verification bundle (Devoxx 2026: arXiv 2607.24604, "Looping Is Not Reliability") -------
+
+// A repair ring's `max` binds its own repair edge, not only the shared node budget. The edge that
+// re-enters a loop's first node from inside it (test -> apply) is charged to the SMALLEST
+// declared loop holding both ends — apply-test here, never the wider review-fix — so a
+// `max: 1` ring means one repair even while review-fix (max 3) widens `apply`'s node budget
+// to 4. Before the ring counter, the second test failure here returned { node: 'apply' }.
+test('a repair ring of max 1 exhausts on the second repair, whatever wider ring shares its nodes', () => {
+  const g = bugfix(); g.loops.find((l) => l.name === 'apply-test').max = 1;
+  const s = initState({ title: 't', requirement: 'r', graph: g }); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass');                                         // apply -> test
+  assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { node: 'apply' });   // repair 1
+  recordOutcome(s, BRICKS, 'pass');                                         // apply -> test
+  assert.deepEqual(recordOutcome(s, BRICKS, 'fail'), { discard: true, resplit: true }); // repair 2: no
+  assert.deepEqual(s.notes, ['iteration 1: apply-test exhausted its max of 1; re-split once']);
+});
+
+// `error` is the engine's reserved outcome: a check that could not produce a verdict (it crashed,
+// or its evidence was never wired) stops the loop for a human — never a repair. A brick that
+// declares it needs no edge for it; with none, the engine routes it to $stop.
+test('error with no declared edge stops the loop, and is never repaired', () => {
+  const bricks = new Map([...BRICKS, brick('test', 'read', ['pass', 'fail', 'error'])]);
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, bricks, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, bricks, 'pass');                                         // apply -> test
+  assert.deepEqual(recordOutcome(s, bricks, 'error'), { stopped: 'test reported error' });
+  assert.equal(s.status, 'stopped');
+});
+
+// A fresh verdict: each `test` report supersedes every earlier `test` note, so the next repair
+// reads only the findings for the code as it now stands. Stale traces broke 34 of 135 correct
+// attempts in the paper, fresh ones 4. Other bricks' notes (plan, review findings) are kept.
+test("a test report drops every earlier test note; other bricks' notes stay", () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card, note: 'plan step 1' }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass');
+  recordOutcome(s, BRICKS, 'fail', { note: 'old finding' });
+  recordOutcome(s, BRICKS, 'pass');
+  assert.deepEqual(s.notes, ['iteration 1 (identify): plan step 1', 'iteration 1 (test): old finding']);
+  recordOutcome(s, BRICKS, 'fail', { note: 'new finding' });
+  assert.deepEqual(s.notes, ['iteration 1 (identify): plan step 1', 'iteration 1 (test): new finding']);
 });

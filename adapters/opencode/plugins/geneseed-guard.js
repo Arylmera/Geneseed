@@ -288,6 +288,32 @@ function ruleStoreTarget(p) {
   return nocase(abs).startsWith(nocase(mem) + "/") ? "memory" : null
 }
 
+// ---- protected checks (External Gate) ------------------------------------------
+// Twin of js/hosts/hooks.mjs's `protectedCheck` — keep in step. A project lists the checks its agent
+// must not edit in `.geneseed/protected-checks.txt` at its git root, one repo-relative path per
+// line; the list protects itself. Found from the WRITE TARGET up to the first `.git`, re-read on
+// every write (a short file, read only on a write call). No ask tier here, so a hit is a deny.
+const SENSOR_LIST = ".geneseed/protected-checks.txt"
+function protectedCheck(p) {
+  try {
+    const target = path.resolve(p)
+    let root = path.dirname(target)
+    while (!existsSync(path.join(root, ".git"))) {
+      const up = path.dirname(root)
+      if (up === root) return null
+      root = up
+    }
+    const text = readFileSync(path.join(root, SENSOR_LIST), "utf8")
+    const fold = (s) => nocase(s.replace(/\\/g, "/"))
+    const rel = fold(path.relative(root, target))
+    const entries = [SENSOR_LIST, ...text.split(/\r?\n/).map((l) => l.trim().replace(/[\\/]+$/, ""))
+      .filter((l) => l && !l.startsWith("#"))]
+    return entries.find((e) => rel === fold(e) || rel.startsWith(fold(e) + "/")) ?? null
+  } catch {
+    return null // no list (the common case) or an unreadable one: nothing is protected
+  }
+}
+
 // Mutation-class tools for the wiki check — wider than WRITE_TOOLS because moving,
 // renaming, or deleting a protected note is as destructive as overwriting it. Same
 // substring stance: over-matching the class is harmless (see WRITE_TOOLS note).
@@ -437,6 +463,8 @@ export const GeneseedGuard = async (ctx) => {
           const p = pickPath(args)
           if (p && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
           if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
+          const sensor = p && protectedCheck(p)
+          if (sensor) { await deny(`${p} is a protected check (${sensor}, listed in ${SENSOR_LIST}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
           const store = p && ruleStoreTarget(p)
           if (store && !RULE_STORE_BUMPED.has(p)) {
             RULE_STORE_BUMPED.add(p)

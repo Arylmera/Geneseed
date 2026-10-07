@@ -169,14 +169,14 @@ const DOCTRINE_TOKEN_RE = /\{\{DOCTRINE(?:\}\}|:)/;
 /**
  * The rules the hooks enforce at the tool boundary, and the address each is bound to there. The
  * hook path cannot afford to read the canon on every tool call, so its gate-ledger keys
- * (`law-1`, `law-4`, `process-1`, `process-5` in `js/hosts/hooks.mjs` and the OpenCode guard
+ * (`law-1`, `law-4`, `process-1`, `process-5`, `rigor-5` in `js/hosts/hooks.mjs` and the OpenCode guard
  * plugin), `CONSENT_RULE` in `js/hosts/settings.mjs` and the console's `HOOK_GATED` stay
  * number-keyed — and this pin is what turns a renumber that moves one of these rules into a
  * doctor failure instead of a gate silently guarding its neighbour.
  */
 export const HOOK_PINNED = {
   'sealed-secrets': 'I', 'deletion-is-deliberate': 'IV',
-  'persist-insight': 'process 1', 'consent-before-push': 'process 5',
+  'persist-insight': 'process 1', 'consent-before-push': 'process 5', 'external-gate': 'rigor 5',
 };
 
 /**

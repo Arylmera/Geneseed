@@ -513,7 +513,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
       // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
       // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
-      // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries.
+      // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries, and for a
+      // write under a project's own `.geneseed/protected-checks.txt` — the project opted in.
       PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
       Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem} || exit 0` }] }],
     };

@@ -22,7 +22,7 @@
   ],
   "loops": [
     { "name": "iterations", "nodes": ["identify", "characterize", "test", "mutation-check"], "max": 20, "iteration": true },
-    { "name": "write-run", "nodes": ["characterize", "test"], "max": 3 },
+    { "name": "write-run", "nodes": ["characterize", "test"], "max": 1 },
     { "name": "kill-mutants", "nodes": ["characterize", "test", "mutation-check"], "max": 3 }
   ],
   "weights": { "new-file": 0.2 }

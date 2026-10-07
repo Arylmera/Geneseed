@@ -47,6 +47,17 @@ all gets exactly 1 — no re-entry — which is also why **every cycle inside an
 named inner loop** in the graph JSON: `geneseed loop check` (and `loop init`, which runs the same
 check) refuses a graph with an undeclared cycle inside an iteration, before a single node runs.
 
+**A ring's `max` is also its own repair budget.** The edge that returns to a ring's first node
+from inside it — `test` → `apply` — is charged to the smallest ring holding both ends, and that
+ring stops at its `max` even when a wider ring raises the node's shared budget. The shipped test
+rings (`apply-test`, `fix-test`, `write-run`, `stabilise`) are `max: 1`: one repair, then the
+attempt is discarded for one fresh try, then the loop stops for you. A second revision makes the
+result worse, not better — 0.82 correct after one, 0.673 after two (arXiv 2607.24604).
+
+**`error` always stops.** A brick may declare the outcome `error` without an edge for it; the
+engine sends it to `$stop`. The shipped `test` brick reports it when a check crashed or its
+evidence was never wired — no verdict is not a failure to repair.
+
 ## Limits
 
 - **No parallel nodes.** The graph runs one node at a time; there is no fan-out.
