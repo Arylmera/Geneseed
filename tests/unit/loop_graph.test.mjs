@@ -150,3 +150,10 @@ test('category is absent, or one of the five', () => {
   assert.deepEqual(checkGraph({ ...bugfix(), category: '' }, BRICKS), refused);
   assert.deepEqual(checkGraph({ ...bugfix(), category: ['tests'] }, BRICKS), refused);
 });
+
+// `error` is reserved: a brick may declare it without an edge (the engine routes it to $stop),
+// so adding it to a shipped brick breaks no user graph. A declared edge for it is still checked.
+test('rule 2 — a declared error outcome needs no edge', () => {
+  const bricks = new Map([...BRICKS, b('test', 'read', ['pass', 'fail', 'error'])]);
+  assert.deepEqual(checkGraph(bugfix(), bricks), []);
+});

@@ -83,7 +83,8 @@ export function checkGraph(graph, bricks) {
     if (!brick) continue;
     for (const o of brick.outcomes) {
       const count = edges.filter((e) => e.from === n && e.on === o).length;
-      if (count === 0) problems.push(`node ${n}: no edge for outcome ${o}`);
+      // `error` is reserved: with no edge the engine routes it to $stop (`recordOutcome`).
+      if (count === 0 && o !== 'error') problems.push(`node ${n}: no edge for outcome ${o}`);
       else if (count > 1) problems.push(`node ${n}: ${count} edges for outcome ${o}`);
     }
   }

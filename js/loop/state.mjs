@@ -288,6 +288,22 @@ function allowedEntries(graph, v) {
   return { allowed: widest ? 1 + widest.max : 1, loop: widest };
 }
 
+// The repair ring an edge closes: the smallest non-iteration loop whose FIRST node is the edge's
+// target and which also holds its source (test -> apply is apply-test's repair, review -> apply
+// review-fix's). Its own counter makes `max` the number of repairs that ring may spend, even when
+// a wider ring sharing the node raises the node budget above it — `max: 1` is one repair, then
+// `exhaust`'s fresh attempt, then a stop (arXiv 2607.24604: a second revision lowers accuracy).
+// Its key lives in `counters`, so every reset of a unit resets it too.
+function repairRing(graph, from, to) {
+  const iteration = iterationLoop(graph);
+  let ring = null;
+  for (const m of graph.loops) {
+    if (m === iteration || m.nodes[0] !== to || !m.nodes.includes(from)) continue;
+    if (!ring || m.nodes.length < ring.nodes.length) ring = m;
+  }
+  return ring;
+}
+
 // Porcelain lines are `XY <path>`; strip the 2-char status + space, slash-normalise, drop
 // LOOP.md rows (the engine rewrites it on every action — it is never part of the scored work)
 // and a lingering LOOP.md.tmp (the atomic writer's own sibling — see `writeLoopFile`'s docblock).
@@ -348,10 +364,17 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
   // this call closes the unit, re-splits, or stops the loop. `notes` is never reset mid-run
   // (only `exhaust`'s own push and `decideAwaiting` add to it otherwise), so it survives
   // `resetUnit`/`finishUnit` — which a card does not: `resetUnit` clears it.
+  // A fresh verdict: `test`'s latest report supersedes its earlier ones, so a repair never reads
+  // findings about code that has since changed (stale traces broke 34 of 135 correct attempts
+  // in arXiv 2607.24604, fresh ones 4). Every other brick's notes are a record and are kept.
+  if (from === 'test') state.notes = state.notes.filter((n) => !/^iteration \d+ \(test\): /.test(n));
   if (note) state.notes.push(`iteration ${state.iteration} (${from}): ${note}`);
   state.visited.push(from);
 
-  const edge = state.graph.edges.find((e) => e.from === from && e.on === outcome);
+  // `error` is reserved: a check that produced no verdict stops for a human, never a repair. A
+  // brick may declare it without an edge (`checkGraph` allows that); the engine routes it here.
+  const edge = state.graph.edges.find((e) => e.from === from && e.on === outcome)
+    ?? (outcome === 'error' ? { from, on: 'error', to: '$stop' } : null);
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);
   if (brick.gate === 'human' && (!brick.gateOn || brick.gateOn.includes(outcome))) {
     state.status = 'awaiting';
@@ -384,6 +407,12 @@ function transition(state, bricks, from, edge) {
     // the head it was about to land on.
     finishUnit(state, false);
     return state.status === 'stopped' ? { stopped: state.reason } : { node: state.node };
+  }
+  const ring = repairRing(state.graph, from, edge.to);
+  if (ring) {
+    const key = `ring:${ring.name}`;
+    state.counters[key] = (state.counters[key] ?? 0) + 1;
+    if (state.counters[key] > ring.max) return exhaust(state, ring);
   }
   state.counters[edge.to] = (state.counters[edge.to] ?? 0) + 1;
   const { allowed, loop } = allowedEntries(state.graph, edge.to);

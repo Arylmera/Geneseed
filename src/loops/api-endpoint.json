@@ -24,7 +24,7 @@
   ],
   "loops": [
     { "name": "iterations", "nodes": ["identify", "apply", "test", "bruno-test", "security-scan", "review"], "max": 20, "iteration": true },
-    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 1 },
     { "name": "review-fix", "nodes": ["apply", "test", "bruno-test", "security-scan", "review"], "max": 3 }
   ],
   "contracts": ["**/openapi*.yaml", "**/openapi*.yml", "**/openapi*.json", "**/swagger*.yaml", "**/swagger*.yml", "**/swagger*.json"]

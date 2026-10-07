@@ -22,7 +22,7 @@
   ],
   "loops": [
     { "name": "iterations", "nodes": ["upgrade-scout", "apply", "test", "deps-audit", "review"], "max": 20, "iteration": true },
-    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 1 },
     { "name": "review-fix", "nodes": ["apply", "test", "deps-audit", "review"], "max": 3 }
   ],
   "ignoreDeletions": ["**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml", "**/*.lock", "**/gradle.lockfile"]

@@ -18,7 +18,7 @@
   ],
   "loops": [
     { "name": "iterations", "nodes": ["identify", "apply", "test"], "max": 20, "iteration": true },
-    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 }
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 1 }
   ],
   "weights": { "logic": 0.6 }
 }

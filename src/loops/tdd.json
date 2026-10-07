@@ -19,7 +19,7 @@
   ],
   "loops": [
     { "name": "iterations", "nodes": ["identify", "red-test", "apply", "test", "review"], "max": 20, "iteration": true },
-    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 1 },
     { "name": "review-fix", "nodes": ["apply", "test", "review"], "max": 3 }
   ]
 }

@@ -23,7 +23,7 @@
   ],
   "loops": [
     { "name": "iterations", "nodes": ["identify", "apply", "test", "compat-check", "review"], "max": 20, "iteration": true },
-    { "name": "apply-test", "nodes": ["apply", "test"], "max": 5 },
+    { "name": "apply-test", "nodes": ["apply", "test"], "max": 1 },
     { "name": "review-fix", "nodes": ["apply", "test", "compat-check", "review"], "max": 3 }
   ],
   "contracts": [

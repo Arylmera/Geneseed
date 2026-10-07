@@ -114,9 +114,11 @@ legitimate rewrite). The host gates both at the tool boundary.
 Every autonomous loop needs an exit you set before you enter it. Before iterating —
 retrying, searching, generating-and-checking — fix the bounds: a cap on attempts, a
 budget of time or tokens, and an explicit definition of success *and* of failure.
-Then watch for the loop that has stopped progressing: if you are issuing the same
-call, hitting the same error, or trying variations of one approach with no new
-information, that is not persistence, it is thrashing — break out, change strategy,
+A check-and-repair loop gets one repair, then a fresh attempt or a hand-back — a second
+revision lowers accuracy. Only a verdict on the final artifact counts: a pass from before
+an edit is void, and old check output is never fed back. Then watch for the loop that has stopped progressing:
+if you are issuing the same call, hitting the same error, or trying variations of one
+approach with no new information, that is not persistence, it is thrashing — break out, change strategy,
 gather different context, or stop. When a bound is reached or progress stalls, do
 not grind on: halt and hand back a structured summary of what was tried, what was
 learned, and what remains ({{LAW:surface-failures}}, {{DOCTRINE:plan-before-acting}}). {{DOCTRINE:context-economy}}
@@ -124,8 +126,10 @@ economises *within* a step; this bounds the *number* of steps. An agent that can
 stop itself is a cost without a limit.
 <!-- LEAN:else -->
 Fix an autonomous loop's bounds before you enter it: an attempt cap, a time or token
-budget, an explicit definition of success *and* failure. Watch for the loop that has
-stopped progressing: the same call, the same error, variations with no new information are
+budget, an explicit definition of success *and* failure. A check-and-repair loop spends
+one repair, then a fresh attempt or a hand-back; accept only a verdict on the final
+artifact — a pass from before an edit is void, old check output is never fed back.
+Watch for the loop that has stopped progressing: the same call, the same error, variations with no new information are
 thrashing; break out, change strategy, or stop. When a bound is reached or progress
 stalls, halt with a structured summary of what was tried, learned, and remains ({{LAW:surface-failures}},
 {{DOCTRINE:plan-before-acting}}).
