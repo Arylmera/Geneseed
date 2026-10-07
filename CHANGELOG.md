@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- `geneseed upgrade` from a checkout older than the August rename of `bin/geneseed.mjs` to `bin/build-driver.mjs` no longer fails with `Cannot find module '…/bin/geneseed.mjs'` and `[E-BUILD]` after a successful pull and doctor gate. The old updater (and an old web daemon's build jobs) spawn the old path from the code they started with; `bin/geneseed.mjs` is back as a forwarder to the driver. If you already hit it, run `geneseed upgrade` again — it is up to date now and rebuilds with the new code.
+
 ## [3.16.0] — 2026-10-05
 
 **Upgrading:** re-emit (`geneseed rebuild-all`) so the context hook stays under Claude Code's output cap. To drop skills you never use, rebuild an install with `--exclude-skills <name,…>` (see [Exclusions](docs/concepts/exclusions.md)).
