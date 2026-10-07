@@ -27,7 +27,8 @@ write; with none, step 5 proposes them.
    - **In AsciiDoc,** apply *AsciiDoc mode* below wherever this skill shows Markdown.
 3. **Interview first when the project has no docs yet** — before writing anything. The code
    gives the *what*; only the user gives the *why*. Ask one question at a time, offering
-   options where you can: the audience and what they need to do; the project's purpose;
+   options where you can: the audience and what they need to do — which also sets the C4
+   levels: L1 and L2 always, L3 only for the containers the user calls complex; the project's purpose;
    goals and non-goals; the key decisions and the reason for each; constraints; what is out
    of scope. Read any spec, ADRs or design notes that exist, for facts. When an answer
    explains a decision, offer to record it as an ADR (in `architecture`'s *Decisions*) —
@@ -143,22 +144,44 @@ The detailed architecture. Open with a link to the root `ARCHITECTURE.md` (repo-
 map) and make sure the map links back — one fenced `geneseed:doc` line at its top, nothing else
 in that file touched; repeat nothing between the two.
 1. **Context (C4 L1)** — the system, its actors, and the external systems (APIs, SSO, shared
-   databases), as a Mermaid flowchart.
+   databases).
 2. **Containers (C4 L2)** — the deployable units and the protocols between them.
-3. **Components (C4 L3)** — one diagram per *significant* container, not one per module. On a
-   monorepo, work one container or package at a time.
+3. **Components (C4 L3)** — only for the containers the user called complex in the interview
+   (on a re-run, the ones already drawn), one diagram each. On a monorepo, work one container
+   or package at a time. Never draw L4 (code) — the code is its own diagram.
 4. **Decisions** — lightweight inline ADRs, `ADR-001`, …, four lines each: *context · decision ·
    consequences · evidence*. Structural choices only (framework, storage, architectural style,
    decomposition) — not details.
+
+**C4 notation.** Every diagram is a Mermaid `flowchart` styled as C4 — not the `C4Context` /
+`C4Container` diagram types, which Mermaid still marks experimental and lays out by hand. Each
+node reads `name [type · technology]` (type: person, software system, container, component,
+database), each edge `intent · protocol`, and each diagram carries a `title:` and a `Legend`
+subgraph keying its shapes (c4model.com notation). Each diagram sits inside its section's
+`geneseed:doc` fences, so a re-run redraws it there and nowhere else.
+
+```mermaid
+---
+title: Containers (C4 L2) — shop
+---
+flowchart LR
+  user(["Customer [person]"]) -->|"browses · HTTPS"| web["web [container · React SPA]"]
+  web -->|"reads orders · HTTPS/JSON"| api["api [container · Node/Express]"]
+  api -->|"reads/writes · SQL"| db[("orders [database · PostgreSQL]")]
+  subgraph Legend
+    l1(["person"]) ~~~ l2["container"] ~~~ l3[("database")]
+  end
+```
 
 ### `AGENTS.md` — repo root, at most ~60 lines
 The short manual an agent reads before touching the repo.
 1. **Commands** — build, test, lint, run: exact, and verified by running each one.
 2. **Non-obvious conventions** — first, the `Docs format:` line from step 2.
 3. **Do not touch** — generated files, vendored code, applied migrations.
-4. **Before you change…** — targeted pointers: a UI → `docs/DESIGN.md`; a new flow or
-   container → `docs/architecture.md`; a feature → `docs/PRD.md` (its FR ID) — with the
-   extension the docs format gives them.
+4. **Before you change…** — targeted pointers: a UI → `docs/DESIGN.md`; a change that crosses
+   containers → read the L2 diagram in `docs/architecture.md` first; a new flow or container →
+   `docs/architecture.md`; a feature → `docs/PRD.md` (its FR ID) — with the extension the docs
+   format gives them.
 
 Geneseed may own a block in this file, between `<!-- BEGIN GENESEED -->` and
 `<!-- END GENESEED -->` — never write inside it. Create the file if it is absent; if it holds
@@ -175,7 +198,7 @@ the other agent-runtime files stay Markdown.
 - **Fences:** `// geneseed:doc:start` and `// geneseed:doc:end` comment lines, one pair per
   section, with the same rewrite-only-inside rule.
 - **Diagrams:** Mermaid in a `[source,mermaid]` listing block delimited by `----` — GitHub
-  renders it like a Markdown `mermaid` fence. Not `[mermaid]` blocks (asciidoctor-diagram)
+  renders it like a Markdown `mermaid` fence; the C4 notation is unchanged. Not `[mermaid]` blocks (asciidoctor-diagram)
   and no STEM: GitHub renders neither.
 - **No `include::`** in a generated page — GitHub does not resolve it, and an agent reading
   the raw file would see the directive instead of the content. Each page reads whole on its
