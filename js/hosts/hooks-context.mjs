@@ -32,7 +32,8 @@ const _ERRNO = {
 function asOsError(e, filename) {
   const hit = _ERRNO[e && e.code];
   if (!hit) return String((e && e.message) || e);
-  // Python reprs the filename, so a Windows path comes out with its backslashes doubled.
+  // The `[Errno N] text: 'file'` shape this hook has always printed: the filename is quoted,
+  // so a Windows path comes out with its backslashes doubled.
   return `[Errno ${hit[0]}] ${hit[1]}: ${JSON.stringify(filename).replace(/^"|"$/g, "'")
     .replace(/\\"/g, '"')}`;
 }
@@ -57,7 +58,7 @@ function fnTranslate(pat) {
       if (pat[j] === '!') j += 1;
       if (pat[j] === ']') j += 1;
       while (j < pat.length && pat[j] !== ']') j += 1;
-      // An unterminated `[` is a LITERAL bracket in Python's translate, not an error.
+      // An unterminated `[` is a LITERAL bracket (fnmatch semantics), not an error.
       if (j >= pat.length) { out += '\\['; continue; }
       let body = pat.slice(i + 1, j).replaceAll('\\', '\\\\');
       if (body.startsWith('!')) body = `^${body.slice(1)}`;
@@ -77,9 +78,14 @@ function fnTranslate(pat) {
  */
 let HOST = 'claude';
 
-// Kept in step with adapters/opencode/plugins/geneseed-context.js, same as the Python.
+// Kept in step with adapters/opencode/plugins/geneseed-context.js.
 const EAGER_ROOT = ['AGENTS.md', 'AGENT.md', 'CLAUDE.md', '.cursorrules',
-  'README.md', 'CONTRIBUTING.md', 'user-rules.md', 'PROFILE.md'];
+  'README.md', 'README.adoc', 'CONTRIBUTING.md', 'CONTRIBUTING.adoc', 'user-rules.md', 'PROFILE.md'];
+// Project docs are Markdown or AsciiDoc: the document-project skill writes AsciiDoc by default
+// when a project has no docs yet, so a loader blind to `.adoc` would hide every doc it wrote.
+// Agent-runtime files (AGENTS.md, CLAUDE.md, specs) stay Markdown whatever the project uses.
+const DOC_EXT = new Set(['.md', '.adoc']);
+const isDoc = (name) => DOC_EXT.has(path.extname(name).toLowerCase());
 const LAZY_DIRS = ['docs', 'doc', 'documentation', 'architecture', 'adr', 'ADR'];
 const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.next',
   'target', '.venv', '__pycache__', '.opencode', '.harness']);
@@ -182,9 +188,8 @@ export function globalHookStandingDown(hookRoot, cwd) {
 
 /** `_disp` — relative to the repo root when it sits under it, else verbatim. */
 function disp(pathStr, root) {
-  // `os.path.relpath` raises ValueError across drives and the Python falls back to the
-  // path as given; `path.relative` silently returns an absolute path instead, which would
-  // print a DIFFERENT string rather than the same one.
+  // A path on another drive has no relative form, so it is printed as given. `path.relative`
+  // would silently return an absolute path instead — a different string, not the same one.
   if (path.parse(path.resolve(pathStr)).root.toLowerCase()
       !== path.parse(path.resolve(root)).root.toLowerCase()) {
     return pathStr;
@@ -193,18 +198,18 @@ function disp(pathStr, root) {
 }
 
 
-function rglobMd(dir, acc = []) {
+function rglobDocs(dir, acc = []) {
   for (const name of listDir(dir)) {
     const full = path.join(dir, name);
-    if (isDir(full)) rglobMd(full, acc);
-    else if (isFile(full) && path.extname(name).toLowerCase() === '.md') acc.push(full);
+    if (isDir(full)) rglobDocs(full, acc);
+    else if (isFile(full) && isDoc(name)) acc.push(full);
   }
   return acc;
 }
 
 /**
  * `_discover_context` — the no-manifest path, mirroring the OpenCode context plugin.
- * Root entry docs are eager; other root markdown, the doc trees and monorepo package
+ * Root entry docs are eager; other root docs (.md or .adoc), the doc trees and monorepo package
  * READMEs are lazy.
  */
 export function discoverContext(root, host = HOST) {
@@ -217,12 +222,12 @@ export function discoverContext(root, host = HOST) {
     const name = path.basename(full);
     if (native.includes(name)) continue;
     if (EAGER_ROOT.includes(name)) eager.set(full, null);
-    else if (path.extname(name).toLowerCase() === '.md') lazy.set(full, null);
+    else if (isDoc(name)) lazy.set(full, null);
   }
   for (const d of LAZY_DIRS) {
     const sub = path.join(root, d);
     if (!isDir(sub)) continue;
-    for (const md of sortPaths(rglobMd(sub))) {
+    for (const md of sortPaths(rglobDocs(sub))) {
       const parts = path.relative(root, md).split(/[\\/]/);
       if (parts.some((part) => EXCLUDE_DIRS.has(part))) continue;
       if (!eager.has(md) && !lazy.has(md)) lazy.set(md, null);
@@ -233,8 +238,10 @@ export function discoverContext(root, host = HOST) {
     if (!isDir(base)) continue;
     for (const pkg of sortPaths(listDir(base).map((n) => path.join(base, n)))) {
       if (!isDir(pkg) || EXCLUDE_DIRS.has(path.basename(pkg))) continue;
-      const readme = path.join(pkg, 'README.md');
-      if (isFile(readme) && !eager.has(readme) && !lazy.has(readme)) lazy.set(readme, null);
+      for (const name of ['README.md', 'README.adoc']) {
+        const readme = path.join(pkg, name);
+        if (isFile(readme) && !eager.has(readme) && !lazy.has(readme)) lazy.set(readme, null);
+      }
     }
   }
   return [
@@ -281,19 +288,18 @@ export function resolveContextSets(root, hookRoot = null) {
   let extend;
   try {
     let data = JSON.parse(raw);
-    // Valid JSON of the wrong SHAPE, guarded on both sides — see the Python original. JS
-    // would not have thrown here (`[].context` is merely undefined), which is exactly why
-    // the guard is written out rather than left to fall out of the language: without it,
-    // the two CLIs disagree about a file a user really does hand-edit.
+    // Valid JSON of the wrong SHAPE (null, a number, an array) is an empty manifest, not a
+    // syntax error. The guard is written out rather than left to fall out of the language:
+    // without it, `null.context` throws into the catch below and a file a user really does
+    // hand-edit is reported as invalid JSON when it is not.
     data = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
     entries = data.context || [];
     if (!Array.isArray(entries)) entries = [];
     extend = Boolean(data.extend);
   } catch {
-    // See the Python original for why the decoder's own message is not quoted: the two
-    // engines disagree on the wording and on the offset, and V8 supplies no offset at all
-    // for the commonest shapes. Reporting the file is what the user needs; reporting
-    // WHICH decoder found it is what makes two implementations impossible.
+    // The decoder's own message is not quoted: its wording and offset are engine details,
+    // and V8 supplies no offset at all for the commonest shapes. Reporting the file is what
+    // the user needs.
     err(`[context] ${manifest} is not valid JSON — no context was loaded `
       + '(fix the syntax, then re-run).\n');
     return [[], [], String(manifest)];

@@ -156,8 +156,12 @@ function log(msg) { if (DEBUG) console.error(`[geneseed-context] ${msg}`) }
 // (OpenCode's own native roots) are deliberately absent: OpenCode already has them, and
 // injecting them again re-sent the whole harness on every request until 2026-09.
 const EAGER_ROOT = new Set([
-  ".cursorrules", "README.md", "CONTRIBUTING.md", "user-rules.md", "PROFILE.md",
+  ".cursorrules", "README.md", "README.adoc", "CONTRIBUTING.md", "CONTRIBUTING.adoc",
+  "user-rules.md", "PROFILE.md",
 ])
+// Project docs are Markdown or AsciiDoc (document-project writes AsciiDoc when a project has
+// none yet). Same set as js/hosts/hooks-context.mjs DOC_EXT.
+const isDoc = (name) => /\.(md|adoc)$/i.test(name)
 // Doc trees walked recursively; everything found is lazy (listed, not injected).
 const LAZY_DIRS = ["docs", "doc", "documentation", "architecture", "adr", "ADR"]
 // Never descend into these.
@@ -277,11 +281,13 @@ function globToRegExp(glob) {
   return new RegExp("^" + re + "$")
 }
 
-// First H1 / heading line of a markdown file, for the lazy listing.
+// First heading line of a markdown or AsciiDoc file, for the lazy listing. An AsciiDoc
+// title is "= Title"; the space is required so a setext "====" underline never matches.
 function firstHeading(text) {
   for (const line of text.split("\n")) {
     const s = line.trim()
     if (s.startsWith("#")) return s.replace(/^#+\s*/, "").trim()
+    if (/^=+\s/.test(s)) return s.replace(/^=+\s*/, "").trim()
   }
   return ""
 }
@@ -425,7 +431,7 @@ async function walkMd(dir, root, depth, acc) {
     if (e.isDirectory()) {
       if (EXCLUDE_DIRS.has(e.name)) continue
       await walkMd(full, root, depth + 1, acc)
-    } else if (e.isFile() && e.name.toLowerCase().endsWith(".md")) {
+    } else if (e.isFile() && isDoc(e.name)) {
       acc.push(full)
     }
   }
@@ -448,7 +454,7 @@ async function discover(root) {
     if (!e.isFile()) continue
     const abs = path.join(root, e.name)
     if (EAGER_ROOT.has(e.name)) add(eager, abs)
-    else if (e.name.toLowerCase().endsWith(".md")) add(lazy, abs)   // misc root .md
+    else if (isDoc(e.name)) add(lazy, abs)   // misc root .md / .adoc
   }
 
   // 2. Doc trees (recursive) -> lazy.
@@ -469,8 +475,10 @@ async function discover(root) {
     try { pkgs = await fs.readdir(base, { withFileTypes: true }) } catch { continue }
     for (const p of pkgs) {
       if (!p.isDirectory() || EXCLUDE_DIRS.has(p.name)) continue
-      const readme = path.join(base, p.name, "README.md")
-      if (await isFile(readme) && !eager.has(readme)) add(lazy, readme)
+      for (const name of ["README.md", "README.adoc"]) {
+        const readme = path.join(base, p.name, name)
+        if (await isFile(readme) && !eager.has(readme)) add(lazy, readme)
+      }
     }
   }
 

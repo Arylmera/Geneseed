@@ -21,8 +21,8 @@ The context step sorts every doc it finds into one of two lists:
 
 With no configuration, the context step finds these files:
 
-- **Eager:** root `AGENTS.md`, `AGENT.md`, `CLAUDE.md` and `.cursorrules`, plus `README.md` and `CONTRIBUTING.md`. The root file your tool already loads by itself is skipped, so you never pay for it twice.
-- **Lazy:** `docs/`, `doc/`, `documentation/`, `architecture/`, `adr/` and `ADR/`, monorepo `packages/*/README.md` and `apps/*/README.md`, and any other root `*.md`.
+- **Eager:** root `AGENTS.md`, `AGENT.md`, `CLAUDE.md` and `.cursorrules`, plus `README.md` and `CONTRIBUTING.md` (or their AsciiDoc `.adoc` twins). The root file your tool already loads by itself is skipped, so you never pay for it twice.
+- **Lazy:** `docs/`, `doc/`, `documentation/`, `architecture/`, `adr/` and `ADR/`, monorepo `packages/*/README.md` and `apps/*/README.md`, and any other root `*.md`. AsciiDoc docs (`.adoc`) are found everywhere a `.md` is.
 - **Never scanned:** `node_modules`, `.git`, `dist`, `build`, `vendor`, `.next`, `target`, `.venv`, `__pycache__`, `.opencode` and `.harness`.
 
 On Claude Code, Bob and OpenClaude the whole injection stays under 9,000 characters, because Claude Code hands the model only a short preview of a hook output past about 10,000 and keeps the rest in a file. Your session files come first, then eager files whole; an eager file that does not fit is listed instead, to be read on demand. On OpenCode eager files share a 48 KB budget. On every host, three or more docs in one folder are listed as that folder with a count (`docs/guides/ — 30 docs`), not file by file.
