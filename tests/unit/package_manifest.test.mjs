@@ -619,7 +619,14 @@ test('the emitted bundle really carries the ignore files', { skip: NO_NPM }, () 
 // disjointness of the hook and CLI verb sets belongs to the hook/CLI parity gate; what is
 // asserted here is that all three files have a name AT ALL, since the shim bakes one of them
 // by absolute path and a file with no bin entry is one nobody can invoke after `npm i -g`.
+//
+// ONE FILE IS EXEMPT, BY NAME: `bin/geneseed.mjs`, the generator's pre-rename path. An updater
+// older than the rename pulls the new tree and then spawns that path to rebuild, so it must
+// exist on disk — and it must NOT get an npm name, because nothing should invoke it on purpose.
+// It is a forwarder to `bin/build-driver.mjs`, which the last test here pins.
 // =============================================================================================
+
+const LEGACY_ENTRIES = ['bin/geneseed.mjs'];
 
 test('each bin target exists and is a node script', () => {
   for (const [name, rel] of Object.entries(manifest().bin)) {
@@ -634,8 +641,18 @@ test('each bin target exists and is a node script', () => {
 test('every entry point file has exactly one bin name', () => {
   const targets = Object.values(manifest().bin).sort();
   const onDisk = fs.readdirSync(path.join(ROOT, 'bin'))
-    .filter((f) => f.endsWith('.mjs')).map((f) => `bin/${f}`).sort();
+    .filter((f) => f.endsWith('.mjs')).map((f) => `bin/${f}`)
+    .filter((f) => !LEGACY_ENTRIES.includes(f)).sort();
   assert.deepEqual(targets, onDisk, 'a bin/ entry point with no npm name, or vice versa');
+});
+
+test('the pre-rename generator path forwards to the driver and nothing else', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'bin', 'geneseed.mjs'), 'utf8');
+  const code = src.replace(/\/\*\*[\s\S]*?\*\//, '').split('\n')
+    .map((l) => l.trim()).filter((l) => l && !l.startsWith('#!'));
+  assert.deepEqual(code, ["import './build-driver.mjs';"]);
+  assert.ok(!Object.values(manifest().bin).includes('bin/geneseed.mjs'),
+    'the legacy path got an npm name — it is a landing pad for old updaters, not an entry point');
 });
 
 test('the bare name is the harness CLI, not the generator', () => {
