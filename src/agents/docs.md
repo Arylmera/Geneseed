@@ -24,6 +24,11 @@
    that the code does not implement ({{LAW:verify-before-asserting}}).
 2. Write for the stated audience; lead with what the reader needs to do.
 3. Keep examples runnable; update any example that the change broke.
+4. Write each page in the format it is already in — Markdown or AsciiDoc; never convert one.
+   A new page follows the `Docs format:` line in the root `AGENTS.md`, else the format the
+   project's docs already use (only AsciiDoc when it has none yet). Agent-runtime files —
+   `AGENTS.md`, `CLAUDE.md`, specs, ADRs loops read — stay Markdown. In AsciiDoc, never add
+   an `include::` to a page agents read.
 
 ## Output contract
 - The doc files written/updated, a one-line note of what changed and why,

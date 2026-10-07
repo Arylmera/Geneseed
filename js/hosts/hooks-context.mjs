@@ -79,7 +79,12 @@ let HOST = 'claude';
 
 // Kept in step with adapters/opencode/plugins/geneseed-context.js, same as the Python.
 const EAGER_ROOT = ['AGENTS.md', 'AGENT.md', 'CLAUDE.md', '.cursorrules',
-  'README.md', 'CONTRIBUTING.md', 'user-rules.md', 'PROFILE.md'];
+  'README.md', 'README.adoc', 'CONTRIBUTING.md', 'CONTRIBUTING.adoc', 'user-rules.md', 'PROFILE.md'];
+// Project docs are Markdown or AsciiDoc: the document-project skill writes AsciiDoc by default
+// when a project has no docs yet, so a loader blind to `.adoc` would hide every doc it wrote.
+// Agent-runtime files (AGENTS.md, CLAUDE.md, specs) stay Markdown whatever the project uses.
+const DOC_EXT = new Set(['.md', '.adoc']);
+const isDoc = (name) => DOC_EXT.has(path.extname(name).toLowerCase());
 const LAZY_DIRS = ['docs', 'doc', 'documentation', 'architecture', 'adr', 'ADR'];
 const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.next',
   'target', '.venv', '__pycache__', '.opencode', '.harness']);
@@ -193,18 +198,18 @@ function disp(pathStr, root) {
 }
 
 
-function rglobMd(dir, acc = []) {
+function rglobDocs(dir, acc = []) {
   for (const name of listDir(dir)) {
     const full = path.join(dir, name);
-    if (isDir(full)) rglobMd(full, acc);
-    else if (isFile(full) && path.extname(name).toLowerCase() === '.md') acc.push(full);
+    if (isDir(full)) rglobDocs(full, acc);
+    else if (isFile(full) && isDoc(name)) acc.push(full);
   }
   return acc;
 }
 
 /**
  * `_discover_context` — the no-manifest path, mirroring the OpenCode context plugin.
- * Root entry docs are eager; other root markdown, the doc trees and monorepo package
+ * Root entry docs are eager; other root docs (.md or .adoc), the doc trees and monorepo package
  * READMEs are lazy.
  */
 export function discoverContext(root, host = HOST) {
@@ -217,12 +222,12 @@ export function discoverContext(root, host = HOST) {
     const name = path.basename(full);
     if (native.includes(name)) continue;
     if (EAGER_ROOT.includes(name)) eager.set(full, null);
-    else if (path.extname(name).toLowerCase() === '.md') lazy.set(full, null);
+    else if (isDoc(name)) lazy.set(full, null);
   }
   for (const d of LAZY_DIRS) {
     const sub = path.join(root, d);
     if (!isDir(sub)) continue;
-    for (const md of sortPaths(rglobMd(sub))) {
+    for (const md of sortPaths(rglobDocs(sub))) {
       const parts = path.relative(root, md).split(/[\\/]/);
       if (parts.some((part) => EXCLUDE_DIRS.has(part))) continue;
       if (!eager.has(md) && !lazy.has(md)) lazy.set(md, null);
@@ -233,8 +238,10 @@ export function discoverContext(root, host = HOST) {
     if (!isDir(base)) continue;
     for (const pkg of sortPaths(listDir(base).map((n) => path.join(base, n)))) {
       if (!isDir(pkg) || EXCLUDE_DIRS.has(path.basename(pkg))) continue;
-      const readme = path.join(pkg, 'README.md');
-      if (isFile(readme) && !eager.has(readme) && !lazy.has(readme)) lazy.set(readme, null);
+      for (const name of ['README.md', 'README.adoc']) {
+        const readme = path.join(pkg, name);
+        if (isFile(readme) && !eager.has(readme) && !lazy.has(readme)) lazy.set(readme, null);
+      }
     }
   }
   return [

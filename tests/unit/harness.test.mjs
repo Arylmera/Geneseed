@@ -37,6 +37,7 @@ import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { themeOfDir } from '../../js/hosts/installs.mjs';
 import { LAW_CLASS, LAW_CLASSES } from '../../js/inspect/inventory.mjs';
 import { PLUGIN_SRC, ROOT, SRC } from '../../js/build/source.mjs';
+import { relPosix } from '../../js/lib/text.mjs';
 import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 
@@ -1070,6 +1071,54 @@ test("discovery drops the host's own native root, and only that one", () => {
     const en = baseNames(discoverContext(d, 'openclaude')[0]);
     assert.ok(!en.has('CLAUDE.md') && en.has('AGENT.md'), [...en].join(', '));
   });
+});
+
+test('discovery treats AsciiDoc docs exactly like markdown ones', () => {
+  // document-project writes AsciiDoc when a project has no docs yet, and GitHub renders a
+  // README.adoc as the repo homepage — so every arm that finds a .md must find a .adoc:
+  // README/CONTRIBUTING eager, other root docs, the doc trees and package READMEs lazy, and
+  // node_modules still skipped. A .txt is not a doc and stays invisible.
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'README.adoc'), '= r', 'utf8');
+    fs.writeFileSync(path.join(d, 'CONTRIBUTING.adoc'), '= c', 'utf8');
+    fs.writeFileSync(path.join(d, 'notes.adoc'), '= n', 'utf8');
+    fs.writeFileSync(path.join(d, 'notes.txt'), 'n', 'utf8');
+    fs.mkdirSync(path.join(d, 'docs', 'deep'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'docs', 'deep', 'PRD.ADOC'), '= p', 'utf8');
+    fs.mkdirSync(path.join(d, 'node_modules'));
+    fs.writeFileSync(path.join(d, 'node_modules', 'junk.adoc'), 'x', 'utf8');
+    fs.mkdirSync(path.join(d, 'packages', 'foo'), { recursive: true });
+    fs.writeFileSync(path.join(d, 'packages', 'foo', 'README.adoc'), '= foo', 'utf8');
+    const [eager, lazy] = discoverContext(d);
+    assert.deepEqual([...baseNames(eager)].sort(), ['CONTRIBUTING.adoc', 'README.adoc']);
+    assert.deepEqual(lazy.map((l) => relPosix(d, l.path)).sort(),
+      ['docs/deep/PRD.ADOC', 'notes.adoc', 'packages/foo/README.adoc']);
+  });
+});
+
+test('the OpenCode plugin discovers AsciiDoc docs like the hook does', () => {
+  // The plugin ships on its own and cannot import the hook, so its copy of the rule is read
+  // from source: the extension test accepts .adoc, every discovery arm goes through it, and
+  // README.adoc / CONTRIBUTING.adoc are eager.
+  const src = fs.readFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins',
+    'geneseed-context.js'), 'utf8');
+  const re = src.match(/const isDoc = \(name\) => (\/.*\/i)\.test\(name\)/);
+  assert.ok(re, 'the plugin no longer declares isDoc');
+  const isDoc = new Function(`return ${re[1]}`)();
+  assert.deepEqual(['a.md', 'b.ADOC', 'c.txt', 'adoc', 'notes-adoc'].map((n) => isDoc.test(n)),
+    [true, true, false, false, false]);
+  assert.equal((src.match(/isDoc\(e\.name\)/g) || []).length, 2,
+    'the doc-tree walk and the root scan must both use isDoc');
+  assert.match(src, /for \(const name of \["README\.md", "README\.adoc"\]\)/);
+  const eagerRoot = src.match(/const EAGER_ROOT = new Set\(\[([\s\S]*?)\]\)/)[1];
+  for (const n of ['README.adoc', 'CONTRIBUTING.adoc']) assert.ok(eagerRoot.includes(`"${n}"`), n);
+  // The lazy listing labels each doc by its first heading: `# T` in markdown, `= T` in
+  // AsciiDoc. A markdown setext underline (`====`) is not a title.
+  const fh = src.match(/function firstHeading\(text\) \{[\s\S]*?\n\}/);
+  assert.ok(fh, 'the plugin no longer declares firstHeading');
+  const firstHeading = new Function(`${fh[0]}; return firstHeading`)();
+  assert.deepEqual(['# Md', ':toc:\n= Adoc Title\n', 'Setext\n====\n# Next', '== Section'].map(firstHeading),
+    ['Md', 'Adoc Title', 'Next', 'Section']);
 });
 
 test('an empty manifest falls back to discovery', () => {
