@@ -1,0 +1,32 @@
+name: scorecard
+
+# THE AI HARNESS SCORECARD, WEEKLY AND ADVISORY. markmishaev76/ai-harness-scorecard grades a repo
+# on five pillars (docs, mechanical constraints, testing, review/drift, AI safeguards) with 31
+# deterministic checks and no LLM. It is a reading, not a gate: `assess` exits 0 whatever the
+# grade, nothing here blocks a merge, and the report lands in the run's summary.
+#
+# Its own workflow, not a `ci.yml` job: the tool is Python, and `ci.yml` proves the package runs
+# without Python (`package-no-python`). It is not on PyPI, so it installs from git, pinned to a
+# full commit — a moving branch would change the score without a change here. Its detectors match
+# tool and file names, so Node-native checks this repo built itself (`node --test`,
+# `tests/mutate.mjs`, doctor's dead-link gate) read as missing; the score is a floor.
+on:
+  schedule:
+    - cron: "43 4 * * 1" # Mondays 04:43 UTC, after mutate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: install the scorecard (upstream, pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/sc"
+          "$RUNNER_TEMP/sc/bin/pip" install --quiet \
+            "git+https://github.com/markmishaev76/ai-harness-scorecard@5536e96227dc8278301eaff3f4ca3faaf13cf278"
+      - name: assess
+        run: '"$RUNNER_TEMP/sc/bin/ai-harness-scorecard" assess . --format markdown >> "$GITHUB_STEP_SUMMARY"'
