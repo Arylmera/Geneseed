@@ -1,0 +1,12 @@
+{
+  "about": "A Maven repo with GitLab CI: reserved and hidden keys, a workflow-level schedule rule, block scalars, allow_failure as a bool and as a flow mapping.",
+  "files": {
+    "pom.xml": "<project>\n  <build><plugins>\n    <plugin><artifactId>spotless-maven-plugin</artifactId></plugin>\n    <plugin><artifactId>jacoco-maven-plugin</artifactId></plugin>\n  </plugins></build>\n</project>\n",
+    "service/pom.xml": "<project><dependencies><dependency><artifactId>jqwik</artifactId></dependency></dependencies></project>\n",
+    "checkstyle.xml": "<module name=\"Checker\"/>\n",
+    "src/test/java/AppTest.java": "class AppTest {}\n",
+    "README.md": "# Shop\n\nThe domain module must not depend on the web module.\n",
+    "CONTRIBUTING.md": "# Contributing\n\nKeep merge requests small and focused.\n",
+    ".gitlab-ci.yml": "stages: [build, test]\n\nvariables:\n  MAVEN_OPTS: \"-Xmx1g\"\n\nworkflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n    - if: $CI_COMMIT_BRANCH\n\n.maven-cache:\n  cache:\n    paths: [.m2/repository]\n\nbuild:\n  stage: build\n  script:\n    - mvn -B compile\n\nunit-test:\n  stage: test\n  before_script:\n    - echo \"starting: tests\"\n  script:\n    - |\n      mvn -B test\n      mvn jacoco:report\n\nlint:\n  stage: test\n  allow_failure: true\n  script: mvn checkstyle:check  # advisory for now\n\nintegration-test:\n  stage: test\n  allow_failure: {exit_codes: [137]}\n  script:\n    - >\n      mvn -B verify\n      -Pintegration\n"
+  }
+}

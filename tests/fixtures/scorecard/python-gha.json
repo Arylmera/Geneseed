@@ -1,0 +1,10 @@
+{
+  "about": "A Python repo with GitHub Actions: an `on:` key (YAML 1.1 reads it as true) with a schedule, a job-level continue-on-error, folded and quoted run values.",
+  "files": {
+    "pyproject.toml": "[project]\nname = \"pkg\"\ndependencies = [\"hypothesis\"]\n\n[tool.mypy]\nstrict = true\n",
+    "tests/test_core.py": "def test_core():\n    assert True\n",
+    "AGENTS.md": "# Agents\n\nRun the tests before asking for review. Keep changes small.\n",
+    ".github/pull_request_template.md": "## What\n\n## Testing\n",
+    ".github/workflows/ci.yml": "name: ci\non:\n  push:\n    branches: [main]\n  schedule:\n    - cron: '0 3 * * *'\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        python: [\"3.11\", \"3.12\"]\n    steps:\n    - uses: actions/checkout@v4\n    - name: install\n      run: pip install -e .\n    - name: test\n      run: >-\n        pytest\n        --cov=pkg\n  lint:\n    runs-on: ubuntu-latest\n    continue-on-error: true\n    steps:\n      - run: \"ruff check .\"\n      - run: 'mypy pkg'\n"
+  }
+}

@@ -1080,6 +1080,44 @@
       "mutex": []
     },
     {
+      "name": "scorecard",
+      "help": "grade a repo with the AI Harness Scorecard (31 checks, five pillars) — scores the repo itself (CI, tests, docs), not the harness files; a reading, never a gate",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "path",
+          "metavar": null,
+          "help": "the repo to score (default: the current directory)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--json"
+          ],
+          "dest": "json",
+          "metavar": null,
+          "help": "print the full assessment as JSON — every check with its score, evidence and fix",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
       "name": "setup",
       "help": "interactive install wizard (dependency-free, all OSes)",
       "description": "",
