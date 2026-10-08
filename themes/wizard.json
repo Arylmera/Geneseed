@@ -39,7 +39,7 @@
   "DESC_COMMIT": "Gather only the reagents this working touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Scry a diff or petition — soundness first, craft after.",
   "DESC_BRAINSTORM": "Turn a raw notion into an agreed design before any rune is cut.",
-  "DESC_CODEBASE_DESIGN": "Design deep modules and the tongue of the domain around them — great behaviour bound behind one small interface, the seam placed by design, a living GLOSSARY.md, and an ADR inscribed for each decision too costly to unmake.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules and the tongue of the domain — great power behind one small interface, the seam placed by design, a living GLOSSARY.md, an ADR inscribed for each irreversible call.",
   "DESC_WAYFINDER": "Chart a working too vast for one session as a shared map of decision runes, resolved one at a time until the way is clear.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn, never to keep in the grimoire.",
   "DESC_ROAST_ME": "Put any work to the trial by fire — blunt, exact, always actionable.",

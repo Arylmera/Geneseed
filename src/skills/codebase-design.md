@@ -3,10 +3,9 @@
 > {{DESC_CODEBASE_DESIGN}}
 <!-- aliases: domain-modeling -->
 
-**Trigger:** designing or reshaping a module's interface, or placing a seam. Also
-making code testable through its interface, pinning down domain terms (a
-design talk keeps stumbling over ambiguous ones) or recording an architectural
-decision — or another {{SKILL}} needs this vocabulary.
+**Trigger:** the user asks "where should the seam go", how to make a module testable through
+its interface, or for a glossary term or ADR. Also designing or reshaping a module's interface,
+a design talk that keeps stumbling over ambiguous terms, or another {{SKILL}} needing this vocabulary.
 
 ## Procedure
 1. First read `GLOSSARY.md` at the repo root (`CONTEXT.md` if absent; a

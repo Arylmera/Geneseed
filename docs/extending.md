@@ -411,6 +411,24 @@ exclusion is dropped with a notice instead of failing the rebuild, and the name 
 used for a new skill. The doctor (`aliasProblems`) refuses an alias that is malformed, duplicated,
 already a skill, retired, or the name of an OpenCode command.
 
+**A rarely-needed half goes in a side file.** A skill body is paid in full every time the skill
+loads. A branch only some runs need, or a big reference, can move into
+`src/skills/<name>/<file>.md` beside the flat spec. The body keeps one pointer line, such as debug's
+`**CI run red** → read [debug/ci.md](debug/ci.md) and follow it.` The side file costs nothing
+until the agent follows that pointer, and then it costs its own size. So move a half only when
+most runs skip it. The flat spec stays the source, so steps 1–9 are unchanged. The side file is
+themed like a spec, and `{{LAW:id}}` citations resolve in it and are gated. Every emit writes it
+next to the skill: `skills/<name>/<file>.md` in the flat bundle, and beside `SKILL.md` on every
+native host, through `claim()`. Native hosts get a code-span path instead of the link:
+`<this-skill-directory>` where the host announces the skill's directory, and the resolved
+directory on Bob and in OpenCode commands, aliases included (`pointSideFiles` in
+`js/hosts/native.mjs`). The doctor (`sideFileProblems`) requires a flat spec for the folder, `.md`
+files one level down, no `SKILL.md`, and a link to every side file from the body.
+`tests/unit/side_files.test.mjs` resolves every emitted pointer. The dead-link scan cannot,
+because a code span is not a link. Measured on 2026-10-08, with the neutral theme at the lean
+footprint: debug's SKILL.md went from 1.64k to 1.18k tokens and rule's from 2.33k to 1.83k
+(chars/4).
+
 
 ---
 

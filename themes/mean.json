@@ -39,7 +39,7 @@
   "DESC_COMMIT": "Stage only what the work touched and write a focused commit. Not a junk drawer.",
   "DESC_CODE_REVIEW": "Go over a diff or PR — correctness first, polish after — and don't soften it.",
   "DESC_BRAINSTORM": "Beat a raw idea into an approved design before a single line of code is written.",
-  "DESC_CODEBASE_DESIGN": "Design deep modules and the glossary that names them — real behaviour behind a small interface at a seam placed on purpose, a living GLOSSARY.md, and an ADR for every hard-to-reverse call. No excuses.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules and the glossary that names them — real behaviour behind a small interface at a deliberate seam, a living GLOSSARY.md, an ADR per hard-to-reverse call. No excuses.",
   "DESC_WAYFINDER": "Chart oversized work as a shared map of decision tickets. Resolve them one at a time — don't wander.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code. Learn from it, then delete it — don't get attached.",
   "DESC_ROAST_ME": "Take any work apart — brutal, exact, always actionable. No comfort included.",

@@ -68,12 +68,17 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const primary = writePrimaryAgent(cfg, path.join(dir, 'agents'), overrides, claim);
   if (primary) owned.push(relPosix(dir, primary));
 
-  const commands = writeCommandLayer(cfg, items, path.join(dir, 'command'), claim);
+  // Where a command's side-file pointer says the skill lives — Bob's rule (`emitClaudeRender`):
+  // per repo relative to the workspace root, so a committed `.opencode/` holds on a teammate's
+  // checkout; globally (`wireBase` IS `dir`) absolute.
+  const skillDirOf = wireBase === dir ? (n) => path.join(dir, 'skills', n).split(path.sep).join('/')
+    : (n) => relPosix(wireBase, path.join(dir, 'skills', n));
+  const commands = writeCommandLayer(cfg, items, path.join(dir, 'command'), claim, skillDirOf);
   const ponytail = writePonytailCommand(path.join(dir, 'command'), claim);   // always-on /ponytail
   if (ponytail) commands.push(ponytail);
   for (const p of commands) owned.push(relPosix(dir, p));
   // Owned but not counted in `nCommands`, as an alias skill is not counted in `nSkills`.
-  for (const p of writeAliasCommands(cfg, items, path.join(dir, 'command'), claim)) owned.push(relPosix(dir, p));
+  for (const p of writeAliasCommands(cfg, items, path.join(dir, 'command'), claim, skillDirOf)) owned.push(relPosix(dir, p));
 
   owned.push(relPosix(dir, writeTheme(path.join(dir, 'themes'), themeName, theme)));
   for (const p of writeColorThemes(cfg, path.join(dir, 'themes'))) owned.push(relPosix(dir, p));

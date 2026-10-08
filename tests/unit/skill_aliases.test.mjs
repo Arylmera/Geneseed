@@ -26,6 +26,8 @@ import { test } from 'node:test';
 import { RETIRED_SKILL_IDS, aliasesOf, resolveSkillNames } from '../../js/build/source.mjs';
 import { parseDriverArgs } from '../../js/build/driver.mjs';
 import { excludedSkillsOfDir } from '../../js/hosts/installs.mjs';
+import * as generate from '../../js/build/generate.mjs';
+import { installAxes } from '../../js/maintain/update.mjs';
 import { writeNativeLayer } from '../../js/hosts/native.mjs';
 import { writeAliasCommands } from '../../js/hosts/opencode.mjs';
 import { aliasProblems } from '../../js/inspect/checks-repo.mjs';
@@ -95,6 +97,19 @@ test('a replayed install that excluded one half of a merged skill excludes the w
     const heard = [];
     assert.deepEqual(excludedSkillsOfDir(d, (n) => heard.push(n)), ['dependencies']);
     assert.deepEqual(heard, [DEPS_NOTICE]);
+  });
+});
+
+// `upgrade` replays an install's axes through `installAxes`; it was the one replay besides
+// `migrate` that read the old name silently, so the owner never learned the exclusion moved.
+test('upgrade replays an old excluded name with the same notice rebuild-all prints', async () => {
+  await withSandbox('gsalias-', async (d) => {
+    fs.writeFileSync(path.join(d, '.geneseed-emit'), 'opencode-global\n');
+    fs.writeFileSync(path.join(d, 'AGENT.md'), '# Agent\n\nExcluded skills: deps-audit\n');
+    const heard = [];
+    const axes = await installAxes(d, generate, (n) => heard.push(n));
+    assert.deepEqual(heard, [DEPS_NOTICE]);
+    assert.equal(axes[axes.indexOf('--exclude-skills') + 1], 'dependencies');
   });
 });
 

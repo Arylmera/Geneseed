@@ -213,8 +213,9 @@ export function cmdMigrate(args = {}) {
   // `process 5` among them) and dropped `--config-dir`, so a global found through
   // `CLAUDE_CONFIG_DIR`/`OPENCODE_CONFIG_DIR` re-emitted into the DEFAULT dir instead.
   for (const r of rows) {
-    const { emit, theme, argv } = installProfile(r.host, r.scope, r.root);
     const label = `${r.host}:${r.scope} (${r.root})`;
+    const { emit, theme, argv } = installProfile(r.host, r.scope, r.root,
+      (n) => printErr(`[migrate] ${label}: ${n}\n`));
     printOut(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
     let rc = 1;
     try { rc = driverMain(argv); } catch { rc = 1; }

@@ -174,8 +174,8 @@ test('a fresh global Bob install diffs clean, though its folder skills name thei
     mustEmit(['--emit', 'bob-global', '--theme', 'neutral'], path.join(d, 'home'),
       { BOB_CONFIG_DIR: gcfg });
     assert.ok(fs.readFileSync(path.join(gcfg, 'skills', 'token-report', 'SKILL.md'), 'utf8')
-      .includes(path.join(fs.realpathSync(gcfg), 'skills', 'token-report')),
-    'the precondition: the path is written (resolved, as `bobConfigDir` resolves it)');
+      .includes(path.join(fs.realpathSync(gcfg), 'skills', 'token-report').split(path.sep).join('/')),
+    'the precondition: the path is written (resolved, as `bobConfigDir` resolves it, `/`-separated)');
     const { files } = diffCollect({ target: gcfg });
     assert.deepEqual(files.map((f) => f.rel), []);
   });

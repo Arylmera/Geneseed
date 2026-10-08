@@ -39,7 +39,7 @@
   "DESC_COMMIT": "Stage only what this stint touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Go over a diff or PR — correctness first, polish after.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed strategy before a single tyre hits the track.",
-  "DESC_CODEBASE_DESIGN": "Design deep modules and the team's own language around them — a lot of behaviour behind a small interface, seam placed on purpose like every line on track, a living GLOSSARY.md, and an ADR for every call too costly to reverse.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules and the team's own language — a lot behind a small interface, the seam placed like a racing line, a living GLOSSARY.md, an ADR for every call too costly to reverse.",
   "DESC_WAYFINDER": "Chart work too big for one stint as a shared map of decision tickets, resolved one at a time until the track's clear.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn the lap, never to keep.",
   "DESC_ROAST_ME": "Tear into any work — blunt, exact, always actionable.",

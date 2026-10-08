@@ -39,7 +39,7 @@
   "DESC_COMMIT": "Stage only the parts this lap touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Scrutineer a diff or PR — correctness first, polish after.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed strategy before a single tyre hits the track.",
-  "DESC_CODEBASE_DESIGN": "Design deep modules and the paddock's own language for them — plenty of behaviour behind a tight interface at a seam placed on purpose, the glossary kept alive in GLOSSARY.md, an ADR logged for every call that's hard to reverse.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules and the paddock's own language — plenty behind a tight interface at a seam placed on purpose, a living GLOSSARY.md, an ADR for every call that's hard to reverse.",
   "DESC_WAYFINDER": "Chart work too big for one session as a shared race map of decision tickets, cleared one at a time until the way is clear.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn the line, never to keep.",
   "DESC_ROAST_ME": "Put any work through scrutineering — blunt, exact, always actionable.",

@@ -39,7 +39,7 @@
   "DESC_COMMIT": "Stage only what this drive touched and log a focused commit.",
   "DESC_CODE_REVIEW": "Review a diff or PR — correctness first, form second.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed game plan before any code is run.",
-  "DESC_CODEBASE_DESIGN": "Design deep modules and the team's own language around them — a lot of behaviour behind a small interface, seam placed by the game plan, a living GLOSSARY.md, and an ADR for every call too costly to reverse.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules and the team's own language — a lot behind a small interface, seam placed by the game plan, a living GLOSSARY.md, an ADR for every call too costly to reverse.",
   "DESC_WAYFINDER": "Chart work too big for one game as a shared map of decision tickets, resolved one at a time until the field's clear.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn the play, never to keep.",
   "DESC_ROAST_ME": "Hard post-game breakdown of any work — blunt, exact, always actionable.",
