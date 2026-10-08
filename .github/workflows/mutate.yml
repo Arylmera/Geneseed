@@ -14,8 +14,14 @@ permissions:
   contents: read
 
 jobs:
+  # ON WINDOWS, BECAUSE TWO ROWS CAN ONLY DIE THERE. M1 (writeText's os.linesep translation) and
+  # M11 (the sandbox's 8.3-short-name temp root) model Windows defects: on Linux the line
+  # separator is already \n and TEMP has no short names, so both mutants are equivalent and
+  # SURVIVE — which is why every scheduled run on ubuntu-latest was red (2026-09-28, 2026-10-05).
+  # Both are killed on Windows (checked locally with `--only M1` / `--only M11`). Every other row
+  # is platform-neutral, so one Windows run covers the whole matrix.
   mutate:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
