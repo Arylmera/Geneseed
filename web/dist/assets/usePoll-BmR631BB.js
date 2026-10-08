@@ -1,0 +1,1 @@
+import{s as e}from"./sections-GalMS0Zv.js";import{i as t}from"./react-DRhoX0kS.js";var n=e(t(),1);function r(e,t,r){(0,n.useEffect)(()=>{let n=!0,r=()=>n,i=()=>{document.hidden||e(r)};e(r);let a=setInterval(i,t);return document.addEventListener(`visibilitychange`,i),()=>{n=!1,clearInterval(a),document.removeEventListener(`visibilitychange`,i)}},r)}export{r as t};
