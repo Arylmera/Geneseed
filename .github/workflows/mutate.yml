@@ -21,6 +21,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # devDependencies: the control run is the whole unit glob, and since #213 one file in it
+      # (jsonc_properties.test.mjs) imports fast-check. Without this the control is red and the
+      # matrix refuses to run — which is how the first Monday after #213 would have failed.
+      - run: npm ci
       - name: every mutation is caught
         run: node tests/mutate.mjs --all
 
