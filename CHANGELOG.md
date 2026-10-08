@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- `document-project` and the docs agent default to Markdown. AsciiDoc is used only when you ask for it or the project's docs are already `.adoc`; the skill no longer proposes a switch on its own.
+
 ## [3.17.0] — 2026-10-08
 
 ### Added

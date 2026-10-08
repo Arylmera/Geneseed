@@ -81,8 +81,8 @@ let HOST = 'claude';
 // Kept in step with adapters/opencode/plugins/geneseed-context.js.
 const EAGER_ROOT = ['AGENTS.md', 'AGENT.md', 'CLAUDE.md', '.cursorrules',
   'README.md', 'README.adoc', 'CONTRIBUTING.md', 'CONTRIBUTING.adoc', 'user-rules.md', 'PROFILE.md'];
-// Project docs are Markdown or AsciiDoc: the document-project skill writes AsciiDoc by default
-// when a project has no docs yet, so a loader blind to `.adoc` would hide every doc it wrote.
+// Project docs are Markdown or AsciiDoc: the document-project skill writes AsciiDoc when the
+// user asks for it or the docs already are, so a loader blind to `.adoc` would hide those docs.
 // Agent-runtime files (AGENTS.md, CLAUDE.md, specs) stay Markdown whatever the project uses.
 const DOC_EXT = new Set(['.md', '.adoc']);
 const isDoc = (name) => DOC_EXT.has(path.extname(name).toLowerCase());
