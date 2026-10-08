@@ -2,11 +2,11 @@
 name: migration-plan
 description: Plan a breaking interface change as expand, migrate each consumer, contract — for the user to review.
 effect: read
-skill: migrate
+skill: dependencies
 gate: human
 outcomes: pass, fail
 ---
-Following the migrate skill, plan the change as ordered steps: expand (add the new shape beside
+Following the dependencies skill, plan the change as ordered steps: expand (add the new shape beside
 the old), migrate (one consumer or call-site group per step), contract (remove the old shape).
 Every step must leave the system deployable and fit one `identify` card. Name the contract files
 the expand and contract steps touch — API specs, schema migrations, event schemas. Never edit any

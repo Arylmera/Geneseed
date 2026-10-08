@@ -95,7 +95,7 @@ On a **shared branch** — `main`, `master`, `develop`, `development`, a
 the same gate applies with extra care; when unsure, treat the branch as shared.
 Never force-push, hard-reset, or rebase a shared branch: undo a published mistake
 with a new revert commit, not a history rewrite — the rare legitimate rewrite goes
-through the git-rescue {{SKILL}} behind a backup. The host gates commit and push at
+through the git-history {{SKILL}} behind a backup. The host gates commit and push at
 the tool boundary too, so this consent cannot be lost to a sticky allowlist.
 <!-- LEAN:else -->
 Recording and sharing code is consented, never unilateral: **every** `git commit` and
@@ -105,7 +105,7 @@ scope changes; push earns no default. A launched loop's batch covers commit and 
 its own `loop/*` branch only; merging it never. Show the plain summary and the exact
 commit message before each, then wait. Shared branches — `main`, `master`, `develop`,
 `development`, `release`/`hotfix`, any unsure — take the same gate. Never force-push,
-hard-reset, or rebase one: undo with a revert commit (git-rescue {{SKILL}} for a
+hard-reset, or rebase one: undo with a revert commit (git-history {{SKILL}} for a
 legitimate rewrite). The host gates both at the tool boundary.
 <!-- LEAN:end -->
 

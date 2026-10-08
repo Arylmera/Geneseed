@@ -37,22 +37,24 @@ function withDir(fn) {
 
 const agentText = (dir) => fs.readFileSync(path.join(dir, 'AGENT.md'), 'utf8').replace(/\r\n/g, '\n');
 
+// One flat skill (`bruno`) and one folder skill (`daydream`) are excluded by their own names;
+// `research.md` is an unrelated flat sibling that must survive, proving the filter took nothing else.
 test('an excluded flat and folder skill leave the bundle, its catalogue rows, and nothing else', () => {
   withDir((d) => {
-    quiet(() => build(makeCfg({ excludeSkills: ['bruno-test-writer', 'daydream'] }), 'neutral', d));
+    quiet(() => build(makeCfg({ excludeSkills: ['bruno', 'daydream'] }), 'neutral', d));
     const skills = fs.readdirSync(path.join(d, 'skills'));
-    assert.ok(!skills.includes('bruno-test-writer.md'), 'the flat skill was written');
+    assert.ok(!skills.includes('bruno.md'), 'the flat skill was written');
     assert.ok(!skills.includes('daydream'), 'the folder skill was written');
-    assert.ok(skills.includes('bruno-collection-generator.md'), 'a sibling skill went with it');
+    assert.ok(skills.includes('research.md'), 'a sibling skill went with it');
     const agent = agentText(d);
-    assert.ok(!agent.includes('skills/bruno-test-writer.md'), 'its catalogue row is still there');
+    assert.ok(!agent.includes('skills/bruno.md'), 'its catalogue row is still there');
     assert.ok(!agent.includes('skills/daydream/SKILL.md'), "the folder skill's bullet is still there");
     // The bullet's indented continuation line goes with it, or it dangles under the previous one.
     assert.ok(!agent.includes('non-obvious connections between notes'), 'a continuation line stayed');
     assert.ok(agent.includes('skills/token-report/SKILL.md'), 'a sibling folder bullet went too');
-    assert.ok(agent.split('\n').includes('Excluded skills: bruno-test-writer, daydream'),
+    assert.ok(agent.split('\n').includes('Excluded skills: bruno, daydream'),
       'the Excluded skills: marker is missing or misspelled');
-    assert.deepEqual(excludedSkillsOfDir(d), ['bruno-test-writer', 'daydream'], 'read-back');
+    assert.deepEqual(excludedSkillsOfDir(d), ['bruno', 'daydream'], 'read-back');
   });
 });
 

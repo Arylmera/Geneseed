@@ -32,6 +32,7 @@ import path from 'node:path';
 import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
+import { aliasesOf } from '../build/source.mjs';
 
 /** What a folder skill writes where it needs its own directory — see `writeNativeLayer`. */
 const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
@@ -567,7 +568,9 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     } else {
       // Skills are BYTE-IDENTICAL across hosts: name + description, body link-stripped.
       // The user-only key is emitted for every host too — Claude Code and Bob honour it,
-      // OpenCode ignores an unknown key — so the identity holds.
+      // OpenCode ignores an unknown key — so the identity holds. ALIASES are the one
+      // exception: OpenCode has no user-only skill, so an alias skill there would land in the
+      // model's catalogue as a duplicate; it gets a command instead (`writeAliasCommands`).
       fm = [`name: ${stem}`, `description: ${jsonDumps(skillDescription(text))}`];
       if (isUserInvokedOnly(text)) fm.push('disable-model-invocation: true');
       body = stripSkillBodyLinks(body);
@@ -576,6 +579,19 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     }
     if (!claim(dest)) continue;
     write(dest, `---\n${fm.join('\n')}\n---\n\n${body}`);
+    // An old name keeps answering `/name`: user-only, so the model's catalogue lists the
+    // skill once. Read off the already-filtered items, so excluding the target drops its
+    // aliases; through `claim`, so manifest, prune and uninstall own them; not counted.
+    // Only once the target's own claim held: a user's file at the target gets no alias
+    // pointing at a skill this install never wrote.
+    if (kind === 'skill' && host === 'claude') {
+      for (const alias of aliasesOf(text)) {
+        const aliasDest = path.join(skillsDir, alias, 'SKILL.md');
+        if (!claim(aliasDest)) continue;
+        write(aliasDest, `---\nname: ${alias}\ndescription: ${jsonDumps(`Alias of ${stem}.`)}\n`
+          + `disable-model-invocation: true\n---\n\n${body}`);
+      }
+    }
     if (kind === 'agent') nAgents += 1;
     else nSkills += 1;
   }

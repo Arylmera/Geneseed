@@ -241,8 +241,8 @@ export function knownRuleIds() {
  * skills) or a vendored `skills/<name>/` folder. The one enumerator `--exclude-skills` closes
  * against, for the reason `knownRuleIds` is one.
  */
-export function knownSkillIds() {
-  const dir = path.join(SRC, 'skills');
+export function knownSkillIds(src = SRC) {
+  const dir = path.join(src, 'skills');
   return readdirSync(dir, { withFileTypes: true })
     .filter((e) => !e.name.startsWith('_') && (e.isDirectory() || e.name.endsWith('.md')))
     .map((e) => e.name.replace(/\.md$/, '')).sort();
@@ -253,7 +253,7 @@ export function knownSkillIds() {
  * outside the §4 catalogue table. They cannot be excluded: the link would ship dead. Scanned,
  * not listed, so a new link protects its target the day it is written.
  */
-export function linkedSkillIds() {
+export function linkedSkillIds(src = SRC) {
   const linked = new Set();
   const walk = (d) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
@@ -266,8 +266,81 @@ export function linkedSkillIds() {
       }
     }
   };
-  walk(SRC);
+  walk(src);
   return [...linked].sort();
+}
+
+/**
+ * OLD NAMES KEEP WORKING. When skills merge, the absorbed names live on as aliases, declared in
+ * the surviving spec on a line of their own — `<!-- aliases: deps-audit, migrate -->` — beside
+ * `<!-- invocation: user -->`, for the same reason: a phrase in the spec, not a second manifest
+ * to keep in step. Anchored to a whole line so a skill that merely QUOTES the syntax in its
+ * prose declares nothing. The emit turns each alias into a user-only `/alias` that runs the
+ * target's body (`writeNativeLayer`, `writeAliasCommands`); `--exclude-skills` maps an alias to
+ * its target (`resolveSkillNames`); the doctor keeps the namespace clean (`aliasProblems`).
+ */
+export const ALIASES_RE = /^<!--[ \t]*aliases:[ \t]*(.+?)[ \t]*-->[ \t]*\r?$/m;
+export function aliasesOf(text) {
+  const m = ALIASES_RE.exec(text);
+  return m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
+}
+
+/** Every declared alias -> the skill that declares it. First declaration wins; the doctor names a duplicate. */
+export function skillAliases(src = SRC) {
+  const map = new Map();
+  const dir = path.join(src, 'skills');
+  for (const f of readdirSync(dir).filter((n) => n.endsWith('.md') && !n.startsWith('_')).sort()) {
+    for (const a of aliasesOf(readFileSync(path.join(dir, f), 'utf8'))) {
+      if (!map.has(a)) map.set(a, f.slice(0, -3));
+    }
+  }
+  return map;
+}
+
+/**
+ * Skill names that were REMOVED outright — no successor to alias them to. Kept because an
+ * install's `Excluded skills:` line outlives the skill: `upgrade` and `rebuild-all` replay it
+ * through `--exclude-skills`, and a name the checkout no longer knows would otherwise refuse
+ * the whole rebuild. A retired name is dropped with a notice instead (excluding a skill that
+ * no longer ships is already true), and the doctor refuses it as a new skill or alias name, so
+ * it never comes back meaning something else — `RETIRED_RULE_IDS`' contract, for skills.
+ */
+export const RETIRED_SKILL_IDS = {
+  tickets: 'removed in the 2026-10 sharpen; plan slices the work now',
+};
+
+/**
+ * `--exclude-skills` names -> what this checkout can exclude, without ever dying on a name that
+ * merely got OLDER. A skill id passes; an alias maps to its target (excluding the merged skill
+ * is what excluding its old half meant); a retired name is dropped. An alias whose target the
+ * harness links to by path is dropped too — the old exclusion cannot be honoured, and refusing
+ * it would break every replay of an install that was valid when it was made. Only `unknown`
+ * (never shipped under any name) is the caller's to refuse. Pure: the tables arrive as
+ * arguments and the notices go back to the caller, so a reader that runs on every status call
+ * can stay silent while the flag speaks.
+ */
+export function resolveSkillNames(names, {
+  known = knownSkillIds(), aliases = skillAliases(), retired = RETIRED_SKILL_IDS, linked = null,
+} = {}) {
+  const ids = [];
+  const notices = [];
+  const unknown = [];
+  for (const name of names) {
+    if (known.includes(name)) ids.push(name);
+    else if (aliases.has(name)) {
+      const target = aliases.get(name);
+      linked ??= linkedSkillIds();
+      if (linked.includes(target)) {
+        notices.push(`'${name}' is now part of '${target}', which cannot be excluded — exclusion dropped`);
+      } else {
+        notices.push(`'${name}' is now part of '${target}' — excluding '${target}'`);
+        ids.push(target);
+      }
+    } else if (Object.hasOwn(retired, name)) {
+      notices.push(`'${name}' no longer ships (${retired[name]}) — exclusion dropped`);
+    } else unknown.push(name);
+  }
+  return { ids: [...new Set(ids)].sort(), notices, unknown };
 }
 
 /**

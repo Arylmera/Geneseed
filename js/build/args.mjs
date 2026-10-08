@@ -11,7 +11,7 @@ import { parseArgs as nodeParseArgs } from 'node:util';
 import { withPlatformNewlines } from '../lib/fs.mjs';
 import path from 'node:path';
 import {
-  CONFIG, discoverNames, PACK_ORDER, knownRuleIds, knownSkillIds, linkedSkillIds,
+  CONFIG, discoverNames, PACK_ORDER, knownRuleIds, knownSkillIds, linkedSkillIds, resolveSkillNames,
 } from './source.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
 // what lets it sit inside this module's `child_process` ban.
@@ -180,30 +180,36 @@ function parseExcludeRules(value) {
 }
 
 /**
- * `--exclude-skills "bruno-test-writer,openscad"` -> the cfg's skill exclusion array.
+ * `--exclude-skills "bruno,openscad"` -> the cfg's skill exclusion array.
  *
  * Refused, by name: a skill this checkout does not ship (a typo would exclude nothing in
  * silence), and a skill the constitution or another skill links to by path — excluding it
  * would ship that link dead (`linkedSkillIds`). Sorted and deduped for marker stability.
+ *
+ * An OLD name is not a typo, and is never refused: `upgrade` and `rebuild-all` replay an
+ * install's `Excluded skills:` line through this flag, so a name that became an alias or was
+ * retired after the install was made would otherwise break every rebuild of it. Those go
+ * through `resolveSkillNames` and leave one stderr line each; the linked refusal stays for a
+ * name typed as itself.
  */
 function parseExcludeSkills(value) {
   const s = value.trim();
   if (s === 'none' || s === '') return [];
   const known = knownSkillIds();
   const linked = linkedSkillIds();
-  const out = [];
-  for (const name of s.split(',').map((x) => x.trim()).filter(Boolean)) {
-    if (!known.includes(name)) {
-      die(2, `argument --exclude-skills: unknown skill '${name}' (choose from `
-        + `${known.filter((k) => !linked.includes(k)).join(', ')}, or 'none')`);
-    }
-    if (linked.includes(name)) {
-      die(2, `argument --exclude-skills: '${name}' cannot be excluded — the harness links to it `
-        + `by path (protected: ${linked.join(', ')})`);
-    }
-    out.push(name);
+  const names = s.split(',').map((x) => x.trim()).filter(Boolean);
+  const { ids, notices, unknown } = resolveSkillNames(names, { known, linked });
+  if (unknown.length) {
+    die(2, `argument --exclude-skills: unknown skill '${unknown[0]}' (choose from `
+      + `${known.filter((k) => !linked.includes(k)).join(', ')}, or 'none')`);
   }
-  return [...new Set(out)].sort();
+  const protectedName = names.find((n) => linked.includes(n));
+  if (protectedName) {
+    die(2, `argument --exclude-skills: '${protectedName}' cannot be excluded — the harness links `
+      + `to it by path (protected: ${linked.join(', ')})`);
+  }
+  for (const n of notices) process.stderr.write(`[geneseed] --exclude-skills: ${n}\n`);
+  return ids;
 }
 
 /**

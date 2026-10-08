@@ -14,12 +14,12 @@ to that choice.
 No key, password, token, or secret is ever written into a tracked file. Secrets
 live in `.env` or a secret manager, never in committed sources, logs, audit
 trails, or output. A secret that has ever touched a commit is burned: rotate it
-and scrub the history (the git-rescue {{SKILL}} covers the procedure) — deleting
+and scrub the history (the git-history {{SKILL}} covers the procedure) — deleting
 the file alone changes nothing.
 <!-- LEAN:else -->
 No key, password, token, or secret is ever written into a tracked file, a log, or
 output — secrets live in `.env` or a secret store. One that has touched a commit is burned:
-rotate it and scrub the history (git-rescue {{SKILL}}); deleting the file alone
+rotate it and scrub the history (git-history {{SKILL}}); deleting the file alone
 changes nothing.
 <!-- LEAN:end -->
 

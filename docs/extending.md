@@ -349,6 +349,10 @@ Intent became IX.
 
 ## 3 — Adding a SKILL or an AGENT
 
+**First, try not to.** Skills rot really fast. Can an existing skill absorb this, or can one be
+merged or deleted to make room? Every skill adds a description to the always-on list and one more
+candidate for routing to choose between, so add only what no sharpened existing skill covers.
+
 **Order matters at the first two steps.** `missingReferencedSpecs` (in `js/build/bundle.mjs`) *aborts the
 build* when `AGENT.md.tmpl` names a spec with no file — so the file comes before the table row, or
 nothing builds at all. The refusal is clean: `tests/unit/emit_gates.test.mjs:265` proves a refused
@@ -395,6 +399,17 @@ Two traps worth knowing before you write the spec:
   `LAW_META`, which *is* cross-checked). Inventing a new *category* means editing that file —
   which drags in the `web/dist` rebuild — and an unknown category lands under Personal in the
   Library (`splitSkills` in `web/src/pages/Library.jsx`) with no warning.
+
+**Merging or removing a skill keeps its old name working.** When a skill absorbs another, put
+`<!-- aliases: old-name, other-old-name -->` on its own line under the surviving skill's purpose
+blockquote. Every host then answers `/old-name` with the merged skill's body. Claude Code,
+OpenClaude and Bob get a user-only `skills/<alias>/SKILL.md`, and OpenCode gets a
+`command/<alias>.md`. Neither form is counted as a skill. An install that excluded the old name
+now excludes the merged skill (`resolveSkillNames` in `js/build/source.mjs`), so a rebuild still
+works. A skill removed with no successor goes into `RETIRED_SKILL_IDS` in the same file: its
+exclusion is dropped with a notice instead of failing the rebuild, and the name can never be
+used for a new skill. The doctor (`aliasProblems`) refuses an alias that is malformed, duplicated,
+already a skill, retired, or the name of an OpenCode command.
 
 
 ---

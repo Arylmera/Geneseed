@@ -27,6 +27,7 @@ import { writeText, readText, copyFile } from '../lib/fs.mjs';
 import { jsonDumps, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { sourceReleaseVersion } from '../build/version.mjs';
+import { aliasesOf } from '../build/source.mjs';
 import { firstBlockquote, stripSkillBodyLinks, pushOverrideLines } from './native.mjs';
 
 // Re-exported for `js/web/api.mjs` and the tests, which import it from here.
@@ -104,7 +105,7 @@ const AGENT_OVERRIDES_STUB = {
  * `/code-review`. As a list the renamed entry missed its skill and was dropped in silence, so a
  * missing skill is now a thrown error in `writeCommandLayer`.
  */
-const COMMAND_SET = {
+export const COMMAND_SET = {
   commit: 'commit', plan: 'plan', 'code-review': 'geneseed-code-review',
   'review-response': 'review-response', ship: 'ship', debug: 'debug', research: 'research',
 };
@@ -322,6 +323,32 @@ export function writeCommandLayer(cfg, items, commandDir, claim = () => true) {
     mkdirSync(path.dirname(dest), { recursive: true });
     writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${body}`);
     written.push(dest);
+  }
+  return written;
+}
+
+/**
+ * A merged skill's OLD names as `/alias` commands — OpenCode's form of the user-only alias
+ * skill `writeNativeLayer` writes for the Claude dialect. A command, not a skill, because
+ * OpenCode has no user-only skill: an alias skill would sit in the model's catalogue as a
+ * second copy of its target. UNCONDITIONAL, unlike the `GENESEED_COMMANDS` set — an old name
+ * that only works behind an opt-in is a name that broke. Read off the already-filtered
+ * `items`, so excluding the target drops its aliases.
+ */
+export function writeAliasCommands(cfg, items, commandDir, claim = () => true) {
+  const written = [];
+  for (const { text, src } of items) {
+    if (text === null) continue;
+    const sp = path.relative(cfg.src, src).split(path.sep);
+    if (sp.length !== 2 || sp[0] !== 'skills' || !sp[1].endsWith('.md') || sp[1].startsWith('_')) continue;
+    const body = stripSkillBodyLinks(text.replace(/^\n+/, ''));
+    for (const alias of aliasesOf(text)) {
+      const dest = path.join(commandDir, `${alias}.md`);
+      if (!claim(dest)) continue;
+      mkdirSync(path.dirname(dest), { recursive: true });
+      writeText(dest, `---\ndescription: ${jsonDumps(`Alias of ${sp[1].slice(0, -3)}.`)}\n---\n\n${body}`);
+      written.push(dest);
+    }
   }
   return written;
 }

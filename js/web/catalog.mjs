@@ -77,6 +77,10 @@ function specEntries(root, nested) {
   for (const p of files) {
     if (!isFile(p)) continue;
     const [fm, body] = frontmatter(readMaybe(p) ?? '');
+    // An alias folder (native.mjs: an old name kept answering `/name`) is its target skill
+    // under a second name, not a skill of the user's own — listing it would read "personal".
+    if (nested && fm.get('disable-model-invocation') === 'true'
+      && (fm.get('description') ?? '').startsWith('Alias of ')) continue;
     const name = nested ? path.basename(path.dirname(p)) : path.basename(p, '.md');
     out.push({ name, desc: specDesc(fm, body), body, source: resolvePath(p) });
   }

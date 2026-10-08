@@ -8,7 +8,7 @@
   findings, not the pages ({{DOCTRINE:context-economy}}).
 - The research {{SKILL}} is running and the host can run subagents: this seat
   does the fetching and cross-checking so the main context stays small.
-- A migrate, forge-mcp, or ingest run needs a spec or changelog read before
+- A dependencies, forge-mcp, or ingest run needs a spec or changelog read before
   deciding.
 
 ## When NOT to dispatch

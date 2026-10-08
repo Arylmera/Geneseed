@@ -1,10 +1,12 @@
 # {{SKILL}}: brainstorm
 
 > {{DESC_BRAINSTORM}}
+<!-- aliases: grill-me -->
 
-**Trigger:** a new feature, behaviour change, or project arrives without a design —
-or with its goal, scope, or success criteria unstated — or the user says "brainstorm",
-"let's design this", "interview me", "clarify this first". Also the front door for
+**Trigger:** a new feature, behaviour change, or project arrives without a design, or the
+user says "brainstorm", "interview me" or "grill me". Also when its goal, scope,
+or success criteria are unstated, or the user says "let's design this", "stress-test this plan",
+"clarify this first". Also the front door for
 non-design work (a refactor, a migration, an investigation) whose *ask* is fuzzy: the
 interview half runs, the design half is skipped.
 
@@ -15,9 +17,14 @@ interview half runs, the design half is skipped.
 2. **Interpret charitably, then interview.** Read the request in its strongest
    reasonable form — do not manufacture ambiguity from a fair ask. If goal, scope and
    success criteria are already unambiguous, restate them in one line and go to step
-   4. Otherwise ask ONE question at a time (multiple-choice when you can), driving at
-   *why* (the outcome wanted), *scope* (explicitly in and out) and *done* (how success
-   is judged) — not *how* yet. Stop when each is unambiguous.
+   4. Otherwise ask, in ONE numbered round, every question answerable now — each with
+   your recommended answer, worded so "yes" accepts it; a question hanging on one
+   still open waits for the next round. Drive at *why* (the outcome wanted), *scope*
+   (explicitly in and out) and *done* (how success is judged) — not *how* yet. Stop
+   when each is unambiguous. Facts are yours to find (read the code, dispatch a
+   subagent), never the user's to supply. A decision owned by someone else gets a
+   `questionnaire-<slug>.md` drafted for that person — ask the user only who it goes
+   to and what they need back — instead of a guess.
 3. **Ledger the decisions.** Name every KEY DECISION the answers imply or leave open —
    direction chosen, trade-offs accepted, load-bearing constraints, assumptions,
    non-goals. Surface each silent assumption as a decision to ratify, not a settled
@@ -34,8 +41,9 @@ interview half runs, the design half is skipped.
    confirmed decision ledger, then the design (when there is one). Re-read it cold for
    ambiguity and fix what a stranger could misread.
 6. **Exit — route, don't build.** Hand the spec to the {{SKILL}} the work now needs:
-   [plan](plan.md) for a multi-step build, [tickets](tickets.md) when it exceeds one
-   session, [wayfinder](wayfinder.md) when the route itself is still unknown,
+   [plan](plan.md) for a multi-step build whose route is known — even one too big for a
+   session, cut into slices — [wayfinder](wayfinder.md) only when the route itself is
+   still in the fog,
    [debug](debug.md) for a defect. Write no implementation code before that handoff.
 
 ## Done when
