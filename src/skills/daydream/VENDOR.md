@@ -15,7 +15,7 @@ generator's `VENDORED_SKILL_DIRS`.
 
 ## Geneseed adaptation
 
-Vault resolution is adapted to read the harness's `wiki.jsonc` knowledge-base
+Vault resolution is adapted to read the harness's `geneseed-wiki.jsonc` knowledge-base
 manifest first (a declared vault's `path`), falling back to the upstream cwd/`.obsidian`
 auto-detection when no wiki is declared. The synthesis/critique still run as parallel
 subagents over recency-weighted note pairs. The model-name references (`sonnet`,
@@ -30,6 +30,6 @@ its slash command. Sibling files are named through the this-skill-directory plac
 `SKILL_DIR_PLACEHOLDER` in `js/hosts/native.mjs`), which the emit resolves for a host that
 does not tell the model where a skill lives.
 
-To update, re-copy the upstream folder, re-apply the wiki.jsonc adaptation, the
+To update, re-copy the upstream folder, re-apply the geneseed-wiki.jsonc adaptation, the
 frontmatter and the placeholder paths in `SKILL.md` / `instructions.md`, and
 bump the commit above.

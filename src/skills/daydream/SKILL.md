@@ -22,7 +22,7 @@ procedure; this one is the overview.
 
 Before the first run, make sure the pieces this skill depends on are in place:
 
-1. **A vault to mine.** Declare your Obsidian vault in the harness `wiki.jsonc`
+1. **A vault to mine.** Declare your Obsidian vault in the harness `geneseed-wiki.jsonc`
    (AGENT.md §8) — give a `wikis[]` entry a `path` to the vault root. Without it the
    skill falls back to detecting a `.obsidian/` folder in the current directory, then
    asks. No vault → nothing to daydream about.
@@ -37,7 +37,7 @@ Before the first run, make sure the pieces this skill depends on are in place:
    `critic-prompt.md` files **in this skill's own folder** (`<this-skill-directory>/`). They ship with the skill — nothing to install.
 5. **Writable output folders.** The run writes `Daydreams/`, `Daydreams/digests/`,
    `Daily/`, and `ai-research/daydream/history.json` into the vault. If any of those
-   sit under a `protected` path in `wiki.jsonc`, the guard plugin will block the write —
+   sit under a `protected` path in `geneseed-wiki.jsonc`, the guard plugin will block the write —
    keep them unprotected (Law-I-safe, since they're generated notes, not secrets).
 
 This skill adds **no dependencies of its own** — it uses only the host's built-in
@@ -45,7 +45,7 @@ Glob/Read/Write/Bash and subagent tools. See [VENDOR.md](VENDOR.md) for provenan
 
 ## What it does
 
-1. Resolves vault root from the harness `wiki.jsonc` manifest (a declared vault's `path`); falls back to auto-detecting `.obsidian/` from the current directory, then asks if still unfound
+1. Resolves vault root from the harness `geneseed-wiki.jsonc` manifest (a declared vault's `path`); falls back to auto-detecting `.obsidian/` from the current directory, then asks if still unfound
 2. Scans vault for notes modified in last 120 days
 2. Generates 50 recency-weighted random pairs
 3. Synthesizes connections (Sonnet, parallel batches of 5)

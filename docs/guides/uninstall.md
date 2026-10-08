@@ -33,7 +33,7 @@ It also removes the install's row from the registry of installs. Start a new ses
 ## What it keeps
 
 - **`memory/` and `notebook/`.** These are never deleted. `--archive-memory` moves both aside, into sibling `archived-memory/<timestamp>/` and `archived-notebook/<timestamp>/` folders, instead of leaving them in place. Even then they are moved, not deleted.
-- **`wiki.jsonc`**, **`context.json`** and the **`improvements/`** folder. None of these are in the manifest.
+- **`geneseed-wiki.jsonc`** (or `wiki.jsonc`, its name before the rename), **`context.json`** and the **`improvements/`** folder. None of these are in the manifest.
 - **Other installs.** Removing the global install does not touch any project install. Uninstall lists the project installs that remain, each with the command that removes it. If a repo carries installs for several hosts, uninstall removes one and tells you to run it again for the next.
 
 ## The hook shim

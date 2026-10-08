@@ -12,7 +12,7 @@ import { writeText } from '../lib/fs.mjs';
 import { isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
 import { EXCLUDES_FILE } from '../hosts/hosts.mjs';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
 // Seeded stubs. Written once into the bundle and NEVER overwritten — each holds
@@ -34,7 +34,7 @@ const CONTEXT_STUB = {
 
 /** `_build_render.WIKI_STUB`. */
 const WIKI_STUB = `\
-// Geneseed wiki.jsonc — declare your machine-wide knowledge base(s) here, typically
+// geneseed-wiki.jsonc — declare your machine-wide knowledge base(s) here, typically
 // an Obsidian vault (AGENT.md: the Wiki section). Comments are allowed in this file
 // (JSONC). It is host-specific — never commit it. The build created it once, empty,
 // and will never overwrite it.
@@ -183,7 +183,8 @@ const BUNDLE_GITIGNORE = `\
 context.json
 
 # Knowledge-base manifest — holds private machine paths; never commit.
-# (wiki.json is the legacy name from earlier seeds.)
+# (wiki.jsonc and wiki.json are its legacy names from earlier seeds.)
+geneseed-wiki.jsonc
 wiki.jsonc
 wiki.json
 
@@ -220,9 +221,37 @@ export function ensureContextStub(out) {
   seed(path.join(out, 'context.json'), `${jsonDumpsIndent(CONTEXT_STUB, { ensureAscii: false })}\n`);
 }
 
-/** `_build_render.ensure_wiki_stub` — a legacy `wiki.json` counts as present. */
+/** The wiki manifest's name. `geneseed-` says who owns it in a shared `.claude/`/`.opencode/`. */
+export const WIKI_FILE = 'geneseed-wiki.jsonc';
+/** Its earlier names, newest first. Readers still fall back to them for one release. */
+const LEGACY_WIKI_FILES = ['wiki.jsonc', 'wiki.json'];
+
+/**
+ * `_build_render.ensure_wiki_stub`, plus the rename. A legacy manifest is the user's file: it is
+ * RENAMED to `WIKI_FILE` (bytes preserved by construction), never copied and never seeded beside.
+ * A rename that fails (the file held open on Windows) leaves it where it is and seeds nothing —
+ * a seed beside it would fork the user's declarations; the readers' fallback still finds it.
+ * The sibling `.gitignore` follows the rename, or the private paths become committable.
+ */
 export function ensureWikiStub(out) {
-  if (!existsSync(path.join(out, 'wiki.json'))) seed(path.join(out, 'wiki.jsonc'), WIKI_STUB);
+  const dest = path.join(out, WIKI_FILE);
+  if (existsSync(dest)) return;
+  const legacy = LEGACY_WIKI_FILES.find((n) => existsSync(path.join(out, n)));
+  if (!legacy) return seed(dest, WIKI_STUB);
+  try { renameSync(path.join(out, legacy), dest); } catch { return; }
+  ignoreRenamedWiki(path.join(out, '.gitignore'), legacy);
+}
+
+/** Add `WIKI_FILE` to a `.gitignore` that ignores the legacy name and not the new one, in the
+ * file's own line ending. Anything else — no file, no legacy line — is left alone. */
+function ignoreRenamedWiki(gi, legacy) {
+  let text;
+  try { text = readFileSync(gi, 'utf8'); } catch { return; }
+  const lines = text.split(/\r?\n/);
+  if (!lines.includes(legacy) || lines.includes(WIKI_FILE)) return;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const sep = text.endsWith('\n') ? '' : eol;
+  writeFileSync(gi, `${text}${sep}${WIKI_FILE}${eol}`);
 }
 
 /** `_build_render.ensure_rules_stub`. */
@@ -264,7 +293,7 @@ export const ensureNotebookIndex = storeIndexWriter('NOTEBOOK.md', NOTEBOOK_INDE
  * the two copies must move with it.
  */
 export const SESSION_SEEDS = {
-  'user-rules.md': RULES_STUB, 'PROFILE.md': PROFILE_STUB, 'wiki.jsonc': WIKI_STUB,
+  'user-rules.md': RULES_STUB, 'PROFILE.md': PROFILE_STUB, [WIKI_FILE]: WIKI_STUB,
   'MEMORY.md': MEMORY_INDEX, 'NOTEBOOK.md': NOTEBOOK_INDEX,
 };
 

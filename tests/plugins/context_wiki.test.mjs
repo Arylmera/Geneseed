@@ -33,7 +33,7 @@ before(async () => {
   // The canonical setup this feature was built for: the whole vault lazy, the
   // root index eager — plus an excluded folder. File entry deliberately listed
   // LAST and the exclude in the middle: order must not matter for the override.
-  await fs.writeFile(path.join(tmp, "wiki.jsonc"), `// test manifest
+  await fs.writeFile(path.join(tmp, "geneseed-wiki.jsonc"), `// test manifest
 {
   "wikis": [{
     "name": "Brain",
@@ -46,7 +46,7 @@ before(async () => {
   }],
 }
 `)
-  process.env.GENESEED_WIKI = path.join(tmp, "wiki.jsonc")
+  process.env.GENESEED_WIKI = path.join(tmp, "geneseed-wiki.jsonc")
 
   const repo = path.join(tmp, "repo")
   await fs.mkdir(repo)
@@ -83,6 +83,30 @@ test("an excluded folder is pruned from the listing", () => {
 
 test("dot-folders (.obsidian, .trash) are never walked", () => {
   assert.ok(!text.includes("skip.md"))
+})
+
+// The manifest was `wiki.jsonc` before the `geneseed-` prefix. With $GENESEED_WIKI unset and only
+// the old name under $GENESEED_HARNESS (an install not yet re-emitted), its wiki still renders.
+test("a legacy wiki.jsonc under $GENESEED_HARNESS is still read", async () => {
+  const harness = path.join(tmp, "legacy-harness")
+  await fs.mkdir(harness, { recursive: true })
+  await fs.writeFile(path.join(harness, "wiki.jsonc"), JSON.stringify({ wikis: [{
+    name: "OldBrain", path: path.join(tmp, "Brain"),
+    entries: [{ path: "ARCHITECTURE.md", load: "eager" }] }] }))
+  const prevWiki = process.env.GENESEED_WIKI, prevHarness = process.env.GENESEED_HARNESS
+  delete process.env.GENESEED_WIKI
+  process.env.GENESEED_HARNESS = harness
+  try {
+    const mod = await import("../../adapters/opencode/plugins/geneseed-context.js?legacy-wiki")
+    const plugin = await mod.default({ directory: path.join(tmp, "repo"), client: {} })
+    const output = { context: [] }
+    await plugin["experimental.session.compacting"]({}, output)
+    assert.match(output.context[0] ?? "", /----- OldBrain\/ARCHITECTURE\.md -----/)
+  } finally {
+    process.env.GENESEED_WIKI = prevWiki
+    if (prevHarness === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = prevHarness
+  }
 })
 
 test("the lazy listing truncates at the cap with a visible count", () => {

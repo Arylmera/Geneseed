@@ -5,7 +5,7 @@
  * at "~90 new, already in js/: `_mcp_load`/`readJsonc` (P6c), `settings.mjs`'s atomic write".
  * Measured against `js/`: `readJsonc` had crossed and NOTHING ELSE HAD. `js/web/api.mjs`
  * carries a five-line `mcpLoad` that is the no-host, comment-tolerant reader P6c needed for
- * `wiki.jsonc`, which is one arm of one of these thirteen functions. `_MCP_PRESETS`,
+ * `geneseed-wiki.jsonc`, which is one arm of one of these thirteen functions. `_MCP_PRESETS`,
  * `_mcp_servers_key`, `_mcp_preset_block`, `_mcp_apply`, `_mcp_state`, `_mcp_set_enabled`,
  * `_mcp_load`'s host fork, `_mcp_commented`, `_mcp_save`, `_mcp_config_for`,
  * `_mcp_install_targets`, `_mcp_known_names` and `_mcp_meta` are 168 lines of Python, all

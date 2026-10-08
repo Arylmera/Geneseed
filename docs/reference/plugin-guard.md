@@ -10,7 +10,7 @@ One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](envi
 
 **What it does.** Enforces the safety rules at the tool boundary — before a tool call runs, not after. High-confidence patterns only, so legitimate work is not caught.
 
-- **Blocks** writes to private-key and credential files (*Sealed Secrets*), catastrophic shell commands such as deleting the filesystem root (*Deletion Is Deliberate*), and any change — write, move, rename, delete — under a wiki folder declared `protected` in `wiki.jsonc`, and writes to a check listed in the project's `.geneseed/protected-checks.txt` (*External Gate* — see [Hooks](../concepts/hooks.md)).
+- **Blocks** writes to private-key and credential files (*Sealed Secrets*), catastrophic shell commands such as deleting the filesystem root (*Deletion Is Deliberate*), and any change — write, move, rename, delete — under a wiki folder declared `protected` in `geneseed-wiki.jsonc`, and writes to a check listed in the project's `.geneseed/protected-checks.txt` (*External Gate* — see [Hooks](../concepts/hooks.md)).
 - **Warns** (logged, allowed) on `.env` writes and force-push.
 - **Speed-bumps** the *first* write to `user-rules.md` or a memory file: it is refused once, naming *Persist Insight* — whether something is a standing rule or a fact to remember is your call, settled through the `rule` skill. The re-issued write goes through.
 

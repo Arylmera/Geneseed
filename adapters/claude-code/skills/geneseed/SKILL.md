@@ -19,7 +19,7 @@ Pick the first that resolves; remember the path for the rest of the session.
 
 If none resolve, the user does not have Geneseed deployed here — say so and stop. Do not run `setup`, `build`, or `upgrade` on your own to "fix" this; that is a user decision.
 
-A live harness root contains: `AGENT.md`, `ontology/universal.md`, `laws/universal.md`, `doctrines/<pack>.md`, `agents/<name>.md`, `skills/<name>/SKILL.md`, `memory/MEMORY.md`, `notebook/NOTEBOOK.md`, `themes/`, and (on OpenCode) `plugins/`, `workflows/`, `opencode.jsonc`, `wiki.jsonc`.
+A live harness root contains: `AGENT.md`, `ontology/universal.md`, `laws/universal.md`, `doctrines/<pack>.md`, `agents/<name>.md`, `skills/<name>/SKILL.md`, `memory/MEMORY.md`, `notebook/NOTEBOOK.md`, `themes/`, and (on OpenCode) `plugins/`, `workflows/`, `opencode.jsonc`, `geneseed-wiki.jsonc`.
 
 The constitution is **three tiers**: an always-on **Ontology** (four prose sections — Telos, Evidence, Decisions, Conduct), nine always-on **Rules** numbered I–IX, and the **Doctrines** — practice packs (`craft`, `rigor`, `ops`, `process`, `comms`) chosen per install at build time. `AGENT.md` carries all three inline (whole at the `full` footprint, heading-plus-first-line at `lean`), *and* the complete text ships as files beside it. All five pack files ship even when a pack was not built in, so a citation into an inactive pack still resolves on disk — which is why a question about a rule is answered from the tier file, never only from `AGENT.md`.
 

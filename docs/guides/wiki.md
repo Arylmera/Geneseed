@@ -18,9 +18,9 @@ If you keep a personal knowledge base on this machine, such as an Obsidian vault
 
 When a memory fact or a notebook note hardens into knowledge worth keeping across projects, the agent promotes it into the wiki, so the truth lives in one place.
 
-## Declare it in `wiki.jsonc`
+## Declare it in `geneseed-wiki.jsonc`
 
-The build writes a `wiki.jsonc` stub beside `AGENT.md` (for the OpenCode global install, `~/.config/opencode/wiki.jsonc`) and never overwrites it. The file is JSONC, so comments and trailing commas are fine. The stub contains this example, commented out:
+The build writes a `geneseed-wiki.jsonc` stub beside `AGENT.md` (for the OpenCode global install, `~/.config/opencode/geneseed-wiki.jsonc`) and never overwrites it. The file is JSONC, so comments and trailing commas are fine. The stub contains this example, commented out:
 
 ```json
 {
@@ -47,7 +47,7 @@ The build writes a `wiki.jsonc` stub beside `AGENT.md` (for the OpenCode global 
 
 You can declare several wikis. An empty `wikis` list keeps the feature off. The file may hold private paths. It is specific to this machine and must never be committed. A project install's own `.gitignore` already lists it.
 
-Geneseed looks for the file in this order: `$GENESEED_WIKI`, then `$GENESEED_HARNESS/wiki.jsonc`, then beside the installed `AGENT.md`. A `wiki.json` left by an older install is still read at each of those places.
+Geneseed looks for the file in this order: `$GENESEED_WIKI`, then `$GENESEED_HARNESS/geneseed-wiki.jsonc`, then beside the installed `AGENT.md`. The build renames a `wiki.jsonc` or `wiki.json` left by an older install to `geneseed-wiki.jsonc`, contents untouched, and adds the new name to a `.gitignore` that listed the old one. Until that next build, the old `wiki.jsonc` is still read at each of those places.
 
 ## How each host honours it
 
@@ -60,7 +60,7 @@ The context plugin loads your eager entries and lists your lazy ones at session 
 <!--harness:claude-->
 *(Claude Code only)*
 
-No hook reads the wiki. The instructions in your harness tell the agent to read `wiki.jsonc` at session start and to honour it, including the `protected` folders. That is an instruction the model follows, not a block. Nothing stops a write at the tool boundary. The same applies to Bob, OpenClaude and plain `AGENT.md` tools. See [Enforced vs. asked](../understand/enforced-vs-asked.md).
+No hook reads the wiki. The instructions in your harness tell the agent to read `geneseed-wiki.jsonc` at session start and to honour it, including the `protected` folders. That is an instruction the model follows, not a block. Nothing stops a write at the tool boundary. The same applies to Bob, OpenClaude and plain `AGENT.md` tools. See [Enforced vs. asked](../understand/enforced-vs-asked.md).
 <!--/harness-->
 
 ## What the agent does with it

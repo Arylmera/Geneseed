@@ -292,19 +292,19 @@ test('a build writes the expected tree', () => {
       // The agent's own freeform space ships its convention plus a seeded index.
       'notebook/README.md', 'notebook/.gitignore', 'notebook/NOTEBOOK.md',
       // The two stubs created once.
-      'context.json', 'wiki.jsonc']) {
+      'context.json', 'geneseed-wiki.jsonc']) {
       assert.ok(isFile(out, ...rel.split('/')), `${rel} is missing from a fresh build`);
     }
   });
 });
 
-test('wiki.jsonc is seeded as commented JSONC and never overwritten', () => {
-  // wiki.jsonc holds the user's own knowledge-base declarations: seeded once as a commented
+test('geneseed-wiki.jsonc is seeded as commented JSONC and never overwritten', () => {
+  // geneseed-wiki.jsonc holds the user's own knowledge-base declarations: seeded once as a commented
   // copy-and-edit example over an empty list, and never rewritten (spec 2026-06-11).
   withDir((d) => {
     const out = path.join(d, 'bundle');
     buildInto(out);
-    const wiki = path.join(out, 'wiki.jsonc');
+    const wiki = path.join(out, 'geneseed-wiki.jsonc');
     const text = fs.readFileSync(wiki, 'utf8');
     assert.ok(text.includes('// Example'), 'the stub shipped without its inline example');
     // Stripped by hand rather than through the product's own `readJsonc`, which is under test
@@ -320,18 +320,65 @@ test('wiki.jsonc is seeded as commented JSONC and never overwritten', () => {
   });
 });
 
-test('a legacy wiki.json suppresses the .jsonc stub', () => {
-  // A `wiki.json` seeded by an earlier build still counts as the manifest. Dropping a second
-  // `wiki.jsonc` beside it would fork the user's declarations across two files, and the build
-  // reads only one of them.
+// The wiki manifest was `wiki.jsonc` (and before that `wiki.json`) until it took the `geneseed-`
+// prefix. Each row: the files an older install left in the bundle -> what one build leaves there.
+// The rule: the user's file is RENAMED, byte for byte, and never seeded beside — a second copy
+// would fork their declarations across two files that only one reader would see.
+const WIKI_MIGRATION = [
+  // A wiki.jsonc the user edited moves to the new name with its exact bytes, CRLF included.
+  { name: 'a user-edited wiki.jsonc', before: { 'wiki.jsonc': '// mine\r\n{"wikis": [{"name": "Brain", "path": "/kb"}]}\r\n' },
+    after: { 'geneseed-wiki.jsonc': '// mine\r\n{"wikis": [{"name": "Brain", "path": "/kb"}]}\r\n' } },
+  // The older wiki.json moves too: plain JSON is valid JSONC.
+  { name: 'a legacy wiki.json', before: { 'wiki.json': '{"wikis": [{"name": "Old", "path": "/kb"}]}\n' },
+    after: { 'geneseed-wiki.jsonc': '{"wikis": [{"name": "Old", "path": "/kb"}]}\n' } },
+  // With both legacy names present the newer, wiki.jsonc, is the one the readers used: it moves,
+  // and wiki.json stays where it is rather than being overwritten or deleted.
+  { name: 'both legacy names', before: { 'wiki.jsonc': '{"wikis": []}\n', 'wiki.json': '{"x": 1}\n' },
+    after: { 'geneseed-wiki.jsonc': '{"wikis": []}\n', 'wiki.json': '{"x": 1}\n' } },
+  // Once the new name exists the build touches nothing: a leftover wiki.jsonc beside it is kept.
+  { name: 'new name already there', before: { 'geneseed-wiki.jsonc': '{"wikis": []}\n', 'wiki.jsonc': '{"y": 2}\n' },
+    after: { 'geneseed-wiki.jsonc': '{"wikis": []}\n', 'wiki.jsonc': '{"y": 2}\n' } },
+];
+
+for (const row of WIKI_MIGRATION) {
+  test(`wiki manifest migration: ${row.name}`, () => {
+    withDir((d) => {
+      const out = path.join(d, 'bundle');
+      fs.mkdirSync(out, { recursive: true });
+      for (const [f, t] of Object.entries(row.before)) fs.writeFileSync(path.join(out, f), t);
+      buildInto(out);
+      for (const f of ['geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json']) {
+        if (f in row.after) assert.equal(read(out, f), row.after[f], `${f} has the wrong bytes`);
+        else assert.ok(!fs.existsSync(path.join(out, f)), `${f} should be gone`);
+      }
+    });
+  });
+}
+
+test('the wiki rename adds the new name to a .gitignore that ignored the old one', () => {
+  // An older bundle's .gitignore (write-once, never re-seeded) lists wiki.jsonc. After the rename
+  // the private vault paths would sit in an un-ignored geneseed-wiki.jsonc, so the build appends the
+  // new name — in the file's own CRLF, without a duplicate on the next build.
   withDir((d) => {
     const out = path.join(d, 'bundle');
     fs.mkdirSync(out, { recursive: true });
-    const legacy = '{"wikis": [{"name": "Old", "path": "/kb"}]}\n';
-    fs.writeFileSync(path.join(out, 'wiki.json'), legacy);
+    fs.writeFileSync(path.join(out, 'wiki.jsonc'), '{"wikis": []}\n');
+    fs.writeFileSync(path.join(out, '.gitignore'), 'context.json\r\nwiki.jsonc');
     buildInto(out);
-    assert.ok(!fs.existsSync(path.join(out, 'wiki.jsonc')), 'the build forked the manifest');
-    assert.equal(read(out, 'wiki.json'), legacy);
+    assert.equal(read(out, '.gitignore'), 'context.json\r\nwiki.jsonc\r\ngeneseed-wiki.jsonc\r\n');
+    buildInto(out);
+    assert.equal(read(out, '.gitignore'), 'context.json\r\nwiki.jsonc\r\ngeneseed-wiki.jsonc\r\n');
+  });
+});
+
+test('a fresh bundle .gitignore ignores the wiki manifest under all its names', () => {
+  // New installs are seeded with the new name; the two legacy names stay listed so a file an
+  // older Geneseed left behind cannot be committed either.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    const lines = read(out, '.gitignore').split(/\r?\n/);
+    for (const n of ['geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json']) assert.ok(lines.includes(n), n);
   });
 });
 
@@ -392,7 +439,7 @@ for (const [axis, dir, dflt, other, dfltMark, otherMark] of [
 
 test('PROFILE.md is seeded once and preserved', () => {
   // PROFILE.md holds the user's own identity: seeded beside AGENT.md, never overwritten (the
-  // same contract as wiki.jsonc and user-rules.md). It is identity, not rules — so the stub
+  // same contract as geneseed-wiki.jsonc and user-rules.md). It is identity, not rules — so the stub
   // has to point rules somewhere else or the two files compete.
   withDir((d) => {
     const out = path.join(d, 'bundle');
@@ -1615,7 +1662,7 @@ for (const host of ['opencode', 'claude']) {
 }
 
 test('excludes.json is seeded once, user-owned, and never in the manifest', () => {
-  // The user's own folder exclusion list. Same contract as context.json, wiki.jsonc and
+  // The user's own folder exclusion list. Same contract as context.json, geneseed-wiki.jsonc and
   // user-rules.md — and the manifest assertion is the mechanism behind it: a global emit
   // prunes what it owns, so being ABSENT from `owned` is what makes the file survive.
   withDir((d) => {

@@ -461,7 +461,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .lib-group .cdot { display: inline-block; width: 7px; height: 7px; margin-right: 8px;
   border-radius: 50%; background: var(--cc, var(--text-3)); vertical-align: 1px; }
 
-/* Manifest doc — the parsed wiki.jsonc / context.json view (cards + entries
+/* Manifest doc — the parsed geneseed-wiki.jsonc / context.json view (cards + entries
    table with load-mode badges) that replaces the raw JSON dump. */
 .mf-doc { display: flex; flex-direction: column; gap: 18px; }
 .mf-vault { border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px;

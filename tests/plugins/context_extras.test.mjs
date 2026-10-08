@@ -24,8 +24,8 @@ before(async () => {
     JSON.stringify({ scripts: { dev: "vite", lint: "eslint ." } }))
   await fs.writeFile(path.join(repo, "yarn.lock"), "")   // → "yarn" runner
   // Keep any developer-machine wiki out of the block.
-  await fs.writeFile(path.join(tmp, "wiki.jsonc"), `{ "wikis": [] }`)
-  process.env.GENESEED_WIKI = path.join(tmp, "wiki.jsonc")
+  await fs.writeFile(path.join(tmp, "geneseed-wiki.jsonc"), `{ "wikis": [] }`)
+  process.env.GENESEED_WIKI = path.join(tmp, "geneseed-wiki.jsonc")
 })
 
 after(async () => {

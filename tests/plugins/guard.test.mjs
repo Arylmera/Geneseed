@@ -1,7 +1,7 @@
 // Tests for the OpenCode guard plugin's cross-platform safety matching — in particular
 // that Windows-style (backslash) secret paths and Windows/PowerShell catastrophic
 // commands are caught, not just their POSIX equivalents — and for the protected-wiki
-// enforcement (AGENT.md §8) driven by a wiki.jsonc manifest.
+// enforcement (AGENT.md §8) driven by a geneseed-wiki.jsonc manifest.
 import { test, after } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
@@ -17,7 +17,7 @@ const vault = path.join(tmp, "Brain")
 await fs.mkdir(path.join(vault, "Codex"), { recursive: true })
 // Written as JSONC on purpose — the seeded stub ships commented, so the guard must
 // tolerate comments and trailing commas (and leave // inside strings alone).
-await fs.writeFile(path.join(tmp, "wiki.jsonc"), `// machine wikis
+await fs.writeFile(path.join(tmp, "geneseed-wiki.jsonc"), `// machine wikis
 {
   /* one vault */
   "wikis": [{
@@ -28,7 +28,7 @@ await fs.writeFile(path.join(tmp, "wiki.jsonc"), `// machine wikis
   }],
 }
 `)
-process.env.GENESEED_WIKI = path.join(tmp, "wiki.jsonc")
+process.env.GENESEED_WIKI = path.join(tmp, "geneseed-wiki.jsonc")
 
 after(async () => {
   delete process.env.GENESEED_WIKI
@@ -365,4 +365,30 @@ test("blocks a write under a protected check path, not beside it", async () => {
   assert.equal(await blocked("edit", { filePath: path.join(repo, ".geneseed", "protected-checks.txt") }), true)
   assert.equal(await blocked("write", { filePath: path.join(repo, "testsuite", "a.js") }), false)
   assert.equal(await blocked("write", { filePath: path.join(repo, "src", "a.js") }), false)
+})
+
+// The manifest was `wiki.jsonc` before the `geneseed-` prefix; an install not yet re-emitted still
+// has only that name, and its protected folders must stay protected. A fresh module instance (the
+// query string) so the main instance's cached prefixes do not answer; $GENESEED_WIKI unset so the
+// lookup walks $GENESEED_HARNESS: a write under the legacy manifest's protected folder is blocked.
+test("a legacy wiki.jsonc under $GENESEED_HARNESS still protects its folders", async () => {
+  const harness = path.join(tmp, "legacy-harness")
+  const old = path.join(tmp, "OldVault")
+  await fs.mkdir(path.join(old, "Locked"), { recursive: true })
+  await fs.mkdir(harness, { recursive: true })
+  await fs.writeFile(path.join(harness, "wiki.jsonc"),
+    JSON.stringify({ wikis: [{ name: "Old", path: old, protected: ["Locked/"] }] }))
+  const prevWiki = process.env.GENESEED_WIKI, prevHarness = process.env.GENESEED_HARNESS
+  delete process.env.GENESEED_WIKI
+  process.env.GENESEED_HARNESS = harness
+  try {
+    const fresh = await import("../../adapters/opencode/plugins/geneseed-guard.js?legacy-wiki")
+    const h = (await fresh.GeneseedGuard())["tool.execute.before"]
+    await assert.rejects(h({ tool: "write", args: { filePath: path.join(old, "Locked", "x.md") } }, {}),
+      /\[geneseed-guard\]/)
+  } finally {
+    process.env.GENESEED_WIKI = prevWiki
+    if (prevHarness === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = prevHarness
+  }
 })
