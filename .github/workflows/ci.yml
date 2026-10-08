@@ -355,3 +355,41 @@ jobs:
             echo "$drift"
             exit 1
           fi
+
+  # DEPENDENCY AUDIT, BLOCKING. The package ships no runtime dependency (ADR 0001), so what this
+  # audits is the toolchain — ESLint, Vite, React and what they pull — which runs on every
+  # contributor's machine and in this CI. `high` and above only: a moderate advisory in a
+  # build-time tool is noise this job would make everyone wade through. The first run of this
+  # step found a high in `brace-expansion` under ESLint's minimatch, fixed in the same PR.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: npm audit (root)
+        run: npm audit --audit-level=high
+      - name: npm audit (web)
+        working-directory: web
+        run: npm audit --audit-level=high
+
+  # CONVENTIONAL COMMITS, on the PR TITLE. Every PR is squash-merged, so its title is the commit
+  # subject that lands on main and feeds the CHANGELOG; the branch's own commits never reach main.
+  # The title comes in through `env`, never interpolated into the script, so a crafted title
+  # cannot run shell. Rules: `commitlint.config.js`.
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: commitlint
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | npx --no-install commitlint
