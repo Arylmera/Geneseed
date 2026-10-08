@@ -59,6 +59,20 @@ export default [
     },
   },
   {
+    // CODE BUILT FROM STRINGS, in the PRODUCT. Geneseed renders text that users and themes
+    // author, and the hook path reads JSON a host pipes in — a string that becomes code there is
+    // an injection. None of the three appears in shipped code today; these make sure an
+    // agent-written change cannot add one without the linter saying so. `tests/` is left out on
+    // purpose: `harness.test.mjs` compiles a function lifted from a plugin's source with
+    // `new Function`, because the plugin cannot be imported — that is the test's mechanism.
+    files: ['js/**', 'bin/**', 'adapters/**'],
+    rules: {
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+    },
+  },
+  {
     // The OpenCode plugins and workflow runtime ship INTO somebody else's process, where the
     // contract is that a plugin never throws into the host session. All eleven empty blocks in
     // this tree are `catch {}` around a best-effort read or unlink — the swallow IS the
