@@ -364,25 +364,35 @@ export function moduleMapProblems() {
 /**
  * The AI Harness Scorecard checks this repo passes, written out — the ratchet's floor.
  *
- * Taken from `geneseed scorecard` on the checkout after PR #209 (SECURITY.md, CODEOWNERS, the PR
- * template, the weekly scorecard workflow), and matching upstream's Python tool check for check.
+ * Taken from `geneseed scorecard` on main after #209-#213 (security policy, PR template, ARCHITECTURE
+ * and ADRs, the audit and commitlint jobs, Dependabot, coverage, property tests, fuzzing): 26 of 31,
+ * 81.2/100, matching upstream's Python tool check for check. Grouped by pillar, in upstream order.
  * The ratchet is on `passed`, which upstream sets for any score above zero: `test_suite_exists`
  * and `error_handling_policy` pass at 1.5 of 3, and a full check sliding to a partial one is
  * invisible here. A check this repo starts to pass is added by hand; one it stops passing is a
  * doctor problem until fixed or deliberately removed from this list, in the same commit.
  */
 export const SCORECARD_FLOOR = [
+  'architecture_doc',
   'agent_instructions',
+  'adr_presence',
   'module_boundary_docs',
   'ci_pipeline_exists',
   'linter_enforcement',
+  'dependency_auditing',
+  'conventional_commits',
+  'unsafe_code_policy',
   'test_suite_exists',
   'feature_matrix_testing',
+  'coverage_measurement',
+  'property_based_testing',
+  'fuzz_testing',
   'contract_tests',
   'tests_blocking_ci',
   'code_review_required',
   'scheduled_ci',
   'mr_template',
+  'automated_review',
   'doc_sync_check',
   'ai_usage_norms',
   'small_batch_enforcement',
