@@ -8,8 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.17.0] — 2026-10-08
+
 ### Added
 
+- Docs in AsciiDoc. `document-project`, the docs agent and the `docs-update` brick detect a project's docs format: a `.md`-only tree stays Markdown, an `.adoc`-only tree stays AsciiDoc, a mix asks you, and a project with no docs defaults to AsciiDoc. The choice is recorded as `Docs format:` in `AGENTS.md`. AsciiDoc mode uses header attributes, `.adoc` names and `[source,mermaid]` diagrams that GitHub renders, and it finishes with an `asciidoctor --failure-level=WARN` lint (or an explicit SKIPPED). With no docs yet, `document-project` interviews you first. Agent-runtime files stay Markdown.
+- C4 architecture diagrams in `document-project`. The audience you name sets the levels: L1 and L2 always, L3 only for containers you call complex, never L4. Diagrams are Mermaid `flowchart`s styled as C4 (typed nodes, `intent · protocol` edges, a title and a legend), redrawn only inside their own section. The `AGENTS.md` it writes sends a cross-container change to the L2 diagram first.
+- The context hook and the OpenCode plugin pick up `.adoc` files wherever they pick up `.md`; `README.adoc` and `CONTRIBUTING.adoc` load eagerly.
 - Protected checks. List the checks and tests your agent is judged by in `.geneseed/protected-checks.txt` at the repo root, one path per line, and a write to any of them asks you first on Claude Code, is blocked on Bob and refused on OpenCode, citing *External Gate*. A check the agent can edit is not a check. Nothing changes until a project adds the file. Shell edits are not seen, so keep running the checks in CI.
 
 ### Changed
