@@ -360,6 +360,8 @@ const WITHHELD = [
   ['.claude/', "this repository's OWN agent config — a deployed harness, not the product"],
   ['.gitignore', 'repo mechanics; npm strips it from a tarball anyway'],
   ['.gitattributes', 'repo mechanics'],
+  ['SECURITY.md', 'the vulnerability-reporting policy GitHub shows on the repository page; it '
+    + 'is about reporting against THIS repository, which an install has no use for'],
   ['CONTRIBUTING.md', 'the GitHub-side pointer at README §Contributing and docs/extending.md; an '
     + 'install never needs it and the README already carries the substance'],
   ['docs/assets/', 'README media (the animated terminal demo). `docs/*.md` ships the prose; the '

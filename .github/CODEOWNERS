@@ -1,0 +1,12 @@
+# Owners of the security-critical paths SECURITY.md lists. Code-owner review is NOT required by
+# the main ruleset (a sole maintainer could not approve their own PR); this file marks the paths
+# so a reviewer, human or bot, knows where a change needs the closest read.
+*                       @Arylmera
+/bin/geneseed-hook.mjs  @Arylmera
+/js/hosts/              @Arylmera
+/js/maintain/           @Arylmera
+/src/skills/daydream/   @Arylmera
+/src/skills/explain-changes/ @Arylmera
+/src/skills/react-view-transitions/ @Arylmera
+/src/skills/token-report/ @Arylmera
+/.github/workflows/     @Arylmera
