@@ -40,7 +40,7 @@ import { authoringProblems, loopProblems } from './checks-authoring.mjs';
 import {
   checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
-import { moduleMapProblems, shimProblems } from './checks-repo.mjs';
+import { moduleMapProblems, scorecardProblems, shimProblems } from './checks-repo.mjs';
 import { isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
 
 /**
@@ -220,6 +220,7 @@ export function doctorCollect({
   problems = problems.concat(ran('loops', 'Loop catalogue', loopProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
+  problems = problems.concat(ran('scorecard', 'Scorecard floor', scorecardProblems()));
   // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed
   // `rituals/harness.py` and compared that against a digest baked into `cli.json`, to catch a
   // parser edited without regenerating the table. P2 made the table the OWNED document

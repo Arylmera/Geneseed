@@ -14,8 +14,9 @@ import { readText } from '../lib/fs.mjs';
 import { formatRepr, formatValue } from '../lib/json.mjs';
 import { splitLines } from '../lib/udiff.mjs';
 import { ENTITY_STATUSES } from './inventory.mjs';
+import { assessRepo } from './scorecard.mjs';
 import { isDir, isFile, rglob, srcStems } from './scan.mjs';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 /**
  * `_harness_build._registry_keys` — every entity the registry must describe.
@@ -358,4 +359,53 @@ export function moduleMapProblems() {
     }
   }
   return problems;
+}
+
+/**
+ * The AI Harness Scorecard checks this repo passes, written out — the ratchet's floor.
+ *
+ * Taken from `geneseed scorecard` on the checkout after PR #209 (SECURITY.md, CODEOWNERS, the PR
+ * template, the weekly scorecard workflow), and matching upstream's Python tool check for check.
+ * The ratchet is on `passed`, which upstream sets for any score above zero: `test_suite_exists`
+ * and `error_handling_policy` pass at 1.5 of 3, and a full check sliding to a partial one is
+ * invisible here. A check this repo starts to pass is added by hand; one it stops passing is a
+ * doctor problem until fixed or deliberately removed from this list, in the same commit.
+ */
+export const SCORECARD_FLOOR = [
+  'agent_instructions',
+  'module_boundary_docs',
+  'ci_pipeline_exists',
+  'linter_enforcement',
+  'test_suite_exists',
+  'feature_matrix_testing',
+  'contract_tests',
+  'tests_blocking_ci',
+  'code_review_required',
+  'scheduled_ci',
+  'mr_template',
+  'doc_sync_check',
+  'ai_usage_norms',
+  'small_batch_enforcement',
+  'multiple_approach_culture',
+  'error_handling_policy',
+  'security_critical_marking',
+];
+
+/**
+ * The scorecard ratchet — one problem per `SCORECARD_FLOOR` check that no longer passes.
+ *
+ * DEVELOPMENT CHECKOUT ONLY: it scores `.github/` (CI, CODEOWNERS, the PR template), and
+ * `.github/` is WITHHELD from the npm package (`tests/unit/package_manifest.test.mjs`), so an npm
+ * install would fail half the floor for files it was never meant to carry. A `.git` entry (a
+ * directory in a clone, a FILE in a worktree — hence `existsSync`, not `isDir`) plus
+ * `.github/workflows` is what only a checkout of this repository has. Anything else skips: [].
+ */
+export function scorecardProblems(root = ROOT) {
+  if (!existsSync(path.join(root, '.git')) || !isDir(path.join(root, '.github', 'workflows'))) return [];
+  const checks = new Map(assessRepo(root).categories.flatMap((c) => c.checks).map((k) => [k.id, k]));
+  return SCORECARD_FLOOR.filter((id) => !checks.get(id)?.passed).map((id) => {
+    const k = checks.get(id);
+    return `[scorecard] ${id} no longer passes — it is in SCORECARD_FLOOR (js/inspect/checks-repo.mjs)`
+      + (k ? `: ${k.evidence}. Fix: ${k.remediation}` : ', and the scorecard has no such check');
+  });
 }
