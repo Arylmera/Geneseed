@@ -40,17 +40,19 @@ test('readJsonc reads plain JSON exactly as parseJson does, and reports no comme
 test('a line comment at the end of any line changes no value', () => {
   fc.assert(fc.property(pretty, fc.string({ unit: 'grapheme-ascii' }), (text, note) => {
     const clean = note.replace(/[\r\n]/g, '');
-    const commented = text.replaceAll('\n', ` // ${clean}\n`) + ` // ${clean}`;
+    const commented = text.replaceAll('\n', () => ` // ${clean}\n`) + ` // ${clean}`;
     const [data, hadComments] = readJsonc(commented);
     assert.equal(hadComments, true);
     assert.equal(jsonDumpsCompact(data), canon(text));
-  }), { numRuns: 300 });
+    // A note with `$&` in it: the first CI run found that a STRING replacement reads it as
+    // "the matched text". A bug in this test, not in readJsonc — kept so it stays found.
+  }), { numRuns: 300, examples: [['{\n  "": []\n}', '$&!']] });
 });
 
 test('a block comment between any two lines changes no value', () => {
   fc.assert(fc.property(pretty, fc.string({ unit: 'grapheme-ascii' }), (text, note) => {
     const body = note.replaceAll('*/', '* /');
-    const commented = `/* ${body} */\n` + text.replaceAll('\n', `\n/* ${body} */`);
+    const commented = `/* ${body} */\n` + text.replaceAll('\n', () => `\n/* ${body} */`);
     const [data] = readJsonc(commented);
     assert.equal(jsonDumpsCompact(data), canon(text));
   }), { numRuns: 300 });
