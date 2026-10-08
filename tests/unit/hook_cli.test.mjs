@@ -187,7 +187,9 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
  */
 // `tool-gate` is the hook side's one native verb: born for a matcherless host after the
 // reference was gone, so no cell was ever recorded for it. Its absolute gate is tests/unit/hook_gates.test.mjs.
-const NATIVE = ['catalog', 'loop', 'mcp', 'memory', 'tool-gate'];
+// `scorecard` is a port of a third-party Python tool, not of a Geneseed subparser; its absolute
+// gate — parity with that tool, written out — is tests/unit/scorecard.test.mjs.
+const NATIVE = ['catalog', 'loop', 'mcp', 'memory', 'scorecard', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the

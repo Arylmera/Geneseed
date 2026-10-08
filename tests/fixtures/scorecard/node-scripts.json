@@ -1,0 +1,10 @@
+{
+  "about": "A Node repo whose CI calls package.json scripts by name: `npm run lint` and `yarn test` resolve to the script bodies the checks then match.",
+  "files": {
+    "package.json": "{\n  \"name\": \"app\",\n  \"scripts\": {\n    \"lint\": \"eslint . --max-warnings 0\",\n    \"test\": \"vitest run\",\n    \"fmt\": \"prettier --check .\"\n  }\n}\n",
+    "tsconfig.json": "{ \"compilerOptions\": { \"strict\": true } }\n",
+    "src/app.test.ts": "test(\"x\", () => {});\n",
+    "CLAUDE.md": "# Claude\n\nPlan before coding: write a plan.md first.\n",
+    ".github/workflows/ci.yml": "on: [push, pull_request]\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci\n      - run: npm run lint\n      - run: yarn test\n      - run: pnpm fmt\n"
+  }
+}

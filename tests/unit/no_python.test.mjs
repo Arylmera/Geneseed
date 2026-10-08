@@ -145,6 +145,21 @@ const PERMITTED = [
     + 'hook?" and reads the same substring to classify a config as `legacy`. Recognition of a '
     + 'string already on a user\'s machine, not an invocation — the settings.mjs row\'s reason, '
     + 'split with the function when the shim cluster moved out in 2026-10.'],
+  // The scorecard port's four. Each is a file name the AI Harness Scorecard LOOKS FOR in the repo
+  // it scores (a Python project is graded like any other), copied from upstream so the port's
+  // checks match the same files. None is invoked, read from this checkout, or shipped as a path.
+  ['js/inspect/scorecard.mjs', 'PY_LITERAL', "'setup.py'", 1,
+    'A LANGUAGE INDICATOR in the scored repo: upstream detects Python by setup.py among others, '
+    + 'and the port must detect it the same way or every Python repo scores differently.'],
+  ['js/inspect/scorecard-checks.mjs', 'PY_LITERAL', "'docs/conf.py'", 1,
+    'A SPHINX CONFIG in the scored repo: upstream api_contracts passes on it, so the port must '
+    + 'look for the same file name. Matched against the scored tree, never opened here.'],
+  ['js/inspect/scorecard-checks.mjs', 'PY_LITERAL', "'mutmut_config.py'", 1,
+    'A MUTMUT CONFIG in the scored repo: upstream mutation_testing gives its partial score on it, '
+    + 'so the port must look for the same file name. Matched, never run.'],
+  ['js/inspect/scorecard-checks.mjs', 'PY_LITERAL', "'.py'", 1,
+    'A FILE EXTENSION upstream contract_tests accepts for a contract/golden/fixture file in the '
+    + 'scored repo — one of six it lists. A substring test on a path, not a file to execute.'],
 ];
 
 const permitKey = (rel, rule, text) => `${rel} ${rule} ${text}`;

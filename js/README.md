@@ -1,6 +1,6 @@
 # `js/` — the module map
 
-Sixty-six modules in eight folders. This page is the address book: **what each one owns**, and
+Sixty-eight modules in eight folders. This page is the address book: **what each one owns**, and
 **which file to open first** for a given task. It is not documentation of behaviour — every module
 has a docblock for that, and the docblock is the thing to read before editing.
 
@@ -109,6 +109,8 @@ Everything that inspects an already-built or already-deployed harness and report
 | `diff.mjs` | `geneseed diff` — what a deployed install has that a fresh render of `src/` does not |
 | `excludes.mjs` | `geneseed exclude add|remove|list` — the WRITER for `excludes.json`; `hooks.mjs` only reads it |
 | `registry.mjs` | `installs.json` under XDG — the persistent deploy-root list `rebuild-all` re-emits into |
+| `scorecard.mjs` | `geneseed scorecard` — a port of the AI Harness Scorecard (upstream pinned in its docblock): the repo walk, the CI-YAML subset parser, `assessRepo`, the text/JSON renderers. Pure: no spawn, no network |
+| `scorecard-checks.mjs` | The scorecard's 31 checks in five pillars, ported line for line — ids, points, partial scores, evidence and fixes as upstream writes them |
 
 **Before editing:** every check returns an array of problem strings, empty when clean — and since
 deleting any check leaves a clean run **byte-identical**, each one is gated by a PLANTED FAULT, not

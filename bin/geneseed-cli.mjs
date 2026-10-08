@@ -155,6 +155,11 @@ const VERBS = {
   // lives entirely inside this port, so — like the three above — it has no recorded cell to
   // compare against, only the absolute gates named beside it in `NATIVE`.
   loop: () => import('../js/loop/cli.mjs').then((m) => m.cmdLoop),
+  // A fifth native verb, and a port rather than an invention: the AI Harness Scorecard
+  // (upstream Python, pinned in the module's docblock). No Geneseed Python subparser ever
+  // existed for it, so there is no recorded cell — its absolute gate is
+  // tests/unit/scorecard.test.mjs. Lazy like every row: the 31 checks load only when asked.
+  scorecard: () => import('../js/inspect/scorecard.mjs').then((m) => m.cmdScorecard),
 };
 
 function die(code, msg) {

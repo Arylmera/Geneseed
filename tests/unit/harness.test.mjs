@@ -1739,6 +1739,50 @@ test('the module map gate sees a module nobody documented, and a row for a modul
 });
 
 // ---------------------------------------------------------------------------------------------
+// The scorecard floor
+
+test('the scorecard ratchet skips outside a checkout and sees a floor check that stopped passing', () => {
+  // The CONTROL plants the `.git` a worktree carries (a FILE, which is why the gate uses
+  // existsSync): the arm runs, and the untouched floor must hold, or the fault proves nothing.
+  const dotGit = { '.git': 'gitdir: elsewhere\n' };
+  const run = () => gate(fixture(), 'm.scorecardProblems()');
+  const clean = withFault(dotGit, run);
+  assert.deepEqual(clean, [],
+    `the untouched copy already fails the scorecard floor, so the fault below proves nothing: ${JSON.stringify(clean)}`);
+
+  // THE FAULT: no SECURITY.md. CODEOWNERS has to go too — upstream's security_critical_marking
+  // passes on CODEOWNERS before it ever looks for SECURITY.md, so removing one alone plants nothing.
+  // The two SKIPS are asserted WITH the fault planted, or deleting either half of the gate would
+  // still pass them: the copy holds tracked files only, so it has no `.git` (an install's shape),
+  // and an npm install has no `.github/` either.
+  const root = fixture();
+  const wf = path.join(root, '.github', 'workflows');
+  const gone = ['SECURITY.md', path.join('.github', 'CODEOWNERS')];
+  const saved = gone.map((rel) => [rel, fs.readFileSync(path.join(root, rel))]);
+  let noGit;
+  let noWorkflows;
+  let problems;
+  try {
+    for (const rel of gone) fs.unlinkSync(path.join(root, rel));
+    noGit = run();
+    problems = withFault(dotGit, run);
+    fs.renameSync(wf, `${wf}.away`);
+    try {
+      noWorkflows = withFault(dotGit, run);
+    } finally {
+      fs.renameSync(`${wf}.away`, wf);
+    }
+  } finally {
+    for (const [rel, bytes] of saved) fs.writeFileSync(path.join(root, rel), bytes);
+  }
+  assert.deepEqual(noGit, [], 'the scorecard ratchet ran in a tree with no .git — it would fail every install');
+  assert.deepEqual(noWorkflows, [],
+    'the scorecard ratchet ran in a tree with no .github/workflows — it would fail every npm install');
+  assert.ok(problems.some((p) => p.startsWith('[scorecard] security_critical_marking no longer passes')),
+    `a floor check that stopped passing went unreported: ${JSON.stringify(problems)}`);
+});
+
+// ---------------------------------------------------------------------------------------------
 // The shipped loop catalogue.
 
 test('the loop catalogue gate sees a shipped template whose graph no longer terminates', () => {
