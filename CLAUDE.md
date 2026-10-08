@@ -142,3 +142,8 @@ re-emits, and `geneseed rebuild-all` is best-effort by contract.
 ESM only, `.mjs`, zero runtime dependencies. Docblocks in this repo carry *why*, not *what* — they
 are the reason a maintainer can still understand a decision, and they are worth reading before
 editing the code under them. When one contradicts the code, the code wins and the docblock is a bug.
+
+**Sharpen before you add.** Skills rot really fast; keep them lean and sharp. Before adding a skill
+or an agent, merge, refine or delete one; prefer a lever that already exists (`<!-- invocation:
+user -->`, `--exclude-skills`, `--doctrines`) to a new mechanism; measure the gain before designing
+for it. Fewer skills means a shorter always-on list, clearer routing and less to rot.

@@ -349,6 +349,10 @@ Intent became IX.
 
 ## 3 — Adding a SKILL or an AGENT
 
+**First, try not to.** Skills rot really fast. Can an existing skill absorb this, or can one be
+merged or deleted to make room? Every skill adds a description to the always-on list and one more
+candidate for routing to choose between, so add only what no sharpened existing skill covers.
+
 **Order matters at the first two steps.** `missingReferencedSpecs` (in `js/build/bundle.mjs`) *aborts the
 build* when `AGENT.md.tmpl` names a spec with no file — so the file comes before the table row, or
 nothing builds at all. The refusal is clean: `tests/unit/emit_gates.test.mjs:265` proves a refused
