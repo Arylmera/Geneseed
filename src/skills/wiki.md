@@ -4,11 +4,11 @@
 
 **Trigger:** a task needs the user's machine-wide knowledge base, or has produced a
 durable cross-project fact worth writing back. The knowledge base is declared in
-`wiki.jsonc` (AGENT.md §8).
+`geneseed-wiki.jsonc` (AGENT.md §8).
 
 ## Procedure
 
-**Locate.** Read `wiki.jsonc` — beside `AGENT.md`, or at `$GENESEED_WIKI`. No
+**Locate.** Read `geneseed-wiki.jsonc` — beside `AGENT.md`, or at `$GENESEED_WIKI`. No
 file, or an empty `wikis` list: stop; there is no knowledge base on this
 machine. Each declared wiki gives you its root `path`, its `entries`, a
 `conventions` note, an `inbox`, and `protected` folders.

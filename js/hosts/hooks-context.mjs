@@ -126,7 +126,10 @@ const cost = (s) => s.length + (s.match(/\n/g) || []).length + 2;
 // honoured by `resolveContextSets` (the harness dir is its last candidate). The OpenCode
 // context plugin carries the same list.
 const SESSION_FILES = ['user-rules.md', 'PROFILE.md', 'memory/MEMORY.md', 'anamnesis/MEMORY.md',
-  'notebook/NOTEBOOK.md', 'wiki.jsonc'];
+  'notebook/NOTEBOOK.md', 'geneseed-wiki.jsonc'];
+// The wiki manifest's earlier name, read when the new one is absent (an install not yet re-emitted,
+// or a rename that failed). One release; `wiki.json`, older still, is the build's to rename.
+const LEGACY_WIKI = 'wiki.jsonc';
 // SHA-256 of each seed body in `js/build/stubs.mjs` (`SESSION_SEEDS`), CRLF folded. A file still
 // byte-identical to its seed says nothing, so it is skipped rather than injected as noise.
 // Hashes, not an import: stubs.mjs pulls in the build's writers, and this module loads on every
@@ -134,7 +137,9 @@ const SESSION_FILES = ['user-rules.md', 'PROFILE.md', 'memory/MEMORY.md', 'anamn
 const SEED_SHA256 = new Set([
   '5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721', // user-rules.md
   '29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816', // PROFILE.md
-  'cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8', // wiki.jsonc
+  '3a82c78ccc5d745033c16c354f5eda9d79350c704e9da8d605d380fb1e108d7a', // geneseed-wiki.jsonc
+  // The wiki seed before the rename: the build renames an untouched one byte for byte.
+  'cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8', // wiki.jsonc (legacy)
   '99c786049c260f6baf7aec68a5c0f59907861afe9b867da009440613bdddb907', // MEMORY.md
   '9acb5c9d9cb5dac572104480f05b48cc144e676869bd60e86d8a15b1f6308184', // NOTEBOOK.md
 ]);
@@ -150,8 +155,9 @@ export function sessionFiles(hookRoot) {
   const found = [];
   for (const rel of SESSION_FILES) {
     let abs = path.join(hookRoot, rel);
-    if (rel === 'wiki.jsonc' && process.env.GENESEED_WIKI && isFile(process.env.GENESEED_WIKI)) {
-      abs = process.env.GENESEED_WIKI;
+    if (rel === 'geneseed-wiki.jsonc') {
+      if (process.env.GENESEED_WIKI && isFile(process.env.GENESEED_WIKI)) abs = process.env.GENESEED_WIKI;
+      else if (!isFile(abs)) abs = path.join(hookRoot, LEGACY_WIKI);
     }
     if (!isFile(abs)) continue;
     let text;

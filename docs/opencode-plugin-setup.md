@@ -27,7 +27,7 @@ echo "export GENESEED_HARNESS=\"$GENESEED_HARNESS\"" >> ~/.zshrc     # persist (
 ```
 
 `GENESEED_HARNESS` points the plugins at your deployed bundle so they find the
-memory store, `context.json`, and `wiki.jsonc` with no hand-typed path. Using a
+memory store, `context.json`, and `geneseed-wiki.jsonc` with no hand-typed path. Using a
 non-default bundle location (`GENESEED_OUT`)? Set `GENESEED_HARNESS` to that
 path instead of `../Harness`.
 

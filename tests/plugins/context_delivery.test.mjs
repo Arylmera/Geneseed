@@ -20,9 +20,9 @@ before(async () => {
   repo = path.join(tmp, "repo")
   await fs.mkdir(repo)
   await fs.writeFile(path.join(repo, "README.md"), "# Delivery Repo\nhello\n")
-  // An empty wiki manifest keeps any developer-machine wiki.jsonc out of the block.
-  await fs.writeFile(path.join(tmp, "wiki.jsonc"), `{ "wikis": [] }`)
-  process.env.GENESEED_WIKI = path.join(tmp, "wiki.jsonc")
+  // An empty wiki manifest keeps any developer-machine geneseed-wiki.jsonc out of the block.
+  await fs.writeFile(path.join(tmp, "geneseed-wiki.jsonc"), `{ "wikis": [] }`)
+  process.env.GENESEED_WIKI = path.join(tmp, "geneseed-wiki.jsonc")
 })
 
 after(async () => {

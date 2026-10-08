@@ -24,7 +24,7 @@ import { renderAll, renderFile } from './render.mjs';
 import {
   BOB_RULES_STUB, ensureContextStub, ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex,
   ensureProfileStub,
-  ensureRulesStub, ensureWikiStub,
+  ensureRulesStub, ensureWikiStub, WIKI_FILE,
 } from './stubs.mjs';
 import { writeVersion } from './version.mjs';
 import { existsSync, mkdirSync } from 'node:fs';
@@ -142,7 +142,7 @@ export function emitClaudeRender(cfg, job) {
     const gi = path.join(cfgDir, '.gitignore');
     const giLines = (host === 'claude' || host === 'openclaude' ? ['settings.local.json']
       : host === 'bob' ? ['settings.json'] : [])
-      .concat(['context.json', 'wiki.jsonc', 'agent-overrides.json']);
+      .concat(['context.json', WIKI_FILE, 'agent-overrides.json']);
     if (!existsSync(gi)) {
       writeText(gi, `${giLines.join('\n')}\n`);
       owned.push('.gitignore');

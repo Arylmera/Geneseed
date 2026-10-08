@@ -18,7 +18,7 @@ What gets loaded into the agent's context at session start — your project's do
 | --- | --- | --- |
 | `GENESEED_CONTEXT` | context plugin, context hook | Explicit `context.json` manifest path; overrides discovery. |
 | `GENESEED_ROOT` | context hook | Repo root to discover docs from (default: the current directory). |
-| `GENESEED_WIKI` | context + guard plugins, context hook, web console | Explicit `wiki.jsonc` path (default `$GENESEED_HARNESS/wiki.jsonc`, else beside the install). |
+| `GENESEED_WIKI` | context + guard plugins, context hook, web console | Explicit `geneseed-wiki.jsonc` path (default `$GENESEED_HARNESS/geneseed-wiki.jsonc`, else beside the install). |
 | `GENESEED_STACK_GLOBAL` | context hook, Claude Code project build | `1` lets a global and a project install of the same host both inject. By default the project install makes the global one stand down. Rebuild the project install after changing it. |
 | `GENESEED_CONTEXT_INJECT` | context plugin | `off` disables injection; the agent is only *asked* to read the docs. |
 | `GENESEED_CONTEXT_VISIBLE` | context plugin | `1` shows the visible `PROJECT CONTEXT` block instead of the invisible per-request delivery. |
@@ -33,7 +33,7 @@ Where distilled memories land at session end, and which model distils them. See 
 
 | Variable | Read by | Effect |
 | --- | --- | --- |
-| `GENESEED_HARNESS` | learn, context, guard plugins; CLI | Base whose `memory/` is written (and where `wiki.jsonc` is looked up). Optional — the plugin finds the in-config store by itself; set it to pin the location. |
+| `GENESEED_HARNESS` | learn, context, guard plugins; CLI | Base whose `memory/` is written (and where `geneseed-wiki.jsonc` is looked up). Optional — the plugin finds the in-config store by itself; set it to pin the location. |
 | `GENESEED_MEMORY` | learn plugin, CLI | Explicit memory dir; wins over `GENESEED_HARNESS`. |
 | `GENESEED_MODEL` | learn + context plugins | `provider/model` fallback when the session's model can't be read from the transcript. |
 | `GENESEED_LLM` | learn hook (Claude Code, Bob, OpenClaude) | Model CLI used to distil, e.g. `claude -p`. Unset, the hook prints the prompt instead of distilling. |

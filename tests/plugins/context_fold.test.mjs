@@ -22,8 +22,8 @@ before(async () => {
   for (let i = 0; i < 5; i++) await fs.writeFile(path.join(repo, "docs", "many", `m${i}.md`), "# M\n")
   for (let i = 0; i < 2; i++) await fs.writeFile(path.join(repo, "docs", "two", `t${i}.md`), "# T\n")
   for (let i = 0; i < 3; i++) await fs.writeFile(path.join(repo, `NOTE${i}.md`), "# N\n")
-  await fs.writeFile(path.join(tmp, "wiki.jsonc"), `{ "wikis": [] }`)
-  process.env.GENESEED_WIKI = path.join(tmp, "wiki.jsonc")
+  await fs.writeFile(path.join(tmp, "geneseed-wiki.jsonc"), `{ "wikis": [] }`)
+  process.env.GENESEED_WIKI = path.join(tmp, "geneseed-wiki.jsonc")
   const mod = await import("../../adapters/opencode/plugins/geneseed-context.js?case=fold")
   const plugin = await mod.default({ directory: repo, client: {} })
   const output = { context: [] }

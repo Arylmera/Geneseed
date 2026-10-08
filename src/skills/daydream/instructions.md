@@ -5,7 +5,7 @@ You are running the Vault Daydream skill. Follow these steps precisely.
 ## Step 0: Resolve Vault Root
 
 Determine `VAULT_ROOT`:
-1. **Geneseed `wiki.jsonc` first.** Look for `wiki.jsonc` beside the harness `AGENT.md` (or at `$GENESEED_WIKI`). Strip `//` and `/* */` comments, parse it, and take the first `wikis[].path` whose root exists on disk — that is the vault. Prefer a declared vault whose `path` contains a `.obsidian/` folder; if several qualify, ask which to use. (This is Geneseed's machine-wide knowledge-base manifest — see AGENT.md's Wiki section.)
+1. **Geneseed `geneseed-wiki.jsonc` first.** Look for `geneseed-wiki.jsonc` beside the harness `AGENT.md` (or at `$GENESEED_WIKI`). Strip `//` and `/* */` comments, parse it, and take the first `wikis[].path` whose root exists on disk — that is the vault. Prefer a declared vault whose `path` contains a `.obsidian/` folder; if several qualify, ask which to use. (This is Geneseed's machine-wide knowledge-base manifest — see AGENT.md's Wiki section.)
 2. Otherwise, check if the current working directory contains a `.obsidian/` folder. If yes, use it as `VAULT_ROOT`.
 3. If still unresolved, use `AskUserQuestion` to ask:
    - Question: "Where is your Obsidian vault located?"

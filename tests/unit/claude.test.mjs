@@ -33,7 +33,7 @@ import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate } from '../../js/maintain/migrate.mjs';
 import {
-  globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES,
+  globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES, sessionFiles,
 } from '../../js/hosts/hooks-context.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
@@ -279,7 +279,7 @@ test('a folder emit round-trips into the repo, with machine paths kept out of th
 
     // Hygiene: the personal and never-commit files are gitignored.
     const gi = read(repo, '.claude', '.gitignore');
-    for (const line of ['settings.local.json', 'wiki.jsonc', 'agent-overrides.json']) {
+    for (const line of ['settings.local.json', 'geneseed-wiki.jsonc', 'agent-overrides.json']) {
       assert.ok(gi.includes(line), `${line} is not gitignored`);
     }
   });
@@ -1503,11 +1503,49 @@ test('the session files reach the hook from the harness dir, and an untouched se
     assert.ok(out.includes('=== SESSION FILES'), `no session block:\n${out}`);
     assert.ok(out.includes('----- user-rules.md -----')
       && out.includes('R1 always state the plan first'), `the changed rules file is missing:\n${out}`);
-    for (const seed of ['PROFILE.md', 'memory/MEMORY.md', 'notebook/NOTEBOOK.md', 'wiki.jsonc']) {
+    for (const seed of ['PROFILE.md', 'memory/MEMORY.md', 'notebook/NOTEBOOK.md', 'geneseed-wiki.jsonc']) {
       assert.ok(!out.includes(`----- ${seed} -----`), `the untouched ${seed} seed was injected:\n${out}`);
     }
     assert.ok(out.includes('no friday deploys'), `the harness-dir manifest was ignored:\n${out}`);
   }));
+});
+
+// The hook's wiki read across the `wiki.jsonc` -> `geneseed-wiki.jsonc` rename. Each row: the
+// files in the harness dir -> the text the hook injects for the wiki (null = nothing injected).
+// The rule: the new name wins; the old name is read only when the new one is absent (an install
+// not yet re-emitted); a pristine OLD seed is still recognised as a seed and says nothing.
+const LEGACY_SEED_TEXT = SESSION_SEEDS['geneseed-wiki.jsonc']
+  .replace('// geneseed-wiki.jsonc — declare', '// Geneseed wiki.jsonc — declare');
+const HOOK_WIKI_READ = [
+  // Only the old name: it is read, and reported under the current name.
+  { name: 'old name only', files: { 'wiki.jsonc': '{"wikis": ["old"]}' }, want: '{"wikis": ["old"]}' },
+  // Both names: the new one wins and the leftover is not injected a second time.
+  { name: 'both names', files: { 'wiki.jsonc': '{"wikis": ["old"]}', 'geneseed-wiki.jsonc': '{"wikis": ["new"]}' },
+    want: '{"wikis": ["new"]}' },
+  // A pre-rename seed nobody edited, renamed byte for byte by the build: still a seed, not news.
+  { name: 'renamed untouched old seed', files: { 'geneseed-wiki.jsonc': LEGACY_SEED_TEXT }, want: null },
+  // The same untouched old seed not yet renamed: equally silent.
+  { name: 'unrenamed untouched old seed', files: { 'wiki.jsonc': LEGACY_SEED_TEXT }, want: null },
+];
+
+for (const row of HOOK_WIKI_READ) {
+  test(`the context hook reads the wiki manifest: ${row.name}`, () => withDir((d) => {
+    const prev = process.env.GENESEED_WIKI;
+    delete process.env.GENESEED_WIKI;
+    try {
+      for (const [f, t] of Object.entries(row.files)) fs.writeFileSync(path.join(d, f), t);
+      const wiki = sessionFiles(d).filter((f) => f.rel === 'geneseed-wiki.jsonc');
+      assert.deepEqual(wiki.map((f) => f.text), row.want === null ? [] : [row.want]);
+    } finally {
+      if (prev !== undefined) process.env.GENESEED_WIKI = prev;
+    }
+  }));
+}
+
+test('LEGACY_SEED_TEXT really is the pre-rename seed', () => {
+  // The rows above are only as good as their old seed: it must hash to the legacy entry.
+  assert.equal(createHash('sha256').update(LEGACY_SEED_TEXT).digest('hex'),
+    'cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8');
 });
 
 test('both copies of the seed hashes are the stubs, and the two file lists agree', () => {
@@ -1515,9 +1553,14 @@ test('both copies of the seed hashes are the stubs, and the two file lists agree
   // them (the hook path pays for every import; the plugin ships on its own). A stub edited
   // without its hashes would make every untouched seed look changed and inject it as noise —
   // so both lists are held to `SESSION_SEEDS` here. The plugin's file list is the hook's minus
-  // `wiki.jsonc`, which its MACHINE WIKI block already renders in full.
+  // `geneseed-wiki.jsonc`, which its MACHINE WIKI block already renders in full.
+  // Plus ONE hash no stub produces any more: the wiki seed from before the `geneseed-` rename, whose
+  // first line still read `// Geneseed wiki.jsonc`. The build renames an untouched one byte for byte,
+  // so without it every such install would get the whole commented stub injected as noise.
+  const LEGACY_WIKI_SEED = 'cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8';
   const expected = Object.values(SESSION_SEEDS)
-    .map((s) => createHash('sha256').update(s.replace(/\r\n/g, '\n')).digest('hex')).sort();
+    .map((s) => createHash('sha256').update(s.replace(/\r\n/g, '\n')).digest('hex'))
+    .concat(LEGACY_WIKI_SEED).sort();
   assert.deepEqual([...SEED_SHA256].sort(), expected, 'hooks.mjs SEED_SHA256 is stale');
   const plugin = fs.readFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins',
     'geneseed-context.js'), 'utf8');
@@ -1528,7 +1571,7 @@ test('both copies of the seed hashes are the stubs, and the two file lists agree
   const files = plugin.match(/const SESSION_FILES = \[([\s\S]*?)\]/);
   assert.ok(files, 'the plugin no longer declares SESSION_FILES');
   assert.deepEqual(files[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)),
-    SESSION_FILES.filter((f) => f !== 'wiki.jsonc'));
+    SESSION_FILES.filter((f) => f !== 'geneseed-wiki.jsonc'));
   for (const name of Object.keys(SESSION_SEEDS)) {
     assert.ok(SESSION_FILES.some((f) => path.posix.basename(f) === name), `${name} is never read`);
   }

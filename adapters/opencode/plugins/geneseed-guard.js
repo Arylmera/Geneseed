@@ -7,7 +7,7 @@
 //   - Persist Insight (rule vs memory):  speed-bump the first write to user-rules.md
 //     memory file — that choice belongs to the user, via the rule skill.
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
-//     folders — the user's knowledge base sets its own no-go zones in wiki.jsonc.
+//     folders — the user's knowledge base sets its own no-go zones in geneseed-wiki.jsonc.
 // High-confidence patterns only, so legitimate work is never caught. Borderline cases
 // (.env edits, force-push) are WARNED, not blocked.
 //
@@ -171,13 +171,13 @@ const SHELL_TOOLS = ["bash", "shell", "exec", "command", "terminal", "run"]
 const hasAny = (name, parts) => parts.some((s) => name.includes(s))
 
 // ---- protected wiki folders (AGENT.md §8) --------------------------------------
-// wiki.jsonc (the machine-level knowledge-base manifest) may list `protected` folders
+// geneseed-wiki.jsonc (the machine-level knowledge-base manifest) may list `protected` folders
 // per wiki. Mutating anything under one is denied. Same resolution chain as the
-// context plugin: $GENESEED_WIKI -> $GENESEED_HARNESS/wiki.jsonc -> beside the install.
+// context plugin: $GENESEED_WIKI -> $GENESEED_HARNESS/geneseed-wiki.jsonc -> beside the install.
 async function isFile(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
 async function isDir(p) { try { return (await fs.stat(p)).isDirectory() } catch { return false } }
 
-// wiki.jsonc is JSONC (the seeded stub carries a commented example): strip // and
+// The wiki manifest is JSONC (the seeded stub carries a commented example): strip // and
 // /* */ comments plus trailing commas before parsing — string-aware, so quoted
 // "https://…" or "C:/…" values are untouched. Kept in sync with the context plugin's
 // copy (plugins stay self-contained, like the other shared helpers).
@@ -226,8 +226,8 @@ async function wikiFile() {
   if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
   bases.push(path.resolve(PLUGIN_DIR, ".."))
   for (const base of bases) {
-    // wiki.json is the legacy name from earlier seeds — still honoured.
-    for (const name of ["wiki.jsonc", "wiki.json"]) {
+    // wiki.jsonc and wiki.json are the legacy names from earlier seeds — still honoured.
+    for (const name of ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) {
       const p = path.join(base, name)
       if (await isFile(p)) return p
     }
@@ -235,7 +235,7 @@ async function wikiFile() {
   return null
 }
 
-// Cached absolute prefixes, refreshed on a short TTL so a wiki.jsonc edit lands
+// Cached absolute prefixes, refreshed on a short TTL so a manifest edit lands
 // without a restart. Compared slash-normalized and case-insensitive — vault paths on
 // Windows and macOS are case-insensitive in practice, and for a guard the rare
 // case-only over-match is the safe direction.

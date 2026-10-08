@@ -83,7 +83,7 @@ function RawSource({ body }) {
   )
 }
 
-// ManifestDoc — renders a parsed setup manifest (wiki.jsonc or context.json) as
+// ManifestDoc — renders a parsed setup manifest (geneseed-wiki.jsonc or context.json) as
 // cards + an entries table instead of a raw JSON dump. Falls back to the raw
 // body when the file couldn't be parsed. Empty manifests become onboarding:
 // they explain how to wire the thing up rather than reading as "nothing here".
@@ -101,7 +101,7 @@ export default function ManifestDoc({ manifest, body, name }) {
           <p>
             A wiki is your machine-wide knowledge base — an Obsidian vault or any folder of linked
             markdown the agent reads from and writes back to. Declare one in{' '}
-            <code className="mono">wiki.jsonc</code> to switch it on.
+            <code className="mono">geneseed-wiki.jsonc</code> to switch it on.
           </p>
           <a className="btn ghost sm" href="#/docs/wiki">
             How to configure a wiki

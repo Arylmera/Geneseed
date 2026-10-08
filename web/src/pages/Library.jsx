@@ -19,7 +19,7 @@ import AgentGlyph from '../components/AgentGlyph.jsx'
 function libSource(sec, name) {
   if (sec === 'memory') return `memory/${name}`
   if (sec === 'notebook') return `notebook/${name}`
-  if (sec === 'wiki') return `wiki.jsonc`
+  if (sec === 'wiki') return `geneseed-wiki.jsonc`
   if (sec === 'config') return name
   return `${sec}/${name}.md`
 }

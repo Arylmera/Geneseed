@@ -183,15 +183,27 @@ export function notebookItems(state) {
   }));
 }
 
-/** The two setup manifests, in listing order. */
+/**
+ * The wiki manifest's names, current first. `wiki.jsonc` is the name before the `geneseed-`
+ * prefix: the build renames it on the next emit, and until then it is still read — one release.
+ */
+const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc'];
+const WIKI_META = ['Wiki manifest', 'your machine-wide knowledge base(s)'];
+
+/** The two setup manifests, in listing order (the wiki under either of its names). */
 const CONFIG_META = {
   'context.json': ['Project context', 'what the agent loads for this project'],
-  'wiki.jsonc': ['Wiki manifest', 'your machine-wide knowledge base(s)'],
+  'geneseed-wiki.jsonc': WIKI_META,
+  'wiki.jsonc': WIKI_META,
 };
+
+/** The wiki manifest beside the bundle under whichever name it has, or `null`. */
+const wikiName = (state) => WIKI_NAMES.find((n) => isFile(path.join(state.target, n))) ?? null;
 
 export function configItems(state) {
   const out = [];
-  for (const fname of ['context.json', 'wiki.jsonc']) {
+  for (const fname of ['context.json', wikiName(state)]) {
+    if (!fname) continue;
     const p = path.join(state.target, fname);
     if (!isFile(p)) continue;
     const [title, desc] = CONFIG_META[fname] ?? [fname, ''];
@@ -231,7 +243,7 @@ function wikiPath(p) {
 }
 
 /**
- * `$GENESEED_WIKI` first, else `wiki.jsonc` beside the deployed bundle, read with the
+ * `$GENESEED_WIKI` first, else the wiki manifest beside the deployed bundle, read with the
  * harness's generic JSONC loader.
  *
  * `resolvePath`, not merely `expanduser`: harmless here because `p` is consumed by `isFile`
@@ -240,7 +252,8 @@ function wikiPath(p) {
  */
 function wikiManifest(state) {
   const cand = process.env.GENESEED_WIKI;
-  const p = cand ? wikiPath(cand) : path.join(state.target, 'wiki.jsonc');
+  const name = cand ? null : wikiName(state);
+  const p = cand ? wikiPath(cand) : name && path.join(state.target, name);
   if (!p || !isFile(p)) return [];
   const cfg = mcpLoad(p);
   const wikis = cfg.wikis;
@@ -252,7 +265,7 @@ function wikiManifest(state) {
  * unparseable, or not an object.
  *
  * Comment-tolerant is the whole point, and getting this wrong is silent: the two files it
- * reads are `wiki.jsonc` and `context.json`, hand-maintained, so a `//` line is expected.
+ * reads are `geneseed-wiki.jsonc` and `context.json`, hand-maintained, so a `//` line is expected.
  * Plain `JSON.parse` would throw on it and this loader would then answer `{}` — the wiki
  * section listing nothing and the config item's `manifest` coming back empty, with no
  * error surfaced anywhere.
@@ -393,7 +406,7 @@ export function resolveLinks(state, body) {
  */
 function configManifest(name, p) {
   const cfg = mcpLoad(p);
-  if (name === 'wiki.jsonc') {
+  if (WIKI_NAMES.includes(name)) {
     const wikis = cfg.wikis;
     return { kind: 'wiki', wikis: Array.isArray(wikis) ? wikis : [] };
   }

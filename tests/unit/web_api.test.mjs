@@ -837,7 +837,7 @@ function wikiFixture() {
   fs.writeFileSync(path.join(vault, 'Note.md'), '# Note\nSee [[learn]].');
   fs.writeFileSync(path.join(vault, 'sub', 'Page.md'), '# Page');
   fs.writeFileSync(path.join(vault, 'Hidden', 'Secret.md'), '# Secret');
-  const manifest = path.join(sb.path, 'wiki.jsonc');
+  const manifest = path.join(sb.path, 'geneseed-wiki.jsonc');
   fs.writeFileSync(manifest, JSON.stringify({
     wikis: [{
       name: 'test',
@@ -880,7 +880,7 @@ test('a wiki item reads its page and blocks traversal and unknown vaults', () =>
     const item = apiItem(st, 'wiki', 'test:Note.md');
     assert.match(item.body, /# Note/);
     assert.equal(item.title, 'Note');
-    assert.throws(() => apiItem(st, 'wiki', 'test:../wiki.jsonc'), NotFound);
+    assert.throws(() => apiItem(st, 'wiki', 'test:../geneseed-wiki.jsonc'), NotFound);
     assert.throws(() => apiItem(st, 'wiki', 'nope:Note.md'), NotFound);
   } finally { w.done(); }
 });
@@ -913,15 +913,39 @@ test('a config item returns the parsed manifest', () => {
     assert.equal(ctx.manifest.kind, 'context');
     assert.equal(ctx.manifest.context[0].load, 'eager');
 
-    const wk = apiItem(st, 'config', 'wiki.jsonc');
+    const wk = apiItem(st, 'config', 'geneseed-wiki.jsonc');
     assert.equal(wk.manifest.kind, 'wiki');
     assert.equal(wk.manifest.wikis[0].name, 'test');
 
     // Both surface as Setup manifests in the catalog.
     const rows = Object.fromEntries(apiCatalog(st, 'config').items.map((i) => [i.name, i]));
     assert.equal(rows['context.json'].kind, 'manifest');
-    assert.equal(rows['wiki.jsonc'].title, 'Wiki manifest');
+    assert.equal(rows['geneseed-wiki.jsonc'].title, 'Wiki manifest');
   } finally { w.done(); }
+});
+
+// The manifest was `wiki.jsonc` before the `geneseed-` prefix. In an install not yet re-emitted,
+// with $GENESEED_WIKI unset, the console finds it under that name: the Setup list shows it under its
+// real name (so it opens), it parses as a wiki, and the Knowledge section lists its pages. With both
+// names present, only the new one is listed.
+test('the console reads a legacy wiki.jsonc, and prefers the new name', () => {
+  const w = wikiFixture();
+  const saved = process.env.GENESEED_WIKI;
+  try {
+    delete process.env.GENESEED_WIKI;
+    fs.renameSync(path.join(w.root, 'geneseed-wiki.jsonc'), path.join(w.root, 'wiki.jsonc'));
+    const st = webState(null, w.root);
+    assert.deepEqual(apiCatalog(st, 'config').items.map((i) => i.name), ['wiki.jsonc']);
+    assert.equal(apiItem(st, 'config', 'wiki.jsonc').manifest.kind, 'wiki');
+    assert.ok(apiCatalog(st, 'wiki').items.some((i) => i.name === 'test:Note.md'));
+
+    fs.writeFileSync(path.join(w.root, 'geneseed-wiki.jsonc'), '{"wikis": []}');
+    assert.deepEqual(apiCatalog(st, 'config').items.map((i) => i.name), ['geneseed-wiki.jsonc']);
+    assert.deepEqual(apiCatalog(st, 'wiki').items, []);
+  } finally {
+    process.env.GENESEED_WIKI = saved;
+    w.done();
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -3010,7 +3034,7 @@ test('promote rejects traversal and index names', () => {
 
 test('a wiki manifest whose entries is not a list is skipped, not a crash', () => {
   // `wikiItems` feeds `/api/status`; `(entries || []).filter` threw on `{"x": 1}`, so one
-  // hand-edited wiki.jsonc failed the whole dashboard. The malformed vault lists nothing; the
+  // hand-edited geneseed-wiki.jsonc failed the whole dashboard. The malformed vault lists nothing; the
   // well-formed one beside it still lists its note.
   const sb = makeSandbox();
   const prev = process.env.GENESEED_WIKI;
@@ -3020,7 +3044,7 @@ test('a wiki manifest whose entries is not a list is skipped, not a crash', () =
     fs.mkdirSync(bad, { recursive: true });
     fs.mkdirSync(good, { recursive: true });
     fs.writeFileSync(path.join(good, 'note.md'), '# n\n');
-    const manifest = path.join(sb.path, 'wiki.jsonc');
+    const manifest = path.join(sb.path, 'geneseed-wiki.jsonc');
     fs.writeFileSync(manifest, JSON.stringify({ wikis: [
       { name: 'bad', path: bad, entries: { x: 1 } },
       { name: 'good', path: good, entries: [{ path: '', load: 'lazy' }] },

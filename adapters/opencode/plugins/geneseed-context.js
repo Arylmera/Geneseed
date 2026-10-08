@@ -27,11 +27,11 @@
 //     is added per request, outside the cached block; unknown -> omitted.
 //
 // MACHINE WIKI (AGENT.md §8): the same block also carries the user's own knowledge
-// base(s) — typically an Obsidian vault — declared once per machine in `wiki.jsonc`
-// ($GENESEED_WIKI -> $GENESEED_HARNESS/wiki.jsonc -> beside this plugin's install).
+// base(s) — typically an Obsidian vault — declared once per machine in `geneseed-wiki.jsonc`
+// ($GENESEED_WIKI -> $GENESEED_HARNESS/geneseed-wiki.jsonc -> beside this plugin's install).
 // Each wiki's eager entries inject in full and lazy entries list, drawing on the
 // SAME budgets as the project context; its conventions/inbox/protected metadata is
-// surfaced so the agent knows the house rules before writing. No wiki.jsonc, or an
+// surfaced so the agent knows the house rules before writing. No wiki manifest, or an
 // empty `wikis` list, costs nothing.
 //
 // DELIVERY (invisible by default): the context rides into each request's message
@@ -178,14 +178,16 @@ async function isDir(p) { try { return (await fs.stat(p)).isDirectory() } catch 
 // holds the installed AGENT.md: the repo root for a project install, the config dir for a
 // global one. Same list and seed hashes as SESSION_FILES/SEED_SHA256 in js/hosts/hooks.mjs;
 // tests/unit/claude.test.mjs gates both copies against SESSION_SEEDS in js/build/stubs.mjs.
-// context.json is not here: it is a manifest, honoured by resolveSource. wiki.jsonc is not
-// here either: the MACHINE WIKI block below already renders it in full.
+// context.json is not here: it is a manifest, honoured by resolveSource. geneseed-wiki.jsonc
+// is not here either: the MACHINE WIKI block below already renders it in full.
 const SESSION_FILES = ["user-rules.md", "PROFILE.md", "memory/MEMORY.md", "anamnesis/MEMORY.md",
   "notebook/NOTEBOOK.md"]
 const SEED_SHA256 = new Set([
   "5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721", // user-rules.md
   "29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816", // PROFILE.md
-  "cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8", // wiki.jsonc
+  "3a82c78ccc5d745033c16c354f5eda9d79350c704e9da8d605d380fb1e108d7a", // geneseed-wiki.jsonc
+  // The wiki seed before the rename: the build renames an untouched one byte for byte.
+  "cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8", // wiki.jsonc (legacy)
   "99c786049c260f6baf7aec68a5c0f59907861afe9b867da009440613bdddb907", // MEMORY.md
   "9acb5c9d9cb5dac572104480f05b48cc144e676869bd60e86d8a15b1f6308184", // NOTEBOOK.md
 ])
@@ -221,8 +223,8 @@ async function readJson(p) {
 }
 
 // Strip JSONC niceties — // and /* */ comments plus trailing commas — string-aware,
-// so a "https://…" or "C:/Users/…" inside quotes is untouched. wiki.jsonc is seeded
-// with a commented example, so its readers must tolerate comments.
+// so a "https://…" or "C:/Users/…" inside quotes is untouched. the wiki manifest is
+// seeded with a commented example, so its readers must tolerate comments.
 function stripJsonc(text) {
   let out = "", inStr = false, esc = false
   for (let i = 0; i < text.length; i++) {
@@ -550,13 +552,13 @@ async function resolveSource(root, harness = null) {
   return { mode: "discover" }
 }
 
-// ---- machine wiki (wiki.jsonc) --------------------------------------------------
+// ---- machine wiki (geneseed-wiki.jsonc) ------------------------------------------
 // The user's own knowledge base(s) — typically an Obsidian vault — declared once per
 // machine, not per repo (AGENT.md §8). Same injection mechanics as project context,
 // different scope. Resolution (first match wins, mirroring the learn plugin):
 //   1. $GENESEED_WIKI                      explicit manifest path
-//   2. $GENESEED_HARNESS/wiki.jsonc         pinned install dir
-//   3. <plugin dir>/../wiki.jsonc           auto-locate: beside the installed AGENT.md
+//   2. $GENESEED_HARNESS/geneseed-wiki.jsonc pinned install dir
+//   3. <plugin dir>/../geneseed-wiki.jsonc  auto-locate: beside the installed AGENT.md
 async function resolveWikiFile() {
   const explicit = process.env.GENESEED_WIKI
   if (explicit && (await isFile(explicit))) return explicit
@@ -568,8 +570,8 @@ async function resolveWikiFile() {
   if (harness) bases.push(harness)
   bases.push(path.resolve(PLUGIN_DIR, ".."))
   for (const base of bases) {
-    // wiki.json is the legacy name from earlier seeds — still honoured.
-    for (const name of ["wiki.jsonc", "wiki.json"]) {
+    // wiki.jsonc and wiki.json are the legacy names from earlier seeds — still honoured.
+    for (const name of ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) {
       const p = path.join(base, name)
       if (await isFile(p)) return p
     }
@@ -602,7 +604,7 @@ async function walkWikiDir(dir, depth, acc) {
 // folders on demand instead.
 const WIKI_LAZY_LIMIT = envNum("GENESEED_WIKI_LAZY_LIMIT", 200)
 
-// Parse wiki.jsonc into renderable wikis: [{ name, root, desc, conventions, inbox,
+// Parse the wiki manifest into renderable wikis: [{ name, root, desc, conventions, inbox,
 // protected, eager:[{rel,abs,desc}], lazy:[...], truncated }]. Entry paths resolve
 // against the wiki's own root and may name a single note OR a folder — a folder
 // applies its load mode to every note beneath it (`.` covers the whole vault).
@@ -613,7 +615,7 @@ const WIKI_LAZY_LIMIT = envNum("GENESEED_WIKI_LAZY_LIMIT", 200)
 async function wikiSets() {
   const file = await resolveWikiFile()
   if (!file) return []
-  const data = await readJsonc(file)   // wiki.jsonc is JSONC: stub ships commented
+  const data = await readJsonc(file)   // the manifest is JSONC: stub ships commented
   const wikis = Array.isArray(data?.wikis) ? data.wikis : []
   const out = []
   for (const w of wikis) {

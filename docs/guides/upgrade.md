@@ -39,7 +39,7 @@ A dirty working tree, or a folder that is not a git clone, is reported rather th
 A rebuild only replaces files the install's manifest says Geneseed owns. It leaves these alone:
 
 - the `memory/` and `notebook/` stores;
-- your `context.json` and `wiki.jsonc`;
+- your `context.json` and `geneseed-wiki.jsonc` (an older `wiki.jsonc` is renamed to it, contents untouched);
 - the marker files that record each install's choices (theme, footprint, packs, excluded rules), which every rebuild reads back;
 - your own agents, skills, plugins and hooks, and any `opencode.json` or `settings.json` keys you wrote yourself;
 - the `improvements/` folder (see below).
