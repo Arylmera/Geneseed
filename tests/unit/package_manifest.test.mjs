@@ -365,7 +365,9 @@ const WITHHELD = [
     + 'edit it'],
   ['docs/adr/', 'the engineering decision records behind this repository\'s code (vendoring, '
     + 'spawn bans, written-out expectations); `files[]` ships the user-facing doc folders only'],
-  ['commitlint.config.js', 'the rules CI applies to a PR title in THIS repository; an install '
+  ['fuzz/', 'fuzz targets for THIS repository\'s hook gates, run by CI; like `tests/`, they '
+    + 'prove the product and are not part of it'],
+  ['commitlint.config.js','the rules CI applies to a PR title in THIS repository; an install '
     + 'never runs commitlint'],
   ['SECURITY.md','the vulnerability-reporting policy GitHub shows on the repository page; it '
     + 'is about reporting against THIS repository, which an install has no use for'],

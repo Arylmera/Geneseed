@@ -113,6 +113,13 @@ jobs:
       - name: the suite left the machine-wide hook shim intact
         run: node tests/shim_intact.mjs
 
+      # FUZZ THE HOOK GATES' STDIN. A gate signals through stdout JSON and must exit 0 on every
+      # input, so a crash or a stray byte is a blocking gate gone silently permissive. This feeds
+      # generated garbage through the real entry point, a process per case — which is why it is
+      # outside the unit glob. A failure prints fast-check's seed and the shrunk input.
+      - name: fuzz the hook gates (fuzz/*.fuzz.mjs)
+        run: node --test --test-reporter=tap "fuzz/*.fuzz.mjs"
+
       # THE MUTATION MATRIX'S ANCHORS, AND ONLY ITS ANCHORS. `tests/mutate.mjs` is not run here
       # and should not be — it applies 33 one-string edits to the product tree and runs a gate per
       # edit, which is minutes of wall clock and, if interrupted, leaves the tree mutated (the
@@ -393,3 +400,26 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$TITLE" | npx --no-install commitlint
+
+  # COVERAGE, INFORMATIONAL. The whole suite under c8, which also collects from the product
+  # processes the suite spawns (the golden and CLI cells run the real binaries). No threshold yet:
+  # the first reading (2026-10-08) was 91.7 % lines, 82.9 % branches over js/ and bin/, and a floor
+  # comes once a few weeks show how much it moves. Its own job so the validate legs keep their
+  # wall clock; the summary lands on the run page.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: suite under c8
+        shell: bash
+        run: |
+          npx c8 --include 'js/**' --include 'bin/**' --reporter=text-summary --reporter=text \
+            node --test --test-reporter=tap "tests/**/*.test.mjs" > coverage.txt
+          { echo '```'; sed -n '/^=* Coverage summary/,$p' coverage.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          sed -n '/^=* Coverage summary/,/^=*$/p' coverage.txt

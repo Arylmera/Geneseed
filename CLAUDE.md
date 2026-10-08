@@ -41,6 +41,14 @@ Right after the suite: the only check that no test left the machine-wide hook sh
 deleted temp directory (which silently kills every hook on the machine).
 
 ```bash
+node --test --test-reporter=tap "fuzz/*.fuzz.mjs"
+```
+
+Fuzzes the hook gates' stdin through the real entry point (a process per case, so it is outside
+the unit glob). Run it after touching anything under `js/hosts/hooks*` or `bin/geneseed-hook.mjs`;
+`FUZZ_RUNS=500` for a longer search. Coverage runs in CI (`c8`, informational).
+
+```bash
 node bin/geneseed-cli.mjs doctor --all
 ```
 
