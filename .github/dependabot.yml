@@ -1,0 +1,27 @@
+# Weekly update PRs for what this repo pins but does not write: the GitHub Actions in
+# .github/workflows (pinned to full commit SHAs, which only a bot keeps current) and the npm
+# toolchains at the root and in web/ (devDependencies only — the package ships none, ADR 0001).
+# Grouped so each ecosystem opens at most one PR a week.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      root-dev:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      web:
+        patterns: ["*"]
