@@ -9,6 +9,7 @@
 - [ ] `npm run lint`
 - [ ] `node --test --test-reporter=tap "tests/**/*.test.mjs"` — `# tests N`, `# fail 0`
 - [ ] `node tests/shim_intact.mjs`
+- [ ] `node --test --test-reporter=tap "fuzz/*.fuzz.mjs"` (hook path touched)
 - [ ] `node bin/geneseed-cli.mjs doctor --all`
 - [ ] `node tests/golden.mjs` (emit path touched) / `--cli` (anything a verb prints)
 - [ ] `node tests/mutate.mjs --verify` (code moved)

@@ -54,3 +54,6 @@ docs/superpowers/
 
 # macOS Finder metadata
 .DS_Store
+
+# c8 scratch data from a local coverage run
+/coverage/
