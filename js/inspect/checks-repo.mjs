@@ -7,8 +7,11 @@
  * itself and compares it against what is on disk.
  */
 import path from 'node:path';
-import { PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC } from '../build/source.mjs';
+import {
+  ALIASES_RE, PLUGIN_SRC, RETIRED_SKILL_IDS, ROOT, SRC, THEMES, WORKFLOW_SRC, aliasesOf, knownSkillIds,
+} from '../build/source.mjs';
 import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
+import { COMMAND_SET } from '../hosts/opencode.mjs';
 import { hookShimPath, shimDeadPaths } from '../hosts/shim.mjs';
 import { readText } from '../lib/fs.mjs';
 import { formatRepr, formatValue } from '../lib/json.mjs';
@@ -235,6 +238,48 @@ export function vendorPinProblems() {
     } else if (!HEX40_RE.test(pin[1].toLowerCase())) {
       problems.push(`[authoring] skills/${name}/VENDOR.md pin '${pin[1]}' is not `
         + 'a 40-character commit sha');
+    }
+  }
+  return problems;
+}
+
+/**
+ * Every `<!-- aliases: … -->` name is a clean, unclaimed, single-owner path segment.
+ *
+ * An alias becomes a folder (`skills/<alias>/`) and a command file (`command/<alias>.md`) on
+ * every install, so a name that collides overwrites something: another skill, another
+ * skill's alias, or an OpenCode command (`COMMAND_SET`, `/ponytail`). A retired skill id is
+ * refused as an alias AND as a live skill — `RETIRED_SKILL_IDS` is the list of names that
+ * already meant something on someone's machine. The emit trusts all of this; this is where
+ * it is checked.
+ */
+export function aliasProblems(src = SRC) {
+  const problems = [];
+  const known = knownSkillIds(src);
+  const reserved = new Set([...Object.keys(COMMAND_SET), 'ponytail']);
+  for (const id of known) {
+    if (Object.hasOwn(RETIRED_SKILL_IDS, id)) {
+      problems.push(`[authoring] skill '${id}' reuses a retired skill id (RETIRED_SKILL_IDS)`);
+    }
+  }
+  const owner = new Map();
+  for (const id of known) {
+    let text;
+    try { text = readText(path.join(src, 'skills', `${id}.md`)); } catch { continue; }  // a folder skill
+    // `aliasesOf` reads the FIRST marker line only, so a second one would be dropped in silence.
+    if ((text.match(new RegExp(ALIASES_RE.source, 'gm')) || []).length > 1) {
+      problems.push(`[authoring] skills/${id}.md declares aliases on more than one line — merge them`);
+    }
+    for (const alias of aliasesOf(text)) {
+      const where = `skills/${id}.md alias '${alias}'`;
+      if (!/^[a-z0-9-]+$/.test(alias)) problems.push(`[authoring] ${where} is not [a-z0-9-]+`);
+      else if (known.includes(alias)) problems.push(`[authoring] ${where} is already a skill`);
+      else if (Object.hasOwn(RETIRED_SKILL_IDS, alias)) {
+        problems.push(`[authoring] ${where} is a retired skill id (RETIRED_SKILL_IDS)`);
+      } else if (reserved.has(alias)) problems.push(`[authoring] ${where} is an OpenCode command name`);
+      else if (owner.has(alias)) {
+        problems.push(`[authoring] ${where} is already declared by skills/${owner.get(alias)}.md`);
+      } else owner.set(alias, id);
     }
   }
   return problems;

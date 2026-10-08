@@ -11,7 +11,7 @@ import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import {
   copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
-  writePonytailCommand, writePrimaryAgent, writeTheme,
+  writeAliasCommands, writePonytailCommand, writePrimaryAgent, writeTheme,
 } from '../hosts/opencode.mjs';
 import { mergeOpencodeJson } from '../hosts/settings.mjs';
 import { isFile, readText, writeText } from '../lib/fs.mjs';
@@ -72,6 +72,8 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const ponytail = writePonytailCommand(path.join(dir, 'command'), claim);   // always-on /ponytail
   if (ponytail) commands.push(ponytail);
   for (const p of commands) owned.push(relPosix(dir, p));
+  // Owned but not counted in `nCommands`, as an alias skill is not counted in `nSkills`.
+  for (const p of writeAliasCommands(cfg, items, path.join(dir, 'command'), claim)) owned.push(relPosix(dir, p));
 
   owned.push(relPosix(dir, writeTheme(path.join(dir, 'themes'), themeName, theme)));
   for (const p of writeColorThemes(cfg, path.join(dir, 'themes'))) owned.push(relPosix(dir, p));

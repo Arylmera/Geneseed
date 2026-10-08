@@ -400,6 +400,17 @@ Two traps worth knowing before you write the spec:
   which drags in the `web/dist` rebuild — and an unknown category lands under Personal in the
   Library (`splitSkills` in `web/src/pages/Library.jsx`) with no warning.
 
+**Merging or removing a skill keeps its old name working.** When a skill absorbs another, put
+`<!-- aliases: old-name, other-old-name -->` on its own line under the surviving skill's purpose
+blockquote. Every host then answers `/old-name` with the merged skill's body. Claude Code,
+OpenClaude and Bob get a user-only `skills/<alias>/SKILL.md`, and OpenCode gets a
+`command/<alias>.md`. Neither form is counted as a skill. An install that excluded the old name
+now excludes the merged skill (`resolveSkillNames` in `js/build/source.mjs`), so a rebuild still
+works. A skill removed with no successor goes into `RETIRED_SKILL_IDS` in the same file: its
+exclusion is dropped with a notice instead of failing the rebuild, and the name can never be
+used for a new skill. The doctor (`aliasProblems`) refuses an alias that is malformed, duplicated,
+already a skill, retired, or the name of an OpenCode command.
+
 
 ---
 

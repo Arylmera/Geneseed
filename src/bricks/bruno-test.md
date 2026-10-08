@@ -2,10 +2,10 @@
 name: bruno-test
 description: Write or update Bruno requests for the endpoints this iteration touched.
 effect: mutate
-skill: bruno-test-writer
+skill: bruno
 outcomes: pass, fail
 ---
-Follow the bruno-test-writer skill for every endpoint this iteration's diff added or changed.
+Follow the bruno skill for every endpoint this iteration's diff added or changed.
 Touch only the Bruno collection — new or updated `.bru` requests and their expectations — never
 the application code.
 

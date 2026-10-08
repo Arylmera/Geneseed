@@ -198,7 +198,7 @@ const DEFAULT_EMIT = new Map([
  * host's row would otherwise rebuild with the WRONG emit — turning a Claude install into an
  * OpenCode one. `rebuild-all/a-dual-host-repo-rebuilds-each-row-in-its-own-emit` is the cell.
  */
-export function installProfile(host, scope, root) {
+export function installProfile(host, scope, root, notify = null) {
   const raw = readMaybe(path.join(root, '.geneseed-emit'));
   let marker = raw === null ? '' : raw.trim();
   if (marker && (EMIT_HOST_SCOPE.get(marker) ?? ['', ''])[0] !== host) marker = '';
@@ -222,7 +222,7 @@ export function installProfile(host, scope, root) {
   // one of them. `null` (no marker) stays `null` so the argv omits the flag, as it always did.
   const excludeRules = excludedRulesOfDir(root);
   // Skills left out stay left out: an upgrade that forgot them would put them all back.
-  const excludeSkills = excludedSkillsOfDir(root);
+  const excludeSkills = excludedSkillsOfDir(root, notify);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludeSkills);
@@ -285,8 +285,10 @@ export function rebuildAll() {
   }
   const failures = [];
   for (const [host, scope, root] of targets) {
-    const p = installProfile(host, scope, root);
     const label = `${host}:${scope} (${root})`;
+    // The one replay that speaks when an excluded skill's name got older: status and the console
+    // read the same profile on every refresh and stay silent.
+    const p = installProfile(host, scope, root, (n) => printErr(`[rebuild-all] ${label}: ${n}\n`));
     printOut(`[rebuild-all] ${label}: theme=${p.theme} emit=${p.emit} footprint=${p.footprint} `
       + `posture=${p.posture} mode=${p.mode}\n`);
     const rc = driverMain(p.argv);

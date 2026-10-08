@@ -18,9 +18,12 @@ request or merge the branch.
    message and wait, and never treat an earlier approval as consent for this push.
    Opening a PR or merging is **outward-facing** — get explicit confirmation first too,
    unless already authorized ({{LAW:deletion-is-deliberate}}).
-4. Open the PR with a structured body: *what* changed and *why*, *how it was
-   tested*, and any risk or follow-up. Link the issue it closes; keep the title an
-   imperative one-line summary.
+4. Open the PR with a three-part body. **Summary**: what changed and why, with the
+   smallest visual that makes the point (a call tree, diff sketch, file tree or
+   Mermaid diagram). **Evidence**: how it was tested, as before/after — the test that
+   failed and now passes, the output, a screenshot for a visual change. **Merge
+   danger**: one-way or two-way door, the blast radius, and any follow-up. Link the
+   issue it closes; keep the title an imperative one-line summary.
 5. If the project merges locally instead, merge into the base branch only after
    review/approval, then delete the merged branch.
    If shipping triggers a production deploy, confirm a tested rollback or
@@ -32,7 +35,7 @@ request or merge the branch.
    that alters behaviour without its docs is incomplete, not ready to ship.
 
 ## Done when
-- The PR is open (or the branch is merged) with a body stating what / why / how it
-  was tested, and nothing unrelated rides along.
+- The PR is open (or the branch is merged) with a Summary / Evidence / Merge danger
+  body, and nothing unrelated rides along.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

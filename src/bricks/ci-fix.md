@@ -2,11 +2,11 @@
 name: ci-fix
 description: Fix the failing CI check named in the card.
 effect: mutate
-skill: ci-fix
+skill: debug
 outcomes: pass, fail
 ---
-Follow the ci-fix skill against the failing check the card names — read its actual log, not a
-guess from the check's title, before changing anything.
+Follow the debug skill's CI branch against the failing check the card names — read its actual
+log, not a guess from the check's title, before changing anything.
 
 Touch only what that failure requires; this is a repair, not a chance to improve the pipeline
 along the way.

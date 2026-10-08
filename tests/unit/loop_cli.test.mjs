@@ -26,7 +26,9 @@ const run = (cwd, argv, input = '') => {
 // template name, and every brick's frontmatter (never its body — `next` hands that over, and
 // only for the node the engine chose), sorted by name, with `overridden` naming any brick a
 // later origin replaced. The two rows below are written out from `src/bricks/apply.md` and
-// `src/bricks/bruno-test.md`: one agent brick, one skill brick, both shipped and available.
+// `src/bricks/bruno-test.md`: one agent brick, one skill brick, both shipped and available. The
+// skill brick names `bruno`, the merged skill that replaced bruno-test-writer; `available` means
+// that skill still exists, so a brick naming a removed skill would read false here.
 test('check over the shipped catalogue is clean, and lists templates and bricks', () => {
   const sb = makeSandbox('loopcli-');
   try {
@@ -48,7 +50,7 @@ test('check over the shipped catalogue is clean, and lists templates and bricks'
     });
     assert.deepEqual(r.out.bricks[4], {
       name: 'bruno-test', description: 'Write or update Bruno requests for the endpoints this iteration touched.',
-      effect: 'mutate', agent: null, skill: 'bruno-test-writer', outcomes: ['pass', 'fail'], origin: 'shipped', available: true,
+      effect: 'mutate', agent: null, skill: 'bruno', outcomes: ['pass', 'fail'], origin: 'shipped', available: true,
     });
   } finally { sb.cleanup(); }
 });

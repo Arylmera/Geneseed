@@ -217,8 +217,14 @@ const EXPECTED = {
 // four vendored folders, so the count moves with `SKILL_CLASS` and `VENDORED_SKILL_DIRS`.
 // 18 specs. `agents/_template.md` does NOT ship: every host loads each `.md` in its agents dir
 // as an agent, so it would register a phantom `_template` agent.
+// Aliases (an old skill name kept answering `/name`, one per name in a skill's
+// `<!-- aliases: … -->` marker — 12 since the 2026-10 sharpen merged 56 skills into 47) are
+// extra `skills/<alias>/SKILL.md` folders on Claude, OpenClaude and Bob, and command files on
+// OpenCode, so they are counted apart: N_SKILLS real skills on every host, N_ALIASES alias
+// folders everywhere but OpenCode, where the skills dir holds none.
 const N_AGENTS = 18;
-const N_SKILLS = 56;
+const N_SKILLS = 47;
+const N_ALIASES = 12;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
 // translates `\n` to `os.linesep`, so on Windows the file really is CRLF on disk (gated as M1).
@@ -531,8 +537,13 @@ test('the native layer is complete', () => {
     if (spec.native === null) continue;
     const b = ok(mode, 'full');
     const cfg = path.join(b.bases[spec.native[0]], ...spec.native[1].split('/'));
-    const skills = dirs(path.join(cfg, 'skills'))
-      .filter((d) => existsSync(path.join(cfg, 'skills', d, 'SKILL.md'))).length;
+    const specs = dirs(path.join(cfg, 'skills'))
+      .map((d) => path.join(cfg, 'skills', d, 'SKILL.md')).filter((p) => existsSync(p));
+    const isAlias = (p) => readFileSync(p, 'utf8').includes('\ndescription: "Alias of ');
+    const skills = specs.filter((p) => !isAlias(p)).length;
+    const aliases = specs.filter(isAlias).length;
+    assert.equal(aliases, spec.host === 'opencode' ? 0 : N_ALIASES,
+      `--emit ${mode}: ${aliases} alias folders`);
     const agents = (existsSync(path.join(cfg, 'agents'))
       ? readdirSync(path.join(cfg, 'agents')) : []).filter((n) => n.endsWith('.md')).length;
     assert.equal(skills, N_SKILLS, `--emit ${mode}: ${skills} native skills`);

@@ -61,7 +61,7 @@ The install records it (`Excluded rules: process 7` beside its pack list) and ev
 Every installed skill costs a line in the host's skill listing, every session. Skills you never use can be left out of an install:
 
 ```bash
-geneseed build --emit claude-global --exclude-skills "bruno-test-writer,bruno-collection-generator,react-view-transitions"
+geneseed build --emit claude-global --exclude-skills "bruno,react-view-transitions"
 ```
 
 The skill's files are not written, its catalogue row goes, and an OpenCode `/command` that runs it goes too. The install records the list (`Excluded skills: …` under its skill section), and every rebuild and upgrade keeps it. `--exclude-skills none` puts them all back.

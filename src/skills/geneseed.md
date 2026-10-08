@@ -1,8 +1,9 @@
 # {{SKILL}}: geneseed
 
 > {{DESC_GENESEED}}
+<!-- aliases: opencode-theme -->
 
-**Trigger:** the user mentions Geneseed, the harness, or `AGENT.md`; asks how the install is set up; asks to change its theme, footprint, posture, mode, doctrine packs or excluded rules — or you need to know what {{LAWS}}, {{AGENTS}}, or {{SKILLS}} this install carries.
+**Trigger:** the user mentions Geneseed, the harness, or `AGENT.md`; asks how the install is set up; asks to change its theme, footprint, posture, mode, doctrine packs or excluded rules; asks for their own OpenCode colour theme or to tweak the shipped colours ("make me a theme", "a theme that matches my brand", "a darker/transparent version of this theme") — or you need to know what {{LAWS}}, {{AGENTS}}, or {{SKILLS}} this install carries.
 
 ## Procedure
 1. **Locate.** Run `geneseed status --json` first: `installs` lists every install on this machine — host, scope, root, state, theme, footprint, posture, mode, packs, excluded rules — and `rebuild`, the command that reproduces each one exactly. `geneseed` not on PATH → ask the user before using `npx geneseed` (it downloads the package), and prefix every command below the same way. Still nothing → look for a host root file: `~/.config/opencode/AGENT.md` or `.opencode/AGENT.md` (OpenCode), `~/.claude/CLAUDE.md` or `.claude/` (Claude Code), `.openclaude/` (OpenClaude), `AGENTS.md` beside `.bob/` (Bob). None → say so; never install to "fix" it.
@@ -12,8 +13,10 @@
 5. **Other writes also need the user's word:** `geneseed memory rm <name>`, `geneseed exclude add|remove <path>`, `geneseed web start|stop`, `geneseed uninstall --target <root> --yes`. Personal rules and the profile belong to their own {{SKILLS}}; do not edit `user-rules.md` or `PROFILE.md` from here.
 6. **Never on your own initiative:** `geneseed setup` (interactive only), `geneseed upgrade`, `geneseed update`, `geneseed bootstrap`, `geneseed sync-self`, `geneseed rebuild-all`, `geneseed migrate`, `geneseed link`, `geneseed unlink`. `learn`, `context` and the `*-gate` verbs are `geneseed-hook` verbs the host's hooks run — never run them by hand.
 7. Directory and section names are plain English in every theme; only prose changes. Do not search by flavour words.
+8. **Custom OpenCode colour theme** (a different concept from the `--theme` package name in step 4 — that one changes the agent's *voice*, this one its terminal colours): clone a shipped palette (`catppuccin tokyonight rosepine gruvbox nord everforest kanagawa dracula`) or derive one from a described vibe, filling all 19 roles in `themes/opencode/README.md` (`bg bgPanel bgElement fg fgMuted accent secondary border ok warn err kw str fn num type comment addBg delBg`) as `#rrggbb` hex. Keep `fg` on `bg` readable (~7:1), `error` red-family, `warning` amber, `success` green, and `addBg`/`delBg` distinct from each other and the background. Write the overrides to a small JSON (`{role: "#hex", …}` or `{"palette": {…}}`) and run `geneseed theme <name> --from <shipped> --palette <file.json>` — either flag alone works, both together lets the palette override the cloned base; `--solid-only`/`--transparent-only` for one flavour, `--global` to force the global dir from inside a repo. Tell the user to select it with `/theme geneseed-<name>` (opaque) or `/theme geneseed-<name>-transparent` (terminal background shows through) — a rebuild never erases it.
 
 ## Done when
 - The answer comes from the live install — CLI output or file paths, not recall — or the requested change was rebuilt with every other setting preserved and `geneseed status` shows it.
+- A custom colour theme's JSON exists in the active themes dir, the CLI reported the path, and the user knows the `/theme <name>` command to select it.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

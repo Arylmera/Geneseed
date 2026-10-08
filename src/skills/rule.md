@@ -1,13 +1,18 @@
 # {{SKILL}}: rule
 
 > {{DESC_RULE}}
+<!-- aliases: consolidate-memory -->
 
-**Trigger:** the user says "always…", "never…", "from now on…" or "remember that…".
-Anything the user wants to outlive this session counts: a standing rule ("make that a
+**Trigger:** the user says "always…", "never…", "from now on…" or "remember that…". Anything the user wants to outlive this session counts: a standing rule ("make that a
 rule") or a durable fact ("note that…", "keep in mind…"). Also fires when a
 `feedback` {{MEMORY}} lesson keeps recurring and deserves promotion, or when
 `user-rules.md` needs review — a trial rule past its date, a stale rule, a bloated
 set. Nothing reaches `user-rules.md` or {{MEMORY}} except through here ({{DOCTRINE:persist-insight}}).
+It also tends the {{MEMORY}} set as a whole — run the **consolidation flow**, not the
+fork — when the index outgrows one useful read (~40 lines) or holds duplicate,
+contradictory or stale entries (a file, flag or command that no longer exists), after
+a release or large refactor, or when the user says "clean up memory", "consolidate",
+"what do you actually remember". The user's wiki is the [wiki {{SKILL}}](wiki.md)'s.
 
 ## Procedure
 
@@ -35,7 +40,10 @@ re-derived. Then take exactly one branch.
    behaviour* (how to act — a fact belongs in Branch A, a pointer to documentation
    in `context.json`), *recurring* (it will bind many future tasks, not just this
    one), and *not already covered* (not a {{LAW}}, not an existing rule — extend
-   the existing rule rather than minting a twin). A failed triage goes back to the
+   the existing rule rather than minting a twin). A *mechanical* rule — a banned
+   API, an import shape, a file location — belongs in a lint, hook or CI check the
+   team shares, not in prose: propose that instead, and report a repo with no such
+   guardrail as a finding. A failed triage goes back to the
    fork, named and explained; a lean rule set is the feature, not a failure.
 2. **Reformulation.** Have the user state the rule as they would to a colleague on
    their first day. Interrupt the moment they (a) use a term they cannot themselves
@@ -79,11 +87,39 @@ due, ask whether it actually fired since adoption — graduate it (drop the tria
 marker), demote it back to a {{MEMORY}} fact, or delete it. Same consent gate as
 adoption.
 
+**Consolidation flow:**
+1. **Read the whole set once**: `MEMORY.md`, every file it indexes, and any file in
+   `{{DIR_MEMORY}}/` it forgot, into a scratch table — name, type, the claim in one
+   line, date written, and whether this session already saw it contradicted
+   ({{DOCTRINE:context-economy}}: read to decide, not to reread).
+2. **Verify against the live repo, not memory** ({{LAW:verify-before-asserting}}): every path,
+   function, flag, command, version, PR or branch a memory names must still exist and
+   behave as claimed; record the evidence in the table.
+3. **Classify each entry**: *keep* (true, still changes behaviour, not derivable from
+   the repo), *merge* (one file survives, the other's `**Why**` folded in), *rewrite*
+   (the fact drifted — fix the claim, keep the lesson), *promote* (a `feedback` lesson
+   that fired three times or more goes through Branch B), *retire* (wrong, superseded,
+   or re-derivable by a fresh read). In doubt between keep and retire, keep and date it.
+4. **Show the plan, apply it with consent** ({{LAW:deletion-is-deliberate}} — retirement is
+   deletion). Merges keep both parents' `[[links]]`; rewrites keep the file name so
+   inbound links hold; every survivor keeps valid frontmatter and the `**Why** / **How
+   to apply**` lines its type demands. A memory holding a secret is retired on sight
+   ({{LAW:sealed-secrets}}).
+5. **Rebuild `MEMORY.md`**: exactly one pointer line per surviving file, each with a
+   hook saying why a future session would open it — lost entries added, retired ones
+   removed, compaction archive lines kept short, no memory content.
+6. **Exit with a count** — kept / merged / rewritten / promoted / retired — and the
+   one or two lessons the pass surfaced (a category that keeps drifting, a kind of
+   note nobody reads) as a proposal for how memories get written, not as a memory.
+
 ## Done when
-- The fork was put to the user, and then either a {{MEMORY}} file exists carrying its
+- For a rule or memory: the fork was put to the user, and then either a {{MEMORY}} file exists carrying its
   `force`, its `type` and its `MEMORY.md` line — or a rule stands in the right
   `user-rules.md`, having survived reformulation, its own counter-example and the
   {{LAWS}}, consented to explicitly, with any promoted source memory archived. The
   {{ONTOLOGY}}, {{LAWS}} and {{DOCTRINES}} files are untouched either way.
+- After a consolidation: every memory was verified against the live repo, changes
+  were applied with consent, no secret remains, and `MEMORY.md` indexes the directory
+  exactly, one line per file.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

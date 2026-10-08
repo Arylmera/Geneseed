@@ -19,7 +19,7 @@ import { readText } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import {
-  folderSkillProblems, registryProblems, secretProblems, vendorPinProblems,
+  aliasProblems, folderSkillProblems, registryProblems, secretProblems, vendorPinProblems,
 } from './checks-repo.mjs';
 import { constitutionProblems, leanBlockProblems } from './checks-constitution.mjs';
 import { countTableProblems } from './checks-counts.mjs';
@@ -109,6 +109,7 @@ export function authoringProblems() {
   problems.push(...secretProblems());
   problems.push(...vendorPinProblems());
   problems.push(...folderSkillProblems());
+  problems.push(...aliasProblems());
   problems.push(...constitutionProblems());
   problems.push(...leanBlockProblems());
   problems.push(...countTableProblems());

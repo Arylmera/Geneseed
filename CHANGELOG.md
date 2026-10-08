@@ -9,6 +9,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Changed
+- Fewer, sharper skills: 56 become 47. `dependencies` replaces `deps-audit` and `migrate`, `bruno` replaces `bruno-collection-generator` and `bruno-test-writer`, and `git-history` replaces `git-archaeology` and `git-rescue`. `document-project` absorbs `repo-map`, `codebase-design` absorbs `domain-modeling` (the glossary is now `GLOSSARY.md`, `CONTEXT.md` still read), `debug` absorbs `ci-fix`, `rule` absorbs `consolidate-memory`, and `geneseed` absorbs `opencode-theme`. Every old name still works as a user-only `/name` alias of its new home, and so does `/grill-me` for `brainstorm`; an old name in `--exclude-skills` excludes the skill that absorbed it. Excluding one half of a merged pair (say `deps-audit`) now excludes the whole merged skill (`dependencies`, which also covers `migrate`). `tickets` is removed with no alias: `wayfinder` charts the decisions and hands execution to `plan`, sliced into thin end-to-end pieces. Parts of brainstorm, codebase-design, debug, develop, prototype, ship, wayfinder, parallel-agents, rule and geneseed-code-review adapt ideas from Matt Pocock's skills (github.com/mattpocock/skills, MIT).
 - `document-project` and the docs agent default to Markdown. AsciiDoc is used only when you ask for it or the project's docs are already `.adoc`; the skill no longer proposes a switch on its own.
 
 ## [3.17.0] — 2026-10-08

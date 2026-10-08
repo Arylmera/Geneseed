@@ -32,7 +32,7 @@ surface.
    new code *logs*.
 5. **Pass 3 — the supply chain.** A new or bumped dependency: who publishes it, how
    maintained, what it pulls in transitively, any advisory against the pinned version
-   (the [deps-audit {{SKILL}}](deps-audit.md) carries the tooling). A destructive
+   (the [dependencies {{SKILL}}](dependencies.md) carries the tooling). A destructive
    capability exposed to an agent or a tool: its guard is enforced server-side, at the
    boundary the call crosses, never left to the caller's judgement ({{DOCTRINE:external-gate}}).
 6. **Report, don't fix.** Each finding as `file:line — attack — impact — fix`, ranked

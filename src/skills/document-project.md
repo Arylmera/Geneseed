@@ -1,8 +1,9 @@
 # {{SKILL}}: document-project
 
 > {{DESC_DOCUMENT_PROJECT}}
+<!-- aliases: repo-map -->
 
-**Trigger:** the project's docs are missing or have drifted from the code, or it needs a PRD, a design system, an architecture document or an AGENTS.md. Existing codebases only — every document is extracted from the code, never written ahead of it.
+**Trigger:** the project's docs are missing or have drifted from the code, or it needs a PRD, a design system, an architecture document or an AGENTS.md. Existing codebases only — every document is extracted from the code, never written ahead of it. Also when orienting in an unfamiliar repo, or refreshing `ARCHITECTURE.md` after a structural change — then step 4 alone is the whole run.
 
 **Argument:** `[prd|design|architecture|agents|all]` — optional. It names the doc-set members to
 write; with none, step 5 proposes them.
@@ -10,8 +11,8 @@ write; with none, step 5 proposes them.
 ## Procedure
 1. **Find the doc home.** Look for an existing `docs/`, `doc/`, `documentation/`, or
    `wiki/` folder at the project root, or a `context.json` pointer to one (the same
-   convention [repo-map {{SKILL}}](repo-map.md) and the context loader use). Reuse the one
-   that exists — never create a second. If none exists, create `docs/` at the root.
+   convention the context loader uses). Reuse the one that exists — never create a
+   second. If none exists, create `docs/` at the root.
 2. **Pick the docs format** — Markdown unless the user asks for AsciiDoc, once per project.
    A `Docs format: markdown|asciidoc` line in the root `AGENTS.md` decides; never re-decide
    it. Otherwise: the user asked for AsciiDoc → AsciiDoc; the project's existing docs (the
@@ -30,11 +31,17 @@ write; with none, step 5 proposes them.
    explains a decision, offer to record it as an ADR (in `architecture`'s *Decisions*) —
    accept or skip. Draft only once the user says the interview is done. Skip this step on a
    re-run or when docs exist: their prose already carries the intent.
-4. **Survey the code, not the intent.** Map entry points, the public API / modules,
-   commands, config, and key directories — read the actual behaviour ({{LAW:verify-before-asserting}},
-   {{DOCTRINE:read-the-docs-first}}). If there is no `ARCHITECTURE.md`, run [repo-map {{SKILL}}](repo-map.md)
-   first so you have the orientation map to build on.
-5. **Select the doc set.** Unless the argument names the targets, propose which of the four
+4. **Survey the code, not the intent, and keep the root map current.** If `ARCHITECTURE.md`
+   exists, read it first — the cheapest orientation ({{DOCTRINE:context-economy}}). Then map
+   entry points, the public API / modules, commands, config, and key directories — read the
+   actual behaviour ({{LAW:verify-before-asserting}}, {{DOCTRINE:read-the-docs-first}}). If
+   `ARCHITECTURE.md` is absent or stale, build or refresh it from this survey — entry points,
+   key directories and what each holds, how to build / test / run, external services, and the
+   one or two non-obvious conventions a newcomer must know. Keep it short, a map not
+   documentation, and link out for detail; update it in the same change whenever structure
+   shifts ({{DOCTRINE:documentation-in-step}}).
+5. **Select the doc set.** When only the map was asked for, step 4 alone was the run — no
+   format pick, no interview, no proposal, no wait; stop there. Unless the argument names the targets, propose which of the four
    documents apply and wait for the user's go-ahead — e.g. "no UI detected (no stylesheet,
    theme, or component tree) — skipping `DESIGN.md`". `AGENTS.md`, `PRD.md` and
    `architecture.md` apply to every project; `DESIGN.md` only when a UI exists.
@@ -136,9 +143,9 @@ Only when a UI exists.
    actually follows — never generic best practice.
 
 ### `docs/architecture.md` — `type: architecture`
-The detailed architecture. Open with a link to the root `ARCHITECTURE.md` (repo-map's short
-map) and make sure the map links back — one fenced `geneseed:doc` line at its top, nothing else
-in that file touched; repeat nothing between the two.
+The detailed architecture. Open with a link to the root `ARCHITECTURE.md` (this skill's short
+map, step 4) and make sure the map links back — one fenced `geneseed:doc` line at its top,
+nothing else in that file touched; repeat nothing between the two.
 1. **Context (C4 L1)** — the system, its actors, and the external systems (APIs, SSO, shared
    databases).
 2. **Containers (C4 L2)** — the deployable units and the protocols between them.
@@ -217,7 +224,9 @@ the other agent-runtime files stay Markdown.
   contradicts it.
 
 ## Done when
-- Every selected doc-set member exists, follows its template, and cites its evidence or
+- For a map-only run: the root `ARCHITECTURE.md` reflects the step-4 survey; nothing below
+  applies.
+- For a doc-set run: every selected doc-set member exists, follows its template, and cites its evidence or
   carries `⚠`; the batch of `⚠` questions has been put to the user.
 - The doc home mirrors the current implementation: every page carries typed frontmatter
   (header attributes in AsciiDoc mode), wraps its generated sections in `geneseed:doc` markers, and is verified against

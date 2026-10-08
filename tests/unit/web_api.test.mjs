@@ -329,6 +329,31 @@ test('a skill of your own reads personal and keeps out of the taxonomy', () => {
   assert.equal(byName.commit.status, 'approved');
 });
 
+// An alias folder (an old skill name kept answering `/name`, emitted user-only with the
+// description "Alias of <target>.") is the target skill under a second name, not a skill of
+// the user's own: it must not appear in the roster at all. A user-only skill whose description
+// does not start "Alias of " is a real skill and stays.
+test('an alias folder is not listed as a skill', () => {
+  const alias = path.join(FIXTURE, 'skills', 'old-name');
+  const userOnly = path.join(FIXTURE, 'skills', 'user-only-thing');
+  fs.mkdirSync(alias, { recursive: true });
+  fs.mkdirSync(userOnly, { recursive: true });
+  fs.writeFileSync(path.join(alias, 'SKILL.md'),
+    '---\nname: old-name\ndescription: "Alias of commit."\ndisable-model-invocation: true\n---\n\nBody.\n');
+  fs.writeFileSync(path.join(userOnly, 'SKILL.md'),
+    '---\nname: user-only-thing\ndescription: "Mine."\ndisable-model-invocation: true\n---\n\nBody.\n');
+  let names;
+  try {
+    names = apiCatalog(webState('neutral'), 'skills').items.map((e) => e.name);
+  } finally {
+    fs.rmSync(alias, { recursive: true, force: true });
+    fs.rmSync(userOnly, { recursive: true, force: true });
+  }
+  assert.ok(!names.includes('old-name'), 'the alias folder is listed as a skill');
+  assert.ok(names.includes('user-only-thing'), 'a user-only skill of your own was dropped');
+  assert.ok(names.includes('commit'), 'the alias target was dropped');
+});
+
 test('an item answers with its body and its links', () => {
   const st = neutral();
   const { name } = apiCatalog(st, 'agents').items[0];

@@ -9,17 +9,22 @@ case where the seam is only known once the change is made.
 
 ## Procedure
 1. Orient on the project's own documentation for what you are about to touch
-   ({{DOCTRINE:read-the-docs-first}}), and confirm the actual starting state — the suite runs,
-   the baseline is green ({{LAW:verify-before-asserting}}). A red baseline is a [debug {{SKILL}}](debug.md)
+   ({{DOCTRINE:read-the-docs-first}}): `GLOSSARY.md` (or `CONTEXT.md`) so test names use the
+   domain's vocabulary, and the ADRs in the area. Then confirm the actual starting state —
+   the suite runs, the baseline is green ({{LAW:verify-before-asserting}}). A red baseline is a [debug {{SKILL}}](debug.md)
    task first, not something to build on.
 2. Agree the seams: name the public interfaces the tests will target and confirm
    them with the user when they are not obvious — no test is written at an
-   unconfirmed seam. Testing effort belongs on critical paths and complex logic,
+   unconfirmed seam. Give each proposed seam one line on what it catches and what it
+   misses; if the interface shape itself is in question, use the
+   [codebase-design {{SKILL}}](codebase-design.md). Testing effort belongs on critical paths and complex logic,
    not every edge.
 3. Pick the next **smallest slice** that advances the task ({{DOCTRINE:smallest-viable-diff}}), then
    cover it:
    - *Seam known up front* — test-first. Write ONE failing test that pins the slice,
-     specific about the expected output (for a bug, the test reproduces it). Run it
+     specific about the expected output (for a bug, the test reproduces it). Expected
+     values come from an independent source — a literal, a worked example, the spec —
+     never recomputed the way the code computes them. Run it
      and watch it fail **for the right reason** — a test that passes immediately, or
      fails on a typo, proves nothing.
    - *Seam only clear once the change exists* — write the covering test alongside the

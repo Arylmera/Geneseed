@@ -226,17 +226,14 @@ the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/cou
 | --- | --- |
 | [brainstorm]({{DIR_SKILLS}}/brainstorm.md) | a new feature or project with no design yet, or whose goal, scope, or success criteria need pinning down first |
 | [plan]({{DIR_SKILLS}}/plan.md) | a task has more than a couple of steps |
-| [codebase-design]({{DIR_SKILLS}}/codebase-design.md) | designing a module's interface, placing a seam, or needing the deep-module vocabulary |
-| [domain-modeling]({{DIR_SKILLS}}/domain-modeling.md) | pinning domain terminology in CONTEXT.md or recording an architectural decision as an ADR |
+| [codebase-design]({{DIR_SKILLS}}/codebase-design.md) | designing a module's interface, placing a seam, or needing the deep-module vocabulary; pinning domain terms in GLOSSARY.md or recording a hard-to-reverse decision as an ADR |
 | [wayfinder]({{DIR_SKILLS}}/wayfinder.md) | a chunk of work too big for one session, still in the fog — chart decision tickets before building |
-| [tickets]({{DIR_SKILLS}}/tickets.md) | splitting a spec into tracker-ready tracer-bullet tickets with blocking edges |
 | [parallel-agents]({{DIR_SKILLS}}/parallel-agents.md) | several independent subtasks and a tool that runs subagents |
 | [develop]({{DIR_SKILLS}}/develop.md) | implementing a feature, fixing a bug, or changing behaviour — failing test first, affected suite green, one committed slice at a time |
 | [worktree]({{DIR_SKILLS}}/worktree.md) | work must not share a tree with what is in flight — a crew, a second task, another session in this checkout |
-| [debug]({{DIR_SKILLS}}/debug.md) | a bug or failure to diagnose before fixing |
+| [debug]({{DIR_SKILLS}}/debug.md) | a bug or failure to diagnose before fixing — a red CI run or pre-merge check included, reproduced under CI's conditions |
 | [prototype]({{DIR_SKILLS}}/prototype.md) | a design question needs a runnable answer before real implementation |
-| [repo-map]({{DIR_SKILLS}}/repo-map.md) | orienting to the repo, or structure changed |
-| [document-project]({{DIR_SKILLS}}/document-project.md) | missing/drifted docs, or a PRD, design system, architecture doc or AGENTS.md |
+| [document-project]({{DIR_SKILLS}}/document-project.md) | missing/drifted docs, or a PRD, design system, architecture doc or AGENTS.md; orienting to the repo, or refreshing its map after the structure changed |
 | [ingest]({{DIR_SKILLS}}/ingest.md) | a task needs content from a PDF, Office doc, or URL |
 | [research]({{DIR_SKILLS}}/research.md) | a question needs answers gathered and verified from the open web |
 | [teach]({{DIR_SKILLS}}/teach.md) | the user wants to be taught — a crash course, confusing material decoded, or a day-by-day path to a deadline |
@@ -247,18 +244,14 @@ the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/cou
 | [review-response]({{DIR_SKILLS}}/review-response.md) | acting on review feedback you have received |
 | [fresh-eyes]({{DIR_SKILLS}}/fresh-eyes.md) | a finished artifact needs an independent verdict on whether it meets the original spec, from an agent with none of the solving session's context |
 | [security-audit]({{DIR_SKILLS}}/security-audit.md) | a change touches the security surface — auth, untrusted input, secrets, shell or file access, a new dependency — or "is this safe" |
-| [ci-fix]({{DIR_SKILLS}}/ci-fix.md) | a CI run or pre-merge check is red — reproduce under CI's conditions, fix at the cause, watch the re-run |
-| [deps-audit]({{DIR_SKILLS}}/deps-audit.md) | deciding which dependencies to upgrade, remove, or refuse — outdated, vulnerable, abandoned, unused |
+| [dependencies]({{DIR_SKILLS}}/dependencies.md) | auditing dependencies — outdated, vulnerable, abandoned, unused — or upgrading a dependency, framework, or language version one change at a time |
 | [ship]({{DIR_SKILLS}}/ship.md) | a verified change is ready to open as a PR or merge |
 | [release]({{DIR_SKILLS}}/release.md) | cutting a version: bump, changelog, tag |
-| [migrate]({{DIR_SKILLS}}/migrate.md) | upgrading a dependency, framework, or language version |
-| [git-archaeology]({{DIR_SKILLS}}/git-archaeology.md) | finding when a regression landed or why code exists — bisect, blame, pickaxe |
-| [git-rescue]({{DIR_SKILLS}}/git-rescue.md) | recovering a broken or messy repo, or safely rewriting history — reflog, undo, rebase behind a backup |
+| [git-history]({{DIR_SKILLS}}/git-history.md) | finding when a regression landed or why code exists — bisect, blame, pickaxe — or recovering a broken repo and safely rewriting history behind a backup branch |
 | [refactor]({{DIR_SKILLS}}/refactor.md) | improving code structure without changing behaviour |
 | [ponytail]({{DIR_SKILLS}}/ponytail.md) | the user wants the minimal, laziest-that-works solution — "ponytail", "be lazy", "simplest path", or a complaint about over-engineering, bloat, or needless dependencies |
 | [forge-mcp]({{DIR_SKILLS}}/forge-mcp.md) | building, extending, or hardening a Model Context Protocol (MCP) server |
-| [bruno-collection-generator]({{DIR_SKILLS}}/bruno-collection-generator.md) | creating or converting a Bruno API collection — requests, environments, docs — from routes, an OpenAPI snippet, curl commands, or an endpoint list |
-| [bruno-test-writer]({{DIR_SKILLS}}/bruno-test-writer.md) | writing or strengthening Bruno tests, assertions, scripts, and request chaining for a request or collection |
+| [bruno]({{DIR_SKILLS}}/bruno.md) | creating, converting, or testing a Bruno API collection — requests, environments, assertions, chaining — from routes, OpenAPI, curl, or an endpoint list |
 | [prose]({{DIR_SKILLS}}/prose.md) | writing prose for a human — a commit body, PR, doc, comment, memory note, or reply — that should not read like a model wrote it |
 | [frontend-design]({{DIR_SKILLS}}/frontend-design.md) | building or reshaping a UI that should carry a deliberate point of view, not a templated default |
 | [handoff]({{DIR_SKILLS}}/handoff.md) | context filling, or passing work to another agent or session |
@@ -270,12 +263,10 @@ the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/cou
 | [brick-forge]({{DIR_SKILLS}}/brick-forge.md) | a new or adapted loop brick |
 | [wiki]({{DIR_SKILLS}}/wiki.md) | consulting or growing the user's machine-wide knowledge base declared in `wiki.jsonc` (§8) |
 | [herdr]({{DIR_SKILLS}}/herdr.md) | running inside a [herdr](https://herdr.dev) pane (`HERDR_ENV=1`) and a task needs another pane — a sibling server, a watched build, a spawned agent |
-| [rule]({{DIR_SKILLS}}/rule.md) | anything the user wants to outlive this session — a standing rule of their own (§1) or a durable fact to remember (§5); also a recurring {{MEMORY}} lesson due for promotion |
+| [rule]({{DIR_SKILLS}}/rule.md) | anything the user wants to outlive this session — a standing rule of their own (§1) or a durable fact to remember (§5); also tending the {{MEMORY}} set — duplicates, stale facts, a recurring lesson due for promotion |
 | [profile]({{DIR_SKILLS}}/profile.md) | the user wants the agent to know who they are — creating or refreshing the `PROFILE.md` identity file (§1) through a short interview |
-| [consolidate-memory]({{DIR_SKILLS}}/consolidate-memory.md) | the {{MEMORY}} set needs tending — an overgrown index, duplicates, stale facts, a lesson due for promotion |
 | [skill-forge]({{DIR_SKILLS}}/skill-forge.md) | a repeated task has no {{SKILL}}, a self-improvement loop produced an edit, or two {{SKILLS}} should merge |
-| [geneseed]({{DIR_SKILLS}}/geneseed.md) | the user mentions Geneseed, the harness, or `AGENT.md`, or you need to inspect or read from the deployed bundle ({{LAWS}}, {{AGENTS}}, {{SKILLS}}, {{MEMORY}}) |
-| [opencode-theme]({{DIR_SKILLS}}/opencode-theme.md) | the user wants their own OpenCode colour theme — pick or tweak a palette, get solid + transparent variants that survive rebuilds |
+| [geneseed]({{DIR_SKILLS}}/geneseed.md) | the user mentions Geneseed, the harness, or `AGENT.md`, wants their own OpenCode colour theme, or you need to inspect or read from the deployed bundle ({{LAWS}}, {{AGENTS}}, {{SKILLS}}, {{MEMORY}}) |
 
 **Folder {{SKILLS}}.** Some {{SKILLS}} ship as self-contained folders under
 `{{DIR_SKILLS}}/`, each with its own format and provenance (`VENDOR.md`) —

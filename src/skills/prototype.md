@@ -9,10 +9,13 @@ real implementation.
 ## Procedure
 1. Name the question the prototype answers; the question decides the shape. A
    logic or state question → a tiny interactive terminal app that pushes the
-   state machine through the cases that are hard to reason about on paper. A
-   UI question → several radically different variations on one route,
-   switchable at runtime. If ambiguous, pick from the surrounding code
-   (backend module → logic; page or component → UI) and state the assumption.
+   state machine through the cases that are hard to reason about on paper;
+   keep the logic a pure module (reducer, machine, functions) with no I/O, so
+   it lifts into real code and only the shell is thrown away. A UI question →
+   structurally different variants on the existing route behind `?variant=`
+   (3 by default; a new route is a last resort). If ambiguous, pick from the
+   surrounding code (backend module → logic; page or component → UI) and
+   state the assumption.
 2. Throwaway from day one, and marked as such: place it near the code it
    prototypes for, but name it so a casual reader sees it is not production.
    No persistence (state lives in memory), no tests, no error handling beyond
@@ -21,9 +24,9 @@ real implementation.
    must be able to start it without thinking.
 4. Surface the full relevant state after every action or variant switch, so
    the user sees exactly what changed.
-5. When the question is answered: fold the validated decision into the real
-   code, record the verdict and the question it settled (issue comment, ADR,
-   or commit message), park the prototype on a throwaway branch, and keep the
+5. When the question is answered: fold the validated decision (and a logic
+   prototype's pure module) into the real code, record the verdict and the
+   question it settled (issue comment, ADR, or commit message), park the prototype on a throwaway branch, and keep the
    main branch clean of prototype code.
 
 ## Done when

@@ -15,7 +15,11 @@
     { "query": "What is a stack trace, conceptually?", "should_trigger": false },
     { "query": "Explain what a race condition is", "should_trigger": false },
     { "query": "Refactor the config loader into smaller functions without changing behaviour", "should_trigger": false },
-    { "query": "Add retry with exponential backoff to the HTTP client", "should_trigger": false }
+    { "query": "Add retry with exponential backoff to the HTTP client", "should_trigger": false },
+    { "query": "The GitHub Actions run on my PR is red, fix it", "should_trigger": true },
+    { "query": "CI is failing on main since the last merge", "should_trigger": true },
+    { "query": "Add a CI workflow that runs the linter", "should_trigger": false },
+    { "query": "What does a CI pipeline do?", "should_trigger": false }
   ],
   "geneseed": [
     { "query": "Which theme and footprint is my Geneseed install using?", "should_trigger": true },
@@ -24,7 +28,7 @@
     { "query": "Write a commit message for the staged changes", "should_trigger": false },
     { "query": "Scaffold a new Vite + React project", "should_trigger": false }
   ],
-  "git-rescue": [
+  "git-history": [
     { "query": "I did a hard reset and lost my last three commits, get them back", "should_trigger": true },
     { "query": "My rebase is half finished and the repo is a mess, help", "should_trigger": true },
     { "query": "Create a new branch for the payment feature", "should_trigger": false },
@@ -39,12 +43,6 @@
     { "query": "Make a loop brick that runs our Playwright suite and reports pass or fail", "should_trigger": true },
     { "query": "Our tests run through make check, adapt the test brick for this project", "should_trigger": true },
     { "query": "Write a new skill for generating changelogs", "should_trigger": false }
-  ],
-  "ci-fix": [
-    { "query": "The GitHub Actions run on my PR is red, fix it", "should_trigger": true },
-    { "query": "CI is failing on main since the last merge", "should_trigger": true },
-    { "query": "Add a CI workflow that runs the linter", "should_trigger": false },
-    { "query": "What does a CI pipeline do?", "should_trigger": false }
   ],
   "research": [
     { "query": "What changed in the latest Vite major release? Check the official sources", "should_trigger": true },

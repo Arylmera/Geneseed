@@ -92,8 +92,8 @@ until 2026-09 it did, and the whole harness was paid twice per session.
 - **User-only skills leave the catalogue.** A skill whose source carries
   `<!-- invocation: user -->` renders `disable-model-invocation: true`; Claude
   Code and Bob then drop its description from the always-on skill metadata and
-  only `/name` opens it. Seven skills carry it today (the five teaching drills,
-  `herdr`, `opencode-theme`), roughly a seventh of the ~1.7k skill-metadata line.
+  only `/name` opens it. The three teaching skills (`teach`, `quiz`, `learn-mode`)
+  and `herdr` carry it today.
 - Plugin JavaScript (OpenCode, ~26k on disk) runs in the host runtime and
   never enters the context window.
 

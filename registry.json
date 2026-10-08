@@ -141,25 +141,11 @@
       "added": "2026-10-03",
       "last_verified": ""
     },
-    "skills/bruno-collection-generator": {
+    "skills/bruno": {
       "status": "experimental",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
-      "added": "2026-09-03",
-      "last_verified": ""
-    },
-    "skills/bruno-test-writer": {
-      "status": "experimental",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-09-03",
-      "last_verified": ""
-    },
-    "skills/ci-fix": {
-      "status": "experimental",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-09-06",
+      "added": "2026-10-08",
       "last_verified": ""
     },
     "skills/codebase-design": {
@@ -175,13 +161,6 @@
       "owner": "Guillaume Lemer",
       "added": "2026-06-01",
       "last_verified": "2026-09-06"
-    },
-    "skills/consolidate-memory": {
-      "status": "experimental",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-09-06",
-      "last_verified": ""
     },
     "skills/council": {
       "status": "approved",
@@ -204,11 +183,11 @@
       "added": "2026-06-03",
       "last_verified": "2026-09-06"
     },
-    "skills/deps-audit": {
+    "skills/dependencies": {
       "status": "experimental",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
-      "added": "2026-09-06",
+      "added": "2026-10-08",
       "last_verified": ""
     },
     "skills/develop": {
@@ -225,12 +204,12 @@
       "added": "2026-06-10",
       "last_verified": "2026-09-06"
     },
-    "skills/domain-modeling": {
-      "status": "approved",
+    "skills/explain-changes": {
+      "status": "experimental",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
-      "added": "2026-07-13",
-      "last_verified": "2026-09-06"
+      "added": "2026-09-30",
+      "last_verified": ""
     },
     "skills/forge-mcp": {
       "status": "approved",
@@ -267,19 +246,12 @@
       "added": "2026-06-19",
       "last_verified": "2026-09-06"
     },
-    "skills/git-archaeology": {
-      "status": "approved",
+    "skills/git-history": {
+      "status": "experimental",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
-      "added": "2026-06-10",
-      "last_verified": "2026-09-06"
-    },
-    "skills/git-rescue": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-10",
-      "last_verified": "2026-09-06"
+      "added": "2026-10-08",
+      "last_verified": ""
     },
     "skills/handoff": {
       "status": "approved",
@@ -315,20 +287,6 @@
       "owner": "Guillaume Lemer",
       "added": "2026-10-03",
       "last_verified": ""
-    },
-    "skills/migrate": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-08",
-      "last_verified": "2026-09-06"
-    },
-    "skills/opencode-theme": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-19",
-      "last_verified": "2026-09-06"
     },
     "skills/parallel-agents": {
       "status": "approved",
@@ -407,13 +365,6 @@
       "added": "2026-06-07",
       "last_verified": "2026-09-06"
     },
-    "skills/repo-map": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-01",
-      "last_verified": "2026-09-06"
-    },
     "skills/research": {
       "status": "approved",
       "version": "1.0.0",
@@ -470,25 +421,11 @@
       "added": "2026-09-06",
       "last_verified": ""
     },
-    "skills/tickets": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-07-13",
-      "last_verified": "2026-09-06"
-    },
     "skills/token-report": {
       "status": "experimental",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-29",
-      "last_verified": ""
-    },
-    "skills/explain-changes": {
-      "status": "experimental",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-09-30",
       "last_verified": ""
     },
     "skills/wayfinder": {

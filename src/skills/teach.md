@@ -17,7 +17,8 @@ readable form, [ingest](ingest.md).
 ## Procedure
 1. Pin the footing before teaching anything: what the user wants to be able to *do*
    afterwards, how much time they have, and what they already know. Ask once if any of
-   the three is missing, then proceed — do not plan around "learn X in general".
+   the three is missing, then proceed — do not plan around "learn X in general". Never
+   teach from recall alone — cite one high-trust primary source for them to read next.
 2. Pick the shape and run it:
    - **Crash course** — act as a teacher who has only this one session and will never
      see them again; the sole objective is *functional* before time runs out. Name
@@ -36,8 +37,9 @@ readable form, [ingest](ingest.md).
      *what-not-to-do* that day. Trace the whole path against the goal; if finishing
      every day would not deliver the result, rebuild it until it does.
 3. Check it took: ask three questions only someone who understood could answer (a
-   crash course or decode), or walk the first day together (a path). A miss goes back
-   to the analogy or the exercise — re-anchor, don't hand over the answer.
+   crash course or decode), or walk the first day together (a path). Check retention,
+   not fluency — recall from memory, spaced across the session, not a fresh re-read. A
+   miss goes back to the analogy or the exercise — re-anchor, don't hand over the answer.
 4. Close by naming what to practise next and the gap most likely to trip them, so the
    learning continues without you; offer the [quiz {{SKILL}}](quiz.md) for when they
    want it tested.

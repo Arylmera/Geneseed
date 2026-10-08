@@ -13,7 +13,11 @@
    designing the steps ({{LAW:verify-before-asserting}} — verify before designing).
 2. Write a numbered plan to `WORKLOG.md` (or `plans/<task>.md`): ordered steps, each
    independently checkable. Group the steps into milestones — coherent chunks after
-   which the work can be verified and reviewed.
+   which the work can be verified and reviewed. Cut the steps as **vertical slices** —
+   thin end-to-end pieces, each green and verifiable on its own, never one horizontal
+   layer at a time — and give each a `Blocked by:` line naming the slices it waits on
+   (`none` when it can start now). Sequence a wide refactor as expand → migrate
+   callers in batches → contract, so every slice leaves the build green.
 3. Execute one step at a time. After each, update the worklog — mark it done, note
    the current step, the next step, and any blockers.
 4. At each milestone, stop and verify before continuing — run the project's checks

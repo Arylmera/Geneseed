@@ -42,6 +42,10 @@ The full list, with each description, is in the catalog.
 
 Every skill ends with one beat of reflection: if a step misled or a step was missing, the agent proposes the exact edit to that skill and applies it only with your assent. Most runs end with nothing to change.
 
+### Old names keep working
+
+When two skills merge, the old name still works as a slash command: `/deps-audit` runs `dependencies`, and `/ci-fix` runs `debug`. The old names are user-only, so the agent's list shows each skill once. If you had left out a skill that was later merged, a rebuild leaves out the merged skill instead. A skill removed with no replacement is dropped from that list, with a note.
+
 ### What they cost
 
 The skill *bodies* are read only when used. The *descriptions* are listed to the agent every turn so it can pick the right one — that list is part of the always-on cost described in [Footprint](footprint.md).
