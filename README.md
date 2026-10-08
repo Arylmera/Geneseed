@@ -6,6 +6,7 @@
 
 [![npm](https://img.shields.io/npm/v/geneseed?color=cb3837&logo=npm)](https://www.npmjs.com/package/geneseed)
 [![CI](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml/badge.svg)](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml)
+[![AI harness scorecard](https://img.shields.io/badge/AI%20harness%20scorecard-A%20%C2%B7%2088.7-1a7f37)](#-validate--test)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node >= 22.3](https://img.shields.io/badge/node-%3E%3D22.3-5fa04e)](package.json)
 [![zero dependencies](https://img.shields.io/badge/deps-zero-success)](package.json)
@@ -290,6 +291,19 @@ node --test --test-reporter=tap "tests/**/*.test.mjs"   # the suites (node expan
 ```
 
 `doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every push and PR, on both Linux and Windows. Publishing is a separate, manually-triggered workflow (`.github/workflows/publish.yml`) — see [Contributing](#-contributing).
+
+### AI Harness Scorecard
+
+<p align="center"><img src="docs/assets/scorecard.svg" alt="AI Harness Scorecard for this repository: grade and score, with one bar per pillar" width="760"></p>
+
+How safe this repository is to change with agents, scored by the [AI Harness Scorecard](https://github.com/markmishaev76/ai-harness-scorecard): 31 deterministic checks, no LLM, in five weighted pillars. Geneseed ships its own JavaScript port, so you can score any repository a harness is installed in — it grades the repository (CI, tests, docs), not the harness files:
+
+```bash
+geneseed scorecard            # grade, one line per pillar, and what to fix
+geneseed scorecard --json     # every check with its evidence
+```
+
+`geneseed scorecard --svg docs/assets/scorecard.svg` rewrites the card and prints the badge URL for the top of this page; `doctor` fails when either no longer matches the live score, and the checks this repository passes are a floor it may not drop below. A weekly workflow also runs the upstream Python tool as a cross-check.
 
 ## 🔄 Keeping it current
 

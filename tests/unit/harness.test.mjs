@@ -1782,6 +1782,34 @@ test('the scorecard ratchet skips outside a checkout and sees a floor check that
     `a floor check that stopped passing went unreported: ${JSON.stringify(problems)}`);
 });
 
+test('the scorecard arm sees a README card or badge that no longer shows the live score', () => {
+  // Same fixture and `.git` control as the ratchet above. Each fault edits ONE number, the
+  // smallest drift a reader would be misled by, and is restored before the next.
+  const dotGit = { '.git': 'gitdir: elsewhere\n' };
+  const run = () => gate(fixture(), 'm.scorecardProblems()');
+  assert.deepEqual(withFault(dotGit, run), [],
+    'the untouched copy already reports a stale card or badge, so the faults below prove nothing');
+  const root = fixture();
+  for (const [rel, edit, expect] of [
+    ['docs/assets/scorecard.svg', (t) => t.replace(/>\d+\.\d</, '>1.0<'), 'does not match the current score'],
+    ['README.md', (t) => t.replace(/AI%20harness%20scorecard-[A-F]%20%C2%B7%20[\d.]+/, 'AI%20harness%20scorecard-A%20%C2%B7%2099.9'),
+      'scorecard badge does not show the current score'],
+  ]) {
+    const file = path.join(root, ...rel.split('/'));
+    const before = fs.readFileSync(file, 'utf8');
+    const after = edit(before);
+    assert.notEqual(after, before, `the ${rel} fault planted nothing — its pattern no longer matches`);
+    let problems;
+    try {
+      fs.writeFileSync(file, after);
+      problems = withFault(dotGit, run);
+    } finally {
+      fs.writeFileSync(file, before);
+    }
+    assert.ok(problems.some((p) => p.includes(expect)), `${rel} drifted unreported: ${JSON.stringify(problems)}`);
+  }
+});
+
 // ---------------------------------------------------------------------------------------------
 // The shipped loop catalogue.
 

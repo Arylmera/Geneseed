@@ -1113,6 +1113,21 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--svg"
+          ],
+          "dest": "svg",
+          "metavar": "PATH",
+          "help": "write the scorecard as an SVG card (grade + one bar per pillar) to PATH instead of printing — the README card is docs/assets/scorecard.svg",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []

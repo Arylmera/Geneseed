@@ -18,6 +18,7 @@ import { formatRepr, formatValue } from '../lib/json.mjs';
 import { splitLines } from '../lib/udiff.mjs';
 import { ENTITY_STATUSES } from './inventory.mjs';
 import { assessRepo } from './scorecard.mjs';
+import { badgeUrl, renderSvg } from './scorecard-svg.mjs';
 import { isDir, isFile, rglob, srcStems } from './scan.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 
@@ -411,7 +412,9 @@ export function moduleMapProblems() {
  *
  * Taken from `geneseed scorecard` on main after #209-#213 (security policy, PR template, ARCHITECTURE
  * and ADRs, the audit and commitlint jobs, Dependabot, coverage, property tests, fuzzing): 26 of 31,
- * 81.2/100, matching upstream's Python tool check for check. Grouped by pillar, in upstream order.
+ * 81.2/100, matching upstream's Python tool check for check. Then the weekly Stryker run and the
+ * offline link check added mutation_testing and stale_doc_detection: 28 of 31, 88.7 (A). Grouped by
+ * pillar, in upstream order.
  * The ratchet is on `passed`, which upstream sets for any score above zero: `test_suite_exists`
  * and `error_handling_policy` pass at 1.5 of 3, and a full check sliding to a partial one is
  * invisible here. A check this repo starts to pass is added by hand; one it stops passing is a
@@ -430,12 +433,14 @@ export const SCORECARD_FLOOR = [
   'test_suite_exists',
   'feature_matrix_testing',
   'coverage_measurement',
+  'mutation_testing',
   'property_based_testing',
   'fuzz_testing',
   'contract_tests',
   'tests_blocking_ci',
   'code_review_required',
   'scheduled_ci',
+  'stale_doc_detection',
   'mr_template',
   'automated_review',
   'doc_sync_check',
@@ -457,10 +462,24 @@ export const SCORECARD_FLOOR = [
  */
 export function scorecardProblems(root = ROOT) {
   if (!existsSync(path.join(root, '.git')) || !isDir(path.join(root, '.github', 'workflows'))) return [];
-  const checks = new Map(assessRepo(root).categories.flatMap((c) => c.checks).map((k) => [k.id, k]));
-  return SCORECARD_FLOOR.filter((id) => !checks.get(id)?.passed).map((id) => {
+  const a = assessRepo(root);
+  const checks = new Map(a.categories.flatMap((c) => c.checks).map((k) => [k.id, k]));
+  // THE README CARD IS A RENDER OF THIS SAME ASSESSMENT, compared byte for byte: a card that no
+  // longer matches the score is the stale-number problem the badges have, caught the same way.
+  const card = path.join(root, ...SCORECARD_CARD.split('/'));
+  const stale = isFile(card) && readText(card) === renderSvg(a) ? [] : [
+    `[scorecard] ${SCORECARD_CARD} does not match the current score — run: geneseed scorecard --svg ${SCORECARD_CARD}`,
+  ];
+  const readme = path.join(root, 'README.md');
+  if (isFile(readme) && !readText(readme).includes(`(${badgeUrl(a)})`)) {
+    stale.push(`[scorecard] README.md's scorecard badge does not show the current score — set it to ${badgeUrl(a)}`);
+  }
+  return stale.concat(SCORECARD_FLOOR.filter((id) => !checks.get(id)?.passed).map((id) => {
     const k = checks.get(id);
     return `[scorecard] ${id} no longer passes — it is in SCORECARD_FLOOR (js/inspect/checks-repo.mjs)`
       + (k ? `: ${k.evidence}. Fix: ${k.remediation}` : ', and the scorecard has no such check');
-  });
+  }));
 }
+
+/** Where the README's scorecard card lives, and what doctor compares against a fresh render. */
+export const SCORECARD_CARD = 'docs/assets/scorecard.svg';

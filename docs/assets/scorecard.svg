@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="366" viewBox="0 0 760 366" role="img" aria-label="AI Harness Scorecard: grade A, 88.7 out of 100">
+  <style>
+    svg { --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --track: #eaeef2; --line: #d0d7de;
+          --a: #1a7f37; --b: #0969da; --c: #9a6700; --d: #bc4c00; --f: #cf222e; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg: #0d1117; --fg: #e6edf3; --muted: #8d96a0; --track: #21262d; --line: #30363d;
+            --a: #3fb950; --b: #4493f8; --c: #d29922; --d: #db6d28; --f: #f85149; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--fg); }
+    .title { font-size: 20px; font-weight: 600; }
+    .label { font-size: 15px; font-weight: 600; }
+    .muted { font-size: 12px; fill: var(--muted); }
+    .pct { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .grade { font-size: 30px; font-weight: 700; fill: #ffffff; }
+    .score { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .track { fill: var(--track); }
+    .a { fill: var(--a); } .b { fill: var(--b); } .c { fill: var(--c); } .d { fill: var(--d); } .f { fill: var(--f); }
+  </style>
+  <rect x="0.5" y="0.5" width="759" height="365" rx="12" fill="var(--bg)" stroke="var(--line)"/>
+  <text class="title" x="32" y="44">AI Harness Scorecard</text>
+  <text class="muted" x="32" y="66">28 of 31 deterministic checks passing · five weighted pillars</text>
+  <text class="score" x="660" y="56" text-anchor="end">88.7<tspan class="muted"> / 100</tspan></text>
+  <rect class="a" x="676" y="22" width="52" height="52" rx="10"/>
+  <text class="grade" x="702" y="59" text-anchor="middle">A</text>
+  <line x1="32" y1="84" x2="728" y2="84" stroke="var(--line)"/>
+  <text class="label" x="32" y="116">Architectural Documentation</text>
+  <text class="muted" x="32" y="133">weight 20 % · 4/5 checks</text>
+  <rect class="track" x="300" y="106" width="330" height="16" rx="8"/>
+  <rect class="bar a" x="300" y="106" width="280.5" height="16" rx="8"/>
+  <text class="pct" x="728" y="120" text-anchor="end">85 %</text>
+  <text class="label" x="32" y="162">Mechanical Constraints</text>
+  <text class="muted" x="32" y="179">weight 25 % · 5/7 checks</text>
+  <rect class="track" x="300" y="152" width="330" height="16" rx="8"/>
+  <rect class="bar b" x="300" y="152" width="240" height="16" rx="8"/>
+  <text class="pct" x="728" y="166" text-anchor="end">72.7 %</text>
+  <text class="label" x="32" y="208">Testing &amp; Stability</text>
+  <text class="muted" x="32" y="225">weight 25 % · 8/8 checks</text>
+  <rect class="track" x="300" y="198" width="330" height="16" rx="8"/>
+  <rect class="bar a" x="300" y="198" width="310.2" height="16" rx="8"/>
+  <text class="pct" x="728" y="212" text-anchor="end">94 %</text>
+  <text class="label" x="32" y="254">Review &amp; Drift Prevention</text>
+  <text class="muted" x="32" y="271">weight 15 % · 6/6 checks</text>
+  <rect class="track" x="300" y="244" width="330" height="16" rx="8"/>
+  <rect class="bar a" x="300" y="244" width="330" height="16" rx="8"/>
+  <text class="pct" x="728" y="258" text-anchor="end">100 %</text>
+  <text class="label" x="32" y="300">AI-Specific Safeguards</text>
+  <text class="muted" x="32" y="317">weight 15 % · 5/5 checks</text>
+  <rect class="track" x="300" y="290" width="330" height="16" rx="8"/>
+  <rect class="bar a" x="300" y="290" width="330" height="16" rx="8"/>
+  <text class="pct" x="728" y="304" text-anchor="end">100 %</text>
+  <text class="muted" x="32" y="350">markmishaev76/ai-harness-scorecard, ported to JavaScript · geneseed scorecard --svg</text>
+</svg>

@@ -57,3 +57,7 @@ docs/superpowers/
 
 # c8 scratch data from a local coverage run
 /coverage/
+
+# Stryker sandbox and reports
+/.stryker-tmp/
+/reports/

@@ -12,6 +12,6 @@ The agent's doc discovery sees markdown (`.md`) and AsciiDoc (`.adoc`) only. The
 - **Pandoc**: excellent for Office and HTML, and a single binary.
 - **Docling** (IBM): best for complex tables and scanned PDFs.
 
-When an MCP converter is available, the skill prefers it. A prompt like *"convert file:///path/to/spec.pdf to markdown"* then just works. The skill never installs a converter silently. If none is present, it tells you which one to add.
+When an MCP converter is available, the skill prefers it. A prompt like "`convert file:///path/to/spec.pdf to markdown`" then just works. The skill never installs a converter silently. If none is present, it tells you which one to add.
 
 Converter not found, or an MCP converter listed but not connecting? See [Model, agent and MCP problems](../reference/troubleshoot-tools.md).

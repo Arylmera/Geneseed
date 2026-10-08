@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "command",
+  "commandRunner": { "command": "node --test tests/unit/settings_jsonc.test.mjs tests/unit/jsonc_properties.test.mjs" },
+  "coverageAnalysis": "off",
+  "mutate": ["js/hosts/settings.mjs:210-267"],
+  "reporters": ["clear-text", "progress"],
+  "concurrency": 4,
+  "timeoutMS": 10000,
+  "timeoutFactor": 1,
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": "always"
+}

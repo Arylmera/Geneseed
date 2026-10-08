@@ -423,3 +423,18 @@ jobs:
             node --test --test-reporter=tap "tests/**/*.test.mjs" > coverage.txt
           { echo '```'; sed -n '/^=* Coverage summary/,$p' coverage.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           sed -n '/^=* Coverage summary/,/^=*$/p' coverage.txt
+
+  # DEAD LINKS IN THE REPOSITORY'S OWN MARKDOWN. doctor already checks every link in the RENDERED
+  # harness, but nothing checked README, docs/, ARCHITECTURE.md or the ADRs — a moved page left
+  # them pointing at nothing. `--offline` checks only links inside the repository: no network, so
+  # no flake from a slow external site. `src/` is excluded because its links carry `{{DIR_*}}`
+  # tokens that resolve only after render, where doctor checks them.
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: lychee (offline, repository markdown)
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --offline --no-progress --exclude-path src --exclude-path node_modules --exclude-path web/node_modules './**/*.md'
+          fail: true
