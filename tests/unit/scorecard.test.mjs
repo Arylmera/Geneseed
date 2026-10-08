@@ -139,12 +139,12 @@ test("this repo's own workflows parse, with their schedules and jobs", () => {
       `${n} no longer parses`);
   }
   // The four files sorted by name; mutate and scorecard run on `schedule:`, ci and publish do not.
-  // ci's last three jobs came with #211 (audit, pr-title) and #213 (coverage), in file order.
+  // ci's last four jobs came with #211 (audit, pr-title), #213 (coverage) and the link check, in file order.
   const configs = parseCiConfigs(ROOT);
   assert.deepEqual(configs.map((c) => [c.ciType, c.hasSchedule, c.jobs.map((j) => j.name)]), [
     ['github', false, ['validate', 'node-cells', 'package-no-python', 'web', 'audit', 'pr-title',
-      'coverage']],
-    ['github', true, ['mutate']],
+      'coverage', 'links']],
+    ['github', true, ['mutate', 'stryker']],
     ['github', false, ['publish']],
     ['github', true, ['scorecard']],
   ]);

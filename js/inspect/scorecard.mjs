@@ -24,8 +24,9 @@
 import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { isDir, isFile, printErr, printOut, readText } from '../lib/fs.mjs';
+import { isDir, isFile, printErr, printOut, readText, writeText } from '../lib/fs.mjs';
 import { ALL_CHECKS } from './scorecard-checks.mjs';
+import { badgeUrl, renderSvg } from './scorecard-svg.mjs';
 
 // ---------------------------------------------------------------------------------------------
 // The YAML subset
@@ -825,6 +826,14 @@ export function cmdScorecard(args) {
     return 1;
   }
   const a = assessRepo(dir);
+  if (args.svg) {
+    // The README card (`scorecard-svg.mjs`). Written, not printed: an SVG on a terminal helps
+    // nobody, and the path is where doctor's freshness check reads it back.
+    writeText(path.resolve(args.svg), renderSvg(a));
+    printOut(`[scorecard] ${a.grade} ${round1(a.overallScore)}/100 → ${args.svg}\n`
+      + `[scorecard] README badge: ${badgeUrl(a)}\n`);
+    return 0;
+  }
   printOut(args.json ? renderJson(a) : renderText(a));
   return 0;
 }

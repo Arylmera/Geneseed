@@ -23,3 +23,22 @@ jobs:
           node-version: "22"
       - name: every mutation is caught
         run: node tests/mutate.mjs --all
+
+  # GENERATED MUTANTS, ON THE PARSER THAT REWRITES A USER'S SETTINGS. The matrix above is 33
+  # hand-picked faults across the product; Stryker generates every operator-level mutant of
+  # `readJsonc` (stryker.config.json) and runs the settings tests against each — first reading
+  # 2026-10-08: 84.5 % (120 of 142 killed or timed out; most survivors are equivalent bounds
+  # checks). A report, not a gate: no `thresholds.break`, so a dip shows in the log and the
+  # summary without turning the Monday run red.
+  stryker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: stryker on readJsonc
+        run: npx stryker run --reporters clear-text,progress

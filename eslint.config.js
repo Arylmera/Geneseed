@@ -56,6 +56,12 @@ export default [
       // deliberate idiom here, it appears 13 times, and "fixing" it trades a documented
       // default for an implicit one.
       'no-useless-assignment': 'off',
+
+      // THROW AN Error, NEVER A STRING. Every failure path here carries `.exitCode` or `.code`
+      // on an Error and is caught by a caller that reads them; a thrown literal has no stack and
+      // no fields, so the catch reports `undefined` and the exit code falls through to 1. None
+      // exist today; this keeps it so.
+      'no-throw-literal': 'error',
     },
   },
   {
