@@ -609,13 +609,17 @@ async function drainStdout() {
  * rewritten markers back through `installProfile`, so the loss stuck. `installProfile` is the
  * one reader of an install's axes; this takes its answer rather than growing a second one.
  *
+ * `notify` hears the one-line notice for an excluded skill since merged or retired, as
+ * `rebuild-all` prints it. `upgrade` reads it BEFORE the pull, so it reflects the pre-pull
+ * alias table: a skill merged by the very commits being pulled is not named until the next run.
+ *
  * Only the TAIL of the argv is kept: theme and emit are `upgrade`'s to decide (a theme argument
  * may override the marker), and `setupBuildArgs` opens with exactly those four tokens when it
  * is given no out and no root.
  */
-export async function installAxes(dir, { installProfile, setupBuildArgs }) {
+export async function installAxes(dir, { installProfile, setupBuildArgs }, notify = null) {
   if (!existsSync(path.join(String(dir), '.geneseed-emit'))) return [];
-  const p = installProfile('opencode', 'global', String(dir));
+  const p = installProfile('opencode', 'global', String(dir), notify);
   return setupBuildArgs('', 'files', null, null, p.footprint, p.posture, p.mode, p.doctrines,
     undefined, p.excludeRules, p.trust, p.excludeSkills).slice(4);
 }
@@ -704,7 +708,8 @@ export async function upgrade(ref = null, themeArg = null) {
   // `installAxes` for why the target's own axes must be carried into the rebuild.
   const [generate, { bounceDaemonIfRunning }] = await Promise.all([
     import('../build/generate.mjs'), import('../web/daemon.mjs')]);
-  const axes = await installAxes(emit === 'opencode-global' ? cfg : out, generate);
+  const axes = await installAxes(emit === 'opencode-global' ? cfg : out, generate,
+    (n) => log(`[upgrade] ${n}`));
 
   log(`[geneseed] fetching from origin (git: ${which('git') || 'git'}, `
     + `timeout: ${fetchTimeout()}s) ...`);

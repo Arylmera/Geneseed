@@ -39,7 +39,7 @@
   "DESC_COMMIT": "Load only what this run touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Go over a diff or PR — correctness first, finish after.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed route before a single wheel turns.",
-  "DESC_CODEBASE_DESIGN": "Build deep modules and the crew's own language for them — big behaviour packed behind a small handlebar at a seam placed on purpose, the glossary kept alive in GLOSSARY.md, an ADR logged for every call that's hard to undo.",
+  "DESC_CODEBASE_DESIGN": "Build deep modules and the crew's own language — big behaviour behind a small handlebar at a seam placed on purpose, a living GLOSSARY.md, an ADR for every call that's hard to undo.",
   "DESC_WAYFINDER": "Chart a run too big for one ride as a shared map of decision tickets, cleared one at a time until the road's open.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn the road, never to keep.",
   "DESC_ROAST_ME": "Tear into any work — blunt, exact, always actionable.",

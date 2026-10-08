@@ -930,6 +930,45 @@ ${out}`);
   });
 });
 
+// `migrate` replays the excluded skills like `rebuild-all` does, so it owes the same one-line
+// notice when a name it reads back has since been merged — on stderr, never stdout.
+test('migrate tells the owner when an excluded skill was merged', () => {
+  withDir((d) => {
+    const savedEnv = {};
+    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR', 'GENESEED_HOME']) {
+      savedEnv[v] = process.env[v];
+    }
+    // A fresh shim home: the test above leaves a `.migrated` stamp, and a stamped machine
+    // has nothing to migrate.
+    process.env.GENESEED_HOME = path.join(d, 'gs-home');
+    process.env.OPENCODE_CONFIG_DIR = path.join(d, 'oc-cfg');
+    process.env.BOB_CONFIG_DIR = path.join(d, 'bob-none');
+    process.env.OPENCLAUDE_CONFIG_DIR = path.join(d, 'openclaude-none');
+    try {
+      cliGlobalEmit('opencode-global', ['--exclude-skills', 'dependencies']);
+      const carrier = path.join(opencodeConfigDir(), 'AGENT.md');
+      const text = fs.readFileSync(carrier, 'utf8');
+      assert.ok(text.includes('Excluded skills: dependencies'), 'the emit wrote no marker');
+      // An install made before the merge: its marker still names the old skill.
+      fs.writeFileSync(carrier, text.replace('Excluded skills: dependencies', 'Excluded skills: deps-audit'));
+
+      const [rc, out, err] = capturedOut(() => cmdMigrate({}));
+
+      assert.equal(rc, 0, `migrate failed:
+${out}
+${err}`);
+      const notice = "'deps-audit' is now part of 'dependencies' — excluding 'dependencies'";
+      assert.ok(err.includes(notice), `migrate replayed the old name silently:
+${err}`);
+      assert.ok(!out.includes(notice), 'the notice went to stdout');
+    } finally {
+      for (const [v, val] of Object.entries(savedEnv)) {
+        if (val === undefined) delete process.env[v]; else process.env[v] = val;
+      }
+    }
+  });
+});
+
 test('rebuild-all rebuilds every active install, survives one failing, and creates none', () => {
   withDir((d) => {
     const savedEnv = {};
@@ -1157,7 +1196,8 @@ test('a Bob emit writes a folder skill\'s own directory where the skill names it
     const cfg = path.join(d, 'dotbob3');
     globalEmit('bob', path.join(d, 'bundle3'), cfg);
     const global = read(cfg, 'skills', 'token-report', 'SKILL.md');
-    assert.ok(global.includes(`node ${path.join(cfg, 'skills', 'token-report')}/scripts/`), global);
+    // `/`-separated even on Windows, like the `/scripts/` that follows it.
+    assert.ok(global.includes(`node ${path.join(cfg, 'skills', 'token-report').split(path.sep).join('/')}/scripts/`), global);
 
     const crepo = path.join(d, 'claudrepo3');
     fs.mkdirSync(crepo);

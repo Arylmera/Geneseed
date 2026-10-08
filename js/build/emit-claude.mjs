@@ -108,10 +108,11 @@ export function emitClaudeRender(cfg, job) {
   // Bob gives the model a skill's text but not its directory, so a folder skill's
   // `<this-skill-directory>` is resolved here. Per repo it is relative to the workspace root,
   // where Bob runs commands, so a committed `.bob/` stays valid on a teammate's checkout;
-  // globally there is no workspace to be relative to, so it is absolute.
+  // globally there is no workspace to be relative to, so it is absolute — and `/`-separated,
+  // like the `/<file>` a pointer appends, so one path never mixes both separators.
   const skillDirOf = !isBob ? null
     : scope === 'project' ? (name) => relPosix(path.dirname(cfgDir), path.join(cfgDir, 'skills', name))
-      : (name) => path.join(cfgDir, 'skills', name);
+      : (name) => path.join(cfgDir, 'skills', name).split(path.sep).join('/');
   // Bob's and OpenClaude's agents/skills use the Claude dialect verbatim.
   // `manifestExisted` is deliberately not passed: the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.

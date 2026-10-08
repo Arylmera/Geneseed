@@ -32,7 +32,8 @@
     { "query": "I did a hard reset and lost my last three commits, get them back", "should_trigger": true },
     { "query": "My rebase is half finished and the repo is a mess, help", "should_trigger": true },
     { "query": "Create a new branch for the payment feature", "should_trigger": false },
-    { "query": "Commit these changes", "should_trigger": false }
+    { "query": "Commit these changes", "should_trigger": false },
+    { "query": "When did the date parsing in invoice.ts start returning UTC? Find the commit that introduced it", "should_trigger": true }
   ],
   "loop": [
     { "query": "Run a bugfix loop on the date parser returning null for ISO weeks", "should_trigger": true },
@@ -97,5 +98,36 @@
     { "query": "Debate this: monorepo or multiple repos? Argue both sides", "should_trigger": true },
     { "query": "Migrate the users table to Postgres", "should_trigger": false },
     { "query": "List the pros of Postgres", "should_trigger": false }
+  ],
+  "brainstorm": [
+    { "query": "I want to add multi-tenant support to the billing service, help me design it before we code", "should_trigger": true },
+    { "query": "Grill me on this migration plan before I start", "should_trigger": true },
+    { "query": "Interview me about what the new export feature should do", "should_trigger": true },
+    { "query": "Rename the variable userId to accountId in auth.ts", "should_trigger": false }
+  ],
+  "dependencies": [
+    { "query": "Are our npm dependencies vulnerable or outdated? Audit them", "should_trigger": true },
+    { "query": "Upgrade Spring Boot from 2.7 to 3.2 in this project", "should_trigger": true },
+    { "query": "Add lodash as a dependency", "should_trigger": false },
+    { "query": "What does this package.json script do?", "should_trigger": false }
+  ],
+  "codebase-design": [
+    { "query": "Where should the seam go between the order service and the payment gateway so it is testable?", "should_trigger": true },
+    { "query": "Record the decision to use event sourcing for orders as an ADR", "should_trigger": true },
+    { "query": "Fix the null pointer in OrderService.java line 42", "should_trigger": false }
+  ],
+  "bruno": [
+    { "query": "Generate a Bruno collection from these OpenAPI routes", "should_trigger": true },
+    { "query": "Write Bruno tests asserting the status and response shape for the login request", "should_trigger": true },
+    { "query": "Write a Jest unit test for the login controller", "should_trigger": false }
+  ],
+  "document-project": [
+    { "query": "Write an architecture document and AGENTS.md for this repo from the code", "should_trigger": true },
+    { "query": "I just joined this repo, give me an orientation map of its structure in ARCHITECTURE.md", "should_trigger": true },
+    { "query": "Add a docstring to the parseDate function", "should_trigger": false }
+  ],
+  "plan": [
+    { "query": "Before you start this five-step refactor across the auth module, write a plan to a file", "should_trigger": true },
+    { "query": "Fix the typo in README line 3", "should_trigger": false }
   ]
 }

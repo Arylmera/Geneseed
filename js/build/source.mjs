@@ -243,9 +243,10 @@ export function knownRuleIds() {
  */
 export function knownSkillIds(src = SRC) {
   const dir = path.join(src, 'skills');
-  return readdirSync(dir, { withFileTypes: true })
+  // A Set: a skill with side files is both `debug.md` and `debug/`.
+  return [...new Set(readdirSync(dir, { withFileTypes: true })
     .filter((e) => !e.name.startsWith('_') && (e.isDirectory() || e.name.endsWith('.md')))
-    .map((e) => e.name.replace(/\.md$/, '')).sort();
+    .map((e) => e.name.replace(/\.md$/, '')))].sort();
 }
 
 /**

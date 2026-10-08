@@ -63,8 +63,9 @@ test('the default build writes no Excluded skills line and reads back as nothing
     quiet(() => build(makeCfg(), 'neutral', d));
     assert.ok(!agentText(d).includes('Excluded skills:'), 'a default build grew a marker line');
     assert.deepEqual(excludedSkillsOfDir(d), []);
-    assert.equal(fs.readdirSync(path.join(d, 'skills')).filter((n) => !n.startsWith('_')).length,
-      knownSkillIds().length, 'a default build lost a skill');
+    // Counted by stem: a skill with side files ships as both `debug.md` and `debug/`.
+    assert.equal(new Set(fs.readdirSync(path.join(d, 'skills')).filter((n) => !n.startsWith('_'))
+      .map((n) => n.replace(/\.md$/, ''))).size, knownSkillIds().length, 'a default build lost a skill');
   });
 });
 

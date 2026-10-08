@@ -28,7 +28,7 @@ import { jsonDumps, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { sourceReleaseVersion } from '../build/version.mjs';
 import { aliasesOf } from '../build/source.mjs';
-import { firstBlockquote, stripSkillBodyLinks, pushOverrideLines } from './native.mjs';
+import { firstBlockquote, stripSkillBodyLinks, pointSideFiles, pushOverrideLines } from './native.mjs';
 
 // Re-exported for `js/web/api.mjs` and the tests, which import it from here.
 export { sourceReleaseVersion };
@@ -297,7 +297,8 @@ export function writePrimaryAgent(cfg, agentsDir, overrides, claim = () => true)
 }
 
 /** `_build_emit._write_command_layer` — the opt-in /slash commands. */
-export function writeCommandLayer(cfg, items, commandDir, claim = () => true) {
+export function writeCommandLayer(cfg, items, commandDir, claim = () => true,
+  skillDirOf = (n) => path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/')) {
   if (!truthyEnv('GENESEED_COMMANDS')) return [];
   const byName = new Map();
   for (const { text, src } of items) {
@@ -319,7 +320,8 @@ export function writeCommandLayer(cfg, items, commandDir, claim = () => true) {
     const dest = path.join(commandDir, `${name}.md`);
     if (!claim(dest)) continue;
     const desc = firstBlockquote(text);
-    const body = stripSkillBodyLinks(text.replace(/^\n+/, ''));
+    // A command has no base directory, so a side-file pointer names the skill's own.
+    const body = stripSkillBodyLinks(pointSideFiles(text.replace(/^\n+/, ''), skill, skillDirOf(skill)));
     mkdirSync(path.dirname(dest), { recursive: true });
     writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${body}`);
     written.push(dest);
@@ -335,13 +337,15 @@ export function writeCommandLayer(cfg, items, commandDir, claim = () => true) {
  * that only works behind an opt-in is a name that broke. Read off the already-filtered
  * `items`, so excluding the target drops its aliases.
  */
-export function writeAliasCommands(cfg, items, commandDir, claim = () => true) {
+export function writeAliasCommands(cfg, items, commandDir, claim = () => true,
+  skillDirOf = (n) => path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/')) {
   const written = [];
   for (const { text, src } of items) {
     if (text === null) continue;
     const sp = path.relative(cfg.src, src).split(path.sep);
     if (sp.length !== 2 || sp[0] !== 'skills' || !sp[1].endsWith('.md') || sp[1].startsWith('_')) continue;
-    const body = stripSkillBodyLinks(text.replace(/^\n+/, ''));
+    const stem = sp[1].slice(0, -3);
+    const body = stripSkillBodyLinks(pointSideFiles(text.replace(/^\n+/, ''), stem, skillDirOf(stem)));
     for (const alias of aliasesOf(text)) {
       const dest = path.join(commandDir, `${alias}.md`);
       if (!claim(dest)) continue;

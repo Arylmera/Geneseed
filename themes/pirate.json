@@ -39,7 +39,7 @@
   "DESC_COMMIT": "Load only the cargo this run touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Inspect a diff or petition — correctness first, craft after.",
   "DESC_BRAINSTORM": "Turn a raw notion into an agreed course before any plank is cut.",
-  "DESC_CODEBASE_DESIGN": "Design deep modules and the crew's own tongue around them — a hold full o' behaviour behind one small hatch, the seam placed a'purpose, a living GLOSSARY.md, and an ADR logged for every call too costly to undo.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules and the crew's own tongue — a hold full o' behaviour behind one small hatch, the seam placed a'purpose, a living GLOSSARY.md, an ADR for every call past undoin'.",
   "DESC_WAYFINDER": "Chart a voyage too big for one watch as a shared map o' decision tickets, resolved one at a time till the way be clear.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn, never to keep in the hold.",
   "DESC_ROAST_ME": "Keelhaul any work — blunt, exact, and always actionable.",

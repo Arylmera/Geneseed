@@ -3,7 +3,7 @@
 > {{DESC_DEBUG}}
 <!-- aliases: ci-fix -->
 
-**Trigger:** a test fails, code crashes or prints a stack trace, or returns the wrong result — load this FIRST. Load it before reading code or investigating, not only before proposing a fix. Also when a CI run, pipeline job or pre-merge check is red ("CI is failing", "fix the build") — then start with the CI branch below.
+**Trigger:** a test fails, code crashes or prints a stack trace, or returns the wrong result — load this FIRST. Load it before reading code or investigating, not only before proposing a fix. Also when a CI run, pipeline job or pre-merge check is red ("CI is failing", "fix the build") — then start with the CI branch.
 
 **No fix without a root cause.** A change you cannot tie to a cause you understand is
 a guess — and a guess that happens to pass is worse than a failure, because it hides.
@@ -21,16 +21,9 @@ faster than thrashing; do not trade it away under pressure.
 
 **Diagnostic logging is scaffolding.** When you add logging to isolate a bug, use the project's real logger at a DEBUG level rather than scattered `print`/`console.log`, and **never log secrets, tokens, or PII** ({{LAW:sealed-secrets}}). Tag every probe with one unique prefix (`[DEBUG-a4f2]`) so cleanup is a single grep, and remove or downgrade each probe, `print`/`console.log`/`debugger` before the change ships ({{LAW:cure-the-cause}}).
 
-## CI branch — a red run
-Needs the CI log: the host's CI tool, `gh run view --log-failed` or equivalent, or the log pasted by the user.
-1. **Read the log, not the badge.** Find the first failing job and its first failing step. Read the error and the command that produced it in full ({{LAW:verify-before-asserting}}); note the runner's OS, toolchain versions and exact invocation.
-2. **Classify before touching anything:** a *real failure* (code or test wrong), an *environment difference* (a version, path, line endings, missing binary, a test skipped locally but not in CI), an *infra flake* (network, runner, cache, timeout), or a *gate on the report itself* (a coverage or count threshold, a lint the local hook skips).
-3. **Reproduce under CI's own conditions** — the workflow's script, flags and a matching toolchain. Green locally and red in CI has not reproduced yet: close the gap (the env var, `--frozen-lockfile`, the reporter, the binary not on PATH) until it fails the same way. Never retry a run blindly.
-4. **Fix at the cause** through steps 2–6 above. For an environment difference, make the *repo* deterministic (pin, normalise, declare) rather than CI more permissive. A flake is fixed at its source — the race, the timeout, the unpinned resource — or quarantined *with an issue and an owner*, never silently skipped ({{LAW:cure-the-cause}}). A fix to CI config itself is its own commit ({{LAW:one-intent-one-act}}), noted in the PR.
-5. **Prove it the way CI will:** run CI's command locally once more and read the output, push with the user's per-push consent ({{DOCTRINE:consent-before-push}}), and watch the re-run to green; the gate that reported it verifies the fix. Report what failed, its class, what changed, and the green run.
+**CI branch (a red run)** → read [debug/ci.md](debug/ci.md) and follow it.
 
 ## Done when
 - The failure is reproduced by a command that went red on it, root-caused, fixed at the cause, and that command passes with no new breakage; every tagged probe is gone.
-- For a red CI run: additionally, it was reproduced under CI's conditions and the same CI run was re-run and read green — no retry-until-green, no test quietly skipped.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

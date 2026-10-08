@@ -20,7 +20,7 @@ import { ENTITY_STATUSES } from './inventory.mjs';
 import { assessRepo } from './scorecard.mjs';
 import { badgeUrl, renderSvg } from './scorecard-svg.mjs';
 import { isDir, isFile, rglob, srcStems } from './scan.mjs';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 /**
  * `_harness_build._registry_keys` — every entity the registry must describe.
@@ -285,6 +285,41 @@ export function aliasProblems(src = SRC) {
     }
   }
   return problems;
+}
+
+/**
+ * A first-party skill's side files (`src/skills/<name>/<file>.md`, emitted beside its SKILL.md
+ * and read only when the body points at them) keep the one layout every writer assumes: a flat
+ * `<name>.md` owns the folder, files sit one level down, each is `.md` (rendered and themed),
+ * none is `SKILL.md` (the emit writes that one), and the spec links every one as
+ * `[…](<name>/<file>)` — an unlinked side file ships to every install and is never read.
+ * Vendored folders are exempt: they carry their own SKILL.md and their own layout.
+ */
+export function sideFileProblems(src = SRC) {
+  const problems = [];
+  const dir = path.join(src, 'skills');
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (!e.isDirectory() || e.name.startsWith('_') || VENDORED_SKILL_DIRS.has(e.name)) continue;
+    const name = e.name;
+    let spec;
+    try { spec = readText(path.join(dir, `${name}.md`)); } catch {
+      problems.push(`[authoring] skills/${name}/ has no skills/${name}.md — a side-file folder `
+        + 'belongs to a flat spec (or list a folder skill in VENDORED_SKILL_DIRS)');
+      continue;
+    }
+    for (const f of readdirSync(path.join(dir, name), { withFileTypes: true })) {
+      const where = `skills/${name}/${f.name}`;
+      if (!f.isFile() || !f.name.endsWith('.md')) {
+        problems.push(`[authoring] ${where} — a side file is a .md one level down`);
+      } else if (f.name === 'SKILL.md') {
+        problems.push(`[authoring] ${where} collides with the SKILL.md the emit writes`);
+      } else if (!spec.includes(`](${name}/${f.name})`) && !spec.includes(`](${name}/${f.name}#`)) {
+        problems.push(`[authoring] ${where} is not linked from skills/${name}.md — `
+          + `link it as [${name}/${f.name}](${name}/${f.name}) or delete it`);
+      }
+    }
+  }
+  return problems.sort();
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;

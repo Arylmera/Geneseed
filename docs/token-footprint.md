@@ -4,9 +4,9 @@ What a deployed harness costs in context-window tokens, per host. Token counts a
 chars/4 estimates and shift a little with theme and version.
 
 **Treat every number below as a floor, not a reading.** They were measured on
-2026-09-12 on a `--footprint lean` build (the default) of the neutral theme with
-four doctrine packs, 54 skills and 19 agents, and nothing re-measures this page
-automatically. For a
+2026-10-08 on a `--footprint lean` build (the default) of the neutral theme with
+the default doctrine packs, 47 skills (plus 12 alias stubs) and 18 agents, and nothing
+re-measures this page automatically. For a
 live figure on your own install, ask the agent for the `token-report` skill —
 that is what it is for. A `--footprint full` build runs roughly 5k tokens
 heavier on the root file.
@@ -17,21 +17,21 @@ The context every host injects at session start, before you type anything:
 
 | Component | Claude Code | OpenCode | Bob |
 |---|---|---|---|
-| Root instruction file | ~7.2k (`CLAUDE.md`) | ~7.2k (`AGENT.md`) | ~7.5k (`AGENTS.md`, §3 table inline) |
-| Skill metadata (name + description) | ~4.1k | ~4.1k | ~4.1k (native) |
-| Agent metadata | ~0.5k | ~0.5k | — (no agents directory) |
+| Root instruction file | ~7.7k (`CLAUDE.md`) | ~7.6k (`AGENT.md`) | ~8.0k (`AGENTS.md`, §3 table inline) |
+| Skill metadata (name + description) | ~3.0k | ~3.0k | ~3.0k (native) |
+| Agent metadata | ~1.0k | ~1.0k | — (in the root's §3 table) |
 | Session files (rules, profile, Memory/Notebook indexes, wiki) | 0 fresh, grows with use (SessionStart hook) | 0 fresh, grows with use (context plugin) | 0 fresh, grows with use (SessionStart hook) |
-| **Total** | **~12k** | **~12k** | **~12k** |
+| **Total** | **~12k** | **~12k** | **~11k** |
 
 The emits are at parity by design: ~12k tokens, about 6% of a 200k
-window. Bob catalogues skills natively but has no agents directory, so its
+window. Bob catalogues skills natively but not agents, so its
 root keeps the §3 Agents table and drops the §4 Skills table — the catalogue
 flag is per kind (`hostCatalogsNatively`), not one boolean. Before the 2026-09 footprint pass every hooked host paid roughly double
 this: the context hook re-injected the root file the host had already loaded
 natively, and skill descriptions ran to 900 characters each — see the
-"Where the tokens go" list below for what changed. Bob carries the §3/§4 catalogue tables inline because its host exposes
-no native skill/agent inventory; Claude Code and OpenCode ship a
-pointer to the host's own inventory instead, ~1.9k tokens lighter. A session file still
+"Where the tokens go" list below for what changed. Bob carries the §3 Agents table inline because its host exposes
+no native agent inventory; Claude Code and OpenCode ship a
+pointer to the host's own inventory instead, ~0.3k tokens lighter. A session file still
 byte-identical to its seed is skipped — it says nothing — so a fresh install injects none
 of them; until 2026-10 the hook read them from the repo root, where a Claude-shaped install
 never puts them, and none reached the session at all. The
@@ -85,15 +85,18 @@ until 2026-09 it did, and the whole harness was paid twice per session.
   "dispatched agents never commit or push"), and the folder-Skill list, which
   now sits in the §4 catalogue half and so drops wherever the host catalogues
   Skills natively.
-- **Skill bodies (~53k) and agent bodies (~10k) are lazy** on every host —
+- **Skill bodies (~54k) and agent bodies (~14k) are lazy** on every host —
   loaded only when invoked. A typical skill costs ≤3k per invocation; the
-  heaviest (`react-view-transitions`, ~17.5k with its reference files) loads
+  heaviest (`react-view-transitions`, ~20k with its reference files) loads
   its references progressively.
 - **User-only skills leave the catalogue.** A skill whose source carries
   `<!-- invocation: user -->` renders `disable-model-invocation: true`; Claude
   Code and Bob then drop its description from the always-on skill metadata and
   only `/name` opens it. The three teaching skills (`teach`, `quiz`, `learn-mode`)
   and `herdr` carry it today.
+- **Aliases cost 0 always-on.** A merged skill's old names (`<!-- aliases: -->`)
+  ship as user-only stubs on Claude Code, Bob and OpenClaude, and as `/name` commands
+  on OpenCode — never in the model's catalogue, so a rename or merge is free.
 - Plugin JavaScript (OpenCode, ~26k on disk) runs in the host runtime and
   never enters the context window.
 

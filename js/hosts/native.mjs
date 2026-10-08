@@ -254,6 +254,25 @@ export function stripSkillBodyLinks(body) {
   return body.replace(SKILL_BODY_LINK_RE, '$1');
 }
 
+/**
+ * A first-party skill's SIDE FILES (`src/skills/<stem>/<file>`, beside the flat spec) are
+ * linked from the spec as `[…](<stem>/<file>)` — the path that resolves in `src/` and in the
+ * flat bundle, where doctor's dead-link scan proves it. A native skill sits one level deeper
+ * (`skills/<stem>/SKILL.md`), and an alias or a command copies the body somewhere else again,
+ * so there the link becomes a code-span path under `dir`: the placeholder a host that
+ * announces the skill's base directory resolves, or the answer for one that does not.
+ *
+ * A link with an `#anchor` (which `sideFileProblems` accepts) gets the same pointer with the
+ * anchor DROPPED: the pointer is a path the agent hands to a file-read tool, and
+ * `deep.md#two` names no file. Left unmatched, `stripSkillBodyLinks` would reduce the link to
+ * its label and the agent would never learn where the file is.
+ */
+export function pointSideFiles(body, stem, dir) {
+  // A function, not a `$1` string: `dir` is a real path and may itself hold a `$`.
+  return body.replace(new RegExp(`\\[[^\\]]+\\]\\(${stem}/([^)\\s#]+)(?:#[^)\\s]*)?\\)`, 'g'),
+    (_m, f) => `\`${dir}/${f}\``);
+}
+
 /** `_build_emit._agent_color_map` — validated, always a valid OpenCode slot. */
 function agentColorMap(theme) {
   let raw = null;
@@ -480,8 +499,8 @@ export function claimer(oldOwned, cfg, manifestExisted = true) {
  * `<this-skill-directory>/…`; Claude Code resolves that because it announces each skill's
  * base directory on load, while on Bob the model got the text with a hole in it and went
  * hunting through the filesystem. With the option, every rendered `.md` of a vendored folder
- * has the placeholder replaced by the answer. Only vendored folders carry the placeholder — a
- * flat skill has no siblings to point at.
+ * has the placeholder replaced by the answer. A flat skill with side files points at them
+ * through the same option (`pointSideFiles`), placeholder when it is absent.
  *
  * `opts.claim` — a `claimer` closure the caller shares with its other writers; built from
  * `oldOwned`/`cfg`/`manifestExisted` when absent.
@@ -506,6 +525,8 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   let nAgents = 0;
   let nSkills = 0;
   const written = [];
+  const sideFiles = [];            // [stem, dest, text], written after the loop
+  const claimedSkills = new Set(); // stems whose own SKILL.md claim held
 
   const write = (dest, text) => {
     mkdirSync(path.dirname(dest), { recursive: true });
@@ -535,6 +556,15 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       continue;
     }
     if (text === null) continue;
+    // A first-party side file rides next to its skill's SKILL.md, read only when the body
+    // points the agent at it; not a skill, so not counted. `sideFileProblems` holds the
+    // layout (a flat spec beside it, one level, `.md`, linked from the body). Held until the
+    // loop ends: written only once its skill's own SKILL.md claim held (the alias rule), so a
+    // user's file at the target never gets a geneseed side file dropped beside it.
+    if (sparts.length === 3 && sparts[0] === 'skills') {
+      sideFiles.push([sparts[1], path.join(skillsDir, sparts[1], sparts[2]), text]);
+      continue;
+    }
     if (sparts.length !== 2 || !sparts[1].endsWith('.md')) continue;
     const [folder, fname] = sparts;
     const targetDir = { agents: agentsDir, skills: skillsDir }[folder];
@@ -573,27 +603,36 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       // model's catalogue as a duplicate; it gets a command instead (`writeAliasCommands`).
       fm = [`name: ${stem}`, `description: ${jsonDumps(skillDescription(text))}`];
       if (isUserInvokedOnly(text)) fm.push('disable-model-invocation: true');
-      body = stripSkillBodyLinks(body);
+      body = stripSkillBodyLinks(pointSideFiles(body, stem, skillDirOf ? skillDirOf(stem)
+        : SKILL_DIR_PLACEHOLDER));
       dest = path.join(skillsDir, stem, 'SKILL.md');
       kind = 'skill';
     }
     if (!claim(dest)) continue;
     write(dest, `---\n${fm.join('\n')}\n---\n\n${body}`);
+    if (kind === 'skill') claimedSkills.add(stem);
     // An old name keeps answering `/name`: user-only, so the model's catalogue lists the
     // skill once. Read off the already-filtered items, so excluding the target drops its
     // aliases; through `claim`, so manifest, prune and uninstall own them; not counted.
     // Only once the target's own claim held: a user's file at the target gets no alias
     // pointing at a skill this install never wrote.
     if (kind === 'skill' && host === 'claude') {
+      // The host announces the ALIAS's folder as the base directory, so a side-file pointer
+      // climbs back to the target's.
+      const aliasBody = skillDirOf ? body : stripSkillBodyLinks(
+        pointSideFiles(lstripNewlines(text), stem, `${SKILL_DIR_PLACEHOLDER}/../${stem}`));
       for (const alias of aliasesOf(text)) {
         const aliasDest = path.join(skillsDir, alias, 'SKILL.md');
         if (!claim(aliasDest)) continue;
         write(aliasDest, `---\nname: ${alias}\ndescription: ${jsonDumps(`Alias of ${stem}.`)}\n`
-          + `disable-model-invocation: true\n---\n\n${body}`);
+          + `disable-model-invocation: true\n---\n\n${aliasBody}`);
       }
     }
     if (kind === 'agent') nAgents += 1;
     else nSkills += 1;
+  }
+  for (const [stem, dest, text] of sideFiles) {
+    if (claimedSkills.has(stem) && claim(dest)) write(dest, stripSkillBodyLinks(text));
   }
   return { nAgents, nSkills, written };
 }

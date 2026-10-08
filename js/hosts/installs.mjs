@@ -420,7 +420,8 @@ const EXCLUDED_SKILLS_RE = /^Excluded skills:[ \t]*(.+?)[ \t]*$/m;
  * A name that only got OLDER is not unknown: an alias reads back as its target and a retired
  * name drops out (`resolveSkillNames`), so a skill merge does not quietly re-admit everything
  * else the install left out. Silent unless the caller passes `notify` — status, diff and the
- * console call this on every read; `rebuild-all` is the replay that passes it.
+ * console call this on every read; the replays that rebuild an install (`rebuild-all`,
+ * `upgrade`, `migrate`) pass it.
  */
 export function excludedSkillsOfDir(d, notify = null) {
   return firstCarrier(d, (carrierPath) => {
