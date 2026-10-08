@@ -159,8 +159,8 @@ const EAGER_ROOT = new Set([
   ".cursorrules", "README.md", "README.adoc", "CONTRIBUTING.md", "CONTRIBUTING.adoc",
   "user-rules.md", "PROFILE.md",
 ])
-// Project docs are Markdown or AsciiDoc (document-project writes AsciiDoc when a project has
-// none yet). Same set as js/hosts/hooks-context.mjs DOC_EXT.
+// Project docs are Markdown or AsciiDoc (document-project writes AsciiDoc when the user asks
+// for it). Same set as js/hosts/hooks-context.mjs DOC_EXT.
 const isDoc = (name) => /\.(md|adoc)$/i.test(name)
 // Doc trees walked recursively; everything found is lazy (listed, not injected).
 const LAZY_DIRS = ["docs", "doc", "documentation", "architecture", "adr", "ADR"]

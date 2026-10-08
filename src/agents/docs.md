@@ -26,7 +26,7 @@
 3. Keep examples runnable; update any example that the change broke.
 4. Write each page in the format it is already in — Markdown or AsciiDoc; never convert one.
    A new page follows the `Docs format:` line in the root `AGENTS.md`, else the format the
-   project's docs already use (only AsciiDoc when it has none yet). Agent-runtime files —
+   project's docs already use (Markdown when it has none yet; AsciiDoc only on request). Agent-runtime files —
    `AGENTS.md`, `CLAUDE.md`, specs, ADRs loops read — stay Markdown. In AsciiDoc, never add
    an `include::` to a page agents read.
 

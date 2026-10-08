@@ -12,18 +12,14 @@ write; with none, step 5 proposes them.
    `wiki/` folder at the project root, or a `context.json` pointer to one (the same
    convention [repo-map {{SKILL}}](repo-map.md) and the context loader use). Reuse the one
    that exists — never create a second. If none exists, create `docs/` at the root.
-2. **Pick the docs format** — Markdown or AsciiDoc, once per project. A `Docs format:
-   markdown|asciidoc` line in the root `AGENTS.md` decides; never re-decide it. Otherwise
-   look at the project's existing docs (the doc home and the root `README`), ignoring the
-   agent-runtime files below: only `.md` → Markdown; only `.adoc` → AsciiDoc; both → ask
-   the user; no docs yet → AsciiDoc. Record the result as that line under *Non-obvious
-   conventions* in `AGENTS.md`.
+2. **Pick the docs format** — Markdown unless the user asks for AsciiDoc, once per project.
+   A `Docs format: markdown|asciidoc` line in the root `AGENTS.md` decides; never re-decide
+   it. Otherwise: the user asked for AsciiDoc → AsciiDoc; the project's existing docs (the
+   doc home and the root `README`, ignoring the agent-runtime files below) are only `.adoc`
+   → AsciiDoc; anything else, no docs yet included → Markdown. Never propose AsciiDoc
+   unprompted. Record the result as that line under *Non-obvious conventions* in `AGENTS.md`.
    - **Agent-runtime files stay Markdown whatever the format:** `AGENTS.md`, `CLAUDE.md`,
      `SKILL.md`, and the specs and ADR files that loops read — the tools need them so.
-   - **In a Markdown project, propose — never impose — a switch to AsciiDoc** when the docs
-     would gain from it: complex tables, many diagrams, content reused across pages,
-     several versions, or PDF output. Say which need you saw, once; the user decides, and a
-     yes rewrites the recorded line.
    - **In AsciiDoc,** apply *AsciiDoc mode* below wherever this skill shows Markdown.
 3. **Interview first when the project has no docs yet** — before writing anything. The code
    gives the *what*; only the user gives the *why*. Ask one question at a time, offering

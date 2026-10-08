@@ -1074,7 +1074,7 @@ test("discovery drops the host's own native root, and only that one", () => {
 });
 
 test('discovery treats AsciiDoc docs exactly like markdown ones', () => {
-  // document-project writes AsciiDoc when a project has no docs yet, and GitHub renders a
+  // document-project writes AsciiDoc when the user asks for it, and GitHub renders a
   // README.adoc as the repo homepage — so every arm that finds a .md must find a .adoc:
   // README/CONTRIBUTING eager, other root docs, the doc trees and package READMEs lazy, and
   // node_modules still skipped. A .txt is not a doc and stays invisible.
