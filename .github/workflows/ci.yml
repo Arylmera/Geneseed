@@ -337,10 +337,13 @@ jobs:
       - run: npm ci
       - name: lint
         run: npm run lint
+      # Called directly, not through `npm run format:check` / `npm test`: the scorecard
+      # resolves npm scripts from the ROOT package.json only, so the web job's scripts read
+      # as missing. Same commands as web/package.json's `format:check` and `test`.
       - name: format check
-        run: npm run format:check
+        run: npx prettier --check "src/**/*.{js,jsx}"
       - name: unit tests
-        run: npm test
+        run: npx vitest run
       - name: production build
         run: npm run build
       - name: dist is fresh
