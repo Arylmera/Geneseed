@@ -128,7 +128,8 @@ const cost = (s) => s.length + (s.match(/\n/g) || []).length + 2;
 const SESSION_FILES = ['user-rules.md', 'PROFILE.md', 'memory/MEMORY.md', 'anamnesis/MEMORY.md',
   'notebook/NOTEBOOK.md', 'geneseed-wiki.jsonc'];
 // The wiki manifest's earlier name, read when the new one is absent (an install not yet re-emitted,
-// or a rename that failed). One release; `wiki.json`, older still, is the build's to rename.
+// or a rename that failed). Kept until a missed rename is reported somewhere (status), since
+// without it such an install loses its wiki in silence; `wiki.json`, older still, is the build's to rename.
 const LEGACY_WIKI = 'wiki.jsonc';
 // SHA-256 of each seed body in `js/build/stubs.mjs` (`SESSION_SEEDS`), CRLF folded. A file still
 // byte-identical to its seed says nothing, so it is skipped rather than injected as noise.
