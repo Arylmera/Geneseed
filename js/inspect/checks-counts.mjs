@@ -116,7 +116,7 @@ const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
  * badges, against `src/`.
  *
  * The tables must list EXACTLY the spec files (no dead row, no orphaned spec) and each
- * `agents`/`skills`/`laws`/`themes` badge must equal the real count. This is the
+ * `agents`/`skills`/`laws`/`doctrines`/`themes` badge must equal the real count. This is the
  * authoring-time guarantee that lets tables, badges and prose stay hand-written without
  * silently drifting from the source tree.
  */
@@ -151,7 +151,8 @@ export function countTableProblems() {
 
   // The numerals the laws RENDER with — positional, off the canon — because LAW_CLASS and the
   // console's LAW_META are keyed the way the rendered catalogue numbers them.
-  const lawRules = ruleCanon(SRC).rules.filter((r) => r.kind === 'LAW');
+  const canonRules = ruleCanon(SRC).rules;
+  const lawRules = canonRules.filter((r) => r.kind === 'LAW');
   const lawNums = lawRules.map((r) => r.label);
   for (const num of lawNums) {
     if (!has(LAW_CLASS, num)) {
@@ -179,6 +180,9 @@ export function countTableProblems() {
     agents: srcStems('agents').size,
     skills: shippedSkills.size,
     laws: lawNums.length,
+    // Every doctrine rule in every pack, opt-in ones included: the laws badge alone told a
+    // reader the harness has 9 rules. It rides the laws badge (`laws-9 + 28 doctrines`).
+    doctrines: canonRules.filter((r) => r.kind === 'DOCTRINE').length,
     themes: themeFiles().length,
     plugins: existsSync(PLUGIN_SRC)
       ? readdirSync(PLUGIN_SRC).filter((f) => f.startsWith('geneseed-') && f.endsWith('.js')).length
@@ -190,7 +194,8 @@ export function countTableProblems() {
   // same reason: `if (m && …)` is green when there is no badge, so deleting a badge silences its
   // own gate.
   for (const [key, n] of Object.entries(counts)) {
-    const m = new RegExp(`badge/${key}-(\\d+)`).exec(readme);
+    const m = (key === 'doctrines' ? /badge\/laws-\d+%20%2B%20(\d+)%20doctrines/
+      : new RegExp(`badge/${key}-(\\d+)`)).exec(readme);
     if (!m) {
       problems.push(`[authoring] README has no ${key} badge — deleting one is how this gate `
         + 'goes green while the reader is told nothing');
