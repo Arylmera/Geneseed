@@ -10,6 +10,11 @@ name: scorecard
 # full commit — a moving branch would change the score without a change here. Its detectors match
 # tool and file names, so Node-native checks this repo built itself (`node --test`,
 # `tests/mutate.mjs`, doctor's dead-link gate) read as missing; the score is a floor.
+#
+# It is also the PARITY GATE for `geneseed scorecard`, the JavaScript port: both tools score the
+# same tree and the job fails when any check's score differs. The port's parity was measured once,
+# by hand, on six trees; without this a detector edit on either side would drift in silence. This
+# is why the Python run stays here — it is the reference, not a duplicate.
 on:
   schedule:
     - cron: "43 4 * * 1" # Mondays 04:43 UTC, after mutate
@@ -28,5 +33,26 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/sc"
           "$RUNNER_TEMP/sc/bin/pip" install --quiet \
             "git+https://github.com/markmishaev76/ai-harness-scorecard@5536e96227dc8278301eaff3f4ca3faaf13cf278"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
       - name: assess
-        run: '"$RUNNER_TEMP/sc/bin/ai-harness-scorecard" assess . --format markdown >> "$GITHUB_STEP_SUMMARY"'
+        run: |
+          "$RUNNER_TEMP/sc/bin/ai-harness-scorecard" assess . --format markdown >> "$GITHUB_STEP_SUMMARY"
+          "$RUNNER_TEMP/sc/bin/ai-harness-scorecard" assess . --format json > "$RUNNER_TEMP/upstream.json"
+          node bin/geneseed-cli.mjs scorecard . --json > "$RUNNER_TEMP/geneseed.json"
+      - name: parity — the port scores every check as upstream does
+        run: |
+          node --input-type=module - "$RUNNER_TEMP/upstream.json" "$RUNNER_TEMP/geneseed.json" <<'EOF'
+          import { readFileSync } from 'node:fs';
+          const [py, js] = process.argv.slice(2).map((f) => JSON.parse(readFileSync(f, 'utf8')));
+          const flat = (a, id) => new Map(a.categories.flatMap((c) => c.checks).map((k) => [k[id], k.score]));
+          const want = flat(py, 'check_id');
+          const got = flat(js, 'id');
+          const diff = [...new Set([...want.keys(), ...got.keys()])]
+            .filter((id) => want.get(id) !== got.get(id))
+            .map((id) => `${id}: upstream ${want.get(id)} · geneseed ${got.get(id)}`);
+          console.log(diff.length ? `scorecard parity: ${diff.length} check(s) differ\n${diff.join('\n')}`
+            : `scorecard parity: all ${want.size} checks agree`);
+          process.exit(diff.length ? 1 : 0);
+          EOF
