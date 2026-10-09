@@ -3,7 +3,8 @@
 > {{DESC_REVIEW_RESPONSE}}
 
 **Trigger:** review feedback has arrived — from a human or another agent — and is about
-to be acted on.
+to be acted on; or the user wants a review criterion recorded ("add a review rule…",
+"reviews should always check…").
 
 ## Procedure
 1. Read every comment in full before changing anything. Group related comments.
@@ -17,9 +18,14 @@ to be acted on.
    [commit {{SKILL}}](commit.md) so {{DOCTRINE:consent-before-push}}'s per-commit consent holds — then
    re-run the checks ({{LAW:verify-before-asserting}}).
 6. Surface anything the review missed that you noticed while addressing it.
+7. Upgrade the review itself. A finding that recurs, a criterion the user asks for, or a
+   defect a review should have caught becomes a rule in the nearest `REVIEW.md` above the
+   files it governs — create it if missing. Show the exact lines and write them only on
+   the user's word. Rules for *criticising* go here, not into the root file the coder
+   loads every session.
 
 ## Done when
 - Every comment has a reasoned response and either an applied change or a justified
-  decline, and the resulting changes are verified.
+  decline, the resulting changes are verified, and any agreed review rule is in `REVIEW.md`.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

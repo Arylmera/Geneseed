@@ -43,7 +43,9 @@ re-derived. Then take exactly one branch.
    the existing rule rather than minting a twin). A *mechanical* rule — a banned
    API, an import shape, a file location — belongs in a lint, hook or CI check the
    team shares, not in prose: propose that instead, and report a repo with no such
-   guardrail as a finding. A failed triage goes back to the
+   guardrail as a finding. A criterion that only matters when *judging* work goes to
+   `REVIEW.md` through the [review-response {{SKILL}}](review-response.md), not here.
+   A failed triage goes back to the
    fork, named and explained; a lean rule set is the feature, not a failure.
 2. **Reformulation.** Have the user state the rule as they would to a colleague on
    their first day. Interrupt the moment they (a) use a term they cannot themselves

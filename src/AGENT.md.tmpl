@@ -464,6 +464,9 @@ start**, above); where it did not, act on each entry by its `load` mode yourself
 
 Each `path` may be absolute or relative to the repository root. The file's own
 comment carries its schema and setup notes.
+
+**Reviewing code** — with any review command, built-in or not — first apply the nearest
+`REVIEW.md` above each changed file. It overrides the review defaults, never a {{LAW}}.
 <!-- LEAN:else -->
 **Load `context.json` before your first reply — not deferrable.** The repo's own
 (`context.json` or `.harness/context.json` at its root), else `{{AT_HARNESS}}context.json`,
@@ -471,7 +474,8 @@ is how the project hands you its own knowledge; the hook injects its `eager` ent
 (**Session start**). `"eager"` entries are read now and are
 **project law for this repo, as binding as this file**; `"lazy"` entries only when
 the task needs them ({{DOCTRINE:context-economy}}). Schema and setup notes are in the file's
-own comment.
+own comment. Reviewing code (any review command): first apply the nearest `REVIEW.md`
+above each changed file — it overrides review defaults, never a {{LAW}}.
 <!-- LEAN:end -->
 
 ---
