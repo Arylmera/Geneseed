@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- The fallback to the old wiki manifest name (`wiki.jsonc`) stays for now, against the 3.18.0 note that it would go in the next release: nothing yet reports an install that missed the rename, so removing it could drop a wiki in silence.
+
 ## [3.19.0] — 2026-10-09
 
 ### Added

@@ -223,7 +223,8 @@ export function ensureContextStub(out) {
 
 /** The wiki manifest's name. `geneseed-` says who owns it in a shared `.claude/`/`.opencode/`. */
 export const WIKI_FILE = 'geneseed-wiki.jsonc';
-/** Its earlier names, newest first. Readers still fall back to them for one release. */
+/** Its earlier names, newest first. Readers still fall back to them, with no end date:
+ * nothing yet tells a user an install missed the rename, so dropping the fallback would lose a wiki in silence. */
 const LEGACY_WIKI_FILES = ['wiki.jsonc', 'wiki.json'];
 
 /**

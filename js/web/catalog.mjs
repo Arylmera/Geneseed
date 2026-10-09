@@ -185,7 +185,7 @@ export function notebookItems(state) {
 
 /**
  * The wiki manifest's names, current first. `wiki.jsonc` is the name before the `geneseed-`
- * prefix: the build renames it on the next emit, and until then it is still read — one release.
+ * prefix: the build renames it on the next emit, and until then it is still read (no end date; see `LEGACY_WIKI_FILES`).
  */
 const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc'];
 const WIKI_META = ['Wiki manifest', 'your machine-wide knowledge base(s)'];
