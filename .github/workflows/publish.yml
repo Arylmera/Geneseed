@@ -163,8 +163,9 @@ jobs:
       #
       # `npm ci` FIRST: the suite imports devDependencies (fast-check, since the property tests),
       # and a runner with no node_modules fails them with ERR_MODULE_NOT_FOUND — measured on the
-      # 3.18.0 dispatch, the same break mutate.yml had. It installs devDependencies only, which
-      # never reach the tarball (`node_modules/` is not in `files`).
+      # 3.18.0 dispatch, the same break the mutation workflow had (named in prose: this file may
+      # name no workflow file but its own). It installs devDependencies only, which never reach
+      # the tarball (`node_modules/` is not in `files`).
       - run: npm ci
       - name: unit tests
         shell: bash
