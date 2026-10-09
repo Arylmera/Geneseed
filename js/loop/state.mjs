@@ -291,8 +291,8 @@ function allowedEntries(graph, v) {
 // The repair ring an edge closes: the smallest non-iteration loop whose FIRST node is the edge's
 // target and which also holds its source (test -> apply is apply-test's repair, review -> apply
 // review-fix's). Its own counter makes `max` the number of repairs that ring may spend, even when
-// a wider ring sharing the node raises the node budget above it — `max: 1` is one repair, then
-// `exhaust`'s fresh attempt, then a stop (arXiv 2607.24604: a second revision lowers accuracy).
+// a wider ring sharing the node raises the node budget above it — `max: 2` is two repairs, then
+// `exhaust`'s fresh attempt, then a stop (arXiv 2607.24604: revisions past the first lower accuracy).
 // Its key lives in `counters`, so every reset of a unit resets it too.
 function repairRing(graph, from, to) {
   const iteration = iterationLoop(graph);
