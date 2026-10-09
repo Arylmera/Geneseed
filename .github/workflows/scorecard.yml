@@ -2,8 +2,9 @@ name: scorecard
 
 # THE AI HARNESS SCORECARD, WEEKLY AND ADVISORY. markmishaev76/ai-harness-scorecard grades a repo
 # on five pillars (docs, mechanical constraints, testing, review/drift, AI safeguards) with 31
-# deterministic checks and no LLM. It is a reading, not a gate: `assess` exits 0 whatever the
-# grade, nothing here blocks a merge, and the report lands in the run's summary.
+# deterministic checks and no LLM. The grade is a reading, not a gate: `assess` exits 0 whatever
+# the grade and the report lands in the run's summary. Only the parity step below can fail the
+# run, and a scheduled run blocks no merge.
 #
 # Its own workflow, not a `ci.yml` job: the tool is Python, and `ci.yml` proves the package runs
 # without Python (`package-no-python`). It is not on PyPI, so it installs from git, pinned to a
