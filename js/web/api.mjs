@@ -275,6 +275,7 @@ const RECENT_LIMIT = 8;
  * law files, so a per-rule mtime would be the file's, repeated — one wrong date on nine rows.
  */
 export function apiRecent(state) {
+  /** @type {Array<[string, string, () => any[]]>} */
   const sections = [
     ['memory', 'memory', () => memoryItems(state)],
     ['notebook', 'notebook', () => notebookItems(state)],
@@ -316,6 +317,7 @@ export function apiLoops(state) {
   const opts = { projectRoot: state.root };
   const catalog = loadCatalog(opts);
   const { bricks, templates, overridden } = catalog;
+  /** @type {(x: [string, any], y: [string, any]) => number} */
   const byName = ([a], [b]) => (a < b ? -1 : 1);
   return {
     templates: [...templates].sort(byName).map(([name, { origin, ...graph }]) => ({

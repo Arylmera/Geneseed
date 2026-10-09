@@ -66,9 +66,7 @@ function sysExit(msg) {
   // transport hole P5b measured. A second copy of a translation is exactly what P5d's
   // `pyStrPath`/`toPlatformPath` split was, and it is ungated in precisely the same way.
   printErr(`${msg}\n`);
-  const e = new Error(msg);
-  e.exitCode = 1;
-  throw e;
+  throw Object.assign(new Error(msg), { exitCode: 1 });
 }
 
 // --------------------------------------------------------------------------------------

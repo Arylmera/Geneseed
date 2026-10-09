@@ -321,9 +321,7 @@ export function parseArgs(argv, defaults) {
       // `main`'s catch is what turns either into this process's exit status. A bare
       // `process.exit(0)` here would be the P5f bug in reverse — it takes `rebuild-all`'s
       // loop with it, and skips the stdout flush the text was just written to.
-      const e = new Error('help');
-      e.exitCode = 0;
-      throw e;
+      throw Object.assign(new Error('help'), { exitCode: 0 });
     }
     if (tok.kind === 'option' && VALUED_BY_NAME[tok.name] !== undefined) {
       if (tok.value === undefined) die(2, `argument ${tok.rawName}: expected one argument`);
@@ -406,7 +404,5 @@ function choice(flag, value, allowed) {
  */
 export function die(code, msg) {
   process.stderr.write(`geneseed: error: ${msg}\n`);
-  const e = new Error(msg);
-  e.exitCode = code;
-  throw e;
+  throw Object.assign(new Error(msg), { exitCode: code });
 }

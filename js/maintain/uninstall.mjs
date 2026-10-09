@@ -155,6 +155,7 @@ function pruneAncestors(start, stop) {
  * `ownedWithin` first, the same containment boundary deactivate draws: the manifest is a file
  * on disk, and without it an `owned` entry of `../../.bashrc` was unlinked — and the prune
  * then climbed from ITS parent, which never meets `base`, removing empty directories as it went.
+ * @returns {[number, string[]]}
  */
 function unlinkOwned(base, owned, label = '') {
   let removed = 0;
@@ -758,9 +759,7 @@ export function cmdUninstall(args) {
  */
 function moveTree(src, dst) {
   if (existsSync(dst)) {
-    const e = new Error(String(dst));
-    e.code = 'EEXIST';
-    throw e;
+    throw Object.assign(new Error(String(dst)), { code: 'EEXIST' });
   }
   mkdirSync(path.dirname(dst), { recursive: true });
   renameSync(src, dst);

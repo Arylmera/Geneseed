@@ -1,0 +1,17 @@
+{
+  // Type-checks the shipped JavaScript (`npm run typecheck`, a blocking CI step). Nothing is
+  // emitted and nothing changes at run time: types come from inference plus JSDoc, and a fix is
+  // an annotation, never a rewrite into TypeScript. `strict` is OFF on purpose — on 2026-10-09
+  // `checkJs` reported 57 errors and `strict` 2 228; the 57 are fixed, strict is a later step.
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["js/**/*.mjs", "bin/*.mjs"]
+}

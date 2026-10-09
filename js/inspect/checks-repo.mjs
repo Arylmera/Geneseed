@@ -111,6 +111,7 @@ export function registryProblems() {
  *
  * `(?i)` becomes the `i` flag on the last one only, which is where the Python puts it.
  */
+/** @type {Array<[string, RegExp]>} */
 const SECRET_PATTERNS = [
   ['Anthropic API key', /sk-ant-[A-Za-z0-9_-]{20,}/],
   ['OpenAI-style API key', /\bsk-[A-Za-z0-9]{32,}/],
@@ -448,8 +449,9 @@ export function moduleMapProblems() {
  * Taken from `geneseed scorecard` on main after #209-#213 (security policy, PR template, ARCHITECTURE
  * and ADRs, the audit and commitlint jobs, Dependabot, coverage, property tests, fuzzing): 26 of 31,
  * 81.2/100, matching upstream's Python tool check for check. Then the weekly Stryker run and the
- * offline link check added mutation_testing and stale_doc_detection: 28 of 31, 88.7 (A). Grouped by
- * pillar, in upstream order.
+ * offline link check added mutation_testing and stale_doc_detection: 28 of 31, 88.7 (A); the checkJs
+ * pass added type_safety (partial: `strict` is off): 29 of 31, 90.4. Grouped by pillar, in upstream
+ * order.
  * The ratchet is on `passed`, which upstream sets for any score above zero: `test_suite_exists`
  * and `error_handling_policy` pass at 1.5 of 3, and a full check sliding to a partial one is
  * invisible here. A check this repo starts to pass is added by hand; one it stops passing is a
@@ -462,6 +464,7 @@ export const SCORECARD_FLOOR = [
   'module_boundary_docs',
   'ci_pipeline_exists',
   'linter_enforcement',
+  'type_safety',
   'dependency_auditing',
   'conventional_commits',
   'unsafe_code_policy',

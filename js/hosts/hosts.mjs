@@ -128,9 +128,7 @@ export function expanduser(p) {
       + "ntpath/posixpath would guess a home directory for 'user' — this port does not); "
       + 'pass an absolute path, or "~" / "~/…" for your own home directory';
     printErr(`${msg}\n`);
-    const e = new Error(msg);
-    e.exitCode = 1;
-    throw e;
+    throw Object.assign(new Error(msg), { exitCode: 1 });
   }
   return p;
 }

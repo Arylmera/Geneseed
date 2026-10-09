@@ -131,9 +131,7 @@ export function loadTheme(cfg, name) {
     // marker — an unvalidated file in a user's install. A bare `throw` there printed a Node
     // stack trace where Python printed one line, and the acceptance matrix is what said so.
     process.stderr.write(`[geneseed] unknown theme '${name}'. available: ${available}\n`);
-    const e = new Error(`unknown theme '${name}'`);
-    e.exitCode = 1;
-    throw e;
+    throw Object.assign(new Error(`unknown theme '${name}'`), { exitCode: 1 });
   }
   // parseJson, not JSON.parse: one rule for every JSON the generator reads, so a numeric
   // theme value keeps the int/float distinction Python's `str()` and `repr()` render
@@ -247,7 +245,17 @@ function readSource(cfg, p) {
   return text;
 }
 
-/** `_build_render.render_file`. */
+/**
+ * `_build_render.render_file`.
+ *
+ * @param {any} cfg
+ * @param {string} filePath
+ * @param {any} theme
+ * @param {string} [footprint]
+ * @param {string} [lawsPrefix]
+ * @param {Set<string>} [visiting]
+ * @param {boolean | { skills?: boolean, agents?: boolean }} [nativeCatalog]
+ */
 export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix = '',
                            visiting = new Set(), nativeCatalog = false) {
   const here = path.resolve(filePath);
@@ -309,19 +317,15 @@ function activeDoctrines(cfg) {
     : [];
   const stray = onDisk.filter((n) => !PACK_ORDER.includes(n));
   if (stray.length) {
-    const e = new Error(`doctrine pack file(s) ${stray.join(', ')} exist under src/doctrines/ `
+    throw Object.assign(new Error(`doctrine pack file(s) ${stray.join(', ')} exist under src/doctrines/ `
       + 'but are missing from PACK_ORDER (js/build/source.mjs) — add them there, or they render '
-      + 'into no install at all');
-    e.exitCode = 1;
-    throw e;
+      + 'into no install at all'), { exitCode: 1 });
   }
   const wanted = cfg.doctrines ?? PACK_ORDER;
   for (const name of wanted) {
     if (!onDisk.includes(name)) {
-      const e = new Error(`doctrine pack '${name}' is selected but src/doctrines/${name}.md `
-        + `does not exist (packs on disk: ${onDisk.join(', ') || 'none'})`);
-      e.exitCode = 1;
-      throw e;
+      throw Object.assign(new Error(`doctrine pack '${name}' is selected but src/doctrines/${name}.md `
+        + `does not exist (packs on disk: ${onDisk.join(', ') || 'none'})`), { exitCode: 1 });
     }
   }
   // ⚠ A PACK WHOSE EVERY RULE IS EXCLUDED IS NOT A PACK, it is a heading over nothing. The
@@ -480,6 +484,9 @@ export function destRel(rel) {
  * themed POSIX output path, `text` is the rendered text or `null` for a binary that the
  * caller copies from `src`. Python returns a tuple of tuples; the object form is the
  * same data with the field names the Python docstring already uses.
+ * @param {any} cfg
+ * @param {string} themeName
+ * @param {{ footprint?: string, lawsPrefix?: string, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
  */
 export function renderAll(cfg, themeName, {
   footprint = 'full', lawsPrefix = '', nativeCatalog = false,

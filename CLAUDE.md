@@ -23,7 +23,11 @@ There is no `npm test`. Run these by hand.
 
 ```bash
 npm run lint
+npm run typecheck
 ```
+
+`typecheck` is `tsc --noEmit` with `checkJs` over `js/` and `bin/`: nothing is emitted, a fix is a
+JSDoc annotation, and `strict` is off (`tsconfig.json` says why).
 
 ```bash
 node --test --test-reporter=tap "tests/**/*.test.mjs"

@@ -65,9 +65,7 @@ export function assertSourceComplete(cfg, context = '') {
     + 'and a global re-emit would delete the good copies in an existing install.\n'
     + '[geneseed] ✗ Re-sync the source (./geneseed update, or re-run the upgrade) '
     + 'and try again.\n');
-  const e = new Error('source is incomplete');
-  e.exitCode = 1;
-  throw e;
+  throw Object.assign(new Error('source is incomplete'), { exitCode: 1 });
 }
 
 // ---------------------------------------------------------------------------

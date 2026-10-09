@@ -103,11 +103,11 @@ export function cmdMenu() {
 }
 
 /** `cmd_home` — the default for a bare `geneseed`. */
-export async function cmdHome(args) {
+export async function cmdHome(_args) {
   if (webFirstOk()) {
     printOut('[geneseed] opening the web console — `geneseed menu` for the terminal UI, '
       + 'GENESEED_NO_WEB=1 to disable.\n');
     return startDaemon(null, 4747, true);
   }
-  return cmdMenu(args);
+  return cmdMenu();
 }

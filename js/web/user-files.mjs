@@ -107,6 +107,7 @@ function parseRuleMeta(line) {
  * Every rule carries its `start`/`end` LINE INDICES, which is what lets `apiRulesMutate`
  * splice exactly one block and leave every other byte of the user's file — prose,
  * formatting, hand-written sections — untouched.
+ * @returns {[Array<{id: number, start: number, end: number} & Record<string, any>>, string[]]}
  */
 export function parseRules(text) {
   const lines = splitLines(text);
