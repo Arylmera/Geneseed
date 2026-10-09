@@ -450,10 +450,11 @@ export function moduleMapProblems() {
  * and ADRs, the audit and commitlint jobs, Dependabot, coverage, property tests, fuzzing): 26 of 31,
  * 81.2/100, matching upstream's Python tool check for check. Then the weekly Stryker run and the
  * offline link check added mutation_testing and stale_doc_detection: 28 of 31, 88.7 (A); the checkJs
- * pass added type_safety (partial: `strict` is off): 29 of 31, 90.4. Grouped by pillar, in upstream
- * order.
- * The ratchet is on `passed`, which upstream sets for any score above zero: `test_suite_exists`
- * and `error_handling_policy` pass at 1.5 of 3, and a full check sliding to a partial one is
+ * pass added type_safety (partial: `strict` is off): 29 of 31, 90.4; calling the web job's prettier and vitest
+ * directly (the scorecard reads only the root package.json's scripts) added formatter_enforcement
+ * and lifted test_suite_exists to 3 of 3: 30 of 31, 95.3. Grouped by pillar, in upstream order.
+ * The ratchet is on `passed`, which upstream sets for any score above zero: `type_safety`
+ * passes at 1.5 of 3, and a full check sliding to a partial one is
  * invisible here. A check this repo starts to pass is added by hand; one it stops passing is a
  * doctor problem until fixed or deliberately removed from this list, in the same commit.
  */
@@ -464,6 +465,7 @@ export const SCORECARD_FLOOR = [
   'module_boundary_docs',
   'ci_pipeline_exists',
   'linter_enforcement',
+  'formatter_enforcement',
   'type_safety',
   'dependency_auditing',
   'conventional_commits',

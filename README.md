@@ -6,7 +6,7 @@
 
 [![npm](https://img.shields.io/npm/v/geneseed?color=cb3837&logo=npm)](https://www.npmjs.com/package/geneseed)
 [![CI](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml/badge.svg)](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml)
-[![AI Harness Scorecard](https://img.shields.io/badge/AI%20Harness%20Scorecard-A%2090.4%2F100-brightgreen)](#ai-harness-scorecard)
+[![AI Harness Scorecard](https://img.shields.io/badge/AI%20Harness%20Scorecard-A%2095.3%2F100-brightgreen)](#ai-harness-scorecard)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node >= 22.3](https://img.shields.io/badge/node-%3E%3D22.3-5fa04e)](package.json)
 [![zero dependencies](https://img.shields.io/badge/deps-zero-success)](package.json)
