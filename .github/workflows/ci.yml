@@ -57,6 +57,11 @@ jobs:
       - run: npm ci
       - name: lint
         run: npm run lint
+      # TYPES, FROM INFERENCE AND JSDoc. `tsc --noEmit` over js/ and bin/ with `checkJs`
+      # (tsconfig.json says why strict is off). A wrong call shape, a missing property, an
+      # argument a function does not take — the class of slip a reader cannot check by eye.
+      - name: typecheck
+        run: npm run typecheck
       # ON BOTH OPERATING SYSTEMS, which is stronger than the gate this replaces: the same
       # sweep used to run here from the reference and, bare, from a Linux-only cell job.
       # The one Node test that drives `doctor --all` out of the checkout root is skipped when

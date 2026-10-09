@@ -31,7 +31,7 @@ const ROOT = pathResolve(import.meta.dirname, '..', '..');
 export function codeStamp(root = ROOT) {
   const read = (rel) => { try { return readFileSync(join(root, rel)); } catch { return ''; } };
   let version = 'unknown';
-  try { version = JSON.parse(read('package.json')).version ?? version; } catch { /* unknown */ }
+  try { version = JSON.parse(String(read('package.json'))).version ?? version; } catch { /* unknown */ }
   const html = createHash('sha256').update(read(join('web', 'dist', 'index.html'))).digest('hex');
   return `${version}:${html.slice(0, 12)}`;
 }
@@ -161,6 +161,7 @@ export const none = (v) => (v === undefined || v === null ? 'None' : String(v));
  */
 function spawnDetached(webArgs, log) {
   const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web', ...webArgs];
+  /** @type {'ignore' | number} */
   let out = 'ignore';
   try {
     out = openSync(log, 'a');

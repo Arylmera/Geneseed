@@ -144,9 +144,7 @@ export function syncThemes(themesDir = THEMES) {
   } catch {
     process.stdout.write(`[sync-themes] ${path.basename(tmplPath)} is missing or unreadable `
       + '— there is nothing to sync against.\n');
-    const e = new Error('template unreadable');
-    e.exitCode = 2;
-    throw e;
+    throw Object.assign(new Error('template unreadable'), { exitCode: 2 });
   }
   const tmplKeys = Object.keys(tmpl);
   let changed = 0;

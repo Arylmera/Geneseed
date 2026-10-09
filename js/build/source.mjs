@@ -89,6 +89,7 @@ export const RETIRED_RULE_IDS = {
   'absence-is-a-claim': { was: 'Law XI', liveAs: null, note: 'folded into verify-before-asserting' },
 };
 
+/** @type {Array<[number, string]>} */
 const ROMAN = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
   [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
 export function toRoman(n) {
@@ -194,7 +195,7 @@ export function discoverNames(dir, first) {
       .map((f) => path.basename(f, '.md'))
       .sort();
   } catch { /* missing dir — fall through to the single default below */ }
-  names.sort((a, b) => (a !== first) - (b !== first) || (a < b ? -1 : a > b ? 1 : 0));
+  names.sort((a, b) => Number(a !== first) - Number(b !== first) || (a < b ? -1 : a > b ? 1 : 0));
   return names.length ? names : [first];
 }
 

@@ -38,7 +38,7 @@ class JsonNumber {
    * Python would have \u2014 NOT the original literal, because `json.dumps(json.loads('1.50'))`
    * is `1.5`: Python re-formats through repr rather than echoing the source.
    */
-  toJSON() { return JSON.rawJSON(formatValue(this)); }
+  toJSON() { return /** @type {any} */ (JSON).rawJSON(formatValue(this)); }
 }
 
 /**

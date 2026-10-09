@@ -277,7 +277,7 @@ export function ensureAgentOverridesStub(cfg, base) {
  * `command/commit.md` without the check made uninstall delete it. Default: claim everything,
  * for a caller with no manifest to consult.
  */
-export function writePrimaryAgent(cfg, agentsDir, overrides, claim = () => true) {
+export function writePrimaryAgent(cfg, agentsDir, overrides, claim = (_dest) => true) {
   if (!truthyEnv('GENESEED_PRIMARY') || !existsSync(cfg.primaryAgentSrc)
       || !statSync(cfg.primaryAgentSrc).isFile()) {
     return null;
@@ -297,7 +297,7 @@ export function writePrimaryAgent(cfg, agentsDir, overrides, claim = () => true)
 }
 
 /** `_build_emit._write_command_layer` — the opt-in /slash commands. */
-export function writeCommandLayer(cfg, items, commandDir, claim = () => true,
+export function writeCommandLayer(cfg, items, commandDir, claim = (_dest) => true,
   skillDirOf = (n) => path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/')) {
   if (!truthyEnv('GENESEED_COMMANDS')) return [];
   const byName = new Map();
@@ -337,7 +337,7 @@ export function writeCommandLayer(cfg, items, commandDir, claim = () => true,
  * that only works behind an opt-in is a name that broke. Read off the already-filtered
  * `items`, so excluding the target drops its aliases.
  */
-export function writeAliasCommands(cfg, items, commandDir, claim = () => true,
+export function writeAliasCommands(cfg, items, commandDir, claim = (_dest) => true,
   skillDirOf = (n) => path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/')) {
   const written = [];
   for (const { text, src } of items) {
@@ -358,7 +358,7 @@ export function writeAliasCommands(cfg, items, commandDir, claim = () => true,
 }
 
 /** `_build_emit._write_ponytail_command` — registered UNCONDITIONALLY; null when the user's. */
-export function writePonytailCommand(commandDir, claim = () => true) {
+export function writePonytailCommand(commandDir, claim = (_dest) => true) {
   const dest = path.join(commandDir, 'ponytail.md');
   if (!claim(dest)) return null;
   mkdirSync(path.dirname(dest), { recursive: true });

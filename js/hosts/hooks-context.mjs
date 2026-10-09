@@ -262,6 +262,7 @@ export function discoverContext(root, host = HOST) {
  *
  * `recs` is a Map, not an object: JS reorders integer-like keys on a plain object, and
  * these keys are absolute paths whose iteration order becomes the printed order.
+ * @returns {[Array<{path: string, description: string}>, Array<{path: string, description: string}>, string]}
  */
 export function resolveContextSets(root, hookRoot = null) {
   let manifest = null;

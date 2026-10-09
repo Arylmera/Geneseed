@@ -165,6 +165,7 @@ const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', ...LAW_IV_BASH];
  * caller warns on it. This is the one branch where the boundary can end up with NO Geneseed
  * gate at all while the constitution states the rule — the unsafe direction — so it must not
  * also be the silent one.
+ * @returns {[boolean, string[], string | null]}
  */
 function reconcileOpencodePermission(perm, want) {
   // A `permission` that is not an object, or whose `bash` is not one — OpenCode also accepts a

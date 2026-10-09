@@ -41,6 +41,7 @@ import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote }
  * `NotFound` is caught once, in `handler`, not per route — repeating the catch here would
  * only duplicate it.
  */
+/** @type {Map<string, [(state: any, body: any) => any, boolean]>} */
 export const POST_ROUTES = new Map([
   ['/api/mcp', [apiMcpToggle, true]],
   ['/api/install', [apiInstallToggle, true]],
@@ -117,6 +118,7 @@ export function readJsonBody(buf) {
  * `percentDecode` and not `decodeURIComponent`: the JS builtin throws a `URIError` on a `%`
  * that is not an escape, where this shell instead answers a 404 naming the literal text.
  */
+/** @type {Array<[string, (state: any, path: string) => any]>} */
 export const PREFIX_ROUTES = [
   ['/api/catalog/', (state, p) => apiCatalog(state, p.split('/').pop())],
   // /api/item/<type>/<name> — TYPE has no slash, the NAME keeps its slashes so a wiki

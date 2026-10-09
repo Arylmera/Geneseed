@@ -270,6 +270,7 @@ export function killTree(child) {
  * `tests/unit/update_git.test.mjs` runs it over a recorded fetch transcript instead.
  *
  * Returns `[linesToLog, lastPhase]`, splitting the reference's loop from its side effects.
+ * @returns {[string[], string]}
  */
 export function fetchPhases(rawLines, last = '') {
   const out = [];
@@ -926,6 +927,7 @@ async function bootstrapPlain() {
   // deployed harness's local edits are overwritten by the rebuild with nothing recorded.
   // Caught by `bootstrap/an-improvements-file-the-step-exported-is-re-announced-afterwards`,
   // which was written for `_flush_export_notes` and found this instead.
+  /** @type {Array<[string, string[], () => Promise<number>]>} */
   const steps = [['Update & rebuild', updateStepCmd('upgrade'),
     () => cmdUpgrade({ ref: null, theme: null })]];
   let failed = false;

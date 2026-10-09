@@ -215,6 +215,7 @@ function shimIsLive(p) {
  * The fallback is strictly no worse than the old behaviour and far better than emitting
  * commands naming a shim that does not exist — those fail on every hook (9009 under
  * cmd.exe, 127 under sh) and take both gates down with them.
+ * @param {{ runner?: string, entry?: string, platform?: NodeJS.Platform }} [opts]
  */
 export function hookPrefix({ runner, entry, platform = process.platform } = {}) {
   // NOT a default. `runner`/`entry` have no computable fallback on this side — this process's

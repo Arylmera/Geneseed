@@ -518,7 +518,7 @@ export function claimer(oldOwned, cfg, manifestExisted = true) {
  */
 export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, {
   host = 'opencode', oldOwned = null, cfg = null, manifestExisted = true,
-  theme = null, src, skillDirOf = null, claim = claimer(oldOwned, cfg, manifestExisted),
+  theme = null, src = undefined, skillDirOf = null, claim = claimer(oldOwned, cfg, manifestExisted),
 } = {}) {
   const ov = overrides || {};
   if (host === 'claude') warnClaudeIgnored(ov);

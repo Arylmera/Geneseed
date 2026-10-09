@@ -154,7 +154,7 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
     srv.listen(port, '127.0.0.1', () => ready());
 
     function ready() {
-      const hostPort = srv.address().port;
+      const hostPort = /** @type {import('node:net').AddressInfo} */ (srv.address()).port;
       const url = `http://127.0.0.1:${hostPort}`;
       if (daemon) {
         writeDaemon(state.target, {

@@ -279,6 +279,7 @@ export function mark(kind) {
  * — the order they are read in, the order AGENT.md renders them, and the order the console's
  * three bands appear in. `Rule` and `Doctrine` are hardcoded English here, as `Rule` already
  * was: this function receives an inventory, not a theme's nouns.
+ * @returns {any[][]}
  */
 export function tuiEntries(inv) {
   const rows = [['head', `AGENTS (${inv.agents.length})`, null]];
