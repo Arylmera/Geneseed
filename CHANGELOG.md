@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- A Claude Code plugin marketplace: `/plugin marketplace add Arylmera/Geneseed`, then `/plugin install geneseed@geneseed`. The plugin carries one skill, `/geneseed:setup`, which asks for scope and theme and runs the published CLI (`npm install -g geneseed`, `geneseed build --emit claude-global` or `--emit claude`). It carries no harness of its own, so nothing in it can drift from the build.
+
 ## [3.20.0] — 2026-10-09
 
 ### Changed

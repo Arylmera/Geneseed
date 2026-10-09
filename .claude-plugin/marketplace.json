@@ -1,0 +1,15 @@
+{
+  "name": "geneseed",
+  "description": "Geneseed: a harness of laws, agents, skills and memory for coding agents, enforced by hooks.",
+  "owner": {
+    "name": "Guillaume Lemer",
+    "url": "https://github.com/Arylmera"
+  },
+  "plugins": [
+    {
+      "name": "geneseed",
+      "source": "./plugin",
+      "description": "Installs the Geneseed harness into Claude Code, for every repo or for this one."
+    }
+  ]
+}

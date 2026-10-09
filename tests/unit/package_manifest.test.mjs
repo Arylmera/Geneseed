@@ -375,6 +375,10 @@ const WITHHELD = [
     + 'never runs commitlint'],
   ['SECURITY.md','the vulnerability-reporting policy GitHub shows on the repository page; it '
     + 'is about reporting against THIS repository, which an install has no use for'],
+  ['.claude-plugin/', 'the Claude Code marketplace manifest; `/plugin marketplace add` reads it from '
+    + 'the GitHub repository, never from an npm install'],
+  ['plugin/', 'the Claude Code plugin that marketplace installs from the repository; it only runs '
+    + 'the published CLI, which an npm install already is'],
   ['CONTRIBUTING.md', 'the GitHub-side pointer at README §Contributing and docs/extending.md; an '
     + 'install never needs it and the README already carries the substance'],
   ['docs/assets/', 'README media (the animated terminal demo). `docs/*.md` ships the prose; the '
