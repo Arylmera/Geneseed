@@ -8,8 +8,22 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.19.0] — 2026-10-09
+
 ### Added
 - Doctrine comms 3, Declare the Judgment Calls: after non-trivial work the agent lists the choices it made alone where a reasonable alternative existed, with the alternative set aside and whether it is cheaply reversible, riskiest first (data, security, production, public interfaces). Only genuine forks count, trivial work owes an empty list, and it never covers a call Echo the Intent says to ask about first. Reviewers read where the agent guessed instead of everything, or nothing. The idea is Victor Rentea's (Devoxx BE 2026, "Responsibly Dimming the Lights in the Software Factory"). It is in the toggleable comms pack, not a law, per DESIGN.md Decision 7; the full-footprint size ceiling rises by 205 characters for it. `explain-changes` now lists these calls among its risks.
+- Reviews apply the nearest `REVIEW.md`: a repo states how its code is judged in a file read only at review time, so the coding context stays lean. The file closest to each changed file wins (folder, then root, then `CODING_STANDARDS.md` / `CONTRIBUTING.md`, then Geneseed's defaults, format included), and it never lifts a law. `geneseed-code-review` and the reviewer agent load it, `ship` runs a review before opening a pull request and stops on a blocking finding, and `review-response` is the only skill that writes it, on your word. One sentence in the always-on core makes host built-in reviews apply it too.
+- `geneseed-code-review` flags architecture drift: when `docs/architecture.md` draws C4 and a diff adds, removes or rewires a container without touching the diagram, it raises a non-blocking issue pointing at `document-project`.
+
+### Changed
+- `roast-me` now attacks your own ask, plan, idea or writing, premise first, and no longer critiques code. Code and diffs, "roast my code" included, go to `geneseed-code-review`, which keeps its findings unsoftened when asked to roast.
+- `daydream` and `react-view-transitions` are user-only: they answer `/daydream` and `/react-view-transitions`, but the agent no longer starts them on its own and their descriptions leave the always-on list.
+- `parallel-agents` and `pipeline` name their boundary: independent units side by side versus a relay in one worktree where each agent builds on the previous one's output.
+
+### Repository
+Not in the package; how Geneseed itself is built and checked.
+- The weekly scorecard run also scores the tree with `geneseed scorecard` and fails when any check differs from the upstream Python tool, so the port cannot drift in silence. The web CI job calls prettier and vitest directly, which the scorecard can see (95.3, 30 of 31 checks).
+- README: the scorecard card sits above "Why Geneseed", the badge takes the upstream look, and the laws badge also counts doctrine rules.
 
 ## [3.18.0] — 2026-10-09
 
