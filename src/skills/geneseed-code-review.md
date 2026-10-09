@@ -2,7 +2,7 @@
 
 > {{DESC_CODE_REVIEW}}
 
-**Trigger:** reviewing changes before merge, or the user asks for a review.
+**Trigger:** reviewing changes before merge, or the user asks for a review — including "roast my code": same passes, findings unsoftened. Critiquing the user's own ask or plan is [roast-me](roast-me.md).
 
 ## Procedure
 1. Pin the diff: `git diff <base>...HEAD` for committed work, `git diff <base>`

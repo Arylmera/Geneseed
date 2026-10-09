@@ -42,7 +42,7 @@
   "DESC_CODEBASE_DESIGN": "Design deep modules and the glossary that names them — heavy behaviour behind a narrow interface at a seam placed by design, a living GLOSSARY.md, an ADR per hard-to-reverse decision.",
   "DESC_WAYFINDER": "Chart a mission too large for one session as a shared map of decision tickets, resolved one at a time until the route is clear.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn, never to field.",
-  "DESC_ROAST_ME": "Adversarial AAR on any artifact — blunt, specific, always actionable.",
+  "DESC_ROAST_ME": "Adversarial AAR on the user's own ask, plan or idea, not code — blunt, specific, always actionable.",
   "DESC_FRESH_EYES": "Task a clean-slate inspector briefed only on the original objective and the delivered work; it sets the pass criteria blind, then rules mission-met or not — uncontaminated by the operator's own confidence.",
   "ROAST_PERSONA": "a hard-nosed drill instructor who has watched this exact mistake get people killed",
   "DESC_COUNCIL": "Convene a panel of opposing positions to war-game a decision, then deliver a verdict with the dissent on record.",

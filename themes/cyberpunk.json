@@ -42,7 +42,7 @@
   "DESC_CODEBASE_DESIGN": "Design deep modules and the domain language around them — slim interfaces at seams placed on purpose, a living GLOSSARY.md, an ADR flashed for each hard-to-reverse call.",
   "DESC_WAYFINDER": "Chart a run too big for one session as a shared map of decision tickets, cleared one at a time until the grid is clean.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn, never to keep the deck around.",
-  "DESC_ROAST_ME": "Stress-test any build to failure — blunt, exact, always actionable.",
+  "DESC_ROAST_ME": "Stress-test the user's own ask, plan or idea to failure, not code — blunt, exact, always actionable.",
   "DESC_FRESH_EYES": "Spin up a zero-context ghost fed only the original spec and the shipped build; it derives the pass-bar blind, then calls whether the build clears it — uncorrupted by the author's faith in their own code.",
   "ROAST_PERSONA": "a burned-out fixer who has watched this exact bug flatline a crew",
   "DESC_COUNCIL": "Spin up a panel of opposed voices to debate a call, then ship a verdict with the dissent logged.",

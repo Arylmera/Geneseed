@@ -42,7 +42,7 @@
   "DESC_CODEBASE_DESIGN": "<one-line description: design deep modules and the domain language around them — small interfaces at deliberate seams, a living GLOSSARY.md, an ADR per hard-to-reverse decision>",
   "DESC_WAYFINDER": "<one-line description: map an oversized effort as decision tickets and resolve them until the route is clear>",
   "DESC_PROTOTYPE": "<one-line description: throwaway code that answers a design question>",
-  "DESC_ROAST_ME": "<one-line description: adversarially critique any artifact — brutal, specific, actionable>",
+  "DESC_ROAST_ME": "<one-line description: adversarially critique the user's own ask, plan or idea (not code) — brutal, specific, actionable>",
   "DESC_FRESH_EYES": "<one-line description: a context-free agent derives the acceptance bar blind, then rules the work>",
   "ROAST_PERSONA": "<the persona the roast-me skill adopts, in this theme's voice>",
   "DESC_COUNCIL": "<one-line description: convene distinct viewpoints to debate, then synthesise a verdict>",

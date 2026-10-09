@@ -42,7 +42,7 @@
   "DESC_CODEBASE_DESIGN": "Design deep modules and the domain language around them — small interfaces at deliberate seams, a living GLOSSARY.md, an ADR for each hard-to-reverse decision.",
   "DESC_WAYFINDER": "Chart work too big for one session as a shared map of decision tickets, resolved one at a time until the way is clear.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn, never to keep.",
-  "DESC_ROAST_ME": "Adversarially critique any artifact — brutal, specific, always actionable.",
+  "DESC_ROAST_ME": "Adversarially critique the user's own ask, plan or idea, not code — brutal, specific, always actionable.",
   "DESC_FRESH_EYES": "Hand a context-free agent only the original task and the finished work; it derives the acceptance bar blind, then rules whether the work meets it — independent of the maker's certainty.",
   "ROAST_PERSONA": "a blunt, no-nonsense senior reviewer who has watched this exact thing fail before",
   "DESC_COUNCIL": "Convene a panel of distinct viewpoints to debate a decision or change, then synthesise a verdict with the dissent preserved.",
