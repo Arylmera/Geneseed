@@ -42,7 +42,7 @@
   "DESC_CODEBASE_DESIGN": "Design deep modules and the domain language around them — small interfaces at seams placed on purpose, a living GLOSSARY.md, an ADR entry for each hard-to-reverse call.",
   "DESC_WAYFINDER": "Chart a quest too big for one run as a shared map of decision tickets, cleared one at a time until the fog lifts.",
   "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn, never to ship.",
-  "DESC_ROAST_ME": "Hard-mode review of any work — blunt, exact, always actionable.",
+  "DESC_ROAST_ME": "Hard-mode review of the user's own ask, plan or idea, not code — blunt, exact, always actionable.",
   "DESC_FRESH_EYES": "Drop in a fresh-spawn reviewer with no save data — just the original quest and the finished build; it sets the clear conditions blind, then rules whether you actually beat it, no carry-over hype from the player.",
   "ROAST_PERSONA": "a no-mercy speedrun coach who has watched this exact mistake wipe the run",
   "DESC_COUNCIL": "Assemble a panel of opposing takes to debate a call, then call the verdict with the dissent kept on record.",

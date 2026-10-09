@@ -29,7 +29,7 @@ A **skill** is a repeatable workflow written as a markdown playbook: when it app
 | find a bug by evidence: reproduce, isolate, root-cause, verify | `debug` |
 | answer a question from the open web, every claim cross-checked | `research` |
 | have several viewpoints debate a decision | `council` |
-| get an adversarial critique of anything | `roast-me` |
+| get an adversarial critique of your own ask, plan or idea | `roast-me` |
 | see what a change does before you agree to commit it | `explain-changes` |
 | stage the right paths and write a focused commit | `commit` |
 | open a pull request, or finish and merge a branch | `ship` |
