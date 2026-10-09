@@ -33,3 +33,7 @@ does not tell the model where a skill lives.
 To update, re-copy the upstream folder, re-apply the geneseed-wiki.jsonc adaptation, the
 frontmatter and the placeholder paths in `SKILL.md` / `instructions.md`, and
 bump the commit above.
+
+`SKILL.md`'s frontmatter also carries `disable-model-invocation: true`, which upstream lacks: the
+skill is user-only (`/daydream`), so its description stays out of the model's always-on catalogue —
+it is personal to one vault. Re-apply it on update.

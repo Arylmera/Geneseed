@@ -17,7 +17,7 @@ A **skill** is a repeatable workflow written as a markdown playbook: when it app
 
 - **By name.** Ask for it — "brainstorm this", "run a council on it" — or, on hosts with slash commands, type `/<name>`.
 - **By trigger.** Every skill has a one-line description of its purpose and when it applies. The host shows those descriptions to the agent every turn, and the agent opens the matching skill when your request fits.
-- **User-only skills.** A few skills are marked to open only when *you* call them (a teaching drill, a tool tied to a setup the agent cannot see). They answer `/<name>` but the agent never starts them on its own, and their description stays out of the always-loaded list.
+- **User-only skills.** A few skills are marked to open only when *you* call them (a teaching drill, a tool tied to a setup the agent cannot see, a guide for one stack or one personal vault). They answer `/<name>` but the agent never starts them on its own, and their description stays out of the always-loaded list.
 
 ### A tour
 

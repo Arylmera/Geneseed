@@ -30,3 +30,7 @@ only one left in any install's catalogue.
 **Deliberately not copied:** upstream's `README.md` (the repo-facing readme: install
 command and folder tree, nothing an agent reads). `AGENTS.md`, upstream's compiled
 all-in-one copy, IS kept — `SKILL.md`'s closing section points the agent at it.
+
+`SKILL.md`'s frontmatter also carries `disable-model-invocation: true`, which upstream lacks: the
+skill is user-only (`/react-view-transitions`), so its description stays out of the model's always-on catalogue —
+it is the largest skill and serves one stack. Re-apply it on update.

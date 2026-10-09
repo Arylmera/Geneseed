@@ -1,6 +1,7 @@
 ---
 name: daydream
 description: "Mine an Obsidian vault for non-obvious connections between notes: samples recency-weighted note pairs, synthesizes links with parallel subagents, keeps only critic-approved insights and writes a daily digest. Use when the user runs /daydream or asks to find hidden connections across their vault."
+disable-model-invocation: true
 ---
 
 # Vault Daydream Skill
