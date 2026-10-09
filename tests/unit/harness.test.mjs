@@ -1792,7 +1792,7 @@ test('the scorecard arm sees a README card or badge that no longer shows the liv
   const root = fixture();
   for (const [rel, edit, expect] of [
     ['docs/assets/scorecard.svg', (t) => t.replace(/>\d+\.\d</, '>1.0<'), 'does not match the current score'],
-    ['README.md', (t) => t.replace(/AI%20harness%20scorecard-[A-F]%20%C2%B7%20[\d.]+/, 'AI%20harness%20scorecard-A%20%C2%B7%2099.9'),
+    ['README.md', (t) => t.replace(/AI%20Harness%20Scorecard-[A-F]%20[\d.]+%2F100/, 'AI%20Harness%20Scorecard-A%2099.9%2F100'),
       'scorecard badge does not show the current score'],
   ]) {
     const file = path.join(root, ...rel.split('/'));

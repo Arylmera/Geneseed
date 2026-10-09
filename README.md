@@ -6,7 +6,7 @@
 
 [![npm](https://img.shields.io/npm/v/geneseed?color=cb3837&logo=npm)](https://www.npmjs.com/package/geneseed)
 [![CI](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml/badge.svg)](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml)
-[![AI harness scorecard](https://img.shields.io/badge/AI%20harness%20scorecard-A%20%C2%B7%2090.4-1a7f37)](#-validate--test)
+[![AI Harness Scorecard](https://img.shields.io/badge/AI%20Harness%20Scorecard-A%2090.4%2F100-brightgreen)](#ai-harness-scorecard)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node >= 22.3](https://img.shields.io/badge/node-%3E%3D22.3-5fa04e)](package.json)
 [![zero dependencies](https://img.shields.io/badge/deps-zero-success)](package.json)
@@ -17,7 +17,7 @@
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
 [![OpenCode · Claude Code · Bob · OpenClaude · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20OpenClaude%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
-[**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & terminal**](#-3--web--terminal) · [**What you get**](#-4--what-you-get)
+[**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & terminal**](#-3--web--terminal) · [**What you get**](#-4--what-you-get) · [**Harnesses**](#-supported-harnesses) · [**Docs**](#-documentation)
 
 </div>
 
@@ -43,6 +43,12 @@ A hand-written instructions file is prose the model may or may not honour, copie
 - **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
 
 This page is the overview. **New to agent harnesses?** Start with [Understand](docs/understand/harness.md) — a short course on what a harness is, what lands on your machine, what changes in your day, and what is enforced versus only asked. Everything else — every install path, configuration knob, and troubleshooting step — is in the **[documentation](docs/README.md)**, which the web console also renders.
+
+### Scored, not claimed
+
+<p align="center"><a href="#ai-harness-scorecard"><img src="docs/assets/scorecard.svg" alt="AI Harness Scorecard for this repository: grade and score, with one bar per pillar" width="760"></a></p>
+
+<p align="center"><sub>31 deterministic checks, no LLM — <a href="#ai-harness-scorecard">how this is scored, and how to score your own repo</a></sub></p>
 
 ---
 
@@ -294,9 +300,7 @@ node --test --test-reporter=tap "tests/**/*.test.mjs"   # the suites (node expan
 
 ### AI Harness Scorecard
 
-<p align="center"><img src="docs/assets/scorecard.svg" alt="AI Harness Scorecard for this repository: grade and score, with one bar per pillar" width="760"></p>
-
-How safe this repository is to change with agents, scored by the [AI Harness Scorecard](https://github.com/markmishaev76/ai-harness-scorecard): 31 deterministic checks, no LLM, in five weighted pillars. Geneseed ships its own JavaScript port, so you can score any repository a harness is installed in — it grades the repository (CI, tests, docs), not the harness files:
+The card [at the top of this page](#scored-not-claimed) measures how safe this repository is to change with agents. It comes from the [AI Harness Scorecard](https://github.com/markmishaev76/ai-harness-scorecard): 31 deterministic checks, no LLM, in five weighted pillars. Geneseed ships its own JavaScript port, so you can score any repository a harness is installed in — it grades the repository (CI, tests, docs), not the harness files:
 
 ```bash
 geneseed scorecard            # grade, one line per pillar, and what to fix
