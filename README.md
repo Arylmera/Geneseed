@@ -90,6 +90,14 @@ npm install -g geneseed       # then plain `geneseed <command>` from any directo
 npm install -g geneseed@latest   # …and that is also the update
 ```
 
+Already in Claude Code? Add the plugin marketplace and let Claude run the install:
+
+```
+/plugin marketplace add Arylmera/Geneseed
+/plugin install geneseed@geneseed
+/geneseed:setup
+```
+
 Every other route (Claude Code, Bob, OpenClaude, plain `AGENT.md`, per-repo installs) is in the **[install guide](docs/guides/install.md)**.
 
 ### 🧬 The long way — a git checkout

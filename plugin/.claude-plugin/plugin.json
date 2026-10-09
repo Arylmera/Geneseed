@@ -1,0 +1,12 @@
+{
+  "name": "geneseed",
+  "description": "Installs the Geneseed harness into Claude Code: laws enforced by hooks, agents, skills and a memory convention.",
+  "author": {
+    "name": "Guillaume Lemer",
+    "url": "https://github.com/Arylmera"
+  },
+  "homepage": "https://github.com/Arylmera/Geneseed#readme",
+  "repository": "https://github.com/Arylmera/Geneseed",
+  "license": "MIT",
+  "keywords": ["harness", "agents", "skills", "hooks", "guardrails"]
+}
