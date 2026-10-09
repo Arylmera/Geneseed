@@ -10,7 +10,7 @@ carries an `amend`, that supersedes the original intent — follow the amendment
 replaced.
 
 When this is a repair after `test`, act on the latest `test` note only — it is the verdict on
-the code as it stands. Fix every finding it lists in this one pass: there is no second repair.
+the code as it stands. Fix every finding it lists in this one pass: repairs are capped at two.
 
 Make no unrelated edits: no drive-by rename, no incidental cleanup, no touching a file the card
 did not declare. If the change genuinely needs a file outside the write set, stop and report that

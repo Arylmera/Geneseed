@@ -50,9 +50,10 @@ check) refuses a graph with an undeclared cycle inside an iteration, before a si
 **A ring's `max` is also its own repair budget.** The edge that returns to a ring's first node
 from inside it — `test` → `apply` — is charged to the smallest ring holding both ends, and that
 ring stops at its `max` even when a wider ring raises the node's shared budget. The shipped test
-rings (`apply-test`, `fix-test`, `write-run`, `stabilise`) are `max: 1`: one repair, then the
-attempt is discarded for one fresh try, then the loop stops for you. A second revision makes the
-result worse, not better — 0.82 correct after one, 0.673 after two (arXiv 2607.24604).
+rings (`apply-test`, `fix-test`, `write-run`, `stabilise`) are `max: 2`: two repairs, then the
+attempt is discarded for one fresh try, then the loop stops for you. Most of the gain is in the
+first revision — 0.82 correct after one, 0.673 after two (arXiv 2607.24604) — but a second still
+lands fixes the first missed, so it is kept as the last chance, and nothing past it.
 
 **`error` always stops.** A brick may declare the outcome `error` without an edge for it; the
 engine sends it to `$stop`. The shipped `test` brick reports it when a check crashed or its
