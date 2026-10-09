@@ -8,7 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.20.0] — 2026-10-09
+
 ### Changed
+- Loops repair twice before giving up: the test repair rings (`apply-test`, `fix-test`, `write-run`, `stabilise`) now allow two repairs instead of one, then the attempt is discarded for one fresh try, then the loop stops for you. The first revision carries most of the gain, but a second still lands fixes the first missed. Bound the Loop, the `apply` and `test` bricks and the loops concept page say two. Review rings are unchanged.
 - The fallback to the old wiki manifest name (`wiki.jsonc`) stays for now, against the 3.18.0 note that it would go in the next release: nothing yet reports an install that missed the rename, so removing it could drop a wiki in silence.
 
 ## [3.19.0] — 2026-10-09
