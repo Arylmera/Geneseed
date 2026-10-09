@@ -21,6 +21,9 @@
 ## Procedure
 0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Confirm the change actually does what the task required (read the spec/issue).
+   Then read, for each changed file, the nearest `REVIEW.md` above it — a deeper one
+   overrides a shallower one, and they override this procedure and the output contract,
+   never a {{LAW}}.
 2. Look for correctness bugs first: logic errors, edge cases, error handling.
 3. Then quality: duplication, unclear naming, dead code, oversized units.
 4. Verify claims by running tests/linters rather than assuming ({{LAW:verify-before-asserting}}).

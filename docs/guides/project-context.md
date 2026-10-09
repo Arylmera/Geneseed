@@ -65,6 +65,26 @@ A monorepo with docs scattered across packages might write:
 
 Keep the eager list to the few files a new teammate would read first. Three sharp docs beat ten broad ones. Use `"load": "lazy"` for anything a session should only read on demand.
 
+## Review rules: `REVIEW.md`
+
+`AGENTS.md` (or `CLAUDE.md`) holds the rules for *doing* the work, and the agent loads it every session. `REVIEW.md` holds the rules for *judging* the work: what counts as serious, what to skip, how many nits are worth reporting, and checks that hold only in this codebase. It is read only when code is reviewed, so the agent writing the code never pays for it.
+
+- **Nearest wins.** For each changed file, the reviewer applies the nearest `REVIEW.md` above it, up to the repo root. A `REVIEW.md` in `api/` overrides the root one for files under `api/`.
+- **Precedence.** A folder's `REVIEW.md`, then the root `REVIEW.md`, then `CODING_STANDARDS.md` / `CONTRIBUTING.md`, then Geneseed's review defaults, output format included. A `REVIEW.md` never lifts a law: it cannot let the reviewer edit code or skip running the checks.
+- **Who reads it.** The `geneseed-code-review` skill and the `reviewer` agent, which also serves the loop `review` brick and the pipeline reviewer seat. The `ship` skill runs that review before it opens a pull request.
+- **Who writes it.** Nobody by default. Ask for a review rule, or let a finding recur, and the `review-response` skill offers the exact lines for the nearest `REVIEW.md`, creating it if it is missing, and writes them only when you agree.
+
+A host's own review command does not read `REVIEW.md` by itself. The always-loaded root file carries one sentence that tells it to:
+
+| Host | Built-in review command | Reads `REVIEW.md` natively | How it gets applied |
+|---|---|---|---|
+| Claude Code | `/code-review`, `/review` | No (only the managed GitHub Code Review does, root file only) | The sentence in `CLAUDE.md`, which the built-in review follows; or run `/geneseed-code-review` |
+| OpenClaude | Undocumented | No | The sentence in `.openclaude/CLAUDE.md`; or run `/geneseed-code-review` |
+| Bob | `/review`, Review panel | No | The sentence in `AGENTS.md` / `.bob/rules/geneseed.md`, which Bob injects in every mode |
+| OpenCode | None | No | `/code-review` runs `geneseed-code-review`, which reads it |
+
+For OpenClaude and Bob, that the built-in review honours the sentence follows from how each host loads its rules files; it has not been checked live yet. Keep `REVIEW.md` short, because every rule in it competes for the reviewer's attention.
+
 <!--harness:opencode-->
 *(OpenCode only)*
 
