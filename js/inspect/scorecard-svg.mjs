@@ -72,8 +72,8 @@ ${rows.join('\n')}
 `;
 }
 
-/** The light-theme band colours, reused by the badge (shields.io takes a bare hex). */
-const BADGE_COLOUR = { a: '1a7f37', b: '0969da', c: '9a6700', d: 'bc4c00', f: 'cf222e' };
+/** shields.io's named colours, one per band — the upstream tool's badge style (grey label, bright value). */
+const BADGE_COLOUR = { a: 'brightgreen', b: 'green', c: 'yellow', d: 'orange', f: 'red' };
 
 /**
  * The README badge for an assessment — grade and score, coloured by band. `--svg` prints it next to
@@ -81,5 +81,5 @@ const BADGE_COLOUR = { a: '1a7f37', b: '0969da', c: '9a6700', d: 'bc4c00', f: 'c
  * reader sees first cannot lag the card below it.
  */
 export function badgeUrl(a) {
-  return `https://img.shields.io/badge/AI%20harness%20scorecard-${a.grade}%20%C2%B7%20${round1(a.overallScore)}-${BADGE_COLOUR[band(a.overallScore)]}`;
+  return `https://img.shields.io/badge/AI%20Harness%20Scorecard-${a.grade}%20${round1(a.overallScore)}%2F100-${BADGE_COLOUR[band(a.overallScore)]}`;
 }
