@@ -185,12 +185,12 @@ const FOOTPRINTS = ['full', 'lean'];
  * `js/loop/state.mjs`. Both ceilings were already full (headroom 20 / 0). Measured `files`
  * carrier after: full 61_715, lean 38_854 — each raised by exactly that, not rounded.
  *
- * NOT RAISED 2026-10-09, for comms 3 (Declare the Judgment Calls): the skill consolidation had
- * freed 762 at both footprints (before: full 60_953, lean 38_092), and the full half was cut
- * to fit rather than raise. Measured `files` carrier after: full 61_704, lean 38_617 (headroom
- * 11 / 237) — the next full-half addition raises `full`.
+ * FULL RAISED 2026-10-09, for comms 3 (Declare the Judgment Calls), a new rule. Its full half
+ * was cut once to fit, but main grew meanwhile (#228-#233). Measured `files` carrier before,
+ * on origin/main at a1acfd9e: full 61_169, lean 38_277. After: full 61_920, lean 38_802.
+ * `full` raised by exactly the overrun, 61_715 -> 61_920, not rounded; lean still fits (52).
  */
-const CEILING = { full: 61_715, lean: 38_854 };
+const CEILING = { full: 61_920, lean: 38_854 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
