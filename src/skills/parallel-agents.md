@@ -2,7 +2,7 @@
 
 > {{DESC_PARALLEL_AGENTS}}
 
-**Trigger:** two or more independent subtasks with no shared state or ordering between them — and a tool that can run subagents.
+**Trigger:** two or more independent subtasks with no shared state or ordering between them — and a tool that can run subagents. The units run side by side and never see each other's work; when one agent must build on what the previous one produced, that is a relay — use [pipeline](pipeline.md).
 
 ## Procedure
 1. Confirm independence: the subtasks must not depend on each other's output or write the same files ({{DOCTRINE:one-writer-per-file}}). Write down each unit's **write set** — the files or globs it may change — and intersect them; an overlap runs in sequence or goes to one owner, and shared append files (registries, index tables, lockfiles, generated bundles) stay with you. If they're sequential or share state, use [plan](plan.md) instead.

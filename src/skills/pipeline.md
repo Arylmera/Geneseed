@@ -2,7 +2,7 @@
 
 > {{DESC_PIPELINE}}
 
-**Trigger:** [foreman mode](../modes/foreman.md) routes a triaged *substantial* task here; also directly invocable without that mode whenever the user asks to "run a pipeline" for a development, documentation, research, or review task.
+**Trigger:** [foreman mode](../modes/foreman.md) routes a triaged *substantial* task here; also directly invocable without that mode whenever the user asks to "run a pipeline" for a development, documentation, research, or review task. The crew is a relay, not a fan-out: its agents take turns in one worktree, each handed what the previous one produced — for independent subtasks run side by side, use [parallel-agents](parallel-agents.md).
 
 ## What it is
 
