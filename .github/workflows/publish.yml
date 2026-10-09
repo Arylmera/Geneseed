@@ -160,6 +160,12 @@ jobs:
       # this job runs a newer toolchain than CI, so it is where a default change lands first.
       # Pinning the reporter makes the gate read a format this repository chose rather than one
       # the runtime picks.
+      #
+      # `npm ci` FIRST: the suite imports devDependencies (fast-check, since the property tests),
+      # and a runner with no node_modules fails them with ERR_MODULE_NOT_FOUND — measured on the
+      # 3.18.0 dispatch, the same break mutate.yml had. It installs devDependencies only, which
+      # never reach the tarball (`node_modules/` is not in `files`).
+      - run: npm ci
       - name: unit tests
         shell: bash
         run: |
