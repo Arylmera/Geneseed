@@ -13,7 +13,7 @@
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
 [![Skills](https://img.shields.io/badge/skills-47-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-18-orange)](src/agents/)
-[![Laws](https://img.shields.io/badge/laws-9-critical)](src/laws/universal.md)
+[![Laws and doctrines](https://img.shields.io/badge/laws-9%20%2B%2028%20doctrines-critical)](src/doctrines/)
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
 [![OpenCode · Claude Code · Bob · OpenClaude · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20OpenClaude%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
