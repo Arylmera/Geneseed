@@ -184,8 +184,13 @@ const FOOTPRINTS = ['full', 'lean'];
  * artifact, in both halves — an amendment, not a new rule; the engine half lives in
  * `js/loop/state.mjs`. Both ceilings were already full (headroom 20 / 0). Measured `files`
  * carrier after: full 61_715, lean 38_854 — each raised by exactly that, not rounded.
+ *
+ * FULL RAISED 2026-10-09, for comms 3 (Declare the Judgment Calls), a new rule. Its full half
+ * was cut once to fit, but main grew meanwhile (#228-#233). Measured `files` carrier before,
+ * on origin/main at a1acfd9e: full 61_169, lean 38_277. After: full 61_920, lean 38_802.
+ * `full` raised by exactly the overrun, 61_715 -> 61_920, not rounded; lean still fits (52).
  */
-const CEILING = { full: 61_715, lean: 38_854 };
+const CEILING = { full: 61_920, lean: 38_854 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -444,8 +449,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack, n: String(i + 1), key: idKey('DOC', m[1]) });
     });
   }
-  assert.equal(rules.length, 28,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 28 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27); either the `
+  assert.equal(rules.length, 29,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 29 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27; comms 3 joined 2026-10-09); either the `
     + 'declaration shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in

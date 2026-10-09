@@ -205,6 +205,11 @@ const DOCTRINE_META = {
     'Beside the prose, a diagram only where arrows carry meaning, else a table; codes stay.',
     'structure-beside-prose',
   ],
+  'comms.3': [
+    'comms',
+    'After non-trivial work, name the calls you made alone, riskiest first; never one to ask about.',
+    'declare-the-judgment-calls',
+  ],
 }
 
 // Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.

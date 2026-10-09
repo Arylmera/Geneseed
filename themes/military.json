@@ -112,6 +112,7 @@
   "DOC_ONE_WRITER_PER_FILE": "One Operator Per Sector · One Writer Per File",
   "DOC_CODES_THAT_PERSIST": "Every Objective Keeps Its Designation · Codes That Persist",
   "DOC_STRUCTURE_BESIDE_PROSE": "Sketch the Map Only When Routes Matter · Structure Beside Prose",
+  "DOC_DECLARE_THE_JUDGMENT_CALLS": "Report Every Field Decision · Declare the Judgment Calls",
   "INTRO_DOC": "This file is the operating manual an AI coding agent reads on entering this repository.",
   "INTRO_AGENTS": "Task focused work to the specialist whose job it is rather than running the whole op in one context; each has one objective and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a standard operating procedure for a recurring task. Run the matching SOP before improvising.",

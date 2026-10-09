@@ -112,6 +112,7 @@
   "DOC_ONE_WRITER_PER_FILE": "<themed title for the process rule One Writer Per File>",
   "DOC_CODES_THAT_PERSIST": "<themed title for the comms rule Codes That Persist>",
   "DOC_STRUCTURE_BESIDE_PROSE": "<themed title for the comms rule Structure Beside Prose>",
+  "DOC_DECLARE_THE_JUDGMENT_CALLS": "<themed title for the comms rule Declare the Judgment Calls>",
   "INTRO_DOC": "<themed intro: this file is the entry point an AI agent reads in this repo>",
   "INTRO_AGENTS": "<themed intro to the Agents section — delegate focused work to a specialist>",
   "INTRO_SKILLS": "<themed intro to the Skills section — run the written procedure before improvising>",

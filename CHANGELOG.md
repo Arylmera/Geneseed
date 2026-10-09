@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- Doctrine comms 3, Declare the Judgment Calls: after non-trivial work the agent lists the choices it made alone where a reasonable alternative existed, with the alternative set aside and whether it is cheaply reversible, riskiest first (data, security, production, public interfaces). Only genuine forks count, trivial work owes an empty list, and it never covers a call Echo the Intent says to ask about first. Reviewers read where the agent guessed instead of everything, or nothing. The idea is Victor Rentea's (Devoxx BE 2026, "Responsibly Dimming the Lights in the Software Factory"). It is in the toggleable comms pack, not a law, per DESIGN.md Decision 7; the full-footprint size ceiling rises by 205 characters for it. `explain-changes` now lists these calls among its risks.
+
 ## [3.18.0] — 2026-10-09
 
 ### Added

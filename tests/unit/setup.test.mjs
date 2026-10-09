@@ -500,15 +500,16 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
       `${p.pack} has a rule with no title, no body, or a class that is not its pack`);
     assert.ok(p.title && p.desc, `${p.pack} has no themed name or blurb`);
   }
-  // 9 + 28 + the four absorbed-into-prose sections is the whole constitution. The 24th is
+  // 9 + 29 + the four absorbed-into-prose sections is the whole constitution. The 24th is
   // rigor 5 — Law IX, moved into the rigor pack (2026-09); the law itself was removed on
   // 2026-09-30, with XI, when numbers became positional. The 25th is
   // one writer per file, appended later that month as process 8 (process 7 since the comms
   // pack took the old process 7). The 26th and 27th are craft 7 (one writer
   // per value) and ops 7 (serialize against a rationed resource), appended 2026-09-23.
   // The comms pack (2026-09-27) MOVED process 7 (reference codes) in as comms 1 — no change to
-  // the total — and added comms 2 (structure beside prose), the 28th.
-  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 28);
+  // the total — and added comms 2 (structure beside prose), the 28th. Comms 3 (declare the
+  // judgment calls), appended 2026-10-09, is the 29th.
+  assert.equal(inv.doctrines.reduce((n, p) => n + p.rules.length, 0), 29);
 });
 
 test('every theme parses to the same three tiers, whatever it calls them', () => {
@@ -519,8 +520,8 @@ test('every theme parses to the same three tiers, whatever it calls them', () =>
   const counts = (inv) => [inv.laws.length, inv.ontology.length, inv.doctrines.length,
     inv.doctrines.reduce((n, p) => n + p.rules.length, 0)];
   const base = counts(tuiInventory('neutral'));
-  // 9 laws since IX and XI were removed (2026-09-30); 5 packs, 28 rules since the comms pack.
-  assert.deepEqual(base, [9, 4, 5, 28]);
+  // 9 laws since IX and XI were removed (2026-09-30); 5 packs, 29 rules since comms 3 (2026-10-09).
+  assert.deepEqual(base, [9, 4, 5, 29]);
   for (const t of themeNames()) {
     const inv = tuiInventory(t);
     assert.deepEqual(counts(inv), base, `${t} parses to a different constitution`);
@@ -595,9 +596,9 @@ test('a pack that is not built in is listed and MARKED, never quietly dropped', 
   // reader cannot infer from the text.
   const rows = tuiEntries(tuiInventory('neutral', ['craft']));
   const doctrine = rows.filter(([k]) => k === 'doctrine');
-  assert.equal(doctrine.length, 28, 'a narrowed install lost rows instead of marking them');
+  assert.equal(doctrine.length, 29, 'a narrowed install lost rows instead of marking them');
   const off = doctrine.filter(([, , d]) => d.active === false);
-  assert.equal(off.length, 21, 'the inactive packs are not marked inactive (28 rules - craft 7)');
+  assert.equal(off.length, 22, 'the inactive packs are not marked inactive (29 rules - craft 7)');
   assert.ok(doctrine.every(([, , d]) => (d.pack === 'craft') === (d.active === true)),
     'the active flag does not follow the selection');
   const head = rows.filter(([k]) => k === 'head').find((h) => h[1].startsWith('DOCTRINES'));
