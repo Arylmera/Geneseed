@@ -18,7 +18,11 @@
    `CONTRIBUTING.md`) override. Then, as judgement calls and skipping what tooling enforces:
    mysterious name, duplication, feature envy, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, middle man, dead code, units that do too much.
 6. Pass 3 — spec fidelity: flag anything asked for but missing, present but never
-   asked for, or implemented wrong — quoting the spec line for each.
+   asked for, or implemented wrong — quoting the spec line for each. Architecture drift too: when
+   `docs/architecture.md` draws C4 and the diff adds, removes or rewires a container — a Dockerfile,
+   a compose service, a deployable module, a datastore, a new client of another container — but
+   leaves the diagram alone, raise `issue (non-blocking)` and point at
+   [document-project](document-project.md) to redraw L2.
 7. Write each finding as a Conventional Comment, `label (decoration): file:line — problem — fix`,
    correctness first. Labels: issue, suggestion, question, todo, nitpick, thought, note,
    praise. Decorations: blocking, non-blocking, if-minor. The line pastes straight into a
