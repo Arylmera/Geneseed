@@ -8,10 +8,27 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [3.18.0] — 2026-10-09
+
+### Added
+- `geneseed scorecard [path]` scores the repo a harness is installed in — its CI, tests and docs, not the harness files — with the AI Harness Scorecard's 31 checks and five weighted pillars, ported to JavaScript (no Python). It prints the grade, each pillar and every failing check with its fix, and always exits 0. `--json` gives the raw result; `--svg PATH` writes a grade-and-pillars card (light and dark) and prints the matching badge URL.
+- Skills can carry side files: `src/skills/<name>/<file>.md` is emitted beside the skill's `SKILL.md` on every host and read only when the skill points at it. `debug` moves its CI section and `rule` its memory consolidation into side files, so each costs about 0.5k tokens less per use.
+
 ### Changed
-- Fewer, sharper skills: 56 become 47. `dependencies` replaces `deps-audit` and `migrate`, `bruno` replaces `bruno-collection-generator` and `bruno-test-writer`, and `git-history` replaces `git-archaeology` and `git-rescue`. `document-project` absorbs `repo-map`, `codebase-design` absorbs `domain-modeling` (the glossary is now `GLOSSARY.md`, `CONTEXT.md` still read), `debug` absorbs `ci-fix`, `rule` absorbs `consolidate-memory`, and `geneseed` absorbs `opencode-theme`. Every old name still works as a user-only `/name` alias of its new home, and so does `/grill-me` for `brainstorm`; an old name in `--exclude-skills` excludes the skill that absorbed it. Excluding one half of a merged pair (say `deps-audit`) now excludes the whole merged skill (`dependencies`, which also covers `migrate`). `tickets` is removed with no alias: `wayfinder` charts the decisions and hands execution to `plan`, sliced into thin end-to-end pieces. Parts of brainstorm, codebase-design, debug, develop, prototype, ship, wayfinder, parallel-agents, rule and geneseed-code-review adapt ideas from Matt Pocock's skills (github.com/mattpocock/skills, MIT).
-- The wiki manifest is now `geneseed-wiki.jsonc`, so a shared `.claude/` or `.opencode/` folder shows who owns it. The next build or upgrade renames an existing `wiki.jsonc` (or older `wiki.json`) to the new name with its contents untouched, and adds the new name to a `.gitignore` that listed the old one. Until then the hook, the OpenCode plugins and the web console still read `wiki.jsonc`; that fallback goes in the next release. `GENESEED_WIKI` is unchanged.
+- Fewer, sharper skills: 56 become 47. `dependencies` replaces `deps-audit` and `migrate`, `bruno` replaces `bruno-collection-generator` and `bruno-test-writer`, and `git-history` replaces `git-archaeology` and `git-rescue`. `document-project` absorbs `repo-map`, `codebase-design` absorbs `domain-modeling` (the glossary is now `GLOSSARY.md`, `CONTEXT.md` still read), `debug` absorbs `ci-fix`, `rule` absorbs `consolidate-memory`, and `geneseed` absorbs `opencode-theme`. Every old name still works as a user-only `/name` alias of its new home, and so does `/grill-me` for `brainstorm`; an old name in `--exclude-skills` excludes the skill that absorbed it. Excluding one half of a merged pair (say `deps-audit`) now excludes the whole merged skill (`dependencies`, which also covers `migrate`). Parts of brainstorm, codebase-design, debug, develop, prototype, ship, wayfinder, parallel-agents, rule and geneseed-code-review adapt ideas from Matt Pocock's skills (github.com/mattpocock/skills, MIT).
+- The wiki manifest is now `geneseed-wiki.jsonc`, so a shared `.claude/` or `.opencode/` folder shows who owns it. The next build or upgrade renames an existing `wiki.jsonc` (or older `wiki.json`) to the new name with its contents untouched, and adds the new name to a `.gitignore` that listed the old one. Until then the hook, the OpenCode plugins and the web console still read `wiki.jsonc`; that fallback goes in the release after 3.18.0. `GENESEED_WIKI` is unchanged.
 - `document-project` and the docs agent default to Markdown. AsciiDoc is used only when you ask for it or the project's docs are already `.adoc`; the skill no longer proposes a switch on its own.
+- `upgrade` and `migrate` print the alias and retired-name notices that `rebuild-all` already printed. `codebase-design` now triggers on "where should the seam go".
+
+### Removed
+- The `tickets` skill, with no alias: `wayfinder` charts the decisions and hands execution to `plan`, sliced into thin end-to-end pieces. A `tickets` entry in `--exclude-skills` is dropped with a notice.
+
+### Repository
+Not in the package; how Geneseed itself is built and checked.
+- `SECURITY.md`, `CODEOWNERS`, a PR template and a weekly advisory scorecard run; `ARCHITECTURE.md` and decision records under `docs/adr/`.
+- CI: a blocking `npm audit --audit-level=high` job, Dependabot, conventional PR titles (commitlint), `tsc --noEmit` with `checkJs` over `js/` and `bin/` (`npm run typecheck`), coverage with `c8`, a `lychee` link check, and the doctor scorecard ratchet with the README card and badge.
+- Tests: fast-check property tests on the settings parser, a `fuzz/` target that drives the hook gates through the real entry point, and a weekly Stryker run. The mutation matrix runs on Windows, where two of its rows are real defects, and installs its devDependencies first.
+- ESLint bans `eval`, implied eval, `new Function` and thrown literals in product code. Toolchain and web dependencies bumped by Dependabot (`web/dist` rebuilt).
 
 ## [3.17.0] — 2026-10-08
 
