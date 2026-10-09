@@ -44,7 +44,7 @@ vault or a specific tool's hooks.
      and the prose words the docs use: the core nouns `LAW(S)`/`DOCTRINE(S)`/`ONTOLOGY`/
      `AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`VAULT`/`WIKI`, plus `TAGLINE`,
      `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`, `ROAST_PERSONA`, the invariant
-     titles `LEX_<ID>`, the 28 doctrine-rule titles `DOC_<ID>` (keyed by stable rule id), the five pack
+     titles `LEX_<ID>`, the 29 doctrine-rule titles `DOC_<ID>` (keyed by stable rule id), the five pack
      names `PACK_CRAFT`/`PACK_RIGOR`/`PACK_OPS`/`PACK_PROCESS`/`PACK_COMMS`, and the section intros
      `INTRO_*`. Each theme defines its own nouns; **neutral keeps the plain words** (Rule,
      Doctrine, Agent, Skill, Memory, Workspace), so neutral output is unchanged.

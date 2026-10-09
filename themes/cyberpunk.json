@@ -112,6 +112,7 @@
   "DOC_ONE_WRITER_PER_FILE": "One Deck Per Node · One Writer Per File",
   "DOC_CODES_THAT_PERSIST": "Every Node Keeps Its Handle · Codes That Persist",
   "DOC_STRUCTURE_BESIDE_PROSE": "Trace the Wires, Skip the Chrome · Structure Beside Prose",
+  "DOC_DECLARE_THE_JUDGMENT_CALLS": "Log Every Off-Grid Call · Declare the Judgment Calls",
   "INTRO_DOC": "This file is the boot sequence a coding daemon reads when it jacks into this repository.",
   "INTRO_AGENTS": "Spin the right daemon for focused work instead of running the whole job on one thread; each has one function and returns a clean log of what it changed.",
   "INTRO_SKILLS": "A Skill is a proven routine for a recurring task. Run the matching routine before you freestyle.",

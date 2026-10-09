@@ -112,6 +112,7 @@
   "DOC_ONE_WRITER_PER_FILE": "No Double-Looting the Chest · One Writer Per File",
   "DOC_CODES_THAT_PERSIST": "Every Item Keeps Its Tag · Codes That Persist",
   "DOC_STRUCTURE_BESIDE_PROSE": "Minimap Only When There Is a Route · Structure Beside Prose",
+  "DOC_DECLARE_THE_JUDGMENT_CALLS": "Show the Branches You Picked · Declare the Judgment Calls",
   "INTRO_DOC": "This file is the loading screen a coding co-op partner reads when it joins this repository.",
   "INTRO_AGENTS": "Pick the right class for focused work instead of soloing the whole raid; each has one role and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a practiced combo for a recurring task. Run the matching combo before you freestyle.",

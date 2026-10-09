@@ -184,6 +184,11 @@ const FOOTPRINTS = ['full', 'lean'];
  * artifact, in both halves — an amendment, not a new rule; the engine half lives in
  * `js/loop/state.mjs`. Both ceilings were already full (headroom 20 / 0). Measured `files`
  * carrier after: full 61_715, lean 38_854 — each raised by exactly that, not rounded.
+ *
+ * NOT RAISED 2026-10-09, for comms 3 (Declare the Judgment Calls): the skill consolidation had
+ * freed 762 at both footprints (before: full 60_953, lean 38_092), and the full half was cut
+ * to fit rather than raise. Measured `files` carrier after: full 61_704, lean 38_617 (headroom
+ * 11 / 237) — the next full-half addition raises `full`.
  */
 const CEILING = { full: 61_715, lean: 38_854 };
 
@@ -444,8 +449,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack, n: String(i + 1), key: idKey('DOC', m[1]) });
     });
   }
-  assert.equal(rules.length, 28,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 28 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27); either the `
+  assert.equal(rules.length, 29,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 29 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27; comms 3 joined 2026-10-09); either the `
     + 'declaration shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in

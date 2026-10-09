@@ -51,3 +51,22 @@ stay inline (`A -> B -> C`). ASCII in a terminal, Mermaid where markdown renders
 rendered page in one line, never unasked. Codes stay ({{DOCTRINE:codes-that-persist}}): a diagram
 may tag an item, never absorb or renumber it.
 <!-- LEAN:end -->
+
+### {{DOCTRINE:declare-the-judgment-calls}} Declare the Judgment Calls
+<!-- LEAN:begin -->
+After any non-trivial piece of work, declare the judgment calls you made alone: each point
+where a reasonable alternative existed and neither the request nor a rule decided it — the
+choice, the alternative set aside, and whether it is cheaply reversible, ordered by risk:
+data, security, production and public interfaces first. Only genuine forks count, never a
+naming or formatting choice; trivial work owes an empty list. A reviewer reads first
+where the agent guessed; handed nothing, they read everything. Where {{LAW:echo-the-intent}}
+checks the goal before the work and {{LAW:verify-before-asserting}} the claims, this exposes
+the choices made during it — never a call {{LAW:echo-the-intent}} says to ask first.
+<!-- LEAN:else -->
+After non-trivial work, declare the judgment calls you made alone — forks where a
+reasonable alternative existed and neither the request nor a rule decided: the choice, the
+alternative set aside, whether cheaply reversible; data, security, production and public
+interfaces first. Genuine forks only, never naming or formatting; trivial work owes none.
+Where {{LAW:echo-the-intent}} checks the goal before, this exposes the choices made during —
+never a call it says to ask about.
+<!-- LEAN:end -->

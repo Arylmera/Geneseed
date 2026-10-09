@@ -903,7 +903,8 @@ test('every doctrine rule carries a DOCTRINE_META principle', () => {
   // were appended on 2026-09-23.
   // 28 since the comms pack (2026-09-27): process 7 (reference codes) MOVED to comms 1, which
   // leaves the total alone, and comms 2 (structure beside prose) is new.
-  assert.equal(addrs.length, 28, `${addrs.length} rules parsed — expected 28`);
+  // 29 since comms 3 (declare the judgment calls) was appended on 2026-10-09.
+  assert.equal(addrs.length, 29, `${addrs.length} rules parsed — expected 29`);
   assert.deepEqual(doctrineMetaProblems(addrs, doctrineRules().map((r) => r.id)), []);
 });
 
