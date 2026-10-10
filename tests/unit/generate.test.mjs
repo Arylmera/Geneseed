@@ -1973,16 +1973,33 @@ test('the opencode permission gate follows the process pack, and Law IV never do
 });
 
 /**
- * OpenCode's own `Wildcard.match` (packages/core/src/util/wildcard.ts): `*` -> `.*`, the
- * whole string anchored (`^...$`), case-insensitive on win32. Ported rather than imported —
- * the upstream sparse clone is TS and outside this repo's module graph — so a drift between
- * this port and upstream is the risk the test lives with; it is exercised against the exact
- * push commands the loop engine emits (hooks.mjs `pushSegmentOk`, docs/concepts/loop-branch.md),
- * not a synthetic string, which is what would catch that drift in practice.
+ * FULL PORT of OpenCode's own `Wildcard.match` (packages/core/src/util/wildcard.ts), not a
+ * simplification — the fix round this cell pins depends on two upstream details a lighter
+ * port would silently drop:
+ *   1. `?` -> `.` (single-char wildcard), used by the loop push guard below to require ONE
+ *      extra character rather than an optional run of them.
+ *   2. The trailing-`" *"` special case (`escaped.endsWith(' .*')` -> `'( .*)?'`): a pattern
+ *      ENDING in a literal `" *"` gets that whole clause made OPTIONAL, which is exactly the
+ *      footgun the guard's trailing `?` was chosen to dodge — a lighter port that treated
+ *      every trailing `*` as a plain mandatory-or-not `.*` would hide that this escape exists
+ *      at all, and the next person to write a trailing-`*` glob here would walk into it.
+ * Backslash normalization and the win32 case-insensitive flag are ported too, for completeness
+ * against the source, even though no row below needs either on this platform.
+ * Ported rather than imported — the upstream sparse clone is TS and outside this repo's module
+ * graph — so a drift between this port and upstream is the risk the test lives with; it is
+ * exercised against the exact push commands the loop engine emits and the exact attack shapes
+ * the fix-round reviewer named (two refspecs in one `git push`), not synthetic strings, which is
+ * what would catch that drift in practice.
  */
 function wildcardMatch(input, pattern) {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-  return new RegExp(`^${escaped}$`, 's').test(input);
+  const normalized = String(input).replaceAll('\\', '/');
+  let escaped = pattern
+    .replaceAll('\\', '/')
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+    .replace(/\?/g, '.');
+  if (escaped.endsWith(' .*')) escaped = `${escaped.slice(0, -3)}( .*)?`;
+  return new RegExp(`^${escaped}$`, process.platform === 'win32' ? 'si' : 's').test(normalized);
 }
 
 /** `Permission.evaluate`'s `findLast` over `permission.bash`: the LAST key whose glob matches
@@ -2003,6 +2020,14 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
   // refspec shapes the loop engine pushes (loopExempt's `pushSegmentOk`: `[-u|--set-upstream]
   // <remote> HEAD:<branch>` or `HEAD:refs/heads/<branch>`), placed where `findLast` lets Law IV's
   // destructive-git asks (force, `+refspec`, `--delete`, bare `:`) still win over it.
+  //
+  // ⚠ FIX ROUND (control review, verified against upstream `Wildcard.match`): `*` is a dotall
+  // `.*`, and `.test()` only needs SOME decomposition to exist, so the plain allow glob matched
+  // any command that merely CONTAINED ` HEAD:loop/` — including a SECOND refspec riding along
+  // in the same `git push`, before or after the loop one, which pushed `main` with no prompt.
+  // `LOOP_PUSH_GUARD` closes that; the rows below exercise both injection directions plus the
+  // ordinary rows, all through the real findLast+Wildcard.match oracle, not an inspection of
+  // which keys exist.
   withDir((d) => {
     const p = path.join(d, 'opencode.json');
     mergeOpencodeJson(p, 'AGENT.md', PACK_ORDER);
@@ -2010,34 +2035,52 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
 
     // Written-out rows, evaluated the way upstream does: findLast + Wildcard.match.
     const rows = [
+      // The ordinary loop push, both refspec spellings, with and without -u/--set-upstream.
       ['git push -u origin HEAD:loop/x', 'allow'],
       ['git push origin HEAD:loop/x', 'allow'],
       ['git push --set-upstream origin HEAD:refs/heads/loop/x', 'allow'],
+      ['git push origin HEAD:refs/heads/loop/x', 'allow'],
+      // Law IV's existing anywhere-in-the-command globs, unaffected by this fix.
       ['git push --force origin HEAD:loop/x', 'ask'],
       ['git push origin +HEAD:loop/x', 'ask'],
       ['git push origin --delete loop/x', 'ask'],
+      ['git push --force-with-lease origin HEAD:loop/x', 'ask'],
+      ['git push --mirror', 'ask'],
+      ['git push --all', 'ask'],
       ['git push -u origin HEAD:main', 'ask'],
       ['git push origin :loop/x', 'ask'],
+      // THE HOLE: a second refspec in the SAME push, either side of the loop one, pushing
+      // `main` with no prompt under the plain allow glob. LOOP_PUSH_GUARD must catch both.
+      ['git push origin HEAD:main HEAD:loop/x', 'ask'],
+      ['git push origin HEAD:loop/x HEAD:main', 'ask'],
+      ['git push origin HEAD:main HEAD:refs/heads/loop/x', 'ask'],
+      ['git push origin HEAD:refs/heads/loop/x HEAD:main', 'ask'],
+      // A second loop/* refspec: harmless, and the guard cannot tell it from `HEAD:main`
+      // without a third tier of rule nothing emits — ask is accepted, not a target to relax.
+      ['git push origin HEAD:loop/x HEAD:loop/y', 'ask'],
     ];
     for (const [cmd, want] of rows) {
       assert.equal(evaluateBash(bash, cmd), want, `${cmd} -> expected ${want}`);
     }
 
     // The allow keys sit strictly between the consent `git push*` ask and Law IV's first
-    // destructive-push key — `findLast` means anything placed AFTER the allow can still
-    // override it, and Law IV is exactly the override this depends on.
+    // destructive-push key, and the guard keys sit between the allow and Law IV too —
+    // `findLast` means anything placed AFTER a key can still override it, and both the guard
+    // (over the allow) and Law IV (over the allow and the guard alike) depend on landing later.
     const keys = Object.keys(bash);
     const pushAskIdx = keys.indexOf('git push*');
     const lawIvIdx = keys.indexOf('git push --force*');
-    const allowIdx = keys.findIndex((k) => k.includes('loop/'));
-    assert.ok(pushAskIdx >= 0 && lawIvIdx >= 0 && allowIdx >= 0, 'a key this cell depends on is missing');
-    assert.ok(pushAskIdx < allowIdx && allowIdx < lawIvIdx,
-      'the loop allow is not strictly between the consent push ask and Law IV');
+    const allowIdx = keys.indexOf('git push * HEAD:loop/*');
+    const guardIdx = keys.indexOf('git push *:* HEAD:loop/*');
+    assert.ok([pushAskIdx, allowIdx, guardIdx, lawIvIdx].every((i) => i >= 0),
+      'a key this cell depends on is missing');
+    assert.ok(pushAskIdx < allowIdx && allowIdx < guardIdx && guardIdx < lawIvIdx,
+      'the loop allow/guard pair is not strictly between the consent push ask and Law IV');
 
-    // Never main/master: a loop allow key must not itself match a plain push to a shared branch.
+    // Never main/master: neither a loop allow key nor a loop guard key matches a plain push to
+    // a shared branch with no loop refspec present at all.
     for (const k of keys.filter((kk) => kk.includes('loop/'))) {
-      assert.ok(!wildcardMatch('git push -u origin HEAD:main', k),
-        `${k} would also allow a push to main`);
+      assert.ok(!wildcardMatch('git push -u origin HEAD:main', k), `${k} matches a push to main`);
     }
   });
 });

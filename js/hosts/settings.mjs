@@ -155,6 +155,50 @@ const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 
  */
 const LOOP_PUSH_ALLOW = ['git push * HEAD:loop/*', 'git push * HEAD:refs/heads/loop/*'];
 
+/**
+ * ⚠ FIX FOR A REAL PUSH-TWO-REFSPECS-AT-ONCE HOLE IN `LOOP_PUSH_ALLOW` (control review, verified
+ * against upstream `Wildcard.match`). OpenCode's `*` is a DOTALL `.*`, and `.test()` only needs
+ * SOME decomposition to exist — so `'git push * HEAD:loop/*'` matches any command that merely
+ * CONTAINS ` HEAD:loop/` anywhere, trailing junk and all. `git push` accepts several refspecs in
+ * one invocation, so `git push origin HEAD:main HEAD:loop/x` (another ref BEFORE the loop one)
+ * and `git push origin HEAD:loop/x HEAD:main` (one AFTER) both satisfied that one `' HEAD:loop/'`
+ * substring and were allowed — pushing `main` with no prompt either way. Ordered AFTER
+ * `LOOP_PUSH_ALLOW` (`findLast` wins), these turn exactly those two shapes back into `ask`:
+ *
+ * - The BEFORE guard (`'git push *:* HEAD:loop/*'`) requires a literal `:` somewhere ahead of
+ *   the loop refspec. A second refspec always carries one (`<src>:<dst>`); the one extra token
+ *   the loop engine itself ever puts there — `-u` / `--set-upstream` — never does, so the
+ *   documented form (`git push -u origin HEAD:loop/<slug>`) keeps matching `LOOP_PUSH_ALLOW`
+ *   instead. The `:` already inside the trailing `HEAD:loop/` cannot double as this one: regex
+ *   matching is sequential, so that colon is consumed by the literal `HEAD:loop/` match that
+ *   must still follow the guard's leading `:*`, not available to satisfy it a second time — a
+ *   plain `remote HEAD:loop/<slug>` push carries only the one colon, so the guard needs a
+ *   SECOND one to exist and finds none.
+ * - The AFTER guard (`'git push * HEAD:loop/* ?*'`) requires ONE more character, ANYWHERE,
+ *   past the refspec — via a literal `?` (`Wildcard.match`'s single-char wildcard), not a bare
+ *   trailing `*`: a pattern ending in literal `" *"` hits upstream's own special case
+ *   (`escaped.endsWith(' .*')` -> `'( .*)?'`), which makes that whole trailing clause OPTIONAL
+ *   and would silently re-allow the exact plain push this guard exists to still catch. `?`
+ *   keeps the pattern from ending in `" *"`, so the clause stays mandatory.
+ *
+ * A second `loop/*` refspec after the first (`git push origin HEAD:loop/x HEAD:loop/y`) also
+ * trips the AFTER guard and asks — harmless, and accepted rather than chased: the engine never
+ * emits one, and distinguishing it from `HEAD:main` would cost a third tier of rule for a shape
+ * nothing produces.
+ *
+ * REMAINING CEILING, named rather than silently narrowed: a flag carrying no colon placed
+ * BEFORE the refspec (`git push --all origin HEAD:loop/x`) is not caught by the colon check.
+ * Not chased — the loop engine never emits one, and git itself refuses to combine `--all` or
+ * `--mirror` with an explicit refspec, so this shape cannot reach a shell as a loop push in the
+ * first place. `--force`/`--force-with-lease`/`--mirror`/`--all`/`--delete`/bare-`:` are still
+ * caught wherever they land, through `LAW_IV_BASH`'s existing anywhere-in-the-command globs
+ * (`'git push *--force*'` et al.), independently of this guard.
+ */
+const LOOP_PUSH_GUARD = [
+  'git push *:* HEAD:loop/*', 'git push * HEAD:loop/* ?*',
+  'git push *:* HEAD:refs/heads/loop/*', 'git push * HEAD:refs/heads/loop/* ?*',
+];
+
 function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
   if (consentRuleOn(doctrines, excluded)) {
@@ -162,6 +206,7 @@ function defaultPermission(doctrines = null, excluded = []) {
     bash['git push*'] = 'ask';
   }
   for (const k of LOOP_PUSH_ALLOW) bash[k] = 'allow';
+  for (const k of LOOP_PUSH_GUARD) bash[k] = 'ask';
   for (const k of LAW_IV_BASH) bash[k] = 'ask';
   return { bash };
 }
@@ -173,7 +218,8 @@ function defaultPermission(doctrines = null, excluded = []) {
  * has to be able to recognise a key that is Geneseed's business at all — to add it back when
  * the pack returns, and to name it when this build no longer wants it but will not remove it.
  */
-const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', ...LOOP_PUSH_ALLOW, ...LAW_IV_BASH];
+const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*',
+  ...LOOP_PUSH_ALLOW, ...LOOP_PUSH_GUARD, ...LAW_IV_BASH];
 
 /**
  * Bring an ALREADY-WRITTEN `permission` block back into line with the pack selection, and
