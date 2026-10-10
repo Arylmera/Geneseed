@@ -62,7 +62,8 @@ import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
-  settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes, unwireClaudeSettings,
+  settingsIntegrityCheck, skillNamesFromOwned, wireClaudeExcludes, unwireClaudeExcludes,
+  unwireClaudeSettings,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
@@ -214,15 +215,16 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
   '.geneseed-footprint', VERSION_MARKER];
 
 /**
- * The manifest's owned `skills/<name>/SKILL.md` entries, as the bare skill names — the
+ * The CURRENT manifest's owned `skills/<name>/SKILL.md` entries, as the bare skill names — the
  * provenance for a `permission.skill` deny: Task 4 (O-1) wires one per user-only skill, and
  * unlike the Law IV `permission.bash` gates (permanent invariants, never taken back — see
  * `reconcileOpencodePermission`), a skill-visibility deny is reversible: once uninstalled
- * there is no skill left to hide, and the name is the user's to reuse.
+ * there is no skill left to hide, and the name is the user's to reuse. `skillNamesFromOwned`
+ * (settings.mjs) is the shared regex; the emit-time sweep uses the same one against the
+ * PREVIOUS manifest's `oldOwned` instead.
  */
 function skillPermissionNames(man) {
-  const re = /^skills\/([^/]+)\/SKILL\.md$/;
-  return ownedOf(man).map((r) => re.exec(r)?.[1]).filter(Boolean);
+  return skillNamesFromOwned(ownedOf(man));
 }
 
 /**

@@ -336,26 +336,49 @@ function defaultSkillPermission(names) {
 }
 
 /**
- * Add any of `names` missing from an EXISTING `permission.skill`, touching nothing else — the
- * `skill` twin of `reconcileOpencodePermission`, but simpler: the "owned" set is not a fixed
- * list of globs, it is exactly this build's `userOnlySkills`, so there is no static OWNED
- * table and nothing to report as `stranded` (a name that stops being user-only, or gets
- * `--exclude-skills`'d, simply stops being asked for — its stale deny, if any, is left as
- * found, same fail-closed direction as a stranded bash key).
+ * The manifest's owned `skills/<name>/SKILL.md` entries, as the bare skill names — the
+ * provenance for a `permission.skill` deny: unambiguous, because only `writeNativeLayer`'s
+ * claim-on-create writes that path shape. Shared by the emit-time stale-deny sweep below
+ * (`mergeOpencodeJson`'s `staleSkillNames`, built from `opts.oldOwned`) and
+ * `js/maintain/uninstall.mjs`'s `skillPermissionNames` (built from the CURRENT manifest).
+ */
+const SKILL_OWNED_RE = /^skills\/([^/]+)\/SKILL\.md$/;
+export function skillNamesFromOwned(ownedRels) {
+  return (ownedRels ?? []).map((r) => SKILL_OWNED_RE.exec(r)?.[1]).filter(Boolean);
+}
+
+/**
+ * Add any of `names` missing from an EXISTING `permission.skill`, and remove any of
+ * `staleNames` that still read `"deny"` — the `skill` twin of `reconcileOpencodePermission`,
+ * but with a DIFFERENT removal rule. `reconcileOpencodePermission` never removes a bash key
+ * because nothing on disk records which `ask`/`allow` entry is Geneseed's; a skill deny has
+ * unambiguous provenance instead (the manifest's owned `skills/<name>/SKILL.md`, read by the
+ * caller into `staleNames` = "owned by the PREVIOUS build, not wanted by THIS one" — a skill
+ * that lost its `<!-- invocation: user -->` marker, or was `--exclude-skills`'d). The value
+ * check on top of the name check still guards a user's own re-scoped `"allow"`/`"ask"` for an
+ * owned name from being overwritten — ownership licenses taking back Geneseed's OWN entry, not
+ * whatever is there now.
  *
  * A non-object `permission.skill` (a blanket `"skill": "allow"`/`"deny"`/`"ask"`) is the
  * user's own policy and is left alone, reported as opaque — same contract as
- * `reconcileOpencodePermission`'s `bash` shape guard.
+ * `reconcileOpencodePermission`'s `bash` shape guard. `staleNames` is silently skipped in that
+ * case too: there is no per-name object to delete from.
  * @returns {[boolean, string | null]}
  */
-function reconcileOpencodeSkillPermission(perm, names) {
-  if (!names.length) return [false, null];
-  if (!has(perm, 'skill')) { perm.skill = defaultSkillPermission(names); return [true, null]; }
+function reconcileOpencodeSkillPermission(perm, names, staleNames = []) {
+  if (!has(perm, 'skill')) {
+    if (!names.length) return [false, null];
+    perm.skill = defaultSkillPermission(names);
+    return [true, null];
+  }
   const skill = get(perm, 'skill');
-  if (!isDict(skill)) return [false, 'has a "skill" that is not an object'];
+  if (!isDict(skill)) return [false, names.length ? 'has a "skill" that is not an object' : null];
   let changed = false;
   for (const n of names) {
     if (!has(skill, n)) { skill[n] = 'deny'; changed = true; }
+  }
+  for (const n of staleNames) {
+    if (skill[n] === 'deny') { delete skill[n]; changed = true; }
   }
   return [changed, null];
 }
@@ -543,7 +566,8 @@ export function atomicWriteJson(p, config) {
  * re-implements the inverse itself rather than inherit this one's permission/lsp side
  * effects, so the only crossings are the two emit-tree ones (`_build_emit.emit_opencode`,
  * `_build_global.emit_opencode_global`). */
-export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [], skillNames = []) {
+export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [], skillNames = [],
+  staleSkillNames = []) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
   const { state, data, hadComments, error } = loadJsonObject(target);
@@ -575,6 +599,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   let stranded = [];
   let opaque = null;
   let skillOpaque = null;
+  let permIsObject = true;
   if (addPerm) {
     config.permission = defaultPermission(doctrines, excluded);
     if (skillNames.length) {
@@ -582,13 +607,14 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     }
   } else {
     const perm = get(config, 'permission');
+    permIsObject = isDict(perm);
     [permChanged, stranded, opaque] = reconcileOpencodePermission(perm,
       defaultPermission(doctrines, excluded));
     // Independent of the `bash` shape: a `permission.bash` the build cannot wire into must
     // not also block the UNRELATED `permission.skill` key from being reconciled.
-    if (isDict(perm)) {
+    if (permIsObject) {
       let skillChanged;
-      [skillChanged, skillOpaque] = reconcileOpencodeSkillPermission(perm, skillNames);
+      [skillChanged, skillOpaque] = reconcileOpencodeSkillPermission(perm, skillNames, staleSkillNames);
       permChanged = permChanged || skillChanged;
     }
   }
@@ -598,10 +624,15 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   // short-circuits before any of the three WARNs below. Reported, never rewritten: the blanket
   // policy is the user's answer and it wins (`generate.test.mjs` pins that it survives).
   if (opaque) {
+    // `permIsObject` is false only here: `permission` itself is not an object at all, so the
+    // skill reconcile above never ran either — the unwired skill denies are folded into THIS
+    // one WARN rather than going unmentioned (a dedicated `skillOpaque` needs `perm` to be a
+    // dict to even look at `perm.skill`, which this case by definition is not).
+    const names = [...OWNED_BASH.filter((k) => has(defaultPermission(doctrines, excluded).bash, k)),
+      ...(!permIsObject ? skillNames : [])];
     process.stderr.write(`[geneseed] WARN: "permission" in ${path.basename(target)} `
       + `${opaque}, so Geneseed cannot wire its own gates into it — including `
-      + `${OWNED_BASH.filter((k) => has(defaultPermission(doctrines, excluded).bash, k))
-        .map((k) => jsonDumps(k)).join(', ')}. Your policy is left exactly as written; the `
+      + `${names.map((k) => jsonDumps(k)).join(', ')}. Your policy is left exactly as written; the `
       + 'harness states those rules but nothing enforces them at this boundary.\n');
   }
   if (skillOpaque) {

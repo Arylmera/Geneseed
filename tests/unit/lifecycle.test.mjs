@@ -352,6 +352,31 @@ function globalInstall(d) {
 }
 
 /**
+ * A second (or third…) pass over an EXISTING `globalInstall(d)` target, same `d` so the home
+ * override and the manifest's `oldOwned` both carry over — the shape a re-emit with a changed
+ * `--exclude-skills` selection actually runs under.
+ */
+function globalReemit(d, cfg, extraArgs = []) {
+  const r = spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode-global', '--theme', 'neutral',
+      ...extraArgs],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: {
+        ...process.env, ...homeOverrides(path.join(d, 'home')), OPENCODE_CONFIG_DIR: cfg,
+      },
+      maxBuffer: 1 << 26,
+      windowsHide: true,
+    });
+  if (r.status !== 0) {
+    throw new Error(`opencode-global re-emit failed (${r.status}): `
+      + `${(r.stderr || r.stdout || '').slice(-1500)}`);
+  }
+  return r;
+}
+
+/**
  * `contextlib.redirect_stdout` / `redirect_stderr`, and BOTH are needed here: the unmerge
  * warning goes to stdout while every refusal `cmdUninstall` makes goes to stderr. Returned
  * separately rather than joined, because "which stream said it" is part of the claim — a
@@ -416,6 +441,23 @@ test('a real global uninstall takes back only the skill denies it owns', () => {
     assert.ok(!('herdr' in after.permission.skill), 'an owned deny survived a real uninstall');
     assert.equal(after.permission.skill.mine, 'deny',
       "a name Geneseed's manifest never owned was removed by uninstall");
+  });
+});
+
+// Fix round (controller review): a re-emit must sweep a stale deny too, not only an uninstall.
+test('a real re-emit sweeps a stale skill deny once --exclude-skills drops it', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const target = path.join(cfg, 'opencode.json');
+    let perm = JSON.parse(fs.readFileSync(target, 'utf8')).permission;
+    assert.equal(perm.skill.herdr, 'deny', 'herdr did not start denied');
+
+    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+
+    perm = JSON.parse(fs.readFileSync(target, 'utf8')).permission;
+    assert.ok(!('herdr' in perm.skill), 'an excluded skill kept a stale deny after a re-emit');
+    // A still-wanted deny rides along unaffected.
+    assert.equal(perm.skill.quiz, 'deny', 'a still-wanted deny was swept along with the stale one');
   });
 });
 

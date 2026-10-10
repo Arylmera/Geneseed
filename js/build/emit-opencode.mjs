@@ -13,7 +13,7 @@ import {
   copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
   writeAliasCommands, writePonytailCommand, writePrimaryAgent, writeTheme,
 } from '../hosts/opencode.mjs';
-import { mergeOpencodeJson, opencodeSentinelWrite } from '../hosts/settings.mjs';
+import { mergeOpencodeJson, opencodeSentinelWrite, skillNamesFromOwned } from '../hosts/settings.mjs';
 import { isFile, readText, writeText } from '../lib/fs.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, build, phaseLog } from './bundle.mjs';
@@ -87,10 +87,16 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const nPlugins = copyPlugins(cfg, path.join(dir, 'plugins'), owned, claim);
   const nWorkflows = copyWorkflows(cfg, path.join(dir, 'workflows'), owned, claim);
 
-  // WIRE — the one file of this layer the user co-owns.
+  // WIRE — the one file of this layer the user co-owns. `staleSkillNames`: names the PREVIOUS
+  // manifest owned a `skills/<name>/SKILL.md` for (fix round, controller review) but this
+  // build no longer wants denied — the skill lost its user-only marker, or was
+  // `--exclude-skills`'d. `oldOwned` is null on a first emit, which is "nothing to sweep", not
+  // "sweep everything".
   phaseLog('WIRE');
+  const staleSkillNames = oldOwned
+    ? skillNamesFromOwned(oldOwned).filter((n) => !userOnlySkills.includes(n)) : [];
   const cfgName = path.basename(mergeOpencodeJson(path.join(wireBase, 'opencode.json'),
-    agentPath, cfg.doctrines, cfg.excludeRules, userOnlySkills));
+    agentPath, cfg.doctrines, cfg.excludeRules, userOnlySkills, staleSkillNames));
 
   return {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands: commands.length, cfgName,
