@@ -144,22 +144,47 @@ function themeFromAgent(agentMd) {
  * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use
  * because the Python writes `d / "rules" / "geneseed.md"` for that one entry.
  *
- * `.openclaude/CLAUDE.md` is NOT in the Python — OpenClaude didn't exist yet — and it is the
- * fix for host-compat verdict B1. OpenClaude's own per-repo carrier is `carrierInLayer` (see
- * `CLAUDE_SHAPED.openclaude` in `js/build/driver.mjs`): it sits at `<repo>/.openclaude/CLAUDE.md`
- * and the root `CLAUDE.md` is deliberately left untouched so a Claude Code install can share the
- * repo. Before this entry existed, every reader below (`themeOfDir`, `postureOfDir`,
- * `modeOfDir`, `doctrinesOfDir`, `excludedRulesOfDir`, `excludedSkillsOfDir`, and everything
- * that calls them — `installProfile`, the web API, `remergeClaudeHooks`/reactivate) read an
- * OpenClaude-only repo as having no carrier at all (defaults: neutral/peer/all packs), and read
- * a repo shared with Claude Code as CLAUDE'S carrier, not its own. It is tried BEFORE the root
- * `CLAUDE.md` for exactly that sharing case: OpenClaude's own answer must win over a sibling
- * host's root file.
+ * `.openclaude/CLAUDE.md` is NOT in the Python — OpenClaude didn't exist yet — and it is half
+ * of the fix for host-compat verdict B1 (the other half is `carriersFor`, below).
+ * OpenClaude's own per-repo carrier is `carrierInLayer` (see `CLAUDE_SHAPED.openclaude` in
+ * `js/build/driver.mjs`, and the `HOSTS` column of the same name): it sits at
+ * `<repo>/.openclaude/CLAUDE.md`, and the root `CLAUDE.md` is deliberately left untouched so a
+ * Claude Code install can share the repo.
+ *
+ * ⚠ THIS LIST STAYS HOST-AGNOSTIC ON PURPOSE — it is only `firstCarrier`'s FALLBACK for a
+ * caller with no host to narrow by (none of this module's exported `*OfDir` readers is one;
+ * see `carriersFor`). A caller that DOES have a host must pass it, or in a repo sharing two
+ * carriers that answer the same probe — only root `CLAUDE.md` today, between `claude` and
+ * `openclaude`'s global scope — this host-agnostic order decides for both of them, which was
+ * exactly B1's failure mode reversed: reading `.openclaude/CLAUDE.md` unconditionally made
+ * `claude`'s OWN read-back answer OpenClaude's settings in a shared repo.
  */
 const CARRIERS = [
   'AGENT.md', path.join('.openclaude', 'CLAUDE.md'), 'CLAUDE.md',
   path.join('rules', 'geneseed.md'), 'AGENTS.md',
 ];
+
+/**
+ * `host`'s own carrier path(s), narrowed off the single `HOSTS` table — `carrierInLayer` and
+ * `projectMarker`/`agentFile` — rather than a second hand-rolled host→carrier map.
+ *
+ * ONE HOST, ONE ANSWER, EXCEPT BOB. `carrierInLayer` true (OpenClaude only) tries the nested
+ * per-repo path FIRST and the bare `agentFile` SECOND, because the same column name means two
+ * different locations depending on scope: `<repo>/.openclaude/CLAUDE.md` for a project
+ * install, `<cfgDir>/CLAUDE.md` for a global one (see `CLAUDE_SHAPED.openclaude-global`,
+ * which has no `carrierInLayer`). Bob is the one host with a second, differently-NAMED
+ * carrier — `rules/geneseed.md` at global scope, because Bob never auto-loads a global
+ * `AGENTS.md` (`CLAUDE_SHAPED['bob-global']`'s summary says so) — which `HOSTS` has no column
+ * for and this hard-codes, same as the un-narrowed `CARRIERS` above always did.
+ */
+function carriersFor(host) {
+  const row = HOSTS.find((h) => h.host === host);
+  if (!row) return CARRIERS;
+  if (host === 'bob') return [path.join('rules', 'geneseed.md'), row.agentFile];
+  return row.carrierInLayer
+    ? [path.join(row.projectMarker, row.agentFile), row.agentFile]
+    : [row.agentFile];
+}
 
 /**
  * The scan `themeOfDir`, `leadOfDir`, `doctrinesOfDir` and `excludedRulesOfDir` each wrote
@@ -168,9 +193,15 @@ const CARRIERS = [
  * legitimate stop values for the two register readers below — to mean "stop, this is the
  * answer". `fallback` is what every caller's own trailing `return …;` supplied once the
  * whole list was exhausted with no answer.
+ *
+ * `host`, when given, narrows the scan to THAT HOST'S OWN carrier(s) via `carriersFor` —
+ * `null` (the default) keeps today's full, host-agnostic `CARRIERS` walk, so every call site
+ * this task's fix round did not touch is unchanged. Every exported reader below takes the
+ * same optional `host` last, mirroring `trustOfDir`'s existing `(d, host = null)` shape one
+ * screen down — this is not a new convention, it is that one applied to the carrier scan too.
  */
-function firstCarrier(d, probe, fallback = null) {
-  for (const carrier of CARRIERS) {
+function firstCarrier(d, probe, fallback = null, host = null) {
+  for (const carrier of (host === null ? CARRIERS : carriersFor(host))) {
     const result = probe(path.join(d, carrier));
     if (result !== undefined) return result;
   }
@@ -191,14 +222,16 @@ const THEME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * through to the sigil scan, as a missing marker does. A plain name that is not shipped is
  * still RETURNED: `loadTheme` then refuses it loudly, which `status`/`rebuild-all`/`migrate`
  * cells pin ("unknown theme 'nosuchtheme'"), rather than a typo going unnoticed.
+ *
+ * `host`, when given, narrows the sigil scan to that host's own carrier — see `firstCarrier`.
  */
-export function themeOfDir(d) {
+export function themeOfDir(d, host = null) {
   const marker = path.join(d, '.geneseed-theme');
   if (isFile(marker)) {
     const name = (readMaybe(marker) ?? '').trim();
     if (THEME_NAME_RE.test(name)) return name;
   }
-  return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined);
+  return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined, null, host);
 }
 
 /** `_harness_setup.FOOTPRINTS`. */
@@ -245,7 +278,7 @@ export function capitalize(s) {
   return s.length ? s[0].toUpperCase() + s.slice(1).toLowerCase() : s;
 }
 
-function leadOfDir(d, names) {
+function leadOfDir(d, names, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -253,11 +286,11 @@ function leadOfDir(d, names) {
       if (text.includes(`**${capitalize(name)}**`)) return name;
     }
     return undefined;
-  });
+  }, null, host);
 }
 
-export const postureOfDir = (d) => leadOfDir(d, discoverNames('postures', 'peer'));
-export const modeOfDir = (d) => leadOfDir(d, discoverNames('modes', 'direct'));
+export const postureOfDir = (d, host = null) => leadOfDir(d, discoverNames('postures', 'peer'), host);
+export const modeOfDir = (d, host = null) => leadOfDir(d, discoverNames('modes', 'direct'), host);
 
 /**
  * The loop skill's default trust preset, read back off a deployed install — `null` when no
@@ -337,7 +370,7 @@ const legacyProcessCarrier = (text) => /\bprocess 8\b/.test(text);
  * checkout ships; one that is not condemns the whole line to `null`. A trailing comma is
  * exactly the empty field a fold leaves behind, which is what makes this catch it.
  */
-export function doctrinesOfDir(d) {
+export function doctrinesOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -353,7 +386,7 @@ export function doctrinesOfDir(d) {
       named.push('comms');
     }
     return PACK_ORDER.filter((pk) => named.includes(pk));
-  });
+  }, null, host);
 }
 
 /**
@@ -374,8 +407,8 @@ export function doctrinesOfDir(d) {
  *
  * `[]` still passes through untouched — a marker that reads `none` is an answer, not a silence.
  */
-export function doctrinesForBuild(d) {
-  return doctrinesOfDir(d) ?? [...PACK_ORDER];
+export function doctrinesForBuild(d, host = null) {
+  return doctrinesOfDir(d, host) ?? [...PACK_ORDER];
 }
 
 /** `Excluded rules: process 7, craft 3` — the marker's optional second line. */
@@ -399,7 +432,7 @@ const EXCLUDED_RULES_RE = /^Excluded rules:[ \t]*(.+?)[ \t]*$/m;
  * same rule as the pack list, same reason, opposite default. Half an exclusion list would
  * take away rules nobody named.
  */
-export function excludedRulesOfDir(d) {
+export function excludedRulesOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -420,7 +453,7 @@ export function excludedRulesOfDir(d) {
     const MOVED = { 'process.7': 'comms.1', 'process.8': 'process.7' };
     const out = legacyProcessCarrier(text) ? ids.map((id) => MOVED[id] ?? id) : ids;
     return [...new Set(out)].sort();
-  }, []);
+  }, [], host);
 }
 
 /** `Excluded skills: bruno, daydream` — written only when something is excluded. */
@@ -436,9 +469,10 @@ const EXCLUDED_SKILLS_RE = /^Excluded skills:[ \t]*(.+?)[ \t]*$/m;
  * name drops out (`resolveSkillNames`), so a skill merge does not quietly re-admit everything
  * else the install left out. Silent unless the caller passes `notify` — status, diff and the
  * console call this on every read; the replays that rebuild an install (`rebuild-all`,
- * `upgrade`, `migrate`) pass it.
+ * `upgrade`, `migrate`) pass it. `host` is last, after `notify`, for the same reason
+ * `trustOfDir` puts it last: every existing positional call keeps working unchanged.
  */
-export function excludedSkillsOfDir(d, notify = null) {
+export function excludedSkillsOfDir(d, notify = null, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -448,7 +482,7 @@ export function excludedSkillsOfDir(d, notify = null) {
     if (unknown.length) return [];
     if (notify) for (const n of notices) notify(n);
     return ids;
-  }, []);
+  }, [], host);
 }
 
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------

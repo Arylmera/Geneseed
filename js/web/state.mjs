@@ -10,7 +10,8 @@ import path from 'node:path';
 
 import { opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
-  footprintOfDir, installedDefaults, modeOfDir, postureOfDir, themeOfDir, trustOfDir,
+  EMIT_HOST_SCOPE, footprintOfDir, installedDefaults, modeOfDir, postureOfDir, themeOfDir,
+  trustOfDir,
 } from '../hosts/installs.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
@@ -61,13 +62,19 @@ export function webState(theme = null, target = null) {
   st.root = st.target;
   st.theme = theme || themeOfDir(st.target) || 'neutral';
   st.emit = installedDefaults().emit || 'opencode-global';
+  // `st.emit` to `host`, the same lookup `apiInstallCmd`/`diffCollect` already make off the
+  // same map — unknown or missing falls back to OpenCode, as those two do.
+  const hostOf = () => (EMIT_HOST_SCOPE.get(st.emit || '') ?? ['opencode', 'global'])[0];
   // The install's sigils, each defaulted when its marker is absent (footprint to 'full').
-  // Read from the ROOT, where every emit writes them.
-  const readMarkers = () => {
+  // Read from the ROOT, where every emit writes them. `host`, when given, narrows the carrier
+  // scan to its own (host-compat B1) — omitted here at construction, where `st.emit` is only
+  // `installedDefaults()`'s best guess and may not be THIS target's own host; `selectView`
+  // and `refresh` below pass it once `detectEmit()` has looked at this install directly.
+  const readMarkers = (host = null) => {
     st.footprint = footprintOfDir(st.root);
-    st.posture = postureOfDir(st.root) || 'peer';
-    st.mode = modeOfDir(st.root) || 'direct';
-    st.trust = trustOfDir(st.root) || DEFAULT_PRESET;
+    st.posture = postureOfDir(st.root, host) || 'peer';
+    st.mode = modeOfDir(st.root, host) || 'direct';
+    st.trust = trustOfDir(st.root, host) || DEFAULT_PRESET;
   };
   readMarkers();
 
@@ -121,18 +128,20 @@ export function webState(theme = null, target = null) {
   st.selectView = (target, root = null) => {
     st.target = target;
     st.root = root || target;
-    st.theme = themeOfDir(st.root) || themeOfDir(st.target) || 'neutral';
     st.emit = st.detectEmit();
-    readMarkers();
+    const host = hostOf();
+    st.theme = themeOfDir(st.root, host) || themeOfDir(st.target, host) || 'neutral';
+    readMarkers(host);
     st._inv = null;
     st._doctor = null;
   };
   st.refresh = () => {
     st._inv = null;
     st._doctor = null;
-    st.theme = themeOfDir(st.root) || themeOfDir(st.target) || st.theme;
     st.emit = st.detectEmit() || st.emit;
-    readMarkers();
+    const host = hostOf();
+    st.theme = themeOfDir(st.root, host) || themeOfDir(st.target, host) || st.theme;
+    readMarkers(host);
   };
   return st;
 }

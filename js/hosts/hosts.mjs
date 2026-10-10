@@ -261,12 +261,20 @@ export function openclaudeConfigDir() {
  *
  * `catalog` — does the host list every skill and agent to the model by itself? See
  * `hostCatalogsNatively` below for what it decides and why it is split per kind.
+ *
+ * `carrierInLayer` joined for host-compat B1 (2026-10): mirrors `CLAUDE_SHAPED.openclaude`'s
+ * own flag of the same name in `js/build/driver.mjs` — true means the host's PROJECT carrier
+ * sits at `<repo>/<projectMarker>/<agentFile>` rather than `<repo>/<agentFile>`. Only
+ * OpenClaude has it: its root `CLAUDE.md` is deliberately left unwritten so a Claude Code
+ * install can share the repo (see the comment at `CLAUDE_SHAPED.openclaude`). `installs.mjs`'s
+ * `carriersFor` reads this column rather than hand-rolling a second host→carrier map — if a
+ * future host also nests its carrier, this is the one place that has to say so.
  */
 export const HOSTS = [
   { host: 'opencode', family: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode', agentFile: 'AGENT.md', catalog: { skills: true, agents: true } },
   { host: 'claude', family: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true } },
   { host: 'bob', family: 'claude', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md', catalog: { skills: true, agents: false } },
-  { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true } },
+  { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true }, carrierInLayer: true },
 ];
 
 /** The Claude-STYLE hosts (`family: 'claude'`), in `HOSTS` order. Test with `.includes(host)`. */

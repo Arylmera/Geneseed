@@ -607,24 +607,27 @@ export function apiInstallCmd(state, body) {
   }
   const emit = EMIT_FOR.get(`${host} ${scope}`);
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
+  // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1) — see the
+  // comment at `installProfile` in `js/build/generate.mjs`.
   const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {
-    theme: state.theme, footprint: footprintOfDir(root), posture: postureOfDir(root) || 'peer',
-    mode: modeOfDir(root) || 'direct', trust: trustOfDir(root, host) || DEFAULT_PRESET });
+    theme: state.theme, footprint: footprintOfDir(root),
+    posture: postureOfDir(root, host) || 'peer',
+    mode: modeOfDir(root, host) || 'direct', trust: trustOfDir(root, host) || DEFAULT_PRESET });
   // Unspecified means "keep what this install already has", exactly as theme, footprint,
   // posture and mode above do — a rebuild through the console is not a place to silently
   // re-decide the constitution. ⚠ AND A CARRIER WITH NO `Active packs:` MARKER (a pre-2.3
   // install) MUST NOT LAND ON `harness.config.json`: `doctrinesOfDir` answers `null` there,
   // `null` elided the flag, and the generator's config fallback then narrowed the install and
   // took its consent gate with it. `doctrinesForBuild` resolves unknown to ALL packs.
-  const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
+  const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root, host);
   // The per-rule axis needs NO `doctrinesForBuild`-style rescue: the marker it reads is only
   // written when something is excluded, so its absence is a statement ("nothing") rather than
   // the silence a pre-2.3 carrier gives on packs. Unspecified therefore keeps the install's
   // own answer, and a pre-marker install answers the empty list — which is what it has.
-  const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
+  const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root, host);
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root));
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, null, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -714,10 +717,10 @@ export function apiDeployCmd(state, body) {
   // the flag off, the generator fell back to `harness.config.json`, and deploying onto an
   // existing all-four Claude install dropped it to one pack — measured: 6 hook groups became 5
   // and `PreToolUse::Bash` went with them. `doctrinesForBuild` resolves unknown to ALL packs.
-  const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root);
-  const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root);
+  const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root, host);
+  const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root, host);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root));
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, null, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

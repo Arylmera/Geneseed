@@ -201,10 +201,13 @@ export function installProfile(host, scope, root, notify = null) {
   let marker = raw === null ? '' : raw.trim();
   if (marker && (EMIT_HOST_SCOPE.get(marker) ?? ['', ''])[0] !== host) marker = '';
   const emit = marker || DEFAULT_EMIT.get(`${host} ${scope}`) || 'opencode-global';
-  const theme = themeOfDir(root) || defaultTheme();
+  // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1): in a repo
+  // shared with another Claude-style host, an un-narrowed scan answers with WHICHEVER host's
+  // carrier the shared `CARRIERS` order favours — the wrong carrier for every host but one.
+  const theme = themeOfDir(root, host) || defaultTheme();
   const footprint = footprintOfDir(root);
-  const posture = postureOfDir(root) || defaultPosture();
-  const mode = modeOfDir(root) || defaultMode();
+  const posture = postureOfDir(root, host) || defaultPosture();
+  const mode = modeOfDir(root, host) || defaultMode();
   // Read off the deployed loop skill; no config fallback — `DEFAULT_PRESET` is the engine's.
   const trust = trustOfDir(root, host) || DEFAULT_PRESET;
   // A rebuild that defaulted the pack selection would re-emit an install into a constitution
@@ -214,13 +217,13 @@ export function installProfile(host, scope, root, notify = null) {
   // `harness.config.json`: a pre-migration carrier has no marker, and resolving that silence
   // out of a machine-wide config narrows every such install on its first upgrade.
   // `doctrinesForBuild` resolves unknown to ALL packs — see its docblock.
-  const doctrines = doctrinesForBuild(root);
+  const doctrines = doctrinesForBuild(root, host);
   // The per-rule axis is preserved for the same reason and with sharper teeth: an upgrade that
   // dropped it would quietly hand back every rule its owner switched off, and `process 5` is
   // one of them. `null` (no marker) stays `null` so the argv omits the flag, as it always did.
-  const excludeRules = excludedRulesOfDir(root);
+  const excludeRules = excludedRulesOfDir(root, host);
   // Skills left out stay left out: an upgrade that forgot them would put them all back.
-  const excludeSkills = excludedSkillsOfDir(root, notify);
+  const excludeSkills = excludedSkillsOfDir(root, notify, host);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludeSkills);

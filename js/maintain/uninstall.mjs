@@ -1030,11 +1030,14 @@ function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   // unconditionally (fail-closed, so not a hole — but wrong, and it made the toggle one-way
   // for project installs). `root` first, `cfg` second: on a global install the two are the
   // same directory anyway. Both silent ⇒ `null` ⇒ the gate stays.
-  const doctrines = doctrinesOfDir(root) ?? doctrinesOfDir(cfg);
+  // Both reads are narrowed to `host`'s OWN carrier (host-compat B1): in a repo shared with
+  // another Claude-style host, an un-narrowed scan can answer with a SIBLING host's carrier —
+  // the same failure `installProfile` had, reached here because `root` is the shared repo.
+  const doctrines = doctrinesOfDir(root, host) ?? doctrinesOfDir(cfg, host);
   // Same two-carrier read for the second axis, and its own default: an absent line means
   // NOTHING excluded, so a reactivate can only ever restore a gate, never remove one.
-  const excluded = excludedRulesOfDir(root).length ? excludedRulesOfDir(root)
-    : excludedRulesOfDir(cfg);
+  const excluded = excludedRulesOfDir(root, host).length ? excludedRulesOfDir(root, host)
+    : excludedRulesOfDir(cfg, host);
   // `host` reaches the group builder: a Bob reactivate must re-wire Gemini-named groups.
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed),
     managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host, cfg);

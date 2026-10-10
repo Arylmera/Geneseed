@@ -1245,10 +1245,45 @@ test('an openclaude per-repo install profile reads its own carrier, not a siblin
     assert.equal(p2.theme, 'imperial', 'the shared root CLAUDE.md shadowed .openclaude/CLAUDE.md');
     assert.equal(p2.posture, 'mentor');
     assert.deepEqual(p2.doctrines, ['craft']);
+
+    // THE REVERSE DIRECTION, which a host-agnostic carrier scan gets backwards: reading
+    // `.openclaude/CLAUDE.md` unconditionally for ANY host would now make CLAUDE's own
+    // read-back answer OpenClaude's settings in this same shared repo.
+    const p3 = installProfile('claude', 'project', repo);
+    assert.equal(p3.theme, 'cyberpunk', "claude's own read-back picked up openclaude's carrier");
+    assert.equal(p3.posture, 'peer');
+    assert.deepEqual(p3.doctrines, []);
   } finally {
     sb.cleanup();
   }
 });
+
+test("a bob per-repo install in the same shared repo also reads its own carrier (host-compat B1)",
+  () => {
+    const sb = makeSandbox();
+    try {
+      const repo = path.join(sb.path, 'repo');
+      fs.mkdirSync(repo);
+      const r1 = emitInherited(['--emit', 'openclaude', '--theme', 'imperial', '--out', repo,
+        '--root', repo, '--posture', 'mentor', '--doctrines', 'craft']);
+      assert.equal(r1.rc, 0, r1.err);
+      const r2 = emitInherited(['--emit', 'bob', '--theme', 'cyberpunk', '--out', repo,
+        '--root', repo, '--posture', 'peer', '--doctrines', 'none']);
+      assert.equal(r2.rc, 0, r2.err);
+
+      const bob = installProfile('bob', 'project', repo);
+      assert.equal(bob.theme, 'cyberpunk');
+      assert.equal(bob.posture, 'peer');
+      assert.deepEqual(bob.doctrines, []);
+
+      const oc = installProfile('openclaude', 'project', repo);
+      assert.equal(oc.theme, 'imperial');
+      assert.equal(oc.posture, 'mentor');
+      assert.deepEqual(oc.doctrines, ['craft']);
+    } finally {
+      sb.cleanup();
+    }
+  });
 
 test('a rebuild command quotes only the arguments a shell would split', () => {
   assert.equal(rebuildCommand(['--theme', 'imperial', '--out', 'C:\\My Repo']),
