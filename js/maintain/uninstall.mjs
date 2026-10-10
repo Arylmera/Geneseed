@@ -214,14 +214,35 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
   '.geneseed-footprint', VERSION_MARKER];
 
 /**
+ * The manifest's owned `skills/<name>/SKILL.md` entries, as the bare skill names — the
+ * provenance for a `permission.skill` deny: Task 4 (O-1) wires one per user-only skill, and
+ * unlike the Law IV `permission.bash` gates (permanent invariants, never taken back — see
+ * `reconcileOpencodePermission`), a skill-visibility deny is reversible: once uninstalled
+ * there is no skill left to hide, and the name is the user's to reuse.
+ */
+function skillPermissionNames(man) {
+  const re = /^skills\/([^/]+)\/SKILL\.md$/;
+  return ownedOf(man).map((r) => re.exec(r)?.[1]).filter(Boolean);
+}
+
+/**
  * `_harness_mcp._unmerge_opencode_json` — drop one `instructions` entry, leave every other
  * key intact.
+ *
+ * `denyNames`, Task 4 (O-1): names this install's manifest owns a `skills/<name>/SKILL.md`
+ * for — remove `permission.skill[name]` for each one, but ONLY where the value is still
+ * exactly `"deny"`. Ownership comes from the manifest entry, not the value; the value check
+ * on top guards the one case ownership alone cannot: a user who independently wrote their own
+ * `"<name>": "allow"`/`"ask"` for a name that happens to collide with an owned skill's. A
+ * caller passing `[]` (every non-uninstall unwire — `installDeactivate`, same as
+ * `permission.bash`) leaves `permission.skill` untouched, so a paused install keeps the model
+ * blind to its skills rather than re-exposing them until the next `geneseed build`.
  *
  * A COMMENTED `.jsonc` is not rewritten and the user is told to do it by hand: rewriting it
  * would drop the comments. That branch returns False, so the caller's `unmerged` reports
  * REALITY rather than intent.
  */
-export function unmergeOpencodeJson(p, entry) {
+export function unmergeOpencodeJson(p, entry, denyNames = []) {
   const target = opencodeTarget(p);
   // Absent, unreadable (the Python's `except OSError: return False`) or not an object: decline.
   const { state, data: cfg, hadComments } = loadJsonObject(target);
@@ -234,6 +255,11 @@ export function unmergeOpencodeJson(p, entry) {
     return false;
   }
   cfg.instructions = instr.filter((i) => i !== entry);
+  if (denyNames.length && isDict(cfg.permission) && isDict(cfg.permission.skill)) {
+    for (const name of denyNames) {
+      if (cfg.permission.skill[name] === 'deny') delete cfg.permission.skill[name];
+    }
+  }
   atomicWriteJson(target, cfg);
   return true;
 }
@@ -337,7 +363,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode') {
     if (isDir(p) && isEmptyDir(p)) rmdirQuiet(p);
   }
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
-    path.join(target, 'AGENT.md').split(path.sep).join('/'));
+    path.join(target, 'AGENT.md').split(path.sep).join('/'), skillPermissionNames(man));
   managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
   if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
@@ -398,10 +424,11 @@ function opencodeProjectUninstall(root) {
   const entry = installAgentEntry(root, 'project');
   let removed = 0;
   let failed = [];
+  let man = null;
   const oc = path.join(root, '.opencode');
   const manifestPath = path.join(oc, GLOBAL_MANIFEST);
   if (isFile(manifestPath)) {
-    const man = claudeReadManifest(oc);
+    man = claudeReadManifest(oc);
     [removed, failed] = unlinkOwned(oc, ownedOf(man), '.opencode/');
     if (failed.length) warnSurvivors(failed);
     // Survivors gate, mirroring the other two reversals: `_project_qualifies` keys off the
@@ -422,7 +449,8 @@ function opencodeProjectUninstall(root) {
   }
   const am = path.join(root, 'AGENT.md');
   if (isFile(am)) { unlinkQuiet(am); removed += 1; }
-  const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry);
+  const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry,
+    man ? skillPermissionNames(man) : []);
   const result = { removed, unmerged, archived: null };
   if (failed.length) result.failed = failed;
   return result;

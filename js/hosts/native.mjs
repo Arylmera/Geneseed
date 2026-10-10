@@ -509,8 +509,10 @@ export function claimer(oldOwned, cfg, manifestExisted = true) {
  * `opts.claim` — a `claimer` closure the caller shares with its other writers; built from
  * `oldOwned`/`cfg`/`manifestExisted` when absent.
  *
- * Returns `{ nAgents, nSkills, written }` — Python's 3-tuple, with `written` as absolute
- * paths in write order.
+ * Returns `{ nAgents, nSkills, written, userOnlySkills }` — Python's 3-tuple, with `written` as
+ * absolute paths in write order, plus `userOnlySkills` (the claimed stems carrying the
+ * user-only marker; Task 4/O-1's input to OpenCode's `permission.skill` wiring — see the
+ * comment above the skill-frontmatter branch).
  *
  * That order is NOT observable, and this comment used to claim it was ("it lands in
  * `owned`, which the prune diffs against"). Measured when a mutation reversing it stayed
@@ -531,6 +533,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   const written = [];
   const sideFiles = [];            // [stem, dest, text], written after the loop
   const claimedSkills = new Set(); // stems whose own SKILL.md claim held
+  const userOnlySkills = [];       // claimed stems carrying the user-only marker
 
   const write = (dest, text) => {
     mkdirSync(path.dirname(dest), { recursive: true });
@@ -594,6 +597,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let fm;
     let dest;
     let kind;
+    let userOnly = false;
     if (folder === 'agents') {
       fm = host === 'claude' ? claudeAgentFrontmatter(stem, text, ov)
         : opencodeAgentFrontmatter(stem, text, ov, theme);
@@ -601,12 +605,18 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       kind = 'agent';
     } else {
       // Skills are BYTE-IDENTICAL across hosts: name + description, body link-stripped.
-      // The user-only key is emitted for every host too — Claude Code and Bob honour it,
-      // OpenCode ignores an unknown key — so the identity holds. ALIASES are the one
-      // exception: OpenCode has no user-only skill, so an alias skill there would land in the
-      // model's catalogue as a duplicate; it gets a command instead (`writeAliasCommands`).
+      // The user-only key is emitted for every host too — Claude Code and Bob honour it
+      // natively (`disable-model-invocation`); OpenCode has no frontmatter equivalent, so the
+      // SAME marker also drives `userOnlySkills` below, which the OpenCode emit turns into a
+      // `permission.skill: {name: "deny"}` row in `opencode.json` (opencode-verdict.md O-1) —
+      // the model loses the skill from its catalogue, `/name` still runs it (O-1's second
+      // finding: the command path reads the UNFILTERED skill list, never the permission one).
+      // ALIASES are the one exception: OpenCode has no user-only skill via frontmatter, so an
+      // alias skill there would land in the model's catalogue as a duplicate; it gets a
+      // command instead (`writeAliasCommands`).
       fm = [`name: ${stem}`, `description: ${jsonDumps(skillDescription(text))}`];
-      if (isUserInvokedOnly(text)) fm.push('disable-model-invocation: true');
+      userOnly = isUserInvokedOnly(text);
+      if (userOnly) fm.push('disable-model-invocation: true');
       body = stripSkillBodyLinks(pointSideFiles(body, stem, skillDirOf ? skillDirOf(stem)
         : SKILL_DIR_PLACEHOLDER));
       dest = path.join(skillsDir, stem, 'SKILL.md');
@@ -614,7 +624,12 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     }
     if (!claim(dest)) continue;
     write(dest, `---\n${fm.join('\n')}\n---\n\n${body}`);
-    if (kind === 'skill') claimedSkills.add(stem);
+    if (kind === 'skill') {
+      claimedSkills.add(stem);
+      // Only a CLAIMED user-only skill is Geneseed's to deny: a pre-existing file the claim
+      // declined belongs to the user, and `userOnly` was computed from OUR text, not theirs.
+      if (userOnly) userOnlySkills.push(stem);
+    }
     // An old name keeps answering `/name`: user-only, so the model's catalogue lists the
     // skill once. Read off the already-filtered items, so excluding the target drops its
     // aliases; through `claim`, so manifest, prune and uninstall own them; not counted.
@@ -638,7 +653,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   for (const [stem, dest, text] of sideFiles) {
     if (claimedSkills.has(stem) && claim(dest)) write(dest, stripSkillBodyLinks(text));
   }
-  return { nAgents, nSkills, written };
+  return { nAgents, nSkills, written, userOnlySkills };
 }
 
 /**

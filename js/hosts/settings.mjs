@@ -320,6 +320,46 @@ function reconcileOpencodePermission(perm, want) {
   return [changed, stranded, null];
 }
 
+/**
+ * `permission.skill` rows for OpenCode's O-1 fix (opencode-verdict.md): a skill marked
+ * `<!-- invocation: user -->` is still model-invocable there (Claude Code's
+ * `disable-model-invocation` has no OpenCode equivalent), so each one gets an explicit
+ * `"<name>": "deny"` — confirmed against upstream `permission.ts` (`skill: Schema.optional(Rule)`,
+ * `Rule = Action | Record<string,Action>`) and `Skill.available`'s `Permission.evaluate("skill",
+ * …)` filter. `/name` still runs it: `Command`'s skill loop reads `skill.all()`, never the
+ * permission-filtered list, so the command path is untouched by design.
+ */
+function defaultSkillPermission(names) {
+  const skill = {};
+  for (const n of names) skill[n] = 'deny';
+  return skill;
+}
+
+/**
+ * Add any of `names` missing from an EXISTING `permission.skill`, touching nothing else — the
+ * `skill` twin of `reconcileOpencodePermission`, but simpler: the "owned" set is not a fixed
+ * list of globs, it is exactly this build's `userOnlySkills`, so there is no static OWNED
+ * table and nothing to report as `stranded` (a name that stops being user-only, or gets
+ * `--exclude-skills`'d, simply stops being asked for — its stale deny, if any, is left as
+ * found, same fail-closed direction as a stranded bash key).
+ *
+ * A non-object `permission.skill` (a blanket `"skill": "allow"`/`"deny"`/`"ask"`) is the
+ * user's own policy and is left alone, reported as opaque — same contract as
+ * `reconcileOpencodePermission`'s `bash` shape guard.
+ * @returns {[boolean, string | null]}
+ */
+function reconcileOpencodeSkillPermission(perm, names) {
+  if (!names.length) return [false, null];
+  if (!has(perm, 'skill')) { perm.skill = defaultSkillPermission(names); return [true, null]; }
+  const skill = get(perm, 'skill');
+  if (!isDict(skill)) return [false, 'has a "skill" that is not an object'];
+  let changed = false;
+  for (const n of names) {
+    if (!has(skill, n)) { skill[n] = 'deny'; changed = true; }
+  }
+  return [changed, null];
+}
+
 /** `_build_settings._opencode_target`. Only caller of a `.json` -> `.jsonc` suffix swap. */
 export function opencodeTarget(jsonPath) {
   const ext = path.extname(jsonPath);
@@ -449,7 +489,7 @@ export function loadJsonObject(p, { strict = false } = {}) {
  * `'add'`, which is what the boolean callers this replaced meant.
  */
 function warnCommentedJsonc(target, agentPath, permission,
-  includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = []) {
+  includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = [], skillNames = []) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
   process.stdout.write(`[${prefix}]     ${jsonDumps(agentPath)}\n`);
@@ -460,6 +500,13 @@ function warnCommentedJsonc(target, agentPath, permission,
       : `[${prefix}] and, for Geneseed's default ask-gates, a "permission" key:\n`);
     for (const line of jsonDumpsIndent(defaultPermission(doctrines, excluded)).split('\n')) {
       process.stdout.write(`[${prefix}]     ${line}\n`);
+    }
+    if (skillNames.length) {
+      process.stdout.write(`[${prefix}] and, to hide its user-only skills from the model, a `
+        + '"permission"."skill" key:\n');
+      for (const line of jsonDumpsIndent(defaultSkillPermission(skillNames)).split('\n')) {
+        process.stdout.write(`[${prefix}]     ${line}\n`);
+      }
     }
   }
   if (includeLsp) {
@@ -496,7 +543,7 @@ export function atomicWriteJson(p, config) {
  * re-implements the inverse itself rather than inherit this one's permission/lsp side
  * effects, so the only crossings are the two emit-tree ones (`_build_emit.emit_opencode`,
  * `_build_global.emit_opencode_global`). */
-export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = []) {
+export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [], skillNames = []) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
   const { state, data, hadComments, error } = loadJsonObject(target);
@@ -527,10 +574,23 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
   let permChanged = addPerm;
   let stranded = [];
   let opaque = null;
-  if (addPerm) config.permission = defaultPermission(doctrines, excluded);
-  else {
-    [permChanged, stranded, opaque] = reconcileOpencodePermission(get(config, 'permission'),
+  let skillOpaque = null;
+  if (addPerm) {
+    config.permission = defaultPermission(doctrines, excluded);
+    if (skillNames.length) {
+      config.permission.skill = defaultSkillPermission(skillNames);
+    }
+  } else {
+    const perm = get(config, 'permission');
+    [permChanged, stranded, opaque] = reconcileOpencodePermission(perm,
       defaultPermission(doctrines, excluded));
+    // Independent of the `bash` shape: a `permission.bash` the build cannot wire into must
+    // not also block the UNRELATED `permission.skill` key from being reconciled.
+    if (isDict(perm)) {
+      let skillChanged;
+      [skillChanged, skillOpaque] = reconcileOpencodeSkillPermission(perm, skillNames);
+      permChanged = permChanged || skillChanged;
+    }
   }
   // The shape said no. This is the direction the residue warning above is NOT — a rule stated
   // in AGENT.md with nothing behind it — and it used to pass in silence, because a blanket
@@ -543,6 +603,12 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
       + `${OWNED_BASH.filter((k) => has(defaultPermission(doctrines, excluded).bash, k))
         .map((k) => jsonDumps(k)).join(', ')}. Your policy is left exactly as written; the `
       + 'harness states those rules but nothing enforces them at this boundary.\n');
+  }
+  if (skillOpaque) {
+    process.stderr.write(`[geneseed] WARN: "permission"."skill" in ${path.basename(target)} `
+      + `${skillOpaque}, so Geneseed cannot wire its own skill-visibility gates into it — `
+      + `including ${skillNames.map((k) => jsonDumps(k)).join(', ')}. Your policy is left `
+      + 'exactly as written; those skills stay in the model\'s catalogue.\n');
   }
   // Told, not silently left: these are gates for a rule this build does not make binding, kept
   // because Geneseed cannot prove it was the one that wrote them. stderr, like the other two
@@ -570,7 +636,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
     // block to paste, split by which of the two situations the reader is actually in. It is
     // stdout, not stderr, because on this path the paste-in IS the output.
     warnCommentedJsonc(target, agentPath, addPerm ? 'add' : (permChanged && 'reconcile'),
-      addLsp, 'geneseed', doctrines, excluded);
+      addLsp, 'geneseed', doctrines, excluded, skillNames);
     return target;
   }
   try {

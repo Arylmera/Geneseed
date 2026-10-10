@@ -399,6 +399,26 @@ test('a global uninstall removes what it owns and keeps the memory store', () =>
   });
 });
 
+test('a real global uninstall takes back only the skill denies it owns', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const target = path.join(cfg, 'opencode.json');
+    const before = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.equal(before.permission.skill.herdr, 'deny',
+      'herdr carries `<!-- invocation: user -->` and must start denied');
+    // A user's own policy for an unrelated name — Geneseed's manifest does not own `mine`.
+    before.permission.skill.mine = 'deny';
+    fs.writeFileSync(target, JSON.stringify(before));
+
+    uninstallGlobal(cfg, false);
+
+    const after = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.ok(!('herdr' in after.permission.skill), 'an owned deny survived a real uninstall');
+    assert.equal(after.permission.skill.mine, 'deny',
+      "a name Geneseed's manifest never owned was removed by uninstall");
+  });
+});
+
 // OpenCode reads `<cfg>/AGENTS.md` and, ONLY when that file is absent, falls back to
 // `~/.claude/CLAUDE.md` — which a Claude-global install fills with the whole harness. So the
 // global emit makes sure an AGENTS.md exists: a GENESEED managed block when the file is
@@ -600,6 +620,41 @@ test('the unmerge edits a comment-free JSONC file', () => {
     const changed = unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md');
     assert.equal(changed, true);
     assert.deepEqual(JSON.parse(fs.readFileSync(jc, 'utf8')).instructions, ['other.md']);
+  });
+});
+
+// Task 4 / O-1: `permission.skill` denies are reversible, unlike the Law IV bash gates — a
+// true uninstall takes back the ones it owns. `denyNames` is `unmergeOpencodeJson`'s 3rd,
+// optional argument; ownership is by NAME (the manifest's owned `skills/<name>/SKILL.md`), the
+// value check on top guards a user's own unrelated policy for a colliding name.
+test('the unmerge strips the skill denies it owns, by name AND value, nothing else', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      instructions: ['AGENT.md'],
+      permission: { skill: { herdr: 'deny', mine: 'deny', quiz: 'allow' } },
+    }));
+    const changed = unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md', ['herdr', 'quiz']);
+    assert.equal(changed, true);
+    const skill = JSON.parse(fs.readFileSync(p, 'utf8')).permission.skill;
+    assert.ok(!('herdr' in skill), 'an owned deny survived uninstall');
+    assert.equal(skill.mine, 'deny', "a name not in denyNames (not this install's) was removed");
+    assert.equal(skill.quiz, 'allow',
+      "a non-'deny' value for an owned name was deleted — ownership is not a licence to overwrite");
+  });
+});
+
+test('the unmerge touches permission.skill not at all when no denyNames are given', () => {
+  // `installDeactivate` calls with no 3rd argument — same contract as the Law IV bash gates,
+  // which never come back out on a pause. The denies must survive untouched.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      instructions: ['AGENT.md'],
+      permission: { skill: { herdr: 'deny' } },
+    }));
+    unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md');
+    assert.equal(JSON.parse(fs.readFileSync(p, 'utf8')).permission.skill.herdr, 'deny');
   });
 });
 

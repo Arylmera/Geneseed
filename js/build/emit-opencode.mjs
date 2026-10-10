@@ -60,7 +60,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   // One claim for every writer below whose path lands in `owned` — see `claimer`.
   const claim = claimer(oldOwned, dir, manifestExisted);
 
-  const { nAgents, nSkills, written } = writeNativeLayer(
+  const { nAgents, nSkills, written, userOnlySkills } = writeNativeLayer(
     items, path.join(dir, 'agents'), path.join(dir, 'skills'), overrides,
     { host: 'opencode', theme, src: cfg.src, claim });
   for (const p of written) owned.push(relPosix(dir, p));
@@ -90,7 +90,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   // WIRE — the one file of this layer the user co-owns.
   phaseLog('WIRE');
   const cfgName = path.basename(mergeOpencodeJson(path.join(wireBase, 'opencode.json'),
-    agentPath, cfg.doctrines, cfg.excludeRules));
+    agentPath, cfg.doctrines, cfg.excludeRules, userOnlySkills));
 
   return {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands: commands.length, cfgName,

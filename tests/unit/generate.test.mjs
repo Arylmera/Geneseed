@@ -1479,6 +1479,71 @@ test('a permission block Geneseed cannot wire into is reported, not passed over 
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// Task 4 / O-1 — `permission.skill` denies for OpenCode's user-only skills. Upstream's
+// `Skill.available` drops any skill whose `permission.skill` evaluates to `deny`
+// (opencode_src_skill_index.ts:314), and `Command`'s skill loop reads `skill.all()` — the
+// UNFILTERED list — so `/name` still runs it (opencode_src_command_index.ts).
+
+test('writeNativeLayer reports the claimed user-only skill stems, and only those', () => {
+  withDir((d) => {
+    const { userOnlySkills } = native(d);
+    // Real authored skills carrying the literal `<!-- invocation: user -->` marker in
+    // src/skills (skill-forge only DESCRIBES the convention in prose; it does not carry it).
+    for (const name of ['herdr', 'learn-mode', 'quiz', 'teach']) {
+      assert.ok(userOnlySkills.includes(name), `${name} missing from userOnlySkills: ${userOnlySkills}`);
+    }
+    // An ordinary, model-invocable skill gets no row.
+    assert.ok(!userOnlySkills.includes('brainstorm'),
+      'brainstorm carries no invocation:user marker and must not be denied');
+  });
+});
+
+test('a fresh opencode.json gets a permission.skill deny row per user-only skill', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz']);
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.deepEqual(data.permission.skill, { herdr: 'deny', quiz: 'deny' });
+    // The bash gates still ride along unmodified.
+    assert.equal(data.permission.bash['rm -rf *'], 'ask');
+  });
+});
+
+test('no user-only skills in this build means no permission.skill key at all', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md');
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.ok(!('skill' in data.permission), 'an empty skill object was written for nothing to deny');
+  });
+});
+
+test('an existing permission block gets its missing skill denies reconciled in', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      permission: { bash: { 'curl *': 'ask' }, skill: { herdr: 'deny' } },
+    }));
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz']);
+    const perm = JSON.parse(fs.readFileSync(p, 'utf8')).permission;
+    assert.deepEqual(perm.skill, { herdr: 'deny', quiz: 'deny' });
+    assert.equal(perm.bash['curl *'], 'ask', 'a sibling bash entry was disturbed');
+  });
+});
+
+test('a blanket permission.skill policy is left alone and reported', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: { 'rm -rf *': 'ask' }, skill: 'allow' } }));
+    const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr']));
+    assert.match(err, /WARN/);
+    assert.ok(err.includes('"herdr"'), err);
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.equal(data.permission.skill, 'allow', "the user's blanket policy was rewritten");
+  });
+});
+
 test('a merge preserves an mcp block it does not own', () => {
   // The markitdown MCP server — and any server the user added — lives under `mcp`. A re-emit
   // merges `instructions` and must touch nothing else in the file.
