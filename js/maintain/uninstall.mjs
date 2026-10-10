@@ -268,9 +268,11 @@ export function archiveStore(store) {
 /**
  * `_harness_mcp._settings_file` — the file this install's hooks were actually wired into.
  *
- * `settings.local.json` for a Claude PROJECT install (personal, untracked), `settings.json`
- * everywhere else, and the manifest is the authority. Every lifecycle path must target the
- * file the EMIT wrote, or the hooks linger in one file while the claims chase another.
+ * `settings.local.json` for a Claude or OpenClaude PROJECT install (personal, untracked),
+ * `settings.json` everywhere else (including Bob's, which documents no local variant), and
+ * the manifest is the authority — this reads `managed.settings_file`, it does not re-derive
+ * the rule. Every lifecycle path must target the file the EMIT wrote, or the hooks linger in
+ * one file while the claims chase another.
  *
  * EXPORTED for `migrate` (host-compat B1 round, `js/maintain/migrate.mjs`'s `hookSettingsFile`):
  * reading a pre-migration install's CURRENT wiring is the same question this answers, and a
@@ -596,7 +598,7 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
     if (scope === 'global' || host === 'opencode') unlinkQuiet(path.join(root, '.geneseed-theme'));
     unlinkQuiet(path.join(root, VERSION_MARKER));
   }
-  // 4. Tidy an emptied marker dir (.claude/.bob) so no husk lingers in the repo.
+  // 4. Tidy an emptied marker dir (.claude/.bob/.openclaude) so no husk lingers in the repo.
   if (data !== root && isDir(data) && isEmptyDir(data)) rmdirQuiet(data);
   const out = { ok: true, removed: summary.removed ?? 0, memory };
   if (archived.length) out.archived = archived;
@@ -747,9 +749,14 @@ export function cmdUninstall(args) {
   const stores = ['memory', 'notebook'].filter((n) => isDir(path.join(data, n)));
   printOut(`[uninstall] target: ${root} (${host}:${scope})\n`);
   if (CLAUDE_STYLE.includes(host)) {
+    // Not always settings.json: a Claude/OpenClaude PROJECT install wires settings.local.json
+    // (host-compat B4) — read back from the manifest `settingsFile` already resolves, rather
+    // than restate the rule here a second time.
+    const cfgForSf = claudeCfg(root, scope, host);
+    const sfName = path.basename(settingsFile(cfgForSf, managedOf(claudeReadManifest(cfgForSf))));
     printOut('[uninstall] removes: agents/, skills/, markers, the '
       + `${hostSpec(host).agentFile} managed block, and Geneseed's `
-      + 'settings.json hooks/excludes (your own keys/hooks are kept).\n');
+      + `${sfName} hooks/excludes (your own keys/hooks are kept).\n`);
   } else if (scope === 'global') {
     printOut('[uninstall] removes: AGENT.md, the AGENTS.md managed block, agents/, skills/, '
       + 'plugins/, markers, and the opencode.json instructions entry.\n');

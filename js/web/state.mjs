@@ -57,8 +57,9 @@ export function webState(theme = null, target = null) {
     _inv: null,
     _doctor: null,
   };
-  // The INSTALL ROOT (== build --out). For globals it IS the data dir; a claude/bob
-  // PROJECT install keeps its data under <repo>/.claude while the markers land at <repo>/.
+  // The INSTALL ROOT (== build --out). For globals it IS the data dir; a claude/bob/openclaude
+  // PROJECT install keeps its data under <repo>/.claude|.bob|.openclaude while the markers
+  // land at <repo>/.
   st.root = st.target;
   st.theme = theme || themeOfDir(st.target) || 'neutral';
   st.emit = installedDefaults().emit || 'opencode-global';
@@ -119,11 +120,14 @@ export function webState(theme = null, target = null) {
   /**
    * Re-point the console at another detected install's data dir.
    *
-   * `root` is the install ROOT the markers and sigils live at. It defaults to `target` and
-   * differs only for claude/bob/openclaude PROJECT installs, where the data sits under
+   * `root` is the install ROOT the markers live at. It defaults to `target` and differs only
+   * for claude/bob/openclaude PROJECT installs, where the data sits under
    * `<repo>/.claude|.bob|.openclaude` while `.geneseed-emit`/`-theme`/`-footprint` land at
    * `<repo>/` — reading them from the data dir mis-detects the install as opencode/neutral,
-   * and a Diff or a Restore would then overwrite it in the wrong dialect.
+   * and a Diff or a Restore would then overwrite it in the wrong dialect. The theme/posture/mode
+   * SIGILS are different: for claude/bob they live in the ROOT carrier (`themeOfDir` scans it);
+   * for openclaude they live ONLY in the data dir's nested `.openclaude/CLAUDE.md`, since its
+   * root carrier is deliberately left untouched (host-compat B1/I1).
    */
   st.selectView = (target, root = null) => {
     st.target = target;

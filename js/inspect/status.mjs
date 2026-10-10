@@ -69,7 +69,8 @@ import {
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs now read them.
 import {
-  defaultTheme, installedDefaults, installTargets, readJsonMaybe, readMaybe,
+  defaultTheme, installedDefaults, installTargets, openclaudeDualHarnessRoots,
+  readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { shimDead } from '../hosts/shim.mjs';
@@ -264,6 +265,7 @@ export function statusData() {
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
     opencode_shadow: opencodeShadowedInstall(),
+    openclaude_dual_harness: openclaudeDualHarnessRoots(),
     // EVERY install, not just the one `installedDefaults` settles on — and read through the
     // same `installProfile` `rebuild-all` uses, so the settings shown are the ones a rebuild
     // keeps. `rebuild` is the pasteable command an agent edits one flag of. A broken install
@@ -365,6 +367,14 @@ export function statusLines(d, color = false) {
   if (d.opencode_shadow) {
     rows.push(['opencode', `ALSO LOADED: a second Geneseed install in ${d.opencode_shadow} (OpenCode `
       + 'reads it beside OPENCODE_CONFIG_DIR, so every plugin runs twice) - uninstall one']);
+  }
+  // Conditional: empty on every machine without a claude/bob AND openclaude project install
+  // sharing one repo. There is no clean exclusion (see `openclaudeDualHarnessRoot`), so this
+  // only names the roots where it is happening.
+  for (const root of d.openclaude_dual_harness ?? []) {
+    rows.push(['openclaude', `ALSO LOADED: ${root} also carries a claude/bob per-repo install — `
+      + 'OpenClaude reads its own .openclaude/CLAUDE.md AND that root CLAUDE.md/AGENTS.md '
+      + '(every always-on doc doubles) - no clean exclusion, uninstall one']);
   }
   // Conditional for the recording reason again: no recorded panel carries `installs`.
   for (const p of d.installs ?? []) {

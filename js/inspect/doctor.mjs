@@ -33,7 +33,7 @@ import path from 'node:path';
 import { emitGlobalInto, emitProjectInto, main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
 import { CLAUDE_STYLE, opencodeShadowedInstall, resolvePath } from '../hosts/hosts.mjs';
-import { installedDefaults, themeFiles } from '../hosts/installs.mjs';
+import { installedDefaults, openclaudeDualHarnessRoots, themeFiles } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { authoringProblems, loopProblems } from './checks-authoring.mjs';
@@ -224,6 +224,12 @@ export function doctorCollect({
   problems = problems.concat(ran('opencode_dirs', 'OpenCode config dirs', shadow
     ? [`[opencode] ${shadow} holds a Geneseed install beside $OPENCODE_CONFIG_DIR's, and OpenCode `
       + 'loads both (every plugin runs twice) — uninstall the one you no longer use'] : []));
+  // Host-compat I1: OpenClaude's project carrier is additive, not exclusive — there is no
+  // clean exclusion, so this check only names the repos where both are loading.
+  problems = problems.concat(ran('openclaude_dual', 'OpenClaude dual harness',
+    openclaudeDualHarnessRoots().map((root) => `[openclaude] ${root} also carries a claude/bob `
+      + 'per-repo install — OpenClaude loads its own .openclaude/CLAUDE.md AND that root '
+      + 'CLAUDE.md/AGENTS.md (every always-on doc doubles) — uninstall the one you no longer use')));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('scorecard', 'Scorecard floor', scorecardProblems()));
   // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed

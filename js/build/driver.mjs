@@ -103,8 +103,9 @@ export function resolveOut(raw) {
  * `_build_global._preamble_exclude` — the `claudeMdExcludes` entry a PROJECT install writes
  * to suppress the GLOBAL preamble of the same host, or null for a host that gets none.
  *
- * `_PREAMBLE_CONFIG_DIR` has exactly one key, so only a `CLAUDE.md` carrier resolves to a
- * value: Bob's `AGENTS.md` gets null.
+ * Only a `CLAUDE.md` carrier resolves to a value — Bob's `AGENTS.md` gets null. The function
+ * branches on `host` to pick between Claude's and OpenClaude's own global config dir, so "one
+ * key" no longer describes what resolves the directory; the carrier-name rule still holds.
  *
  * Computed HERE and not in the render child, and that is the inverted boundary rule doing
  * real work rather than being restated. P3b's note on the Python original: it resolves
@@ -394,9 +395,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
-    _comment: "Files owned by Geneseed's Claude emit. Do not edit; removed on "
+    _comment: "Files owned by Geneseed's Claude/Bob/OpenClaude emit. Do not edit; removed on "
       + 're-emit. The memory and notebook stores are NOT listed — never '
-      + 'deleted. `managed` records the CLAUDE.md block + settings.json '
+      + 'deleted. `managed` records the CLAUDE.md/AGENTS.md block + settings file '
+      + '(settings.json, or settings.local.json at PROJECT scope on Claude/OpenClaude) '
       + 'hooks so uninstall removes exactly those.',
     owned: [...owned].sort(),
     managed,
@@ -752,9 +754,11 @@ function run(argv) {
   writeMarkers(markerDir, args.emit, args.footprint);
   // build() drops a .geneseed-theme in `out` for the emits that call it; the global emits
   // render into the config dir WITHOUT calling build(), so the theme is recorded here.
-  // Deliberately not written for the claude/bob/openclaude PROJECT emits — they carry none,
-  // and `_harness_setup._installed_defaults` detects those by an AGENT.md sigil scan
-  // instead. Writing one for them would change the emitted tree.
+  // Deliberately not written for the claude/bob/openclaude PROJECT emits — they carry none.
+  // Claude and Bob fall back to a sigil scan of their ROOT carrier instead
+  // (`_harness_setup._installed_defaults`); OpenClaude has no root carrier to scan, so its
+  // project theme is read off `.openclaude/CLAUDE.md` (host-narrowed `firstCarrier`, host-compat
+  // B1). Writing one for them would change the emitted tree.
   if (args.emit.endsWith('-global')) {
     try {
       writeText(path.join(markerDir, '.geneseed-theme'), `${args.theme}\n`);

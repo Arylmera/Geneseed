@@ -1,5 +1,5 @@
 /**
- * The Claude and Bob emits — one renderer, and the settings merge that wires it in.
+ * The Claude, Bob and OpenClaude emits — one renderer, and the settings merge that wires it in.
  *
  * Split out of `emit.mjs` beside `emit-opencode.mjs`, over the shared writers in
  * `emit-common.mjs`. `claudeWire` is the half that touches a file the USER also edits, and
@@ -236,8 +236,8 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     managedBlockRemove(victim);
   }
 
-  // Hooks embed machine-absolute paths. At PROJECT scope for Claude they go into
-  // settings.local.json — the personal, untracked file — never the team-shared
+  // Hooks embed machine-absolute paths. At PROJECT scope for Claude and OpenClaude they go
+  // into settings.local.json — the personal, untracked file — never the team-shared
   // settings.json, which would hand every teammate failing hooks pointing at this machine's
   // node and this machine's checkout. (Bob documents no local variant, so it keeps
   // settings.json.)
@@ -269,8 +269,9 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   );
   managed.settings_hooks = managedHooks;
 
-  // Project-bypasses-global (Claude only): a PROJECT install suppresses the GLOBAL
-  // ~/.claude/CLAUDE.md while cwd is this repo, via Claude's native claudeMdExcludes.
+  // Project-bypasses-global (Claude and OpenClaude): a PROJECT install suppresses the GLOBAL
+  // ~/.claude/CLAUDE.md (or ~/.openclaude/CLAUDE.md) while cwd is this repo, via the shared
+  // claudeMdExcludes dialect.
   // Written only when this run actually emitted the project's own preamble (never
   // suppress with no replacement); GENESEED_STACK_GLOBAL=1 opts out, and a re-emit with
   // it set strips a prior exclude. Bob never gets one: its bypass is the same-named

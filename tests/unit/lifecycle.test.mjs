@@ -31,7 +31,9 @@ import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
   projectQualifies, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
-import { emitHostScopeOf, installState, installTargets } from '../../js/hosts/installs.mjs';
+import {
+  emitHostScopeOf, installState, installTargets, openclaudeDualHarnessRoot,
+} from '../../js/hosts/installs.mjs';
 import { isScratchRoot, registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import {
   VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir, opencodeShadowedInstall,
@@ -469,6 +471,37 @@ test('a Geneseed install left in the xdg dir beside OPENCODE_CONFIG_DIR is repor
       else process.env.OPENCODE_CONFIG_DIR = saved.env;
       process.env.XDG_CONFIG_HOME = saved.xdg;
     }
+  });
+});
+
+// Host-compat verdict I1: OpenClaude's project carrier is additive (`.openclaude/CLAUDE.md`),
+// so a repo that also has a claude or bob project install loads BOTH harnesses — there is no
+// clean exclusion, only the warning `openclaudeDualHarnessRoot` feeds to status/doctor.
+test('openclaudeDualHarnessRoot fires only when openclaude shares a root with claude or bob', () => {
+  withDir((d) => {
+    const mark = (host) => {
+      const dir = path.join(d, `.${host}`);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+    };
+    assert.equal(openclaudeDualHarnessRoot(d), false, 'nothing installed yet');
+    mark('openclaude');
+    assert.equal(openclaudeDualHarnessRoot(d), false, 'openclaude alone shares nothing');
+    mark('claude');
+    assert.equal(openclaudeDualHarnessRoot(d), true, 'claude + openclaude share the root');
+    assert.ok(statusLines({ ...statusData(), openclaude_dual_harness: [d] })
+      .some((l) => l.includes(d) && l.includes('openclaude')),
+      'status does not warn about the dual harness');
+  });
+  withDir((d) => {
+    const mark = (host) => {
+      const dir = path.join(d, `.${host}`);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+    };
+    mark('openclaude');
+    mark('bob');
+    assert.equal(openclaudeDualHarnessRoot(d), true, 'bob + openclaude share the root too');
   });
 });
 

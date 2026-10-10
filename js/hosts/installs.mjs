@@ -594,6 +594,33 @@ export function installState(root, host = 'opencode', scope = 'global') {
   return installKind(root) !== null ? 'active' : 'absent';
 }
 
+/**
+ * Host-compat verdict I1: an OpenClaude PROJECT install is additive, never exclusive — it loads
+ * its own `<repo>/.openclaude/CLAUDE.md` **and** whatever root `CLAUDE.md`/`AGENTS.md` a claude
+ * or bob PROJECT install already wrote there (`B/src/utils/claudemd.ts` l.904-928; `CARRIERS`
+ * above deliberately leaves the root file untouched for OpenClaude so a Claude/Bob install can
+ * share the repo). There is no clean fix: excluding the root file would hide the user's OWN
+ * content in it too, so the only thing `status`/`doctor` can do is say the doubling exists.
+ *
+ * `installState` on the two hosts is enough — a claude/bob PROJECT install is 'active' only
+ * once it has actually written its own `.claude`/`.bob` manifest, which is exactly when it has
+ * also written the root carrier.
+ */
+export function openclaudeDualHarnessRoot(root) {
+  if (installState(root, 'openclaude', 'project') !== 'active') return false;
+  return installState(root, 'claude', 'project') === 'active'
+    || installState(root, 'bob', 'project') === 'active';
+}
+
+/** Every PROJECT root `installTargets()` reaches where `openclaudeDualHarnessRoot` is true. */
+export function openclaudeDualHarnessRoots() {
+  const roots = new Set();
+  for (const [, scope, root] of installTargets()) {
+    if (scope === 'project') roots.add(resolvePath(root));
+  }
+  return [...roots].filter(openclaudeDualHarnessRoot).sort(comparePaths);
+}
+
 /** `_harness_mcp._registered_targets` — (host, scope, root) for every registered root. */
 export function registeredTargets() {
   const out = [];

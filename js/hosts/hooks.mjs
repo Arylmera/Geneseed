@@ -6,15 +6,17 @@
  * fused for a host that runs ONE command per event), and a Stop/SubagentStop/PreCompact
  * distiller.
  *
- * ONE VERB, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
+ * THREE HOSTS, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
  * prompt. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
  * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5) exit 2 with the reason on stderr
- * and the rest is a stderr line with exit 0; SessionStart
- * context is plain stdout, as on Claude. `--host openclaude` speaks Claude's dialect verbatim
- * (OpenClaude is a Claude Code fork); the flag only picks which root file counts as native. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
- * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
- * driver emits has no Python in its hook path at all — which is what let the interpreter
+ * and the rest is a stderr line with exit 0; SessionStart context is plain stdout, as on
+ * Claude. `--host openclaude` speaks Claude's dialect verbatim (OpenClaude is a Claude Code
+ * fork); the flag only picks which root file counts as native for `context`'s discovery.
+ *
+ * Since P5b, `--host` is also what the emitted hooks themselves name: `bin/build-driver.mjs`
+ * bakes `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install
+ * this driver emits has no Python in its hook path at all — which is what let the interpreter
  * discovery and its exit-4 refusal be deleted rather than merely bypassed.
  *
  * Ported from `rituals/_harness_context.py` and `rituals/_harness_learn.py`, whose shared
