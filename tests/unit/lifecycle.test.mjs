@@ -461,6 +461,73 @@ test('a real re-emit sweeps a stale skill deny once --exclude-skills drops it', 
   });
 });
 
+// Final review: owning `skills/<name>/SKILL.md` is not owning a deny for that name — a user may
+// hide a Geneseed skill from the model on their own. So the manifest records the names Geneseed
+// itself WROTE a deny for (`skill_denies`), and only those are ever swept or uninstalled.
+const editJson = (p, fn) => {
+  const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+  fn(data);
+  fs.writeFileSync(p, JSON.stringify(data));
+};
+
+test("a user's own deny on a Geneseed skill survives a re-emit and an uninstall", () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const target = path.join(cfg, 'opencode.json');
+    const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    assert.ok(man.skill_denies.includes('herdr') && !man.skill_denies.includes('brainstorm'),
+      `the manifest does not record exactly the denies Geneseed wrote: ${man.skill_denies}`);
+    // brainstorm is model-invocable, so Geneseed never denies it: this one is the user's.
+    editJson(target, (c) => { c.permission.skill.brainstorm = 'deny'; });
+
+    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+    let skill = JSON.parse(fs.readFileSync(target, 'utf8')).permission.skill;
+    assert.equal(skill.brainstorm, 'deny', "a re-emit swept the user's own deny on a Geneseed skill");
+    assert.ok(!('herdr' in skill), "Geneseed's own stale deny survived the re-emit");
+
+    uninstallGlobal(cfg, false);
+    skill = JSON.parse(fs.readFileSync(target, 'utf8')).permission.skill;
+    assert.deepEqual(skill, { brainstorm: 'deny' }, 'uninstall took more, or less, than its own denies');
+  });
+});
+
+test('a deny the user wrote before the first emit is never recorded as Geneseed\'s', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    fs.writeFileSync(path.join(cfg, 'opencode.json'),
+      JSON.stringify({ permission: { bash: {}, skill: { herdr: 'deny' } } }));
+    globalReemit(d, cfg);
+    const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    assert.ok(!man.skill_denies.includes('herdr'), 'a pre-existing user deny was claimed');
+    assert.ok(man.skill_denies.includes('quiz'), 'a deny Geneseed did write went unrecorded');
+    uninstallGlobal(cfg, false);
+    const skill = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.skill;
+    assert.deepEqual(skill, { herdr: 'deny' });
+  });
+});
+
+test('an uninstall that takes back every deny drops the emptied permission.skill object', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    uninstallGlobal(cfg, false);
+    const perm = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission;
+    assert.ok(!('skill' in perm), `an empty skill object was left behind: ${JSON.stringify(perm)}`);
+  });
+});
+
+test('a manifest with no skill_denies record sweeps nothing on re-emit', () => {
+  // The safe reading of an older manifest: no record of what Geneseed wrote means no licence
+  // to take anything away.
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    editJson(path.join(cfg, GLOBAL_MANIFEST), (m) => { delete m.skill_denies; });
+    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+    const skill = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.skill;
+    assert.equal(skill.herdr, 'deny', 'a deny with no recorded provenance was swept');
+  });
+});
+
 // OpenCode reads `<cfg>/AGENTS.md` and, ONLY when that file is absent, falls back to
 // `~/.claude/CLAUDE.md` — which a Claude-global install fills with the whole harness. So the
 // global emit makes sure an AGENTS.md exists: a GENESEED managed block when the file is
@@ -667,7 +734,7 @@ test('the unmerge edits a comment-free JSONC file', () => {
 
 // Task 4 / O-1: `permission.skill` denies are reversible, unlike the Law IV bash gates — a
 // true uninstall takes back the ones it owns. `denyNames` is `unmergeOpencodeJson`'s 3rd,
-// optional argument; ownership is by NAME (the manifest's owned `skills/<name>/SKILL.md`), the
+// optional argument; ownership is by NAME (the manifest's `skill_denies` record), the
 // value check on top guards a user's own unrelated policy for a colliding name.
 test('the unmerge strips the skill denies it owns, by name AND value, nothing else', () => {
   withDir((d) => {

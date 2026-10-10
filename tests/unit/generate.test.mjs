@@ -1545,9 +1545,28 @@ test('a blanket permission.skill policy is left alone and reported', () => {
 });
 
 // Fix round (controller review): stale denies were never swept on re-emit. Ownership of a
-// skill deny is unambiguous — the manifest's owned `skills/<name>/SKILL.md`, the same fact
-// `skillPermissionNames` (uninstall.mjs) reads — so `mergeOpencodeJson`'s 6th argument,
-// `staleSkillNames`, carries names the PREVIOUS build owned that this one no longer wants.
+// skill deny is the manifest's `skill_denies` record (final review: the names Geneseed itself
+// ADDED, not every owned skill) — so `mergeOpencodeJson`'s 6th argument, `staleSkillNames`,
+// carries recorded names this build no longer wants, and its 7th, `result`, reports in
+// `skillsAdded` which denies this call added, so the caller can record them.
+
+test('skillsAdded names only the denies this merge added, and stays unset when nothing was written', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: {}, skill: { herdr: 'deny' } } }));
+    const res = {};
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz'], [], res);
+    // herdr's deny was already there — the user's, not Geneseed's to record.
+    assert.deepEqual(res.skillsAdded, ['quiz']);
+
+    const c = path.join(d, 'opencode.jsonc');
+    fs.writeFileSync(c, '// mine\n{"permission": {"bash": {}}}');
+    const commented = {};
+    captured(() => mergeOpencodeJson(c, 'AGENT.md', null, [], ['quiz'], [], commented));
+    assert.equal(commented.skillsAdded, undefined,
+      'a commented .jsonc is never rewritten, so no deny may be recorded as written');
+  });
+});
 
 test('a re-emit removes a stale skill deny once the skill stops being user-only', () => {
   withDir((d) => {

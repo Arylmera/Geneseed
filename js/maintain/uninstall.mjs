@@ -62,7 +62,7 @@ import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
-  settingsIntegrityCheck, skillNamesFromOwned, wireClaudeExcludes, unwireClaudeExcludes,
+  settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes,
   unwireClaudeSettings,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
@@ -215,27 +215,26 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
   '.geneseed-footprint', VERSION_MARKER];
 
 /**
- * The CURRENT manifest's owned `skills/<name>/SKILL.md` entries, as the bare skill names — the
- * provenance for a `permission.skill` deny: Task 4 (O-1) wires one per user-only skill, and
- * unlike the Law IV `permission.bash` gates (permanent invariants, never taken back — see
- * `reconcileOpencodePermission`), a skill-visibility deny is reversible: once uninstalled
- * there is no skill left to hide, and the name is the user's to reuse. `skillNamesFromOwned`
- * (settings.mjs) is the shared regex; the emit-time sweep uses the same one against the
- * PREVIOUS manifest's `oldOwned` instead.
+ * The CURRENT manifest's `skill_denies` — the `permission.skill` denies Geneseed itself added
+ * (`opencodeLayer` in emit-opencode.mjs records them; a deny the user wrote, even on a Geneseed
+ * skill, is never in it). Task 4 (O-1) wires one per user-only skill, and unlike the Law IV
+ * `permission.bash` gates (permanent invariants, never taken back — see
+ * `reconcileOpencodePermission`), a skill-visibility deny is reversible: once uninstalled there
+ * is no skill left to hide, and the name is the user's to reuse. No record takes back nothing.
  */
 function skillPermissionNames(man) {
-  return skillNamesFromOwned(ownedOf(man));
+  return Array.isArray(man.skill_denies) ? man.skill_denies.filter((n) => typeof n === 'string') : [];
 }
 
 /**
  * `_harness_mcp._unmerge_opencode_json` — drop one `instructions` entry, leave every other
  * key intact.
  *
- * `denyNames`, Task 4 (O-1): names this install's manifest owns a `skills/<name>/SKILL.md`
- * for — remove `permission.skill[name]` for each one, but ONLY where the value is still
- * exactly `"deny"`. Ownership comes from the manifest entry, not the value; the value check
- * on top guards the one case ownership alone cannot: a user who independently wrote their own
- * `"<name>": "allow"`/`"ask"` for a name that happens to collide with an owned skill's. A
+ * `denyNames`, Task 4 (O-1): the denies this install's manifest records writing
+ * (`skill_denies`) — remove `permission.skill[name]` for each one, but ONLY where the value is
+ * still exactly `"deny"`, and drop the `skill` object once it is empty. Ownership comes from the
+ * record, not the value; the value check on top guards a user who re-scoped a recorded name to
+ * their own `"allow"`/`"ask"`. A
  * caller passing `[]` (every non-uninstall unwire — `installDeactivate`, same as
  * `permission.bash`) leaves `permission.skill` untouched, so a paused install keeps the model
  * blind to its skills rather than re-exposing them until the next `geneseed build`.
@@ -261,6 +260,7 @@ export function unmergeOpencodeJson(p, entry, denyNames = []) {
     for (const name of denyNames) {
       if (cfg.permission.skill[name] === 'deny') delete cfg.permission.skill[name];
     }
+    if (!Object.keys(cfg.permission.skill).length) delete cfg.permission.skill;
   }
   atomicWriteJson(target, cfg);
   return true;

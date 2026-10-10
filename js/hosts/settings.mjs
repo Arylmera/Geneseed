@@ -336,28 +336,17 @@ function defaultSkillPermission(names) {
 }
 
 /**
- * The manifest's owned `skills/<name>/SKILL.md` entries, as the bare skill names — the
- * provenance for a `permission.skill` deny: unambiguous, because only `writeNativeLayer`'s
- * claim-on-create writes that path shape. Shared by the emit-time stale-deny sweep below
- * (`mergeOpencodeJson`'s `staleSkillNames`, built from `opts.oldOwned`) and
- * `js/maintain/uninstall.mjs`'s `skillPermissionNames` (built from the CURRENT manifest).
- */
-const SKILL_OWNED_RE = /^skills\/([^/]+)\/SKILL\.md$/;
-export function skillNamesFromOwned(ownedRels) {
-  return (ownedRels ?? []).map((r) => SKILL_OWNED_RE.exec(r)?.[1]).filter(Boolean);
-}
-
-/**
- * Add any of `names` missing from an EXISTING `permission.skill`, and remove any of
- * `staleNames` that still read `"deny"` — the `skill` twin of `reconcileOpencodePermission`,
- * but with a DIFFERENT removal rule. `reconcileOpencodePermission` never removes a bash key
- * because nothing on disk records which `ask`/`allow` entry is Geneseed's; a skill deny has
- * unambiguous provenance instead (the manifest's owned `skills/<name>/SKILL.md`, read by the
- * caller into `staleNames` = "owned by the PREVIOUS build, not wanted by THIS one" — a skill
- * that lost its `<!-- invocation: user -->` marker, or was `--exclude-skills`'d). The value
- * check on top of the name check still guards a user's own re-scoped `"allow"`/`"ask"` for an
- * owned name from being overwritten — ownership licenses taking back Geneseed's OWN entry, not
- * whatever is there now.
+ * Add any of `names` missing from an EXISTING `permission.skill` (each one pushed onto `added`),
+ * and remove any of `staleNames` that still read `"deny"` — the `skill` twin of
+ * `reconcileOpencodePermission`, but with a DIFFERENT removal rule. `reconcileOpencodePermission`
+ * never removes a bash key because nothing on disk records which `ask`/`allow` entry is
+ * Geneseed's; a skill deny has a record instead: the manifest's `skill_denies`, the names a
+ * previous emit itself ADDED (never a name whose deny was already there — that one is the
+ * user's, even on a Geneseed skill). The caller reads it into `staleNames` = "recorded by the
+ * PREVIOUS build, not wanted by THIS one" — a skill that lost its `<!-- invocation: user -->`
+ * marker, or was `--exclude-skills`'d. The value check on top still guards a user's own
+ * re-scoped `"allow"`/`"ask"` for a recorded name — the record licenses taking back Geneseed's
+ * OWN entry, not whatever is there now.
  *
  * A non-object `permission.skill` (a blanket `"skill": "allow"`/`"deny"`/`"ask"`) is the
  * user's own policy and is left alone, reported as opaque — same contract as
@@ -365,17 +354,18 @@ export function skillNamesFromOwned(ownedRels) {
  * case too: there is no per-name object to delete from.
  * @returns {[boolean, string | null]}
  */
-function reconcileOpencodeSkillPermission(perm, names, staleNames = []) {
+function reconcileOpencodeSkillPermission(perm, names, staleNames = [], added = []) {
   if (!has(perm, 'skill')) {
     if (!names.length) return [false, null];
     perm.skill = defaultSkillPermission(names);
+    added.push(...names);
     return [true, null];
   }
   const skill = get(perm, 'skill');
   if (!isDict(skill)) return [false, names.length ? 'has a "skill" that is not an object' : null];
   let changed = false;
   for (const n of names) {
-    if (!has(skill, n)) { skill[n] = 'deny'; changed = true; }
+    if (!has(skill, n)) { skill[n] = 'deny'; changed = true; added.push(n); }
   }
   for (const n of staleNames) {
     if (skill[n] === 'deny') { delete skill[n]; changed = true; }
@@ -565,9 +555,14 @@ export function atomicWriteJson(p, config) {
  * Zero runtime callers — re-measured this phase and still true. `rituals/_harness_mcp.py`
  * re-implements the inverse itself rather than inherit this one's permission/lsp side
  * effects, so the only crossings are the two emit-tree ones (`_build_emit.emit_opencode`,
- * `_build_global.emit_opencode_global`). */
+ * `_build_global.emit_opencode_global`).
+ *
+ * `result.skillsAdded` is set to the `permission.skill` denies this call added ONLY when the
+ * file on disk now matches what it computed (written, or nothing to change). Left unset on
+ * every path that wrote nothing — unreadable, not an object, commented `.jsonc`, write
+ * failure — so the caller keeps its previous record rather than claiming denies never written. */
 export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [], skillNames = [],
-  staleSkillNames = []) {
+  staleSkillNames = [], result = {}) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
   const { state, data, hadComments, error } = loadJsonObject(target);
@@ -600,10 +595,12 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   let opaque = null;
   let skillOpaque = null;
   let permIsObject = true;
+  const added = [];
   if (addPerm) {
     config.permission = defaultPermission(doctrines, excluded);
     if (skillNames.length) {
       config.permission.skill = defaultSkillPermission(skillNames);
+      added.push(...skillNames);
     }
   } else {
     const perm = get(config, 'permission');
@@ -614,7 +611,8 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // not also block the UNRELATED `permission.skill` key from being reconciled.
     if (permIsObject) {
       let skillChanged;
-      [skillChanged, skillOpaque] = reconcileOpencodeSkillPermission(perm, skillNames, staleSkillNames);
+      [skillChanged, skillOpaque] = reconcileOpencodeSkillPermission(perm, skillNames, staleSkillNames,
+        added);
       permChanged = permChanged || skillChanged;
     }
   }
@@ -653,7 +651,10 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   }
   const addLsp = !has(config, 'lsp');
   if (addLsp) config.lsp = true;
-  if (!addInstr && !permChanged && !addLsp) return target;
+  if (!addInstr && !permChanged && !addLsp) {
+    result.skillsAdded = added;
+    return target;
+  }
   if (path.extname(target) === '.jsonc' && hadComments) {
     // ⚠ THE TWO CASES GIVE OPPOSITE ADVICE, and telling a file that HAS a `permission` key to
     // add one is how the first cut of this got it wrong. `add` = there is no block, here is the
@@ -672,6 +673,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   }
   try {
     atomicWriteJson(target, config);
+    result.skillsAdded = added;
   } catch (e) {
     if (!isOsError(e)) throw e;
     process.stderr.write(`[geneseed] WARN: could not write ${target} (${e.message}) — `
