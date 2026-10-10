@@ -4,6 +4,7 @@
 // "enforce by injection, don't just instruct" stance as the context plugin:
 //   - Sealed Secrets:  block writes to private-key / credential files.
 //   - Deletion Is Deliberate:  block catastrophic shell commands.
+//   - Commands Must Return:  block a recursive scan rooted at a whole filesystem (find /).
 //   - Persist Insight (rule vs memory):  speed-bump the first write to user-rules.md
 //     memory file — that choice belongs to the user, via the rule skill.
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
@@ -198,6 +199,82 @@ const SHELL_WARN_RE = [
   /\bgit\s+reflog\b[^\n]*\bexpire\b/,
   /\bgit\s+gc\b[^\n]*--prune\b/,
 ]
+
+// A recursive scan rooted at a whole filesystem (Commands Must Return) → BLOCK. Twin of
+// js/hosts/hooks.mjs's `rootScan` — keep in step; tests/plugins/guard.test.mjs diffs the
+// constants below against it. In Git Bash `/` mounts every drive and share: on 2026-10-10 a
+// `find / … | head -5` ran 3.5 h (`| head` stops nothing). Exempt: any ssh command, any path
+// deeper than a root, a scanner word that is not the program. Backslash is never an escape in
+// the tokeniser, so `C:\ -Recurse` stays two tokens.
+const SCAN_ALWAYS = new Set(["find", "du", "tree", "rg", "fd", "where.exe"])
+const SCAN_GREP_R = new Set(["grep", "egrep"])
+const SCAN_LS_R = new Set(["ls", "dir"])
+const SCAN_PS_R = new Set(["get-childitem", "gci"])
+// `-r` recurses for grep only; for ls it is reverse, so ls/dir need an uppercase `R` cluster.
+const GREP_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/
+const LS_RECURSE_RE = /^(?:-[a-zA-Z]*R[a-zA-Z]*|--recursive)$/
+const PS_RECURSE_RE = /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i
+const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i
+const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i
+const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g
+const SCAN_WRAPPERS = new Set(["sudo", "command", "\\builtin", "time", "nice"])
+// A comment (`#` starting a word), a quoted run (its `;`/`|` is data), a separator, or a heredoc
+// opener (never the `<<<` here-string).
+const SCAN_SPLIT_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g
+// Cut at separators OUTSIDE quotes and drop every heredoc body (to its TAG line; `<<-` allows
+// tabs): a commit message that names a root scan is data, not a command to block.
+function scanSegments(command) {
+  const segs = []
+  const tags = []
+  const re = new RegExp(SCAN_SPLIT_RE)
+  let start = 0
+  let m
+  while ((m = re.exec(command))) {
+    if (m[3]) { tags.push([m[1], m[3]]); continue }
+    if (m[0][0] === '"' || m[0][0] === "'" || m[0][0] === '#') continue
+    segs.push(command.slice(start, m.index))
+    start = re.lastIndex
+    while (m[0] === "\n" && tags.length) {
+      const end = command.indexOf("\n", start)
+      const line = command.slice(start, end < 0 ? command.length : end).replace(/\r$/, "")
+      start = end < 0 ? command.length : end + 1
+      if ((tags[0][0] ? line.replace(/^\t+/, "") : line) === tags[0][1]) tags.shift()
+      if (end < 0) break
+    }
+    re.lastIndex = start
+  }
+  segs.push(command.slice(start))
+  return segs
+}
+function rootScan(command) {
+  if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null
+  for (const seg of scanSegments(command)) {
+    // Quotes kept until the root test, so a quoted "a:" is told from a bare C:.
+    let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t))
+    while (toks.length && SCAN_WRAPPERS.has(unquote(toks[0]))) toks = toks.slice(1)
+    if (!toks.length) continue
+    // The program word without its path (either slash) or an `.exe` suffix.
+    const word = unquote(toks[0]).split(/[\\/]/).pop().toLowerCase()
+    const prog = SCAN_ALWAYS.has(word) ? word : word.replace(/\.exe$/, "")
+    const always = SCAN_ALWAYS.has(prog)
+    const grep = SCAN_GREP_R.has(prog)
+    const ls = SCAN_LS_R.has(prog)
+    const ps = SCAN_PS_R.has(prog)
+    if (!always && !grep && !ls && !ps) continue
+    // `-Path=x` and PowerShell's colon binding `-Path:C:\` read as the path itself.
+    const argv = toks.slice(1).map((t) => {
+      const m = /^-path[=:](.+)$/i.exec(t)
+      return m ? m[1] : t
+    })
+    if (!always && !argv.some((a) => (grep && GREP_RECURSE_RE.test(a))
+      || (ls && LS_RECURSE_RE.test(a)) || ((ls || ps) && PS_RECURSE_RE.test(a)))) continue
+    if (argv.some(rootArg)) return seg.trim()
+  }
+  return null
+}
+const unquote = (t) => t.replace(/^["']+|["']+$/g, "")
+// A QUOTED single-letter-colon token is data (`grep -rn "a:" src`), never a drive root.
+const rootArg = (t) => FS_ROOT_RE.test(unquote(t)) && !(/^["']/.test(t) && /^[a-z]:$/i.test(unquote(t)))
 
 // `apply_patch`'s only argument is `patchText` (OpenCode verdict I-1): every gpt-5*
 // model gets ONLY this tool, never `edit`/`write`, so a path that lives inside the
@@ -533,6 +610,12 @@ export const GeneseedGuard = async (ctx) => {
         if (hasAny(tool, SHELL_TOOLS)) {
           const c = pickCommand(args)
           if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { await deny(`catastrophic command (Deletion Is Deliberate): ${c.slice(0, 80)}`, "law-4"); return }
+          const scan = c && rootScan(c)
+          if (scan) {
+            await deny(`\`${scan.slice(0, 80)}\` recursively scans a whole filesystem root (Commands Must Return) — ` +
+              "search a specific directory instead: the project, node_modules, ~/.npm, %APPDATA%", "ops-2")
+            return
+          }
           if (c && SHELL_WARN_RE.some((re) => re.test(c))) log(`WARN: irreversible op — confirm intent (Deletion Is Deliberate): ${c.slice(0, 80)}`)
         }
       } catch (err) {

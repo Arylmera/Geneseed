@@ -9,7 +9,7 @@
  * THREE HOSTS, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
  * prompt. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
- * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5) exit 2 with the reason on stderr
+ * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5 and ops-2) exit 2 with the reason on stderr
  * and the rest is a stderr line with exit 0; SessionStart context is plain stdout, as on
  * Claude. `--host openclaude` speaks Claude's dialect verbatim (OpenClaude is a Claude Code
  * fork); the flag only picks which root file counts as native for `context`'s discovery.
@@ -229,10 +229,12 @@ const BOB_DENY_EXIT = 2;
  * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
  * only", see bob-code.md B3. Process 1 and process 5 are the USER's calls — a hard
  * block would make Bob unable to commit at all — so they become a warning the host
- * logs. `gate-error` is a warning too: a crashed gate that blocked every tool call would be
+ * logs. ops-2 (Commands Must Return, the root-scan check) is a block too: a warning would let a
+ * scan of every drive run for hours, and the agent loses nothing by re-targeting a directory.
+ * `gate-error` is a warning too: a crashed gate that blocked every tool call would be
  * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
  */
-const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5']);
+const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5', 'ops-2']);
 
 /**
  * THE GATE LEDGER — one JSON line per ask, nothing per defer.
@@ -333,12 +335,132 @@ function gitGate(args) {
   return gitDecide(args, readPayload());
 }
 
+// ======================================================================================
+// root scan — Doctrine ops 2 (Commands Must Return)'s tool-boundary backstop
+// ======================================================================================
+
+// On 2026-10-10 a subagent ran `find / -iname "write.ts" … | head -5` in Git Bash, where `/`
+// mounts every drive (/c, /d) and a network share: 3.5 h at 100 % CPU, and the Bash timeout
+// did not stop the orphaned child. `| head` stops nothing — find still visits every directory.
+// Ported from Ritus/guards/root_scan.py (its 9 refuse / 8 pass self-check is in
+// tests/unit/hook_gates.test.mjs), with one tightening: the reference's recursion regex,
+// `-[a-z]*r[a-z]*` under `/i`, read PowerShell's `-Force`/`-Filter`/`-ErrorAction` as a
+// recursion flag, which on Bob and OpenCode is a hard block, not a prompt. So grep takes a short
+// flag cluster carrying `r`/`R` (or `--recursive`), ls/dir an uppercase `R` (their `-r` is
+// reverse), and PowerShell's `-Recurse` or one of its prefix abbreviations. Lives HERE, inside `gitDecide`, rather than in a verb of
+// its own: every `command` payload on every host already routes through this function, and a
+// new verb on an older machine-wide shim would exit 1 — which `onFailure: "block"` turns into
+// every Bash call refused. Runs whether or not the ops pack is built in, like rule-gate's
+// process-1: how a command is run is never wrong to bound. Twin: adapters/opencode/plugins/
+// geneseed-guard.js `rootScan` — keep in step (tests/plugins/guard.test.mjs diffs the constants).
+const SCAN_ALWAYS = new Set(['find', 'du', 'tree', 'rg', 'fd', 'where.exe']);
+const SCAN_GREP_R = new Set(['grep', 'egrep']);
+const SCAN_LS_R = new Set(['ls', 'dir']);
+const SCAN_PS_R = new Set(['get-childitem', 'gci']);
+// `-r` recurses for grep only: for `ls` it is REVERSE (`ls -ltr /` lists one directory), so
+// ls/dir need an UPPERCASE `R` in the cluster, `--recursive`, or (as PowerShell aliases) `-Recurse`.
+const GREP_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/;
+const LS_RECURSE_RE = /^(?:-[a-zA-Z]*R[a-zA-Z]*|--recursive)$/;
+const PS_RECURSE_RE = /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i;
+// A trailing `*` is still the root: the shell expands `du -sh /*` to every drive just the same.
+const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i;
+// The cheap prefilter: a command that names no scanner pays this one test and nothing else.
+const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i;
+// Non-POSIX tokens, like the reference's `shlex.split(posix=False)`: a quoted run stays inside
+// its word and a backslash is NEVER an escape — a POSIX lexer would eat the one in `C:\ -Recurse`
+// and leave the root unseen.
+const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g;
+const SCAN_WRAPPERS = new Set(['sudo', 'command', '\\builtin', 'time', 'nice']);
+// One left-to-right pass: a comment (`#` starting a word, to the end of the line — an apostrophe
+// in it is no quote), a quoted run (kept whole, so its `;`/`|` is data), a separator, or a
+// heredoc opener (`<<TAG`, `<<-TAG`, `<< 'TAG'`, `<<"TAG"` — never the here-string `<<<`).
+// Every alternative consumes at least one character, and none can backtrack past its start.
+const SCAN_SPLIT_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g;
+
+/**
+ * The command cut at `|`/`;`/`&&`/`||`/newline OUTSIDE quotes, with every heredoc body (the
+ * lines after `<<TAG` up to the `TAG` line; `<<-` lets it be tab-indented) dropped: both are data.
+ * Without this, `git commit -F - <<'EOF'` — the mandated multi-line commit form — or a quoted
+ * `-m "fix; find / loop"` whose text merely names a root scan reads as one, which on Bob and
+ * OpenCode is a hard block of the commit. An unterminated heredoc runs to the end, as in bash.
+ * Backslash is no escape here either, like `SCAN_TOKEN_RE` (`"C:\"` must close).
+ */
+function scanSegments(command) {
+  const segs = [];
+  const tags = [];
+  const re = new RegExp(SCAN_SPLIT_RE);
+  let start = 0;
+  let m;
+  while ((m = re.exec(command))) {
+    if (m[3]) { tags.push([m[1], m[3]]); continue; }
+    if (m[0][0] === '"' || m[0][0] === "'" || m[0][0] === '#') continue;
+    segs.push(command.slice(start, m.index));
+    start = re.lastIndex;
+    // A pending heredoc's body starts on the line after its opener; each line is read once.
+    while (m[0] === '\n' && tags.length) {
+      const end = command.indexOf('\n', start);
+      const line = command.slice(start, end < 0 ? command.length : end).replace(/\r$/, '');
+      start = end < 0 ? command.length : end + 1;
+      if ((tags[0][0] ? line.replace(/^\t+/, '') : line) === tags[0][1]) tags.shift();
+      if (end < 0) break;
+    }
+    re.lastIndex = start;
+  }
+  segs.push(command.slice(start));
+  return segs;
+}
+
+/**
+ * The first segment (see `scanSegments`) that recursively scans a whole filesystem root, or
+ * null. Any `ssh` command is exempt (a remote root scan is the remote's business — ponytail:
+ * that also exempts a local `find / -name "*ssh*"`; the reference's choice), and so is any path
+ * deeper than a root.
+ */
+export function rootScan(command) {
+  if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null;
+  for (const seg of scanSegments(command)) {
+    // Tokens keep their quotes until the root test, so a quoted `"a:"` can be told from a bare `C:`.
+    let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t));
+    while (toks.length && SCAN_WRAPPERS.has(unquote(toks[0]))) toks = toks.slice(1);
+    if (!toks.length) continue;
+    // The program word without its path (either slash) or an `.exe` suffix: `C:\tools\rg.exe`.
+    const word = unquote(toks[0]).split(/[\\/]/).pop().toLowerCase();
+    const prog = SCAN_ALWAYS.has(word) ? word : word.replace(/\.exe$/, '');
+    const always = SCAN_ALWAYS.has(prog);
+    const grep = SCAN_GREP_R.has(prog);
+    const ls = SCAN_LS_R.has(prog);
+    const ps = SCAN_PS_R.has(prog);
+    if (!always && !grep && !ls && !ps) continue;
+    // `-Path=x` and PowerShell's colon binding `-Path:C:\` read as the path itself.
+    const argv = toks.slice(1).map((t) => {
+      const m = /^-path[=:](.+)$/i.exec(t);
+      return m ? m[1] : t;
+    });
+    if (!always && !argv.some((a) => (grep && GREP_RECURSE_RE.test(a))
+      || (ls && LS_RECURSE_RE.test(a)) || ((ls || ps) && PS_RECURSE_RE.test(a)))) continue;
+    if (argv.some(rootArg)) return seg.trim();
+  }
+  return null;
+}
+const unquote = (t) => t.replace(/^["']+|["']+$/g, '');
+// A QUOTED single-letter-colon token is data (`grep -rn "a:" src`), never a drive root; a bare
+// `C:` still is.
+const rootArg = (t) => FS_ROOT_RE.test(unquote(t)) && !(/^["']/.test(t) && /^[a-z]:$/i.test(unquote(t)));
+
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
   if (DESTRUCTIVE_GIT_RE.test(command)) {
     return ask(args, 'git-gate', 'law-4', 'Geneseed (Deletion Is Deliberate) \u2014 a history-rewriting or '
       + 'discarding git act needs confirmation bound to this specific command');
+  }
+  // Before `--no-consent`: that flag drops the process pack's rule, not this one.
+  const scan = rootScan(command);
+  if (scan) {
+    return ask(args, 'git-gate', 'ops-2', `Geneseed (Commands Must Return) \u2014 \`${scan.slice(0, 80)}\` `
+      + 'recursively scans a whole filesystem root (in Git Bash, / spans every drive and mounted '
+      + 'share, for hours; | head stops nothing). Search a specific directory instead: the '
+      + 'project, node_modules, ~/.npm, %APPDATA%.');
   }
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run. Checked before
@@ -484,11 +606,16 @@ function normaliseBobPayload(payload) {
 }
 
 /**
- * Bob's PreToolUse entry carries no matcher over documented tool names, so it cannot name `git-gate` for Bash and `rule-gate` for Write the way Claude's
- * `PreToolUse` does. This verb is the two fused, dispatched on the payload rather
- * than on a matcher: a `command` field is a shell call and gets the git checks, a path
- * field is a write and gets the rule checks. Nothing here decides anything the two named
- * gates do not — it only removes the need for a matcher the host does not have.
+ * Bob's PreToolUse entry carries no matcher, deliberately (host-compat O1, revisited): Bob's
+ * tool list drifts (already stale against the 2.1.0+ changelog — `web_fetch`, the Office/
+ * IBM-docs tools) and its "regex on the tool name" dialect is otherwise unverified, so
+ * `claudeHookGroups` (settings.mjs) does not build one — an allow-list would fail OPEN on a
+ * tool it has not seen yet, and a deny-list needs lookahead the regex dialect may not have.
+ * So this verb cannot name `git-gate` for one tool and `rule-gate` for another the way
+ * Claude's two separate `PreToolUse` matchers do; it is the two fused, dispatched on the
+ * PAYLOAD rather than on a matcher: a `command` field is a shell call and gets the git
+ * checks, a path field is a write and gets the rule checks. Nothing here decides anything
+ * the two named gates do not — it only removes the need for a matcher the host does not have.
  */
 function toolGate(args) {
   if (sovereignBypass(args.root)) return 0;

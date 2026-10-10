@@ -227,6 +227,15 @@ function readManifest(manifestPath) {
   return { existed, doc };
 }
 
+/**
+ * An OpenCode manifest's `skill_denies` — the `permission.skill` denies Geneseed itself added
+ * (see `opencodeLayer`) — or `[]` when absent or malformed, which sweeps nothing.
+ */
+function recordedDenies(doc) {
+  const d = doc && doc.skill_denies;
+  return Array.isArray(d) ? d.filter((n) => typeof n === 'string') : [];
+}
+
 /** The "+ primary agent, N command(s)" tail both OpenCode summary lines share. */
 function extrasTail(stats) {
   const extras = [...(stats.primary ? ['primary agent'] : []),
@@ -272,6 +281,7 @@ function emitOpencode(cfg, args, out) {
   // rather than deleting them. The prune set is then empty by construction.
   const { existed: manifestExisted, doc } = readManifest(manifestPath);
   const oldOwned = (doc && doc.owned) || [];
+  const oldDenies = recordedDenies(doc);
 
   const agentPathRel = relUnder(out, root);
   const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';
@@ -283,8 +293,9 @@ function emitOpencode(cfg, args, out) {
     {
       theme: args.theme, out, root, footprint: args.footprint,
       nativeCatalog: hostCatalogsNatively('opencode'), oldOwned, manifestExisted, agentPath,
+      oldDenies,
     });
-  const { owned, stats, cfgName } = rendered;
+  const { owned, stats, cfgName, skillDenies } = rendered;
 
   phaseLog('PRUNE');
   pruneOwned(oc, oldOwned, owned);
@@ -296,6 +307,7 @@ function emitOpencode(cfg, args, out) {
       + 'list is yours and is never touched.',
     owned: [...owned].sort(),
     scope: 'project',
+    ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
   });
 
   const extra = extrasTail(stats);
@@ -319,7 +331,8 @@ function emitOpencode(cfg, args, out) {
  *     sends a path relative to the project root;
  *   - the manifest carries no `scope` and no `managed` claim set, because the one file this
  *     emit wires is never unwired by any teardown — so there is nothing to record and no
- *     VERIFY stage to re-read it.
+ *     VERIFY stage to re-read it. It does carry `skill_denies`, as the per-repo one does: the
+ *     `permission.skill` denies an uninstall takes back.
  */
 function emitOpencodeGlobal(cfg, args, out) {
   const cfgDir = args.cfgDir ?? opencodeConfigDir();
@@ -327,6 +340,7 @@ function emitOpencodeGlobal(cfg, args, out) {
 
   const { doc } = readManifest(manifestPath);
   const oldOwned = (doc && doc.owned) || [];
+  const oldDenies = recordedDenies(doc);
 
   const agentPath = path.join(cfgDir, 'AGENT.md').split(path.sep).join('/');
 
@@ -335,9 +349,9 @@ function emitOpencodeGlobal(cfg, args, out) {
     {
       theme: args.theme, cfgDir, out,
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
-      oldOwned, agentPath,
+      oldOwned, agentPath, oldDenies,
     });
-  const { owned, stats, memStatus, nbStatus, cfgName } = rendered;
+  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies } = rendered;
 
   phaseLog('PRUNE');
   pruneOwned(cfgDir, oldOwned, owned);
@@ -348,6 +362,7 @@ function emitOpencodeGlobal(cfg, args, out) {
       + 'Do not edit; removed on re-emit. The memory and notebook '
       + 'stores are NOT listed — they are never deleted.',
     owned: [...owned].sort(),
+    ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
   });
 
   const extra = extrasTail(stats);

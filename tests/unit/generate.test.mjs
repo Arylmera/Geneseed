@@ -1479,6 +1479,138 @@ test('a permission block Geneseed cannot wire into is reported, not passed over 
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// Task 4 / O-1 — `permission.skill` denies for OpenCode's user-only skills. Upstream's
+// `Skill.available` drops any skill whose `permission.skill` evaluates to `deny`
+// (opencode_src_skill_index.ts:314), and `Command`'s skill loop reads `skill.all()` — the
+// UNFILTERED list — so `/name` still runs it (opencode_src_command_index.ts).
+
+test('writeNativeLayer reports the claimed user-only skill stems, and only those', () => {
+  withDir((d) => {
+    const { userOnlySkills } = native(d);
+    // Real authored skills carrying the literal `<!-- invocation: user -->` marker in
+    // src/skills (skill-forge only DESCRIBES the convention in prose; it does not carry it).
+    for (const name of ['herdr', 'learn-mode', 'quiz', 'teach']) {
+      assert.ok(userOnlySkills.includes(name), `${name} missing from userOnlySkills: ${userOnlySkills}`);
+    }
+    // An ordinary, model-invocable skill gets no row.
+    assert.ok(!userOnlySkills.includes('brainstorm'),
+      'brainstorm carries no invocation:user marker and must not be denied');
+  });
+});
+
+test('a fresh opencode.json gets a permission.skill deny row per user-only skill', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz']);
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.deepEqual(data.permission.skill, { herdr: 'deny', quiz: 'deny' });
+    // The bash gates still ride along unmodified.
+    assert.equal(data.permission.bash['rm -rf *'], 'ask');
+  });
+});
+
+test('no user-only skills in this build means no permission.skill key at all', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md');
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.ok(!('skill' in data.permission), 'an empty skill object was written for nothing to deny');
+  });
+});
+
+test('an existing permission block gets its missing skill denies reconciled in', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      permission: { bash: { 'curl *': 'ask' }, skill: { herdr: 'deny' } },
+    }));
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz']);
+    const perm = JSON.parse(fs.readFileSync(p, 'utf8')).permission;
+    assert.deepEqual(perm.skill, { herdr: 'deny', quiz: 'deny' });
+    assert.equal(perm.bash['curl *'], 'ask', 'a sibling bash entry was disturbed');
+  });
+});
+
+test('a blanket permission.skill policy is left alone and reported', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: { 'rm -rf *': 'ask' }, skill: 'allow' } }));
+    const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr']));
+    assert.match(err, /WARN/);
+    assert.ok(err.includes('"herdr"'), err);
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.equal(data.permission.skill, 'allow', "the user's blanket policy was rewritten");
+  });
+});
+
+// Fix round (controller review): stale denies were never swept on re-emit. Ownership of a
+// skill deny is the manifest's `skill_denies` record (final review: the names Geneseed itself
+// ADDED, not every owned skill) — so `mergeOpencodeJson`'s 6th argument, `staleSkillNames`,
+// carries recorded names this build no longer wants, and its 7th, `result`, reports in
+// `skillsAdded` which denies this call added, so the caller can record them.
+
+test('skillsAdded names only the denies this merge added, and stays unset when nothing was written', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: {}, skill: { herdr: 'deny' } } }));
+    const res = {};
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz'], [], res);
+    // herdr's deny was already there — the user's, not Geneseed's to record.
+    assert.deepEqual(res.skillsAdded, ['quiz']);
+
+    const c = path.join(d, 'opencode.jsonc');
+    fs.writeFileSync(c, '// mine\n{"permission": {"bash": {}}}');
+    const commented = {};
+    captured(() => mergeOpencodeJson(c, 'AGENT.md', null, [], ['quiz'], [], commented));
+    assert.equal(commented.skillsAdded, undefined,
+      'a commented .jsonc is never rewritten, so no deny may be recorded as written');
+  });
+});
+
+test('a re-emit removes a stale skill deny once the skill stops being user-only', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      permission: { bash: { 'rm -rf *': 'ask' }, skill: { herdr: 'deny', quiz: 'deny' } },
+    }));
+    // herdr lost its `<!-- invocation: user -->` marker (or was `--exclude-skills`'d): no
+    // longer wanted, and the PREVIOUS manifest owned `skills/herdr/SKILL.md`.
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['quiz'], ['herdr']);
+    const perm = JSON.parse(fs.readFileSync(p, 'utf8')).permission;
+    assert.ok(!('herdr' in perm.skill), 'a stale owned deny survived a re-emit');
+    assert.equal(perm.skill.quiz, 'deny', 'the still-wanted deny was removed too');
+    assert.equal(perm.bash['rm -rf *'], 'ask', 'a sibling bash entry was disturbed');
+  });
+});
+
+test('a re-emit never removes a non-deny value or a name the previous build did not own', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      permission: { bash: {}, skill: { herdr: 'allow', mine: 'deny' } },
+    }));
+    // `herdr` is stale (no longer wanted) but the user re-scoped it to "allow" by hand; `mine`
+    // is a name no Geneseed manifest, past or present, ever owned.
+    mergeOpencodeJson(p, 'AGENT.md', null, [], [], ['herdr']);
+    const skill = JSON.parse(fs.readFileSync(p, 'utf8')).permission.skill;
+    assert.equal(skill.herdr, 'allow',
+      "a user's own re-scoped value was deleted — ownership is not a licence to overwrite");
+    assert.equal(skill.mine, 'deny', 'a name outside staleSkillNames was removed');
+  });
+});
+
+test('a fully opaque permission block names the unwired skill denies too', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, '{"permission": "allow"}');
+    const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr']));
+    assert.ok(err.includes('"herdr"'),
+      `a permission block that is not an object at all skipped the skill reconcile silently, `
+      + `and the opaque WARN did not name the unwired skill deny either:\n${err}`);
+  });
+});
+
 test('a merge preserves an mcp block it does not own', () => {
   // The markitdown MCP server — and any server the user added — lives under `mcp`. A re-emit
   // merges `instructions` and must touch nothing else in the file.

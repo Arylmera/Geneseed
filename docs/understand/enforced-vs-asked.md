@@ -24,12 +24,13 @@ On Claude Code and OpenClaude the hooks never block silently. They make the host
 
 - **Destructive git**: a force-push, `reset --hard`, `clean -f`, `branch -D` or `checkout --`. Wired in every build.
 - **Commit and push**: every `git commit` and `git push`, including chained one-liners and `git -C <path>`. This question belongs to the **process** pack. Build without it and the git gate stays wired. Only this question goes away, and destructive git is still caught.
+- **A scan of a whole filesystem**: a recursive `find`, `du`, `grep -r`, `rg` or `Get-ChildItem -Recurse` rooted at `/`, `/c` or `C:\`, which in Git Bash walks every drive for hours. Wired in every build.
 - **Credentials**: a write or edit whose content looks like a real key (AWS, GitHub, Anthropic, Slack, or a private-key block), anywhere except a `.env` file.
 - **Your rules and memory**: any write by the agent to `user-rules.md` or to the memory store. Whether something is a standing rule or a fact to remember is your call.
 
-If a gate crashes, it asks instead of letting the call through. Other shell commands, `rm -rf` included, go through Claude Code's normal permission flow.
+If a gate crashes, it asks instead of letting the call through. If it cannot start at all (a deleted or broken shim) or times out, Claude Code blocks the call instead: see [Troubleshoot hooks](../reference/troubleshoot-hooks.md) to recover. Other shell commands, `rm -rf` included, go through Claude Code's normal permission flow.
 
-**Bob** runs one combined gate and has no "ask": it refuses with exit code 2, and only for the rules that admit no judgement call: credentials, destructive git, and a write under a project's own protected-checks list. The commit/push and memory checks become a log line, and the call goes through. Bob's hook wiring follows its documentation but has not been tested on a live Bob install.
+**Bob** runs one combined gate and has no "ask": it refuses with exit code 2, and only for the rules that admit no judgement call: credentials, destructive git, a scan of a whole filesystem, and a write under a project's own protected-checks list. The commit/push and memory checks become a log line, and the call goes through. Bob's hook wiring follows its documentation but has not been tested on a live Bob install.
 
 <!--/harness-->
 <!--harness:opencode-->
@@ -38,7 +39,7 @@ If a gate crashes, it asks instead of letting the call through. Other shell comm
 On OpenCode, two mechanisms enforce rules:
 
 - **OpenCode's own permission prompt**, which Geneseed configures in `opencode.json`. It asks you before `rm -rf`, a force-push, `reset --hard`, `clean -f`, `branch -D` and `checkout --`, and, when the **process** pack is on, before every commit and push.
-- **The guard plugin**, which blocks outright: writes to key and credential files (`id_rsa`, `*.pem`, `.ssh/`, `.npmrc`…), catastrophic commands (`rm -rf /`, `rm -rf ~`, formatting or overwriting a disk), and any change inside a folder your wiki marks `protected`. It also refuses the first write to `user-rules.md` or memory once. Re-issue the write and it goes through.
+- **The guard plugin**, which blocks outright: writes to key and credential files (`id_rsa`, `*.pem`, `.ssh/`, `.npmrc`…), catastrophic commands (`rm -rf /`, `rm -rf ~`, formatting or overwriting a disk), a recursive scan of a whole filesystem (`find /`, `du -sh /`, `Get-ChildItem C:\ -Recurse`), and any change inside a folder your wiki marks `protected`. It also refuses the first write to `user-rules.md` or memory once. Re-issue the write and it goes through.
 
 The guard only warns on `.env` edits. It checks credentials by **file path**, not by content, so a key pasted into an ordinary source file is not caught here. One caveat about the process pack: if your `opencode.json` already has a `git commit*` entry, a rebuild without the pack leaves that entry in place and reports it. Geneseed cannot tell its own entry from one you typed.
 

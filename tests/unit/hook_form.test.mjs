@@ -31,7 +31,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { shimProblems } from '../../js/inspect/checks-repo.mjs';
+import { installsReferencingShim, shimProblems } from '../../js/inspect/checks-repo.mjs';
 import { gateSummary, statusData, statusLines } from '../../js/inspect/status.mjs';
 import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
 import {
@@ -117,6 +117,24 @@ function withHookShell(shell, fn) {
   }
 }
 
+/**
+ * Run `fn` with `process.platform` forced to `value` — the same monkeypatch
+ * `tests/unit/web_pick_folder.test.mjs` uses, restored in `finally`. Every default-`process
+ * .platform` parameter in this codebase (`hookShimPath`, `hookPrefix`, `writeHookShim`,
+ * `claudeHookShell`) reads the LIVE value, so this is what lets a test exercise the win32 shim
+ * shape (`.cmd`) and the POSIX one (bare) in the same run, on whichever OS actually runs it —
+ * the CI gap this helper exists for: a test built assuming `hookShimPath()` and
+ * `writeInstall`'s shim both land on the SAME shape is only true by accident on a Windows
+ * runner, and silently false on Linux (host-compat fix round, Task 1).
+ */
+function withPlatform(value, fn) {
+  const real = process.platform;
+  Object.defineProperty(process, 'platform', { value, configurable: true });
+  try { return fn(); } finally {
+    Object.defineProperty(process, 'platform', { value: real, configurable: true });
+  }
+}
+
 /** Run `fn` with `GENESEED_HOME` pointed at a fresh empty directory (or at `at`). */
 function withHome(fn, at = null) {
   const sb = makeSandbox('hookform-');
@@ -170,6 +188,23 @@ test('Stop, SubagentStop and PreCompact all run one and the same learn command',
     assert.ok(cmds[0].includes(' learn '), cmds[0]);
     assert.equal(cmds[1], cmds[0]);
     assert.equal(cmds[2], cmds[0]);
+  });
+});
+
+// `onFailure: "block"` (hooks.md, v2.1.295+): a `command` hook that cannot start, times out, or
+// exits anything other than 0 or 2 — even one that prints valid JSON — counts as a FAILURE, and
+// the field makes that failure block the action instead of sliding through as the non-blocking
+// default. A normal gate run (exit 0 plus a schema-valid decision document) is neither of those,
+// so it is never affected: the field changes only what happens when the gate did NOT run.
+test('onFailure: "block" sits on the two Claude PreToolUse gates, and nowhere else', () => {
+  withHome((home) => {
+    const groups = claudeHookGroups(path.join(home, 'cfg'), HOOK_OPTS());
+    const [gitGate, ruleGate] = groups.PreToolUse.map((g) => g.hooks[0]);
+    assert.equal(gitGate.onFailure, 'block', JSON.stringify(gitGate));
+    assert.equal(ruleGate.onFailure, 'block', JSON.stringify(ruleGate));
+    for (const ev of ['SessionStart', 'Stop', 'SubagentStop', 'PreCompact']) {
+      assert.equal(groups[ev][0].hooks[0].onFailure, undefined, `${ev} must stay "continue"`);
+    }
   });
 });
 
@@ -374,6 +409,67 @@ test('the doctor gate is silent when no shim exists', () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// THE SHIM DELETED OUT FROM UNDER A LIVE INSTALL (controller fix round, Task 1). `shimDeadPaths`
+// reads paths back OUT of a shim body, so it has nothing to read once the shim FILE is gone —
+// `shimProblems`'s old `!isFile(p) -> []` read that the same as a checkout that never emitted.
+// Newly worth telling apart since `onFailure: "block"` (this task) makes a dead git-gate/rule-gate
+// BLOCK instead of silently passing: the user needs to find `geneseed rebuild-all`, not discover
+// a stuck session by trial and error.
+
+test('shimProblems reports a deleted shim only when a live install still names it', () => {
+  // Both shim SHAPES, on whatever host actually runs this (CI regression, host-compat fix
+  // round): `writeInstall`'s shim and this test's own `hookShimPath()` must agree on which
+  // file ('.cmd' or bare) they mean, which was true only by accident on a win32 runner.
+  for (const plat of [process.platform, process.platform === 'win32' ? 'linux' : 'win32']) {
+    withPlatform(plat, () => withHome((home) => {
+      const cfg = path.join(home, 'cfg');
+      mkdirSync(cfg, { recursive: true });
+      // writes settings.json + manifest + (via hookPrefix) the shim, all shaped for `plat`
+      writeInstall(cfg, 'bash', plat);
+      const p = hookShimPath();
+      assert.ok(existsSync(p), `${plat}: writeInstall did not write the shim its own commands name`);
+      rmSync(p);                // simulate: a user (or a cleanup script) deleted it by hand
+      const targets = [['claude', 'global', cfg]];
+      const probs = shimProblems(targets);
+      assert.equal(probs.length, 1, `${plat}: ${probs.join('\n')}`);
+      assert.ok(probs[0].includes(p) && probs[0].includes(cfg) && probs[0].includes('rebuild-all'),
+        `${plat}: ${probs[0]}`);
+      // The clean half: once the install itself is gone too, nothing live names the shim.
+      rmSync(cfg, { recursive: true, force: true });
+      assert.deepEqual(shimProblems(targets), [], plat);
+    }));
+  }
+});
+
+test('installsReferencingShim matches the exact shim path, not merely its marker', () => {
+  // Two installs each name A shim, but only one names THIS one — the distinction that matters
+  // once more than one GENESEED_HOME can exist on a machine (a relocated one, or this very test
+  // running beside a real install): an install whose shim is healthy must never be reported as
+  // dead because some OTHER shim, sharing nothing but the filename, is missing.
+  withHome((home) => {
+    const real = hookShimPath();
+    const other = path.join(home, 'elsewhere', '.geneseed', 'bin', 'geneseed-hook.cmd');
+    const writeReferencing = (cfg, shimPath) => {
+      mkdirSync(cfg, { recursive: true });
+      const group = { matcher: 'Bash|PowerShell',
+        hooks: [{ type: 'command', command: `"${shimPath}" git-gate --root "${cfg}"` }] };
+      writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({ hooks: { PreToolUse: [group] } }));
+      writeFileSync(path.join(cfg, GLOBAL_MANIFEST),
+        JSON.stringify({ managed: { settings_hooks: [{ event: 'PreToolUse', group }] } }));
+    };
+    const mine = path.join(home, 'mine');
+    const theirs = path.join(home, 'theirs');
+    writeReferencing(mine, real);
+    writeReferencing(theirs, other);
+    const targets = [['claude', 'global', mine], ['claude', 'global', theirs]];
+    assert.deepEqual(installsReferencingShim(real, targets), [mine],
+      "an install naming a DIFFERENT shim (even one sharing the 'geneseed-hook' marker) "
+      + 'answered for this one');
+    assert.deepEqual(installsReferencingShim(other, targets), [theirs]);
+  });
+});
+
 test('the sniff recognises both the legacy and the shim shape', () => {
   // During migration both shapes are in the wild. Dropping the legacy marker would make every
   // not-yet-migrated install invisible to the orphan scan — an orphan the user deletes by hand.
@@ -544,15 +640,20 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
     const ps = withHookShell('powershell', () => claudeHookGroups(cfg, winOpts));
     const bash = withHookShell('bash', () => claudeHookGroups(cfg, winOpts));
     // Written out: every handler gains `shell` and a leading `&` (PowerShell refuses a quoted
-    // command head followed by arguments); the non-gate tail swaps `||` for `;`, the gates stay
-    // bare (no verb exits 2, so a launch failure is non-blocking either way).
+    // command head followed by arguments); the non-gate tail swaps `||` for `;`; the gates carry
+    // no exit-code-2 tail either way, but DO carry `onFailure: "block"` (Task 1), so a launch
+    // failure there blocks instead of being non-blocking.
     const context = `& ${run} context --root "${cfg}"; exit 0`;
     const learn = `& ${run} learn --memory "${path.join(cfg, 'memory')}"; exit 0`;
     const h = (command) => ({ hooks: [{ type: 'command', command, shell: 'powershell' }] });
+    // The two gates also carry `onFailure: "block"` (Claude-only, v2.1.295+, Task 1): a gate
+    // that cannot start or times out must fail CLOSED, not slide through as a non-blocking
+    // error the way a crashing gate did before. `context`/`learn` stay plain `continue`.
+    const hGate = (command) => ({ hooks: [{ type: 'command', command, shell: 'powershell', onFailure: 'block' }] });
     assert.deepEqual(ps, {
       PreToolUse: [
-        { matcher: 'Bash|PowerShell', ...h(`& ${run} git-gate --root "${cfg}"`) },
-        { matcher: 'Write|Edit|NotebookEdit', ...h(`& ${run} rule-gate --root "${cfg}"`) },
+        { matcher: 'Bash|PowerShell', ...hGate(`& ${run} git-gate --root "${cfg}"`) },
+        { matcher: 'Write|Edit|NotebookEdit', ...hGate(`& ${run} rule-gate --root "${cfg}"`) },
       ],
       SessionStart: [h(context)],
       Stop: [h(learn)],
@@ -570,6 +671,12 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
         assert.ok(!flat.includes('"shell"') && !flat.includes('& '), `${host}/${platform}: ${flat}`);
       }
     });
+    // `onFailure` is a Claude Code v2.1.295+ field: OpenClaude is a 2.1.88-era fork and must
+    // never see a field that version predates, and Bob's own hook doc names no such field.
+    for (const host of ['openclaude', 'bob']) {
+      const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform: 'win32' }, null, [], host);
+      assert.ok(!JSON.stringify(groups).includes('onFailure'), `${host} must not get onFailure`);
+    }
   });
 });
 
@@ -598,10 +705,48 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
   });
 });
 
-/** Write a Claude install at `cfg` as an emit under `shell` would: settings file and manifest. */
-function writeInstall(cfg, shell) {
+test('an install emitted before onFailure existed upgrades to it on re-emit', () => {
+  // A manifest recorded by a pre-Task-1 build claims the gate groups WITHOUT `onFailure`. That
+  // claim is no longer canonical (the current `claudeHookGroups` output carries it), so
+  // `mergeClaudeSettings` must prune the stale group and write the upgraded one — the same
+  // replace-not-stack rule the hook-shell-flip test above pins, now for a field instead of a
+  // shell. A re-emit that merely appended would leave both the old (fails open on a crash) and
+  // the new (fails closed) git-gate command wired at once.
+  withHome((home) => {
+    const cfg = path.join(home, 'cfg');
+    mkdirSync(cfg, { recursive: true });
+    const settings = path.join(cfg, 'settings.json');
+    const opts = HOOK_OPTS();
+    const current = claudeHookGroups(cfg, opts, null, [], 'claude');
+    // Strip `onFailure` from every handler to build the OLD claim set, as if a prior version of
+    // this file had emitted it, and seed a settings file carrying that old shape.
+    const strip = (groups) => Object.fromEntries(Object.entries(groups).map(([event, gs]) => [
+      event, gs.map((g) => ({ ...g, hooks: g.hooks.map(({ onFailure, ...rest }) => rest) })),
+    ]));
+    const old = strip(current);
+    const priorClaims = Object.entries(old).flatMap(([event, gs]) => gs.map((group) => ({ event, group })));
+    writeFileSync(settings, JSON.stringify({ hooks: old }));
+    const [, claims] = mergeClaudeSettings(settings, priorClaims, opts, null, [], 'claude', cfg);
+    const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
+    assert.equal(hooks.PreToolUse.length, 2, JSON.stringify(hooks.PreToolUse));
+    for (const g of hooks.PreToolUse) {
+      assert.equal(g.hooks[0].onFailure, 'block', JSON.stringify(g));
+    }
+    assert.equal(claims.length, 6, 'the claim set is not the six current (upgraded) groups');
+  });
+});
+
+/**
+ * Write a Claude install at `cfg` as an emit under `shell` would: settings file and manifest.
+ *
+ * `platform` defaults to `'win32'` (unchanged for every existing caller below, which is
+ * deliberately simulating Windows' two hook shells regardless of the host OS running the
+ * test). Pass the live `process.platform` explicitly when the shim this writes must agree
+ * with a bare `hookShimPath()` call elsewhere in the same test — see `withPlatform` above.
+ */
+function writeInstall(cfg, shell, platform = 'win32') {
   withHookShell(shell, () => {
-    const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform: 'win32' });
+    const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform });
     const recorded = Object.entries(groups)
       .flatMap(([event, gs]) => gs.map((group) => ({ event, group })));
     writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({ hooks: groups }));
@@ -666,6 +811,36 @@ test('status shows a fail-open hook form in the gates row, and adds nothing when
   });
 });
 
+test('status marks the gates DEAD when the shim itself is gone but a live install still names it', () => {
+  // Same cross-platform agreement `withPlatform` exists for, in the previous test — the
+  // `'win32'` passed to `gateSummary` below only steers its UNRELATED `fail_open` check
+  // (Task 15); it does not make the shim this test writes and reads agree in shape.
+  for (const plat of [process.platform, process.platform === 'win32' ? 'linux' : 'win32']) {
+    withPlatform(plat, () => withHome((home) => {
+      const cfg = path.join(home, 'claude-cfg');
+      mkdirSync(cfg, { recursive: true });
+      writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+      writeInstall(cfg, 'bash', plat);
+      const p = hookShimPath();
+      assert.ok(existsSync(p), plat);
+      rmSync(p);
+      const g = gateSummary([cfg], 'win32');
+      assert.deepEqual(g.dead, [p], `${plat}: ${JSON.stringify(g)}`);
+      const row = statusLines({ ...statusData(), gates: g }, false).find((l) => l.includes('gates'));
+      assert.ok(row.includes('DEAD') && row.includes('geneseed rebuild-all'), `${plat}: ${row}`);
+      // A dir that is not Claude-STYLE (an OpenCode config dir) is never judged — same rule the
+      // fail-open test above pins for `fail_open`, now for `dead`.
+      writeFileSync(path.join(cfg, '.geneseed-emit'), 'opencode-global\n');
+      assert.deepEqual(gateSummary([cfg], 'win32').dead, [], plat);
+      // Once the install itself is gone too, nothing live names the missing shim.
+      writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+      rmSync(path.join(cfg, 'settings.json'));
+      rmSync(path.join(cfg, GLOBAL_MANIFEST));
+      assert.deepEqual(gateSummary([cfg], 'win32').dead, [], plat);
+    }));
+  }
+});
+
 test('the PowerShell form escapes $ and backtick inside its double-quoted paths', () => {
   // A Windows path may hold either; unescaped, PowerShell expands `$x` and eats the backtick, so
   // `--root` names another directory and the gate answers for the wrong install.
@@ -713,6 +888,15 @@ test('the PowerShell form runs the gate under pwsh and Windows PowerShell', {
       assert.equal(g.status, 0, `${exe}: ${g.stderr}`);
       assert.equal(JSON.parse(g.stdout).hookSpecificOutput.permissionDecision, 'ask',
         `${exe}: ${g.stdout}`);
+      // The defer path, with `onFailure: "block"` live on this exact handler (Task 1): a normal
+      // non-ask run must still exit 0 with no JSON decision fields, or Claude Code would read it
+      // as a FAILURE (exit code other than 0/2, or invalid output) and BLOCK `git status` too.
+      const defer = run(gate.command, {
+        session_id: 'x', hook_event_name: 'PreToolUse', tool_name: 'Bash',
+        tool_input: { command: 'git status' }, cwd: home,
+      });
+      assert.equal(defer.status, 0, `${exe}: ${defer.stderr}`);
+      assert.equal(defer.stdout.trim(), '', `${exe}: a deferring gate must print nothing: ${defer.stdout}`);
       const c = run(context.command,
         { session_id: 'x', hook_event_name: 'SessionStart', source: 'startup', cwd: home });
       assert.equal(c.status, 0, `${exe}: ${c.stderr}`);

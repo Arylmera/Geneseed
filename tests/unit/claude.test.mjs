@@ -209,6 +209,111 @@ test('a user-only skill renders disable-model-invocation; an ordinary one does n
   });
 });
 
+test('a Bob emit gives a user-only skill a command and no SKILL.md at all (O2/R1)', () => {
+  // Bob's skills page documents no model-invocation key (host-compat R1) — unlike Claude
+  // Code, there is no frontmatter that hides `quiz` from the model's `use_skill` catalogue.
+  // So Bob gets no `skills/quiz/` folder at all; `.bob/commands/quiz.md` is the only way
+  // `/quiz` (or anything else) reaches it, exactly as `develop` (not user-only) still gets
+  // a normal `skills/develop/SKILL.md` and no command.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotbob-useronly');
+    globalEmit('bob', path.join(d, 'bundle-uo'), cfg);
+    assert.ok(!fs.existsSync(path.join(cfg, 'skills', 'quiz')),
+      'Bob must not get a user-only SKILL.md — the model would see it, R1');
+    assert.ok(fs.existsSync(path.join(cfg, 'skills', 'develop', 'SKILL.md')),
+      'an ordinary skill still gets its SKILL.md on Bob');
+    assert.ok(!fs.existsSync(path.join(cfg, 'commands', 'develop.md')),
+      'an ordinary (non-user-only, non-alias) skill gets no command');
+    const cmd = read(cfg, 'commands', 'quiz.md');
+    assert.doesNotMatch(cmd, /disable-model-invocation/, 'no claim about an unverified key');
+    assert.match(cmd, /^---\r?\ndescription: /);
+  });
+});
+
+test('a Bob emit gives a merged skill\'s old names commands, not alias SKILL.md files', () => {
+  // `bruno`'s aliases (`bruno-test-writer`, `bruno-collection-generator`) got a duplicate,
+  // model-visible SKILL.md on Bob before this fix — `emit-claude.mjs` passed the literal
+  // string `host: 'claude'` into `writeNativeLayer`, so its `host === 'claude'` alias branch
+  // fired for Bob too (host-compat R1, the exact bug the OpenCode `permission.skill` work
+  // (Task 4) and `writeAliasCommands` already solved for OpenCode). `bobDialect` stops it;
+  // the same commands OpenCode gets now land in `.bob/commands/` instead.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotbob-alias');
+    globalEmit('bob', path.join(d, 'bundle-alias'), cfg);
+    for (const alias of ['bruno-test-writer', 'bruno-collection-generator']) {
+      assert.ok(!fs.existsSync(path.join(cfg, 'skills', alias)),
+        `Bob must not get an alias SKILL.md for ${alias}`);
+      const cmd = read(cfg, 'commands', `${alias}.md`);
+      assert.match(cmd, /^---\r?\ndescription: "Alias of bruno\."\r?\n---\r?\n\r?\n/);
+    }
+    assert.ok(fs.existsSync(path.join(cfg, 'skills', 'bruno', 'SKILL.md')),
+      'the alias TARGET still gets its own real skill');
+  });
+});
+
+test('a Bob uninstall removes its alias/user-only commands, manifest-owned like everything else', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'dotbob-uninstall');
+    globalEmit('bob', path.join(d, 'bundle-un'), cfg);
+    assert.ok(fs.existsSync(path.join(cfg, 'commands', 'quiz.md')),
+      'the emit wrote no user-only command, so its removal below would prove nothing');
+    assert.ok(fs.existsSync(path.join(cfg, 'commands', 'bruno-test-writer.md')),
+      'the emit wrote no alias command, so its removal below would prove nothing');
+    const owned = new Set(readJson(cfg, GLOBAL_MANIFEST).owned);
+    assert.ok(owned.has('commands/quiz.md'));
+    assert.ok(owned.has('commands/bruno-test-writer.md'));
+
+    captured(() => uninstallGlobal(cfg, false, 'bob'));
+
+    assert.ok(!fs.existsSync(path.join(cfg, 'commands', 'quiz.md')));
+    assert.ok(!fs.existsSync(path.join(cfg, 'commands', 'bruno-test-writer.md')));
+    assert.ok(!fs.existsSync(path.join(cfg, GLOBAL_MANIFEST)));
+  });
+});
+
+test('a Bob re-emit prunes the old alias/user-only SKILL.md the pre-fix bug wrote, and does '
+  + 'not double-wire the (always matcher-less) PreToolUse group', () => {
+  // Simulates upgrading a REAL pre-this-task install: `emit-claude.mjs` used to pass the
+  // literal `host: 'claude'` into `writeNativeLayer` for Bob too, so a first emit back then
+  // wrote `skills/bruno-test-writer/SKILL.md` and `skills/quiz/SKILL.md` (both manifest-owned,
+  // both model-visible). Forge that exact state on top of a CURRENT emit, then re-emit with
+  // today's code and check both halves of the fix round survive together: the stale files are
+  // pruned (ownership no longer covers them, current code never writes them) and the
+  // `PreToolUse` group — matcher-less in every version of this code, before, during and after
+  // the now-reverted O1 matcher — stays a SINGLE group rather than stacking a second one.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotbob-upgrade');
+    const out = path.join(d, 'bundle-upgrade');
+    globalEmit('bob', out, cfg);
+
+    const staleAlias = path.join(cfg, 'skills', 'bruno-test-writer', 'SKILL.md');
+    const staleUserOnly = path.join(cfg, 'skills', 'quiz', 'SKILL.md');
+    fs.mkdirSync(path.dirname(staleAlias), { recursive: true });
+    fs.writeFileSync(staleAlias, '---\nname: bruno-test-writer\ndescription: "Alias of bruno."\n'
+      + 'disable-model-invocation: true\n---\n\nOLD ALIAS SKILL\n');
+    fs.mkdirSync(path.dirname(staleUserOnly), { recursive: true });
+    fs.writeFileSync(staleUserOnly, '---\nname: quiz\ndescription: "Test what you know."\n'
+      + 'disable-model-invocation: true\n---\n\nOLD USER-ONLY SKILL\n');
+    const man = readJson(cfg, GLOBAL_MANIFEST);
+    man.owned.push('skills/bruno-test-writer/SKILL.md', 'skills/quiz/SKILL.md');
+    fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST), JSON.stringify(man));
+
+    globalEmit('bob', out, cfg);
+
+    assert.ok(!fs.existsSync(staleAlias), 'the pre-fix alias SKILL.md was not pruned');
+    assert.ok(!fs.existsSync(staleUserOnly), 'the pre-fix user-only SKILL.md was not pruned');
+    assert.ok(fs.existsSync(path.join(cfg, 'commands', 'bruno-test-writer.md')),
+      'the replacement command is missing');
+    assert.ok(fs.existsSync(path.join(cfg, 'commands', 'quiz.md')),
+      'the replacement command is missing');
+
+    const settings = readJson(cfg, 'settings', 'settings.json');
+    assert.equal(settings.hooks.PreToolUse.length, 1,
+      'the matcher-less PreToolUse group was double-wired on re-emit');
+    assert.ok(!('matcher' in settings.hooks.PreToolUse[0]));
+  });
+});
+
 test('a re-emit prunes what it owns and stacks nothing it does not', () => {
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');
@@ -1282,9 +1387,11 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     assert.equal(manifestIsClaude(cfg), true);
     // BOB'S OWN CONTRACT (docs/reviews/bob-global-injection-2026-09.md): the global hooks
     // file is the NESTED `settings/settings.json`; Bob has five events and Geneseed uses three
-    // — SessionStart (context, plain stdout), PreToolUse (ONE `tool-gate` group, no matcher,
-    // `--host bob` so a refusal is exit 2), Stop (learn). `SubagentStop`/`PreCompact` are not
-    // Bob events and must not be written; a flat `settings.json` must not exist either.
+    // — SessionStart (context, plain stdout), PreToolUse (ONE `tool-gate` group, deliberately
+    // NO matcher — host-compat O1, revisited: an allow-list from Bob's own tool list would
+    // fail open on tool drift, and a deny-list needs an unverified regex dialect — `--host
+    // bob` so a refusal is exit 2), Stop (learn). `SubagentStop`/`PreCompact` are not Bob
+    // events and must not be written; a flat `settings.json` must not exist either.
     assert.ok(!fs.existsSync(path.join(cfg, 'settings.json')), 'the flat settings.json is the OLD path');
     const settings = readJson(cfg, 'settings', 'settings.json');
     assert.ok(!('claudeMdExcludes' in settings));

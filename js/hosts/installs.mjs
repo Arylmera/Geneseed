@@ -679,8 +679,12 @@ export function installTargets() {
  * (`claudeHookShell`; Task 15) — the "Git Bash removed after the emit" gap, which otherwise
  * reports nothing: hooks signal through stdout and Claude treats a parse error as non-blocking.
  *
- * Bash form with Git Bash now gone is a PROBLEM (every hook, both gates included, fails open
- * under PowerShell). PowerShell form with Git Bash now present is a `[note]`: the hooks work,
+ * Bash form with Git Bash now gone is a PROBLEM: `context`/`learn` fail open under PowerShell
+ * (no `onFailure`, so a launch failure there is still non-blocking) and, since Task 1, the two
+ * gates fail CLOSED instead (`onFailure: "block"` blocks every Bash/PowerShell/Write/Edit/
+ * NotebookEdit call until `rebuild-all` re-emits the PowerShell form) — worse for the user
+ * either way, so the message below still reports it as drift needing a rebuild; it does not
+ * distinguish the two outcomes. PowerShell form with Git Bash now present is a `[note]`: the hooks work,
  * they only pay PowerShell's startup. Read from the recorded claims the settings file still
  * carries (`liveRecordedHooks`) — the form the emit wrote, not re-derived; Windows only, since
  * nowhere else has two hook shells. `targets` and `platform` are parameters so a test can hand
@@ -701,8 +705,8 @@ export function hookShellProblems(targets = installTargets(), platform = process
     if (was === now) continue;
     out.push(was === 'bash'
       ? `[hooks] ${cfg}: hooks were emitted for Git Bash, which is no longer found, so Claude `
-        + 'Code runs them under PowerShell where they fail open (no gate fires) - run: '
-        + 'geneseed rebuild-all'
+        + 'Code runs them under PowerShell where context/learn fail open (no effect) and '
+        + 'git-gate/rule-gate now BLOCK every call instead of gating it - run: geneseed rebuild-all'
       : `[note] ${cfg}: hooks were emitted for PowerShell, but Git Bash is now found - they work, `
         + 'and pay PowerShell startup on every call; geneseed rebuild-all switches them back');
   }

@@ -63,7 +63,7 @@ import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
-  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, GATE_LEDGER,
+  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, CLAUDE_STYLE, GATE_LEDGER,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
@@ -73,7 +73,8 @@ import {
   readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
-import { shimDead } from '../hosts/shim.mjs';
+import { installsReferencingShim } from './checks-repo.mjs';
+import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
@@ -208,7 +209,11 @@ export function gateSummary(cfgDirs, platform = process.platform) {
     }
   }
   // `dead` is the machine shim's missing targets: every gate below is armed on paper and never
-  // runs, so it outranks `armed` in the row.
+  // runs, so it outranks `armed` in the row. A shim that exists but names a moved checkout
+  // (`shimDead`) and a shim that is simply GONE while a live install still names it
+  // (`installsReferencingShim`, Task 1's fix round — `onFailure: "block"` makes a dead gate
+  // block instead of silently passing, so this stopped being a quiet failure) are the same
+  // row here: both mean "every hook of every install naming this shim cannot run".
   // `fail_open` (Task 15): Claude installs whose bash-form hooks now run under PowerShell. Only
   // present when non-empty, so every recorded `--json` panel keeps its shape.
   // Only the dirs it was handed, and only those that are Claude's global (`isHostGlobalDir`);
@@ -216,8 +221,17 @@ export function gateSummary(cfgDirs, platform = process.platform) {
   const isClaude = (c) => { try { return isHostGlobalDir('claude', c); } catch { return false; } };
   const claude = cfgDirs.filter(isClaude).map((c) => ['claude', 'global', c]);
   const failOpen = hookShellProblems(claude, platform).filter((p) => !p.startsWith('[note] '));
+  // Same `cfgDirs`, widened to every Claude-STYLE host (`CLAUDE_STYLE`: claude, bob,
+  // openclaude — all three share this one machine-wide shim), for `installsReferencingShim`.
+  const styleTargets = cfgDirs.flatMap((c) => CLAUDE_STYLE
+    .filter((host) => { try { return isHostGlobalDir(host, c); } catch { return false; } })
+    .map((host) => [host, 'global', c]));
+  const shimPath = hookShimPath();
+  const dead = shimDead();
+  const missing = !dead.length && !existsSync(shimPath)
+    && installsReferencingShim(shimPath, styleTargets).length ? [shimPath] : dead;
   return {
-    standing_down: standingDown, asks, total, dead: shimDead(),
+    standing_down: standingDown, asks, total, dead: missing,
     ...(failOpen.length ? { fail_open: failOpen } : {}),
   };
 }

@@ -10,6 +10,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Added
 - A Claude Code plugin marketplace: `/plugin marketplace add Arylmera/Geneseed`, then `/plugin install geneseed@geneseed`. The plugin carries one skill, `/geneseed:setup`, which asks for scope and theme and runs the published CLI (`npm install -g geneseed`, `geneseed build --emit claude-global` or `--emit claude`). It carries no harness of its own, so nothing in it can drift from the build.
+- Bob gets `/`-commands: each skill alias and each user-only skill is a `.bob/commands/<name>.md`, and a user-only skill writes no SKILL.md on Bob, so the model cannot start it there.
+- OpenCode hides user-only skills from the model: each one gets a `permission.skill` deny in `opencode.json`, and `/name` still runs it. Geneseed records the denies it writes in its manifest (`skill_denies`); a rebuild removes a recorded deny once the skill is no longer user-only, and uninstall takes the recorded ones back. A deny you set yourself, even on a Geneseed skill, is never touched.
+- A root-scan check in the shell gate: a recursive scan whose argument is a whole filesystem root (`find /`, `du -sh /`, `grep -r foo /`, `rg x C:\`, `Get-ChildItem C:\ -Recurse`) now asks on Claude Code and OpenClaude and is refused on Bob and by the OpenCode guard plugin, citing *Commands Must Return* (ops 2), which gains a sentence saying so in both halves. In Git Bash `/` mounts every drive and share: a `find / … | head -5` ran for 3.5 hours on 2026-10-10. A deeper path, `ls /` without `-R`, and any `ssh` command pass. It runs inside `git-gate`/`tool-gate`, so no emitted hook command changes. Separators inside quotes and heredoc bodies are data, so a commit message that names such a scan is not one.
+
+### Changed
+- Claude Code gates now block the tool call when the gate itself fails: `git-gate` and `rule-gate` carry `onFailure: "block"`, so a dead or missing shim, a gate process that crashes or a timeout refuses every Bash, PowerShell, Write, Edit and NotebookEdit call instead of letting it through. This needs Claude Code v2.1.295 or later; whether an older version ignores the key or rejects the settings file is unverified. `doctor` and `status` now report a deleted shim. To recover from inside a blocked session, see [Troubleshoot hooks](docs/reference/troubleshoot-hooks.md). OpenClaude and Bob are unchanged.
+
+### Fixed
+- `learn` on `SubagentStop` reads the subagent's own transcript (`agent_transcript_path`); it used to distil a lesson from the main session's. When the transcript cannot be read, or lags behind the final turn, it falls back to or appends `last_assistant_message`.
 
 ## [3.20.0] — 2026-10-09
 

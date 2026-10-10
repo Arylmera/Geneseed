@@ -62,7 +62,8 @@ import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
-  settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes, unwireClaudeSettings,
+  settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes,
+  unwireClaudeSettings,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
@@ -214,14 +215,35 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
   '.geneseed-footprint', VERSION_MARKER];
 
 /**
+ * The CURRENT manifest's `skill_denies` — the `permission.skill` denies Geneseed itself added
+ * (`opencodeLayer` in emit-opencode.mjs records them; a deny the user wrote, even on a Geneseed
+ * skill, is never in it). Task 4 (O-1) wires one per user-only skill, and unlike the Law IV
+ * `permission.bash` gates (permanent invariants, never taken back — see
+ * `reconcileOpencodePermission`), a skill-visibility deny is reversible: once uninstalled there
+ * is no skill left to hide, and the name is the user's to reuse. No record takes back nothing.
+ */
+function skillPermissionNames(man) {
+  return Array.isArray(man.skill_denies) ? man.skill_denies.filter((n) => typeof n === 'string') : [];
+}
+
+/**
  * `_harness_mcp._unmerge_opencode_json` — drop one `instructions` entry, leave every other
  * key intact.
+ *
+ * `denyNames`, Task 4 (O-1): the denies this install's manifest records writing
+ * (`skill_denies`) — remove `permission.skill[name]` for each one, but ONLY where the value is
+ * still exactly `"deny"`, and drop the `skill` object once it is empty. Ownership comes from the
+ * record, not the value; the value check on top guards a user who re-scoped a recorded name to
+ * their own `"allow"`/`"ask"`. A
+ * caller passing `[]` (every non-uninstall unwire — `installDeactivate`, same as
+ * `permission.bash`) leaves `permission.skill` untouched, so a paused install keeps the model
+ * blind to its skills rather than re-exposing them until the next `geneseed build`.
  *
  * A COMMENTED `.jsonc` is not rewritten and the user is told to do it by hand: rewriting it
  * would drop the comments. That branch returns False, so the caller's `unmerged` reports
  * REALITY rather than intent.
  */
-export function unmergeOpencodeJson(p, entry) {
+export function unmergeOpencodeJson(p, entry, denyNames = []) {
   const target = opencodeTarget(p);
   // Absent, unreadable (the Python's `except OSError: return False`) or not an object: decline.
   const { state, data: cfg, hadComments } = loadJsonObject(target);
@@ -234,6 +256,12 @@ export function unmergeOpencodeJson(p, entry) {
     return false;
   }
   cfg.instructions = instr.filter((i) => i !== entry);
+  if (denyNames.length && isDict(cfg.permission) && isDict(cfg.permission.skill)) {
+    for (const name of denyNames) {
+      if (cfg.permission.skill[name] === 'deny') delete cfg.permission.skill[name];
+    }
+    if (!Object.keys(cfg.permission.skill).length) delete cfg.permission.skill;
+  }
   atomicWriteJson(target, cfg);
   return true;
 }
@@ -337,7 +365,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode') {
     if (isDir(p) && isEmptyDir(p)) rmdirQuiet(p);
   }
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
-    path.join(target, 'AGENT.md').split(path.sep).join('/'));
+    path.join(target, 'AGENT.md').split(path.sep).join('/'), skillPermissionNames(man));
   managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
   if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
@@ -398,10 +426,11 @@ function opencodeProjectUninstall(root) {
   const entry = installAgentEntry(root, 'project');
   let removed = 0;
   let failed = [];
+  let man = null;
   const oc = path.join(root, '.opencode');
   const manifestPath = path.join(oc, GLOBAL_MANIFEST);
   if (isFile(manifestPath)) {
-    const man = claudeReadManifest(oc);
+    man = claudeReadManifest(oc);
     [removed, failed] = unlinkOwned(oc, ownedOf(man), '.opencode/');
     if (failed.length) warnSurvivors(failed);
     // Survivors gate, mirroring the other two reversals: `_project_qualifies` keys off the
@@ -422,7 +451,8 @@ function opencodeProjectUninstall(root) {
   }
   const am = path.join(root, 'AGENT.md');
   if (isFile(am)) { unlinkQuiet(am); removed += 1; }
-  const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry);
+  const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry,
+    man ? skillPermissionNames(man) : []);
   const result = { removed, unmerged, archived: null };
   if (failed.length) result.failed = failed;
   return result;

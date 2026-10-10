@@ -352,6 +352,31 @@ function globalInstall(d) {
 }
 
 /**
+ * A second (or third…) pass over an EXISTING `globalInstall(d)` target, same `d` so the home
+ * override and the manifest's `oldOwned` both carry over — the shape a re-emit with a changed
+ * `--exclude-skills` selection actually runs under.
+ */
+function globalReemit(d, cfg, extraArgs = []) {
+  const r = spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode-global', '--theme', 'neutral',
+      ...extraArgs],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: {
+        ...process.env, ...homeOverrides(path.join(d, 'home')), OPENCODE_CONFIG_DIR: cfg,
+      },
+      maxBuffer: 1 << 26,
+      windowsHide: true,
+    });
+  if (r.status !== 0) {
+    throw new Error(`opencode-global re-emit failed (${r.status}): `
+      + `${(r.stderr || r.stdout || '').slice(-1500)}`);
+  }
+  return r;
+}
+
+/**
  * `contextlib.redirect_stdout` / `redirect_stderr`, and BOTH are needed here: the unmerge
  * warning goes to stdout while every refusal `cmdUninstall` makes goes to stderr. Returned
  * separately rather than joined, because "which stream said it" is part of the claim — a
@@ -396,6 +421,110 @@ test('a global uninstall removes what it owns and keeps the memory store', () =>
     assert.ok(summary.unmerged);
     assert.ok(!instructionsOf(cfg).includes(agentMd),
       'opencode.json still points at an AGENT.md that no longer exists');
+  });
+});
+
+test('a real global uninstall takes back only the skill denies it owns', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const target = path.join(cfg, 'opencode.json');
+    const before = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.equal(before.permission.skill.herdr, 'deny',
+      'herdr carries `<!-- invocation: user -->` and must start denied');
+    // A user's own policy for an unrelated name — Geneseed's manifest does not own `mine`.
+    before.permission.skill.mine = 'deny';
+    fs.writeFileSync(target, JSON.stringify(before));
+
+    uninstallGlobal(cfg, false);
+
+    const after = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.ok(!('herdr' in after.permission.skill), 'an owned deny survived a real uninstall');
+    assert.equal(after.permission.skill.mine, 'deny',
+      "a name Geneseed's manifest never owned was removed by uninstall");
+  });
+});
+
+// Fix round (controller review): a re-emit must sweep a stale deny too, not only an uninstall.
+test('a real re-emit sweeps a stale skill deny once --exclude-skills drops it', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const target = path.join(cfg, 'opencode.json');
+    let perm = JSON.parse(fs.readFileSync(target, 'utf8')).permission;
+    assert.equal(perm.skill.herdr, 'deny', 'herdr did not start denied');
+
+    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+
+    perm = JSON.parse(fs.readFileSync(target, 'utf8')).permission;
+    assert.ok(!('herdr' in perm.skill), 'an excluded skill kept a stale deny after a re-emit');
+    // A still-wanted deny rides along unaffected.
+    assert.equal(perm.skill.quiz, 'deny', 'a still-wanted deny was swept along with the stale one');
+  });
+});
+
+// Final review: owning `skills/<name>/SKILL.md` is not owning a deny for that name — a user may
+// hide a Geneseed skill from the model on their own. So the manifest records the names Geneseed
+// itself WROTE a deny for (`skill_denies`), and only those are ever swept or uninstalled.
+const editJson = (p, fn) => {
+  const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+  fn(data);
+  fs.writeFileSync(p, JSON.stringify(data));
+};
+
+test("a user's own deny on a Geneseed skill survives a re-emit and an uninstall", () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const target = path.join(cfg, 'opencode.json');
+    const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    assert.ok(man.skill_denies.includes('herdr') && !man.skill_denies.includes('brainstorm'),
+      `the manifest does not record exactly the denies Geneseed wrote: ${man.skill_denies}`);
+    // brainstorm is model-invocable, so Geneseed never denies it: this one is the user's.
+    editJson(target, (c) => { c.permission.skill.brainstorm = 'deny'; });
+
+    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+    let skill = JSON.parse(fs.readFileSync(target, 'utf8')).permission.skill;
+    assert.equal(skill.brainstorm, 'deny', "a re-emit swept the user's own deny on a Geneseed skill");
+    assert.ok(!('herdr' in skill), "Geneseed's own stale deny survived the re-emit");
+
+    uninstallGlobal(cfg, false);
+    skill = JSON.parse(fs.readFileSync(target, 'utf8')).permission.skill;
+    assert.deepEqual(skill, { brainstorm: 'deny' }, 'uninstall took more, or less, than its own denies');
+  });
+});
+
+test('a deny the user wrote before the first emit is never recorded as Geneseed\'s', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    fs.writeFileSync(path.join(cfg, 'opencode.json'),
+      JSON.stringify({ permission: { bash: {}, skill: { herdr: 'deny' } } }));
+    globalReemit(d, cfg);
+    const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    assert.ok(!man.skill_denies.includes('herdr'), 'a pre-existing user deny was claimed');
+    assert.ok(man.skill_denies.includes('quiz'), 'a deny Geneseed did write went unrecorded');
+    uninstallGlobal(cfg, false);
+    const skill = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.skill;
+    assert.deepEqual(skill, { herdr: 'deny' });
+  });
+});
+
+test('an uninstall that takes back every deny drops the emptied permission.skill object', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    uninstallGlobal(cfg, false);
+    const perm = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission;
+    assert.ok(!('skill' in perm), `an empty skill object was left behind: ${JSON.stringify(perm)}`);
+  });
+});
+
+test('a manifest with no skill_denies record sweeps nothing on re-emit', () => {
+  // The safe reading of an older manifest: no record of what Geneseed wrote means no licence
+  // to take anything away.
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    editJson(path.join(cfg, GLOBAL_MANIFEST), (m) => { delete m.skill_denies; });
+    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+    const skill = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.skill;
+    assert.equal(skill.herdr, 'deny', 'a deny with no recorded provenance was swept');
   });
 });
 
@@ -600,6 +729,41 @@ test('the unmerge edits a comment-free JSONC file', () => {
     const changed = unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md');
     assert.equal(changed, true);
     assert.deepEqual(JSON.parse(fs.readFileSync(jc, 'utf8')).instructions, ['other.md']);
+  });
+});
+
+// Task 4 / O-1: `permission.skill` denies are reversible, unlike the Law IV bash gates — a
+// true uninstall takes back the ones it owns. `denyNames` is `unmergeOpencodeJson`'s 3rd,
+// optional argument; ownership is by NAME (the manifest's `skill_denies` record), the
+// value check on top guards a user's own unrelated policy for a colliding name.
+test('the unmerge strips the skill denies it owns, by name AND value, nothing else', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      instructions: ['AGENT.md'],
+      permission: { skill: { herdr: 'deny', mine: 'deny', quiz: 'allow' } },
+    }));
+    const changed = unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md', ['herdr', 'quiz']);
+    assert.equal(changed, true);
+    const skill = JSON.parse(fs.readFileSync(p, 'utf8')).permission.skill;
+    assert.ok(!('herdr' in skill), 'an owned deny survived uninstall');
+    assert.equal(skill.mine, 'deny', "a name not in denyNames (not this install's) was removed");
+    assert.equal(skill.quiz, 'allow',
+      "a non-'deny' value for an owned name was deleted — ownership is not a licence to overwrite");
+  });
+});
+
+test('the unmerge touches permission.skill not at all when no denyNames are given', () => {
+  // `installDeactivate` calls with no 3rd argument — same contract as the Law IV bash gates,
+  // which never come back out on a pause. The denies must survive untouched.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      instructions: ['AGENT.md'],
+      permission: { skill: { herdr: 'deny' } },
+    }));
+    unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md');
+    assert.equal(JSON.parse(fs.readFileSync(p, 'utf8')).permission.skill.herdr, 'deny');
   });
 });
 

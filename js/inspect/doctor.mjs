@@ -234,7 +234,8 @@ export function doctorCollect({
   problems = problems.concat(ran('loops', 'Loop catalogue', loopProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
   // Windows: a Claude install's hooks emitted for Git Bash on a machine that no longer has it
-  // fail open under PowerShell (Task 15). The reverse direction is a note.
+  // misbehave under PowerShell (Task 15) — context/learn fail open, and since Task 1 the two
+  // gates fail CLOSED instead (`onFailure: "block"`). The reverse direction is a note.
   problems = problems.concat(ran('hook_shell', 'Hook shell', hookShellProblems()));
   // A machine check like the shim's: OPENCODE_CONFIG_DIR adds a dir, it does not replace one.
   const shadow = opencodeShadowedInstall();
