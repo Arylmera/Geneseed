@@ -31,7 +31,7 @@ import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
   projectQualifies, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
-import { emitHostScopeOf, installTargets } from '../../js/hosts/installs.mjs';
+import { emitHostScopeOf, installState, installTargets } from '../../js/hosts/installs.mjs';
 import { isScratchRoot, registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import {
   VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir, opencodeShadowedInstall,
@@ -1080,6 +1080,44 @@ test('uninstalling one host reports the other still installed here', () => {
     const [rc, out] = captured(() => cmdUninstall(uninstallArgs(repo)));
     assert.equal(rc, 0, out);
     assert.ok(out.includes('also found bob:project here'), out);
+  });
+});
+
+test('uninstalling one host does not erase the shared root marker a sibling install still '
+  + 'needs (host-compat B2)', () => {
+  // `registryRoots` (`js/inspect/registry.mjs`) keeps a registered root only while
+  // `.geneseed-emit` exists there — ONE marker per shared project root, last deploy wins
+  // (`generate.mjs`'s "THE MARKER IS TRUSTED ONLY FOR ITS OWN HOST"). Installing opencode then
+  // claude leaves the marker naming claude; uninstalling opencode (which qualifies through its
+  // OWN `.opencode/` manifest, not the marker) must leave that marker alone, because claude's
+  // install is still live and the registry's self-prune does not know the difference between
+  // "root abandoned" and "root's marker belongs to a surviving sibling".
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const home = path.join(d, 'home');
+    fs.mkdirSync(repo, { recursive: true });
+    projectInstall(repo, 'opencode', home);
+    projectInstall(repo, 'claude', home);
+    assert.deepEqual(emitHostScopeOf(repo), ['claude', 'project'],
+      'sanity: the shared marker now names claude (last deploy wins)');
+    // The CLI child emits register into ITS OWN sandboxed home (`homeOverrides(home)`); the
+    // registry read below runs in-process under `sandboxProcessHome()`'s home instead, so the
+    // row is recorded here the same way every other in-process registry test in this file does.
+    registryRecord(repo);
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+    // opencode resolves first in HOSTS order and qualifies via its own manifest regardless of
+    // the marker — confirming the uninstall really did remove opencode, not claude.
+    assert.equal(installState(resolved(repo), 'opencode', 'project'), 'absent');
+
+    assert.equal(installState(resolved(repo), 'claude', 'project'), 'active',
+      "claude's own install was untouched by the opencode uninstall");
+    assert.deepEqual(emitHostScopeOf(repo), ['claude', 'project'],
+      "the opencode uninstall deleted claude's shared root marker");
+    assert.ok(registryRoots().some((r) => {
+      try { return fs.realpathSync.native(r) === resolved(repo); } catch { return false; }
+    }), 'the registry silently dropped a root that still carries a live claude install');
   });
 });
 

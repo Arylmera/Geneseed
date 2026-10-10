@@ -271,8 +271,16 @@ export function archiveStore(store) {
  * `settings.local.json` for a Claude PROJECT install (personal, untracked), `settings.json`
  * everywhere else, and the manifest is the authority. Every lifecycle path must target the
  * file the EMIT wrote, or the hooks linger in one file while the claims chase another.
+ *
+ * EXPORTED for `migrate` (host-compat B1 round, `js/maintain/migrate.mjs`'s `hookSettingsFile`):
+ * reading a pre-migration install's CURRENT wiring is the same question this answers, and a
+ * fresh install with no `managed.settings_file` yet recorded (no manifest, or a manifest from
+ * before this field existed) must fall back to the bare, pre-nesting `settings.json` — the
+ * shape a legacy `bob-global` install actually carries — not to wherever the NEXT emit would
+ * write. `claudeWire`'s own `get(old, 'settings_file') || 'settings.json'` (`emit-claude.mjs`)
+ * makes the same choice for the same reason.
  */
-function settingsFile(cfg, managed) {
+export function settingsFile(cfg, managed) {
   return path.join(cfg, (managed && managed.settings_file) || 'settings.json');
 }
 
@@ -520,8 +528,22 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
     if (archived.length) out.archived = archived;
     return out;
   }
-  for (const m of ['.geneseed-emit', '.geneseed-theme', VERSION_MARKER]) {
-    unlinkQuiet(path.join(root, m));
+  // The root markers are ONE PER ROOT (`generate.mjs`'s "THE MARKER IS TRUSTED ONLY FOR ITS
+  // OWN HOST") and `registryRoots` keeps a row alive only while `.geneseed-emit` exists there
+  // — so in a repo sharing two project installs (`.claude/` + `.opencode/` at the same cwd,
+  // last deploy wins the marker), deleting it here because THIS host is being uninstalled
+  // would also silently deregister the OTHER host's still-live install. Delete only when the
+  // marker actually names the host just removed, or when nothing else is installed at this
+  // root to still need it.
+  const markerScope = emitHostScopeOf(root);
+  const marksThisHost = markerScope !== null && markerScope[0] === host;
+  const otherInstallRemains = HOSTS.some(
+    ({ host: h }) => h !== host && installState(root, h, scope) !== 'absent',
+  );
+  if (marksThisHost || !otherInstallRemains) {
+    for (const m of ['.geneseed-emit', '.geneseed-theme', VERSION_MARKER]) {
+      unlinkQuiet(path.join(root, m));
+    }
   }
   // 4. Tidy an emptied marker dir (.claude/.bob) so no husk lingers in the repo.
   if (data !== root && isDir(data) && isEmptyDir(data)) rmdirQuiet(data);

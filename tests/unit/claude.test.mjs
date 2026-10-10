@@ -31,7 +31,7 @@ import { createHash } from 'node:crypto';
 
 import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { rebuildAll } from '../../js/build/generate.mjs';
-import { cmdMigrate } from '../../js/maintain/migrate.mjs';
+import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
   globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES, sessionFiles,
 } from '../../js/hosts/hooks-context.mjs';
@@ -959,6 +959,56 @@ function cliGlobalEmit(kind, extra = []) {
     { cwd: String(ROOT), encoding: 'utf8', env: process.env, maxBuffer: 1 << 26, windowsHide: true });
   assert.equal(r.status, 0, `${kind} emit failed (${r.status}): ${(r.stderr || '').slice(-800)}`);
 }
+
+// `migrate` reads hook commands out of the settings file the EMIT wired them into
+// (`hookSettingsFile`). It used to hand-roll `path.join(root, name)` directly, which dropped the
+// `.claude`/`.bob`/`.openclaude` project subfolder entirely and guessed the canonical name
+// instead of reading what the install's OWN manifest recorded — missing Bob global's nested
+// `settings/settings.json` on a fresh install AND breaking a pre-existing (pre-nesting) Bob
+// global install, whose manifest carries no `managed.settings_file` and whose real file is the
+// bare `settings.json` the golden CLI matrix's `migrate/a-legacy-bob-install-crosses` cell
+// seeds. Every row here is read back through the same two resolvers (`claudeCfg` +
+// `settingsFile`) rather than a third copy, against a FILE THE EMIT REALLY WROTE.
+test('hookSettingsFile resolves the exact file the emit wires, per host and scope', () => {
+  withDir((d) => {
+    // Project scope: `<root>/<projectMarker>/settings.local.json`, except Bob (no local
+    // variant documented), which keeps the team-shared `settings.json`.
+    for (const [host, name] of [
+      ['claude', 'settings.local.json'], ['openclaude', 'settings.local.json'],
+      ['bob', 'settings.json'],
+    ]) {
+      const repo = path.join(d, `proj-${host}`);
+      projectEmit(host, repo, repo);
+      const file = path.join(repo, `.${host}`, name);
+      assert.equal(hookSettingsFile(repo, host, 'project'), file, `${host}:project`);
+      assert.ok(fs.existsSync(file), `${host}'s own emit did not write ${file}`);
+    }
+
+    // Global scope: bare `settings.json`, except Bob which nests one level down (host-compat B1).
+    for (const [host, name] of [
+      ['claude', 'settings.json'], ['openclaude', 'settings.json'],
+      ['bob', path.join('settings', 'settings.json')],
+    ]) {
+      const cfg = path.join(d, `global-${host}`);
+      globalEmit(host, path.join(d, `bundle-${host}`), cfg);
+      const file = path.join(cfg, name);
+      assert.equal(hookSettingsFile(cfg, host, 'global'), file, `${host}:global`);
+      assert.ok(fs.existsSync(file), `${host}'s own emit did not write ${file}`);
+    }
+
+    // A manifest with no `managed.settings_file` recorded (no field yet, or none at all) falls
+    // back to the bare, pre-nesting `settings.json` the install was ACTUALLY written with, not
+    // to wherever a brand-new emit would write — the shape of a pre-existing bob-global install.
+    const legacy = path.join(d, 'legacy-bob-global');
+    fs.mkdirSync(legacy, { recursive: true });
+    fs.writeFileSync(path.join(legacy, '.geneseed-manifest.json'), '{"owned": []}\n');
+    assert.equal(hookSettingsFile(legacy, 'bob', 'global'), path.join(legacy, 'settings.json'));
+
+    // OpenCode wires no settings file at all — its hooks are a plugin, not a Claude-style merge.
+    assert.equal(hookSettingsFile(d, 'opencode', 'project'), null);
+    assert.equal(hookSettingsFile(d, 'opencode', 'global'), null);
+  });
+});
 
 // `migrate` re-emits each install in its OWN values, and the excluded rules are one of them. It
 // hand-copied `installProfile` and passed them as `null`, so the re-emit fell back to
