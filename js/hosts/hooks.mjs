@@ -371,10 +371,11 @@ const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-c
 // and leave the root unseen.
 const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g;
 const SCAN_WRAPPERS = new Set(['sudo', 'command', '\\builtin', 'time', 'nice']);
-// One left-to-right pass: a quoted run (kept whole, so its `;`/`|` is data), a separator, or a
+// One left-to-right pass: a comment (`#` starting a word, to the end of the line — an apostrophe
+// in it is no quote), a quoted run (kept whole, so its `;`/`|` is data), a separator, or a
 // heredoc opener (`<<TAG`, `<<-TAG`, `<< 'TAG'`, `<<"TAG"` — never the here-string `<<<`).
 // Every alternative consumes at least one character, and none can backtrack past its start.
-const SCAN_SPLIT_RE = /"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g;
+const SCAN_SPLIT_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g;
 
 /**
  * The command cut at `|`/`;`/`&&`/`||`/newline OUTSIDE quotes, with every heredoc body (the
@@ -392,7 +393,7 @@ function scanSegments(command) {
   let m;
   while ((m = re.exec(command))) {
     if (m[3]) { tags.push([m[1], m[3]]); continue; }
-    if (m[0][0] === '"' || m[0][0] === "'") continue;
+    if (m[0][0] === '"' || m[0][0] === "'" || m[0][0] === '#') continue;
     segs.push(command.slice(start, m.index));
     start = re.lastIndex;
     // A pending heredoc's body starts on the line after its opener; each line is read once.

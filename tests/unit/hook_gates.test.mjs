@@ -1002,6 +1002,13 @@ const QUOTE_HEREDOC_CASES = [
   ["find / -name 'a;b'", true],
   ['cat <<< "x"; find / -name x', true],
   ['git commit -m "a" && find / -name x', true],
+  // A `#` that starts a word opens a comment to the end of the line: an apostrophe in it is not
+  // a quote, so it must not swallow the real command on the next line. Mid-word it is no comment.
+  ["# don't search all\nfind / -name x", true],
+  ["echo a # it's\nfind / -name x", true],
+  ['echo a#b; find / -name x', true],
+  ['echo ${#x}; find / -name x', true],
+  ['# find / -name x', false],
 ];
 
 test('rootScan: quoted separators and heredoc bodies are data, real separators still cut', async () => {

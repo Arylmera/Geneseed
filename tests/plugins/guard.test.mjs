@@ -494,6 +494,9 @@ for (const [command, want] of [
   ["echo a; find / -name x", true],
   ["find / -name 'a;b'", true],
   ['cat <<< "x"; find / -name x', true],
+  ["# don't search all\nfind / -name x", true],
+  ["echo a # it's\nfind / -name x", true],
+  ["echo a#b; find / -name x", true],
 ]) {
   test(`root-scan guard: ${JSON.stringify(command)} -> ${want ? "blocked" : "allowed"}`, async () => {
     assert.equal(await blocked("bash", { command }), want)

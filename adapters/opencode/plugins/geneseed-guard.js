@@ -218,8 +218,9 @@ const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i
 const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i
 const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g
 const SCAN_WRAPPERS = new Set(["sudo", "command", "\\builtin", "time", "nice"])
-// A quoted run (its `;`/`|` is data), a separator, or a heredoc opener (never the `<<<` here-string).
-const SCAN_SPLIT_RE = /"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g
+// A comment (`#` starting a word), a quoted run (its `;`/`|` is data), a separator, or a heredoc
+// opener (never the `<<<` here-string).
+const SCAN_SPLIT_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g
 // Cut at separators OUTSIDE quotes and drop every heredoc body (to its TAG line; `<<-` allows
 // tabs): a commit message that names a root scan is data, not a command to block.
 function scanSegments(command) {
@@ -230,7 +231,7 @@ function scanSegments(command) {
   let m
   while ((m = re.exec(command))) {
     if (m[3]) { tags.push([m[1], m[3]]); continue }
-    if (m[0][0] === '"' || m[0][0] === "'") continue
+    if (m[0][0] === '"' || m[0][0] === "'" || m[0][0] === '#') continue
     segs.push(command.slice(start, m.index))
     start = re.lastIndex
     while (m[0] === "\n" && tags.length) {
