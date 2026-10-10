@@ -99,13 +99,14 @@ What the global emit writes into `~/.bob/settings/settings.json`:
 | event | verb | how the verdict travels |
 | --- | --- | --- |
 | `SessionStart` | `context --host bob` | plain stdout, as on Claude |
-| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV and rigor-5: **exit 2**, reason on stderr; process 1/5: a stderr line, exit 0 |
+| `PreToolUse` | `tool-gate --host bob`, matched on `write_file\|apply_diff\|insert_content\|search_and_replace\|execute_command` | Laws I/IV and rigor-5: **exit 2**, reason on stderr; process 1/5: a stderr line, exit 0 |
 | `Stop` | `learn` | never a verdict |
 
-No matcher on `PreToolUse` because Bob's tool names are undocumented (its IDE and its
-Shell differ); `tool-gate` reads the payload's shape instead — a `command` field gets
-the git checks, a path gets the rule checks — and defers on anything it does not
-recognise. Bob has **no "ask the user" tier**, so the Laws and checks that admit no judgement
+The `PreToolUse` matcher names every tool Bob's tools page documents as a write or a shell
+call, so the hook stops spawning on `read_file`/`grep`/`glob`/etc. Bob's tool PAYLOAD FIELD
+NAMES are still undocumented (its IDE and its Shell differ), so `tool-gate` still reads the
+payload's shape rather than the matched name — a `command` field gets the git checks, a
+path gets the rule checks — and defers on anything it does not recognise. Bob has **no "ask the user" tier**, so the Laws and checks that admit no judgement
 call — Laws I and IV, and rigor-5 (External Gate, when a project opts in) — are refused
 outright, and the two consent rules become a warning. Because that warning is all process 5
 can be here, the `process` pack toggle changes nothing in Bob's hooks: the one group only
@@ -141,10 +142,23 @@ MCP servers are wired at runtime (web console, listed by `geneseed mcp`) into th
 `~/.bob/settings/mcp.json` global — never `settings.json`, which Bob does not read
 servers from ([Bob docs](https://bob.ibm.com/docs/ide/configuration/mcp/mcp-in-bob)).
 
+## Slash commands
+
+Bob documents `.bob/commands/*.md` (project) and `~/.bob/commands/*.md` (global), with
+`description` frontmatter (bob-docs.md §6 — no use for `argument-hint` yet: no Geneseed
+skill takes positional arguments). Geneseed writes one command per merged skill's OLD name
+(`/old-name`, the same alias problem OpenCode's `command/` layer solves) and one per
+genuinely user-only skill (host-compat O2/R1): Bob's skills page documents only
+`name`/`description`, no model-invocation key, so a user-only skill gets **no** SKILL.md on
+Bob at all — `/its-name` is the only way to run it, and the model never sees it in its
+`use_skill` catalogue. Claim-on-create and manifest-owned like every other native file;
+uninstall removes them the same way.
+
 ## What Bob does not get
 
 Bob rides the Claude engine, so — like Claude — it has no OpenCode-only extras:
-colour themes, JS plugins, the saved-workflow runner, the primary-agent
-orchestrator, LSP enablement, or the `/`-command layer. Those capabilities have
-no analogue on a Claude-shaped host; the harness discipline is carried by the
-preamble and skills instead. See the [host matrix](../../README.md#-supported-harnesses).
+colour themes, JS plugins, the saved-workflow runner, the primary-agent orchestrator,
+LSP enablement, or OpenCode's full `/`-command layer (`COMMAND_SET`, `/ponytail`) — only
+the narrow alias/user-only-skill commands above. Those capabilities have no analogue on a
+Claude-shaped host; the harness discipline is carried by the preamble and skills instead.
+See the [host matrix](../../README.md#-supported-harnesses).
