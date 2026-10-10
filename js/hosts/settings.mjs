@@ -531,7 +531,9 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a project
-  // install of the same host sits at/above cwd (project-bypasses-global).
+  // install of the same host sits at/above cwd (project-bypasses-global): `context` and
+  // `git-gate` read it, `learn` reads `--memory`'s parent. `rule-gate` and Bob's `tool-gate`
+  // do not stand down: both still run once per install (host-compat B4 fixed only the three).
   if (host === 'bob') {
     // BOB'S OWN HOOK CONTRACT, per its hooks doc and 2.0.2 changelog (docs/reviews/
     // bob-global-injection-2026-09.md): FIVE events — SessionStart, UserPromptSubmit,
@@ -553,16 +555,20 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries, and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in.
       PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
-      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem} || exit 0` }] }],
+      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b} || exit 0` }] }],
     };
   }
-  // OpenClaude takes Claude's whole group set and verdicts unchanged; only `context` needs
-  // the host, to know which root file OpenClaude already loads by itself.
+  // OpenClaude takes Claude's whole group set and verdicts unchanged. `context` needs the host
+  // to know which root file OpenClaude already loads by itself; `git-gate` and `learn` need it
+  // to stand down under a relocated `$OPENCLAUDE_CONFIG_DIR` (the marker is keyed on `--host`,
+  // not the folder name — `globalHookStandingDown`). Claude's commands carry none: no `--host`
+  // means Claude, so they stay byte-identical. An OLDER shim (last-writer-wins) accepts
+  // `--host` on `git-gate` but not on `learn`, which then exits 1 under `|| exit 0` and skips.
   const h = host === 'openclaude' ? ' --host openclaude' : '';
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
-  const gate = `${run} git-gate --root "${cfg}"${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
+  const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
-  const learn = `${run} learn ${mem} || exit 0`;
+  const learn = `${run} learn ${mem}${h} || exit 0`;
   return {
     PreToolUse: [
       // `Bash|PowerShell`, not `Bash` alone (Claude verdict I1): docs `hooks.md` says a hook

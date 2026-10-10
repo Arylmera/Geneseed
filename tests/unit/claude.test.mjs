@@ -1220,8 +1220,13 @@ test('an OpenClaude project emit keeps the repo root clean and excludes ITS glob
     const ctx = hookCmds(s).filter((c) => c.includes(' context '));
     assert.ok(ctx.length > 0 && ctx.every((c) => c.includes('--host openclaude')),
       JSON.stringify(ctx));
-    // The gates speak Claude's dialect, so they carry no host flag at all.
-    assert.ok(hookCmds(s).some((c) => c.includes(' git-gate ') && !c.includes('--host')));
+    // The gates speak Claude's dialect; `git-gate` and `learn` still carry `--host openclaude`,
+    // because the global stand-down keys its marker on it, not on the (relocatable) folder name.
+    // `rule-gate` does not stand down, so it carries none.
+    for (const verb of [' git-gate ', ' learn ']) {
+      assert.ok(hookCmds(s).some((c) => c.includes(verb) && c.includes('--host openclaude')), verb);
+    }
+    assert.ok(hookCmds(s).some((c) => c.includes(' rule-gate ') && !c.includes('--host')));
   }));
 });
 
@@ -1287,7 +1292,9 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     const cmdOf = (ev) => settings.hooks[ev][0].hooks[0].command;
     assert.ok(cmdOf('PreToolUse').endsWith(` tool-gate --root "${cfg}" --host bob`), cmdOf('PreToolUse'));
     assert.ok(cmdOf('SessionStart').endsWith(` context --root "${cfg}" --host bob || exit 0`), cmdOf('SessionStart'));
-    assert.ok(cmdOf('Stop').endsWith(` learn --memory "${path.join(cfg, 'memory')}" || exit 0`), cmdOf('Stop'));
+    // `learn --host bob`: the global stand-down keys its marker on `--host`, so a global moved by
+    // `$BOB_CONFIG_DIR` still stands down beside a project `.bob`.
+    assert.ok(cmdOf('Stop').endsWith(` learn --memory "${path.join(cfg, 'memory')}" --host bob || exit 0`), cmdOf('Stop'));
     assert.equal(managed.settings_file, path.join('settings', 'settings.json'));
   }));
 });
@@ -1530,6 +1537,49 @@ test('the global hook stands down only for a project install of its own host', (
     if (bobBlocker) t.diagnostic(`skipped: an ancestor of the sandbox is a .bob install (${bobBlocker})`);
     else assert.equal(globalHookStandingDown(bobg, repo), false,
       "a project .claude silenced a global .bob — the hosts' hooks are not independent");
+  }));
+});
+
+test('the stand-down marker comes from --host, so a relocated global still stands down', (t) => {
+  // THE MARKER RULE (host-compat Claude B9, OpenClaude I2, Bob B4). The detector looks for a
+  // project install under the global's OWN host marker. It used to read that marker off the
+  // global dir's folder name, so a global moved by `$CLAUDE_CONFIG_DIR`, `$BOB_CONFIG_DIR` or
+  // `$OPENCLAUDE_CONFIG_DIR` (folder `claude-work`, `bob-cfg`, …) matched no marker and never
+  // stood down: two injections, two gates, two learns. Now: an explicit `--host` names the
+  // marker; with no `--host` (Claude's commands, and any emitted before the gates carried one), a
+  // folder named like a marker is that marker, else the root's own `.geneseed-emit` names it, and
+  // with neither it NEVER stands down: guessing Claude silenced a pre-`--host` relocated
+  // OpenClaude gate beside a project `.claude`, and OpenClaude loads no `.claude` hooks — no gate.
+  withoutStackGlobal(() => withDir((d) => {
+    const rows = [
+      // [global folder, --host, its .geneseed-emit, project marker in the repo, stands down?, why]
+      ['.claude', null, null, '.claude', true, 'the default ~/.claude'],
+      ['claude-work', null, 'claude-global', '.claude', true, '$CLAUDE_CONFIG_DIR, keyed on the emit marker'],
+      ['bob-cfg', 'bob', null, '.bob', true, '$BOB_CONFIG_DIR, keyed on --host bob'],
+      ['oc-cfg', 'openclaude', null, '.openclaude', true, '$OPENCLAUDE_CONFIG_DIR, keyed on --host'],
+      ['.openclaude', null, null, '.openclaude', true, 'an older OpenClaude gate with no --host'],
+      ['oc-cfg', 'openclaude', null, '.claude', false, 'a project .claude never silences OpenClaude'],
+      ['oc-cfg', null, 'openclaude-global', '.claude', false, 'nor a pre---host relocated OpenClaude'],
+      ['claude-work', null, null, '.claude', false, 'no --host, no marker name, no emit: never'],
+      ['claude-work', null, 'claude-global', '.bob', false, 'a project .bob never silences Claude'],
+      ['.bob', 'bob', null, '.openclaude', false, 'a project .openclaude never silences Bob'],
+    ];
+    rows.forEach(([folder, host, emit, projMarker, expected, why], i) => {
+      const gcfg = mkInstall(path.join(d, `home${i}`), folder);
+      if (emit) fs.writeFileSync(path.join(gcfg, '.geneseed-emit'), `${emit}\n`);
+      const repo = path.join(d, `repo${i}`);
+      mkInstall(repo, projMarker);
+      const blocker = expected ? null : ancestorInstall(repo, projMarker);
+      if (blocker) { t.diagnostic(`row ${i} skipped: ancestor install ${blocker}`); return; }
+      assert.equal(globalHookStandingDown(gcfg, repo, host), expected, `row ${i}: ${why}`);
+    });
+    // The opt-out wins over every row: GENESEED_STACK_GLOBAL stacks the global on purpose.
+    const gcfg = mkInstall(path.join(d, 'homeS'), 'claude-work');
+    fs.writeFileSync(path.join(gcfg, '.geneseed-emit'), 'claude-global\n');
+    const repo = path.join(d, 'repoS');
+    mkInstall(repo);
+    process.env.GENESEED_STACK_GLOBAL = '1';
+    assert.equal(globalHookStandingDown(gcfg, repo, null), false, 'the opt-out was ignored');
   }));
 });
 

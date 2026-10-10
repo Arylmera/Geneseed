@@ -22,7 +22,7 @@ import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 /** `bin/geneseed-hook.mjs <verb> [--root R]` with `stdin` on fd 0. */
-function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd = null } = {}) {
+function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd = null, env = null } = {}) {
   const sb = makeSandbox();
   try {
     const inFile = path.join(sb.path, 'stdin.json');
@@ -35,6 +35,7 @@ function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd =
       argv.push(...extra);
       const proc = spawnSync(process.execPath, argv, {
         encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], ...(cwd ? { cwd } : {}),
+        ...(env ? { env } : {}),
       });
       return { rc: proc.status, out: proc.stdout, err: proc.stderr };
     } finally { fs.closeSync(fd); }
@@ -432,6 +433,73 @@ test('git-gate --no-consent skips only the process-5 ask; Law IV still asks', ()
   assertDefers(hookRun('git-gate', opts('git push origin main')), 'push');
   const law4 = askDecision(hookRun('git-gate', opts('git reset --hard HEAD~1')), 'reset --hard');
   assert.match(law4.permissionDecisionReason, /Deletion Is Deliberate/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// GLOBAL BESIDE PROJECT (host-compat Claude B4). Claude runs EVERY matching hook and the
+// strictest verdict wins, so when a global and a project install of the same host coexist, the
+// global git-gate used to ask process 5 on every commit even though the project was built with
+// `--no-consent`, and `learn` ran twice per Stop. Both now stand down exactly as `context` does:
+// the project's own hook decides, and `GENESEED_STACK_GLOBAL` stacks the global on purpose.
+
+/** A sandbox with a global install (folder `globalName`) and a repo carrying a project one. */
+function globalBesideProject(globalName, marker, fn) {
+  const sb = makeSandbox();
+  try {
+    const mk = (d) => {
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), '{}');
+      return d;
+    };
+    const gcfg = mk(path.join(sb.path, 'home', globalName));
+    // Every real global carries its emit marker; a relocated one with no `--host` is keyed on it.
+    fs.writeFileSync(path.join(gcfg, '.geneseed-emit'), `${marker.slice(1)}-global\n`);
+    const repo = path.join(sb.path, 'repo');
+    const pcfg = mk(path.join(repo, marker));
+    const env = { ...process.env };
+    for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM']) delete env[k];
+    return fn({ gcfg, pcfg, repo, env });
+  } finally { sb.cleanup(); }
+}
+
+test('a global git-gate stands down for a project install; the project gate still decides', () => {
+  // Rows: [global folder, --host, project marker]. The relocated folders are the B9/I2 case:
+  // the marker comes from --host (or, with none, the root's `.geneseed-emit`), not the folder name.
+  for (const [folder, host, marker] of [['.claude', null, '.claude'],
+    ['claude-work', null, '.claude'], ['oc-cfg', 'openclaude', '.openclaude']]) {
+    globalBesideProject(folder, marker, ({ gcfg, pcfg, repo, env }) => {
+      const run = (root, command, extra = [], e = env) => hookRun('git-gate',
+        { root, host, stdin: bashPayload(command), cwd: repo, env: e, extra });
+      // The global is silent even on Law IV: the project's own gate is about to judge it.
+      assertDefers(run(gcfg, 'git commit -m x'), `${folder}: global gate on a commit`);
+      assertDefers(run(gcfg, 'git reset --hard HEAD~1'), `${folder}: global gate on reset --hard`);
+      // The project built with --no-consent: its commit passes, its Law IV still asks.
+      assertDefers(run(pcfg, 'git commit -m x', ['--no-consent']), `${folder}: project --no-consent`);
+      askDecision(run(pcfg, 'git reset --hard HEAD~1', ['--no-consent']), `${folder}: project law-4`);
+      // The opt-out un-silences the global.
+      askDecision(run(gcfg, 'git commit -m x', [], { ...env, GENESEED_STACK_GLOBAL: '1' }),
+        `${folder}: GENESEED_STACK_GLOBAL`);
+    });
+  }
+});
+
+test('a global learn stands down for a project install; the project learn still runs', () => {
+  // With `$GENESEED_LLM` unset, `learn` prints its prompt to stdout — the observable "it ran".
+  // Its install root is the parent of `--memory`, the same root its sovereign bypass reads.
+  for (const [folder, host, marker] of [['.claude', null, '.claude'],
+    ['claude-work', null, '.claude'], ['bob-cfg', 'bob', '.bob']]) {
+    globalBesideProject(folder, marker, ({ gcfg, pcfg, repo, env }) => {
+      const run = (cfg, e = env) => hookRun('learn', {
+        host, stdin: 'a durable fact worth keeping', cwd: repo, env: e,
+        extra: ['--memory', path.join(cfg, 'memory')] });
+      const global = run(gcfg);
+      assert.equal(global.rc, 0, `${folder}: ${global.err}`);
+      assert.equal(global.out, '', `${folder}: the global learn ran beside a project install`);
+      assert.match(run(pcfg).out, /NOTES:/, `${folder}: the project learn did not run`);
+      assert.match(run(gcfg, { ...env, GENESEED_STACK_GLOBAL: '1' }).out, /NOTES:/,
+        `${folder}: GENESEED_STACK_GLOBAL did not un-silence the global learn`);
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------------------------

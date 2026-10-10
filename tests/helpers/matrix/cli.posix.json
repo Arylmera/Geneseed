@@ -708,16 +708,46 @@
       }
     },
     {
-      "expect": [
-        "PROJECT CONTEXT"
-      ],
-      "id": "context/non-marker-root-never-stands-down",
+      "expect_silent": true,
+      "id": "context/relocated-claude-root-stands-down",
       "steps": [
         {
           "argv": [
             "context",
             "--root",
             "{cfg}"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "cfg/.geneseed-emit": "claude-global\n",
+        "cfg/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
+        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
+        "repo/README.md": "# Project\n\nThe readme.\n",
+        "repo/apps/site/README.md": "# site\n",
+        "repo/docs/architecture.md": "# Architecture\n",
+        "repo/docs/nested/deep.md": "# Deep\n",
+        "repo/docs/node_modules/vendored.md": "must never be listed\n",
+        "repo/packages/widget/README.md": "# widget\n",
+        "repo/packages/widget/index.js": "// not markdown\n"
+      }
+    },
+    {
+      "expect": [
+        "PROJECT CONTEXT"
+      ],
+      "id": "context/relocated-other-host-root-never-stands-down",
+      "steps": [
+        {
+          "argv": [
+            "context",
+            "--root",
+            "{cfg}",
+            "--host",
+            "openclaude"
           ],
           "cwd": "repo"
         }

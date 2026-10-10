@@ -169,10 +169,10 @@ test('every relocation variable is cleared even when set', () => {
 //
 // A READ, NOT THE NAME — and the first draft got this wrong in the way `docs/limits.md`
 // row 6 already records. Scanning for the word reported `CLAUDE_CONFIG_DIR` as a missing entry,
-// because `js/hosts/hosts.mjs:131` carries a docblock saying that setting it must NOT move the
-// target: an INVERSE row, deliberately unread. A structural gate that matches prose is a gate
-// on the documentation, and it would have been "fixed" by sandboxing a variable the generator
-// ignores. What is scanned for is the read itself.
+// back when `js/hosts/hosts.mjs` carried a docblock saying that setting it must NOT move the
+// target: an INVERSE row, deliberately unread (it is read now — host-compat Claude B9). A
+// structural gate that matches prose is a gate on the documentation, and it would have been
+// "fixed" by sandboxing a variable the generator ignored. What is scanned for is the read itself.
 test('every relocation variable the generator reads is listed', () => {
   const READ = /process\.env\.([A-Z][A-Z0-9_]*_CONFIG_DIR)\b|process\.env\[['"]([A-Z][A-Z0-9_]*_CONFIG_DIR)['"]\]/g;
   const found = new Set();

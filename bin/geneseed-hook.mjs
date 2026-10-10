@@ -77,7 +77,8 @@ const VERBS = {
   learn: {
     load: () => import('../js/hosts/hooks-learn.mjs'),
     fn: 'cmdLearn',
-    flags: { '--memory': 'memory' },
+    // `--host` only keys the global stand-down's marker (js/hosts/hosts.mjs); learn has no dialect.
+    flags: { '--memory': 'memory', '--host': 'host' },
     switches: { '--consolidate': 'consolidate' },
     positional: 'file',
   },

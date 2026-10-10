@@ -17,7 +17,8 @@ import path from 'node:path';
 // consulting HOME/XDG, so redirecting HOME alone does not sandbox the `*-global` emits.
 // Measured, not theorised: with `OPENCODE_CONFIG_DIR` exported, one opencode-global cell wrote
 // 135 files straight into the real target.
-export const RELOCATION_VARS = ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR'];
+export const RELOCATION_VARS = ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR',
+  'CLAUDE_CONFIG_DIR'];
 
 // Every variable that decides where "home" is, in the order a resolver reaches for one.
 // `GENESEED_HOME` is last because it is the STRONGEST: the shim-home resolver prefers it over
@@ -147,6 +148,11 @@ export function sandboxProcessHome() {
   const saved = {};
   for (const v of HOME_VARS) saved[v] = envGet(v);
   Object.assign(process.env, homeOverrides(sb.path));
+  // ponytail: Claude's dir alone, because every in-process Claude test rides the sandboxed HOME
+  // to `~/.claude`; an ambient `$CLAUDE_CONFIG_DIR` would send it to the real one instead. The
+  // other three relocation vars are set explicitly by the tests that use them.
+  saved.CLAUDE_CONFIG_DIR = envGet('CLAUDE_CONFIG_DIR');
+  envDelete('CLAUDE_CONFIG_DIR');
   PROCESS_HOMES.push([sb, saved]);
   return sb.path;
 }

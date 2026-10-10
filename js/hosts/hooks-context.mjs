@@ -9,8 +9,8 @@ import { createHash } from 'node:crypto';
 import { readText, printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
-import { resolvePath, sovereignBypass } from './hosts.mjs';
-import { isFile, isDir, selfAndParents, sortPaths, listDir } from './hooks-prims.mjs';
+import { globalHookStandingDown, resolvePath, sovereignBypass } from './hosts.mjs';
+import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
 
 /**
  * `str(OSError)` — `[Errno N] strerror: 'filename'`, with the filename REPR'd.
@@ -169,29 +169,8 @@ export function sessionFiles(hookRoot) {
   return found;
 }
 
-const CLAUDE_MARKERS = ['.claude', '.bob', '.openclaude'];
-const GENESEED_MANIFEST = '.geneseed-manifest.json';
-
-/**
- * `_global_hook_standing_down` — project-bypasses-global.
- *
- * A GLOBAL install's hook passes its own dir as `--root`; when a Geneseed PROJECT install
- * of the SAME host sits at or above cwd, the project's hook injects and this one must not
- * double up.
- */
-export function globalHookStandingDown(hookRoot, cwd) {
-  const marker = path.basename(hookRoot);
-  if (!CLAUDE_MARKERS.includes(marker)) return false;
-  for (const d of selfAndParents(cwd)) {
-    const cand = path.join(d, marker);
-    if (isFile(path.join(cand, GENESEED_MANIFEST))) {
-      // Path equality, which is case-folded on Windows — `~/.claude` and `~/.Claude` are
-      // the same install there and two different ones on Linux.
-      return normcase(resolvePath(cand)) !== normcase(resolvePath(hookRoot));
-    }
-  }
-  return false;
-}
+// Moved to `hosts.mjs` so the gates and `learn` share it; re-exported for this verb's callers.
+export { globalHookStandingDown };
 
 /** `_disp` — relative to the repo root when it sits under it, else verbatim. */
 function disp(pathStr, root) {
@@ -430,8 +409,9 @@ export function cmdContext(args) {
     return 0;
   }
   if (hookRoot && sovereignBypass(hookRoot)) return 0;
-  if (hookRoot && !process.env.GENESEED_STACK_GLOBAL
-      && globalHookStandingDown(hookRoot, root)) return 0;
+  // The RAW `args.host`, not `HOST`: `HOST` defaults to claude, which would key an older
+  // OpenClaude emit's `~/.openclaude` (no `--host`) on `.claude` instead of its folder name.
+  if (globalHookStandingDown(hookRoot, root, args.host)) return 0;
   const session = hookRoot ? sessionFiles(hookRoot) : [];
   // A session file discovery would also pick up (a `user-rules.md` at the repo root of an
   // install whose harness dir IS the repo root) is injected once, in the session block.

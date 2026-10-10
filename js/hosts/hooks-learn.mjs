@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { readText, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { resolveMemoryDir, sovereignBypass } from './hosts.mjs';
+import { globalHookStandingDown, resolveMemoryDir, sovereignBypass } from './hosts.mjs';
 import { readStdin, splitLines, splitWords } from './hooks-prims.mjs';
 import {
   existingSlugs, writeMemories, consolidateMemory, appendAgentLesson,
@@ -234,6 +234,10 @@ export function cmdLearn(args) {
   // The Stop/SubagentStop hook always passes `--memory <cfg>/memory`; inside an excluded
   // folder the global install must not learn.
   if (args.memory && sovereignBypass(path.dirname(toPlatformPath(args.memory)))) return 0;
+  // Same install root, and a project install of this host beside it learns on its own Stop: a
+  // second LLM call, and the global store learning facts the project owns (Claude B4).
+  if (args.memory && globalHookStandingDown(path.dirname(toPlatformPath(args.memory)),
+    process.cwd(), args.host)) return 0;
 
   const raw = args.file ? readText(args.file) : readStdin();
   const meta = hookMeta(raw);

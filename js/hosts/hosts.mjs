@@ -19,6 +19,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
+import { selfAndParents } from './hooks-prims.mjs';
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
@@ -82,6 +83,56 @@ export function sovereignBypass(root) {
     if (cwd === base || cwd.startsWith(base + path.sep)) return true;
   }
   return false;
+}
+
+/**
+ * `_global_hook_standing_down` — project-bypasses-global, for `context`, `git-gate` and `learn`.
+ *
+ * A GLOBAL install's hook knows its own dir (`--root`, or `learn`'s `--memory` parent); when a
+ * Geneseed PROJECT install of the SAME host sits at or above cwd, that project's hook runs too,
+ * and Claude runs every matching hook with the strictest verdict winning — so the global's
+ * second injection, its process-5 ask over a project built `--no-consent`, and its second LLM
+ * call are all doubles (host-compat Claude B4). `$GENESEED_STACK_GLOBAL` stacks them on purpose.
+ *
+ * THE MARKER COMES FROM `host`, NOT THE FOLDER NAME. It once came from `basename(hookRoot)`,
+ * so a global moved by `$CLAUDE_CONFIG_DIR`/`$BOB_CONFIG_DIR`/`$OPENCLAUDE_CONFIG_DIR` matched
+ * no marker and never stood down (Claude B9, OpenClaude I2, Bob B4). With no `host` (Claude's
+ * commands, and any emitted before the gates carried one), a folder named like a marker is that
+ * marker, else the root's own `.geneseed-emit` names it; neither = never stand down.
+ *
+ * LIVES HERE, beside `sovereignBypass`, for the same reason: the gates must not import
+ * `hooks-context.mjs`. Any failure (a `~user` root `resolvePath` refuses) is false: a gate that
+ * cannot tell keeps gating.
+ */
+export function globalHookStandingDown(hookRoot, cwd, host = null) {
+  if (!hookRoot || process.env.GENESEED_STACK_GLOBAL) return false;
+  const markers = Object.fromEntries(HOSTS.filter((h) => h.family === 'claude')
+    .map((h) => [h.host, h.projectMarker]));
+  const own = path.basename(hookRoot);
+  try {
+    return withDiscardableStderr(() => {
+      let marker = markers[host] || (Object.values(markers).includes(own) ? own : null);
+      if (!marker) {
+        // A relocated root with no `--host`: its own `.geneseed-emit` (`claude-global`, …) names
+        // the host. Absent or unknown = false — guessing Claude would silence a pre-`--host`
+        // OpenClaude gate beside a project `.claude`, and OpenClaude loads no `.claude` hooks.
+        let emit = '';
+        try { emit = readText(path.join(hookRoot, '.geneseed-emit')).trim(); } catch { /* absent */ }
+        marker = emit.endsWith('-global') ? markers[emit.slice(0, -'-global'.length)] : null;
+        if (!marker) return false;
+      }
+      const self = normcase(resolvePath(hookRoot));
+      for (const d of selfAndParents(resolvePath(cwd))) {
+        const cand = path.join(d, marker);
+        // Path equality, case-folded on Windows — `~/.claude` and `~/.Claude` are the same
+        // install there and two different ones on Linux.
+        if (isFile(path.join(cand, GLOBAL_MANIFEST))) return normcase(resolvePath(cand)) !== self;
+      }
+      return false;
+    });
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -199,17 +250,17 @@ export function opencodeShadowedInstall() {
 }
 
 /**
- * `_build_core._claude_config_dir` — `~/.claude`, and there is NO env branch BY DESIGN.
+ * `_build_core._claude_config_dir` — `~/.claude`, relocatable via `$CLAUDE_CONFIG_DIR`.
  *
- * Its three siblings all check a `*_CONFIG_DIR` variable first; this one does not, because
- * Claude Code documents none and inventing one here would make the two CLIs disagree about
- * where a global install lives. The absence is the specification, so it is asserted rather
- * than merely not implemented — `test_every_relocation_var_moves_its_global_target` carries
- * an INVERSE row for this host: setting `$CLAUDE_CONFIG_DIR` must NOT move the target.
- * Without that row the table could only say "no cell covers Claude", which reads the same
- * as an omission.
+ * Claude Code's own documented variable (`env-vars.md`; `claude-directory.md`: "every
+ * `~/.claude` path … lives under that directory instead"), so it moves CLAUDE.md, skills,
+ * agents, rules and settings together. This once had NO env branch, on the false premise that
+ * Claude documents none — and a user who set it got a global install their Claude never read
+ * (host-compat Claude B9). `~/.claude.json` is NOT moved here: `mcpConfigFor` keeps its own rule.
  */
 export function claudeConfigDir() {
+  const env = process.env.CLAUDE_CONFIG_DIR;
+  if (env) return resolvePath(env);
   return resolvePath(path.join(os.homedir(), '.claude'));
 }
 
