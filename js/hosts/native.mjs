@@ -635,6 +635,9 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     }
     // Bob, user-only: no SKILL.md at all — the command written by the caller is the only
     // copy, so the model's `use_skill` catalogue never carries it (see `bobDialect` above).
+    // The `continue` is BEFORE `claimedSkills.add(stem)` below, so a user-only skill's own
+    // side files (none exist today, but the layout allows them) are skipped too — there is
+    // no `skills/<stem>/` folder on Bob for one to sit beside.
     if (kind === 'skill' && userOnly && bobDialect) continue;
     if (!claim(dest)) continue;
     write(dest, `---\n${fm.join('\n')}\n---\n\n${body}`);

@@ -688,16 +688,6 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
 // injectable failure instead and compares everything except the OS's own wording.
 
 /**
- * The tools bob-docs.md §2 lists that write a file or run a shell command — the exact set
- * `claudeHookGroups`' Bob `PreToolUse` matcher names (host-compat O1). See the comment at
- * that matcher's one call site for which documented tools are excluded, and why.
- */
-export const BOB_WRITE_EXEC_TOOLS = [
-  'write_file', 'apply_diff', 'insert_content', 'search_and_replace', 'execute_command',
-];
-const BOB_WRITE_EXEC_MATCHER = `^(${BOB_WRITE_EXEC_TOOLS.join('|')})$`;
-
-/**
  * `_build_settings._claude_hook_groups` — Geneseed's Claude hooks, keyed by event.
  *
  * ⚠ `doctrines` IS WHERE PROMPT AND BOUNDARY ARE KEPT IN AGREEMENT. The `git-gate` group
@@ -745,25 +735,20 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // refuse a call is EXIT CODE 2. The groups this emit wrote before were Claude's whole
     // set: `SubagentStop`/`PreCompact` are not Bob events, and the gates answered with a
     // stdout JSON Bob never reads — permissive on every call. `--host bob` makes the gates
-    // speak exit codes (js/hosts/hooks.mjs). Matcher on PreToolUse (host-compat O1): Bob's
-    // tools page DOES document tool names (bob-docs.md §2), unlike its payload field names,
-    // so this one half of the undocumented pair can be narrowed. `BOB_WRITE_EXEC_TOOLS`
-    // below is every tool that page lists as a write or a shell call — the only shapes
-    // `tool-gate` can act on at all (it reads `command` for the git checks and a path field
-    // for the rule checks; `ruleDecide`/`gitDecide` return 0 on anything else regardless).
-    // Everything else the tools page lists is excluded on purpose: `read_file`, `glob`,
-    // `grep`, `list_files`, `GetSymbolsOverview`, `FindSymbol`, `FindReferencingSymbols` are
-    // read-only; `spawn_subagent`, `start_subtask`, `switch_mode`, `use_skill`,
-    // `start_workflow`, `update_todo_list`, `ask_followup_question` are control/meta calls,
-    // none of which writes a file or runs a shell command itself (a subagent's own tool
-    // calls fire their own PreToolUse events and are still gated there). The one risk this
-    // narrowing accepts: a tool Bob adds later that writes or executes, under a name this
-    // list does not carry — unlike the payload-shape dispatch inside `tool-gate`, a regex
-    // matcher cannot "defer on anything else", it just never spawns. Re-check this list
-    // against the tools page on every Bob-docs refresh (bob-verdict.md O1's own caveat).
-    // Which tool payload FIELD NAMES Bob sends is still undocumented; the gates read
+    // speak exit codes (js/hosts/hooks.mjs). DELIBERATELY no matcher on PreToolUse
+    // (host-compat O1, revisited): bob-docs.md §2's tool list is already stale against the
+    // changelog (`web_fetch`, the 2.1.0 Office/IBM-docs tools are undocumented there), so an
+    // allow-list matcher built from it fails OPEN on every tool Bob adds between one
+    // docs read and the next — the exact failure mode a gate must not have. A deny-list
+    // with a negative-lookahead was the other shape considered; it depends on an unverified
+    // regex DIALECT (bob-docs.md never states whether its "regex on the tool name" supports
+    // lookahead at all), and a dialect mismatch there would silence the WHOLE gate rather than
+    // merely skip spawning it. bob-verdict.md O1 itself rates the matcher's upside "low,
+    // performance only" — not worth either risk. So `tool-gate` reads the payload's shape
+    // instead. Which tool payload fields Bob sends is equally undocumented; the gates read
     // Claude's (`command`, `file_path`/`path`, `content`/`new_string`) and defer on anything
-    // else. Unverified live: no Bob install on the authoring machine.
+    // else. Unverified live: no Bob install on the authoring machine. Revisit a matcher only
+    // once a live Bob session can confirm both the current tool list and the regex dialect.
     const b = ' --host bob';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
@@ -771,8 +756,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
       // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries, and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in.
-      PreToolUse: [{ matcher: BOB_WRITE_EXEC_MATCHER,
-        hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and

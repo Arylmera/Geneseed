@@ -484,14 +484,16 @@ function normaliseBobPayload(payload) {
 }
 
 /**
- * Bob's PreToolUse matcher (host-compat O1, `BOB_WRITE_EXEC_MATCHER` in settings.mjs) only
- * narrows WHICH calls spawn this hook at all — write/exec tool names, not read ones — it
- * cannot name `git-gate` for one tool and `rule-gate` for another the way Claude's two
- * separate `PreToolUse` matchers do, because Bob's tool PAYLOAD FIELD NAMES are still
- * undocumented (bob-verdict.md I1) and no name on that list maps to one gate or the other.
- * So this verb is the two fused, dispatched on the payload shape instead: a `command` field
- * is a shell call and gets the git checks, a path field is a write and gets the rule checks.
- * Nothing here decides anything the two named gates do not.
+ * Bob's PreToolUse entry carries no matcher, deliberately (host-compat O1, revisited): Bob's
+ * tool list drifts (already stale against the 2.1.0+ changelog — `web_fetch`, the Office/
+ * IBM-docs tools) and its "regex on the tool name" dialect is otherwise unverified, so
+ * `claudeHookGroups` (settings.mjs) does not build one — an allow-list would fail OPEN on a
+ * tool it has not seen yet, and a deny-list needs lookahead the regex dialect may not have.
+ * So this verb cannot name `git-gate` for one tool and `rule-gate` for another the way
+ * Claude's two separate `PreToolUse` matchers do; it is the two fused, dispatched on the
+ * PAYLOAD rather than on a matcher: a `command` field is a shell call and gets the git
+ * checks, a path field is a write and gets the rule checks. Nothing here decides anything
+ * the two named gates do not — it only removes the need for a matcher the host does not have.
  */
 function toolGate(args) {
   if (sovereignBypass(args.root)) return 0;
