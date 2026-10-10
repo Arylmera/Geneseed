@@ -121,7 +121,13 @@ const SECRET_RE = [
   /(^|\/)\.npmrc$/i,
   /(^|\/)\.pypirc$/i,
 ]
-// .env files are often edited legitimately → WARN, don't hard-block.
+// .env files are often edited legitimately → WARN, don't hard-block. Considered aligning this
+// with js/hosts/hooks.mjs's DOTENV_RE (`/(^|[\\/])\.env(\.[^\\/]*)?$/`) the way SECRET_CONTENT_RE
+// is aligned with SECRET_RE below — but the two diverge beyond case/slash-style: DOTENV_RE's
+// suffix is `*` (zero-or-more, any non-slash char — matches `.env.` and `.env!`), this one's is
+// `+` over `[\w.-]` (one-or-more, word/dot/hyphen only). Widening to DOTENV_RE's shape would
+// change which filenames warn instead of block on THIS host, not just fold case, so it is left
+// as-is rather than silently changing guard behaviour for a parity task.
 const SECRET_WARN_RE = [/(^|\/)\.env(\.[\w.-]+)?$/i]
 
 // Twin of js/hosts/hooks.mjs's SECRET_RE (Law I's boundary half) — scans WRITE CONTENT for a
@@ -226,21 +232,59 @@ function pickPath(args, cwd) {
   }
   return []
 }
-// The content a write/edit/apply_patch call would actually land on disk — what the content
-// secret scan runs against. `write` carries `content`, `edit` carries `newString`
-// (OpenCode tool Parameters, packages/opencode/src/tool/{write,edit}.ts). For `apply_patch`
-// only the `+`-prefixed hunk lines are NEW content — a `-` line is text being REMOVED, so a
-// secret there is leaving the file, not landing in it, and must not block the call.
-function pickAddedContent(args) {
-  if (args && typeof args.patchText === "string") {
-    return String(args.patchText).split(/\r?\n/)
-      .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
-      .map((l) => l.slice(1))
-      .join("\n")
+// Per-FILE added content for an `apply_patch` call: `parsePatchPaths` flattens every marker
+// path into one list (right for the path-only gates, which must catch a secret/protected name
+// on either side of a `Move to`), but the CONTENT scan must not pool every file's `+` lines
+// into one string — a patch that touches a `.env` AND an ordinary file would then exempt the
+// ordinary file's own secret too, because the exemption was computed over the pool, not the
+// line's own file. One section per marker; a `Move to` target is where the `+` lines actually
+// land, so content is attributed to it, not the pre-move path. `*** Delete File:` sections
+// collect no `+` lines (nothing is being written).
+function parsePatchSections(patchText) {
+  const out = []
+  let current = null
+  const flush = () => { if (current) out.push(current) }
+  const lines = String(patchText).split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    let m = /^\*\*\* (?:Add|Delete) File:\s*(.+)$/.exec(line)
+    if (m) { flush(); current = { path: m[1].trim(), added: [] }; continue }
+    m = /^\*\*\* Update File:\s*(.+)$/.exec(line)
+    if (m) {
+      flush()
+      let p = m[1].trim()
+      const mv = /^\*\*\* Move to:\s*(.+)$/.exec(lines[i + 1] || "")
+      if (mv) { p = mv[1].trim(); i++ }
+      current = { path: p, added: [] }
+      continue
+    }
+    if (current && line.startsWith("+") && !line.startsWith("+++")) current.added.push(line.slice(1))
   }
-  if (args && typeof args.content === "string") return args.content
-  if (args && typeof args.newString === "string") return args.newString
-  return ""
+  flush()
+  return out.filter((s) => s.path)
+}
+
+// The content a write/edit/apply_patch call would actually land on disk, per FILE — what the
+// content secret scan runs against, paired with the path it belongs to so the `.env` exemption
+// can be checked against that file alone. `write` carries `content`, `edit` carries `newString`
+// (OpenCode tool Parameters, packages/opencode/src/tool/{write,edit}.ts) — both single-path, so
+// one pair. For `apply_patch`, one pair per marker section; only the `+`-prefixed hunk lines are
+// NEW content — a `-` line is text being REMOVED, so a secret there is leaving the file, not
+// landing in it, and must not block the call.
+function pickAddedContentByPath(args, cwd) {
+  if (args && typeof args.patchText === "string") {
+    return parsePatchSections(args.patchText)
+      .filter((s) => s.added.length)
+      .map((s) => ({
+        path: path.resolve(cwd || process.cwd(), s.path).replace(/\\/g, "/"),
+        content: s.added.join("\n"),
+      }))
+  }
+  const [p] = pickPath(args, cwd)
+  if (!p) return []
+  if (typeof args.content === "string") return [{ path: p, content: args.content }]
+  if (typeof args.newString === "string") return [{ path: p, content: args.newString }]
+  return []
 }
 function pickCommand(args) {
   for (const k of ["command", "cmd", "script"]) {
@@ -452,13 +496,17 @@ export const GeneseedGuard = async (ctx) => {
               return
             }
           }
-          // Content scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide): skipped
-          // when the target is itself a `.env*` file, same exemption as the path WARN tier above.
-          const added = pickAddedContent(args)
-          if (added && !paths.some((p) => SECRET_WARN_RE.some((re) => re.test(p))) && SECRET_CONTENT_RE.test(added)) {
-            await deny("write would carry a credential-shaped string (Sealed Secrets) — secrets "
-              + "live in .env or a secret manager, never in a tracked file", "law-1")
-            return
+          // Content scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide): per
+          // FILE, not pooled — a patch touching `.env` AND an ordinary file must still catch a
+          // secret in the ordinary file; only the hunk whose OWN path is `.env`-shaped is
+          // exempt, same as the path WARN tier above.
+          for (const { path: cp, content } of pickAddedContentByPath(args, cwd)) {
+            if (SECRET_WARN_RE.some((re) => re.test(cp))) continue
+            if (SECRET_CONTENT_RE.test(content)) {
+              await deny(`${cp} would carry a credential-shaped string (Sealed Secrets) — secrets `
+                + "live in .env or a secret manager, never in a tracked file", "law-1")
+              return
+            }
           }
         }
         if (hasAny(tool, WIKI_MUTATE_TOOLS)) {

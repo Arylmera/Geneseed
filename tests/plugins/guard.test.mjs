@@ -286,6 +286,25 @@ test("a credential-shaped string written to a .env file only warns, not blocked"
   assert.equal(await blocked("write", { filePath: ".env", content: "AKIA_KEY=AKIAABCDEFGHIJKLMNOP" }), false)
 })
 
+// The exemption must be computed PER FILE, not pooled across every section of one apply_patch
+// call — a patch that touches `.env` (exempt) and an ordinary file (not exempt) in the SAME
+// call must still catch the secret in the ordinary file.
+test("apply_patch: a secret in .env is exempt but the SAME patch's secret in another file is blocked", async () => {
+  const envDest = path.join(tmp, "patched", ".env").replace(/\\/g, "/")
+  const srcDest = path.join(tmp, "patched", "src", "a.js").replace(/\\/g, "/")
+  const text = [
+    patch(`*** Add File: ${envDest}`, "+AKIA_KEY=AKIAABCDEFGHIJKLMNOP"),
+    patch(`*** Add File: ${srcDest}`, "+const k = 'AKIAABCDEFGHIJKLMNOP'"),
+  ].join("\n")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("apply_patch: a secret in .env ALONE (no other file) is not blocked", async () => {
+  const envDest = path.join(tmp, "patched", ".env").replace(/\\/g, "/")
+  const text = patch(`*** Add File: ${envDest}`, "+AKIA_KEY=AKIAABCDEFGHIJKLMNOP")
+  assert.equal(await blocked("apply_patch", { patchText: text }), false)
+})
+
 test("SECRET_CONTENT_RE stays in parity with the Node hook's SECRET_RE (Law I twin)", async () => {
   const guardSrc = await fs.readFile(
     path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
