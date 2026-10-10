@@ -62,7 +62,7 @@ import { THEMES, ROOT, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
-  claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir,
+  claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
   resolvePath, resolveMemoryDir, sovereignBypass, GATE_LEDGER,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
@@ -263,6 +263,7 @@ export function statusData() {
     agent_md: agentMd ? String(agentMd) : null,
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
+    opencode_shadow: opencodeShadowedInstall(),
     // EVERY install, not just the one `installedDefaults` settles on — and read through the
     // same `installProfile` `rebuild-all` uses, so the settings shown are the ones a rebuild
     // keeps. `rebuild` is the pasteable command an agent edits one flag of. A broken install
@@ -359,6 +360,11 @@ export function statusLines(d, color = false) {
       .map(([k, v]) => `${k} ${v}`).join(', ');
     rows.push(['gates', `${armed}  ${DOT}  ${g.total} ask${g.total === 1 ? '' : 's'}`
       + (byRule ? ` (${byRule})` : '')]);
+  }
+  // Conditional: null on every machine that has not set `OPENCODE_CONFIG_DIR` over an old install.
+  if (d.opencode_shadow) {
+    rows.push(['opencode', `ALSO LOADED: a second Geneseed install in ${d.opencode_shadow} (OpenCode `
+      + 'reads it beside OPENCODE_CONFIG_DIR, so every plugin runs twice) - uninstall one']);
   }
   // Conditional for the recording reason again: no recorded panel carries `installs`.
   for (const p of d.installs ?? []) {

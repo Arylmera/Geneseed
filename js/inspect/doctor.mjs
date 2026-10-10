@@ -32,7 +32,7 @@
 import path from 'node:path';
 import { emitGlobalInto, emitProjectInto, main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
-import { CLAUDE_STYLE, resolvePath } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, opencodeShadowedInstall, resolvePath } from '../hosts/hosts.mjs';
 import { installedDefaults, themeFiles } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut } from '../lib/fs.mjs';
@@ -219,6 +219,11 @@ export function doctorCollect({
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
   problems = problems.concat(ran('loops', 'Loop catalogue', loopProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
+  // A machine check like the shim's: OPENCODE_CONFIG_DIR adds a dir, it does not replace one.
+  const shadow = opencodeShadowedInstall();
+  problems = problems.concat(ran('opencode_dirs', 'OpenCode config dirs', shadow
+    ? [`[opencode] ${shadow} holds a Geneseed install beside $OPENCODE_CONFIG_DIR's, and OpenCode `
+      + 'loads both (every plugin runs twice) — uninstall the one you no longer use'] : []));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('scorecard', 'Scorecard floor', scorecardProblems()));
   // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed

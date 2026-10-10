@@ -60,7 +60,7 @@ import {
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
-  loadJsonObject, mergeClaudeSettings, opencodeTarget,
+  loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes, unwireClaudeSettings,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
@@ -344,6 +344,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode') {
   }
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
     path.join(target, 'AGENT.md').split(path.sep).join('/'));
+  managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
   if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
   let archived = null;
@@ -677,8 +678,8 @@ export function cmdUninstall(args) {
       + `${hostSpec(host).agentFile} managed block, and Geneseed's `
       + 'settings.json hooks/excludes (your own keys/hooks are kept).\n');
   } else if (scope === 'global') {
-    printOut('[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the '
-      + 'opencode.json instructions entry.\n');
+    printOut('[uninstall] removes: AGENT.md, the AGENTS.md managed block, agents/, skills/, '
+      + 'plugins/, markers, and the opencode.json instructions entry.\n');
   } else {
     printOut('[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the '
       + 'opencode.json instructions entry.\n');
@@ -949,6 +950,8 @@ export function installDeactivate(root, host = 'opencode', scope = 'global') {
     return { ok: false, failed, rolled_back: done.length };
   }
   unmergeOpencodeJson(path.join(root, 'opencode.json'), installAgentEntry(root, kind));
+  // The sentinel goes too, or a disabled install keeps the user's ~/.claude/CLAUDE.md from loading.
+  if (kind === 'global') managedBlockRemove(path.join(root, OPENCODE_SENTINEL));
   for (const rel of done) pruneAncestors(path.dirname(path.join(root, rel)), root);
   return { ok: true, kind, moved: done.length };
 }
@@ -975,6 +978,7 @@ export function installReactivate(root, host = 'opencode', scope = 'global') {
   if (leftovers.length) return { ok: false, failed: leftovers, moved };
   const kind = installKind(root) || 'global';
   installReaddEntry(target, installAgentEntry(root, kind));
+  if (kind === 'global') opencodeSentinelWrite(root);
   rmtreeQuiet(stash);
   return { ok: true, kind, moved };
 }

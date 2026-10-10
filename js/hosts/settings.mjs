@@ -941,6 +941,24 @@ export function managedBlockRemove(p, blockId = 'GENESEED', whole = false) {
   else unlinkSync(p);
 }
 
+/**
+ * The global OpenCode `AGENTS.md` sentinel. OpenCode loads `<cfg>/AGENTS.md` and, only when it
+ * is ABSENT, `~/.claude/CLAUDE.md` — where a Claude-global install keeps the whole harness in
+ * Claude dialect — so without an AGENTS.md the harness loads twice. The switch upstream is an
+ * env var (`OPENCODE_DISABLE_CLAUDE_CODE_PROMPT`) no config file can set, so the file has to exist.
+ * The carrier stays `AGENT.md`: this block only has to exist, and it is one line because it
+ * lands in every system prompt. A user's own AGENTS.md already suppresses the fallback and is
+ * left byte-for-byte alone; only an absent file or one carrying our block is written.
+ */
+export const OPENCODE_SENTINEL = 'AGENTS.md';
+
+export function opencodeSentinelWrite(cfgDir) {
+  const p = path.join(cfgDir, OPENCODE_SENTINEL);
+  if (existsSync(p) && managedBlockRead(p) === null) return;
+  managedBlockWrite(p, 'Geneseed keeps this block so OpenCode does not also load '
+    + '~/.claude/CLAUDE.md; the harness is AGENT.md. Put your own rules outside the block.');
+}
+
 /** `_build_settings._managed_block_read` — the block's inner content, or null. */
 export function managedBlockRead(p, blockId = 'GENESEED') {
   if (!existsSync(p)) return null;

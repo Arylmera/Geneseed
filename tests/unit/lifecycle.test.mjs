@@ -29,11 +29,13 @@ import { sourceReleaseVersion } from '../../js/hosts/opencode.mjs';
 import { versionVerdict, statusData, statusLines, gateSummary } from '../../js/inspect/status.mjs';
 import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
-  projectQualifies,
+  projectQualifies, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
 import { emitHostScopeOf, installTargets } from '../../js/hosts/installs.mjs';
 import { isScratchRoot, registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
-import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts/hosts.mjs';
+import {
+  VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir, opencodeShadowedInstall,
+} from '../../js/hosts/hosts.mjs';
 import { installProfile, rebuildCommand } from '../../js/build/generate.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
 import { CONFIG, ROOT, SRC, makeCfg } from '../../js/build/source.mjs';
@@ -390,6 +392,83 @@ test('a global uninstall removes what it owns and keeps the memory store', () =>
     assert.ok(summary.unmerged);
     assert.ok(!instructionsOf(cfg).includes(agentMd),
       'opencode.json still points at an AGENT.md that no longer exists');
+  });
+});
+
+// OpenCode reads `<cfg>/AGENTS.md` and, ONLY when that file is absent, falls back to
+// `~/.claude/CLAUDE.md` — which a Claude-global install fills with the whole harness. So the
+// global emit makes sure an AGENTS.md exists: a GENESEED managed block when the file is
+// absent (or already ours), and NOTHING when the user has their own, which suppresses the
+// fallback by itself. Uninstall and deactivate take the block away; a file that held only
+// the block goes with it.
+const BEGIN = '<!-- BEGIN GENESEED -->';
+
+test('a global OpenCode install claims AGENTS.md so the CLAUDE.md fallback cannot fire', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const agents = path.join(cfg, 'AGENTS.md');
+    assert.ok(fs.readFileSync(agents, 'utf8').startsWith(BEGIN),
+      'no GENESEED block in AGENTS.md: OpenCode would load ~/.claude/CLAUDE.md beside AGENT.md');
+    // NOT owned: a user may add their own rules around the block, and uninstall deletes owned files.
+    const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    assert.ok(!man.owned.includes('AGENTS.md'), 'AGENTS.md is in the manifest: uninstall would delete it');
+
+    const off = installDeactivate(cfg, 'opencode', 'global');
+    assert.ok(off.ok, JSON.stringify(off));
+    assert.ok(!fs.existsSync(agents), 'a disabled install still suppresses the CLAUDE.md fallback');
+    const on = installReactivate(cfg, 'opencode', 'global');
+    assert.ok(on.ok, JSON.stringify(on));
+    assert.ok(fs.readFileSync(agents, 'utf8').startsWith(BEGIN), 'reactivate did not restore the block');
+
+    uninstallGlobal(cfg, false);
+    assert.ok(!fs.existsSync(agents), 'an AGENTS.md holding only our block survived the uninstall');
+  });
+});
+
+test('a user\'s own global AGENTS.md is never touched by the emit or the uninstall', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    const mine = '# my rules\r\nbe terse\r\n';
+    fs.writeFileSync(path.join(cfg, 'AGENTS.md'), mine, 'utf8');
+    globalInstall(d);
+    assert.equal(fs.readFileSync(path.join(cfg, 'AGENTS.md'), 'utf8'), mine,
+      'the emit edited a user-owned AGENTS.md (it already suppresses the fallback)');
+    uninstallGlobal(cfg, false);
+    assert.equal(fs.readFileSync(path.join(cfg, 'AGENTS.md'), 'utf8'), mine,
+      'the uninstall edited a user-owned AGENTS.md');
+  });
+});
+
+// `OPENCODE_CONFIG_DIR` is ADDITIVE upstream: agents, plugins, skills and opencode.json still
+// load from `$XDG_CONFIG_HOME/opencode` too. So a Geneseed manifest in BOTH means every plugin
+// runs twice — the answer names the xdg dir, and is null in every other layout.
+test('a Geneseed install left in the xdg dir beside OPENCODE_CONFIG_DIR is reported', () => {
+  withDir((d) => {
+    const saved = { env: process.env.OPENCODE_CONFIG_DIR, xdg: process.env.XDG_CONFIG_HOME };
+    const relocated = path.join(d, 'relocated');
+    const xdgDir = path.join(d, 'xdg', 'opencode');
+    fs.mkdirSync(relocated, { recursive: true });
+    fs.mkdirSync(xdgDir, { recursive: true });
+    try {
+      process.env.XDG_CONFIG_HOME = path.join(d, 'xdg');
+      delete process.env.OPENCODE_CONFIG_DIR;
+      fs.writeFileSync(path.join(xdgDir, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+      assert.equal(opencodeShadowedInstall(), null, 'no env var: one dir, nothing shadowed');
+      process.env.OPENCODE_CONFIG_DIR = relocated;
+      assert.equal(opencodeShadowedInstall(), null, 'only the xdg dir holds a manifest');
+      fs.writeFileSync(path.join(relocated, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+      assert.equal(opencodeShadowedInstall(), fs.realpathSync.native(xdgDir));
+      process.env.OPENCODE_CONFIG_DIR = xdgDir;
+      assert.equal(opencodeShadowedInstall(), null, 'the env var names the xdg dir itself');
+      assert.ok(statusLines({ ...statusData(), opencode_shadow: xdgDir })
+        .some((l) => l.includes(xdgDir) && l.includes('OPENCODE_CONFIG_DIR')),
+        'status does not warn about the second install');
+    } finally {
+      if (saved.env === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+      else process.env.OPENCODE_CONFIG_DIR = saved.env;
+      process.env.XDG_CONFIG_HOME = saved.xdg;
+    }
   });
 });
 

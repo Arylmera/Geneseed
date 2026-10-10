@@ -17,7 +17,7 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { printErr, withDiscardableStderr, isDir, readText } from '../lib/fs.mjs';
+import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
@@ -163,15 +163,39 @@ export function resolvePath(p) {
  *
  * P3c's rule was "the child must never resolve this": a render child that did would write
  * 135 files into the developer's real `~/.config/opencode`. A driver is the PARENT, so the
- * rule inverts — resolving it there is exactly the job. Precedence is the env var (which
- * relocates the whole dir), then `$XDG_CONFIG_HOME/opencode`, then `~/.config/opencode`.
+ * rule inverts — resolving it there is exactly the job. Precedence is the env var, then
+ * `$XDG_CONFIG_HOME/opencode`, then `~/.config/opencode`.
+ *
+ * The env var does NOT relocate the whole dir upstream, it ADDS one: agents, commands,
+ * plugins, skills and `opencode.json` still load from the xdg dir as well, and only the global
+ * `AGENTS.md` and the skills home follow the env var alone (`Global.Service.config`). Emitting
+ * into the env-var dir is still right — it is the one both lists include — but an older
+ * install left in the xdg dir keeps loading beside it; `opencodeShadowedInstall` reports that.
  */
 export function opencodeConfigDir() {
   const env = process.env.OPENCODE_CONFIG_DIR;
   if (env) return resolvePath(env);
+  return opencodeXdgDir();
+}
+
+/** The dir OpenCode ALWAYS loads, `OPENCODE_CONFIG_DIR` or not (`Global.Path.config`). */
+function opencodeXdgDir() {
   const xdg = process.env.XDG_CONFIG_HOME;
   const base = xdg ? expanduser(xdg) : path.join(os.homedir(), '.config');
   return resolvePath(path.join(base, 'opencode'));
+}
+
+/**
+ * The xdg dir when it holds a Geneseed install BESIDE the one at `$OPENCODE_CONFIG_DIR` —
+ * both load, so every plugin (learn, activity, notify, ponytail) runs twice — else null.
+ */
+export function opencodeShadowedInstall() {
+  if (!process.env.OPENCODE_CONFIG_DIR) return null;
+  const env = opencodeConfigDir();
+  const xdg = opencodeXdgDir();
+  if (env === xdg) return null;
+  const both = [env, xdg].every((d) => isFile(path.join(d, GLOBAL_MANIFEST)));
+  return both ? xdg : null;
 }
 
 /**

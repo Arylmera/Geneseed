@@ -13,7 +13,7 @@ import {
   copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
   writeAliasCommands, writePonytailCommand, writePrimaryAgent, writeTheme,
 } from '../hosts/opencode.mjs';
-import { mergeOpencodeJson } from '../hosts/settings.mjs';
+import { mergeOpencodeJson, opencodeSentinelWrite } from '../hosts/settings.mjs';
 import { isFile, readText, writeText } from '../lib/fs.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, build, phaseLog } from './bundle.mjs';
@@ -199,6 +199,8 @@ export function emitOpencodeGlobalRender(cfg, job) {
     writeText(path.join(cfgDir, 'AGENT.md'), stripCapabilityLinks(agentText));
     owned.push('AGENT.md');
   }
+  // Co-owned, so never in `owned` — see `opencodeSentinelWrite`.
+  opencodeSentinelWrite(cfgDir);
 
   // `manifestExisted` is deliberately not passed — the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.

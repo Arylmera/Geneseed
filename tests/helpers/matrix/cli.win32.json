@@ -5487,7 +5487,7 @@
       "expect": [
         "[uninstall] target: <HOME>",
         "(opencode:global)",
-        "[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the opencode.json instructions entry.",
+        "[uninstall] removes: AGENT.md, the AGENTS.md managed block, agents/, skills/, plugins/, markers, and the opencode.json instructions entry.",
         "[uninstall] done — removed 2 file(s); opencode.json updated where needed; memory/notebook kept in place. Start a new session to apply."
       ],
       "expect_absent_files": [
