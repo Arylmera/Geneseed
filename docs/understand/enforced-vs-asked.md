@@ -28,7 +28,7 @@ On Claude Code and OpenClaude the hooks never block silently. They make the host
 - **Credentials**: a write or edit whose content looks like a real key (AWS, GitHub, Anthropic, Slack, or a private-key block), anywhere except a `.env` file.
 - **Your rules and memory**: any write by the agent to `user-rules.md` or to the memory store. Whether something is a standing rule or a fact to remember is your call.
 
-If a gate crashes, it asks instead of letting the call through. Other shell commands, `rm -rf` included, go through Claude Code's normal permission flow.
+If a gate crashes, it asks instead of letting the call through. If it cannot start at all (a deleted or broken shim) or times out, Claude Code blocks the call instead: see [Troubleshoot hooks](../reference/troubleshoot-hooks.md) to recover. Other shell commands, `rm -rf` included, go through Claude Code's normal permission flow.
 
 **Bob** runs one combined gate and has no "ask": it refuses with exit code 2, and only for the rules that admit no judgement call: credentials, destructive git, a scan of a whole filesystem, and a write under a project's own protected-checks list. The commit/push and memory checks become a log line, and the call goes through. Bob's hook wiring follows its documentation but has not been tested on a live Bob install.
 
