@@ -242,12 +242,34 @@ const THEME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * cells pin ("unknown theme 'nosuchtheme'"), rather than a typo going unnoticed.
  *
  * `host`, when given, narrows the sigil scan to that host's own carrier — see `firstCarrier`.
+ *
+ * ⚠ THE ROOT MARKER ITSELF IS HOST-NARROWED TOO (host-compat B1, round 3): `driver.mjs` writes
+ * it at `d` unconditionally for a GLOBAL emit (every host's `-global` arm, the `writeText`
+ * right after `writeMarkers`), but at PROJECT scope only for a host whose emit calls `build()`
+ * directly — today that is `opencode` alone; the CLAUDE-STYLE hosts (`claude`/`bob`/
+ * `openclaude`, `CLAUDE_STYLE` below) go through `claudeShaped` instead, which never calls it
+ * (`driver.mjs`'s own comment: "Deliberately not written for the claude/bob/openclaude
+ * PROJECT emits"). So a claude-style host must distrust this marker UNLESS `d` is provably
+ * that host's OWN global config dir — `hostsOwnGlobalDir` below, which is what makes this
+ * scope-correct without a `scope` parameter: at ANY other `d` (a project root, or another
+ * host's global dir entirely) a claude-style host's project emit never wrote this file, so a
+ * present one is a SIBLING's (`opencode`'s project marker, in a shared repo — the B1 failure,
+ * reached a third way) and `themeOfDir` falls through to `firstCarrier`'s sigil scan instead,
+ * exactly as it already must for a claude-style host's own project installs.
  */
+function hostsOwnGlobalDir(host, d) {
+  const row = HOSTS.find((h) => h.host === host);
+  if (!row) return false;
+  try { return resolvePath(d) === resolvePath(row.configDir()); } catch { return false; }
+}
+
 export function themeOfDir(d, host = null) {
-  const marker = path.join(d, '.geneseed-theme');
-  if (isFile(marker)) {
-    const name = (readMaybe(marker) ?? '').trim();
-    if (THEME_NAME_RE.test(name)) return name;
+  if (host === null || !CLAUDE_STYLE.includes(host) || hostsOwnGlobalDir(host, d)) {
+    const marker = path.join(d, '.geneseed-theme');
+    if (isFile(marker)) {
+      const name = (readMaybe(marker) ?? '').trim();
+      if (THEME_NAME_RE.test(name)) return name;
+    }
   }
   return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined, null, host);
 }

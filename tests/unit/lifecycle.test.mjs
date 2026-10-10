@@ -1364,6 +1364,38 @@ test('a bob per-repo install in the same shared repo also reads its own carrier,
   }
 });
 
+test('an opencode + bob shared repo: the root .geneseed-theme marker is OpenCode\'s own, not '
+  + "bob's (host-compat B1, round 3)", () => {
+  // `.geneseed-theme` at a PROJECT root is written only by a host whose emit calls `build()`
+  // directly — today, OpenCode alone (`emitOpencode` -> `emitOpencodeRender` -> `build()` in
+  // `js/build/bundle.mjs`). The claude-style per-repo emits (claude/bob/openclaude, dispatched
+  // through `claudeShaped` in `js/build/driver.mjs`) never call `build()` and so never write
+  // this marker at their own project root — `themeOfDir` read it UNCONDITIONALLY, before
+  // `firstCarrier` and without `host`, so in a repo shared with an OpenCode install, asking for
+  // BOB's own theme answered OpenCode's.
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const oc = emitAndProfile('opencode', repo,
+      { theme: 'imperial', posture: 'mentor', mode: 'foreman', doctrines: 'craft' });
+    assert.equal(oc.theme, 'imperial');
+
+    const bob = emitAndProfile('bob', repo,
+      { theme: 'cyberpunk', posture: 'peer', mode: 'direct', doctrines: 'craft' });
+    assert.equal(bob.theme, 'cyberpunk');
+
+    // Re-read both, now that the shared root carries OpenCode's `.geneseed-theme` marker.
+    const ocAfter = installProfile('opencode', 'project', repo);
+    assert.equal(ocAfter.theme, 'imperial', "opencode's own theme, off its own marker");
+    const bobAfter = installProfile('bob', 'project', repo);
+    assert.equal(bobAfter.theme, 'cyberpunk',
+      "bob's own read-back picked up opencode's root .geneseed-theme marker");
+  } finally {
+    sb.cleanup();
+  }
+});
+
 test('a rebuild command quotes only the arguments a shell would split', () => {
   assert.equal(rebuildCommand(['--theme', 'imperial', '--out', 'C:\\My Repo']),
     'geneseed build --theme imperial --out "C:\\My Repo"');
