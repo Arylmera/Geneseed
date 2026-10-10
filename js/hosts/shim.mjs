@@ -258,6 +258,43 @@ export function hookPrefix({ runner, entry, platform = process.platform } = {}) 
   return `"${runner}" "${entry}"`;
 }
 
+/** The basenames env-vars.md accepts for `CLAUDE_CODE_GIT_BASH_PATH`. */
+const GIT_BASH_NAMES = new Set(['bash.exe', 'sh.exe', 'bash', 'sh']);
+
+/**
+ * Which shell Claude Code runs a shell-form hook under on this machine: 'bash' | 'powershell'.
+ *
+ * hooks.md (`shell` field; "Shell form"): Git Bash on Windows, or PowerShell when Git Bash isn't
+ * installed — never cmd.exe. Under PowerShell the bash-form `"<shim>.cmd" verb … || exit 0` is a
+ * parse error, so every hook fails OPEN; `claudeHookGroups` emits the PowerShell form instead.
+ *
+ * THE RULE, filesystem and env only (the generator never spawns):
+ *   1. `CLAUDE_CODE_GIT_BASH_PATH` naming an existing bash.exe/sh.exe/bash/sh (env-vars.md; an
+ *      invalid value is ignored and Claude auto-detects as if unset);
+ *   2. any PATH entry holding `git.exe` with `<dir>\..\bin\bash.exe` beside it — the PATH
+ *      auto-detect is undocumented, so this mirrors the one detector we can read, OpenClaude's
+ *      `findGitBashPath` (`<git>/../../bin/bash.exe`).
+ * ponytail: no guessed default install paths. A missed Git Bash costs only PowerShell startup
+ * (~150 ms a hook — `shell: "powershell"` is explicit and wins), a false hit fails open; add a
+ * location when Claude documents one. `env` is a parameter so tests inject it; keys are matched
+ * case-insensitively because a copied Windows env keeps `Path`.
+ */
+export function claudeHookShell(env = process.env, platform = process.platform) {
+  if (platform !== 'win32') return 'bash';
+  const read = (name) => Object.entries(env).find(([k]) => k.toUpperCase() === name)?.[1];
+  const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
+  const forced = read('CLAUDE_CODE_GIT_BASH_PATH');
+  if (forced && GIT_BASH_NAMES.has(path.basename(forced).toLowerCase()) && isFile(forced)) {
+    return 'bash';
+  }
+  for (const raw of (read('PATH') || '').split(';')) {
+    const dir = raw.replace(/"/g, '');
+    if (dir && isFile(path.join(dir, 'git.exe'))
+      && isFile(path.join(dir, '..', 'bin', 'bash.exe'))) return 'bash';
+  }
+  return 'powershell';
+}
+
 /**
  * `_build_settings._hook_runner_entry()`'s two values — this driver's answer, which since
  * P5b is NOT Python's.

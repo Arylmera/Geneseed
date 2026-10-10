@@ -43,6 +43,7 @@ import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
+import { claudeHookShell } from './shim.mjs';
 
 /**
  * `Path.read_text(encoding="utf-8")`, or null where Python raises OSError.
@@ -669,6 +670,40 @@ export function installTargets() {
     try { add(host, 'global', configDir()); } catch { /* a missing host dir is not fatal */ }
   }
   for (const [host, scope, root] of registeredTargets()) add(host, scope, root);
+  return out;
+}
+
+/**
+ * Each Claude install whose emitted hook FORM no longer matches this machine's hook shell
+ * (`claudeHookShell`; Task 15) — the "Git Bash removed after the emit" gap, which otherwise
+ * reports nothing: hooks signal through stdout and Claude treats a parse error as non-blocking.
+ *
+ * Bash form with Git Bash now gone is a PROBLEM (every hook, both gates included, fails open
+ * under PowerShell). PowerShell form with Git Bash now present is a `[note]`: the hooks work,
+ * they only pay PowerShell's startup. Read from the manifest's recorded claims — the form the
+ * emit wrote — not re-derived; Windows only, since nowhere else has two hook shells. `targets`
+ * and `platform` are parameters so a test can hand it a sandboxed install.
+ */
+export function hookShellProblems(targets = installTargets(), platform = process.platform) {
+  if (platform !== 'win32') return [];
+  const now = claudeHookShell(process.env, platform);
+  const out = [];
+  for (const [host, scope, root] of targets) {
+    // A disabled install's manifest still records the hooks it unwired: nothing runs, nothing drifts.
+    if (host !== 'claude' || claudeState(root, scope) !== 'active') continue;
+    const cfg = claudeCfg(root, scope);
+    const recorded = readJsonMaybe(path.join(cfg, GLOBAL_MANIFEST))?.managed?.settings_hooks;
+    const handlers = (Array.isArray(recorded) ? recorded : [])
+      .flatMap((r) => (Array.isArray(r?.group?.hooks) ? r.group.hooks : []));
+    if (!handlers.length) continue;
+    const was = handlers.some((h) => h?.shell === 'powershell') ? 'powershell' : 'bash';
+    if (was === now) continue;
+    out.push(was === 'bash'
+      ? `[hooks] ${cfg}: hooks were emitted for Git Bash, which is no longer found, so Claude Code `
+        + 'runs them under PowerShell where they fail open (no gate fires) - run: geneseed rebuild-all'
+      : `[note] ${cfg}: hooks were emitted for PowerShell, but Git Bash is now found - they work, `
+        + 'and pay PowerShell startup on every call; geneseed rebuild-all switches them back');
+  }
   return out;
 }
 

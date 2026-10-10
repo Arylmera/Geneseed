@@ -33,7 +33,9 @@ import path from 'node:path';
 import { emitGlobalInto, emitProjectInto, main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
 import { CLAUDE_STYLE, opencodeShadowedInstall, resolvePath } from '../hosts/hosts.mjs';
-import { installedDefaults, openclaudeDualHarnessRoots, themeFiles } from '../hosts/installs.mjs';
+import {
+  hookShellProblems, installedDefaults, openclaudeDualHarnessRoots, themeFiles,
+} from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { authoringProblems, loopProblems } from './checks-authoring.mjs';
@@ -231,6 +233,9 @@ export function doctorCollect({
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
   problems = problems.concat(ran('loops', 'Loop catalogue', loopProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
+  // Windows: a Claude install's hooks emitted for Git Bash on a machine that no longer has it
+  // fail open under PowerShell (Task 15). The reverse direction is a note.
+  problems = problems.concat(ran('hook_shell', 'Hook shell', hookShellProblems()));
   // A machine check like the shim's: OPENCODE_CONFIG_DIR adds a dir, it does not replace one.
   const shadow = opencodeShadowedInstall();
   problems = problems.concat(ran('opencode_dirs', 'OpenCode config dirs', shadow

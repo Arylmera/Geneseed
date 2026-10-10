@@ -69,7 +69,7 @@ import {
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs now read them.
 import {
-  defaultTheme, installedDefaults, installTargets, openclaudeDualHarnessRoots,
+  defaultTheme, hookShellProblems, installedDefaults, installTargets, openclaudeDualHarnessRoots,
   readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
@@ -209,7 +209,13 @@ export function gateSummary(cfgDirs) {
   }
   // `dead` is the machine shim's missing targets: every gate below is armed on paper and never
   // runs, so it outranks `armed` in the row.
-  return { standing_down: standingDown, asks, total, dead: shimDead() };
+  // `fail_open` (Task 15): Claude installs whose bash-form hooks now run under PowerShell. Only
+  // present when non-empty, so every recorded `--json` panel keeps its shape.
+  const failOpen = hookShellProblems().filter((p) => !p.startsWith('[note] '));
+  return {
+    standing_down: standingDown, asks, total, dead: shimDead(),
+    ...(failOpen.length ? { fail_open: failOpen } : {}),
+  };
 }
 
 /** `_harness_status._status_data`. */
@@ -355,6 +361,9 @@ export function statusLines(d, color = false) {
     const g = d.gates;
     const armed = g.dead?.length
       ? `DEAD — hook shim points at ${g.dead.join(', ')}; run: geneseed rebuild-all`
+      : g.fail_open?.length
+      ? `FAIL OPEN — ${g.fail_open.length} Claude install(s) emitted for Git Bash, now absent; `
+        + 'run: geneseed rebuild-all'
       : g.standing_down.length
       ? `STANDING DOWN for this cwd (excludes.json in ${g.standing_down.join(', ')})`
       : 'armed';

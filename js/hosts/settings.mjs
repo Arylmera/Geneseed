@@ -12,8 +12,8 @@
  * this module.
  *
  * THE STDOUT RULE BINDS HARDEST HERE. The hooks this module writes signal their verdict as
- * a JSON object on stdout and return 0 on EVERY path (`|| exit 0` is not what it looks
- * like — see the shim comment below), so a stray byte printed on a hook path does not make
+ * a JSON object on stdout and return 0 on EVERY path (`|| exit 0`, or `; exit 0` in the
+ * PowerShell form, is not what it looks like — see the shim comment below), so a stray byte printed on a hook path does not make
  * noise, it silently disables a gate. Everything printed here is a generator-time message;
  * the split between them is asserted absolutely by `tests/unit/settings_jsonc.test.mjs` and
  * `tests/unit/settings_integrity.test.mjs`. The asymmetry (`_warn_commented_jsonc` prints to
@@ -41,7 +41,7 @@ import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals, formatRepr,
   indexOfDeepEqual, get, has, isDict,
 } from '../lib/json.mjs';
-import { SHIM_MARK, hookPrefix } from './shim.mjs';
+import { SHIM_MARK, claudeHookShell, hookPrefix } from './shim.mjs';
 import { stripWhitespace, stripWhitespaceEnd } from '../lib/text.mjs';
 
 const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
@@ -575,7 +575,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
   const learn = `${run} learn ${mem}${h} || exit 0`;
-  return {
+  const groups = {
     PreToolUse: [
       // `Bash|PowerShell`, not `Bash` alone (Claude verdict I1): docs `hooks.md` says a hook
       // that matches only `Bash` never fires on the PowerShell tool, which is Windows' default
@@ -597,12 +597,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // a forked session got no session files or project context. The static AGENT.md is NOT
     // re-printed here either way.
     SessionStart: [{ hooks: [{ type: 'command', command: context }] }],
-    // `|| exit 0` (not `|| true`): hooks on Windows run under Git Bash on OpenClaude and on
-    // the Claude Code 2.1.88 build the host-compat review read (`B/src/utils/hooks.ts`), not
-    // cmd.exe — but no version is a documented guarantee going forward, and a hook shell is
-    // not guaranteed at all, so `exit 0` is the one spelling that swallows failures either
-    // way: `true` is not a cmd.exe command and would invert the swallow-failures intent into
-    // a 9009 error there.
+    // `|| exit 0` (not `|| true`): the hook shell is `sh -c` on POSIX and Git Bash on Windows
+    // (OpenClaude requires it), or PowerShell on Windows when Git Bash isn't installed
+    // (hooks.md, "Shell form") — never cmd.exe for Claude. Bob runs `cmd /c`, where `true` is
+    // not a command (a 9009 error), so `exit 0` is the spelling every shell-form host shares.
+    // Under PowerShell `||` is a parse error in 5.1: `powershellForm` below swaps the tail.
     Stop: [{ hooks: [{ type: 'command', command: learn }] }],
     // Same command as Stop: `learn` reads the payload's hook_event_name and routes a
     // SubagentStop to the per-agent lesson path.
@@ -615,6 +614,32 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // `|| exit 0`: never block.
     PreCompact: [{ hooks: [{ type: 'command', command: learn }] }],
   };
+  // Claude Code only: OpenClaude always runs Git Bash on Windows (its `findGitBashPath` exits
+  // without one), and Bob takes the early return above.
+  if (host !== 'claude' || claudeHookShell(process.env, hookOpts?.platform) !== 'powershell') {
+    return groups;
+  }
+  return powershellForm(groups);
+}
+
+/**
+ * The PowerShell spelling of a hook group set, for a Claude install on Windows without Git Bash
+ * (`claudeHookShell`). Without it the bash form is a parse error there and every hook fails
+ * OPEN. Each handler gets an explicit `shell: "powershell"` (hooks.md: it wins over the
+ * default) and a leading `&` — PowerShell refuses a quoted command head followed by arguments —
+ * and the never-block tail `|| exit 0` becomes `; exit 0`, valid in pwsh 7 and Windows
+ * PowerShell 5.1 alike (both measured byte-identical to the bash form's output). The gates stay
+ * bare: no verb exits 2, so a launch failure is non-blocking in either shell.
+ *
+ * ponytail: the paths stay double-quoted, so a `$` or backtick in one would expand under
+ * PowerShell (bash has the same `$` exposure today); single-quote them if a path ever does.
+ */
+function powershellForm(groups) {
+  const ps = (h) => ({
+    ...h, command: `& ${h.command.replace(/ \|\| exit 0$/, '; exit 0')}`, shell: 'powershell',
+  });
+  return Object.fromEntries(Object.entries(groups)
+    .map(([event, gs]) => [event, gs.map((g) => ({ ...g, hooks: g.hooks.map(ps) }))]));
 }
 
 /**
