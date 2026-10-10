@@ -39,7 +39,7 @@ If a gate crashes, it asks instead of letting the call through. Other shell comm
 On OpenCode, two mechanisms enforce rules:
 
 - **OpenCode's own permission prompt**, which Geneseed configures in `opencode.json`. It asks you before `rm -rf`, a force-push, `reset --hard`, `clean -f`, `branch -D` and `checkout --`, and, when the **process** pack is on, before every commit and push.
-- **The guard plugin**, which blocks outright: writes to key and credential files (`id_rsa`, `*.pem`, `.ssh/`, `.npmrc`…), catastrophic commands (`rm -rf /`, `rm -rf ~`, formatting or overwriting a disk), and any change inside a folder your wiki marks `protected`. It also refuses the first write to `user-rules.md` or memory once. Re-issue the write and it goes through.
+- **The guard plugin**, which blocks outright: writes to key and credential files (`id_rsa`, `*.pem`, `.ssh/`, `.npmrc`…), catastrophic commands (`rm -rf /`, `rm -rf ~`, formatting or overwriting a disk), a recursive scan of a whole filesystem (`find /`, `du -sh /`, `Get-ChildItem C:\ -Recurse`), and any change inside a folder your wiki marks `protected`. It also refuses the first write to `user-rules.md` or memory once. Re-issue the write and it goes through.
 
 The guard only warns on `.env` edits. It checks credentials by **file path**, not by content, so a key pasted into an ordinary source file is not caught here. One caveat about the process pack: if your `opencode.json` already has a `git commit*` entry, a rebuild without the pack leaves that entry in place and reports it. Geneseed cannot tell its own entry from one you typed.
 

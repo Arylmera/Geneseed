@@ -207,9 +207,12 @@ const SHELL_WARN_RE = [
 // deeper than a root, a scanner word that is not the program. Backslash is never an escape in
 // the tokeniser, so `C:\ -Recurse` stays two tokens.
 const SCAN_ALWAYS = new Set(["find", "du", "tree", "rg", "fd", "where.exe"])
-const SCAN_POSIX_R = new Set(["grep", "egrep", "ls", "dir"])
-const SCAN_PS_R = new Set(["get-childitem", "gci", "dir"])
-const POSIX_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/
+const SCAN_GREP_R = new Set(["grep", "egrep"])
+const SCAN_LS_R = new Set(["ls", "dir"])
+const SCAN_PS_R = new Set(["get-childitem", "gci"])
+// `-r` recurses for grep only; for ls it is reverse, so ls/dir need an uppercase `R` cluster.
+const GREP_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/
+const LS_RECURSE_RE = /^(?:-[a-zA-Z]*R[a-zA-Z]*|--recursive)$/
 const PS_RECURSE_RE = /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i
 const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i
 const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i
@@ -218,20 +221,32 @@ const SCAN_WRAPPERS = new Set(["sudo", "command", "\\builtin", "time", "nice"])
 function rootScan(command) {
   if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null
   for (const seg of command.split(/\|\||&&|[|;\n]/)) {
-    let toks = (seg.match(SCAN_TOKEN_RE) || []).map((t) => t.replace(/^["']+|["']+$/g, ""))
-      .filter((t) => !/^\w+=/.test(t))
-    while (toks.length && SCAN_WRAPPERS.has(toks[0])) toks = toks.slice(1)
+    // Quotes kept until the root test, so a quoted "a:" is told from a bare C:.
+    let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t))
+    while (toks.length && SCAN_WRAPPERS.has(unquote(toks[0]))) toks = toks.slice(1)
     if (!toks.length) continue
-    const prog = toks[0].split("/").pop().toLowerCase()
+    // The program word without its path (either slash) or an `.exe` suffix.
+    const word = unquote(toks[0]).split(/[\\/]/).pop().toLowerCase()
+    const prog = SCAN_ALWAYS.has(word) ? word : word.replace(/\.exe$/, "")
     const always = SCAN_ALWAYS.has(prog)
-    if (!always && !SCAN_POSIX_R.has(prog) && !SCAN_PS_R.has(prog)) continue
-    const argv = toks.slice(1).map((t) => (t.toLowerCase().startsWith("-path") ? t.slice(t.indexOf("=") + 1) : t))
-    if (!always && !argv.some((a) => (SCAN_POSIX_R.has(prog) && POSIX_RECURSE_RE.test(a))
-      || (SCAN_PS_R.has(prog) && PS_RECURSE_RE.test(a)))) continue
-    if (argv.some((a) => FS_ROOT_RE.test(a))) return seg.trim()
+    const grep = SCAN_GREP_R.has(prog)
+    const ls = SCAN_LS_R.has(prog)
+    const ps = SCAN_PS_R.has(prog)
+    if (!always && !grep && !ls && !ps) continue
+    // `-Path=x` and PowerShell's colon binding `-Path:C:\` read as the path itself.
+    const argv = toks.slice(1).map((t) => {
+      const m = /^-path[=:](.+)$/i.exec(t)
+      return m ? m[1] : t
+    })
+    if (!always && !argv.some((a) => (grep && GREP_RECURSE_RE.test(a))
+      || (ls && LS_RECURSE_RE.test(a)) || ((ls || ps) && PS_RECURSE_RE.test(a)))) continue
+    if (argv.some(rootArg)) return seg.trim()
   }
   return null
 }
+const unquote = (t) => t.replace(/^["']+|["']+$/g, "")
+// A QUOTED single-letter-colon token is data (`grep -rn "a:" src`), never a drive root.
+const rootArg = (t) => FS_ROOT_RE.test(unquote(t)) && !(/^["']/.test(t) && /^[a-z]:$/i.test(unquote(t)))
 
 // `apply_patch`'s only argument is `patchText` (OpenCode verdict I-1): every gpt-5*
 // model gets ONLY this tool, never `edit`/`write`, so a path that lives inside the

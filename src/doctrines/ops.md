@@ -29,8 +29,9 @@ anything that must run long with a timeout, a non-follow flag, or redirected out
 so it hands control back. Search a named directory, never a recursive scan rooted at a
 whole filesystem (`find /`, `du /`): Git Bash's `/` spans every drive, and `| head` stops
 nothing. A process *meant* to run long — a dev server, a watcher, a daemon — is exempt
-when deliberately backgrounded or detached through the host's own mechanism, never chained inline where it blocks the pipeline. ({{LAW:deletion-is-deliberate}}
-governs *whether* to run a command; this governs *how*.)
+when deliberately backgrounded or detached through the host's own mechanism, never chained
+inline where it blocks the pipeline. ({{LAW:deletion-is-deliberate}} governs *whether* to run a
+command; this governs *how*.)
 <!-- LEAN:else -->
 A command must return on its own. Never invoke what blocks on a terminal you cannot answer —
 prompt, pager, REPL, editor, or process that runs until killed. Prefer the non-interactive

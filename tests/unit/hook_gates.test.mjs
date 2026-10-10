@@ -958,6 +958,33 @@ const PS_CASES = [
   ['dir C:\\ -Recurse', true],
 ];
 
+// Review fix round. `ls`/`dir` recurse only on an UPPERCASE `-R` cluster, `--recursive` or a
+// PowerShell `-Recurse` prefix — `ls -r` is REVERSE, so `-ltr`/`-lr` list one directory. `-r`
+// stays recursive for grep only. A QUOTED single-letter-colon token is data (a grep pattern), never
+// a drive root; an unquoted `C:` still is. The program word loses its leading path (either slash)
+// and an `.exe` suffix, and PowerShell's colon binding `-Path:C:\` reads like `-Path C:\`.
+const FIX_CASES = [
+  ['ls -ltr /', false],
+  ['ls -lr /c', false],
+  ['ls -Force C:\\', false],
+  ['ls -R /', true],
+  ['ls C:\\ -Recurse', true],
+  ['dir C:\\ -Recurse', true],
+  ['grep -rn "a:" src', false],
+  ['rg "e:" src', false],
+  ["rg 'e:' src", false],
+  ['rg needle C:', true],
+  ['find.exe / -name x', true],
+  ['C:\\tools\\rg.exe x C:\\', true],
+  ['Get-ChildItem -Path:C:\\ -Recurse', true],
+  ['where.exe /r C:\\ x.dll', true],
+];
+
+test('rootScan: ls -r is reverse, quoted "a:" is data, .exe and -Path: are still the scan', async () => {
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  for (const [c, refused] of FIX_CASES) assert.equal(Boolean(rootScan(c)), refused, c);
+});
+
 test('rootScan: the reference self-check — 9 refused, 8 passed', async () => {
   const { rootScan } = await import('../../js/hosts/hooks.mjs');
   for (const c of REF_REFUSE) assert.ok(rootScan(c), `should refuse: ${c}`);

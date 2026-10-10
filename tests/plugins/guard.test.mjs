@@ -476,6 +476,15 @@ for (const [command, want] of [
   ["gci C:\\ -r", true],
   ["du -sh /*", true],
   ["ls /*", false],
+  // Review fix round: ls -r is reverse; a quoted "a:" is a pattern; .exe / a path / -Path: binding.
+  ["ls -ltr /", false],
+  ["ls -Force C:\\", false],
+  ["ls C:\\ -Recurse", true],
+  ['grep -rn "a:" src', false],
+  ["rg needle C:", true],
+  ["find.exe / -name x", true],
+  ["C:\\tools\\rg.exe x C:\\", true],
+  ["Get-ChildItem -Path:C:\\ -Recurse", true],
 ]) {
   test(`root-scan guard: ${JSON.stringify(command)} -> ${want ? "blocked" : "allowed"}`, async () => {
     assert.equal(await blocked("bash", { command }), want)
@@ -494,7 +503,8 @@ test("the root-scan constants stay in parity with js/hosts/hooks.mjs's rootScan"
   const guardSrc = await fs.readFile(
     path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
   const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
-  const names = ["SCAN_ALWAYS", "SCAN_POSIX_R", "SCAN_PS_R", "POSIX_RECURSE_RE", "PS_RECURSE_RE",
+  const names = ["SCAN_ALWAYS", "SCAN_GREP_R", "SCAN_LS_R", "SCAN_PS_R", "GREP_RECURSE_RE",
+    "LS_RECURSE_RE", "PS_RECURSE_RE",
     "FS_ROOT_RE", "SCAN_WORD_RE", "SCAN_TOKEN_RE", "SCAN_WRAPPERS"]
   const pick = (src, name) => {
     const m = src.match(new RegExp(`const ${name} = (.*?);?\\r?\\n`))

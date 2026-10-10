@@ -336,34 +336,38 @@ function gitGate(args) {
 }
 
 // ======================================================================================
-// root scan \u2014 Doctrine ops 2 (Commands Must Return)'s tool-boundary backstop
+// root scan — Doctrine ops 2 (Commands Must Return)'s tool-boundary backstop
 // ======================================================================================
 
-// On 2026-10-10 a subagent ran `find / -iname "write.ts" \u2026 | head -5` in Git Bash, where `/`
+// On 2026-10-10 a subagent ran `find / -iname "write.ts" … | head -5` in Git Bash, where `/`
 // mounts every drive (/c, /d) and a network share: 3.5 h at 100 % CPU, and the Bash timeout
-// did not stop the orphaned child. `| head` stops nothing \u2014 find still visits every directory.
+// did not stop the orphaned child. `| head` stops nothing — find still visits every directory.
 // Ported from Ritus/guards/root_scan.py (its 9 refuse / 8 pass self-check is in
 // tests/unit/hook_gates.test.mjs), with one tightening: the reference's recursion regex,
 // `-[a-z]*r[a-z]*` under `/i`, read PowerShell's `-Force`/`-Filter`/`-ErrorAction` as a
-// recursion flag, which on Bob and OpenCode is a hard block, not a prompt. So POSIX programs
-// take a short flag cluster carrying `r`/`R` (or `--recursive`), PowerShell's take `-Recurse`
-// or one of its prefix abbreviations. Lives HERE, inside `gitDecide`, rather than in a verb of
+// recursion flag, which on Bob and OpenCode is a hard block, not a prompt. So grep takes a short
+// flag cluster carrying `r`/`R` (or `--recursive`), ls/dir an uppercase `R` (their `-r` is
+// reverse), and PowerShell's `-Recurse` or one of its prefix abbreviations. Lives HERE, inside `gitDecide`, rather than in a verb of
 // its own: every `command` payload on every host already routes through this function, and a
-// new verb on an older machine-wide shim would exit 1 \u2014 which `onFailure: "block"` turns into
+// new verb on an older machine-wide shim would exit 1 — which `onFailure: "block"` turns into
 // every Bash call refused. Runs whether or not the ops pack is built in, like rule-gate's
 // process-1: how a command is run is never wrong to bound. Twin: adapters/opencode/plugins/
-// geneseed-guard.js `rootScan` \u2014 keep in step (tests/plugins/guard.test.mjs diffs the constants).
+// geneseed-guard.js `rootScan` — keep in step (tests/plugins/guard.test.mjs diffs the constants).
 const SCAN_ALWAYS = new Set(['find', 'du', 'tree', 'rg', 'fd', 'where.exe']);
-const SCAN_POSIX_R = new Set(['grep', 'egrep', 'ls', 'dir']);
-const SCAN_PS_R = new Set(['get-childitem', 'gci', 'dir']);
-const POSIX_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/;
+const SCAN_GREP_R = new Set(['grep', 'egrep']);
+const SCAN_LS_R = new Set(['ls', 'dir']);
+const SCAN_PS_R = new Set(['get-childitem', 'gci']);
+// `-r` recurses for grep only: for `ls` it is REVERSE (`ls -ltr /` lists one directory), so
+// ls/dir need an UPPERCASE `R` in the cluster, `--recursive`, or (as PowerShell aliases) `-Recurse`.
+const GREP_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/;
+const LS_RECURSE_RE = /^(?:-[a-zA-Z]*R[a-zA-Z]*|--recursive)$/;
 const PS_RECURSE_RE = /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i;
 // A trailing `*` is still the root: the shell expands `du -sh /*` to every drive just the same.
 const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i;
 // The cheap prefilter: a command that names no scanner pays this one test and nothing else.
 const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i;
 // Non-POSIX tokens, like the reference's `shlex.split(posix=False)`: a quoted run stays inside
-// its word and a backslash is NEVER an escape \u2014 a POSIX lexer would eat the one in `C:\ -Recurse`
+// its word and a backslash is NEVER an escape — a POSIX lexer would eat the one in `C:\ -Recurse`
 // and leave the root unseen.
 const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g;
 const SCAN_WRAPPERS = new Set(['sudo', 'command', '\\builtin', 'time', 'nice']);
@@ -371,26 +375,39 @@ const SCAN_WRAPPERS = new Set(['sudo', 'command', '\\builtin', 'time', 'nice']);
 /**
  * The first `|`/`;`/`&&`/`||`/newline-separated segment that recursively scans a whole
  * filesystem root, or null. Any `ssh` command is exempt (a remote root scan is the remote's
- * business \u2014 ponytail: that also exempts a local `find / -name "*ssh*"`; the reference's choice),
+ * business — ponytail: that also exempts a local `find / -name "*ssh*"`; the reference's choice),
  * and so is any path deeper than a root.
  */
 export function rootScan(command) {
   if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null;
   for (const seg of command.split(/\|\||&&|[|;\n]/)) {
-    let toks = (seg.match(SCAN_TOKEN_RE) || []).map((t) => t.replace(/^["']+|["']+$/g, ''))
-      .filter((t) => !/^\w+=/.test(t));
-    while (toks.length && SCAN_WRAPPERS.has(toks[0])) toks = toks.slice(1);
+    // Tokens keep their quotes until the root test, so a quoted `"a:"` can be told from a bare `C:`.
+    let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t));
+    while (toks.length && SCAN_WRAPPERS.has(unquote(toks[0]))) toks = toks.slice(1);
     if (!toks.length) continue;
-    const prog = toks[0].split('/').pop().toLowerCase();
+    // The program word without its path (either slash) or an `.exe` suffix: `C:\tools\rg.exe`.
+    const word = unquote(toks[0]).split(/[\\/]/).pop().toLowerCase();
+    const prog = SCAN_ALWAYS.has(word) ? word : word.replace(/\.exe$/, '');
     const always = SCAN_ALWAYS.has(prog);
-    if (!always && !SCAN_POSIX_R.has(prog) && !SCAN_PS_R.has(prog)) continue;
-    const argv = toks.slice(1).map((t) => (t.toLowerCase().startsWith('-path') ? t.slice(t.indexOf('=') + 1) : t));
-    if (!always && !argv.some((a) => (SCAN_POSIX_R.has(prog) && POSIX_RECURSE_RE.test(a))
-      || (SCAN_PS_R.has(prog) && PS_RECURSE_RE.test(a)))) continue;
-    if (argv.some((a) => FS_ROOT_RE.test(a))) return seg.trim();
+    const grep = SCAN_GREP_R.has(prog);
+    const ls = SCAN_LS_R.has(prog);
+    const ps = SCAN_PS_R.has(prog);
+    if (!always && !grep && !ls && !ps) continue;
+    // `-Path=x` and PowerShell's colon binding `-Path:C:\` read as the path itself.
+    const argv = toks.slice(1).map((t) => {
+      const m = /^-path[=:](.+)$/i.exec(t);
+      return m ? m[1] : t;
+    });
+    if (!always && !argv.some((a) => (grep && GREP_RECURSE_RE.test(a))
+      || (ls && LS_RECURSE_RE.test(a)) || ((ls || ps) && PS_RECURSE_RE.test(a)))) continue;
+    if (argv.some(rootArg)) return seg.trim();
   }
   return null;
 }
+const unquote = (t) => t.replace(/^["']+|["']+$/g, '');
+// A QUOTED single-letter-colon token is data (`grep -rn "a:" src`), never a drive root; a bare
+// `C:` still is.
+const rootArg = (t) => FS_ROOT_RE.test(unquote(t)) && !(/^["']/.test(t) && /^[a-z]:$/i.test(unquote(t)));
 
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
