@@ -32,6 +32,40 @@ If you moved the shim itself with `GENESEED_HOME`, set it the same way before re
 
 **Confirm.** `geneseed doctor` prints no `[shim]` line, and a new session opens with the readiness sigil and your project docs in context.
 
+<!--harness:claude-->
+*(Claude Code only)*
+
+## A Bash/Write/Edit call is refused with `onFailure is "block"`
+
+Claude Code refuses a `Bash`, `PowerShell`, `Write`, `Edit` or `NotebookEdit` call outright, and the transcript carries wording like:
+
+> `PreToolUse:Bash hook error: [...]: failed; blocking because onFailure is "block"`
+
+(or `... timed out; blocking because onFailure is "block"`) — not the usual "nothing is enforced" silence, but every matching tool call refused, one after another.
+
+**Cause.** Claude Code's two gates, `git-gate` and `rule-gate`, carry `onFailure: "block"` (Claude Code v2.1.295+, required): when the gate itself cannot run at all — a dead hook shim, a moved checkout, a crash — the tool call is now refused instead of silently let through. This is deliberate (a crashing gate failing open is worse), but it turns the usual "Hooks stopped firing" symptom above into a hard stop for exactly these two gates. The underlying cause is almost always the same stale or missing shim: `geneseed doctor`/`geneseed status`, run from **outside** the stuck session, now also catch the shim having been deleted outright (not just moved) while a live install still names it — `[shim] <path> does not exist, but <install> still runs its hooks through it` / the `gates` row reading `DEAD`.
+
+**Fix.** Rebuild from wherever Geneseed lives now:
+
+```bash
+geneseed rebuild-all
+```
+
+**Recovering without leaving the blocked session.** Claude Code's bash mode — a message that starts with `!`, e.g. `! geneseed rebuild-all` — is reported (outside Anthropic's own hooks reference, which is silent on the point either way) to bypass `PreToolUse` hooks entirely, so it is worth one try before leaving the session:
+
+```
+! geneseed rebuild-all
+```
+
+or `! geneseed doctor` to see the cause first. If that message is ALSO refused, that is proof the bypass does not apply to your Claude Code build — fall back to a plain terminal outside Claude Code entirely, where no hook can fire at all:
+
+```bash
+geneseed rebuild-all   # or: geneseed doctor
+```
+
+**Confirm.** Start a **new** Claude Code session after the rebuild; a `git commit`, a `Write`/`Edit` call and `geneseed doctor` all go through again with no `onFailure` refusal.
+<!--/harness-->
+
 ## The agent never shows the readiness sigil
 
 The first reply of a session should open with the readiness sigil (`✅` in the neutral theme) — the agent's sign that it loaded the harness.

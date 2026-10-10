@@ -31,7 +31,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { shimProblems } from '../../js/inspect/checks-repo.mjs';
+import { installsReferencingShim, shimProblems } from '../../js/inspect/checks-repo.mjs';
 import { gateSummary, statusData, statusLines } from '../../js/inspect/status.mjs';
 import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
 import {
@@ -391,6 +391,61 @@ test('the doctor gate is silent when no shim exists', () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// THE SHIM DELETED OUT FROM UNDER A LIVE INSTALL (controller fix round, Task 1). `shimDeadPaths`
+// reads paths back OUT of a shim body, so it has nothing to read once the shim FILE is gone —
+// `shimProblems`'s old `!isFile(p) -> []` read that the same as a checkout that never emitted.
+// Newly worth telling apart since `onFailure: "block"` (this task) makes a dead git-gate/rule-gate
+// BLOCK instead of silently passing: the user needs to find `geneseed rebuild-all`, not discover
+// a stuck session by trial and error.
+
+test('shimProblems reports a deleted shim only when a live install still names it', () => {
+  withHome((home) => {
+    const cfg = path.join(home, 'cfg');
+    mkdirSync(cfg, { recursive: true });
+    writeInstall(cfg, 'bash');   // writes settings.json + manifest + (via hookPrefix) the shim
+    const p = hookShimPath();
+    assert.ok(existsSync(p), 'writeInstall did not write the shim its own commands name');
+    rmSync(p);                  // simulate: a user (or a cleanup script) deleted it by hand
+    const targets = [['claude', 'global', cfg]];
+    const probs = shimProblems(targets);
+    assert.equal(probs.length, 1, probs.join('\n'));
+    assert.ok(probs[0].includes(p) && probs[0].includes(cfg) && probs[0].includes('rebuild-all'),
+      probs[0]);
+    // The clean half: once the install itself is gone too, nothing live names the shim.
+    rmSync(cfg, { recursive: true, force: true });
+    assert.deepEqual(shimProblems(targets), []);
+  });
+});
+
+test('installsReferencingShim matches the exact shim path, not merely its marker', () => {
+  // Two installs each name A shim, but only one names THIS one — the distinction that matters
+  // once more than one GENESEED_HOME can exist on a machine (a relocated one, or this very test
+  // running beside a real install): an install whose shim is healthy must never be reported as
+  // dead because some OTHER shim, sharing nothing but the filename, is missing.
+  withHome((home) => {
+    const real = hookShimPath();
+    const other = path.join(home, 'elsewhere', '.geneseed', 'bin', 'geneseed-hook.cmd');
+    const writeReferencing = (cfg, shimPath) => {
+      mkdirSync(cfg, { recursive: true });
+      const group = { matcher: 'Bash|PowerShell',
+        hooks: [{ type: 'command', command: `"${shimPath}" git-gate --root "${cfg}"` }] };
+      writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({ hooks: { PreToolUse: [group] } }));
+      writeFileSync(path.join(cfg, GLOBAL_MANIFEST),
+        JSON.stringify({ managed: { settings_hooks: [{ event: 'PreToolUse', group }] } }));
+    };
+    const mine = path.join(home, 'mine');
+    const theirs = path.join(home, 'theirs');
+    writeReferencing(mine, real);
+    writeReferencing(theirs, other);
+    const targets = [['claude', 'global', mine], ['claude', 'global', theirs]];
+    assert.deepEqual(installsReferencingShim(real, targets), [mine],
+      "an install naming a DIFFERENT shim (even one sharing the 'geneseed-hook' marker) "
+      + 'answered for this one');
+    assert.deepEqual(installsReferencingShim(other, targets), [theirs]);
+  });
+});
+
 test('the sniff recognises both the legacy and the shim shape', () => {
   // During migration both shapes are in the wild. Dropping the legacy marker would make every
   // not-yet-migrated install invisible to the orphan scan — an orphan the user deletes by hand.
@@ -722,6 +777,31 @@ test('status shows a fail-open hook form in the gates row, and adds nothing when
     const row = statusLines({ ...statusData(), gates: { ...g, dead: [] } }, false)
       .find((l) => l.includes('gates'));
     assert.ok(row.includes('FAIL OPEN') && row.includes('geneseed rebuild-all'), row);
+  });
+});
+
+test('status marks the gates DEAD when the shim itself is gone but a live install still names it', () => {
+  withHome((home) => {
+    const cfg = path.join(home, 'claude-cfg');
+    mkdirSync(cfg, { recursive: true });
+    writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+    writeInstall(cfg, 'bash');
+    const p = hookShimPath();
+    assert.ok(existsSync(p));
+    rmSync(p);
+    const g = gateSummary([cfg], 'win32');
+    assert.deepEqual(g.dead, [p], JSON.stringify(g));
+    const row = statusLines({ ...statusData(), gates: g }, false).find((l) => l.includes('gates'));
+    assert.ok(row.includes('DEAD') && row.includes('geneseed rebuild-all'), row);
+    // A dir that is not Claude-STYLE (an OpenCode config dir) is never judged — same rule the
+    // fail-open test above pins for `fail_open`, now for `dead`.
+    writeFileSync(path.join(cfg, '.geneseed-emit'), 'opencode-global\n');
+    assert.deepEqual(gateSummary([cfg], 'win32').dead, []);
+    // Once the install itself is gone too, nothing live names the missing shim.
+    writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+    rmSync(path.join(cfg, 'settings.json'));
+    rmSync(path.join(cfg, GLOBAL_MANIFEST));
+    assert.deepEqual(gateSummary([cfg], 'win32').dead, []);
   });
 });
 
