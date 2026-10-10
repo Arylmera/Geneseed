@@ -1503,15 +1503,19 @@ function ancestorInstall(dir, marker) {
   }
 }
 
-// A manifest that records the three stand-down verbs as wired, the way a live emit's does: the
-// stand-down needs `managed.settings_hooks` to name the verb, not just a manifest (final review C1).
-const WIRED_MANIFEST = JSON.stringify({ managed: { settings_hooks: ['context', 'git-gate', 'learn']
-  .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } })) } });
+// A manifest that records the three stand-down verbs as wired, plus the `settings.json` that
+// carries them, the way a live emit leaves both: the stand-down needs `managed.settings_hooks` to
+// name the verb AND the settings file to still run it, not just a manifest (final review C1).
+const WIRED_GROUPS = ['context', 'git-gate', 'learn']
+  .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } }));
+const WIRED_MANIFEST = JSON.stringify({ managed: { settings_hooks: WIRED_GROUPS } });
+const WIRED_SETTINGS = JSON.stringify({ hooks: { X: WIRED_GROUPS.map((r) => r.group) } });
 
 const mkInstall = (parent, marker = '.claude') => {
   const d = path.join(parent, marker);
   fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), WIRED_MANIFEST);
+  fs.writeFileSync(path.join(d, 'settings.json'), WIRED_SETTINGS);
   return d;
 };
 

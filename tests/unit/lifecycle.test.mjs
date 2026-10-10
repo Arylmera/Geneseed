@@ -1613,7 +1613,9 @@ test('status lists only installs that exist — an absent slot has no settings t
 // `managed.settings_hooks` recording a group that runs THIS verb. Rows:
 //   * a live project install                    -> the global gate defers (the project's asks);
 //   * the same install, deactivated             -> the global gate asks;
-//   * a project emit beside commented settings  -> the global gate asks.
+//   * a project emit beside commented settings  -> the global gate asks;
+//   * hooks hand-deleted from the settings file, manifest kept -> asks (the settings file the
+//     manifest names must still carry the recorded command; commented/unparseable -> asks).
 
 /** The global `git-gate` at `gcfg` judging `git reset --hard HEAD~3` in a session at `repo`. */
 function globalGateIn(gcfg, repo, home) {
@@ -1639,6 +1641,19 @@ test('a global gate stands down only for a LIVE, WIRED project install', () => {
     const live = projectInstall(path.join(d, 'live'), 'claude', home);
     assert.equal(globalGateIn(gcfg, live, home), 'defer', 'a live project install did not silence '
       + 'the global gate (its own gate is about to ask)');
+    // The user strips the hooks from the settings file by hand; the manifest still records them.
+    // The manifest is a claim, the settings file is what Claude runs: nothing fires, so ask.
+    const sf = path.join(live, '.claude', 'settings.local.json');
+    const kept = fs.readFileSync(sf, 'utf8');
+    fs.writeFileSync(sf, JSON.stringify({ ...JSON.parse(kept), hooks: {} }));
+    assert.equal(globalGateIn(gcfg, live, home), 'ask',
+      'hooks deleted from settings.local.json, manifest kept: the global gate went silent');
+    fs.writeFileSync(sf, `// mine
+${kept}`);
+    assert.equal(globalGateIn(gcfg, live, home), 'ask',
+      'a commented settings file cannot be verified, so the global gate must not stand down');
+    fs.writeFileSync(sf, kept);
+    assert.equal(globalGateIn(gcfg, live, home), 'defer', 'sanity: restoring the settings re-arms the stand-down');
     const off = installDeactivate(live, 'claude', 'project');
     assert.ok(off.ok, JSON.stringify(off));
     assert.equal(globalGateIn(gcfg, live, home), 'ask',

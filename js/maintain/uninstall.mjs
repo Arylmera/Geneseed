@@ -56,7 +56,7 @@ import {
 } from '../hosts/installs.mjs';
 import {
   CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir,
-  resolvePath,
+  resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
@@ -266,26 +266,9 @@ export function archiveStore(store) {
   return dest;
 }
 
-/**
- * `_harness_mcp._settings_file` — the file this install's hooks were actually wired into.
- *
- * `settings.local.json` for a Claude or OpenClaude PROJECT install (personal, untracked),
- * `settings.json` everywhere else (including Bob's, which documents no local variant), and
- * the manifest is the authority — this reads `managed.settings_file`, it does not re-derive
- * the rule. Every lifecycle path must target the file the EMIT wrote, or the hooks linger in
- * one file while the claims chase another.
- *
- * EXPORTED for `migrate` (host-compat B1 round, `js/maintain/migrate.mjs`'s `hookSettingsFile`):
- * reading a pre-migration install's CURRENT wiring is the same question this answers, and a
- * fresh install with no `managed.settings_file` yet recorded (no manifest, or a manifest from
- * before this field existed) must fall back to the bare, pre-nesting `settings.json` — the
- * shape a legacy `bob-global` install actually carries — not to wherever the NEXT emit would
- * write. `claudeWire`'s own `get(old, 'settings_file') || 'settings.json'` (`emit-claude.mjs`)
- * makes the same choice for the same reason.
- */
-export function settingsFile(cfg, managed) {
-  return path.join(cfg, (managed && managed.settings_file) || 'settings.json');
-}
+// `settingsFile` lives in `hosts.mjs` (the hook stand-down reads it, and must not import this
+// module); re-exported here for `migrate`.
+export { settingsFile };
 
 /** `_harness_mcp._claude_md_path` — where the manifest says the managed block lives. */
 function claudeMdPath(cfg, managed) {

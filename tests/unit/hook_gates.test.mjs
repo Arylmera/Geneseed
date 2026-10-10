@@ -61,10 +61,13 @@ function assertDefers(r, what) {
 // ---------------------------------------------------------------------------------------------
 // The git gate: a commit/push command — bare, flagged, chained, or `-C path` — asks.
 
-// A manifest that records the three stand-down verbs as wired, the way a live emit's does: the
-// stand-down needs `managed.settings_hooks` to name the verb, not just a manifest (final review C1).
-const WIRED_MANIFEST = JSON.stringify({ managed: { settings_hooks: ['context', 'git-gate', 'learn']
-  .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } })) } });
+// A manifest that records the three stand-down verbs as wired, plus the `settings.json` that
+// carries them, the way a live emit leaves both: the stand-down needs `managed.settings_hooks` to
+// name the verb AND the settings file to still run it, not just a manifest (final review C1).
+const WIRED_GROUPS = ['context', 'git-gate', 'learn']
+  .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } }));
+const WIRED_MANIFEST = JSON.stringify({ managed: { settings_hooks: WIRED_GROUPS } });
+const WIRED_SETTINGS = JSON.stringify({ hooks: { X: WIRED_GROUPS.map((r) => r.group) } });
 
 const bashPayload = (command) =>
   JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
@@ -454,6 +457,7 @@ function globalBesideProject(globalName, marker, fn) {
     const mk = (d) => {
       fs.mkdirSync(d, { recursive: true });
       fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), WIRED_MANIFEST);
+      fs.writeFileSync(path.join(d, 'settings.json'), WIRED_SETTINGS);
       return d;
     };
     const gcfg = mk(path.join(sb.path, 'home', globalName));
@@ -523,6 +527,7 @@ test('a gate stays loud unless a project gate replaces it: other globals, cd els
     const mk = (d, emit) => {
       fs.mkdirSync(d, { recursive: true });
       fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), WIRED_MANIFEST);
+      fs.writeFileSync(path.join(d, 'settings.json'), WIRED_SETTINGS);
       if (emit) fs.writeFileSync(path.join(d, '.geneseed-emit'), `${emit}\n`);
       return d;
     };
@@ -568,6 +573,7 @@ test('only the session\'s own project dir silences: no walk up, for any host', (
     const mk = (d, emit) => {
       fs.mkdirSync(d, { recursive: true });
       fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), WIRED_MANIFEST);
+      fs.writeFileSync(path.join(d, 'settings.json'), WIRED_SETTINGS);
       if (emit) fs.writeFileSync(path.join(d, '.geneseed-emit'), `${emit}\n`);
       return d;
     };

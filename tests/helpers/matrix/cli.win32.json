@@ -642,7 +642,8 @@
         "repo/docs/nested/deep.md": "# Deep\n",
         "repo/docs/node_modules/vendored.md": "must never be listed\n",
         "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
+        "repo/packages/widget/index.js": "// not markdown\n",
+        "repo/.claude/settings.json": "{\"hooks\": {\"SessionStart\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}]}}\n"
       }
     },
     {
@@ -793,7 +794,8 @@
         "repo/docs/nested/deep.md": "# Deep\n",
         "repo/docs/node_modules/vendored.md": "must never be listed\n",
         "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
+        "repo/packages/widget/index.js": "// not markdown\n",
+        "repo/.claude/settings.json": "{\"hooks\": {\"SessionStart\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}]}}\n"
       }
     },
     {

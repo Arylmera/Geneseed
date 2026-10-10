@@ -124,9 +124,9 @@ export function sovereignBypass(root) {
  * project gate fires: `deactivate` unwires every hook and keeps the manifest, and a project
  * emit beside a commented `settings.local.json` writes a manifest but refuses to wire. So the
  * candidate must carry no `.geneseed-disabled/<host>` stash (the test `claudeState` uses) and
- * its manifest's `managed.settings_hooks` must record a group running `verb`. A manifest that
- * does not parse, or records no such group, is false: the gate stays loud. What is not checked
- * is the settings file itself — a user who hand-deletes a recorded group is told by `doctor`.
+ * its manifest's `managed.settings_hooks` must record a group running `verb`, still present in
+ * the settings file the manifest names (`projectWiresVerb`). A manifest or settings file that
+ * does not parse, or carries no such group, is false: the gate stays loud.
  *
  * LIVES HERE, beside `sovereignBypass`, for the same reason: the gates must not import
  * `hooks-context.mjs`. Any failure (a `~user` root `resolvePath` refuses) is false: a gate that
@@ -161,14 +161,48 @@ export function globalHookStandingDown(hookRoot, projectDir, host, verb) {
   }
 }
 
-/** Does the manifest at `cand` record a settings hook group whose command runs `verb`? */
+/**
+ * Does the project install at `cand` really run `verb`? Its manifest must record a hook group
+ * whose command runs it, AND the settings file that manifest names must still carry that
+ * command under the same event — the manifest is a claim, the settings file is what the host
+ * runs. A user who deletes `hooks` by hand keeps the manifest (re-review, Important). Absent,
+ * unparseable or COMMENTED settings fail `JSON.parse` and answer false: what cannot be
+ * verified does not silence a gate.
+ */
 function projectWiresVerb(cand, verb) {
-  let man;
-  try { man = JSON.parse(readText(path.join(cand, GLOBAL_MANIFEST))); } catch { return false; }
-  const groups = man?.managed?.settings_hooks;
+  const readJson = (p) => { try { return JSON.parse(readText(p)); } catch { return null; } };
+  const managed = readJson(path.join(cand, GLOBAL_MANIFEST))?.managed;
+  const recorded = Array.isArray(managed?.settings_hooks) ? managed.settings_hooks : [];
   // Every emitted command is `<runner> <verb> --root|--memory …` (`claudeHookGroups`).
   const runs = (h) => typeof h?.command === 'string' && h.command.includes(` ${verb} --`);
-  return Array.isArray(groups) && groups.some((g) => (g?.group?.hooks ?? []).some(runs));
+  const wanted = recorded.flatMap((r) => (Array.isArray(r?.group?.hooks) ? r.group.hooks : [])
+    .filter(runs).map((h) => [r.event, h.command]));
+  if (!wanted.length) return false;
+  const hooks = readJson(settingsFile(cand, managed))?.hooks;
+  const live = (event, command) => Array.isArray(hooks?.[event]) && hooks[event]
+    .some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => h?.command === command));
+  return wanted.some(([event, command]) => live(event, command));
+}
+
+/**
+ * `_harness_mcp._settings_file` — the file this install's hooks were actually wired into.
+ *
+ * `settings.local.json` for a Claude or OpenClaude PROJECT install (personal, untracked),
+ * `settings.json` everywhere else (including Bob's, which documents no local variant), and
+ * the manifest is the authority — this reads `managed.settings_file`, it does not re-derive
+ * the rule. Every lifecycle path must target the file the EMIT wrote, or the hooks linger in
+ * one file while the claims chase another.
+ *
+ * EXPORTED for `migrate` (host-compat B1 round, `js/maintain/migrate.mjs`'s `hookSettingsFile`):
+ * reading a pre-migration install's CURRENT wiring is the same question this answers, and a
+ * fresh install with no `managed.settings_file` yet recorded (no manifest, or a manifest from
+ * before this field existed) must fall back to the bare, pre-nesting `settings.json` — the
+ * shape a legacy `bob-global` install actually carries — not to wherever the NEXT emit would
+ * write. `claudeWire`'s own `get(old, 'settings_file') || 'settings.json'` (`emit-claude.mjs`)
+ * makes the same choice for the same reason.
+ */
+export function settingsFile(cfg, managed) {
+  return path.join(cfg, (managed && managed.settings_file) || 'settings.json');
 }
 
 /** A dir's own `.geneseed-emit`, trimmed, or `''`. */
