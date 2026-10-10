@@ -529,19 +529,26 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const learn = `${run} learn ${mem} || exit 0`;
   return {
     PreToolUse: [
-      { matcher: 'Bash', hooks: [{ type: 'command', command: gate }] },
+      // `Bash|PowerShell`, not `Bash` alone (Claude verdict I1): docs `hooks.md` says a hook
+      // that matches only `Bash` never fires on the PowerShell tool, which is Windows' default
+      // shell whenever Git Bash is absent — and on Windows without Git Bash, Bash is not even
+      // registered. `tool_input.command` is the same field on both tools, so `GIT_GATE_RE`
+      // needs no change.
+      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: gate }] },
       {
-        matcher: 'Write|Edit|MultiEdit|NotebookEdit',
+        // No `MultiEdit`: it is not in Claude Code's tool table (tools-reference.md) — a dead
+        // matcher entry (Claude verdict R2).
+        matcher: 'Write|Edit|NotebookEdit',
         hooks: [{ type: 'command', command: ruleGate }],
       },
     ],
-    SessionStart: [
-      { matcher: 'startup|clear', hooks: [{ type: 'command', command: context }] },
-      // `compact` too: auto-compaction keeps the instruction file (the host re-reads it) but
-      // summarises away the eagerly injected context, memory index and notebook TOC. Re-seed
-      // them the way a resume does — the static AGENT.md is NOT re-printed.
-      { matcher: 'resume|compact', hooks: [{ type: 'command', command: context }] },
-    ],
+    // One matcher-less group, not a `startup|clear` / `resume|compact` split (Claude verdict
+    // I4): every SessionStart source — `startup`, `resume`, `clear`, `compact` and `fork` —
+    // runs the identical `context` command, so splitting them only risked missing one. The
+    // split DID: a `--fork-session` run sets `source: "fork"`, which neither half matched, so
+    // a forked session got no session files or project context. The static AGENT.md is NOT
+    // re-printed here either way.
+    SessionStart: [{ hooks: [{ type: 'command', command: context }] }],
     // `|| exit 0` (not `|| true`): hooks run under cmd.exe on native Windows, where `true`
     // is not a command and the swallow-failures intent would invert into a 9009 error.
     Stop: [{ hooks: [{ type: 'command', command: learn }] }],

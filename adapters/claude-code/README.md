@@ -14,7 +14,7 @@ bin/geneseed-hook.mjs …` — so at user scope they would fire and fail in ever
 repo that doesn't vendor the harness. A generated global install wires
 absolute-path hooks instead — `geneseed setup` does that for you.) It:
 
-- on **PreToolUse** (matcher `Bash`), runs `geneseed-hook git-gate` — the tool-boundary
+- on **PreToolUse** (matcher `Bash|PowerShell`), runs `geneseed-hook git-gate` — the tool-boundary
   half of Doctrine process 5 (*consent before every commit and push*) and of the
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
   wired with `--no-consent`: commits and pushes pass without asking, while the
@@ -27,22 +27,26 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   next time regardless. Every other Bash command (and any unreadable payload) is
   deferred to the normal permission flow — the hook never blocks unrelated work.
 
-  **Caveat — the GitHub MCP vector.** The hook matches the `Bash` tool only. If your
-  session has the GitHub MCP server, an agent can commit/push via `push_files` /
-  `create_or_update_file` / `merge_pull_request`, which bypass Bash. To gate those too,
-  widen the matcher to `"Bash|mcp__github__.*"` — `git-gate` ignores any payload it
-  doesn't recognise as a commit/push, so over-matching the tool surface is harmless.
-- on **PreToolUse** (matcher `Write|Edit|MultiEdit|NotebookEdit`), runs
+  **Caveat — the GitHub MCP vector.** The hook matches the `Bash` and `PowerShell` tools
+  only. If your session has the GitHub MCP server, an agent can commit/push via
+  `push_files` / `create_or_update_file` / `merge_pull_request`, which bypass both. To
+  gate those too, widen the matcher to `"Bash|PowerShell|mcp__github__.*"` —
+  `git-gate` ignores any payload it doesn't recognise as a commit/push, so
+  over-matching the tool surface is harmless.
+- on **PreToolUse** (matcher `Write|Edit|NotebookEdit`), runs
   `geneseed-hook rule-gate` — refuses a write that would put a credential into a tracked
   file, and asks first on the first write to `user-rules.md` or a memory file (whether
   something you want kept is a rule or a fact is your call). Ordinary edits pass.
+  (`MultiEdit` is not a Claude Code tool and is not in the matcher; the gate reads
+  `edits[].new_string` as a cheap guard regardless.)
 - on **SessionStart** (`startup`/`clear` only — a fresh context), prints `AGENT.md`
   so the harness is in context from the first turn, then runs `geneseed-hook context` to
   **inject the project context** directly into the session — so the project-context load is
   by the hook, not left to the agent to remember (lazy entries are only listed). On
-  **`resume`** it runs `geneseed-hook context` *without* re-`cat`ting `AGENT.md`: the resumed
-  conversation already carries the harness, so re-injecting the static file each resume
-  is pure token waste — only the (possibly changed) project context is refreshed;
+  **`resume`**, **`compact`**, or **`fork`** (`--fork-session`) it runs `geneseed-hook
+  context` *without* re-`cat`ting `AGENT.md`: the resumed or forked conversation already
+  carries the harness, so re-injecting the static file each time is pure token waste —
+  only the (possibly changed) project context is refreshed;
 - on **Stop**, runs `geneseed-hook learn` over the session to capture durable memories.
   Claude Code pipes the hook payload (with the session's `transcript_path`) to the
   command on stdin; `learn` reads that, flattens the transcript, distils new

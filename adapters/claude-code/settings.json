@@ -2,13 +2,13 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           { "type": "command", "command": "node bin/geneseed-hook.mjs git-gate" }
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "matcher": "Write|Edit|NotebookEdit",
         "hooks": [
           { "type": "command", "command": "node bin/geneseed-hook.mjs rule-gate" }
         ]
@@ -23,7 +23,7 @@
         ]
       },
       {
-        "matcher": "resume|compact",
+        "matcher": "resume|compact|fork",
         "hooks": [
           { "type": "command", "command": "node bin/geneseed-hook.mjs context" }
         ]

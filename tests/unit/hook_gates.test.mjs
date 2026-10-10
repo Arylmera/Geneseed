@@ -340,9 +340,13 @@ test('a credential-shaped write asks under Sealed Secrets', () => {
 });
 
 test('MultiEdit and NotebookEdit carrying a credential ask too', () => {
-  // The settings matcher routes both here. MultiEdit puts its text in `edits[].new_string` —
-  // the secret sits in the SECOND edit, so a gate reading only the first still misses it — and
-  // NotebookEdit names its file `notebook_path` and its text `new_source`.
+  // The settings matcher routes only NotebookEdit here now — MultiEdit is not a Claude Code
+  // tool (absent from tools-reference.md) and was dropped from the matcher (Claude verdict
+  // R2). The `edits[]` scan survives anyway as a cheap guard against a tool-table surprise or
+  // a future re-add, costing nothing on payloads that never carry it. MultiEdit puts its text
+  // in `edits[].new_string` — the secret sits in the SECOND edit, so a gate reading only the
+  // first still misses it — and NotebookEdit names its file `notebook_path` and its text
+  // `new_source`.
   const multi = JSON.stringify({ tool_name: 'MultiEdit', tool_input: { file_path: 'src/a.js',
     edits: [{ old_string: 'a', new_string: 'b' },
       { old_string: 'c', new_string: 'const k = "AKIAIOSFODNN7EXAMPLE";' }] } });

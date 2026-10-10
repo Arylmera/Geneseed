@@ -400,6 +400,9 @@ function ruleDecide(args, payload) {
   if (typeof p !== 'string' || !p) return 0;
   // Write carries `content`, Edit `new_string`, NotebookEdit `new_source`, MultiEdit an
   // `edits[]` of `new_string`s — every one can plant a credential, so every one is scanned.
+  // MultiEdit is no longer in Claude Code's own tool table (tools-reference.md) or the
+  // settings matcher that routes here (Claude verdict R2); the `edits[]` read stays as a
+  // cheap, harmless guard in case that ever changes.
   // `diff` (Bob's `apply_diff`) and `replace`/`search` (`search_and_replace`) are Roo-lineage
   // field names the Bob docs never confirm (bob-verdict.md I1) — accepted when present, never
   // required, same as every field above.

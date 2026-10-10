@@ -370,10 +370,11 @@ const p = (...s) => path.join('<H>', ...s);
 // The end of setup names the file each host really loads, where it really is, the hooks a
 // Claude-shaped host wired, and the tool to restart. It used to know only OpenCode's AGENT.md,
 // so a successful claude-global install ended on "expected AGENT.md … but it is not there" and
-// "start a NEW OpenCode session". The hook-group counts are the groups each emit wires: seven
-// for Claude Code and OpenClaude (SessionStart ×2, PreToolUse ×2, Stop, SubagentStop,
-// PreCompact), three for Bob, whose contract has no SubagentStop/PreCompact and takes one
-// PreToolUse group for both gates (`claudeHookGroups`).
+// "start a NEW OpenCode session". The hook-group counts are the groups each emit wires: six
+// for Claude Code and OpenClaude (SessionStart ×1 — one matcher-less group covers every
+// source, Claude verdict I4 — PreToolUse ×2, Stop, SubagentStop, PreCompact), three for Bob,
+// whose contract has no SubagentStop/PreCompact and takes one PreToolUse group for both gates
+// (`claudeHookGroups`).
 test('the end-of-setup summary tells the truth for every host', () => {
   const cases = {
     'opencode-global': [
@@ -390,14 +391,14 @@ test('the end-of-setup summary tells the truth for every host', () => {
     ],
     'claude-global': [
       ['ok', `CLAUDE.md written to ${p('.claude', 'CLAUDE.md')}`],
-      ['ok', `7 hook groups wired in ${p('.claude', 'settings.json')}`],
+      ['ok', `6 hook groups wired in ${p('.claude', 'settings.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
     ],
     claude: [
       ['ok', `CLAUDE.md written to ${p('proj', 'CLAUDE.md')}`],
-      ['ok', `7 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
+      ['ok', `6 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
@@ -411,7 +412,7 @@ test('the end-of-setup summary tells the truth for every host', () => {
     ],
     'openclaude-global': [
       ['ok', `CLAUDE.md written to ${p('.openclaude', 'CLAUDE.md')}`],
-      ['ok', `7 hook groups wired in ${p('.openclaude', 'settings.json')}`],
+      ['ok', `6 hook groups wired in ${p('.openclaude', 'settings.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW OpenClaude session to load it"],
       ['info', NEXT],

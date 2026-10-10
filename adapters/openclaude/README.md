@@ -47,8 +47,9 @@ global config file.
 
 ## Hooks
 
-The Claude group set, unchanged: `PreToolUse` (git gate on `Bash`, rule gate on
-writes), `SessionStart` (context on `startup|clear` and `resume|compact`), `Stop`,
+The Claude group set, unchanged: `PreToolUse` (git gate on `Bash|PowerShell`, rule gate on
+writes), `SessionStart` (context on every source — one matcher-less group covers
+`startup`, `resume`, `clear`, `compact` and `fork` alike), `Stop`,
 `SubagentStop` and `PreCompact` (learn). OpenClaude reads Claude's
 `hookSpecificOutput.permissionDecision`, so the gates **ask** where Claude asks.
 The context hook carries `--host openclaude` for one reason. It tells the hook

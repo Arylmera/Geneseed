@@ -359,7 +359,11 @@ function claudeAgentFrontmatter(stem, text, overrides) {
   if (isReadonly(text)) {
     const list = ['Write', 'Edit', 'NotebookEdit'];
     if (!text.includes(WEBFETCH_MARKER)) list.push('WebFetch');
-    if (!text.includes(BASH_MARKER)) list.push('Bash');
+    // Bash AND PowerShell: docs `tools-reference.md` says denying Bash turns PowerShell off
+    // only for settings rules and `--disallowedTools` — agent frontmatter is not named there,
+    // so a "read-only" agent on Windows could still run shell commands via PowerShell
+    // (Claude verdict R1). The one opt-in marker lifts both together.
+    if (!text.includes(BASH_MARKER)) list.push('Bash', 'PowerShell');
     fm.push(`disallowedTools: ${list.join(', ')}`);
   }
   return fm;

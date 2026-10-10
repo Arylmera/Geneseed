@@ -47,7 +47,7 @@ import {
   doctrinesOfDir, excludedRulesOfDir, installState, installTargets, manifestIsClaude,
 } from '../../js/hosts/installs.mjs';
 import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
-import { hookRunnerEntry, hookShimPath } from '../../js/hosts/shim.mjs';
+import { hookRunnerEntry, hookShimPath, hookPrefix } from '../../js/hosts/shim.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
@@ -122,7 +122,7 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
     assert.ok(read(cfg, 'agents', 'explorer.md').includes('disallowedTools:'));
     // The webfetch marker lifts exactly WebFetch from the denylist; Bash stays denied.
     const researcher = read(cfg, 'agents', 'researcher.md');
-    assert.match(researcher, /disallowedTools: Write, Edit, NotebookEdit, Bash$/m);
+    assert.match(researcher, /disallowedTools: Write, Edit, NotebookEdit, Bash, PowerShell$/m);
 
     // THE HOOK PATH IS THE POINT OF THE CLASS. A hook's cwd is the user's project, so nothing
     // relative resolves — it must be absolute, and it must be the STABLE SHIM rather than this
@@ -695,6 +695,18 @@ test('the emitted git-gate hook carries --root with the install path', () => {
   });
 });
 
+test('the git gate matches PowerShell too, not only Bash (Claude verdict I1)', () => {
+  // Docs `hooks.md`: "Match `Bash|PowerShell` in hooks that inspect shell commands … A hook
+  // that matches only `Bash` never fires there." On Windows without Git Bash, Bash is not even
+  // registered, so a `Bash`-only matcher leaves Law IV and the push/commit consent gate off by
+  // default. `tool_input.command` is the same field on both tools, so the gate code is unchanged.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    const group = claudeHookGroups(cfg, hookRunnerEntry()).PreToolUse[0];
+    assert.equal(group.matcher, 'Bash|PowerShell');
+  });
+});
+
 test('the rule gate is APPENDED behind the git gate, and is scoped the same way', () => {
   // Position is load-bearing and asserted for that reason: the tests above read PreToolUse[0]
   // positionally, and so does the prune below. A rule gate that landed first would move the git
@@ -709,25 +721,26 @@ test('the rule gate is APPENDED behind the git gate, and is scoped the same way'
     for (const tool of ['Write', 'Edit']) {
       assert.ok(rule[0].matcher.includes(tool), `the rule gate does not match ${tool}`);
     }
+    // MultiEdit is not in Claude Code's tool table (tools-reference.md) — a dead matcher entry.
+    assert.ok(!rule[0].matcher.includes('MultiEdit'), `dead MultiEdit entry: ${rule[0].matcher}`);
   });
 });
 
-test('SessionStart re-seeds the context on resume AND compact, and prints AGENT.md on neither', () => {
-  // Auto-compaction keeps the instruction file (the host re-reads it) but summarises away the
-  // injected context, memory index and notebook TOC. Those come back through the same
-  // `context` command a resume runs — and only that: re-printing AGENT.md there would double
-  // the largest always-on block every time a long session compacts.
+test('SessionStart re-seeds the context on every source, fork included (Claude verdict I4)', () => {
+  // `startup`, `resume`, `clear`, `compact` and `fork` all run the identical `context` command
+  // (B13), so there is exactly one group and it carries no matcher at all — the previous
+  // `startup|clear` / `resume|compact` split silently dropped `fork`, which a `--fork-session`
+  // run sets as its SessionStart `source`. Auto-compaction keeps the instruction file (the host
+  // re-reads it) but summarises away the injected context, memory index and notebook TOC; a
+  // fork gets neither unless this group fires for it too.
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');
     const groups = claudeHookGroups(cfg, hookRunnerEntry()).SessionStart;
-    const cold = groups.find((g) => g.matcher === 'startup|clear');
-    const warm = groups.find((g) => g.matcher === 'resume|compact');
-    assert.ok(cold && warm, `expected a cold and a warm group, got ${
-      JSON.stringify(groups.map((g) => g.matcher))}`);
-    assert.equal(warm.hooks.length, 1);
-    assert.ok(warm.hooks[0].command.includes(' context '), 'the warm group runs `context`');
-    assert.equal(warm.hooks[0].command, cold.hooks[cold.hooks.length - 1].command,
-      'warm and cold share the one context command');
+    assert.equal(groups.length, 1, `expected one matcher-less group, got ${
+      JSON.stringify(groups)}`);
+    assert.ok(!('matcher' in groups[0]), 'a matcher-less group must carry no matcher key');
+    assert.equal(groups[0].hooks.length, 1);
+    assert.ok(groups[0].hooks[0].command.includes(' context '), 'the group runs `context`');
   });
 });
 
@@ -754,6 +767,57 @@ test('a re-emit prunes a pre---root git-gate group instead of stacking beside it
     const gitGates = cmds.filter((c) => c.includes('git-gate'));
     assert.equal(gitGates.length, 1, `expected 1 git-gate, got ${gitGates.length}: ${cmds}`);
     assert.ok(gitGates.every((c) => c.includes('--root')), `git-gate lost --root: ${gitGates}`);
+  });
+});
+
+test('an install from before I1/I4 upgrades its matchers instead of double-wiring', () => {
+  // The exact shape a pre-task-3 emit wrote: `Bash`-only git gate, and the SessionStart split
+  // into `startup|clear` / `resume|compact`. Both are recorded as managed (`priorHooks`), the
+  // way an upgrade really finds them. If `mergeClaudeSettings` compared only the command string
+  // it would see these as "already wired" and never add the fixed matchers — every upgraded
+  // install would keep missing PowerShell and `fork` forever. Deep equality on the WHOLE group
+  // (matcher included) is what makes a changed matcher look like a new group to prune-and-add.
+  withDir((d) => {
+    const cfg = path.join(d, 'settings_test');
+    fs.mkdirSync(cfg);
+    const run = hookPrefix(hookRunnerEntry());
+    const oldGate = {
+      matcher: 'Bash',
+      hooks: [{ type: 'command', command: `${run} git-gate --root "${cfg}"` }],
+    };
+    const oldCold = {
+      matcher: 'startup|clear',
+      hooks: [{ type: 'command', command: `${run} context --root "${cfg}" || exit 0` }],
+    };
+    const oldWarm = {
+      matcher: 'resume|compact',
+      hooks: [{ type: 'command', command: `${run} context --root "${cfg}" || exit 0` }],
+    };
+    const settings = path.join(cfg, 'settings.json');
+    fs.writeFileSync(settings, JSON.stringify({
+      hooks: { PreToolUse: [oldGate], SessionStart: [oldCold, oldWarm] },
+    }));
+    const prior = [
+      { event: 'PreToolUse', group: oldGate },
+      { event: 'SessionStart', group: oldCold },
+      { event: 'SessionStart', group: oldWarm },
+    ];
+
+    captured(() => mergeClaudeSettings(settings, prior, hookRunnerEntry(), null, [], 'claude', cfg));
+
+    const data = readJson(settings);
+    const gateGroups = data.hooks.PreToolUse.filter((g) => g.hooks[0].command.includes('git-gate'));
+    assert.equal(gateGroups.length, 1, `expected 1 git-gate group, got ${gateGroups.length}`);
+    assert.equal(gateGroups[0].matcher, 'Bash|PowerShell',
+      `the stale Bash-only matcher survived the upgrade: ${JSON.stringify(gateGroups)}`);
+
+    const startGroups = data.hooks.SessionStart;
+    assert.equal(startGroups.length, 1,
+      `expected the two stale SessionStart groups pruned down to one, got ${
+        JSON.stringify(startGroups)}`);
+    assert.ok(!('matcher' in startGroups[0]), 'the upgraded SessionStart group must carry no matcher');
+    const contextCmds = startGroups[0].hooks.map((h) => h.command).filter((c) => c.includes(' context '));
+    assert.equal(contextCmds.length, 1, 'context must run exactly once per SessionStart, not twice');
   });
 });
 
