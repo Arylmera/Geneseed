@@ -2021,13 +2021,22 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
   // <remote> HEAD:<branch>` or `HEAD:refs/heads/<branch>`), placed where `findLast` lets Law IV's
   // destructive-git asks (force, `+refspec`, `--delete`, bare `:`) still win over it.
   //
-  // ⚠ FIX ROUND (control review, verified against upstream `Wildcard.match`): `*` is a dotall
+  // ⚠ FIX ROUND 1 (control review, verified against upstream `Wildcard.match`): `*` is a dotall
   // `.*`, and `.test()` only needs SOME decomposition to exist, so the plain allow glob matched
   // any command that merely CONTAINED ` HEAD:loop/` — including a SECOND refspec riding along
   // in the same `git push`, before or after the loop one, which pushed `main` with no prompt.
-  // `LOOP_PUSH_GUARD` closes that; the rows below exercise both injection directions plus the
-  // ordinary rows, all through the real findLast+Wildcard.match oracle, not an inspection of
-  // which keys exist.
+  // The round-1 fix guarded on a literal `:` before the refspec.
+  //
+  // ⚠ FIX ROUND 2 (control review): the colon guard was itself wrong — a bare branch name IS a
+  // valid refspec (`git push origin main` pushes local `main` to remote `main`) and carries no
+  // colon, so `git push origin main HEAD:loop/x` slipped past it. TOKEN COUNT is the actual
+  // invariant: the loop engine's only legitimate extra is `-u`/`--set-upstream` (one flag, one
+  // remote — never more than two tokens before the refspec), so a 5-tier chain
+  // (`LOOP_PUSH_ASK_EXTRA` -> `LOOP_PUSH_ALLOW_FLAG` -> `LOOP_PUSH_ASK_FLAG_EXTRA` ->
+  // `LOOP_PUSH_ASK_TRAILING`) now re-closes on ANY extra token, flag or refspec, colon or not,
+  // before or after the refspec, while still re-opening for exactly the one legitimate 2-token
+  // prefix. The rows below exercise both fix rounds' attack shapes plus the ordinary rows, all
+  // through the real findLast+Wildcard.match oracle, not an inspection of which keys exist.
   withDir((d) => {
     const p = path.join(d, 'opencode.json');
     mergeOpencodeJson(p, 'AGENT.md', PACK_ORDER);
@@ -2035,50 +2044,68 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
 
     // Written-out rows, evaluated the way upstream does: findLast + Wildcard.match.
     const rows = [
-      // The ordinary loop push, both refspec spellings, with and without -u/--set-upstream.
-      ['git push -u origin HEAD:loop/x', 'allow'],
+      // The ordinary loop push, both refspec spellings, with and without -u/--set-upstream —
+      // the ONE legitimate 2-token prefix, which the chain must keep re-opening at tier 3.
       ['git push origin HEAD:loop/x', 'allow'],
-      ['git push --set-upstream origin HEAD:refs/heads/loop/x', 'allow'],
       ['git push origin HEAD:refs/heads/loop/x', 'allow'],
-      // Law IV's existing anywhere-in-the-command globs, unaffected by this fix.
+      ['git push -u origin HEAD:loop/x', 'allow'],
+      ['git push --set-upstream origin HEAD:refs/heads/loop/x', 'allow'],
+      // Law IV's existing anywhere-in-the-command globs, unaffected by this chain.
       ['git push --force origin HEAD:loop/x', 'ask'],
       ['git push origin +HEAD:loop/x', 'ask'],
       ['git push origin --delete loop/x', 'ask'],
-      ['git push --force-with-lease origin HEAD:loop/x', 'ask'],
-      ['git push --mirror', 'ask'],
-      ['git push --all', 'ask'],
       ['git push -u origin HEAD:main', 'ask'],
       ['git push origin :loop/x', 'ask'],
-      // THE HOLE: a second refspec in the SAME push, either side of the loop one, pushing
-      // `main` with no prompt under the plain allow glob. LOOP_PUSH_GUARD must catch both.
+      // ROUND 1's injection shapes (a second, colon-carrying refspec) — still caught.
       ['git push origin HEAD:main HEAD:loop/x', 'ask'],
       ['git push origin HEAD:loop/x HEAD:main', 'ask'],
       ['git push origin HEAD:main HEAD:refs/heads/loop/x', 'ask'],
       ['git push origin HEAD:refs/heads/loop/x HEAD:main', 'ask'],
-      // A second loop/* refspec: harmless, and the guard cannot tell it from `HEAD:main`
-      // without a third tier of rule nothing emits — ask is accepted, not a target to relax.
+      // A second loop/* refspec: harmless, and the chain cannot tell it from `HEAD:main` without
+      // inspecting the trailing text's content — ask is accepted, not a target to relax.
       ['git push origin HEAD:loop/x HEAD:loop/y', 'ask'],
+      // ROUND 2's actual hole: a COLON-FREE second refspec (a bare branch name), either side
+      // of the loop one, with and without -u. The round-1 colon guard let every one of these
+      // through as `allow`; tier 2/4's token count catches them regardless of the colon.
+      ['git push origin main HEAD:loop/x', 'ask'],
+      ['git push -u origin main HEAD:loop/x', 'ask'],
+      ['git push origin HEAD:loop/x main', 'ask'],
+      // Flags before the refspec, colon-free, with a real remote — exactly the shape (2)
+      // exists for. `--mirror`/`--all` have no dedicated LAW_IV_BASH key (git itself refuses to
+      // pair them with an explicit refspec, so the loop engine could never emit this shape
+      // either way), so this chain is their ONLY guard when a refspec is present.
+      ['git push --all origin HEAD:loop/x', 'ask'],
+      ['git push -f origin HEAD:loop/x', 'ask'],
+      ['git push --force-with-lease origin HEAD:loop/x', 'ask'],
+      ['git push --mirror origin HEAD:loop/x', 'ask'],
+      // The same flags with no refspec at all: trivial, the allow tier never matches (no
+      // ` HEAD:loop/` substring present), so the blanket `git push*` ask applies regardless.
+      ['git push --mirror', 'ask'],
+      ['git push --all', 'ask'],
     ];
     for (const [cmd, want] of rows) {
       assert.equal(evaluateBash(bash, cmd), want, `${cmd} -> expected ${want}`);
     }
 
-    // The allow keys sit strictly between the consent `git push*` ask and Law IV's first
-    // destructive-push key, and the guard keys sit between the allow and Law IV too —
-    // `findLast` means anything placed AFTER a key can still override it, and both the guard
-    // (over the allow) and Law IV (over the allow and the guard alike) depend on landing later.
+    // Every tier sits strictly between the consent `git push*` ask and Law IV's first
+    // destructive-push key, IN THE ORDER the chain's re-opening/re-closing depends on —
+    // `findLast` means anything placed after a key can still override it.
     const keys = Object.keys(bash);
-    const pushAskIdx = keys.indexOf('git push*');
-    const lawIvIdx = keys.indexOf('git push --force*');
-    const allowIdx = keys.indexOf('git push * HEAD:loop/*');
-    const guardIdx = keys.indexOf('git push *:* HEAD:loop/*');
-    assert.ok([pushAskIdx, allowIdx, guardIdx, lawIvIdx].every((i) => i >= 0),
-      'a key this cell depends on is missing');
-    assert.ok(pushAskIdx < allowIdx && allowIdx < guardIdx && guardIdx < lawIvIdx,
-      'the loop allow/guard pair is not strictly between the consent push ask and Law IV');
+    const idx = (k) => keys.indexOf(k);
+    const order = [
+      'git push*', 'git push * HEAD:loop/*', 'git push * * HEAD:loop/*',
+      'git push -u * HEAD:loop/*', 'git push -u * * HEAD:loop/*',
+      'git push * HEAD:loop/* ?*', 'git push --force*',
+    ];
+    const idxs = order.map(idx);
+    assert.ok(idxs.every((i) => i >= 0), `a key this chain depends on is missing: ${order}`);
+    for (let i = 1; i < idxs.length; i += 1) {
+      assert.ok(idxs[i - 1] < idxs[i],
+        `${order[i - 1]} must come before ${order[i]} for findLast to re-open/re-close correctly`);
+    }
 
-    // Never main/master: neither a loop allow key nor a loop guard key matches a plain push to
-    // a shared branch with no loop refspec present at all.
+    // Never main/master: no key in this chain matches a plain push to a shared branch with no
+    // loop refspec present at all.
     for (const k of keys.filter((kk) => kk.includes('loop/'))) {
       assert.ok(!wildcardMatch('git push -u origin HEAD:main', k), `${k} matches a push to main`);
     }

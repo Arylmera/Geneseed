@@ -156,48 +156,71 @@ const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 
 const LOOP_PUSH_ALLOW = ['git push * HEAD:loop/*', 'git push * HEAD:refs/heads/loop/*'];
 
 /**
- * ⚠ FIX FOR A REAL PUSH-TWO-REFSPECS-AT-ONCE HOLE IN `LOOP_PUSH_ALLOW` (control review, verified
- * against upstream `Wildcard.match`). OpenCode's `*` is a DOTALL `.*`, and `.test()` only needs
- * SOME decomposition to exist — so `'git push * HEAD:loop/*'` matches any command that merely
- * CONTAINS ` HEAD:loop/` anywhere, trailing junk and all. `git push` accepts several refspecs in
- * one invocation, so `git push origin HEAD:main HEAD:loop/x` (another ref BEFORE the loop one)
- * and `git push origin HEAD:loop/x HEAD:main` (one AFTER) both satisfied that one `' HEAD:loop/'`
- * substring and were allowed — pushing `main` with no prompt either way. Ordered AFTER
- * `LOOP_PUSH_ALLOW` (`findLast` wins), these turn exactly those two shapes back into `ask`:
+ * ⚠ SECOND FIX ROUND (control review). The first guard (`'git push *:* HEAD:loop/*'`) checked
+ * for a literal `:` ahead of the loop refspec, reasoning that a second refspec always carries
+ * one. Wrong: a bare branch name IS a valid refspec (`git push origin main` pushes local
+ * `main` to remote `main`) and carries no colon at all, so `git push origin main HEAD:loop/x`
+ * sailed past the colon check and pushed `main` with no prompt. A colon is not the invariant;
+ * TOKEN COUNT is — the loop engine's leading extras are exactly `-u <remote>` or
+ * `--set-upstream <remote>` (one flag, one remote: always precisely ONE or TWO tokens before
+ * the refspec), and every injected extra refspec, colon or not, adds a token beyond that. This
+ * replaces the colon guard with a token-count chain, each tier ordered (`findLast` wins) to
+ * override the one before it where it must:
  *
- * - The BEFORE guard (`'git push *:* HEAD:loop/*'`) requires a literal `:` somewhere ahead of
- *   the loop refspec. A second refspec always carries one (`<src>:<dst>`); the one extra token
- *   the loop engine itself ever puts there — `-u` / `--set-upstream` — never does, so the
- *   documented form (`git push -u origin HEAD:loop/<slug>`) keeps matching `LOOP_PUSH_ALLOW`
- *   instead. The `:` already inside the trailing `HEAD:loop/` cannot double as this one: regex
- *   matching is sequential, so that colon is consumed by the literal `HEAD:loop/` match that
- *   must still follow the guard's leading `:*`, not available to satisfy it a second time — a
- *   plain `remote HEAD:loop/<slug>` push carries only the one colon, so the guard needs a
- *   SECOND one to exist and finds none.
- * - The AFTER guard (`'git push * HEAD:loop/* ?*'`) requires ONE more character, ANYWHERE,
- *   past the refspec — via a literal `?` (`Wildcard.match`'s single-char wildcard), not a bare
- *   trailing `*`: a pattern ending in literal `" *"` hits upstream's own special case
- *   (`escaped.endsWith(' .*')` -> `'( .*)?'`), which makes that whole trailing clause OPTIONAL
- *   and would silently re-allow the exact plain push this guard exists to still catch. `?`
- *   keeps the pattern from ending in `" *"`, so the clause stays mandatory.
+ * 1. `LOOP_PUSH_ALLOW` (above) — allow. Matches ANY text before the loop refspec, however many
+ *    tokens.
+ * 2. `LOOP_PUSH_ASK_EXTRA` (`'git push * * HEAD:loop/*'`) — ask. Requires the text before the
+ *    refspec to contain its own literal space, i.e. 2+ tokens — which a bare single remote
+ *    (`origin`) never has (no space inside one word), so the documented bare-remote form keeps
+ *    falling through to (1)'s allow; `origin main` (remote + an injected second refspec, with
+ *    or without a colon), `-u origin` (flag + remote — ALSO 2 tokens, so this ALSO fires for the
+ *    legitimate `-u`/`--set-upstream` form; that is corrected by tier 3, not avoided here) and
+ *    any other 2+-token prefix — `--all origin`, `-f origin`, `--force-with-lease origin`,
+ *    `--mirror origin` — all trip it.
+ * 3. `LOOP_PUSH_ALLOW_FLAG` (`'git push -u * HEAD:loop/*'` / `'git push --set-upstream * …'`) —
+ *    allow, ordered AFTER (2) specifically to re-admit the one 2-token prefix that is legitimate:
+ *    `-u <remote>` or `--set-upstream <remote>`. The literal `-u `/`--set-upstream ` prefix means
+ *    only a command that STARTS with that flag can match; nothing with a different first token
+ *    (including an injected refspec in that slot) does.
+ * 4. `LOOP_PUSH_ASK_FLAG_EXTRA` (`'git push -u * * HEAD:loop/*'` / `--set-upstream` twin) — ask,
+ *    ordered AFTER (3) to re-close it: ANYTHING beyond `-u <remote>` before the refspec — a
+ *    third token, e.g. `-u origin main HEAD:loop/x` — puts a literal space inside what (3)'s
+ *    single wildcard would otherwise swallow whole, so this fires and wins back from (3).
+ * 5. `LOOP_PUSH_ASK_TRAILING` (`'git push * HEAD:loop/* ?*'`) — ask. Requires ONE more character,
+ *    ANYWHERE, past the refspec, via `?` (`Wildcard.match`'s single-char wildcard) rather than a
+ *    bare trailing `*`: a pattern ENDING in literal `" *"` hits upstream's own special case
+ *    (`escaped.endsWith(' .*')` -> `'( .*)?'`), making that whole clause OPTIONAL and silently
+ *    re-allowing the plain push this tier exists to still catch. Catches an injected refspec, or
+ *    anything else, AFTER the loop one (`git push origin HEAD:loop/x HEAD:main`,
+ *    `… HEAD:loop/x main`) — order relative to the others does not matter for this tier, since
+ *    nothing else in this chain inspects text after the refspec.
  *
- * A second `loop/*` refspec after the first (`git push origin HEAD:loop/x HEAD:loop/y`) also
- * trips the AFTER guard and asks — harmless, and accepted rather than chased: the engine never
- * emits one, and distinguishing it from `HEAD:main` would cost a third tier of rule for a shape
- * nothing produces.
+ * A second `loop/*` refspec after the first also trips tier 5 and asks — harmless, and accepted
+ * rather than chased: the engine never emits one, and telling it apart from an injected `main`
+ * needs no extra tier, since both are "something after the refspec".
  *
- * REMAINING CEILING, named rather than silently narrowed: a flag carrying no colon placed
- * BEFORE the refspec (`git push --all origin HEAD:loop/x`) is not caught by the colon check.
- * Not chased — the loop engine never emits one, and git itself refuses to combine `--all` or
- * `--mirror` with an explicit refspec, so this shape cannot reach a shell as a loop push in the
- * first place. `--force`/`--force-with-lease`/`--mirror`/`--all`/`--delete`/bare-`:` are still
- * caught wherever they land, through `LAW_IV_BASH`'s existing anywhere-in-the-command globs
- * (`'git push *--force*'` et al.), independently of this guard.
+ * NO REMAINING CEILING for the realistic shapes: every 2+-token prefix — a flag, an injected
+ * refspec, colon or not — is caught by (2) unless it is exactly the one legitimate `-u`/
+ * `--set-upstream` + remote pair, which (4) still catches the moment anything rides along with
+ * it. The one shape this chain cannot see is a BARE SINGLE flag occupying the sole "remote"
+ * slot with nothing else before the refspec (`git push --all HEAD:loop/x`, one token, same shape
+ * as a legitimate bare remote) — indistinguishable from a real remote name by token count alone,
+ * and not a practical gap: a leading `-`/`--` token is parsed by git as an OPTION, never as the
+ * remote, so this exact shape either errors (no remote given) or reads the refspec text itself
+ * as the remote and fails to resolve it — it does not reach a working push to `main`. Still
+ * caught by `LAW_IV_BASH`'s existing anywhere-in-the-command globs regardless of position
+ * (`'git push *--force*'`, `'git push * -f*'`, et al.), independently of this chain.
  */
-const LOOP_PUSH_GUARD = [
-  'git push *:* HEAD:loop/*', 'git push * HEAD:loop/* ?*',
-  'git push *:* HEAD:refs/heads/loop/*', 'git push * HEAD:refs/heads/loop/* ?*',
+const LOOP_PUSH_ASK_EXTRA = ['git push * * HEAD:loop/*', 'git push * * HEAD:refs/heads/loop/*'];
+const LOOP_PUSH_ALLOW_FLAG = [
+  'git push -u * HEAD:loop/*', 'git push --set-upstream * HEAD:loop/*',
+  'git push -u * HEAD:refs/heads/loop/*', 'git push --set-upstream * HEAD:refs/heads/loop/*',
 ];
+const LOOP_PUSH_ASK_FLAG_EXTRA = [
+  'git push -u * * HEAD:loop/*', 'git push --set-upstream * * HEAD:loop/*',
+  'git push -u * * HEAD:refs/heads/loop/*', 'git push --set-upstream * * HEAD:refs/heads/loop/*',
+];
+const LOOP_PUSH_ASK_TRAILING = ['git push * HEAD:loop/* ?*', 'git push * HEAD:refs/heads/loop/* ?*'];
 
 function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
@@ -206,7 +229,10 @@ function defaultPermission(doctrines = null, excluded = []) {
     bash['git push*'] = 'ask';
   }
   for (const k of LOOP_PUSH_ALLOW) bash[k] = 'allow';
-  for (const k of LOOP_PUSH_GUARD) bash[k] = 'ask';
+  for (const k of LOOP_PUSH_ASK_EXTRA) bash[k] = 'ask';
+  for (const k of LOOP_PUSH_ALLOW_FLAG) bash[k] = 'allow';
+  for (const k of LOOP_PUSH_ASK_FLAG_EXTRA) bash[k] = 'ask';
+  for (const k of LOOP_PUSH_ASK_TRAILING) bash[k] = 'ask';
   for (const k of LAW_IV_BASH) bash[k] = 'ask';
   return { bash };
 }
@@ -219,7 +245,8 @@ function defaultPermission(doctrines = null, excluded = []) {
  * the pack returns, and to name it when this build no longer wants it but will not remove it.
  */
 const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*',
-  ...LOOP_PUSH_ALLOW, ...LOOP_PUSH_GUARD, ...LAW_IV_BASH];
+  ...LOOP_PUSH_ALLOW, ...LOOP_PUSH_ASK_EXTRA, ...LOOP_PUSH_ALLOW_FLAG, ...LOOP_PUSH_ASK_FLAG_EXTRA,
+  ...LOOP_PUSH_ASK_TRAILING, ...LAW_IV_BASH];
 
 /**
  * Bring an ALREADY-WRITTEN `permission` block back into line with the pack selection, and
