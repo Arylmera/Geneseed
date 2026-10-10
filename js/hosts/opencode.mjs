@@ -169,10 +169,19 @@ export function themeJson(theme) {
   return { $schema: 'https://opencode.ai/theme.json', theme: t };
 }
 
-/** `_build_emit._write_theme` — `<themes_dir>/geneseed-<theme>.json`. */
-export function writeTheme(themesDir, themeName, theme) {
-  mkdirSync(themesDir, { recursive: true });
+/**
+ * `_build_emit._write_theme` — `<themes_dir>/geneseed-<theme>.json`.
+ *
+ * `claim` — the same `claimer` closure the native layer and command writers share (see
+ * `writePrimaryAgent`'s docblock). Without it a user's own same-named theme file was
+ * overwritten and recorded in `owned`, so uninstall deleted it next. Default: claim
+ * everything, for a caller with no manifest to consult. Returns `null`, not the dest,
+ * when the claim is refused — so the caller does not push a non-write into `owned`.
+ */
+export function writeTheme(themesDir, themeName, theme, claim = (_dest) => true) {
   const dest = path.join(themesDir, `geneseed-${themeName}.json`);
+  if (!claim(dest)) return null;
+  mkdirSync(themesDir, { recursive: true });
   writeText(dest, `${jsonDumpsIndent(themeJson(theme))}\n`);
   return dest;
 }
@@ -215,8 +224,8 @@ export function colorThemeFiles(cfg) {
     .sort(comparePaths);
 }
 
-/** `_build_emit._write_color_themes` — each curated palette in both flavours. */
-export function writeColorThemes(cfg, themesDir) {
+/** `_build_emit._write_color_themes` — each curated palette in both flavours. `claim` — see `writeTheme`. */
+export function writeColorThemes(cfg, themesDir, claim = (_dest) => true) {
   mkdirSync(themesDir, { recursive: true });
   const written = [];
   for (const src of colorThemeFiles(cfg)) {
@@ -224,6 +233,7 @@ export function writeColorThemes(cfg, themesDir) {
     const palette = spec.palette;
     for (const [flavour, transparent] of [['solid', false], ['transparent', true]]) {
       const dest = path.join(themesDir, `geneseed-${spec.name}-${flavour}.json`);
+      if (!claim(dest)) continue;
       writeText(dest, `${jsonDumpsIndent(colorThemeJson(palette, transparent))}\n`);
       written.push(dest);
     }
@@ -367,8 +377,13 @@ export function writePonytailCommand(commandDir, claim = (_dest) => true) {
   return dest;
 }
 
-/** `_copy_plugins` / `_copy_workflows` — maintained files, copied verbatim (copy2, so LF). */
-function copyJsDir(srcDir, dst, owned, prefix) {
+/**
+ * `_copy_plugins` / `_copy_workflows` — maintained files, copied verbatim (copy2, so LF).
+ *
+ * `claim` — see `writeTheme`. A file the claim refuses is skipped: not copied, not counted,
+ * not pushed into `owned`, exactly as a declined native-layer write is.
+ */
+function copyJsDir(srcDir, dst, owned, prefix, claim = (_dest) => true) {
   let n = 0;
   if (existsSync(srcDir) && statSync(srcDir).isDirectory()) {
     mkdirSync(dst, { recursive: true });
@@ -377,7 +392,9 @@ function copyJsDir(srcDir, dst, owned, prefix) {
       .map((name) => path.join(srcDir, name))
       .sort(comparePaths);
     for (const js of files) {
-      copyFile(js, path.join(dst, path.basename(js)));
+      const dest = path.join(dst, path.basename(js));
+      if (!claim(dest)) continue;
+      copyFile(js, dest);
       if (owned !== null && owned !== undefined) owned.push(`${prefix}/${path.basename(js)}`);
       n += 1;
     }
@@ -386,11 +403,11 @@ function copyJsDir(srcDir, dst, owned, prefix) {
 }
 
 /** `_build_emit._copy_plugins`. */
-export function copyPlugins(cfg, dst, owned = null) {
-  return copyJsDir(cfg.pluginSrc, dst, owned, 'plugins');
+export function copyPlugins(cfg, dst, owned = null, claim = (_dest) => true) {
+  return copyJsDir(cfg.pluginSrc, dst, owned, 'plugins', claim);
 }
 
 /** `_build_emit._copy_workflows`. */
-export function copyWorkflows(cfg, dst, owned = null) {
-  return copyJsDir(cfg.workflowSrc, dst, owned, 'workflows');
+export function copyWorkflows(cfg, dst, owned = null, claim = (_dest) => true) {
+  return copyJsDir(cfg.workflowSrc, dst, owned, 'workflows', claim);
 }

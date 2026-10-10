@@ -80,11 +80,12 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   // Owned but not counted in `nCommands`, as an alias skill is not counted in `nSkills`.
   for (const p of writeAliasCommands(cfg, items, path.join(dir, 'command'), claim, skillDirOf)) owned.push(relPosix(dir, p));
 
-  owned.push(relPosix(dir, writeTheme(path.join(dir, 'themes'), themeName, theme)));
-  for (const p of writeColorThemes(cfg, path.join(dir, 'themes'))) owned.push(relPosix(dir, p));
+  const themeDest = writeTheme(path.join(dir, 'themes'), themeName, theme, claim);
+  if (themeDest) owned.push(relPosix(dir, themeDest));
+  for (const p of writeColorThemes(cfg, path.join(dir, 'themes'), claim)) owned.push(relPosix(dir, p));
 
-  const nPlugins = copyPlugins(cfg, path.join(dir, 'plugins'), owned);
-  const nWorkflows = copyWorkflows(cfg, path.join(dir, 'workflows'), owned);
+  const nPlugins = copyPlugins(cfg, path.join(dir, 'plugins'), owned, claim);
+  const nWorkflows = copyWorkflows(cfg, path.join(dir, 'workflows'), owned, claim);
 
   // WIRE — the one file of this layer the user co-owns.
   phaseLog('WIRE');
@@ -127,7 +128,7 @@ export function emitOpencodeRender(cfg, job) {
   if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(readText(agentMd)));
 
   const owned = [];
-  const { theme, items } = renderAll(cfg, _theme);
+  const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
 
   const {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName,
