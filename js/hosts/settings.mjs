@@ -530,8 +530,9 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
 export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude') {
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
-  // --root carries the install's own dir so a GLOBAL hook can stand down when a project
-  // install of the same host sits at/above cwd (project-bypasses-global): `context` and
+  // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
+  // project install of the same host sits in the session's project dir (no walk up —
+  // `globalHookStandingDown`, project-bypasses-global): `context` and
   // `git-gate` read it, `learn` reads `--memory`'s parent. `rule-gate` and Bob's `tool-gate`
   // do not stand down: both still run once per install (host-compat B4 fixed only the three).
   if (host === 'bob') {
@@ -609,8 +610,9 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // And once more BEFORE compaction. `learn` distils the tail of the transcript (the newest
     // MAX_NOTES_CHARS), so per-turn Stop is a sliding window over the session — and
     // compaction is the one moment that window is about to be summarised away for good.
-    // The payload carries `transcript_path` like Stop's; the SessionStart `compact` matcher
-    // re-seeds context AFTER, this captures memory BEFORE. Same `|| exit 0`: never block.
+    // The payload carries `transcript_path` like Stop's; the matcher-less SessionStart group
+    // (its `compact` source) re-seeds context AFTER, this captures memory BEFORE. Same
+    // `|| exit 0`: never block.
     PreCompact: [{ hooks: [{ type: 'command', command: learn }] }],
   };
 }

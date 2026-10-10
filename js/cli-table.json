@@ -312,7 +312,7 @@
           ],
           "dest": "root",
           "metavar": null,
-          "help": "the install's own dir (set by the emitted hook). A GLOBAL install's hook stands down when a Geneseed project install of the same host is at/above cwd (project-bypasses-global); GENESEED_STACK_GLOBAL=1 disables.",
+          "help": "the install's own dir (set by the emitted hook). A GLOBAL install's context, git-gate and learn hooks stand down when a live Geneseed project install of the same host, wiring that hook, is in the session's project dir (no walk up; project-bypasses-global); GENESEED_STACK_GLOBAL=1 disables.",
           "choices": null,
           "default": null,
           "required": false,

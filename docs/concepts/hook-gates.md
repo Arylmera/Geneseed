@@ -16,7 +16,7 @@ If a gate cannot evaluate a call — an unreadable payload, a bug — it asks, w
 geneseed status
 ```
 
-In an [excluded folder](exclusions.md), every hook of a global install exits silently. And a global install's `context` hook stands down when the repo has its own per-repo install of the same host, so nothing is injected twice.
+In an [excluded folder](exclusions.md), every hook of a global install exits silently. And a global install's `context`, `git-gate` and `learn` hooks stand down when the session's project folder (the one the session started in, not a parent of it) has its own live per-repo install of the same host that wires the same hook, so nothing is injected, asked or learned twice. A per-repo install that is deactivated, or whose hooks were never wired, does not count: the global hook keeps running. `GENESEED_STACK_GLOBAL=1` keeps both.
 
 ## Where they are written
 
