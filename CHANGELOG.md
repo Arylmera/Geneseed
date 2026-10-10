@@ -10,6 +10,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Added
 - A Claude Code plugin marketplace: `/plugin marketplace add Arylmera/Geneseed`, then `/plugin install geneseed@geneseed`. The plugin carries one skill, `/geneseed:setup`, which asks for scope and theme and runs the published CLI (`npm install -g geneseed`, `geneseed build --emit claude-global` or `--emit claude`). It carries no harness of its own, so nothing in it can drift from the build.
+- A root-scan check in the shell gate: a recursive scan whose argument is a whole filesystem root (`find /`, `du -sh /`, `grep -r foo /`, `rg x C:\`, `Get-ChildItem C:\ -Recurse`) now asks on Claude Code and OpenClaude and is refused on Bob and by the OpenCode guard plugin, citing *Commands Must Return* (ops 2), which gains a sentence saying so in both halves. In Git Bash `/` mounts every drive and share: a `find / … | head -5` ran for 3.5 hours on 2026-10-10. A deeper path, `ls /` without `-R`, and any `ssh` command pass. It runs inside `git-gate`/`tool-gate`, so no emitted hook command changes.
 
 ## [3.20.0] — 2026-10-09
 

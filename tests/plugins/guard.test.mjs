@@ -446,3 +446,60 @@ test("apply_patch: resolves against ctx.directory, not the wider ctx.worktree", 
   await assert.rejects(h({ tool: "apply_patch", args: { patchText: text } }, {}),
     /\[geneseed-guard\]/)
 })
+
+// ---- root scan (Commands Must Return) -------------------------------------------
+// The twin of js/hosts/hooks.mjs's `rootScan`: a recursive scan whose argument is a whole
+// filesystem root is blocked (no ask tier here), the same scan of a deeper path passes. The rows
+// are Ritus/guards/root_scan.py's 9 refuse / 8 pass self-check, as they are, plus the PowerShell
+// rows that pin the tightened recursion flag (`-Force`/`-Filter` contain an `r` but do not recurse).
+for (const [command, want] of [
+  ['find / -iname "write.ts" -path "*opencode*" 2>/dev/null | head -5', true],
+  ["cd x && find /c -name foo", true],
+  ["find /x -type f", true],
+  ["du -sh /", true],
+  ["grep -rl foo /", true],
+  ["rg needle C:\\", true],
+  ["ls -R /d", true],
+  ["Get-ChildItem -Path C:\\ -Recurse -Filter x.ts", true],
+  ["gci C:/ -Recurse", true],
+  ["find . -name x", false],
+  ["find /c/Users/guill/Documents/git/Terra -name x", false],
+  ["ssh nas 'find / -name x'", false],
+  ["ls /", false],
+  ["grep foo /", false],
+  ["du -sh /tmp", false],
+  ["Get-ChildItem C:\\", false],
+  ["echo find /", false],
+  ["sudo find / -name x", true],
+  ["gci C:\\ -Force", false],
+  ["Get-ChildItem C:\\ -Filter x", false],
+  ["gci C:\\ -r", true],
+  ["du -sh /*", true],
+  ["ls /*", false],
+]) {
+  test(`root-scan guard: ${JSON.stringify(command)} -> ${want ? "blocked" : "allowed"}`, async () => {
+    assert.equal(await blocked("bash", { command }), want)
+  })
+}
+
+test("a root-scan block names Commands Must Return and a directory to search instead", async () => {
+  await assert.rejects(hook({ tool: "bash", args: { command: "find / -name x" } }, {}),
+    /Commands Must Return.*specific directory/)
+})
+
+test("the root-scan constants stay in parity with js/hosts/hooks.mjs's rootScan", async () => {
+  // Hand-mirrored, not shared (this plugin is copied whole into an install), so the cheap guard
+  // against the two drifting is that every constant reads the same in both files once quotes
+  // are folded: a regex literal byte for byte, a Set by its members.
+  const guardSrc = await fs.readFile(
+    path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
+  const names = ["SCAN_ALWAYS", "SCAN_POSIX_R", "SCAN_PS_R", "POSIX_RECURSE_RE", "PS_RECURSE_RE",
+    "FS_ROOT_RE", "SCAN_WORD_RE", "SCAN_TOKEN_RE", "SCAN_WRAPPERS"]
+  const pick = (src, name) => {
+    const m = src.match(new RegExp(`const ${name} = (.*?);?\\r?\\n`))
+    assert.ok(m, `${name} not found`)
+    return m[1].startsWith("new Set") ? m[1].replace(/'/g, '"') : m[1]
+  }
+  for (const name of names) assert.equal(pick(guardSrc, name), pick(hookSrc, name), `${name} drifted`)
+})

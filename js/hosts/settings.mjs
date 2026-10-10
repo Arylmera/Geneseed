@@ -755,7 +755,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
       // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
       // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries, and for a
-      // write under a project's own `.geneseed/protected-checks.txt` — the project opted in.
+      // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
+      // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
       PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT

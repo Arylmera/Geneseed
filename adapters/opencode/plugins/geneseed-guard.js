@@ -4,6 +4,7 @@
 // "enforce by injection, don't just instruct" stance as the context plugin:
 //   - Sealed Secrets:  block writes to private-key / credential files.
 //   - Deletion Is Deliberate:  block catastrophic shell commands.
+//   - Commands Must Return:  block a recursive scan rooted at a whole filesystem (find /).
 //   - Persist Insight (rule vs memory):  speed-bump the first write to user-rules.md
 //     memory file — that choice belongs to the user, via the rule skill.
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
@@ -198,6 +199,39 @@ const SHELL_WARN_RE = [
   /\bgit\s+reflog\b[^\n]*\bexpire\b/,
   /\bgit\s+gc\b[^\n]*--prune\b/,
 ]
+
+// A recursive scan rooted at a whole filesystem (Commands Must Return) → BLOCK. Twin of
+// js/hosts/hooks.mjs's `rootScan` — keep in step; tests/plugins/guard.test.mjs diffs the
+// constants below against it. In Git Bash `/` mounts every drive and share: on 2026-10-10 a
+// `find / … | head -5` ran 3.5 h (`| head` stops nothing). Exempt: any ssh command, any path
+// deeper than a root, a scanner word that is not the program. Backslash is never an escape in
+// the tokeniser, so `C:\ -Recurse` stays two tokens.
+const SCAN_ALWAYS = new Set(["find", "du", "tree", "rg", "fd", "where.exe"])
+const SCAN_POSIX_R = new Set(["grep", "egrep", "ls", "dir"])
+const SCAN_PS_R = new Set(["get-childitem", "gci", "dir"])
+const POSIX_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/
+const PS_RECURSE_RE = /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i
+const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i
+const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i
+const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g
+const SCAN_WRAPPERS = new Set(["sudo", "command", "\\builtin", "time", "nice"])
+function rootScan(command) {
+  if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null
+  for (const seg of command.split(/\|\||&&|[|;\n]/)) {
+    let toks = (seg.match(SCAN_TOKEN_RE) || []).map((t) => t.replace(/^["']+|["']+$/g, ""))
+      .filter((t) => !/^\w+=/.test(t))
+    while (toks.length && SCAN_WRAPPERS.has(toks[0])) toks = toks.slice(1)
+    if (!toks.length) continue
+    const prog = toks[0].split("/").pop().toLowerCase()
+    const always = SCAN_ALWAYS.has(prog)
+    if (!always && !SCAN_POSIX_R.has(prog) && !SCAN_PS_R.has(prog)) continue
+    const argv = toks.slice(1).map((t) => (t.toLowerCase().startsWith("-path") ? t.slice(t.indexOf("=") + 1) : t))
+    if (!always && !argv.some((a) => (SCAN_POSIX_R.has(prog) && POSIX_RECURSE_RE.test(a))
+      || (SCAN_PS_R.has(prog) && PS_RECURSE_RE.test(a)))) continue
+    if (argv.some((a) => FS_ROOT_RE.test(a))) return seg.trim()
+  }
+  return null
+}
 
 // `apply_patch`'s only argument is `patchText` (OpenCode verdict I-1): every gpt-5*
 // model gets ONLY this tool, never `edit`/`write`, so a path that lives inside the
@@ -533,6 +567,12 @@ export const GeneseedGuard = async (ctx) => {
         if (hasAny(tool, SHELL_TOOLS)) {
           const c = pickCommand(args)
           if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { await deny(`catastrophic command (Deletion Is Deliberate): ${c.slice(0, 80)}`, "law-4"); return }
+          const scan = c && rootScan(c)
+          if (scan) {
+            await deny(`\`${scan.slice(0, 80)}\` recursively scans a whole filesystem root (Commands Must Return) — ` +
+              "search a specific directory instead: the project, node_modules, ~/.npm, %APPDATA%", "ops-2")
+            return
+          }
           if (c && SHELL_WARN_RE.some((re) => re.test(c))) log(`WARN: irreversible op — confirm intent (Deletion Is Deliberate): ${c.slice(0, 80)}`)
         }
       } catch (err) {

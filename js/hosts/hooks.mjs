@@ -9,7 +9,7 @@
  * THREE HOSTS, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
  * prompt. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
- * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5) exit 2 with the reason on stderr
+ * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5 and ops-2) exit 2 with the reason on stderr
  * and the rest is a stderr line with exit 0; SessionStart context is plain stdout, as on
  * Claude. `--host openclaude` speaks Claude's dialect verbatim (OpenClaude is a Claude Code
  * fork); the flag only picks which root file counts as native for `context`'s discovery.
@@ -229,10 +229,12 @@ const BOB_DENY_EXIT = 2;
  * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
  * only", see bob-code.md B3. Process 1 and process 5 are the USER's calls — a hard
  * block would make Bob unable to commit at all — so they become a warning the host
- * logs. `gate-error` is a warning too: a crashed gate that blocked every tool call would be
+ * logs. ops-2 (Commands Must Return, the root-scan check) is a block too: a warning would let a
+ * scan of every drive run for hours, and the agent loses nothing by re-targeting a directory.
+ * `gate-error` is a warning too: a crashed gate that blocked every tool call would be
  * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
  */
-const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5']);
+const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5', 'ops-2']);
 
 /**
  * THE GATE LEDGER — one JSON line per ask, nothing per defer.
@@ -333,12 +335,77 @@ function gitGate(args) {
   return gitDecide(args, readPayload());
 }
 
+// ======================================================================================
+// root scan \u2014 Doctrine ops 2 (Commands Must Return)'s tool-boundary backstop
+// ======================================================================================
+
+// On 2026-10-10 a subagent ran `find / -iname "write.ts" \u2026 | head -5` in Git Bash, where `/`
+// mounts every drive (/c, /d) and a network share: 3.5 h at 100 % CPU, and the Bash timeout
+// did not stop the orphaned child. `| head` stops nothing \u2014 find still visits every directory.
+// Ported from Ritus/guards/root_scan.py (its 9 refuse / 8 pass self-check is in
+// tests/unit/hook_gates.test.mjs), with one tightening: the reference's recursion regex,
+// `-[a-z]*r[a-z]*` under `/i`, read PowerShell's `-Force`/`-Filter`/`-ErrorAction` as a
+// recursion flag, which on Bob and OpenCode is a hard block, not a prompt. So POSIX programs
+// take a short flag cluster carrying `r`/`R` (or `--recursive`), PowerShell's take `-Recurse`
+// or one of its prefix abbreviations. Lives HERE, inside `gitDecide`, rather than in a verb of
+// its own: every `command` payload on every host already routes through this function, and a
+// new verb on an older machine-wide shim would exit 1 \u2014 which `onFailure: "block"` turns into
+// every Bash call refused. Runs whether or not the ops pack is built in, like rule-gate's
+// process-1: how a command is run is never wrong to bound. Twin: adapters/opencode/plugins/
+// geneseed-guard.js `rootScan` \u2014 keep in step (tests/plugins/guard.test.mjs diffs the constants).
+const SCAN_ALWAYS = new Set(['find', 'du', 'tree', 'rg', 'fd', 'where.exe']);
+const SCAN_POSIX_R = new Set(['grep', 'egrep', 'ls', 'dir']);
+const SCAN_PS_R = new Set(['get-childitem', 'gci', 'dir']);
+const POSIX_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/;
+const PS_RECURSE_RE = /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i;
+// A trailing `*` is still the root: the shell expands `du -sh /*` to every drive just the same.
+const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i;
+// The cheap prefilter: a command that names no scanner pays this one test and nothing else.
+const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i;
+// Non-POSIX tokens, like the reference's `shlex.split(posix=False)`: a quoted run stays inside
+// its word and a backslash is NEVER an escape \u2014 a POSIX lexer would eat the one in `C:\ -Recurse`
+// and leave the root unseen.
+const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g;
+const SCAN_WRAPPERS = new Set(['sudo', 'command', '\\builtin', 'time', 'nice']);
+
+/**
+ * The first `|`/`;`/`&&`/`||`/newline-separated segment that recursively scans a whole
+ * filesystem root, or null. Any `ssh` command is exempt (a remote root scan is the remote's
+ * business \u2014 ponytail: that also exempts a local `find / -name "*ssh*"`; the reference's choice),
+ * and so is any path deeper than a root.
+ */
+export function rootScan(command) {
+  if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null;
+  for (const seg of command.split(/\|\||&&|[|;\n]/)) {
+    let toks = (seg.match(SCAN_TOKEN_RE) || []).map((t) => t.replace(/^["']+|["']+$/g, ''))
+      .filter((t) => !/^\w+=/.test(t));
+    while (toks.length && SCAN_WRAPPERS.has(toks[0])) toks = toks.slice(1);
+    if (!toks.length) continue;
+    const prog = toks[0].split('/').pop().toLowerCase();
+    const always = SCAN_ALWAYS.has(prog);
+    if (!always && !SCAN_POSIX_R.has(prog) && !SCAN_PS_R.has(prog)) continue;
+    const argv = toks.slice(1).map((t) => (t.toLowerCase().startsWith('-path') ? t.slice(t.indexOf('=') + 1) : t));
+    if (!always && !argv.some((a) => (SCAN_POSIX_R.has(prog) && POSIX_RECURSE_RE.test(a))
+      || (SCAN_PS_R.has(prog) && PS_RECURSE_RE.test(a)))) continue;
+    if (argv.some((a) => FS_ROOT_RE.test(a))) return seg.trim();
+  }
+  return null;
+}
+
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
   if (DESTRUCTIVE_GIT_RE.test(command)) {
     return ask(args, 'git-gate', 'law-4', 'Geneseed (Deletion Is Deliberate) \u2014 a history-rewriting or '
       + 'discarding git act needs confirmation bound to this specific command');
+  }
+  // Before `--no-consent`: that flag drops the process pack's rule, not this one.
+  const scan = rootScan(command);
+  if (scan) {
+    return ask(args, 'git-gate', 'ops-2', `Geneseed (Commands Must Return) \u2014 \`${scan}\` `
+      + 'recursively scans a whole filesystem root (in Git Bash, / spans every drive and mounted '
+      + 'share, for hours; | head stops nothing). Search a specific directory instead: the '
+      + 'project, node_modules, ~/.npm, %APPDATA%.');
   }
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run. Checked before

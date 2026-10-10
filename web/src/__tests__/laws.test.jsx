@@ -186,7 +186,7 @@ describe('Constitution page', () => {
   })
 
   it('states each rule’s status and what enforces it', async () => {
-    // Status is Active or Retired; "Enforced by" is Hook gate for the four rules a hook
+    // Status is Active or Retired; "Enforced by" is Hook gate for the rules a hook
     // enforces at the tool boundary (lib/constitution.js HOOK_GATED, gated against
     // js/hosts/hooks.mjs) and Instruction for the rest. The Latin name is the voice's half of
     // the title, and a title without one leaves the column empty.

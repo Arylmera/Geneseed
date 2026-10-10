@@ -889,3 +889,120 @@ test('no list in the repo protects nothing, even with one above the repo', () =>
     ruleDefers(path.join(repo, 'tests', 'a.js'));
   } finally { sb.cleanup(); }
 });
+
+// ---------------------------------------------------------------------------------------------
+// THE ROOT-SCAN CHECK (Commands Must Return, `ops-2`). On 2026-10-10 a subagent ran
+// `find / -iname "write.ts" … | head -5` in Git Bash, where `/` mounts every drive and a network
+// share: 3.5 h at 100 % CPU, and the Bash timeout did not stop the orphaned child. A recursive
+// scan whose argument is a whole filesystem root asks; the same scan of any deeper path defers.
+// The first two tables are Ritus/guards/root_scan.py's own self-check, ported as they are; the
+// POSIX table adds the wrapper/env/path-to-binary shapes; the last table pins the tightening of
+// the reference's recursion regex (its `-[a-z]*r[a-z]*` under `/i` read `-Force` and `-Filter`
+// as a recursion flag, which on Bob and OpenCode would be a hard block, not a prompt).
+
+const REF_REFUSE = [
+  'find / -iname "write.ts" -path "*opencode*" 2>/dev/null | head -5',
+  'cd x && find /c -name foo',
+  'find /x -type f',
+  'du -sh /',
+  'grep -rl foo /',
+  'rg needle C:\\',
+  'ls -R /d',
+  'Get-ChildItem -Path C:\\ -Recurse -Filter x.ts',
+  'gci C:/ -Recurse',
+];
+const REF_PASS = [
+  'find . -name x',
+  'find /c/Users/guill/Documents/git/Terra -name x',
+  "ssh nas 'find / -name x'",
+  'ls /',
+  'grep foo /',
+  'du -sh /tmp',
+  'Get-ChildItem C:\\',
+  'echo find /',
+];
+// Wrappers, an env assignment and a path to the binary are still the scanner running; `/mnt/c`
+// is WSL's drive root. A scan of a real directory, or a scanner word that is only an argument,
+// is ordinary work.
+const POSIX_REFUSE = [
+  'sudo find / -name x',
+  'FOO=1 time du -sh /',
+  '/usr/bin/find / -name x',
+  'tree /',
+  'fd needle /',
+  'find /mnt/c -name x',
+  'grep --recursive foo /',
+  'ls -la; find / -name x',
+  'true || du /\nfind / -name x',
+  // A glob on the root is the root: the shell expands `/*` to /c, /d, /x before du ever runs.
+  'du -sh /*',
+  'find /* -name x',
+  'ls -R /c/*',
+];
+const POSIX_PASS = [
+  'find /usr -name x',
+  'grep -r foo .',
+  'ls -R ./src',
+  'du -sh /var/log',
+  'rg needle node_modules',
+  'git log --grep=find /',
+  'ls /*',
+];
+// PowerShell parameters that merely CONTAIN an `r` are not -Recurse; its prefix abbreviations are.
+const PS_CASES = [
+  ['gci C:\\ -Force', false],
+  ['Get-ChildItem C:\\ -Filter x', false],
+  ['Get-ChildItem C:\\ -ErrorAction SilentlyContinue', false],
+  ['gci C:\\ -r', true],
+  ['gci C:\\ -Rec -Include x.ts', true],
+  ['dir C:\\ -Recurse', true],
+];
+
+test('rootScan: the reference self-check — 9 refused, 8 passed', async () => {
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  for (const c of REF_REFUSE) assert.ok(rootScan(c), `should refuse: ${c}`);
+  for (const c of REF_PASS) assert.equal(rootScan(c), null, `should pass: ${c}`);
+});
+
+test('rootScan: POSIX wrappers and paths refuse; deeper directories pass', async () => {
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  for (const c of POSIX_REFUSE) assert.ok(rootScan(c), `should refuse: ${c}`);
+  for (const c of POSIX_PASS) assert.equal(rootScan(c), null, `should pass: ${c}`);
+});
+
+test('rootScan: only a real recursion flag makes a PowerShell listing a scan', async () => {
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  for (const [c, refused] of PS_CASES) assert.equal(Boolean(rootScan(c)), refused, c);
+});
+
+test('rootScan: names the offending segment, and keeps C:\\ apart from the next token', async () => {
+  // A POSIX lexer would read `C:\ -Recurse` as ONE token (`C: -Recurse`), and the root would never
+  // be seen — the Windows trap the reference's `posix=False` exists for.
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  assert.equal(rootScan('cd x && find /c -name foo'), 'find /c -name foo');
+  assert.equal(rootScan('Get-ChildItem C:\\ -Recurse'), 'Get-ChildItem C:\\ -Recurse');
+});
+
+test('git-gate asks on a root scan citing Commands Must Return, even with --no-consent', () => {
+  for (const extra of [[], ['--no-consent']]) {
+    const dec = askDecision(hookRun('git-gate', { extra, stdin: bashPayload('find / -name x') }),
+      `root scan ${extra.join(' ')}`);
+    assert.match(dec.permissionDecisionReason, /Commands Must Return/);
+    assert.match(dec.permissionDecisionReason, /specific directory/);
+  }
+  assertDefers(hookRun('git-gate', { stdin: bashPayload('find . -name x') }), 'find .');
+});
+
+test('a root scan is ledgered as ops-2, and Bob blocks it (exit 2) on either payload shape', () => {
+  withLedgerRoot((root, ledger) => {
+    askDecision(hookRun('git-gate', { root, stdin: bashPayload('du -sh /') }), 'du /');
+    assert.deepEqual(fs.readFileSync(ledger, 'utf8').trim().split('\n')
+      .map((l) => JSON.parse(l).rule), ['ops-2']);
+  });
+  for (const stdin of [bashPayload('find / -name x'),
+    bobPayload('execute_command', { command: 'find / -name x' })]) {
+    const r = hookRun('tool-gate', { stdin, host: 'bob' });
+    assert.equal(r.rc, 2, `bob root scan: expected exit 2, got ${r.rc}, stderr=${r.err}`);
+    assert.match(r.err, /BLOCKED: Geneseed \(Commands Must Return\)/);
+  }
+});

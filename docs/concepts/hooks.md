@@ -17,7 +17,7 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 | Event | When | Command | What it does | Conditional? |
 | --- | --- | --- | --- | --- |
 | `SessionStart` | `startup`, `resume`, `clear`, `compact`, `fork` | `geneseed-hook context` | injects your harness files and the repo's docs, or re-injects them after a resume, a fork, or an auto-compaction summarised them away | no |
-| `PreToolUse` | `Bash`, `PowerShell` | `geneseed-hook git-gate` | asks before destructive git; asks before every commit and push | the commit/push question only |
+| `PreToolUse` | `Bash`, `PowerShell` | `geneseed-hook git-gate` | asks before destructive git, and before a recursive scan of a whole filesystem; asks before every commit and push | the commit/push question only |
 | `PreToolUse` | `Write`, `Edit`, `NotebookEdit` | `geneseed-hook rule-gate` | asks before a secret lands in a file, or a write to your rules or memory | no |
 | `Stop` | the agent finishes a reply | `geneseed-hook learn` | distils durable facts into `memory/` | needs `GENESEED_LLM` |
 | `SubagentStop` | a subagent finishes | `geneseed-hook learn` | records a lesson for that agent in `memory/agents/<name>.md` | needs `GENESEED_LLM` |
@@ -27,9 +27,10 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 
 **context.** Before your first message, the agent receives your own harness files — `user-rules.md`, `PROFILE.md`, the memory index, the notebook index, your wiki declaration — skipping any still untouched since install, then the repo's docs, discovered by convention or listed in a `context.json`. Each file is capped at 16 KB and the whole injection at 48 KB; what does not fit is listed for the agent to read on demand. You see nothing, except that the agent already knows your project. See [Project context](../guides/project-context.md).
 
-**git-gate.** Runs before every shell command and looks for `git` in it, including chained one-liners and `git -C <path>` forms.
+**git-gate.** Runs before every shell command and looks for `git` in it, including chained one-liners and `git -C <path>` forms, and for a recursive scan of a whole filesystem.
 - **Destructive git** — `reset --hard`, `clean -f`, `branch -D`, `checkout -- `, a `push --force` — always gets a confirmation prompt, citing *Deletion Is Deliberate*. That is a Rule, so it holds in every build.
 - **Every `git commit` and `git push`** gets a prompt citing *Consent Before Push*. This part belongs to the **process** doctrine pack: build without it, or exclude that rule, and the hook stays wired with `--no-consent` — commits and pushes go through without asking, destructive git is still stopped ([Rules](rules.md)).
+- **A recursive scan of a whole filesystem** — `find /`, `du -sh /`, `grep -r foo /`, `rg x C:\`, `Get-ChildItem C:\ -Recurse` — gets a prompt citing *Commands Must Return* (on Bob, it is blocked). In Git Bash `/` mounts every drive and mounted share, so such a scan runs for hours, and `| head` does not stop it. The prompt tells the agent to search a specific directory instead. A deeper path (`find /c/Users/me/project`), `ls /` without `-R`, and any `ssh` command pass.
 - Any other command passes untouched.
 
 **rule-gate.** Runs before every file write.

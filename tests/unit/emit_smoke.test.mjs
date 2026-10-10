@@ -189,8 +189,16 @@ const FOOTPRINTS = ['full', 'lean'];
  * was cut once to fit, but main grew meanwhile (#228-#233). Measured `files` carrier before,
  * on origin/main at a1acfd9e: full 61_169, lean 38_277. After: full 61_920, lean 38_802.
  * `full` raised by exactly the overrun, 61_715 -> 61_920, not rounded; lean still fits (52).
+ *
+ * BOTH RAISED 2026-10-10, for the root-scan amendment to ops 2 (Commands Must Return): one
+ * sentence in each half — search a named directory, never a recursive scan rooted at a whole
+ * filesystem — after a `find /` in Git Bash walked every drive for 3.5 h. An amendment, not a
+ * new rule; the boundary half is `rootScan` in js/hosts/hooks.mjs. The full sentence was cut
+ * once (the PowerShell example and the "visits every directory" clause went), the lean one to
+ * its shortest form. Measured `files` carrier after: full 62_076, lean 38_890 — each raised by
+ * exactly the overrun (61_920 -> 62_076, 38_854 -> 38_890), not rounded.
  */
-const CEILING = { full: 61_920, lean: 38_854 };
+const CEILING = { full: 62_076, lean: 38_890 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
