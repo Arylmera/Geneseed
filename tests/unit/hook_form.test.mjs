@@ -173,6 +173,23 @@ test('Stop, SubagentStop and PreCompact all run one and the same learn command',
   });
 });
 
+// `onFailure: "block"` (hooks.md, v2.1.295+): a `command` hook that cannot start, times out, or
+// exits anything other than 0 or 2 — even one that prints valid JSON — counts as a FAILURE, and
+// the field makes that failure block the action instead of sliding through as the non-blocking
+// default. A normal gate run (exit 0 plus a schema-valid decision document) is neither of those,
+// so it is never affected: the field changes only what happens when the gate did NOT run.
+test('onFailure: "block" sits on the two Claude PreToolUse gates, and nowhere else', () => {
+  withHome((home) => {
+    const groups = claudeHookGroups(path.join(home, 'cfg'), HOOK_OPTS());
+    const [gitGate, ruleGate] = groups.PreToolUse.map((g) => g.hooks[0]);
+    assert.equal(gitGate.onFailure, 'block', JSON.stringify(gitGate));
+    assert.equal(ruleGate.onFailure, 'block', JSON.stringify(ruleGate));
+    for (const ev of ['SessionStart', 'Stop', 'SubagentStop', 'PreCompact']) {
+      assert.equal(groups[ev][0].hooks[0].onFailure, undefined, `${ev} must stay "continue"`);
+    }
+  });
+});
+
 test('every gate hook is emitted, and none of them ends with || exit 0', () => {
   // THE OTHER HALF, AND THE REFERENCE ONLY HAD THE FIRST. It asserted each named gate SHIPS, so
   // that the exemption is not silently protecting nothing. It never asserted that the exempt
@@ -544,15 +561,20 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
     const ps = withHookShell('powershell', () => claudeHookGroups(cfg, winOpts));
     const bash = withHookShell('bash', () => claudeHookGroups(cfg, winOpts));
     // Written out: every handler gains `shell` and a leading `&` (PowerShell refuses a quoted
-    // command head followed by arguments); the non-gate tail swaps `||` for `;`, the gates stay
-    // bare (no verb exits 2, so a launch failure is non-blocking either way).
+    // command head followed by arguments); the non-gate tail swaps `||` for `;`; the gates carry
+    // no exit-code-2 tail either way, but DO carry `onFailure: "block"` (Task 1), so a launch
+    // failure there blocks instead of being non-blocking.
     const context = `& ${run} context --root "${cfg}"; exit 0`;
     const learn = `& ${run} learn --memory "${path.join(cfg, 'memory')}"; exit 0`;
     const h = (command) => ({ hooks: [{ type: 'command', command, shell: 'powershell' }] });
+    // The two gates also carry `onFailure: "block"` (Claude-only, v2.1.295+, Task 1): a gate
+    // that cannot start or times out must fail CLOSED, not slide through as a non-blocking
+    // error the way a crashing gate did before. `context`/`learn` stay plain `continue`.
+    const hGate = (command) => ({ hooks: [{ type: 'command', command, shell: 'powershell', onFailure: 'block' }] });
     assert.deepEqual(ps, {
       PreToolUse: [
-        { matcher: 'Bash|PowerShell', ...h(`& ${run} git-gate --root "${cfg}"`) },
-        { matcher: 'Write|Edit|NotebookEdit', ...h(`& ${run} rule-gate --root "${cfg}"`) },
+        { matcher: 'Bash|PowerShell', ...hGate(`& ${run} git-gate --root "${cfg}"`) },
+        { matcher: 'Write|Edit|NotebookEdit', ...hGate(`& ${run} rule-gate --root "${cfg}"`) },
       ],
       SessionStart: [h(context)],
       Stop: [h(learn)],
@@ -570,6 +592,12 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
         assert.ok(!flat.includes('"shell"') && !flat.includes('& '), `${host}/${platform}: ${flat}`);
       }
     });
+    // `onFailure` is a Claude Code v2.1.295+ field: OpenClaude is a 2.1.88-era fork and must
+    // never see a field that version predates, and Bob's own hook doc names no such field.
+    for (const host of ['openclaude', 'bob']) {
+      const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform: 'win32' }, null, [], host);
+      assert.ok(!JSON.stringify(groups).includes('onFailure'), `${host} must not get onFailure`);
+    }
   });
 });
 
@@ -595,6 +623,37 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
       }
       assert.equal(claims.length, 6, `${shell}: the claim set is not the six current groups`);
     }
+  });
+});
+
+test('an install emitted before onFailure existed upgrades to it on re-emit', () => {
+  // A manifest recorded by a pre-Task-1 build claims the gate groups WITHOUT `onFailure`. That
+  // claim is no longer canonical (the current `claudeHookGroups` output carries it), so
+  // `mergeClaudeSettings` must prune the stale group and write the upgraded one — the same
+  // replace-not-stack rule the hook-shell-flip test above pins, now for a field instead of a
+  // shell. A re-emit that merely appended would leave both the old (fails open on a crash) and
+  // the new (fails closed) git-gate command wired at once.
+  withHome((home) => {
+    const cfg = path.join(home, 'cfg');
+    mkdirSync(cfg, { recursive: true });
+    const settings = path.join(cfg, 'settings.json');
+    const opts = HOOK_OPTS();
+    const current = claudeHookGroups(cfg, opts, null, [], 'claude');
+    // Strip `onFailure` from every handler to build the OLD claim set, as if a prior version of
+    // this file had emitted it, and seed a settings file carrying that old shape.
+    const strip = (groups) => Object.fromEntries(Object.entries(groups).map(([event, gs]) => [
+      event, gs.map((g) => ({ ...g, hooks: g.hooks.map(({ onFailure, ...rest }) => rest) })),
+    ]));
+    const old = strip(current);
+    const priorClaims = Object.entries(old).flatMap(([event, gs]) => gs.map((group) => ({ event, group })));
+    writeFileSync(settings, JSON.stringify({ hooks: old }));
+    const [, claims] = mergeClaudeSettings(settings, priorClaims, opts, null, [], 'claude', cfg);
+    const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
+    assert.equal(hooks.PreToolUse.length, 2, JSON.stringify(hooks.PreToolUse));
+    for (const g of hooks.PreToolUse) {
+      assert.equal(g.hooks[0].onFailure, 'block', JSON.stringify(g));
+    }
+    assert.equal(claims.length, 6, 'the claim set is not the six current (upgraded) groups');
   });
 });
 
@@ -713,6 +772,15 @@ test('the PowerShell form runs the gate under pwsh and Windows PowerShell', {
       assert.equal(g.status, 0, `${exe}: ${g.stderr}`);
       assert.equal(JSON.parse(g.stdout).hookSpecificOutput.permissionDecision, 'ask',
         `${exe}: ${g.stdout}`);
+      // The defer path, with `onFailure: "block"` live on this exact handler (Task 1): a normal
+      // non-ask run must still exit 0 with no JSON decision fields, or Claude Code would read it
+      // as a FAILURE (exit code other than 0/2, or invalid output) and BLOCK `git status` too.
+      const defer = run(gate.command, {
+        session_id: 'x', hook_event_name: 'PreToolUse', tool_name: 'Bash',
+        tool_input: { command: 'git status' }, cwd: home,
+      });
+      assert.equal(defer.status, 0, `${exe}: ${defer.stderr}`);
+      assert.equal(defer.stdout.trim(), '', `${exe}: a deferring gate must print nothing: ${defer.stdout}`);
       const c = run(context.command,
         { session_id: 'x', hook_event_name: 'SessionStart', source: 'startup', cwd: home });
       assert.equal(c.status, 0, `${exe}: ${c.stderr}`);

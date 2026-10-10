@@ -670,6 +670,15 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
   const learn = `${run} learn ${mem}${h} || exit 0`;
+  // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
+  // out, or exits anything but 0 or 2 — even one whose stdout happens to be valid JSON — now
+  // BLOCKS the tool call instead of sliding through as the non-blocking default. Only safe to
+  // turn on now that an argv error inside geneseed-hook.mjs itself exits 0 (earlier host-compat
+  // fix): before that, a gate typo would have turned every tool call into a hang-visible block.
+  // A normal run (exit 0 + a schema-valid verdict) is untouched either way — see hooks.md's
+  // failure table. OpenClaude is a 2.1.88-era fork and must never see a field that version
+  // predates; Bob's own hook doc names no such field (and takes the early return above).
+  const onFailureBlock = host === 'claude' ? { onFailure: 'block' } : {};
   const groups = {
     PreToolUse: [
       // `Bash|PowerShell`, not `Bash` alone (Claude verdict I1): docs `hooks.md` says a hook
@@ -677,12 +686,12 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // shell whenever Git Bash is absent — and on Windows without Git Bash, Bash is not even
       // registered. `tool_input.command` is the same field on both tools, so `GIT_GATE_RE`
       // needs no change.
-      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: gate }] },
+      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: gate, ...onFailureBlock }] },
       {
         // No `MultiEdit`: it is not in Claude Code's tool table (tools-reference.md) — a dead
         // matcher entry (Claude verdict R2).
         matcher: 'Write|Edit|NotebookEdit',
-        hooks: [{ type: 'command', command: ruleGate }],
+        hooks: [{ type: 'command', command: ruleGate, ...onFailureBlock }],
       },
     ],
     // One matcher-less group, not a `startup|clear` / `resume|compact` split (Claude verdict
@@ -724,7 +733,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
  * default) and a leading `&` — PowerShell refuses a quoted command head followed by arguments —
  * and the never-block tail `|| exit 0` becomes `; exit 0`, valid in pwsh 7 and Windows
  * PowerShell 5.1 alike (both measured byte-identical to the bash form's output). The gates stay
- * bare: no verb exits 2, so a launch failure is non-blocking in either shell.
+ * bare on the exit-code side (no verb exits 2), but since Task 1 they carry `onFailure: "block"`
+ * (Claude only — `claudeHookGroups`'s `onFailureBlock`), so a launch failure — e.g. the bash-form
+ * command run under a Git-Bash-less PowerShell, a parse error — now BLOCKS instead of sliding
+ * through. `context`/`learn` carry no such field and stay non-blocking on a launch failure,
+ * in either shell.
  *
  * The paths stay double-quoted, where PowerShell expands `$name` and reads a backtick as an
  * escape — a Windows path may legally hold either, and a mangled `--root` silently changes
