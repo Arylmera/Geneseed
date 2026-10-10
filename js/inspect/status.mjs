@@ -186,7 +186,7 @@ export function accentFor(theme) {
  * do anything, and the input to the decision of whether to build more of them. Unreadable
  * ledgers and malformed lines are skipped, not reported: this is a display read.
  */
-export function gateSummary(cfgDirs) {
+export function gateSummary(cfgDirs, platform = process.platform) {
   const standingDown = [];
   const asks = {};
   let total = 0;
@@ -211,10 +211,11 @@ export function gateSummary(cfgDirs) {
   // runs, so it outranks `armed` in the row.
   // `fail_open` (Task 15): Claude installs whose bash-form hooks now run under PowerShell. Only
   // present when non-empty, so every recorded `--json` panel keeps its shape.
-  // Only the dirs it was handed, and only those that are Claude's global (`isHostGlobalDir`).
+  // Only the dirs it was handed, and only those that are Claude's global (`isHostGlobalDir`);
+  // `platform` is injectable so a test on Linux still exercises the win32 branch.
   const isClaude = (c) => { try { return isHostGlobalDir('claude', c); } catch { return false; } };
   const claude = cfgDirs.filter(isClaude).map((c) => ['claude', 'global', c]);
-  const failOpen = hookShellProblems(claude).filter((p) => !p.startsWith('[note] '));
+  const failOpen = hookShellProblems(claude, platform).filter((p) => !p.startsWith('[note] '));
   return {
     standing_down: standingDown, asks, total, dead: shimDead(),
     ...(failOpen.length ? { fail_open: failOpen } : {}),

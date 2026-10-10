@@ -653,13 +653,13 @@ test('status shows a fail-open hook form in the gates row, and adds nothing when
     mkdirSync(cfg, { recursive: true });
     writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
     writeInstall(cfg, 'bash');
-    const clean = withHookShell('bash', () => gateSummary([cfg]));
+    const clean = withHookShell('bash', () => gateSummary([cfg], 'win32'));
     assert.ok(!('fail_open' in clean), 'a clean machine grew a fail_open key in the --json panel');
-    const g = withHookShell('powershell', () => gateSummary([cfg]));
+    const g = withHookShell('powershell', () => gateSummary([cfg], 'win32'));
     assert.equal(g.fail_open?.length, 1, JSON.stringify(g));
     // A dir that is not Claude's global (an OpenCode or Bob config dir) is never judged.
     writeFileSync(path.join(cfg, '.geneseed-emit'), 'bob-global\n');
-    assert.ok(!('fail_open' in withHookShell('powershell', () => gateSummary([cfg]))));
+    assert.ok(!('fail_open' in withHookShell('powershell', () => gateSummary([cfg], 'win32'))));
     const row = statusLines({ ...statusData(), gates: { ...g, dead: [] } }, false)
       .find((l) => l.includes('gates'));
     assert.ok(row.includes('FAIL OPEN') && row.includes('geneseed rebuild-all'), row);
