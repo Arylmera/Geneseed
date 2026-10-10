@@ -47,7 +47,7 @@ import { relPosix } from '../lib/text.mjs';
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
 // that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
 import {
-  GLOBAL_MANIFEST, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
+  GLOBAL_MANIFEST, HOSTS, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
 
@@ -474,8 +474,14 @@ const CLAUDE_SHAPED = {
   // Everything under `.openclaude/`, the preamble included. OpenClaude reads the root CLAUDE.md
   // only when the repo has no AGENTS.md, but `.openclaude/CLAUDE.md` always; keeping the root
   // untouched also lets a Claude Code install share the repo.
+  //
+  // `carrierInLayer` reads off `HOSTS`' own column of the same name (`js/hosts/hosts.mjs`)
+  // rather than restating the literal here — `installs.mjs`'s `carriersFor` reads the SAME
+  // column to know where the deployed carrier is, and two booleans naming one fact is exactly
+  // the kind of drift this repo's docblocks keep warning about.
   openclaude: {
-    host: 'openclaude', layer: '.openclaude', carrier: 'CLAUDE.md', carrierInLayer: true,
+    host: 'openclaude', layer: '.openclaude', carrier: 'CLAUDE.md',
+    carrierInLayer: HOSTS.find((h) => h.host === 'openclaude').carrierInLayer,
     summary: (at, r) => `[geneseed] openclaude (folder) -> ${at}: .openclaude/ `
       + `(CLAUDE.md, ${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
       + `settings.local.json), ${r.memStatus}, ${r.nbStatus}.\n`,

@@ -262,12 +262,12 @@ export function openclaudeConfigDir() {
  * `catalog` — does the host list every skill and agent to the model by itself? See
  * `hostCatalogsNatively` below for what it decides and why it is split per kind.
  *
- * `carrierInLayer` joined for host-compat B1 (2026-10): mirrors `CLAUDE_SHAPED.openclaude`'s
- * own flag of the same name in `js/build/driver.mjs` — true means the host's PROJECT carrier
- * sits at `<repo>/<projectMarker>/<agentFile>` rather than `<repo>/<agentFile>`. Only
- * OpenClaude has it: its root `CLAUDE.md` is deliberately left unwritten so a Claude Code
- * install can share the repo (see the comment at `CLAUDE_SHAPED.openclaude`). `installs.mjs`'s
- * `carriersFor` reads this column rather than hand-rolling a second host→carrier map — if a
+ * `carrierInLayer` joined for host-compat B1 (2026-10) — THE ONE SOURCE for whether a host's
+ * PROJECT carrier sits at `<repo>/<projectMarker>/<agentFile>` rather than
+ * `<repo>/<agentFile>`. Only OpenClaude has it: its root `CLAUDE.md` is deliberately left
+ * unwritten so a Claude Code install can share the repo. Two readers, both DERIVED rather than
+ * restated: `js/build/driver.mjs`'s `CLAUDE_SHAPED.openclaude.carrierInLayer` reads this
+ * column (not a second literal `true`), and `installs.mjs`'s `carriersFor` reads it too — if a
  * future host also nests its carrier, this is the one place that has to say so.
  */
 export const HOSTS = [

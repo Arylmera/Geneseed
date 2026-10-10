@@ -199,11 +199,29 @@ function carriersFor(host) {
  * this task's fix round did not touch is unchanged. Every exported reader below takes the
  * same optional `host` last, mirroring `trustOfDir`'s existing `(d, host = null)` shape one
  * screen down — this is not a new convention, it is that one applied to the carrier scan too.
+ *
+ * ⚠ HOST-NARROWED: THE FIRST CANDIDATE THAT EXISTS IS AUTHORITATIVE, EVEN IF ITS PROBE COMES
+ * BACK `undefined`. `undefined` is overloaded on purpose for the host-agnostic walk above (it
+ * means BOTH "this carrier is absent" and "this carrier exists but says nothing"), and that
+ * is exactly right for `CARRIERS`, where only one entry can ever exist for a given host —
+ * but `carriersFor` can return TWO paths for one host (OpenClaude's nested-then-bare
+ * `CLAUDE.md`; Bob's `rules/geneseed.md`-then-`AGENTS.md`), and "exists but says nothing" is
+ * the COMMON case for `excludedRulesOfDir`/`excludedSkillsOfDir` — their marker line is
+ * written only when something is excluded. Falling through past an existing-but-silent own
+ * carrier to the SECOND candidate let it read a sibling host's file that happens to sit at
+ * that second path (root `CLAUDE.md`, for OpenClaude's second candidate, in a repo also
+ * carrying a Claude install) — the fix-round-1 bug, reversed again. So once a host is given,
+ * `isFile` on each candidate (checked AFTER the probe, so a non-existent file's `undefined`
+ * still falls through to try the host's OWN next candidate — the one legitimate reason the
+ * list has two entries) stops the walk at the first one that exists and returns `fallback`,
+ * never a later file's answer.
  */
 function firstCarrier(d, probe, fallback = null, host = null) {
   for (const carrier of (host === null ? CARRIERS : carriersFor(host))) {
-    const result = probe(path.join(d, carrier));
+    const carrierPath = path.join(d, carrier);
+    const result = probe(carrierPath);
     if (result !== undefined) return result;
+    if (host !== null && isFile(carrierPath)) return fallback;
   }
   return fallback;
 }

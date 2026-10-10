@@ -1213,77 +1213,156 @@ test('a global install profile names its own config dir, and its argv rebuilds e
   }
 });
 
-test('an openclaude per-repo install profile reads its own carrier, not a sibling root file '
-  + '(host-compat B1)', () => {
+/**
+ * Builds `host` into `repo` and returns `installProfile(host, 'project', repo)`'s seven
+ * read-back axes relevant here (theme/posture/mode/doctrines/excludeRules/excludeSkills/trust)
+ * — a shared helper so the shared-repo tests below assert the same shape for every host
+ * without three copies of the same seven-line struct literal.
+ */
+function emitAndProfile(host, repo, { theme, posture, mode, doctrines, excludeRules, excludeSkills }) {
+  const argv = ['--emit', host, '--theme', theme, '--out', repo, '--root', repo,
+    '--posture', posture, '--mode', mode, '--doctrines', doctrines];
+  if (excludeRules) argv.push('--exclude-rules', excludeRules);
+  if (excludeSkills) argv.push('--exclude-skills', excludeSkills);
+  const r = emitInherited(argv);
+  assert.equal(r.rc, 0, r.err);
+  return installProfile(host, 'project', repo);
+}
+
+test('an openclaude per-repo install profile reads its own carrier, not a sibling root file, '
+  + 'on every axis (host-compat B1, both fix rounds)', () => {
   // OpenClaude's project carrier is `<repo>/.openclaude/CLAUDE.md`, not `<repo>/CLAUDE.md`
-  // (`carrierInLayer` in `js/build/driver.mjs`'s `CLAUDE_SHAPED.openclaude`). `installProfile`
-  // reads theme/posture/mode/doctrines off `firstCarrier`'s root-only CARRIERS list, which
-  // before this fix never looked inside `.openclaude/`, so an openclaude per-repo install
-  // always read back as the defaults (neutral/peer/all packs) regardless of what it was built
-  // with.
+  // (`carrierInLayer` in `js/build/driver.mjs`'s `CLAUDE_SHAPED.openclaude`). ROUND 1's bug:
+  // `installProfile` read theme/posture/mode/doctrines off `firstCarrier`'s root-only
+  // `CARRIERS` list, which never looked inside `.openclaude/`, so an openclaude per-repo
+  // install always read back as the defaults regardless of what it was built with. ROUND 2's
+  // bug, introduced by round 1's own fix: once `host`-narrowing tried OpenClaude's own carrier
+  // FIRST and fell through to the root `CLAUDE.md` whenever that carrier's probe answered
+  // `undefined`, excludeRules/excludeSkills — whose marker line is written ONLY when something
+  // is excluded, so "nothing excluded" is the common, undefined-returning case — silently
+  // picked up a SIBLING Claude install's exclusions instead of staying `[]`.
   const sb = makeSandbox();
   try {
     const repo = path.join(sb.path, 'repo');
     fs.mkdirSync(repo);
-    const r = emitInherited(['--emit', 'openclaude', '--theme', 'imperial', '--out', repo,
-      '--root', repo, '--posture', 'mentor', '--doctrines', 'craft']);
-    assert.equal(r.rc, 0, r.err);
+    const oc = emitAndProfile('openclaude', repo,
+      { theme: 'imperial', posture: 'mentor', mode: 'foreman', doctrines: 'craft' });
+    assert.equal(oc.state, 'active');
+    assert.equal(oc.theme, 'imperial');
+    assert.equal(oc.posture, 'mentor');
+    assert.equal(oc.mode, 'foreman');
+    assert.deepEqual(oc.doctrines, ['craft']);
+    assert.deepEqual(oc.excludeRules, []);
+    assert.deepEqual(oc.excludeSkills, []);
 
-    const p = installProfile('openclaude', 'project', repo);
-    assert.equal(p.state, 'active');
-    assert.equal(p.theme, 'imperial');
-    assert.equal(p.posture, 'mentor');
-    assert.deepEqual(p.doctrines, ['craft']);
+    // Sharing the repo with a Claude Code install that EXCLUDES something must not leak either
+    // Claude's settings OR Claude's exclusions into OpenClaude's own read-back.
+    const claude = emitAndProfile('claude', repo, {
+      theme: 'cyberpunk', posture: 'peer', mode: 'direct', doctrines: 'craft',
+      excludeRules: 'craft 1', excludeSkills: 'bruno',
+    });
+    assert.equal(claude.theme, 'cyberpunk');
+    assert.equal(claude.posture, 'peer');
+    assert.equal(claude.mode, 'direct');
+    assert.deepEqual(claude.doctrines, ['craft']);
+    assert.deepEqual(claude.excludeRules, ['craft.1']);
+    assert.deepEqual(claude.excludeSkills, ['bruno']);
 
-    // Sharing the repo with a Claude Code install must not leak Claude's root CLAUDE.md into
-    // OpenClaude's own read-back: the root carrier belongs to a different host.
-    const r2 = emitInherited(['--emit', 'claude', '--theme', 'cyberpunk', '--out', repo,
-      '--root', repo, '--posture', 'peer', '--doctrines', 'none']);
-    assert.equal(r2.rc, 0, r2.err);
-
-    const p2 = installProfile('openclaude', 'project', repo);
-    assert.equal(p2.theme, 'imperial', 'the shared root CLAUDE.md shadowed .openclaude/CLAUDE.md');
-    assert.equal(p2.posture, 'mentor');
-    assert.deepEqual(p2.doctrines, ['craft']);
+    const ocAfter = installProfile('openclaude', 'project', repo);
+    assert.equal(ocAfter.theme, 'imperial', 'the shared root CLAUDE.md shadowed .openclaude/CLAUDE.md');
+    assert.equal(ocAfter.posture, 'mentor');
+    assert.equal(ocAfter.mode, 'foreman');
+    assert.deepEqual(ocAfter.doctrines, ['craft']);
+    assert.deepEqual(ocAfter.excludeRules, [],
+      "round 2's bug: fell through its own silent carrier to claude's 'craft 1'");
+    assert.deepEqual(ocAfter.excludeSkills, [],
+      "round 2's bug: fell through its own silent carrier to claude's 'bruno'");
 
     // THE REVERSE DIRECTION, which a host-agnostic carrier scan gets backwards: reading
-    // `.openclaude/CLAUDE.md` unconditionally for ANY host would now make CLAUDE's own
-    // read-back answer OpenClaude's settings in this same shared repo.
-    const p3 = installProfile('claude', 'project', repo);
-    assert.equal(p3.theme, 'cyberpunk', "claude's own read-back picked up openclaude's carrier");
-    assert.equal(p3.posture, 'peer');
-    assert.deepEqual(p3.doctrines, []);
+    // `.openclaude/CLAUDE.md` unconditionally for ANY host would make CLAUDE's own read-back
+    // answer OpenClaude's settings in this same shared repo. OpenClaude here is the one with
+    // NO exclusions, so this is also the 'nothing excluded, sibling has something' row for
+    // Claude's read of ITS OWN exclusions — they must stay exactly as built, not cleared by
+    // OpenClaude's silent carrier.
+    const claudeAfter = installProfile('claude', 'project', repo);
+    assert.equal(claudeAfter.theme, 'cyberpunk', "claude's own read-back picked up openclaude's carrier");
+    assert.equal(claudeAfter.posture, 'peer');
+    assert.equal(claudeAfter.mode, 'direct');
+    assert.deepEqual(claudeAfter.doctrines, ['craft']);
+    assert.deepEqual(claudeAfter.excludeRules, ['craft.1']);
+    assert.deepEqual(claudeAfter.excludeSkills, ['bruno']);
   } finally {
     sb.cleanup();
   }
 });
 
-test("a bob per-repo install in the same shared repo also reads its own carrier (host-compat B1)",
-  () => {
-    const sb = makeSandbox();
-    try {
-      const repo = path.join(sb.path, 'repo');
-      fs.mkdirSync(repo);
-      const r1 = emitInherited(['--emit', 'openclaude', '--theme', 'imperial', '--out', repo,
-        '--root', repo, '--posture', 'mentor', '--doctrines', 'craft']);
-      assert.equal(r1.rc, 0, r1.err);
-      const r2 = emitInherited(['--emit', 'bob', '--theme', 'cyberpunk', '--out', repo,
-        '--root', repo, '--posture', 'peer', '--doctrines', 'none']);
-      assert.equal(r2.rc, 0, r2.err);
+test('the same shared repo with the exclusions on the OTHER host (host-compat B1 round 2)', () => {
+  // The mirror of the test above: OPENCLAUDE excludes something and Claude excludes nothing,
+  // so the 'nothing excluded' vs 'sibling excludes something' row is covered for BOTH hosts,
+  // not just one of them.
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const oc = emitAndProfile('openclaude', repo, {
+      theme: 'imperial', posture: 'mentor', mode: 'foreman', doctrines: 'craft',
+      excludeRules: 'craft 1', excludeSkills: 'bruno',
+    });
+    assert.deepEqual(oc.excludeRules, ['craft.1']);
+    assert.deepEqual(oc.excludeSkills, ['bruno']);
 
-      const bob = installProfile('bob', 'project', repo);
-      assert.equal(bob.theme, 'cyberpunk');
-      assert.equal(bob.posture, 'peer');
-      assert.deepEqual(bob.doctrines, []);
+    const claude = emitAndProfile('claude', repo,
+      { theme: 'cyberpunk', posture: 'peer', mode: 'direct', doctrines: 'craft' });
+    assert.deepEqual(claude.excludeRules, []);
+    assert.deepEqual(claude.excludeSkills, []);
 
-      const oc = installProfile('openclaude', 'project', repo);
-      assert.equal(oc.theme, 'imperial');
-      assert.equal(oc.posture, 'mentor');
-      assert.deepEqual(oc.doctrines, ['craft']);
-    } finally {
-      sb.cleanup();
-    }
-  });
+    const ocAfter = installProfile('openclaude', 'project', repo);
+    assert.deepEqual(ocAfter.excludeRules, ['craft.1'], "openclaude's own exclusion was cleared");
+    assert.deepEqual(ocAfter.excludeSkills, ['bruno'], "openclaude's own exclusion was cleared");
+
+    const claudeAfter = installProfile('claude', 'project', repo);
+    assert.deepEqual(claudeAfter.excludeRules, [],
+      "claude's own 'nothing excluded' picked up openclaude's 'craft 1'");
+    assert.deepEqual(claudeAfter.excludeSkills, [],
+      "claude's own 'nothing excluded' picked up openclaude's 'bruno'");
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('a bob per-repo install in the same shared repo also reads its own carrier, including its '
+  + 'own exclusions (host-compat B1, both fix rounds)', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const oc = emitAndProfile('openclaude', repo,
+      { theme: 'imperial', posture: 'mentor', mode: 'foreman', doctrines: 'craft' });
+    assert.deepEqual(oc.excludeRules, []);
+    assert.deepEqual(oc.excludeSkills, []);
+
+    const bob = emitAndProfile('bob', repo, {
+      theme: 'cyberpunk', posture: 'peer', mode: 'direct', doctrines: 'craft',
+      excludeRules: 'craft 1', excludeSkills: 'bruno',
+    });
+    assert.equal(bob.theme, 'cyberpunk');
+    assert.equal(bob.posture, 'peer');
+    assert.equal(bob.mode, 'direct');
+    assert.deepEqual(bob.doctrines, ['craft']);
+    assert.deepEqual(bob.excludeRules, ['craft.1']);
+    assert.deepEqual(bob.excludeSkills, ['bruno']);
+
+    const ocAfter = installProfile('openclaude', 'project', repo);
+    assert.equal(ocAfter.theme, 'imperial');
+    assert.equal(ocAfter.posture, 'mentor');
+    assert.equal(ocAfter.mode, 'foreman');
+    assert.deepEqual(ocAfter.doctrines, ['craft']);
+    assert.deepEqual(ocAfter.excludeRules, [], "openclaude's own read-back picked up bob's 'craft 1'");
+    assert.deepEqual(ocAfter.excludeSkills, [], "openclaude's own read-back picked up bob's 'bruno'");
+  } finally {
+    sb.cleanup();
+  }
+});
 
 test('a rebuild command quotes only the arguments a shell would split', () => {
   assert.equal(rebuildCommand(['--theme', 'imperial', '--out', 'C:\\My Repo']),
