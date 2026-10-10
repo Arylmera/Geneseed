@@ -174,13 +174,49 @@ const SHELL_WARN_RE = [
   /\bgit\s+gc\b[^\n]*--prune\b/,
 ]
 
-function pickPath(args) {
+// `apply_patch`'s only argument is `patchText` (OpenCode verdict I-1): every gpt-5*
+// model gets ONLY this tool, never `edit`/`write`, so a path that lives inside the
+// patch text — not in `filePath`/`path`/etc — must still hit every gate below, or
+// Sealed Secrets, the protected-check gate, the rule store and the wiki gate all go
+// dark for that model class. Markers match upstream's own parser
+// (`packages/opencode/src/patch/index.ts` `parsePatchHeader`): `*** Add File:`,
+// `*** Update File:` (optionally followed by `*** Move to:`, both the old and the new
+// path count) and `*** Delete File:`. The `+`-prefixed body lines are the new file
+// content, never a path, and are not scanned here — no gate in this file inspects
+// write content, only the target path.
+function parsePatchPaths(patchText) {
+  const out = []
+  const lines = String(patchText).split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    let m = /^\*\*\* (?:Add|Delete) File:\s*(.+)$/.exec(line)
+    if (m) { out.push(m[1].trim()); continue }
+    m = /^\*\*\* Update File:\s*(.+)$/.exec(line)
+    if (m) {
+      out.push(m[1].trim())
+      const mv = /^\*\*\* Move to:\s*(.+)$/.exec(lines[i + 1] || "")
+      if (mv) { out.push(mv[1].trim()); i++ }
+    }
+  }
+  return out.filter(Boolean)
+}
+
+// Returns every candidate path for this call, normalized (backslashes -> `/`) and,
+// for an `apply_patch` call, resolved against `cwd` (the session's `ctx.directory` —
+// the same root `apply_patch.ts:72` resolves against upstream) since a patch marker
+// is worktree-relative. Non-patch tools keep the single-path shape every other gate
+// already expects, just wrapped in an array.
+function pickPath(args, cwd) {
+  if (args && typeof args.patchText === "string") {
+    return parsePatchPaths(args.patchText)
+      .map((p) => path.resolve(cwd || process.cwd(), p).replace(/\\/g, "/"))
+  }
   for (const k of ["filePath", "path", "file", "target", "filename"]) {
     // Normalize Windows backslashes to `/` so the secret-path patterns (which use `/`
     // as the segment separator) match `C:\Users\me\.ssh\id_rsa` the same as a POSIX path.
-    if (args && typeof args[k] === "string") return args[k].replace(/\\/g, "/")
+    if (args && typeof args[k] === "string") return [args[k].replace(/\\/g, "/")]
   }
-  return ""
+  return []
 }
 function pickCommand(args) {
   for (const k of ["command", "cmd", "script"]) {
@@ -488,24 +524,34 @@ export const GeneseedGuard = async (ctx) => {
         throw new Error(`[geneseed-guard] blocked: ${why} — set GENESEED_GUARD=off to allow`)
       }
       try {
+        // `apply_patch`'s own tool resolves every marker path against `instance.directory`
+        // (`apply_patch.ts:72` in the verdict's evidence), NOT the worktree root `root()`
+        // uses for the git-branch checks below — a worktree session started in a
+        // subdirectory of its git root must see the same (narrower) root the write
+        // actually lands under, or a protected-check/wiki/secret hit one directory up
+        // would be missed.
+        const cwd = ctx?.directory || process.cwd()
         if (hasAny(tool, WRITE_TOOLS)) {
-          const p = pickPath(args)
-          if (p && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
-          if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
-          const sensor = p && protectedCheck(p)
-          if (sensor) { await deny(`${p} is a protected check (${sensor}, listed in ${SENSOR_LIST}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
-          const store = p && ruleStoreTarget(p)
-          if (store && !RULE_STORE_BUMPED.has(p)) {
-            RULE_STORE_BUMPED.add(p)
-            await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
-                 `choice is the user's (Persist Insight). Settle it through the rule skill, ` +
-                 `then re-issue this write`, "process-1")
-            return
+          // `apply_patch` (gpt-5*) can carry several marker paths in one call — every
+          // one of them is a write target, so every one runs every gate; the first hit
+          // blocks the whole call (see `pickPath` for why this is not a single path).
+          for (const p of pickPath(args, cwd)) {
+            if (SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
+            if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
+            const sensor = protectedCheck(p)
+            if (sensor) { await deny(`${p} is a protected check (${sensor}, listed in ${SENSOR_LIST}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
+            const store = ruleStoreTarget(p)
+            if (store && !RULE_STORE_BUMPED.has(p)) {
+              RULE_STORE_BUMPED.add(p)
+              await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
+                   `choice is the user's (Persist Insight). Settle it through the rule skill, ` +
+                   `then re-issue this write`, "process-1")
+              return
+            }
           }
         }
         if (hasAny(tool, WIKI_MUTATE_TOOLS)) {
-          const p = pickPath(args)
-          if (p) {
+          for (const p of pickPath(args, cwd)) {
             const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/").toLowerCase()
             const hit = (await protectedPrefixes()).find(
               (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))

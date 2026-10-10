@@ -462,3 +462,79 @@ test("a legacy wiki.jsonc under $GENESEED_HARNESS still protects its folders", a
     else process.env.GENESEED_HARNESS = prevHarness
   }
 })
+
+// ---- apply_patch (OpenCode verdict I-1) ----------------------------------------
+// gpt-5* models get ONLY `apply_patch` (no `edit`/`write`) — every path lives inside
+// `patchText` as a `*** Add File:`/`*** Update File:`/`*** Delete File:`/`*** Move to:`
+// marker line (upstream `packages/opencode/src/patch/index.ts` `parsePatchHeader`), never
+// in `filePath`/`path`/etc. Markers carry an absolute path here so the assertion is not
+// also exercising cwd resolution against `ctx.directory` (covered separately below).
+
+function patch(...lines) {
+  return ["*** Begin Patch", ...lines, "*** End Patch"].join("\n")
+}
+
+test("apply_patch: a patch adding a secret file is blocked", async () => {
+  const dest = path.join(tmp, "patched", ".ssh", "id_rsa").replace(/\\/g, "/")
+  const text = patch(`*** Add File: ${dest}`, "+ -----BEGIN OPENSSH PRIVATE KEY-----")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("apply_patch: a patch touching a protected test file is blocked", async () => {
+  const repo = path.join(tmp, "sensed-patch")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "tests/\n")
+  const target = path.join(repo, "tests", "a.test.js").replace(/\\/g, "/")
+  const text = patch("*** Update File: " + target, "@@", "-old", "+new")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("apply_patch: a benign patch passes", async () => {
+  const dest = path.join(tmp, "patched", "src", "main.py").replace(/\\/g, "/")
+  const text = patch(`*** Add File: ${dest}`, "+print('hi')")
+  assert.equal(await blocked("apply_patch", { patchText: text }), false)
+})
+
+test("apply_patch: an Update File with a Move to resolves BOTH the old and new path", async () => {
+  const repo = path.join(tmp, "sensed-move")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "tests/\n")
+  const from = path.join(repo, "src", "a.js").replace(/\\/g, "/")
+  const to = path.join(repo, "tests", "a.js").replace(/\\/g, "/")
+  const text = patch(`*** Update File: ${from}`, `*** Move to: ${to}`, "@@", "-old", "+new")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("apply_patch: a relative marker path resolves against ctx.directory", async () => {
+  const repo = path.join(tmp, "patch-cwd")
+  await fs.mkdir(repo, { recursive: true })
+  const fresh = await import("../../adapters/opencode/plugins/geneseed-guard.js?patch-cwd")
+  const h = (await fresh.GeneseedGuard({ directory: repo }))["tool.execute.before"]
+  const text = patch("*** Add File: .ssh/id_rsa", "+ secret")
+  await assert.rejects(h({ tool: "apply_patch", args: { patchText: text } }, {}),
+    /\[geneseed-guard\]/)
+})
+
+// Upstream's own `apply_patch` tool resolves every marker path against `instance.directory`
+// (`apply_patch.ts:72`), not against a wider worktree root. `ctx.worktree` is a DIFFERENT,
+// wider root used elsewhere in this file for the git-branch checks — if patch-path
+// resolution preferred `ctx.worktree` over `ctx.directory` the way `root()` does, a session
+// started in a worktree subdirectory would check the wrong file and miss a real hit one
+// directory up from where the write actually lands.
+test("apply_patch: resolves against ctx.directory, not the wider ctx.worktree", async () => {
+  const repo = path.join(tmp, "patch-subdir")
+  const sub = path.join(repo, "sub")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.mkdir(sub, { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "sub/tests/\n")
+  const fresh = await import("../../adapters/opencode/plugins/geneseed-guard.js?patch-subdir")
+  const h = (await fresh.GeneseedGuard({ worktree: repo, directory: sub }))["tool.execute.before"]
+  // `instance.directory` (here `sub`) + "tests/a.js" = repo/sub/tests/a.js, which the
+  // protected list covers via "sub/tests/".
+  const text = patch("*** Update File: tests/a.js", "@@", "-old", "+new")
+  await assert.rejects(h({ tool: "apply_patch", args: { patchText: text } }, {}),
+    /\[geneseed-guard\]/)
+})
