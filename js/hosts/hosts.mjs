@@ -19,7 +19,6 @@ import path from 'node:path';
 import os from 'node:os';
 import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
-import { selfAndParents } from './hooks-prims.mjs';
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
@@ -89,7 +88,8 @@ export function sovereignBypass(root) {
  * `_global_hook_standing_down` — project-bypasses-global, for `context`, `git-gate` and `learn`.
  *
  * A GLOBAL install's hook knows its own dir (`--root`, or `learn`'s `--memory` parent); when a
- * Geneseed PROJECT install of the SAME host sits at or above cwd, that project's hook runs too,
+ * Geneseed PROJECT install of the SAME host sits IN the session's project dir, that project's
+ * hook runs too,
  * and Claude runs every matching hook with the strictest verdict winning — so the global's
  * second injection, its process-5 ask over a project built `--no-consent`, and its second LLM
  * call are all doubles (host-compat Claude B4). `$GENESEED_STACK_GLOBAL` stacks them on purpose.
@@ -100,22 +100,32 @@ export function sovereignBypass(root) {
  * commands, and any emitted before the gates carried one), a folder named like a marker is that
  * marker, else the root's own `.geneseed-emit` names it; neither = never stand down.
  *
- * ONLY A PROJECT INSTALL SILENCES, NEVER ANOTHER GLOBAL. The up-walk from anywhere under home
- * reaches `~`, so with `CLAUDE_CONFIG_DIR=~/.claude-work` (the docs' multi-account example) it
- * finds the OTHER global `~/.claude` — whose hooks this session never loads. A candidate whose
- * own `.geneseed-emit` names a `-global` emit, or that IS a host's global dir (its default
- * `~/<marker>`, which also catches a leftover with no emit marker, or the env-resolved one),
- * ends the walk with false: nothing at or above a global dir is this session's project.
+ * `<projectDir>/<marker>` ONLY — NO WALK UP. Claude reads a project's `.claude/settings.json`
+ * from the session's primary working directory (`settings.md`), not from its ancestors, so an
+ * install above the project dir proves no project gate fired (round 3 of the Task 11 review:
+ * `~/mono/.claude` silenced the global gate for a session in `~/mono/pkg`). One known
+ * consequence is DELIBERATE: outside Windows Claude may also read `settings.local.json` at the
+ * git repo root when started in a subdirectory, so that case asks twice. A doubled ask is
+ * safe; a silenced gate is not. Bob's own project-hook lookup is undocumented, so its cwd
+ * fallback does not walk either. `projectDir` is `hookProjectDir()`: the cwd follows the
+ * agent's `cd` into repos whose hooks were never loaded.
  *
- * `cwd` should be the SESSION's project root (`$CLAUDE_PROJECT_DIR`, see `hookProjectDir`),
- * not the hook's cwd: Claude loads project hooks once, from that root, and the cwd follows
- * the agent's `cd` into repos whose hooks were never loaded.
+ * ONLY A PROJECT INSTALL SILENCES, NEVER ANOTHER GLOBAL. With `CLAUDE_CONFIG_DIR=~/.claude-work`
+ * (the docs' multi-account example) a session in `~` finds the OTHER global `~/.claude`, whose
+ * hooks this session never loads. A candidate whose own `.geneseed-emit` names a `-global`
+ * emit, or that IS a host's global dir (its default `~/<marker>`, which also catches a leftover
+ * with no emit marker, or the env-resolved one), is a global: false.
+ *   * M-3, DELIBERATE: a hand-written `-global` marker in a PROJECT's `.claude/` therefore reads
+ *     as a global, and the gate asks twice. Never "fix" that into silence — it would turn a
+ *     user-editable file into a switch that turns a gate off.
+ *   * M-2: a `configDir()` that throws (a `~user` relocation variable `resolvePath` refuses)
+ *     lands in the catch below, which is false: the gate stays loud.
  *
  * LIVES HERE, beside `sovereignBypass`, for the same reason: the gates must not import
  * `hooks-context.mjs`. Any failure (a `~user` root `resolvePath` refuses) is false: a gate that
  * cannot tell keeps gating.
  */
-export function globalHookStandingDown(hookRoot, cwd, host = null) {
+export function globalHookStandingDown(hookRoot, projectDir, host = null) {
   if (!hookRoot || process.env.GENESEED_STACK_GLOBAL) return false;
   const markers = STAND_DOWN_MARKERS;
   const own = path.basename(hookRoot);
@@ -132,15 +142,12 @@ export function globalHookStandingDown(hookRoot, cwd, host = null) {
         if (!marker) return false;
       }
       const self = normcase(resolvePath(hookRoot));
-      for (const d of selfAndParents(resolvePath(cwd))) {
-        const cand = path.join(d, marker);
-        // Path equality, case-folded on Windows — `~/.claude` and `~/.Claude` are the same
-        // install there and two different ones on Linux.
-        if (!isFile(path.join(cand, GLOBAL_MANIFEST))) continue;
-        const c = normcase(resolvePath(cand));
-        return c !== self && !isGlobalDir(cand, c);
-      }
-      return false;
+      const cand = path.join(resolvePath(projectDir), marker);
+      if (!isFile(path.join(cand, GLOBAL_MANIFEST))) return false;
+      // Path equality, case-folded on Windows — `~/.claude` and `~/.Claude` are the same
+      // install there and two different ones on Linux.
+      const c = normcase(resolvePath(cand));
+      return c !== self && !isGlobalDir(cand, c);
     });
   } catch {
     return false;

@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { readText, printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
-import { globalHookStandingDown, resolvePath, sovereignBypass } from './hosts.mjs';
+import { globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass } from './hosts.mjs';
 import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
 
 /**
@@ -391,8 +391,9 @@ function lazyLines(entries, root, room) {
 
 export function cmdContext(args) {
   HOST = (args && args.host) || 'claude';
-  // Discovery runs against the project root the hook was launched from — Claude runs
-  // SessionStart hooks with cwd = repo root — not the harness package dir.
+  // Discovery (and the stand-down) runs against the SESSION's project root, not the harness
+  // package dir: `$CLAUDE_PROJECT_DIR` when the host sets it (`hookProjectDir`), because
+  // SessionStart also fires on resume/compact/clear, after the agent may have `cd`'d away.
   // The only two `resolvePath` calls in this file whose argument can be a `~user` path the
   // user typed — `$GENESEED_ROOT` and `--root` — and `resolvePath` expands, so both can now
   // throw. Every other caller either builds its argument by `path.join` from an absolute
@@ -402,7 +403,7 @@ export function cmdContext(args) {
   let hookRoot;
   try {
     ({ root, hookRoot } = withDiscardableStderr(() => ({
-      root: resolvePath(process.env.GENESEED_ROOT || process.cwd()),
+      root: resolvePath(process.env.GENESEED_ROOT || hookProjectDir()),
       hookRoot: args.root ? resolvePath(args.root) : null,
     })));
   } catch {

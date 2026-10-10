@@ -505,9 +505,10 @@ test('a global learn stands down for a project install; the project learn still 
 test('a gate stays loud unless a project gate replaces it: other globals, cd elsewhere', () => {
   // THE BINDING RULE: a global gate goes quiet ONLY where an equivalent project gate fires.
   // Two ways the first cut broke it, each a written-out row driven through the real entry point:
-  //   * another GLOBAL up the walk (`CLAUDE_CONFIG_DIR=~/.claude-work`, with `~/.claude` still
-  //     there, with or without its emit marker) is not a project install — nothing replaces the
-  //     relocated global's gate, so `git push --force` must still ask;
+  //   * another GLOBAL in the project dir (`CLAUDE_CONFIG_DIR=~/.claude-work`, a session started
+  //     in `~`, where `~/.claude` is still there with or without its emit marker) is not a
+  //     project install — nothing replaces the relocated global's gate, so `git push --force`
+  //     must still ask;
   //   * the agent `cd`s from project A into repo B: B's project install was never loaded (Claude
   //     loads project hooks from `$CLAUDE_PROJECT_DIR`, the session's root), so the gate keys on
   //     `$CLAUDE_PROJECT_DIR` when set, not on the hook's cwd.
@@ -531,9 +532,11 @@ test('a gate stays loud unless a project gate replaces it: other globals, cd els
     const force = (cwd, e = env) => hookRun('git-gate',
       { root: work, stdin: bashPayload('git push --force'), cwd, env: e });
 
-    askDecision(force(repoA), 'another global ~/.claude (with emit marker) silenced the gate');
+    askDecision(force(home), 'another global ~/.claude (with emit marker) silenced the gate');
+    askDecision(force(repoA, { ...env, CLAUDE_PROJECT_DIR: home }),
+      'another global ~/.claude as $CLAUDE_PROJECT_DIR/.claude silenced the gate');
     fs.rmSync(path.join(dotClaude, '.geneseed-emit'));
-    askDecision(force(repoA), 'a leftover ~/.claude (no emit marker) silenced the gate');
+    askDecision(force(home), 'a leftover ~/.claude (no emit marker) silenced the gate');
     // cwd = B (has a project install), session project = A (has none): the gate still asks.
     askDecision(force(repoB, { ...env, CLAUDE_PROJECT_DIR: repoA }),
       'a cd into a repo whose hooks were never loaded silenced the gate');
@@ -543,6 +546,56 @@ test('a gate stays loud unless a project gate replaces it: other globals, cd els
     assert.match(learnB.out, /NOTES:/, 'a cd into another repo silenced the global learn');
     // Control: the session's own project IS B — the project gate fires, the global stands down.
     assertDefers(force(repoB, { ...env, CLAUDE_PROJECT_DIR: repoB }), 'global beside project B');
+  } finally { sb.cleanup(); }
+});
+
+test('only the session\'s own project dir silences: no walk up, for any host', () => {
+  // ROUND 3 (Task 11 review). Claude reads a project's `.claude/settings.json` from the session's
+  // primary working directory, not its ancestors (`settings.md`, "reads the shared
+  // `.claude/settings.json` from the session's primary working directory"). So a project install
+  // ABOVE the project dir proves nothing about which project gate fired, and the stand-down
+  // tests `<project dir>/<marker>` alone. Bob's project-hook lookup is undocumented, so its
+  // cwd fallback does not walk either: a doubled ask is safe, a silenced gate is not.
+  // Rows: [label, CLAUDE_PROJECT_DIR (null = unset), cwd, expected].
+  const sb = makeSandbox();
+  try {
+    const home = path.join(sb.path, 'home');
+    const mk = (d, emit) => {
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), '{}');
+      if (emit) fs.writeFileSync(path.join(d, '.geneseed-emit'), `${emit}\n`);
+      return d;
+    };
+    const dir = (d) => { fs.mkdirSync(d, { recursive: true }); return d; };
+    const work = mk(path.join(home, '.claude-work'), 'claude-global');
+    const mono = dir(path.join(home, 'mono'));
+    mk(path.join(mono, '.claude'));
+    const pkg = dir(path.join(mono, 'pkg'));
+    mk(path.join(pkg, '.claude'));
+    const sub = dir(path.join(pkg, 'sub'));
+    const mono2 = dir(path.join(home, 'mono2'));
+    mk(path.join(mono2, '.claude'));
+    const pkg2 = dir(path.join(mono2, 'pkg'));
+    const hand = dir(path.join(home, 'hand'));
+    mk(path.join(hand, '.claude'), 'claude-global');
+    const env = { ...process.env, ...homeOverrides(home), CLAUDE_CONFIG_DIR: work };
+    for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM', 'CLAUDE_PROJECT_DIR']) delete env[k];
+    const rows = [
+      ['install only above the project dir (mono2/.claude, project mono2/pkg)', pkg2, pkg2, 'ask'],
+      ['installs above but none in the project dir (project mono/pkg/sub)', sub, sub, 'ask'],
+      ['the project dir carries its own install (mono/pkg)', pkg, pkg, 'defer'],
+      ['the monorepo root is the project dir', mono, mono, 'defer'],
+      ['no $CLAUDE_PROJECT_DIR (Bob): cwd mono2/pkg, install only above it', null, pkg2, 'ask'],
+      ['no $CLAUDE_PROJECT_DIR (Bob): cwd carries its own install', null, pkg, 'defer'],
+      // M-3: a hand-written `-global` emit in a project `.claude/` reads as a global. The result
+      // is a doubled ask, which is deliberate — never "fix" it into silence.
+      ['a project .claude/ carrying a hand-written claude-global emit marker', hand, hand, 'ask'],
+    ];
+    for (const [label, cpd, cwd, want] of rows) {
+      const r = hookRun('git-gate', { root: work, stdin: bashPayload('git push --force'), cwd,
+        env: cpd ? { ...env, CLAUDE_PROJECT_DIR: cpd } : env });
+      if (want === 'ask') askDecision(r, label); else assertDefers(r, label);
+    }
   } finally { sb.cleanup(); }
 });
 

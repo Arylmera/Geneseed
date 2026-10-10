@@ -1521,10 +1521,13 @@ test('the global hook stands down only for a project install of its own host', (
     // The project's OWN hook never stands down for itself. Path equality is case-folded on
     // Windows, which is why this is an identity check and not a string compare.
     assert.equal(globalHookStandingDown(pcfg, repo), false);
-    // The up-walk: a subdirectory of the repo still counts as being in it.
+    // NO UP-WALK (Task 11 review, round 3): a session whose project dir is a SUBDIRECTORY of the
+    // repo does not count as being in it. Claude reads the shared `.claude/settings.json` from
+    // the session's primary working directory only (`settings.md`), so the repo's project hooks
+    // may never have loaded there; a doubled gate is safe, a silenced one is not.
     const sub = path.join(repo, 'a', 'b');
     fs.mkdirSync(sub, { recursive: true });
-    assert.equal(globalHookStandingDown(gcfg, sub), true);
+    assert.equal(globalHookStandingDown(gcfg, sub), false);
 
     // The two that depend on finding NOTHING — see the header.
     const empty = path.join(d, 'elsewhere');
@@ -1587,12 +1590,12 @@ test('the stand-down marker comes from --host, so a relocated global still stand
   }));
 });
 
-test('another GLOBAL install up the walk is never a project install', () => {
+test('another GLOBAL install in the project dir is never a project install', () => {
   // THE MULTI-ACCOUNT CASE (Task 11 review, Critical). `CLAUDE_CONFIG_DIR=~/.claude-work` is the
-  // docs' own example, and it leaves `~/.claude` in place. The up-walk from any dir under home
-  // reaches `~` and finds `~/.claude/.geneseed-manifest.json`; treating that as a project
-  // install silenced context, git-gate (Law IV) and learn in every session under home, with no
-  // project gate to replace them. A candidate is a GLOBAL, never a project, when its own
+  // docs' own example, and it leaves `~/.claude` in place. A session whose project dir is `~`
+  // (or, before round 3 removed the up-walk, any dir under it) finds
+  // `~/.claude/.geneseed-manifest.json`; treating that as a project install silenced context,
+  // git-gate (Law IV) and learn with no project gate to replace them. A candidate is a GLOBAL, never a project, when its own
   // `.geneseed-emit` names a `-global` emit, or when it is a host's global dir (its default
   // `~/<marker>` or the env-resolved one) — the second catches a leftover with no emit marker.
   withoutStackGlobal(() => withDir((d) => {
@@ -1608,11 +1611,11 @@ test('another GLOBAL install up the walk is never a project install', () => {
       // Row 1: two Claude globals, one relocated, both carrying their emit marker.
       mkInstall(home, '.claude');
       fs.writeFileSync(path.join(dotClaude, '.geneseed-emit'), 'claude-global\n');
-      assert.equal(globalHookStandingDown(work, below, null), false,
+      assert.equal(globalHookStandingDown(work, home, null), false,
         'the relocated global stood down for the other global ~/.claude');
       // Row 2: a leftover ~/.claude with a manifest but no emit marker — still a global.
       fs.rmSync(path.join(dotClaude, '.geneseed-emit'));
-      assert.equal(globalHookStandingDown(work, below, null), false,
+      assert.equal(globalHookStandingDown(work, home, null), false,
         'the relocated global stood down for a leftover ~/.claude');
       // Control: a real project install below home still silences the global.
       mkInstall(below, '.claude');

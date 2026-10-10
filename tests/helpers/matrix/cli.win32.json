@@ -708,6 +708,67 @@
       }
     },
     {
+      "env": {
+        "CLAUDE_PROJECT_DIR": "{repo}"
+      },
+      "expect": [
+        "PROJECT CONTEXT",
+        "The readme."
+      ],
+      "id": "context/discovery-follows-claude-project-dir",
+      "steps": [
+        {
+          "argv": [
+            "context",
+            "--root",
+            "{repo}/.claude"
+          ],
+          "cwd": "cfg"
+        }
+      ],
+      "world": {
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
+        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
+        "repo/README.md": "# Project\n\nThe readme.\n",
+        "repo/apps/site/README.md": "# site\n",
+        "repo/docs/architecture.md": "# Architecture\n",
+        "repo/docs/nested/deep.md": "# Deep\n",
+        "repo/docs/node_modules/vendored.md": "must never be listed\n",
+        "repo/packages/widget/README.md": "# widget\n",
+        "repo/packages/widget/index.js": "// not markdown\n"
+      }
+    },
+    {
+      "expect": [
+        "PROJECT CONTEXT"
+      ],
+      "id": "context/project-dir-below-an-install-never-stands-down",
+      "steps": [
+        {
+          "argv": [
+            "context",
+            "--root",
+            "{home}/.claude"
+          ],
+          "cwd": "repo/docs"
+        }
+      ],
+      "world": {
+        "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
+        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
+        "repo/README.md": "# Project\n\nThe readme.\n",
+        "repo/apps/site/README.md": "# site\n",
+        "repo/docs/architecture.md": "# Architecture\n",
+        "repo/docs/nested/deep.md": "# Deep\n",
+        "repo/docs/node_modules/vendored.md": "must never be listed\n",
+        "repo/packages/widget/README.md": "# widget\n",
+        "repo/packages/widget/index.js": "// not markdown\n"
+      }
+    },
+    {
       "expect_silent": true,
       "id": "context/relocated-claude-root-stands-down",
       "steps": [
