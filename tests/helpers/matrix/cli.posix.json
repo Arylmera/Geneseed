@@ -2255,8 +2255,9 @@
     {
       "env": {},
       "expect": [
-        "hook_event_name"
+        "nothing to distil"
       ],
+      "expect_silent": true,
       "id": "learn/json-stdin-without-a-transcript-path",
       "steps": [
         {
@@ -2269,6 +2270,86 @@
       ],
       "world": {
         "repo/.keep": ""
+      }
+    },
+    {
+      "env": {},
+      "expect": [
+        "nothing to distil"
+      ],
+      "expect_absent": [
+        "why does the build fail"
+      ],
+      "expect_silent": true,
+      "id": "learn/hook-payload-llm-unset-skips-the-transcript-read",
+      "steps": [
+        {
+          "argv": [
+            "learn"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"Stop\", \"transcript_path\": \"{sb/}/transcript.jsonl\"}"
+        }
+      ],
+      "world": {
+        "repo/.keep": "",
+        "transcript.jsonl": "{\"message\": {\"role\": \"user\", \"content\": \"why does the build fail on windows\"}}\n"
+      }
+    },
+    {
+      "env": {
+        "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
+        "GENESEED_LEARN_CHILD": "1",
+        "GENESEED_LLM": "{py} {llm}"
+      },
+      "expect_absent_files": [
+        "echo/prompt.txt"
+      ],
+      "expect_silent": true,
+      "id": "learn/child-stands-down-immediately",
+      "steps": [
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "a durable fact\n"
+        }
+      ],
+      "world": {
+        "repo/memory/.keep": ""
+      }
+    },
+    {
+      "env": {
+        "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
+        "GENESEED_LLM": "{py} {llm}"
+      },
+      "expect": [
+        "no transcript available (bob)"
+      ],
+      "expect_absent_files": [
+        "echo/prompt.txt"
+      ],
+      "expect_silent": true,
+      "id": "learn/bob-stop-with-no-transcript-never-calls-the-model",
+      "steps": [
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory",
+            "--host",
+            "bob"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"event\": \"Stop\", \"session_id\": \"s\"}"
+        }
+      ],
+      "world": {
+        "repo/memory/.keep": ""
       }
     },
     {

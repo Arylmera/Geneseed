@@ -555,6 +555,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries, and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in.
       PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
+      // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
+      // and returns immediately rather than wasting a model call on the bare envelope. KEPT
+      // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
+      // if Bob ever starts sending one, learning on Bob starts working with no emit change —
+      // dropping the group would need a second one re-added later for the same reason.
       Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b} || exit 0` }] }],
     };
   }

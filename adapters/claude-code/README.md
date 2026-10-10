@@ -68,7 +68,9 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
 
   This step is **opt-in on a model CLI**: set `GENESEED_LLM` (e.g. `claude -p`,
   `llm`, `ollama run …`) for `learn` to actually distil. With it unset the hook is
-  a harmless no-op that just prints the prompt. Geneseed never embeds an API key.
+  a harmless no-op — it returns immediately rather than reading the transcript for
+  nothing; running `learn` by hand with notes piped in still prints the prompt it
+  would have sent. Geneseed never embeds an API key.
   If your bundle's `memory/` is not at `./memory` or `./Harness/memory`, point at
   it with `GENESEED_MEMORY=/abs/path/to/memory`.
 

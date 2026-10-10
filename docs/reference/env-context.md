@@ -36,5 +36,6 @@ Where distilled memories land at session end, and which model distils them. See 
 | `GENESEED_HARNESS` | learn, context, guard plugins; CLI | Base whose `memory/` is written (and where `geneseed-wiki.jsonc` is looked up). Optional — the plugin finds the in-config store by itself; set it to pin the location. |
 | `GENESEED_MEMORY` | learn plugin, CLI | Explicit memory dir; wins over `GENESEED_HARNESS`. |
 | `GENESEED_MODEL` | learn + context plugins | `provider/model` fallback when the session's model can't be read from the transcript. |
-| `GENESEED_LLM` | learn hook (Claude Code, Bob, OpenClaude) | Model CLI used to distil, e.g. `claude -p`. Unset, the hook prints the prompt instead of distilling. |
+| `GENESEED_LLM` | learn hook (Claude Code, Bob, OpenClaude) | Model CLI used to distil, e.g. `claude -p`. Unset, a real Stop/SubagentStop/PreCompact call returns immediately — nothing reads its stdout there; a manual `learn` run (notes piped or given as a file) still prints the prompt instead of distilling. |
+| `GENESEED_LEARN_CHILD` | learn hook | Set by `learn` itself on the model CLI it spawns; a nested session's own Stop hook sees it and returns immediately, which stops `GENESEED_LLM="claude -p"` (hooks not disabled) from recursing. Not meant to be set by hand. |
 | `GENESEED_LEARN_DEBOUNCE_MS` | learn plugin | Quiet period before distilling, in ms (default 60000). |

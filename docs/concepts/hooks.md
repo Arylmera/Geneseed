@@ -44,7 +44,7 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 export GENESEED_LLM="claude -p"
 ```
 
-Unset, `learn` does nothing useful — it prints the prompt it would have sent. Geneseed never stores or embeds an API key. See [Memory](memory.md).
+Unset, `learn` does nothing useful: on a real Stop/SubagentStop/PreCompact call it returns immediately rather than reading the transcript for nothing, and on a manual run it prints the prompt it would have sent. Geneseed never stores or embeds an API key. See [Memory](memory.md).
 
 ## Verify
 
