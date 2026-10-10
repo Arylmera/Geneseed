@@ -206,7 +206,9 @@ export function cellEnv(home) {
       if (k.toLowerCase() === name.toLowerCase()) delete env[k];
     }
   };
-  for (const v of [...RELOCATION_VARS, 'NO_COLOR', 'TERM']) drop(v);
+  // `CLAUDE_PROJECT_DIR`: the hooks' stand-down judges against it, and a suite run from inside
+  // Claude Code inherits the developer's own project root.
+  for (const v of [...RELOCATION_VARS, 'NO_COLOR', 'TERM', 'CLAUDE_PROJECT_DIR']) drop(v);
   for (const k of Object.keys(env)) {
     if (k.toUpperCase().startsWith('GENESEED_') && k.toUpperCase() !== 'GENESEED_HOME') {
       delete env[k];

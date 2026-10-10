@@ -19,7 +19,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { ROOT } from '../../js/build/source.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 
 /** `bin/geneseed-hook.mjs <verb> [--root R]` with `stdin` on fd 0. */
 function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd = null, env = null } = {}) {
@@ -457,7 +457,7 @@ function globalBesideProject(globalName, marker, fn) {
     const repo = path.join(sb.path, 'repo');
     const pcfg = mk(path.join(repo, marker));
     const env = { ...process.env };
-    for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM']) delete env[k];
+    for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM', 'CLAUDE_PROJECT_DIR']) delete env[k];
     return fn({ gcfg, pcfg, repo, env });
   } finally { sb.cleanup(); }
 }
@@ -500,6 +500,50 @@ test('a global learn stands down for a project install; the project learn still 
         `${folder}: GENESEED_STACK_GLOBAL did not un-silence the global learn`);
     });
   }
+});
+
+test('a gate stays loud unless a project gate replaces it: other globals, cd elsewhere', () => {
+  // THE BINDING RULE: a global gate goes quiet ONLY where an equivalent project gate fires.
+  // Two ways the first cut broke it, each a written-out row driven through the real entry point:
+  //   * another GLOBAL up the walk (`CLAUDE_CONFIG_DIR=~/.claude-work`, with `~/.claude` still
+  //     there, with or without its emit marker) is not a project install — nothing replaces the
+  //     relocated global's gate, so `git push --force` must still ask;
+  //   * the agent `cd`s from project A into repo B: B's project install was never loaded (Claude
+  //     loads project hooks from `$CLAUDE_PROJECT_DIR`, the session's root), so the gate keys on
+  //     `$CLAUDE_PROJECT_DIR` when set, not on the hook's cwd.
+  const sb = makeSandbox();
+  try {
+    const home = path.join(sb.path, 'home');
+    const mk = (d, emit) => {
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), '{}');
+      if (emit) fs.writeFileSync(path.join(d, '.geneseed-emit'), `${emit}\n`);
+      return d;
+    };
+    const work = mk(path.join(home, '.claude-work'), 'claude-global');
+    const dotClaude = mk(path.join(home, '.claude'), 'claude-global');
+    const repoA = path.join(home, 'src', 'a');
+    fs.mkdirSync(repoA, { recursive: true });
+    const repoB = path.join(home, 'src', 'b');
+    mk(path.join(repoB, '.claude'));
+    const env = { ...process.env, ...homeOverrides(home), CLAUDE_CONFIG_DIR: work };
+    for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM', 'CLAUDE_PROJECT_DIR']) delete env[k];
+    const force = (cwd, e = env) => hookRun('git-gate',
+      { root: work, stdin: bashPayload('git push --force'), cwd, env: e });
+
+    askDecision(force(repoA), 'another global ~/.claude (with emit marker) silenced the gate');
+    fs.rmSync(path.join(dotClaude, '.geneseed-emit'));
+    askDecision(force(repoA), 'a leftover ~/.claude (no emit marker) silenced the gate');
+    // cwd = B (has a project install), session project = A (has none): the gate still asks.
+    askDecision(force(repoB, { ...env, CLAUDE_PROJECT_DIR: repoA }),
+      'a cd into a repo whose hooks were never loaded silenced the gate');
+    // And learn follows the same project dir.
+    const learnB = hookRun('learn', { stdin: 'a durable fact', cwd: repoB,
+      env: { ...env, CLAUDE_PROJECT_DIR: repoA }, extra: ['--memory', path.join(work, 'memory')] });
+    assert.match(learnB.out, /NOTES:/, 'a cd into another repo silenced the global learn');
+    // Control: the session's own project IS B — the project gate fires, the global stands down.
+    assertDefers(force(repoB, { ...env, CLAUDE_PROJECT_DIR: repoB }), 'global beside project B');
+  } finally { sb.cleanup(); }
 });
 
 // ---------------------------------------------------------------------------------------------

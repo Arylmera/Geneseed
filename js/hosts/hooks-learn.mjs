@@ -9,7 +9,9 @@ import { spawnSync } from 'node:child_process';
 import { readText, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { globalHookStandingDown, resolveMemoryDir, sovereignBypass } from './hosts.mjs';
+import {
+  globalHookStandingDown, hookProjectDir, resolveMemoryDir, sovereignBypass,
+} from './hosts.mjs';
 import { readStdin, splitLines, splitWords } from './hooks-prims.mjs';
 import {
   existingSlugs, writeMemories, consolidateMemory, appendAgentLesson,
@@ -237,7 +239,7 @@ export function cmdLearn(args) {
   // Same install root, and a project install of this host beside it learns on its own Stop: a
   // second LLM call, and the global store learning facts the project owns (Claude B4).
   if (args.memory && globalHookStandingDown(path.dirname(toPlatformPath(args.memory)),
-    process.cwd(), args.host)) return 0;
+    hookProjectDir(), args.host)) return 0;
 
   const raw = args.file ? readText(args.file) : readStdin();
   const meta = hookMeta(raw);

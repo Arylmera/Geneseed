@@ -100,14 +100,24 @@ export function sovereignBypass(root) {
  * commands, and any emitted before the gates carried one), a folder named like a marker is that
  * marker, else the root's own `.geneseed-emit` names it; neither = never stand down.
  *
+ * ONLY A PROJECT INSTALL SILENCES, NEVER ANOTHER GLOBAL. The up-walk from anywhere under home
+ * reaches `~`, so with `CLAUDE_CONFIG_DIR=~/.claude-work` (the docs' multi-account example) it
+ * finds the OTHER global `~/.claude` — whose hooks this session never loads. A candidate whose
+ * own `.geneseed-emit` names a `-global` emit, or that IS a host's global dir (its default
+ * `~/<marker>`, which also catches a leftover with no emit marker, or the env-resolved one),
+ * ends the walk with false: nothing at or above a global dir is this session's project.
+ *
+ * `cwd` should be the SESSION's project root (`$CLAUDE_PROJECT_DIR`, see `hookProjectDir`),
+ * not the hook's cwd: Claude loads project hooks once, from that root, and the cwd follows
+ * the agent's `cd` into repos whose hooks were never loaded.
+ *
  * LIVES HERE, beside `sovereignBypass`, for the same reason: the gates must not import
  * `hooks-context.mjs`. Any failure (a `~user` root `resolvePath` refuses) is false: a gate that
  * cannot tell keeps gating.
  */
 export function globalHookStandingDown(hookRoot, cwd, host = null) {
   if (!hookRoot || process.env.GENESEED_STACK_GLOBAL) return false;
-  const markers = Object.fromEntries(HOSTS.filter((h) => h.family === 'claude')
-    .map((h) => [h.host, h.projectMarker]));
+  const markers = STAND_DOWN_MARKERS;
   const own = path.basename(hookRoot);
   try {
     return withDiscardableStderr(() => {
@@ -126,13 +136,34 @@ export function globalHookStandingDown(hookRoot, cwd, host = null) {
         const cand = path.join(d, marker);
         // Path equality, case-folded on Windows — `~/.claude` and `~/.Claude` are the same
         // install there and two different ones on Linux.
-        if (isFile(path.join(cand, GLOBAL_MANIFEST))) return normcase(resolvePath(cand)) !== self;
+        if (!isFile(path.join(cand, GLOBAL_MANIFEST))) continue;
+        const c = normcase(resolvePath(cand));
+        return c !== self && !isGlobalDir(cand, c);
       }
       return false;
     });
   } catch {
     return false;
   }
+}
+
+/** `cand` (resolved and case-folded as `c`) is some host's GLOBAL install, not a project's. */
+function isGlobalDir(cand, c) {
+  let emit = '';
+  try { emit = readText(path.join(cand, '.geneseed-emit')).trim(); } catch { /* absent */ }
+  if (emit.endsWith('-global')) return true;
+  return HOSTS.some((h) => h.family === 'claude'
+    && (normcase(resolvePath(path.join(os.homedir(), h.projectMarker))) === c
+      || normcase(h.configDir()) === c));
+}
+
+/**
+ * The project root a hook judges against: `$CLAUDE_PROJECT_DIR` (Claude Code and OpenClaude set
+ * it for every hook — the session's root, where its project hooks were loaded from), else the
+ * cwd. Bob documents no such variable, so under Bob this is the cwd.
+ */
+export function hookProjectDir() {
+  return process.env.CLAUDE_PROJECT_DIR || process.cwd();
 }
 
 /**
@@ -327,6 +358,10 @@ export const HOSTS = [
   { host: 'bob', family: 'claude', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md', catalog: { skills: true, agents: false } },
   { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true }, carrierInLayer: true },
 ];
+
+/** Each Claude-family host's project marker, keyed by host — `globalHookStandingDown`'s table. */
+const STAND_DOWN_MARKERS = Object.fromEntries(HOSTS.filter((h) => h.family === 'claude')
+  .map((h) => [h.host, h.projectMarker]));
 
 /** The Claude-STYLE hosts (`family: 'claude'`), in `HOSTS` order. Test with `.includes(host)`. */
 export const CLAUDE_STYLE = HOSTS.filter((h) => h.family === 'claude').map((h) => h.host);

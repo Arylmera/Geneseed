@@ -25,6 +25,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -615,7 +616,10 @@ const realOrSelf = (p) => (fs.existsSync(p)
 /** Run `fn` with `cwd` current and `host`'s global config dir resolved to `cfgDir`. */
 function asHostGlobal(host, cwd, cfgDir, fn) {
   const cwd0 = process.cwd();
-  const overrides = host === 'claude' ? homeOverrides(cwd) : { [ENV_FOR_HOST[host]]: cfgDir };
+  // Claude gets BOTH: HOME at the cwd keeps the daemon's real situation reproduced (above), and
+  // `$CLAUDE_CONFIG_DIR` makes the resolver read its variable like the other three hosts.
+  const overrides = host === 'claude' ? { ...homeOverrides(cwd), CLAUDE_CONFIG_DIR: cfgDir }
+    : { [ENV_FOR_HOST[host]]: cfgDir };
   const saved = Object.fromEntries(Object.keys(overrides).map((k) => [k, process.env[k]]));
   Object.assign(process.env, overrides);
   process.chdir(cwd);
@@ -1580,6 +1584,44 @@ test('the stand-down marker comes from --host, so a relocated global still stand
     mkInstall(repo);
     process.env.GENESEED_STACK_GLOBAL = '1';
     assert.equal(globalHookStandingDown(gcfg, repo, null), false, 'the opt-out was ignored');
+  }));
+});
+
+test('another GLOBAL install up the walk is never a project install', () => {
+  // THE MULTI-ACCOUNT CASE (Task 11 review, Critical). `CLAUDE_CONFIG_DIR=~/.claude-work` is the
+  // docs' own example, and it leaves `~/.claude` in place. The up-walk from any dir under home
+  // reaches `~` and finds `~/.claude/.geneseed-manifest.json`; treating that as a project
+  // install silenced context, git-gate (Law IV) and learn in every session under home, with no
+  // project gate to replace them. A candidate is a GLOBAL, never a project, when its own
+  // `.geneseed-emit` names a `-global` emit, or when it is a host's global dir (its default
+  // `~/<marker>` or the env-resolved one) — the second catches a leftover with no emit marker.
+  withoutStackGlobal(() => withDir((d) => {
+    const home = os.homedir();                    // sandboxed by sandboxProcessHome above
+    const work = mkInstall(path.join(d, 'acct'), 'claude-work');
+    fs.writeFileSync(path.join(work, '.geneseed-emit'), 'claude-global\n');
+    const below = path.join(home, 'src', 'repo');  // no install of its own
+    fs.mkdirSync(below, { recursive: true });
+    const dotClaude = path.join(home, '.claude');
+    const preexisting = fs.existsSync(dotClaude);
+    assert.ok(!preexisting, `the sandboxed home already has ${dotClaude}`);
+    try {
+      // Row 1: two Claude globals, one relocated, both carrying their emit marker.
+      mkInstall(home, '.claude');
+      fs.writeFileSync(path.join(dotClaude, '.geneseed-emit'), 'claude-global\n');
+      assert.equal(globalHookStandingDown(work, below, null), false,
+        'the relocated global stood down for the other global ~/.claude');
+      // Row 2: a leftover ~/.claude with a manifest but no emit marker — still a global.
+      fs.rmSync(path.join(dotClaude, '.geneseed-emit'));
+      assert.equal(globalHookStandingDown(work, below, null), false,
+        'the relocated global stood down for a leftover ~/.claude');
+      // Control: a real project install below home still silences the global.
+      mkInstall(below, '.claude');
+      assert.equal(globalHookStandingDown(work, below, null), true,
+        'a genuine project install no longer silences the global');
+    } finally {
+      fs.rmSync(dotClaude, { recursive: true, force: true });
+      fs.rmSync(path.join(home, 'src'), { recursive: true, force: true });
+    }
   }));
 });
 
