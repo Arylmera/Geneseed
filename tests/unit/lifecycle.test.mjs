@@ -1155,6 +1155,39 @@ test('the mirror ordering: the marker names the host being removed, and must be 
   });
 });
 
+test('an unrelated bare .opencode/ dir is not a surviving install (host-compat B2, fix '
+  + 'round 3)', () => {
+  // `installState`'s OpenCode branch answers 'active' off a bare `.opencode/` DIRECTORY's
+  // existence alone (`installKind`), with no manifest or marker check — so a repo with a
+  // real Claude install and an unrelated, never-emitted `.opencode/` folder (any tool can
+  // make one) must not read that folder as a surviving OpenCode install. The survivor scan
+  // uses `projectQualifies` (the same predicate `uninstallResolve` already trusts) instead,
+  // so uninstalling Claude here finds no real survivor and the shared root markers are
+  // deleted outright rather than kept or rewritten for a phantom OpenCode install.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const home = path.join(d, 'home');
+    projectInstall(repo, 'claude', home);
+    fs.mkdirSync(path.join(repo, '.opencode'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.opencode', 'not-geneseed.txt'), 'hello\n');
+    assert.equal(projectQualifies(repo, 'opencode'), false,
+      'sanity: a bare, never-emitted .opencode/ must not qualify as an OpenCode install');
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+
+    assert.equal(installState(resolved(repo), 'claude', 'project'), 'absent',
+      "claude's own install was not actually removed");
+    assert.equal(emitHostScopeOf(repo), null,
+      'the shared marker was kept or rewritten for a phantom OpenCode survivor instead of '
+      + 'being deleted outright');
+    assert.ok(!fs.existsSync(path.join(repo, '.geneseed-theme')), '.geneseed-theme was kept');
+    // The unrelated directory itself is untouched — uninstall only ever claims what it owns.
+    assert.ok(fs.existsSync(path.join(repo, '.opencode', 'not-geneseed.txt')),
+      'uninstall touched a directory it does not own');
+  });
+});
+
 test('a single host reports nothing extra', () => {
   // The control: "also found" must be about a real second install, not a line printed always.
   withDir((d) => {

@@ -556,9 +556,22 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
   //     so a project root never actually carries this file regardless of host — deleting it
   //     here is always a no-op there. At GLOBAL scope neither file is ever shared (each host
   //     owns its own config dir), so both are always this host's own and always safe to drop.
-  const survivor = HOSTS.find(
-    ({ host: h }) => h !== host && installState(root, h, scope) !== 'absent',
-  );
+  // PROJECT scope uses `projectQualifies` (the same predicate `uninstallResolve` already
+  // trusts for exactly this question), never `installState`: `installState`'s OpenCode
+  // branch answers 'active' off a bare `.opencode/` DIRECTORY's existence alone, with no
+  // manifest or marker check, so an unrelated non-Geneseed `.opencode/` sitting next to a
+  // real Claude install would read as a "surviving" OpenCode install and keep the marker
+  // alive for a host that was never actually here.
+  const survivor = HOSTS.find(({ host: h }) => h !== host && (
+    scope === 'project'
+      ? projectQualifies(root, h)
+      // GLOBAL: each host owns a distinct config dir, so no two hosts' global installs ever
+      // share a root — this can only match THIS host's own global install, and by the time
+      // execution reaches here (step 3) step 1 has already unlinked THIS host's own
+      // manifest/markers, so the lookback never mistakes its own just-removed install for a
+      // surviving sibling.
+      : installState(root, h, scope) !== 'absent'
+  ));
   if (!survivor) {
     for (const m of ['.geneseed-emit', '.geneseed-theme', VERSION_MARKER]) {
       unlinkQuiet(path.join(root, m));
@@ -568,7 +581,17 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
     if (markerScope !== null && markerScope[0] === host) {
       const survivorEmit = [...EMIT_HOST_SCOPE.entries()]
         .find(([, hs]) => hs[0] === survivor.host && hs[1] === scope)?.[0];
-      if (survivorEmit) writeText(path.join(root, '.geneseed-emit'), `${survivorEmit}\n`);
+      if (survivorEmit) {
+        writeText(path.join(root, '.geneseed-emit'), `${survivorEmit}\n`);
+      } else {
+        // Defensive: every (host, scope) pair in `HOSTS` has an `EMIT_HOST_SCOPE` entry, so
+        // this should be unreachable — but silently leaving a marker naming the just-removed
+        // host would deregister the survivor exactly as before, so it is loud instead of quiet.
+        printErr(`[uninstall] WARN: could not resolve an emit name for the surviving `
+          + `${survivor.host}:${scope} install here — the shared .geneseed-emit marker still `
+          + `names ${host}, which was just removed. Re-run \`geneseed rebuild-all\` or `
+          + `re-emit ${survivor.host} to refresh it.\n`);
+      }
     }
     if (scope === 'global' || host === 'opencode') unlinkQuiet(path.join(root, '.geneseed-theme'));
     unlinkQuiet(path.join(root, VERSION_MARKER));
