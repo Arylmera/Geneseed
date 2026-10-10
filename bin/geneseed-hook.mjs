@@ -38,7 +38,12 @@
  * subparsers (25 invocable names — `update` is an alias of `upgrade`); a hook entry that
  * silently accepted `doctor` and did nothing would be the worst available failure, because
  * every Geneseed hook returns 0 and signals through stdout — so "did nothing" and "worked"
- * are the same observation.
+ * are the same observation. That refusal exits **1**, never 2: on Claude Code and Bob, exit 2
+ * is the one code that blocks a tool call (or, on `Stop`/`SubagentStop`, keeps the turn going
+ * without running the hook again), so a verb this build does not know yet — the forward case,
+ * when a newer Geneseed names a verb this stale checkout has never heard of, under the
+ * machine-wide last-writer-wins shim (see I3/B1 below) — must not read as a block. Exit 1 still
+ * shows a `<hook name> hook error` notice; it just does not stop anything (see I3/B1).
  */
 // FIRST, before anything it could fail to run: an old Node gets one sentence, not a stack trace.
 import '../js/lib/node-floor.mjs';
@@ -125,7 +130,9 @@ async function main(argv) {
 
   const verb = argv[0];
   if (!verb || verb === '-h' || verb === '--help') {
-    return die(2, `the following arguments are required: cmd (one of ${
+    // 1, not 2: see this file's header (I3/B1) — 2 is the one code that blocks a tool call on
+    // Claude Code and Bob, and a bare invocation is not a gate decision.
+    return die(1, `the following arguments are required: cmd (one of ${
       Object.keys(VERBS).join(', ')})`);
   }
   const spec = VERBS[verb];
@@ -137,7 +144,11 @@ async function main(argv) {
     // The COMMAND is not a table: `geneseed` is this package's `bin` entry for the CLI
     // (package.json), it answers every non-hook verb, and it survives the deletion of the
     // interpreter-plus-script invocation this line used to print.
-    return die(2, `invalid choice: '${verb}'. This entry point carries only the HOOK `
+    //
+    // 1, not 2 (I3/B1): the forward case is the one that matters — settings emitted by a NEWER
+    // Geneseed name a verb this stale checkout, running from the machine-wide last-writer-wins
+    // shim, has never heard of. That must not read as a block.
+    return die(1, `invalid choice: '${verb}'. This entry point carries only the HOOK `
       + `verbs (${Object.keys(VERBS).join(', ')}); every other harness subcommand lives `
       + 'elsewhere — run `geneseed ' + verb + '`.');
   }
@@ -159,7 +170,12 @@ async function main(argv) {
     // to stderr for a human debugging the shim, but return 0 with no stdout, exactly like a gate
     // that chose not to act.
     if (GATE_VERBS.has(verb)) { printErr(`geneseed-hook: error: ${parsed.error}\n`); return 0; }
-    return die(2, parsed.error);
+    // `context` and `learn` are not gate verbs, but their own argv errors are not a decision
+    // either, so still 1, not 2 (I3/B1): a `<hook name> hook error` notice, and nothing more.
+    // `learn` is the one that matters here — it runs on Stop/SubagentStop, where exit 2 ALSO has
+    // an effect (it sends Claude back to keep working instead of letting the turn end; docs
+    // `hooks.md`, "Stop, SubagentStop, TaskCompleted, and TeammateIdle").
+    return die(1, parsed.error);
   }
   return (await spec.load())[spec.fn](parsed.args);
 }
