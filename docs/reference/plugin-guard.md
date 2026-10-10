@@ -16,9 +16,9 @@ One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](envi
 
 It ships whole on every install, whatever [doctrine packs](../concepts/rules.md) you chose. On Claude Code and Bob the same checks are hooks, which can *ask* you instead of refusing; OpenCode's tool hook has no ask tier. Protected wiki folders are enforced only here — on the other hosts they are an instruction.
 
-A `permission.ask` hook lets through only a fixed set of commit/push forms on a `loop/*` branch with a running loop — anything else still asks, same as the Claude/Bob git-gate's loop/* exemption.
+There is no loop/* exemption on OpenCode. OpenCode declares a `permission.ask` plugin hook but never calls it, so the guard cannot let a loop's own commit and push through: a loop running on OpenCode gets the static `permission.bash` ask on every commit and push. That fails safe — one prompt, never a silent allow. The Claude/Bob git-gate keeps its loop/* exemption.
 
-**When it runs.** Before every tool call (`tool.execute.before`), and before a static `permission.bash` ask is shown to you (`permission.ask`).
+**When it runs.** Before every tool call (`tool.execute.before`).
 
 **What you see.** A refused tool call: `[geneseed-guard] blocked: <reason> — set GENESEED_GUARD=off to allow`. Warnings go to stderr.
 

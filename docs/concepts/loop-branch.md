@@ -40,7 +40,8 @@ explicit `HEAD:<ref>` — any other shape still asks. The exemption only ever co
 branch, and never a shared one (`main`, `master`, `develop`, `development`, `release/*`,
 `hotfix/*`). The **final** commit of a run — the one that removes `LOOP.md` on `$close` — is
 outside the exemption too, because the loop is no longer running when it lands; that ask is your
-consent to close it. **Merging a loop branch into anything else always asks, with no exception.**
+consent to close it. On OpenCode there is no exemption at all — the host never calls the plugin
+hook it would need — so every commit and push asks. **Merging a loop branch into anything else always asks, with no exception.**
 The loop reports the branch to merge and the iterations that landed in "to review" — it never
 merges for you.
 
