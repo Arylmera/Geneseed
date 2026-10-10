@@ -40,7 +40,7 @@ import { isScratchRoot, registryRecord, registryRoots } from '../../js/inspect/r
 import {
   VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir, opencodeShadowedInstall,
 } from '../../js/hosts/hosts.mjs';
-import { installProfile, rebuildCommand } from '../../js/build/generate.mjs';
+import { installProfile, rebuildAll, rebuildCommand } from '../../js/build/generate.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
 import { CONFIG, ROOT, SRC, makeCfg } from '../../js/build/source.mjs';
 import {
@@ -1602,4 +1602,92 @@ test('status lists only installs that exist — an absent slot has no settings t
   // nothing at all.
   assert.ok(installTargets().length > 0, 'installTargets() found no hosts to check');
   assert.ok(d.installs.every((p) => p.state !== 'absent'), 'an absent slot leaked into installs');
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE BINDING RULE, through real installs (final review C1): a global gate goes quiet ONLY where
+// an equivalent project gate fires. "A project manifest exists" is not that proof — a
+// deactivated project install keeps its manifest with every hook unwired, and a project emit
+// into a commented `settings.local.json` writes a manifest but refuses to wire any hook. So the
+// stand-down needs the install LIVE (no `.geneseed-disabled/<host>` stash) and its manifest's
+// `managed.settings_hooks` recording a group that runs THIS verb. Rows:
+//   * a live project install                    -> the global gate defers (the project's asks);
+//   * the same install, deactivated             -> the global gate asks;
+//   * a project emit beside commented settings  -> the global gate asks.
+
+/** The global `git-gate` at `gcfg` judging `git reset --hard HEAD~3` in a session at `repo`. */
+function globalGateIn(gcfg, repo, home) {
+  const r = spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'git-gate', '--root', gcfg], {
+      input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git reset --hard HEAD~3' } }),
+      cwd: repo, encoding: 'utf8', windowsHide: true,
+      env: { ...process.env, ...homeOverrides(home), CLAUDE_PROJECT_DIR: repo,
+        GENESEED_STACK_GLOBAL: '' },
+    });
+  assert.equal(r.status, 0, r.stderr);
+  return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'defer';
+}
+
+test('a global gate stands down only for a LIVE, WIRED project install', () => {
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    const gcfg = path.join(d, 'claude-work');
+    fs.mkdirSync(gcfg, { recursive: true });
+    fs.writeFileSync(path.join(gcfg, '.geneseed-emit'), 'claude-global\n');
+    fs.writeFileSync(path.join(gcfg, GLOBAL_MANIFEST), '{}');
+
+    const live = projectInstall(path.join(d, 'live'), 'claude', home);
+    assert.equal(globalGateIn(gcfg, live, home), 'defer', 'a live project install did not silence '
+      + 'the global gate (its own gate is about to ask)');
+    const off = installDeactivate(live, 'claude', 'project');
+    assert.ok(off.ok, JSON.stringify(off));
+    assert.equal(globalGateIn(gcfg, live, home), 'ask',
+      'a DEACTIVATED project install silenced the global Law IV gate — nothing asks');
+
+    const commented = path.join(d, 'commented');
+    fs.mkdirSync(path.join(commented, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(commented, '.claude', 'settings.local.json'), '{\n  // mine\n}\n');
+    projectInstall(commented, 'claude', home);
+    assert.ok(fs.existsSync(path.join(commented, '.claude', GLOBAL_MANIFEST)),
+      'sanity: the commented-settings emit wrote no manifest, so the row proves nothing');
+    assert.equal(globalGateIn(gcfg, commented, home), 'ask',
+      'a project install whose hooks were never wired silenced the global Law IV gate');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// ONE ANSWER TO "IS THIS A HOST'S GLOBAL" (final review C2). Under `$CLAUDE_CONFIG_DIR` (the
+// docs' multi-account example) the default `~/.claude` is still a Claude GLOBAL — never a
+// `claude:project` rooted at `$HOME`. Comparing only against the env-resolved `configDir()`
+// made `status` list it as a project, `rebuild-all` re-emit it as one (writing `$HOME/CLAUDE.md`
+// and a second hook set), and `uninstall` offer to remove "the project at $HOME".
+
+test('a relocated CLAUDE_CONFIG_DIR never turns the default ~/.claude into a project at $HOME', () => {
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    fs.mkdirSync(home, { recursive: true });
+    withHome(home, () => {
+      const r = emitInherited(['--emit', 'claude-global', '--theme', 'neutral'], { CLAUDE_CONFIG_DIR: '' });
+      assert.equal(r.rc, 0, r.err);
+      const dotClaude = path.join(home, '.claude');
+      assert.ok(fs.existsSync(path.join(dotClaude, GLOBAL_MANIFEST)), 'sanity: no ~/.claude global');
+      inCwd(home, () => {
+        const isHomeProject = (t) => t && t[0] === 'claude' && t[1] === 'project';
+        assert.ok(!installTargets().some(isHomeProject),
+          `installTargets listed claude:project at $HOME: ${JSON.stringify(installTargets())}`);
+        assert.ok(!isHomeProject(uninstallResolve(null)), 'bare uninstall resolved claude:project $HOME');
+        assert.deepEqual(uninstallResolve(dotClaude), ['claude', 'global', resolved(dotClaude)],
+          'uninstall --target ~/.claude is not the Claude global');
+        assert.equal(projectQualifies(home, 'claude'), false, '$HOME qualified as a claude project');
+        captured(() => rebuildAll());
+        assert.ok(!fs.existsSync(path.join(home, 'CLAUDE.md')),
+          'rebuild-all re-emitted ~/.claude as a PROJECT and wrote $HOME/CLAUDE.md');
+      });
+    }, {
+      CLAUDE_CONFIG_DIR: path.join(home, '.claude-work'),
+      OPENCODE_CONFIG_DIR: path.join(d, 'oc-none'),
+      BOB_CONFIG_DIR: path.join(d, 'bob-none'),
+      OPENCLAUDE_CONFIG_DIR: path.join(d, 'openclaude-none'),
+    });
+  });
 });

@@ -412,7 +412,7 @@ export function cmdContext(args) {
   if (hookRoot && sovereignBypass(hookRoot)) return 0;
   // The RAW `args.host`, not `HOST`: `HOST` defaults to claude, which would key an older
   // OpenClaude emit's `~/.openclaude` (no `--host`) on `.claude` instead of its folder name.
-  if (globalHookStandingDown(hookRoot, root, args.host)) return 0;
+  if (globalHookStandingDown(hookRoot, root, args.host, 'context')) return 0;
   const session = hookRoot ? sessionFiles(hookRoot) : [];
   // A session file discovery would also pick up (a `user-rules.md` at the repo root of an
   // install whose harness dir IS the repo root) is injected once, in the session block.

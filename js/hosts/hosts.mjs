@@ -112,20 +112,27 @@ export function sovereignBypass(root) {
  *
  * ONLY A PROJECT INSTALL SILENCES, NEVER ANOTHER GLOBAL. With `CLAUDE_CONFIG_DIR=~/.claude-work`
  * (the docs' multi-account example) a session in `~` finds the OTHER global `~/.claude`, whose
- * hooks this session never loads. A candidate whose own `.geneseed-emit` names a `-global`
- * emit, or that IS a host's global dir (its default `~/<marker>`, which also catches a leftover
- * with no emit marker, or the env-resolved one), is a global: false.
+ * hooks this session never loads. `isHostGlobalDir` (below) decides, the same predicate the
+ * lifecycle verbs use: a candidate that is any host's global is never a project install.
  *   * M-3, DELIBERATE: a hand-written `-global` marker in a PROJECT's `.claude/` therefore reads
  *     as a global, and the gate asks twice. Never "fix" that into silence — it would turn a
  *     user-editable file into a switch that turns a gate off.
  *   * M-2: a `configDir()` that throws (a `~user` relocation variable `resolvePath` refuses)
  *     lands in the catch below, which is false: the gate stays loud.
  *
+ * ONLY A LIVE, WIRED PROJECT INSTALL SILENCES (final review C1). A manifest alone proves no
+ * project gate fires: `deactivate` unwires every hook and keeps the manifest, and a project
+ * emit beside a commented `settings.local.json` writes a manifest but refuses to wire. So the
+ * candidate must carry no `.geneseed-disabled/<host>` stash (the test `claudeState` uses) and
+ * its manifest's `managed.settings_hooks` must record a group running `verb`. A manifest that
+ * does not parse, or records no such group, is false: the gate stays loud. What is not checked
+ * is the settings file itself — a user who hand-deletes a recorded group is told by `doctor`.
+ *
  * LIVES HERE, beside `sovereignBypass`, for the same reason: the gates must not import
  * `hooks-context.mjs`. Any failure (a `~user` root `resolvePath` refuses) is false: a gate that
  * cannot tell keeps gating.
  */
-export function globalHookStandingDown(hookRoot, projectDir, host = null) {
+export function globalHookStandingDown(hookRoot, projectDir, host, verb) {
   if (!hookRoot || process.env.GENESEED_STACK_GLOBAL) return false;
   const markers = STAND_DOWN_MARKERS;
   const own = path.basename(hookRoot);
@@ -136,32 +143,62 @@ export function globalHookStandingDown(hookRoot, projectDir, host = null) {
         // A relocated root with no `--host`: its own `.geneseed-emit` (`claude-global`, …) names
         // the host. Absent or unknown = false — guessing Claude would silence a pre-`--host`
         // OpenClaude gate beside a project `.claude`, and OpenClaude loads no `.claude` hooks.
-        let emit = '';
-        try { emit = readText(path.join(hookRoot, '.geneseed-emit')).trim(); } catch { /* absent */ }
+        const emit = emitMarkerOf(hookRoot);
         marker = emit.endsWith('-global') ? markers[emit.slice(0, -'-global'.length)] : null;
         if (!marker) return false;
       }
-      const self = normcase(resolvePath(hookRoot));
+      const markerHost = Object.keys(markers).find((h) => markers[h] === marker);
       const cand = path.join(resolvePath(projectDir), marker);
-      if (!isFile(path.join(cand, GLOBAL_MANIFEST))) return false;
       // Path equality, case-folded on Windows — `~/.claude` and `~/.Claude` are the same
       // install there and two different ones on Linux.
-      const c = normcase(resolvePath(cand));
-      return c !== self && !isGlobalDir(cand, c);
+      if (normcase(resolvePath(cand)) === normcase(resolvePath(hookRoot))) return false;
+      if (isHostGlobalDir(null, cand)) return false;
+      if (isDir(path.join(cand, DISABLED_STASH, markerHost))) return false;
+      return projectWiresVerb(cand, verb);
     });
   } catch {
     return false;
   }
 }
 
-/** `cand` (resolved and case-folded as `c`) is some host's GLOBAL install, not a project's. */
-function isGlobalDir(cand, c) {
-  let emit = '';
-  try { emit = readText(path.join(cand, '.geneseed-emit')).trim(); } catch { /* absent */ }
-  if (emit.endsWith('-global')) return true;
-  return HOSTS.some((h) => h.family === 'claude'
-    && (normcase(resolvePath(path.join(os.homedir(), h.projectMarker))) === c
-      || normcase(h.configDir()) === c));
+/** Does the manifest at `cand` record a settings hook group whose command runs `verb`? */
+function projectWiresVerb(cand, verb) {
+  let man;
+  try { man = JSON.parse(readText(path.join(cand, GLOBAL_MANIFEST))); } catch { return false; }
+  const groups = man?.managed?.settings_hooks;
+  // Every emitted command is `<runner> <verb> --root|--memory …` (`claudeHookGroups`).
+  const runs = (h) => typeof h?.command === 'string' && h.command.includes(` ${verb} --`);
+  return Array.isArray(groups) && groups.some((g) => (g?.group?.hooks ?? []).some(runs));
+}
+
+/** A dir's own `.geneseed-emit`, trimmed, or `''`. */
+function emitMarkerOf(dir) {
+  try { return readText(path.join(dir, '.geneseed-emit')).trim(); } catch { return ''; }
+}
+
+/** `_harness_mcp.DISABLED_STASH` — a sibling dir whose presence means "disabled". */
+export const DISABLED_STASH = '.geneseed-disabled';
+
+/**
+ * Is `dir` a GLOBAL install of `host` (any host when `null`), never a project's marker dir?
+ *
+ * THE ONE ANSWER (final review C2), used by `installTargets`, `projectQualifies`,
+ * `uninstallResolve`, `themeOfDir` and `globalHookStandingDown`. Three ways to be one:
+ *   * it is the env-resolved `configDir()`;
+ *   * it is the DEFAULT `~/<projectMarker>` of a Claude-family host. Under
+ *     `CLAUDE_CONFIG_DIR=~/.claude-work` the old `~/.claude` is still a global — comparing
+ *     only against `configDir()` made `rebuild-all` re-emit it as a PROJECT rooted at `$HOME`;
+ *   * its own `.geneseed-emit` names a `-global` emit (`<host>-global` when `host` is given).
+ * Case-folded on Windows. A `configDir()` that throws propagates: each caller already has the
+ * catch that says what "cannot tell" means for it (the hook stays loud).
+ */
+export function isHostGlobalDir(host, dir) {
+  const emit = emitMarkerOf(dir);
+  if (host === null ? emit.endsWith('-global') : emit === `${host}-global`) return true;
+  const c = normcase(resolvePath(dir));
+  return HOSTS.some((h) => (host === null || h.host === host)
+    && (normcase(h.configDir()) === c || (h.family === 'claude'
+      && normcase(resolvePath(path.join(os.homedir(), h.projectMarker))) === c)));
 }
 
 /**

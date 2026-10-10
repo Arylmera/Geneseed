@@ -36,7 +36,9 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, PACK_ORDER, THEMES, discoverNames, resolveSkillNames } from '../build/source.mjs';
-import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
+import {
+  CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, isHostGlobalDir, resolvePath,
+} from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
@@ -250,21 +252,18 @@ const THEME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * `openclaude`, `CLAUDE_STYLE` below) go through `claudeShaped` instead, which never calls it
  * (`driver.mjs`'s own comment: "Deliberately not written for the claude/bob/openclaude
  * PROJECT emits"). So a claude-style host must distrust this marker UNLESS `d` is provably
- * that host's OWN global config dir — `hostsOwnGlobalDir` below, which is what makes this
+ * that host's OWN global config dir — `isHostGlobalDir` (`hosts.mjs`), which is what makes this
  * scope-correct without a `scope` parameter: at ANY other `d` (a project root, or another
  * host's global dir entirely) a claude-style host's project emit never wrote this file, so a
  * present one is a SIBLING's (`opencode`'s project marker, in a shared repo — the B1 failure,
  * reached a third way) and `themeOfDir` falls through to `firstCarrier`'s sigil scan instead,
  * exactly as it already must for a claude-style host's own project installs.
  */
-function hostsOwnGlobalDir(host, d) {
-  const row = HOSTS.find((h) => h.host === host);
-  if (!row) return false;
-  try { return resolvePath(d) === resolvePath(row.configDir()); } catch { return false; }
-}
-
 export function themeOfDir(d, host = null) {
-  if (host === null || !CLAUDE_STYLE.includes(host) || hostsOwnGlobalDir(host, d)) {
+  let trust = host === null || !CLAUDE_STYLE.includes(host);
+  // A `configDir()` that throws cannot prove `d` is the global: distrust the marker.
+  try { trust ||= isHostGlobalDir(host, d); } catch { /* sigil scan below */ }
+  if (trust) {
     const marker = path.join(d, '.geneseed-theme');
     if (isFile(marker)) {
       const name = (readMaybe(marker) ?? '').trim();
@@ -557,8 +556,8 @@ export function emitHostScopeOf(root) {
   return EMIT_HOST_SCOPE.get(emit.trim()) ?? null;
 }
 
-/** `_harness_mcp.DISABLED_STASH` — a sibling dir whose presence means "disabled". */
-export const DISABLED_STASH = '.geneseed-disabled';
+// `DISABLED_STASH` moved to `hosts.mjs`: the hook stand-down reads it and must not import this.
+export { DISABLED_STASH };
 
 /**
  * `_harness_mcp._claude_cfg` — where a Claude-STYLE install keeps its manifest.
@@ -647,15 +646,15 @@ export function installTargets() {
   const seen = new Set();
 
   const add = (host, scope, root) => {
-    // A "project" whose marker dir IS this host's global config dir is the global install
-    // seen from its parent (the daemon's cwd is $HOME, where $HOME/.claude == ~/.claude) —
-    // not a separate project. Surfacing it would alias the global's files.
+    // A "project" whose marker dir IS this host's global (`isHostGlobalDir`: the env-resolved
+    // dir, the default `~/<marker>`, or a `-global` emit) is the global install seen from its
+    // parent (the daemon's cwd is $HOME, where $HOME/.claude == ~/.claude) — not a separate
+    // project. Surfacing it would alias the global's files, and `rebuild-all` would re-emit it
+    // as a project rooted at $HOME (final review C2, under `$CLAUDE_CONFIG_DIR`).
     if (scope !== 'global') {
       try {
         const spec = HOSTS.find((h) => h.host === host);
-        if (resolvePath(path.join(root, spec.projectMarker)) === resolvePath(spec.configDir())) {
-          return;
-        }
+        if (isHostGlobalDir(host, path.join(root, spec.projectMarker))) return;
       } catch { /* as the Python's bare `except Exception: pass` */ }
     }
     const key = `${host}\0${resolvePath(root)}`;

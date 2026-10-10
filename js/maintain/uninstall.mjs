@@ -55,7 +55,8 @@ import {
   registeredTargets, DISABLED_STASH,
 } from '../hosts/installs.mjs';
 import {
-  CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
+  CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir,
+  resolvePath,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
@@ -608,8 +609,9 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
 /**
  * `_harness_mcp._project_qualifies` — does `root` carry a REAL Geneseed project install?
  *
- * The marker dir exists, is not the host's global config dir seen from its parent (the
- * `installTargets` aliasing guard), and shows Geneseed's own tracks: the manifest, or the
+ * The marker dir exists, is not the host's global seen from its parent (`isHostGlobalDir`, the
+ * `installTargets` aliasing guard — the default `~/.claude` too, under `$CLAUDE_CONFIG_DIR`),
+ * and shows Geneseed's own tracks: the manifest, or the
  * root `.geneseed-emit` naming this host's project emit for a pre-manifest legacy install.
  * A bare non-Geneseed `.claude/` is very common and must never hijack the resolve.
  */
@@ -618,7 +620,7 @@ export function projectQualifies(root, host) {
   const cfg = path.join(root, spec.projectMarker);
   if (!isDir(cfg)) return false;
   try {
-    if (resolvePath(cfg) === resolvePath(spec.configDir())) return false;
+    if (isHostGlobalDir(host, cfg)) return false;
   } catch { /* as the Python's bare `except Exception: pass` */ }
   if (isFile(path.join(cfg, GLOBAL_MANIFEST))) return true;
   const hs = emitHostScopeOf(root);
@@ -632,7 +634,8 @@ export function projectQualifies(root, host) {
  * is NAMED like a project marker and is the global install, never `claude:project` rooted at
  * `$HOME`, so the global-config-dir case is checked before the marker-name case.
  *
- *   1. `--target` IS a host's global config dir.
+ *   1. `--target` IS a host's global (`isHostGlobalDir`: its env-resolved dir, its default
+ *      `~/<marker>`, or a dir whose emit marker names that host's `-global` emit).
  *   2. `--target` IS a project marker dir itself (…/.claude) — root is its parent.
  *   3. `--target` (as a root) carries a Geneseed project install.
  *   4. `--target` given and unrecognised — null, and the caller reports it.
@@ -642,7 +645,7 @@ export function uninstallResolve(targetArg) {
   const globalHit = (p) => {
     for (const spec of HOSTS) {
       try {
-        if (p === resolvePath(spec.configDir())) return [spec.host, 'global', p];
+        if (isHostGlobalDir(spec.host, p)) return [spec.host, 'global', p];
       } catch { continue; }
     }
     return null;

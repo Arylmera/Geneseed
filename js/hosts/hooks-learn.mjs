@@ -254,7 +254,7 @@ export function cmdLearn(args) {
   // Same install root, and a project install of this host beside it learns on its own Stop: a
   // second LLM call, and the global store learning facts the project owns (Claude B4).
   if (args.memory && globalHookStandingDown(path.dirname(toPlatformPath(args.memory)),
-    hookProjectDir(), args.host)) return 0;
+    hookProjectDir(), args.host, 'learn')) return 0;
 
   const raw = args.file ? readText(args.file) : readStdin();
   const meta = hookMeta(raw);

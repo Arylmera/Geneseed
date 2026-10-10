@@ -633,7 +633,7 @@
       ],
       "world": {
         "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": [], \"managed\": {\"settings_hooks\": [{\"event\": \"SessionStart\", \"group\": {\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}}]}}\n",
         "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
         "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
         "repo/README.md": "# Project\n\nThe readme.\n",
@@ -784,7 +784,7 @@
       "world": {
         "cfg/.geneseed-emit": "claude-global\n",
         "cfg/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": [], \"managed\": {\"settings_hooks\": [{\"event\": \"SessionStart\", \"group\": {\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}}]}}\n",
         "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
         "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
         "repo/README.md": "# Project\n\nThe readme.\n",

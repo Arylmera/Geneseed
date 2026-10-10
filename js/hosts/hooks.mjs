@@ -329,7 +329,7 @@ function gitGate(args) {
   // A project install of this host beside a global one: the project's own git-gate runs too and
   // carries the project's `--no-consent` choice, so the global's verdict would only overrule it
   // (Claude B4). Law IV still runs, in the project's gate.
-  if (globalHookStandingDown(args.root, hookProjectDir(), args.host)) return 0;
+  if (globalHookStandingDown(args.root, hookProjectDir(), args.host, 'git-gate')) return 0;
   return gitDecide(args, readPayload());
 }
 

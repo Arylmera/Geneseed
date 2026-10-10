@@ -1503,10 +1503,15 @@ function ancestorInstall(dir, marker) {
   }
 }
 
+// A manifest that records the three stand-down verbs as wired, the way a live emit's does: the
+// stand-down needs `managed.settings_hooks` to name the verb, not just a manifest (final review C1).
+const WIRED_MANIFEST = JSON.stringify({ managed: { settings_hooks: ['context', 'git-gate', 'learn']
+  .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } })) } });
+
 const mkInstall = (parent, marker = '.claude') => {
   const d = path.join(parent, marker);
   fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), '{}');
+  fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), WIRED_MANIFEST);
   return d;
 };
 
@@ -1517,24 +1522,24 @@ test('the global hook stands down only for a project install of its own host', (
     const pcfg = mkInstall(repo);                               // the project's own .claude
 
     // In the repo, the global hook stands down — the project's hook is about to inject.
-    assert.equal(globalHookStandingDown(gcfg, repo), true);
+    assert.equal(globalHookStandingDown(gcfg, repo, null, 'context'), true);
     // The project's OWN hook never stands down for itself. Path equality is case-folded on
     // Windows, which is why this is an identity check and not a string compare.
-    assert.equal(globalHookStandingDown(pcfg, repo), false);
+    assert.equal(globalHookStandingDown(pcfg, repo, null, 'context'), false);
     // NO UP-WALK (Task 11 review, round 3): a session whose project dir is a SUBDIRECTORY of the
     // repo does not count as being in it. Claude reads the shared `.claude/settings.json` from
     // the session's primary working directory only (`settings.md`), so the repo's project hooks
     // may never have loaded there; a doubled gate is safe, a silenced one is not.
     const sub = path.join(repo, 'a', 'b');
     fs.mkdirSync(sub, { recursive: true });
-    assert.equal(globalHookStandingDown(gcfg, sub), false);
+    assert.equal(globalHookStandingDown(gcfg, sub, null, 'context'), false);
 
     // The two that depend on finding NOTHING — see the header.
     const empty = path.join(d, 'elsewhere');
     fs.mkdirSync(empty);
     const blocker = ancestorInstall(empty, '.claude');
     if (blocker) t.diagnostic(`skipped: an ancestor of the sandbox is a .claude install (${blocker})`);
-    else assert.equal(globalHookStandingDown(gcfg, empty), false, 'the global hook went silent '
+    else assert.equal(globalHookStandingDown(gcfg, empty, null, 'context'), false, 'the global hook went silent '
       + 'outside any project, so nothing would inject at all');
 
     // PER HOST: a project `.claude` must never silence a global `.bob`. Different marker,
@@ -1542,7 +1547,7 @@ test('the global hook stands down only for a project install of its own host', (
     const bobg = mkInstall(path.join(d, 'bobhome'), '.bob');
     const bobBlocker = ancestorInstall(repo, '.bob');
     if (bobBlocker) t.diagnostic(`skipped: an ancestor of the sandbox is a .bob install (${bobBlocker})`);
-    else assert.equal(globalHookStandingDown(bobg, repo), false,
+    else assert.equal(globalHookStandingDown(bobg, repo, null, 'context'), false,
       "a project .claude silenced a global .bob — the hosts' hooks are not independent");
   }));
 });
@@ -1578,7 +1583,7 @@ test('the stand-down marker comes from --host, so a relocated global still stand
       mkInstall(repo, projMarker);
       const blocker = expected ? null : ancestorInstall(repo, projMarker);
       if (blocker) { t.diagnostic(`row ${i} skipped: ancestor install ${blocker}`); return; }
-      assert.equal(globalHookStandingDown(gcfg, repo, host), expected, `row ${i}: ${why}`);
+      assert.equal(globalHookStandingDown(gcfg, repo, host, 'context'), expected, `row ${i}: ${why}`);
     });
     // The opt-out wins over every row: GENESEED_STACK_GLOBAL stacks the global on purpose.
     const gcfg = mkInstall(path.join(d, 'homeS'), 'claude-work');
@@ -1586,7 +1591,7 @@ test('the stand-down marker comes from --host, so a relocated global still stand
     const repo = path.join(d, 'repoS');
     mkInstall(repo);
     process.env.GENESEED_STACK_GLOBAL = '1';
-    assert.equal(globalHookStandingDown(gcfg, repo, null), false, 'the opt-out was ignored');
+    assert.equal(globalHookStandingDown(gcfg, repo, null, 'context'), false, 'the opt-out was ignored');
   }));
 });
 
@@ -1611,15 +1616,15 @@ test('another GLOBAL install in the project dir is never a project install', () 
       // Row 1: two Claude globals, one relocated, both carrying their emit marker.
       mkInstall(home, '.claude');
       fs.writeFileSync(path.join(dotClaude, '.geneseed-emit'), 'claude-global\n');
-      assert.equal(globalHookStandingDown(work, home, null), false,
+      assert.equal(globalHookStandingDown(work, home, null, 'context'), false,
         'the relocated global stood down for the other global ~/.claude');
       // Row 2: a leftover ~/.claude with a manifest but no emit marker — still a global.
       fs.rmSync(path.join(dotClaude, '.geneseed-emit'));
-      assert.equal(globalHookStandingDown(work, home, null), false,
+      assert.equal(globalHookStandingDown(work, home, null, 'context'), false,
         'the relocated global stood down for a leftover ~/.claude');
       // Control: a real project install below home still silences the global.
       mkInstall(below, '.claude');
-      assert.equal(globalHookStandingDown(work, below, null), true,
+      assert.equal(globalHookStandingDown(work, below, null, 'context'), true,
         'a genuine project install no longer silences the global');
     } finally {
       fs.rmSync(dotClaude, { recursive: true, force: true });
