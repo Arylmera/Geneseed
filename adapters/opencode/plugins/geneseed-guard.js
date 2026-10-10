@@ -124,6 +124,16 @@ const SECRET_RE = [
 // .env files are often edited legitimately → WARN, don't hard-block.
 const SECRET_WARN_RE = [/(^|\/)\.env(\.[\w.-]+)?$/i]
 
+// Twin of js/hosts/hooks.mjs's SECRET_RE (Law I's boundary half) — scans WRITE CONTENT for a
+// credential-shaped string, not the target path (SECRET_RE above is the path twin, file names
+// only). High-precision vendor prefixes only, same rationale as the Node side: a generic
+// "looks like entropy" scan fires on every hash and lockfile. Kept byte-identical by the parity
+// test in tests/plugins/guard.test.mjs — simple enough to literally diff, unlike SHELL_WARN_RE's
+// hand-mirrored git acts. `.env*` is exempt (SECRET_WARN_RE above already names it as where a
+// secret may legitimately live) via the same path check used for the WARN tier.
+const SECRET_CONTENT_RE =
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/
+
 // Catastrophic, effectively irreversible shell → BLOCK. Both Unix and Windows shells,
 // since OpenCode runs natively on Windows and the agent may emit cmd / PowerShell.
 const SHELL_BLOCK_RE = [
@@ -215,6 +225,22 @@ function pickPath(args, cwd) {
     if (args && typeof args[k] === "string") return [args[k].replace(/\\/g, "/")]
   }
   return []
+}
+// The content a write/edit/apply_patch call would actually land on disk — what the content
+// secret scan runs against. `write` carries `content`, `edit` carries `newString`
+// (OpenCode tool Parameters, packages/opencode/src/tool/{write,edit}.ts). For `apply_patch`
+// only the `+`-prefixed hunk lines are NEW content — a `-` line is text being REMOVED, so a
+// secret there is leaving the file, not landing in it, and must not block the call.
+function pickAddedContent(args) {
+  if (args && typeof args.patchText === "string") {
+    return String(args.patchText).split(/\r?\n/)
+      .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
+      .map((l) => l.slice(1))
+      .join("\n")
+  }
+  if (args && typeof args.content === "string") return args.content
+  if (args && typeof args.newString === "string") return args.newString
+  return ""
 }
 function pickCommand(args) {
   for (const k of ["command", "cmd", "script"]) {
@@ -411,7 +437,8 @@ export const GeneseedGuard = async (ctx) => {
           // `apply_patch` (gpt-5*) can carry several marker paths in one call — every
           // one of them is a write target, so every one runs every gate; the first hit
           // blocks the whole call (see `pickPath` for why this is not a single path).
-          for (const p of pickPath(args, cwd)) {
+          const paths = pickPath(args, cwd)
+          for (const p of paths) {
             if (SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
             if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
             const sensor = protectedCheck(p)
@@ -424,6 +451,14 @@ export const GeneseedGuard = async (ctx) => {
                    `then re-issue this write`, "process-1")
               return
             }
+          }
+          // Content scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide): skipped
+          // when the target is itself a `.env*` file, same exemption as the path WARN tier above.
+          const added = pickAddedContent(args)
+          if (added && !paths.some((p) => SECRET_WARN_RE.some((re) => re.test(p))) && SECRET_CONTENT_RE.test(added)) {
+            await deny("write would carry a credential-shaped string (Sealed Secrets) — secrets "
+              + "live in .env or a secret manager, never in a tracked file", "law-1")
+            return
           }
         }
         if (hasAny(tool, WIKI_MUTATE_TOOLS)) {

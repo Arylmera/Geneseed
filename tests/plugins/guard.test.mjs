@@ -255,6 +255,49 @@ for (const cmd of [
   })
 }
 
+// ---- content secret scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide) -----
+// The path check above only ever saw the FILENAME; this is the body that would land on disk.
+
+test("blocks a write whose content carries a credential-shaped string", async () => {
+  assert.equal(await blocked("write", { filePath: "src/config.js", content: "const k = 'AKIAABCDEFGHIJKLMNOP'" }), true)
+})
+
+test("blocks an edit whose newString carries a credential-shaped string", async () => {
+  assert.equal(await blocked("edit", { filePath: "src/config.js", oldString: "x", newString: "ghp_" + "a".repeat(36) }), true)
+})
+
+test("blocks an apply_patch whose + line carries a credential-shaped string", async () => {
+  const dest = path.join(tmp, "patched", "src", "config.js").replace(/\\/g, "/")
+  const text = patch(`*** Add File: ${dest}`, "+const k = '" + "sk-ant-" + "a".repeat(24) + "'")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("does NOT block an apply_patch when the credential-shaped string is only on a - line", async () => {
+  const dest = path.join(tmp, "patched", "src", "config2.js").replace(/\\/g, "/")
+  const text = patch(`*** Update File: ${dest}`, "@@", "-const k = '" + "sk-ant-" + "a".repeat(24) + "'", "+const k = loadFromEnv()")
+  assert.equal(await blocked("apply_patch", { patchText: text }), false)
+})
+
+test("an ordinary write passes the content scan", async () => {
+  assert.equal(await blocked("write", { filePath: "src/plain.js", content: "console.log('hello')" }), false)
+})
+
+test("a credential-shaped string written to a .env file only warns, not blocked", async () => {
+  assert.equal(await blocked("write", { filePath: ".env", content: "AKIA_KEY=AKIAABCDEFGHIJKLMNOP" }), false)
+})
+
+test("SECRET_CONTENT_RE stays in parity with the Node hook's SECRET_RE (Law I twin)", async () => {
+  const guardSrc = await fs.readFile(
+    path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
+  const guardRe = guardSrc.match(/const SECRET_CONTENT_RE =\s*\r?\n\s*(\/.*\/)\s*\r?\n/)
+  const hookRe = hookSrc.match(/const SECRET_RE =\s*\r?\n\s*(\/.*\/);/)
+  assert.ok(guardRe, "SECRET_CONTENT_RE not found in geneseed-guard.js")
+  assert.ok(hookRe, "SECRET_RE not found in js/hosts/hooks.mjs")
+  assert.equal(guardRe[1], hookRe[1],
+    "the guard's content-secret pattern drifted from js/hosts/hooks.mjs's SECRET_RE — keep the two byte-identical")
+})
+
 // ---- permission.ask: not registered (OpenCode verdict I-2) --------------------------
 // Upstream declares a `permission.ask` hook in its plugin types but never triggers it:
 // `Permission.ask` (packages/opencode/src/permission/index.ts) evaluates the rules and
