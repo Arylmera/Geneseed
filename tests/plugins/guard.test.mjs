@@ -209,6 +209,7 @@ for (const cmd of [
   "git reset --hard HEAD~1",
   "git clean --force",
   "git branch --delete --force x",
+  "git branch --force --delete x",
   "git restore .",
   "git restore src/file.js",
   // `--staged --worktree` together restores the working tree too, discarding exactly like

@@ -93,10 +93,46 @@ const consentRuleOn = (d, excluded = []) =>
  * after other words (`push origin -f`, `reset -q --hard`, `clean -d -f`) and `git push *+*`
  * a `+refspec` force push. The regex stays the stricter reader — it also sees a flag cluster
  * with `f` not first (`clean -d -xf`), which a glob cannot say without matching `--exclude=f`.
+ *
+ * B5's (claude-code.md / claude-verdict.md) long/modern spellings, added here appended (never
+ * reorder: OpenCode's permission engine evaluates key order with `findLast`, so moving an
+ * existing key can change which VALUE wins on a file that already disagrees with one — adding
+ * only is always safe, since every key here maps to the same `'ask'`). `clean --force`, the
+ * long flag; `branch --delete --force`, the long form of `-D` (both orders, since a glob has
+ * no "either order" — an un-forced `--delete` already refuses on an unmerged branch exactly
+ * like `-d`, so it is deliberately NOT a key here; `-D --force`/`--delete -f`/`-d --force`/
+ * `-df` are the same act again and are a known ceiling this does not chase); `checkout
+ * -f`/`--force` and `switch -f`/`--force`/`--discard-changes` (git's own `switch -h` lists
+ * `-f, --force` and `--discard-changes` as two separate options); `worktree remove -f`/`--force` (both
+ * flag-then-path and path-then-flag order); `reflog expire`; `gc --prune` (matched bare, since
+ * a `--prune` with no `=now` still eventually prunes); and `push *--delete*` / `push * :*` (a
+ * literal space before the colon, so `push origin HEAD:main`, an ordinary refspec, does not
+ * match).
+ *
+ * `git restore` is DELIBERATELY NOT HERE. Its rule is "ask unless `--staged` appears ALONE" —
+ * `--staged --worktree` together still discards the working tree — and a glob has no negation,
+ * so the closest glob (`git restore*`) would ask on the harmless `--staged`-alone case too. The
+ * regex (`DESTRUCTIVE_GIT_RE`) gets that exactly right; `stash drop`/`clear` have the SAME
+ * `restore` anchoring concern in the regex (a bare word / ordinary English, matched there only
+ * in verb position) but no false-positive risk as a glob, since OpenCode matches a glob against
+ * the FULL sub-command text (`opencode-verdict.md` CR-6) — `git stash drop*` cannot match a
+ * DIFFERENT sub-command like `git stash push -m "clear old state"`, so they ARE glob keys here.
+ * Guard-only acts (currently just `restore`) still warn via the OpenCode guard plugin's
+ * `SHELL_WARN_RE` — see `adapters/opencode/plugins/geneseed-guard.js`.
  */
 const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 'git push * -f*',
   'git push *+*', 'git reset --hard*', 'git reset * --hard*', 'git clean -f*', 'git clean * -f*',
-  'git branch -D*', 'git checkout -- *'];
+  'git branch -D*', 'git checkout -- *',
+  'git clean --force*', 'git clean * --force*',
+  'git branch *--delete*--force*', 'git branch *--force*--delete*',
+  'git checkout -f*', 'git checkout * -f*', 'git checkout --force*', 'git checkout * --force*',
+  'git switch -f*', 'git switch * -f*', 'git switch --force*', 'git switch * --force*',
+  'git switch --discard-changes*', 'git switch * --discard-changes*',
+  'git worktree remove -f*', 'git worktree remove --force*',
+  'git worktree remove * -f*', 'git worktree remove * --force*',
+  'git reflog expire*', 'git gc --prune*', 'git gc * --prune*',
+  'git stash drop*', 'git stash clear*',
+  'git push *--delete*', 'git push * :*'];
 
 function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };

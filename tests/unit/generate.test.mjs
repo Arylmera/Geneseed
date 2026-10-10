@@ -1343,16 +1343,32 @@ test('an EXISTING opencode.json has its git gate re-wired when the pack comes ba
 
     // A file that already has a `permission` block, wired with the process pack OFF: the two
     // process keys are absent and the Law IV keys are not — `rm -rf` plus the same destructive
-    // git verbs Claude's git-gate asks on (DESTRUCTIVE_GIT_RE).
+    // git verbs Claude's git-gate asks on (DESTRUCTIVE_GIT_RE). B5's long/modern-spelling gaps
+    // (claude-code.md / claude-verdict.md) are added below the original set — `git restore` is
+    // deliberately NOT here: a glob cannot express "ask unless `--staged` alone", so it stays
+    // guard-only (the OpenCode guard plugin's `SHELL_WARN_RE`), documented at `LAW_IV_BASH`.
     mergeOpencodeJson(p, 'AGENT.md', ['craft']);
     for (const k of ['git commit*', 'git push*']) {
       assert.ok(!(k in bashOf()), `${k} was wired into a build whose process pack is off`);
     }
     for (const k of ['rm -rf *', 'git push --force*', 'git push -f*', 'git push *--force*',
       'git push * -f*', 'git push *+*', 'git reset --hard*', 'git reset * --hard*',
-      'git clean -f*', 'git clean * -f*', 'git branch -D*', 'git checkout -- *']) {
+      'git clean -f*', 'git clean * -f*', 'git branch -D*', 'git checkout -- *',
+      // B5 gaps, glob form:
+      'git clean --force*', 'git clean * --force*',
+      'git branch *--delete*--force*', 'git branch *--force*--delete*',
+      'git checkout -f*', 'git checkout * -f*', 'git checkout --force*', 'git checkout * --force*',
+      'git switch -f*', 'git switch * -f*', 'git switch --force*', 'git switch * --force*',
+      'git switch --discard-changes*', 'git switch * --discard-changes*',
+      'git worktree remove -f*', 'git worktree remove --force*',
+      'git worktree remove * -f*', 'git worktree remove * --force*',
+      'git reflog expire*', 'git gc --prune*', 'git gc * --prune*',
+      'git stash drop*', 'git stash clear*',
+      'git push *--delete*', 'git push * :*']) {
       assert.equal(bashOf()[k], 'ask', `${k} is Law IV's and rides no pack toggle`);
     }
+    assert.ok(!('git restore*' in bashOf()),
+      'git restore* would over-ask on `--staged` alone; it is guard-only, not a LAW_IV_BASH glob');
 
     // Off -> on: the direction that was fail-OPEN. The file already has a `permission` key, so
     // the old `!has(config,'permission')` guard never looked at it again.

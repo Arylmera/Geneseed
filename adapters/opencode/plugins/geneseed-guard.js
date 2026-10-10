@@ -147,8 +147,10 @@ const SHELL_BLOCK_RE = [
 // same acts js/hosts/hooks.mjs's `DESTRUCTIVE_GIT_RE` asks about — mirrored by hand rather
 // than shared, since this plugin is copied whole into an OpenCode install, outside this
 // repo's module graph (see the loop/* exemption note below for the same constraint). `clean`
-// and `--delete` need `--force` alongside them to count — an un-forced `clean`/`branch
-// --delete` already refuses or only removes what is reproducible. `git switch -h` lists `-f,
+// and `--delete` need `--force` alongside them to count, EITHER order (`--force --delete` is
+// the same act as `--delete --force`) — an un-forced `clean`/`branch --delete` already refuses
+// or only removes what is reproducible. `-D --force`/`--delete -f`/`-d --force`/`-df` are the
+// same act again and are a known ceiling this does not chase. `git switch -h` lists `-f,
 // --force` and `--discard-changes` as two SEPARATE options, not one flag's long/short spelling,
 // so both are listed. `restore` and `stash drop`/`clear` are anchored to the VERB position
 // (`\bgit\s+restore\b`, not `\bgit\s+.*restore\b`) — every other row needs a flag that is
@@ -161,7 +163,7 @@ const SHELL_WARN_RE = [
   /\bgit\s+push\b[^\n]*(--force\b|-f\b|\+\S|\s--delete\b|\s:\S)/,   // forced, mirror, or delete push
   /\bgit\s+reset\s+--hard\b/,
   /\bgit\s+clean\b[^\n]*\s(-[a-zA-Z]*f|--force\b)/,
-  /\bgit\s+branch\b[^\n]*\s(-D\b|--delete\b[^\n]*--force\b)/,
+  /\bgit\s+branch\b[^\n]*\s(-D\b|--delete\b[^\n]*--force\b|--force\b[^\n]*--delete\b)/,
   /\bgit\s+checkout\s+--\s/,
   /\bgit\s+checkout\b[^\n]*\s(-[a-zA-Z]*f\b|--force\b)/,
   /\bgit\s+switch\b[^\n]*\s(-[a-zA-Z]*f\b|--force\b|--discard-changes\b)/,

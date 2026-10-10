@@ -79,8 +79,11 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 //
 // B5 (claude-code.md / claude-verdict.md) found the long/modern spellings of the same acts
 // still passed: `clean --force` (the long flag, not a `-f` cluster), `branch --delete --force`
-// (the long form of `-D`; an un-forced `--delete` refuses on an unmerged branch exactly like
-// `-d`, so it stays OUT), `checkout -f`/`--force` and `switch -f`/`--force`/`--discard-changes`
+// (the long form of `-D`, EITHER flag order — `--force --delete` is the same act; an un-forced
+// `--delete` refuses on an unmerged branch exactly like `-d`, so it stays OUT; `-D --force`/
+// `--delete -f`/`-d --force`/`-df` are the SAME act again and are a known ceiling this does not
+// chase — add them if a probe ever shows one in real use), `checkout -f`/`--force` and
+// `switch -f`/`--force`/`--discard-changes`
 // (git's own `-h` lists `-f, --force` AND a separate `--discard-changes` for switch — both
 // discard uncommitted work the same way `checkout --` does), `worktree remove --force`/`-f`
 // (can discard an uncommitted worktree), `reflog expire` and `gc --prune=now` (delete the
@@ -98,7 +101,7 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 // combination DOES discard working-tree changes, unlike `--staged` alone) while still deferring
 // on `--staged` alone.
 const DESTRUCTIVE_GIT_RE =
-  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s(?:-[a-zA-Z]*f|--force\b)|branch\b[^\n]*\s(?:-D\b|--delete\b[^\n]*--force\b)|checkout\s+--\s|checkout\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b)|switch\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b|--discard-changes\b)|worktree\b[^\n]*\bremove\b[^\n]*(?:-[a-zA-Z]*f\b|--force\b)|reflog\b[^\n]*\bexpire\b|gc\b[^\n]*--prune\b|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S|\s--delete\b|\s:\S))|\bgit(?:\s+-C\s+\S+)*\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))|\bgit(?:\s+-C\s+\S+)*\s+stash\s+(?:drop|clear)\b/;
+  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s(?:-[a-zA-Z]*f|--force\b)|branch\b[^\n]*\s(?:-D\b|--delete\b[^\n]*--force\b|--force\b[^\n]*--delete\b)|checkout\s+--\s|checkout\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b)|switch\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b|--discard-changes\b)|worktree\b[^\n]*\bremove\b[^\n]*(?:-[a-zA-Z]*f\b|--force\b)|reflog\b[^\n]*\bexpire\b|gc\b[^\n]*--prune\b|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S|\s--delete\b|\s:\S))|\bgit(?:\s+-C\s+\S+)*\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))|\bgit(?:\s+-C\s+\S+)*\s+stash\s+(?:drop|clear)\b/;
 
 // `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
 // false allow publishes. So the exemption holds only when the ENTIRE command is built from

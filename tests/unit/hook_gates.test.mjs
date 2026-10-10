@@ -307,6 +307,7 @@ test('the B5 long/modern-spelling gaps ask under Deletion Is Deliberate too', ()
   for (const cmd of [
     'git clean --force',
     'git branch --delete --force x',
+    'git branch --force --delete x',
     'git restore .',
     'git restore src/file.js',
     'git -C /repo restore .',
