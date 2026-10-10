@@ -117,6 +117,24 @@ function withHookShell(shell, fn) {
   }
 }
 
+/**
+ * Run `fn` with `process.platform` forced to `value` — the same monkeypatch
+ * `tests/unit/web_pick_folder.test.mjs` uses, restored in `finally`. Every default-`process
+ * .platform` parameter in this codebase (`hookShimPath`, `hookPrefix`, `writeHookShim`,
+ * `claudeHookShell`) reads the LIVE value, so this is what lets a test exercise the win32 shim
+ * shape (`.cmd`) and the POSIX one (bare) in the same run, on whichever OS actually runs it —
+ * the CI gap this helper exists for: a test built assuming `hookShimPath()` and
+ * `writeInstall`'s shim both land on the SAME shape is only true by accident on a Windows
+ * runner, and silently false on Linux (host-compat fix round, Task 1).
+ */
+function withPlatform(value, fn) {
+  const real = process.platform;
+  Object.defineProperty(process, 'platform', { value, configurable: true });
+  try { return fn(); } finally {
+    Object.defineProperty(process, 'platform', { value: real, configurable: true });
+  }
+}
+
 /** Run `fn` with `GENESEED_HOME` pointed at a fresh empty directory (or at `at`). */
 function withHome(fn, at = null) {
   const sb = makeSandbox('hookform-');
@@ -400,22 +418,28 @@ test('the doctor gate is silent when no shim exists', () => {
 // a stuck session by trial and error.
 
 test('shimProblems reports a deleted shim only when a live install still names it', () => {
-  withHome((home) => {
-    const cfg = path.join(home, 'cfg');
-    mkdirSync(cfg, { recursive: true });
-    writeInstall(cfg, 'bash');   // writes settings.json + manifest + (via hookPrefix) the shim
-    const p = hookShimPath();
-    assert.ok(existsSync(p), 'writeInstall did not write the shim its own commands name');
-    rmSync(p);                  // simulate: a user (or a cleanup script) deleted it by hand
-    const targets = [['claude', 'global', cfg]];
-    const probs = shimProblems(targets);
-    assert.equal(probs.length, 1, probs.join('\n'));
-    assert.ok(probs[0].includes(p) && probs[0].includes(cfg) && probs[0].includes('rebuild-all'),
-      probs[0]);
-    // The clean half: once the install itself is gone too, nothing live names the shim.
-    rmSync(cfg, { recursive: true, force: true });
-    assert.deepEqual(shimProblems(targets), []);
-  });
+  // Both shim SHAPES, on whatever host actually runs this (CI regression, host-compat fix
+  // round): `writeInstall`'s shim and this test's own `hookShimPath()` must agree on which
+  // file ('.cmd' or bare) they mean, which was true only by accident on a win32 runner.
+  for (const plat of [process.platform, process.platform === 'win32' ? 'linux' : 'win32']) {
+    withPlatform(plat, () => withHome((home) => {
+      const cfg = path.join(home, 'cfg');
+      mkdirSync(cfg, { recursive: true });
+      // writes settings.json + manifest + (via hookPrefix) the shim, all shaped for `plat`
+      writeInstall(cfg, 'bash', plat);
+      const p = hookShimPath();
+      assert.ok(existsSync(p), `${plat}: writeInstall did not write the shim its own commands name`);
+      rmSync(p);                // simulate: a user (or a cleanup script) deleted it by hand
+      const targets = [['claude', 'global', cfg]];
+      const probs = shimProblems(targets);
+      assert.equal(probs.length, 1, `${plat}: ${probs.join('\n')}`);
+      assert.ok(probs[0].includes(p) && probs[0].includes(cfg) && probs[0].includes('rebuild-all'),
+        `${plat}: ${probs[0]}`);
+      // The clean half: once the install itself is gone too, nothing live names the shim.
+      rmSync(cfg, { recursive: true, force: true });
+      assert.deepEqual(shimProblems(targets), [], plat);
+    }));
+  }
 });
 
 test('installsReferencingShim matches the exact shim path, not merely its marker', () => {
@@ -712,10 +736,17 @@ test('an install emitted before onFailure existed upgrades to it on re-emit', ()
   });
 });
 
-/** Write a Claude install at `cfg` as an emit under `shell` would: settings file and manifest. */
-function writeInstall(cfg, shell) {
+/**
+ * Write a Claude install at `cfg` as an emit under `shell` would: settings file and manifest.
+ *
+ * `platform` defaults to `'win32'` (unchanged for every existing caller below, which is
+ * deliberately simulating Windows' two hook shells regardless of the host OS running the
+ * test). Pass the live `process.platform` explicitly when the shim this writes must agree
+ * with a bare `hookShimPath()` call elsewhere in the same test — see `withPlatform` above.
+ */
+function writeInstall(cfg, shell, platform = 'win32') {
   withHookShell(shell, () => {
-    const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform: 'win32' });
+    const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform });
     const recorded = Object.entries(groups)
       .flatMap(([event, gs]) => gs.map((group) => ({ event, group })));
     writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({ hooks: groups }));
@@ -781,28 +812,33 @@ test('status shows a fail-open hook form in the gates row, and adds nothing when
 });
 
 test('status marks the gates DEAD when the shim itself is gone but a live install still names it', () => {
-  withHome((home) => {
-    const cfg = path.join(home, 'claude-cfg');
-    mkdirSync(cfg, { recursive: true });
-    writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
-    writeInstall(cfg, 'bash');
-    const p = hookShimPath();
-    assert.ok(existsSync(p));
-    rmSync(p);
-    const g = gateSummary([cfg], 'win32');
-    assert.deepEqual(g.dead, [p], JSON.stringify(g));
-    const row = statusLines({ ...statusData(), gates: g }, false).find((l) => l.includes('gates'));
-    assert.ok(row.includes('DEAD') && row.includes('geneseed rebuild-all'), row);
-    // A dir that is not Claude-STYLE (an OpenCode config dir) is never judged — same rule the
-    // fail-open test above pins for `fail_open`, now for `dead`.
-    writeFileSync(path.join(cfg, '.geneseed-emit'), 'opencode-global\n');
-    assert.deepEqual(gateSummary([cfg], 'win32').dead, []);
-    // Once the install itself is gone too, nothing live names the missing shim.
-    writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
-    rmSync(path.join(cfg, 'settings.json'));
-    rmSync(path.join(cfg, GLOBAL_MANIFEST));
-    assert.deepEqual(gateSummary([cfg], 'win32').dead, []);
-  });
+  // Same cross-platform agreement `withPlatform` exists for, in the previous test — the
+  // `'win32'` passed to `gateSummary` below only steers its UNRELATED `fail_open` check
+  // (Task 15); it does not make the shim this test writes and reads agree in shape.
+  for (const plat of [process.platform, process.platform === 'win32' ? 'linux' : 'win32']) {
+    withPlatform(plat, () => withHome((home) => {
+      const cfg = path.join(home, 'claude-cfg');
+      mkdirSync(cfg, { recursive: true });
+      writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+      writeInstall(cfg, 'bash', plat);
+      const p = hookShimPath();
+      assert.ok(existsSync(p), plat);
+      rmSync(p);
+      const g = gateSummary([cfg], 'win32');
+      assert.deepEqual(g.dead, [p], `${plat}: ${JSON.stringify(g)}`);
+      const row = statusLines({ ...statusData(), gates: g }, false).find((l) => l.includes('gates'));
+      assert.ok(row.includes('DEAD') && row.includes('geneseed rebuild-all'), `${plat}: ${row}`);
+      // A dir that is not Claude-STYLE (an OpenCode config dir) is never judged — same rule the
+      // fail-open test above pins for `fail_open`, now for `dead`.
+      writeFileSync(path.join(cfg, '.geneseed-emit'), 'opencode-global\n');
+      assert.deepEqual(gateSummary([cfg], 'win32').dead, [], plat);
+      // Once the install itself is gone too, nothing live names the missing shim.
+      writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+      rmSync(path.join(cfg, 'settings.json'));
+      rmSync(path.join(cfg, GLOBAL_MANIFEST));
+      assert.deepEqual(gateSummary([cfg], 'win32').dead, [], plat);
+    }));
+  }
 });
 
 test('the PowerShell form escapes $ and backtick inside its double-quoted paths', () => {
