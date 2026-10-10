@@ -378,9 +378,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     && !Array.isArray(doc.managed)) ? doc.managed : {};
 
   // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every
-  // carrier but `CLAUDE.md` — `_PREAMBLE_CONFIG_DIR` has exactly one key — so Bob's
-  // `AGENTS.md` does not resolve to one. Spelling it as a call rather than a literal is what makes that a
-  // measured `null` instead of an assumed one.
+  // carrier but `CLAUDE.md`, so Bob's `AGENTS.md` does not resolve to one; for a `CLAUDE.md`
+  // carrier it branches on `host` to pick Claude's or OpenClaude's own global config dir (see
+  // `preambleExclude`'s own docblock). Spelling it as a call rather than a literal is what
+  // makes that a measured `null` instead of an assumed one.
   const rendered = emitClaudeRender(cfg, {
     theme: args.theme, cfgDir, claudeMd, scope, host,
     out,

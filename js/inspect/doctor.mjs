@@ -41,7 +41,7 @@ import {
   checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
 import { moduleMapProblems, scorecardProblems, shimProblems } from './checks-repo.mjs';
-import { isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
+import { NOTE, isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
 
 /**
  * `_harness_build._themes_to_check` — which themes doctor validates.
@@ -56,6 +56,18 @@ export function themesToCheck(theme, allThemes, detected, available) {
   if (theme) return [theme];
   if (!allThemes && detected && available.includes(detected)) return [detected];
   return [...available].sort();
+}
+
+/**
+ * Host-compat I1: one `[note]`-prefixed line per root `openclaudeDualHarnessRoots` finds —
+ * extracted to its own function (rather than inlined in `doctorCollect`) so a test can pin the
+ * exact text without running a full doctor sweep.
+ */
+export function openclaudeDualHarnessNotes() {
+  return openclaudeDualHarnessRoots().map((root) => `${NOTE}[openclaude] ${root} also carries `
+    + 'a claude/bob per-repo install — OpenClaude loads its own .openclaude/CLAUDE.md AND that '
+    + 'root CLAUDE.md/AGENTS.md (every always-on doc doubles) — uninstall the one you no '
+    + 'longer use if this was not intended');
 }
 
 /**
@@ -225,11 +237,11 @@ export function doctorCollect({
     ? [`[opencode] ${shadow} holds a Geneseed install beside $OPENCODE_CONFIG_DIR's, and OpenCode `
       + 'loads both (every plugin runs twice) — uninstall the one you no longer use'] : []));
   // Host-compat I1: OpenClaude's project carrier is additive, not exclusive — there is no
-  // clean exclusion, so this check only names the repos where both are loading.
+  // clean exclusion, so unlike `opencode_dirs` above (an accident of an env var) this is a
+  // NOTE, not a problem: a repo that deliberately runs claude/bob AND openclaude is a legal
+  // configuration its owner chose, and doctor must not fail a legal configuration.
   problems = problems.concat(ran('openclaude_dual', 'OpenClaude dual harness',
-    openclaudeDualHarnessRoots().map((root) => `[openclaude] ${root} also carries a claude/bob `
-      + 'per-repo install — OpenClaude loads its own .openclaude/CLAUDE.md AND that root '
-      + 'CLAUDE.md/AGENTS.md (every always-on doc doubles) — uninstall the one you no longer use')));
+    openclaudeDualHarnessNotes()));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('scorecard', 'Scorecard floor', scorecardProblems()));
   // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed
@@ -270,12 +282,14 @@ export function cmdDoctor(args) {
     printOut(`${collected.length ? collected[0] : '[doctor] no themes found'}\n`);
     return 1;
   }
-  // ⚠ NOTES ARE PRINTED AND NOT COUNTED. The only producer is the pack-off citation report in
-  // `constitutionProblems`, and the state it describes is one the install's owner chose: a
-  // build that leaves body prose citing a pack it did not render. Silence there is how prose
-  // and boundary drift apart, and a non-zero exit there is doctor failing a legal
-  // configuration. Nothing in the recorded CLI corpus produces one — the checkout's own
-  // `harness.config.json` names no packs — so the byte-compared output is unmoved.
+  // ⚠ NOTES ARE PRINTED AND NOT COUNTED. Two producers: the pack-off citation report in
+  // `constitutionProblems` (a build that leaves body prose citing a pack it did not render),
+  // and `openclaudeDualHarnessRoots` above (a repo deliberately running claude/bob AND
+  // openclaude). Both describe a state the install's owner chose — silence is how prose and
+  // boundary drift apart unnoticed, or how a dual-harness repo stays a surprise, but a
+  // non-zero exit for either would be doctor failing a legal configuration. Nothing in the
+  // recorded CLI corpus produces either — the checkout's own `harness.config.json` names no
+  // packs, and it carries no dual-harness install — so the byte-compared output is unmoved.
   const notes = collected.filter(isDoctorNote);
   const problems = collected.filter((p) => !isDoctorNote(p));
   const scoped = !args.theme && !args.all && themes.length === 1;

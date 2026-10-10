@@ -27,6 +27,8 @@ import { spawnSync } from 'node:child_process';
 import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/build/version.mjs';
 import { sourceReleaseVersion } from '../../js/hosts/opencode.mjs';
 import { versionVerdict, statusData, statusLines, gateSummary } from '../../js/inspect/status.mjs';
+import { openclaudeDualHarnessNotes } from '../../js/inspect/doctor.mjs';
+import { NOTE, isDoctorNote } from '../../js/inspect/scan.mjs';
 import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
   projectQualifies, installDeactivate, installReactivate,
@@ -502,6 +504,35 @@ test('openclaudeDualHarnessRoot fires only when openclaude shares a root with cl
     mark('openclaude');
     mark('bob');
     assert.equal(openclaudeDualHarnessRoot(d), true, 'bob + openclaude share the root too');
+  });
+});
+
+// Controller fix round: the dual-harness finding is a NOTE (a legal, deliberate configuration),
+// not a problem — `cmdDoctor` must not exit 1 over it, the way it already does not for D5's
+// pack-off citation note (`harness.test.mjs`'s "the gate flags an unknown pack..." test).
+test('openclaudeDualHarnessNotes pins NOTE-prefixed text doctor will not count as a problem', () => {
+  withDir((d) => {
+    const mark = (host) => {
+      const dir = path.join(d, `.${host}`);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+    };
+    mark('openclaude');
+    mark('claude');
+    const cwd0 = process.cwd();
+    process.chdir(d);
+    try {
+      const notes = openclaudeDualHarnessNotes();
+      const real = fs.realpathSync.native(d);
+      assert.ok(notes.some((n) => n.startsWith(NOTE)
+        && n.includes('[openclaude]') && n.includes(real)
+        && n.includes('also carries a claude/bob per-repo install')
+        && n.includes('uninstall the one you no longer use if this was not intended')),
+        `note text did not match the pinned shape: ${JSON.stringify(notes)}`);
+      for (const n of notes) {
+        assert.ok(isDoctorNote(n), `a dual-harness line did not read as a note: ${n}`);
+      }
+    } finally { process.chdir(cwd0); }
   });
 });
 

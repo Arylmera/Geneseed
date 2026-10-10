@@ -596,11 +596,12 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // a forked session got no session files or project context. The static AGENT.md is NOT
     // re-printed here either way.
     SessionStart: [{ hooks: [{ type: 'command', command: context }] }],
-    // `|| exit 0` (not `|| true`): hooks on Windows run under Git Bash on both Claude Code
-    // (2.1.88+) and OpenClaude, not cmd.exe (host-compat OpenClaude verdict, `B/src/utils/
-    // hooks.ts`) — but a hook shell is not guaranteed, so `exit 0` is the one spelling that
-    // swallows failures under either: `true` is not a cmd.exe command and would invert the
-    // swallow-failures intent into a 9009 error there.
+    // `|| exit 0` (not `|| true`): hooks on Windows run under Git Bash on OpenClaude and on
+    // the Claude Code 2.1.88 build the host-compat review read (`B/src/utils/hooks.ts`), not
+    // cmd.exe — but no version is a documented guarantee going forward, and a hook shell is
+    // not guaranteed at all, so `exit 0` is the one spelling that swallows failures either
+    // way: `true` is not a cmd.exe command and would invert the swallow-failures intent into
+    // a 9009 error there.
     Stop: [{ hooks: [{ type: 'command', command: learn }] }],
     // Same command as Stop: `learn` reads the payload's hook_event_name and routes a
     // SubagentStop to the per-agent lesson path.
