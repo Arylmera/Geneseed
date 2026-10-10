@@ -1671,6 +1671,8 @@ test('a relocated CLAUDE_CONFIG_DIR never turns the default ~/.claude into a pro
       assert.equal(r.rc, 0, r.err);
       const dotClaude = path.join(home, '.claude');
       assert.ok(fs.existsSync(path.join(dotClaude, GLOBAL_MANIFEST)), 'sanity: no ~/.claude global');
+      const work = process.env.CLAUDE_CONFIG_DIR;
+      assert.equal(emitInherited(['--emit', 'claude-global', '--theme', 'neutral']).rc, 0);
       inCwd(home, () => {
         const isHomeProject = (t) => t && t[0] === 'claude' && t[1] === 'project';
         assert.ok(!installTargets().some(isHomeProject),
@@ -1682,6 +1684,17 @@ test('a relocated CLAUDE_CONFIG_DIR never turns the default ~/.claude into a pro
         captured(() => rebuildAll());
         assert.ok(!fs.existsSync(path.join(home, 'CLAUDE.md')),
           'rebuild-all re-emitted ~/.claude as a PROJECT and wrote $HOME/CLAUDE.md');
+        // Uninstalling the old global acts on THAT root, never on the active relocated one, and
+        // leaves the machine-wide hook shim the active account still runs through.
+        const shimDir = path.join(process.env.GENESEED_HOME, 'bin');
+        const shims = fs.readdirSync(shimDir).filter((f) => f.startsWith('geneseed-hook'));
+        assert.ok(shims.length, 'sanity: the emit wrote no hook shim');
+        const [rc] = captured(() => cmdUninstall(uninstallArgs(dotClaude)));
+        assert.equal(rc, 0);
+        assert.ok(!fs.existsSync(path.join(dotClaude, GLOBAL_MANIFEST)), 'the ~/.claude global survived');
+        assert.equal(installState(work, 'claude', 'global'), 'active',
+          'uninstalling ~/.claude removed the ACTIVE relocated global');
+        for (const f of shims) assert.ok(fs.existsSync(path.join(shimDir, f)), `${f} was removed`);
       });
     }, {
       CLAUDE_CONFIG_DIR: path.join(home, '.claude-work'),
