@@ -134,12 +134,34 @@ const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 
   'git stash drop*', 'git stash clear*',
   'git push *--delete*', 'git push * :*'];
 
+/**
+ * User decision (2026-10-10): a loop runs on its own `loop/*` branch, never `main`/`master`, so
+ * pushing it is fine — only the COMMIT still asks. OpenCode has no dynamic equivalent of
+ * `js/hosts/hooks.mjs`'s `loopExempt` (Task 6: its `permission.ask` plugin hook is declared but
+ * never called), so this is a STATIC allow for the exact refspec shapes the loop engine itself
+ * pushes — `pushSegmentOk`'s `[-u|--set-upstream] <remote> HEAD:<branch>` and
+ * `HEAD:refs/heads/<branch>` forms, with `<branch>` fixed to `loop/*` here since a static glob
+ * cannot read the checked-out branch the way the Node hook does. `git push * HEAD:loop/*` eats
+ * `-u origin`/`--set-upstream origin`/any remote through its leading `*`; the second key covers
+ * the `refs/heads/` spelling the same way.
+ *
+ * ORDER IS LOAD-BEARING. `defaultPermission` appends these AFTER `git push*`'s ask (so a loop
+ * push is not swallowed by the blanket consent ask) and BEFORE `LAW_IV_BASH` (so `findLast`
+ * — OpenCode's own `permission.bash` evaluator — lets a force push, a `+refspec`, or a
+ * `--delete`/bare-`:` push still ask even when the target is `loop/*`; those LAW_IV_BASH keys
+ * match the same command and come later, so they win). Never move this block to before
+ * `git push*` or after `LAW_IV_BASH` — either moves the `findLast` boundary the ordering above
+ * depends on.
+ */
+const LOOP_PUSH_ALLOW = ['git push * HEAD:loop/*', 'git push * HEAD:refs/heads/loop/*'];
+
 function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
   if (consentRuleOn(doctrines, excluded)) {
     bash['git commit*'] = 'ask';
     bash['git push*'] = 'ask';
   }
+  for (const k of LOOP_PUSH_ALLOW) bash[k] = 'allow';
   for (const k of LAW_IV_BASH) bash[k] = 'ask';
   return { bash };
 }
@@ -151,7 +173,7 @@ function defaultPermission(doctrines = null, excluded = []) {
  * has to be able to recognise a key that is Geneseed's business at all — to add it back when
  * the pack returns, and to name it when this build no longer wants it but will not remove it.
  */
-const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', ...LAW_IV_BASH];
+const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', ...LOOP_PUSH_ALLOW, ...LAW_IV_BASH];
 
 /**
  * Bring an ALREADY-WRITTEN `permission` block back into line with the pack selection, and

@@ -1972,6 +1972,76 @@ test('the opencode permission gate follows the process pack, and Law IV never do
   });
 });
 
+/**
+ * OpenCode's own `Wildcard.match` (packages/core/src/util/wildcard.ts): `*` -> `.*`, the
+ * whole string anchored (`^...$`), case-insensitive on win32. Ported rather than imported —
+ * the upstream sparse clone is TS and outside this repo's module graph — so a drift between
+ * this port and upstream is the risk the test lives with; it is exercised against the exact
+ * push commands the loop engine emits (hooks.mjs `pushSegmentOk`, docs/concepts/loop-branch.md),
+ * not a synthetic string, which is what would catch that drift in practice.
+ */
+function wildcardMatch(input, pattern) {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`, 's').test(input);
+}
+
+/** `Permission.evaluate`'s `findLast` over `permission.bash`: the LAST key whose glob matches
+ * the command wins, 'ask' when nothing does (OpenCode's own default for a shell command with
+ * no matching rule). */
+function evaluateBash(bash, command) {
+  const keys = Object.keys(bash);
+  for (let i = keys.length - 1; i >= 0; i -= 1) {
+    if (wildcardMatch(command, keys[i])) return bash[keys[i]];
+  }
+  return 'ask';
+}
+
+test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to loop/* still ask', () => {
+  // User decision (2026-10-10): a loop runs on its own branch, never main/master, so pushing it
+  // is fine. Task 6 removed the dead `permission.ask` loop exemption and left OpenCode asking
+  // on every push; this is the static replacement — an unconditional `allow` for the exact
+  // refspec shapes the loop engine pushes (loopExempt's `pushSegmentOk`: `[-u|--set-upstream]
+  // <remote> HEAD:<branch>` or `HEAD:refs/heads/<branch>`), placed where `findLast` lets Law IV's
+  // destructive-git asks (force, `+refspec`, `--delete`, bare `:`) still win over it.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md', PACK_ORDER);
+    const bash = JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
+
+    // Written-out rows, evaluated the way upstream does: findLast + Wildcard.match.
+    const rows = [
+      ['git push -u origin HEAD:loop/x', 'allow'],
+      ['git push origin HEAD:loop/x', 'allow'],
+      ['git push --set-upstream origin HEAD:refs/heads/loop/x', 'allow'],
+      ['git push --force origin HEAD:loop/x', 'ask'],
+      ['git push origin +HEAD:loop/x', 'ask'],
+      ['git push origin --delete loop/x', 'ask'],
+      ['git push -u origin HEAD:main', 'ask'],
+      ['git push origin :loop/x', 'ask'],
+    ];
+    for (const [cmd, want] of rows) {
+      assert.equal(evaluateBash(bash, cmd), want, `${cmd} -> expected ${want}`);
+    }
+
+    // The allow keys sit strictly between the consent `git push*` ask and Law IV's first
+    // destructive-push key — `findLast` means anything placed AFTER the allow can still
+    // override it, and Law IV is exactly the override this depends on.
+    const keys = Object.keys(bash);
+    const pushAskIdx = keys.indexOf('git push*');
+    const lawIvIdx = keys.indexOf('git push --force*');
+    const allowIdx = keys.findIndex((k) => k.includes('loop/'));
+    assert.ok(pushAskIdx >= 0 && lawIvIdx >= 0 && allowIdx >= 0, 'a key this cell depends on is missing');
+    assert.ok(pushAskIdx < allowIdx && allowIdx < lawIvIdx,
+      'the loop allow is not strictly between the consent push ask and Law IV');
+
+    // Never main/master: a loop allow key must not itself match a plain push to a shared branch.
+    for (const k of keys.filter((kk) => kk.includes('loop/'))) {
+      assert.ok(!wildcardMatch('git push -u origin HEAD:main', k),
+        `${k} would also allow a push to main`);
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // THE SECOND DOCTRINE AXIS — `--exclude-rules`, one rule at a time
 //

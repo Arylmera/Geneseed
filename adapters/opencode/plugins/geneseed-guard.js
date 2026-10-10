@@ -22,12 +22,23 @@
 // `permission.asked` bus event with no plugin hook in between. The loop/* exemption this
 // plugin once hung there (downgrade the static `git commit*`/`git push*` ask to allow on a
 // launched loop branch, the twin of js/hosts/hooks.mjs's `loopExempt`) therefore never ran,
-// and is gone. Lost behaviour, stated plainly: an OpenCode loop gets the static ask on every
-// commit and push. That fails safe — one prompt, never a silent allow. The `permission.asked`
+// and is gone. Lost behaviour, stated plainly: an OpenCode loop's COMMIT gets the static ask
+// every time — that fails safe, one prompt, never a silent allow. The `permission.asked`
 // event + SDK reply route was not taken: it races the TUI's own prompt and is unverified from
-// inside a plugin. The upgrade path is a session-level `permission` ruleset set by the loop
-// launcher when it creates the loop session (`session.create` accepts one) allowing exactly
-// its `git push <remote> HEAD:<branch>` form.
+// inside a plugin.
+//
+// The PUSH half is recovered differently (user decision, 2026-10-10): pushing a `loop/*`
+// branch is not pushing `main`/`master`, so it is allowed STATICALLY rather than dynamically —
+// js/hosts/settings.mjs's `LOOP_PUSH_ALLOW` wires an unconditional `permission.bash` allow for
+// the loop engine's own refspec shapes (`git push [-u] <remote> HEAD:loop/*` and its
+// `refs/heads/` spelling), ordered so a force push, a `+refspec`, or a `--delete`/bare-`:`
+// push to `loop/*` still asks (`LAW_IV_BASH` comes after it, and `findLast` wins on the last
+// match). This plugin has no part in that — it is a `permission.bash` key, read before any
+// `tool.execute.before` hook runs — so there is nothing to change here for the push half; this
+// comment only keeps this file's account in step. The commit still has no static equivalent:
+// a commit's content cannot be named by a glob the way a push's target branch can, so the
+// upgrade path there is still a session-level `permission` ruleset set by the loop launcher
+// when it creates the loop session (`session.create` accepts one).
 
 import { promises as fs, realpathSync, existsSync, readFileSync } from "node:fs"
 import * as path from "node:path"

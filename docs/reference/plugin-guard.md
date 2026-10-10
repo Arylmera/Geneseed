@@ -16,7 +16,7 @@ One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](envi
 
 It ships whole on every install, whatever [doctrine packs](../concepts/rules.md) you chose. On Claude Code and Bob the same checks are hooks, which can *ask* you instead of refusing; OpenCode's tool hook has no ask tier. Protected wiki folders are enforced only here — on the other hosts they are an instruction.
 
-There is no loop/* exemption on OpenCode. OpenCode declares a `permission.ask` plugin hook but never calls it, so the guard cannot let a loop's own commit and push through: a loop running on OpenCode gets the static `permission.bash` ask on every commit and push. That fails safe — one prompt, never a silent allow. The Claude/Bob git-gate keeps its loop/* exemption.
+There is no DYNAMIC loop/* exemption on OpenCode — it declares a `permission.ask` plugin hook but never calls it, so this guard cannot let a loop's own commit through the way the Claude/Bob git-gate's `loopExempt` does. A loop's commit on OpenCode still gets the static `permission.bash` ask, every time. A push to a `loop/*` branch does not: pushing a loop branch is not pushing `main`/`master`, so [`js/hosts/settings.mjs`](../../js/README.md) wires a static `allow` for the exact refspec shapes the loop engine pushes (`git push [-u] <remote> HEAD:loop/<slug>`, and the `refs/heads/` spelling) — never `main`/`master`, and a force push, a `+refspec`, or a `--delete`/bare-`:` push to a `loop/*` branch still asks, because those keys are ordered to win.
 
 **When it runs.** Before every tool call (`tool.execute.before`).
 
