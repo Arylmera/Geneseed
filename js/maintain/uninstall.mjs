@@ -50,8 +50,8 @@ import path from 'node:path';
 import { hookRunnerEntry } from '../hosts/shim.mjs';
 import { confirm } from '../lib/prompt.mjs';
 import {
-  claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, excludedRulesOfDir, installKind,
-  installState,
+  claudeCfg, claudeReadManifest, doctrinesOfDir, EMIT_HOST_SCOPE, emitHostScopeOf,
+  excludedRulesOfDir, installKind, installState,
   registeredTargets, DISABLED_STASH,
 } from '../hosts/installs.mjs';
 import {
@@ -531,19 +531,47 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
   // The root markers are ONE PER ROOT (`generate.mjs`'s "THE MARKER IS TRUSTED ONLY FOR ITS
   // OWN HOST") and `registryRoots` keeps a row alive only while `.geneseed-emit` exists there
   // — so in a repo sharing two project installs (`.claude/` + `.opencode/` at the same cwd,
-  // last deploy wins the marker), deleting it here because THIS host is being uninstalled
-  // would also silently deregister the OTHER host's still-live install. Delete only when the
-  // marker actually names the host just removed, or when nothing else is installed at this
-  // root to still need it.
-  const markerScope = emitHostScopeOf(root);
-  const marksThisHost = markerScope !== null && markerScope[0] === host;
-  const otherInstallRemains = HOSTS.some(
+  // last deploy wins the marker), deleting it unconditionally because THIS host is being
+  // uninstalled would silently deregister the OTHER host's still-live install, regardless of
+  // which host's name the marker happened to carry.
+  //
+  // Delete every marker ONLY when nothing else is installed here. Otherwise:
+  //   - `.geneseed-emit` carries HOST IDENTITY (`EMIT_HOST_SCOPE`'s key names a (host, scope)
+  //     pair) and `installProfile`/`migrateSurvey` trust it only for the host it names
+  //     (`generate.mjs`'s own docblock). If it currently names the host just removed, REWRITE
+  //     it to the survivor's own emit name — the same string `writeMarkers` (`driver.mjs`)
+  //     would have written for that survivor — rather than deleting it and leaving the
+  //     registry row to self-prune a live install. If it already names a survivor, it is
+  //     already correct; leave it untouched.
+  //   - `.geneseed-theme` and `VERSION_MARKER` carry NO host identity — a bare theme name and
+  //     a version/fingerprint string — so there is no survivor value to rewrite them TO; the
+  //     only question is whether they are THIS host's own litter to clear. At PROJECT scope
+  //     `.geneseed-theme` here is OpenCode's alone: `driver.mjs`'s own comment says the
+  //     claude/bob/openclaude project emits never write it, and `themeOfDir`'s host-narrowing
+  //     (host-compat B1 round 3, `js/hosts/installs.mjs`) means no Claude-style sibling ever
+  //     reads it either — so delete it only when OpenCode is the host being removed, and
+  //     leave it for a Claude-style uninstall (it belongs to a surviving or absent OpenCode
+  //     install either way, never to the host that just left). `VERSION_MARKER` is written at
+  //     `cfgDir`, never bare `root`, by every PROJECT emit (`js/build/version.mjs`'s callers),
+  //     so a project root never actually carries this file regardless of host — deleting it
+  //     here is always a no-op there. At GLOBAL scope neither file is ever shared (each host
+  //     owns its own config dir), so both are always this host's own and always safe to drop.
+  const survivor = HOSTS.find(
     ({ host: h }) => h !== host && installState(root, h, scope) !== 'absent',
   );
-  if (marksThisHost || !otherInstallRemains) {
+  if (!survivor) {
     for (const m of ['.geneseed-emit', '.geneseed-theme', VERSION_MARKER]) {
       unlinkQuiet(path.join(root, m));
     }
+  } else {
+    const markerScope = emitHostScopeOf(root);
+    if (markerScope !== null && markerScope[0] === host) {
+      const survivorEmit = [...EMIT_HOST_SCOPE.entries()]
+        .find(([, hs]) => hs[0] === survivor.host && hs[1] === scope)?.[0];
+      if (survivorEmit) writeText(path.join(root, '.geneseed-emit'), `${survivorEmit}\n`);
+    }
+    if (scope === 'global' || host === 'opencode') unlinkQuiet(path.join(root, '.geneseed-theme'));
+    unlinkQuiet(path.join(root, VERSION_MARKER));
   }
   // 4. Tidy an emptied marker dir (.claude/.bob) so no husk lingers in the repo.
   if (data !== root && isDir(data) && isEmptyDir(data)) rmdirQuiet(data);

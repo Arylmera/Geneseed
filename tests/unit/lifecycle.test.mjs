@@ -1121,6 +1121,40 @@ test('uninstalling one host does not erase the shared root marker a sibling inst
   });
 });
 
+test('the mirror ordering: the marker names the host being removed, and must be REWRITTEN to '
+  + 'the survivor rather than deleted (host-compat B2, fix round 2)', () => {
+  // The previous round only guarded against deleting a marker that already named a survivor.
+  // Installing claude FIRST then opencode leaves the marker naming opencode (last deploy
+  // wins); opencode still resolves first in HOSTS order and is uninstalled. This time the
+  // marker DOES name the host being removed, so the old guard's `marksThisHost` branch fired
+  // and deleted it anyway — deregistering claude's still-live install exactly as before, just
+  // from the other direction. The fix rewrites `.geneseed-emit` to the survivor's own emit
+  // name instead of deleting it.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const home = path.join(d, 'home');
+    fs.mkdirSync(repo, { recursive: true });
+    projectInstall(repo, 'claude', home);
+    projectInstall(repo, 'opencode', home);
+    assert.deepEqual(emitHostScopeOf(repo), ['opencode', 'project'],
+      'sanity: the shared marker now names opencode (last deploy wins)');
+    registryRecord(repo);
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+    assert.equal(installState(resolved(repo), 'opencode', 'project'), 'absent');
+
+    assert.equal(installState(resolved(repo), 'claude', 'project'), 'active',
+      "claude's own install was untouched by the opencode uninstall");
+    assert.deepEqual(emitHostScopeOf(repo), ['claude', 'project'],
+      "the marker still names the removed host (opencode) instead of being rewritten to "
+      + 'the surviving claude install');
+    assert.ok(registryRoots().some((r) => {
+      try { return fs.realpathSync.native(r) === resolved(repo); } catch { return false; }
+    }), 'the registry silently dropped a root that still carries a live claude install');
+  });
+});
+
 test('a single host reports nothing extra', () => {
   // The control: "also found" must be about a real second install, not a line printed always.
   withDir((d) => {
