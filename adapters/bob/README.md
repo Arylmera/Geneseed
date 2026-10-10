@@ -99,16 +99,17 @@ What the global emit writes into `~/.bob/settings/settings.json`:
 | event | verb | how the verdict travels |
 | --- | --- | --- |
 | `SessionStart` | `context --host bob` | plain stdout, as on Claude |
-| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV: **exit 2**, reason on stderr; process 1/5: a stderr line, exit 0 |
+| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV and rigor-5: **exit 2**, reason on stderr; process 1/5: a stderr line, exit 0 |
 | `Stop` | `learn` | never a verdict |
 
 No matcher on `PreToolUse` because Bob's tool names are undocumented (its IDE and its
 Shell differ); `tool-gate` reads the payload's shape instead — a `command` field gets
 the git checks, a path gets the rule checks — and defers on anything it does not
-recognise. Bob has **no "ask the user" tier**, so the two Laws that admit no judgement
-call are refused outright and the two consent rules become a warning. Because that
-warning is all process 5 can be here, the `process` pack toggle changes nothing in
-Bob's hooks: the one group only ever exits 2 for Laws I and IV, which every build carries.
+recognise. Bob has **no "ask the user" tier**, so the Laws and checks that admit no judgement
+call — Laws I and IV, and rigor-5 (External Gate, when a project opts in) — are refused
+outright, and the two consent rules become a warning. Because that warning is all process 5
+can be here, the `process` pack toggle changes nothing in Bob's hooks: the one group only
+ever exits 2 for Laws I and IV and rigor-5, which every build carries.
 
 **Migration.** A re-emit over an older install unwires Geneseed's groups from the flat
 `~/.bob/settings.json` (your own keys there are kept) and writes the new set to the

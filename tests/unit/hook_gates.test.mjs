@@ -412,6 +412,44 @@ test('the Claude dialect is unchanged when --host is absent, and tool-gate speak
     { stdin: contentPayload('src/a.js', 'AKIAIOSFODNN7EXAMPLE') }), 'tool-gate/claude/secret');
 });
 
+// ---------------------------------------------------------------------------------------------
+// Bob's REAL payload shape (bob-verdict.md I1): `{event, session_id, tool, input:{...}}` — no
+// `tool_input`, `tool_name` or `hook_event_name`. `tool-gate` is the only verb Bob's settings.json
+// ever invokes (settings.mjs:519), so normalising must happen there. Before the fix, `toolGate`
+// reads `payload.tool_input` (absent -> `{}`), always falls through to `ruleDecide`, which reads
+// `payload.tool_input` again (still absent) and defers on every call — Law I, Law IV and
+// rigor-5 are a silent no-op on every real Bob tool call.
+const bobPayload = (tool, input) => JSON.stringify({ event: 'PreToolUse', session_id: 'ses_1', tool, input });
+
+test('bob-shaped write_file with a secret still blocks (rc 2), not a silent defer', () => {
+  const r = hookRun('tool-gate', {
+    stdin: bobPayload('write_file', { path: 'src/a.js', content: 'AKIAIOSFODNN7EXAMPLE' }),
+    host: 'bob',
+  });
+  assert.equal(r.rc, 2, `write_file/secret: expected exit 2, got ${r.rc}, stderr=${r.err}`);
+  assert.match(r.err, /Sealed Secrets/);
+});
+
+test('bob-shaped execute_command with a destructive git act still blocks (rc 2)', () => {
+  const r = hookRun('tool-gate', {
+    stdin: bobPayload('execute_command', { command: 'git push --force' }),
+    host: 'bob',
+  });
+  assert.equal(r.rc, 2, `execute_command/force-push: expected exit 2, got ${r.rc}, stderr=${r.err}`);
+  assert.match(r.err, /Deletion Is Deliberate/);
+});
+
+test('a Claude-shaped payload is unchanged by the Bob normalisation', () => {
+  // Same assertion as the existing Bob dialect test above, re-run through `tool-gate` with the
+  // ALREADY-Claude-shaped payload, to prove the new normalisation step is a no-op here: nothing
+  // it sets (`tool_input`, `tool_name`, `hook_event_name`) was missing to begin with.
+  const r = hookRun('tool-gate', { stdin: bashPayload('git push --force'), host: 'bob' });
+  assert.equal(r.rc, 2, `claude-shaped unchanged: expected exit 2, got ${r.rc}`);
+  assert.match(r.err, /Deletion Is Deliberate/);
+  // process-5 (consent) has no block tier on Bob: a stderr nudge, exit 0 — a defer, not a block.
+  assertDefers(hookRun('tool-gate', { stdin: bashPayload('git push'), host: 'bob' }), 'tool-gate/claude-shaped/consent');
+});
+
 test('a dotenv target and ordinary content defer', () => {
   assertDefers(hookRun('rule-gate',
     { stdin: contentPayload('.env', 'AWS_KEY=AKIAIOSFODNN7EXAMPLE') }), '.env');

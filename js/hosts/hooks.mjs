@@ -9,7 +9,8 @@
  * ONE VERB, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
  * prompt. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
- * EXIT CODE 2, so the two Laws exit 2 with the reason on stderr and the rest is a stderr line with exit 0; SessionStart
+ * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5) exit 2 with the reason on stderr
+ * and the rest is a stderr line with exit 0; SessionStart
  * context is plain stdout, as on Claude. `--host openclaude` speaks Claude's dialect verbatim
  * (OpenClaude is a Claude Code fork); the flag only picks which root file counts as native. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
  * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
@@ -196,7 +197,9 @@ const BOB_DENY_EXIT = 2;
 /**
  * On Bob, which has no ask tier, which rules are worth a hard block. Laws I and IV: a
  * credential in a tracked file and a history-discarding git act are wrong in every context,
- * so refusing them costs nothing. Process 1 and process 5 are the USER's calls — a hard
+ * so refusing them costs nothing. rigor-5 (External Gate) joins them: a protected check the
+ * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
+ * only", see bob-code.md B3. Process 1 and process 5 are the USER's calls — a hard
  * block would make Bob unable to commit at all — so they become a warning the host
  * logs. `gate-error` is a warning too: a crashed gate that blocked every tool call would be
  * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
@@ -397,8 +400,11 @@ function ruleDecide(args, payload) {
   if (typeof p !== 'string' || !p) return 0;
   // Write carries `content`, Edit `new_string`, NotebookEdit `new_source`, MultiEdit an
   // `edits[]` of `new_string`s — every one can plant a credential, so every one is scanned.
+  // `diff` (Bob's `apply_diff`) and `replace`/`search` (`search_and_replace`) are Roo-lineage
+  // field names the Bob docs never confirm (bob-verdict.md I1) — accepted when present, never
+  // required, same as every field above.
   const edits = Array.isArray(ti.edits) ? ti.edits.map((e) => e && e.new_string) : [];
-  const body = [ti.content, ti.new_string, ti.new_source, ...edits]
+  const body = [ti.content, ti.new_string, ti.new_source, ti.diff, ti.replace, ti.search, ...edits]
     .filter((v) => typeof v === 'string').join('\n');
   if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
     return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
@@ -424,6 +430,25 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 // ======================================================================================
 
 /**
+ * Bob's documented PreToolUse payload (bob-verdict.md I1) is `{event, session_id, tool,
+ * input:{...}}` — none of `tool_input`, `tool_name` or `hook_event_name` exist. Normalised
+ * HERE, once, at Bob's one entry point (`toolGate` is the only verb its settings.json invokes
+ * for PreToolUse), so `gitDecide`/`ruleDecide` keep reading the Claude shape unchanged and
+ * never learn Bob exists. A no-op for an already-Claude-shaped payload: every field it sets
+ * is only filled in when the Claude-named field is absent.
+ */
+function normaliseBobPayload(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const out = { ...payload };
+  if (!out.tool_input && payload.input && typeof payload.input === 'object') {
+    out.tool_input = payload.input;
+  }
+  if (!out.tool_name && typeof payload.tool === 'string') out.tool_name = payload.tool;
+  if (!out.hook_event_name && typeof payload.event === 'string') out.hook_event_name = payload.event;
+  return out;
+}
+
+/**
  * Bob's PreToolUse entry carries no matcher over documented tool names, so it cannot name `git-gate` for Bash and `rule-gate` for Write the way Claude's
  * `PreToolUse` does. This verb is the two fused, dispatched on the payload rather
  * than on a matcher: a `command` field is a shell call and gets the git checks, a path
@@ -432,7 +457,7 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
  */
 function toolGate(args) {
   if (sovereignBypass(args.root)) return 0;
-  const payload = readPayload();
+  const payload = normaliseBobPayload(readPayload());
   const ti = (payload && payload.tool_input) || {};
   return typeof ti.command === 'string' ? gitDecide(args, payload) : ruleDecide(args, payload);
 }
