@@ -55,6 +55,13 @@ import { printErr } from '../js/lib/fs.mjs';
 // specifiers stay literal strings — `tests/unit/hook_cli.test.mjs`'s import walk reads them.
 const HOSTED = { '--root': 'root', '--host': 'host' };
 const gates = () => import('../js/hosts/hooks.mjs');
+// Verbs PreToolUse/PostToolUse actually gate a tool call with. The machine-wide, last-writer-wins
+// shim (this file's header) means a stale checkout can be handed a flag only a newer install
+// knows (e.g. `--no-consent`); on Claude Code, exit 2 from one of THESE verbs blocks the tool
+// outright, with no ask. `main` below answers an argv error on a gate verb with exit 0 instead —
+// a gate's own decision still exits 0 and signals through stdout (`askDecision`), so this only
+// changes what used to be a hard lockout into "the gate is silent this one call" (see I3/B1).
+const GATE_VERBS = new Set(['git-gate', 'rule-gate', 'tool-gate']);
 const VERBS = {
   context: { load: () => import('../js/hosts/hooks-context.mjs'), fn: 'cmdContext', flags: HOSTED },
   'git-gate': {
@@ -146,7 +153,14 @@ async function main(argv) {
     if (rc !== null) return rc;
   }
   const parsed = parse(spec, argv.slice(1));
-  if (parsed.error) return die(2, parsed.error);
+  if (parsed.error) {
+    // A gate verb must never exit 2 on an argv error: that is indistinguishable, to Claude's
+    // PreToolUse, from the gate deliberately blocking (see I3/B1 above). Print the same message
+    // to stderr for a human debugging the shim, but return 0 with no stdout, exactly like a gate
+    // that chose not to act.
+    if (GATE_VERBS.has(verb)) { printErr(`geneseed-hook: error: ${parsed.error}\n`); return 0; }
+    return die(2, parsed.error);
+  }
   return (await spec.load())[spec.fn](parsed.args);
 }
 

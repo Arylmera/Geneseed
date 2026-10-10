@@ -957,6 +957,23 @@ test('no verb at all refuses', () => {
   assert.equal(r.stdout, '');
 });
 
+// I3/B1: PreToolUse exit 2 BLOCKS the tool call. The machine-wide, last-writer-wins shim means a
+// stale checkout can receive a flag it does not recognise (e.g. a newer install's
+// `--no-consent`), and the old argv-error path answered that with exit 2 — turning a flag
+// mismatch into every Bash/Write call being blocked. A gate's own decision still exits 0 and
+// signals through stdout (`askDecision`); only the ARGV-parsing failure is at issue here.
+for (const verb of ['git-gate', 'rule-gate', 'tool-gate']) {
+  test(`${verb} survives an unknown flag with rc 0 and empty stdout`, () => {
+    const r = run(HOOK, [verb, '--root', ROOT, '--frobnicate'], process.env, ROOT);
+    assert.equal(r.status, 0,
+      `an argv error on a gate verb must never exit 2 — that blocks the tool call it was `
+      + `guarding. stderr: ${r.stderr.slice(0, 200)}`);
+    assert.equal(r.stdout, '',
+      'a non-blocking argv error prints nothing on stdout: that is the channel the host parses '
+      + 'as a verdict');
+  });
+}
+
 test('two mutually exclusive theme flags are refused, and one of them is not', () => {
   // A mutually-exclusive group is BEHAVIOUR even though its wording is not reproduced, and the two
   // are separable — which is why this is a hand-written gate rather than a cell. A cell would
