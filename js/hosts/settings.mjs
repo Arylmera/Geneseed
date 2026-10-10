@@ -13,8 +13,8 @@
  *
  * THE STDOUT RULE BINDS HARDEST HERE. The hooks this module writes signal their verdict as
  * a JSON object on stdout and return 0 on EVERY path (`|| exit 0`, or `; exit 0` in the
- * PowerShell form, is not what it looks like — see the shim comment below), so a stray byte printed on a hook path does not make
- * noise, it silently disables a gate. Everything printed here is a generator-time message;
+ * PowerShell form, is not what it looks like — see the shim comment below), so a stray byte
+ * printed on a hook path does not make noise, it silently disables a gate. Everything printed here is a generator-time message;
  * the split between them is asserted absolutely by `tests/unit/settings_jsonc.test.mjs` and
  * `tests/unit/settings_integrity.test.mjs`. The asymmetry (`_warn_commented_jsonc` prints to
  * STDOUT, every other message to stderr) is inherited from `_build_settings.py` and kept
@@ -631,13 +631,17 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
  * PowerShell 5.1 alike (both measured byte-identical to the bash form's output). The gates stay
  * bare: no verb exits 2, so a launch failure is non-blocking in either shell.
  *
- * ponytail: the paths stay double-quoted, so a `$` or backtick in one would expand under
- * PowerShell (bash has the same `$` exposure today); single-quote them if a path ever does.
+ * The paths stay double-quoted, where PowerShell expands `$name` and reads a backtick as an
+ * escape — a Windows path may legally hold either, and a mangled `--root` silently changes
+ * which install a gate answers for. So both are backtick-escaped first; nothing else in the
+ * command (verbs, flags) can contain them.
  */
 function powershellForm(groups) {
-  const ps = (h) => ({
-    ...h, command: `& ${h.command.replace(/ \|\| exit 0$/, '; exit 0')}`, shell: 'powershell',
-  });
+  const ps = (h) => {
+    const escaped = h.command.replace(/[`$]/g, '`$&');
+    const command = `& ${escaped.replace(/ \|\| exit 0$/, '; exit 0')}`;
+    return { ...h, command, shell: 'powershell' };
+  };
   return Object.fromEntries(Object.entries(groups)
     .map(([event, gs]) => [event, gs.map((g) => ({ ...g, hooks: g.hooks.map(ps) }))]));
 }

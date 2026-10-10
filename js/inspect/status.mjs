@@ -63,7 +63,7 @@ import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
-  resolvePath, resolveMemoryDir, sovereignBypass, GATE_LEDGER,
+  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, GATE_LEDGER,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
@@ -211,7 +211,10 @@ export function gateSummary(cfgDirs) {
   // runs, so it outranks `armed` in the row.
   // `fail_open` (Task 15): Claude installs whose bash-form hooks now run under PowerShell. Only
   // present when non-empty, so every recorded `--json` panel keeps its shape.
-  const failOpen = hookShellProblems().filter((p) => !p.startsWith('[note] '));
+  // Only the dirs it was handed, and only those that are Claude's global (`isHostGlobalDir`).
+  const isClaude = (c) => { try { return isHostGlobalDir('claude', c); } catch { return false; } };
+  const claude = cfgDirs.filter(isClaude).map((c) => ['claude', 'global', c]);
+  const failOpen = hookShellProblems(claude).filter((p) => !p.startsWith('[note] '));
   return {
     standing_down: standingDown, asks, total, dead: shimDead(),
     ...(failOpen.length ? { fail_open: failOpen } : {}),

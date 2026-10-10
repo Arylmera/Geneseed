@@ -26,21 +26,20 @@
  * is precisely the bug this test exists for.
  */
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { shimProblems } from '../../js/inspect/checks-repo.mjs';
-import { GENESEED_HOOK_SNIFF, claudeHookGroups } from '../../js/hosts/settings.mjs';
+import { gateSummary, statusData, statusLines } from '../../js/inspect/status.mjs';
+import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
 import {
   SHIM_ARGV, claudeHookShell, ephemeralCheckout, hookPrefix, hookRunnerEntry, hookShimBody,
   hookShimPath, writeHookShim,
 } from '../../js/hosts/shim.mjs';
-import { mergeClaudeSettings } from '../../js/hosts/settings.mjs';
 import { hookShellProblems } from '../../js/hosts/installs.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
-import { spawnSync } from 'node:child_process';
-import { gateSummary, statusData, statusLines } from '../../js/inspect/status.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
@@ -599,17 +598,23 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
   });
 });
 
+/** Write a Claude install at `cfg` as an emit under `shell` would: settings file and manifest. */
+function writeInstall(cfg, shell) {
+  withHookShell(shell, () => {
+    const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform: 'win32' });
+    const recorded = Object.entries(groups)
+      .flatMap(([event, gs]) => gs.map((group) => ({ event, group })));
+    writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({ hooks: groups }));
+    writeFileSync(path.join(cfg, GLOBAL_MANIFEST),
+      JSON.stringify({ managed: { settings_hooks: recorded } }));
+  });
+}
+
 test('doctor names a Claude install whose hook form no longer matches the machine', () => {
   withHome((home) => {
     const cfg = path.join(home, '.claude');
     mkdirSync(cfg, { recursive: true });
-    const write = (shell) => withHookShell(shell, () => {
-      const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform: 'win32' });
-      const recorded = Object.entries(groups)
-        .flatMap(([event, gs]) => gs.map((group) => ({ event, group })));
-      writeFileSync(path.join(cfg, GLOBAL_MANIFEST),
-        JSON.stringify({ managed: { settings_hooks: recorded } }));
-    });
+    const write = (shell) => writeInstall(cfg, shell);
     const probe = (shell, targets, platform = 'win32') => withHookShell(shell,
       () => hookShellProblems(targets, platform));
     const global = [['claude', 'global', cfg]];
@@ -630,6 +635,10 @@ test('doctor names a Claude install whose hook form no longer matches the machin
     assert.ok(slow[0].startsWith('[note] '), `the slow-but-working direction is a note: ${slow[0]}`);
     // A project install is read from `<repo>/.claude`, the manifest the project emit writes.
     assert.equal(probe('bash', [['claude', 'project', home]]).length, 1);
+    // The settings file is what the host runs: recorded hooks the user deleted by hand are no drift.
+    writeFileSync(path.join(cfg, 'settings.json'), '{}');
+    assert.deepEqual(probe('bash', global), []);
+    write('powershell');
     // A DISABLED install keeps its manifest but runs no hooks, so it cannot fail open.
     mkdirSync(path.join(cfg, '.geneseed-disabled', 'claude'), { recursive: true });
     assert.deepEqual(probe('bash', global), []);
@@ -637,11 +646,41 @@ test('doctor names a Claude install whose hook form no longer matches the machin
 });
 
 test('status shows a fail-open hook form in the gates row, and adds nothing when there is none', () => {
-  const g = gateSummary([]);
-  assert.ok(!('fail_open' in g), 'a clean machine grew a fail_open key in the --json panel');
-  const row = statusLines({ ...statusData(), gates: { ...g, dead: [], fail_open: ['x'] } }, false)
-    .find((l) => l.includes('gates'));
-  assert.ok(row.includes('FAIL OPEN') && row.includes('geneseed rebuild-all'), row);
+  // Sandboxed: `gateSummary` judges only the config dirs it is handed, here one Claude global
+  // (`.geneseed-emit` says so) emitted for Git Bash, read on a machine forced to have none.
+  withHome((home) => {
+    const cfg = path.join(home, 'claude-cfg');
+    mkdirSync(cfg, { recursive: true });
+    writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+    writeInstall(cfg, 'bash');
+    const clean = withHookShell('bash', () => gateSummary([cfg]));
+    assert.ok(!('fail_open' in clean), 'a clean machine grew a fail_open key in the --json panel');
+    const g = withHookShell('powershell', () => gateSummary([cfg]));
+    assert.equal(g.fail_open?.length, 1, JSON.stringify(g));
+    // A dir that is not Claude's global (an OpenCode or Bob config dir) is never judged.
+    writeFileSync(path.join(cfg, '.geneseed-emit'), 'bob-global\n');
+    assert.ok(!('fail_open' in withHookShell('powershell', () => gateSummary([cfg]))));
+    const row = statusLines({ ...statusData(), gates: { ...g, dead: [] } }, false)
+      .find((l) => l.includes('gates'));
+    assert.ok(row.includes('FAIL OPEN') && row.includes('geneseed rebuild-all'), row);
+  });
+});
+
+test('the PowerShell form escapes $ and backtick inside its double-quoted paths', () => {
+  // A Windows path may hold either; unescaped, PowerShell expands `$x` and eats the backtick, so
+  // `--root` names another directory and the gate answers for the wrong install.
+  withHome((home) => {
+    const cfg = path.join(home, 'a$b`c');
+    const winOpts = { ...HOOK_OPTS(), platform: 'win32' };
+    const run = hookPrefix(winOpts);
+    const ps = withHookShell('powershell', () => claudeHookGroups(cfg, winOpts));
+    const esc = path.join(home, 'a`$b``c');
+    assert.equal(ps.SessionStart[0].hooks[0].command, `& ${run} context --root "${esc}"; exit 0`);
+    assert.equal(ps.PreToolUse[0].hooks[0].command, `& ${run} git-gate --root "${esc}"`);
+    // The bash form is untouched by it.
+    const bash = withHookShell('bash', () => claudeHookGroups(cfg, winOpts));
+    assert.equal(bash.SessionStart[0].hooks[0].command, `${run} context --root "${cfg}" || exit 0`);
+  });
 });
 
 // THE LIVE PROOF, Windows only: spawn the emitted command under each PowerShell on PATH (bare

@@ -24,14 +24,20 @@ export const RELOCATION_VARS = ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCL
 // `GENESEED_HOME` is last because it is the STRONGEST: the shim-home resolver prefers it over
 // the OS home, so an ambient `GENESEED_HOME` overrides a module's own HOME/USERPROFILE sandbox
 // — which is how the first measurement of that defect reported three well-behaved modules as
-// polluters.
+// polluters. `CLAUDE_CODE_GIT_BASH_PATH` is the one row that is not a home: it points at
+// `STUB_GIT_BASH` (see `homeOverrides`) and is listed so `restoreProcessHome` puts it back.
 export const HOME_VARS = ['HOME', 'USERPROFILE', 'XDG_CONFIG_HOME', 'APPDATA', 'LOCALAPPDATA',
-  'GENESEED_HOME'];
+  'GENESEED_HOME', 'CLAUDE_CODE_GIT_BASH_PATH'];
 
 /**
- * The six assignments that move "home" into `home`. ONE definition, because a child's env and
+ * The assignments that move "home" into `home`. ONE definition, because a child's env and
  * this process's env have to agree on what the word covers — a sandbox missing one row is a
  * sandbox with a hole in it.
+ *
+ * `CLAUDE_CODE_GIT_BASH_PATH` is not a home, but it rides here for the same reason: it pins
+ * Claude's hook shell to bash (`claudeHookShell`), so emitted hook bytes and every expectation
+ * over them are the same on a Windows machine with or without Git Bash. The PowerShell branch
+ * is covered by `withHookShell`'s forced rows in `tests/unit/hook_form.test.mjs`.
  */
 export function homeOverrides(home) {
   return {
@@ -41,6 +47,7 @@ export function homeOverrides(home) {
     APPDATA: path.join(home, 'AppData', 'Roaming'),
     LOCALAPPDATA: path.join(home, 'AppData', 'Local'),
     GENESEED_HOME: path.join(home, '.geneseed'),
+    CLAUDE_CODE_GIT_BASH_PATH: STUB_GIT_BASH,
   };
 }
 
@@ -68,6 +75,12 @@ export function homeOverrides(home) {
 // matched nothing. The developer's machine cannot produce a short `TEMP`; GitHub's runner
 // spells it `C:\Users\RUNNER~1\…`.
 export const TMP_ROOT = fs.realpathSync.native(os.tmpdir());
+
+// One empty `bash.exe` beside the temp root, for `homeOverrides`' CLAUDE_CODE_GIT_BASH_PATH:
+// `claudeHookShell` only checks that it exists and is named bash.exe. Never executed.
+export const STUB_GIT_BASH = path.join(TMP_ROOT, 'geneseed-stub-git-bash', 'bash.exe');
+fs.mkdirSync(path.dirname(STUB_GIT_BASH), { recursive: true });
+if (!fs.existsSync(STUB_GIT_BASH)) fs.writeFileSync(STUB_GIT_BASH, '');
 
 /**
  * One cell's temp dir: canonical, and with a teardown that cannot raise.

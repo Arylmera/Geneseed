@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   HOME_VARS, RELOCATION_VARS, cellEnv, homeOverrides, makeSandbox, restoreProcessHome,
-  sandboxProcessHome,
+  sandboxProcessHome, STUB_GIT_BASH,
 } from '../helpers/sandbox.mjs';
 import { ALIAS_SKIP, aliasedTemp } from '../helpers/alias.mjs';
 
@@ -229,22 +229,29 @@ test('a knob spelled in another case is still cleared', () => {
   }
 });
 
+// Every HOME_VARS row is a home except `CLAUDE_CODE_GIT_BASH_PATH`, which pins Claude's hook
+// shell to bash at the one shared stub so emitted hook bytes do not depend on the machine.
+const HOMES = HOME_VARS.filter((v) => v !== 'CLAUDE_CODE_GIT_BASH_PATH');
+
 test('home and XDG point inside the sandbox', () => {
   const home = path.join(fs.realpathSync(os.tmpdir()), 'sb-home');
   const env = cellEnv(home);
-  for (const v of HOME_VARS) {
+  for (const v of HOMES) {
     assert.ok(env[v] && env[v].startsWith(home), `${v} points outside the sandbox: ${env[v]}`);
   }
+  assert.equal(env.CLAUDE_CODE_GIT_BASH_PATH, STUB_GIT_BASH);
+  assert.ok(fs.statSync(STUB_GIT_BASH).isFile(), 'the Git Bash stub was not created');
 });
 
 test('the process-home sandbox covers every variable that decides where home is', () => {
   const before = Object.fromEntries(HOME_VARS.map((v) => [v, process.env[v]]));
   const home = sandboxProcessHome();
   try {
-    for (const v of HOME_VARS) {
+    for (const v of HOMES) {
       assert.ok(process.env[v] && process.env[v].startsWith(home),
         `${v} was not moved into the sandbox`);
     }
+    assert.equal(process.env.CLAUDE_CODE_GIT_BASH_PATH, STUB_GIT_BASH);
     assert.deepEqual(Object.keys(homeOverrides(home)).sort(), [...HOME_VARS].sort());
   } finally { restoreProcessHome(); }
   for (const v of HOME_VARS) assert.equal(process.env[v], before[v], `${v} was not restored`);

@@ -162,26 +162,34 @@ export function globalHookStandingDown(hookRoot, projectDir, host, verb) {
 }
 
 /**
- * Does the project install at `cand` really run `verb`? Its manifest must record a hook group
- * whose command runs it, AND the settings file that manifest names must still carry that
- * command under the same event — the manifest is a claim, the settings file is what the host
- * runs. A user who deletes `hooks` by hand keeps the manifest (re-review, Important). Absent,
- * unparseable or COMMENTED settings fail `JSON.parse` and answer false: what cannot be
- * verified does not silence a gate.
+ * The hook handlers the install at `cfg` both RECORDS and still RUNS: `[event, handler]` pairs
+ * from its manifest's `managed.settings_hooks` whose command the settings file that manifest
+ * names still carries under the same event — the manifest is a claim, the settings file is what
+ * the host runs. A user who deletes `hooks` by hand keeps the manifest (re-review, Important).
+ * Absent, unparseable or COMMENTED settings fail `JSON.parse` and answer `[]`. Shared by
+ * `projectWiresVerb` and the hook-shell drift check (`hookShellProblems`).
  */
-function projectWiresVerb(cand, verb) {
+export function liveRecordedHooks(cfg) {
   const readJson = (p) => { try { return JSON.parse(readText(p)); } catch { return null; } };
-  const managed = readJson(path.join(cand, GLOBAL_MANIFEST))?.managed;
+  const managed = readJson(path.join(cfg, GLOBAL_MANIFEST))?.managed;
   const recorded = Array.isArray(managed?.settings_hooks) ? managed.settings_hooks : [];
-  // Every emitted command is `<runner> <verb> --root|--memory …` (`claudeHookGroups`).
-  const runs = (h) => typeof h?.command === 'string' && h.command.includes(` ${verb} --`);
   const wanted = recorded.flatMap((r) => (Array.isArray(r?.group?.hooks) ? r.group.hooks : [])
-    .filter(runs).map((h) => [r.event, h.command]));
-  if (!wanted.length) return false;
-  const hooks = readJson(settingsFile(cand, managed))?.hooks;
+    .filter((h) => typeof h?.command === 'string').map((h) => [r.event, h]));
+  if (!wanted.length) return [];
+  const hooks = readJson(settingsFile(cfg, managed))?.hooks;
   const live = (event, command) => Array.isArray(hooks?.[event]) && hooks[event]
     .some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => h?.command === command));
-  return wanted.some(([event, command]) => live(event, command));
+  return wanted.filter(([event, h]) => live(event, h.command));
+}
+
+/**
+ * Does the project install at `cand` really run `verb`? A live recorded handler
+ * (`liveRecordedHooks`) must run it; what cannot be verified does not silence a gate.
+ */
+function projectWiresVerb(cand, verb) {
+  // Every emitted command is `<runner> <verb> --root|--memory …` (`claudeHookGroups`), behind a
+  // leading `& ` in the PowerShell form.
+  return liveRecordedHooks(cand).some(([, h]) => h.command.includes(` ${verb} --`));
 }
 
 /**
