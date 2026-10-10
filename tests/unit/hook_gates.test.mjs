@@ -985,6 +985,43 @@ test('rootScan: ls -r is reverse, quoted "a:" is data, .exe and -Path: are still
   for (const [c, refused] of FIX_CASES) assert.equal(Boolean(rootScan(c)), refused, c);
 });
 
+// Final review: segments split only on separators OUTSIDE quotes, and a heredoc body (from
+// `<<TAG`/`<<'TAG'`/`<<-TAG` to the TAG line) is data, never a command. Without both, a commit
+// message that merely DESCRIBES a root scan — this machine's mandated `git commit -F - <<'EOF'`
+// form, or a quoted `-m` — reads as one, and on Bob and OpenCode that blocks the commit. A real
+// separator, or a command after the terminator, is still scanned.
+const QUOTE_HEREDOC_CASES = [
+  ["git commit -F - <<'EOF'\nfind / -name x\nEOF", false],
+  ['git commit -F - <<EOF\nfind / -name x\nEOF', false],
+  ['cat <<-EOF\n\tfind / -name x\n\tEOF', false],
+  ['cat << "EOF"\r\nfind / -name x\r\nEOF\r\n', false],
+  ['git commit -m "fix; find / loop"', false],
+  ['echo "x | du -sh /"', false],
+  ["cat <<'EOF'\nhi\nEOF\nfind / -name x", true],
+  ['echo a; find / -name x', true],
+  ["find / -name 'a;b'", true],
+  ['cat <<< "x"; find / -name x', true],
+  ['git commit -m "a" && find / -name x', true],
+];
+
+test('rootScan: quoted separators and heredoc bodies are data, real separators still cut', async () => {
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  for (const [c, refused] of QUOTE_HEREDOC_CASES) assert.equal(Boolean(rootScan(c)), refused, c);
+});
+
+test('rootScan: never throws and stays linear on pathological input', async () => {
+  // A throw becomes a gate-error ask (a warning on Bob); a backtracking blow-up becomes a hook
+  // timeout, which `onFailure: "block"` turns into a refused call. Neither is acceptable.
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  for (const c of ['find / <<', 'find <<EOF\n'.repeat(100000), 'find / '.concat('<<'.repeat(200000)),
+    '"\''.repeat(500000) + ' find /', 'find / "'.repeat(100000), 'find <<-\t'.repeat(100000),
+    'ls; '.repeat(250000) + 'find / -name x', 'find \0 / \uD800 <<', 'find <<A\r\n'.repeat(100000)]) {
+    const t = Date.now();
+    rootScan(c);
+    assert.ok(Date.now() - t < 2000, `rootScan took ${Date.now() - t} ms on ${c.slice(0, 20)}`);
+  }
+});
+
 test('rootScan: the reference self-check — 9 refused, 8 passed', async () => {
   const { rootScan } = await import('../../js/hosts/hooks.mjs');
   for (const c of REF_REFUSE) assert.ok(rootScan(c), `should refuse: ${c}`);

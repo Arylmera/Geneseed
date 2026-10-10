@@ -371,16 +371,53 @@ const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-c
 // and leave the root unseen.
 const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g;
 const SCAN_WRAPPERS = new Set(['sudo', 'command', '\\builtin', 'time', 'nice']);
+// One left-to-right pass: a quoted run (kept whole, so its `;`/`|` is data), a separator, or a
+// heredoc opener (`<<TAG`, `<<-TAG`, `<< 'TAG'`, `<<"TAG"` — never the here-string `<<<`).
+// Every alternative consumes at least one character, and none can backtrack past its start.
+const SCAN_SPLIT_RE = /"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g;
 
 /**
- * The first `|`/`;`/`&&`/`||`/newline-separated segment that recursively scans a whole
- * filesystem root, or null. Any `ssh` command is exempt (a remote root scan is the remote's
- * business — ponytail: that also exempts a local `find / -name "*ssh*"`; the reference's choice),
- * and so is any path deeper than a root.
+ * The command cut at `|`/`;`/`&&`/`||`/newline OUTSIDE quotes, with every heredoc body (the
+ * lines after `<<TAG` up to the `TAG` line; `<<-` lets it be tab-indented) dropped: both are data.
+ * Without this, `git commit -F - <<'EOF'` — the mandated multi-line commit form — or a quoted
+ * `-m "fix; find / loop"` whose text merely names a root scan reads as one, which on Bob and
+ * OpenCode is a hard block of the commit. An unterminated heredoc runs to the end, as in bash.
+ * Backslash is no escape here either, like `SCAN_TOKEN_RE` (`"C:\"` must close).
+ */
+function scanSegments(command) {
+  const segs = [];
+  const tags = [];
+  const re = new RegExp(SCAN_SPLIT_RE);
+  let start = 0;
+  let m;
+  while ((m = re.exec(command))) {
+    if (m[3]) { tags.push([m[1], m[3]]); continue; }
+    if (m[0][0] === '"' || m[0][0] === "'") continue;
+    segs.push(command.slice(start, m.index));
+    start = re.lastIndex;
+    // A pending heredoc's body starts on the line after its opener; each line is read once.
+    while (m[0] === '\n' && tags.length) {
+      const end = command.indexOf('\n', start);
+      const line = command.slice(start, end < 0 ? command.length : end).replace(/\r$/, '');
+      start = end < 0 ? command.length : end + 1;
+      if ((tags[0][0] ? line.replace(/^\t+/, '') : line) === tags[0][1]) tags.shift();
+      if (end < 0) break;
+    }
+    re.lastIndex = start;
+  }
+  segs.push(command.slice(start));
+  return segs;
+}
+
+/**
+ * The first segment (see `scanSegments`) that recursively scans a whole filesystem root, or
+ * null. Any `ssh` command is exempt (a remote root scan is the remote's business — ponytail:
+ * that also exempts a local `find / -name "*ssh*"`; the reference's choice), and so is any path
+ * deeper than a root.
  */
 export function rootScan(command) {
   if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null;
-  for (const seg of command.split(/\|\||&&|[|;\n]/)) {
+  for (const seg of scanSegments(command)) {
     // Tokens keep their quotes until the root test, so a quoted `"a:"` can be told from a bare `C:`.
     let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t));
     while (toks.length && SCAN_WRAPPERS.has(unquote(toks[0]))) toks = toks.slice(1);
@@ -419,7 +456,7 @@ function gitDecide(args, payload) {
   // Before `--no-consent`: that flag drops the process pack's rule, not this one.
   const scan = rootScan(command);
   if (scan) {
-    return ask(args, 'git-gate', 'ops-2', `Geneseed (Commands Must Return) \u2014 \`${scan}\` `
+    return ask(args, 'git-gate', 'ops-2', `Geneseed (Commands Must Return) \u2014 \`${scan.slice(0, 80)}\` `
       + 'recursively scans a whole filesystem root (in Git Bash, / spans every drive and mounted '
       + 'share, for hours; | head stops nothing). Search a specific directory instead: the '
       + 'project, node_modules, ~/.npm, %APPDATA%.');

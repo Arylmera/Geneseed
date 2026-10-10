@@ -485,6 +485,15 @@ for (const [command, want] of [
   ["find.exe / -name x", true],
   ["C:\\tools\\rg.exe x C:\\", true],
   ["Get-ChildItem -Path:C:\\ -Recurse", true],
+  // Final review: quoted separators and heredoc bodies are data; a real separator still cuts.
+  ["git commit -F - <<'EOF'\nfind / -name x\nEOF", false],
+  ["cat <<-EOF\n\tfind / -name x\n\tEOF", false],
+  ['git commit -m "fix; find / loop"', false],
+  ['echo "x | du -sh /"', false],
+  ["cat <<'EOF'\nhi\nEOF\nfind / -name x", true],
+  ["echo a; find / -name x", true],
+  ["find / -name 'a;b'", true],
+  ['cat <<< "x"; find / -name x', true],
 ]) {
   test(`root-scan guard: ${JSON.stringify(command)} -> ${want ? "blocked" : "allowed"}`, async () => {
     assert.equal(await blocked("bash", { command }), want)
@@ -505,7 +514,7 @@ test("the root-scan constants stay in parity with js/hosts/hooks.mjs's rootScan"
   const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
   const names = ["SCAN_ALWAYS", "SCAN_GREP_R", "SCAN_LS_R", "SCAN_PS_R", "GREP_RECURSE_RE",
     "LS_RECURSE_RE", "PS_RECURSE_RE",
-    "FS_ROOT_RE", "SCAN_WORD_RE", "SCAN_TOKEN_RE", "SCAN_WRAPPERS"]
+    "FS_ROOT_RE", "SCAN_WORD_RE", "SCAN_TOKEN_RE", "SCAN_WRAPPERS", "SCAN_SPLIT_RE"]
   const pick = (src, name) => {
     const m = src.match(new RegExp(`const ${name} = (.*?);?\\r?\\n`))
     assert.ok(m, `${name} not found`)

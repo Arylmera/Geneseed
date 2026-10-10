@@ -218,9 +218,36 @@ const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i
 const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i
 const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g
 const SCAN_WRAPPERS = new Set(["sudo", "command", "\\builtin", "time", "nice"])
+// A quoted run (its `;`/`|` is data), a separator, or a heredoc opener (never the `<<<` here-string).
+const SCAN_SPLIT_RE = /"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g
+// Cut at separators OUTSIDE quotes and drop every heredoc body (to its TAG line; `<<-` allows
+// tabs): a commit message that names a root scan is data, not a command to block.
+function scanSegments(command) {
+  const segs = []
+  const tags = []
+  const re = new RegExp(SCAN_SPLIT_RE)
+  let start = 0
+  let m
+  while ((m = re.exec(command))) {
+    if (m[3]) { tags.push([m[1], m[3]]); continue }
+    if (m[0][0] === '"' || m[0][0] === "'") continue
+    segs.push(command.slice(start, m.index))
+    start = re.lastIndex
+    while (m[0] === "\n" && tags.length) {
+      const end = command.indexOf("\n", start)
+      const line = command.slice(start, end < 0 ? command.length : end).replace(/\r$/, "")
+      start = end < 0 ? command.length : end + 1
+      if ((tags[0][0] ? line.replace(/^\t+/, "") : line) === tags[0][1]) tags.shift()
+      if (end < 0) break
+    }
+    re.lastIndex = start
+  }
+  segs.push(command.slice(start))
+  return segs
+}
 function rootScan(command) {
   if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null
-  for (const seg of command.split(/\|\||&&|[|;\n]/)) {
+  for (const seg of scanSegments(command)) {
     // Quotes kept until the root test, so a quoted "a:" is told from a bare C:.
     let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t))
     while (toks.length && SCAN_WRAPPERS.has(unquote(toks[0]))) toks = toks.slice(1)
