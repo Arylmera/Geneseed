@@ -1213,6 +1213,43 @@ test('a global install profile names its own config dir, and its argv rebuilds e
   }
 });
 
+test('an openclaude per-repo install profile reads its own carrier, not a sibling root file '
+  + '(host-compat B1)', () => {
+  // OpenClaude's project carrier is `<repo>/.openclaude/CLAUDE.md`, not `<repo>/CLAUDE.md`
+  // (`carrierInLayer` in `js/build/driver.mjs`'s `CLAUDE_SHAPED.openclaude`). `installProfile`
+  // reads theme/posture/mode/doctrines off `firstCarrier`'s root-only CARRIERS list, which
+  // before this fix never looked inside `.openclaude/`, so an openclaude per-repo install
+  // always read back as the defaults (neutral/peer/all packs) regardless of what it was built
+  // with.
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const r = emitInherited(['--emit', 'openclaude', '--theme', 'imperial', '--out', repo,
+      '--root', repo, '--posture', 'mentor', '--doctrines', 'craft']);
+    assert.equal(r.rc, 0, r.err);
+
+    const p = installProfile('openclaude', 'project', repo);
+    assert.equal(p.state, 'active');
+    assert.equal(p.theme, 'imperial');
+    assert.equal(p.posture, 'mentor');
+    assert.deepEqual(p.doctrines, ['craft']);
+
+    // Sharing the repo with a Claude Code install must not leak Claude's root CLAUDE.md into
+    // OpenClaude's own read-back: the root carrier belongs to a different host.
+    const r2 = emitInherited(['--emit', 'claude', '--theme', 'cyberpunk', '--out', repo,
+      '--root', repo, '--posture', 'peer', '--doctrines', 'none']);
+    assert.equal(r2.rc, 0, r2.err);
+
+    const p2 = installProfile('openclaude', 'project', repo);
+    assert.equal(p2.theme, 'imperial', 'the shared root CLAUDE.md shadowed .openclaude/CLAUDE.md');
+    assert.equal(p2.posture, 'mentor');
+    assert.deepEqual(p2.doctrines, ['craft']);
+  } finally {
+    sb.cleanup();
+  }
+});
+
 test('a rebuild command quotes only the arguments a shell would split', () => {
   assert.equal(rebuildCommand(['--theme', 'imperial', '--out', 'C:\\My Repo']),
     'geneseed build --theme imperial --out "C:\\My Repo"');

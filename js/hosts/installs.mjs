@@ -137,14 +137,29 @@ function themeFromAgent(agentMd) {
 }
 
 /**
- * `_harness_setup.CARRIERS` — the four instruction carriers, in the Python's order.
+ * `_harness_setup.CARRIERS` — the Python's four root-level carriers, plus one JS-only addition.
  *
  * A shared table rather than three copies of the same list: `_theme_of_dir`,
  * `_posture_of_dir` and `_mode_of_dir` each walk it, and the order is observable (the first
  * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use
  * because the Python writes `d / "rules" / "geneseed.md"` for that one entry.
+ *
+ * `.openclaude/CLAUDE.md` is NOT in the Python — OpenClaude didn't exist yet — and it is the
+ * fix for host-compat verdict B1. OpenClaude's own per-repo carrier is `carrierInLayer` (see
+ * `CLAUDE_SHAPED.openclaude` in `js/build/driver.mjs`): it sits at `<repo>/.openclaude/CLAUDE.md`
+ * and the root `CLAUDE.md` is deliberately left untouched so a Claude Code install can share the
+ * repo. Before this entry existed, every reader below (`themeOfDir`, `postureOfDir`,
+ * `modeOfDir`, `doctrinesOfDir`, `excludedRulesOfDir`, `excludedSkillsOfDir`, and everything
+ * that calls them — `installProfile`, the web API, `remergeClaudeHooks`/reactivate) read an
+ * OpenClaude-only repo as having no carrier at all (defaults: neutral/peer/all packs), and read
+ * a repo shared with Claude Code as CLAUDE'S carrier, not its own. It is tried BEFORE the root
+ * `CLAUDE.md` for exactly that sharing case: OpenClaude's own answer must win over a sibling
+ * host's root file.
  */
-const CARRIERS = ['AGENT.md', 'CLAUDE.md', path.join('rules', 'geneseed.md'), 'AGENTS.md'];
+const CARRIERS = [
+  'AGENT.md', path.join('.openclaude', 'CLAUDE.md'), 'CLAUDE.md',
+  path.join('rules', 'geneseed.md'), 'AGENTS.md',
+];
 
 /**
  * The scan `themeOfDir`, `leadOfDir`, `doctrinesOfDir` and `excludedRulesOfDir` each wrote
