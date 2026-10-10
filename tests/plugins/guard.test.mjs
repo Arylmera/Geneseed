@@ -185,6 +185,75 @@ test("no notebook/ dir means no ledger and no mkdir", async () => {
 
 async function isFileAt(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
 
+// ---- SHELL_WARN_RE: Deletion Is Deliberate, the WARN tier --------------------------
+// Mirrors js/hosts/hooks.mjs's DESTRUCTIVE_GIT_RE (law-4) — `tool.execute.before` has no ask
+// tier, so these warn (console.error, logged but allowed) rather than block. Captures stderr
+// around the call rather than reusing `blocked()`, since a warn never throws.
+async function warned(command) {
+  const calls = []
+  const orig = console.error
+  console.error = (msg) => calls.push(String(msg))
+  try {
+    await hook({ tool: "bash", args: { command } }, {})
+  } finally {
+    console.error = orig
+  }
+  return calls.some((m) => m.includes("WARN: irreversible op"))
+}
+
+// B5 (claude-code.md / claude-verdict.md), confirmed live, all inside Law IV's "deletion of
+// what version control cannot restore": the long/modern spellings alongside the two acts this
+// list already had (force push, reset --hard).
+for (const cmd of [
+  "git push --force origin feature",
+  "git reset --hard HEAD~1",
+  "git clean --force",
+  "git branch --delete --force x",
+  "git restore .",
+  "git restore src/file.js",
+  // `--staged --worktree` together restores the working tree too, discarding exactly like
+  // plain `restore` — unlike `--staged` alone (see the negative below).
+  "git restore --staged --worktree x",
+  "git push origin :main",
+  "git push --delete origin x",
+  "git checkout -f",
+  "git checkout --force",
+  "git switch -f other",
+  // `git switch -h` lists `-f, --force` and `--discard-changes` as two separate options.
+  "git switch --force",
+  "git switch --discard-changes",
+  "git stash drop",
+  "git stash clear",
+  "git worktree remove --force ../wt",
+  "git reflog expire --expire=now",
+  "git gc --prune=now",
+]) {
+  test(`SHELL_WARN_RE: ${JSON.stringify(cmd)} warns, never blocks`, async () => {
+    assert.equal(await blocked("bash", { command: cmd }), false, "a warn must never throw")
+    assert.equal(await warned(cmd), true, "expected a Deletion Is Deliberate warning")
+  })
+}
+
+// Negatives, same rule as the Node gate: `--staged` ALONE only unstages, and an un-forced
+// `branch --delete` refuses on an unmerged branch exactly like `-d`, so neither warns. And
+// because `restore`/`stash drop`/`stash clear` have no required flag or use ordinary English
+// words, they are anchored to VERB POSITION — a command whose MESSAGE or FILENAME merely
+// contains the word must never warn.
+for (const cmd of [
+  "git restore --staged x",
+  "git restore --staged .",
+  "git branch --delete merged",
+  "git add src/restore.js",
+  "git checkout restore-ui-fix",
+  'git commit -m "restore working behavior"',
+  'git stash push -m "clear old state"',
+  'git commit -m "drop the old flag"',
+]) {
+  test(`SHELL_WARN_RE: ${JSON.stringify(cmd)} does not warn`, async () => {
+    assert.equal(await warned(cmd), false)
+  })
+}
+
 // ---- permission.ask: the loop/* exemption (Consent Before Push) ---------------------
 // Twin of js/hosts/hooks.mjs's git-gate tests — same whitelist, same escapes, same
 // "a loop was launched" evidence — driven here with a fake `input`/`output` the way

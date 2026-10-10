@@ -296,6 +296,64 @@ test('a destructive git verb asks under Deletion Is Deliberate', () => {
   }
 });
 
+// B5 confirmed-live gaps (claude-code.md / claude-verdict.md): the long/modern spellings of
+// the same Law IV acts above — all inside "deletion of what version control cannot restore".
+// `restore`/`switch`/`checkout -f` discard uncommitted work the same way `checkout -- ` does;
+// `stash drop/clear` deletes stashed work; `worktree remove --force` can discard an uncommitted
+// worktree; `reflog expire` and `gc --prune=now` delete the safety net reflog/dangling commits
+// provide; `push :branch`/`push --delete` deletes a remote branch, the same act `--force` push
+// trips this gate for rather than process 5's.
+test('the B5 long/modern-spelling gaps ask under Deletion Is Deliberate too', () => {
+  for (const cmd of [
+    'git clean --force',
+    'git branch --delete --force x',
+    'git restore .',
+    'git restore src/file.js',
+    'git -C /repo restore .',
+    'cd /repo && git restore .',
+    // `--staged --worktree` together restores BOTH the index and the working tree, so it
+    // discards exactly like plain `restore` — unlike `--staged` alone (see the negative below).
+    'git restore --staged --worktree x',
+    'git push origin :main',
+    'git push --delete origin x',
+    'git checkout -f',
+    'git checkout --force',
+    'git switch -f other',
+    // git switch -h lists these as two SEPARATE options, not one flag's long and short spelling.
+    'git switch --force',
+    'git switch --discard-changes',
+    'git stash drop',
+    'git stash clear',
+    'git worktree remove --force ../wt',
+    'git reflog expire --expire=now',
+    'git gc --prune=now']) {
+    const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
+    assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
+  }
+});
+
+// Negatives named in the brief: `git restore --staged` ALONE only unstages — version control
+// still holds the staged change, nothing is discarded, so Law IV does not reach it (contrast the
+// `--staged --worktree` row above, which does discard). An un-forced `git branch --delete`
+// refuses unless the branch is merged, same as `-d`, so it defers like the existing `-d` row
+// below. And because `restore`/`stash drop`/`stash clear` have no required flag or use ordinary
+// English words, they are matched only in VERB POSITION (right after `git`, or `git -C <path>`)
+// — a commit message or a filename that merely contains the word must never trip Law IV.
+test('restore --staged, an un-forced branch --delete, and "restore"/"drop"/"clear" as plain '
+  + 'text (not a verb) all defer under Law IV', () => {
+  for (const cmd of [
+    'git restore --staged x',
+    'git restore --staged .',
+    'git branch --delete merged',
+    'git add src/restore.js',
+    'git checkout restore-ui-fix',
+    'git commit -m "restore working behavior"',
+    'git stash push -m "clear old state"',
+    'git commit -m "drop the old flag"']) {
+    assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), extra: ['--no-consent'] }), cmd);
+  }
+});
+
 test('an ordinary push is not a force push, so with consent off it defers', () => {
   // `--no-consent` takes process 5 out, so only Law IV could ask: a `-u`, a `--follow-tags`
   // (an `f` after `--`, not a `-f` cluster) and a plain refspec are not destructive.

@@ -142,8 +142,35 @@ const SHELL_BLOCK_RE = [
   /\bremove-item\b[^\n]*-recurse\b[^\n]*-force\b/i,                  // PowerShell rm -rf
   /\bremove-item\b[^\n]*-force\b[^\n]*-recurse\b/i,                  // (either flag order)
 ]
-// History-rewriting / irreversible git ops → WARN.
-const SHELL_WARN_RE = [/\bgit\s+push\b[^\n]*(--force\b|-f\b)/, /\bgit\s+reset\s+--hard\b/]
+// History-rewriting / irreversible git ops (Deletion Is Deliberate) → WARN, never BLOCK:
+// `tool.execute.before` has no ask tier, so these are a speed bump rather than a wall. The
+// same acts js/hosts/hooks.mjs's `DESTRUCTIVE_GIT_RE` asks about — mirrored by hand rather
+// than shared, since this plugin is copied whole into an OpenCode install, outside this
+// repo's module graph (see the loop/* exemption note below for the same constraint). `clean`
+// and `--delete` need `--force` alongside them to count — an un-forced `clean`/`branch
+// --delete` already refuses or only removes what is reproducible. `git switch -h` lists `-f,
+// --force` and `--discard-changes` as two SEPARATE options, not one flag's long/short spelling,
+// so both are listed. `restore` and `stash drop`/`clear` are anchored to the VERB position
+// (`\bgit\s+restore\b`, not `\bgit\s+.*restore\b`) — every other row needs a flag that is
+// vanishingly unlikely in a commit message or filename, but `restore` needs none and
+// `drop`/`clear` are ordinary English, so a message like "restore working behavior" or "clear
+// old state" must never warn. `restore` matches UNLESS `--staged` appears on the line, EXCEPT
+// `--staged --worktree` together, which restores the working tree too and so discards exactly
+// like plain `restore` (see the twin rationale and tests in js/hosts/hooks.mjs).
+const SHELL_WARN_RE = [
+  /\bgit\s+push\b[^\n]*(--force\b|-f\b|\+\S|\s--delete\b|\s:\S)/,   // forced, mirror, or delete push
+  /\bgit\s+reset\s+--hard\b/,
+  /\bgit\s+clean\b[^\n]*\s(-[a-zA-Z]*f|--force\b)/,
+  /\bgit\s+branch\b[^\n]*\s(-D\b|--delete\b[^\n]*--force\b)/,
+  /\bgit\s+checkout\s+--\s/,
+  /\bgit\s+checkout\b[^\n]*\s(-[a-zA-Z]*f\b|--force\b)/,
+  /\bgit\s+switch\b[^\n]*\s(-[a-zA-Z]*f\b|--force\b|--discard-changes\b)/,
+  /\bgit\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))/,
+  /\bgit\s+stash\s+(drop|clear)\b/,
+  /\bgit\s+worktree\b[^\n]*\bremove\b[^\n]*(-[a-zA-Z]*f\b|--force\b)/,
+  /\bgit\s+reflog\b[^\n]*\bexpire\b/,
+  /\bgit\s+gc\b[^\n]*--prune\b/,
+]
 
 function pickPath(args) {
   for (const k of ["filePath", "path", "file", "target", "filename"]) {

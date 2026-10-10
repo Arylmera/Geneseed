@@ -76,8 +76,29 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 // A forced push is `--force*`, a `-f` cluster, or a `+refspec` (`push origin +main`) — the last
 // is a force push with no flag at all. `push --force*` trips this gate rather than process 5's
 // so the stronger reason is the one the user reads.
+//
+// B5 (claude-code.md / claude-verdict.md) found the long/modern spellings of the same acts
+// still passed: `clean --force` (the long flag, not a `-f` cluster), `branch --delete --force`
+// (the long form of `-D`; an un-forced `--delete` refuses on an unmerged branch exactly like
+// `-d`, so it stays OUT), `checkout -f`/`--force` and `switch -f`/`--force`/`--discard-changes`
+// (git's own `-h` lists `-f, --force` AND a separate `--discard-changes` for switch — both
+// discard uncommitted work the same way `checkout --` does), `worktree remove --force`/`-f`
+// (can discard an uncommitted worktree), `reflog expire` and `gc --prune=now` (delete the
+// reflog/dangling-commit safety net recovery depends on), and `push :branch`/`push --delete`
+// (deletes a remote branch — the colon form needs a space before the `:` so `push origin
+// HEAD:main`, an ordinary refspec, is not caught).
+//
+// `restore` and `stash drop`/`stash clear` are carved OUT of the shared `\bgit\b[^\n]*\b(…)`
+// wrapper above and anchored to the verb position instead (`git`, an optional `-C <path>`, then
+// the verb immediately): every other arm here needs a flag that is vanishingly unlikely in a
+// commit message or a filename, but "restore" needs no flag at all and "drop"/"clear" are
+// ordinary English, so `git commit -m "restore working behavior"` or `git stash push -m "clear
+// old state"` would otherwise trip Law IV on the MESSAGE TEXT, not the command. Anchoring to
+// the verb position is also what lets `restore` ask for `--staged --worktree` together (that
+// combination DOES discard working-tree changes, unlike `--staged` alone) while still deferring
+// on `--staged` alone.
 const DESTRUCTIVE_GIT_RE =
-  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S))/;
+  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s(?:-[a-zA-Z]*f|--force\b)|branch\b[^\n]*\s(?:-D\b|--delete\b[^\n]*--force\b)|checkout\s+--\s|checkout\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b)|switch\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b|--discard-changes\b)|worktree\b[^\n]*\bremove\b[^\n]*(?:-[a-zA-Z]*f\b|--force\b)|reflog\b[^\n]*\bexpire\b|gc\b[^\n]*--prune\b|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S|\s--delete\b|\s:\S))|\bgit(?:\s+-C\s+\S+)*\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))|\bgit(?:\s+-C\s+\S+)*\s+stash\s+(?:drop|clear)\b/;
 
 // `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
 // false allow publishes. So the exemption holds only when the ENTIRE command is built from
