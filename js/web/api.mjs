@@ -119,10 +119,12 @@ export function apiInstalls(state) {
     out.push({
       id: `${host}:${scope}`, host, scope, path: root,
       state: installState(root, host, scope),
-      theme: themeOfDir(root),
+      // Narrowed to this row's own host (host-compat B1): a shared repo otherwise answers
+      // every row with whichever host's carrier the host-agnostic scan favours.
+      theme: themeOfDir(root, host),
       footprint: footprintOfDir(root),
-      posture: postureOfDir(root),
-      mode: modeOfDir(root),
+      posture: postureOfDir(root, host),
+      mode: modeOfDir(root, host),
       trust: trustOfDir(root, host),
       selected: samePath(viewCfg(host, scope, root), state.target),
     });

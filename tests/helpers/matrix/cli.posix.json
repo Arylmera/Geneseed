@@ -633,7 +633,7 @@
       ],
       "world": {
         "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
-        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": [], \"managed\": {\"settings_hooks\": [{\"event\": \"SessionStart\", \"group\": {\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}}]}}\n",
         "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
         "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
         "repo/README.md": "# Project\n\nThe readme.\n",
@@ -642,7 +642,8 @@
         "repo/docs/nested/deep.md": "# Deep\n",
         "repo/docs/node_modules/vendored.md": "must never be listed\n",
         "repo/packages/widget/README.md": "# widget\n",
-        "repo/packages/widget/index.js": "// not markdown\n"
+        "repo/packages/widget/index.js": "// not markdown\n",
+        "repo/.claude/settings.json": "{\"hooks\": {\"SessionStart\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}]}}\n"
       }
     },
     {
@@ -708,16 +709,108 @@
       }
     },
     {
+      "env": {
+        "CLAUDE_PROJECT_DIR": "{repo}"
+      },
+      "expect": [
+        "PROJECT CONTEXT",
+        "The readme."
+      ],
+      "id": "context/discovery-follows-claude-project-dir",
+      "steps": [
+        {
+          "argv": [
+            "context",
+            "--root",
+            "{repo}/.claude"
+          ],
+          "cwd": "cfg"
+        }
+      ],
+      "world": {
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
+        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
+        "repo/README.md": "# Project\n\nThe readme.\n",
+        "repo/apps/site/README.md": "# site\n",
+        "repo/docs/architecture.md": "# Architecture\n",
+        "repo/docs/nested/deep.md": "# Deep\n",
+        "repo/docs/node_modules/vendored.md": "must never be listed\n",
+        "repo/packages/widget/README.md": "# widget\n",
+        "repo/packages/widget/index.js": "// not markdown\n"
+      }
+    },
+    {
       "expect": [
         "PROJECT CONTEXT"
       ],
-      "id": "context/non-marker-root-never-stands-down",
+      "id": "context/project-dir-below-an-install-never-stands-down",
+      "steps": [
+        {
+          "argv": [
+            "context",
+            "--root",
+            "{home}/.claude"
+          ],
+          "cwd": "repo/docs"
+        }
+      ],
+      "world": {
+        "home/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
+        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
+        "repo/README.md": "# Project\n\nThe readme.\n",
+        "repo/apps/site/README.md": "# site\n",
+        "repo/docs/architecture.md": "# Architecture\n",
+        "repo/docs/nested/deep.md": "# Deep\n",
+        "repo/docs/node_modules/vendored.md": "must never be listed\n",
+        "repo/packages/widget/README.md": "# widget\n",
+        "repo/packages/widget/index.js": "// not markdown\n"
+      }
+    },
+    {
+      "expect_silent": true,
+      "id": "context/relocated-claude-root-stands-down",
       "steps": [
         {
           "argv": [
             "context",
             "--root",
             "{cfg}"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "cfg/.geneseed-emit": "claude-global\n",
+        "cfg/.geneseed-manifest.json": "{\"owned\": []}\n",
+        "repo/.claude/.geneseed-manifest.json": "{\"owned\": [], \"managed\": {\"settings_hooks\": [{\"event\": \"SessionStart\", \"group\": {\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}}]}}\n",
+        "repo/CLAUDE.md": "# Instructions\n\nBe careful.\n",
+        "repo/NOTES.md": "loose root markdown — lazy, not eager\n",
+        "repo/README.md": "# Project\n\nThe readme.\n",
+        "repo/apps/site/README.md": "# site\n",
+        "repo/docs/architecture.md": "# Architecture\n",
+        "repo/docs/nested/deep.md": "# Deep\n",
+        "repo/docs/node_modules/vendored.md": "must never be listed\n",
+        "repo/packages/widget/README.md": "# widget\n",
+        "repo/packages/widget/index.js": "// not markdown\n",
+        "repo/.claude/settings.json": "{\"hooks\": {\"SessionStart\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"geneseed-hook context --root \\\"repo/.claude\\\" || exit 0\"}]}]}}\n"
+      }
+    },
+    {
+      "expect": [
+        "PROJECT CONTEXT"
+      ],
+      "id": "context/relocated-other-host-root-never-stands-down",
+      "steps": [
+        {
+          "argv": [
+            "context",
+            "--root",
+            "{cfg}",
+            "--host",
+            "openclaude"
           ],
           "cwd": "repo"
         }
@@ -2164,8 +2257,9 @@
     {
       "env": {},
       "expect": [
-        "hook_event_name"
+        "nothing to distil"
       ],
+      "expect_silent": true,
       "id": "learn/json-stdin-without-a-transcript-path",
       "steps": [
         {
@@ -2178,6 +2272,86 @@
       ],
       "world": {
         "repo/.keep": ""
+      }
+    },
+    {
+      "env": {},
+      "expect": [
+        "nothing to distil"
+      ],
+      "expect_absent": [
+        "why does the build fail"
+      ],
+      "expect_silent": true,
+      "id": "learn/hook-payload-llm-unset-skips-the-transcript-read",
+      "steps": [
+        {
+          "argv": [
+            "learn"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"hook_event_name\": \"Stop\", \"transcript_path\": \"{sb/}/transcript.jsonl\"}"
+        }
+      ],
+      "world": {
+        "repo/.keep": "",
+        "transcript.jsonl": "{\"message\": {\"role\": \"user\", \"content\": \"why does the build fail on windows\"}}\n"
+      }
+    },
+    {
+      "env": {
+        "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
+        "GENESEED_LEARN_CHILD": "1",
+        "GENESEED_LLM": "{py} {llm}"
+      },
+      "expect_absent_files": [
+        "echo/prompt.txt"
+      ],
+      "expect_silent": true,
+      "id": "learn/child-stands-down-immediately",
+      "steps": [
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory"
+          ],
+          "cwd": "repo",
+          "stdin": "a durable fact\n"
+        }
+      ],
+      "world": {
+        "repo/memory/.keep": ""
+      }
+    },
+    {
+      "env": {
+        "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
+        "GENESEED_LLM": "{py} {llm}"
+      },
+      "expect": [
+        "no transcript available (bob)"
+      ],
+      "expect_absent_files": [
+        "echo/prompt.txt"
+      ],
+      "expect_silent": true,
+      "id": "learn/bob-stop-with-no-transcript-never-calls-the-model",
+      "steps": [
+        {
+          "argv": [
+            "learn",
+            "--memory",
+            "{repo}/memory",
+            "--host",
+            "bob"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"event\": \"Stop\", \"session_id\": \"s\"}"
+        }
+      ],
+      "world": {
+        "repo/memory/.keep": ""
       }
     },
     {
@@ -5487,7 +5661,7 @@
       "expect": [
         "[uninstall] target: <HOME>",
         "(opencode:global)",
-        "[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the opencode.json instructions entry.",
+        "[uninstall] removes: AGENT.md, the AGENTS.md managed block, agents/, skills/, plugins/, markers, and the opencode.json instructions entry.",
         "[uninstall] done — removed 2 file(s); opencode.json updated where needed; memory/notebook kept in place. Start a new session to apply."
       ],
       "expect_absent_files": [

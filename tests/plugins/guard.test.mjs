@@ -185,171 +185,149 @@ test("no notebook/ dir means no ledger and no mkdir", async () => {
 
 async function isFileAt(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
 
-// ---- permission.ask: the loop/* exemption (Consent Before Push) ---------------------
-// Twin of js/hosts/hooks.mjs's git-gate tests — same whitelist, same escapes, same
-// "a loop was launched" evidence — driven here with a fake `input`/`output` the way
-// OpenCode calls a permission hook.
-
-const LOOP_MARKER = "<!-- loop-state:begin -->\n{}\n<!-- loop-state:end -->\n"
-
-/**
- * A sandboxed repo on `branch`, as a plain repo or a worktree, with `directory` inside it.
- * `loop`: `"valid"` writes a LOOP.md carrying the state marker at the git root, `"invalid"`
- * writes one without it, `"none"` (default) writes no LOOP.md at all.
- */
-async function repoOn(branch, { worktree = false, loop = "none" } = {}) {
-  const sb = makeSandbox("gsguard-branch-")
-  const root = sb.path
-  let gitRoot
-  let directory
-  if (worktree) {
-    const gitdir = path.join(root, "main-repo", ".git", "worktrees", "w")
-    await fs.mkdir(gitdir, { recursive: true })
-    await fs.writeFile(path.join(gitdir, "HEAD"), `ref: refs/heads/${branch}\n`)
-    await fs.mkdir(path.join(root, "w"))
-    await fs.writeFile(path.join(root, "w", ".git"), `gitdir: ${gitdir}\n`)
-    gitRoot = path.join(root, "w")
-    directory = gitRoot
-  } else {
-    await fs.mkdir(path.join(root, ".git"))
-    await fs.writeFile(path.join(root, ".git", "HEAD"), `ref: refs/heads/${branch}\n`)
-    await fs.mkdir(path.join(root, "sub"))
-    gitRoot = root
-    directory = path.join(root, "sub")
+// ---- SHELL_WARN_RE: Deletion Is Deliberate, the WARN tier --------------------------
+// Mirrors js/hosts/hooks.mjs's DESTRUCTIVE_GIT_RE (law-4) — `tool.execute.before` has no ask
+// tier, so these warn (console.error, logged but allowed) rather than block. Captures stderr
+// around the call rather than reusing `blocked()`, since a warn never throws.
+async function warned(command) {
+  const calls = []
+  const orig = console.error
+  console.error = (msg) => calls.push(String(msg))
+  try {
+    await hook({ tool: "bash", args: { command } }, {})
+  } finally {
+    console.error = orig
   }
-  if (loop === "valid") await fs.writeFile(path.join(gitRoot, "LOOP.md"), LOOP_MARKER)
-  if (loop === "invalid") await fs.writeFile(path.join(gitRoot, "LOOP.md"), "# no state block\n")
-  return { cleanup: sb.cleanup, directory, gitRoot }
+  return calls.some((m) => m.includes("WARN: irreversible op"))
 }
 
-/** `output.status` after one `permission.ask` call for a bash `command` in `directory`. */
-async function askStatus(directory, command, { type = "bash", status = "ask" } = {}) {
-  const hooks = await GeneseedGuard({ directory })
-  const output = { status }
-  await hooks["permission.ask"]({ type, metadata: { command } }, output)
-  return output.status
+// B5 (claude-code.md / claude-verdict.md), confirmed live, all inside Law IV's "deletion of
+// what version control cannot restore": the long/modern spellings alongside the two acts this
+// list already had (force push, reset --hard).
+for (const cmd of [
+  "git push --force origin feature",
+  "git reset --hard HEAD~1",
+  "git clean --force",
+  "git branch --delete --force x",
+  "git branch --force --delete x",
+  "git restore .",
+  "git restore src/file.js",
+  // `--staged --worktree` together restores the working tree too, discarding exactly like
+  // plain `restore` — unlike `--staged` alone (see the negative below).
+  "git restore --staged --worktree x",
+  "git push origin :main",
+  "git push --delete origin x",
+  "git checkout -f",
+  "git checkout --force",
+  "git switch -f other",
+  // `git switch -h` lists `-f, --force` and `--discard-changes` as two separate options.
+  "git switch --force",
+  "git switch --discard-changes",
+  "git stash drop",
+  "git stash clear",
+  "git worktree remove --force ../wt",
+  "git reflog expire --expire=now",
+  "git gc --prune=now",
+]) {
+  test(`SHELL_WARN_RE: ${JSON.stringify(cmd)} warns, never blocks`, async () => {
+    assert.equal(await blocked("bash", { command: cmd }), false, "a warn must never throw")
+    assert.equal(await warned(cmd), true, "expected a Deletion Is Deliberate warning")
+  })
 }
 
-test("permission.ask: on a loop/x branch with a launched loop, the whitelisted forms are allowed — plain repo and worktree", async () => {
-  for (const worktree of [false, true]) {
-    const { cleanup, directory } = await repoOn("loop/x", { worktree, loop: "valid" })
-    try {
-      for (const cmd of [
-        // The ONLY exempt push form: an explicit, colon-qualified HEAD:<branch> refspec.
-        "git push -u origin HEAD:loop/x",
-        "git push origin HEAD:refs/heads/loop/x",
-        "git add -A && git commit -F .git/LOOP_COMMIT_MSG && git push -u origin HEAD:loop/x",
-        "git status && git commit -F msg.txt",
-        // A Windows absolute path (drive letter) through the `-F` path token.
-        "git commit -F C:/Users/x/repo/.git/LOOP_COMMIT_MSG",
-      ]) {
-        assert.equal(await askStatus(directory, cmd), "allow", cmd)
-      }
-    } finally { cleanup() }
-  }
+// Negatives, same rule as the Node gate: `--staged` ALONE only unstages, and an un-forced
+// `branch --delete` refuses on an unmerged branch exactly like `-d`, so neither warns. And
+// because `restore`/`stash drop`/`stash clear` have no required flag or use ordinary English
+// words, they are anchored to VERB POSITION — a command whose MESSAGE or FILENAME merely
+// contains the word must never warn.
+for (const cmd of [
+  "git restore --staged x",
+  "git restore --staged .",
+  "git branch --delete merged",
+  "git add src/restore.js",
+  "git checkout restore-ui-fix",
+  'git commit -m "restore working behavior"',
+  'git stash push -m "clear old state"',
+  'git commit -m "drop the old flag"',
+]) {
+  test(`SHELL_WARN_RE: ${JSON.stringify(cmd)} does not warn`, async () => {
+    assert.equal(await warned(cmd), false)
+  })
+}
+
+// ---- content secret scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide) -----
+// The path check above only ever saw the FILENAME; this is the body that would land on disk.
+
+test("blocks a write whose content carries a credential-shaped string", async () => {
+  assert.equal(await blocked("write", { filePath: "src/config.js", content: "const k = 'AKIAABCDEFGHIJKLMNOP'" }), true)
 })
 
-test("permission.ask: every escape the review found leaves the ask untouched, on that same loop/launched branch", async () => {
-  const { cleanup, directory } = await repoOn("loop/x", { loop: "valid" })
-  try {
-    for (const cmd of [
-      // Moved to ASK in fix round 2 (X2): none of these names an explicit HEAD:<branch>
-      // refspec, so every one is redirectable by push.default/remote.*.push.
-      "git push",
-      "git push origin",
-      "git push -u origin",
-      "git push origin HEAD",
-      "git push origin loop/x",
-      'git push origin "HEAD:main"',
-      "git push origin 'main'",
-      "git push origin HEAD:main>/dev/null",
-      "git push origin HEAD:main)",
-      "cd ../other && git push",
-      "git -C ../other push",
-      "git switch - && git commit -F m",
-      "GIT_DIR=x git push",
-      "git push --all",
-      "git push --mirror",
-      "git -c push.default=matching push",
-      "git push --tags",
-      "git push origin v9.9.9",
-      "git push -f origin loop/x",
-      "git push origin +loop/x",
-      "git push origin :feature/x",
-      "git push origin --delete feature/x",
-      'git commit -m "x"',
-      "git commit --amend -F m",
-      "git commit -F m\necho hi",
-      // Re-review fold-in: the loose `[^\s'"]+` path class let brace/glob expansion turn
-      // the loop's own commit into something else entirely.
-      "git commit -F {m,--amend} && git push -u origin HEAD:loop/x",
-      "git commit -F m* && git push -u origin HEAD:loop/x",
-      // X1: a single `&` (not doubled into `&&`) still chains two commands for a shell.
-      "git add -A & git push origin HEAD:main",
-      "git status & git push --mirror",
-      "git log & git push origin :main",
-      "git add -A & cd ../o & git push",
-      // X1: brace/glob expansion is excluded from the tightened argument token class. (A
-      // bare `git add` never reaches this gate — it names neither commit nor push.)
-      "git add {a,b} && git commit -F m",
-      "git add * && git push -u origin HEAD:loop/x",
-    ]) {
-      assert.equal(await askStatus(directory, cmd), "ask", cmd)
-    }
-  } finally { cleanup() }
+test("blocks an edit whose newString carries a credential-shaped string", async () => {
+  assert.equal(await blocked("edit", { filePath: "src/config.js", oldString: "x", newString: "ghp_" + "a".repeat(36) }), true)
 })
 
-test("permission.ask: LOOP.md as a symlink is not launched evidence — leaves the ask untouched", async (t) => {
-  const { cleanup, directory, gitRoot } = await repoOn("loop/x", { loop: "none" })
-  try {
-    const target = path.join(gitRoot, "REAL_LOOP.md")
-    await fs.writeFile(target, LOOP_MARKER)
-    try {
-      await fs.symlink(target, path.join(gitRoot, "LOOP.md"))
-    } catch (e) {
-      if (process.platform === "win32" && e.code === "EPERM") { t.skip("symlinks need privileges here"); return }
-      throw e
-    }
-    assert.equal(await askStatus(directory, "git push -u origin HEAD:loop/x"), "ask")
-  } finally { cleanup() }
+test("blocks an apply_patch whose + line carries a credential-shaped string", async () => {
+  const dest = path.join(tmp, "patched", "src", "config.js").replace(/\\/g, "/")
+  const text = patch(`*** Add File: ${dest}`, "+const k = '" + "sk-ant-" + "a".repeat(24) + "'")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
 })
 
-test("permission.ask: also leaves the ask untouched — no LOOP.md, no state marker, or a shared branch with a valid one", async () => {
-  // Each row's command is otherwise the one exempt shape for that row's own branch, so the
-  // ask proves the LOOP.md/branch check, not the shape.
-  for (const [branch, loop, cmd] of [
-    ["loop/x", "none", "git push -u origin HEAD:loop/x"],
-    ["loop/x", "invalid", "git push -u origin HEAD:loop/x"],
-    ["main", "valid", "git push -u origin HEAD:main"],
-  ]) {
-    const { cleanup, directory } = await repoOn(branch, { loop })
-    try { assert.equal(await askStatus(directory, cmd), "ask", `${branch}/${loop}`) }
-    finally { cleanup() }
-  }
+test("does NOT block an apply_patch when the credential-shaped string is only on a - line", async () => {
+  const dest = path.join(tmp, "patched", "src", "config2.js").replace(/\\/g, "/")
+  const text = patch(`*** Update File: ${dest}`, "@@", "-const k = '" + "sk-ant-" + "a".repeat(24) + "'", "+const k = loadFromEnv()")
+  assert.equal(await blocked("apply_patch", { patchText: text }), false)
 })
 
-test("permission.ask: a non-bash permission is left untouched even on a launched loop branch", async () => {
-  const { cleanup, directory } = await repoOn("loop/x", { loop: "valid" })
-  try {
-    assert.equal(await askStatus(directory, "git commit -F m", { type: "write" }), "ask")
-  } finally { cleanup() }
+test("an ordinary write passes the content scan", async () => {
+  assert.equal(await blocked("write", { filePath: "src/plain.js", content: "console.log('hello')" }), false)
 })
 
-test("permission.ask: a deny from another hook is never overwritten", async () => {
-  const { cleanup, directory } = await repoOn("loop/x", { loop: "valid" })
-  try {
-    assert.equal(await askStatus(directory, "git push", { status: "deny" }), "deny")
-  } finally { cleanup() }
+test("a credential-shaped string written to a .env file only warns, not blocked", async () => {
+  assert.equal(await blocked("write", { filePath: ".env", content: "AKIA_KEY=AKIAABCDEFGHIJKLMNOP" }), false)
 })
 
-test("permission.ask: the command is read ONLY from input.metadata.command — an absent one is untouched", async () => {
-  const { cleanup, directory } = await repoOn("loop/x", { loop: "valid" })
-  try {
-    const hooks = await GeneseedGuard({ directory })
-    const output = { status: "ask" }
-    await hooks["permission.ask"]({ type: "bash", pattern: "git push", title: "git push" }, output)
-    assert.equal(output.status, "ask")
-  } finally { cleanup() }
+// The exemption must be computed PER FILE, not pooled across every section of one apply_patch
+// call — a patch that touches `.env` (exempt) and an ordinary file (not exempt) in the SAME
+// call must still catch the secret in the ordinary file.
+test("apply_patch: a secret in .env is exempt but the SAME patch's secret in another file is blocked", async () => {
+  const envDest = path.join(tmp, "patched", ".env").replace(/\\/g, "/")
+  const srcDest = path.join(tmp, "patched", "src", "a.js").replace(/\\/g, "/")
+  const text = [
+    patch(`*** Add File: ${envDest}`, "+AKIA_KEY=AKIAABCDEFGHIJKLMNOP"),
+    patch(`*** Add File: ${srcDest}`, "+const k = 'AKIAABCDEFGHIJKLMNOP'"),
+  ].join("\n")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("apply_patch: a secret in .env ALONE (no other file) is not blocked", async () => {
+  const envDest = path.join(tmp, "patched", ".env").replace(/\\/g, "/")
+  const text = patch(`*** Add File: ${envDest}`, "+AKIA_KEY=AKIAABCDEFGHIJKLMNOP")
+  assert.equal(await blocked("apply_patch", { patchText: text }), false)
+})
+
+test("SECRET_CONTENT_RE stays in parity with the Node hook's SECRET_RE (Law I twin)", async () => {
+  const guardSrc = await fs.readFile(
+    path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
+  const guardRe = guardSrc.match(/const SECRET_CONTENT_RE =\s*\r?\n\s*(\/.*\/)\s*\r?\n/)
+  const hookRe = hookSrc.match(/const SECRET_RE =\s*\r?\n\s*(\/.*\/);/)
+  assert.ok(guardRe, "SECRET_CONTENT_RE not found in geneseed-guard.js")
+  assert.ok(hookRe, "SECRET_RE not found in js/hosts/hooks.mjs")
+  assert.equal(guardRe[1], hookRe[1],
+    "the guard's content-secret pattern drifted from js/hosts/hooks.mjs's SECRET_RE — keep the two byte-identical")
+})
+
+// ---- permission.ask: not registered (OpenCode verdict I-2) --------------------------
+// Upstream declares a `permission.ask` hook in its plugin types but never triggers it:
+// `Permission.ask` (packages/opencode/src/permission/index.ts) evaluates the rules and
+// publishes the `permission.asked` bus event with no plugin hook in between. A hook
+// registered there is dead code that a test could only exercise by calling it directly,
+// so the guard registers none — loops on OpenCode get the static commit/push ask.
+
+test("permission.ask: the guard registers no dead permission hook", async () => {
+  const hooks = await GeneseedGuard({ directory: tmp })
+  assert.equal(hooks["permission.ask"], undefined)
+  assert.deepEqual(Object.keys(hooks), ["tool.execute.before"])
 })
 
 // ---- protected checks (External Gate) ------------------------------------------
@@ -391,4 +369,80 @@ test("a legacy wiki.jsonc under $GENESEED_HARNESS still protects its folders", a
     if (prevHarness === undefined) delete process.env.GENESEED_HARNESS
     else process.env.GENESEED_HARNESS = prevHarness
   }
+})
+
+// ---- apply_patch (OpenCode verdict I-1) ----------------------------------------
+// gpt-5* models get ONLY `apply_patch` (no `edit`/`write`) — every path lives inside
+// `patchText` as a `*** Add File:`/`*** Update File:`/`*** Delete File:`/`*** Move to:`
+// marker line (upstream `packages/opencode/src/patch/index.ts` `parsePatchHeader`), never
+// in `filePath`/`path`/etc. Markers carry an absolute path here so the assertion is not
+// also exercising cwd resolution against `ctx.directory` (covered separately below).
+
+function patch(...lines) {
+  return ["*** Begin Patch", ...lines, "*** End Patch"].join("\n")
+}
+
+test("apply_patch: a patch adding a secret file is blocked", async () => {
+  const dest = path.join(tmp, "patched", ".ssh", "id_rsa").replace(/\\/g, "/")
+  const text = patch(`*** Add File: ${dest}`, "+ -----BEGIN OPENSSH PRIVATE KEY-----")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("apply_patch: a patch touching a protected test file is blocked", async () => {
+  const repo = path.join(tmp, "sensed-patch")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "tests/\n")
+  const target = path.join(repo, "tests", "a.test.js").replace(/\\/g, "/")
+  const text = patch("*** Update File: " + target, "@@", "-old", "+new")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("apply_patch: a benign patch passes", async () => {
+  const dest = path.join(tmp, "patched", "src", "main.py").replace(/\\/g, "/")
+  const text = patch(`*** Add File: ${dest}`, "+print('hi')")
+  assert.equal(await blocked("apply_patch", { patchText: text }), false)
+})
+
+test("apply_patch: an Update File with a Move to resolves BOTH the old and new path", async () => {
+  const repo = path.join(tmp, "sensed-move")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "tests/\n")
+  const from = path.join(repo, "src", "a.js").replace(/\\/g, "/")
+  const to = path.join(repo, "tests", "a.js").replace(/\\/g, "/")
+  const text = patch(`*** Update File: ${from}`, `*** Move to: ${to}`, "@@", "-old", "+new")
+  assert.equal(await blocked("apply_patch", { patchText: text }), true)
+})
+
+test("apply_patch: a relative marker path resolves against ctx.directory", async () => {
+  const repo = path.join(tmp, "patch-cwd")
+  await fs.mkdir(repo, { recursive: true })
+  const fresh = await import("../../adapters/opencode/plugins/geneseed-guard.js?patch-cwd")
+  const h = (await fresh.GeneseedGuard({ directory: repo }))["tool.execute.before"]
+  const text = patch("*** Add File: .ssh/id_rsa", "+ secret")
+  await assert.rejects(h({ tool: "apply_patch", args: { patchText: text } }, {}),
+    /\[geneseed-guard\]/)
+})
+
+// Upstream's own `apply_patch` tool resolves every marker path against `instance.directory`
+// (`apply_patch.ts:72`), not against a wider worktree root. `ctx.worktree` is a DIFFERENT,
+// wider root used elsewhere in this file for the git-branch checks — if patch-path
+// resolution preferred `ctx.worktree` over `ctx.directory` the way `root()` does, a session
+// started in a worktree subdirectory would check the wrong file and miss a real hit one
+// directory up from where the write actually lands.
+test("apply_patch: resolves against ctx.directory, not the wider ctx.worktree", async () => {
+  const repo = path.join(tmp, "patch-subdir")
+  const sub = path.join(repo, "sub")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.mkdir(sub, { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "sub/tests/\n")
+  const fresh = await import("../../adapters/opencode/plugins/geneseed-guard.js?patch-subdir")
+  const h = (await fresh.GeneseedGuard({ worktree: repo, directory: sub }))["tool.execute.before"]
+  // `instance.directory` (here `sub`) + "tests/a.js" = repo/sub/tests/a.js, which the
+  // protected list covers via "sub/tests/".
+  const text = patch("*** Update File: tests/a.js", "@@", "-old", "+new")
+  await assert.rejects(h({ tool: "apply_patch", args: { patchText: text } }, {}),
+    /\[geneseed-guard\]/)
 })

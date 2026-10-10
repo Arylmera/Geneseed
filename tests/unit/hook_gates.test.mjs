@@ -19,10 +19,10 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { ROOT } from '../../js/build/source.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 
 /** `bin/geneseed-hook.mjs <verb> [--root R]` with `stdin` on fd 0. */
-function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd = null } = {}) {
+function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd = null, env = null } = {}) {
   const sb = makeSandbox();
   try {
     const inFile = path.join(sb.path, 'stdin.json');
@@ -35,6 +35,7 @@ function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd =
       argv.push(...extra);
       const proc = spawnSync(process.execPath, argv, {
         encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], ...(cwd ? { cwd } : {}),
+        ...(env ? { env } : {}),
       });
       return { rc: proc.status, out: proc.stdout, err: proc.stderr };
     } finally { fs.closeSync(fd); }
@@ -59,6 +60,14 @@ function assertDefers(r, what) {
 
 // ---------------------------------------------------------------------------------------------
 // The git gate: a commit/push command — bare, flagged, chained, or `-C path` — asks.
+
+// A manifest that records the three stand-down verbs as wired, plus the `settings.json` that
+// carries them, the way a live emit leaves both: the stand-down needs `managed.settings_hooks` to
+// name the verb AND the settings file to still run it, not just a manifest (final review C1).
+const WIRED_GROUPS = ['context', 'git-gate', 'learn']
+  .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } }));
+const WIRED_MANIFEST = JSON.stringify({ managed: { settings_hooks: WIRED_GROUPS } });
+const WIRED_SETTINGS = JSON.stringify({ hooks: { X: WIRED_GROUPS.map((r) => r.group) } });
 
 const bashPayload = (command) =>
   JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
@@ -296,6 +305,65 @@ test('a destructive git verb asks under Deletion Is Deliberate', () => {
   }
 });
 
+// B5 confirmed-live gaps (claude-code.md / claude-verdict.md): the long/modern spellings of
+// the same Law IV acts above — all inside "deletion of what version control cannot restore".
+// `restore`/`switch`/`checkout -f` discard uncommitted work the same way `checkout -- ` does;
+// `stash drop/clear` deletes stashed work; `worktree remove --force` can discard an uncommitted
+// worktree; `reflog expire` and `gc --prune=now` delete the safety net reflog/dangling commits
+// provide; `push :branch`/`push --delete` deletes a remote branch, the same act `--force` push
+// trips this gate for rather than process 5's.
+test('the B5 long/modern-spelling gaps ask under Deletion Is Deliberate too', () => {
+  for (const cmd of [
+    'git clean --force',
+    'git branch --delete --force x',
+    'git branch --force --delete x',
+    'git restore .',
+    'git restore src/file.js',
+    'git -C /repo restore .',
+    'cd /repo && git restore .',
+    // `--staged --worktree` together restores BOTH the index and the working tree, so it
+    // discards exactly like plain `restore` — unlike `--staged` alone (see the negative below).
+    'git restore --staged --worktree x',
+    'git push origin :main',
+    'git push --delete origin x',
+    'git checkout -f',
+    'git checkout --force',
+    'git switch -f other',
+    // git switch -h lists these as two SEPARATE options, not one flag's long and short spelling.
+    'git switch --force',
+    'git switch --discard-changes',
+    'git stash drop',
+    'git stash clear',
+    'git worktree remove --force ../wt',
+    'git reflog expire --expire=now',
+    'git gc --prune=now']) {
+    const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
+    assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
+  }
+});
+
+// Negatives named in the brief: `git restore --staged` ALONE only unstages — version control
+// still holds the staged change, nothing is discarded, so Law IV does not reach it (contrast the
+// `--staged --worktree` row above, which does discard). An un-forced `git branch --delete`
+// refuses unless the branch is merged, same as `-d`, so it defers like the existing `-d` row
+// below. And because `restore`/`stash drop`/`stash clear` have no required flag or use ordinary
+// English words, they are matched only in VERB POSITION (right after `git`, or `git -C <path>`)
+// — a commit message or a filename that merely contains the word must never trip Law IV.
+test('restore --staged, an un-forced branch --delete, and "restore"/"drop"/"clear" as plain '
+  + 'text (not a verb) all defer under Law IV', () => {
+  for (const cmd of [
+    'git restore --staged x',
+    'git restore --staged .',
+    'git branch --delete merged',
+    'git add src/restore.js',
+    'git checkout restore-ui-fix',
+    'git commit -m "restore working behavior"',
+    'git stash push -m "clear old state"',
+    'git commit -m "drop the old flag"']) {
+    assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), extra: ['--no-consent'] }), cmd);
+  }
+});
+
 test('an ordinary push is not a force push, so with consent off it defers', () => {
   // `--no-consent` takes process 5 out, so only Law IV could ask: a `-u`, a `--follow-tags`
   // (an `f` after `--`, not a `-f` cluster) and a plain refspec are not destructive.
@@ -340,9 +408,13 @@ test('a credential-shaped write asks under Sealed Secrets', () => {
 });
 
 test('MultiEdit and NotebookEdit carrying a credential ask too', () => {
-  // The settings matcher routes both here. MultiEdit puts its text in `edits[].new_string` —
-  // the secret sits in the SECOND edit, so a gate reading only the first still misses it — and
-  // NotebookEdit names its file `notebook_path` and its text `new_source`.
+  // The settings matcher routes only NotebookEdit here now — MultiEdit is not a Claude Code
+  // tool (absent from tools-reference.md) and was dropped from the matcher (Claude verdict
+  // R2). The `edits[]` scan survives anyway as a cheap guard against a tool-table surprise or
+  // a future re-add, costing nothing on payloads that never carry it. MultiEdit puts its text
+  // in `edits[].new_string` — the secret sits in the SECOND edit, so a gate reading only the
+  // first still misses it — and NotebookEdit names its file `notebook_path` and its text
+  // `new_source`.
   const multi = JSON.stringify({ tool_name: 'MultiEdit', tool_input: { file_path: 'src/a.js',
     edits: [{ old_string: 'a', new_string: 'b' },
       { old_string: 'c', new_string: 'const k = "AKIAIOSFODNN7EXAMPLE";' }] } });
@@ -369,6 +441,173 @@ test('git-gate --no-consent skips only the process-5 ask; Law IV still asks', ()
   assertDefers(hookRun('git-gate', opts('git push origin main')), 'push');
   const law4 = askDecision(hookRun('git-gate', opts('git reset --hard HEAD~1')), 'reset --hard');
   assert.match(law4.permissionDecisionReason, /Deletion Is Deliberate/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// GLOBAL BESIDE PROJECT (host-compat Claude B4). Claude runs EVERY matching hook and the
+// strictest verdict wins, so when a global and a project install of the same host coexist, the
+// global git-gate used to ask process 5 on every commit even though the project was built with
+// `--no-consent`, and `learn` ran twice per Stop. Both now stand down exactly as `context` does:
+// the project's own hook decides, and `GENESEED_STACK_GLOBAL` stacks the global on purpose.
+
+/** A sandbox with a global install (folder `globalName`) and a repo carrying a project one. */
+function globalBesideProject(globalName, marker, fn) {
+  const sb = makeSandbox();
+  try {
+    const mk = (d) => {
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), WIRED_MANIFEST);
+      fs.writeFileSync(path.join(d, 'settings.json'), WIRED_SETTINGS);
+      return d;
+    };
+    const gcfg = mk(path.join(sb.path, 'home', globalName));
+    // Every real global carries its emit marker; a relocated one with no `--host` is keyed on it.
+    fs.writeFileSync(path.join(gcfg, '.geneseed-emit'), `${marker.slice(1)}-global\n`);
+    const repo = path.join(sb.path, 'repo');
+    const pcfg = mk(path.join(repo, marker));
+    const env = { ...process.env };
+    for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM', 'CLAUDE_PROJECT_DIR']) delete env[k];
+    return fn({ gcfg, pcfg, repo, env });
+  } finally { sb.cleanup(); }
+}
+
+test('a global git-gate stands down for a project install; the project gate still decides', () => {
+  // Rows: [global folder, --host, project marker]. The relocated folders are the B9/I2 case:
+  // the marker comes from --host (or, with none, the root's `.geneseed-emit`), not the folder name.
+  for (const [folder, host, marker] of [['.claude', null, '.claude'],
+    ['claude-work', null, '.claude'], ['oc-cfg', 'openclaude', '.openclaude']]) {
+    globalBesideProject(folder, marker, ({ gcfg, pcfg, repo, env }) => {
+      const run = (root, command, extra = [], e = env) => hookRun('git-gate',
+        { root, host, stdin: bashPayload(command), cwd: repo, env: e, extra });
+      // The global is silent even on Law IV: the project's own gate is about to judge it.
+      assertDefers(run(gcfg, 'git commit -m x'), `${folder}: global gate on a commit`);
+      assertDefers(run(gcfg, 'git reset --hard HEAD~1'), `${folder}: global gate on reset --hard`);
+      // The project built with --no-consent: its commit passes, its Law IV still asks.
+      assertDefers(run(pcfg, 'git commit -m x', ['--no-consent']), `${folder}: project --no-consent`);
+      askDecision(run(pcfg, 'git reset --hard HEAD~1', ['--no-consent']), `${folder}: project law-4`);
+      // The opt-out un-silences the global.
+      askDecision(run(gcfg, 'git commit -m x', [], { ...env, GENESEED_STACK_GLOBAL: '1' }),
+        `${folder}: GENESEED_STACK_GLOBAL`);
+    });
+  }
+});
+
+test('a global learn stands down for a project install; the project learn still runs', () => {
+  // With `$GENESEED_LLM` unset, `learn` prints its prompt to stdout — the observable "it ran".
+  // Its install root is the parent of `--memory`, the same root its sovereign bypass reads.
+  for (const [folder, host, marker] of [['.claude', null, '.claude'],
+    ['claude-work', null, '.claude'], ['bob-cfg', 'bob', '.bob']]) {
+    globalBesideProject(folder, marker, ({ gcfg, pcfg, repo, env }) => {
+      const run = (cfg, e = env) => hookRun('learn', {
+        host, stdin: 'a durable fact worth keeping', cwd: repo, env: e,
+        extra: ['--memory', path.join(cfg, 'memory')] });
+      const global = run(gcfg);
+      assert.equal(global.rc, 0, `${folder}: ${global.err}`);
+      assert.equal(global.out, '', `${folder}: the global learn ran beside a project install`);
+      assert.match(run(pcfg).out, /NOTES:/, `${folder}: the project learn did not run`);
+      assert.match(run(gcfg, { ...env, GENESEED_STACK_GLOBAL: '1' }).out, /NOTES:/,
+        `${folder}: GENESEED_STACK_GLOBAL did not un-silence the global learn`);
+    });
+  }
+});
+
+test('a gate stays loud unless a project gate replaces it: other globals, cd elsewhere', () => {
+  // THE BINDING RULE: a global gate goes quiet ONLY where an equivalent project gate fires.
+  // Two ways the first cut broke it, each a written-out row driven through the real entry point:
+  //   * another GLOBAL in the project dir (`CLAUDE_CONFIG_DIR=~/.claude-work`, a session started
+  //     in `~`, where `~/.claude` is still there with or without its emit marker) is not a
+  //     project install — nothing replaces the relocated global's gate, so `git push --force`
+  //     must still ask;
+  //   * the agent `cd`s from project A into repo B: B's project install was never loaded (Claude
+  //     loads project hooks from `$CLAUDE_PROJECT_DIR`, the session's root), so the gate keys on
+  //     `$CLAUDE_PROJECT_DIR` when set, not on the hook's cwd.
+  const sb = makeSandbox();
+  try {
+    const home = path.join(sb.path, 'home');
+    const mk = (d, emit) => {
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), WIRED_MANIFEST);
+      fs.writeFileSync(path.join(d, 'settings.json'), WIRED_SETTINGS);
+      if (emit) fs.writeFileSync(path.join(d, '.geneseed-emit'), `${emit}\n`);
+      return d;
+    };
+    const work = mk(path.join(home, '.claude-work'), 'claude-global');
+    const dotClaude = mk(path.join(home, '.claude'), 'claude-global');
+    const repoA = path.join(home, 'src', 'a');
+    fs.mkdirSync(repoA, { recursive: true });
+    const repoB = path.join(home, 'src', 'b');
+    mk(path.join(repoB, '.claude'));
+    const env = { ...process.env, ...homeOverrides(home), CLAUDE_CONFIG_DIR: work };
+    for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM', 'CLAUDE_PROJECT_DIR']) delete env[k];
+    const force = (cwd, e = env) => hookRun('git-gate',
+      { root: work, stdin: bashPayload('git push --force'), cwd, env: e });
+
+    askDecision(force(home), 'another global ~/.claude (with emit marker) silenced the gate');
+    askDecision(force(repoA, { ...env, CLAUDE_PROJECT_DIR: home }),
+      'another global ~/.claude as $CLAUDE_PROJECT_DIR/.claude silenced the gate');
+    fs.rmSync(path.join(dotClaude, '.geneseed-emit'));
+    askDecision(force(home), 'a leftover ~/.claude (no emit marker) silenced the gate');
+    // cwd = B (has a project install), session project = A (has none): the gate still asks.
+    askDecision(force(repoB, { ...env, CLAUDE_PROJECT_DIR: repoA }),
+      'a cd into a repo whose hooks were never loaded silenced the gate');
+    // And learn follows the same project dir.
+    const learnB = hookRun('learn', { stdin: 'a durable fact', cwd: repoB,
+      env: { ...env, CLAUDE_PROJECT_DIR: repoA }, extra: ['--memory', path.join(work, 'memory')] });
+    assert.match(learnB.out, /NOTES:/, 'a cd into another repo silenced the global learn');
+    // Control: the session's own project IS B — the project gate fires, the global stands down.
+    assertDefers(force(repoB, { ...env, CLAUDE_PROJECT_DIR: repoB }), 'global beside project B');
+  } finally { sb.cleanup(); }
+});
+
+test('only the session\'s own project dir silences: no walk up, for any host', () => {
+  // ROUND 3 (Task 11 review). Claude reads a project's `.claude/settings.json` from the session's
+  // primary working directory, not its ancestors (`settings.md`, "reads the shared
+  // `.claude/settings.json` from the session's primary working directory"). So a project install
+  // ABOVE the project dir proves nothing about which project gate fired, and the stand-down
+  // tests `<project dir>/<marker>` alone. Bob's project-hook lookup is undocumented, so its
+  // cwd fallback does not walk either: a doubled ask is safe, a silenced gate is not.
+  // Rows: [label, CLAUDE_PROJECT_DIR (null = unset), cwd, expected].
+  const sb = makeSandbox();
+  try {
+    const home = path.join(sb.path, 'home');
+    const mk = (d, emit) => {
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, '.geneseed-manifest.json'), WIRED_MANIFEST);
+      fs.writeFileSync(path.join(d, 'settings.json'), WIRED_SETTINGS);
+      if (emit) fs.writeFileSync(path.join(d, '.geneseed-emit'), `${emit}\n`);
+      return d;
+    };
+    const dir = (d) => { fs.mkdirSync(d, { recursive: true }); return d; };
+    const work = mk(path.join(home, '.claude-work'), 'claude-global');
+    const mono = dir(path.join(home, 'mono'));
+    mk(path.join(mono, '.claude'));
+    const pkg = dir(path.join(mono, 'pkg'));
+    mk(path.join(pkg, '.claude'));
+    const sub = dir(path.join(pkg, 'sub'));
+    const mono2 = dir(path.join(home, 'mono2'));
+    mk(path.join(mono2, '.claude'));
+    const pkg2 = dir(path.join(mono2, 'pkg'));
+    const hand = dir(path.join(home, 'hand'));
+    mk(path.join(hand, '.claude'), 'claude-global');
+    const env = { ...process.env, ...homeOverrides(home), CLAUDE_CONFIG_DIR: work };
+    for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM', 'CLAUDE_PROJECT_DIR']) delete env[k];
+    const rows = [
+      ['install only above the project dir (mono2/.claude, project mono2/pkg)', pkg2, pkg2, 'ask'],
+      ['installs above but none in the project dir (project mono/pkg/sub)', sub, sub, 'ask'],
+      ['the project dir carries its own install (mono/pkg)', pkg, pkg, 'defer'],
+      ['the monorepo root is the project dir', mono, mono, 'defer'],
+      ['no $CLAUDE_PROJECT_DIR (Bob): cwd mono2/pkg, install only above it', null, pkg2, 'ask'],
+      ['no $CLAUDE_PROJECT_DIR (Bob): cwd carries its own install', null, pkg, 'defer'],
+      // M-3: a hand-written `-global` emit in a project `.claude/` reads as a global. The result
+      // is a doubled ask, which is deliberate — never "fix" it into silence.
+      ['a project .claude/ carrying a hand-written claude-global emit marker', hand, hand, 'ask'],
+    ];
+    for (const [label, cpd, cwd, want] of rows) {
+      const r = hookRun('git-gate', { root: work, stdin: bashPayload('git push --force'), cwd,
+        env: cpd ? { ...env, CLAUDE_PROJECT_DIR: cpd } : env });
+      if (want === 'ask') askDecision(r, label); else assertDefers(r, label);
+    }
+  } finally { sb.cleanup(); }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -410,6 +649,44 @@ test('the Claude dialect is unchanged when --host is absent, and tool-gate speak
   askDecision(hookRun('tool-gate', { stdin: bashPayload('git push') }), 'tool-gate/claude');
   askDecision(hookRun('tool-gate',
     { stdin: contentPayload('src/a.js', 'AKIAIOSFODNN7EXAMPLE') }), 'tool-gate/claude/secret');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Bob's REAL payload shape (bob-verdict.md I1): `{event, session_id, tool, input:{...}}` — no
+// `tool_input`, `tool_name` or `hook_event_name`. `tool-gate` is the only verb Bob's settings.json
+// ever invokes (settings.mjs:519), so normalising must happen there. Before the fix, `toolGate`
+// reads `payload.tool_input` (absent -> `{}`), always falls through to `ruleDecide`, which reads
+// `payload.tool_input` again (still absent) and defers on every call — Law I, Law IV and
+// rigor-5 are a silent no-op on every real Bob tool call.
+const bobPayload = (tool, input) => JSON.stringify({ event: 'PreToolUse', session_id: 'ses_1', tool, input });
+
+test('bob-shaped write_file with a secret still blocks (rc 2), not a silent defer', () => {
+  const r = hookRun('tool-gate', {
+    stdin: bobPayload('write_file', { path: 'src/a.js', content: 'AKIAIOSFODNN7EXAMPLE' }),
+    host: 'bob',
+  });
+  assert.equal(r.rc, 2, `write_file/secret: expected exit 2, got ${r.rc}, stderr=${r.err}`);
+  assert.match(r.err, /Sealed Secrets/);
+});
+
+test('bob-shaped execute_command with a destructive git act still blocks (rc 2)', () => {
+  const r = hookRun('tool-gate', {
+    stdin: bobPayload('execute_command', { command: 'git push --force' }),
+    host: 'bob',
+  });
+  assert.equal(r.rc, 2, `execute_command/force-push: expected exit 2, got ${r.rc}, stderr=${r.err}`);
+  assert.match(r.err, /Deletion Is Deliberate/);
+});
+
+test('a Claude-shaped payload is unchanged by the Bob normalisation', () => {
+  // Same assertion as the existing Bob dialect test above, re-run through `tool-gate` with the
+  // ALREADY-Claude-shaped payload, to prove the new normalisation step is a no-op here: nothing
+  // it sets (`tool_input`, `tool_name`, `hook_event_name`) was missing to begin with.
+  const r = hookRun('tool-gate', { stdin: bashPayload('git push --force'), host: 'bob' });
+  assert.equal(r.rc, 2, `claude-shaped unchanged: expected exit 2, got ${r.rc}`);
+  assert.match(r.err, /Deletion Is Deliberate/);
+  // process-5 (consent) has no block tier on Bob: a stderr nudge, exit 0 — a defer, not a block.
+  assertDefers(hookRun('tool-gate', { stdin: bashPayload('git push'), host: 'bob' }), 'tool-gate/claude-shaped/consent');
 });
 
 test('a dotenv target and ordinary content defer', () => {

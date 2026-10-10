@@ -941,9 +941,15 @@ test('an unported verb refuses loudly', () => {
   // command that does work. `exclude` is the interesting one: a verb the SIBLING Node binary
   // answers, so "some Node entry handles it" is true while "this one does" must stay false — the
   // shim bakes exactly one of the two.
+  //
+  // Exit 1, not 2 (I3/B1): on Claude Code and Bob, exit 2 is the one code that BLOCKS a tool
+  // call (or, on Stop/SubagentStop, keeps the turn going). The forward case is the one that
+  // matters: settings emitted by a NEWER Geneseed name a verb this stale checkout — running from
+  // the machine-wide, last-writer-wins shim — has never heard of, and that must not read as a
+  // block. 1 still shows a `<hook name> hook error` notice; it just does not stop anything.
   for (const verb of ['doctor', 'build', 'status', 'uninstall', 'exclude']) {
     const r = run(HOOK, [verb], process.env, ROOT);
-    assert.equal(r.status, 2, `${verb} must refuse with exit 2, got ${r.status}`);
+    assert.equal(r.status, 1, `${verb} must refuse with a non-blocking exit 1, got ${r.status}`);
     assert.ok(r.stderr.includes(`run \`geneseed ${verb}\``),
       `the refusal must name the command that does work, not merely repeat the verb: ${r.stderr}`);
     assert.equal(r.stdout, '',
@@ -951,11 +957,30 @@ test('an unported verb refuses loudly', () => {
   }
 });
 
-test('no verb at all refuses', () => {
+test('no verb at all refuses, non-blocking', () => {
+  // Same rule as above: a bare invocation is not a gate decision, so exit 1 (never 2) — see
+  // I3/B1.
   const r = run(HOOK, [], process.env, ROOT);
-  assert.equal(r.status, 2, r.stderr.slice(0, 200));
+  assert.equal(r.status, 1, r.stderr.slice(0, 200));
   assert.equal(r.stdout, '');
 });
+
+// I3/B1: PreToolUse exit 2 BLOCKS the tool call. The machine-wide, last-writer-wins shim means a
+// stale checkout can receive a flag it does not recognise (e.g. a newer install's
+// `--no-consent`), and the old argv-error path answered that with exit 2 — turning a flag
+// mismatch into every Bash/Write call being blocked. A gate's own decision still exits 0 and
+// signals through stdout (`askDecision`); only the ARGV-parsing failure is at issue here.
+for (const verb of ['git-gate', 'rule-gate', 'tool-gate']) {
+  test(`${verb} survives an unknown flag with rc 0 and empty stdout`, () => {
+    const r = run(HOOK, [verb, '--root', ROOT, '--frobnicate'], process.env, ROOT);
+    assert.equal(r.status, 0,
+      `an argv error on a gate verb must never exit 2 — that blocks the tool call it was `
+      + `guarding. stderr: ${r.stderr.slice(0, 200)}`);
+    assert.equal(r.stdout, '',
+      'a non-blocking argv error prints nothing on stdout: that is the channel the host parses '
+      + 'as a verdict');
+  });
+}
 
 test('two mutually exclusive theme flags are refused, and one of them is not', () => {
   // A mutually-exclusive group is BEHAVIOUR even though its wording is not reproduced, and the two

@@ -321,7 +321,7 @@ test('a non-ASCII target path is escaped in the registry', () => {
   }
 });
 
-test('every relocation var moves its global target, and Claude\'s does not', () => {
+test('every relocation var moves its global target', () => {
   // NO GOLDEN CELL CAN CHECK THIS, and the reason is a safety measure: `cellEnv` deliberately
   // CLEARS every relocation variable, because leaving one set sends ~126 global cells into the
   // developer's real install. So the matrix runs with the vars unset, and a driver that ignored
@@ -334,18 +334,18 @@ test('every relocation var moves its global target, and Claude\'s does not', () 
   // gate in the repo. The prose describing the hazard had been generalised to the new host; the
   // gate had not.
   //
-  // CLAUDE IS THE INVERSE ROW, and it is why there is a `moves` column instead of one fewer
-  // entry. `claudeConfigDir` has NO env branch BY DESIGN — Claude Code documents no such variable
-  // — so for that host the property is the opposite one: the variable a reader would reach for
-  // must NOT move the target. Expressed as absence, the table could not tell a deliberate design
-  // from a forgotten host, which is exactly what the `covered` cross-check catches.
+  // CLAUDE WAS ONCE THE INVERSE ROW, and the `moves` column stays for the next host that needs
+  // one. `claudeConfigDir` had no env branch on the premise that Claude Code documents no such
+  // variable. It does (`env-vars.md`: `CLAUDE_CONFIG_DIR` relocates settings, CLAUDE.md, skills
+  // and agents — host-compat Claude B9), so an install that ignored it landed in a `~/.claude`
+  // the user's Claude never reads.
   const hosts = [
     ['OPENCODE_CONFIG_DIR', true, 'opencode-global', 'AGENT.md', path.join('.config', 'opencode')],
     // `rules/geneseed.md`, not AGENTS.md: Bob never auto-loads a global AGENTS.md, so the global
     // emit deliberately writes none and puts the preamble in its always-injected rules folder.
     // The first version of this row named AGENTS.md and failed — the table caught its own author.
     ['BOB_CONFIG_DIR', true, 'bob-global', path.join('rules', 'geneseed.md'), '.bob'],
-    ['CLAUDE_CONFIG_DIR', false, 'claude-global', 'CLAUDE.md', '.claude'],
+    ['CLAUDE_CONFIG_DIR', true, 'claude-global', 'CLAUDE.md', '.claude'],
     // OpenClaude forked Claude Code but DOES document its variable (and ignores Claude's), so
     // its row is a mover — the fork is the one place the two hosts' answers differ.
     ['OPENCLAUDE_CONFIG_DIR', true, 'openclaude-global', 'CLAUDE.md', '.openclaude'],

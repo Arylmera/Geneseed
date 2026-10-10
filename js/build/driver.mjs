@@ -47,7 +47,7 @@ import { relPosix } from '../lib/text.mjs';
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
 // that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
 import {
-  GLOBAL_MANIFEST, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
+  GLOBAL_MANIFEST, HOSTS, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
 
@@ -103,8 +103,9 @@ export function resolveOut(raw) {
  * `_build_global._preamble_exclude` — the `claudeMdExcludes` entry a PROJECT install writes
  * to suppress the GLOBAL preamble of the same host, or null for a host that gets none.
  *
- * `_PREAMBLE_CONFIG_DIR` has exactly one key, so only a `CLAUDE.md` carrier resolves to a
- * value: Bob's `AGENTS.md` gets null.
+ * Only a `CLAUDE.md` carrier resolves to a value — Bob's `AGENTS.md` gets null. The function
+ * branches on `host` to pick between Claude's and OpenClaude's own global config dir, so "one
+ * key" no longer describes what resolves the directory; the carrier-name rule still holds.
  *
  * Computed HERE and not in the render child, and that is the inverted boundary rule doing
  * real work rather than being restated. P3b's note on the Python original: it resolves
@@ -377,9 +378,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     && !Array.isArray(doc.managed)) ? doc.managed : {};
 
   // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every
-  // carrier but `CLAUDE.md` — `_PREAMBLE_CONFIG_DIR` has exactly one key — so Bob's
-  // `AGENTS.md` does not resolve to one. Spelling it as a call rather than a literal is what makes that a
-  // measured `null` instead of an assumed one.
+  // carrier but `CLAUDE.md`, so Bob's `AGENTS.md` does not resolve to one; for a `CLAUDE.md`
+  // carrier it branches on `host` to pick Claude's or OpenClaude's own global config dir (see
+  // `preambleExclude`'s own docblock). Spelling it as a call rather than a literal is what
+  // makes that a measured `null` instead of an assumed one.
   const rendered = emitClaudeRender(cfg, {
     theme: args.theme, cfgDir, claudeMd, scope, host,
     out,
@@ -394,9 +396,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
-    _comment: "Files owned by Geneseed's Claude emit. Do not edit; removed on "
+    _comment: "Files owned by Geneseed's Claude/Bob/OpenClaude emit. Do not edit; removed on "
       + 're-emit. The memory and notebook stores are NOT listed — never '
-      + 'deleted. `managed` records the CLAUDE.md block + settings.json '
+      + 'deleted. `managed` records the CLAUDE.md/AGENTS.md block + settings file '
+      + '(settings.json, or settings.local.json at PROJECT scope on Claude/OpenClaude) '
       + 'hooks so uninstall removes exactly those.',
     owned: [...owned].sort(),
     managed,
@@ -474,8 +477,14 @@ const CLAUDE_SHAPED = {
   // Everything under `.openclaude/`, the preamble included. OpenClaude reads the root CLAUDE.md
   // only when the repo has no AGENTS.md, but `.openclaude/CLAUDE.md` always; keeping the root
   // untouched also lets a Claude Code install share the repo.
+  //
+  // `carrierInLayer` reads off `HOSTS`' own column of the same name (`js/hosts/hosts.mjs`)
+  // rather than restating the literal here — `installs.mjs`'s `carriersFor` reads the SAME
+  // column to know where the deployed carrier is, and two booleans naming one fact is exactly
+  // the kind of drift this repo's docblocks keep warning about.
   openclaude: {
-    host: 'openclaude', layer: '.openclaude', carrier: 'CLAUDE.md', carrierInLayer: true,
+    host: 'openclaude', layer: '.openclaude', carrier: 'CLAUDE.md',
+    carrierInLayer: HOSTS.find((h) => h.host === 'openclaude').carrierInLayer,
     summary: (at, r) => `[geneseed] openclaude (folder) -> ${at}: .openclaude/ `
       + `(CLAUDE.md, ${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
       + `settings.local.json), ${r.memStatus}, ${r.nbStatus}.\n`,
@@ -746,9 +755,11 @@ function run(argv) {
   writeMarkers(markerDir, args.emit, args.footprint);
   // build() drops a .geneseed-theme in `out` for the emits that call it; the global emits
   // render into the config dir WITHOUT calling build(), so the theme is recorded here.
-  // Deliberately not written for the claude/bob/openclaude PROJECT emits — they carry none,
-  // and `_harness_setup._installed_defaults` detects those by an AGENT.md sigil scan
-  // instead. Writing one for them would change the emitted tree.
+  // Deliberately not written for the claude/bob/openclaude PROJECT emits — they carry none.
+  // Claude and Bob fall back to a sigil scan of their ROOT carrier instead
+  // (`_harness_setup._installed_defaults`); OpenClaude has no root carrier to scan, so its
+  // project theme is read off `.openclaude/CLAUDE.md` (host-narrowed `firstCarrier`, host-compat
+  // B1). Writing one for them would change the emitted tree.
   if (args.emit.endsWith('-global')) {
     try {
       writeText(path.join(markerDir, '.geneseed-theme'), `${args.theme}\n`);

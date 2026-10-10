@@ -4,9 +4,10 @@
  * SUCCESSOR TO `tests/test_hook_form.py`. Two subjects, both of them silent-and-global when they
  * break — which is the whole reason the file exists rather than trusting the emit corpus:
  *
- *   * EVERY NON-GATE HOOK MUST END `|| exit 0`, so a crashing hook can never block the host
+ *   * EVERY NON-GATE HOOK MUST END `|| exit 0` (`; exit 0` in the PowerShell form a Claude
+ *     install gets on Windows without Git Bash), so a crashing hook can never block the host
  *     session, and the two GATES must NOT, because standing in the way is their job and
- *     `|| exit 0` would make a crashing gate fail OPEN — silently permissive on exactly the acts
+ *     the swallow would make a crashing gate fail OPEN — silently permissive on exactly the acts
  *     (commit/push, writing a rule or a memory) that need the user's word. BOTH HALVES ARE THE
  *     ASSERTION: the partition, not the presence.
  *   * THE SHIM is the one path every emitted hook goes through. A shim that prints anything of
@@ -25,16 +26,20 @@
  * is precisely the bug this test exists for.
  */
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { shimProblems } from '../../js/inspect/checks-repo.mjs';
-import { GENESEED_HOOK_SNIFF, claudeHookGroups } from '../../js/hosts/settings.mjs';
+import { gateSummary, statusData, statusLines } from '../../js/inspect/status.mjs';
+import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
 import {
-  SHIM_ARGV, ephemeralCheckout, hookPrefix, hookRunnerEntry, hookShimBody, hookShimPath,
-  writeHookShim,
+  SHIM_ARGV, claudeHookShell, ephemeralCheckout, hookPrefix, hookRunnerEntry, hookShimBody,
+  hookShimPath, writeHookShim,
 } from '../../js/hosts/shim.mjs';
+import { hookShellProblems } from '../../js/hosts/installs.mjs';
+import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
@@ -59,13 +64,57 @@ const HOOK_OPTS = () => hookRunnerEntry();
  */
 function allCommands(dir) {
   const out = [];
-  for (const host of ['claude', 'bob']) {
-    const groups = claudeHookGroups(dir, HOOK_OPTS(), null, [], host);
-    for (const [event, gs] of Object.entries(groups)) {
-      for (const g of gs) for (const h of g.hooks ?? []) out.push([`${host}:${event}`, h.command ?? '']);
-    }
+  // Every host on THIS platform, plus both win32 hook-shell branches (Task 15): the partition
+  // must hold in the PowerShell form too, and a run on a machine with Git Bash would otherwise
+  // never look at it.
+  const runs = [[process.platform, null], ['win32', 'bash'], ['win32', 'powershell']];
+  for (const [platform, shell] of runs) {
+    withHookShell(shell, () => {
+      for (const host of ['claude', 'openclaude', 'bob']) {
+        const groups = claudeHookGroups(dir, { ...HOOK_OPTS(), platform }, null, [], host);
+        for (const [event, gs] of Object.entries(groups)) {
+          for (const g of gs) {
+            for (const h of g.hooks ?? []) {
+              out.push([`${platform}:${shell}:${host}:${event}`, h.command ?? '', h.shell ?? 'bash']);
+            }
+          }
+        }
+      }
+    });
   }
   return out;
+}
+
+/** The never-block tail each hook shell spells: `||` is a parse error in Windows PowerShell 5.1. */
+const SWALLOW = { bash: '|| exit 0', powershell: '; exit 0' };
+
+/**
+ * Run `fn` with the env `claudeHookShell` reads forced to answer `shell` ('bash' via a valid
+ * `CLAUDE_CODE_GIT_BASH_PATH`, 'powershell' via an empty PATH and no override), or untouched
+ * when `shell` is null. Restored in `finally`; `process.env` is case-insensitive on Windows, so
+ * `PATH` here IS the machine's `Path`.
+ */
+function withHookShell(shell, fn) {
+  if (shell === null) return fn();
+  const sb = makeSandbox('hookshell-');
+  const saved = { PATH: process.env.PATH, CLAUDE_CODE_GIT_BASH_PATH: process.env.CLAUDE_CODE_GIT_BASH_PATH };
+  try {
+    if (shell === 'bash') {
+      const bash = path.join(sb.path, 'bash.exe');
+      writeFileSync(bash, '', 'utf8');
+      process.env.CLAUDE_CODE_GIT_BASH_PATH = bash;
+    } else {
+      delete process.env.CLAUDE_CODE_GIT_BASH_PATH;
+      process.env.PATH = path.join(sb.path, 'empty');
+    }
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    sb.cleanup();
+  }
 }
 
 /** Run `fn` with `GENESEED_HOME` pointed at a fresh empty directory (or at `at`). */
@@ -92,13 +141,13 @@ test('the hook groups are the Claude settings shape', () => {
   });
 });
 
-test('every non-gate hook ends with || exit 0', () => {
+test('every non-gate hook ends with its shell-specific exit 0 swallow', () => {
   withHome((home) => {
     let checked = 0;
-    for (const [event, cmd] of allCommands(path.join(home, 'cfg'))) {
+    for (const [event, cmd, shell] of allCommands(path.join(home, 'cfg'))) {
       if (GATES.some((g) => cmd.includes(` ${g} `))) continue;   // deliberately blocking
       checked += 1;
-      assert.ok(cmd.trimEnd().endsWith('|| exit 0'),
+      assert.ok(cmd.trimEnd().endsWith(SWALLOW[shell]),
         `the ${event} hook can block the host session: ${cmd}`);
     }
     assert.ok(checked > 0,
@@ -137,7 +186,7 @@ test('every gate hook is emitted, and none of them ends with || exit 0', () => {
       assert.ok(mine.length > 0,
         `${gate} is exempt from the never-block rule but is not emitted`);
       for (const c of mine) {
-        assert.ok(!c.trimEnd().endsWith('|| exit 0'),
+        assert.ok(!c.trimEnd().endsWith('|| exit 0') && !c.trimEnd().endsWith('; exit 0'),
           `${gate} ends with || exit 0 — a crashing gate would fail OPEN, silently permissive on `
           + `exactly the act it exists to hold: ${c}`);
       }
@@ -433,5 +482,241 @@ test('a disposable checkout still writes a shim nobody else owns', () => {
     } finally {
       sb.cleanup();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE HOOK SHELL ON WINDOWS (Task 15, host-compat Claude verdict I2, option C).
+//
+// Claude Code runs a shell-form hook under Git Bash on Windows, or under PowerShell when Git Bash
+// is not installed (hooks.md, `shell` field and "Shell form"). Under PowerShell the bash form
+// `"<shim>.cmd" verb ... || exit 0` is a parse error (rc 1, measured on pwsh 7 and Windows
+// PowerShell 5.1), so every hook fails OPEN. A Claude install emitted on a machine without Git
+// Bash therefore gets `shell: "powershell"` and `& "<shim>.cmd" verb ...; exit 0`; a machine with
+// Git Bash keeps today's bytes, and so does every other host and platform.
+
+test('claudeHookShell finds Git Bash the way the docs and the upstream detector do', () => {
+  const sb = makeSandbox('hookshell-detect-');
+  try {
+    const git = path.join(sb.path, 'Git');
+    mkdirSync(path.join(git, 'cmd'), { recursive: true });
+    mkdirSync(path.join(git, 'bin'), { recursive: true });
+    writeFileSync(path.join(git, 'cmd', 'git.exe'), '', 'utf8');
+    const nobash = path.join(sb.path, 'NoBash', 'cmd');
+    mkdirSync(nobash, { recursive: true });
+    writeFileSync(path.join(nobash, 'git.exe'), '', 'utf8');
+    const empty = path.join(sb.path, 'empty');
+    const odd = path.join(sb.path, 'zsh.exe');
+    writeFileSync(odd, '', 'utf8');
+    // Before bash.exe exists: a git.exe with no `<dir>\..\bin\bash.exe` is not Git Bash.
+    assert.equal(claudeHookShell({ PATH: path.join(git, 'cmd') }, 'win32'), 'powershell');
+    writeFileSync(path.join(git, 'bin', 'bash.exe'), '', 'utf8');
+    const rows = [
+      // env-vars.md: CLAUDE_CODE_GIT_BASH_PATH names bash.exe/sh.exe/bash/sh and must exist.
+      [{ CLAUDE_CODE_GIT_BASH_PATH: path.join(git, 'bin', 'bash.exe'), PATH: empty }, 'bash'],
+      // ...otherwise Claude ignores it and auto-detects, as if unset.
+      [{ CLAUDE_CODE_GIT_BASH_PATH: odd, PATH: empty }, 'powershell'],
+      [{ CLAUDE_CODE_GIT_BASH_PATH: path.join(sb.path, 'gone', 'bash.exe'), PATH: empty }, 'powershell'],
+      // Auto-detect: git.exe on PATH with `<dir>\..\bin\bash.exe` beside it (any PATH entry).
+      [{ PATH: [empty, path.join(git, 'cmd')].join(';') }, 'bash'],
+      // Windows env keys are case-insensitive; a copied env keeps `Path`.
+      [{ Path: path.join(git, 'cmd') }, 'bash'],
+      [{ PATH: nobash }, 'powershell'],
+      [{ PATH: empty }, 'powershell'],
+      [{}, 'powershell'],
+      // Never PowerShell off Windows: POSIX hooks run under `sh -c`.
+      [{ PATH: empty }, 'bash', 'linux'],
+      [{ PATH: empty }, 'bash', 'darwin'],
+    ];
+    for (const [env, want, platform = 'win32'] of rows) {
+      assert.equal(claudeHookShell(env, platform), want, `${platform} ${JSON.stringify(env)}`);
+    }
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the PowerShell form is emitted for Claude on win32 without Git Bash, and only there', () => {
+  withHome((home) => {
+    const cfg = path.join(home, 'cfg');
+    const winOpts = { ...HOOK_OPTS(), platform: 'win32' };
+    const run = hookPrefix(winOpts);
+    const ps = withHookShell('powershell', () => claudeHookGroups(cfg, winOpts));
+    const bash = withHookShell('bash', () => claudeHookGroups(cfg, winOpts));
+    // Written out: every handler gains `shell` and a leading `&` (PowerShell refuses a quoted
+    // command head followed by arguments); the non-gate tail swaps `||` for `;`, the gates stay
+    // bare (no verb exits 2, so a launch failure is non-blocking either way).
+    const context = `& ${run} context --root "${cfg}"; exit 0`;
+    const learn = `& ${run} learn --memory "${path.join(cfg, 'memory')}"; exit 0`;
+    const h = (command) => ({ hooks: [{ type: 'command', command, shell: 'powershell' }] });
+    assert.deepEqual(ps, {
+      PreToolUse: [
+        { matcher: 'Bash|PowerShell', ...h(`& ${run} git-gate --root "${cfg}"`) },
+        { matcher: 'Write|Edit|NotebookEdit', ...h(`& ${run} rule-gate --root "${cfg}"`) },
+      ],
+      SessionStart: [h(context)],
+      Stop: [h(learn)],
+      SubagentStop: [h(learn)],
+      PreCompact: [h(learn)],
+    });
+    // With Git Bash: today's bytes, no `shell` key, the `|| exit 0` form.
+    assert.equal(bash.SessionStart[0].hooks[0].command, `${run} context --root "${cfg}" || exit 0`);
+    assert.ok(!JSON.stringify(bash).includes('"shell"'), JSON.stringify(bash));
+    // Never for OpenClaude (always Git Bash, 2.1.88-era) or Bob (`cmd /c`), never off win32.
+    withHookShell('powershell', () => {
+      for (const [host, platform] of [['openclaude', 'win32'], ['bob', 'win32'], ['claude', 'linux']]) {
+        const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform }, null, [], host);
+        const flat = JSON.stringify(groups);
+        assert.ok(!flat.includes('"shell"') && !flat.includes('& '), `${host}/${platform}: ${flat}`);
+      }
+    });
+  });
+});
+
+test('a re-emit after the hook shell flips replaces the groups instead of double-wiring', () => {
+  // Git Bash removed (or installed) between two emits: the handler changes, so the recorded group
+  // is no longer canonical and `mergeClaudeSettings` must prune it, or every hook runs twice,
+  // once in a form that fails open.
+  withHome((home) => {
+    const cfg = path.join(home, 'cfg');
+    mkdirSync(cfg, { recursive: true });
+    const settings = path.join(cfg, 'settings.json');
+    const winOpts = { ...HOOK_OPTS(), platform: 'win32' };
+    const emit = (shell, prior) => withHookShell(shell,
+      () => mergeClaudeSettings(settings, prior, winOpts, null, [], 'claude', cfg)[1]);
+    let claims = emit('bash', null);
+    for (const [shell, want] of [['powershell', 'powershell'], ['bash', undefined]]) {
+      claims = emit(shell, claims);
+      const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
+      for (const [event, n] of [['PreToolUse', 2], ['SessionStart', 1], ['Stop', 1],
+        ['SubagentStop', 1], ['PreCompact', 1]]) {
+        assert.equal(hooks[event].length, n, `${shell}: ${event} ${JSON.stringify(hooks[event])}`);
+        for (const g of hooks[event]) assert.equal(g.hooks[0].shell, want, `${shell}: ${event}`);
+      }
+      assert.equal(claims.length, 6, `${shell}: the claim set is not the six current groups`);
+    }
+  });
+});
+
+/** Write a Claude install at `cfg` as an emit under `shell` would: settings file and manifest. */
+function writeInstall(cfg, shell) {
+  withHookShell(shell, () => {
+    const groups = claudeHookGroups(cfg, { ...HOOK_OPTS(), platform: 'win32' });
+    const recorded = Object.entries(groups)
+      .flatMap(([event, gs]) => gs.map((group) => ({ event, group })));
+    writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({ hooks: groups }));
+    writeFileSync(path.join(cfg, GLOBAL_MANIFEST),
+      JSON.stringify({ managed: { settings_hooks: recorded } }));
+  });
+}
+
+test('doctor names a Claude install whose hook form no longer matches the machine', () => {
+  withHome((home) => {
+    const cfg = path.join(home, '.claude');
+    mkdirSync(cfg, { recursive: true });
+    const write = (shell) => writeInstall(cfg, shell);
+    const probe = (shell, targets, platform = 'win32') => withHookShell(shell,
+      () => hookShellProblems(targets, platform));
+    const global = [['claude', 'global', cfg]];
+    write('bash');
+    assert.deepEqual(probe('bash', global), []);
+    const failOpen = probe('powershell', global);
+    assert.equal(failOpen.length, 1, failOpen.join('\n'));
+    assert.match(failOpen[0], /^\[hooks\] .*Git Bash.*fail open.*rebuild-all/);
+    assert.ok(failOpen[0].includes(cfg), failOpen[0]);
+    // Only Windows has two hook shells.
+    assert.deepEqual(probe('powershell', global, 'linux'), []);
+    // Bob and OpenClaude never get the PowerShell form, so they are never drift.
+    assert.deepEqual(probe('powershell', [['openclaude', 'global', cfg]]), []);
+    write('powershell');
+    assert.deepEqual(probe('powershell', global), []);
+    const slow = probe('bash', global);
+    assert.equal(slow.length, 1, slow.join('\n'));
+    assert.ok(slow[0].startsWith('[note] '), `the slow-but-working direction is a note: ${slow[0]}`);
+    // A project install is read from `<repo>/.claude`, the manifest the project emit writes.
+    assert.equal(probe('bash', [['claude', 'project', home]]).length, 1);
+    // The settings file is what the host runs: recorded hooks the user deleted by hand are no drift.
+    writeFileSync(path.join(cfg, 'settings.json'), '{}');
+    assert.deepEqual(probe('bash', global), []);
+    write('powershell');
+    // A DISABLED install keeps its manifest but runs no hooks, so it cannot fail open.
+    mkdirSync(path.join(cfg, '.geneseed-disabled', 'claude'), { recursive: true });
+    assert.deepEqual(probe('bash', global), []);
+  });
+});
+
+test('status shows a fail-open hook form in the gates row, and adds nothing when there is none', () => {
+  // Sandboxed: `gateSummary` judges only the config dirs it is handed, here one Claude global
+  // (`.geneseed-emit` says so) emitted for Git Bash, read on a machine forced to have none.
+  withHome((home) => {
+    const cfg = path.join(home, 'claude-cfg');
+    mkdirSync(cfg, { recursive: true });
+    writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+    writeInstall(cfg, 'bash');
+    const clean = withHookShell('bash', () => gateSummary([cfg], 'win32'));
+    assert.ok(!('fail_open' in clean), 'a clean machine grew a fail_open key in the --json panel');
+    const g = withHookShell('powershell', () => gateSummary([cfg], 'win32'));
+    assert.equal(g.fail_open?.length, 1, JSON.stringify(g));
+    // A dir that is not Claude's global (an OpenCode or Bob config dir) is never judged.
+    writeFileSync(path.join(cfg, '.geneseed-emit'), 'bob-global\n');
+    assert.ok(!('fail_open' in withHookShell('powershell', () => gateSummary([cfg], 'win32'))));
+    const row = statusLines({ ...statusData(), gates: { ...g, dead: [] } }, false)
+      .find((l) => l.includes('gates'));
+    assert.ok(row.includes('FAIL OPEN') && row.includes('geneseed rebuild-all'), row);
+  });
+});
+
+test('the PowerShell form escapes $ and backtick inside its double-quoted paths', () => {
+  // A Windows path may hold either; unescaped, PowerShell expands `$x` and eats the backtick, so
+  // `--root` names another directory and the gate answers for the wrong install.
+  withHome((home) => {
+    const cfg = path.join(home, 'a$b`c');
+    const winOpts = { ...HOOK_OPTS(), platform: 'win32' };
+    const run = hookPrefix(winOpts);
+    const ps = withHookShell('powershell', () => claudeHookGroups(cfg, winOpts));
+    const esc = path.join(home, 'a`$b``c');
+    assert.equal(ps.SessionStart[0].hooks[0].command, `& ${run} context --root "${esc}"; exit 0`);
+    assert.equal(ps.PreToolUse[0].hooks[0].command, `& ${run} git-gate --root "${esc}"`);
+    // The bash form is untouched by it.
+    const bash = withHookShell('bash', () => claudeHookGroups(cfg, winOpts));
+    assert.equal(bash.SessionStart[0].hooks[0].command, `${run} context --root "${cfg}" || exit 0`);
+  });
+});
+
+// THE LIVE PROOF, Windows only: spawn the emitted command under each PowerShell on PATH (bare
+// name, never an absolute path) the way Claude Code does (`-NoProfile -NonInteractive -Command`),
+// and require the gate's VERDICT, not merely rc 0: a parse error is rc 1 with no output, which
+// is exactly the fail-open this branch exists to prevent.
+test('the PowerShell form runs the gate under pwsh and Windows PowerShell', {
+  skip: process.platform !== 'win32' && 'win32 only',
+}, () => {
+  withHome((home) => {
+    const cfg = path.join(home, 'cfg');
+    mkdirSync(cfg, { recursive: true });
+    const groups = withHookShell('powershell', () => claudeHookGroups(cfg, HOOK_OPTS()));
+    const gate = groups.PreToolUse[0].hooks[0];
+    const context = groups.SessionStart[0].hooks[0];
+    assert.equal(gate.shell, 'powershell');
+    const env = { ...process.env };
+    for (const k of Object.keys(env)) if (k.toUpperCase() === 'CLAUDE_PROJECT_DIR') delete env[k];
+    let ran = 0;
+    for (const exe of ['pwsh', 'powershell']) {
+      const run = (command, payload) => spawnSync(exe,
+        ['-NoProfile', '-NonInteractive', '-Command', command],
+        { input: JSON.stringify(payload), cwd: home, env, encoding: 'utf8', windowsHide: true });
+      const g = run(gate.command, {
+        session_id: 'x', hook_event_name: 'PreToolUse', tool_name: 'Bash',
+        tool_input: { command: 'git push --force origin main' }, cwd: home,
+      });
+      if (g.error?.code === 'ENOENT') continue;
+      ran += 1;
+      assert.equal(g.status, 0, `${exe}: ${g.stderr}`);
+      assert.equal(JSON.parse(g.stdout).hookSpecificOutput.permissionDecision, 'ask',
+        `${exe}: ${g.stdout}`);
+      const c = run(context.command,
+        { session_id: 'x', hook_event_name: 'SessionStart', source: 'startup', cwd: home });
+      assert.equal(c.status, 0, `${exe}: ${c.stderr}`);
+    }
+    assert.ok(ran > 0, 'neither pwsh nor powershell is on PATH, so the live proof proved nothing');
   });
 });

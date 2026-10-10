@@ -45,7 +45,7 @@ The agent passes your answer on as `geneseed loop decide --verdict ok|no|amend -
 git log --format='%h %s%n%(trailers)' loop/<slug>
 ```
 
-While a loop runs on its `loop/*` branch, the git gate lets exactly one commit-and-push shape through without asking, the one the agent uses to close each iteration. Any other git command still asks, as usual. Bob has no ask prompt, so there the commit and push gate logs a warning instead of asking.
+While a loop runs on its `loop/*` branch, the git gate lets exactly one commit-and-push shape through without asking, the one the agent uses to close each iteration. Any other git command still asks, as usual. Bob has no ask prompt, so there the commit and push gate logs a warning instead of asking. OpenCode has no DYNAMIC exemption: its plugin hook for it is never called, so a loop there still asks on every commit. Its push to a `loop/*` branch does not — pushing a branch that is not `main`/`master` is allowed statically — but a force push, a `+refspec`, or a `--delete`/bare-`:` push still asks, even to `loop/*`.
 
 ## Stop, resume, and what ends a loop
 

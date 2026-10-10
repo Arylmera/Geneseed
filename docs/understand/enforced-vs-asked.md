@@ -29,7 +29,7 @@ On Claude Code and OpenClaude the hooks never block silently. They make the host
 
 If a gate crashes, it asks instead of letting the call through. Other shell commands, `rm -rf` included, go through Claude Code's normal permission flow.
 
-**Bob** runs one combined gate and has no "ask": it refuses with exit code 2, and only for two rules: credentials and destructive git. The commit/push and memory checks become a log line, and the call goes through. Bob's hook wiring follows its documentation but has not been tested on a live Bob install.
+**Bob** runs one combined gate and has no "ask": it refuses with exit code 2, and only for the rules that admit no judgement call: credentials, destructive git, and a write under a project's own protected-checks list. The commit/push and memory checks become a log line, and the call goes through. Bob's hook wiring follows its documentation but has not been tested on a live Bob install.
 
 <!--/harness-->
 <!--harness:opencode-->

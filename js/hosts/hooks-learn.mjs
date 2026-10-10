@@ -9,7 +9,9 @@ import { spawnSync } from 'node:child_process';
 import { readText, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { resolveMemoryDir, sovereignBypass } from './hosts.mjs';
+import {
+  globalHookStandingDown, hookProjectDir, resolveMemoryDir, sovereignBypass,
+} from './hosts.mjs';
 import { readStdin, splitLines, splitWords } from './hooks-prims.mjs';
 import {
   existingSlugs, writeMemories, consolidateMemory, appendAgentLesson,
@@ -163,8 +165,15 @@ function runLlm(llm, prompt) {
   // `_harness_learn.py:85` runs this through the wrapped `run(..., capture_output=True)`,
   // which folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
   // otherwise pops a console for as long as it takes to answer.
+  //
+  // `GENESEED_LEARN_CHILD=1` (Claude B2): `$GENESEED_LLM="claude -p"` with hooks not disabled
+  // starts a child Claude session that loads this SAME install's Stop hook, which re-runs
+  // `learn` — one recursion per nested session, stopped only by the host's 600 s timeout
+  // killing the outermost call. The marker rides in the child's own environment (inherited by
+  // every grandchild too), and `cmdLearn`'s first line stands down the instant it sees it.
   const proc = spawnSync(argv[0], [...argv.slice(1), prompt],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...NO_WINDOW });
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+      env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
   // Universal newlines, because Python reads the pipe in TEXT mode: a model CLI that is
   // itself a Python script emits CRLF on Windows, `subprocess` folds it to `\n`, and
   // `write_text` expands it again on the way into the memory file. Node hands back the raw
@@ -198,6 +207,9 @@ function learnAgentLesson(meta, notes, args) {
   if (!memDir) return 0;
   const prompt = [agentLessonPrompt(), '', 'NOTES:', notes].join('\n');
   const llm = process.env.GENESEED_LLM;
+  // Unreachable through the hook path: `cmdLearn` already returned above when `$GENESEED_LLM`
+  // was unset, because a SubagentStop payload always names its own event. Left in as the same
+  // defensive no-op `resolveMemoryDir`'s check above is, should this ever be called directly.
   if (!llm) {
     err('[learn] $GENESEED_LLM unset \u2014 printing agent-lesson prompt.\n\n');
     out(`${prompt}\n`);
@@ -217,6 +229,11 @@ function learnAgentLesson(meta, notes, args) {
 }
 
 export function cmdLearn(args) {
+  // B2: stand straight down inside a model-CLI child `runLlm` just spawned (see its comment).
+  // Checked before anything else — a child never gets as far as reading its own stdin, let
+  // alone deciding whether there is a store to write to.
+  if (process.env.GENESEED_LEARN_CHILD) return 0;
+
   if (args.consolidate) {
     const memDir = resolveMemoryDir(args.memory);
     if (!memDir) {
@@ -234,9 +251,50 @@ export function cmdLearn(args) {
   // The Stop/SubagentStop hook always passes `--memory <cfg>/memory`; inside an excluded
   // folder the global install must not learn.
   if (args.memory && sovereignBypass(path.dirname(toPlatformPath(args.memory)))) return 0;
+  // Same install root, and a project install of this host beside it learns on its own Stop: a
+  // second LLM call, and the global store learning facts the project owns (Claude B4).
+  if (args.memory && globalHookStandingDown(path.dirname(toPlatformPath(args.memory)),
+    hookProjectDir(), args.host, 'learn')) return 0;
 
   const raw = args.file ? readText(args.file) : readStdin();
   const meta = hookMeta(raw);
+  // A genuine lifecycle-hook call names its own event — `hook_event_name` (Claude/OpenClaude)
+  // or `event` (Bob, whose docs give the Stop payload as `{"event":"Stop","session_id":...}`).
+  // A MANUAL invocation (plain notes text, a `--file`, or a hand-typed JSON note such as
+  // `{"foo": 1}` — `readNotes`'s own rule, kept for it below) carries neither and is unaffected
+  // by either check in this block.
+  const hookEvent = typeof meta.hook_event_name === 'string' ? meta.hook_event_name
+    : (typeof meta.event === 'string' ? meta.event : null);
+
+  // I2 (Bob): its Stop payload never carries `transcript_path`, so there is never a transcript
+  // to distil — and the bare envelope itself is not notes text (that would waste a model call
+  // on `{"event":"Stop","session_id":"s"}`). Scoped to `--host bob`: every other host's Stop/
+  // PreCompact genuinely carries `transcript_path` (docs `hooks.md`), so a bare envelope there
+  // is either a hand-typed note (no event field at all) or a bug upstream, neither of which this
+  // should swallow. SubagentStop is excluded too — it legitimately has no `transcript_path`
+  // (it carries `agent_transcript_path` instead, B10 — undone) and is routed below on the
+  // agent-name fields alone. Kept rather than dropping Bob's Stop group (js/hosts/settings.mjs):
+  // the group costs nothing once this returns immediately, and if Bob ever starts sending a
+  // transcript, learning starts working there with no emit change.
+  if (args.host === 'bob' && hookEvent && hookEvent !== 'SubagentStop' && !args.file
+    && typeof meta.transcript_path !== 'string') {
+    err('[learn] no transcript available (bob) \u2014 nothing to distil.\n');
+    return 0;
+  }
+
+  // B3: a real hook call with `$GENESEED_LLM` unset has nothing to send a prompt to — stdout on
+  // Stop/SubagentStop/PreCompact reaches only the debug log, never the user (docs `hooks.md`) —
+  // so reading and flattening the transcript (up to 16 KB, every turn) just to print it nowhere
+  // is pure waste. Checked BEFORE `readNotes`, which is what does that read. A manual
+  // invocation keeps printing the prompt on an unset `$GENESEED_LLM` — that is the documented,
+  // deliberate behaviour (docs/reference/env-context.md) for someone running `learn` by hand to
+  // see what would have been sent, and `hookEvent` being unset is exactly what tells the two
+  // apart.
+  if (hookEvent && !process.env.GENESEED_LLM) {
+    err('[learn] $GENESEED_LLM unset \u2014 nothing to distil.\n');
+    return 0;
+  }
+
   let notes = readNotes(raw, meta);
   if (!notes.trim()) {
     err('[learn] no notes or transcript content \u2014 nothing to distil.\n');

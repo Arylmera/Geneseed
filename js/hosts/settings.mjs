@@ -12,9 +12,9 @@
  * this module.
  *
  * THE STDOUT RULE BINDS HARDEST HERE. The hooks this module writes signal their verdict as
- * a JSON object on stdout and return 0 on EVERY path (`|| exit 0` is not what it looks
- * like — see the shim comment below), so a stray byte printed on a hook path does not make
- * noise, it silently disables a gate. Everything printed here is a generator-time message;
+ * a JSON object on stdout and return 0 on EVERY path (`|| exit 0`, or `; exit 0` in the
+ * PowerShell form, is not what it looks like — see the shim comment below), so a stray byte
+ * printed on a hook path does not make noise, it silently disables a gate. Everything printed here is a generator-time message;
  * the split between them is asserted absolutely by `tests/unit/settings_jsonc.test.mjs` and
  * `tests/unit/settings_integrity.test.mjs`. The asymmetry (`_warn_commented_jsonc` prints to
  * STDOUT, every other message to stderr) is inherited from `_build_settings.py` and kept
@@ -41,7 +41,7 @@ import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals, formatRepr,
   indexOfDeepEqual, get, has, isDict,
 } from '../lib/json.mjs';
-import { SHIM_MARK, hookPrefix } from './shim.mjs';
+import { SHIM_MARK, claudeHookShell, hookPrefix } from './shim.mjs';
 import { stripWhitespace, stripWhitespaceEnd } from '../lib/text.mjs';
 
 const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
@@ -93,10 +93,134 @@ const consentRuleOn = (d, excluded = []) =>
  * after other words (`push origin -f`, `reset -q --hard`, `clean -d -f`) and `git push *+*`
  * a `+refspec` force push. The regex stays the stricter reader — it also sees a flag cluster
  * with `f` not first (`clean -d -xf`), which a glob cannot say without matching `--exclude=f`.
+ *
+ * B5's (claude-code.md / claude-verdict.md) long/modern spellings, added here appended (never
+ * reorder: OpenCode's permission engine evaluates key order with `findLast`, so moving an
+ * existing key can change which VALUE wins on a file that already disagrees with one — adding
+ * only is always safe, since every key here maps to the same `'ask'`). `clean --force`, the
+ * long flag; `branch --delete --force`, the long form of `-D` (both orders, since a glob has
+ * no "either order" — an un-forced `--delete` already refuses on an unmerged branch exactly
+ * like `-d`, so it is deliberately NOT a key here; `-D --force`/`--delete -f`/`-d --force`/
+ * `-df` are the same act again and are a known ceiling this does not chase); `checkout
+ * -f`/`--force` and `switch -f`/`--force`/`--discard-changes` (git's own `switch -h` lists
+ * `-f, --force` and `--discard-changes` as two separate options); `worktree remove -f`/`--force` (both
+ * flag-then-path and path-then-flag order); `reflog expire`; `gc --prune` (matched bare, since
+ * a `--prune` with no `=now` still eventually prunes); and `push *--delete*` / `push * :*` (a
+ * literal space before the colon, so `push origin HEAD:main`, an ordinary refspec, does not
+ * match).
+ *
+ * `git restore` is DELIBERATELY NOT HERE. Its rule is "ask unless `--staged` appears ALONE" —
+ * `--staged --worktree` together still discards the working tree — and a glob has no negation,
+ * so the closest glob (`git restore*`) would ask on the harmless `--staged`-alone case too. The
+ * regex (`DESTRUCTIVE_GIT_RE`) gets that exactly right; `stash drop`/`clear` have the SAME
+ * `restore` anchoring concern in the regex (a bare word / ordinary English, matched there only
+ * in verb position) but no false-positive risk as a glob, since OpenCode matches a glob against
+ * the FULL sub-command text (`opencode-verdict.md` CR-6) — `git stash drop*` cannot match a
+ * DIFFERENT sub-command like `git stash push -m "clear old state"`, so they ARE glob keys here.
+ * Guard-only acts (currently just `restore`) still warn via the OpenCode guard plugin's
+ * `SHELL_WARN_RE` — see `adapters/opencode/plugins/geneseed-guard.js`.
  */
 const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 'git push * -f*',
   'git push *+*', 'git reset --hard*', 'git reset * --hard*', 'git clean -f*', 'git clean * -f*',
-  'git branch -D*', 'git checkout -- *'];
+  'git branch -D*', 'git checkout -- *',
+  'git clean --force*', 'git clean * --force*',
+  'git branch *--delete*--force*', 'git branch *--force*--delete*',
+  'git checkout -f*', 'git checkout * -f*', 'git checkout --force*', 'git checkout * --force*',
+  'git switch -f*', 'git switch * -f*', 'git switch --force*', 'git switch * --force*',
+  'git switch --discard-changes*', 'git switch * --discard-changes*',
+  'git worktree remove -f*', 'git worktree remove --force*',
+  'git worktree remove * -f*', 'git worktree remove * --force*',
+  'git reflog expire*', 'git gc --prune*', 'git gc * --prune*',
+  'git stash drop*', 'git stash clear*',
+  'git push *--delete*', 'git push * :*'];
+
+/**
+ * User decision (2026-10-10): a loop runs on its own `loop/*` branch, never `main`/`master`, so
+ * pushing it is fine — only the COMMIT still asks. OpenCode has no dynamic equivalent of
+ * `js/hosts/hooks.mjs`'s `loopExempt` (Task 6: its `permission.ask` plugin hook is declared but
+ * never called), so this is a STATIC allow for the exact refspec shapes the loop engine itself
+ * pushes — `pushSegmentOk`'s `[-u|--set-upstream] <remote> HEAD:<branch>` and
+ * `HEAD:refs/heads/<branch>` forms, with `<branch>` fixed to `loop/*` here since a static glob
+ * cannot read the checked-out branch the way the Node hook does. `git push * HEAD:loop/*` eats
+ * `-u origin`/`--set-upstream origin`/any remote through its leading `*`; the second key covers
+ * the `refs/heads/` spelling the same way.
+ *
+ * ORDER IS LOAD-BEARING. `defaultPermission` appends these AFTER `git push*`'s ask (so a loop
+ * push is not swallowed by the blanket consent ask) and BEFORE `LAW_IV_BASH` (so `findLast`
+ * — OpenCode's own `permission.bash` evaluator — lets a force push, a `+refspec`, or a
+ * `--delete`/bare-`:` push still ask even when the target is `loop/*`; those LAW_IV_BASH keys
+ * match the same command and come later, so they win). Never move this block to before
+ * `git push*` or after `LAW_IV_BASH` — either moves the `findLast` boundary the ordering above
+ * depends on.
+ */
+const LOOP_PUSH_ALLOW = ['git push * HEAD:loop/*', 'git push * HEAD:refs/heads/loop/*'];
+
+/**
+ * ⚠ SECOND FIX ROUND (control review). The first guard (`'git push *:* HEAD:loop/*'`) checked
+ * for a literal `:` ahead of the loop refspec, reasoning that a second refspec always carries
+ * one. Wrong: a bare branch name IS a valid refspec (`git push origin main` pushes local
+ * `main` to remote `main`) and carries no colon at all, so `git push origin main HEAD:loop/x`
+ * sailed past the colon check and pushed `main` with no prompt. A colon is not the invariant;
+ * TOKEN COUNT is — the loop engine's leading extras are exactly `-u <remote>` or
+ * `--set-upstream <remote>` (one flag, one remote: always precisely ONE or TWO tokens before
+ * the refspec), and every injected extra refspec, colon or not, adds a token beyond that. This
+ * replaces the colon guard with a token-count chain, each tier ordered (`findLast` wins) to
+ * override the one before it where it must:
+ *
+ * 1. `LOOP_PUSH_ALLOW` (above) — allow. Matches ANY text before the loop refspec, however many
+ *    tokens.
+ * 2. `LOOP_PUSH_ASK_EXTRA` (`'git push * * HEAD:loop/*'`) — ask. Requires the text before the
+ *    refspec to contain its own literal space, i.e. 2+ tokens — which a bare single remote
+ *    (`origin`) never has (no space inside one word), so the documented bare-remote form keeps
+ *    falling through to (1)'s allow; `origin main` (remote + an injected second refspec, with
+ *    or without a colon), `-u origin` (flag + remote — ALSO 2 tokens, so this ALSO fires for the
+ *    legitimate `-u`/`--set-upstream` form; that is corrected by tier 3, not avoided here) and
+ *    any other 2+-token prefix — `--all origin`, `-f origin`, `--force-with-lease origin`,
+ *    `--mirror origin` — all trip it.
+ * 3. `LOOP_PUSH_ALLOW_FLAG` (`'git push -u * HEAD:loop/*'` / `'git push --set-upstream * …'`) —
+ *    allow, ordered AFTER (2) specifically to re-admit the one 2-token prefix that is legitimate:
+ *    `-u <remote>` or `--set-upstream <remote>`. The literal `-u `/`--set-upstream ` prefix means
+ *    only a command that STARTS with that flag can match; nothing with a different first token
+ *    (including an injected refspec in that slot) does.
+ * 4. `LOOP_PUSH_ASK_FLAG_EXTRA` (`'git push -u * * HEAD:loop/*'` / `--set-upstream` twin) — ask,
+ *    ordered AFTER (3) to re-close it: ANYTHING beyond `-u <remote>` before the refspec — a
+ *    third token, e.g. `-u origin main HEAD:loop/x` — puts a literal space inside what (3)'s
+ *    single wildcard would otherwise swallow whole, so this fires and wins back from (3).
+ * 5. `LOOP_PUSH_ASK_TRAILING` (`'git push * HEAD:loop/* ?*'`) — ask. Requires ONE more character,
+ *    ANYWHERE, past the refspec, via `?` (`Wildcard.match`'s single-char wildcard) rather than a
+ *    bare trailing `*`: a pattern ENDING in literal `" *"` hits upstream's own special case
+ *    (`escaped.endsWith(' .*')` -> `'( .*)?'`), making that whole clause OPTIONAL and silently
+ *    re-allowing the plain push this tier exists to still catch. Catches an injected refspec, or
+ *    anything else, AFTER the loop one (`git push origin HEAD:loop/x HEAD:main`,
+ *    `… HEAD:loop/x main`) — order relative to the others does not matter for this tier, since
+ *    nothing else in this chain inspects text after the refspec.
+ *
+ * A second `loop/*` refspec after the first also trips tier 5 and asks — harmless, and accepted
+ * rather than chased: the engine never emits one, and telling it apart from an injected `main`
+ * needs no extra tier, since both are "something after the refspec".
+ *
+ * NO REMAINING CEILING for the realistic shapes: every 2+-token prefix — a flag, an injected
+ * refspec, colon or not — is caught by (2) unless it is exactly the one legitimate `-u`/
+ * `--set-upstream` + remote pair, which (4) still catches the moment anything rides along with
+ * it. The one shape this chain cannot see is a BARE SINGLE flag occupying the sole "remote"
+ * slot with nothing else before the refspec (`git push --all HEAD:loop/x`, one token, same shape
+ * as a legitimate bare remote) — indistinguishable from a real remote name by token count alone,
+ * and not a practical gap: a leading `-`/`--` token is parsed by git as an OPTION, never as the
+ * remote, so this exact shape either errors (no remote given) or reads the refspec text itself
+ * as the remote and fails to resolve it — it does not reach a working push to `main`. Still
+ * caught by `LAW_IV_BASH`'s existing anywhere-in-the-command globs regardless of position
+ * (`'git push *--force*'`, `'git push * -f*'`, et al.), independently of this chain.
+ */
+const LOOP_PUSH_ASK_EXTRA = ['git push * * HEAD:loop/*', 'git push * * HEAD:refs/heads/loop/*'];
+const LOOP_PUSH_ALLOW_FLAG = [
+  'git push -u * HEAD:loop/*', 'git push --set-upstream * HEAD:loop/*',
+  'git push -u * HEAD:refs/heads/loop/*', 'git push --set-upstream * HEAD:refs/heads/loop/*',
+];
+const LOOP_PUSH_ASK_FLAG_EXTRA = [
+  'git push -u * * HEAD:loop/*', 'git push --set-upstream * * HEAD:loop/*',
+  'git push -u * * HEAD:refs/heads/loop/*', 'git push --set-upstream * * HEAD:refs/heads/loop/*',
+];
+const LOOP_PUSH_ASK_TRAILING = ['git push * HEAD:loop/* ?*', 'git push * HEAD:refs/heads/loop/* ?*'];
 
 function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
@@ -104,6 +228,11 @@ function defaultPermission(doctrines = null, excluded = []) {
     bash['git commit*'] = 'ask';
     bash['git push*'] = 'ask';
   }
+  for (const k of LOOP_PUSH_ALLOW) bash[k] = 'allow';
+  for (const k of LOOP_PUSH_ASK_EXTRA) bash[k] = 'ask';
+  for (const k of LOOP_PUSH_ALLOW_FLAG) bash[k] = 'allow';
+  for (const k of LOOP_PUSH_ASK_FLAG_EXTRA) bash[k] = 'ask';
+  for (const k of LOOP_PUSH_ASK_TRAILING) bash[k] = 'ask';
   for (const k of LAW_IV_BASH) bash[k] = 'ask';
   return { bash };
 }
@@ -115,7 +244,9 @@ function defaultPermission(doctrines = null, excluded = []) {
  * has to be able to recognise a key that is Geneseed's business at all — to add it back when
  * the pack returns, and to name it when this build no longer wants it but will not remove it.
  */
-const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*', ...LAW_IV_BASH];
+const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*',
+  ...LOOP_PUSH_ALLOW, ...LOOP_PUSH_ASK_EXTRA, ...LOOP_PUSH_ALLOW_FLAG, ...LOOP_PUSH_ASK_FLAG_EXTRA,
+  ...LOOP_PUSH_ASK_TRAILING, ...LAW_IV_BASH];
 
 /**
  * Bring an ALREADY-WRITTEN `permission` block back into line with the pack selection, and
@@ -494,8 +625,11 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
 export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude') {
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
-  // --root carries the install's own dir so a GLOBAL hook can stand down when a project
-  // install of the same host sits at/above cwd (project-bypasses-global).
+  // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
+  // project install of the same host sits in the session's project dir (no walk up —
+  // `globalHookStandingDown`, project-bypasses-global): `context` and
+  // `git-gate` read it, `learn` reads `--memory`'s parent. `rule-gate` and Bob's `tool-gate`
+  // do not stand down: both still run once per install (host-compat B4 fixed only the three).
   if (host === 'bob') {
     // BOB'S OWN HOOK CONTRACT, per its hooks doc and 2.0.2 changelog (docs/reviews/
     // bob-global-injection-2026-09.md): FIVE events — SessionStart, UserPromptSubmit,
@@ -517,33 +651,52 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries, and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in.
       PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
-      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem} || exit 0` }] }],
+      // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
+      // and returns immediately rather than wasting a model call on the bare envelope. KEPT
+      // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
+      // if Bob ever starts sending one, learning on Bob starts working with no emit change —
+      // dropping the group would need a second one re-added later for the same reason.
+      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b} || exit 0` }] }],
     };
   }
-  // OpenClaude takes Claude's whole group set and verdicts unchanged; only `context` needs
-  // the host, to know which root file OpenClaude already loads by itself.
+  // OpenClaude takes Claude's whole group set and verdicts unchanged. `context` needs the host
+  // to know which root file OpenClaude already loads by itself; `git-gate` and `learn` need it
+  // to stand down under a relocated `$OPENCLAUDE_CONFIG_DIR` (the marker is keyed on `--host`,
+  // not the folder name — `globalHookStandingDown`). Claude's commands carry none: no `--host`
+  // means Claude, so they stay byte-identical. An OLDER shim (last-writer-wins) accepts
+  // `--host` on `git-gate` but not on `learn`, which then exits 1 under `|| exit 0` and skips.
   const h = host === 'openclaude' ? ' --host openclaude' : '';
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
-  const gate = `${run} git-gate --root "${cfg}"${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
+  const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
-  const learn = `${run} learn ${mem} || exit 0`;
-  return {
+  const learn = `${run} learn ${mem}${h} || exit 0`;
+  const groups = {
     PreToolUse: [
-      { matcher: 'Bash', hooks: [{ type: 'command', command: gate }] },
+      // `Bash|PowerShell`, not `Bash` alone (Claude verdict I1): docs `hooks.md` says a hook
+      // that matches only `Bash` never fires on the PowerShell tool, which is Windows' default
+      // shell whenever Git Bash is absent — and on Windows without Git Bash, Bash is not even
+      // registered. `tool_input.command` is the same field on both tools, so `GIT_GATE_RE`
+      // needs no change.
+      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: gate }] },
       {
-        matcher: 'Write|Edit|MultiEdit|NotebookEdit',
+        // No `MultiEdit`: it is not in Claude Code's tool table (tools-reference.md) — a dead
+        // matcher entry (Claude verdict R2).
+        matcher: 'Write|Edit|NotebookEdit',
         hooks: [{ type: 'command', command: ruleGate }],
       },
     ],
-    SessionStart: [
-      { matcher: 'startup|clear', hooks: [{ type: 'command', command: context }] },
-      // `compact` too: auto-compaction keeps the instruction file (the host re-reads it) but
-      // summarises away the eagerly injected context, memory index and notebook TOC. Re-seed
-      // them the way a resume does — the static AGENT.md is NOT re-printed.
-      { matcher: 'resume|compact', hooks: [{ type: 'command', command: context }] },
-    ],
-    // `|| exit 0` (not `|| true`): hooks run under cmd.exe on native Windows, where `true`
-    // is not a command and the swallow-failures intent would invert into a 9009 error.
+    // One matcher-less group, not a `startup|clear` / `resume|compact` split (Claude verdict
+    // I4): every SessionStart source — `startup`, `resume`, `clear`, `compact` and `fork` —
+    // runs the identical `context` command, so splitting them only risked missing one. The
+    // split DID: a `--fork-session` run sets `source: "fork"`, which neither half matched, so
+    // a forked session got no session files or project context. The static AGENT.md is NOT
+    // re-printed here either way.
+    SessionStart: [{ hooks: [{ type: 'command', command: context }] }],
+    // `|| exit 0` (not `|| true`): the hook shell is `sh -c` on POSIX and Git Bash on Windows
+    // (OpenClaude requires it), or PowerShell on Windows when Git Bash isn't installed
+    // (hooks.md, "Shell form") — never cmd.exe for Claude. Bob runs `cmd /c`, where `true` is
+    // not a command (a 9009 error), so `exit 0` is the spelling every shell-form host shares.
+    // Under PowerShell `||` is a parse error in 5.1: `powershellForm` below swaps the tail.
     Stop: [{ hooks: [{ type: 'command', command: learn }] }],
     // Same command as Stop: `learn` reads the payload's hook_event_name and routes a
     // SubagentStop to the per-agent lesson path.
@@ -551,10 +704,41 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // And once more BEFORE compaction. `learn` distils the tail of the transcript (the newest
     // MAX_NOTES_CHARS), so per-turn Stop is a sliding window over the session — and
     // compaction is the one moment that window is about to be summarised away for good.
-    // The payload carries `transcript_path` like Stop's; the SessionStart `compact` matcher
-    // re-seeds context AFTER, this captures memory BEFORE. Same `|| exit 0`: never block.
+    // The payload carries `transcript_path` like Stop's; the matcher-less SessionStart group
+    // (its `compact` source) re-seeds context AFTER, this captures memory BEFORE. Same
+    // `|| exit 0`: never block.
     PreCompact: [{ hooks: [{ type: 'command', command: learn }] }],
   };
+  // Claude Code only: OpenClaude always runs Git Bash on Windows (its `findGitBashPath` exits
+  // without one), and Bob takes the early return above.
+  if (host !== 'claude' || claudeHookShell(process.env, hookOpts?.platform) !== 'powershell') {
+    return groups;
+  }
+  return powershellForm(groups);
+}
+
+/**
+ * The PowerShell spelling of a hook group set, for a Claude install on Windows without Git Bash
+ * (`claudeHookShell`). Without it the bash form is a parse error there and every hook fails
+ * OPEN. Each handler gets an explicit `shell: "powershell"` (hooks.md: it wins over the
+ * default) and a leading `&` — PowerShell refuses a quoted command head followed by arguments —
+ * and the never-block tail `|| exit 0` becomes `; exit 0`, valid in pwsh 7 and Windows
+ * PowerShell 5.1 alike (both measured byte-identical to the bash form's output). The gates stay
+ * bare: no verb exits 2, so a launch failure is non-blocking in either shell.
+ *
+ * The paths stay double-quoted, where PowerShell expands `$name` and reads a backtick as an
+ * escape — a Windows path may legally hold either, and a mangled `--root` silently changes
+ * which install a gate answers for. So both are backtick-escaped first; nothing else in the
+ * command (verbs, flags) can contain them.
+ */
+function powershellForm(groups) {
+  const ps = (h) => {
+    const escaped = h.command.replace(/[`$]/g, '`$&');
+    const command = `& ${escaped.replace(/ \|\| exit 0$/, '; exit 0')}`;
+    return { ...h, command, shell: 'powershell' };
+  };
+  return Object.fromEntries(Object.entries(groups)
+    .map(([event, gs]) => [event, gs.map((g) => ({ ...g, hooks: g.hooks.map(ps) }))]));
 }
 
 /**
@@ -896,6 +1080,24 @@ export function managedBlockRemove(p, blockId = 'GENESEED', whole = false) {
   const rest = stripWhitespace(`${stripTrailingNewlines(pre)}\n${lstripNewlines(post)}`);
   if (rest) writeText(p, `${rest}\n`);
   else unlinkSync(p);
+}
+
+/**
+ * The global OpenCode `AGENTS.md` sentinel. OpenCode loads `<cfg>/AGENTS.md` and, only when it
+ * is ABSENT, `~/.claude/CLAUDE.md` — where a Claude-global install keeps the whole harness in
+ * Claude dialect — so without an AGENTS.md the harness loads twice. The switch upstream is an
+ * env var (`OPENCODE_DISABLE_CLAUDE_CODE_PROMPT`) no config file can set, so the file has to exist.
+ * The carrier stays `AGENT.md`: this block only has to exist, and it is one line because it
+ * lands in every system prompt. A user's own AGENTS.md already suppresses the fallback and is
+ * left byte-for-byte alone; only an absent file or one carrying our block is written.
+ */
+export const OPENCODE_SENTINEL = 'AGENTS.md';
+
+export function opencodeSentinelWrite(cfgDir) {
+  const p = path.join(cfgDir, OPENCODE_SENTINEL);
+  if (existsSync(p) && managedBlockRead(p) === null) return;
+  managedBlockWrite(p, 'Geneseed keeps this block so OpenCode does not also load '
+    + '~/.claude/CLAUDE.md; the harness is AGENT.md. Put your own rules outside the block.');
 }
 
 /** `_build_settings._managed_block_read` — the block's inner content, or null. */

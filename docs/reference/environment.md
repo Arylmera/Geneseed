@@ -20,8 +20,9 @@ Where Geneseed writes an install, and what an upgrade re-renders.
 | --- | --- | --- |
 | `GENESEED_HOME` | build / hooks | Directory holding the hook shim `bin/geneseed-hook` (default `~/.geneseed`). Change it, then rebuild, so the emitted hooks point at the new location. |
 | `GENESEED_NO_SHIM_CHECK` | CLI | `1` silences the warning every `geneseed` command prints when the hook shim points at a path that no longer exists. For scripted callers; the `status` gates row still says `DEAD`. |
-| `OPENCODE_CONFIG_DIR` | OpenCode emits, `diff`, plugins | OpenCode's config dir — where the global install is written. |
+| `OPENCODE_CONFIG_DIR` | OpenCode emits, `diff`, plugins | OpenCode's config dir — where the global install is written. OpenCode still loads `$XDG_CONFIG_HOME/opencode` beside it, so `status` and `doctor` warn when both hold a Geneseed install. |
 | `XDG_CONFIG_HOME` | OpenCode emits, plugins | Used when `OPENCODE_CONFIG_DIR` is unset: the install goes to `$XDG_CONFIG_HOME/opencode` (default `~/.config/opencode`). |
+| `CLAUDE_CONFIG_DIR` | Claude Code emits, hooks, lifecycle verbs | Claude Code's config dir (default `~/.claude`) — where the global install is written. A Geneseed install left in `~/.claude` is still treated as a global, never as a project at your home folder. |
 | `BOB_CONFIG_DIR` | Bob emits | Bob's config dir (default `~/.bob`). |
 | `OPENCLAUDE_CONFIG_DIR` | OpenClaude emits | OpenClaude's own config-dir variable (default `~/.openclaude`); also moves `.openclaude.json`. |
 | `GENESEED_EMIT` | `geneseed upgrade` | Which emit target to re-render (e.g. `opencode-global`). Unset, it is read from the install's `.geneseed-emit` marker, else the plain bundle. |

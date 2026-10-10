@@ -160,6 +160,102 @@ test('learn names the model CLI it could not run', () => {
   });
 });
 
+// Host-compat B2/B3/I2 (Claude verdict B2/B3, Bob verdict I2): the three rows below each pin a
+// cell no CLI matrix row reaches the same way, because each needs either a stub model CLI that
+// inspects its OWN environment or a disk read that must NOT happen — both are process-shape
+// assertions, not output-text ones.
+// `homeOverrides` points HOME/APPDATA/XDG_CONFIG_HOME at the sandbox: `resolveMemoryDir(null)`
+// also checks `opencodeConfigDir()`, so without this a real OpenCode install's memory on the
+// machine running the suite can shadow the empty one these tests mean to test against.
+const baseEnv = (home) => {
+  const env = { ...process.env, ...homeOverrides(home) };
+  for (const k of ['GENESEED_LLM', 'GENESEED_LEARN_CHILD', 'CLAUDE_PROJECT_DIR']) delete env[k];
+  return env;
+};
+// `cwd` is the sandbox, not the checkout: `resolveMemoryDir(null)` falls back to a `memory/`
+// directory under `process.cwd()`, and running from the repo's own checkout would pick up
+// whatever is actually there.
+const runLearn = (extra, stdin, env, cwd) => spawnSync(process.execPath,
+  [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn', ...extra],
+  { encoding: 'utf8', windowsHide: true, input: stdin, env, cwd });
+
+// B2: `runLlm` must hand its OWN spawn the marker, not merely document that a nested session
+// should respect one it already has — the two are independent bugs. No `--memory`, so a
+// non-NOTHING reply is printed verbatim (`cmdLearn`'s no-memDir branch), which turns the
+// marker's value into the whole of stdout.
+test('runLlm sets GENESEED_LEARN_CHILD=1 on the model CLI it spawns', () => {
+  withDir((d) => {
+    const stub = path.join(d, 'echo-marker.mjs');
+    fs.writeFileSync(stub, "process.stdout.write(String(process.env.GENESEED_LEARN_CHILD));\n");
+    const proc = runLearn([], 'a note worth distilling\n',
+      { ...baseEnv(d), GENESEED_LLM: `node ${stub}` }, d);
+    assert.equal(proc.status, 0, proc.stderr);
+    assert.equal(proc.stdout.trim(), '1', 'the spawned model CLI did not see GENESEED_LEARN_CHILD=1');
+  });
+});
+
+// B2: and the other half — a `learn` invocation that already carries the marker (because it IS
+// that spawned model CLI's own Stop hook, firing inside the child session) stands down before
+// it would spawn a SECOND model CLI, which is the recursion itself.
+test('learn returns immediately when GENESEED_LEARN_CHILD is already set', () => {
+  withDir((d) => {
+    const marker = path.join(d, 'invoked.txt');
+    const stub = path.join(d, 'mark-and-reply.mjs');
+    fs.writeFileSync(stub, "import fs2 from 'node:fs'; "
+      + `fs2.writeFileSync(${JSON.stringify(marker)}, '1');\n`);
+    const proc = runLearn(['--memory', path.join(d, 'memory')], 'a durable fact\n',
+      { ...baseEnv(d), GENESEED_LLM: `node ${stub}`, GENESEED_LEARN_CHILD: '1' }, d);
+    assert.equal(proc.status, 0, proc.stderr);
+    assert.equal(proc.stdout, '');
+    assert.equal(proc.stderr, '');
+    assert.ok(!fs.existsSync(marker), 'learn spawned the model CLI from inside its own child');
+  });
+});
+
+// B3: a REAL hook call (names its own `hook_event_name`) with `$GENESEED_LLM` unset must return
+// before `readNotes` ever opens the transcript file — proven by a transcript whose flattened
+// text would otherwise show up on stdout (the unset-LLM branch prints the whole prompt) and
+// does not. The control right under it is the documented manual-use case: the same unset LLM,
+// but no hook envelope, still prints — so the fix did not just silence `learn` outright.
+test('learn returns before reading the transcript when $GENESEED_LLM is unset for a hook call', () => {
+  withDir((d) => {
+    const transcript = path.join(d, 'transcript.jsonl');
+    fs.writeFileSync(transcript,
+      '{"message": {"role": "user", "content": "why does the build fail on windows"}}\n');
+    const stdin = JSON.stringify({ hook_event_name: 'Stop', transcript_path: transcript });
+    const proc = runLearn([], stdin, baseEnv(d), d);
+    assert.equal(proc.status, 0, proc.stderr);
+    assert.equal(proc.stdout, '', 'the flattened transcript was printed with nothing to send it to');
+    assert.match(proc.stderr, /nothing to distil/);
+  });
+});
+test('a manual invocation still prints the prompt when $GENESEED_LLM is unset (control)', () => {
+  withDir((d) => {
+    const proc = runLearn([], 'a note typed by hand\n', baseEnv(d), d);
+    assert.equal(proc.status, 0, proc.stderr);
+    assert.match(proc.stdout, /a note typed by hand/);
+  });
+});
+
+// I2 (Bob): its Stop payload names its event as `event`, not `hook_event_name`, and carries no
+// `transcript_path` at all. `learn` must return before ever spawning the model CLI — proven by
+// a stub that leaves a marker if it is run, the same technique as the recursion test above, with
+// `$GENESEED_LLM` SET so a bug that only skips the unset-LLM branch cannot pass this one.
+test('learn (bob) returns immediately when the Stop payload has no transcript', () => {
+  withDir((d) => {
+    const marker = path.join(d, 'invoked.txt');
+    const stub = path.join(d, 'mark.mjs');
+    fs.writeFileSync(stub, "import fs2 from 'node:fs'; "
+      + `fs2.writeFileSync(${JSON.stringify(marker)}, '1');\n`);
+    const proc = runLearn(['--memory', path.join(d, 'memory'), '--host', 'bob'],
+      JSON.stringify({ event: 'Stop', session_id: 's' }),
+      { ...baseEnv(d), GENESEED_LLM: `node ${stub}` }, d);
+    assert.equal(proc.status, 0, proc.stderr);
+    assert.equal(proc.stdout, '');
+    assert.ok(!fs.existsSync(marker), 'learn spawned the model CLI for a transcript-less Bob Stop');
+  });
+});
+
 // `NOTHING` is the model's way of saying it found no durable fact. It must write NO files at
 // all — not an empty index, which would look like a store that had been cleared.
 test('a NOTHING answer writes no files', () => {

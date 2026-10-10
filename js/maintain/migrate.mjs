@@ -38,8 +38,11 @@ import path from 'node:path';
 import { main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
 import { CLAUDE_STYLE } from '../hosts/hosts.mjs';
-import { EMIT_HOST_SCOPE, installState, installTargets, readMaybe } from '../hosts/installs.mjs';
+import {
+  claudeCfg, claudeReadManifest, EMIT_HOST_SCOPE, installState, installTargets, readMaybe,
+} from '../hosts/installs.mjs';
 import { installProfile } from '../build/generate.mjs';
+import { settingsFile } from './uninstall.mjs';
 import {
   autostartPaths, autostartStale, hookShimPath, migrateShape, shimHome,
 } from '../hosts/shim.mjs';
@@ -57,11 +60,23 @@ const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
  * shim nor `harness.py`), so it classifies as `none` and its whole migration is the re-emit —
  * the same re-emit, in the same change, on every host, which is what the project's
  * host-parity rule asks for.
+ *
+ * BOTH HALVES READ BACK AN EXISTING RESOLVER rather than a second hand-rolled copy
+ * (host-compat B1/B2): `claudeCfg` (`js/hosts/installs.mjs`) is the cfg dir — `root` itself
+ * for a global install, `<root>/<projectMarker>` (`.claude`/`.bob`/`.openclaude`) for a
+ * project one — and `settingsFile` (`js/maintain/uninstall.mjs`) is the file name inside it,
+ * read off the install's OWN manifest. The manifest is the authority, not a guess at the
+ * canonical name: a pre-existing `bob-global` install with no `managed.settings_file` yet
+ * recorded carries the bare, pre-nesting `settings.json` it was actually written with, not
+ * the nested `settings/settings.json` a brand new one gets — exactly the distinction
+ * `claudeWire`'s own `get(old, 'settings_file') || 'settings.json'` makes before rewiring. A
+ * literal `path.join(root, name)` here, as before, skipped the project subfolder entirely and
+ * guessed the canonical name instead of reading what the install actually has.
  */
-function hookSettingsFile(root, host, scope) {
+export function hookSettingsFile(root, host, scope) {
   if (!CLAUDE_STYLE.includes(host)) return null;
-  const name = scope === 'project' && host !== 'bob' ? 'settings.local.json' : 'settings.json';
-  return path.join(root, name);
+  const cfg = claudeCfg(root, scope, host);
+  return settingsFile(cfg, claudeReadManifest(cfg).managed);
 }
 
 /** Every hook command string in a settings file, or [] when it cannot be read or parsed. */

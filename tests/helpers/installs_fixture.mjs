@@ -50,6 +50,8 @@ export function withGlobalInstalls(hosts, fn) {
     for (const [host, envVar] of Object.entries(ENV_FOR)) {
       process.env[envVar] = path.join(sb.path, `${host}-none`);
     }
+    // Claude rides HOME here (see the docblock); `$CLAUDE_CONFIG_DIR` would move it elsewhere.
+    delete process.env.CLAUDE_CONFIG_DIR;
 
     const cfgs = {};
     for (const host of hosts) {

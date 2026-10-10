@@ -16,7 +16,7 @@ If a gate cannot evaluate a call — an unreadable payload, a bug — it asks, w
 geneseed status
 ```
 
-In an [excluded folder](exclusions.md), every hook of a global install exits silently. And a global install's `context` hook stands down when the repo has its own per-repo install of the same host, so nothing is injected twice.
+In an [excluded folder](exclusions.md), every hook of a global install exits silently. And a global install's `context`, `git-gate` and `learn` hooks stand down when the session's project folder (the one the session started in, not a parent of it) has its own live per-repo install of the same host that wires the same hook, so nothing is injected, asked or learned twice. A per-repo install that is deactivated, or whose hooks were never wired, does not count: the global hook keeps running. `GENESEED_STACK_GLOBAL=1` keeps both.
 
 ## Where they are written
 
@@ -37,7 +37,7 @@ The merge is surgical. Every other key and every hook of your own survive, and t
 **Bob** has its own contract. It uses Claude's event names but ignores a hook's output before a tool call — the only way to refuse is exit code 2 — and it has no tool matcher, `SubagentStop` or `PreCompact`. So Bob gets three hooks:
 
 - `SessionStart` → `geneseed-hook context`.
-- `PreToolUse` → `geneseed-hook tool-gate`, the git gate and the rule gate fused into one command that decides from the shape of the call. It **blocks** (exit 2) only for the two Rules, secrets and destructive git. The commit/push and rule-or-memory checks become a warning line, because a hard block would leave Bob unable to commit at all.
+- `PreToolUse` → `geneseed-hook tool-gate`, the git gate and the rule gate fused into one command that decides from the shape of the call. It **blocks** (exit 2) only for the checks that admit no judgement call: secrets, destructive git, and a write under a project's own protected-checks list. The commit/push and rule-or-memory checks become a warning line, because a hard block would leave Bob unable to commit at all.
 - `Stop` → `geneseed-hook learn`.
 
 Neither host has been verified live on the authoring machine. If a hook does not fire, the same rules still reach the agent through the instructions file.

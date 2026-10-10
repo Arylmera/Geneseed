@@ -27,14 +27,20 @@ import { spawnSync } from 'node:child_process';
 import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/build/version.mjs';
 import { sourceReleaseVersion } from '../../js/hosts/opencode.mjs';
 import { versionVerdict, statusData, statusLines, gateSummary } from '../../js/inspect/status.mjs';
+import { openclaudeDualHarnessNotes } from '../../js/inspect/doctor.mjs';
+import { NOTE, isDoctorNote } from '../../js/inspect/scan.mjs';
 import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
-  projectQualifies,
+  projectQualifies, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
-import { emitHostScopeOf, installTargets } from '../../js/hosts/installs.mjs';
+import {
+  emitHostScopeOf, installState, installTargets, openclaudeDualHarnessRoot,
+} from '../../js/hosts/installs.mjs';
 import { isScratchRoot, registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
-import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts/hosts.mjs';
-import { installProfile, rebuildCommand } from '../../js/build/generate.mjs';
+import {
+  VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir, opencodeShadowedInstall,
+} from '../../js/hosts/hosts.mjs';
+import { installProfile, rebuildAll, rebuildCommand } from '../../js/build/generate.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
 import { CONFIG, ROOT, SRC, makeCfg } from '../../js/build/source.mjs';
 import {
@@ -390,6 +396,143 @@ test('a global uninstall removes what it owns and keeps the memory store', () =>
     assert.ok(summary.unmerged);
     assert.ok(!instructionsOf(cfg).includes(agentMd),
       'opencode.json still points at an AGENT.md that no longer exists');
+  });
+});
+
+// OpenCode reads `<cfg>/AGENTS.md` and, ONLY when that file is absent, falls back to
+// `~/.claude/CLAUDE.md` — which a Claude-global install fills with the whole harness. So the
+// global emit makes sure an AGENTS.md exists: a GENESEED managed block when the file is
+// absent (or already ours), and NOTHING when the user has their own, which suppresses the
+// fallback by itself. Uninstall and deactivate take the block away; a file that held only
+// the block goes with it.
+const BEGIN = '<!-- BEGIN GENESEED -->';
+
+test('a global OpenCode install claims AGENTS.md so the CLAUDE.md fallback cannot fire', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const agents = path.join(cfg, 'AGENTS.md');
+    assert.ok(fs.readFileSync(agents, 'utf8').startsWith(BEGIN),
+      'no GENESEED block in AGENTS.md: OpenCode would load ~/.claude/CLAUDE.md beside AGENT.md');
+    // NOT owned: a user may add their own rules around the block, and uninstall deletes owned files.
+    const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    assert.ok(!man.owned.includes('AGENTS.md'), 'AGENTS.md is in the manifest: uninstall would delete it');
+
+    const off = installDeactivate(cfg, 'opencode', 'global');
+    assert.ok(off.ok, JSON.stringify(off));
+    assert.ok(!fs.existsSync(agents), 'a disabled install still suppresses the CLAUDE.md fallback');
+    const on = installReactivate(cfg, 'opencode', 'global');
+    assert.ok(on.ok, JSON.stringify(on));
+    assert.ok(fs.readFileSync(agents, 'utf8').startsWith(BEGIN), 'reactivate did not restore the block');
+
+    uninstallGlobal(cfg, false);
+    assert.ok(!fs.existsSync(agents), 'an AGENTS.md holding only our block survived the uninstall');
+  });
+});
+
+test('a user\'s own global AGENTS.md is never touched by the emit or the uninstall', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    const mine = '# my rules\r\nbe terse\r\n';
+    fs.writeFileSync(path.join(cfg, 'AGENTS.md'), mine, 'utf8');
+    globalInstall(d);
+    assert.equal(fs.readFileSync(path.join(cfg, 'AGENTS.md'), 'utf8'), mine,
+      'the emit edited a user-owned AGENTS.md (it already suppresses the fallback)');
+    uninstallGlobal(cfg, false);
+    assert.equal(fs.readFileSync(path.join(cfg, 'AGENTS.md'), 'utf8'), mine,
+      'the uninstall edited a user-owned AGENTS.md');
+  });
+});
+
+// `OPENCODE_CONFIG_DIR` is ADDITIVE upstream: agents, plugins, skills and opencode.json still
+// load from `$XDG_CONFIG_HOME/opencode` too. So a Geneseed manifest in BOTH means every plugin
+// runs twice — the answer names the xdg dir, and is null in every other layout.
+test('a Geneseed install left in the xdg dir beside OPENCODE_CONFIG_DIR is reported', () => {
+  withDir((d) => {
+    const saved = { env: process.env.OPENCODE_CONFIG_DIR, xdg: process.env.XDG_CONFIG_HOME };
+    const relocated = path.join(d, 'relocated');
+    const xdgDir = path.join(d, 'xdg', 'opencode');
+    fs.mkdirSync(relocated, { recursive: true });
+    fs.mkdirSync(xdgDir, { recursive: true });
+    try {
+      process.env.XDG_CONFIG_HOME = path.join(d, 'xdg');
+      delete process.env.OPENCODE_CONFIG_DIR;
+      fs.writeFileSync(path.join(xdgDir, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+      assert.equal(opencodeShadowedInstall(), null, 'no env var: one dir, nothing shadowed');
+      process.env.OPENCODE_CONFIG_DIR = relocated;
+      assert.equal(opencodeShadowedInstall(), null, 'only the xdg dir holds a manifest');
+      fs.writeFileSync(path.join(relocated, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+      assert.equal(opencodeShadowedInstall(), fs.realpathSync.native(xdgDir));
+      process.env.OPENCODE_CONFIG_DIR = xdgDir;
+      assert.equal(opencodeShadowedInstall(), null, 'the env var names the xdg dir itself');
+      assert.ok(statusLines({ ...statusData(), opencode_shadow: xdgDir })
+        .some((l) => l.includes(xdgDir) && l.includes('OPENCODE_CONFIG_DIR')),
+        'status does not warn about the second install');
+    } finally {
+      if (saved.env === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+      else process.env.OPENCODE_CONFIG_DIR = saved.env;
+      process.env.XDG_CONFIG_HOME = saved.xdg;
+    }
+  });
+});
+
+// Host-compat verdict I1: OpenClaude's project carrier is additive (`.openclaude/CLAUDE.md`),
+// so a repo that also has a claude or bob project install loads BOTH harnesses — there is no
+// clean exclusion, only the warning `openclaudeDualHarnessRoot` feeds to status/doctor.
+test('openclaudeDualHarnessRoot fires only when openclaude shares a root with claude or bob', () => {
+  withDir((d) => {
+    const mark = (host) => {
+      const dir = path.join(d, `.${host}`);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+    };
+    assert.equal(openclaudeDualHarnessRoot(d), false, 'nothing installed yet');
+    mark('openclaude');
+    assert.equal(openclaudeDualHarnessRoot(d), false, 'openclaude alone shares nothing');
+    mark('claude');
+    assert.equal(openclaudeDualHarnessRoot(d), true, 'claude + openclaude share the root');
+    assert.ok(statusLines({ ...statusData(), openclaude_dual_harness: [d] })
+      .some((l) => l.includes(d) && l.includes('openclaude')),
+      'status does not warn about the dual harness');
+  });
+  withDir((d) => {
+    const mark = (host) => {
+      const dir = path.join(d, `.${host}`);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+    };
+    mark('openclaude');
+    mark('bob');
+    assert.equal(openclaudeDualHarnessRoot(d), true, 'bob + openclaude share the root too');
+  });
+});
+
+// Controller fix round: the dual-harness finding is a NOTE (a legal, deliberate configuration),
+// not a problem — `cmdDoctor` must not exit 1 over it, the way it already does not for D5's
+// pack-off citation note (`harness.test.mjs`'s "the gate flags an unknown pack..." test).
+test('openclaudeDualHarnessNotes pins NOTE-prefixed text doctor will not count as a problem', () => {
+  withDir((d) => {
+    const mark = (host) => {
+      const dir = path.join(d, `.${host}`);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, GLOBAL_MANIFEST), '{"owned":[]}', 'utf8');
+    };
+    mark('openclaude');
+    mark('claude');
+    const cwd0 = process.cwd();
+    process.chdir(d);
+    try {
+      const notes = openclaudeDualHarnessNotes();
+      const real = fs.realpathSync.native(d);
+      assert.ok(notes.some((n) => n.startsWith(NOTE)
+        && n.includes('[openclaude]') && n.includes(real)
+        && n.includes('also carries a claude/bob per-repo install')
+        && n.includes('uninstall the one you no longer use if this was not intended')),
+        `note text did not match the pinned shape: ${JSON.stringify(notes)}`);
+      for (const n of notes) {
+        assert.ok(isDoctorNote(n), `a dual-harness line did not read as a note: ${n}`);
+      }
+    } finally { process.chdir(cwd0); }
   });
 });
 
@@ -1004,6 +1147,111 @@ test('uninstalling one host reports the other still installed here', () => {
   });
 });
 
+test('uninstalling one host does not erase the shared root marker a sibling install still '
+  + 'needs (host-compat B2)', () => {
+  // `registryRoots` (`js/inspect/registry.mjs`) keeps a registered root only while
+  // `.geneseed-emit` exists there — ONE marker per shared project root, last deploy wins
+  // (`generate.mjs`'s "THE MARKER IS TRUSTED ONLY FOR ITS OWN HOST"). Installing opencode then
+  // claude leaves the marker naming claude; uninstalling opencode (which qualifies through its
+  // OWN `.opencode/` manifest, not the marker) must leave that marker alone, because claude's
+  // install is still live and the registry's self-prune does not know the difference between
+  // "root abandoned" and "root's marker belongs to a surviving sibling".
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const home = path.join(d, 'home');
+    fs.mkdirSync(repo, { recursive: true });
+    projectInstall(repo, 'opencode', home);
+    projectInstall(repo, 'claude', home);
+    assert.deepEqual(emitHostScopeOf(repo), ['claude', 'project'],
+      'sanity: the shared marker now names claude (last deploy wins)');
+    // The CLI child emits register into ITS OWN sandboxed home (`homeOverrides(home)`); the
+    // registry read below runs in-process under `sandboxProcessHome()`'s home instead, so the
+    // row is recorded here the same way every other in-process registry test in this file does.
+    registryRecord(repo);
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+    // opencode resolves first in HOSTS order and qualifies via its own manifest regardless of
+    // the marker — confirming the uninstall really did remove opencode, not claude.
+    assert.equal(installState(resolved(repo), 'opencode', 'project'), 'absent');
+
+    assert.equal(installState(resolved(repo), 'claude', 'project'), 'active',
+      "claude's own install was untouched by the opencode uninstall");
+    assert.deepEqual(emitHostScopeOf(repo), ['claude', 'project'],
+      "the opencode uninstall deleted claude's shared root marker");
+    assert.ok(registryRoots().some((r) => {
+      try { return fs.realpathSync.native(r) === resolved(repo); } catch { return false; }
+    }), 'the registry silently dropped a root that still carries a live claude install');
+  });
+});
+
+test('the mirror ordering: the marker names the host being removed, and must be REWRITTEN to '
+  + 'the survivor rather than deleted (host-compat B2, fix round 2)', () => {
+  // The previous round only guarded against deleting a marker that already named a survivor.
+  // Installing claude FIRST then opencode leaves the marker naming opencode (last deploy
+  // wins); opencode still resolves first in HOSTS order and is uninstalled. This time the
+  // marker DOES name the host being removed, so the old guard's `marksThisHost` branch fired
+  // and deleted it anyway — deregistering claude's still-live install exactly as before, just
+  // from the other direction. The fix rewrites `.geneseed-emit` to the survivor's own emit
+  // name instead of deleting it.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const home = path.join(d, 'home');
+    fs.mkdirSync(repo, { recursive: true });
+    projectInstall(repo, 'claude', home);
+    projectInstall(repo, 'opencode', home);
+    assert.deepEqual(emitHostScopeOf(repo), ['opencode', 'project'],
+      'sanity: the shared marker now names opencode (last deploy wins)');
+    registryRecord(repo);
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+    assert.equal(installState(resolved(repo), 'opencode', 'project'), 'absent');
+
+    assert.equal(installState(resolved(repo), 'claude', 'project'), 'active',
+      "claude's own install was untouched by the opencode uninstall");
+    assert.deepEqual(emitHostScopeOf(repo), ['claude', 'project'],
+      "the marker still names the removed host (opencode) instead of being rewritten to "
+      + 'the surviving claude install');
+    assert.ok(registryRoots().some((r) => {
+      try { return fs.realpathSync.native(r) === resolved(repo); } catch { return false; }
+    }), 'the registry silently dropped a root that still carries a live claude install');
+  });
+});
+
+test('an unrelated bare .opencode/ dir is not a surviving install (host-compat B2, fix '
+  + 'round 3)', () => {
+  // `installState`'s OpenCode branch answers 'active' off a bare `.opencode/` DIRECTORY's
+  // existence alone (`installKind`), with no manifest or marker check — so a repo with a
+  // real Claude install and an unrelated, never-emitted `.opencode/` folder (any tool can
+  // make one) must not read that folder as a surviving OpenCode install. The survivor scan
+  // uses `projectQualifies` (the same predicate `uninstallResolve` already trusts) instead,
+  // so uninstalling Claude here finds no real survivor and the shared root markers are
+  // deleted outright rather than kept or rewritten for a phantom OpenCode install.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const home = path.join(d, 'home');
+    projectInstall(repo, 'claude', home);
+    fs.mkdirSync(path.join(repo, '.opencode'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.opencode', 'not-geneseed.txt'), 'hello\n');
+    assert.equal(projectQualifies(repo, 'opencode'), false,
+      'sanity: a bare, never-emitted .opencode/ must not qualify as an OpenCode install');
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+
+    assert.equal(installState(resolved(repo), 'claude', 'project'), 'absent',
+      "claude's own install was not actually removed");
+    assert.equal(emitHostScopeOf(repo), null,
+      'the shared marker was kept or rewritten for a phantom OpenCode survivor instead of '
+      + 'being deleted outright');
+    assert.ok(!fs.existsSync(path.join(repo, '.geneseed-theme')), '.geneseed-theme was kept');
+    // The unrelated directory itself is untouched — uninstall only ever claims what it owns.
+    assert.ok(fs.existsSync(path.join(repo, '.opencode', 'not-geneseed.txt')),
+      'uninstall touched a directory it does not own');
+  });
+});
+
 test('a single host reports nothing extra', () => {
   // The control: "also found" must be about a real second install, not a line printed always.
   withDir((d) => {
@@ -1134,6 +1382,189 @@ test('a global install profile names its own config dir, and its argv rebuilds e
   }
 });
 
+/**
+ * Builds `host` into `repo` and returns `installProfile(host, 'project', repo)`'s seven
+ * read-back axes relevant here (theme/posture/mode/doctrines/excludeRules/excludeSkills/trust)
+ * — a shared helper so the shared-repo tests below assert the same shape for every host
+ * without three copies of the same seven-line struct literal.
+ */
+function emitAndProfile(host, repo, { theme, posture, mode, doctrines, excludeRules, excludeSkills }) {
+  const argv = ['--emit', host, '--theme', theme, '--out', repo, '--root', repo,
+    '--posture', posture, '--mode', mode, '--doctrines', doctrines];
+  if (excludeRules) argv.push('--exclude-rules', excludeRules);
+  if (excludeSkills) argv.push('--exclude-skills', excludeSkills);
+  const r = emitInherited(argv);
+  assert.equal(r.rc, 0, r.err);
+  return installProfile(host, 'project', repo);
+}
+
+test('an openclaude per-repo install profile reads its own carrier, not a sibling root file, '
+  + 'on every axis (host-compat B1, both fix rounds)', () => {
+  // OpenClaude's project carrier is `<repo>/.openclaude/CLAUDE.md`, not `<repo>/CLAUDE.md`
+  // (`carrierInLayer` in `js/build/driver.mjs`'s `CLAUDE_SHAPED.openclaude`). ROUND 1's bug:
+  // `installProfile` read theme/posture/mode/doctrines off `firstCarrier`'s root-only
+  // `CARRIERS` list, which never looked inside `.openclaude/`, so an openclaude per-repo
+  // install always read back as the defaults regardless of what it was built with. ROUND 2's
+  // bug, introduced by round 1's own fix: once `host`-narrowing tried OpenClaude's own carrier
+  // FIRST and fell through to the root `CLAUDE.md` whenever that carrier's probe answered
+  // `undefined`, excludeRules/excludeSkills — whose marker line is written ONLY when something
+  // is excluded, so "nothing excluded" is the common, undefined-returning case — silently
+  // picked up a SIBLING Claude install's exclusions instead of staying `[]`.
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const oc = emitAndProfile('openclaude', repo,
+      { theme: 'imperial', posture: 'mentor', mode: 'foreman', doctrines: 'craft' });
+    assert.equal(oc.state, 'active');
+    assert.equal(oc.theme, 'imperial');
+    assert.equal(oc.posture, 'mentor');
+    assert.equal(oc.mode, 'foreman');
+    assert.deepEqual(oc.doctrines, ['craft']);
+    assert.deepEqual(oc.excludeRules, []);
+    assert.deepEqual(oc.excludeSkills, []);
+
+    // Sharing the repo with a Claude Code install that EXCLUDES something must not leak either
+    // Claude's settings OR Claude's exclusions into OpenClaude's own read-back.
+    const claude = emitAndProfile('claude', repo, {
+      theme: 'cyberpunk', posture: 'peer', mode: 'direct', doctrines: 'craft',
+      excludeRules: 'craft 1', excludeSkills: 'bruno',
+    });
+    assert.equal(claude.theme, 'cyberpunk');
+    assert.equal(claude.posture, 'peer');
+    assert.equal(claude.mode, 'direct');
+    assert.deepEqual(claude.doctrines, ['craft']);
+    assert.deepEqual(claude.excludeRules, ['craft.1']);
+    assert.deepEqual(claude.excludeSkills, ['bruno']);
+
+    const ocAfter = installProfile('openclaude', 'project', repo);
+    assert.equal(ocAfter.theme, 'imperial', 'the shared root CLAUDE.md shadowed .openclaude/CLAUDE.md');
+    assert.equal(ocAfter.posture, 'mentor');
+    assert.equal(ocAfter.mode, 'foreman');
+    assert.deepEqual(ocAfter.doctrines, ['craft']);
+    assert.deepEqual(ocAfter.excludeRules, [],
+      "round 2's bug: fell through its own silent carrier to claude's 'craft 1'");
+    assert.deepEqual(ocAfter.excludeSkills, [],
+      "round 2's bug: fell through its own silent carrier to claude's 'bruno'");
+
+    // THE REVERSE DIRECTION, which a host-agnostic carrier scan gets backwards: reading
+    // `.openclaude/CLAUDE.md` unconditionally for ANY host would make CLAUDE's own read-back
+    // answer OpenClaude's settings in this same shared repo. OpenClaude here is the one with
+    // NO exclusions, so this is also the 'nothing excluded, sibling has something' row for
+    // Claude's read of ITS OWN exclusions — they must stay exactly as built, not cleared by
+    // OpenClaude's silent carrier.
+    const claudeAfter = installProfile('claude', 'project', repo);
+    assert.equal(claudeAfter.theme, 'cyberpunk', "claude's own read-back picked up openclaude's carrier");
+    assert.equal(claudeAfter.posture, 'peer');
+    assert.equal(claudeAfter.mode, 'direct');
+    assert.deepEqual(claudeAfter.doctrines, ['craft']);
+    assert.deepEqual(claudeAfter.excludeRules, ['craft.1']);
+    assert.deepEqual(claudeAfter.excludeSkills, ['bruno']);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the same shared repo with the exclusions on the OTHER host (host-compat B1 round 2)', () => {
+  // The mirror of the test above: OPENCLAUDE excludes something and Claude excludes nothing,
+  // so the 'nothing excluded' vs 'sibling excludes something' row is covered for BOTH hosts,
+  // not just one of them.
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const oc = emitAndProfile('openclaude', repo, {
+      theme: 'imperial', posture: 'mentor', mode: 'foreman', doctrines: 'craft',
+      excludeRules: 'craft 1', excludeSkills: 'bruno',
+    });
+    assert.deepEqual(oc.excludeRules, ['craft.1']);
+    assert.deepEqual(oc.excludeSkills, ['bruno']);
+
+    const claude = emitAndProfile('claude', repo,
+      { theme: 'cyberpunk', posture: 'peer', mode: 'direct', doctrines: 'craft' });
+    assert.deepEqual(claude.excludeRules, []);
+    assert.deepEqual(claude.excludeSkills, []);
+
+    const ocAfter = installProfile('openclaude', 'project', repo);
+    assert.deepEqual(ocAfter.excludeRules, ['craft.1'], "openclaude's own exclusion was cleared");
+    assert.deepEqual(ocAfter.excludeSkills, ['bruno'], "openclaude's own exclusion was cleared");
+
+    const claudeAfter = installProfile('claude', 'project', repo);
+    assert.deepEqual(claudeAfter.excludeRules, [],
+      "claude's own 'nothing excluded' picked up openclaude's 'craft 1'");
+    assert.deepEqual(claudeAfter.excludeSkills, [],
+      "claude's own 'nothing excluded' picked up openclaude's 'bruno'");
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('a bob per-repo install in the same shared repo also reads its own carrier, including its '
+  + 'own exclusions (host-compat B1, both fix rounds)', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const oc = emitAndProfile('openclaude', repo,
+      { theme: 'imperial', posture: 'mentor', mode: 'foreman', doctrines: 'craft' });
+    assert.deepEqual(oc.excludeRules, []);
+    assert.deepEqual(oc.excludeSkills, []);
+
+    const bob = emitAndProfile('bob', repo, {
+      theme: 'cyberpunk', posture: 'peer', mode: 'direct', doctrines: 'craft',
+      excludeRules: 'craft 1', excludeSkills: 'bruno',
+    });
+    assert.equal(bob.theme, 'cyberpunk');
+    assert.equal(bob.posture, 'peer');
+    assert.equal(bob.mode, 'direct');
+    assert.deepEqual(bob.doctrines, ['craft']);
+    assert.deepEqual(bob.excludeRules, ['craft.1']);
+    assert.deepEqual(bob.excludeSkills, ['bruno']);
+
+    const ocAfter = installProfile('openclaude', 'project', repo);
+    assert.equal(ocAfter.theme, 'imperial');
+    assert.equal(ocAfter.posture, 'mentor');
+    assert.equal(ocAfter.mode, 'foreman');
+    assert.deepEqual(ocAfter.doctrines, ['craft']);
+    assert.deepEqual(ocAfter.excludeRules, [], "openclaude's own read-back picked up bob's 'craft 1'");
+    assert.deepEqual(ocAfter.excludeSkills, [], "openclaude's own read-back picked up bob's 'bruno'");
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('an opencode + bob shared repo: the root .geneseed-theme marker is OpenCode\'s own, not '
+  + "bob's (host-compat B1, round 3)", () => {
+  // `.geneseed-theme` at a PROJECT root is written only by a host whose emit calls `build()`
+  // directly — today, OpenCode alone (`emitOpencode` -> `emitOpencodeRender` -> `build()` in
+  // `js/build/bundle.mjs`). The claude-style per-repo emits (claude/bob/openclaude, dispatched
+  // through `claudeShaped` in `js/build/driver.mjs`) never call `build()` and so never write
+  // this marker at their own project root — `themeOfDir` read it UNCONDITIONALLY, before
+  // `firstCarrier` and without `host`, so in a repo shared with an OpenCode install, asking for
+  // BOB's own theme answered OpenCode's.
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(repo);
+    const oc = emitAndProfile('opencode', repo,
+      { theme: 'imperial', posture: 'mentor', mode: 'foreman', doctrines: 'craft' });
+    assert.equal(oc.theme, 'imperial');
+
+    const bob = emitAndProfile('bob', repo,
+      { theme: 'cyberpunk', posture: 'peer', mode: 'direct', doctrines: 'craft' });
+    assert.equal(bob.theme, 'cyberpunk');
+
+    // Re-read both, now that the shared root carries OpenCode's `.geneseed-theme` marker.
+    const ocAfter = installProfile('opencode', 'project', repo);
+    assert.equal(ocAfter.theme, 'imperial', "opencode's own theme, off its own marker");
+    const bobAfter = installProfile('bob', 'project', repo);
+    assert.equal(bobAfter.theme, 'cyberpunk',
+      "bob's own read-back picked up opencode's root .geneseed-theme marker");
+  } finally {
+    sb.cleanup();
+  }
+});
+
 test('a rebuild command quotes only the arguments a shell would split', () => {
   assert.equal(rebuildCommand(['--theme', 'imperial', '--out', 'C:\\My Repo']),
     'geneseed build --theme imperial --out "C:\\My Repo"');
@@ -1171,4 +1602,120 @@ test('status lists only installs that exist — an absent slot has no settings t
   // nothing at all.
   assert.ok(installTargets().length > 0, 'installTargets() found no hosts to check');
   assert.ok(d.installs.every((p) => p.state !== 'absent'), 'an absent slot leaked into installs');
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE BINDING RULE, through real installs (final review C1): a global gate goes quiet ONLY where
+// an equivalent project gate fires. "A project manifest exists" is not that proof — a
+// deactivated project install keeps its manifest with every hook unwired, and a project emit
+// into a commented `settings.local.json` writes a manifest but refuses to wire any hook. So the
+// stand-down needs the install LIVE (no `.geneseed-disabled/<host>` stash) and its manifest's
+// `managed.settings_hooks` recording a group that runs THIS verb. Rows:
+//   * a live project install                    -> the global gate defers (the project's asks);
+//   * the same install, deactivated             -> the global gate asks;
+//   * a project emit beside commented settings  -> the global gate asks;
+//   * hooks hand-deleted from the settings file, manifest kept -> asks (the settings file the
+//     manifest names must still carry the recorded command; commented/unparseable -> asks).
+
+/** The global `git-gate` at `gcfg` judging `git reset --hard HEAD~3` in a session at `repo`. */
+function globalGateIn(gcfg, repo, home) {
+  const r = spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'git-gate', '--root', gcfg], {
+      input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git reset --hard HEAD~3' } }),
+      cwd: repo, encoding: 'utf8', windowsHide: true,
+      env: { ...process.env, ...homeOverrides(home), CLAUDE_PROJECT_DIR: repo,
+        GENESEED_STACK_GLOBAL: '' },
+    });
+  assert.equal(r.status, 0, r.stderr);
+  return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : 'defer';
+}
+
+test('a global gate stands down only for a LIVE, WIRED project install', () => {
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    const gcfg = path.join(d, 'claude-work');
+    fs.mkdirSync(gcfg, { recursive: true });
+    fs.writeFileSync(path.join(gcfg, '.geneseed-emit'), 'claude-global\n');
+    fs.writeFileSync(path.join(gcfg, GLOBAL_MANIFEST), '{}');
+
+    const live = projectInstall(path.join(d, 'live'), 'claude', home);
+    assert.equal(globalGateIn(gcfg, live, home), 'defer', 'a live project install did not silence '
+      + 'the global gate (its own gate is about to ask)');
+    // The user strips the hooks from the settings file by hand; the manifest still records them.
+    // The manifest is a claim, the settings file is what Claude runs: nothing fires, so ask.
+    const sf = path.join(live, '.claude', 'settings.local.json');
+    const kept = fs.readFileSync(sf, 'utf8');
+    fs.writeFileSync(sf, JSON.stringify({ ...JSON.parse(kept), hooks: {} }));
+    assert.equal(globalGateIn(gcfg, live, home), 'ask',
+      'hooks deleted from settings.local.json, manifest kept: the global gate went silent');
+    fs.writeFileSync(sf, `// mine
+${kept}`);
+    assert.equal(globalGateIn(gcfg, live, home), 'ask',
+      'a commented settings file cannot be verified, so the global gate must not stand down');
+    fs.writeFileSync(sf, kept);
+    assert.equal(globalGateIn(gcfg, live, home), 'defer', 'sanity: restoring the settings re-arms the stand-down');
+    const off = installDeactivate(live, 'claude', 'project');
+    assert.ok(off.ok, JSON.stringify(off));
+    assert.equal(globalGateIn(gcfg, live, home), 'ask',
+      'a DEACTIVATED project install silenced the global Law IV gate — nothing asks');
+
+    const commented = path.join(d, 'commented');
+    fs.mkdirSync(path.join(commented, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(commented, '.claude', 'settings.local.json'), '{\n  // mine\n}\n');
+    projectInstall(commented, 'claude', home);
+    assert.ok(fs.existsSync(path.join(commented, '.claude', GLOBAL_MANIFEST)),
+      'sanity: the commented-settings emit wrote no manifest, so the row proves nothing');
+    assert.equal(globalGateIn(gcfg, commented, home), 'ask',
+      'a project install whose hooks were never wired silenced the global Law IV gate');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// ONE ANSWER TO "IS THIS A HOST'S GLOBAL" (final review C2). Under `$CLAUDE_CONFIG_DIR` (the
+// docs' multi-account example) the default `~/.claude` is still a Claude GLOBAL — never a
+// `claude:project` rooted at `$HOME`. Comparing only against the env-resolved `configDir()`
+// made `status` list it as a project, `rebuild-all` re-emit it as one (writing `$HOME/CLAUDE.md`
+// and a second hook set), and `uninstall` offer to remove "the project at $HOME".
+
+test('a relocated CLAUDE_CONFIG_DIR never turns the default ~/.claude into a project at $HOME', () => {
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    fs.mkdirSync(home, { recursive: true });
+    withHome(home, () => {
+      const r = emitInherited(['--emit', 'claude-global', '--theme', 'neutral'], { CLAUDE_CONFIG_DIR: '' });
+      assert.equal(r.rc, 0, r.err);
+      const dotClaude = path.join(home, '.claude');
+      assert.ok(fs.existsSync(path.join(dotClaude, GLOBAL_MANIFEST)), 'sanity: no ~/.claude global');
+      const work = process.env.CLAUDE_CONFIG_DIR;
+      assert.equal(emitInherited(['--emit', 'claude-global', '--theme', 'neutral']).rc, 0);
+      inCwd(home, () => {
+        const isHomeProject = (t) => t && t[0] === 'claude' && t[1] === 'project';
+        assert.ok(!installTargets().some(isHomeProject),
+          `installTargets listed claude:project at $HOME: ${JSON.stringify(installTargets())}`);
+        assert.ok(!isHomeProject(uninstallResolve(null)), 'bare uninstall resolved claude:project $HOME');
+        assert.deepEqual(uninstallResolve(dotClaude), ['claude', 'global', resolved(dotClaude)],
+          'uninstall --target ~/.claude is not the Claude global');
+        assert.equal(projectQualifies(home, 'claude'), false, '$HOME qualified as a claude project');
+        captured(() => rebuildAll());
+        assert.ok(!fs.existsSync(path.join(home, 'CLAUDE.md')),
+          'rebuild-all re-emitted ~/.claude as a PROJECT and wrote $HOME/CLAUDE.md');
+        // Uninstalling the old global acts on THAT root, never on the active relocated one, and
+        // leaves the machine-wide hook shim the active account still runs through.
+        const shimDir = path.join(process.env.GENESEED_HOME, 'bin');
+        const shims = fs.readdirSync(shimDir).filter((f) => f.startsWith('geneseed-hook'));
+        assert.ok(shims.length, 'sanity: the emit wrote no hook shim');
+        const [rc] = captured(() => cmdUninstall(uninstallArgs(dotClaude)));
+        assert.equal(rc, 0);
+        assert.ok(!fs.existsSync(path.join(dotClaude, GLOBAL_MANIFEST)), 'the ~/.claude global survived');
+        assert.equal(installState(work, 'claude', 'global'), 'active',
+          'uninstalling ~/.claude removed the ACTIVE relocated global');
+        for (const f of shims) assert.ok(fs.existsSync(path.join(shimDir, f)), `${f} was removed`);
+      });
+    }, {
+      CLAUDE_CONFIG_DIR: path.join(home, '.claude-work'),
+      OPENCODE_CONFIG_DIR: path.join(d, 'oc-none'),
+      BOB_CONFIG_DIR: path.join(d, 'bob-none'),
+      OPENCLAUDE_CONFIG_DIR: path.join(d, 'openclaude-none'),
+    });
+  });
 });

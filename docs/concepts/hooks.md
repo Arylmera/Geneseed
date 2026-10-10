@@ -16,10 +16,9 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 
 | Event | When | Command | What it does | Conditional? |
 | --- | --- | --- | --- | --- |
-| `SessionStart` | `startup`, `clear` | `geneseed-hook context` | injects your harness files and the repo's docs | no |
-| `SessionStart` | `resume`, `compact` | `geneseed-hook context` | re-injects them after a resume or an auto-compaction summarised them away | no |
-| `PreToolUse` | `Bash` | `geneseed-hook git-gate` | asks before destructive git; asks before every commit and push | the commit/push question only |
-| `PreToolUse` | `Write`, `Edit`, `MultiEdit`, `NotebookEdit` | `geneseed-hook rule-gate` | asks before a secret lands in a file, or a write to your rules or memory | no |
+| `SessionStart` | `startup`, `resume`, `clear`, `compact`, `fork` | `geneseed-hook context` | injects your harness files and the repo's docs, or re-injects them after a resume, a fork, or an auto-compaction summarised them away | no |
+| `PreToolUse` | `Bash`, `PowerShell` | `geneseed-hook git-gate` | asks before destructive git; asks before every commit and push | the commit/push question only |
+| `PreToolUse` | `Write`, `Edit`, `NotebookEdit` | `geneseed-hook rule-gate` | asks before a secret lands in a file, or a write to your rules or memory | no |
 | `Stop` | the agent finishes a reply | `geneseed-hook learn` | distils durable facts into `memory/` | needs `GENESEED_LLM` |
 | `SubagentStop` | a subagent finishes | `geneseed-hook learn` | records a lesson for that agent in `memory/agents/<name>.md` | needs `GENESEED_LLM` |
 | `PreCompact` | before auto-compaction | `geneseed-hook learn` | captures memory before the transcript is summarised | needs `GENESEED_LLM` |
@@ -45,7 +44,7 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 export GENESEED_LLM="claude -p"
 ```
 
-Unset, `learn` does nothing useful — it prints the prompt it would have sent. Geneseed never stores or embeds an API key. See [Memory](memory.md).
+Unset, `learn` does nothing useful: on a real Stop/SubagentStop/PreCompact call it returns immediately rather than reading the transcript for nothing, and on a manual run it prints the prompt it would have sent. Geneseed never stores or embeds an API key. See [Memory](memory.md).
 
 ## Verify
 

@@ -106,9 +106,11 @@ after the cut is gone (observed 2026-10 on 16.5 KB and 25.6 KB SessionStart outp
 threshold is undocumented). So `cmdContext` keeps its *whole* payload under `OUTPUT_BUDGET`
 (9 000), counting each line at +2 because stdout is `\r\n` on Windows — a line-per-entry listing
 overran by its line count before that. Measure a hook change with `node bin/geneseed-hook.mjs
-context --root <install> | wc -c`. The OpenCode plugin injects through the system prompt and
-has no such cap, which is why its budget stays 48 KB. The Claude hook injects `geneseed-wiki.jsonc` as
-raw text and never renders wiki entries; the OpenCode plugin does — a known parity gap.
+context --root <install> | wc -c`. The OpenCode plugin injects a synthetic *user* message on
+every request (`experimental.chat.messages.transform`, with a visible fallback for the first
+turn), never the system prompt, and has no stdout-style cap at all, which is why its budget
+stays 48 KB. The Claude hook injects `geneseed-wiki.jsonc` as raw text and never renders wiki
+entries; the OpenCode plugin does — a known parity gap.
 
 **Uninstall never needs a backup, by construction.** A user's root file gets a delimited
 `<!-- BEGIN/END GENESEED -->` block (`managedBlockWrite`/`managedBlockRemove`,

@@ -38,7 +38,12 @@
  * subparsers (25 invocable names — `update` is an alias of `upgrade`); a hook entry that
  * silently accepted `doctor` and did nothing would be the worst available failure, because
  * every Geneseed hook returns 0 and signals through stdout — so "did nothing" and "worked"
- * are the same observation.
+ * are the same observation. That refusal exits **1**, never 2: on Claude Code and Bob, exit 2
+ * is the one code that blocks a tool call (or, on `Stop`/`SubagentStop`, keeps the turn going
+ * without running the hook again), so a verb this build does not know yet — the forward case,
+ * when a newer Geneseed names a verb this stale checkout has never heard of, under the
+ * machine-wide last-writer-wins shim (see I3/B1 below) — must not read as a block. Exit 1 still
+ * shows a `<hook name> hook error` notice; it just does not stop anything (see I3/B1).
  */
 // FIRST, before anything it could fail to run: an old Node gets one sentence, not a stack trace.
 import '../js/lib/node-floor.mjs';
@@ -55,6 +60,13 @@ import { printErr } from '../js/lib/fs.mjs';
 // specifiers stay literal strings — `tests/unit/hook_cli.test.mjs`'s import walk reads them.
 const HOSTED = { '--root': 'root', '--host': 'host' };
 const gates = () => import('../js/hosts/hooks.mjs');
+// Verbs PreToolUse/PostToolUse actually gate a tool call with. The machine-wide, last-writer-wins
+// shim (this file's header) means a stale checkout can be handed a flag only a newer install
+// knows (e.g. `--no-consent`); on Claude Code, exit 2 from one of THESE verbs blocks the tool
+// outright, with no ask. `main` below answers an argv error on a gate verb with exit 0 instead —
+// a gate's own decision still exits 0 and signals through stdout (`askDecision`), so this only
+// changes what used to be a hard lockout into "the gate is silent this one call" (see I3/B1).
+const GATE_VERBS = new Set(['git-gate', 'rule-gate', 'tool-gate']);
 const VERBS = {
   context: { load: () => import('../js/hosts/hooks-context.mjs'), fn: 'cmdContext', flags: HOSTED },
   'git-gate': {
@@ -65,7 +77,8 @@ const VERBS = {
   learn: {
     load: () => import('../js/hosts/hooks-learn.mjs'),
     fn: 'cmdLearn',
-    flags: { '--memory': 'memory' },
+    // `--host` only keys the global stand-down's marker (js/hosts/hosts.mjs); learn has no dialect.
+    flags: { '--memory': 'memory', '--host': 'host' },
     switches: { '--consolidate': 'consolidate' },
     positional: 'file',
   },
@@ -118,7 +131,9 @@ async function main(argv) {
 
   const verb = argv[0];
   if (!verb || verb === '-h' || verb === '--help') {
-    return die(2, `the following arguments are required: cmd (one of ${
+    // 1, not 2: see this file's header (I3/B1) — 2 is the one code that blocks a tool call on
+    // Claude Code and Bob, and a bare invocation is not a gate decision.
+    return die(1, `the following arguments are required: cmd (one of ${
       Object.keys(VERBS).join(', ')})`);
   }
   const spec = VERBS[verb];
@@ -130,7 +145,11 @@ async function main(argv) {
     // The COMMAND is not a table: `geneseed` is this package's `bin` entry for the CLI
     // (package.json), it answers every non-hook verb, and it survives the deletion of the
     // interpreter-plus-script invocation this line used to print.
-    return die(2, `invalid choice: '${verb}'. This entry point carries only the HOOK `
+    //
+    // 1, not 2 (I3/B1): the forward case is the one that matters — settings emitted by a NEWER
+    // Geneseed name a verb this stale checkout, running from the machine-wide last-writer-wins
+    // shim, has never heard of. That must not read as a block.
+    return die(1, `invalid choice: '${verb}'. This entry point carries only the HOOK `
       + `verbs (${Object.keys(VERBS).join(', ')}); every other harness subcommand lives `
       + 'elsewhere — run `geneseed ' + verb + '`.');
   }
@@ -146,7 +165,19 @@ async function main(argv) {
     if (rc !== null) return rc;
   }
   const parsed = parse(spec, argv.slice(1));
-  if (parsed.error) return die(2, parsed.error);
+  if (parsed.error) {
+    // A gate verb must never exit 2 on an argv error: that is indistinguishable, to Claude's
+    // PreToolUse, from the gate deliberately blocking (see I3/B1 above). Print the same message
+    // to stderr for a human debugging the shim, but return 0 with no stdout, exactly like a gate
+    // that chose not to act.
+    if (GATE_VERBS.has(verb)) { printErr(`geneseed-hook: error: ${parsed.error}\n`); return 0; }
+    // `context` and `learn` are not gate verbs, but their own argv errors are not a decision
+    // either, so still 1, not 2 (I3/B1): a `<hook name> hook error` notice, and nothing more.
+    // `learn` is the one that matters here — it runs on Stop/SubagentStop, where exit 2 ALSO has
+    // an effect (it sends Claude back to keep working instead of letting the turn end; docs
+    // `hooks.md`, "Stop, SubagentStop, TaskCompleted, and TeammateIdle").
+    return die(1, parsed.error);
+  }
   return (await spec.load())[spec.fn](parsed.args);
 }
 

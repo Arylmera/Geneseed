@@ -12,9 +12,9 @@
  * `child_process` ban like every other closure that feeds `bin/geneseed-cli.mjs` — may ever
  * import. A module that is fs/path only is importable from anywhere.
  *
- * The OpenCode guard plugin (`adapters/opencode/plugins/geneseed-guard.js`) keeps its own
- * standalone copy — it cannot import from `js/` at all — kept in step by hand, commented as
- * this module's twin.
+ * The OpenCode guard plugin once kept a standalone twin of this for its `permission.ask`
+ * loop exemption; upstream never calls that hook, so the twin was deleted (OpenCode verdict
+ * I-2). This module has no copy to keep in step.
  */
 import { existsSync, statSync, lstatSync, readFileSync, openSync, readSync, closeSync } from 'node:fs';
 import path from 'node:path';

@@ -6,14 +6,17 @@
  * fused for a host that runs ONE command per event), and a Stop/SubagentStop/PreCompact
  * distiller.
  *
- * ONE VERB, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
+ * THREE HOSTS, TWO DIALECTS. `--host` names the host that will read the verdict. Claude Code
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
  * prompt. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
- * EXIT CODE 2, so the two Laws exit 2 with the reason on stderr and the rest is a stderr line with exit 0; SessionStart
- * context is plain stdout, as on Claude. `--host openclaude` speaks Claude's dialect verbatim
- * (OpenClaude is a Claude Code fork); the flag only picks which root file counts as native. Since P5b they are also what the emitted hooks name: `bin/build-driver.mjs` bakes
- * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
- * driver emits has no Python in its hook path at all — which is what let the interpreter
+ * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5) exit 2 with the reason on stderr
+ * and the rest is a stderr line with exit 0; SessionStart context is plain stdout, as on
+ * Claude. `--host openclaude` speaks Claude's dialect verbatim (OpenClaude is a Claude Code
+ * fork); the flag only picks which root file counts as native for `context`'s discovery.
+ *
+ * Since P5b, `--host` is also what the emitted hooks themselves name: `bin/build-driver.mjs`
+ * bakes `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install
+ * this driver emits has no Python in its hook path at all — which is what let the interpreter
  * discovery and its exit-4 refusal be deleted rather than merely bypassed.
  *
  * Ported from `rituals/_harness_context.py` and `rituals/_harness_learn.py`, whose shared
@@ -51,7 +54,9 @@ import { readFileSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
-import { GATE_LEDGER, resolvePath, sovereignBypass } from './hosts.mjs';
+import {
+  GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
+} from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { selfAndParents, readStdin } from './hooks-prims.mjs';
 
@@ -75,8 +80,32 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 // A forced push is `--force*`, a `-f` cluster, or a `+refspec` (`push origin +main`) — the last
 // is a force push with no flag at all. `push --force*` trips this gate rather than process 5's
 // so the stronger reason is the one the user reads.
+//
+// B5 (claude-code.md / claude-verdict.md) found the long/modern spellings of the same acts
+// still passed: `clean --force` (the long flag, not a `-f` cluster), `branch --delete --force`
+// (the long form of `-D`, EITHER flag order — `--force --delete` is the same act; an un-forced
+// `--delete` refuses on an unmerged branch exactly like `-d`, so it stays OUT; `-D --force`/
+// `--delete -f`/`-d --force`/`-df` are the SAME act again and are a known ceiling this does not
+// chase — add them if a probe ever shows one in real use), `checkout -f`/`--force` and
+// `switch -f`/`--force`/`--discard-changes`
+// (git's own `-h` lists `-f, --force` AND a separate `--discard-changes` for switch — both
+// discard uncommitted work the same way `checkout --` does), `worktree remove --force`/`-f`
+// (can discard an uncommitted worktree), `reflog expire` and `gc --prune=now` (delete the
+// reflog/dangling-commit safety net recovery depends on), and `push :branch`/`push --delete`
+// (deletes a remote branch — the colon form needs a space before the `:` so `push origin
+// HEAD:main`, an ordinary refspec, is not caught).
+//
+// `restore` and `stash drop`/`stash clear` are carved OUT of the shared `\bgit\b[^\n]*\b(…)`
+// wrapper above and anchored to the verb position instead (`git`, an optional `-C <path>`, then
+// the verb immediately): every other arm here needs a flag that is vanishingly unlikely in a
+// commit message or a filename, but "restore" needs no flag at all and "drop"/"clear" are
+// ordinary English, so `git commit -m "restore working behavior"` or `git stash push -m "clear
+// old state"` would otherwise trip Law IV on the MESSAGE TEXT, not the command. Anchoring to
+// the verb position is also what lets `restore` ask for `--staged --worktree` together (that
+// combination DOES discard working-tree changes, unlike `--staged` alone) while still deferring
+// on `--staged` alone.
 const DESTRUCTIVE_GIT_RE =
-  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s-[a-zA-Z]*f|branch\s+-D|checkout\s+--\s|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S))/;
+  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s(?:-[a-zA-Z]*f|--force\b)|branch\b[^\n]*\s(?:-D\b|--delete\b[^\n]*--force\b|--force\b[^\n]*--delete\b)|checkout\s+--\s|checkout\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b)|switch\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b|--discard-changes\b)|worktree\b[^\n]*\bremove\b[^\n]*(?:-[a-zA-Z]*f\b|--force\b)|reflog\b[^\n]*\bexpire\b|gc\b[^\n]*--prune\b|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S|\s--delete\b|\s:\S))|\bgit(?:\s+-C\s+\S+)*\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))|\bgit(?:\s+-C\s+\S+)*\s+stash\s+(?:drop|clear)\b/;
 
 // `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
 // false allow publishes. So the exemption holds only when the ENTIRE command is built from
@@ -196,7 +225,9 @@ const BOB_DENY_EXIT = 2;
 /**
  * On Bob, which has no ask tier, which rules are worth a hard block. Laws I and IV: a
  * credential in a tracked file and a history-discarding git act are wrong in every context,
- * so refusing them costs nothing. Process 1 and process 5 are the USER's calls — a hard
+ * so refusing them costs nothing. rigor-5 (External Gate) joins them: a protected check the
+ * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
+ * only", see bob-code.md B3. Process 1 and process 5 are the USER's calls — a hard
  * block would make Bob unable to commit at all — so they become a warning the host
  * logs. `gate-error` is a warning too: a crashed gate that blocked every tool call would be
  * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
@@ -295,6 +326,10 @@ function readPayload() {
 
 function gitGate(args) {
   if (sovereignBypass(args.root)) return 0;
+  // A project install of this host beside a global one: the project's own git-gate runs too and
+  // carries the project's `--no-consent` choice, so the global's verdict would only overrule it
+  // (Claude B4). Law IV still runs, in the project's gate.
+  if (globalHookStandingDown(args.root, hookProjectDir(), args.host, 'git-gate')) return 0;
   return gitDecide(args, readPayload());
 }
 
@@ -397,8 +432,14 @@ function ruleDecide(args, payload) {
   if (typeof p !== 'string' || !p) return 0;
   // Write carries `content`, Edit `new_string`, NotebookEdit `new_source`, MultiEdit an
   // `edits[]` of `new_string`s — every one can plant a credential, so every one is scanned.
+  // MultiEdit is no longer in Claude Code's own tool table (tools-reference.md) or the
+  // settings matcher that routes here (Claude verdict R2); the `edits[]` read stays as a
+  // cheap, harmless guard in case that ever changes.
+  // `diff` (Bob's `apply_diff`) and `replace`/`search` (`search_and_replace`) are Roo-lineage
+  // field names the Bob docs never confirm (bob-verdict.md I1) — accepted when present, never
+  // required, same as every field above.
   const edits = Array.isArray(ti.edits) ? ti.edits.map((e) => e && e.new_string) : [];
-  const body = [ti.content, ti.new_string, ti.new_source, ...edits]
+  const body = [ti.content, ti.new_string, ti.new_source, ti.diff, ti.replace, ti.search, ...edits]
     .filter((v) => typeof v === 'string').join('\n');
   if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
     return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
@@ -424,6 +465,25 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 // ======================================================================================
 
 /**
+ * Bob's documented PreToolUse payload (bob-verdict.md I1) is `{event, session_id, tool,
+ * input:{...}}` — none of `tool_input`, `tool_name` or `hook_event_name` exist. Normalised
+ * HERE, once, at Bob's one entry point (`toolGate` is the only verb its settings.json invokes
+ * for PreToolUse), so `gitDecide`/`ruleDecide` keep reading the Claude shape unchanged and
+ * never learn Bob exists. A no-op for an already-Claude-shaped payload: every field it sets
+ * is only filled in when the Claude-named field is absent.
+ */
+function normaliseBobPayload(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const out = { ...payload };
+  if (!out.tool_input && payload.input && typeof payload.input === 'object') {
+    out.tool_input = payload.input;
+  }
+  if (!out.tool_name && typeof payload.tool === 'string') out.tool_name = payload.tool;
+  if (!out.hook_event_name && typeof payload.event === 'string') out.hook_event_name = payload.event;
+  return out;
+}
+
+/**
  * Bob's PreToolUse entry carries no matcher over documented tool names, so it cannot name `git-gate` for Bash and `rule-gate` for Write the way Claude's
  * `PreToolUse` does. This verb is the two fused, dispatched on the payload rather
  * than on a matcher: a `command` field is a shell call and gets the git checks, a path
@@ -432,7 +492,7 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
  */
 function toolGate(args) {
   if (sovereignBypass(args.root)) return 0;
-  const payload = readPayload();
+  const payload = normaliseBobPayload(readPayload());
   const ti = (payload && payload.tool_input) || {};
   return typeof ti.command === 'string' ? gitDecide(args, payload) : ruleDecide(args, payload);
 }

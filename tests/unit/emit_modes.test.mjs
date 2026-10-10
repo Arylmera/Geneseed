@@ -90,6 +90,8 @@ const emitOpencode = (theme, out, root) =>
   quiet(() => emitProjectInto('opencode', { theme, out, root, footprint: 'full' }));
 const emitGlobal = (cfgDir) =>
   quiet(() => emitGlobalInto('opencode', { theme: 'neutral', out: null, cfgDir, footprint: 'full' }));
+const emitOpencodeLean = (theme, out, root) =>
+  quiet(() => emitProjectInto('opencode', { theme, out, root, footprint: 'lean' }));
 
 // ---------------------------------------------------------------------------------------------
 // `build` — the portable plain-folder bundle
@@ -249,6 +251,12 @@ test('a legacy manifestless install preserves every file it does not recognise',
   // every still-current spec, since the emit has no record of having written them. Nothing is
   // deleted either way, and a manifest is bootstrapped from what THIS run actually wrote, so a
   // freshly created file is tracked and pruned normally from here on.
+  //
+  // The theme writer is now claim-gated too (Task 7, CR-3), so `geneseed-neutral.json` from the
+  // FIRST call is already on disk by the second call and is, correctly, treated the same as
+  // `reviewer.md` — unclaimed. The second call switches to `--theme imperial` instead, which is
+  // the one file in this whole re-emit genuinely new on disk, to keep the "a freshly produced
+  // file IS tracked from run one" half of the claim provable.
   withDir((d) => {
     const out = path.join(d, 'bundle');
     emitOpencode('neutral', out, d);
@@ -259,7 +267,7 @@ test('a legacy manifestless install preserves every file it does not recognise',
     const reviewer = path.join(d, '.opencode', 'agents', 'reviewer.md');
     const before = readFileSync(reviewer, 'utf8');
 
-    emitOpencode('neutral', out, d);
+    emitOpencode('imperial', out, d);
     assert.ok(existsSync(unknown),
       'an unrecognised file must survive the first post-upgrade re-emit, not be wiped');
     assert.equal(readFileSync(reviewer, 'utf8'), before,
@@ -268,8 +276,11 @@ test('a legacy manifestless install preserves every file it does not recognise',
     const owned = new Set(JSON.parse(readFileSync(mp, 'utf8')).owned);
     assert.ok(!owned.has('agents/reviewer.md'));
     assert.ok(!owned.has('agents/my-legacy-agent.md'));
+    assert.ok(!owned.has('themes/geneseed-neutral.json'),
+      'the pre-existing neutral theme file is unclaimed too — it already existed and the '
+      + 'manifest that would have recognised it as Geneseed\'s is gone');
     // …but a freshly produced file — nothing on disk to collide with — IS tracked from run one.
-    assert.ok(owned.has('themes/geneseed-neutral.json'),
+    assert.ok(owned.has('themes/geneseed-imperial.json'),
       'nothing at all was claimed, so the bootstrap produced an empty manifest');
   });
 });
@@ -405,6 +416,65 @@ test("a user's own command/ and orchestrator file survive the opt-in emit and th
     }
     assert.ok(!existsSync(path.join(d, '.opencode', 'command', 'plan.md')),
       'uninstall left a command Geneseed did write');
+  });
+});
+
+test('a per-repo --footprint lean emit renders lean skill text, not full', () => {
+  // `emitOpencodeRender` called `renderAll(cfg, _theme)` with no options, so the per-repo native
+  // layer always rendered at the DEFAULT footprint ('full') regardless of the flag — the global
+  // twin (`emitOpencodeGlobalRender`) and Claude's emit both pass `{ footprint, nativeCatalog }`
+  // through. Written-out expectation, from `src/skills/_self-improvement.md`'s two LEAN halves,
+  // substituted for the `debug` skill: full opens "Close each run with one beat of reflection on
+  // the Skill itself:"; lean reads "One beat of reflection on this Skill: a step that misled".
+  withDir((d) => {
+    emitOpencodeLean('neutral', path.join(d, 'bundle'), d);
+    const skill = read(d, '.opencode', 'skills', 'debug', 'SKILL.md');
+    assert.ok(skill.includes('One beat of reflection on this Skill: a step that misled'),
+      'a --footprint lean per-repo emit must render the LEAN:else half');
+    assert.ok(!skill.includes('Close each run with one beat of reflection on the Skill itself:'),
+      'a --footprint lean per-repo emit rendered the FULL half — footprint was dropped on the '
+      + 'way into renderAll');
+  });
+});
+
+test("a user's own plugin, workflow and theme file survive the emit and the uninstall", () => {
+  // `copyPlugins`/`copyWorkflows` (via `copyJsDir`) and `writeTheme`/`writeColorThemes` wrote and
+  // pushed into `owned` with NO claim-on-create check — unlike the native layer and the command
+  // writers. So a user's own same-named file under `.opencode/plugins/`, `.opencode/workflows/`
+  // or `.opencode/themes/` was silently overwritten, recorded as Geneseed's, and deleted by the
+  // next uninstall.
+  withDir((d) => {
+    const mine = {
+      // Real shipped names, so the collision is the case that matters.
+      [path.join(d, '.opencode', 'plugins', 'geneseed-guard.js')]: '// MY GUARD\n',
+      [path.join(d, '.opencode', 'workflows', 'review.js')]: '// MY REVIEW WORKFLOW\n',
+      [path.join(d, '.opencode', 'themes', 'geneseed-neutral.json')]: '{"mine":true}\n',
+    };
+    for (const [p, body] of Object.entries(mine)) {
+      mkdirSync(path.dirname(p), { recursive: true });
+      writeFileSync(p, body, 'utf8');
+    }
+    const [, , err] = emitOpencode('neutral', path.join(d, 'bundle'), d);
+    const owned = readJson(d, '.opencode', GLOBAL_MANIFEST).owned;
+    for (const rel of ['plugins/geneseed-guard.js', 'workflows/review.js',
+      'themes/geneseed-neutral.json']) {
+      assert.ok(!owned.includes(rel), `${rel} is the user's, yet the manifest claims it`);
+      assert.match(err, new RegExp(`kept your existing ${rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+        `${rel} was overwritten silently`);
+    }
+    for (const [p, body] of Object.entries(mine)) {
+      assert.equal(read(p), body, `the emit overwrote the user's ${p}`);
+    }
+    // Positive control: a plugin/workflow/colour theme the user did NOT have is still Geneseed's.
+    assert.ok(owned.includes('plugins/geneseed-context.js'));
+    assert.ok(owned.includes('workflows/_runtime.js'));
+    assert.ok(owned.includes('themes/geneseed-catppuccin-solid.json'));
+    quiet(() => installUninstall(d, 'opencode', 'project', 'keep'));
+    for (const [p, body] of Object.entries(mine)) {
+      assert.equal(read(p), body, `uninstall deleted or changed the user's ${p}`);
+    }
+    assert.ok(!existsSync(path.join(d, '.opencode', 'plugins', 'geneseed-context.js')),
+      'uninstall left a plugin Geneseed did write');
   });
 });
 

@@ -14,7 +14,7 @@ bin/geneseed-hook.mjs …` — so at user scope they would fire and fail in ever
 repo that doesn't vendor the harness. A generated global install wires
 absolute-path hooks instead — `geneseed setup` does that for you.) It:
 
-- on **PreToolUse** (matcher `Bash`), runs `geneseed-hook git-gate` — the tool-boundary
+- on **PreToolUse** (matcher `Bash|PowerShell`), runs `geneseed-hook git-gate` — the tool-boundary
   half of Doctrine process 5 (*consent before every commit and push*) and of the
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
   wired with `--no-consent`: commits and pushes pass without asking, while the
@@ -27,22 +27,27 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   next time regardless. Every other Bash command (and any unreadable payload) is
   deferred to the normal permission flow — the hook never blocks unrelated work.
 
-  **Caveat — the GitHub MCP vector.** The hook matches the `Bash` tool only. If your
-  session has the GitHub MCP server, an agent can commit/push via `push_files` /
-  `create_or_update_file` / `merge_pull_request`, which bypass Bash. To gate those too,
-  widen the matcher to `"Bash|mcp__github__.*"` — `git-gate` ignores any payload it
-  doesn't recognise as a commit/push, so over-matching the tool surface is harmless.
-- on **PreToolUse** (matcher `Write|Edit|MultiEdit|NotebookEdit`), runs
+  **Caveat — the GitHub MCP vector.** The hook matches the `Bash` and `PowerShell` tools
+  only. If your session has the GitHub MCP server, an agent can commit/push via
+  `push_files` / `create_or_update_file` / `merge_pull_request`, which bypass both. To
+  gate those too, widen the matcher to `"Bash|PowerShell|mcp__github__.*"` —
+  `git-gate` ignores any payload it doesn't recognise as a commit/push, so
+  over-matching the tool surface is harmless.
+- on **PreToolUse** (matcher `Write|Edit|NotebookEdit`), runs
   `geneseed-hook rule-gate` — refuses a write that would put a credential into a tracked
   file, and asks first on the first write to `user-rules.md` or a memory file (whether
   something you want kept is a rule or a fact is your call). Ordinary edits pass.
-- on **SessionStart** (`startup`/`clear` only — a fresh context), prints `AGENT.md`
-  so the harness is in context from the first turn, then runs `geneseed-hook context` to
-  **inject the project context** directly into the session — so the project-context load is
-  by the hook, not left to the agent to remember (lazy entries are only listed). On
-  **`resume`** it runs `geneseed-hook context` *without* re-`cat`ting `AGENT.md`: the resumed
-  conversation already carries the harness, so re-injecting the static file each resume
-  is pure token waste — only the (possibly changed) project context is refreshed;
+  (`MultiEdit` is not a Claude Code tool and is not in the matcher; the gate reads
+  `edits[].new_string` as a cheap guard regardless.)
+- on **SessionStart**, every source (`startup`, `resume`, `clear`, `compact`, `fork`), runs
+  `geneseed-hook context` to **inject the project context** directly into the session — so
+  the project-context load is by the hook, not left to the agent to remember (lazy entries
+  are only listed). This is one matcher-less group, exactly as a generated install wires it:
+  a matcher list is one more place to miss a source (`fork` once was). A second group,
+  `startup`/`clear` only — a fresh context — prints `AGENT.md` so the vendored harness is in
+  context from the first turn. A generated install has no such group: its root file is
+  `CLAUDE.md`, which Claude Code loads by itself. A resumed or forked conversation already
+  carries the harness, so re-printing the static file there is pure token waste;
 - on **Stop**, runs `geneseed-hook learn` over the session to capture durable memories.
   Claude Code pipes the hook payload (with the session's `transcript_path`) to the
   command on stdin; `learn` reads that, flattens the transcript, distils new
@@ -59,12 +64,14 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
 - on **PreCompact**, runs the same `geneseed-hook learn` once more. `learn` distils the
   *tail* of the transcript, so per-turn Stop is a sliding window over the session —
   and auto-compaction is the moment that window is about to be summarised away.
-  This captures memory *before* the summary; the SessionStart `compact` matcher
-  re-seeds context *after* it.
+  This captures memory *before* the summary; the SessionStart `context` hook (which
+  also fires on the `compact` source) re-seeds context *after* it.
 
   This step is **opt-in on a model CLI**: set `GENESEED_LLM` (e.g. `claude -p`,
   `llm`, `ollama run …`) for `learn` to actually distil. With it unset the hook is
-  a harmless no-op that just prints the prompt. Geneseed never embeds an API key.
+  a harmless no-op — it returns immediately rather than reading the transcript for
+  nothing; running `learn` by hand with notes piped in still prints the prompt it
+  would have sent. Geneseed never embeds an API key.
   If your bundle's `memory/` is not at `./memory` or `./Harness/memory`, point at
   it with `GENESEED_MEMORY=/abs/path/to/memory`.
 

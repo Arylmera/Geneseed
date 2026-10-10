@@ -17,7 +17,7 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { printErr, withDiscardableStderr, isDir, readText } from '../lib/fs.mjs';
+import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
@@ -82,6 +82,174 @@ export function sovereignBypass(root) {
     if (cwd === base || cwd.startsWith(base + path.sep)) return true;
   }
   return false;
+}
+
+/**
+ * `_global_hook_standing_down` — project-bypasses-global, for `context`, `git-gate` and `learn`.
+ *
+ * A GLOBAL install's hook knows its own dir (`--root`, or `learn`'s `--memory` parent); when a
+ * Geneseed PROJECT install of the SAME host sits IN the session's project dir, that project's
+ * hook runs too,
+ * and Claude runs every matching hook with the strictest verdict winning — so the global's
+ * second injection, its process-5 ask over a project built `--no-consent`, and its second LLM
+ * call are all doubles (host-compat Claude B4). `$GENESEED_STACK_GLOBAL` stacks them on purpose.
+ *
+ * THE MARKER COMES FROM `host`, NOT THE FOLDER NAME. It once came from `basename(hookRoot)`,
+ * so a global moved by `$CLAUDE_CONFIG_DIR`/`$BOB_CONFIG_DIR`/`$OPENCLAUDE_CONFIG_DIR` matched
+ * no marker and never stood down (Claude B9, OpenClaude I2, Bob B4). With no `host` (Claude's
+ * commands, and any emitted before the gates carried one), a folder named like a marker is that
+ * marker, else the root's own `.geneseed-emit` names it; neither = never stand down.
+ *
+ * `<projectDir>/<marker>` ONLY — NO WALK UP. Claude reads a project's `.claude/settings.json`
+ * from the session's primary working directory (`settings.md`), not from its ancestors, so an
+ * install above the project dir proves no project gate fired (round 3 of the Task 11 review:
+ * `~/mono/.claude` silenced the global gate for a session in `~/mono/pkg`). One known
+ * consequence is DELIBERATE: outside Windows Claude may also read `settings.local.json` at the
+ * git repo root when started in a subdirectory, so that case asks twice. A doubled ask is
+ * safe; a silenced gate is not. Bob's own project-hook lookup is undocumented, so its cwd
+ * fallback does not walk either. `projectDir` is `hookProjectDir()`: the cwd follows the
+ * agent's `cd` into repos whose hooks were never loaded.
+ *
+ * ONLY A PROJECT INSTALL SILENCES, NEVER ANOTHER GLOBAL. With `CLAUDE_CONFIG_DIR=~/.claude-work`
+ * (the docs' multi-account example) a session in `~` finds the OTHER global `~/.claude`, whose
+ * hooks this session never loads. `isHostGlobalDir` (below) decides, the same predicate the
+ * lifecycle verbs use: a candidate that is any host's global is never a project install.
+ *   * M-3, DELIBERATE: a hand-written `-global` marker in a PROJECT's `.claude/` therefore reads
+ *     as a global, and the gate asks twice. Never "fix" that into silence — it would turn a
+ *     user-editable file into a switch that turns a gate off.
+ *   * M-2: a `configDir()` that throws (a `~user` relocation variable `resolvePath` refuses)
+ *     lands in the catch below, which is false: the gate stays loud.
+ *
+ * ONLY A LIVE, WIRED PROJECT INSTALL SILENCES (final review C1). A manifest alone proves no
+ * project gate fires: `deactivate` unwires every hook and keeps the manifest, and a project
+ * emit beside a commented `settings.local.json` writes a manifest but refuses to wire. So the
+ * candidate must carry no `.geneseed-disabled/<host>` stash (the test `claudeState` uses) and
+ * its manifest's `managed.settings_hooks` must record a group running `verb`, still present in
+ * the settings file the manifest names (`projectWiresVerb`). A manifest or settings file that
+ * does not parse, or carries no such group, is false: the gate stays loud.
+ *
+ * LIVES HERE, beside `sovereignBypass`, for the same reason: the gates must not import
+ * `hooks-context.mjs`. Any failure (a `~user` root `resolvePath` refuses) is false: a gate that
+ * cannot tell keeps gating.
+ */
+export function globalHookStandingDown(hookRoot, projectDir, host, verb) {
+  if (!hookRoot || process.env.GENESEED_STACK_GLOBAL) return false;
+  const markers = STAND_DOWN_MARKERS;
+  const own = path.basename(hookRoot);
+  try {
+    return withDiscardableStderr(() => {
+      let marker = markers[host] || (Object.values(markers).includes(own) ? own : null);
+      if (!marker) {
+        // A relocated root with no `--host`: its own `.geneseed-emit` (`claude-global`, …) names
+        // the host. Absent or unknown = false — guessing Claude would silence a pre-`--host`
+        // OpenClaude gate beside a project `.claude`, and OpenClaude loads no `.claude` hooks.
+        const emit = emitMarkerOf(hookRoot);
+        marker = emit.endsWith('-global') ? markers[emit.slice(0, -'-global'.length)] : null;
+        if (!marker) return false;
+      }
+      const markerHost = Object.keys(markers).find((h) => markers[h] === marker);
+      const cand = path.join(resolvePath(projectDir), marker);
+      // Path equality, case-folded on Windows — `~/.claude` and `~/.Claude` are the same
+      // install there and two different ones on Linux.
+      if (normcase(resolvePath(cand)) === normcase(resolvePath(hookRoot))) return false;
+      if (isHostGlobalDir(null, cand)) return false;
+      if (isDir(path.join(cand, DISABLED_STASH, markerHost))) return false;
+      return projectWiresVerb(cand, verb);
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The hook handlers the install at `cfg` both RECORDS and still RUNS: `[event, handler]` pairs
+ * from its manifest's `managed.settings_hooks` whose command the settings file that manifest
+ * names still carries under the same event — the manifest is a claim, the settings file is what
+ * the host runs. A user who deletes `hooks` by hand keeps the manifest (re-review, Important).
+ * Absent, unparseable or COMMENTED settings fail `JSON.parse` and answer `[]`. Shared by
+ * `projectWiresVerb` and the hook-shell drift check (`hookShellProblems`).
+ */
+export function liveRecordedHooks(cfg) {
+  const readJson = (p) => { try { return JSON.parse(readText(p)); } catch { return null; } };
+  const managed = readJson(path.join(cfg, GLOBAL_MANIFEST))?.managed;
+  const recorded = Array.isArray(managed?.settings_hooks) ? managed.settings_hooks : [];
+  const wanted = recorded.flatMap((r) => (Array.isArray(r?.group?.hooks) ? r.group.hooks : [])
+    .filter((h) => typeof h?.command === 'string').map((h) => [r.event, h]));
+  if (!wanted.length) return [];
+  const hooks = readJson(settingsFile(cfg, managed))?.hooks;
+  const live = (event, command) => Array.isArray(hooks?.[event]) && hooks[event]
+    .some((g) => Array.isArray(g?.hooks) && g.hooks.some((h) => h?.command === command));
+  return wanted.filter(([event, h]) => live(event, h.command));
+}
+
+/**
+ * Does the project install at `cand` really run `verb`? A live recorded handler
+ * (`liveRecordedHooks`) must run it; what cannot be verified does not silence a gate.
+ */
+function projectWiresVerb(cand, verb) {
+  // Every emitted command is `<runner> <verb> --root|--memory …` (`claudeHookGroups`), behind a
+  // leading `& ` in the PowerShell form.
+  return liveRecordedHooks(cand).some(([, h]) => h.command.includes(` ${verb} --`));
+}
+
+/**
+ * `_harness_mcp._settings_file` — the file this install's hooks were actually wired into.
+ *
+ * `settings.local.json` for a Claude or OpenClaude PROJECT install (personal, untracked),
+ * `settings.json` everywhere else (including Bob's, which documents no local variant), and
+ * the manifest is the authority — this reads `managed.settings_file`, it does not re-derive
+ * the rule. Every lifecycle path must target the file the EMIT wrote, or the hooks linger in
+ * one file while the claims chase another.
+ *
+ * EXPORTED for `migrate` (host-compat B1 round, `js/maintain/migrate.mjs`'s `hookSettingsFile`):
+ * reading a pre-migration install's CURRENT wiring is the same question this answers, and a
+ * fresh install with no `managed.settings_file` yet recorded (no manifest, or a manifest from
+ * before this field existed) must fall back to the bare, pre-nesting `settings.json` — the
+ * shape a legacy `bob-global` install actually carries — not to wherever the NEXT emit would
+ * write. `claudeWire`'s own `get(old, 'settings_file') || 'settings.json'` (`emit-claude.mjs`)
+ * makes the same choice for the same reason.
+ */
+export function settingsFile(cfg, managed) {
+  return path.join(cfg, (managed && managed.settings_file) || 'settings.json');
+}
+
+/** A dir's own `.geneseed-emit`, trimmed, or `''`. */
+function emitMarkerOf(dir) {
+  try { return readText(path.join(dir, '.geneseed-emit')).trim(); } catch { return ''; }
+}
+
+/** `_harness_mcp.DISABLED_STASH` — a sibling dir whose presence means "disabled". */
+export const DISABLED_STASH = '.geneseed-disabled';
+
+/**
+ * Is `dir` a GLOBAL install of `host` (any host when `null`), never a project's marker dir?
+ *
+ * THE ONE ANSWER (final review C2), used by `installTargets`, `projectQualifies`,
+ * `uninstallResolve`, `themeOfDir` and `globalHookStandingDown`. Three ways to be one:
+ *   * it is the env-resolved `configDir()`;
+ *   * it is the DEFAULT `~/<projectMarker>` of a Claude-family host. Under
+ *     `CLAUDE_CONFIG_DIR=~/.claude-work` the old `~/.claude` is still a global — comparing
+ *     only against `configDir()` made `rebuild-all` re-emit it as a PROJECT rooted at `$HOME`;
+ *   * its own `.geneseed-emit` names a `-global` emit (`<host>-global` when `host` is given).
+ * Case-folded on Windows. A `configDir()` that throws propagates: each caller already has the
+ * catch that says what "cannot tell" means for it (the hook stays loud).
+ */
+export function isHostGlobalDir(host, dir) {
+  const emit = emitMarkerOf(dir);
+  if (host === null ? emit.endsWith('-global') : emit === `${host}-global`) return true;
+  const c = normcase(resolvePath(dir));
+  return HOSTS.some((h) => (host === null || h.host === host)
+    && (normcase(h.configDir()) === c || (h.family === 'claude'
+      && normcase(resolvePath(path.join(os.homedir(), h.projectMarker))) === c)));
+}
+
+/**
+ * The project root a hook judges against: `$CLAUDE_PROJECT_DIR` (Claude Code and OpenClaude set
+ * it for every hook — the session's root, where its project hooks were loaded from), else the
+ * cwd. Bob documents no such variable, so under Bob this is the cwd.
+ */
+export function hookProjectDir() {
+  return process.env.CLAUDE_PROJECT_DIR || process.cwd();
 }
 
 /**
@@ -163,29 +331,53 @@ export function resolvePath(p) {
  *
  * P3c's rule was "the child must never resolve this": a render child that did would write
  * 135 files into the developer's real `~/.config/opencode`. A driver is the PARENT, so the
- * rule inverts — resolving it there is exactly the job. Precedence is the env var (which
- * relocates the whole dir), then `$XDG_CONFIG_HOME/opencode`, then `~/.config/opencode`.
+ * rule inverts — resolving it there is exactly the job. Precedence is the env var, then
+ * `$XDG_CONFIG_HOME/opencode`, then `~/.config/opencode`.
+ *
+ * The env var does NOT relocate the whole dir upstream, it ADDS one: agents, commands,
+ * plugins, skills and `opencode.json` still load from the xdg dir as well, and only the global
+ * `AGENTS.md` and the skills home follow the env var alone (`Global.Service.config`). Emitting
+ * into the env-var dir is still right — it is the one both lists include — but an older
+ * install left in the xdg dir keeps loading beside it; `opencodeShadowedInstall` reports that.
  */
 export function opencodeConfigDir() {
   const env = process.env.OPENCODE_CONFIG_DIR;
   if (env) return resolvePath(env);
+  return opencodeXdgDir();
+}
+
+/** The dir OpenCode ALWAYS loads, `OPENCODE_CONFIG_DIR` or not (`Global.Path.config`). */
+function opencodeXdgDir() {
   const xdg = process.env.XDG_CONFIG_HOME;
   const base = xdg ? expanduser(xdg) : path.join(os.homedir(), '.config');
   return resolvePath(path.join(base, 'opencode'));
 }
 
 /**
- * `_build_core._claude_config_dir` — `~/.claude`, and there is NO env branch BY DESIGN.
+ * The xdg dir when it holds a Geneseed install BESIDE the one at `$OPENCODE_CONFIG_DIR` —
+ * both load, so every plugin (learn, activity, notify, ponytail) runs twice — else null.
+ */
+export function opencodeShadowedInstall() {
+  if (!process.env.OPENCODE_CONFIG_DIR) return null;
+  const env = opencodeConfigDir();
+  const xdg = opencodeXdgDir();
+  if (env === xdg) return null;
+  const both = [env, xdg].every((d) => isFile(path.join(d, GLOBAL_MANIFEST)));
+  return both ? xdg : null;
+}
+
+/**
+ * `_build_core._claude_config_dir` — `~/.claude`, relocatable via `$CLAUDE_CONFIG_DIR`.
  *
- * Its three siblings all check a `*_CONFIG_DIR` variable first; this one does not, because
- * Claude Code documents none and inventing one here would make the two CLIs disagree about
- * where a global install lives. The absence is the specification, so it is asserted rather
- * than merely not implemented — `test_every_relocation_var_moves_its_global_target` carries
- * an INVERSE row for this host: setting `$CLAUDE_CONFIG_DIR` must NOT move the target.
- * Without that row the table could only say "no cell covers Claude", which reads the same
- * as an omission.
+ * Claude Code's own documented variable (`env-vars.md`; `claude-directory.md`: "every
+ * `~/.claude` path … lives under that directory instead"), so it moves CLAUDE.md, skills,
+ * agents, rules and settings together. This once had NO env branch, on the false premise that
+ * Claude documents none — and a user who set it got a global install their Claude never read
+ * (host-compat Claude B9). `~/.claude.json` is NOT moved here: `mcpConfigFor` keeps its own rule.
  */
 export function claudeConfigDir() {
+  const env = process.env.CLAUDE_CONFIG_DIR;
+  if (env) return resolvePath(env);
   return resolvePath(path.join(os.homedir(), '.claude'));
 }
 
@@ -237,13 +429,25 @@ export function openclaudeConfigDir() {
  *
  * `catalog` — does the host list every skill and agent to the model by itself? See
  * `hostCatalogsNatively` below for what it decides and why it is split per kind.
+ *
+ * `carrierInLayer` joined for host-compat B1 (2026-10) — THE ONE SOURCE for whether a host's
+ * PROJECT carrier sits at `<repo>/<projectMarker>/<agentFile>` rather than
+ * `<repo>/<agentFile>`. Only OpenClaude has it: its root `CLAUDE.md` is deliberately left
+ * unwritten so a Claude Code install can share the repo. Two readers, both DERIVED rather than
+ * restated: `js/build/driver.mjs`'s `CLAUDE_SHAPED.openclaude.carrierInLayer` reads this
+ * column (not a second literal `true`), and `installs.mjs`'s `carriersFor` reads it too — if a
+ * future host also nests its carrier, this is the one place that has to say so.
  */
 export const HOSTS = [
   { host: 'opencode', family: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode', agentFile: 'AGENT.md', catalog: { skills: true, agents: true } },
   { host: 'claude', family: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true } },
   { host: 'bob', family: 'claude', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md', catalog: { skills: true, agents: false } },
-  { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true } },
+  { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true }, carrierInLayer: true },
 ];
+
+/** Each Claude-family host's project marker, keyed by host — `globalHookStandingDown`'s table. */
+const STAND_DOWN_MARKERS = Object.fromEntries(HOSTS.filter((h) => h.family === 'claude')
+  .map((h) => [h.host, h.projectMarker]));
 
 /** The Claude-STYLE hosts (`family: 'claude'`), in `HOSTS` order. Test with `.includes(host)`. */
 export const CLAUDE_STYLE = HOSTS.filter((h) => h.family === 'claude').map((h) => h.host);

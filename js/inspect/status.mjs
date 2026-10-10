@@ -62,14 +62,15 @@ import { THEMES, ROOT, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
-  claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir,
-  resolvePath, resolveMemoryDir, sovereignBypass, GATE_LEDGER,
+  claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
+  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, GATE_LEDGER,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs now read them.
 import {
-  defaultTheme, installedDefaults, installTargets, readJsonMaybe, readMaybe,
+  defaultTheme, hookShellProblems, installedDefaults, installTargets, openclaudeDualHarnessRoots,
+  readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { shimDead } from '../hosts/shim.mjs';
@@ -185,7 +186,7 @@ export function accentFor(theme) {
  * do anything, and the input to the decision of whether to build more of them. Unreadable
  * ledgers and malformed lines are skipped, not reported: this is a display read.
  */
-export function gateSummary(cfgDirs) {
+export function gateSummary(cfgDirs, platform = process.platform) {
   const standingDown = [];
   const asks = {};
   let total = 0;
@@ -208,7 +209,17 @@ export function gateSummary(cfgDirs) {
   }
   // `dead` is the machine shim's missing targets: every gate below is armed on paper and never
   // runs, so it outranks `armed` in the row.
-  return { standing_down: standingDown, asks, total, dead: shimDead() };
+  // `fail_open` (Task 15): Claude installs whose bash-form hooks now run under PowerShell. Only
+  // present when non-empty, so every recorded `--json` panel keeps its shape.
+  // Only the dirs it was handed, and only those that are Claude's global (`isHostGlobalDir`);
+  // `platform` is injectable so a test on Linux still exercises the win32 branch.
+  const isClaude = (c) => { try { return isHostGlobalDir('claude', c); } catch { return false; } };
+  const claude = cfgDirs.filter(isClaude).map((c) => ['claude', 'global', c]);
+  const failOpen = hookShellProblems(claude, platform).filter((p) => !p.startsWith('[note] '));
+  return {
+    standing_down: standingDown, asks, total, dead: shimDead(),
+    ...(failOpen.length ? { fail_open: failOpen } : {}),
+  };
 }
 
 /** `_harness_status._status_data`. */
@@ -263,6 +274,8 @@ export function statusData() {
     agent_md: agentMd ? String(agentMd) : null,
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
+    opencode_shadow: opencodeShadowedInstall(),
+    openclaude_dual_harness: openclaudeDualHarnessRoots(),
     // EVERY install, not just the one `installedDefaults` settles on — and read through the
     // same `installProfile` `rebuild-all` uses, so the settings shown are the ones a rebuild
     // keeps. `rebuild` is the pasteable command an agent edits one flag of. A broken install
@@ -352,6 +365,9 @@ export function statusLines(d, color = false) {
     const g = d.gates;
     const armed = g.dead?.length
       ? `DEAD — hook shim points at ${g.dead.join(', ')}; run: geneseed rebuild-all`
+      : g.fail_open?.length
+      ? `FAIL OPEN — ${g.fail_open.length} Claude install(s) emitted for Git Bash, now absent; `
+        + 'run: geneseed rebuild-all'
       : g.standing_down.length
       ? `STANDING DOWN for this cwd (excludes.json in ${g.standing_down.join(', ')})`
       : 'armed';
@@ -359,6 +375,19 @@ export function statusLines(d, color = false) {
       .map(([k, v]) => `${k} ${v}`).join(', ');
     rows.push(['gates', `${armed}  ${DOT}  ${g.total} ask${g.total === 1 ? '' : 's'}`
       + (byRule ? ` (${byRule})` : '')]);
+  }
+  // Conditional: null on every machine that has not set `OPENCODE_CONFIG_DIR` over an old install.
+  if (d.opencode_shadow) {
+    rows.push(['opencode', `ALSO LOADED: a second Geneseed install in ${d.opencode_shadow} (OpenCode `
+      + 'reads it beside OPENCODE_CONFIG_DIR, so every plugin runs twice) - uninstall one']);
+  }
+  // Conditional: empty on every machine without a claude/bob AND openclaude project install
+  // sharing one repo. There is no clean exclusion (see `openclaudeDualHarnessRoot`), so this
+  // only names the roots where it is happening.
+  for (const root of d.openclaude_dual_harness ?? []) {
+    rows.push(['openclaude', `ALSO LOADED: ${root} also carries a claude/bob per-repo install — `
+      + 'OpenClaude reads its own .openclaude/CLAUDE.md AND that root CLAUDE.md/AGENTS.md '
+      + '(every always-on doc doubles) - no clean exclusion, uninstall one']);
   }
   // Conditional for the recording reason again: no recorded panel carries `installs`.
   for (const p of d.installs ?? []) {

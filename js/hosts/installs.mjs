@@ -36,11 +36,15 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, PACK_ORDER, THEMES, discoverNames, resolveSkillNames } from '../build/source.mjs';
-import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, resolvePath } from './hosts.mjs';
+import {
+  CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, isHostGlobalDir, liveRecordedHooks,
+  resolvePath,
+} from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
+import { claudeHookShell } from './shim.mjs';
 
 /**
  * `Path.read_text(encoding="utf-8")`, or null where Python raises OSError.
@@ -137,14 +141,54 @@ function themeFromAgent(agentMd) {
 }
 
 /**
- * `_harness_setup.CARRIERS` — the four instruction carriers, in the Python's order.
+ * `_harness_setup.CARRIERS` — the Python's four root-level carriers, plus one JS-only addition.
  *
  * A shared table rather than three copies of the same list: `_theme_of_dir`,
  * `_posture_of_dir` and `_mode_of_dir` each walk it, and the order is observable (the first
  * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use
  * because the Python writes `d / "rules" / "geneseed.md"` for that one entry.
+ *
+ * `.openclaude/CLAUDE.md` is NOT in the Python — OpenClaude didn't exist yet — and it is half
+ * of the fix for host-compat verdict B1 (the other half is `carriersFor`, below).
+ * OpenClaude's own per-repo carrier is `carrierInLayer` (see `CLAUDE_SHAPED.openclaude` in
+ * `js/build/driver.mjs`, and the `HOSTS` column of the same name): it sits at
+ * `<repo>/.openclaude/CLAUDE.md`, and the root `CLAUDE.md` is deliberately left untouched so a
+ * Claude Code install can share the repo.
+ *
+ * ⚠ THIS LIST STAYS HOST-AGNOSTIC ON PURPOSE — it is only `firstCarrier`'s FALLBACK for a
+ * caller with no host to narrow by (none of this module's exported `*OfDir` readers is one;
+ * see `carriersFor`). A caller that DOES have a host must pass it, or in a repo sharing two
+ * carriers that answer the same probe — only root `CLAUDE.md` today, between `claude` and
+ * `openclaude`'s global scope — this host-agnostic order decides for both of them, which was
+ * exactly B1's failure mode reversed: reading `.openclaude/CLAUDE.md` unconditionally made
+ * `claude`'s OWN read-back answer OpenClaude's settings in a shared repo.
  */
-const CARRIERS = ['AGENT.md', 'CLAUDE.md', path.join('rules', 'geneseed.md'), 'AGENTS.md'];
+const CARRIERS = [
+  'AGENT.md', path.join('.openclaude', 'CLAUDE.md'), 'CLAUDE.md',
+  path.join('rules', 'geneseed.md'), 'AGENTS.md',
+];
+
+/**
+ * `host`'s own carrier path(s), narrowed off the single `HOSTS` table — `carrierInLayer` and
+ * `projectMarker`/`agentFile` — rather than a second hand-rolled host→carrier map.
+ *
+ * ONE HOST, ONE ANSWER, EXCEPT BOB. `carrierInLayer` true (OpenClaude only) tries the nested
+ * per-repo path FIRST and the bare `agentFile` SECOND, because the same column name means two
+ * different locations depending on scope: `<repo>/.openclaude/CLAUDE.md` for a project
+ * install, `<cfgDir>/CLAUDE.md` for a global one (see `CLAUDE_SHAPED.openclaude-global`,
+ * which has no `carrierInLayer`). Bob is the one host with a second, differently-NAMED
+ * carrier — `rules/geneseed.md` at global scope, because Bob never auto-loads a global
+ * `AGENTS.md` (`CLAUDE_SHAPED['bob-global']`'s summary says so) — which `HOSTS` has no column
+ * for and this hard-codes, same as the un-narrowed `CARRIERS` above always did.
+ */
+function carriersFor(host) {
+  const row = HOSTS.find((h) => h.host === host);
+  if (!row) return CARRIERS;
+  if (host === 'bob') return [path.join('rules', 'geneseed.md'), row.agentFile];
+  return row.carrierInLayer
+    ? [path.join(row.projectMarker, row.agentFile), row.agentFile]
+    : [row.agentFile];
+}
 
 /**
  * The scan `themeOfDir`, `leadOfDir`, `doctrinesOfDir` and `excludedRulesOfDir` each wrote
@@ -153,11 +197,35 @@ const CARRIERS = ['AGENT.md', 'CLAUDE.md', path.join('rules', 'geneseed.md'), 'A
  * legitimate stop values for the two register readers below — to mean "stop, this is the
  * answer". `fallback` is what every caller's own trailing `return …;` supplied once the
  * whole list was exhausted with no answer.
+ *
+ * `host`, when given, narrows the scan to THAT HOST'S OWN carrier(s) via `carriersFor` —
+ * `null` (the default) keeps today's full, host-agnostic `CARRIERS` walk, so every call site
+ * this task's fix round did not touch is unchanged. Every exported reader below takes the
+ * same optional `host` last, mirroring `trustOfDir`'s existing `(d, host = null)` shape one
+ * screen down — this is not a new convention, it is that one applied to the carrier scan too.
+ *
+ * ⚠ HOST-NARROWED: THE FIRST CANDIDATE THAT EXISTS IS AUTHORITATIVE, EVEN IF ITS PROBE COMES
+ * BACK `undefined`. `undefined` is overloaded on purpose for the host-agnostic walk above (it
+ * means BOTH "this carrier is absent" and "this carrier exists but says nothing"), and that
+ * is exactly right for `CARRIERS`, where only one entry can ever exist for a given host —
+ * but `carriersFor` can return TWO paths for one host (OpenClaude's nested-then-bare
+ * `CLAUDE.md`; Bob's `rules/geneseed.md`-then-`AGENTS.md`), and "exists but says nothing" is
+ * the COMMON case for `excludedRulesOfDir`/`excludedSkillsOfDir` — their marker line is
+ * written only when something is excluded. Falling through past an existing-but-silent own
+ * carrier to the SECOND candidate let it read a sibling host's file that happens to sit at
+ * that second path (root `CLAUDE.md`, for OpenClaude's second candidate, in a repo also
+ * carrying a Claude install) — the fix-round-1 bug, reversed again. So once a host is given,
+ * `isFile` on each candidate (checked AFTER the probe, so a non-existent file's `undefined`
+ * still falls through to try the host's OWN next candidate — the one legitimate reason the
+ * list has two entries) stops the walk at the first one that exists and returns `fallback`,
+ * never a later file's answer.
  */
-function firstCarrier(d, probe, fallback = null) {
-  for (const carrier of CARRIERS) {
-    const result = probe(path.join(d, carrier));
+function firstCarrier(d, probe, fallback = null, host = null) {
+  for (const carrier of (host === null ? CARRIERS : carriersFor(host))) {
+    const carrierPath = path.join(d, carrier);
+    const result = probe(carrierPath);
     if (result !== undefined) return result;
+    if (host !== null && isFile(carrierPath)) return fallback;
   }
   return fallback;
 }
@@ -176,14 +244,35 @@ const THEME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * through to the sigil scan, as a missing marker does. A plain name that is not shipped is
  * still RETURNED: `loadTheme` then refuses it loudly, which `status`/`rebuild-all`/`migrate`
  * cells pin ("unknown theme 'nosuchtheme'"), rather than a typo going unnoticed.
+ *
+ * `host`, when given, narrows the sigil scan to that host's own carrier — see `firstCarrier`.
+ *
+ * ⚠ THE ROOT MARKER ITSELF IS HOST-NARROWED TOO (host-compat B1, round 3): `driver.mjs` writes
+ * it at `d` unconditionally for a GLOBAL emit (every host's `-global` arm, the `writeText`
+ * right after `writeMarkers`), but at PROJECT scope only for a host whose emit calls `build()`
+ * directly — today that is `opencode` alone; the CLAUDE-STYLE hosts (`claude`/`bob`/
+ * `openclaude`, `CLAUDE_STYLE` below) go through `claudeShaped` instead, which never calls it
+ * (`driver.mjs`'s own comment: "Deliberately not written for the claude/bob/openclaude
+ * PROJECT emits"). So a claude-style host must distrust this marker UNLESS `d` is provably
+ * that host's OWN global config dir — `isHostGlobalDir` (`hosts.mjs`), which is what makes this
+ * scope-correct without a `scope` parameter: at ANY other `d` (a project root, or another
+ * host's global dir entirely) a claude-style host's project emit never wrote this file, so a
+ * present one is a SIBLING's (`opencode`'s project marker, in a shared repo — the B1 failure,
+ * reached a third way) and `themeOfDir` falls through to `firstCarrier`'s sigil scan instead,
+ * exactly as it already must for a claude-style host's own project installs.
  */
-export function themeOfDir(d) {
-  const marker = path.join(d, '.geneseed-theme');
-  if (isFile(marker)) {
-    const name = (readMaybe(marker) ?? '').trim();
-    if (THEME_NAME_RE.test(name)) return name;
+export function themeOfDir(d, host = null) {
+  let trust = host === null || !CLAUDE_STYLE.includes(host);
+  // A `configDir()` that throws cannot prove `d` is the global: distrust the marker.
+  try { trust ||= isHostGlobalDir(host, d); } catch { /* sigil scan below */ }
+  if (trust) {
+    const marker = path.join(d, '.geneseed-theme');
+    if (isFile(marker)) {
+      const name = (readMaybe(marker) ?? '').trim();
+      if (THEME_NAME_RE.test(name)) return name;
+    }
   }
-  return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined);
+  return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined, null, host);
 }
 
 /** `_harness_setup.FOOTPRINTS`. */
@@ -230,7 +319,7 @@ export function capitalize(s) {
   return s.length ? s[0].toUpperCase() + s.slice(1).toLowerCase() : s;
 }
 
-function leadOfDir(d, names) {
+function leadOfDir(d, names, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -238,11 +327,11 @@ function leadOfDir(d, names) {
       if (text.includes(`**${capitalize(name)}**`)) return name;
     }
     return undefined;
-  });
+  }, null, host);
 }
 
-export const postureOfDir = (d) => leadOfDir(d, discoverNames('postures', 'peer'));
-export const modeOfDir = (d) => leadOfDir(d, discoverNames('modes', 'direct'));
+export const postureOfDir = (d, host = null) => leadOfDir(d, discoverNames('postures', 'peer'), host);
+export const modeOfDir = (d, host = null) => leadOfDir(d, discoverNames('modes', 'direct'), host);
 
 /**
  * The loop skill's default trust preset, read back off a deployed install — `null` when no
@@ -322,7 +411,7 @@ const legacyProcessCarrier = (text) => /\bprocess 8\b/.test(text);
  * checkout ships; one that is not condemns the whole line to `null`. A trailing comma is
  * exactly the empty field a fold leaves behind, which is what makes this catch it.
  */
-export function doctrinesOfDir(d) {
+export function doctrinesOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -338,7 +427,7 @@ export function doctrinesOfDir(d) {
       named.push('comms');
     }
     return PACK_ORDER.filter((pk) => named.includes(pk));
-  });
+  }, null, host);
 }
 
 /**
@@ -359,8 +448,8 @@ export function doctrinesOfDir(d) {
  *
  * `[]` still passes through untouched — a marker that reads `none` is an answer, not a silence.
  */
-export function doctrinesForBuild(d) {
-  return doctrinesOfDir(d) ?? [...PACK_ORDER];
+export function doctrinesForBuild(d, host = null) {
+  return doctrinesOfDir(d, host) ?? [...PACK_ORDER];
 }
 
 /** `Excluded rules: process 7, craft 3` — the marker's optional second line. */
@@ -384,7 +473,7 @@ const EXCLUDED_RULES_RE = /^Excluded rules:[ \t]*(.+?)[ \t]*$/m;
  * same rule as the pack list, same reason, opposite default. Half an exclusion list would
  * take away rules nobody named.
  */
-export function excludedRulesOfDir(d) {
+export function excludedRulesOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -405,7 +494,7 @@ export function excludedRulesOfDir(d) {
     const MOVED = { 'process.7': 'comms.1', 'process.8': 'process.7' };
     const out = legacyProcessCarrier(text) ? ids.map((id) => MOVED[id] ?? id) : ids;
     return [...new Set(out)].sort();
-  }, []);
+  }, [], host);
 }
 
 /** `Excluded skills: bruno, daydream` — written only when something is excluded. */
@@ -421,9 +510,10 @@ const EXCLUDED_SKILLS_RE = /^Excluded skills:[ \t]*(.+?)[ \t]*$/m;
  * name drops out (`resolveSkillNames`), so a skill merge does not quietly re-admit everything
  * else the install left out. Silent unless the caller passes `notify` — status, diff and the
  * console call this on every read; the replays that rebuild an install (`rebuild-all`,
- * `upgrade`, `migrate`) pass it.
+ * `upgrade`, `migrate`) pass it. `host` is last, after `notify`, for the same reason
+ * `trustOfDir` puts it last: every existing positional call keeps working unchanged.
  */
-export function excludedSkillsOfDir(d, notify = null) {
+export function excludedSkillsOfDir(d, notify = null, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -433,7 +523,7 @@ export function excludedSkillsOfDir(d, notify = null) {
     if (unknown.length) return [];
     if (notify) for (const n of notices) notify(n);
     return ids;
-  }, []);
+  }, [], host);
 }
 
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
@@ -468,8 +558,8 @@ export function emitHostScopeOf(root) {
   return EMIT_HOST_SCOPE.get(emit.trim()) ?? null;
 }
 
-/** `_harness_mcp.DISABLED_STASH` — a sibling dir whose presence means "disabled". */
-export const DISABLED_STASH = '.geneseed-disabled';
+// `DISABLED_STASH` moved to `hosts.mjs`: the hook stand-down reads it and must not import this.
+export { DISABLED_STASH };
 
 /**
  * `_harness_mcp._claude_cfg` — where a Claude-STYLE install keeps its manifest.
@@ -505,6 +595,33 @@ export function installState(root, host = 'opencode', scope = 'global') {
   return installKind(root) !== null ? 'active' : 'absent';
 }
 
+/**
+ * Host-compat verdict I1: an OpenClaude PROJECT install is additive, never exclusive — it loads
+ * its own `<repo>/.openclaude/CLAUDE.md` **and** whatever root `CLAUDE.md`/`AGENTS.md` a claude
+ * or bob PROJECT install already wrote there (`B/src/utils/claudemd.ts` l.904-928; `CARRIERS`
+ * above deliberately leaves the root file untouched for OpenClaude so a Claude/Bob install can
+ * share the repo). There is no clean fix: excluding the root file would hide the user's OWN
+ * content in it too, so the only thing `status`/`doctor` can do is say the doubling exists.
+ *
+ * `installState` on the two hosts is enough — a claude/bob PROJECT install is 'active' only
+ * once it has actually written its own `.claude`/`.bob` manifest, which is exactly when it has
+ * also written the root carrier.
+ */
+export function openclaudeDualHarnessRoot(root) {
+  if (installState(root, 'openclaude', 'project') !== 'active') return false;
+  return installState(root, 'claude', 'project') === 'active'
+    || installState(root, 'bob', 'project') === 'active';
+}
+
+/** Every PROJECT root `installTargets()` reaches where `openclaudeDualHarnessRoot` is true. */
+export function openclaudeDualHarnessRoots() {
+  const roots = new Set();
+  for (const [, scope, root] of installTargets()) {
+    if (scope === 'project') roots.add(resolvePath(root));
+  }
+  return [...roots].filter(openclaudeDualHarnessRoot).sort(comparePaths);
+}
+
 /** `_harness_mcp._registered_targets` — (host, scope, root) for every registered root. */
 export function registeredTargets() {
   const out = [];
@@ -531,15 +648,15 @@ export function installTargets() {
   const seen = new Set();
 
   const add = (host, scope, root) => {
-    // A "project" whose marker dir IS this host's global config dir is the global install
-    // seen from its parent (the daemon's cwd is $HOME, where $HOME/.claude == ~/.claude) —
-    // not a separate project. Surfacing it would alias the global's files.
+    // A "project" whose marker dir IS this host's global (`isHostGlobalDir`: the env-resolved
+    // dir, the default `~/<marker>`, or a `-global` emit) is the global install seen from its
+    // parent (the daemon's cwd is $HOME, where $HOME/.claude == ~/.claude) — not a separate
+    // project. Surfacing it would alias the global's files, and `rebuild-all` would re-emit it
+    // as a project rooted at $HOME (final review C2, under `$CLAUDE_CONFIG_DIR`).
     if (scope !== 'global') {
       try {
         const spec = HOSTS.find((h) => h.host === host);
-        if (resolvePath(path.join(root, spec.projectMarker)) === resolvePath(spec.configDir())) {
-          return;
-        }
+        if (isHostGlobalDir(host, path.join(root, spec.projectMarker))) return;
       } catch { /* as the Python's bare `except Exception: pass` */ }
     }
     const key = `${host}\0${resolvePath(root)}`;
@@ -554,6 +671,41 @@ export function installTargets() {
     try { add(host, 'global', configDir()); } catch { /* a missing host dir is not fatal */ }
   }
   for (const [host, scope, root] of registeredTargets()) add(host, scope, root);
+  return out;
+}
+
+/**
+ * Each Claude install whose emitted hook FORM no longer matches this machine's hook shell
+ * (`claudeHookShell`; Task 15) — the "Git Bash removed after the emit" gap, which otherwise
+ * reports nothing: hooks signal through stdout and Claude treats a parse error as non-blocking.
+ *
+ * Bash form with Git Bash now gone is a PROBLEM (every hook, both gates included, fails open
+ * under PowerShell). PowerShell form with Git Bash now present is a `[note]`: the hooks work,
+ * they only pay PowerShell's startup. Read from the recorded claims the settings file still
+ * carries (`liveRecordedHooks`) — the form the emit wrote, not re-derived; Windows only, since
+ * nowhere else has two hook shells. `targets` and `platform` are parameters so a test can hand
+ * it a sandboxed install and `gateSummary` its own config dirs.
+ */
+export function hookShellProblems(targets = installTargets(), platform = process.platform) {
+  if (platform !== 'win32') return [];
+  const now = claudeHookShell(process.env, platform);
+  const out = [];
+  for (const [host, scope, root] of targets) {
+    // A disabled install's manifest still records the hooks it unwired: nothing runs, so
+    // nothing drifts.
+    if (host !== 'claude' || claudeState(root, scope) !== 'active') continue;
+    const cfg = claudeCfg(root, scope);
+    const handlers = liveRecordedHooks(cfg);
+    if (!handlers.length) continue;
+    const was = handlers.some(([, h]) => h.shell === 'powershell') ? 'powershell' : 'bash';
+    if (was === now) continue;
+    out.push(was === 'bash'
+      ? `[hooks] ${cfg}: hooks were emitted for Git Bash, which is no longer found, so Claude `
+        + 'Code runs them under PowerShell where they fail open (no gate fires) - run: '
+        + 'geneseed rebuild-all'
+      : `[note] ${cfg}: hooks were emitted for PowerShell, but Git Bash is now found - they work, `
+        + 'and pay PowerShell startup on every call; geneseed rebuild-all switches them back');
+  }
   return out;
 }
 

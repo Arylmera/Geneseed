@@ -17,21 +17,30 @@
 // Install: dropped into the plugins dir by `build --emit opencode[-global]` (the *.js
 // glob), exactly like the context and learn plugins. Errors never break a tool call.
 //
-// `permission.ask` — the loop/* exemption (Consent Before Push). OpenCode's static
-// `permission.bash` globs (`git commit*`/`git push*` = "ask", written by
-// js/hosts/settings.mjs) cannot see which branch is checked out — they are a build-time
-// string match with no request-time context. This hook is the ONLY seam where Geneseed can
-// look at the live branch, and it only DOWNGRADES an ask to allow: only a fixed set of
-// commit/push forms (see `loopExempt` below, the twin of js/hosts/hooks.mjs's) on a `loop/*`
-// branch a loop was actually LAUNCHED on — not just named `loop/...`. It is a WHITELIST, not
-// a blacklist: a false ask costs one prompt, a false allow publishes. It never raises the
-// bar: anything not on the whitelist, anything off a launched loop branch, a status this hook
-// did not itself leave as the default "ask", or any non-bash permission leaves `output.status`
-// untouched and OpenCode's own ask (or another hook's deny) stands. A host version that never
-// fires `permission.ask` simply never reaches this hook — the static ask still fires, so the
-// failure mode is one extra prompt, never a silent allow.
+// No `permission.ask` hook (OpenCode verdict I-2). Upstream declares one in its plugin
+// types but never triggers it: `Permission.ask` evaluates the rules and publishes the
+// `permission.asked` bus event with no plugin hook in between. The loop/* exemption this
+// plugin once hung there (downgrade the static `git commit*`/`git push*` ask to allow on a
+// launched loop branch, the twin of js/hosts/hooks.mjs's `loopExempt`) therefore never ran,
+// and is gone. Lost behaviour, stated plainly: an OpenCode loop's COMMIT gets the static ask
+// every time — that fails safe, one prompt, never a silent allow. The `permission.asked`
+// event + SDK reply route was not taken: it races the TUI's own prompt and is unverified from
+// inside a plugin.
+//
+// The PUSH half is recovered differently (user decision, 2026-10-10): pushing a `loop/*`
+// branch is not pushing `main`/`master`, so it is allowed STATICALLY rather than dynamically —
+// js/hosts/settings.mjs's `LOOP_PUSH_ALLOW` wires an unconditional `permission.bash` allow for
+// the loop engine's own refspec shapes (`git push [-u] <remote> HEAD:loop/*` and its
+// `refs/heads/` spelling), ordered so a force push, a `+refspec`, or a `--delete`/bare-`:`
+// push to `loop/*` still asks (`LAW_IV_BASH` comes after it, and `findLast` wins on the last
+// match). This plugin has no part in that — it is a `permission.bash` key, read before any
+// `tool.execute.before` hook runs — so there is nothing to change here for the push half; this
+// comment only keeps this file's account in step. The commit still has no static equivalent:
+// a commit's content cannot be named by a glob the way a push's target branch can, so the
+// upgrade path there is still a session-level `permission` ruleset set by the loop launcher
+// when it creates the loop session (`session.create` accepts one).
 
-import { promises as fs, realpathSync, existsSync, statSync, lstatSync, readFileSync, openSync, readSync, closeSync } from "node:fs"
+import { promises as fs, realpathSync, existsSync, readFileSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
@@ -123,8 +132,24 @@ const SECRET_RE = [
   /(^|\/)\.npmrc$/i,
   /(^|\/)\.pypirc$/i,
 ]
-// .env files are often edited legitimately → WARN, don't hard-block.
+// .env files are often edited legitimately → WARN, don't hard-block. Considered aligning this
+// with js/hosts/hooks.mjs's DOTENV_RE (`/(^|[\\/])\.env(\.[^\\/]*)?$/`) the way SECRET_CONTENT_RE
+// is aligned with SECRET_RE below — but the two diverge beyond case/slash-style: DOTENV_RE's
+// suffix is `*` (zero-or-more, any non-slash char — matches `.env.` and `.env!`), this one's is
+// `+` over `[\w.-]` (one-or-more, word/dot/hyphen only). Widening to DOTENV_RE's shape would
+// change which filenames warn instead of block on THIS host, not just fold case, so it is left
+// as-is rather than silently changing guard behaviour for a parity task.
 const SECRET_WARN_RE = [/(^|\/)\.env(\.[\w.-]+)?$/i]
+
+// Twin of js/hosts/hooks.mjs's SECRET_RE (Law I's boundary half) — scans WRITE CONTENT for a
+// credential-shaped string, not the target path (SECRET_RE above is the path twin, file names
+// only). High-precision vendor prefixes only, same rationale as the Node side: a generic
+// "looks like entropy" scan fires on every hash and lockfile. Kept byte-identical by the parity
+// test in tests/plugins/guard.test.mjs — simple enough to literally diff, unlike SHELL_WARN_RE's
+// hand-mirrored git acts. `.env*` is exempt (SECRET_WARN_RE above already names it as where a
+// secret may legitimately live) via the same path check used for the WARN tier.
+const SECRET_CONTENT_RE =
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/
 
 // Catastrophic, effectively irreversible shell → BLOCK. Both Unix and Windows shells,
 // since OpenCode runs natively on Windows and the agent may emit cmd / PowerShell.
@@ -142,16 +167,135 @@ const SHELL_BLOCK_RE = [
   /\bremove-item\b[^\n]*-recurse\b[^\n]*-force\b/i,                  // PowerShell rm -rf
   /\bremove-item\b[^\n]*-force\b[^\n]*-recurse\b/i,                  // (either flag order)
 ]
-// History-rewriting / irreversible git ops → WARN.
-const SHELL_WARN_RE = [/\bgit\s+push\b[^\n]*(--force\b|-f\b)/, /\bgit\s+reset\s+--hard\b/]
+// History-rewriting / irreversible git ops (Deletion Is Deliberate) → WARN, never BLOCK:
+// `tool.execute.before` has no ask tier, so these are a speed bump rather than a wall. The
+// same acts js/hosts/hooks.mjs's `DESTRUCTIVE_GIT_RE` asks about — mirrored by hand rather
+// than shared, since this plugin is copied whole into an OpenCode install, outside this
+// repo's module graph. `clean`
+// and `--delete` need `--force` alongside them to count, EITHER order (`--force --delete` is
+// the same act as `--delete --force`) — an un-forced `clean`/`branch --delete` already refuses
+// or only removes what is reproducible. `-D --force`/`--delete -f`/`-d --force`/`-df` are the
+// same act again and are a known ceiling this does not chase. `git switch -h` lists `-f,
+// --force` and `--discard-changes` as two SEPARATE options, not one flag's long/short spelling,
+// so both are listed. `restore` and `stash drop`/`clear` are anchored to the VERB position
+// (`\bgit\s+restore\b`, not `\bgit\s+.*restore\b`) — every other row needs a flag that is
+// vanishingly unlikely in a commit message or filename, but `restore` needs none and
+// `drop`/`clear` are ordinary English, so a message like "restore working behavior" or "clear
+// old state" must never warn. `restore` matches UNLESS `--staged` appears on the line, EXCEPT
+// `--staged --worktree` together, which restores the working tree too and so discards exactly
+// like plain `restore` (see the twin rationale and tests in js/hosts/hooks.mjs).
+const SHELL_WARN_RE = [
+  /\bgit\s+push\b[^\n]*(--force\b|-f\b|\+\S|\s--delete\b|\s:\S)/,   // forced, mirror, or delete push
+  /\bgit\s+reset\s+--hard\b/,
+  /\bgit\s+clean\b[^\n]*\s(-[a-zA-Z]*f|--force\b)/,
+  /\bgit\s+branch\b[^\n]*\s(-D\b|--delete\b[^\n]*--force\b|--force\b[^\n]*--delete\b)/,
+  /\bgit\s+checkout\s+--\s/,
+  /\bgit\s+checkout\b[^\n]*\s(-[a-zA-Z]*f\b|--force\b)/,
+  /\bgit\s+switch\b[^\n]*\s(-[a-zA-Z]*f\b|--force\b|--discard-changes\b)/,
+  /\bgit\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))/,
+  /\bgit\s+stash\s+(drop|clear)\b/,
+  /\bgit\s+worktree\b[^\n]*\bremove\b[^\n]*(-[a-zA-Z]*f\b|--force\b)/,
+  /\bgit\s+reflog\b[^\n]*\bexpire\b/,
+  /\bgit\s+gc\b[^\n]*--prune\b/,
+]
 
-function pickPath(args) {
+// `apply_patch`'s only argument is `patchText` (OpenCode verdict I-1): every gpt-5*
+// model gets ONLY this tool, never `edit`/`write`, so a path that lives inside the
+// patch text — not in `filePath`/`path`/etc — must still hit every gate below, or
+// Sealed Secrets, the protected-check gate, the rule store and the wiki gate all go
+// dark for that model class. Markers match upstream's own parser
+// (`packages/opencode/src/patch/index.ts` `parsePatchHeader`): `*** Add File:`,
+// `*** Update File:` (optionally followed by `*** Move to:`, both the old and the new
+// path count) and `*** Delete File:`. The `+`-prefixed body lines are the new file
+// content, never a path, and are not scanned here — no gate in this file inspects
+// write content, only the target path.
+function parsePatchPaths(patchText) {
+  const out = []
+  const lines = String(patchText).split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    let m = /^\*\*\* (?:Add|Delete) File:\s*(.+)$/.exec(line)
+    if (m) { out.push(m[1].trim()); continue }
+    m = /^\*\*\* Update File:\s*(.+)$/.exec(line)
+    if (m) {
+      out.push(m[1].trim())
+      const mv = /^\*\*\* Move to:\s*(.+)$/.exec(lines[i + 1] || "")
+      if (mv) { out.push(mv[1].trim()); i++ }
+    }
+  }
+  return out.filter(Boolean)
+}
+
+// Returns every candidate path for this call, normalized (backslashes -> `/`) and,
+// for an `apply_patch` call, resolved against `cwd` (the session's `ctx.directory` —
+// the same root `apply_patch.ts:72` resolves against upstream) since a patch marker
+// is worktree-relative. Non-patch tools keep the single-path shape every other gate
+// already expects, just wrapped in an array.
+function pickPath(args, cwd) {
+  if (args && typeof args.patchText === "string") {
+    return parsePatchPaths(args.patchText)
+      .map((p) => path.resolve(cwd || process.cwd(), p).replace(/\\/g, "/"))
+  }
   for (const k of ["filePath", "path", "file", "target", "filename"]) {
     // Normalize Windows backslashes to `/` so the secret-path patterns (which use `/`
     // as the segment separator) match `C:\Users\me\.ssh\id_rsa` the same as a POSIX path.
-    if (args && typeof args[k] === "string") return args[k].replace(/\\/g, "/")
+    if (args && typeof args[k] === "string") return [args[k].replace(/\\/g, "/")]
   }
-  return ""
+  return []
+}
+// Per-FILE added content for an `apply_patch` call: `parsePatchPaths` flattens every marker
+// path into one list (right for the path-only gates, which must catch a secret/protected name
+// on either side of a `Move to`), but the CONTENT scan must not pool every file's `+` lines
+// into one string — a patch that touches a `.env` AND an ordinary file would then exempt the
+// ordinary file's own secret too, because the exemption was computed over the pool, not the
+// line's own file. One section per marker; a `Move to` target is where the `+` lines actually
+// land, so content is attributed to it, not the pre-move path. `*** Delete File:` sections
+// collect no `+` lines (nothing is being written).
+function parsePatchSections(patchText) {
+  const out = []
+  let current = null
+  const flush = () => { if (current) out.push(current) }
+  const lines = String(patchText).split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    let m = /^\*\*\* (?:Add|Delete) File:\s*(.+)$/.exec(line)
+    if (m) { flush(); current = { path: m[1].trim(), added: [] }; continue }
+    m = /^\*\*\* Update File:\s*(.+)$/.exec(line)
+    if (m) {
+      flush()
+      let p = m[1].trim()
+      const mv = /^\*\*\* Move to:\s*(.+)$/.exec(lines[i + 1] || "")
+      if (mv) { p = mv[1].trim(); i++ }
+      current = { path: p, added: [] }
+      continue
+    }
+    if (current && line.startsWith("+") && !line.startsWith("+++")) current.added.push(line.slice(1))
+  }
+  flush()
+  return out.filter((s) => s.path)
+}
+
+// The content a write/edit/apply_patch call would actually land on disk, per FILE — what the
+// content secret scan runs against, paired with the path it belongs to so the `.env` exemption
+// can be checked against that file alone. `write` carries `content`, `edit` carries `newString`
+// (OpenCode tool Parameters, packages/opencode/src/tool/{write,edit}.ts) — both single-path, so
+// one pair. For `apply_patch`, one pair per marker section; only the `+`-prefixed hunk lines are
+// NEW content — a `-` line is text being REMOVED, so a secret there is leaving the file, not
+// landing in it, and must not block the call.
+function pickAddedContentByPath(args, cwd) {
+  if (args && typeof args.patchText === "string") {
+    return parsePatchSections(args.patchText)
+      .filter((s) => s.added.length)
+      .map((s) => ({
+        path: path.resolve(cwd || process.cwd(), s.path).replace(/\\/g, "/"),
+        content: s.added.join("\n"),
+      }))
+  }
+  const [p] = pickPath(args, cwd)
+  if (!p) return []
+  if (typeof args.content === "string") return [{ path: p, content: args.content }]
+  if (typeof args.newString === "string") return [{ path: p, content: args.newString }]
+  return []
 }
 function pickCommand(args) {
   for (const k of ["command", "cmd", "script"]) {
@@ -319,130 +463,8 @@ function protectedCheck(p) {
 // substring stance: over-matching the class is harmless (see WRITE_TOOLS note).
 const WIKI_MUTATE_TOOLS = [...WRITE_TOOLS, "delete", "remove", "rename", "move", "trash"]
 
-// ---- the loop/* exemption (Consent Before Push) --------------------------------
-// Twin of js/hosts/gitref.mjs (currentBranch/loopLaunched) and js/hosts/hooks.mjs's
-// git-gate (the rest) — keep in step. Node's native sync `fs` (not the `fs.promises`
-// import above): a worktree's `.git` is read the same way the Claude/Bob hook reads it, so
-// the two decide the exemption identically. This plugin cannot import from `js/` at all
-// (it is copied whole into an OpenCode install, outside this repo's module graph), so it
-// keeps its own standalone copy rather than the single shared owner the Node side has.
-
-const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/
-
-// No newline, backtick, or `$(` substitution anywhere, no `<`/`>` redirect, and no single
-// `&` (a shell runs `a & b` as two commands exactly like `a && b`) — these can smuggle a
-// second command (or a shared-branch target) past every check below. `(?<!&)&(?!&)` matches
-// a lone `&` without matching either half of a doubled `&&`.
-const UNSAFE_CHARS_RE = /[\n`<>]|\$\(|(?<!&)&(?!&)/
-
-// The only three git shapes a loop's own automation ever needs — see js/hosts/hooks.mjs's
-// identically-named constants for the full rationale. The token class `[\w./:@^~=+,-]`
-// excludes quotes, braces, `!`, `*`, `$` and `&` — a brace/glob expansion is exactly how a
-// shell turns one whitelisted-looking token into several unknown ones, which is also why the
-// `-F`/`--file` path uses this same class rather than the looser `[^\s'"]+` it once did: that
-// loose class let `git commit -F {m,--amend}` brace-expand into an amend of the last commit.
-const ARG_RE = "[\\w./:@^~=+,-]+"
-const SEG_ADD_RE = new RegExp(`^git\\s+add(\\s+${ARG_RE})*$`)
-const SEG_COMMIT_RE = new RegExp(`^git\\s+commit(\\s+-q)?\\s+(-F\\s+|--file[=\\s])${ARG_RE}(\\s+-q)?$`)
-const SEG_READONLY_RE = new RegExp(`^git\\s+(status|diff|log|rev-parse|show)(\\s+${ARG_RE})*$`)
-
-/**
- * `git push`, exactly: `[-u|--set-upstream] <remote> HEAD:<branch>` or
- * `HEAD:refs/heads/<branch>` — the ONLY exempt form, same as js/hosts/hooks.mjs's
- * `pushSegmentOk`. An explicit refspec is immune to `push.default`/`remote.*.push`
- * redirection and refuses to coexist with a mirror/`+`/`:`-prefixed form; nothing else is.
- */
-function pushSegmentOk(seg, branch) {
-  const m = /^git\s+push(?:\s+(.*))?$/.exec(seg)
-  if (!m) return false
-  const rest = (m[1] || "").trim()
-  if (!rest) return false
-  const tokens = rest.split(/\s+/)
-  let i = 0
-  if (tokens[i] === "-u" || tokens[i] === "--set-upstream") i += 1
-  const remote = tokens[i]
-  if (remote === undefined || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) return false
-  i += 1
-  const ref = tokens[i]
-  i += 1
-  if (ref === undefined || i !== tokens.length) return false
-  return ref === `HEAD:${branch}` || ref === `HEAD:refs/heads/${branch}`
-}
-
-const LOOP_STATE_MARKER = "<!-- loop-state:begin -->"
-
-/**
- * Whether `<root>/LOOP.md` carries the engine's state marker — read at most 64 KB.
- * `lstatSync` (never `statSync`, which follows a link) must find an ordinary file: a FIFO
- * would block the read, a symlink could point anywhere outside the repo.
- */
-function loopLaunched(gitRoot) {
-  let fd
-  try {
-    const p = path.join(gitRoot, "LOOP.md")
-    if (!lstatSync(p).isFile()) return false
-    fd = openSync(p, "r")
-    const buf = Buffer.alloc(65536)
-    const n = readSync(fd, buf, 0, buf.length, 0)
-    return buf.toString("utf8", 0, n).includes(LOOP_STATE_MARKER)
-  } catch {
-    return false
-  } finally {
-    if (fd !== undefined) { try { closeSync(fd) } catch { /* already gone */ } }
-  }
-}
-
-/**
- * The branch checked out in `cwd`, and the directory holding `.git` for it, read from
- * .git/HEAD without spawning git — a worktree's `.git` is a FILE naming its gitdir, so both
- * shapes are followed. `{ branch: null, root: null }` on anything unexpected (detached HEAD,
- * no repo, unreadable): the caller then leaves the ask alone.
- */
-function currentBranch(cwd) {
-  try {
-    let dir = path.resolve(cwd)
-    for (;;) {
-      const dotgit = path.join(dir, ".git")
-      if (existsSync(dotgit)) {
-        let gitdir = dotgit
-        if (statSync(dotgit).isFile()) {
-          const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, "utf8"))
-          if (!m) return { branch: null, root: null }
-          gitdir = path.resolve(dir, m[1])
-        }
-        const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitdir, "HEAD"), "utf8"))
-        return { branch: ref ? ref[1] : null, root: dir }
-      }
-      const up = path.dirname(dir)
-      if (up === dir) return { branch: null, root: null }
-      dir = up
-    }
-  } catch {
-    return { branch: null, root: null }
-  }
-}
-
-/**
- * Consent Before Push's loop/* exemption — the twin of js/hosts/hooks.mjs's `loopExempt`.
- * True only when the command carries none of the unsafe characters, every `&&`/`;`/`||`/`|`
- * segment is one of the three whitelisted git shapes (every push segment also passing
- * `pushSegmentOk`), and the branch checked out in `cwd` starts with `loop/` AND its git root
- * carries a launched LOOP.md.
- */
-function loopExempt(command, cwd) {
-  if (typeof command !== "string" || UNSAFE_CHARS_RE.test(command)) return false
-  const { branch, root } = currentBranch(cwd)
-  if (!branch || !branch.startsWith("loop/")) return false
-  if (!root || !loopLaunched(root)) return false
-  const segments = command.split(/&&|\|\||[;|]/).map((s) => s.trim()).filter(Boolean)
-  if (!segments.length) return false
-  return segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_COMMIT_RE.test(seg)
-    || SEG_READONLY_RE.test(seg) || pushSegmentOk(seg, branch))
-}
-
 export const GeneseedGuard = async (ctx) => {
-  // The session's working directory, the same resolution the context plugin uses — a
-  // worktree session's `.git` is a FILE, which `currentBranch` already follows.
+  // The session's working directory, the same resolution the context plugin uses.
   const root = () => ctx?.worktree || ctx?.directory || process.cwd()
   return {
     "tool.execute.before": async (input, output) => {
@@ -459,24 +481,47 @@ export const GeneseedGuard = async (ctx) => {
         throw new Error(`[geneseed-guard] blocked: ${why} — set GENESEED_GUARD=off to allow`)
       }
       try {
+        // `apply_patch`'s own tool resolves every marker path against `instance.directory`
+        // (`apply_patch.ts:72` in the verdict's evidence), NOT the worktree root `root()`
+        // uses for the sovereign-repo bypass above — a worktree session started in a
+        // subdirectory of its git root must see the same (narrower) root the write
+        // actually lands under, or a protected-check/wiki/secret hit one directory up
+        // would be missed.
+        const cwd = ctx?.directory || process.cwd()
         if (hasAny(tool, WRITE_TOOLS)) {
-          const p = pickPath(args)
-          if (p && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
-          if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
-          const sensor = p && protectedCheck(p)
-          if (sensor) { await deny(`${p} is a protected check (${sensor}, listed in ${SENSOR_LIST}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
-          const store = p && ruleStoreTarget(p)
-          if (store && !RULE_STORE_BUMPED.has(p)) {
-            RULE_STORE_BUMPED.add(p)
-            await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
-                 `choice is the user's (Persist Insight). Settle it through the rule skill, ` +
-                 `then re-issue this write`, "process-1")
-            return
+          // `apply_patch` (gpt-5*) can carry several marker paths in one call — every
+          // one of them is a write target, so every one runs every gate; the first hit
+          // blocks the whole call (see `pickPath` for why this is not a single path).
+          const paths = pickPath(args, cwd)
+          for (const p of paths) {
+            if (SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
+            if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
+            const sensor = protectedCheck(p)
+            if (sensor) { await deny(`${p} is a protected check (${sensor}, listed in ${SENSOR_LIST}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
+            const store = ruleStoreTarget(p)
+            if (store && !RULE_STORE_BUMPED.has(p)) {
+              RULE_STORE_BUMPED.add(p)
+              await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
+                   `choice is the user's (Persist Insight). Settle it through the rule skill, ` +
+                   `then re-issue this write`, "process-1")
+              return
+            }
+          }
+          // Content scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide): per
+          // FILE, not pooled — a patch touching `.env` AND an ordinary file must still catch a
+          // secret in the ordinary file; only the hunk whose OWN path is `.env`-shaped is
+          // exempt, same as the path WARN tier above.
+          for (const { path: cp, content } of pickAddedContentByPath(args, cwd)) {
+            if (SECRET_WARN_RE.some((re) => re.test(cp))) continue
+            if (SECRET_CONTENT_RE.test(content)) {
+              await deny(`${cp} would carry a credential-shaped string (Sealed Secrets) — secrets `
+                + "live in .env or a secret manager, never in a tracked file", "law-1")
+              return
+            }
           }
         }
         if (hasAny(tool, WIKI_MUTATE_TOOLS)) {
-          const p = pickPath(args)
-          if (p) {
+          for (const p of pickPath(args, cwd)) {
             const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/").toLowerCase()
             const hit = (await protectedPrefixes()).find(
               (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
@@ -495,23 +540,6 @@ export const GeneseedGuard = async (ctx) => {
         if (err && String(err.message || "").startsWith("[geneseed-guard]")) throw err
         log(`inspect error (ignored): ${err?.message ?? err}`)
       }
-    },
-    "permission.ask": async (input, output) => {
-      // Never throw from a permission hook — leave `output.status` untouched on any
-      // error, exactly as a crashed check here must default to the static ask standing.
-      try {
-        if (OFF) return
-        // Never loosen anything but the plain "ask" this hook itself would otherwise leave
-        // alone — a deny (or any other status another hook already set) is never overwritten.
-        if (output?.status && output.status !== "ask") return
-        if (input?.type !== "bash") return
-        // ONLY `input.metadata?.command` — no pattern/title fallback. A value this hook did
-        // not itself read in full is a value it must not reason about.
-        const command = input?.metadata?.command
-        if (typeof command !== "string" || !command || !GIT_GATE_RE.test(command)) return
-        if (await sovereignBypass(root())) return
-        if (loopExempt(command, root())) output.status = "allow"
-      } catch { /* leave output.status untouched */ }
     },
   }
 }

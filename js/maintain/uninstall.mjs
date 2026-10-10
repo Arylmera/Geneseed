@@ -50,17 +50,18 @@ import path from 'node:path';
 import { hookRunnerEntry } from '../hosts/shim.mjs';
 import { confirm } from '../lib/prompt.mjs';
 import {
-  claudeCfg, claudeReadManifest, doctrinesOfDir, emitHostScopeOf, excludedRulesOfDir, installKind,
-  installState,
+  claudeCfg, claudeReadManifest, doctrinesOfDir, EMIT_HOST_SCOPE, emitHostScopeOf,
+  excludedRulesOfDir, installKind, installState,
   registeredTargets, DISABLED_STASH,
 } from '../hosts/installs.mjs';
 import {
-  CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
+  CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir,
+  resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
-  loadJsonObject, mergeClaudeSettings, opencodeTarget,
+  loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes, unwireClaudeSettings,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
@@ -265,16 +266,9 @@ export function archiveStore(store) {
   return dest;
 }
 
-/**
- * `_harness_mcp._settings_file` — the file this install's hooks were actually wired into.
- *
- * `settings.local.json` for a Claude PROJECT install (personal, untracked), `settings.json`
- * everywhere else, and the manifest is the authority. Every lifecycle path must target the
- * file the EMIT wrote, or the hooks linger in one file while the claims chase another.
- */
-function settingsFile(cfg, managed) {
-  return path.join(cfg, (managed && managed.settings_file) || 'settings.json');
-}
+// `settingsFile` lives in `hosts.mjs` (the hook stand-down reads it, and must not import this
+// module); re-exported here for `migrate`.
+export { settingsFile };
 
 /** `_harness_mcp._claude_md_path` — where the manifest says the managed block lives. */
 function claudeMdPath(cfg, managed) {
@@ -344,6 +338,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode') {
   }
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
     path.join(target, 'AGENT.md').split(path.sep).join('/'));
+  managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
   if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
   let archived = null;
@@ -519,10 +514,75 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
     if (archived.length) out.archived = archived;
     return out;
   }
-  for (const m of ['.geneseed-emit', '.geneseed-theme', VERSION_MARKER]) {
-    unlinkQuiet(path.join(root, m));
+  // The root markers are ONE PER ROOT (`generate.mjs`'s "THE MARKER IS TRUSTED ONLY FOR ITS
+  // OWN HOST") and `registryRoots` keeps a row alive only while `.geneseed-emit` exists there
+  // — so in a repo sharing two project installs (`.claude/` + `.opencode/` at the same cwd,
+  // last deploy wins the marker), deleting it unconditionally because THIS host is being
+  // uninstalled would silently deregister the OTHER host's still-live install, regardless of
+  // which host's name the marker happened to carry.
+  //
+  // Delete every marker ONLY when nothing else is installed here. Otherwise:
+  //   - `.geneseed-emit` carries HOST IDENTITY (`EMIT_HOST_SCOPE`'s key names a (host, scope)
+  //     pair) and `installProfile`/`migrateSurvey` trust it only for the host it names
+  //     (`generate.mjs`'s own docblock). If it currently names the host just removed, REWRITE
+  //     it to the survivor's own emit name — the same string `writeMarkers` (`driver.mjs`)
+  //     would have written for that survivor — rather than deleting it and leaving the
+  //     registry row to self-prune a live install. If it already names a survivor, it is
+  //     already correct; leave it untouched.
+  //   - `.geneseed-theme` and `VERSION_MARKER` carry NO host identity — a bare theme name and
+  //     a version/fingerprint string — so there is no survivor value to rewrite them TO; the
+  //     only question is whether they are THIS host's own litter to clear. At PROJECT scope
+  //     `.geneseed-theme` here is OpenCode's alone: `driver.mjs`'s own comment says the
+  //     claude/bob/openclaude project emits never write it, and `themeOfDir`'s host-narrowing
+  //     (host-compat B1 round 3, `js/hosts/installs.mjs`) means no Claude-style sibling ever
+  //     reads it either — so delete it only when OpenCode is the host being removed, and
+  //     leave it for a Claude-style uninstall (it belongs to a surviving or absent OpenCode
+  //     install either way, never to the host that just left). `VERSION_MARKER` is written at
+  //     `cfgDir`, never bare `root`, by every PROJECT emit (`js/build/version.mjs`'s callers),
+  //     so a project root never actually carries this file regardless of host — deleting it
+  //     here is always a no-op there. At GLOBAL scope neither file is ever shared (each host
+  //     owns its own config dir), so both are always this host's own and always safe to drop.
+  // PROJECT scope uses `projectQualifies` (the same predicate `uninstallResolve` already
+  // trusts for exactly this question), never `installState`: `installState`'s OpenCode
+  // branch answers 'active' off a bare `.opencode/` DIRECTORY's existence alone, with no
+  // manifest or marker check, so an unrelated non-Geneseed `.opencode/` sitting next to a
+  // real Claude install would read as a "surviving" OpenCode install and keep the marker
+  // alive for a host that was never actually here.
+  const survivor = HOSTS.find(({ host: h }) => h !== host && (
+    scope === 'project'
+      ? projectQualifies(root, h)
+      // GLOBAL: each host owns a distinct config dir, so no two hosts' global installs ever
+      // share a root — this can only match THIS host's own global install, and by the time
+      // execution reaches here (step 3) step 1 has already unlinked THIS host's own
+      // manifest/markers, so the lookback never mistakes its own just-removed install for a
+      // surviving sibling.
+      : installState(root, h, scope) !== 'absent'
+  ));
+  if (!survivor) {
+    for (const m of ['.geneseed-emit', '.geneseed-theme', VERSION_MARKER]) {
+      unlinkQuiet(path.join(root, m));
+    }
+  } else {
+    const markerScope = emitHostScopeOf(root);
+    if (markerScope !== null && markerScope[0] === host) {
+      const survivorEmit = [...EMIT_HOST_SCOPE.entries()]
+        .find(([, hs]) => hs[0] === survivor.host && hs[1] === scope)?.[0];
+      if (survivorEmit) {
+        writeText(path.join(root, '.geneseed-emit'), `${survivorEmit}\n`);
+      } else {
+        // Defensive: every (host, scope) pair in `HOSTS` has an `EMIT_HOST_SCOPE` entry, so
+        // this should be unreachable — but silently leaving a marker naming the just-removed
+        // host would deregister the survivor exactly as before, so it is loud instead of quiet.
+        printErr(`[uninstall] WARN: could not resolve an emit name for the surviving `
+          + `${survivor.host}:${scope} install here — the shared .geneseed-emit marker still `
+          + `names ${host}, which was just removed. Re-run \`geneseed rebuild-all\` or `
+          + `re-emit ${survivor.host} to refresh it.\n`);
+      }
+    }
+    if (scope === 'global' || host === 'opencode') unlinkQuiet(path.join(root, '.geneseed-theme'));
+    unlinkQuiet(path.join(root, VERSION_MARKER));
   }
-  // 4. Tidy an emptied marker dir (.claude/.bob) so no husk lingers in the repo.
+  // 4. Tidy an emptied marker dir (.claude/.bob/.openclaude) so no husk lingers in the repo.
   if (data !== root && isDir(data) && isEmptyDir(data)) rmdirQuiet(data);
   const out = { ok: true, removed: summary.removed ?? 0, memory };
   if (archived.length) out.archived = archived;
@@ -532,8 +592,9 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
 /**
  * `_harness_mcp._project_qualifies` — does `root` carry a REAL Geneseed project install?
  *
- * The marker dir exists, is not the host's global config dir seen from its parent (the
- * `installTargets` aliasing guard), and shows Geneseed's own tracks: the manifest, or the
+ * The marker dir exists, is not the host's global seen from its parent (`isHostGlobalDir`, the
+ * `installTargets` aliasing guard — the default `~/.claude` too, under `$CLAUDE_CONFIG_DIR`),
+ * and shows Geneseed's own tracks: the manifest, or the
  * root `.geneseed-emit` naming this host's project emit for a pre-manifest legacy install.
  * A bare non-Geneseed `.claude/` is very common and must never hijack the resolve.
  */
@@ -542,7 +603,7 @@ export function projectQualifies(root, host) {
   const cfg = path.join(root, spec.projectMarker);
   if (!isDir(cfg)) return false;
   try {
-    if (resolvePath(cfg) === resolvePath(spec.configDir())) return false;
+    if (isHostGlobalDir(host, cfg)) return false;
   } catch { /* as the Python's bare `except Exception: pass` */ }
   if (isFile(path.join(cfg, GLOBAL_MANIFEST))) return true;
   const hs = emitHostScopeOf(root);
@@ -556,7 +617,8 @@ export function projectQualifies(root, host) {
  * is NAMED like a project marker and is the global install, never `claude:project` rooted at
  * `$HOME`, so the global-config-dir case is checked before the marker-name case.
  *
- *   1. `--target` IS a host's global config dir.
+ *   1. `--target` IS a host's global (`isHostGlobalDir`: its env-resolved dir, its default
+ *      `~/<marker>`, or a dir whose emit marker names that host's `-global` emit).
  *   2. `--target` IS a project marker dir itself (…/.claude) — root is its parent.
  *   3. `--target` (as a root) carries a Geneseed project install.
  *   4. `--target` given and unrecognised — null, and the caller reports it.
@@ -566,7 +628,7 @@ export function uninstallResolve(targetArg) {
   const globalHit = (p) => {
     for (const spec of HOSTS) {
       try {
-        if (p === resolvePath(spec.configDir())) return [spec.host, 'global', p];
+        if (isHostGlobalDir(spec.host, p)) return [spec.host, 'global', p];
       } catch { continue; }
     }
     return null;
@@ -673,12 +735,17 @@ export function cmdUninstall(args) {
   const stores = ['memory', 'notebook'].filter((n) => isDir(path.join(data, n)));
   printOut(`[uninstall] target: ${root} (${host}:${scope})\n`);
   if (CLAUDE_STYLE.includes(host)) {
+    // Not always settings.json: a Claude/OpenClaude PROJECT install wires settings.local.json
+    // (host-compat B4) — read back from the manifest `settingsFile` already resolves, rather
+    // than restate the rule here a second time.
+    const cfgForSf = claudeCfg(root, scope, host);
+    const sfName = path.basename(settingsFile(cfgForSf, managedOf(claudeReadManifest(cfgForSf))));
     printOut('[uninstall] removes: agents/, skills/, markers, the '
       + `${hostSpec(host).agentFile} managed block, and Geneseed's `
-      + 'settings.json hooks/excludes (your own keys/hooks are kept).\n');
+      + `${sfName} hooks/excludes (your own keys/hooks are kept).\n`);
   } else if (scope === 'global') {
-    printOut('[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the '
-      + 'opencode.json instructions entry.\n');
+    printOut('[uninstall] removes: AGENT.md, the AGENTS.md managed block, agents/, skills/, '
+      + 'plugins/, markers, and the opencode.json instructions entry.\n');
   } else {
     printOut('[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the '
       + 'opencode.json instructions entry.\n');
@@ -949,6 +1016,8 @@ export function installDeactivate(root, host = 'opencode', scope = 'global') {
     return { ok: false, failed, rolled_back: done.length };
   }
   unmergeOpencodeJson(path.join(root, 'opencode.json'), installAgentEntry(root, kind));
+  // The sentinel goes too, or a disabled install keeps the user's ~/.claude/CLAUDE.md from loading.
+  if (kind === 'global') managedBlockRemove(path.join(root, OPENCODE_SENTINEL));
   for (const rel of done) pruneAncestors(path.dirname(path.join(root, rel)), root);
   return { ok: true, kind, moved: done.length };
 }
@@ -975,6 +1044,7 @@ export function installReactivate(root, host = 'opencode', scope = 'global') {
   if (leftovers.length) return { ok: false, failed: leftovers, moved };
   const kind = installKind(root) || 'global';
   installReaddEntry(target, installAgentEntry(root, kind));
+  if (kind === 'global') opencodeSentinelWrite(root);
   rmtreeQuiet(stash);
   return { ok: true, kind, moved };
 }
@@ -1026,11 +1096,14 @@ function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   // unconditionally (fail-closed, so not a hole — but wrong, and it made the toggle one-way
   // for project installs). `root` first, `cfg` second: on a global install the two are the
   // same directory anyway. Both silent ⇒ `null` ⇒ the gate stays.
-  const doctrines = doctrinesOfDir(root) ?? doctrinesOfDir(cfg);
+  // Both reads are narrowed to `host`'s OWN carrier (host-compat B1): in a repo shared with
+  // another Claude-style host, an un-narrowed scan can answer with a SIBLING host's carrier —
+  // the same failure `installProfile` had, reached here because `root` is the shared repo.
+  const doctrines = doctrinesOfDir(root, host) ?? doctrinesOfDir(cfg, host);
   // Same two-carrier read for the second axis, and its own default: an absent line means
   // NOTHING excluded, so a reactivate can only ever restore a gate, never remove one.
-  const excluded = excludedRulesOfDir(root).length ? excludedRulesOfDir(root)
-    : excludedRulesOfDir(cfg);
+  const excluded = excludedRulesOfDir(root, host).length ? excludedRulesOfDir(root, host)
+    : excludedRulesOfDir(cfg, host);
   // `host` reaches the group builder: a Bob reactivate must re-wire Gemini-named groups.
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed),
     managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host, cfg);

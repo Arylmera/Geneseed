@@ -25,13 +25,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { rebuildAll } from '../../js/build/generate.mjs';
-import { cmdMigrate } from '../../js/maintain/migrate.mjs';
+import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
   globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES, sessionFiles,
 } from '../../js/hosts/hooks-context.mjs';
@@ -47,7 +48,7 @@ import {
   doctrinesOfDir, excludedRulesOfDir, installState, installTargets, manifestIsClaude,
 } from '../../js/hosts/installs.mjs';
 import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
-import { hookRunnerEntry, hookShimPath } from '../../js/hosts/shim.mjs';
+import { hookRunnerEntry, hookShimPath, hookPrefix } from '../../js/hosts/shim.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
@@ -122,7 +123,7 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
     assert.ok(read(cfg, 'agents', 'explorer.md').includes('disallowedTools:'));
     // The webfetch marker lifts exactly WebFetch from the denylist; Bash stays denied.
     const researcher = read(cfg, 'agents', 'researcher.md');
-    assert.match(researcher, /disallowedTools: Write, Edit, NotebookEdit, Bash$/m);
+    assert.match(researcher, /disallowedTools: Write, Edit, NotebookEdit, Bash, PowerShell$/m);
 
     // THE HOOK PATH IS THE POINT OF THE CLASS. A hook's cwd is the user's project, so nothing
     // relative resolves — it must be absolute, and it must be the STABLE SHIM rather than this
@@ -615,7 +616,10 @@ const realOrSelf = (p) => (fs.existsSync(p)
 /** Run `fn` with `cwd` current and `host`'s global config dir resolved to `cfgDir`. */
 function asHostGlobal(host, cwd, cfgDir, fn) {
   const cwd0 = process.cwd();
-  const overrides = host === 'claude' ? homeOverrides(cwd) : { [ENV_FOR_HOST[host]]: cfgDir };
+  // Claude gets BOTH: HOME at the cwd keeps the daemon's real situation reproduced (above), and
+  // `$CLAUDE_CONFIG_DIR` makes the resolver read its variable like the other three hosts.
+  const overrides = host === 'claude' ? { ...homeOverrides(cwd), CLAUDE_CONFIG_DIR: cfgDir }
+    : { [ENV_FOR_HOST[host]]: cfgDir };
   const saved = Object.fromEntries(Object.keys(overrides).map((k) => [k, process.env[k]]));
   Object.assign(process.env, overrides);
   process.chdir(cwd);
@@ -695,6 +699,18 @@ test('the emitted git-gate hook carries --root with the install path', () => {
   });
 });
 
+test('the git gate matches PowerShell too, not only Bash (Claude verdict I1)', () => {
+  // Docs `hooks.md`: "Match `Bash|PowerShell` in hooks that inspect shell commands … A hook
+  // that matches only `Bash` never fires there." On Windows without Git Bash, Bash is not even
+  // registered, so a `Bash`-only matcher leaves Law IV and the push/commit consent gate off by
+  // default. `tool_input.command` is the same field on both tools, so the gate code is unchanged.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    const group = claudeHookGroups(cfg, hookRunnerEntry()).PreToolUse[0];
+    assert.equal(group.matcher, 'Bash|PowerShell');
+  });
+});
+
 test('the rule gate is APPENDED behind the git gate, and is scoped the same way', () => {
   // Position is load-bearing and asserted for that reason: the tests above read PreToolUse[0]
   // positionally, and so does the prune below. A rule gate that landed first would move the git
@@ -709,25 +725,26 @@ test('the rule gate is APPENDED behind the git gate, and is scoped the same way'
     for (const tool of ['Write', 'Edit']) {
       assert.ok(rule[0].matcher.includes(tool), `the rule gate does not match ${tool}`);
     }
+    // MultiEdit is not in Claude Code's tool table (tools-reference.md) — a dead matcher entry.
+    assert.ok(!rule[0].matcher.includes('MultiEdit'), `dead MultiEdit entry: ${rule[0].matcher}`);
   });
 });
 
-test('SessionStart re-seeds the context on resume AND compact, and prints AGENT.md on neither', () => {
-  // Auto-compaction keeps the instruction file (the host re-reads it) but summarises away the
-  // injected context, memory index and notebook TOC. Those come back through the same
-  // `context` command a resume runs — and only that: re-printing AGENT.md there would double
-  // the largest always-on block every time a long session compacts.
+test('SessionStart re-seeds the context on every source, fork included (Claude verdict I4)', () => {
+  // `startup`, `resume`, `clear`, `compact` and `fork` all run the identical `context` command
+  // (B13), so there is exactly one group and it carries no matcher at all — the previous
+  // `startup|clear` / `resume|compact` split silently dropped `fork`, which a `--fork-session`
+  // run sets as its SessionStart `source`. Auto-compaction keeps the instruction file (the host
+  // re-reads it) but summarises away the injected context, memory index and notebook TOC; a
+  // fork gets neither unless this group fires for it too.
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');
     const groups = claudeHookGroups(cfg, hookRunnerEntry()).SessionStart;
-    const cold = groups.find((g) => g.matcher === 'startup|clear');
-    const warm = groups.find((g) => g.matcher === 'resume|compact');
-    assert.ok(cold && warm, `expected a cold and a warm group, got ${
-      JSON.stringify(groups.map((g) => g.matcher))}`);
-    assert.equal(warm.hooks.length, 1);
-    assert.ok(warm.hooks[0].command.includes(' context '), 'the warm group runs `context`');
-    assert.equal(warm.hooks[0].command, cold.hooks[cold.hooks.length - 1].command,
-      'warm and cold share the one context command');
+    assert.equal(groups.length, 1, `expected one matcher-less group, got ${
+      JSON.stringify(groups)}`);
+    assert.ok(!('matcher' in groups[0]), 'a matcher-less group must carry no matcher key');
+    assert.equal(groups[0].hooks.length, 1);
+    assert.ok(groups[0].hooks[0].command.includes(' context '), 'the group runs `context`');
   });
 });
 
@@ -754,6 +771,57 @@ test('a re-emit prunes a pre---root git-gate group instead of stacking beside it
     const gitGates = cmds.filter((c) => c.includes('git-gate'));
     assert.equal(gitGates.length, 1, `expected 1 git-gate, got ${gitGates.length}: ${cmds}`);
     assert.ok(gitGates.every((c) => c.includes('--root')), `git-gate lost --root: ${gitGates}`);
+  });
+});
+
+test('an install from before I1/I4 upgrades its matchers instead of double-wiring', () => {
+  // The exact shape a pre-task-3 emit wrote: `Bash`-only git gate, and the SessionStart split
+  // into `startup|clear` / `resume|compact`. Both are recorded as managed (`priorHooks`), the
+  // way an upgrade really finds them. If `mergeClaudeSettings` compared only the command string
+  // it would see these as "already wired" and never add the fixed matchers — every upgraded
+  // install would keep missing PowerShell and `fork` forever. Deep equality on the WHOLE group
+  // (matcher included) is what makes a changed matcher look like a new group to prune-and-add.
+  withDir((d) => {
+    const cfg = path.join(d, 'settings_test');
+    fs.mkdirSync(cfg);
+    const run = hookPrefix(hookRunnerEntry());
+    const oldGate = {
+      matcher: 'Bash',
+      hooks: [{ type: 'command', command: `${run} git-gate --root "${cfg}"` }],
+    };
+    const oldCold = {
+      matcher: 'startup|clear',
+      hooks: [{ type: 'command', command: `${run} context --root "${cfg}" || exit 0` }],
+    };
+    const oldWarm = {
+      matcher: 'resume|compact',
+      hooks: [{ type: 'command', command: `${run} context --root "${cfg}" || exit 0` }],
+    };
+    const settings = path.join(cfg, 'settings.json');
+    fs.writeFileSync(settings, JSON.stringify({
+      hooks: { PreToolUse: [oldGate], SessionStart: [oldCold, oldWarm] },
+    }));
+    const prior = [
+      { event: 'PreToolUse', group: oldGate },
+      { event: 'SessionStart', group: oldCold },
+      { event: 'SessionStart', group: oldWarm },
+    ];
+
+    captured(() => mergeClaudeSettings(settings, prior, hookRunnerEntry(), null, [], 'claude', cfg));
+
+    const data = readJson(settings);
+    const gateGroups = data.hooks.PreToolUse.filter((g) => g.hooks[0].command.includes('git-gate'));
+    assert.equal(gateGroups.length, 1, `expected 1 git-gate group, got ${gateGroups.length}`);
+    assert.equal(gateGroups[0].matcher, 'Bash|PowerShell',
+      `the stale Bash-only matcher survived the upgrade: ${JSON.stringify(gateGroups)}`);
+
+    const startGroups = data.hooks.SessionStart;
+    assert.equal(startGroups.length, 1,
+      `expected the two stale SessionStart groups pruned down to one, got ${
+        JSON.stringify(startGroups)}`);
+    assert.ok(!('matcher' in startGroups[0]), 'the upgraded SessionStart group must carry no matcher');
+    const contextCmds = startGroups[0].hooks.map((h) => h.command).filter((c) => c.includes(' context '));
+    assert.equal(contextCmds.length, 1, 'context must run exactly once per SessionStart, not twice');
   });
 });
 
@@ -895,6 +963,56 @@ function cliGlobalEmit(kind, extra = []) {
     { cwd: String(ROOT), encoding: 'utf8', env: process.env, maxBuffer: 1 << 26, windowsHide: true });
   assert.equal(r.status, 0, `${kind} emit failed (${r.status}): ${(r.stderr || '').slice(-800)}`);
 }
+
+// `migrate` reads hook commands out of the settings file the EMIT wired them into
+// (`hookSettingsFile`). It used to hand-roll `path.join(root, name)` directly, which dropped the
+// `.claude`/`.bob`/`.openclaude` project subfolder entirely and guessed the canonical name
+// instead of reading what the install's OWN manifest recorded — missing Bob global's nested
+// `settings/settings.json` on a fresh install AND breaking a pre-existing (pre-nesting) Bob
+// global install, whose manifest carries no `managed.settings_file` and whose real file is the
+// bare `settings.json` the golden CLI matrix's `migrate/a-legacy-bob-install-crosses` cell
+// seeds. Every row here is read back through the same two resolvers (`claudeCfg` +
+// `settingsFile`) rather than a third copy, against a FILE THE EMIT REALLY WROTE.
+test('hookSettingsFile resolves the exact file the emit wires, per host and scope', () => {
+  withDir((d) => {
+    // Project scope: `<root>/<projectMarker>/settings.local.json`, except Bob (no local
+    // variant documented), which keeps the team-shared `settings.json`.
+    for (const [host, name] of [
+      ['claude', 'settings.local.json'], ['openclaude', 'settings.local.json'],
+      ['bob', 'settings.json'],
+    ]) {
+      const repo = path.join(d, `proj-${host}`);
+      projectEmit(host, repo, repo);
+      const file = path.join(repo, `.${host}`, name);
+      assert.equal(hookSettingsFile(repo, host, 'project'), file, `${host}:project`);
+      assert.ok(fs.existsSync(file), `${host}'s own emit did not write ${file}`);
+    }
+
+    // Global scope: bare `settings.json`, except Bob which nests one level down (host-compat B1).
+    for (const [host, name] of [
+      ['claude', 'settings.json'], ['openclaude', 'settings.json'],
+      ['bob', path.join('settings', 'settings.json')],
+    ]) {
+      const cfg = path.join(d, `global-${host}`);
+      globalEmit(host, path.join(d, `bundle-${host}`), cfg);
+      const file = path.join(cfg, name);
+      assert.equal(hookSettingsFile(cfg, host, 'global'), file, `${host}:global`);
+      assert.ok(fs.existsSync(file), `${host}'s own emit did not write ${file}`);
+    }
+
+    // A manifest with no `managed.settings_file` recorded (no field yet, or none at all) falls
+    // back to the bare, pre-nesting `settings.json` the install was ACTUALLY written with, not
+    // to wherever a brand-new emit would write — the shape of a pre-existing bob-global install.
+    const legacy = path.join(d, 'legacy-bob-global');
+    fs.mkdirSync(legacy, { recursive: true });
+    fs.writeFileSync(path.join(legacy, '.geneseed-manifest.json'), '{"owned": []}\n');
+    assert.equal(hookSettingsFile(legacy, 'bob', 'global'), path.join(legacy, 'settings.json'));
+
+    // OpenCode wires no settings file at all — its hooks are a plugin, not a Claude-style merge.
+    assert.equal(hookSettingsFile(d, 'opencode', 'project'), null);
+    assert.equal(hookSettingsFile(d, 'opencode', 'global'), null);
+  });
+});
 
 // `migrate` re-emits each install in its OWN values, and the excluded rules are one of them. It
 // hand-copied `installProfile` and passed them as `null`, so the re-emit fell back to
@@ -1106,8 +1224,13 @@ test('an OpenClaude project emit keeps the repo root clean and excludes ITS glob
     const ctx = hookCmds(s).filter((c) => c.includes(' context '));
     assert.ok(ctx.length > 0 && ctx.every((c) => c.includes('--host openclaude')),
       JSON.stringify(ctx));
-    // The gates speak Claude's dialect, so they carry no host flag at all.
-    assert.ok(hookCmds(s).some((c) => c.includes(' git-gate ') && !c.includes('--host')));
+    // The gates speak Claude's dialect; `git-gate` and `learn` still carry `--host openclaude`,
+    // because the global stand-down keys its marker on it, not on the (relocatable) folder name.
+    // `rule-gate` does not stand down, so it carries none.
+    for (const verb of [' git-gate ', ' learn ']) {
+      assert.ok(hookCmds(s).some((c) => c.includes(verb) && c.includes('--host openclaude')), verb);
+    }
+    assert.ok(hookCmds(s).some((c) => c.includes(' rule-gate ') && !c.includes('--host')));
   }));
 });
 
@@ -1173,7 +1296,9 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     const cmdOf = (ev) => settings.hooks[ev][0].hooks[0].command;
     assert.ok(cmdOf('PreToolUse').endsWith(` tool-gate --root "${cfg}" --host bob`), cmdOf('PreToolUse'));
     assert.ok(cmdOf('SessionStart').endsWith(` context --root "${cfg}" --host bob || exit 0`), cmdOf('SessionStart'));
-    assert.ok(cmdOf('Stop').endsWith(` learn --memory "${path.join(cfg, 'memory')}" || exit 0`), cmdOf('Stop'));
+    // `learn --host bob`: the global stand-down keys its marker on `--host`, so a global moved by
+    // `$BOB_CONFIG_DIR` still stands down beside a project `.bob`.
+    assert.ok(cmdOf('Stop').endsWith(` learn --memory "${path.join(cfg, 'memory')}" --host bob || exit 0`), cmdOf('Stop'));
     assert.equal(managed.settings_file, path.join('settings', 'settings.json'));
   }));
 });
@@ -1378,10 +1503,19 @@ function ancestorInstall(dir, marker) {
   }
 }
 
+// A manifest that records the three stand-down verbs as wired, plus the `settings.json` that
+// carries them, the way a live emit leaves both: the stand-down needs `managed.settings_hooks` to
+// name the verb AND the settings file to still run it, not just a manifest (final review C1).
+const WIRED_GROUPS = ['context', 'git-gate', 'learn']
+  .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } }));
+const WIRED_MANIFEST = JSON.stringify({ managed: { settings_hooks: WIRED_GROUPS } });
+const WIRED_SETTINGS = JSON.stringify({ hooks: { X: WIRED_GROUPS.map((r) => r.group) } });
+
 const mkInstall = (parent, marker = '.claude') => {
   const d = path.join(parent, marker);
   fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), '{}');
+  fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), WIRED_MANIFEST);
+  fs.writeFileSync(path.join(d, 'settings.json'), WIRED_SETTINGS);
   return d;
 };
 
@@ -1392,21 +1526,24 @@ test('the global hook stands down only for a project install of its own host', (
     const pcfg = mkInstall(repo);                               // the project's own .claude
 
     // In the repo, the global hook stands down — the project's hook is about to inject.
-    assert.equal(globalHookStandingDown(gcfg, repo), true);
+    assert.equal(globalHookStandingDown(gcfg, repo, null, 'context'), true);
     // The project's OWN hook never stands down for itself. Path equality is case-folded on
     // Windows, which is why this is an identity check and not a string compare.
-    assert.equal(globalHookStandingDown(pcfg, repo), false);
-    // The up-walk: a subdirectory of the repo still counts as being in it.
+    assert.equal(globalHookStandingDown(pcfg, repo, null, 'context'), false);
+    // NO UP-WALK (Task 11 review, round 3): a session whose project dir is a SUBDIRECTORY of the
+    // repo does not count as being in it. Claude reads the shared `.claude/settings.json` from
+    // the session's primary working directory only (`settings.md`), so the repo's project hooks
+    // may never have loaded there; a doubled gate is safe, a silenced one is not.
     const sub = path.join(repo, 'a', 'b');
     fs.mkdirSync(sub, { recursive: true });
-    assert.equal(globalHookStandingDown(gcfg, sub), true);
+    assert.equal(globalHookStandingDown(gcfg, sub, null, 'context'), false);
 
     // The two that depend on finding NOTHING — see the header.
     const empty = path.join(d, 'elsewhere');
     fs.mkdirSync(empty);
     const blocker = ancestorInstall(empty, '.claude');
     if (blocker) t.diagnostic(`skipped: an ancestor of the sandbox is a .claude install (${blocker})`);
-    else assert.equal(globalHookStandingDown(gcfg, empty), false, 'the global hook went silent '
+    else assert.equal(globalHookStandingDown(gcfg, empty, null, 'context'), false, 'the global hook went silent '
       + 'outside any project, so nothing would inject at all');
 
     // PER HOST: a project `.claude` must never silence a global `.bob`. Different marker,
@@ -1414,8 +1551,89 @@ test('the global hook stands down only for a project install of its own host', (
     const bobg = mkInstall(path.join(d, 'bobhome'), '.bob');
     const bobBlocker = ancestorInstall(repo, '.bob');
     if (bobBlocker) t.diagnostic(`skipped: an ancestor of the sandbox is a .bob install (${bobBlocker})`);
-    else assert.equal(globalHookStandingDown(bobg, repo), false,
+    else assert.equal(globalHookStandingDown(bobg, repo, null, 'context'), false,
       "a project .claude silenced a global .bob — the hosts' hooks are not independent");
+  }));
+});
+
+test('the stand-down marker comes from --host, so a relocated global still stands down', (t) => {
+  // THE MARKER RULE (host-compat Claude B9, OpenClaude I2, Bob B4). The detector looks for a
+  // project install under the global's OWN host marker. It used to read that marker off the
+  // global dir's folder name, so a global moved by `$CLAUDE_CONFIG_DIR`, `$BOB_CONFIG_DIR` or
+  // `$OPENCLAUDE_CONFIG_DIR` (folder `claude-work`, `bob-cfg`, …) matched no marker and never
+  // stood down: two injections, two gates, two learns. Now: an explicit `--host` names the
+  // marker; with no `--host` (Claude's commands, and any emitted before the gates carried one), a
+  // folder named like a marker is that marker, else the root's own `.geneseed-emit` names it, and
+  // with neither it NEVER stands down: guessing Claude silenced a pre-`--host` relocated
+  // OpenClaude gate beside a project `.claude`, and OpenClaude loads no `.claude` hooks — no gate.
+  withoutStackGlobal(() => withDir((d) => {
+    const rows = [
+      // [global folder, --host, its .geneseed-emit, project marker in the repo, stands down?, why]
+      ['.claude', null, null, '.claude', true, 'the default ~/.claude'],
+      ['claude-work', null, 'claude-global', '.claude', true, '$CLAUDE_CONFIG_DIR, keyed on the emit marker'],
+      ['bob-cfg', 'bob', null, '.bob', true, '$BOB_CONFIG_DIR, keyed on --host bob'],
+      ['oc-cfg', 'openclaude', null, '.openclaude', true, '$OPENCLAUDE_CONFIG_DIR, keyed on --host'],
+      ['.openclaude', null, null, '.openclaude', true, 'an older OpenClaude gate with no --host'],
+      ['oc-cfg', 'openclaude', null, '.claude', false, 'a project .claude never silences OpenClaude'],
+      ['oc-cfg', null, 'openclaude-global', '.claude', false, 'nor a pre---host relocated OpenClaude'],
+      ['claude-work', null, null, '.claude', false, 'no --host, no marker name, no emit: never'],
+      ['claude-work', null, 'claude-global', '.bob', false, 'a project .bob never silences Claude'],
+      ['.bob', 'bob', null, '.openclaude', false, 'a project .openclaude never silences Bob'],
+    ];
+    rows.forEach(([folder, host, emit, projMarker, expected, why], i) => {
+      const gcfg = mkInstall(path.join(d, `home${i}`), folder);
+      if (emit) fs.writeFileSync(path.join(gcfg, '.geneseed-emit'), `${emit}\n`);
+      const repo = path.join(d, `repo${i}`);
+      mkInstall(repo, projMarker);
+      const blocker = expected ? null : ancestorInstall(repo, projMarker);
+      if (blocker) { t.diagnostic(`row ${i} skipped: ancestor install ${blocker}`); return; }
+      assert.equal(globalHookStandingDown(gcfg, repo, host, 'context'), expected, `row ${i}: ${why}`);
+    });
+    // The opt-out wins over every row: GENESEED_STACK_GLOBAL stacks the global on purpose.
+    const gcfg = mkInstall(path.join(d, 'homeS'), 'claude-work');
+    fs.writeFileSync(path.join(gcfg, '.geneseed-emit'), 'claude-global\n');
+    const repo = path.join(d, 'repoS');
+    mkInstall(repo);
+    process.env.GENESEED_STACK_GLOBAL = '1';
+    assert.equal(globalHookStandingDown(gcfg, repo, null, 'context'), false, 'the opt-out was ignored');
+  }));
+});
+
+test('another GLOBAL install in the project dir is never a project install', () => {
+  // THE MULTI-ACCOUNT CASE (Task 11 review, Critical). `CLAUDE_CONFIG_DIR=~/.claude-work` is the
+  // docs' own example, and it leaves `~/.claude` in place. A session whose project dir is `~`
+  // (or, before round 3 removed the up-walk, any dir under it) finds
+  // `~/.claude/.geneseed-manifest.json`; treating that as a project install silenced context,
+  // git-gate (Law IV) and learn with no project gate to replace them. A candidate is a GLOBAL, never a project, when its own
+  // `.geneseed-emit` names a `-global` emit, or when it is a host's global dir (its default
+  // `~/<marker>` or the env-resolved one) — the second catches a leftover with no emit marker.
+  withoutStackGlobal(() => withDir((d) => {
+    const home = os.homedir();                    // sandboxed by sandboxProcessHome above
+    const work = mkInstall(path.join(d, 'acct'), 'claude-work');
+    fs.writeFileSync(path.join(work, '.geneseed-emit'), 'claude-global\n');
+    const below = path.join(home, 'src', 'repo');  // no install of its own
+    fs.mkdirSync(below, { recursive: true });
+    const dotClaude = path.join(home, '.claude');
+    const preexisting = fs.existsSync(dotClaude);
+    assert.ok(!preexisting, `the sandboxed home already has ${dotClaude}`);
+    try {
+      // Row 1: two Claude globals, one relocated, both carrying their emit marker.
+      mkInstall(home, '.claude');
+      fs.writeFileSync(path.join(dotClaude, '.geneseed-emit'), 'claude-global\n');
+      assert.equal(globalHookStandingDown(work, home, null, 'context'), false,
+        'the relocated global stood down for the other global ~/.claude');
+      // Row 2: a leftover ~/.claude with a manifest but no emit marker — still a global.
+      fs.rmSync(path.join(dotClaude, '.geneseed-emit'));
+      assert.equal(globalHookStandingDown(work, home, null, 'context'), false,
+        'the relocated global stood down for a leftover ~/.claude');
+      // Control: a real project install below home still silences the global.
+      mkInstall(below, '.claude');
+      assert.equal(globalHookStandingDown(work, below, null, 'context'), true,
+        'a genuine project install no longer silences the global');
+    } finally {
+      fs.rmSync(dotClaude, { recursive: true, force: true });
+      fs.rmSync(path.join(home, 'src'), { recursive: true, force: true });
+    }
   }));
 });
 

@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   HOME_VARS, RELOCATION_VARS, cellEnv, homeOverrides, makeSandbox, restoreProcessHome,
-  sandboxProcessHome,
+  sandboxProcessHome, STUB_GIT_BASH,
 } from '../helpers/sandbox.mjs';
 import { ALIAS_SKIP, aliasedTemp } from '../helpers/alias.mjs';
 
@@ -169,10 +169,10 @@ test('every relocation variable is cleared even when set', () => {
 //
 // A READ, NOT THE NAME — and the first draft got this wrong in the way `docs/limits.md`
 // row 6 already records. Scanning for the word reported `CLAUDE_CONFIG_DIR` as a missing entry,
-// because `js/hosts/hosts.mjs:131` carries a docblock saying that setting it must NOT move the
-// target: an INVERSE row, deliberately unread. A structural gate that matches prose is a gate
-// on the documentation, and it would have been "fixed" by sandboxing a variable the generator
-// ignores. What is scanned for is the read itself.
+// back when `js/hosts/hosts.mjs` carried a docblock saying that setting it must NOT move the
+// target: an INVERSE row, deliberately unread (it is read now — host-compat Claude B9). A
+// structural gate that matches prose is a gate on the documentation, and it would have been
+// "fixed" by sandboxing a variable the generator ignored. What is scanned for is the read itself.
 test('every relocation variable the generator reads is listed', () => {
   const READ = /process\.env\.([A-Z][A-Z0-9_]*_CONFIG_DIR)\b|process\.env\[['"]([A-Z][A-Z0-9_]*_CONFIG_DIR)['"]\]/g;
   const found = new Set();
@@ -229,22 +229,29 @@ test('a knob spelled in another case is still cleared', () => {
   }
 });
 
+// Every HOME_VARS row is a home except `CLAUDE_CODE_GIT_BASH_PATH`, which pins Claude's hook
+// shell to bash at the one shared stub so emitted hook bytes do not depend on the machine.
+const HOMES = HOME_VARS.filter((v) => v !== 'CLAUDE_CODE_GIT_BASH_PATH');
+
 test('home and XDG point inside the sandbox', () => {
   const home = path.join(fs.realpathSync(os.tmpdir()), 'sb-home');
   const env = cellEnv(home);
-  for (const v of HOME_VARS) {
+  for (const v of HOMES) {
     assert.ok(env[v] && env[v].startsWith(home), `${v} points outside the sandbox: ${env[v]}`);
   }
+  assert.equal(env.CLAUDE_CODE_GIT_BASH_PATH, STUB_GIT_BASH);
+  assert.ok(fs.statSync(STUB_GIT_BASH).isFile(), 'the Git Bash stub was not created');
 });
 
 test('the process-home sandbox covers every variable that decides where home is', () => {
   const before = Object.fromEntries(HOME_VARS.map((v) => [v, process.env[v]]));
   const home = sandboxProcessHome();
   try {
-    for (const v of HOME_VARS) {
+    for (const v of HOMES) {
       assert.ok(process.env[v] && process.env[v].startsWith(home),
         `${v} was not moved into the sandbox`);
     }
+    assert.equal(process.env.CLAUDE_CODE_GIT_BASH_PATH, STUB_GIT_BASH);
     assert.deepEqual(Object.keys(homeOverrides(home)).sort(), [...HOME_VARS].sort());
   } finally { restoreProcessHome(); }
   for (const v of HOME_VARS) assert.equal(process.env[v], before[v], `${v} was not restored`);

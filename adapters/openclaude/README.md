@@ -12,14 +12,21 @@ There is nothing to install by hand: `geneseed setup` (or `geneseed-build --emit
 openclaude` / `--emit openclaude-global`) writes everything.
 
 **OpenClaude never reads `~/.claude`, a project `.claude/`, or `$CLAUDE_CONFIG_DIR`.**
-A Claude Code install is invisible to it, so it gets its own. The two coexist on one
-machine and in one repo without touching each other.
+A Claude Code install is invisible to it, so it gets its own, and neither emit
+overwrites the other's files. On one machine the two coexist cleanly. In one
+repo they do not fully: OpenClaude also reads the root `CLAUDE.md`/`AGENTS.md`
+a Claude Code or Bob per-repo install already wrote there, on top of its own
+`.openclaude/CLAUDE.md` — both harnesses load, and there is no clean exclusion
+(excluding the root file would hide your own content in it too). `geneseed status`
+and `geneseed doctor` warn when this is happening in your repo.
 
 ## What the emit writes
 
 ### Per-repo (`--emit openclaude`)
 
-Everything lives under **`.openclaude/`**. Nothing is written at the repo root.
+Everything lives under **`.openclaude/`**, except the `.geneseed-emit`/
+`.geneseed-footprint` markers and `.mcp.json` below, which the driver writes at the
+repo root like every other host.
 
 - `CLAUDE.md`: the harness preamble as a delimited **managed block**. OpenClaude
   loads the root `AGENTS.md`, or the root `CLAUDE.md` only when `AGENTS.md` is
@@ -47,8 +54,9 @@ global config file.
 
 ## Hooks
 
-The Claude group set, unchanged: `PreToolUse` (git gate on `Bash`, rule gate on
-writes), `SessionStart` (context on `startup|clear` and `resume|compact`), `Stop`,
+The Claude group set, unchanged: `PreToolUse` (git gate on `Bash|PowerShell`, rule gate on
+writes), `SessionStart` (context on every source — one matcher-less group covers
+`startup`, `resume`, `clear`, `compact` and `fork` alike), `Stop`,
 `SubagentStop` and `PreCompact` (learn). OpenClaude reads Claude's
 `hookSpecificOutput.permissionDecision`, so the gates **ask** where Claude asks.
 The context hook carries `--host openclaude` for one reason. It tells the hook
