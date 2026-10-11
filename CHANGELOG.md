@@ -8,6 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.0.0] — 2026-10-11
+
+Major: a host-compatibility pass against the current IBM Bob, Claude Code, OpenCode and OpenClaude docs (#240), the host opportunities and a root-scan guard (#241), and author notes kept out of what the agent reads (#242). It is a major because three behaviours change visibly: Claude Code gates now block when they cannot run, OpenCode no longer falls back to `~/.claude/CLAUDE.md`, and the silent *process 8* migration is gone.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating: nothing on a machine changes until an install is re-emitted.
+- An install built before the comms pack (3.7.0) is now skipped by `rebuild-all`, `migrate` and `upgrade`; run `geneseed setup` for it.
+- If a Claude Code session suddenly refuses every Bash or Write call, the machine-wide hook shim is missing or stale: run `! geneseed rebuild-all` (see docs/reference/troubleshoot-hooks.md).
+
 ### Added
 - A Claude Code plugin marketplace: `/plugin marketplace add Arylmera/Geneseed`, then `/plugin install geneseed@geneseed`. The plugin carries one skill, `/geneseed:setup`, which asks for scope and theme and runs the published CLI (`npm install -g geneseed`, `geneseed build --emit claude-global` or `--emit claude`). It carries no harness of its own, so nothing in it can drift from the build.
 - Bob gets `/`-commands: each skill alias and each user-only skill is a `.bob/commands/<name>.md`, and a user-only skill writes no SKILL.md on Bob, so the model cannot start it there.
@@ -22,6 +31,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - The automatic *process 8* migration. An install built before the comms pack (3.7.0, 2026-09-27) used to be silently rewritten on every rebuild: `doctrinesOfDir` added `comms` so the codes rule it carried inside `process` was not lost, and `excludedRulesOfDir` re-addressed any `process 7`/`process 8` exclusion. Both relied on sniffing `process 8` in the rendered carrier, which breaks the day the process pack ever regains an eighth rule for an unrelated reason — it would then fire on a current install and rewrite data nobody asked rewritten. 4.0.0 removes the rewrite: a pre-comms carrier is now read exactly as written, and reading it (`doctor`, `diff`, `status`, `uninstall`) prints a warning on stderr instead, once per process. `rebuild-all` (and `upgrade`, which shells into it) now **skips** a pre-comms install entirely rather than re-emitting it — re-emitting would have written a fresh carrier that still drops `comms` and still carries unaddressed `process 7`/`process 8` exclusions, except now permanently, with no `process 8` text left for anything to ever catch again. **Upgrading:** if your install predates 3.7.0 and still names `process 8` in its carrier, run `geneseed setup` for it — `rebuild-all`/`upgrade` will skip it and name it in their summary until you do.
 
 ### Fixed
+- Bob gates read Bob's own payload (`{event, tool, input}`); they used to read only `tool_input`, so on Bob no gate ever fired. Bob also scans `apply_diff` and `search_and_replace` bodies.
+- The Claude Code and OpenClaude git gate also matches the PowerShell tool (`Bash|PowerShell`); on Windows a destructive git command run through PowerShell used to pass unchecked. Read-only agents deny PowerShell too.
+- A hook argv error never exits 2: a stale machine-wide shim handed a newer flag used to block every tool call.
+- Windows without Git Bash: Claude Code runs hooks under PowerShell, where the emitted command was a parse error. The emit now detects Git Bash and writes a PowerShell form when it is absent; `doctor` and `status` warn when the machine changes after the emit.
+- `CLAUDE_CONFIG_DIR` is honoured. A global hook stands down only for a live project install in `$CLAUDE_PROJECT_DIR` whose settings file still runs the same hook, never for a parent folder, another global install, a deactivated install or a manifest alone.
+- The destructive-git gate also covers `clean --force`, `restore`, `push --delete` and `:branch`, `checkout -f`, `switch -f`, `stash drop/clear`, `worktree remove --force`, `reflog expire` and `gc --prune`, in the hook, the OpenCode guard and OpenCode's permissions.
+- OpenCode: the guard checks every path an `apply_patch` touches (the only edit tool of gpt-* models) and scans written content for secrets; per-repo builds honour `--footprint lean`; plugins, workflows and themes are claimed on create, so a same-named user file survives emit and uninstall; a one-line managed `AGENTS.md` stops OpenCode loading the harness a second time through `~/.claude/CLAUDE.md`; a shadowed install under `OPENCODE_CONFIG_DIR` is reported. The dead `permission.ask` loop exemption is removed; pushes to `loop/*` are allowed by a static rule, and force, delete, an extra refspec and commits still ask.
+- Settings are read back per host, so `rebuild-all`, `upgrade` and the console keep an OpenClaude per-repo install's theme, posture, packs and exclusions, also in a repo shared with another host.
+- Uninstalling one host from a shared repo hands the root marker to the surviving host instead of deleting it; `migrate` reads the settings file the install really wired.
+- `learn` cannot recurse through `claude -p`, reads nothing when `GENESEED_LLM` is unset, and returns at once on Bob, which sends no transcript.
 - `learn` on `SubagentStop` reads the subagent's own transcript (`agent_transcript_path`); it used to distil a lesson from the main session's. When the transcript cannot be read, or lags behind the final turn, it falls back to or appends `last_assistant_message`.
 
 ## [3.20.0] — 2026-10-09
