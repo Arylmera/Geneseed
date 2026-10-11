@@ -64,4 +64,4 @@ The patterns that do exist are deliberately narrow. A gate that fired on every h
 
 ---
 
-**Where next:** [Install it](../guides/install.md) · [The rules in detail](../concepts/rules.md) · [Glossary](../reference/glossary.md)
+**Where next:** [Install it](../guides/install.md) · [The rules in detail](../concepts/rules.md) · [Every rule, mapped to its host](../concepts/enforcement-table.md) · [Glossary](../reference/glossary.md)
