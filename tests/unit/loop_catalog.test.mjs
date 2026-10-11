@@ -34,6 +34,17 @@ test('parseBrick reads the flat frontmatter and the body', () => {
   });
 });
 
+// A brick's body is handed to the model RAW (the module header's own claim) — never through
+// `renderFile`/`resolveRuleIds` — so a `note:` comment in one would have ridden straight into
+// the loop prompt unless `parseBrick` strips it itself, through the same helper.
+test('parseBrick strips a note: comment out of the body before it ever reaches the loop prompt', () => {
+  const { brick, problems } = parseBrick(
+    `${brickMd('lint').trimEnd()}\n<!-- note: maintainers only, never the model -->\nMore text.\n`,
+    'shipped');
+  assert.deepEqual(problems, []);
+  assert.equal(brick.body, 'Run lint.\nMore text.');
+});
+
 test('parseBrick names every malformed field', () => {
   const { problems } = parseBrick('---\nname: Bad_Name\neffect: write\nagent: a\nskill: s\noutcomes:\n---\n', 'global');
   assert.deepEqual(problems, [

@@ -22,6 +22,7 @@ import {
 } from '../../js/hosts/native.mjs';
 import { cmdValidate } from '../../js/inspect/validate.mjs';
 import { checkBuild } from '../../js/inspect/checks-build.mjs';
+import { authorNoteProblems } from '../../js/inspect/checks-authoring.mjs';
 import { syncThemes } from '../../js/build/themes.mjs';
 import { writeText } from '../../js/lib/fs.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
@@ -2606,14 +2607,29 @@ test('a note: comment is stripped, single and multi-line, and known functional m
   const untouched = '<!-- invocation: user -->\n<!-- aliases: x, y -->\n'
     + '<!-- webfetch: allow -->\n<!--harness:claude-->\n<!-- bash: allow -->\n';
   assert.equal(resolveRuleIds(untouched), untouched);
-  // HTML comments do not nest — a `note:` comment whose prose quotes a literal `-->` (e.g. to
-  // show another marker's syntax) closes AT THAT POINT, same as every browser and the LEAN/
-  // CATALOG/INCLUDE markers already parse it. An author writing such an example must spell the
-  // marker without its closing `-->` (prose, or split the arrow) — this is pinned down so the
-  // landmine src/skills/_template.md hit once is not reintroduced silently.
-  assert.equal(resolveRuleIds('before\n<!-- note: see `<!-- x -->` -->\nafter\n'),
-    'before\n` -->\nafter\n');
 });
+
+test('a note: comment shown only as a literal example, inside a fence or a code span, is left alone', () => {
+  // The same fence/code-span detection the doctor uses (`blankCodeSpans`, js/inspect/scan.mjs via
+  // js/lib/text.mjs) gates the strip too: a skill teaching the `note:` syntax by example must not
+  // have that example eaten.
+  const fenced = 'before\n```\n<!-- note: just an example -->\n```\nafter\n';
+  assert.equal(resolveRuleIds(fenced), fenced);
+  const spanned = 'before `<!-- note: inline example -->` after\n';
+  assert.equal(resolveRuleIds(spanned), spanned);
+});
+
+test('a note: comment containing a nested <!-- or --> is refused by the doctor, not silently truncated', () => withDir((d) => {
+  // HTML comments do not nest — a `note:` comment whose prose quotes a literal marker (e.g. to
+  // show another marker's syntax) would close AT THAT POINT, same as every browser and the
+  // LEAN/CATALOG/INCLUDE markers already parse it. This is the landmine src/skills/_template.md
+  // hit once (fixed there by rewording); the doctor now catches it instead of a human having to.
+  const src = path.join(d, 'src');
+  fs.mkdirSync(src, { recursive: true });
+  fs.writeFileSync(path.join(src, 'x.md'), 'before\n<!-- note: see `<!-- x -->` -->\nafter\n');
+  const problems = authorNoteProblems(src);
+  assert.ok(problems.some((p) => p.includes('x.md') && p.includes('nested')), problems.join('\n'));
+}));
 
 test('the real canon strips the author note from the on-disk laws copy, the full carrier, and herdr.md', () => {
   const laws = renderFile(cfg(), path.join(ROOT, 'src', 'laws', 'universal.md'),

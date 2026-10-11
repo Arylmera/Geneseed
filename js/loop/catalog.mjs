@@ -20,7 +20,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { readText, isFile, isDir } from '../lib/fs.mjs';
 import { frontmatter } from '../hosts/memory-files.mjs';
-import { SRC } from '../build/source.mjs';
+import { SRC, stripAuthorNotes } from '../build/source.mjs';
 import { checkGraph } from './graph.mjs';
 
 export function userLoopsDir() {
@@ -31,7 +31,12 @@ export function userLoopsDir() {
 const KEBAB = /^[a-z0-9][a-z0-9-]*$/;
 
 export function parseBrick(text, origin) {
-  const [fm, body] = frontmatter(text);
+  // A brick's body never goes through `renderFile` — the module header above is explicit that
+  // the loop CLI hands it to the model raw — so this is the one place that can strip a `note:`
+  // comment before it reaches the prompt, through the same `stripAuthorNotes` every other
+  // reader of `src/` text goes through (`js/build/source.mjs`).
+  const [fm, rawBody] = frontmatter(text);
+  const body = stripAuthorNotes(rawBody);
   const get = (k) => (fm.get(k) ?? '').trim();
   const name = get('name');
   const problems = [];

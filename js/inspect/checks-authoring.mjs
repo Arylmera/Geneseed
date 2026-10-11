@@ -28,6 +28,13 @@ import { catalogProblems } from '../loop/catalog.mjs';
 import { blankCodeSpans, globSorted, isDir, isFile, rglob } from './scan.mjs';
 import { spawnSync } from 'node:child_process';
 
+// The four harness ids `js/web/docs.mjs`'s `HARNESS_OPEN_RE` accepts, comma-separated, in its
+// own `HARNESSES` constant. Not imported: `js/web/docs.mjs` pulls in the web daemon's CLI
+// reference, status and update modules, and `inspect/` has no existing import from `web/` to
+// extend — paying that weight on every `doctor --all` for one id list is not "cheap" reuse.
+// Inlined instead, so it must be kept in step by hand if `HARNESSES` ever changes.
+const HARNESS_IDS = 'opencode|claude|openclaude|bob';
+
 /**
  * The comment bodies (trimmed) that are known to be FUNCTIONAL — consumed by the render, a
  * host emit, or the docs skill — rather than a maintainer's own note, so a bare, un-prefixed
@@ -43,31 +50,54 @@ const ALLOWED_COMMENT_RES = [
   /^invocation:\s*user$/,                    // js/hosts/native.mjs: disable-model-invocation
   /^aliases:\s*\S.*$/,                       // js/build/source.mjs ALIASES_RE
   /^webfetch:\s*allow$/,                     // js/hosts/* webfetch gate
-  /^harness:\S+$/,                           // js/web/docs.mjs HARNESS_OPEN_RE
+  // js/web/docs.mjs HARNESS_OPEN_RE: `harness:` then one or more of its four ids, comma-separated.
+  new RegExp(`^harness:\\s*(?:${HARNESS_IDS})(?:\\s*,\\s*(?:${HARNESS_IDS}))*$`),
   /^bash:\s*allow$/,                         // js/hosts/native.mjs BASH_MARKER
 ];
 
 /**
- * Every bare HTML comment under `src/` that is neither the `<!-- note: ... -->` author-note
+ * Every bare HTML comment under `src` that is neither the `<!-- note: ... -->` author-note
  * prefix nor a known functional marker — the half of the pair `resolveRuleIds`' strip does not
  * cover: that function only ever sees a file once it is already being rendered, so a note
  * someone forgot to prefix would ship verbatim rather than fail loudly. Comments inside a
  * fenced code block or an inline code span are exempt — a skill explaining the managed-block
  * syntax (`` `<!-- BEGIN GENESEED -->` ``) to the agent is literal text, not live markup, and
- * `blankCodeSpans` is what tells the two apart without a full Markdown parser.
+ * `blankCodeSpans` (shared with `stripAuthorNotes`'s own fence/code-span exemption, so the two
+ * can never disagree about what counts as "shown as an example") is what tells the two apart
+ * without a full Markdown parser.
+ *
+ * A SECOND CHECK, on the SAME `note:` matches, named after the landmine `src/skills/_template.md`
+ * actually hit: a `note:` comment whose prose quotes a literal marker (`` `<!-- x -->` ``, even
+ * inside backticks) closes AT ITS OWN inner `-->`, because HTML comments do not nest — the rest
+ * of the note then leaks as live text. This is checked against the RAW slice of the match, BEFORE
+ * blanking: `blankCodeSpans` is what lets `stripAuthorNotes` run to the real closing `-->` when
+ * the inner one sits inside a fence or a span, but that same blanking would hide the inner
+ * `<!--`/`-->` from a check run on the blanked text — the raw body is the only place the nesting
+ * is still visible. `src = SRC` is a parameter, not a constant read, so a test can point it at a
+ * throwaway tree instead of planting a fault in the real one.
  */
-export function authorNoteProblems() {
+export function authorNoteProblems(src = SRC) {
   const problems = [];
-  for (const p of rglob(SRC)) {
+  for (const p of rglob(src)) {
     if (!isFile(p) || !p.endsWith('.md')) continue;
     let raw;
     try { raw = readText(p); } catch { continue; }
     const scan = blankCodeSpans(raw);
-    const rel = `src/${path.relative(SRC, p).split(path.sep).join('/')}`;
+    const rel = `src/${path.relative(src, p).split(path.sep).join('/')}`;
     for (const m of scan.matchAll(/<!--([\s\S]*?)-->/g)) {
       const body = m[1].trim();
-      if (ALLOWED_COMMENT_RES.some((re) => re.test(body))) continue;
       const line = scan.slice(0, m.index).split('\n').length;
+      if (/^note:/.test(body)) {
+        const rawInner = raw.slice(m.index + 4, m.index + m[0].length - 3);
+        if (rawInner.includes('<!--') || rawInner.includes('-->')) {
+          problems.push(`[authoring] ${rel}:${line} note: comment contains a nested HTML `
+            + 'comment marker (<!-- or -->) — comments do not nest, so it closes early and '
+            + 'leaks the rest of the note as live text; rephrase the example without the '
+            + 'literal marker (prose instead of a quoted <!-- ... -->)');
+          continue;
+        }
+      }
+      if (ALLOWED_COMMENT_RES.some((re) => re.test(body))) continue;
       problems.push(`[authoring] ${rel}:${line} has an HTML comment that is neither the `
         + "'note:' author-note prefix nor a known functional marker (" + JSON.stringify(body) + ') — '
         + "prefix it with 'note:' if it is maintainer-only, or the doctor's allow-list if the "

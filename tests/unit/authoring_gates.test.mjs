@@ -361,6 +361,17 @@ test('every known functional marker is silenced, including inside a fence or a c
   });
 });
 
+// The `harness:` allow-list is aligned with js/web/docs.mjs's HARNESS_OPEN_RE: one or more of
+// its four ids (opencode, claude, openclaude, bob), comma-separated, nothing else.
+test('harness: accepts the four real ids, comma-separated, and nothing else', () => {
+  withFault('src/zz-note.md', '<!-- harness: claude, openclaude -->\n', () => {
+    assert.deepEqual(F.authoring.authorNoteProblems(), []);
+  });
+  withFault('src/zz-note.md', '<!-- harness: made-up-host -->\n', () => {
+    assert.ok(some(F.authoring.authorNoteProblems(), 'src/zz-note.md', 'made-up-host'));
+  });
+});
+
 test('a folder SKILL.md with no frontmatter is flagged', () => {
   // daydream shipped this way: Claude Code tolerated it, a host reading the frontmatter does not.
   withFault('src/skills/daydream/SKILL.md', '# Vault Daydream Skill\n\nbody\n', () => {
