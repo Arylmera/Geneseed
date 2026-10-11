@@ -45,6 +45,7 @@ import { ENTITY_STATUSES, entityStatus, loadRegistry } from '../../js/inspect/in
 import {
   folderSkillProblems, registryProblems, secretProblems, vendorPinProblems,
 } from '../../js/inspect/checks-repo.mjs';
+import { authorNoteProblems } from '../../js/inspect/checks-authoring.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -62,7 +63,12 @@ async function checkoutFixture(prefix, faults) {
   const co = path.join(sb.path, 'checkout');
   copyCheckout(co, faults);
   const at = (rel) => pathToFileURL(path.join(co, rel)).href;
-  return { co, checks: await import(at('js/inspect/checks-repo.mjs')), inv: await import(at('js/inspect/inventory.mjs')) };
+  return {
+    co,
+    checks: await import(at('js/inspect/checks-repo.mjs')),
+    inv: await import(at('js/inspect/inventory.mjs')),
+    authoring: await import(at('js/inspect/checks-authoring.mjs')),
+  };
 }
 
 // THE SHARED COPY. Twenty of the twenty-four rows run against this one instance, because the
@@ -315,6 +321,55 @@ test('a proper pin is accepted', () => {
 test('the shipped folder skills open with a name that matches the folder', () => {
   assert.deepEqual(folderSkillProblems(), []);
   assert.deepEqual(F.checks.folderSkillProblems(), []);
+});
+
+// ---------------------------------------------------------------------------------------------
+// AUTHOR NOTES — the doctor's half of the pair with `resolveRuleIds`' strip. `<!-- note: ... -->`
+// is the one prefix that may ship un-flagged; every other bare HTML comment in `src/` must be
+// either that prefix or one of the known functional markers, or the doctor names it.
+
+test('the shipped tree carries no un-prefixed author note', () => {
+  assert.deepEqual(authorNoteProblems(), []);
+  assert.deepEqual(F.authoring.authorNoteProblems(), []);
+});
+
+test('a planted unprefixed note is flagged, and the note: prefix silences it', () => {
+  withFault('src/zz-note.md', '# x\n\n<!-- Maintainers: do not split this file. -->\n', () => {
+    const problems = F.authoring.authorNoteProblems();
+    assert.ok(some(problems, 'src/zz-note.md', 'Maintainers: do not split this file'), problems.join('\n'));
+  });
+  withFault('src/zz-note.md', '# x\n\n<!-- note: Maintainers: do not split this file. -->\n', () => {
+    assert.deepEqual(F.authoring.authorNoteProblems(), []);
+  });
+});
+
+test('every known functional marker is silenced, including inside a fence or a code span', () => {
+  const live = '<!-- LEAN:begin -->\nfull\n<!-- LEAN:else -->\nlean\n<!-- LEAN:end -->\n'
+    + '<!-- CATALOG:begin skills -->\ntable\n<!-- CATALOG:else -->\npointer\n<!-- CATALOG:end -->\n'
+    + '<!-- INCLUDE: skills/_self-improvement.md -->\n'
+    + '<!-- invocation: user -->\n<!-- aliases: x, y -->\n<!-- webfetch: allow -->\n'
+    + '<!--harness:claude-->\n<!-- bash: allow -->\n';
+  withFault('src/zz-note.md', live, () => {
+    assert.deepEqual(F.authoring.authorNoteProblems(), []);
+  });
+  // A comment is only ever a LITERAL EXAMPLE here — a skill explaining the GENESEED managed-block
+  // syntax to the agent — so it must not be mistaken for live, unprefixed markup.
+  const example = '# x\n\n`<!-- BEGIN GENESEED -->` and `<!-- geneseed:doc:start -->`\n\n'
+    + '```\n<!-- an example fence comment, not a real note -->\n```\n';
+  withFault('src/zz-note.md', example, () => {
+    assert.deepEqual(F.authoring.authorNoteProblems(), []);
+  });
+});
+
+// The `harness:` allow-list is aligned with js/web/docs.mjs's HARNESS_OPEN_RE: one or more of
+// its four ids (opencode, claude, openclaude, bob), comma-separated, nothing else.
+test('harness: accepts the four real ids, comma-separated, and nothing else', () => {
+  withFault('src/zz-note.md', '<!-- harness: claude, openclaude -->\n', () => {
+    assert.deepEqual(F.authoring.authorNoteProblems(), []);
+  });
+  withFault('src/zz-note.md', '<!-- harness: made-up-host -->\n', () => {
+    assert.ok(some(F.authoring.authorNoteProblems(), 'src/zz-note.md', 'made-up-host'));
+  });
 });
 
 test('a folder SKILL.md with no frontmatter is flagged', () => {

@@ -22,6 +22,7 @@ import {
 } from '../../js/hosts/native.mjs';
 import { cmdValidate } from '../../js/inspect/validate.mjs';
 import { checkBuild } from '../../js/inspect/checks-build.mjs';
+import { authorNoteProblems } from '../../js/inspect/checks-authoring.mjs';
 import { syncThemes } from '../../js/build/themes.mjs';
 import { writeText } from '../../js/lib/fs.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
@@ -2591,4 +2592,52 @@ test('the real canon numbers Echo the Intent IX, now that IX and XI are gone', (
   assert.ok(laws.includes('### Rule IX — Echo the Intent\n'), 'Echo the Intent is not Rule IX');
   assert.ok(!/^### Rule (X|XI) /m.test(laws), 'a tenth or eleventh law still renders');
   assert.ok(laws.includes('(*Echo the Intent*'), 'Verify Before Asserting no longer cites it by name');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Author notes. `<!-- note: ... -->`, single or multi-line, is maintainer-only prose and must
+// never reach an agent — stripped inside `resolveRuleIds`, the one function every text file
+// threads through before a render sees it (`readSource` for `renderFile`, `readPackText` for a
+// doctrine pack, `registerBody` for a posture/mode).
+
+test('a note: comment is stripped, single and multi-line, and known functional markers survive', () => {
+  assert.equal(resolveRuleIds('before\n<!-- note: drop me -->\nafter\n'), 'before\nafter\n');
+  assert.equal(resolveRuleIds('before\n<!-- note: line one\n   line two -->\nafter\n'),
+    'before\nafter\n');
+  const untouched = '<!-- invocation: user -->\n<!-- aliases: x, y -->\n'
+    + '<!-- webfetch: allow -->\n<!--harness:claude-->\n<!-- bash: allow -->\n';
+  assert.equal(resolveRuleIds(untouched), untouched);
+});
+
+test('a note: comment shown only as a literal example, inside a fence or a code span, is left alone', () => {
+  // The same fence/code-span detection the doctor uses (`blankCodeSpans`, js/inspect/scan.mjs via
+  // js/lib/text.mjs) gates the strip too: a skill teaching the `note:` syntax by example must not
+  // have that example eaten.
+  const fenced = 'before\n```\n<!-- note: just an example -->\n```\nafter\n';
+  assert.equal(resolveRuleIds(fenced), fenced);
+  const spanned = 'before `<!-- note: inline example -->` after\n';
+  assert.equal(resolveRuleIds(spanned), spanned);
+});
+
+test('a note: comment containing a nested <!-- or --> is refused by the doctor, not silently truncated', () => withDir((d) => {
+  // HTML comments do not nest — a `note:` comment whose prose quotes a literal marker (e.g. to
+  // show another marker's syntax) would close AT THAT POINT, same as every browser and the
+  // LEAN/CATALOG/INCLUDE markers already parse it. This is the landmine src/skills/_template.md
+  // hit once (fixed there by rewording); the doctor now catches it instead of a human having to.
+  const src = path.join(d, 'src');
+  fs.mkdirSync(src, { recursive: true });
+  fs.writeFileSync(path.join(src, 'x.md'), 'before\n<!-- note: see `<!-- x -->` -->\nafter\n');
+  const problems = authorNoteProblems(src);
+  assert.ok(problems.some((p) => p.includes('x.md') && p.includes('nested')), problems.join('\n'));
+}));
+
+test('the real canon strips the author note from the on-disk laws copy, the full carrier, and herdr.md', () => {
+  const laws = renderFile(cfg(), path.join(ROOT, 'src', 'laws', 'universal.md'),
+    effectiveTheme(cfg(), 'neutral'), 'full');
+  assert.ok(!laws.includes('Amend BOTH halves'), 'the on-disk laws copy still carries the maintainer note');
+  const herdr = rendered('skills/herdr.md');
+  assert.ok(!herdr.includes('Authoring note'), 'the rendered herdr skill still carries the maintainer note');
+  // AGENT.md inlines laws/universal.md at full footprint — the carrier copy, not just the on-disk one.
+  const agent = rendered('AGENT.md', 'neutral', 'full');
+  assert.ok(!agent.includes('Amend BOTH halves'), 'the full carrier still inlines the maintainer note');
 });

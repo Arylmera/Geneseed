@@ -1,5 +1,5 @@
 <!-- LEAN:begin -->
-<!-- Each law: a heading declaring its permanent id (its number is its position) and one
+<!-- note: Each law: a heading declaring its permanent id (its number is its position) and one
      LEAN block, full text then the lean form AGENT.md inlines. Amend BOTH halves. -->
 
 These {{LAWS}} are the invariants: always in force, never toggleable, never

@@ -1,4 +1,4 @@
-<!-- Authoring note: this file is deliberately 4-6x the size of its peers — it is the only documentation the agent has for the external `herdr` CLI surface (no man page, no --help in context), so it carries the full command reference inline. Do not split it. -->
+<!-- note: this file is deliberately 4-6x the size of its peers — it is the only documentation the agent has for the external `herdr` CLI surface (no man page, no --help in context), so it carries the full command reference inline. Do not split it. -->
 # {{SKILL}}: herdr
 
 > {{DESC_HERDR}}

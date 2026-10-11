@@ -193,3 +193,26 @@ export function percentDecode(s) {
 export function relPosix(base, target) {
   return path.relative(base, target).split(path.sep).join('/');
 }
+
+/**
+ * Markdown's two ways to show syntax as a literal example rather than live markup: a fenced
+ * block (```` ``` ````) and an inline span (`` ` ``). Shared here, not duplicated in
+ * `js/inspect/scan.mjs` and `js/build/source.mjs`, because both need the SAME answer to "is this
+ * text code" and a second regex drifting from the first would silently stop agreeing on it.
+ */
+export const FENCE_RE = /```[\s\S]*?```/g;
+export const INLINE_CODE_RE = /`[^`]*`/g;
+
+/**
+ * Fenced and inline code, blanked to same-length whitespace with every newline kept — so a scan
+ * for a BARE `<!-- ... -->` (one a reader actually sees as live markup) never trips on one that
+ * is only a literal example inside a fence or a code span, while every match's INDEX still lands
+ * on the right source offset in the ORIGINAL text. Two callers: `checks-authoring.mjs`'s
+ * `authorNoteProblems` (which needs comments that survive, unlike `js/inspect/scan.mjs`'s
+ * `stripCode`, which drops them) and `js/build/source.mjs`'s `stripAuthorNotes` (which needs a
+ * `note:` comment show ONLY as a literal example left un-stripped).
+ */
+export function blankCodeSpans(text) {
+  const blank = (s) => s.replace(/[^\n]/g, ' ');
+  return text.replace(FENCE_RE, blank).replace(INLINE_CODE_RE, blank);
+}

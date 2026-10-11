@@ -27,6 +27,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
+import { blankCodeSpans } from '../lib/text.mjs';
 
 /**
  * One doctrine pack file used to be read three times per render — the survives gate and the
@@ -137,11 +138,49 @@ export function ruleCanon(src = SRC) {
 }
 
 /**
+ * AUTHOR NOTES — `<!-- note: ... -->`, single or multi-line, is maintainer-only prose and must
+ * never reach an agent (user decision 2026-10-11). Stripped here because `resolveRuleIds` is the
+ * one function every text file threads through before a render sees it: `readSource` in
+ * `js/build/render.mjs` for `renderFile` (every file in `src/`, including the on-disk `laws/`,
+ * `ontology/` and `doctrines/` copies and everything an INCLUDE pulls in), `registerBody` there
+ * for a posture/mode, `readPackText` here for a doctrine pack body, and `parseBrick`
+ * (`js/loop/catalog.mjs`) for a brick body, which never goes through `renderFile` at all — the
+ * loop CLI hands it to the model raw, so it calls `stripAuthorNotes` itself. One function, every
+ * reader. `js/inspect/checks-authoring.mjs`'s `authorNoteProblems` is the companion gate: it
+ * scans `src/` directly for a comment that is neither this prefix nor a known functional marker,
+ * so a new author note without the prefix is caught instead of silently shipping.
+ *
+ * MATCHED AGAINST THE BLANKED TEXT, NOT THE RAW ONE. `blankCodeSpans` (`js/lib/text.mjs`, shared
+ * with the doctor arm so the two can never disagree about what counts as "shown as an example")
+ * replaces every fenced block and inline code span with same-length whitespace, so (a) a
+ * `note:` comment that is only a literal example — a skill teaching the syntax — never matches,
+ * and (b) a real comment whose prose quotes a literal marker inside backticks (the
+ * `src/skills/_template.md` landmine: `` `<!-- invocation: user -->` `` closing the OUTER note
+ * at its own inner `-->`) is blanked there too, so the lazy `[\s\S]*?` correctly runs to the
+ * REAL closing `-->` instead of stopping at the quoted one. Blanking preserves every index and
+ * every newline, so a match found in the blanked copy is removed from the SAME range of the
+ * original — never from the blanked copy itself, which would turn the code span's blanks into
+ * removed source.
+ */
+const AUTHOR_NOTE_RE = /[ \t]*<!--[ \t]*note:[\s\S]*?-->[ \t]*\r?\n?/g;
+export function stripAuthorNotes(text) {
+  const masked = blankCodeSpans(text);
+  const ranges = [...masked.matchAll(AUTHOR_NOTE_RE)]
+    .map((m) => [m.index, m.index + m[0].length]);
+  if (!ranges.length) return text;
+  let out = '';
+  let last = 0;
+  for (const [start, end] of ranges) { out += text.slice(last, start); last = end; }
+  return out + text.slice(last);
+}
+
+/**
  * Resolve every declaration and citation in `text` against the canon under `src`. An unknown id
  * is left exactly as written — visible in the output, and named by the doctor — rather than
  * guessed at.
  */
 export function resolveRuleIds(text, src = SRC) {
+  text = stripAuthorNotes(text);
   if (!text.includes('{{LAW:') && !text.includes('{{DOCTRINE:')) return text;
   const { byId } = ruleCanon(src);
   const known = (kind, id) => { const r = byId.get(id); return r && r.kind === kind ? r : null; };

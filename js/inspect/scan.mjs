@@ -14,12 +14,15 @@ import { SRC } from '../build/source.mjs';
 import { comparePaths, within } from '../lib/paths.mjs';
 import { isDir, isFile } from '../lib/fs.mjs';
 import { has } from '../lib/json.mjs';
+import { FENCE_RE, INLINE_CODE_RE, blankCodeSpans } from '../lib/text.mjs';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 
 // `isDir`/`isFile`/`has` are owned by `js/lib` now (single owner across `hosts/`, `build/`,
 // `inspect/` and `web/`) — re-exported here so this module's own existing callers keep
-// importing them from `./scan.mjs` unchanged.
-export { isDir, isFile, has };
+// importing them from `./scan.mjs` unchanged. `blankCodeSpans` is `js/lib/text.mjs`'s too, for
+// the same reason: `js/build/source.mjs`'s `stripAuthorNotes` needs the identical fence/code-span
+// answer and cannot import this module (it would cycle back through `../build/source.mjs` above).
+export { isDir, isFile, has, blankCodeSpans };
 
 // --------------------------------------------------------------------------------------
 // _harness_core's scanning primitives
@@ -32,8 +35,6 @@ export { isDir, isFile, has };
 export const TOKEN_RE = /\{\{[A-Z_][A-Z0-9_]*\}\}/g;
 export const LINK_RE = /\]\((?!https?:\/\/|#)([^)]+)\)/g;
 export const ABS_LINK_RE = /^([A-Za-z]:[\\/]|\/|~)/;
-const FENCE_RE = /```[\s\S]*?```/g;
-const INLINE_CODE_RE = /`[^`]*`/g;
 const COMMENT_RE = /<!--[\s\S]*?-->/g;
 
 /** `_harness_core.strip_code` — fenced blocks, then HTML comments, then inline code, in that order. */

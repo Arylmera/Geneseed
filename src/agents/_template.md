@@ -1,4 +1,4 @@
-<!--
+<!-- note:
   Authoring a new agent:
   1. Reuse first — if an existing {{AGENT}}'s capability already covers the need,
      extend it instead of adding a file ({{DOCTRINE:automate-repetition}} applies to specialists too).
