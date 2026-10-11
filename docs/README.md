@@ -12,6 +12,8 @@
 
 **Day to day** — [A day with the harness](understand/a-day.md): the moments you will actually meet · [Enforced vs. asked](understand/enforced-vs-asked.md): what is guaranteed by code, and what the model is only asked to do.
 
+**Why it works this way** — [Why Geneseed works this way](understand/design-choices.md): every decision already taken, one line each, and where it is argued · [The shape of the harness](understand/design-choices-shape.md) · [Gates](understand/design-choices-gates.md) · [Hosts](understand/design-choices-hosts.md) · [Install, uninstall, update](understand/design-choices-install.md) · [Engineering, skills and agents](understand/design-choices-engineering.md) · [Considered and refused](design-history.md#considered-and-refused).
+
 ## 2 · Guides
 
 | Section | Guide | When |
