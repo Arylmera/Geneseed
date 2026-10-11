@@ -28,7 +28,10 @@ import { jsonDumps, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { sourceReleaseVersion } from '../build/version.mjs';
 import { aliasesOf } from '../build/source.mjs';
-import { firstBlockquote, stripSkillBodyLinks, pointSideFiles, pushOverrideLines } from './native.mjs';
+import {
+  firstBlockquote, isUserInvokedOnly, skillDescription, stripSkillBodyLinks, pointSideFiles,
+  pushOverrideLines,
+} from './native.mjs';
 
 // Re-exported for `js/web/api.mjs` and the tests, which import it from here.
 export { sourceReleaseVersion };
@@ -346,9 +349,17 @@ export function writeCommandLayer(cfg, items, commandDir, claim = (_dest) => tru
  * second copy of its target. UNCONDITIONAL, unlike the `GENESEED_COMMANDS` set — an old name
  * that only works behind an opt-in is a name that broke. Read off the already-filtered
  * `items`, so excluding the target drops its aliases.
+ *
+ * `alsoUserOnly` (Bob host-compat O2/R1): Bob's skills page documents no model-invocation
+ * key either, so a genuinely user-only skill (not just an alias) needs the same treatment —
+ * `writeNativeLayer({ bobDialect: true })` already skipped its SKILL.md, and this is the one
+ * place left to give `/<stem>` a home. Default `false`: OpenCode's own call site leaves this
+ * off, because a real user-only skill there is handled by `permission.skill` deny instead
+ * (Task 4) — it keeps its SKILL.md and does not need a second, command-shaped copy.
  */
 export function writeAliasCommands(cfg, items, commandDir, claim = (_dest) => true,
-  skillDirOf = (n) => path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/')) {
+  skillDirOf = (n) => path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/'),
+  alsoUserOnly = false) {
   const written = [];
   for (const { text, src } of items) {
     if (text === null) continue;
@@ -356,11 +367,13 @@ export function writeAliasCommands(cfg, items, commandDir, claim = (_dest) => tr
     if (sp.length !== 2 || sp[0] !== 'skills' || !sp[1].endsWith('.md') || sp[1].startsWith('_')) continue;
     const stem = sp[1].slice(0, -3);
     const body = stripSkillBodyLinks(pointSideFiles(text.replace(/^\n+/, ''), stem, skillDirOf(stem)));
-    for (const alias of aliasesOf(text)) {
-      const dest = path.join(commandDir, `${alias}.md`);
+    const names = alsoUserOnly && isUserInvokedOnly(text) ? [...aliasesOf(text), stem] : aliasesOf(text);
+    for (const name of names) {
+      const dest = path.join(commandDir, `${name}.md`);
       if (!claim(dest)) continue;
       mkdirSync(path.dirname(dest), { recursive: true });
-      writeText(dest, `---\ndescription: ${jsonDumps(`Alias of ${sp[1].slice(0, -3)}.`)}\n---\n\n${body}`);
+      const desc = name === stem ? skillDescription(text) : `Alias of ${stem}.`;
+      writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${body}`);
       written.push(dest);
     }
   }

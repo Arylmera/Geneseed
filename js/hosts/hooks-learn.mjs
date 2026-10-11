@@ -118,10 +118,27 @@ function flattenTranscript(p) {
 }
 
 /**
- * `_read_notes` — a lifecycle-hook payload with a `transcript_path` is read and flattened
- * (this is what makes wiring `learn` to a Stop hook work with no redirection); anything
- * else is used as-is. `meta` is that payload as `hookMeta` parsed it — passed in by
- * `cmdLearn`, which needs it again, so the raw text is parsed once.
+ * `_read_notes` — a lifecycle-hook payload naming a transcript is read and flattened (this is
+ * what makes wiring `learn` to a Stop hook work with no redirection); anything else is used
+ * as-is. `meta` is that payload as `hookMeta` parsed it — passed in by `cmdLearn`, which needs
+ * it again, so the raw text is parsed once.
+ *
+ * B10 (Claude verdict, host-compat-2026-10): on SubagentStop, `transcript_path` is the MAIN
+ * session's transcript — the subagent's own turn lives in `agent_transcript_path` instead, in
+ * a nested `subagents/` folder (docs `hooks.md`). Flattening the parent's file distils a lesson
+ * about the wrong conversation, so the agent's own path wins whenever both are given; Stop/
+ * PreCompact never send `agent_transcript_path`, so they fall through to `transcript_path`
+ * unchanged.
+ *
+ * `last_assistant_message` (Stop and SubagentStop) is the host's own copy of the final turn. It
+ * is never preferred over the transcript — `learn` distils from the whole exchange, and
+ * `last_assistant_message` is Claude's reply alone, with the user's side of the turn gone, so
+ * using it as the default would trade lesson quality for a read it does not need to save. It is
+ * used in two cases only, both strictly additive: as the whole of `notes` when the transcript
+ * file cannot be read at all (missing, or the host has not flushed it yet); and APPENDED when
+ * the file DID read but the write lagged behind the live conversation enough to miss the final
+ * turn (docs `hooks.md`) — detected by the flattened text not already ending in it, so a
+ * transcript that already has the final turn never gets a duplicate.
  *
  * EXPORTED FOR THE UNIT TIER, and the rule this follows is written down once here for it and
  * for `./memory-files.mjs`'s `existingSlugs` and `writeMemories`.
@@ -136,8 +153,14 @@ function flattenTranscript(p) {
  */
 export function readNotes(raw, meta = hookMeta(raw)) {
   if (!raw.trim()) return '';
-  const tp = meta.transcript_path;
-  return tp ? flattenTranscript(tp) : raw;
+  const tp = meta.agent_transcript_path || meta.transcript_path;
+  if (!tp) return raw;
+  const flat = flattenTranscript(tp);
+  const lastMsg = typeof meta.last_assistant_message === 'string'
+    ? meta.last_assistant_message.trim() : '';
+  if (!flat) return lastMsg || flat;
+  if (lastMsg && !flat.endsWith(lastMsg)) return `${flat}\n\nassistant: ${lastMsg}`;
+  return flat;
 }
 
 function buildLearnPrompt(notes, existing) {
@@ -271,8 +294,8 @@ export function cmdLearn(args) {
   // on `{"event":"Stop","session_id":"s"}`). Scoped to `--host bob`: every other host's Stop/
   // PreCompact genuinely carries `transcript_path` (docs `hooks.md`), so a bare envelope there
   // is either a hand-typed note (no event field at all) or a bug upstream, neither of which this
-  // should swallow. SubagentStop is excluded too — it legitimately has no `transcript_path`
-  // (it carries `agent_transcript_path` instead, B10 — undone) and is routed below on the
+  // should swallow. SubagentStop is excluded too — its own transcript is `agent_transcript_path`,
+  // which `readNotes` now reads instead (B10), and it is routed below on the
   // agent-name fields alone. Kept rather than dropping Bob's Stop group (js/hosts/settings.mjs):
   // the group costs nothing once this returns immediately, and if Bob ever starts sending a
   // transcript, learning starts working there with no emit change.

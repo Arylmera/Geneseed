@@ -320,6 +320,59 @@ function reconcileOpencodePermission(perm, want) {
   return [changed, stranded, null];
 }
 
+/**
+ * `permission.skill` rows for OpenCode's O-1 fix (opencode-verdict.md): a skill marked
+ * `<!-- invocation: user -->` is still model-invocable there (Claude Code's
+ * `disable-model-invocation` has no OpenCode equivalent), so each one gets an explicit
+ * `"<name>": "deny"` — confirmed against upstream `permission.ts` (`skill: Schema.optional(Rule)`,
+ * `Rule = Action | Record<string,Action>`) and `Skill.available`'s `Permission.evaluate("skill",
+ * …)` filter. `/name` still runs it: `Command`'s skill loop reads `skill.all()`, never the
+ * permission-filtered list, so the command path is untouched by design.
+ */
+function defaultSkillPermission(names) {
+  const skill = {};
+  for (const n of names) skill[n] = 'deny';
+  return skill;
+}
+
+/**
+ * Add any of `names` missing from an EXISTING `permission.skill` (each one pushed onto `added`),
+ * and remove any of `staleNames` that still read `"deny"` — the `skill` twin of
+ * `reconcileOpencodePermission`, but with a DIFFERENT removal rule. `reconcileOpencodePermission`
+ * never removes a bash key because nothing on disk records which `ask`/`allow` entry is
+ * Geneseed's; a skill deny has a record instead: the manifest's `skill_denies`, the names a
+ * previous emit itself ADDED (never a name whose deny was already there — that one is the
+ * user's, even on a Geneseed skill). The caller reads it into `staleNames` = "recorded by the
+ * PREVIOUS build, not wanted by THIS one" — a skill that lost its `<!-- invocation: user -->`
+ * marker, or was `--exclude-skills`'d. The value check on top still guards a user's own
+ * re-scoped `"allow"`/`"ask"` for a recorded name — the record licenses taking back Geneseed's
+ * OWN entry, not whatever is there now.
+ *
+ * A non-object `permission.skill` (a blanket `"skill": "allow"`/`"deny"`/`"ask"`) is the
+ * user's own policy and is left alone, reported as opaque — same contract as
+ * `reconcileOpencodePermission`'s `bash` shape guard. `staleNames` is silently skipped in that
+ * case too: there is no per-name object to delete from.
+ * @returns {[boolean, string | null]}
+ */
+function reconcileOpencodeSkillPermission(perm, names, staleNames = [], added = []) {
+  if (!has(perm, 'skill')) {
+    if (!names.length) return [false, null];
+    perm.skill = defaultSkillPermission(names);
+    added.push(...names);
+    return [true, null];
+  }
+  const skill = get(perm, 'skill');
+  if (!isDict(skill)) return [false, names.length ? 'has a "skill" that is not an object' : null];
+  let changed = false;
+  for (const n of names) {
+    if (!has(skill, n)) { skill[n] = 'deny'; changed = true; added.push(n); }
+  }
+  for (const n of staleNames) {
+    if (skill[n] === 'deny') { delete skill[n]; changed = true; }
+  }
+  return [changed, null];
+}
+
 /** `_build_settings._opencode_target`. Only caller of a `.json` -> `.jsonc` suffix swap. */
 export function opencodeTarget(jsonPath) {
   const ext = path.extname(jsonPath);
@@ -449,7 +502,7 @@ export function loadJsonObject(p, { strict = false } = {}) {
  * `'add'`, which is what the boolean callers this replaced meant.
  */
 function warnCommentedJsonc(target, agentPath, permission,
-  includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = []) {
+  includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = [], skillNames = []) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
   process.stdout.write(`[${prefix}]     ${jsonDumps(agentPath)}\n`);
@@ -460,6 +513,13 @@ function warnCommentedJsonc(target, agentPath, permission,
       : `[${prefix}] and, for Geneseed's default ask-gates, a "permission" key:\n`);
     for (const line of jsonDumpsIndent(defaultPermission(doctrines, excluded)).split('\n')) {
       process.stdout.write(`[${prefix}]     ${line}\n`);
+    }
+    if (skillNames.length) {
+      process.stdout.write(`[${prefix}] and, to hide its user-only skills from the model, a `
+        + '"permission"."skill" key:\n');
+      for (const line of jsonDumpsIndent(defaultSkillPermission(skillNames)).split('\n')) {
+        process.stdout.write(`[${prefix}]     ${line}\n`);
+      }
     }
   }
   if (includeLsp) {
@@ -495,8 +555,14 @@ export function atomicWriteJson(p, config) {
  * Zero runtime callers — re-measured this phase and still true. `rituals/_harness_mcp.py`
  * re-implements the inverse itself rather than inherit this one's permission/lsp side
  * effects, so the only crossings are the two emit-tree ones (`_build_emit.emit_opencode`,
- * `_build_global.emit_opencode_global`). */
-export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = []) {
+ * `_build_global.emit_opencode_global`).
+ *
+ * `result.skillsAdded` is set to the `permission.skill` denies this call added ONLY when the
+ * file on disk now matches what it computed (written, or nothing to change). Left unset on
+ * every path that wrote nothing — unreadable, not an object, commented `.jsonc`, write
+ * failure — so the caller keeps its previous record rather than claiming denies never written. */
+export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [], skillNames = [],
+  staleSkillNames = [], result = {}) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
   const { state, data, hadComments, error } = loadJsonObject(target);
@@ -527,10 +593,28 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
   let permChanged = addPerm;
   let stranded = [];
   let opaque = null;
-  if (addPerm) config.permission = defaultPermission(doctrines, excluded);
-  else {
-    [permChanged, stranded, opaque] = reconcileOpencodePermission(get(config, 'permission'),
+  let skillOpaque = null;
+  let permIsObject = true;
+  const added = [];
+  if (addPerm) {
+    config.permission = defaultPermission(doctrines, excluded);
+    if (skillNames.length) {
+      config.permission.skill = defaultSkillPermission(skillNames);
+      added.push(...skillNames);
+    }
+  } else {
+    const perm = get(config, 'permission');
+    permIsObject = isDict(perm);
+    [permChanged, stranded, opaque] = reconcileOpencodePermission(perm,
       defaultPermission(doctrines, excluded));
+    // Independent of the `bash` shape: a `permission.bash` the build cannot wire into must
+    // not also block the UNRELATED `permission.skill` key from being reconciled.
+    if (permIsObject) {
+      let skillChanged;
+      [skillChanged, skillOpaque] = reconcileOpencodeSkillPermission(perm, skillNames, staleSkillNames,
+        added);
+      permChanged = permChanged || skillChanged;
+    }
   }
   // The shape said no. This is the direction the residue warning above is NOT — a rule stated
   // in AGENT.md with nothing behind it — and it used to pass in silence, because a blanket
@@ -538,11 +622,22 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
   // short-circuits before any of the three WARNs below. Reported, never rewritten: the blanket
   // policy is the user's answer and it wins (`generate.test.mjs` pins that it survives).
   if (opaque) {
+    // `permIsObject` is false only here: `permission` itself is not an object at all, so the
+    // skill reconcile above never ran either — the unwired skill denies are folded into THIS
+    // one WARN rather than going unmentioned (a dedicated `skillOpaque` needs `perm` to be a
+    // dict to even look at `perm.skill`, which this case by definition is not).
+    const names = [...OWNED_BASH.filter((k) => has(defaultPermission(doctrines, excluded).bash, k)),
+      ...(!permIsObject ? skillNames : [])];
     process.stderr.write(`[geneseed] WARN: "permission" in ${path.basename(target)} `
       + `${opaque}, so Geneseed cannot wire its own gates into it — including `
-      + `${OWNED_BASH.filter((k) => has(defaultPermission(doctrines, excluded).bash, k))
-        .map((k) => jsonDumps(k)).join(', ')}. Your policy is left exactly as written; the `
+      + `${names.map((k) => jsonDumps(k)).join(', ')}. Your policy is left exactly as written; the `
       + 'harness states those rules but nothing enforces them at this boundary.\n');
+  }
+  if (skillOpaque) {
+    process.stderr.write(`[geneseed] WARN: "permission"."skill" in ${path.basename(target)} `
+      + `${skillOpaque}, so Geneseed cannot wire its own skill-visibility gates into it — `
+      + `including ${skillNames.map((k) => jsonDumps(k)).join(', ')}. Your policy is left `
+      + 'exactly as written; those skills stay in the model\'s catalogue.\n');
   }
   // Told, not silently left: these are gates for a rule this build does not make binding, kept
   // because Geneseed cannot prove it was the one that wrote them. stderr, like the other two
@@ -556,7 +651,10 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
   }
   const addLsp = !has(config, 'lsp');
   if (addLsp) config.lsp = true;
-  if (!addInstr && !permChanged && !addLsp) return target;
+  if (!addInstr && !permChanged && !addLsp) {
+    result.skillsAdded = added;
+    return target;
+  }
   if (path.extname(target) === '.jsonc' && hadComments) {
     // ⚠ THE TWO CASES GIVE OPPOSITE ADVICE, and telling a file that HAS a `permission` key to
     // add one is how the first cut of this got it wrong. `add` = there is no block, here is the
@@ -570,11 +668,12 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [])
     // block to paste, split by which of the two situations the reader is actually in. It is
     // stdout, not stderr, because on this path the paste-in IS the output.
     warnCommentedJsonc(target, agentPath, addPerm ? 'add' : (permChanged && 'reconcile'),
-      addLsp, 'geneseed', doctrines, excluded);
+      addLsp, 'geneseed', doctrines, excluded, skillNames);
     return target;
   }
   try {
     atomicWriteJson(target, config);
+    result.skillsAdded = added;
   } catch (e) {
     if (!isOsError(e)) throw e;
     process.stderr.write(`[geneseed] WARN: could not write ${target} (${e.message}) — `
@@ -638,18 +737,28 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // refuse a call is EXIT CODE 2. The groups this emit wrote before were Claude's whole
     // set: `SubagentStop`/`PreCompact` are not Bob events, and the gates answered with a
     // stdout JSON Bob never reads — permissive on every call. `--host bob` makes the gates
-    // speak exit codes (js/hosts/hooks.mjs). No matcher on PreToolUse: Bob's tool names
-    // are undocumented (its IDE and Shell differ), so `tool-gate` reads the payload's shape
+    // speak exit codes (js/hosts/hooks.mjs). DELIBERATELY no matcher on PreToolUse
+    // (host-compat O1, revisited): bob-docs.md §2's tool list is already stale against the
+    // changelog (`web_fetch`, the 2.1.0 Office/IBM-docs tools are undocumented there), so an
+    // allow-list matcher built from it fails OPEN on every tool Bob adds between one
+    // docs read and the next — the exact failure mode a gate must not have. A deny-list
+    // with a negative-lookahead was the other shape considered; it depends on an unverified
+    // regex DIALECT (bob-docs.md never states whether its "regex on the tool name" supports
+    // lookahead at all), and a dialect mismatch there would silence the WHOLE gate rather than
+    // merely skip spawning it. bob-verdict.md O1 itself rates the matcher's upside "low,
+    // performance only" — not worth either risk. So `tool-gate` reads the payload's shape
     // instead. Which tool payload fields Bob sends is equally undocumented; the gates read
     // Claude's (`command`, `file_path`/`path`, `content`/`new_string`) and defer on anything
-    // else. Unverified live: no Bob install on the authoring machine.
+    // else. Unverified live: no Bob install on the authoring machine. Revisit a matcher only
+    // once a live Bob session can confirm both the current tool list and the regex dialect.
     const b = ' --host bob';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
       // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
       // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
       // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries, and for a
-      // write under a project's own `.geneseed/protected-checks.txt` — the project opted in.
+      // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
+      // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
       PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
@@ -670,6 +779,15 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
   const learn = `${run} learn ${mem}${h} || exit 0`;
+  // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
+  // out, or exits anything but 0 or 2 — even one whose stdout happens to be valid JSON — now
+  // BLOCKS the tool call instead of sliding through as the non-blocking default. Only safe to
+  // turn on now that an argv error inside geneseed-hook.mjs itself exits 0 (earlier host-compat
+  // fix): before that, a gate typo would have turned every tool call into a hang-visible block.
+  // A normal run (exit 0 + a schema-valid verdict) is untouched either way — see hooks.md's
+  // failure table. OpenClaude is a 2.1.88-era fork and must never see a field that version
+  // predates; Bob's own hook doc names no such field (and takes the early return above).
+  const onFailureBlock = host === 'claude' ? { onFailure: 'block' } : {};
   const groups = {
     PreToolUse: [
       // `Bash|PowerShell`, not `Bash` alone (Claude verdict I1): docs `hooks.md` says a hook
@@ -677,12 +795,12 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // shell whenever Git Bash is absent — and on Windows without Git Bash, Bash is not even
       // registered. `tool_input.command` is the same field on both tools, so `GIT_GATE_RE`
       // needs no change.
-      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: gate }] },
+      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: gate, ...onFailureBlock }] },
       {
         // No `MultiEdit`: it is not in Claude Code's tool table (tools-reference.md) — a dead
         // matcher entry (Claude verdict R2).
         matcher: 'Write|Edit|NotebookEdit',
-        hooks: [{ type: 'command', command: ruleGate }],
+        hooks: [{ type: 'command', command: ruleGate, ...onFailureBlock }],
       },
     ],
     // One matcher-less group, not a `startup|clear` / `resume|compact` split (Claude verdict
@@ -724,7 +842,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
  * default) and a leading `&` — PowerShell refuses a quoted command head followed by arguments —
  * and the never-block tail `|| exit 0` becomes `; exit 0`, valid in pwsh 7 and Windows
  * PowerShell 5.1 alike (both measured byte-identical to the bash form's output). The gates stay
- * bare: no verb exits 2, so a launch failure is non-blocking in either shell.
+ * bare on the exit-code side (no verb exits 2), but since Task 1 they carry `onFailure: "block"`
+ * (Claude only — `claudeHookGroups`'s `onFailureBlock`), so a launch failure — e.g. the bash-form
+ * command run under a Git-Bash-less PowerShell, a parse error — now BLOCKS instead of sliding
+ * through. `context`/`learn` carry no such field and stay non-blocking on a launch failure,
+ * in either shell.
  *
  * The paths stay double-quoted, where PowerShell expands `$name` and reads a backtick as an
  * escape — a Windows path may legally hold either, and a mangled `--root` silently changes

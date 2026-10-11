@@ -53,14 +53,14 @@ import { mkdirSync } from 'node:fs';
  */
 function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const {
-    oldOwned, manifestExisted, agentPath, wireBase, overridesDir,
+    oldOwned, manifestExisted, agentPath, wireBase, overridesDir, oldDenies = [],
   } = opts;
   ensureAgentOverridesStub(cfg, overridesDir);
   const overrides = loadAgentOverrides(overridesDir);
   // One claim for every writer below whose path lands in `owned` — see `claimer`.
   const claim = claimer(oldOwned, dir, manifestExisted);
 
-  const { nAgents, nSkills, written } = writeNativeLayer(
+  const { nAgents, nSkills, written, userOnlySkills } = writeNativeLayer(
     items, path.join(dir, 'agents'), path.join(dir, 'skills'), overrides,
     { host: 'opencode', theme, src: cfg.src, claim });
   for (const p of written) owned.push(relPosix(dir, p));
@@ -87,13 +87,25 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const nPlugins = copyPlugins(cfg, path.join(dir, 'plugins'), owned, claim);
   const nWorkflows = copyWorkflows(cfg, path.join(dir, 'workflows'), owned, claim);
 
-  // WIRE — the one file of this layer the user co-owns.
+  // WIRE — the one file of this layer the user co-owns. `oldDenies` is the previous manifest's
+  // `skill_denies`: the `permission.skill` denies Geneseed itself ADDED (final review — owning
+  // `skills/<name>/SKILL.md` is not owning a deny the user put on that name). `staleSkillNames`
+  // is the part of it this build no longer wants denied — the skill lost its user-only marker,
+  // or was `--exclude-skills`'d. No record (a first emit, or an older manifest) sweeps nothing.
   phaseLog('WIRE');
+  const staleSkillNames = oldDenies.filter((n) => !userOnlySkills.includes(n));
+  const wired = {};
   const cfgName = path.basename(mergeOpencodeJson(path.join(wireBase, 'opencode.json'),
-    agentPath, cfg.doctrines, cfg.excludeRules));
+    agentPath, cfg.doctrines, cfg.excludeRules, userOnlySkills, staleSkillNames, wired));
+  // The next record: Geneseed's earlier denies still wanted, plus the ones it added now. A merge
+  // that wrote nothing (`skillsAdded` unset) keeps the old record whole.
+  const skillDenies = wired.skillsAdded
+    ? [...new Set([...oldDenies.filter((n) => userOnlySkills.includes(n)), ...wired.skillsAdded])].sort()
+    : oldDenies;
 
   return {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands: commands.length, cfgName,
+    skillDenies,
   };
 }
 
@@ -117,6 +129,7 @@ export function emitOpencodeRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: _theme, out, root, footprint, nativeCatalog, oldOwned, manifestExisted, agentPath,
+    oldDenies,
   } = job;
   const oc = path.join(root, '.opencode');
 
@@ -131,9 +144,9 @@ export function emitOpencodeRender(cfg, job) {
   const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
 
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies,
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
-    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out,
+    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies,
   });
 
   return {
@@ -142,6 +155,7 @@ export function emitOpencodeRender(cfg, job) {
       nAgents, nSkills, nPlugins, nWorkflows, nCommands, primary: !!primary,
     },
     cfgName,
+    skillDenies,
   };
 }
 
@@ -180,7 +194,7 @@ export function emitOpencodeRender(cfg, job) {
 export function emitOpencodeGlobalRender(cfg, job) {
   phaseLog('RENDER');
   const {
-    theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath,
+    theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath, oldDenies,
   } = job;
 
   // No `lawsPrefix`: the standalone laws dir sits beside AGENT.md in <cfg>, so the lean
@@ -205,9 +219,9 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // `manifestExisted` is deliberately not passed — the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
-    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir,
+    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies,
   });
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
@@ -232,5 +246,6 @@ export function emitOpencodeGlobalRender(cfg, job) {
     memStatus,
     nbStatus,
     cfgName,
+    skillDenies,
   };
 }

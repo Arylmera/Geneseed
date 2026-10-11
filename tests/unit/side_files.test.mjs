@@ -212,9 +212,14 @@ function withCommands(fn) {
 }
 
 // Which files carry a pointer, per host family: the two skills with side files, their two
-// aliases on the Claude dialect (alias skills) and on OpenCode (alias commands), plus
-// OpenCode's opt-in `/debug` command. Each pointer must resolve to a file the emit wrote.
+// aliases on the Claude dialect (alias skills), on OpenCode (alias commands, `command/`) and
+// on Bob (alias commands too, host-compat O2/R1 — but `commands/`, Bob's own documented
+// folder name, and never `command/debug.md`: Bob never runs `writeCommandLayer`, the
+// `GENESEED_COMMANDS` opt-in layer, only the unconditional alias commands), plus OpenCode's
+// opt-in `/debug` command. Each pointer must resolve to a file the emit wrote.
 const CLAUDE_CARRIERS = ['skills/ci-fix/SKILL.md', 'skills/consolidate-memory/SKILL.md',
+  'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
+const BOB_CARRIERS = ['commands/ci-fix.md', 'commands/consolidate-memory.md',
   'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
 const OPENCODE_CARRIERS = ['command/ci-fix.md', 'command/consolidate-memory.md', 'command/debug.md',
   'skills/debug/SKILL.md', 'skills/rule/SKILL.md'];
@@ -227,7 +232,7 @@ function assertResolves(found, carriers) {
 }
 
 for (const [host, dot, carriers] of [['claude', '.claude', CLAUDE_CARRIERS],
-  ['bob', '.bob', CLAUDE_CARRIERS], ['openclaude', '.openclaude', CLAUDE_CARRIERS],
+  ['bob', '.bob', BOB_CARRIERS], ['openclaude', '.openclaude', CLAUDE_CARRIERS],
   ['opencode', '.opencode', OPENCODE_CARRIERS]]) {
   test(`every side-file pointer resolves on a per-repo ${host} emit`, async () => {
     await withSandbox('gsside-', (d) => {

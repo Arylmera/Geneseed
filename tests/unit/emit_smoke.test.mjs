@@ -189,8 +189,16 @@ const FOOTPRINTS = ['full', 'lean'];
  * was cut once to fit, but main grew meanwhile (#228-#233). Measured `files` carrier before,
  * on origin/main at a1acfd9e: full 61_169, lean 38_277. After: full 61_920, lean 38_802.
  * `full` raised by exactly the overrun, 61_715 -> 61_920, not rounded; lean still fits (52).
+ *
+ * BOTH RAISED 2026-10-10, for the root-scan amendment to ops 2 (Commands Must Return): one
+ * sentence in each half — search a named directory, never a recursive scan rooted at a whole
+ * filesystem — after a `find /` in Git Bash walked every drive for 3.5 h. An amendment, not a
+ * new rule; the boundary half is `rootScan` in js/hosts/hooks.mjs. The full sentence was cut
+ * once (the PowerShell example and the "visits every directory" clause went), the lean one to
+ * its shortest form. Measured `files` carrier after: full 62_076, lean 38_890 — each raised by
+ * exactly the overrun (61_920 -> 62_076, 38_854 -> 38_890), not rounded.
  */
-const CEILING = { full: 61_920, lean: 38_854 };
+const CEILING = { full: 62_076, lean: 38_890 };
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the
@@ -224,12 +232,20 @@ const EXPECTED = {
 // as an agent, so it would register a phantom `_template` agent.
 // Aliases (an old skill name kept answering `/name`, one per name in a skill's
 // `<!-- aliases: … -->` marker — 12 since the 2026-10 sharpen merged 56 skills into 47) are
-// extra `skills/<alias>/SKILL.md` folders on Claude, OpenClaude and Bob, and command files on
-// OpenCode, so they are counted apart: N_SKILLS real skills on every host, N_ALIASES alias
-// folders everywhere but OpenCode, where the skills dir holds none.
+// extra `skills/<alias>/SKILL.md` folders on Claude and OpenClaude, and command files on
+// OpenCode AND Bob (host-compat O2/R1: Bob's skills page has no model-invocation key, so an
+// alias skill there would be a visible duplicate — it gets `.bob/commands/<alias>.md`
+// instead, same as OpenCode's `command/<alias>.md`), so they are counted apart: N_SKILLS real
+// skills on every host, N_ALIASES alias folders only on Claude and OpenClaude.
+//
+// A genuinely user-only skill (not an alias, `<!-- invocation: user -->` on its own target
+// — 4: herdr, learn-mode, quiz, teach) is the same story one level up: Bob gets NO
+// SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
+// skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
 const N_AGENTS = 18;
 const N_SKILLS = 47;
 const N_ALIASES = 12;
+const N_USER_ONLY = 4;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
 // translates `\n` to `os.linesep`, so on Windows the file really is CRLF on disk (gated as M1).
@@ -547,11 +563,12 @@ test('the native layer is complete', () => {
     const isAlias = (p) => readFileSync(p, 'utf8').includes('\ndescription: "Alias of ');
     const skills = specs.filter((p) => !isAlias(p)).length;
     const aliases = specs.filter(isAlias).length;
-    assert.equal(aliases, spec.host === 'opencode' ? 0 : N_ALIASES,
+    assert.equal(aliases, spec.host === 'opencode' || spec.host === 'bob' ? 0 : N_ALIASES,
       `--emit ${mode}: ${aliases} alias folders`);
     const agents = (existsSync(path.join(cfg, 'agents'))
       ? readdirSync(path.join(cfg, 'agents')) : []).filter((n) => n.endsWith('.md')).length;
-    assert.equal(skills, N_SKILLS, `--emit ${mode}: ${skills} native skills`);
+    assert.equal(skills, spec.host === 'bob' ? N_SKILLS - N_USER_ONLY : N_SKILLS,
+      `--emit ${mode}: ${skills} native skills`);
     assert.equal(agents, N_AGENTS, `--emit ${mode}: ${agents} native agents`);
   }
 });

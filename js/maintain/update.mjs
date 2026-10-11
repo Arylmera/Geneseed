@@ -46,6 +46,7 @@ import path from 'node:path';
 import { ROOT } from '../build/source.mjs';
 import { exportImprovements, flushExportNotes } from '../inspect/diff.mjs';
 import { opencodeConfigDir } from '../hosts/hosts.mjs';
+import { legacyProcessCarrierOfDir } from '../hosts/installs.mjs';
 import { appendText, copyFile, printOut, printErr, readText, writeText } from '../lib/fs.mjs';
 import { comparePaths, toPlatformPath, which } from '../lib/paths.mjs';
 import { WHITESPACE, parseIntStrict, stripWhitespace } from '../lib/text.mjs';
@@ -617,9 +618,18 @@ async function drainStdout() {
  * Only the TAIL of the argv is kept: theme and emit are `upgrade`'s to decide (a theme argument
  * may override the marker), and `setupBuildArgs` opens with exactly those four tokens when it
  * is given no out and no root.
+ *
+ * `null` — distinct from `[]`'s "never built, nothing to carry over" — means `dir` carries a
+ * pre-comms carrier (same guard as `rebuild-all`/`migrate`/the web console, reusing
+ * `legacyProcessCarrierOfDir`): `installProfile` would read it exactly as written, and feeding
+ * that into a rebuild would write the loss back PERMANENTLY. `[]` here would be WORSE, not
+ * neutral — it resets every axis to the generator's config default, the exact failure this
+ * function exists to prevent, on top of the comms/process-address loss. `upgrade` must skip the
+ * bundle rebuild entirely on `null`, never fall through to an empty axes list.
  */
 export async function installAxes(dir, { installProfile, setupBuildArgs }, notify = null) {
   if (!existsSync(path.join(String(dir), '.geneseed-emit'))) return [];
+  if (legacyProcessCarrierOfDir(String(dir), 'opencode')) return null;
   const p = installProfile('opencode', 'global', String(dir), notify);
   return setupBuildArgs('', 'files', null, null, p.footprint, p.posture, p.mode, p.doctrines,
     undefined, p.excludeRules, p.trust, p.excludeSkills).slice(4);
@@ -756,8 +766,18 @@ export async function upgrade(ref = null, themeArg = null) {
   } catch (e) {
     log(`[geneseed] ⚠️  could not migrate the old in-folder bundle (${e && e.message ? e.message : e}) — continuing.`);
   }
-  let rc = await rebuildBundle(here, out, theme, emit, rootDir, log, axes,
-    bounceDaemonIfRunning);
+  let rc = 0;
+  if (axes === null) {
+    // `installAxes` found a pre-comms carrier at this bundle's own target — skip the rebuild
+    // entirely rather than fall through with no axes (which would reset it to the generator's
+    // config default, worse than the loss this guard exists to stop). `rebuildInstalls` below
+    // reaches the same directory through `rebuild-all`'s own, identically-reasoned skip.
+    log(`[geneseed] SKIPPED bundle rebuild: pre-comms carrier at `
+      + `${emit === 'opencode-global' ? cfg : out} (names 'process 8') — run `
+      + '`geneseed setup` for it.');
+  } else {
+    rc = await rebuildBundle(here, out, theme, emit, rootDir, log, axes, bounceDaemonIfRunning);
+  }
   if (rc !== 0) {
     log(`[geneseed][E-BUILD] ✗ the bundle build FAILED (theme: ${theme || 'default'}, emit: ${emit}).`);
     return 1;

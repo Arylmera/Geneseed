@@ -51,4 +51,4 @@ A [theme](themes.md) renames the nouns — an `imperial` install calls the invar
 
 ### Related
 
-[Footprint](footprint.md) — how much of this text loads every turn · [Exclusions](exclusions.md) — switching rules off per rule versus per repo · [Glossary](../reference/glossary.md)
+[Footprint](footprint.md) — how much of this text loads every turn · [Exclusions](exclusions.md) — switching rules off per rule versus per repo · [Rule enforcement, by host](enforcement-table.md) — which rules a hook actually checks · [Glossary](../reference/glossary.md)

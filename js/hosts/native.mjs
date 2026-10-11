@@ -150,7 +150,7 @@ function triggerOf(text) {
  * failure, so the cure is a shorter first trigger sentence in the source, never a wider cap.
  */
 const DESCRIPTION_CAP = 320;
-function skillDescription(text) {
+export function skillDescription(text) {
   return withWhen(firstBlockquote(text), triggerOf(text));
 }
 
@@ -245,7 +245,7 @@ function isReadonly(text) {
  * themselves, and the ones gated on an environment the model cannot see (a herdr pane).
  */
 const USER_INVOKED_RE = /<!--\s*invocation:\s*user\s*-->/;
-function isUserInvokedOnly(text) {
+export function isUserInvokedOnly(text) {
   return USER_INVOKED_RE.test(text);
 }
 
@@ -509,8 +509,10 @@ export function claimer(oldOwned, cfg, manifestExisted = true) {
  * `opts.claim` — a `claimer` closure the caller shares with its other writers; built from
  * `oldOwned`/`cfg`/`manifestExisted` when absent.
  *
- * Returns `{ nAgents, nSkills, written }` — Python's 3-tuple, with `written` as absolute
- * paths in write order.
+ * Returns `{ nAgents, nSkills, written, userOnlySkills }` — Python's 3-tuple, with `written` as
+ * absolute paths in write order, plus `userOnlySkills` (the claimed stems carrying the
+ * user-only marker; Task 4/O-1's input to OpenCode's `permission.skill` wiring — see the
+ * comment above the skill-frontmatter branch).
  *
  * That order is NOT observable, and this comment used to claim it was ("it lands in
  * `owned`, which the prune diffs against"). Measured when a mutation reversing it stayed
@@ -523,6 +525,15 @@ export function claimer(oldOwned, cfg, manifestExisted = true) {
 export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, {
   host = 'opencode', oldOwned = null, cfg = null, manifestExisted = true,
   theme = null, src = undefined, skillDirOf = null, claim = claimer(oldOwned, cfg, manifestExisted),
+  // Bob (host-compat R1): its skills page documents only `name`/`description` — no
+  // `disable-model-invocation` — and giving it the Claude-dialect alias SKILL.md (the
+  // `host === 'claude'` branch below) would be an unverified key PLUS a visible duplicate
+  // in the model's catalogue (exactly the OpenCode problem this file already dodges for
+  // aliases). `bobDialect` suppresses both for Bob only, while `host: 'claude'` keeps every
+  // OTHER Claude-dialect choice (agent frontmatter, `warnClaudeIgnored`) — Bob still renders
+  // those verbatim. The caller (`emit-claude.mjs`) routes the suppressed names through
+  // `writeAliasCommands(..., alsoUserOnly: true)` into `.bob/commands/*.md` instead (O2).
+  bobDialect = false,
 } = {}) {
   const ov = overrides || {};
   if (host === 'claude') warnClaudeIgnored(ov);
@@ -531,6 +542,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   const written = [];
   const sideFiles = [];            // [stem, dest, text], written after the loop
   const claimedSkills = new Set(); // stems whose own SKILL.md claim held
+  const userOnlySkills = [];       // claimed stems carrying the user-only marker
 
   const write = (dest, text) => {
     mkdirSync(path.dirname(dest), { recursive: true });
@@ -594,6 +606,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let fm;
     let dest;
     let kind;
+    let userOnly = false;
     if (folder === 'agents') {
       fm = host === 'claude' ? claudeAgentFrontmatter(stem, text, ov)
         : opencodeAgentFrontmatter(stem, text, ov, theme);
@@ -601,26 +614,45 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       kind = 'agent';
     } else {
       // Skills are BYTE-IDENTICAL across hosts: name + description, body link-stripped.
-      // The user-only key is emitted for every host too — Claude Code and Bob honour it,
-      // OpenCode ignores an unknown key — so the identity holds. ALIASES are the one
-      // exception: OpenCode has no user-only skill, so an alias skill there would land in the
+      // The user-only key is emitted for Claude Code, which honours it natively
+      // (`disable-model-invocation`). OpenCode has no frontmatter equivalent, so the
+      // SAME marker also drives `userOnlySkills` below, which the OpenCode emit turns into a
+      // `permission.skill: {name: "deny"}` row in `opencode.json` (opencode-verdict.md O-1) —
+      // the model loses the skill from its catalogue, `/name` still runs it (O-1's second
+      // finding: the command path reads the UNFILTERED skill list, never the permission one).
+      // Bob's skills page documents no such key (host-compat R1) — see `bobDialect` above,
+      // which skips the SKILL.md for a user-only skill on Bob entirely.
+      // ALIASES are the one case every non-Claude dialect shares: no alias skill via
+      // frontmatter exists for them either, so an alias skill there would land in the
       // model's catalogue as a duplicate; it gets a command instead (`writeAliasCommands`).
       fm = [`name: ${stem}`, `description: ${jsonDumps(skillDescription(text))}`];
-      if (isUserInvokedOnly(text)) fm.push('disable-model-invocation: true');
+      userOnly = isUserInvokedOnly(text);
+      if (userOnly && !bobDialect) fm.push('disable-model-invocation: true');
       body = stripSkillBodyLinks(pointSideFiles(body, stem, skillDirOf ? skillDirOf(stem)
         : SKILL_DIR_PLACEHOLDER));
       dest = path.join(skillsDir, stem, 'SKILL.md');
       kind = 'skill';
     }
+    // Bob, user-only: no SKILL.md at all — the command written by the caller is the only
+    // copy, so the model's `use_skill` catalogue never carries it (see `bobDialect` above).
+    // The `continue` is BEFORE `claimedSkills.add(stem)` below, so a user-only skill's own
+    // side files (none exist today, but the layout allows them) are skipped too — there is
+    // no `skills/<stem>/` folder on Bob for one to sit beside.
+    if (kind === 'skill' && userOnly && bobDialect) continue;
     if (!claim(dest)) continue;
     write(dest, `---\n${fm.join('\n')}\n---\n\n${body}`);
-    if (kind === 'skill') claimedSkills.add(stem);
+    if (kind === 'skill') {
+      claimedSkills.add(stem);
+      // Only a CLAIMED user-only skill is Geneseed's to deny: a pre-existing file the claim
+      // declined belongs to the user, and `userOnly` was computed from OUR text, not theirs.
+      if (userOnly) userOnlySkills.push(stem);
+    }
     // An old name keeps answering `/name`: user-only, so the model's catalogue lists the
     // skill once. Read off the already-filtered items, so excluding the target drops its
     // aliases; through `claim`, so manifest, prune and uninstall own them; not counted.
     // Only once the target's own claim held: a user's file at the target gets no alias
     // pointing at a skill this install never wrote.
-    if (kind === 'skill' && host === 'claude') {
+    if (kind === 'skill' && host === 'claude' && !bobDialect) {
       // The host announces the ALIAS's folder as the base directory, so a side-file pointer
       // climbs back to the target's.
       const aliasBody = skillDirOf ? body : stripSkillBodyLinks(
@@ -638,7 +670,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   for (const [stem, dest, text] of sideFiles) {
     if (claimedSkills.has(stem) && claim(dest)) write(dest, stripSkillBodyLinks(text));
   }
-  return { nAgents, nSkills, written };
+  return { nAgents, nSkills, written, userOnlySkills };
 }
 
 /**

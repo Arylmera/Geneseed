@@ -317,8 +317,14 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    marker (§9), which names only the packs that existed when it was built, so a new pack reaches
    an existing install only if that install is re-emitted *and* the reader adds it. A pack that
    merely adds rules can stay off for old installs. A pack that *moves* a rule out of another
-   pack cannot, or the moved rule disappears on the next rebuild: `comms` (2026-09-27) is the
-   worked example — see `legacyProcessCarrier` in `js/hosts/installs.mjs`.
+   pack cannot, or the moved rule disappears on the next rebuild — `comms` (2026-09-27) is the
+   worked example. Through 3.x this was auto-migrated on sight; 4.0.0 retired that (CHANGELOG
+   "Removed") because the detector it relied on breaks the day the donor pack regains a rule at
+   the same old count. `js/hosts/installs.mjs`'s `legacyProcessCarrier` now only warns a
+   pre-migration install to re-run `geneseed setup` rather than rewriting its data for it, and
+   `legacyProcessCarrierOfDir` makes `rebuild-all`/`upgrade` (§9 below) skip that install
+   entirely rather than re-emit it — re-emitting would write a fresh carrier that drops the
+   rewrite silently and for good, since no `process 8` text survives it to warn about next time.
 
 ---
 
@@ -785,7 +791,9 @@ rows, nor `web/package.json`.
 **Which installs get missed:** project installs that were never registered; installs disabled via
 the `.geneseed-disabled` stash; registry rows whose directory is gone; and everything after the
 point where a `rebuild-all` fails mid-loop — it is best-effort by contract and leaves a mixed
-machine. Autostart entries are surveyed and reported, never rewritten.
+machine. Autostart entries are surveyed and reported, never rewritten. An install whose carrier
+predates the comms pack (§2d item 7) is also skipped, deliberately, every run until its owner
+runs `geneseed setup` for it — `rebuild-all` names it SKIPPED rather than re-emitting it.
 
 **The web daemon serves the code it launched with**, plus an in-memory cache of every dist file.
 After a `web/dist` rebuild the correct move is `geneseed web restart`, not a hard refresh —

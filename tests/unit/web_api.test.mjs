@@ -1911,12 +1911,16 @@ test('each host sees its own machine page, and Bob not the Claude Code one', () 
 });
 
 // The Understand track, read top to bottom, per host: the shared pages in `order`, with the
-// host's own machine page(s) between "What lands on your machine" and "Taking it back out".
+// host's own machine page(s) between "What lands on your machine" and "Taking it back out",
+// then the "Why it works this way" section: the design-choices landing page first, its five
+// sub-pages after it, every host alike (none of them carries a `harness:` tag).
 test('the Understand track reads in order for each host', () => {
   const track = (hn) => apiDocs(neutral(), hn).groups.find((g) => g.id === 'understand')
     .pages.map((p) => p.id);
   const head = ['harness', 'on-your-machine'];
-  const tail = ['take-it-out', 'a-day', 'enforced-vs-asked'];
+  const tail = ['take-it-out', 'a-day', 'enforced-vs-asked', 'design-choices',
+    'design-choices-shape', 'design-choices-gates', 'design-choices-hosts',
+    'design-choices-install', 'design-choices-engineering'];
   assert.deepEqual(track('opencode'), [...head, 'machine-opencode', 'machine-bob', ...tail]);
   assert.deepEqual(track('claude'), [...head, 'machine-claude', 'machine-bob', ...tail]);
   assert.deepEqual(track('openclaude'), [...head, 'machine-claude', 'machine-bob', ...tail]);

@@ -187,6 +187,27 @@ test('OpenCode gets no alias skill, but an unconditional alias command', async (
   });
 });
 
+const USER_ONLY_SKILL = '# Skill: quiz\n\n> Test what you know.\n<!-- invocation: user -->\n'
+  + '\n**Trigger:** quiz.\n';
+const userOnlyItems = (src) => [{ rel: 'skills/quiz.md', text: USER_ONLY_SKILL, src: path.join(src, 'skills', 'quiz.md') }];
+
+test('writeAliasCommands(alsoUserOnly) also commands a user-only skill\'s own name, undecorated', async () => {
+  // Bob host-compat O2/R1: `writeNativeLayer({ bobDialect: true })` skips the SKILL.md for a
+  // user-only skill entirely, so `/quiz` through a command is the only thing left to give
+  // it. `alsoUserOnly` defaults false — OpenCode's own call site never passes it, because a
+  // real user-only skill there keeps its SKILL.md (Task 4's `permission.skill` deny).
+  await withSandbox('gsalias-', (d) => {
+    const src = path.join(d, 'src');
+    const cmd = path.join(d, 'cmd');
+    const written = writeAliasCommands({ src }, userOnlyItems(src), cmd, () => true, undefined, true);
+    assert.deepEqual(written.map((p) => path.basename(p)), ['quiz.md']);
+    assert.equal(read(path.join(cmd, 'quiz.md')),
+      '---\ndescription: "Test what you know. Use when: quiz."\n---\n\n' + USER_ONLY_SKILL);
+    // Without the flag, nothing is written for a plain (alias-less) user-only skill.
+    assert.deepEqual(writeAliasCommands({ src }, userOnlyItems(src), path.join(d, 'cmd2')), []);
+  });
+});
+
 test('the doctor refuses every alias that would collide on disk', async () => {
   await withSandbox('gsalias-', (d) => {
     const dir = path.join(d, 'skills');

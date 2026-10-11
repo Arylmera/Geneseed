@@ -7,8 +7,8 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import { loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
-import { ensureAgentOverridesStub } from '../hosts/opencode.mjs';
+import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
+import { ensureAgentOverridesStub, writeAliasCommands } from '../hosts/opencode.mjs';
 import {
   managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
   unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes,
@@ -116,11 +116,26 @@ export function emitClaudeRender(cfg, job) {
   // Bob's and OpenClaude's agents/skills use the Claude dialect verbatim.
   // `manifestExisted` is deliberately not passed: the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.
+  // One shared `claim` (see `claimer`): the skills/agents writer and the Bob command writer
+  // below both push into the same `owned` list, so a pre-manifest-install warning still
+  // prints once across the whole emit rather than once per writer.
+  const claim = claimer(oldOwned, cfgDir, true);
   const { nAgents, nSkills, written } = writeNativeLayer(
     items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'),
     loadAgentOverrides(cfgDir),
-    { host: 'claude', oldOwned, cfg: cfgDir, src: cfg.src, skillDirOf });
+    { host: 'claude', bobDialect: isBob, oldOwned, cfg: cfgDir, src: cfg.src, skillDirOf, claim });
   for (const p of written) owned.push(relPosix(cfgDir, p));
+
+  // Bob host-compat O2/R1: an alias, or a genuinely user-only skill (unverified
+  // `disable-model-invocation` support — see `bobDialect` above), gets `/<name>` through
+  // `.bob/commands/<name>.md` instead of a model-visible SKILL.md. The command layer
+  // OpenCode built for its own alias problem is exactly the right shape, reused as-is.
+  if (isBob) {
+    const commandDir = path.join(cfgDir, 'commands');
+    for (const p of writeAliasCommands(cfg, items, commandDir, claim, skillDirOf, true)) {
+      owned.push(relPosix(cfgDir, p));
+    }
+  }
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
   ensureMemoryIndex(path.join(cfgDir, 'memory'));

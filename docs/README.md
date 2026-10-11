@@ -2,7 +2,7 @@
 
 [← Back to README](../README.md)
 
-**New to agent harnesses?** Read **Understand** first — a short track, about ten minutes, that every other page assumes. The same pages open the **Docs** tab of the web console (`geneseed web`), which groups each part into sections, adds an interactive map of your own install, and filters host-specific passages to the tool you use.
+**New to agent harnesses?** Read **Understand** first: the track every other page assumes. Its last section, *Why it works this way*, is reference, to consult when a question comes up. The same pages open the **Docs** tab of the web console (`geneseed web`), which groups each part into sections, adds an interactive map of your own install, and filters host-specific passages to the tool you use.
 
 ## 1 · Understand
 
@@ -11,6 +11,8 @@
 **On your machine** — [What lands on your machine](understand/on-your-machine.md) · [On OpenCode](understand/machine-opencode.md) · [On Claude Code and OpenClaude](understand/machine-claude.md) · [On Bob, or any AGENT.md tool](understand/machine-bob.md) · [Taking it back out](understand/take-it-out.md): every file and hook an install writes, what it does for you, what it costs, how to turn it off.
 
 **Day to day** — [A day with the harness](understand/a-day.md): the moments you will actually meet · [Enforced vs. asked](understand/enforced-vs-asked.md): what is guaranteed by code, and what the model is only asked to do.
+
+**Why it works this way** — [Why Geneseed works this way](understand/design-choices.md): every decision already taken, one line each, and where it is argued · [The shape of the harness](understand/design-choices-shape.md) · [Gates](understand/design-choices-gates.md) · [Hosts](understand/design-choices-hosts.md) · [Install, uninstall, update](understand/design-choices-install.md) · [Engineering, skills and agents](understand/design-choices-engineering.md) · [Considered and refused](design-history.md#considered-and-refused).
 
 ## 2 · Guides
 

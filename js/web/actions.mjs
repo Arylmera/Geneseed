@@ -47,8 +47,7 @@ import {
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir,
-  installState,
-  installTargets, modeOfDir, postureOfDir, trustOfDir,
+  installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
@@ -605,6 +604,15 @@ export function apiInstallCmd(state, body) {
   if (installState(root, host, scope) === 'disabled') {
     return { error: 'install is disabled — reactivate it before (re)building' };
   }
+  // A LEGACY CARRIER IS REFUSED, NEVER REBUILT — same guard as `rebuild-all`/`migrate` (see
+  // `legacyProcessCarrierOfDir`'s docblock): `doctrinesForBuild`/`excludedRulesOfDir` below
+  // read a pre-comms carrier exactly as written, and this endpoint's `{cmd}` is EXECUTED by
+  // `startJob` (`js/web/handler.mjs`'s `install` action) — building that argv here would write
+  // the same permanent loss a console click away.
+  if (legacyProcessCarrierOfDir(root, host)) {
+    return { error: `${host}:${scope} (${root}) predates the comms pack (its carrier names `
+      + "'process 8') — run `geneseed setup` for it before rebuilding from the console" };
+  }
   const emit = EMIT_FOR.get(`${host} ${scope}`);
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
   // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1) — see the
@@ -706,6 +714,13 @@ export function apiDeployCmd(state, body) {
   }
   if (cfgdirs.has(root)) {
     return { error: "that's a host global config dir — use its existing row to build a global install" };
+  }
+  // Same guard as `apiInstallCmd` above: a landing folder that already holds a pre-comms
+  // install must not be rebuilt through `doctrinesForBuild`/`excludedRulesOfDir` below. A
+  // fresh, never-built folder has no carrier at all, so this is a no-op for the common case.
+  if (legacyProcessCarrierOfDir(root, host)) {
+    return { error: `${root} predates the comms pack (its carrier names 'process 8') — `
+      + 'run `geneseed setup` for it before deploying over it' };
   }
   // A fresh deploy is full, at the default register, mode and trust.
   const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {

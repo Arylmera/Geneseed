@@ -1093,6 +1093,60 @@
     },
     {
       "expect": [
+        "permissionDecision",
+        "Commands Must Return"
+      ],
+      "id": "git-gate/root-scan-asks",
+      "steps": [
+        {
+          "argv": [
+            "git-gate"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"find / -iname \\\"write.ts\\\" 2>/dev/null | head -5\"}}"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "expect": [
+        "permissionDecision",
+        "Commands Must Return"
+      ],
+      "id": "git-gate/drive-root-scan-asks",
+      "steps": [
+        {
+          "argv": [
+            "git-gate"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"Get-ChildItem -Path C:\\\\ -Recurse -Filter x.ts\"}}"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "expect_silent": true,
+      "id": "git-gate/scan-of-a-directory-is-not-gated",
+      "steps": [
+        {
+          "argv": [
+            "git-gate"
+          ],
+          "cwd": "repo",
+          "stdin": "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"find /usr/share -name x\"}}"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "expect": [
         "permissionDecision"
       ],
       "id": "git-gate/push",

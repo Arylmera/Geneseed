@@ -10,6 +10,8 @@ import path from 'node:path';
 import {
   ALIASES_RE, PLUGIN_SRC, RETIRED_SKILL_IDS, ROOT, SRC, THEMES, WORKFLOW_SRC, aliasesOf, knownSkillIds,
 } from '../build/source.mjs';
+import { CLAUDE_STYLE, liveRecordedHooks } from '../hosts/hosts.mjs';
+import { claudeCfg, installTargets } from '../hosts/installs.mjs';
 import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
 import { COMMAND_SET } from '../hosts/opencode.mjs';
 import { hookShimPath, shimDeadPaths } from '../hosts/shim.mjs';
@@ -166,6 +168,44 @@ export function secretProblems() {
 }
 
 /**
+ * Every active Claude-STYLE install (`CLAUDE_STYLE`: claude, bob, openclaude — the hosts that
+ * share this one machine-wide shim) whose LIVE, recorded hooks still name `shimPath` by exact
+ * string, keyed by its own config dir.
+ *
+ * Split out of `shimProblems` for the case `shimDeadPaths` cannot see: that function reads
+ * paths back OUT of the shim body, so it has nothing to read once the shim file is gone
+ * outright (deleted, not moved-and-regenerated) — a plain `isFile` check upstream then calls
+ * that clean, the same as a source checkout that never emitted. `liveRecordedHooks` is already
+ * "the manifest claims it AND the settings file still runs it" (`js/hosts/hosts.mjs`), so a
+ * disabled or never-wired install cannot appear here — only installs for which the missing
+ * shim is a live, standing failure.
+ *
+ * MATCHES THE EXACT PATH, not merely a command that mentions the shim's filename
+ * (`geneseed-hook`): the shim path is baked per `GENESEED_HOME`, so a machine with more than
+ * one Geneseed home (a relocated one, or a sandboxed test run beside a real install) must not
+ * let an install naming a DIFFERENT, perfectly healthy shim answer for this one.
+ *
+ * EXPORTED: `status`'s `gateSummary` (`js/inspect/status.mjs`) needs the same answer to fold
+ * into its `dead` field, the one `statusLines` already renders as a `DEAD` gates row — two
+ * readers of one fact, not two copies of the install walk.
+ *
+ * `targets` is a parameter, the same convention `hookShellProblems` uses, so a test can hand
+ * it a sandboxed `[host, scope, root]` triple instead of walking this machine's real config
+ * dirs and registry — the live default every production caller takes.
+ */
+export function installsReferencingShim(shimPath = hookShimPath(), targets = installTargets()) {
+  const out = [];
+  for (const [host, scope, root] of targets) {
+    if (!CLAUDE_STYLE.includes(host)) continue;
+    const cfg = claudeCfg(root, scope, host);
+    const live = liveRecordedHooks(cfg)
+      .some(([, h]) => typeof h.command === 'string' && h.command.includes(shimPath));
+    if (live) out.push(cfg);
+  }
+  return out;
+}
+
+/**
  * `_harness_build._shim_problems` — the hook shim exists and points at something real.
  *
  * This gate exists because the shim DISARMED an accidental safety net. When the emitted hook
@@ -176,12 +216,36 @@ export function secretProblems() {
  * every gate silently dead: the hooks still fire, the shim still runs, and the interpreter
  * reports "no such file" into a channel nobody reads.
  *
- * An ABSENT shim is not a problem: a source checkout that has never emitted has no reason to
- * own one.
+ * An ABSENT shim is not ALWAYS a problem: a source checkout that has never emitted has no
+ * reason to own one. But one deleted by hand (or by a cleanup script) out from under an
+ * install that still names it is the same dead-hooks failure as a moved checkout, newly worth
+ * catching now that the two Claude gates fail CLOSED on a dead hook instead of open
+ * (`onFailure: "block"`, Task 1) — a Bash/Write/Edit call blocked with no shim to even try
+ * running is otherwise invisible until the user notices nothing works.
+ * `installsReferencingShim` answers that half; this still returns `[]` when nothing live
+ * names the missing shim.
+ *
+ * NOT CHECKED: whether the runner (`node`) on the emitted command line can still be found.
+ * Every command this repo emits bakes an ABSOLUTE interpreter path at emit time
+ * (`hookRunnerEntry`'s `process.execPath`) — never a bare `node` resolved against the live
+ * PATH — so there is no PATH-lookup fact to check here, and confirming the absolute path
+ * still exists would mean spawning nothing (a plain `existsSync`), which `shimDeadPaths`
+ * already does for every runner path baked into a shim BODY that still exists. There is no
+ * second runner path to check in the "shim file itself is gone" branch below: the only thing
+ * the live install's settings.json names at that point is the shim's own (missing) path.
+ *
+ * `targets` is a parameter (default: the real `installTargets()`) for the same reason
+ * `installsReferencingShim` takes one: a test exercises the "missing but referenced" branch
+ * with a sandboxed install instead of this machine's.
  */
-export function shimProblems() {
+export function shimProblems(targets = installTargets()) {
   const p = hookShimPath();
-  if (!isFile(p)) return [];
+  if (!isFile(p)) {
+    return installsReferencingShim(p, targets).map((cfg) => `[shim] ${p} does not exist, but ${cfg} `
+      + 'still runs its hooks through it — every hook in that install is dead, and (since '
+      + "Task 1) Claude's git-gate/rule-gate now BLOCK instead of silently passing. Run: "
+      + 'geneseed rebuild-all');
+  }
   let body;
   try { body = readText(p); } catch (e) {
     return [`[shim] ${p} exists but cannot be read (${e.message}) — hooks may be dead`];

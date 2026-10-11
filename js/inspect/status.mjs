@@ -63,17 +63,18 @@ import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
-  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, GATE_LEDGER,
+  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, CLAUDE_STYLE, GATE_LEDGER,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs now read them.
 import {
-  defaultTheme, hookShellProblems, installedDefaults, installTargets, openclaudeDualHarnessRoots,
-  readJsonMaybe, readMaybe,
+  defaultTheme, hookShellProblems, installedDefaults, installTargets, legacyProcessCarrierOfDir,
+  openclaudeDualHarnessRoots, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
-import { shimDead } from '../hosts/shim.mjs';
+import { installsReferencingShim } from './checks-repo.mjs';
+import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
@@ -208,7 +209,11 @@ export function gateSummary(cfgDirs, platform = process.platform) {
     }
   }
   // `dead` is the machine shim's missing targets: every gate below is armed on paper and never
-  // runs, so it outranks `armed` in the row.
+  // runs, so it outranks `armed` in the row. A shim that exists but names a moved checkout
+  // (`shimDead`) and a shim that is simply GONE while a live install still names it
+  // (`installsReferencingShim`, Task 1's fix round — `onFailure: "block"` makes a dead gate
+  // block instead of silently passing, so this stopped being a quiet failure) are the same
+  // row here: both mean "every hook of every install naming this shim cannot run".
   // `fail_open` (Task 15): Claude installs whose bash-form hooks now run under PowerShell. Only
   // present when non-empty, so every recorded `--json` panel keeps its shape.
   // Only the dirs it was handed, and only those that are Claude's global (`isHostGlobalDir`);
@@ -216,8 +221,17 @@ export function gateSummary(cfgDirs, platform = process.platform) {
   const isClaude = (c) => { try { return isHostGlobalDir('claude', c); } catch { return false; } };
   const claude = cfgDirs.filter(isClaude).map((c) => ['claude', 'global', c]);
   const failOpen = hookShellProblems(claude, platform).filter((p) => !p.startsWith('[note] '));
+  // Same `cfgDirs`, widened to every Claude-STYLE host (`CLAUDE_STYLE`: claude, bob,
+  // openclaude — all three share this one machine-wide shim), for `installsReferencingShim`.
+  const styleTargets = cfgDirs.flatMap((c) => CLAUDE_STYLE
+    .filter((host) => { try { return isHostGlobalDir(host, c); } catch { return false; } })
+    .map((host) => [host, 'global', c]));
+  const shimPath = hookShimPath();
+  const dead = shimDead();
+  const missing = !dead.length && !existsSync(shimPath)
+    && installsReferencingShim(shimPath, styleTargets).length ? [shimPath] : dead;
   return {
-    standing_down: standingDown, asks, total, dead: shimDead(),
+    standing_down: standingDown, asks, total, dead: missing,
     ...(failOpen.length ? { fail_open: failOpen } : {}),
   };
 }
@@ -278,14 +292,21 @@ export function statusData() {
     openclaude_dual_harness: openclaudeDualHarnessRoots(),
     // EVERY install, not just the one `installedDefaults` settles on — and read through the
     // same `installProfile` `rebuild-all` uses, so the settings shown are the ones a rebuild
-    // keeps. `rebuild` is the pasteable command an agent edits one flag of. A broken install
-    // must not sink the panel, so it is reported rather than thrown. `absent` slots are
-    // filtered out here: an absent slot has no settings, so a row of defaults for it reads as
-    // an install that does not exist — noise in the panel and misinformation in `--json`.
+    // keeps. `rebuild` is the pasteable command an agent edits one flag of — EXCEPT for a
+    // pre-comms carrier, where `p.argv` already carries the under-specified read-back
+    // (`doctrinesOfDir`/`excludedRulesOfDir` no longer migrate it) and pasting it would cause
+    // the exact permanent loss `rebuild-all`/`migrate`/the web console now refuse to cause, with
+    // no guard left to stop an agent or owner from running it by hand. A broken install must not
+    // sink the panel, so it is reported rather than thrown. `absent` slots are filtered out
+    // here: an absent slot has no settings, so a row of defaults for it reads as an install that
+    // does not exist — noise in the panel and misinformation in `--json`.
     installs: installTargets().map(([host, scope, root]) => {
       try {
         const p = installProfile(host, scope, root);
-        return { ...p, rebuild: rebuildCommand(p.argv) };
+        const rebuild = legacyProcessCarrierOfDir(root, host)
+          ? "geneseed setup  # pre-comms carrier (names 'process 8') — run setup for this install, not a rebuild"
+          : rebuildCommand(p.argv);
+        return { ...p, rebuild };
       } catch (e) {
         return { host, scope, root, state: 'unreadable', error: String(e?.message ?? e) };
       }

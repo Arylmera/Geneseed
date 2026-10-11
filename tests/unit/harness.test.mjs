@@ -281,6 +281,99 @@ test('readNotes passes raw text through and returns non-transcript JSON verbatim
   assert.equal(readNotes('{"foo": 1}'), '{"foo": 1}');
 });
 
+// B10 (Claude verdict): SubagentStop's own `transcript_path` is the MAIN session's transcript —
+// the subagent's turn lives in `agent_transcript_path` instead (docs `hooks.md`). Reading the
+// parent's file distils a lesson about the WRONG conversation, so when both are present the
+// agent's own file wins.
+test('readNotes prefers the SubagentStop agent transcript over the parent session transcript', () => {
+  withDir((d) => {
+    const parent = path.join(d, 'parent.jsonl');
+    const agent = path.join(d, 'agent.jsonl');
+    fs.writeFileSync(parent, '{"message": {"role": "user", "content": "parent session turn"}}\n');
+    fs.writeFileSync(agent, '{"message": {"role": "assistant", "content": "agent own turn"}}\n');
+    const meta = { hook_event_name: 'SubagentStop', transcript_path: parent, agent_transcript_path: agent };
+    const notes = readNotes('{}', meta);
+    assert.match(notes, /agent own turn/);
+    assert.ok(!notes.includes('parent session turn'), 'read the parent transcript, not the agent’s own');
+  });
+});
+
+// Stop's `transcript_path` file is written asynchronously and can lag the live conversation,
+// so it may not yet hold the final turn (docs `hooks.md`); `last_assistant_message` is the
+// host's own copy of that turn, so it is the fallback when the transcript cannot be read at
+// all — rather than silently losing the lesson.
+test('readNotes falls back to last_assistant_message when the transcript file cannot be read', () => {
+  withDir((d) => {
+    const meta = { hook_event_name: 'Stop', transcript_path: path.join(d, 'missing.jsonl'),
+      last_assistant_message: 'the final reply text' };
+    assert.equal(readNotes('{}', meta), 'the final reply text');
+  });
+});
+
+// The fallback must not become the default: a full transcript carries the user's side of the
+// turn too, which `last_assistant_message` (Claude's reply alone) does not — so a readable
+// transcript's content is always kept, even when `last_assistant_message` is also present.
+test('readNotes still flattens the Stop transcript when last_assistant_message is also present', () => {
+  withDir((d) => {
+    const transcript = path.join(d, 'transcript.jsonl');
+    fs.writeFileSync(transcript,
+      '{"message": {"role": "user", "content": "full context question"}}\n'
+      + '{"message": {"role": "assistant", "content": "full context answer"}}\n');
+    const meta = { hook_event_name: 'Stop', transcript_path: transcript,
+      last_assistant_message: 'short final text' };
+    const notes = readNotes('{}', meta);
+    assert.match(notes, /full context question/);
+    assert.match(notes, /full context answer/);
+  });
+});
+
+// The transcript write can lag the live conversation enough that the file reads but is MISSING
+// the final turn (docs `hooks.md`) — `last_assistant_message` is appended so that turn is not
+// lost outright.
+test('readNotes appends last_assistant_message when the transcript is missing the final turn', () => {
+  withDir((d) => {
+    const transcript = path.join(d, 'transcript.jsonl');
+    fs.writeFileSync(transcript,
+      '{"message": {"role": "user", "content": "a lagging transcript question"}}\n');
+    const meta = { hook_event_name: 'Stop', transcript_path: transcript,
+      last_assistant_message: 'the reply the file has not caught up to yet' };
+    const notes = readNotes('{}', meta);
+    assert.match(notes, /a lagging transcript question/);
+    assert.match(notes, /the reply the file has not caught up to yet/);
+  });
+});
+
+// And the inverse: when the transcript file already DOES hold the final turn, appending
+// `last_assistant_message` again would duplicate it in the notes sent to the model.
+test('readNotes does not duplicate last_assistant_message already in the transcript', () => {
+  withDir((d) => {
+    const transcript = path.join(d, 'transcript.jsonl');
+    fs.writeFileSync(transcript,
+      '{"message": {"role": "user", "content": "a question"}}\n'
+      + '{"message": {"role": "assistant", "content": "the final answer"}}\n');
+    const meta = { hook_event_name: 'Stop', transcript_path: transcript,
+      last_assistant_message: 'the final answer' };
+    const notes = readNotes('{}', meta);
+    assert.equal(notes.split('the final answer').length, 2, `expected one occurrence, got: ${notes}`);
+  });
+});
+
+// The de-dup check is "ends with", not "contains": an early turn can happen to repeat the
+// closing line's exact text (a short reply like "Done." recurring) without that being the
+// FINAL turn the file is missing. A substring check would wrongly skip the append there.
+test('readNotes appends last_assistant_message even if its text appeared earlier, mid-transcript', () => {
+  withDir((d) => {
+    const transcript = path.join(d, 'transcript.jsonl');
+    fs.writeFileSync(transcript,
+      '{"message": {"role": "assistant", "content": "Done."}}\n'
+      + '{"message": {"role": "user", "content": "one more thing"}}\n');
+    const meta = { hook_event_name: 'Stop', transcript_path: transcript,
+      last_assistant_message: 'Done.' };
+    const notes = readNotes('{}', meta);
+    assert.equal(notes.split('Done.').length, 3, `expected the append, got: ${notes}`);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // Theme parity.
 

@@ -30,7 +30,9 @@ import {
   writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
 } from '../../js/hosts/opencode.mjs';
 import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/hosts/settings.mjs';
-import { doctrinesOfDir, excludedRulesOfDir, themeFiles } from '../../js/hosts/installs.mjs';
+import {
+  doctrinesOfDir, excludedRulesOfDir, resetLegacyProcessCarrierWarning, themeFiles,
+} from '../../js/hosts/installs.mjs';
 import {
   ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER, resolveRuleIds,
 } from '../../js/build/source.mjs';
@@ -1479,6 +1481,138 @@ test('a permission block Geneseed cannot wire into is reported, not passed over 
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// Task 4 / O-1 — `permission.skill` denies for OpenCode's user-only skills. Upstream's
+// `Skill.available` drops any skill whose `permission.skill` evaluates to `deny`
+// (opencode_src_skill_index.ts:314), and `Command`'s skill loop reads `skill.all()` — the
+// UNFILTERED list — so `/name` still runs it (opencode_src_command_index.ts).
+
+test('writeNativeLayer reports the claimed user-only skill stems, and only those', () => {
+  withDir((d) => {
+    const { userOnlySkills } = native(d);
+    // Real authored skills carrying the literal `<!-- invocation: user -->` marker in
+    // src/skills (skill-forge only DESCRIBES the convention in prose; it does not carry it).
+    for (const name of ['herdr', 'learn-mode', 'quiz', 'teach']) {
+      assert.ok(userOnlySkills.includes(name), `${name} missing from userOnlySkills: ${userOnlySkills}`);
+    }
+    // An ordinary, model-invocable skill gets no row.
+    assert.ok(!userOnlySkills.includes('brainstorm'),
+      'brainstorm carries no invocation:user marker and must not be denied');
+  });
+});
+
+test('a fresh opencode.json gets a permission.skill deny row per user-only skill', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz']);
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.deepEqual(data.permission.skill, { herdr: 'deny', quiz: 'deny' });
+    // The bash gates still ride along unmodified.
+    assert.equal(data.permission.bash['rm -rf *'], 'ask');
+  });
+});
+
+test('no user-only skills in this build means no permission.skill key at all', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md');
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.ok(!('skill' in data.permission), 'an empty skill object was written for nothing to deny');
+  });
+});
+
+test('an existing permission block gets its missing skill denies reconciled in', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      permission: { bash: { 'curl *': 'ask' }, skill: { herdr: 'deny' } },
+    }));
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz']);
+    const perm = JSON.parse(fs.readFileSync(p, 'utf8')).permission;
+    assert.deepEqual(perm.skill, { herdr: 'deny', quiz: 'deny' });
+    assert.equal(perm.bash['curl *'], 'ask', 'a sibling bash entry was disturbed');
+  });
+});
+
+test('a blanket permission.skill policy is left alone and reported', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: { 'rm -rf *': 'ask' }, skill: 'allow' } }));
+    const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr']));
+    assert.match(err, /WARN/);
+    assert.ok(err.includes('"herdr"'), err);
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.equal(data.permission.skill, 'allow', "the user's blanket policy was rewritten");
+  });
+});
+
+// Fix round (controller review): stale denies were never swept on re-emit. Ownership of a
+// skill deny is the manifest's `skill_denies` record (final review: the names Geneseed itself
+// ADDED, not every owned skill) — so `mergeOpencodeJson`'s 6th argument, `staleSkillNames`,
+// carries recorded names this build no longer wants, and its 7th, `result`, reports in
+// `skillsAdded` which denies this call added, so the caller can record them.
+
+test('skillsAdded names only the denies this merge added, and stays unset when nothing was written', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: {}, skill: { herdr: 'deny' } } }));
+    const res = {};
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr', 'quiz'], [], res);
+    // herdr's deny was already there — the user's, not Geneseed's to record.
+    assert.deepEqual(res.skillsAdded, ['quiz']);
+
+    const c = path.join(d, 'opencode.jsonc');
+    fs.writeFileSync(c, '// mine\n{"permission": {"bash": {}}}');
+    const commented = {};
+    captured(() => mergeOpencodeJson(c, 'AGENT.md', null, [], ['quiz'], [], commented));
+    assert.equal(commented.skillsAdded, undefined,
+      'a commented .jsonc is never rewritten, so no deny may be recorded as written');
+  });
+});
+
+test('a re-emit removes a stale skill deny once the skill stops being user-only', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      permission: { bash: { 'rm -rf *': 'ask' }, skill: { herdr: 'deny', quiz: 'deny' } },
+    }));
+    // herdr lost its `<!-- invocation: user -->` marker (or was `--exclude-skills`'d): no
+    // longer wanted, and the PREVIOUS manifest owned `skills/herdr/SKILL.md`.
+    mergeOpencodeJson(p, 'AGENT.md', null, [], ['quiz'], ['herdr']);
+    const perm = JSON.parse(fs.readFileSync(p, 'utf8')).permission;
+    assert.ok(!('herdr' in perm.skill), 'a stale owned deny survived a re-emit');
+    assert.equal(perm.skill.quiz, 'deny', 'the still-wanted deny was removed too');
+    assert.equal(perm.bash['rm -rf *'], 'ask', 'a sibling bash entry was disturbed');
+  });
+});
+
+test('a re-emit never removes a non-deny value or a name the previous build did not own', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      permission: { bash: {}, skill: { herdr: 'allow', mine: 'deny' } },
+    }));
+    // `herdr` is stale (no longer wanted) but the user re-scoped it to "allow" by hand; `mine`
+    // is a name no Geneseed manifest, past or present, ever owned.
+    mergeOpencodeJson(p, 'AGENT.md', null, [], [], ['herdr']);
+    const skill = JSON.parse(fs.readFileSync(p, 'utf8')).permission.skill;
+    assert.equal(skill.herdr, 'allow',
+      "a user's own re-scoped value was deleted — ownership is not a licence to overwrite");
+    assert.equal(skill.mine, 'deny', 'a name outside staleSkillNames was removed');
+  });
+});
+
+test('a fully opaque permission block names the unwired skill denies too', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, '{"permission": "allow"}');
+    const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', null, [], ['herdr']));
+    assert.ok(err.includes('"herdr"'),
+      `a permission block that is not an object at all skipped the skill reconcile silently, `
+      + `and the opaque WARN did not name the unwired skill deny either:\n${err}`);
+  });
+});
+
 test('a merge preserves an mcp block it does not own', () => {
   // The markitdown MCP server — and any server the user added — lives under `mcp`. A re-emit
   // merges `instructions` and must touch nothing else in the file.
@@ -2220,45 +2354,71 @@ test('excludedRulesOfDir round-trips the marker a real build wrote', () => {
   });
 });
 
-// THE ADDRESS MIGRATION (2026-09-27). The comms pack took `process 7` (reference codes) out of
-// process as `comms 1`, and `process 8` (one writer per file) became `process 7`. An install
-// built before that carries a marker naming `process` and not `comms` — and so does a current
-// install whose owner switched comms off. The carrier's text tells them apart: only a pre-comms
-// carrier can say `process 8` (as a rendered heading, or in its `Excluded rules:` line).
+// THE ADDRESS MIGRATION (2026-09-27) AND ITS RETIREMENT (4.0.0). The comms pack took
+// `process 7` (reference codes) out of process as `comms 1`, and `process 8` (one writer per
+// file) became `process 7`. An install built before that carries a marker naming `process` and
+// not `comms` — and so does a current install whose owner switched comms off. The carrier's
+// text tells them apart: only a pre-comms carrier can say `process 8` (as a rendered heading,
+// or in its `Excluded rules:` line). Through 3.x a pre-comms carrier was silently rewritten on
+// read; 4.0.0 removed that rewrite because its detector breaks the day `process` ever regains
+// an eighth rule for an unrelated reason. Now the carrier is read exactly as written, and the
+// read warns on stderr instead of mutating anything — once per process (fix round 2), so
+// `resetLegacyProcessCarrierWarning` is called between the steps below that each expect to see
+// the line fire again; nothing outside a test should ever call it.
 
-test('a pre-comms install that carried process gains comms, and keeps its codes rule', () => {
+test('a pre-comms install is read as written, and warned about loudly instead of migrated', () => {
   withDir((d) => {
     const old = path.join(d, 'old');
     fs.mkdirSync(old);
     const write = (body) => writeText(path.join(old, 'AGENT.md'), `# Geneseed\n\n${body}\n`);
 
-    // The default pre-comms carrier: process active, its eighth rule rendered.
+    // The default pre-comms carrier: process active, its eighth rule rendered. No `comms` is
+    // added any more — the pack list comes back exactly as named — and the read warns.
+    resetLegacyProcessCarrierWarning();
     write('### Doctrine process 8 — One Writer Per File\n\nActive packs: craft, rigor, ops, process');
-    assert.deepEqual(doctrinesOfDir(old), ['craft', 'rigor', 'ops', 'process', 'comms'],
-      'a pre-comms install lost the codes rule on its first rebuild');
-    assert.deepEqual(excludedRulesOfDir(old), []);
+    let [packs, , err] = captured(() => doctrinesOfDir(old));
+    assert.deepEqual(packs, ['craft', 'rigor', 'ops', 'process'],
+      'the retired migration must not add comms any more — the carrier is read as written');
+    assert.match(err, /process 8/, 'a pre-comms carrier must warn loudly, not read in silence');
+    assert.match(err, /geneseed setup/, 'the warning must name the fix: re-run setup');
+    assert.doesNotMatch(err, /geneseed rebuild-all/,
+      'the one command the warning must never suggest: it is now a refused no-op for this install');
 
-    // Its exclusions are re-addressed, once: the old `process 7` IS `comms 1` now, and the old
-    // `process 8` is `process 7` — never chained on to `comms 1`.
+    // A second read in the SAME process says nothing more — the line is deduped, not repeated
+    // on every call a long-running `doctor`/`validate`/`uninstall` makes against one install.
+    [, , err] = captured(() => doctrinesOfDir(old));
+    assert.equal(err, '', 'the warning must not repeat within one process');
+
+    // Its exclusions are no longer re-addressed: the old `process 7`/`process 8` spellings come
+    // back literally, not remapped to `comms 1`/`process 7`, and the read still warns.
+    resetLegacyProcessCarrierWarning();
     write('Active packs: craft, process\nExcluded rules: process 7, process 8');
-    assert.deepEqual(doctrinesOfDir(old), ['craft', 'process', 'comms']);
-    assert.deepEqual(excludedRulesOfDir(old), ['comms.1', 'process.7']);
+    let excluded;
+    [excluded, , err] = captured(() => excludedRulesOfDir(old));
+    assert.deepEqual(excluded, ['process.7', 'process.8'],
+      'the retired migration must not re-address old process addresses any more');
+    assert.match(err, /process 8/);
 
-    // No process, no codes rule to preserve: nothing is added.
-    write('### Doctrine process 8 — x\n\nActive packs: craft');
-    assert.deepEqual(doctrinesOfDir(old), ['craft']);
+    // No `process 8` in the carrier: nothing is legacy, nothing warns.
+    resetLegacyProcessCarrierWarning();
+    write('Active packs: craft');
+    [packs, , err] = captured(() => doctrinesOfDir(old));
+    assert.deepEqual(packs, ['craft']);
+    assert.equal(err, '', 'a carrier that never said process 8 has nothing to warn about');
   });
 });
 
 test('a current install with comms switched off stays off across a rebuild', () => {
-  // The other direction, and the reason the migration sniffs the carrier instead of keying on
-  // the marker alone: `process` without `comms` is also what a deliberate current choice says.
+  // The other direction: `process` without `comms` is also what a deliberate current choice
+  // says, and the retired migration's detector (sniffing `process 8`) is what told them apart
+  // rather than the marker alone — unchanged by the retirement, since this carrier never says
+  // `process 8`.
   withDir((d) => {
     const out = path.join(d, 'bundle');
     buildInto(out, { doctrines: ['craft', 'process'], excludeRules: ['process.7'] });
     assert.deepEqual(doctrinesOfDir(out), ['craft', 'process']);
     assert.deepEqual(excludedRulesOfDir(out), ['process.7'],
-      'a current `process 7` exclusion was re-addressed as if it were a pre-comms one');
+      'a current `process 7` exclusion must never be rewritten');
   });
 });
 

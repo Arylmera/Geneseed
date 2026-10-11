@@ -1288,3 +1288,62 @@ pointer whatever the prose around it says. Dead **prose paths** are left as writ
   gitignored `__pycache__` executed instead of the source after a `git stash` round-trip
   restored an mtime the cache satisfied — **a test can fail, or pass, against bytecode that is
   not the source.**
+
+---
+
+## Considered and refused
+
+Ideas that were weighed and turned down. Each looks reasonable on its own, which is why it keeps
+coming back; the reason it was refused is recorded beside it. **An agent must not re-propose an
+idea from this list without new evidence** that the stated reason no longer holds. The choices
+Geneseed did make are listed in [Why Geneseed works this way](understand/design-choices.md).
+
+- **A backup or restore layer for uninstall** (2026-10-05). Managed blocks, key-by-key merges and
+  claim-on-create already mean uninstall overwrites nothing of yours, so there is nothing to
+  restore. See [ADR 0004](adr/0004-uninstall-without-backups.md).
+- **A full-screen terminal interface (TUI)**, refused twice: dropped in the 2.0 move off Python
+  (2026-08-11), and rejected again (2026-10-02). Corporate Windows consoles mangle ANSI escapes and
+  code pages; the line wizard and the web console cover the same ground.
+- **Retiring the D/O/F/R/Q/A codes** (2026-08-27), **or replacing them with Conventional Comments**
+  (2026-09-09). The codes are in daily use, and the rule that carries them, Codes That Persist, is
+  already optional with the comms pack. The two schemes answer different questions: a code
+  addresses an item across a conversation, and a Conventional Comments label grades a review
+  finding's severity. Both stay.
+- **Merging laws that look alike** (2026-08-27): three pairs of laws, plus Data, Not Orders with
+  External Gate, which was then a law and is now a rigor doctrine. Each pair is a deliberate
+  seam, and each side guards a different failure. Surface Failures stops and reports a failure; Cure the Cause fixes
+  its root. One Intent, One Act bounds what a single change is for; Least Privilege bounds the
+  power it uses. Deletion Is Deliberate guards acts that cannot be undone; Least Privilege guards
+  access. Data, Not Orders keeps read content from steering the agent; External Gate keeps the
+  agent from approving its own actions.
+- **Splitting the web console's fonts per flavour** (2026-08-29). A browser only fetches the font
+  the active flavour uses, so a split saves nothing and adds a flash of unstyled text.
+- **`Intl.NumberFormat`, `util.parseArgs` and an external heading-id library** (2026-08-27).
+  Each diverges on real inputs: `Intl` at unit boundaries in the compact number format, the
+  heading library on a large share of existing anchors, and `parseArgs` cannot express the
+  argument queue the CLI needs.
+- **A `--validate-only` flag on `geneseed build`** (2026-09-30). The generator may not start a
+  process, and validation runs the doctor; `geneseed validate` is the dry run. See
+  [Verify it works](guides/verify.md).
+- **An accessibility agent, a memory-curator agent and a triager agent** (2026-09-06).
+  Accessibility is part of the reviewer agent's job, memory curation belongs in a skill, and
+  foreman mode is the triager.
+- **An external skill loader** (catalogues, a gateway skill, sync and lock files) **and skills
+  bound to a ticket tracker** (2026-10-08). The loader would save about 0.5k tokens per
+  turn at the cost of a large release; it is worth reviving only for a large external catalogue.
+  The ticket-tracker skills had no tracker to serve.
+- **TypeScript `strict` mode** (not pursued, 2026-10-09). It would take thousands of annotations
+  for a scorecard gain under two points. Gaming the scorecard's API-docs check with a bare
+  `jsdoc.json` was refused outright.
+- **A tool matcher on Bob's gate hook** (2026-09, reconfirmed in the 2026-10 host review). Bob's
+  tool list drifts from its own changelog, so an allow-list would let a new write tool through,
+  and a deny-list needs a regex dialect Bob's docs never confirm; the gain would be speed only.
+  See [the Bob adapter](../adapters/bob/README.md).
+- **Splitting the context hook into two commands** (2026-10-10). Measured on real repositories,
+  the split would have recovered a dropped document in only a few of them; the hook keeps one
+  command under its output budget instead. See [Token footprint](token-footprint.md).
+- **A runtime posture or mode toggle that replaces the build-time anchor** (2026-07-13). A register
+  fixed at build time does not drift during a session, which is the point of anchoring it, so the
+  anchor stays. A runtime toggle that works beside the anchor, without replacing it, remains
+  possible. See
+  [Foreman mode](concepts/foreman-mode.md).

@@ -26,17 +26,19 @@ process that runs until killed. Reach for the non-interactive form: `--yes`/`-y`
 on confirmations, `--no-pager` (or `GIT_PAGER=cat`) on git, no `-i` subcommands,
 piped input rather than typed, `--no-edit` where a tool would open `$EDITOR`. Bound
 anything that must run long with a timeout, a non-follow flag, or redirected output
-so it hands control back. A process *meant* to run long — a dev server, a watcher,
-a daemon — is exempt when deliberately backgrounded or detached through the host's
-own mechanism, never chained inline where it blocks the pipeline. ({{LAW:deletion-is-deliberate}}
-governs *whether* to run a command; this governs *how*.)
+so it hands control back. Search a named directory, never a recursive scan rooted at a
+whole filesystem (`find /`, `du /`): Git Bash's `/` spans every drive, and `| head` stops
+nothing. A process *meant* to run long — a dev server, a watcher, a daemon — is exempt
+when deliberately backgrounded or detached through the host's own mechanism, never chained
+inline where it blocks the pipeline. ({{LAW:deletion-is-deliberate}} governs *whether* to run a
+command; this governs *how*.)
 <!-- LEAN:else -->
 A command must return on its own. Never invoke what blocks on a terminal you cannot answer —
 prompt, pager, REPL, editor, or process that runs until killed. Prefer the non-interactive
 form: `--yes`/`-y`, `--no-pager` (or `GIT_PAGER=cat`), no `-i` subcommands, piped input,
-`--no-edit`. Bound long runs with a timeout, non-follow flag, or redirected output. A
-process *meant* to run long is exempt only when deliberately backgrounded through the host's
-own mechanism.
+`--no-edit`. Bound long runs with a timeout, non-follow flag, or redirected output. Never
+scan a filesystem root recursively (`find /`); search a named directory. A process *meant*
+to run long is exempt only when deliberately backgrounded through the host's own mechanism.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:edit-the-source-not-the-surface}} Edit the Source, Not the Surface
