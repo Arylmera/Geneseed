@@ -69,8 +69,8 @@ import {
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs now read them.
 import {
-  defaultTheme, hookShellProblems, installedDefaults, installTargets, openclaudeDualHarnessRoots,
-  readJsonMaybe, readMaybe,
+  defaultTheme, hookShellProblems, installedDefaults, installTargets, legacyProcessCarrierOfDir,
+  openclaudeDualHarnessRoots, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { installsReferencingShim } from './checks-repo.mjs';
@@ -292,14 +292,21 @@ export function statusData() {
     openclaude_dual_harness: openclaudeDualHarnessRoots(),
     // EVERY install, not just the one `installedDefaults` settles on — and read through the
     // same `installProfile` `rebuild-all` uses, so the settings shown are the ones a rebuild
-    // keeps. `rebuild` is the pasteable command an agent edits one flag of. A broken install
-    // must not sink the panel, so it is reported rather than thrown. `absent` slots are
-    // filtered out here: an absent slot has no settings, so a row of defaults for it reads as
-    // an install that does not exist — noise in the panel and misinformation in `--json`.
+    // keeps. `rebuild` is the pasteable command an agent edits one flag of — EXCEPT for a
+    // pre-comms carrier, where `p.argv` already carries the under-specified read-back
+    // (`doctrinesOfDir`/`excludedRulesOfDir` no longer migrate it) and pasting it would cause
+    // the exact permanent loss `rebuild-all`/`migrate`/the web console now refuse to cause, with
+    // no guard left to stop an agent or owner from running it by hand. A broken install must not
+    // sink the panel, so it is reported rather than thrown. `absent` slots are filtered out
+    // here: an absent slot has no settings, so a row of defaults for it reads as an install that
+    // does not exist — noise in the panel and misinformation in `--json`.
     installs: installTargets().map(([host, scope, root]) => {
       try {
         const p = installProfile(host, scope, root);
-        return { ...p, rebuild: rebuildCommand(p.argv) };
+        const rebuild = legacyProcessCarrierOfDir(root, host)
+          ? "geneseed setup  # pre-comms carrier (names 'process 8') — run setup for this install, not a rebuild"
+          : rebuildCommand(p.argv);
+        return { ...p, rebuild };
       } catch (e) {
         return { host, scope, root, state: 'unreadable', error: String(e?.message ?? e) };
       }

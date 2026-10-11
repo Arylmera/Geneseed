@@ -1192,6 +1192,58 @@ ${err}`);
   });
 });
 
+// FIX ROUND 3 (doc-1, 4.0.0): `migrate`'s own re-emit loop carries the identical risk
+// `rebuild-all` was found to have — `installProfile` reads a pre-comms carrier exactly as
+// written (no `comms`, unaddressed `process 7`/`process 8`) and feeding that into `driverMain`
+// would write it back PERMANENTLY. `migrate` must SKIP that one row (not roll back the whole
+// machine over it — see the comment at the loop in `js/maintain/migrate.mjs`) and say so.
+test('migrate skips a pre-comms install rather than re-emitting it, and says so', () => {
+  withDir((d) => {
+    const savedEnv = {};
+    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR', 'GENESEED_HOME']) {
+      savedEnv[v] = process.env[v];
+    }
+    // A fresh shim home, same reason as the test above: a stamped machine has nothing to
+    // migrate, and `needed` must be true for this row to ever reach the loop.
+    process.env.GENESEED_HOME = path.join(d, 'gs-home');
+    process.env.OPENCODE_CONFIG_DIR = path.join(d, 'oc-cfg');
+    process.env.BOB_CONFIG_DIR = path.join(d, 'bob-none');
+    process.env.OPENCLAUDE_CONFIG_DIR = path.join(d, 'openclaude-none');
+    try {
+      cliGlobalEmit('opencode-global');
+      const ocCfg = opencodeConfigDir();
+      const carrier = path.join(ocCfg, 'AGENT.md');
+      const original = fs.readFileSync(carrier, 'utf8');
+      assert.ok(original.includes('Active packs: craft, rigor, ops, process, comms'),
+        'sanity: a fresh opencode-global emit carries the full default pack line');
+      // Simulate a pre-comms install: no `comms` in the marker, carrier text still says
+      // `process 8` (its old eighth rule's heading) — the same signature the rebuild-all test
+      // uses.
+      const legacy = `${original.replace('Active packs: craft, rigor, ops, process, comms',
+        'Active packs: craft, rigor, ops, process')}\n### Doctrine process 8 — One Writer Per File\n`;
+      fs.writeFileSync(carrier, legacy);
+      const before = fs.readFileSync(carrier);
+
+      const [rc, out, err] = capturedOut(() => cmdMigrate({}));
+
+      assert.equal(rc, 0, `migrate failed:\n${out}\n${err}`);
+      assert.match(out, /SKIPPED/);
+      assert.match(out, /process 8/);
+      assert.match(out, /geneseed setup/);
+      assert.doesNotMatch(out, /rolled back/,
+        'a legacy row must be SKIPPED, never trigger the all-or-nothing rollback');
+
+      const after = fs.readFileSync(carrier);
+      assert.deepEqual(after, before,
+        'migrate re-emitted a pre-comms carrier instead of skipping it — permanent data loss');
+    } finally {
+      for (const [v, val] of Object.entries(savedEnv)) {
+        if (val === undefined) delete process.env[v]; else process.env[v] = val;
+      }
+    }
+  });
+});
+
 test('rebuild-all rebuilds every active install, survives one failing, and creates none', () => {
   withDir((d) => {
     const savedEnv = {};
