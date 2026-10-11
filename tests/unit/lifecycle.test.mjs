@@ -753,6 +753,38 @@ test('the unmerge strips the skill denies it owns, by name AND value, nothing el
   });
 });
 
+test('deactivate then uninstall: the recorded denies go even though the instructions entry is gone', () => {
+  // PR #241 review: `installDeactivate` drops the `instructions` entry and keeps the denies (no
+  // denyNames); a later uninstall then finds no entry. The deny sweep must not hang off it.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      instructions: ['AGENT.md'],
+      permission: { skill: { herdr: 'deny', mine: 'deny' } },
+    }));
+    assert.equal(unmergeOpencodeJson(p, 'AGENT.md'), true, 'the deactivate half');
+    assert.equal(unmergeOpencodeJson(p, 'AGENT.md', ['herdr']), true, 'the uninstall half');
+    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.deepEqual(cfg.permission.skill, { mine: 'deny' });
+    assert.equal(unmergeOpencodeJson(p, 'AGENT.md', ['herdr']), false, 'nothing left is not a change');
+  });
+});
+
+test('a commented opencode.jsonc is refused, and the message names the recorded denies too', () => {
+  withDir((d) => {
+    const jc = path.join(d, 'opencode.jsonc');
+    const original = '// mine\n{\n  "instructions": ["AGENT.md"],\n'
+      + '  "permission": { "skill": { "herdr": "deny", "quiz": "allow" } }\n}\n';
+    fs.writeFileSync(jc, original, 'utf8');
+    const [changed, said] = captured(
+      () => unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md', ['herdr', 'quiz']));
+    assert.equal(changed, false);
+    assert.ok(said.includes('"instructions"') && said.includes('"herdr"'), said);
+    assert.ok(!said.includes('"quiz"'), `a non-deny value is not ours to remove: ${said}`);
+    assert.equal(fs.readFileSync(jc, 'utf8'), original);
+  });
+});
+
 test('the unmerge touches permission.skill not at all when no denyNames are given', () => {
   // `installDeactivate` calls with no 3rd argument — same contract as the Law IV bash gates,
   // which never come back out on a pause. The denies must survive untouched.

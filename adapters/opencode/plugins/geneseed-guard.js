@@ -203,7 +203,7 @@ const SHELL_WARN_RE = [
 // A recursive scan rooted at a whole filesystem (Commands Must Return) → BLOCK. Twin of
 // js/hosts/hooks.mjs's `rootScan` — keep in step; tests/plugins/guard.test.mjs diffs the
 // constants below against it. In Git Bash `/` mounts every drive and share: on 2026-10-10 a
-// `find / … | head -5` ran 3.5 h (`| head` stops nothing). Exempt: any ssh command, any path
+// `find / … | head -5` ran 3.5 h (`| head` stops nothing). Exempt: a segment whose program is ssh, a quoted argument, any path
 // deeper than a root, a scanner word that is not the program. Backslash is never an escape in
 // the tokeniser, so `C:\ -Recurse` stays two tokens.
 const SCAN_ALWAYS = new Set(["find", "du", "tree", "rg", "fd", "where.exe"])
@@ -231,9 +231,11 @@ function scanSegments(command) {
   let m
   while ((m = re.exec(command))) {
     if (m[3]) { tags.push([m[1], m[3]]); continue }
-    if (m[0][0] === '"' || m[0][0] === "'" || m[0][0] === '#') continue
+    if (m[0][0] === '"' || m[0][0] === "'") continue
     segs.push(command.slice(start, m.index))
     start = re.lastIndex
+    // A comment is cut OUT of its segment; the newline after it is the next separator.
+    if (m[0][0] === "#") continue
     while (m[0] === "\n" && tags.length) {
       const end = command.indexOf("\n", start)
       const line = command.slice(start, end < 0 ? command.length : end).replace(/\r$/, "")
@@ -247,7 +249,9 @@ function scanSegments(command) {
   return segs
 }
 function rootScan(command) {
-  if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null
+  // A segment whose program is ssh passes (its remote command is ssh's argument): ssh is in no
+  // scanner set below. Only that segment — `ssh h true; find /` still blocks.
+  if (!SCAN_WORD_RE.test(command)) return null
   for (const seg of scanSegments(command)) {
     // Quotes kept until the root test, so a quoted "a:" is told from a bare C:.
     let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t))
@@ -267,14 +271,16 @@ function rootScan(command) {
       return m ? m[1] : t
     })
     if (!always && !argv.some((a) => (grep && GREP_RECURSE_RE.test(a))
-      || (ls && LS_RECURSE_RE.test(a)) || ((ls || ps) && PS_RECURSE_RE.test(a)))) continue
+      || (ls && (LS_RECURSE_RE.test(a) || (a.length >= 3 && PS_RECURSE_RE.test(a))))
+      || (ps && PS_RECURSE_RE.test(a)))) continue
     if (argv.some(rootArg)) return seg.trim()
   }
   return null
 }
+// For ls/dir a `-Recurse` abbreviation counts from `-re` up: bare `-r` there is POSIX reverse.
 const unquote = (t) => t.replace(/^["']+|["']+$/g, "")
-// A QUOTED single-letter-colon token is data (`grep -rn "a:" src`), never a drive root.
-const rootArg = (t) => FS_ROOT_RE.test(unquote(t)) && !(/^["']/.test(t) && /^[a-z]:$/i.test(unquote(t)))
+// A QUOTED token is data (a grep pattern, a path named in a search), never a root target.
+const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t)
 
 // `apply_patch`'s only argument is `patchText` (OpenCode verdict I-1): every gpt-5*
 // model gets ONLY this tool, never `edit`/`write`, so a path that lives inside the

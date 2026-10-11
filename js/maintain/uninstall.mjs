@@ -239,7 +239,12 @@ function skillPermissionNames(man) {
  * `permission.bash`) leaves `permission.skill` untouched, so a paused install keeps the model
  * blind to its skills rather than re-exposing them until the next `geneseed build`.
  *
- * A COMMENTED `.jsonc` is not rewritten and the user is told to do it by hand: rewriting it
+ * The sweep runs even when the `instructions` entry is already gone — an uninstall after a
+ * deactivate, which removed the entry but kept the denies (PR #241 review) — so either half
+ * alone is a change, and only "neither" declines.
+ *
+ * A COMMENTED `.jsonc` is not rewritten and the user is told to do it by hand — the entry AND
+ * the recorded denies still set to `"deny"`, each named: rewriting it
  * would drop the comments. That branch returns False, so the caller's `unmerged` reports
  * REALITY rather than intent.
  */
@@ -249,19 +254,23 @@ export function unmergeOpencodeJson(p, entry, denyNames = []) {
   const { state, data: cfg, hadComments } = loadJsonObject(target);
   if (state !== 'ok') return false;
   const instr = cfg.instructions;
-  if (!Array.isArray(instr) || !instr.includes(entry)) return false;
+  const hasEntry = Array.isArray(instr) && instr.includes(entry);
+  // The deny sweep does NOT hang off the entry: `installDeactivate` already dropped the entry
+  // (and kept the denies), so an uninstall after a deactivate finds no entry but still owns them.
+  const skill = isDict(cfg.permission) && isDict(cfg.permission.skill) ? cfg.permission.skill : null;
+  const denies = skill ? denyNames.filter((n) => skill[n] === 'deny') : [];
+  if (!hasEntry && !denies.length) return false;
   if (path.extname(target) === '.jsonc' && hadComments) {
-    printOut(`[uninstall] ${path.basename(target)} has comments — not rewriting it. Remove `
-      + `this from its "instructions" by hand: ${jsonDumps(entry)}\n`);
+    printOut(`[uninstall] ${path.basename(target)} has comments — not rewriting it.`
+      + (hasEntry ? ` Remove this from its "instructions" by hand: ${jsonDumps(entry)}` : '')
+      + (denies.length ? ` Remove these from its "permission.skill" by hand: `
+        + `${denies.map((n) => jsonDumps(n)).join(', ')}` : '')
+      + '\n');
     return false;
   }
-  cfg.instructions = instr.filter((i) => i !== entry);
-  if (denyNames.length && isDict(cfg.permission) && isDict(cfg.permission.skill)) {
-    for (const name of denyNames) {
-      if (cfg.permission.skill[name] === 'deny') delete cfg.permission.skill[name];
-    }
-    if (!Object.keys(cfg.permission.skill).length) delete cfg.permission.skill;
-  }
+  if (hasEntry) cfg.instructions = instr.filter((i) => i !== entry);
+  for (const name of denies) delete skill[name];
+  if (skill && denies.length && !Object.keys(skill).length) delete cfg.permission.skill;
   atomicWriteJson(target, cfg);
   return true;
 }

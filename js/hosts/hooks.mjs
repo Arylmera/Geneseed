@@ -393,9 +393,12 @@ function scanSegments(command) {
   let m;
   while ((m = re.exec(command))) {
     if (m[3]) { tags.push([m[1], m[3]]); continue; }
-    if (m[0][0] === '"' || m[0][0] === "'" || m[0][0] === '#') continue;
+    if (m[0][0] === '"' || m[0][0] === "'") continue;
     segs.push(command.slice(start, m.index));
     start = re.lastIndex;
+    // A comment is cut OUT of its segment (its text is prose, `# scanning / for refs`); the
+    // newline after it, if any, is the next separator.
+    if (m[0][0] === '#') continue;
     // A pending heredoc's body starts on the line after its opener; each line is read once.
     while (m[0] === '\n' && tags.length) {
       const end = command.indexOf('\n', start);
@@ -412,12 +415,13 @@ function scanSegments(command) {
 
 /**
  * The first segment (see `scanSegments`) that recursively scans a whole filesystem root, or
- * null. Any `ssh` command is exempt (a remote root scan is the remote's business — ponytail:
- * that also exempts a local `find / -name "*ssh*"`; the reference's choice), and so is any path
- * deeper than a root.
+ * null. A segment whose PROGRAM is ssh is exempt — its remote command is ssh's argument, and a
+ * remote root scan is the remote's business — but only that segment: `ssh h true; find /` still
+ * refuses, and so does a `find /` whose comment merely mentions ssh (the reference exempted any
+ * command containing "ssh"). Any path deeper than a root passes.
  */
 export function rootScan(command) {
-  if (!SCAN_WORD_RE.test(command) || /\bssh\b/.test(command)) return null;
+  if (!SCAN_WORD_RE.test(command)) return null;
   for (const seg of scanSegments(command)) {
     // Tokens keep their quotes until the root test, so a quoted `"a:"` can be told from a bare `C:`.
     let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t));
@@ -430,22 +434,25 @@ export function rootScan(command) {
     const grep = SCAN_GREP_R.has(prog);
     const ls = SCAN_LS_R.has(prog);
     const ps = SCAN_PS_R.has(prog);
-    if (!always && !grep && !ls && !ps) continue;
+    if (!always && !grep && !ls && !ps) continue; // ssh is none of these, so its segment passes
     // `-Path=x` and PowerShell's colon binding `-Path:C:\` read as the path itself.
     const argv = toks.slice(1).map((t) => {
       const m = /^-path[=:](.+)$/i.exec(t);
       return m ? m[1] : t;
     });
     if (!always && !argv.some((a) => (grep && GREP_RECURSE_RE.test(a))
-      || (ls && LS_RECURSE_RE.test(a)) || ((ls || ps) && PS_RECURSE_RE.test(a)))) continue;
+      || (ls && (LS_RECURSE_RE.test(a) || (a.length >= 3 && PS_RECURSE_RE.test(a))))
+      || (ps && PS_RECURSE_RE.test(a)))) continue;
     if (argv.some(rootArg)) return seg.trim();
   }
   return null;
 }
+// For ls/dir a PowerShell `-Recurse` abbreviation counts from `-re` up: a bare `-r` there is the
+// POSIX reverse flag (`ls -r /`, `dir -r C:\`). gci/Get-ChildItem keep the full abbreviation set.
 const unquote = (t) => t.replace(/^["']+|["']+$/g, '');
-// A QUOTED single-letter-colon token is data (`grep -rn "a:" src`), never a drive root; a bare
-// `C:` still is.
-const rootArg = (t) => FS_ROOT_RE.test(unquote(t)) && !(/^["']/.test(t) && /^[a-z]:$/i.test(unquote(t)));
+// A QUOTED token is data — a grep pattern (`grep -rn "/" src`), a path named in a search
+// (`rg "/mnt/c" README.md`) — never a root target; only an unquoted root is one.
+const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t);
 
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;

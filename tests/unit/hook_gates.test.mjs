@@ -985,6 +985,49 @@ test('rootScan: ls -r is reverse, quoted "a:" is data, .exe and -Path: are still
   for (const [c, refused] of FIX_CASES) assert.equal(Boolean(rootScan(c)), refused, c);
 });
 
+// PR #241 review. (1) ANY quoted token is data — a grep pattern `"/"`, a path named in prose — never
+// a root target; only an unquoted root is one. (2) For ls/dir a PowerShell `-Recurse` abbreviation
+// counts only from 3 characters (`-re`…): bare `-r` there is POSIX reverse; gci keeps `-r`.
+// (3) A `#` comment is cut out of its segment, not folded into it. (5) ssh is exempt per SEGMENT
+// whose program is ssh (the remote command is its argument), not because "ssh" appears anywhere.
+const REVIEW_CASES = [
+  ['grep -rn "/" src', false],
+  ['rg "/mnt/c" README.md', false],
+  ["rg 'C:\\' src", false],
+  ['grep -r foo /', true],
+  ['rg needle C:\\', true],
+  ['ls -r /', false],
+  ['dir -r C:\\', false],
+  ['ls -Recurse C:\\', true],
+  ['ls -rec C:\\', true],
+  ['gci C:\\ -r', true],
+  ['grep -rn needle . # scanning / for refs', false],
+  ['ls # x\nfind / -name y', true],
+  ["ssh nas 'find / -name x'", false],
+  ['ssh build-host true; find / -delete', true],
+  ["find / -iname '*.conf' # check ssh config", true],
+];
+
+test('rootScan: quoted tokens are data, ls -r is reverse, comments are cut, ssh per segment', async () => {
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  for (const [c, refused] of REVIEW_CASES) assert.equal(Boolean(rootScan(c)), refused, JSON.stringify(c));
+});
+
+test('rootScan never throws on random input', async () => {
+  // A crash here is a gate error — an ask on every call. Cheap fuzz over the characters the
+  // splitter and tokenizer treat specially.
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  const alphabet = ['find', 'ls', 'gci', 'ssh', ' ', '/', 'C:\\', '"', "'", '#', ';', '|', '&&', '\n',
+    '<<', 'EOF', '-r', '-R', '-Recurse', '*', 'x', '\t', '-Path:'];
+  let seed = 7;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  for (let i = 0; i < 3000; i++) {
+    let c = '';
+    for (let j = rnd(20); j >= 0; j--) c += alphabet[rnd(alphabet.length)];
+    assert.doesNotThrow(() => rootScan(c), JSON.stringify(c));
+  }
+});
+
 // Final review: segments split only on separators OUTSIDE quotes, and a heredoc body (from
 // `<<TAG`/`<<'TAG'`/`<<-TAG` to the TAG line) is data, never a command. Without both, a commit
 // message that merely DESCRIBES a root scan — this machine's mandated `git commit -F - <<'EOF'`

@@ -497,6 +497,16 @@ for (const [command, want] of [
   ["# don't search all\nfind / -name x", true],
   ["echo a # it's\nfind / -name x", true],
   ["echo a#b; find / -name x", true],
+  // PR #241 review: quoted tokens are data; ls -r is reverse; comments are cut; ssh per segment.
+  ['grep -rn "/" src', false],
+  ["rg 'C:\\' src", false],
+  ["ls -r /", false],
+  ["dir -r C:\\", false],
+  ["ls -Recurse C:\\", true],
+  ["grep -rn needle . # scanning / for refs", false],
+  ["ls # x\nfind / -name y", true],
+  ["ssh build-host true; find / -delete", true],
+  ["find / -iname '*.conf' # check ssh config", true],
 ]) {
   test(`root-scan guard: ${JSON.stringify(command)} -> ${want ? "blocked" : "allowed"}`, async () => {
     assert.equal(await blocked("bash", { command }), want)
