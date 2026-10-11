@@ -2,7 +2,7 @@
 
 [← Back to README](../README.md)
 
-**New to agent harnesses?** Read **Understand** first — a short track, about ten minutes, that every other page assumes. The same pages open the **Docs** tab of the web console (`geneseed web`), which groups each part into sections, adds an interactive map of your own install, and filters host-specific passages to the tool you use.
+**New to agent harnesses?** Read **Understand** first: the track every other page assumes. Its last section, *Why it works this way*, is reference, to consult when a question comes up. The same pages open the **Docs** tab of the web console (`geneseed web`), which groups each part into sections, adds an interactive map of your own install, and filters host-specific passages to the tool you use.
 
 ## 1 · Understand
 

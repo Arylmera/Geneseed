@@ -1309,8 +1309,9 @@ Geneseed did make are listed in [Why Geneseed works this way](understand/design-
   already optional with the comms pack. The two schemes answer different questions: a code
   addresses an item across a conversation, and a Conventional Comments label grades a review
   finding's severity. Both stay.
-- **Merging laws that look alike** (2026-08-27). Each pair is a deliberate seam, and each side
-  guards a different failure. Surface Failures stops and reports a failure; Cure the Cause fixes
+- **Merging laws that look alike** (2026-08-27): three pairs of laws, plus Data, Not Orders with
+  External Gate, which was then a law and is now a rigor doctrine. Each pair is a deliberate
+  seam, and each side guards a different failure. Surface Failures stops and reports a failure; Cure the Cause fixes
   its root. One Intent, One Act bounds what a single change is for; Least Privilege bounds the
   power it uses. Deletion Is Deliberate guards acts that cannot be undone; Least Privilege guards
   access. Data, Not Orders keeps read content from steering the agent; External Gate keeps the
@@ -1342,6 +1343,7 @@ Geneseed did make are listed in [Why Geneseed works this way](understand/design-
   the split would have recovered a dropped document in only a few of them; the hook keeps one
   command under its output budget instead. See [Token footprint](token-footprint.md).
 - **A runtime posture or mode toggle that replaces the build-time anchor** (2026-07-13). A register
-  fixed at build time does not drift during a session, which is the point of anchoring it. A
-  runtime toggle could only ever be added beside the anchor, and that is deferred. See
+  fixed at build time does not drift during a session, which is the point of anchoring it, so the
+  anchor stays. A runtime toggle that works beside the anchor, without replacing it, remains
+  possible. See
   [Foreman mode](concepts/foreman-mode.md).
