@@ -40,8 +40,8 @@ import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
-  readMaybe, themeOfDir, trustOfDir,
+  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, installState, installTargets,
+  legacyProcessCarrierOfDir, modeOfDir, postureOfDir, readMaybe, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
@@ -266,6 +266,15 @@ export function rebuildCommand(argv) {
  * defaulted any of them would silently re-emit an install into something its owner did not
  * choose — which is the same failure mode `_footprint_of_dir`'s WARN exists to prevent, at a
  * larger scale.
+ *
+ * A LEGACY CARRIER IS SKIPPED, NEVER RE-EMITTED. `installProfile` (through `doctrinesOfDir`/
+ * `excludedRulesOfDir`) no longer migrates a pre-comms carrier — it reads it as written. Calling
+ * `driverMain` on that read-back would WRITE a fresh carrier missing `comms` and still naming
+ * `process 7`/`process 8` nowhere, which deletes the one signal (`legacyProcessCarrierOfDir`)
+ * that could ever have caught it again: a permanent, silent loss, and `upgrade` reaches this
+ * same loop by shelling into `rebuild-all` (`js/maintain/update.mjs`'s `rebuildInstalls`), so
+ * fixing it once here covers both verbs. Checked BEFORE `installProfile`, so no argv is even
+ * built for it.
  */
 export async function cmdRebuildAll() {
   const rc = rebuildAll();
@@ -285,8 +294,16 @@ export function rebuildAll() {
     return 0;
   }
   const failures = [];
+  const skipped = [];
   for (const [host, scope, root] of targets) {
     const label = `${host}:${scope} (${root})`;
+    // Ask BEFORE `installProfile`: a legacy carrier must never reach `driverMain`, see above.
+    if (legacyProcessCarrierOfDir(root, host)) {
+      skipped.push(label);
+      printOut(`[rebuild-all] SKIPPED ${label}: pre-comms carrier (names 'process 8') — `
+        + 'run `geneseed setup` for it.\n');
+      continue;
+    }
     // The one replay that speaks when an excluded skill's name got older: status and the console
     // read the same profile on every refresh and stay silent.
     const p = installProfile(host, scope, root, (n) => printErr(`[rebuild-all] ${label}: ${n}\n`));
@@ -303,7 +320,16 @@ export function rebuildAll() {
       + `${failures.join(', ')}\n`);
     return 1;
   }
-  printOut(`[rebuild-all] rebuilt ${targets.length} install(s).\n`);
+  const rebuilt = targets.length - skipped.length;
+  // Skipping is protective, not a failure — same convention as the install count itself
+  // already filtering to `active` targets without flagging the inactive ones. Exit 0 as long
+  // as nothing that WAS attempted failed; the per-install SKIPPED line above is the record.
+  if (skipped.length) {
+    printOut(`[rebuild-all] rebuilt ${rebuilt} install(s), skipped ${skipped.length}: `
+      + `${skipped.join(', ')}.\n`);
+  } else {
+    printOut(`[rebuild-all] rebuilt ${rebuilt} install(s).\n`);
+  }
   return 0;
 }
 

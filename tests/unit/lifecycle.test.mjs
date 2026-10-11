@@ -1915,3 +1915,49 @@ test('a relocated CLAUDE_CONFIG_DIR never turns the default ~/.claude into a pro
     });
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// FIX ROUND (doc-1, 4.0.0): a pre-comms carrier must be SKIPPED by `rebuild-all`, never
+// re-emitted. `doctrinesOfDir`/`excludedRulesOfDir` no longer migrate it — they read it as
+// written — so calling `driverMain` on that read-back would WRITE a fresh carrier missing
+// `comms` and still not re-addressing `process 7`/`process 8`, except now PERMANENTLY: the
+// fresh carrier carries no `process 8` text, so `legacyProcessCarrierOfDir` could never catch
+// it again. `rebuildAll` must ask before `installProfile`, not after.
+
+test('rebuild-all skips a pre-comms carrier rather than re-emitting it, and says so', () => {
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', home);
+    const carrier = path.join(repo, 'CLAUDE.md');
+    const original = fs.readFileSync(carrier, 'utf8');
+    assert.ok(original.includes('Active packs: craft, rigor, ops, process, comms'),
+      'sanity: a fresh claude emit carries the full default pack line');
+    // Simulate an install built before the comms pack existed: `process` active with no
+    // `comms` in the marker, and the carrier's text still saying `process 8` — its old eighth
+    // rule's heading, the one signal the retired migration (and now the skip) keys on.
+    const legacy = `${original.replace('Active packs: craft, rigor, ops, process, comms',
+      'Active packs: craft, rigor, ops, process')}\n### Doctrine process 8 — One Writer Per File\n`;
+    fs.writeFileSync(carrier, legacy);
+    const before = fs.readFileSync(carrier);
+
+    withHome(home, () => {
+      inCwd(repo, () => {
+        const [rc, out] = captured(() => rebuildAll());
+        assert.equal(rc, 0, 'skipping a legacy install is not a rebuild-all FAILURE');
+        assert.match(out, /SKIPPED/);
+        assert.match(out, /process 8/);
+        assert.match(out, /geneseed setup/);
+        assert.doesNotMatch(out, /geneseed rebuild-all/,
+          'must not point the owner at the one command guaranteed to do nothing here');
+      });
+    }, {
+      OPENCODE_CONFIG_DIR: path.join(d, 'oc-none'),
+      BOB_CONFIG_DIR: path.join(d, 'bob-none'),
+      OPENCLAUDE_CONFIG_DIR: path.join(d, 'openclaude-none'),
+    });
+
+    const after = fs.readFileSync(carrier);
+    assert.deepEqual(after, before,
+      'rebuild-all re-emitted a pre-comms carrier instead of skipping it — permanent data loss');
+  });
+});

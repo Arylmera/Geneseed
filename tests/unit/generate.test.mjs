@@ -30,7 +30,9 @@ import {
   writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
 } from '../../js/hosts/opencode.mjs';
 import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/hosts/settings.mjs';
-import { doctrinesOfDir, excludedRulesOfDir, themeFiles } from '../../js/hosts/installs.mjs';
+import {
+  doctrinesOfDir, excludedRulesOfDir, resetLegacyProcessCarrierWarning, themeFiles,
+} from '../../js/hosts/installs.mjs';
 import {
   ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER, resolveRuleIds,
 } from '../../js/build/source.mjs';
@@ -2360,7 +2362,9 @@ test('excludedRulesOfDir round-trips the marker a real build wrote', () => {
 // or in its `Excluded rules:` line). Through 3.x a pre-comms carrier was silently rewritten on
 // read; 4.0.0 removed that rewrite because its detector breaks the day `process` ever regains
 // an eighth rule for an unrelated reason. Now the carrier is read exactly as written, and the
-// read warns on stderr instead of mutating anything.
+// read warns on stderr instead of mutating anything — once per process (fix round 2), so
+// `resetLegacyProcessCarrierWarning` is called between the steps below that each expect to see
+// the line fire again; nothing outside a test should ever call it.
 
 test('a pre-comms install is read as written, and warned about loudly instead of migrated', () => {
   withDir((d) => {
@@ -2370,15 +2374,24 @@ test('a pre-comms install is read as written, and warned about loudly instead of
 
     // The default pre-comms carrier: process active, its eighth rule rendered. No `comms` is
     // added any more — the pack list comes back exactly as named — and the read warns.
+    resetLegacyProcessCarrierWarning();
     write('### Doctrine process 8 — One Writer Per File\n\nActive packs: craft, rigor, ops, process');
     let [packs, , err] = captured(() => doctrinesOfDir(old));
     assert.deepEqual(packs, ['craft', 'rigor', 'ops', 'process'],
       'the retired migration must not add comms any more — the carrier is read as written');
     assert.match(err, /process 8/, 'a pre-comms carrier must warn loudly, not read in silence');
     assert.match(err, /geneseed setup/, 'the warning must name the fix: re-run setup');
+    assert.doesNotMatch(err, /geneseed rebuild-all/,
+      'the one command the warning must never suggest: it is now a refused no-op for this install');
+
+    // A second read in the SAME process says nothing more — the line is deduped, not repeated
+    // on every call a long-running `doctor`/`validate`/`uninstall` makes against one install.
+    [, , err] = captured(() => doctrinesOfDir(old));
+    assert.equal(err, '', 'the warning must not repeat within one process');
 
     // Its exclusions are no longer re-addressed: the old `process 7`/`process 8` spellings come
     // back literally, not remapped to `comms 1`/`process 7`, and the read still warns.
+    resetLegacyProcessCarrierWarning();
     write('Active packs: craft, process\nExcluded rules: process 7, process 8');
     let excluded;
     [excluded, , err] = captured(() => excludedRulesOfDir(old));
@@ -2387,6 +2400,7 @@ test('a pre-comms install is read as written, and warned about loudly instead of
     assert.match(err, /process 8/);
 
     // No `process 8` in the carrier: nothing is legacy, nothing warns.
+    resetLegacyProcessCarrierWarning();
     write('Active packs: craft');
     [packs, , err] = captured(() => doctrinesOfDir(old));
     assert.deepEqual(packs, ['craft']);

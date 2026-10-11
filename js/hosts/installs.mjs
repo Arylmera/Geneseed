@@ -391,13 +391,49 @@ const legacyProcessCarrier = (text) => /\bprocess 8\b/.test(text);
  * to perform on the same detection. Never thrown — both are read-only introspection called by
  * `uninstall`, `diff`, `validate` and the web console, none of which should become
  * un-runnable against an install that merely needs a rebuild.
+ *
+ * NEVER `geneseed rebuild-all` — that is the exact command `rebuildAll` (`js/build/generate.mjs`)
+ * now REFUSES to run against a legacy carrier (see `legacyProcessCarrierOfDir` there), because
+ * running it is what caused the permanent data loss this fix round exists to stop. Pointing the
+ * warning at the one command that is guaranteed to do nothing here would be a second silent
+ * misread wearing a loud one's clothes.
+ *
+ * DEDUPED ONCE PER PROCESS — `doctor`/`validate`/`uninstall` read the same install's carrier
+ * more than once per run, and a line per read drowns the one thing the owner needs to act on.
+ * `resetLegacyProcessCarrierWarning` (below) exists only so tests can see the line fire more
+ * than once in one process; nothing else should call it.
  */
+let warnedLegacyProcessCarrier = false;
 function warnLegacyProcessCarrier() {
+  if (warnedLegacyProcessCarrier) return;
+  warnedLegacyProcessCarrier = true;
   printErr('[geneseed] WARN: this install predates the comms pack (3.7.0, 2026-09-27) — its '
     + "carrier still names 'process 8'. The automatic migration (adding comms, re-addressing "
-    + "process 7/process 8) was removed in 4.0.0; the carrier is now read as written. Run "
-    + '`geneseed setup` (or `geneseed rebuild-all`) once to rebuild this install on the '
-    + 'current rule addresses.\n');
+    + 'process 7/process 8) was removed in 4.0.0; the carrier is now read as written. Run '
+    + '`geneseed setup` once to rebuild this install on the current rule addresses.\n');
+}
+
+/** Test-only: undo the dedup above so a test can see the warning fire again. */
+export function resetLegacyProcessCarrierWarning() {
+  warnedLegacyProcessCarrier = false;
+}
+
+/**
+ * Whether ANY of `d`'s own carriers still shows the pre-comms signature — the one question
+ * `rebuildAll`, `upgrade` (which shells into it) and `migrate` must ask BEFORE calling
+ * `installProfile`/`driverMain` on an install, now that `doctrinesOfDir`/`excludedRulesOfDir`
+ * no longer rewrite it for them. Re-emitting a legacy carrier through the current template
+ * does not raise an error — it just writes a fresh `Active packs:` line that silently drops
+ * `comms` and leaves `process 7`/`process 8` unaddressed, permanently, with no further carrier
+ * text left afterward for THIS function to ever detect again. Checking before the write is the
+ * only point where the loss is still preventable.
+ */
+export function legacyProcessCarrierOfDir(d, host = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    return legacyProcessCarrier(text) || undefined;
+  }, false, host) === true;
 }
 
 /**
