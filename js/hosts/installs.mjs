@@ -363,7 +363,8 @@ export function trustOfDir(d, host = null) {
 const ACTIVE_PACKS_RE = /^Active packs:[ \t]*(.+?)[ \t]*$/m;
 
 /**
- * A carrier rendered BEFORE the comms pack existed — the address migration's one detector.
+ * A carrier rendered BEFORE the comms pack existed — the pre-4.0.0 address migration's one
+ * detector, kept only to WARN now.
  *
  * The comms pack took `process 7` (reference codes) out of process, and `process 8` (one
  * writer per file) was renumbered to `process 7`. An install built before that names
@@ -374,11 +375,30 @@ const ACTIVE_PACKS_RE = /^Active packs:[ \t]*(.+?)[ \t]*$/m;
  * it. No current carrier can say `process 8` — the pack has seven rules and nothing cites
  * an eighth.
  *
- * ponytail: text sniff, not a stamp. It holds only while process has seven rules; the day
- * process gets an eighth, this must move to a build stamp (or be retired, once no install
- * built before the migration can remain).
+ * 4.0.0 RETIRED THE AUTO-MIGRATION THIS DROVE (see `warnLegacyProcessCarrier` below): it used
+ * to add `comms` and re-address `process 7`/`process 8` on sight, silently, which is exactly
+ * backward the day the process pack ever regains an eighth rule for an unrelated reason —
+ * this sniff would then fire on a CURRENT carrier and rewrite data nobody asked rewritten. A
+ * false positive that only prints a loud warning and reads the carrier as written is safe to
+ * keep; a false positive that mutates data was not. See CHANGELOG "Removed" (4.0.0) for the
+ * upgrade instruction this now points installs at.
  */
 const legacyProcessCarrier = (text) => /\bprocess 8\b/.test(text);
+
+/**
+ * The loud half of retiring the migration: one stderr line pointing a pre-comms install at
+ * `geneseed setup`, instead of the silent rewrite `doctrinesOfDir`/`excludedRulesOfDir` used
+ * to perform on the same detection. Never thrown — both are read-only introspection called by
+ * `uninstall`, `diff`, `validate` and the web console, none of which should become
+ * un-runnable against an install that merely needs a rebuild.
+ */
+function warnLegacyProcessCarrier() {
+  printErr('[geneseed] WARN: this install predates the comms pack (3.7.0, 2026-09-27) — its '
+    + "carrier still names 'process 8'. The automatic migration (adding comms, re-addressing "
+    + "process 7/process 8) was removed in 4.0.0; the carrier is now read as written. Run "
+    + '`geneseed setup` (or `geneseed rebuild-all`) once to rebuild this install on the '
+    + 'current rule addresses.\n');
+}
 
 /**
  * The doctrine packs a DEPLOYED install carries — the third register read back off disk,
@@ -420,11 +440,11 @@ export function doctrinesOfDir(d, host = null) {
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
     if (!named.every((n) => PACK_ORDER.includes(n))) return null;
-    // MIGRATION: a pre-comms install that carried process carried the codes rule inside it,
-    // so it keeps that rule by gaining comms. Its old `process 7` exclusion, if any, is
-    // re-addressed to `comms 1` by `excludedRulesOfDir` in the same pass.
+    // RETIRED MIGRATION (4.0.0): a pre-comms install used to gain `comms` here so it kept the
+    // codes rule it carried inside `process`. That rewrite is gone — the carrier is read as
+    // written, and the owner is warned loudly instead, once per read.
     if (named.includes('process') && !named.includes('comms') && legacyProcessCarrier(text)) {
-      named.push('comms');
+      warnLegacyProcessCarrier();
     }
     return PACK_ORDER.filter((pk) => named.includes(pk));
   }, null, host);
@@ -489,11 +509,12 @@ export function excludedRulesOfDir(d, host = null) {
         ? `${parts[0]}.${Number(parts[1])}` : null;
     });
     if (!ids.every(Boolean)) return [];
-    // MIGRATION: the same pre-comms carrier spells the old addresses — see
-    // `legacyProcessCarrier`. One map, applied once, so `process 8` cannot chain onward.
-    const MOVED = { 'process.7': 'comms.1', 'process.8': 'process.7' };
-    const out = legacyProcessCarrier(text) ? ids.map((id) => MOVED[id] ?? id) : ids;
-    return [...new Set(out)].sort();
+    // RETIRED MIGRATION (4.0.0): a pre-comms carrier used to have its old addresses
+    // (`process.7` -> `comms.1`, `process.8` -> `process.7`) remapped here, once, so
+    // `process 8` could not chain onward. That rewrite is gone — the addresses are returned
+    // exactly as named, and the owner is warned loudly instead of having them silently moved.
+    if (legacyProcessCarrier(text)) warnLegacyProcessCarrier();
+    return [...new Set(ids)].sort();
   }, [], host);
 }
 

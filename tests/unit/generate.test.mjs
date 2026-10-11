@@ -2352,45 +2352,59 @@ test('excludedRulesOfDir round-trips the marker a real build wrote', () => {
   });
 });
 
-// THE ADDRESS MIGRATION (2026-09-27). The comms pack took `process 7` (reference codes) out of
-// process as `comms 1`, and `process 8` (one writer per file) became `process 7`. An install
-// built before that carries a marker naming `process` and not `comms` — and so does a current
-// install whose owner switched comms off. The carrier's text tells them apart: only a pre-comms
-// carrier can say `process 8` (as a rendered heading, or in its `Excluded rules:` line).
+// THE ADDRESS MIGRATION (2026-09-27) AND ITS RETIREMENT (4.0.0). The comms pack took
+// `process 7` (reference codes) out of process as `comms 1`, and `process 8` (one writer per
+// file) became `process 7`. An install built before that carries a marker naming `process` and
+// not `comms` — and so does a current install whose owner switched comms off. The carrier's
+// text tells them apart: only a pre-comms carrier can say `process 8` (as a rendered heading,
+// or in its `Excluded rules:` line). Through 3.x a pre-comms carrier was silently rewritten on
+// read; 4.0.0 removed that rewrite because its detector breaks the day `process` ever regains
+// an eighth rule for an unrelated reason. Now the carrier is read exactly as written, and the
+// read warns on stderr instead of mutating anything.
 
-test('a pre-comms install that carried process gains comms, and keeps its codes rule', () => {
+test('a pre-comms install is read as written, and warned about loudly instead of migrated', () => {
   withDir((d) => {
     const old = path.join(d, 'old');
     fs.mkdirSync(old);
     const write = (body) => writeText(path.join(old, 'AGENT.md'), `# Geneseed\n\n${body}\n`);
 
-    // The default pre-comms carrier: process active, its eighth rule rendered.
+    // The default pre-comms carrier: process active, its eighth rule rendered. No `comms` is
+    // added any more — the pack list comes back exactly as named — and the read warns.
     write('### Doctrine process 8 — One Writer Per File\n\nActive packs: craft, rigor, ops, process');
-    assert.deepEqual(doctrinesOfDir(old), ['craft', 'rigor', 'ops', 'process', 'comms'],
-      'a pre-comms install lost the codes rule on its first rebuild');
-    assert.deepEqual(excludedRulesOfDir(old), []);
+    let [packs, , err] = captured(() => doctrinesOfDir(old));
+    assert.deepEqual(packs, ['craft', 'rigor', 'ops', 'process'],
+      'the retired migration must not add comms any more — the carrier is read as written');
+    assert.match(err, /process 8/, 'a pre-comms carrier must warn loudly, not read in silence');
+    assert.match(err, /geneseed setup/, 'the warning must name the fix: re-run setup');
 
-    // Its exclusions are re-addressed, once: the old `process 7` IS `comms 1` now, and the old
-    // `process 8` is `process 7` — never chained on to `comms 1`.
+    // Its exclusions are no longer re-addressed: the old `process 7`/`process 8` spellings come
+    // back literally, not remapped to `comms 1`/`process 7`, and the read still warns.
     write('Active packs: craft, process\nExcluded rules: process 7, process 8');
-    assert.deepEqual(doctrinesOfDir(old), ['craft', 'process', 'comms']);
-    assert.deepEqual(excludedRulesOfDir(old), ['comms.1', 'process.7']);
+    let excluded;
+    [excluded, , err] = captured(() => excludedRulesOfDir(old));
+    assert.deepEqual(excluded, ['process.7', 'process.8'],
+      'the retired migration must not re-address old process addresses any more');
+    assert.match(err, /process 8/);
 
-    // No process, no codes rule to preserve: nothing is added.
-    write('### Doctrine process 8 — x\n\nActive packs: craft');
-    assert.deepEqual(doctrinesOfDir(old), ['craft']);
+    // No `process 8` in the carrier: nothing is legacy, nothing warns.
+    write('Active packs: craft');
+    [packs, , err] = captured(() => doctrinesOfDir(old));
+    assert.deepEqual(packs, ['craft']);
+    assert.equal(err, '', 'a carrier that never said process 8 has nothing to warn about');
   });
 });
 
 test('a current install with comms switched off stays off across a rebuild', () => {
-  // The other direction, and the reason the migration sniffs the carrier instead of keying on
-  // the marker alone: `process` without `comms` is also what a deliberate current choice says.
+  // The other direction: `process` without `comms` is also what a deliberate current choice
+  // says, and the retired migration's detector (sniffing `process 8`) is what told them apart
+  // rather than the marker alone — unchanged by the retirement, since this carrier never says
+  // `process 8`.
   withDir((d) => {
     const out = path.join(d, 'bundle');
     buildInto(out, { doctrines: ['craft', 'process'], excludeRules: ['process.7'] });
     assert.deepEqual(doctrinesOfDir(out), ['craft', 'process']);
     assert.deepEqual(excludedRulesOfDir(out), ['process.7'],
-      'a current `process 7` exclusion was re-addressed as if it were a pre-comms one');
+      'a current `process 7` exclusion must never be rewritten');
   });
 });
 

@@ -317,8 +317,11 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    marker (§9), which names only the packs that existed when it was built, so a new pack reaches
    an existing install only if that install is re-emitted *and* the reader adds it. A pack that
    merely adds rules can stay off for old installs. A pack that *moves* a rule out of another
-   pack cannot, or the moved rule disappears on the next rebuild: `comms` (2026-09-27) is the
-   worked example — see `legacyProcessCarrier` in `js/hosts/installs.mjs`.
+   pack cannot, or the moved rule disappears on the next rebuild — `comms` (2026-09-27) is the
+   worked example. Through 3.x this was auto-migrated on sight; 4.0.0 retired that (CHANGELOG
+   "Removed") because the detector it relied on breaks the day the donor pack regains a rule at
+   the same old count. `js/hosts/installs.mjs`'s `legacyProcessCarrier` now only warns a
+   pre-migration install to re-run `geneseed setup` rather than rewriting its data for it.
 
 ---
 
