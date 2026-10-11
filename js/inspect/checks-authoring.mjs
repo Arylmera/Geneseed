@@ -25,8 +25,57 @@ import {
 import { constitutionProblems, leanBlockProblems } from './checks-constitution.mjs';
 import { countTableProblems } from './checks-counts.mjs';
 import { catalogProblems } from '../loop/catalog.mjs';
-import { globSorted, isDir } from './scan.mjs';
+import { blankCodeSpans, globSorted, isDir, isFile, rglob } from './scan.mjs';
 import { spawnSync } from 'node:child_process';
+
+/**
+ * The comment bodies (trimmed) that are known to be FUNCTIONAL — consumed by the render, a
+ * host emit, or the docs skill — rather than a maintainer's own note, so a bare, un-prefixed
+ * comment matching one of these is left alone. `<!-- note: ... -->` is the escape hatch itself:
+ * `resolveRuleIds` in `js/build/source.mjs` strips it before any render sees it, so it is
+ * already quiet by the time an agent would read it — this just stops the doctor re-flagging it.
+ */
+const ALLOWED_COMMENT_RES = [
+  /^note:[\s\S]*$/,                          // the author-note prefix itself
+  /^LEAN:(begin|else|end)$/,                 // js/build/render.mjs LEAN_BLOCK_RE
+  /^CATALOG:(begin (agents|skills)|else|end)$/, // js/build/render.mjs CATALOG_BLOCK_RE
+  /^INCLUDE:\s*\S+$/,                        // js/build/render.mjs INCLUDE_RE
+  /^invocation:\s*user$/,                    // js/hosts/native.mjs: disable-model-invocation
+  /^aliases:\s*\S.*$/,                       // js/build/source.mjs ALIASES_RE
+  /^webfetch:\s*allow$/,                     // js/hosts/* webfetch gate
+  /^harness:\S+$/,                           // js/web/docs.mjs HARNESS_OPEN_RE
+  /^bash:\s*allow$/,                         // js/hosts/native.mjs BASH_MARKER
+];
+
+/**
+ * Every bare HTML comment under `src/` that is neither the `<!-- note: ... -->` author-note
+ * prefix nor a known functional marker — the half of the pair `resolveRuleIds`' strip does not
+ * cover: that function only ever sees a file once it is already being rendered, so a note
+ * someone forgot to prefix would ship verbatim rather than fail loudly. Comments inside a
+ * fenced code block or an inline code span are exempt — a skill explaining the managed-block
+ * syntax (`` `<!-- BEGIN GENESEED -->` ``) to the agent is literal text, not live markup, and
+ * `blankCodeSpans` is what tells the two apart without a full Markdown parser.
+ */
+export function authorNoteProblems() {
+  const problems = [];
+  for (const p of rglob(SRC)) {
+    if (!isFile(p) || !p.endsWith('.md')) continue;
+    let raw;
+    try { raw = readText(p); } catch { continue; }
+    const scan = blankCodeSpans(raw);
+    const rel = `src/${path.relative(SRC, p).split(path.sep).join('/')}`;
+    for (const m of scan.matchAll(/<!--([\s\S]*?)-->/g)) {
+      const body = m[1].trim();
+      if (ALLOWED_COMMENT_RES.some((re) => re.test(body))) continue;
+      const line = scan.slice(0, m.index).split('\n').length;
+      problems.push(`[authoring] ${rel}:${line} has an HTML comment that is neither the `
+        + "'note:' author-note prefix nor a known functional marker (" + JSON.stringify(body) + ') — '
+        + "prefix it with 'note:' if it is maintainer-only, or the doctor's allow-list if the "
+        + 'agent must read it literally');
+    }
+  }
+  return problems;
+}
 
 // Moved to the two sibling modules; re-exported so callers that import the authoring group as
 // one module keep working.
@@ -115,6 +164,7 @@ export function authoringProblems() {
   problems.push(...constitutionProblems());
   problems.push(...leanBlockProblems());
   problems.push(...countTableProblems());
+  problems.push(...authorNoteProblems());
   return problems;
 }
 

@@ -41,6 +41,18 @@ export function stripCode(text) {
   return text.replace(FENCE_RE, '').replace(COMMENT_RE, '').replace(INLINE_CODE_RE, '');
 }
 
+/**
+ * Fenced and inline code, blanked to same-length whitespace with every newline kept — so a scan
+ * for a BARE `<!-- ... -->` (one a reader actually sees as live markup) never trips on one that
+ * is only a literal example inside a fence or a code span, while every match's line number
+ * still lands on the right source line. `checks-authoring.mjs`'s `authorNoteProblems` is the
+ * one caller: it needs comments that survive, unlike `stripCode` above, which drops them.
+ */
+export function blankCodeSpans(text) {
+  const blank = (s) => s.replace(/[^\n]/g, ' ');
+  return text.replace(FENCE_RE, blank).replace(INLINE_CODE_RE, blank);
+}
+
 // `within` — owned by js/lib/paths.mjs; re-exported for this module's importers.
 export { within };
 

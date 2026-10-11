@@ -1,4 +1,4 @@
-<!--
+<!-- note:
   A brick template — copy this file to `<name>.md` (kebab-case, matching the `name:` field
   below) under `bricks/` at whichever level you are authoring for: shipped (this package's
   `src/bricks/`), global ($XDG_CONFIG_HOME/geneseed/bricks/), or project (<repo>/.geneseed/bricks/).

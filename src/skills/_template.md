@@ -1,4 +1,4 @@
-<!--
+<!-- note:
   Authoring a new skill (this scaffold replaces the old create-skill skill):
   1. Reuse first — if an existing skill's domain already covers the need, extend it
      instead of adding a file ({{DOCTRINE:automate-repetition}}). Name the skill by its domain.
@@ -6,8 +6,8 @@
      procedure, and done-when. In an installed harness the purpose line is plain
      prose; in the Geneseed source repo it is the DESC_<NAME> token with the prose
      defined per theme. If only the USER should ever open the skill (a teaching drill,
-     a tool gated on an environment the model cannot see), put `<!-- invocation: user -->`
-     on the line after the purpose blockquote: it renders to
+     a tool gated on an environment the model cannot see), put an `invocation: user`
+     HTML comment on the line after the purpose blockquote: it renders to
      `disable-model-invocation: true`, so `/name` still works but the model never
      self-triggers it and its description leaves the always-on catalogue.
   3. Add a row for it to the skills table in AGENT.md (the table is hand-authored;

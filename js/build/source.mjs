@@ -137,11 +137,28 @@ export function ruleCanon(src = SRC) {
 }
 
 /**
+ * AUTHOR NOTES — `<!-- note: ... -->`, single or multi-line, is maintainer-only prose and must
+ * never reach an agent (user decision 2026-10-11). Stripped here because `resolveRuleIds` is the
+ * one function every text file threads through before a render sees it: `readSource` in
+ * `js/build/render.mjs` for `renderFile` (every file in `src/`, including the on-disk `laws/`,
+ * `ontology/` and `doctrines/` copies and everything an INCLUDE pulls in), `registerBody` there
+ * for a posture/mode, and `readPackText` here for a doctrine pack body. One strip, every reader.
+ * `js/inspect/checks-authoring.mjs`'s `authorNoteProblems` is the companion gate: it scans
+ * `src/` directly for a comment that is neither this prefix nor a known functional marker, so a
+ * new author note without the prefix is caught instead of silently shipping.
+ */
+const AUTHOR_NOTE_RE = /[ \t]*<!--[ \t]*note:[\s\S]*?-->[ \t]*\r?\n?/g;
+export function stripAuthorNotes(text) {
+  return text.replace(AUTHOR_NOTE_RE, '');
+}
+
+/**
  * Resolve every declaration and citation in `text` against the canon under `src`. An unknown id
  * is left exactly as written — visible in the output, and named by the doctor — rather than
  * guessed at.
  */
 export function resolveRuleIds(text, src = SRC) {
+  text = stripAuthorNotes(text);
   if (!text.includes('{{LAW:') && !text.includes('{{DOCTRINE:')) return text;
   const { byId } = ruleCanon(src);
   const known = (kind, id) => { const r = byId.get(id); return r && r.kind === kind ? r : null; };
