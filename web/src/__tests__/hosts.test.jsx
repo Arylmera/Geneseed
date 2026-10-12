@@ -35,21 +35,12 @@ vi.mock('../api/index.js', () => ({
             root: 'C:/cfg',
             exists: true,
             commented: false,
-            servers: [
-              {
-                name: 'markitdown',
-                label: 'MarkItDown',
-                desc: 'docs',
-                preset: true,
-                state: 'enabled',
-              },
-            ],
+            servers: [{ name: 'markitdown', state: 'enabled' }],
           },
         ],
         default: 0,
       }),
     ),
-    mcpToggle: vi.fn(() => Promise.resolve({ ok: true })),
     mcpReveal: vi.fn(() => Promise.resolve({ ok: true, dir: 'C:/cfg' })),
     excludes: vi.fn(() =>
       Promise.resolve({ excludes: [], installs: [{ host: 'claude', cfg: '/x' }] }),
@@ -356,17 +347,17 @@ describe('Installs / Hosts', () => {
     expect(document.querySelector('.voice-ref')).toBeNull()
   })
 
-  it('shows the active install’s switch on, and its MCP servers in the panel', async () => {
+  it('shows the active install’s switch on, and its MCP servers read-only', async () => {
     render(<Hosts onAction={() => {}} />)
-    await waitFor(() => expect(screen.getByText('MarkItDown')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('markitdown')).toBeTruthy())
     expect(screen.getByRole('switch', { name: 'activate opencode · global' }).checked).toBe(true)
-    fireEvent.click(screen.getByRole('switch', { name: 'MarkItDown server' }))
-    await waitFor(() =>
-      expect(api.mcpToggle).toHaveBeenCalledWith('C:/cfg/opencode.json', 'markitdown', false),
-    )
+    expect(screen.getByText('Enabled')).toBeTruthy()
+    // Read-only: the install switch is the panel's only switch, and nothing offers to Add.
+    expect(screen.getAllByRole('switch')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull()
   })
 
-  it('offers Add for an absent preset MCP server, and nothing for a non-preset one', async () => {
+  it('says so when a config holds no MCP server, rather than offering one', async () => {
     vi.mocked(api.mcp).mockResolvedValueOnce({
       targets: [
         {
@@ -376,20 +367,17 @@ describe('Installs / Hosts', () => {
           root: 'C:/cfg',
           exists: true,
           commented: false,
-          servers: [
-            { name: 'context7', label: 'Context7', desc: 'docs', preset: true, state: 'absent' },
-            { name: 'custom-srv', label: 'Custom', desc: 'custom', preset: false, state: 'absent' },
-          ],
+          servers: [],
         },
       ],
       default: 0,
     })
     render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy())
-    expect(screen.getAllByRole('button', { name: 'Add' })).toHaveLength(1)
+    await waitFor(() => expect(screen.getByText('None configured in this file.')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull()
   })
 
-  it('the Open folder button reveals the config the tokens actually go into', async () => {
+  it('the Open folder button reveals the config the servers live in', async () => {
     render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Open folder' }))
     // THE TARGET'S CONFIG PATH, not the install root: the server's allowlist is keyed on
@@ -422,23 +410,17 @@ describe('Installs / Hosts', () => {
           exists: true,
           commented: false,
           servers: [
-            {
-              name: 'markitdown',
-              label: 'MarkItDown',
-              desc: 'docs',
-              preset: true,
-              state: 'enabled',
-            },
-            { name: 'gitlab', label: 'GitLab', desc: 'mr', preset: true, state: 'absent' },
+            { name: 'markitdown', state: 'enabled' },
+            { name: 'gitlab', state: 'disabled' },
           ],
         },
       ],
       default: 0,
     })
     render(<Hosts onAction={() => {}} themes={[{ name: 'neutral' }]} />)
-    await waitFor(() => expect(screen.getByText('MarkItDown')).toBeTruthy())
-    expect(screen.getByText('GitLab')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('markitdown')).toBeTruthy())
+    expect(screen.getByText('gitlab')).toBeTruthy()
+    expect(screen.getByText('Disabled')).toBeTruthy()
   })
 
   it('shows the excluded folders of an active global install', async () => {

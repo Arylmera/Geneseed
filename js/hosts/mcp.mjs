@@ -1,22 +1,15 @@
 /**
- * MCP server presets, state and config I/O — `rituals/_harness_mcp.py`'s MCP block.
+ * MCP server state and config reading — `rituals/_harness_mcp.py`'s MCP block, minus its writers.
  *
- * WHAT THE PLAN SAID AND WHAT READING FOUND. The P6f plan scored `api_mcp` + `api_mcp_toggle`
- * at "~90 new, already in js/: `_mcp_load`/`readJsonc` (P6c), `settings.mjs`'s atomic write".
- * Measured against `js/`: `readJsonc` had crossed and NOTHING ELSE HAD. `js/web/api.mjs`
- * carries a five-line `mcpLoad` that is the no-host, comment-tolerant reader P6c needed for
- * `geneseed-wiki.jsonc`, which is one arm of one of these thirteen functions. `_MCP_PRESETS`,
- * `_mcp_servers_key`, `_mcp_preset_block`, `_mcp_apply`, `_mcp_state`, `_mcp_set_enabled`,
- * `_mcp_load`'s host fork, `_mcp_commented`, `_mcp_save`, `_mcp_config_for`,
- * `_mcp_install_targets`, `_mcp_known_names` and `_mcp_meta` are 168 lines of Python, all
- * new. The endpoints on top of them are the small half.
+ * READ-ONLY BY DECISION (2026-10). Which MCP servers an install wires depends on the user and on
+ * the host, so Geneseed shows what each config already holds and where that file lives, and the
+ * user edits it. The three presets (`MCP_PRESETS`), the block shaper, the applier, the
+ * enable/disable flip and the atomic saver went with the console's Add button and toggle;
+ * `docs/guides/mcp*.md` carry the blocks a user copies by hand. Nothing here writes.
  *
- * THE ROUND TRIP IS THE HAZARD, and it is why every read here goes through `parseJson`.
- * `_mcp_save` rewrites the WHOLE config, not the servers map — and for a Claude global
- * install that config is `~/.claude.json`, which holds projects and history far beyond MCP
- * wiring. A `JSON.parse` would turn every `"temperature": 1.0` in somebody's real file into
- * `1` on the way back out. `readJsonc` already learned this; the strict-JSON fork has to
- * learn it separately, because it does not go through `readJsonc` at all.
+ * THE READ IS STILL HOST-SHAPED. OpenCode nests servers under `mcp` with an `enabled` flag and
+ * may be `.jsonc`; the Claude-shaped three use `mcpServers`, are strict JSON, and have no flag —
+ * present IS enabled. `uninstall` reads through `mcpLoad` too.
  *
  * A JsonNumber IS AN OBJECT TO `typeof`, which is why `isDict` (js/lib/json.mjs) excludes
  * the wrapper rather than testing `typeof v === 'object'`. Python's `isinstance(x, dict)` is
@@ -31,7 +24,7 @@ import { installState, installTargets } from './installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
 import { isDict } from '../lib/json.mjs';
 import { padEndToWidth } from '../lib/text.mjs';
-import { atomicWriteJson, loadJsonObject, opencodeTarget } from './settings.mjs';
+import { loadJsonObject, opencodeTarget } from './settings.mjs';
 
 
 /** `dict.get(key, default)`. */
@@ -39,52 +32,6 @@ const dget = (obj, key, dflt) => (isDict(obj) && Object.hasOwn(obj, key) ? obj[k
 
 /** The hosts whose MCP config is strict JSON under `mcpServers`, with no `enabled` flag. */
 const FLAGLESS = CLAUDE_STYLE;
-
-/**
- * `_harness_mcp._MCP_PRESETS` — the ready-to-wire servers the MCP screen can toggle.
- *
- * The `desc` strings go on the wire verbatim (`api_mcp` returns them), so they are the one
- * place in this file where a byte matters more than the shape. Insertion order is the
- * listing order.
- */
-export const MCP_PRESETS = {
-  markitdown: {
-    label: 'MarkItDown',
-    desc: 'PDF / Office / HTML -> Markdown for the ingest skill. Runs via `uvx` '
-      + '(needs uv; zero-install, fetches on first call). No uv? Switch the command '
-      + 'to ["markitdown-mcp"] after `pipx install markitdown-mcp`. Exposes one '
-      + 'tool: convert_to_markdown(uri).',
-    block: { type: 'local', command: ['uvx', 'markitdown-mcp'], enabled: true },
-  },
-  gitlab: {
-    label: 'GitLab',
-    desc: 'GitLab repo / MR / issue / CI tools via @zereight/mcp-gitlab (npx, no '
-      + 'install). Edit GITLAB_PERSONAL_ACCESS_TOKEN (scopes: api, read_repository) '
-      + 'and GITLAB_API_URL before use. For a second instance (a self-hosted server), '
-      + 'copy this block by hand under a new name and point it at the other URL — '
-      + 'docs/guides/mcp-gitlab.md has the pattern.',
-    block: {
-      type: 'local',
-      command: ['npx', '-y', '@zereight/mcp-gitlab'],
-      environment: { GITLAB_PERSONAL_ACCESS_TOKEN: '',
-        GITLAB_API_URL: 'https://gitlab.com/api/v4' },
-      enabled: true,
-    },
-  },
-  filesystem: {
-    label: 'Filesystem',
-    desc: 'Read/write files under explicitly allowed directories via '
-      + '@modelcontextprotocol/server-filesystem (npx, no install). Replace the '
-      + 'trailing path arg(s) with only the dir(s) the agent may touch '
-      + '(least-privilege).',
-    block: {
-      type: 'local',
-      command: ['npx', '-y', '@modelcontextprotocol/server-filesystem',
-        '/path/to/allowed/dir'],
-      enabled: true,
-    },
-  },
-};
 
 /** `_mcp_servers_key` — OpenCode nests servers under `mcp`, the other three `mcpServers`. */
 const serversKey = (host) => (FLAGLESS.includes(host) ? 'mcpServers' : 'mcp');
@@ -96,49 +43,10 @@ const serversOf = (config, host) => {
 };
 
 /**
- * `_mcp_preset_block` — the block to WRITE for a preset, shaped for `host`.
- *
- * OpenCode takes it verbatim. The flagless three split the command list into `command`
- * (head) + `args` (tail) and rename `environment` to `env`.
- */
-export function mcpPresetBlock(name, host = 'opencode') {
-  const block = { ...MCP_PRESETS[name].block };
-  if (!FLAGLESS.includes(host)) return block;
-  const cmd = [...(block.command || [])];
-  const out = { command: cmd.length ? cmd[0] : '', args: cmd.slice(1) };
-  const env = block.environment;
-  if (env) out.env = { ...env };
-  return out;
-}
-
-/**
- * `_mcp_apply` — a COPY of `config` with server `name` set to `block`, or removed when
- * `block` is null. Never touches another key; drops an emptied servers map.
- *
- * The key ORDER is behaviour, not cosmetics: `setdefault` appends `$schema` at the end of a
- * fresh dict and leaves an existing one where it is, and `_mcp_save` writes the result out
- * as the file the user then reads. `{...config}` plus a guarded assignment is the same rule.
- */
-export function mcpApply(config, name, block, host = 'opencode') {
-  const cfg = { ...config };
-  const key = serversKey(host);
-  if (host === 'opencode' && !Object.hasOwn(cfg, '$schema')) {
-    cfg.$schema = 'https://opencode.ai/config.json';
-  }
-  const servers = { ...serversOf(cfg, host) };
-  if (block === null) delete servers[name];
-  else servers[name] = block;
-  if (Object.keys(servers).length) cfg[key] = servers;
-  else delete cfg[key];
-  return cfg;
-}
-
-/**
  * `_mcp_state` — 'enabled' | 'disabled' | 'absent'.
  *
  * OpenCode: a present server with no explicit `enabled` counts as enabled (its default).
- * The flagless three have no such key, so present IS enabled and 'disabled' never occurs —
- * toggling one off removes its entry instead.
+ * The flagless three have no such key, so present IS enabled and 'disabled' never occurs.
  */
 export function mcpState(config, name, host = 'opencode') {
   const server = serversOf(config, host)[name];
@@ -147,25 +55,13 @@ export function mcpState(config, name, host = 'opencode') {
   return dget(server, 'enabled', true) ? 'enabled' : 'disabled';
 }
 
-/** `_mcp_set_enabled` — flip a present server's enabled-ness. No-op when it is absent. */
-export function mcpSetEnabled(config, name, enabled, host = 'opencode') {
-  const server = serversOf(config, host)[name];
-  if (!isDict(server)) return config;
-  if (FLAGLESS.includes(host)) {
-    return enabled ? config : mcpApply(config, name, null, host);
-  }
-  return mcpApply(config, name, { ...server, enabled }, host);
-}
-
 /**
  * `_mcp_load` — a config as a dict; `{}` when missing, unreadable, unparseable or not an
  * object.
  *
  * The host fork is the whole function. OpenCode is read comment-tolerantly because a
  * hand-maintained `opencode.jsonc` carries `//`; the other three are read STRICTLY, because
- * their configs are plain JSON by contract, and a file that does not parse as such — for a
- * Claude global install, one that holds projects and history — is not one to rewrite from a
- * best-effort reading. (The comment stripper's trailing-comma pass IS string-aware; an older
+ * their configs are plain JSON by contract. (The comment stripper's trailing-comma pass IS string-aware; an older
  * version of this note said otherwise, and `generate.test.mjs` pins the string-aware case.)
  */
 export function mcpLoad(p, host = 'opencode') {
@@ -177,11 +73,6 @@ export function mcpLoad(p, host = 'opencode') {
 export function mcpCommented(p) {
   if (path.extname(p) !== '.jsonc') return false;
   return loadJsonObject(p).hadComments;
-}
-
-/** `_mcp_save` — pretty JSON, written ATOMICALLY. The one writer, under its MCP name. */
-export function mcpSave(p, config) {
-  atomicWriteJson(p, config);
 }
 
 /**
@@ -222,19 +113,9 @@ export function mcpInstallTargets() {
   return out;
 }
 
-/** `_mcp_known_names` — the presets first, then any server already in THIS config. */
-export function mcpKnownNames(config, host = 'opencode') {
-  const names = Object.keys(MCP_PRESETS);
-  const present = isDict(config) ? Object.keys(serversOf(config, host)) : [];
-  return names.concat(present.filter((n) => !Object.hasOwn(MCP_PRESETS, n)));
-}
-
-/** `_mcp_meta` — (label, description); the bare name and a generic note for an unknown one. */
-export function mcpMeta(name) {
-  const p = MCP_PRESETS[name];
-  if (p) return [p.label, p.desc];
-  return [name, 'User-defined MCP server (not a Harness preset). It lives in this '
-    + "config already — 'e' enables/disables it, Enter removes it."];
+/** The servers THIS config already has, in file order. Nothing it could have. */
+export function mcpServerNames(config, host = 'opencode') {
+  return isDict(config) ? Object.keys(serversOf(config, host)) : [];
 }
 
 export { isDict };
@@ -242,22 +123,11 @@ export { isDict };
 // ---- the verb ----------------------------------------------------------------------------
 
 /**
- * `geneseed mcp` — the CLI FACE this library never had.
+ * `geneseed mcp` — the servers each active install has wired, and the file they live in.
  *
- * Everything above crossed with the web console rather than with a subcommand: the reference
- * kept it as a preset/state library whose only command was the uninstall path, and the one
- * way to see which servers an install had wired was to start a server and look. That is the
- * gap this verb closes, and it closes it by CALLING the library — the same `mcpInstallTargets`
- * / `mcpLoad` / `mcpKnownNames` / `mcpState` / `mcpMeta` sequence the console's read endpoint
- * runs, rendered as text instead of as JSON.
- *
- * ponytail: READ-ONLY, on purpose, and this is the ceiling. Wiring a server from here needs
- * the console's toggle orchestration, whose load-bearing part is not the toggle at all — it
- * is the refusal to rewrite a config it could not parse strictly, because for a global
- * Claude install that file holds projects and history and a rewrite from an empty object
- * would erase them. A second copy of that guard is a second place for it to be wrong. When a
- * terminal toggle is wanted, move the console's non-HTTP core down into this module and have
- * both faces call it; do not grow a parallel one here.
+ * The same `mcpInstallTargets` / `mcpLoad` / `mcpServerNames` / `mcpState` sequence the
+ * console's read endpoint runs, rendered as text instead of as JSON. Read-only like the
+ * console: there is nothing here to add or toggle a server with.
  */
 export function cmdMcp() {
   const targets = mcpInstallTargets()
@@ -272,9 +142,10 @@ export function cmdMcp() {
     if (mcpCommented(p)) {
       printOut('  this config carries comments — edit it by hand so they survive.\n');
     }
-    for (const name of mcpKnownNames(cfg, host)) {
-      const [lbl] = mcpMeta(name);
-      printOut(`  ${padEndToWidth(mcpState(cfg, name, host), 8)}  ${padEndToWidth(name, 12)}  ${lbl}\n`);
+    const names = mcpServerNames(cfg, host);
+    if (!names.length) printOut('  no MCP server configured\n');
+    for (const name of names) {
+      printOut(`  ${padEndToWidth(mcpState(cfg, name, host), 8)}  ${name}\n`);
     }
   }
   return 0;

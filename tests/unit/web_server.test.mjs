@@ -59,9 +59,9 @@ const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/d
   '/api/jobs', '/api/jobs/', '/api/loops', '/api/loops/active', '/api/mcp', '/api/overview',
   '/api/ping', '/api/profile', '/api/rules', '/api/setup', '/api/themes', '/api/recent'];
 
-/** Every POST path the daemon answers — 16. */
+/** Every POST path the daemon answers — 15. `/api/mcp` left it when MCP became read-only. */
 const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/install',
-  '/api/jobs/', '/api/loops/preset', '/api/mcp', '/api/memory/delete', '/api/pick-folder',
+  '/api/jobs/', '/api/loops/preset', '/api/memory/delete', '/api/pick-folder',
   '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/promote',
   '/api/shutdown', '/api/view'];
 
@@ -73,7 +73,7 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/i
  * toggle a behavioural test can perform SUCCEEDS, and the failing arm needs the flag write to
  * raise — so the column has to be checked as a column, below.
  */
-const EXPECT_409 = ['/api/excludes', '/api/install', '/api/mcp', '/api/profile', '/api/rules',
+const EXPECT_409 = ['/api/excludes', '/api/install', '/api/profile', '/api/rules',
   '/api/rules/promote', '/api/view'];
 
 /** Every kind `apiDocsPage` dispatches on — 6. */

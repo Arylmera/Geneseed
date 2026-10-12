@@ -40,7 +40,7 @@ import {
 } from '../../js/web/docs.mjs';
 import { HOSTS } from '../../web/src/lib/hosts.js';
 import {
-  apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
+  apiRestore, apiMcp, buildOverride, apiInstallToggle,
   apiInstallCmd, apiSelectView, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
   apiLoopsPresetMutate, apiMemoryDelete,
 } from '../../js/web/actions.mjs';
@@ -50,9 +50,7 @@ import {
 } from '../../js/maintain/uninstall.mjs';
 import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import { parseOrigin, originDisplay } from '../../js/maintain/update.mjs';
-import { MCP_PRESETS as _P, mcpApply, mcpConfigFor, mcpLoad, mcpSave, mcpState, mcpSetEnabled }
-  from '../../js/hosts/mcp.mjs';
-import { MCP_PRESETS } from '../../js/hosts/mcp.mjs';
+import { mcpConfigFor } from '../../js/hosts/mcp.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, resolvePath, HOSTS as HOST_SPECS,
 } from '../../js/hosts/hosts.mjs';
@@ -64,7 +62,7 @@ import { POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES } from '../../js/web/
 import { recordLoop } from '../../js/loop/registry.mjs';
 import { initState, renderLoopFile } from '../../js/loop/state.mjs';
 import { PRESETS } from '../../js/loop/score.mjs';
-import { makeSandbox, TMP_ROOT } from '../helpers/sandbox.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 import { webFixture, webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
 import { withGlobalInstalls as withGlobalInstallsFixture } from '../helpers/installs_fixture.mjs';
 
@@ -951,40 +949,17 @@ test('the console reads a legacy wiki.jsonc, and prefers the new name', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// MCP.
+// MCP — READ-ONLY since 2026-10.
 //
-// THE TARGETS ARE REAL, NOT FAKED, and this is the one place the port is stronger than the
-// reference by necessity. `tests/test_web.py` replaced `_mcp_install_targets` with a lambda —
-// a module-level rebind ESM does not allow, since `apiMcpToggle` closes over the imported
-// binding. The alternative is not a weaker test: `installTargets()` scans `process.cwd()` for
-// each host's project marker, so creating `.opencode/` or `.claude/` in a sandbox and chdiring
-// into it produces a target the product DISCOVERS. The allowlist is then exercised as shipped
-// rather than as substituted — and the Python's fake could not have caught a discovery bug at
-// all, because it replaced discovery.
-//
-// CHDIR IS PROCESS-WIDE, so every one of these restores it in a `finally`. Note what that
-// protects against: this repository's own root carries a `.claude/` directory, so a toggle test
-// that ran from there would have `<repo>/.mcp.json` in its allowlist and could write into the
-// working tree.
-function inProjectDir(marker, fn) {
-  const sb = makeSandbox();
-  const cwd = process.cwd();
-  try {
-    fs.mkdirSync(path.join(sb.path, marker), { recursive: true });
-    process.chdir(sb.path);
-    // The sandbox root is canonical, but `process.cwd()` is what `installTargets` reads and it
-    // must agree with the path this test hands the allowlist.
-    return fn(process.cwd());
-  } finally {
-    process.chdir(cwd);
-    sb.cleanup();
-  }
-}
+// Which servers to wire depends on the user and on the host, so the console shows what each
+// active install's config already holds and where it lives, and offers nothing to add or toggle.
+// The toggle's tests (allowlist, commented-jsonc refusal, `~/.claude.json` round-trip) went with
+// it: there is no writer left to guard. What is left to state is that the listing is EXACTLY the
+// config's own servers — no preset row, no `absent` state — and that the POST is gone.
 
 test('the MCP listing carries every active install with its servers', () => {
   // The shared fixture IS an active opencode-global install, which is what makes this
-  // structural check hold on any machine: the reference had to fake one for the same reason
-  // and got a weaker assertion for it.
+  // structural check hold on any machine.
   const m = apiMcp();
   assert.ok(m.targets.length > 0, 'no active install was listed — the fixture is not active');
   for (const t of m.targets) {
@@ -993,205 +968,41 @@ test('the MCP listing carries every active install with its servers', () => {
     assert.ok(['opencode', 'claude', 'bob', 'openclaude'].includes(t.host));
     assert.ok('root' in t);
     for (const s of t.servers) {
-      assert.ok(['enabled', 'disabled', 'absent'].includes(s.state));
-      assert.ok('label' in s);
+      assert.ok(['enabled', 'disabled'].includes(s.state),
+        `${s.name} is ${s.state}: a server the config does not hold was listed`);
     }
   }
   assert.equal(typeof m.default, 'number');
 });
 
-test('an OpenCode target adds a preset and then disables it in place', () => {
-  inProjectDir('.opencode', (root) => {
-    const cfgPath = path.join(root, 'opencode.json');
-    const st = neutral();
-    const preset = Object.keys(MCP_PRESETS)[0];
-
-    let res = apiMcpToggle(st, { path: cfgPath, name: preset, enabled: true });
-    assert.equal(res.ok, true, JSON.stringify(res));
-    assert.equal(res.state, 'enabled');
-
-    // OpenCode KEEPS the entry and flips its enabled flag, so the state becomes `disabled`.
-    res = apiMcpToggle(st, { path: cfgPath, name: preset, enabled: false });
-    assert.equal(res.ok, true);
-    assert.equal(res.state, 'disabled');
-
-    assert.throws(() => apiMcpToggle(st, { path: 'bogus', name: preset, enabled: true }),
-      NotFound, 'an unlisted path was accepted — the allowlist is the whole security here');
-  });
-});
-
-// ---------------------------------------------------------------------------------------------
-// THE TWO TWINS OF THE RETIRED `mcp/` RECORDINGS.
-//
-// Dropping the `gitlab-2` preset moved the preset LISTING, and the listing is recorded verbatim
-// in five `web/{lf,crlf}/mcp__*` cells. There is no recorder — the Python reference that produced
-// those bytes died in P4 — so a moved listing can only be deleted, and deleting it deletes the
-// coverage. Three of the five already had absolute twins in this file ("the MCP listing carries
-// every active install", "an OpenCode target adds a preset and then disables it in place", "a
-// Claude config keeps its unrelated keys and refuses to be clobbered"). These are the other two,
-// written BEFORE the recordings were removed so the coverage never lapsed.
-//
-// They are STRONGER than what they replace, and deliberately so: a corpus cell asserted that two
-// implementations agreed, which is silent about whether either was right. These state what the
-// endpoint must do, absolutely.
-
-test('the MCP toggle refuses a commented jsonc and does not rewrite a byte', () => {
-  // Twin of `mcp/a-commented-jsonc-is-refused-rather-than-rewritten`.
-  //
-  // The nearest existing test is "deactivate refuses a commented jsonc and moves nothing", and it
-  // is a DIFFERENT code path — `installDeactivate`, not `apiMcpToggle`. Each has its own comment
-  // sniff and its own refusal, so one passing says nothing about the other.
-  inProjectDir('.opencode', (root) => {
-    // THE FILE IS WRITTEN BEFORE THE PATH IS RESOLVED, and the order is the point: the `.jsonc`
-    // preference is a preference for a file that EXISTS, so resolving first would hand back
-    // `opencode.json` and this test would probe a file the endpoint never reads. Caught by the
-    // extension guard below on the first run.
-    const original = '// hand-maintained, keep these notes\n{\n  "mcp": {}\n}\n';
-    fs.writeFileSync(path.join(root, 'opencode.jsonc'), original, 'utf8');
-    const cfgPath = mcpConfigFor('opencode', 'project', root);
-    assert.equal(path.extname(cfgPath), '.jsonc',
-      'the .jsonc preference did not resolve — this test would probe the wrong file');
-
-    const res = apiMcpToggle(neutral(), {
-      path: cfgPath, name: Object.keys(MCP_PRESETS)[0], enabled: true,
-    });
-    assert.equal(res.ok, false, 'a commented config was rewritten — the comments are now gone');
-    assert.match(res.error, /comments/,
-      'the refusal must say WHY, or the UI cannot tell the user to edit by hand');
-
-    // THE REFUSAL IS ONLY HALF THE CLAIM. `ok: false` with the file already clobbered is the
-    // exact failure this guard exists to prevent, so the bytes are the other half.
-    assert.equal(fs.readFileSync(cfgPath, 'utf8'), original,
-      'the config changed despite the refusal');
-  });
-});
-
-test('a user-defined server joins the presets in the listing and keeps its own state', () => {
-  // Twin of `mcp/a-user-defined-server-joins-the-presets-and-keeps-its-state`.
-  //
-  // The listing is a UNION — the shipped presets plus whatever the user already wired by hand —
-  // and the union is the part a preset removal can quietly break. A `gitlab-2` that vanished from
-  // `MCP_PRESETS` must still be LISTED for anyone who already had it in their config, marked
-  // `preset: false` so the screen offers no "Add" button for a block it no longer ships.
-  //
-  // The shared fixture is the active install (see the listing test above), so its own config is
-  // what the endpoint reads. Saved and restored byte-for-byte — a leaked probe server would
-  // follow this process into every later test in the file.
+test('the MCP listing is exactly the servers the config holds, with their state', () => {
+  // The shared fixture's own config is what the endpoint reads. Saved and restored
+  // byte-for-byte — a leaked probe server would follow this process into every later test.
   const before = apiMcp();
   assert.ok(before.targets.length > 0, 'no active install was listed — the fixture is not active');
   const target = before.targets[0];
+  assert.equal(target.host, 'opencode', 'the fixture is no longer the opencode install');
   const had = fs.existsSync(target.path);
   const original = had ? fs.readFileSync(target.path) : null;
-  const PROBE = 'gs-probe-user-defined';
   try {
-    const cfg = mcpApply(mcpLoad(target.path, target.host), PROBE,
-      { type: 'local', command: ['npx', '-y', 'nothing-real'], enabled: false }, target.host);
-    mcpSave(target.path, cfg);
+    fs.writeFileSync(target.path, JSON.stringify({ mcp: {
+      'gs-probe-on': { type: 'local', command: ['x'] },
+      'gs-probe-off': { type: 'local', command: ['y'], enabled: false },
+    } }));
+    const t = apiMcp().targets.find((x) => x.path === target.path);
+    assert.ok(t, 'the target disappeared from the listing once it held servers');
+    // EXACTLY these two, in file order: no preset row beside them, which is the whole change.
+    assert.deepEqual(t.servers, [
+      { name: 'gs-probe-on', state: 'enabled' },
+      { name: 'gs-probe-off', state: 'disabled' },
+    ]);
 
-    const after = apiMcp();
-    const t = after.targets.find((x) => x.path === target.path);
-    assert.ok(t, 'the target disappeared from the listing once it held a user-defined server');
-    const probe = t.servers.find((s) => s.name === PROBE);
-    assert.ok(probe, 'a hand-wired server was dropped from the listing');
-    assert.equal(probe.preset, false,
-      'a server Geneseed does not ship was marked as a preset — the screen would offer to Add it');
-    assert.equal(probe.state, 'disabled', 'the listing did not preserve the state on disk');
-
-    // AND THE PRESETS ARE STILL THERE BESIDE IT, which is what makes this a union rather than a
-    // replacement. Without this half, an endpoint that returned ONLY the config's own servers
-    // would pass every assertion above.
-    for (const name of Object.keys(MCP_PRESETS)) {
-      const s = t.servers.find((x) => x.name === name);
-      assert.ok(s, `preset ${name} vanished from the listing`);
-      assert.equal(s.preset, true, `preset ${name} lost its preset flag`);
-    }
+    // And an empty config lists nothing at all, rather than three presets to Add.
+    fs.writeFileSync(target.path, '{}');
+    assert.deepEqual(apiMcp().targets.find((x) => x.path === target.path).servers, []);
   } finally {
     if (original === null) fs.rmSync(target.path, { force: true });
     else fs.writeFileSync(target.path, original);
-  }
-});
-
-test('a Claude target adds under mcpServers and REMOVES on toggle off', () => {
-  inProjectDir('.claude', (root) => {
-    const cfgPath = path.join(root, '.mcp.json');
-    const st = neutral();
-
-    let res = apiMcpToggle(st, { path: cfgPath, name: 'markitdown', enabled: true });
-    assert.equal(res.ok, true, JSON.stringify(res));
-    assert.equal(res.state, 'enabled');
-    let cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    assert.deepEqual(cfg.mcpServers.markitdown, { command: 'uvx', args: ['markitdown-mcp'] });
-    assert.ok(!('mcp' in cfg), "OpenCode's key was written into a Claude config");
-
-    // Claude has no enabled flag, so toggling off REMOVES the entry.
-    res = apiMcpToggle(st, { path: cfgPath, name: 'markitdown', enabled: false });
-    assert.equal(res.ok, true);
-    assert.equal(res.state, 'absent');
-    cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    assert.ok(!Object.hasOwn(cfg.mcpServers || {}, 'markitdown'));
-  });
-});
-
-// `~/.claude.json` is the USER-scope config and it holds far more than MCP wiring — projects,
-// history, startup counts. It is always a discovered target, so no marker directory is needed.
-//
-// THE GUARD BELOW IS NOT DECORATION. These two tests WRITE and then DELETE `~/.claude.json`,
-// and the only thing standing between that and the developer's real 160 kB Claude config is
-// `os.homedir()` reading the sandbox's `USERPROFILE`/`HOME`. It does — but "it does" is an
-// observation about today's Node, and the failure mode is silent destruction of a file this
-// suite does not own. `tests/unit/sandbox.test.mjs` already carries the rule this follows:
-// assert on the ENVIRONMENT, never by observing the leak.
-function sandboxHomeFile(name) {
-  const home = os.homedir();
-  assert.ok(home.startsWith(TMP_ROOT),
-    `os.homedir() is ${home}, which is not under the test temp root — refusing to write and `
-    + `delete ${name} in the developer's real home`);
-  return path.join(home, name);
-}
-
-test('a Claude config keeps its unrelated keys and refuses to be clobbered', () => {
-  const cfgPath = sandboxHomeFile('.claude.json');
-  const st = neutral();
-  try {
-    fs.writeFileSync(cfgPath, JSON.stringify({ numStartups: 7, projects: { '/x': {} } }));
-    const res = apiMcpToggle(st, { path: cfgPath, name: 'gitlab', enabled: true });
-    assert.equal(res.ok, true, JSON.stringify(res));
-    const after = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    assert.equal(after.numStartups, 7, 'an unrelated key was dropped');
-    assert.ok('gitlab' in after.mcpServers);
-
-    // A config that will not parse is REFUSED, never clobbered.
-    fs.writeFileSync(cfgPath, '{ not json');
-    const bad = apiMcpToggle(st, { path: cfgPath, name: 'markitdown', enabled: true });
-    assert.equal(bad.ok, false);
-    assert.equal(fs.readFileSync(cfgPath, 'utf8'), '{ not json',
-      'an unparseable config was overwritten — this file holds the user\'s whole Claude state');
-  } finally {
-    fs.rmSync(cfgPath, { force: true });
-  }
-});
-
-// A Claude config is STRICT JSON and must round-trip byte-faithfully. A string value holding
-// `,]` or `, }` — realistic in `~/.claude.json`'s history and prompts — must NOT have its comma
-// silently dropped by the OpenCode comment-stripper's trailing-comma pass. This is the
-// regression guard for a parser-mismatch DATA-LOSS bug.
-test('a Claude config does not have its string values mangled', () => {
-  const cfgPath = sandboxHomeFile('.claude.json');
-  const st = neutral();
-  const booby = {
-    history: [{ display: 'jq .a[] | select(.x,]' }, { display: 'rewrite {a, } please' }],
-    note: 'fix [1,2,] and {b, }',
-  };
-  try {
-    fs.writeFileSync(cfgPath, JSON.stringify(booby));
-    const res = apiMcpToggle(st, { path: cfgPath, name: 'markitdown', enabled: true });
-    assert.equal(res.ok, true, JSON.stringify(res));
-    const after = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    assert.deepEqual(after.history, booby.history, 'a comma was dropped from a string value');
-    assert.equal(after.note, booby.note);
-    assert.ok('markitdown' in after.mcpServers);
-  } finally {
-    fs.rmSync(cfgPath, { force: true });
   }
 });
 
@@ -2651,15 +2462,6 @@ test('the view cfg and the restore emitter are host-correct', () => {
   assert.equal(globalEmitHostFor('claude-global'), 'claude');
   assert.equal(globalEmitHostFor('opencode-global'), 'opencode');
   assert.equal(globalEmitHostFor(null), 'opencode', 'the safe fallback moved');
-});
-
-// Bob shares Claude's FLAG-LESS `mcpServers` shape: disabling REMOVES the server, because a
-// stray `enabled: false` would be ignored by Bob and leave it live.
-test('a flagless host removes the entry instead of flagging it', () => {
-  const cfg = { mcpServers: { md: { command: 'uvx', args: ['x'] } } };
-  assert.equal(mcpState(cfg, 'md', 'bob'), 'enabled');
-  const off = mcpSetEnabled(cfg, 'md', false, 'bob');
-  assert.deepEqual(off.mcpServers || {}, {});
 });
 
 for (const host of ['bob']) {

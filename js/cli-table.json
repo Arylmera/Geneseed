@@ -901,7 +901,7 @@
     },
     {
       "name": "mcp",
-      "help": "list the MCP servers wired into each active install, and the presets available to add",
+      "help": "list the MCP servers wired into each active install, read-only",
       "description": "",
       "positionals": [],
       "options": [],

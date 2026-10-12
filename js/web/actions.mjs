@@ -42,7 +42,7 @@ import { setupBuildArgs } from '../build/generate.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
 import {
-  CLAUDE_STYLE, HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
+  HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
@@ -50,11 +50,10 @@ import {
   installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import {
-  MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
-  mcpMeta, mcpPresetBlock, mcpSave, mcpSetEnabled, mcpState,
+  isDict, mcpCommented, mcpInstallTargets, mcpLoad, mcpServerNames, mcpState,
 } from '../hosts/mcp.mjs';
-import { readText, isFile, isDir } from '../lib/fs.mjs';
-import { parseJson, formatRepr, formatValue, isTruthy } from '../lib/json.mjs';
+import { isFile, isDir } from '../lib/fs.mjs';
+import { formatRepr, formatValue, isTruthy } from '../lib/json.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import { normcase, which, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
@@ -348,18 +347,20 @@ export function apiLoopsPresetMutate(state, body) {
 
 // ---- MCP ----------------------------------------------------------------------------------
 
+/**
+ * The MCP servers each active install ALREADY has, and nothing it could have. Read-only by
+ * decision (2026-10): which servers to wire depends on the user and on the host, so the console
+ * shows what is in each config and where that file lives, and the user edits it. There is no
+ * preset to add and no toggle, so nothing here ever rewrites a config — including
+ * `~/.claude.json`, which holds far more than MCP wiring.
+ */
 export function apiMcp() {
   const out = [];
   for (const [label, p, host, scope, root] of mcpInstallTargets()) {
     if (installState(root, host, scope) !== 'active') continue;
     const cfg = mcpLoad(p, host);
-    const servers = [];
-    for (const name of mcpKnownNames(cfg, host)) {
-      const [lbl, desc] = mcpMeta(name);
-      servers.push({ name, label: lbl, desc,
-        preset: Object.hasOwn(MCP_PRESETS, name),
-        state: mcpState(cfg, name, host) });
-    }
+    const servers = mcpServerNames(cfg, host)
+      .map((name) => ({ name, state: mcpState(cfg, name, host) }));
     out.push({ label, path: p, host, root, exists: isFile(p),
       commented: mcpCommented(p), servers });
   }
@@ -370,10 +371,8 @@ export function apiMcp() {
 /**
  * The MCP config paths a request body is allowed to name, as `path -> [path, host]`.
  *
- * LIFTED OUT OF `apiMcpToggle` BECAUSE IT NOW HAS A SECOND CALLER, not for tidiness. `/api/reveal`
- * hands a path to the desktop's file manager, and the allowlist is the whole security of that
- * endpoint exactly as it is of the toggle: an unlisted path must 404 before anything is opened.
- * Two copies of a security check drift, and the copy that drifts is the one nobody re-read.
+ * `/api/reveal` hands a path to the desktop's file manager, and this allowlist is the whole
+ * security of that endpoint: an unlisted path must 404 before anything is opened.
  *
  * It is rebuilt per call rather than cached: installs come and go while the daemon runs, and a
  * stale allowlist is wrong in both directions — refusing a real target, or naming a dead one.
@@ -384,67 +383,6 @@ export function mcpTargetPaths() {
     known.set(String(cfgPath), [cfgPath, host]);
   }
   return known;
-}
-
-/**
- * Enable / disable / first-add one server.
- *
- * THE PATH COMES OUT OF THE REQUEST BODY, so the allowlist is the whole security of this
- * endpoint: `known` is built from the detected install targets and an unlisted path is a 404
- * before anything is read or written. Without it this is "write arbitrary JSON to an
- * arbitrary file", behind a CSRF token and nothing else.
- *
- * The Claude-shaped hosts are parsed ONCE, STRICTLY, and that exact object is what gets
- * rewritten — so the safety check and the value saved come from the same read, with no
- * time-of-check/time-of-use gap and no comment-stripper touching a string that contains
- * `,]`. A file that will not parse is refused rather than clobbered: it may be
- * `~/.claude.json`, which holds projects and history far beyond MCP wiring.
- */
-export function apiMcpToggle(state, body) {
-  const name = strOr(bget(body, 'name'));
-  const want = isTruthy(bget(body, 'enabled'));
-  const pathArg = strOr(bget(body, 'path'));
-  const known = mcpTargetPaths();
-  const hit = known.get(pathArg);
-  if (hit === undefined || !name) {
-    throw new NotFound(`mcp target ${pathArg || '(none)'}`);
-  }
-  const [p, host] = hit;
-  if (mcpCommented(p)) {
-    return { ok: false, error: 'config holds comments — edit it by hand to keep them' };
-  }
-  let cfg;
-  if (CLAUDE_STYLE.includes(host)) {
-    if (isFile(p)) {
-      let parsed;
-      try {
-        parsed = parseJson(readText(p));
-      } catch {
-        parsed = null;
-      }
-      if (!isDict(parsed)) {
-        return { ok: false,
-          error: "couldn't parse this config — edit it by hand to avoid data loss" };
-      }
-      cfg = parsed;
-    } else {
-      cfg = {};
-    }
-  } else {
-    cfg = mcpLoad(p);
-  }
-  if (mcpState(cfg, name, host) === 'absent') {
-    if (!Object.hasOwn(MCP_PRESETS, name)) {
-      return { ok: false, error: `unknown server '${name}'` };
-    }
-    if (!want) return { ok: false, error: `'${name}' is not configured` };
-    cfg = mcpApply(cfg, name, mcpPresetBlock(name, host), host);
-    cfg = mcpSetEnabled(cfg, name, true, host);
-  } else {
-    cfg = mcpSetEnabled(cfg, name, want, host);
-  }
-  mcpSave(p, cfg);
-  return { ok: true, name, state: mcpState(cfg, name, host) };
 }
 
 // ---- the harness selector ------------------------------------------------------------------

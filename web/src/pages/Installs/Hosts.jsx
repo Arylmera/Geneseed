@@ -146,7 +146,6 @@ export default function Hosts({
   const { data: mcpData, error: mcpErr } = useAsync(() => api.mcp(), [dataRev])
   const [note, setNote] = useState('')
   const [busyKey, setBusyKey] = useState('') // install toggle in flight
-  const [mcpBusy, setMcpBusy] = useState('') // mcp server toggle in flight
   // Each install's build choices, keyed by id: { theme, footprint, posture, mode, trust }, each
   // key present only once the user has picked it (choiceFor fills the rest).
   const [picks, setPicks] = useState({})
@@ -289,9 +288,9 @@ export default function Hosts({
     }
   }
 
-  // A preset lands with its token and API URL deliberately blank; this opens the FOLDER
-  // holding the config on the machine running the daemon, so they can be filled in. `ok`
-  // means the request went out, not that a window appeared, so the note names the folder.
+  // MCP is read-only here, so editing a server means editing its file: this opens the FOLDER
+  // holding the config on the machine running the daemon. `ok` means the request went out,
+  // not that a window appeared, so the note names the folder.
   const revealMcp = async (target) => {
     setNote('')
     try {
@@ -299,20 +298,6 @@ export default function Hosts({
       setNote(`Opening ${r.dir}. If no window appeared, open that folder by hand.`)
     } catch (e) {
       setNote(e.message)
-    }
-  }
-
-  const toggleMcp = async (target, s) => {
-    const key = target.path + s.name
-    setMcpBusy(key)
-    setNote('')
-    try {
-      await api.mcpToggle(target.path, s.name, s.state !== 'enabled')
-      onMutated?.()
-    } catch (e) {
-      setNote(e.message)
-    } finally {
-      setMcpBusy('')
     }
   }
 
@@ -418,7 +403,6 @@ export default function Hosts({
           onPick={(key, v) => setPick(current, key, v)}
           canAct={!!onAction}
           busy={busyKey === current.id}
-          mcpBusy={mcpBusy}
           removing={removing?.id === current.id ? removing : null}
           onRemoving={(r) =>
             setRemoving(
@@ -429,7 +413,6 @@ export default function Hosts({
           onToggleInstall={() => toggleInstall(current)}
           onRemove={confirmRemove}
           onRevealMcp={revealMcp}
-          onToggleMcp={toggleMcp}
         />
       ) : null}
     </div>

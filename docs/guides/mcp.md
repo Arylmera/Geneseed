@@ -4,15 +4,15 @@ order: 16
 title: "MCP servers"
 kind: "concept"
 section: "Set up"
-description: "Where MCP config lives for each host, the three presets, and how to check a server connected."
+description: "Where MCP config lives for each host, three servers worth adding, and how to check a server connected."
 ---
-MCP (Model Context Protocol) servers give your agent extra tools: converting a PDF, opening a merge request, reading files outside the repo. Geneseed ships three ready-made server **presets** (MarkItDown, GitLab and Filesystem) that you can switch on without writing JSON by hand.
+MCP (Model Context Protocol) servers give your agent extra tools: converting a PDF, opening a merge request, reading files outside the repo. Geneseed documents three servers worth adding (MarkItDown, GitLab and Filesystem), with the config block for each host. You add them to your config yourself: which servers you need depends on you and on your host.
 
 > **You already know this:** an MCP entry is a line in a Procfile. It names a command the agent starts on demand. Writing the line does not install the program behind it.
 
-Each preset is a *local* server, a command your agent launches when it needs the server. Registering a preset only points the agent at that command. **You** install the tool behind it (or let `uvx` or `npx` fetch it) and you supply any credentials.
+Each of the three is a *local* server, a command your agent launches when it needs the server. Registering one only points the agent at that command. **You** install the tool behind it (or let `uvx` or `npx` fetch it) and you supply any credentials.
 
-> **Never commit a real token.** The presets ship with an empty `GITLAB_PERSONAL_ACCESS_TOKEN` and a sample filesystem path. Fill them in your own config, never in a tracked file.
+> **Never commit a real token.** The blocks here carry an empty `GITLAB_PERSONAL_ACCESS_TOKEN` and a sample filesystem path. Fill them in your own config, never in a tracked file.
 
 ## Where the config lives
 
@@ -35,11 +35,11 @@ The same MarkItDown server in both shapes:
 { "mcpServers": { "markitdown": { "command": "uvx", "args": ["markitdown-mcp"] } } }
 ```
 
-**Toggle instead of editing.** In the web console (`geneseed web`), **Settings → MCP servers** adds, enables, disables or removes any preset in the right file, already in the right shape. Not sure which file that is? The **Harnesses** page shows the config path for each install, and `geneseed mcp` prints the same paths and lists the servers each install has wired, without starting anything.
+**See what is wired.** Geneseed never writes these files. The web console (`geneseed web`) shows, for each active install, its config path and the servers it holds, enabled or disabled, with a button that opens the folder so you can edit the file. `geneseed mcp` prints the same in a terminal, without starting anything.
 
-The reference OpenCode config ships MarkItDown enabled and the GitLab and Filesystem entries disabled, so a merge never switches on a server that has no credentials yet. Fill in the blanks, then switch the server on.
+The reference OpenCode config ships MarkItDown enabled and the GitLab and Filesystem entries disabled, so a merge never switches on a server that has no credentials yet. Fill in the blanks, then set `enabled` to `true`.
 
-## The presets
+## Three servers worth adding
 
 - [MarkItDown](mcp-markitdown.md): converts PDF, Word, Excel, PowerPoint and HTML to markdown.
 - [GitLab](mcp-gitlab.md): repository, merge request, issue and CI tools over the GitLab API.

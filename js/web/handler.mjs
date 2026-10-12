@@ -371,8 +371,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
           try {
             return doPost(req, res, path, ae, buf);
           } catch (e) {
-            // `apiMcpToggle`, `apiSelectView`, `apiMemoryDelete`, `apiRulesMutate` and
-            // `apiRulesPromote` all raise `NotFound` for an unknown target, mapped to 404
+            // `apiSelectView`, `apiMemoryDelete`, `apiRulesMutate` and `apiRulesPromote` all
+            // raise `NotFound` for an unknown target, mapped to 404
             // here; anything else falls to the 500 arm below, carrying its own message.
             if (e instanceof NotFound) {
               return sendJson(res, { error: `not found: ${e.message}` }, 404, ae);

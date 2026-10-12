@@ -70,14 +70,12 @@ const activeLoops = () => get('/api/loops/active')
 const setLoopPreset = (root, preset) => post('/api/loops/preset', { root, preset })
 
 // ── MCP ─────────────────────────────────────────────────────────────────────
-// MCP server wiring: list configured targets/servers, and toggle one on or off
-// (the server rewrites only the `mcp` block of the target config).
+// MCP server wiring, read-only: each active install's config and the servers it holds.
 
 const mcp = () => get('/api/mcp')
-const mcpToggle = (path, name, enabled) => post('/api/mcp', { path, name, enabled })
 
 // Ask the machine running the daemon to open the FOLDER holding a target's config, so the
-// tokens and URLs a preset leaves blank can actually be filled in. `path` is the target's
+// user can edit it by hand. `path` is the target's
 // config path and must be one the server already listed — it checks, and 404s otherwise.
 // Resolves `{ ok, dir }`; `ok` means the path was allowed, not that a window appeared (a
 // headless host has no opener and the server swallows that by design).
@@ -173,7 +171,6 @@ export const api = {
   cancelJob,
   action,
   mcp,
-  mcpToggle,
   mcpReveal,
   installs,
   installToggle,
