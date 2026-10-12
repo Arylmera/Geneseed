@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.0.2] — 2026-10-12
+
+Patch: none of the OpenCode plugins loaded on OpenCode 2, and MCP is read-only.
+
+### Fixed
+- The seven OpenCode plugins now load on OpenCode 2. OpenCode 2 rewrote the plugin API and refused every Geneseed plugin with *"Plugin must export a default definition with an id and an effect or setup function"*. It skipped them without crashing, so the context load, learn, notify, ponytail, activity and the `workflow` tool were all gone, and the guard's safety gates were silently off. Each plugin now carries both APIs in one file and works on OpenCode 1.3.4 or newer and on OpenCode 2. Plugins no longer load on OpenCode older than 1.3.4. On OpenCode 2 a guard block shows up as a failed tool call that gives the reason, and the Activity view shows no todo list or files-touched count, because OpenCode 2 sends no event for either. Run `geneseed rebuild-all` after updating to install the new plugin files.
+
 ### Changed
 - MCP is read-only in the web console and in `geneseed mcp`. Each active install lists only the servers its config already holds, enabled or disabled, with its config path and an **Open folder** button. The **Add** button, the on/off switch and the three built-in presets are gone. Which servers to wire depends on you and on your host, so you edit the config yourself; [MCP servers](docs/guides/mcp.md) still has the blocks for MarkItDown, GitLab and Filesystem. Geneseed no longer writes any MCP config, and the `POST /api/mcp` endpoint is removed.
 
