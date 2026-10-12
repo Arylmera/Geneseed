@@ -89,6 +89,15 @@ function findBinary(prefixDir, platformPrefix) {
   return null;
 }
 
+function v2Diagnostics(home, listed, logFile) {
+  const files = fs.readdirSync(home, { recursive: true }).map(String)
+    .filter((f) => !f.includes('bun') && !/plugins[\\/]/.test(f)).slice(0, 60);
+  const logs = files.filter((f) => f.endsWith('.log'))
+    .map((f) => `--- ${f}\n${fs.readFileSync(path.join(home, f), 'utf8').split('\n').slice(-15).join('\n')}`);
+  return [`diagnostics: plugin list said: ${listed.trim() || '(nothing)'}`, `expected log: ${logFile}`,
+    `files under the throwaway home:\n    ${files.join('\n    ')}`, ...logs].join('\n');
+}
+
 function canary(major, work) {
   const problems = [];
   const prefix = path.join(work, 'pkg');
@@ -126,10 +135,12 @@ function canary(major, work) {
     const logFile = path.join(env.XDG_DATA_HOME, 'opencode', 'log', 'opencode.log');
     const readLog = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
     const loaded = (id) => new RegExp(`msg="loading plugin" id="[^"]*[\\\\/]${id}\\.js"`).test(log);
+    let listed = '';
     try {
       for (let tick = 0; tick < 60; tick++) {
         if (tick % 20 === 0) {
           const r = run(bin, ['plugin', 'list'], { cwd: project, env });
+          listed = r.out;
           if (r.status !== 0) problems.push(`\`opencode plugin list\` exited ${r.status}:\n${r.out}`);
         }
         log = readLog();
@@ -141,7 +152,11 @@ function canary(major, work) {
     } finally {
       run(bin, ['service', 'stop'], { cwd: project, env, timeout: 30_000 });
     }
-    for (const id of IDS) if (!loaded(id)) problems.push(`${id}: never loaded (no "loading plugin" line)`);
+    const missing = IDS.filter((id) => !loaded(id));
+    for (const id of missing) problems.push(`${id}: never loaded (no "loading plugin" line)`);
+    // Nothing loaded at all is a harness question before it is a plugin one (where did the
+    // service log, did it start?) — so say what the host left behind.
+    if (missing.length === IDS.length) problems.push(v2Diagnostics(home, listed, logFile));
   } else {
     const r = run(bin, ['debug', 'config', '--print-logs', '--log-level', 'DEBUG'], { cwd: project, env });
     log = r.out;
