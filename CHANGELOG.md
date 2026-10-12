@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.0.1] — 2026-10-12
+
+Patch: the web console could not tell apart two project installs of the same host (#244).
+
+### Fixed
+- Two project installs of one host (two repos on Bob, say) are now separate rows in the web console. Both used to get the id `bob:project`, so the Installs table showed both as selected and the topbar harness selector always switched back to the first. The id now carries the install root, and the selector names a project install by its folder. All four hosts had the bug and all four are covered by a test. Nothing is re-emitted; run `geneseed web restart` after updating.
+
 ## [4.0.0] — 2026-10-11
 
 Major: a host-compatibility pass against the current IBM Bob, Claude Code, OpenCode and OpenClaude docs (#240), the host opportunities and a root-scan guard (#241), and author notes kept out of what the agent reads (#242). It is a major because three behaviours change visibly: Claude Code gates now block when they cannot run, OpenCode no longer falls back to `~/.claude/CLAUDE.md`, and the silent *process 8* migration is gone.
