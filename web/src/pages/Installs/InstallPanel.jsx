@@ -48,18 +48,15 @@ function RemoveConfirm({ inst, memory, busy, onMemory, onRemove, onCancel }) {
   )
 }
 
-// The MCP servers wired into an active install, each with its switch (or Add, for a preset
-// not yet in the file).
-function McpList({ targets, mcpBusy, onReveal, onToggle }) {
+// The MCP servers an active install's config already holds, read-only. Which servers to wire
+// depends on the user and on the host, so this shows what is there and where the file lives;
+// adding or switching one is an edit to that file, by hand.
+function McpList({ targets, onReveal }) {
   const servers = targets.flatMap((t) => t.servers)
-  const on = servers.filter((s) => s.state === 'enabled').length
   return (
     <div className="ip-block">
       <span className="ip-label">
-        MCP servers{' '}
-        <span className="mono dim">
-          {on} of {servers.length}
-        </span>
+        MCP servers <span className="mono dim">{servers.length}</span>
       </span>
       {targets.map((t) => (
         <div className="mcp-target" key={t.path}>
@@ -69,38 +66,23 @@ function McpList({ targets, mcpBusy, onReveal, onToggle }) {
               type="button"
               className="btn ghost sm"
               onClick={() => onReveal(t)}
-              title={`Open the folder holding ${t.path}: tokens and URLs go in this file`}
+              title={`Open the folder holding ${t.path} to edit it`}
             >
               Open folder
             </button>
-            {t.commented ? <span className="dim">has comments; edit by hand</span> : null}
           </div>
-          {t.servers.map((s) => {
-            const key = t.path + s.name
-            const disabled = !!(t.commented || mcpBusy === key)
-            return (
-              <div className="mcp-row" key={s.name} title={s.desc}>
-                <span>{s.label}</span>
-                {s.state !== 'absent' ? (
-                  <Switch
-                    on={s.state === 'enabled'}
-                    disabled={disabled}
-                    label={`${s.label} server`}
-                    onToggle={() => onToggle(t, s)}
-                  />
-                ) : s.preset ? (
-                  <button
-                    type="button"
-                    className="btn ghost sm"
-                    disabled={disabled}
-                    onClick={() => onToggle(t, s)}
-                  >
-                    Add
-                  </button>
-                ) : null}
+          {t.servers.length ? (
+            t.servers.map((s) => (
+              <div className="mcp-row" key={s.name}>
+                <span className="mono">{s.name}</span>
+                <span className={`tag ${s.state === 'enabled' ? 'ok' : 'warn'}`}>
+                  {s.state === 'enabled' ? 'Enabled' : 'Disabled'}
+                </span>
               </div>
-            )
-          })}
+            ))
+          ) : (
+            <p className="sub">None configured in this file.</p>
+          )}
         </div>
       ))}
     </div>
@@ -126,14 +108,12 @@ export default function InstallPanel({
   onPick,
   canAct,
   busy,
-  mcpBusy,
   removing,
   onRemoving,
   onApply,
   onToggleInstall,
   onRemove,
   onRevealMcp,
-  onToggleMcp,
 }) {
   const who = `${inst.host} · ${inst.scope}`
   const [label, tone] = BADGE[inst.state] || BADGE.absent
@@ -165,14 +145,7 @@ export default function InstallPanel({
         </div>
       ) : null}
 
-      {active && targets.length ? (
-        <McpList
-          targets={targets}
-          mcpBusy={mcpBusy}
-          onReveal={onRevealMcp}
-          onToggle={onToggleMcp}
-        />
-      ) : null}
+      {active && targets.length ? <McpList targets={targets} onReveal={onRevealMcp} /> : null}
       {active && inst.scope === 'global' ? <ExclusionsCard /> : null}
 
       {!absent ? (

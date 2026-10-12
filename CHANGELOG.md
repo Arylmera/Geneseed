@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- MCP is read-only in the web console and in `geneseed mcp`. Each active install lists only the servers its config already holds, enabled or disabled, with its config path and an **Open folder** button. The **Add** button, the on/off switch and the three built-in presets are gone. Which servers to wire depends on you and on your host, so you edit the config yourself; [MCP servers](docs/guides/mcp.md) still has the blocks for MarkItDown, GitLab and Filesystem. Geneseed no longer writes any MCP config, and the `POST /api/mcp` endpoint is removed.
+
 ## [4.0.1] — 2026-10-12
 
 Patch: the web console could not tell apart two project installs of the same host (#244).

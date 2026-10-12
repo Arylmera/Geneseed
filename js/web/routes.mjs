@@ -18,7 +18,7 @@
  */
 import { formatValue, isTruthy, parseJson } from '../lib/json.mjs';
 import { percentDecode } from '../lib/text.mjs';
-import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMcpToggle, apiMemoryDelete, apiSelectView } from './actions.mjs';
+import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, apiSelectView } from './actions.mjs';
 import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
 import {
   apiDiff, apiDoctor, apiExcludes, apiInstalls, apiLoops, apiLoopsActive, apiOverview,
@@ -43,7 +43,6 @@ import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote }
  */
 /** @type {Map<string, [(state: any, body: any) => any, boolean]>} */
 export const POST_ROUTES = new Map([
-  ['/api/mcp', [apiMcpToggle, true]],
   ['/api/install', [apiInstallToggle, true]],
   ['/api/excludes', [apiExcludesMutate, true]],
   ['/api/view', [apiSelectView, true]],

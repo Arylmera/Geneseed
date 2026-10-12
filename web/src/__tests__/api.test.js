@@ -32,7 +32,6 @@ describe('api surface', () => {
       'cancelJob',
       'action',
       'mcp',
-      'mcpToggle',
       'installs',
       'installToggle',
       'excludes',
@@ -71,13 +70,13 @@ describe('http get/post', () => {
 
   it('posts with the token header and a JSON body', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({ ok: true })))
-    await api.mcpToggle('/cfg', 'srv', true)
+    await api.mcpReveal('/cfg/opencode.json')
     const [path, opts] = global.fetch.mock.calls[0]
-    expect(path).toBe('/api/mcp')
+    expect(path).toBe('/api/reveal')
     expect(opts.method).toBe('POST')
     expect(opts.headers['Content-Type']).toBe('application/json')
     expect('X-Geneseed-Token' in opts.headers).toBe(true)
-    expect(JSON.parse(opts.body)).toEqual({ path: '/cfg', name: 'srv', enabled: true })
+    expect(JSON.parse(opts.body)).toEqual({ path: '/cfg/opencode.json' })
   })
 })
 

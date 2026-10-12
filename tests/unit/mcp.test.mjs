@@ -1,34 +1,18 @@
-// `tests/test_harness.py`'s `McpServerTests` — toggling an MCP server block in an
-// `opencode.json` without disturbing anything else.
+// `tests/test_harness.py`'s `McpServerTests`, cut down to what is left: READING an MCP config.
 //
-// ITS DOCSTRING SAYS "the pure logic behind the TUI's MCP-servers screen", AND THE TUI IS
-// DROPPED — so the first job here was to find out how much of the class died with it. The
-// answer is: the LOGIC did not, only the screen's target picker did.
-//
-// `js/hosts/mcp.mjs` crossed with the WEB console rather than with a CLI verb (`js/web/actions.mjs`
-// is its caller), so what was missing was a FACE, not logic: apply, state, set-enabled, load,
-// save and the comment sniff were all here and all exported. `mcp` is now a verb in the CLI
-// table and `cmdMcp` is that face — READ-ONLY, and the last test in this file is what says so,
-// because a terminal toggle would need a second copy of the console's refusal to rewrite a
-// config it could not parse strictly, and that guard is the only thing standing between a
-// toggle and a rewritten `~/.claude.json`.
+// MCP is read-only since 2026-10. Which servers to wire depends on the user and on the host, so
+// the console and `geneseed mcp` show what each config already holds and the file it lives in,
+// and the user edits it. The presets, the applier, set-enabled and the saver went with the
+// console's Add button and toggle, and their tests with them; the last test in this file gates
+// that the module stays without a writer.
 //
 // ⚠ THE VERB HAS NO ORACLE AND NEVER WILL. `rituals/_harness_mcp.py` is a library whose only
 // command was the uninstall path; there was no `mcp` subparser, so there is no recorded help
-// text and no acceptance cell, and there is no way to make one. Every claim about `cmdMcp`
-// below is absolute — what it prints, and what it does not do — rather than a comparison.
+// text and no acceptance cell. Every claim about `cmdMcp` below is absolute — what it prints,
+// and what it does not do — rather than a comparison.
 //
-// WHAT DID NOT SURVIVE, and it is two tests, both about `_mcp_default_target`:
-// "when exactly one config exists, open there" and "otherwise follow the install mode". Those
-// answer a question only a full-screen picker asks — which of two candidate files should the
-// cursor start on. The port has no picker and no `mcpDefaultTarget`; `mcpInstallTargets()` is a
-// different function with a different job, enumerating DETECTED INSTALLS from the registry
-// rather than guessing between a cwd file and a global one. `tests/unit/no_panel.test.mjs` is
-// what keeps the screen gone. Retired here, named there.
-//
-// The third target-list test DID survive, with a changed shape: the `.jsonc`-preference it
-// asserts is a live product property, and it now lives under `mcpConfigFor` where the port
-// actually decides it.
+// The `.jsonc`-preference test is a survivor of the reference's target-list tests: it is a live
+// product property, and it lives under `mcpConfigFor` where the port decides it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -37,8 +21,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  MCP_PRESETS, mcpPresetBlock, mcpApply, mcpState, mcpSetEnabled, mcpLoad, mcpSave,
-  mcpCommented, mcpConfigFor, mcpKnownNames, mcpMeta, cmdMcp,
+  mcpState, mcpLoad, mcpCommented, mcpConfigFor, mcpServerNames, cmdMcp,
 } from '../../js/hosts/mcp.mjs';
 import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
 
@@ -51,34 +34,6 @@ function withDir(fn) {
 
 const MARKITDOWN = 'markitdown';
 
-test('apply adds the server and preserves every other key', () => {
-  const cfg = {
-    $schema: 'x',
-    instructions: ['AGENT.md'],
-    permission: { bash: 'allow' },
-  };
-  const out = mcpApply(cfg, MARKITDOWN, mcpPresetBlock(MARKITDOWN));
-  assert.deepEqual(out.mcp[MARKITDOWN].command, ['uvx', 'markitdown-mcp']);
-  assert.deepEqual(out.instructions, ['AGENT.md'], 'an unrelated key was rewritten');
-  assert.deepEqual(out.permission, { bash: 'allow' }, 'an unrelated key was rewritten');
-  // THE INPUT MUST NOT BE MUTATED. The caller holds the file it just read; an in-place edit
-  // means a failed save leaves the in-memory config already changed.
-  assert.equal(cfg.mcp, undefined, 'apply mutated its input');
-});
-
-test('apply with no block drops the server, and an emptied map with it', () => {
-  const out = mcpApply({ mcp: { [MARKITDOWN]: { type: 'local' } } }, MARKITDOWN, null);
-  assert.ok(!('mcp' in out), 'an empty `mcp` map was left behind');
-  assert.ok('$schema' in out, 'the result is no longer a valid config file');
-});
-
-test('removing one server keeps the others', () => {
-  const out = mcpApply(
-    { mcp: { [MARKITDOWN]: { type: 'local' }, other: { type: 'local' } } },
-    MARKITDOWN, null);
-  assert.deepEqual(Object.keys(out.mcp), ['other']);
-});
-
 test('state reports enabled, disabled and absent', () => {
   assert.equal(mcpState({}, MARKITDOWN), 'absent');
   assert.equal(mcpState({ mcp: { [MARKITDOWN]: { enabled: true } } }, MARKITDOWN), 'enabled');
@@ -88,26 +43,27 @@ test('state reports enabled, disabled and absent', () => {
   assert.equal(mcpState({ mcp: { [MARKITDOWN]: {} } }, MARKITDOWN), 'enabled');
 });
 
-test('set-enabled toggles only that server, and no-ops on an absent one', () => {
-  const off = mcpSetEnabled(
-    { mcp: { [MARKITDOWN]: { type: 'local', enabled: true } } }, MARKITDOWN, false);
-  assert.equal(off.mcp[MARKITDOWN].enabled, false);
-  assert.equal(off.mcp[MARKITDOWN].type, 'local', 'the other fields were dropped');
-  assert.deepEqual(mcpSetEnabled({}, MARKITDOWN, true), {},
-    'enabling a server that is not there invented one');
-});
-
-test('load and save round-trip, and a malformed file reads as empty', () => {
+test('load reads a config, and a missing or malformed file reads as empty', () => {
   withDir((d) => {
     const p = path.join(d, 'opencode.json');
     assert.deepEqual(mcpLoad(p), {}, 'a missing config did not read as empty');
-    mcpSave(p, mcpApply({}, MARKITDOWN, mcpPresetBlock(MARKITDOWN)));
-    assert.deepEqual(mcpLoad(p).mcp[MARKITDOWN].command, ['uvx', 'markitdown-mcp']);
+    fs.writeFileSync(p, JSON.stringify({ mcp: { [MARKITDOWN]: { command: ['uvx'] } } }), 'utf8');
+    assert.deepEqual(mcpLoad(p).mcp[MARKITDOWN].command, ['uvx']);
     // Malformed reads as empty rather than throwing: the screen has to render something, and
     // a stack trace over a hand-edited config is not it.
     fs.writeFileSync(p, '{not json', 'utf8');
     assert.deepEqual(mcpLoad(p), {});
   });
+});
+
+test('the Claude-shaped hosts read `mcpServers`, where present is enabled', () => {
+  const cfg = { mcpServers: { [MARKITDOWN]: { command: 'uvx' } } };
+  for (const host of ['claude', 'bob', 'openclaude']) {
+    assert.deepEqual(mcpServerNames(cfg, host), [MARKITDOWN], host);
+    assert.equal(mcpState(cfg, MARKITDOWN, host), 'enabled', host);
+    // The OpenCode key means nothing to them: no server under `mcp` is theirs.
+    assert.deepEqual(mcpServerNames({ mcp: { x: {} } }, host), [], host);
+  }
 });
 
 test('load is comment tolerant', () => {
@@ -149,78 +105,21 @@ test('the comment sniff detects only real comments', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// The LISTING — what the console shows. A user who adds a server by hand must see it, not only
-// the servers Geneseed ships a preset for.
+// The LISTING — what the console and the verb show: the servers the config HAS, in file order,
+// and nothing it could have. There is no preset to offer any more.
 
-test('the known names union the presets with the config\'s own servers', () => {
-  // `custom` and `sentry` are NOT presets; `markitdown` IS — both branches in one config.
-  const names = mcpKnownNames({
-    mcp: {
-      custom: { type: 'local' },
-      sentry: { type: 'local' },
-      markitdown: { type: 'local' },
-    },
+test('the server names are exactly the config\'s own servers, in file order', () => {
+  const names = mcpServerNames({
+    mcp: { sentry: { type: 'local' }, custom: { type: 'local' }, markitdown: { type: 'local' } },
   });
-  // The built-in presets come first, in their own order, then the user-added ones.
-  assert.deepEqual(names.slice(0, Object.keys(MCP_PRESETS).length), Object.keys(MCP_PRESETS));
-  assert.ok(names.includes('custom'), names.join(','));
-  assert.ok(names.includes('sentry'), names.join(','));
-  // No duplicate, even though markitdown is both a preset AND present in the config — the
-  // screen would otherwise offer to remove the same server twice.
-  assert.equal(names.length, new Set(names).size, names.join(','));
+  assert.deepEqual(names, ['sentry', 'custom', 'markitdown']);
 });
 
-test('the known names survive an empty or missing mcp map', () => {
-  assert.deepEqual(mcpKnownNames({}), Object.keys(MCP_PRESETS));
-  assert.deepEqual(mcpKnownNames({ mcp: {} }), Object.keys(MCP_PRESETS));
-});
-
-test('meta falls back to the bare name for an unknown server', () => {
-  const [label, desc] = mcpMeta('custom');
-  assert.equal(label, 'custom', 'an unknown name must not throw or render blank');
-  assert.ok(desc, 'an unknown server got no description at all');
-  const [presetLabel] = mcpMeta(MARKITDOWN);
-  assert.equal(presetLabel, MCP_PRESETS[MARKITDOWN].label);
-});
-
-test('the starter presets are present and well formed', () => {
-  // The three starter MCP servers Geneseed ships, as the MCP guide documents them. `gitlab-2` was
-  // the fourth and is gone: it was a byte-for-byte copy of `gitlab` under a different URL, so
-  // the screen carried two rows to teach one pattern that the MCP guide teaches in prose. Removing
-  // it cost 10 web recordings that cannot be re-recorded — the reason this list is now also
-  // the gate that a fifth preset does not quietly reappear.
-  assert.deepEqual(Object.keys(MCP_PRESETS), ['markitdown', 'gitlab', 'filesystem'],
-    'the preset table changed shape — a listing recording moves with it, and there is no '
-    + 'recorder left to re-bless one');
-  for (const name of ['markitdown', 'gitlab', 'filesystem']) {
-    assert.ok(Object.hasOwn(MCP_PRESETS, name), `${name} is no longer a preset`);
-    const preset = MCP_PRESETS[name];
-    assert.ok(preset.label && preset.desc, `${name} has no label or description`);
-    assert.equal(preset.block.type, 'local');
-    assert.ok(preset.block.command.length, `${name} has an empty command`);
-  }
-  {
-    const name = 'gitlab';
-    assert.deepEqual(MCP_PRESETS[name].block.command, ['npx', '-y', '@zereight/mcp-gitlab']);
-    // AND NO TOKEN IN THE SOURCE. This is the one assertion in the file that is about
-    // secrets rather than about wiring: a preset that shipped a real token would put it in
-    // every install and in the repository.
-    assert.equal(MCP_PRESETS[name].block.environment.GITLAB_PERSONAL_ACCESS_TOKEN, '');
-  }
-  assert.deepEqual(MCP_PRESETS.filesystem.block.command.slice(0, 3),
-    ['npx', '-y', '@modelcontextprotocol/server-filesystem']);
-});
-
-test('every preset carries a block the applier can use', () => {
-  // Not in the reference, and it is the control the preset table needs: each test above names
-  // `markitdown`, so a preset added later with a broken block would be gated by nothing.
-  for (const name of Object.keys(MCP_PRESETS)) {
-    const block = mcpPresetBlock(name);
-    assert.ok(block && typeof block === 'object', `${name} has no usable block`);
-    const out = mcpApply({}, name, block);
-    assert.equal(mcpState(out, name), 'enabled', `${name} did not apply as enabled`);
-  }
-  assert.ok(Object.keys(MCP_PRESETS).length > 0, 'the preset table is empty');
+test('an empty, missing or malformed servers map lists nothing', () => {
+  assert.deepEqual(mcpServerNames({}), []);
+  assert.deepEqual(mcpServerNames({ mcp: {} }), []);
+  assert.deepEqual(mcpServerNames({ mcp: ['not', 'a', 'map'] }), []);
+  assert.deepEqual(mcpServerNames(null), []);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -259,25 +158,15 @@ test('with no install detected the verb refuses and names the fix', () => {
   }
 });
 
-test('the verb is read-only, and that is asserted rather than described', () => {
-  // ⚠ THE CLAIM THE MODULE HEADER MAKES, gated. `cmdMcp` renders what is wired; it must never
-  // reach the writers. The hazard is specific and is why the console guards it: for a global
-  // Claude install the config is `~/.claude.json`, which holds projects and history, and a save
-  // built on a config that failed to parse would write `{}` over all of it. That guard lives in
-  // one place and this face must not grow a second copy of it by growing a write path first.
+test('the module is read-only, and that is asserted rather than described', () => {
+  // ⚠ THE CLAIM THE MODULE HEADER MAKES, gated. Nothing in js/hosts/mcp.mjs writes: for a
+  // global Claude install the config is `~/.claude.json`, which holds projects and history, and
+  // the safest writer for it is none. A write path that comes back has to delete this test.
   const src = fs.readFileSync(path.join(ROOT, 'js', 'hosts', 'mcp.mjs'), 'utf8');
-  const at = src.indexOf('export function cmdMcp(');
-  assert.notEqual(at, -1, 'js/hosts/mcp.mjs no longer exports cmdMcp — the scrape has gone stale');
-  const body = src.slice(at, at + src.slice(at).indexOf('\n}\n'));
-  assert.ok(body.length > 200, `the cmdMcp scrape found ${body.length} chars, which is too few`);
-  for (const writer of ['mcpSave', 'mcpApply', 'mcpSetEnabled', 'writeFileSync', 'writeText']) {
-    assert.ok(!body.includes(writer),
-      `cmdMcp calls ${writer}. If a terminal toggle is wanted, move the console's non-HTTP `
-      + 'core down into js/hosts/mcp.mjs and have both faces call it — do not grow a second one here');
+  for (const writer of ['mcpSave', 'mcpApply', 'mcpSetEnabled', 'writeFileSync', 'writeText',
+    'atomicWrite']) {
+    assert.ok(!src.includes(writer), `js/hosts/mcp.mjs mentions ${writer}`);
   }
-  // …and the positive control: the writers are still in the module, so the scan above is a
-  // statement about `cmdMcp` and not about a file that has nothing left to find.
-  for (const writer of ['mcpSave', 'mcpApply', 'mcpSetEnabled']) {
-    assert.ok(src.includes(`export function ${writer}(`), `js/hosts/mcp.mjs no longer has ${writer}`);
-  }
+  // …and the positive control: the scan reads the real module, which still imports its reader.
+  assert.ok(src.includes('loadJsonObject'), 'the scrape no longer reads js/hosts/mcp.mjs');
 });

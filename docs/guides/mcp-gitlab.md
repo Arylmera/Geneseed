@@ -6,7 +6,7 @@ kind: "concept"
 section: "Set up"
 description: "Merge requests, issues and CI from the agent: token scopes, the config block, a second instance."
 ---
-One of the [MCP server](mcp.md) presets. Where each host keeps the config, and how to check the server connected, are on that page.
+One of the [MCP servers](mcp.md) Geneseed documents. Where each host keeps the config, and how to check the server connected, are on that page.
 
 > **Never commit a real token.** The presets ship with an empty `GITLAB_PERSONAL_ACCESS_TOKEN` and a sample filesystem path. Fill them in your own config, never in a tracked file.
 
@@ -59,7 +59,7 @@ You can also register it with `claude mcp add`.
 
 Keep the `/api/v4` suffix on the URL.
 
-**A second instance** (gitlab.com plus a self-hosted server, for example) is a copy of the same block under a new name, such as `gitlab-acme`, with its own `GITLAB_API_URL` and token. The preset covers the first instance only. You add the copy by hand.
+**A second instance** (gitlab.com plus a self-hosted server, for example) is a copy of the same block under a new name, such as `gitlab-acme`, with its own `GITLAB_API_URL` and token. You add the copy by hand, like the first.
 
 ---
 
