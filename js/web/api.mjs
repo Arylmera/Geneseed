@@ -113,11 +113,18 @@ export function viewCfg(host, scope, root) {
   return root;
 }
 
+/**
+ * The row `id` carries the ROOT, not only `host:scope`: two project installs of one host (two
+ * repos on Bob, say) are both `bob:project`, and the console keys its selection, its React rows
+ * and its per-install picks on this id — with a shared one, both rows read as selected and every
+ * pick resolved to whichever came first. `installTargets()` de-duplicates on (host, root), so
+ * this is unique by construction.
+ */
 export function apiInstalls(state) {
   const out = [];
   for (const [host, scope, root] of installTargets()) {
     out.push({
-      id: `${host}:${scope}`, host, scope, path: root,
+      id: `${host}:${scope}:${root}`, host, scope, path: root,
       state: installState(root, host, scope),
       // Narrowed to this row's own host (host-compat B1): a shared repo otherwise answers
       // every row with whichever host's carrier the host-agnostic scan favours.
