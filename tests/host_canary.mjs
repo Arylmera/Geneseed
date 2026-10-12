@@ -134,7 +134,9 @@ function canary(major, work) {
     // logged a few hundred ms after its load line. Stopped in `finally`: it outlives the CLI.
     const logFile = path.join(env.XDG_DATA_HOME, 'opencode', 'log', 'opencode.log');
     const readLog = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
-    const loaded = (id) => new RegExp(`msg="loading plugin" id="[^"]*[\\\\/]${id}\\.js"`).test(log);
+    // logfmt quotes a value only when it must: a Windows path (backslashes) is quoted, a Linux
+    // `/tmp/...` path is not — the first CI run missed every line by requiring the quotes.
+    const loaded = (id) => new RegExp(`msg="loading plugin" id="?[^"\\s]*[\\\\/]${id}\\.js[" ]`).test(log);
     let listed = '';
     try {
       for (let tick = 0; tick < 60; tick++) {
