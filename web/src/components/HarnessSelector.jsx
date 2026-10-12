@@ -1,5 +1,6 @@
 import React from 'react'
 import { api } from '../api/index.js'
+import { installName } from '../lib/hosts.js'
 
 // Re-points the whole console at one detected install. Lists the ACTIVE installs only
 // (others have no data to view); selecting one updates memory, edits, and inventory
@@ -32,7 +33,9 @@ export default function HarnessSelector({ installs, onSwitch }) {
     >
       {active.map((i) => (
         <option key={i.id} value={i.id}>
-          {i.host} · {i.scope}
+          {/* A project is named by its folder: two project installs of one host would
+              otherwise be two identical "bob · project" options. */}
+          {i.scope === 'global' ? `${i.host} · global` : `${installName(i)} · ${i.host}`}
         </option>
       ))}
     </select>

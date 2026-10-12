@@ -53,7 +53,9 @@ import { parseOrigin, originDisplay } from '../../js/maintain/update.mjs';
 import { MCP_PRESETS as _P, mcpApply, mcpConfigFor, mcpLoad, mcpSave, mcpState, mcpSetEnabled }
   from '../../js/hosts/mcp.mjs';
 import { MCP_PRESETS } from '../../js/hosts/mcp.mjs';
-import { GLOBAL_MANIFEST, VERSION_MARKER, resolvePath } from '../../js/hosts/hosts.mjs';
+import {
+  GLOBAL_MANIFEST, VERSION_MARKER, resolvePath, HOSTS as HOST_SPECS,
+} from '../../js/hosts/hosts.mjs';
 import { normcase } from '../../js/lib/paths.mjs';
 import { DOC_FOLDERS } from '../../js/build/source.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
@@ -2705,6 +2707,37 @@ test('the registry round-trips a recorded root and prunes it with its marker', (
     assert.deepEqual(installTargets().filter((r) => samePath(r[2], live)), []);
   });
 });
+
+// Two project installs of ONE host must be two rows the console can tell apart: the row id is
+// what the topbar selector and the Installs table key selection on, and a `host:scope` id made
+// both of a user's Bob repos `bob:project` — both rows read as selected, and every pick landed
+// on the first. So the ids differ, and selecting the second marks exactly the second — for
+// every host, since the id is built in one place for all of them.
+for (const { host, projectMarker } of HOST_SPECS) {
+  test(`two ${host} project installs get distinct ids and select independently`, () => {
+    withXdg((tmp) => {
+      const [a, b] = ['repo-a', 'repo-b'].map((n) => path.join(tmp, n));
+      for (const root of [a, b]) {
+        fs.mkdirSync(path.join(root, projectMarker), { recursive: true });
+        fs.writeFileSync(path.join(root, '.geneseed-emit'), `${host}\n`);
+        registryRecord(root);
+      }
+      const st = neutral();
+      // Narrowed to the two repos: the daemon's cwd (this checkout carries a `.claude/`) is
+      // a project row of its own.
+      const mine = () => apiInstalls(st).installs
+        .filter((r) => r.host === host && [a, b].some((root) => samePath(r.path, root)));
+      const rows = mine();
+      assert.equal(rows.length, 2, JSON.stringify(rows.map((r) => r.path)));
+      assert.notEqual(rows[0].id, rows[1].id, 'two installs share one id');
+
+      apiSelectView(st, { host, path: b });
+      const selected = mine().filter((r) => r.selected);
+      assert.equal(selected.length, 1, 'more than one row claimed to be the current view');
+      assert.ok(samePath(selected[0].path, b), 'the selection did not move to the second repo');
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------------------------
 // The trash icon: the `remove` action permanently deletes a folder install and de-lists it.
