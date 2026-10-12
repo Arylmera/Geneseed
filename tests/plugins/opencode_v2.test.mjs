@@ -85,6 +85,9 @@ function fakeCtx({ directory = tmp, session = {}, generate } = {}) {
   return { ctx, hooks, calls, transforms, emit }
 }
 const settle = () => new Promise((r) => setTimeout(r, 30))
+// For work that crosses several fs awaits: a fixed 30 ms loses the race when the whole suite
+// runs in parallel (the learn distil failed that way), so wait for the outcome, up to 5 s.
+const until = async (ok, ms = 5000) => { for (const end = Date.now() + ms; !ok() && Date.now() < end;) await settle() }
 
 // ---- guard ----------------------------------------------------------------------
 // A deny cannot throw on V2 (a throwing hook fails the whole step), so the call is renamed
@@ -149,6 +152,16 @@ test("ponytail: levelFromPrompt reads only the template's first line", async () 
   assert.equal(levelFromPrompt("fix the bug"), undefined)
 })
 
+// The pattern above is half of a pair: the other half is the /ponytail command template the
+// emitter writes (js/hosts/opencode.mjs). Expand the real template the way OpenCode does, so a
+// reworded first line fails here instead of silently disabling the switch on V2.
+test("ponytail: the emitted /ponytail template is read back as its level", async () => {
+  const { levelFromPrompt } = (await load("ponytail")).server
+  const { PONYTAIL_COMMAND_BODY } = await import("../../js/hosts/opencode.mjs")
+  assert.equal(levelFromPrompt(PONYTAIL_COMMAND_BODY.replace("$ARGUMENTS", "ultra")), "ultra")
+  assert.equal(levelFromPrompt(PONYTAIL_COMMAND_BODY.replace("$ARGUMENTS", "")), "full")
+})
+
 test("ponytail: a /ponytail prompt persists the level the context hook then injects", async () => {
   const { ctx, hooks } = fakeCtx()
   await (await load("ponytail")).setup(ctx)
@@ -204,7 +217,7 @@ test("learn: an execution end distils the transcript into memory/", async () => 
   })
   const cleanup = await (await load("learn")).setup(ctx)
   emit("session.execution.succeeded", { sessionID: "s1" })
-  await settle()
+  await until(() => existsSync(path.join(memDir, "MEMORY.md")))
   const gen = calls.find(([m]) => m === "generate.text")
   assert.ok(gen, "generate.text was called")
   assert.deepEqual(gen[1].model, { providerID: "p", id: "m" })
@@ -257,7 +270,11 @@ test("activity: toV1Events maps the V2 vocabulary onto V1 events", async () => {
     ["session.error", "session.idle"])
   assert.deepEqual(ev("permission.replied", { requestID: "per_1" }),
     [{ type: "permission.replied", properties: { sessionID: "s1", permissionID: "per_1" } }])
-  ev("session.tool.called", { id: "c1", name: "shell", assistantMessageID: "m1" }, 1000)
+  // The name rides only on `session.tool.input.started`; `session.tool.called` carries the
+  // input but no name (SessionToolCalled in @opencode/client 2.0.27's generated types).
+  assert.deepEqual(ev("session.tool.input.started", { id: "c1", name: "shell", assistantMessageID: "m1" }, 900), [])
+  const [running] = ev("session.tool.called", { id: "c1", input: { command: "ls" }, executed: false, assistantMessageID: "m1" }, 1000)
+  assert.equal(running.properties.part.tool, "shell")
   const [end] = ev("session.tool.success", { id: "c1", assistantMessageID: "m1" }, 1250)
   assert.equal(end.properties.part.tool, "shell")
   assert.deepEqual(end.properties.part.state.time, { start: 1000, end: 1250 })

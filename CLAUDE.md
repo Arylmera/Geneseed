@@ -53,6 +53,17 @@ the unit glob). Run it after touching anything under `js/hosts/hooks*` or `bin/g
 `FUZZ_RUNS=500` for a longer search. Coverage runs in CI (`c8`, informational).
 
 ```bash
+node tests/host_canary.mjs
+```
+
+Installs the real OpenCode V1 and V2 from npm (~400 MB), starts each on a throwaway home with
+`adapters/opencode/plugins/`, and fails when the host logs `failed to load plugin` for one of
+ours. Run it after touching any OpenCode plugin. It is the only check that meets the host itself:
+every other gate compares the code with itself or with a mock, which is why OpenCode 2 refusing
+all seven plugins survived a whole-repo refactor pass. CI runs it weekly against `latest`
+(`.github/workflows/host-canary.yml`). It proves the plugins *load*, not that their hooks fire.
+
+```bash
 node bin/geneseed-cli.mjs doctor --all
 ```
 

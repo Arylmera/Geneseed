@@ -1,0 +1,35 @@
+name: host-canary
+
+# THE REAL OPENCODE, LOADING OUR PLUGINS. `tests/host_canary.mjs` installs opencode-ai (V1) and
+# @opencode/cli (V2) from npm, starts each on a throwaway home holding adapters/opencode/plugins,
+# and fails when the host's own log says it refused one. Every other gate in this repo compares the
+# code with itself, so none of them could see OpenCode 2 refuse all seven plugins (4.0.2, c6a17d9).
+#
+# Weekly against `latest`, so a new host release that breaks the load contract turns this red
+# within a week; and on any change to the plugins, so a PR cannot break the load on either major.
+# Not part of ci.yml: it downloads ~400 MB and depends on npm being up, which a PR's verdict
+# should not.
+on:
+  schedule:
+    - cron: "41 5 * * 1" # Mondays 05:41 UTC
+  pull_request:
+    paths:
+      - "adapters/opencode/plugins/**"
+      - "tests/host_canary.mjs"
+      - ".github/workflows/host-canary.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      # No `npm ci`: the canary imports only node: builtins and tests/helpers/sandbox.mjs.
+      - name: opencode V1 and V2 load every plugin
+        run: node tests/host_canary.mjs

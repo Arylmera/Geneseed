@@ -8,6 +8,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- On OpenCode 2, the Activity view now names each tool call. OpenCode 2 sends a tool's name only when its input starts streaming, not with the call itself, so every tool card read "undefined".
+
+### Added
+- A host canary, `node tests/host_canary.mjs`: it installs the real OpenCode 1 and OpenCode 2 from npm, starts each on a throwaway home holding the plugins, and fails when the host's own log says it refused or could not set up one of them. It runs in CI every Monday against the latest releases and on every pull request that touches the plugins, so the next OpenCode release that breaks the plugin contract is caught within a week rather than by a user.
+
 ## [4.0.2] — 2026-10-12
 
 Patch: none of the OpenCode plugins loaded on OpenCode 2, and MCP is read-only.

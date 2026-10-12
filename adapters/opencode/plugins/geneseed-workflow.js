@@ -175,40 +175,49 @@ function makeExecute({ client, directory, worktree }) {
   return execute
 }
 
+// The `workflow` tool as the model sees it, on both majors.
+const TOOL_DESCRIPTION =
+  "Run a saved, code-driven Geneseed workflow that orchestrates subagents " +
+  "deterministically (parallel fan-out, find→verify pipeline, phased handoff). " +
+  "Call with no name to list available workflows."
+const NAME_DESCRIPTION = "saved workflow name; omit to list available"
+const ARGS_DESCRIPTION = "inputs passed to the workflow script as `args` (object, or a JSON object string)"
+
+// One-line load banner (always on) so a restart visibly confirms the plugin loaded and the
+// `workflow` tool is registered. tests/host_canary.mjs reads it as V1's proof of load.
+async function loadBanner(warn = "") {
+  try {
+    const names = await listWorkflows()
+    console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}${warn}`)
+  } catch (e) { console.error(`[geneseed-workflow] loaded but could not list workflows: ${e?.message || e}`) }
+}
+
 export const GeneseedWorkflow = async (ctx) => {
   const { client, directory, worktree } = ctx
   let toolHelper
   try { ({ tool: toolHelper } = await import("@opencode-ai/plugin")) }
   catch { dlog("@opencode-ai/plugin tool helper unavailable — registering a raw tool def") }
 
-  // One-line load banner (always on) so a restart visibly confirms the plugin loaded
-  // and the `workflow` tool is registered — and WARNS if this OpenCode build lacks the
-  // custom-tool helper (the silent "tool never appears" failure).
-  try {
-    const names = await listWorkflows()
-    const warn = toolHelper ? ""
-      : " — WARN: @opencode-ai/plugin 'tool' helper missing; the workflow tool may NOT register on this OpenCode version"
-    console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}${warn}`)
-  } catch (e) { console.error(`[geneseed-workflow] loaded but could not list workflows: ${e?.message || e}`) }
+  // Warn when this OpenCode build lacks the custom-tool helper (the silent "tool never
+  // appears" failure).
+  await loadBanner(toolHelper ? ""
+    : " — WARN: @opencode-ai/plugin 'tool' helper missing; the workflow tool may NOT register on this OpenCode version")
 
   const execute = makeExecute({ client, directory, worktree })
 
   const def = {
-    description:
-      "Run a saved, code-driven Geneseed workflow that orchestrates subagents " +
-      "deterministically (parallel fan-out, find→verify pipeline, phased handoff). " +
-      "Call with no name to list available workflows.",
+    description: TOOL_DESCRIPTION,
     args: toolHelper
       ? {
-          name: toolHelper.schema.string().optional().describe("saved workflow name; omit to list available"),
+          name: toolHelper.schema.string().optional().describe(NAME_DESCRIPTION),
           // Keep this `any()` — it's the only param shape known to register cleanly on
           // this OpenCode build (record()/object schemas wedged tool registration → every
           // session message stuck "queued"). The provider may still deliver the object as
           // a JSON string or empty; normalizeArgs() in execute() recovers both cases.
-          args: toolHelper.schema.any().optional().describe("inputs passed to the workflow script as `args` (object, or a JSON object string)"),
+          args: toolHelper.schema.any().optional().describe(ARGS_DESCRIPTION),
         }
       : {
-          name: { type: "string", description: "saved workflow name; omit to list available" },
+          name: { type: "string", description: NAME_DESCRIPTION },
           args: { type: "object", description: "inputs passed to the workflow script as `args`" },
         },
     async execute(argv) { return execute(argv) },
@@ -218,9 +227,8 @@ export const GeneseedWorkflow = async (ctx) => {
 }
 
 // ---- OpenCode 2 ----------------------------------------------------------------
-// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
-// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
-// each loader ignores the other's — so this file serves both majors unchanged.
+// `export default { id, server, setup }` serves V1 (>= 1.3.4) and V2 from one file — why, and
+// each V1 hook's V2 counterpart: adapters/opencode/HOW-OPENCODE-LOADS.md.
 //
 // V2 registers tools through `tool.transform` with a plain JSON-schema `input` (no
 // `@opencode-ai/plugin` helper — that package is `@opencode/plugin` there, and not
@@ -279,22 +287,16 @@ async function setupV2(ctx) {
   const directory = ctx?.location?.directory
   const worktree = ctx?.location?.project?.directory
   const execute = makeExecute({ client: v2Client(ctx), directory, worktree })
-  try {
-    const names = await listWorkflows()
-    console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}`)
-  } catch (e) { console.error(`[geneseed-workflow] loaded but could not list workflows: ${e?.message || e}`) }
+  await loadBanner()
   await ctx.tool.transform((editor) => {
     editor.add({
       name: "workflow",
-      description:
-        "Run a saved, code-driven Geneseed workflow that orchestrates subagents " +
-        "deterministically (parallel fan-out, find→verify pipeline, phased handoff). " +
-        "Call with no name to list available workflows.",
+      description: TOOL_DESCRIPTION,
       input: {
         type: "object",
         properties: {
-          name: { type: "string", description: "saved workflow name; omit to list available" },
-          args: { description: "inputs passed to the workflow script as `args` (object, or a JSON object string)" },
+          name: { type: "string", description: NAME_DESCRIPTION },
+          args: { description: ARGS_DESCRIPTION },
         },
       },
       // A rejected promise here is a defect that fails the whole agent step, not the call:

@@ -428,9 +428,8 @@ export const GeneseedActivity = async () => {
 Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, errStr, snip, safeName, activityDir, enabledFromFlag, toV1Events })
 
 // --- OpenCode 2 --------------------------------------------------------------
-// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
-// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
-// each loader ignores the other's — so this file serves both majors unchanged.
+// `export default { id, server, setup }` serves V1 (>= 1.3.4) and V2 from one file — why, and
+// each V1 hook's V2 counterpart: adapters/opencode/HOW-OPENCODE-LOADS.md.
 //
 // V2's event stream is a different vocabulary (`{ type, created, data }`, the turn as an
 // execution, a message as steps, tool calls as called/success/failed), but every fact the
@@ -477,10 +476,15 @@ function toV1Events(ev, tools) {
       return [msg({ id: d.assistantMessageID, cost: d.cost, tokens: d.tokens, time: { completed: t } })]
     case "session.step.failed":
       return [msg({ id: d.assistantMessageID, cost: d.cost, tokens: d.tokens, error: v1Error(d.error), time: { completed: t } })]
+    // The name rides only on `input.started`; `called` carries the input but no name.
+    case "session.tool.input.started":
+      tools.set(d.id, { name: d.name, start: undefined })
+      return []
     case "session.tool.called": {
-      tools.set(d.id, { name: d.name, start: t })
-      return [part({ type: "tool", callID: d.id, tool: d.name, messageID: d.assistantMessageID,
-        state: { status: "running", title: d.name, time: { start: t } } })]
+      const name = tools.get(d.id)?.name ?? "tool"
+      tools.set(d.id, { name, start: t })
+      return [part({ type: "tool", callID: d.id, tool: name, messageID: d.assistantMessageID,
+        state: { status: "running", title: name, time: { start: t } } })]
     }
     case "session.tool.success":
     case "session.tool.failed": {

@@ -114,7 +114,7 @@ export const COMMAND_SET = {
 };
 
 /** Mirrors `_build_emit.PONYTAIL_COMMAND_BODY`. */
-const PONYTAIL_COMMAND_BODY =
+export const PONYTAIL_COMMAND_BODY =
   'Ponytail level requested: $ARGUMENTS\n\n'
   + 'The geneseed-ponytail plugin records this level and, from your next turn, appends '
   + 'the matching "laziest solution that works" ruleset to your system prompt — honour '
