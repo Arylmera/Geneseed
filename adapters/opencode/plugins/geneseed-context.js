@@ -989,4 +989,100 @@ export const GeneseedContext = async (ctx) => {
   }
 }
 
-export default GeneseedContext
+// ---- OpenCode 2 ----------------------------------------------------------------
+// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
+// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
+// each loader ignores the other's — so this file serves both majors unchanged.
+//
+// V2 has no `messages.transform`: `session.hook("context")` is its stable per-request
+// equivalent (the outgoing system + messages, mutable), so the invisible delivery needs
+// no fallback detection there. Messages are `LLM.Message` class instances, not V1's
+// `{info, parts}`. A V2 hook that throws is a defect that fails the whole request,
+// so every callback below swallows its own errors.
+
+// Build a user message the request will accept: reuse the class of a message already in
+// it (LLM.Message validates on construction), else a plain object of the same shape.
+function v2UserMessage(messages, text) {
+  const content = [{ type: "text", text }]
+  const Ctor = messages.find((m) => m && m.constructor && m.constructor !== Object)?.constructor
+  if (Ctor) { try { return new Ctor({ role: "user", content }) } catch {} }
+  return { role: "user", content }
+}
+const v2HasMarker = (messages) => messages.some((m) =>
+  (m?.content ?? []).some((p) => typeof p?.text === "string" && p.text.includes(MARKER)))
+const v2Model = (ref) => (ref?.providerID && ref?.id ? `${ref.providerID}/${ref.id}` : null)
+
+async function setupV2(ctx) {
+  const root = repoRoot({ worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory })
+  const blockCache = { text: null, at: 0 }
+  // Same scope rule as V1's skipSession: child/subagent sessions inherit the parent's
+  // context, geneseed-* sessions stay clean. A failed lookup is not cached.
+  const sessionSkip = new Map()
+  async function skipSession(sid) {
+    if (!sid) return false
+    const hit = sessionSkip.get(sid)
+    if (hit !== undefined) return hit
+    try {
+      const info = await ctx.session.get({ sessionID: sid })
+      const skip = Boolean(info?.parentID) || String(info?.title ?? "").startsWith("geneseed-")
+      sessionSkip.set(sid, skip)
+      return skip
+    } catch {
+      return false
+    }
+  }
+
+  if (!VISIBLE) {
+    await ctx.session.hook("context", async (event) => {
+      if (INJECT_OFF) return
+      try {
+        if (await sovereignBypass(root)) return
+        if (!Array.isArray(event?.messages) || v2HasMarker(event.messages)) return
+        if (await skipSession(event.sessionID)) return
+        const cached = await cachedBlockText(root, blockCache)
+        if (!cached) return
+        event.messages.unshift(v2UserMessage(event.messages, withModel(cached, v2Model(event.model) || envModelStr())))
+        log("context hook: injected context invisibly")
+      } catch (err) {
+        log(`context hook error: ${err?.message ?? err}`)
+      }
+    })
+    return
+  }
+
+  // Visible delivery (GENESEED_CONTEXT_VISIBLE): one synthetic message when a session is
+  // created, re-pushed into the compaction request so it outlives the summary.
+  await ctx.session.hook("compaction", async (event) => {
+    if (INJECT_OFF) return
+    try {
+      if (await sovereignBypass(root)) return
+      if (!Array.isArray(event?.messages) || await skipSession(event.sessionID)) return
+      const { block } = await resolveBlock(root)
+      if (block) event.messages.unshift(v2UserMessage(event.messages, block.text))
+    } catch (err) {
+      log(`compaction error: ${err?.message ?? err}`)
+    }
+  })
+  const controller = new AbortController()
+  void (async () => {
+    for await (const ev of ctx.event.subscribe({ signal: controller.signal })) {
+      if (ev?.type !== "session.created" || INJECT_OFF) continue
+      const d = ev.data ?? {}
+      try {
+        if (d.parentID || String(d.title ?? "").startsWith("geneseed-")) continue
+        if (await sovereignBypass(root)) continue
+        const { block } = await resolveBlock(root)
+        if (!block) continue
+        await ctx.session.synthetic({
+          sessionID: d.sessionID, text: withModel(block.text, v2Model(d.model) || envModelStr()),
+          description: "Geneseed project context", resume: false,
+        })
+      } catch (err) {
+        log(`visible injection error: ${err?.message ?? err}`)
+      }
+    }
+  })().catch((err) => log(`event stream ended: ${err?.message ?? err}`))
+  return () => controller.abort()
+}
+
+export default { id: "geneseed-context", server: GeneseedContext, setup: setupV2 }

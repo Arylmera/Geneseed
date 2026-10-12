@@ -53,7 +53,7 @@ async function load(env, tag) {
   }
   try {
     const mod = await import(`${PLUGIN}?case=${tag}`)
-    return await mod.default({ directory: repo, client: stubClient() })
+    return await mod.default.server({ directory: repo, client: stubClient() })
   } finally {
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) delete process.env[k]

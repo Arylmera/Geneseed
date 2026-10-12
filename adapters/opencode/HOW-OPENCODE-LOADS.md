@@ -64,6 +64,36 @@ export const MyPlugin = async ({ client, $, directory, worktree }) => ({
   **without** triggering a reply with `client.session.prompt({ path, body: { noReply: true, parts } })`.
 - **`$`** — a shell executor for running commands.
 
+### OpenCode 2 — a different plugin API
+
+OpenCode 2 (the `@opencode/cli` package; V1 is still `opencode-ai`) still auto-loads every
+`.js`/`.ts` in `plugins/` (or `plugin/`), but it accepts **only** a default-exported
+definition: `export default { id, setup(ctx) }`. A V1 plugin fails to load with *"Plugin
+must export a default definition with an id and an effect or setup function"*. Each one
+is marked failed on its own and OpenCode carries on, so nothing warns you.
+
+V1 (>= 1.3.4) also accepts an object default, `{ id, server }`, and each loader ignores
+the other's key. So every Geneseed plugin exports **one object for both majors**:
+`export default { id: "<file stem>", server: <V1 factory>, setup: <V2 setup> }`. On V1
+older than 1.3.4 the plugins no longer load.
+
+`setup(ctx)` gets domains instead of hooks returned in a map. Hooks register by name
+(`ctx.tool.hook("execute.before")`, `ctx.session.hook("context" | "prompt" |
+"compaction")`), tools through `ctx.tool.transform`, and events come from
+`ctx.event.subscribe()` as `{ type, created, data }` (not `{ type, properties }`). What
+changed for each plugin:
+
+| V1 | V2 |
+| --- | --- |
+| `session.idle` | not published by core (deprecated). The turn ends with `session.execution.succeeded` / `failed` / `interrupted` |
+| `experimental.chat.messages.transform` / `chat.system.transform` | `session.hook("context")`: mutable `system` parts and `LLM.Message` instances, on every request |
+| `command.execute.before` | none. A markdown command's expanded template arrives through `session.hook("prompt")` |
+| `client.session.messages` | `ctx.session.context({ sessionID })`: `user` / `assistant` messages after the last compaction |
+| throwaway session + `prompt` to distil | `ctx.generate.text({ prompt, model })`: one stateless call |
+| a hook throws to block a tool | a throw is a **defect that fails the whole step**. The guard renames the call instead (see `geneseed-guard.js`) |
+| `@opencode-ai/plugin` `tool()` helper | `@opencode/plugin`; a plain JSON-schema `input` needs no helper |
+| `todo.updated`, session `summary` diffs | no V2 event. The activity cards show no todos or files on V2 |
+
 ## 4. Subagents, skills & commands
 
 Subdir names are **plural** canonically (`agents/`, `skills/`, `commands/`,

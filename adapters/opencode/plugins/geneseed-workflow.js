@@ -116,23 +116,10 @@ async function writeTrace(rootDir, runId, lines) {
   } catch (e) { dlog(`trace write failed: ${e?.message || e}`); return "(trace write failed)" }
 }
 
-export const GeneseedWorkflow = async (ctx) => {
-  const { client, directory, worktree } = ctx
+// The `workflow` tool's body, shared by the V1 and V2 registrations: `client` is the V1
+// SDK client, or on V2 the facade `v2Client` builds over the plugin context.
+function makeExecute({ client, directory, worktree }) {
   const rootDir = worktree || directory
-  let toolHelper
-  try { ({ tool: toolHelper } = await import("@opencode-ai/plugin")) }
-  catch { dlog("@opencode-ai/plugin tool helper unavailable — registering a raw tool def") }
-
-  // One-line load banner (always on) so a restart visibly confirms the plugin loaded
-  // and the `workflow` tool is registered — and WARNS if this OpenCode build lacks the
-  // custom-tool helper (the silent "tool never appears" failure).
-  try {
-    const names = await listWorkflows()
-    const warn = toolHelper ? ""
-      : " — WARN: @opencode-ai/plugin 'tool' helper missing; the workflow tool may NOT register on this OpenCode version"
-    console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}${warn}`)
-  } catch (e) { console.error(`[geneseed-workflow] loaded but could not list workflows: ${e?.message || e}`) }
-
   // Normalize the `args` parameter. OpenCode's tool layer can deliver a structured
   // object param as a JSON STRING (or drop it) when the schema is untyped — so coerce
   // a string back to an object and reject non-object shapes to `{}`. Without this, the
@@ -185,6 +172,27 @@ export const GeneseedWorkflow = async (ctx) => {
     return summarize(name, result, stats, tracePath)
   }
 
+  return execute
+}
+
+export const GeneseedWorkflow = async (ctx) => {
+  const { client, directory, worktree } = ctx
+  let toolHelper
+  try { ({ tool: toolHelper } = await import("@opencode-ai/plugin")) }
+  catch { dlog("@opencode-ai/plugin tool helper unavailable — registering a raw tool def") }
+
+  // One-line load banner (always on) so a restart visibly confirms the plugin loaded
+  // and the `workflow` tool is registered — and WARNS if this OpenCode build lacks the
+  // custom-tool helper (the silent "tool never appears" failure).
+  try {
+    const names = await listWorkflows()
+    const warn = toolHelper ? ""
+      : " — WARN: @opencode-ai/plugin 'tool' helper missing; the workflow tool may NOT register on this OpenCode version"
+    console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}${warn}`)
+  } catch (e) { console.error(`[geneseed-workflow] loaded but could not list workflows: ${e?.message || e}`) }
+
+  const execute = makeExecute({ client, directory, worktree })
+
   const def = {
     description:
       "Run a saved, code-driven Geneseed workflow that orchestrates subagents " +
@@ -209,4 +217,94 @@ export const GeneseedWorkflow = async (ctx) => {
   return { tool: { workflow: toolHelper ? toolHelper(def) : def } }
 }
 
-export default GeneseedWorkflow
+// ---- OpenCode 2 ----------------------------------------------------------------
+// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
+// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
+// each loader ignores the other's — so this file serves both majors unchanged.
+//
+// V2 registers tools through `tool.transform` with a plain JSON-schema `input` (no
+// `@opencode-ai/plugin` helper — that package is `@opencode/plugin` there, and not
+// needed). The runtime (`_runtime.js`) and every saved workflow speak the V1 SDK client,
+// so `v2Client` presents that client's few calls over the V2 session domain instead of
+// forking the runtime:
+//   create  → session.create (a worktree directory becomes the session's location)
+//   prompt  → switchAgent/switchModel when asked, then session.prompt — which only
+//             admits the input on V2 — then session.wait for the loop to go idle, and the
+//             last assistant message read back from session.context
+//   messages → session.context, reshaped to V1's `{ info, parts }`
+//   delete  → session.remove
+function v2Message(m) {
+  if (m?.type === "assistant") {
+    return {
+      info: { role: "assistant", tokens: m.tokens },
+      parts: (m.content || []).filter((p) => p?.type === "text").map((p) => ({ type: "text", text: p.text })),
+    }
+  }
+  return { info: { role: m?.type }, parts: typeof m?.text === "string" ? [{ type: "text", text: m.text }] : [] }
+}
+function v2ModelRef(model) {
+  if (typeof model === "string" && model.includes("/")) {
+    const [providerID, ...rest] = model.split("/")
+    return { providerID, id: rest.join("/") }
+  }
+  const id = model?.id ?? model?.modelID
+  return model?.providerID && id ? { providerID: model.providerID, id } : null
+}
+function v2Client(ctx) {
+  const context = async (sid) => (await ctx.session.context({ sessionID: sid })) || []
+  return {
+    session: {
+      create: async ({ body, query } = {}) => ctx.session.create({
+        ...(body?.title ? { title: body.title } : {}),
+        ...(query?.directory ? { location: { directory: query.directory } } : {}),
+      }),
+      prompt: async ({ path: p, body } = {}) => {
+        const sessionID = p?.id
+        if (body?.agent) await ctx.session.switchAgent({ sessionID, agent: body.agent })
+        const model = v2ModelRef(body?.model)
+        if (model) await ctx.session.switchModel({ sessionID, model })
+        const text = (body?.parts || []).filter((x) => x?.type === "text").map((x) => x.text).join("\n")
+        await ctx.session.prompt({ sessionID, text })
+        await ctx.session.wait({ sessionID })
+        const last = (await context(sessionID)).filter((m) => m?.type === "assistant").pop()
+        return last ? v2Message(last) : null
+      },
+      messages: async ({ path: p } = {}) => (await context(p?.id)).map(v2Message),
+      delete: async ({ path: p } = {}) => ctx.session.remove({ sessionID: p?.id }),
+    },
+  }
+}
+
+async function setupV2(ctx) {
+  const directory = ctx?.location?.directory
+  const worktree = ctx?.location?.project?.directory
+  const execute = makeExecute({ client: v2Client(ctx), directory, worktree })
+  try {
+    const names = await listWorkflows()
+    console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}`)
+  } catch (e) { console.error(`[geneseed-workflow] loaded but could not list workflows: ${e?.message || e}`) }
+  await ctx.tool.transform((editor) => {
+    editor.add({
+      name: "workflow",
+      description:
+        "Run a saved, code-driven Geneseed workflow that orchestrates subagents " +
+        "deterministically (parallel fan-out, find→verify pipeline, phased handoff). " +
+        "Call with no name to list available workflows.",
+      input: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "saved workflow name; omit to list available" },
+          args: { description: "inputs passed to the workflow script as `args` (object, or a JSON object string)" },
+        },
+      },
+      // A rejected promise here is a defect that fails the whole agent step, not the call:
+      // every failure comes back as text, as the V1 tool's do.
+      execute: async (input) => {
+        try { return { content: await execute(input) } }
+        catch (e) { return { content: `Workflow failed: ${e?.message || e}` } }
+      },
+    })
+  })
+}
+
+export default { id: "geneseed-workflow", server: GeneseedWorkflow, setup: setupV2 }

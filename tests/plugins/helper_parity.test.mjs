@@ -45,12 +45,22 @@ for (const [helper, plugins] of Object.entries(COPIES)) {
   })
 }
 
-// OpenCode calls EVERY export of a plugin file as a plugin factory, so an exported string or
-// helper crashes startup or logs "not a function". Helpers tests need hang off the factory.
+// Both OpenCode majors read the DEFAULT export, and each ignores the other's key: V1
+// (>= 1.3.4) loads `{ id, server }`, V2 loads `{ id, setup }` (it rejects a bare function —
+// "Plugin must export a default definition with an id and an effect or setup function").
+// So one object `{ id, server, setup }` serves both. The id is the file stem: V2 refuses a
+// duplicate id, and V1 resolves the plugin by it. Named exports stay functions, because a V1
+// build whose default is not such an object falls back to calling every export as a factory.
 for (const file of readdirSync(PLUGINS).filter((f) => f.endsWith(".js")).sort()) {
-  test(`${file}: every export is a function`, async () => {
+  test(`${file}: default export loads on OpenCode V1 and V2`, async () => {
     const mod = await import(pathToFileURL(path.join(PLUGINS, file)).href)
-    const bad = Object.entries(mod).filter(([, v]) => typeof v !== "function").map(([k]) => k)
-    assert.deepEqual(bad, [], `non-function export(s): ${bad.join(", ")}`)
+    const def = mod.default
+    assert.equal(typeof def, "object", "default export must be an object, not a factory")
+    assert.deepEqual(Object.keys(def).sort(), ["id", "server", "setup"])
+    assert.equal(def.id, file.slice(0, -3))
+    assert.equal(typeof def.server, "function")
+    assert.equal(typeof def.setup, "function")
+    const bad = Object.entries(mod).filter(([k, v]) => k !== "default" && typeof v !== "function").map(([k]) => k)
+    assert.deepEqual(bad, [], `non-function named export(s): ${bad.join(", ")}`)
   })
 }

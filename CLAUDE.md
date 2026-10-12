@@ -107,10 +107,19 @@ threshold is undocumented). So `cmdContext` keeps its *whole* payload under `OUT
 (9 000), counting each line at +2 because stdout is `\r\n` on Windows — a line-per-entry listing
 overran by its line count before that. Measure a hook change with `node bin/geneseed-hook.mjs
 context --root <install> | wc -c`. The OpenCode plugin injects a synthetic *user* message on
-every request (`experimental.chat.messages.transform`, with a visible fallback for the first
-turn), never the system prompt, and has no stdout-style cap at all, which is why its budget
+every request (`experimental.chat.messages.transform` on V1, with a visible fallback for the first
+turn; `session.hook("context")` on V2), never the system prompt, and has no stdout-style cap at all, which is why its budget
 stays 48 KB. The Claude hook injects `geneseed-wiki.jsonc` as raw text and never renders wiki
 entries; the OpenCode plugin does — a known parity gap.
+
+**Every OpenCode plugin serves two plugin APIs from one file.** OpenCode 2 loads only
+`export default { id, setup }`; V1 (>= 1.3.4) loads `{ id, server }`; each ignores the other's
+key. So each `adapters/opencode/plugins/*.js` exports `{ id: <file stem>, server, setup }`, and
+`tests/plugins/helper_parity.test.mjs` pins that shape. Nothing can be shared through an extra
+file: V2 loads every `.js` in `plugins/` as a plugin. And a V2 hook or tool `execute` that
+throws is a *defect* that fails the whole agent step, so every V2 callback swallows its own
+errors (the guard blocks by renaming the call, not by throwing).
+`adapters/opencode/HOW-OPENCODE-LOADS.md` maps each V1 hook to its V2 counterpart.
 
 **Uninstall never needs a backup, by construction.** A user's root file gets a delimited
 `<!-- BEGIN/END GENESEED -->` block (`managedBlockWrite`/`managedBlockRemove`,

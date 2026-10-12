@@ -425,6 +425,105 @@ export const GeneseedActivity = async () => {
 
 // ponytail: OpenCode treats every export as a plugin and rejects non-functions; hang
 // the test helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, errStr, snip, safeName, activityDir, enabledFromFlag })
+Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, errStr, snip, safeName, activityDir, enabledFromFlag, toV1Events })
 
-export default GeneseedActivity
+// --- OpenCode 2 --------------------------------------------------------------
+// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
+// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
+// each loader ignores the other's — so this file serves both majors unchanged.
+//
+// V2's event stream is a different vocabulary (`{ type, created, data }`, the turn as an
+// execution, a message as steps, tool calls as called/success/failed), but every fact the
+// cards show is still in it. Rather than a second reducer, `toV1Events` translates each
+// V2 event into the V1 event(s) the handler above already reduces, so both majors write
+// the same files. Not carried: todos (V2 publishes no todo event) and files-touched (the
+// V1 session summary has no V2 event).
+
+// A V2 SessionError ({ type, message }) in the V1 error union errStr reads.
+const v1Error = (e) => (e ? { name: e.type, data: { message: e.message || e.type } } : undefined)
+
+// V2 event -> the V1 events it means ([] for one the cards ignore). `tools` remembers each
+// running call's name and start (callID -> { name, start }) so its end can say both.
+// Pure but for `tools`; exported for tests.
+function toV1Events(ev, tools) {
+  const d = ev?.data ?? {}
+  const sessionID = d.sessionID
+  if (!sessionID) return []
+  const t = typeof ev.created === "number" ? ev.created : Date.now()
+  const msg = (info) => ({ type: "message.updated", properties: { info: { role: "assistant", sessionID, ...info } } })
+  const part = (p) => ({ type: "message.part.updated", properties: { part: { sessionID, ...p } } })
+  switch (ev.type) {
+    case "session.created":
+      return [{ type: "session.created", properties: { info: {
+        id: sessionID, title: d.title, parentID: d.parentID, directory: d.location?.directory } } }]
+    case "session.renamed":
+      return [{ type: "session.updated", properties: { info: { id: sessionID, title: d.title } } }]
+    case "session.deleted":
+      return [{ type: "session.deleted", properties: { sessionID } }]
+    case "session.execution.started":
+      return [{ type: "session.status", properties: { sessionID, status: { type: "busy" } } }]
+    case "session.execution.succeeded":
+      return [{ type: "session.idle", properties: { sessionID } }]
+    case "session.execution.failed":
+      return [{ type: "session.error", properties: { sessionID, error: v1Error(d.error) } },
+        { type: "session.idle", properties: { sessionID } }]
+    case "session.execution.interrupted":
+      return [{ type: "session.status", properties: { sessionID, status: { type: "idle" } } }]
+    case "session.retry.scheduled":
+      return [{ type: "session.status", properties: { sessionID, status: { type: "retry" } } }]
+    case "session.step.started":
+      return [msg({ id: d.assistantMessageID, mode: d.agent, modelID: d.model?.id, time: { created: t } })]
+    case "session.step.ended":
+      return [msg({ id: d.assistantMessageID, cost: d.cost, tokens: d.tokens, time: { completed: t } })]
+    case "session.step.failed":
+      return [msg({ id: d.assistantMessageID, cost: d.cost, tokens: d.tokens, error: v1Error(d.error), time: { completed: t } })]
+    case "session.tool.called": {
+      tools.set(d.id, { name: d.name, start: t })
+      return [part({ type: "tool", callID: d.id, tool: d.name, messageID: d.assistantMessageID,
+        state: { status: "running", title: d.name, time: { start: t } } })]
+    }
+    case "session.tool.success":
+    case "session.tool.failed": {
+      const call = tools.get(d.id) ?? { name: "tool", start: undefined }
+      tools.delete(d.id)
+      const failed = ev.type === "session.tool.failed"
+      return [part({ type: "tool", callID: d.id, tool: call.name, messageID: d.assistantMessageID,
+        state: { status: failed ? "error" : "completed", title: call.name,
+          error: failed ? d.error?.message || d.error?.type : undefined, time: { start: call.start, end: t } } })]
+    }
+    case "session.reasoning.started":
+    case "session.reasoning.ended":
+      return [part({ type: "reasoning", id: `r:${d.assistantMessageID}:${d.ordinal}`, text: d.text ?? "" })]
+    case "session.text.ended":
+      return [part({ type: "text", id: `t:${d.assistantMessageID}:${d.ordinal}`, messageID: d.assistantMessageID, text: d.text })]
+    case "permission.asked":
+      return [{ type: "permission.updated", properties: { sessionID, id: d.id, title: d.message || d.action } }]
+    case "permission.replied":
+      return [{ type: "permission.replied", properties: { sessionID, permissionID: d.requestID } }]
+    default:
+      return []
+  }
+}
+
+async function setupV2(ctx) {
+  const hooks = await GeneseedActivity()
+  const tools = new Map()
+  // The user's prompt, as V1's chat.message hook received it.
+  await ctx.session.hook("prompt", async (event) => {
+    try {
+      await hooks["chat.message"]({ sessionID: event?.sessionID, messageID: event?.messageID },
+        { parts: [{ type: "text", text: event?.prompt?.text }] })
+    } catch (err) { log(`prompt hook failed: ${err?.message ?? err}`) }
+  })
+  const controller = new AbortController()
+  void (async () => {
+    for await (const ev of ctx.event.subscribe({ signal: controller.signal })) {
+      for (const event of toV1Events(ev, tools)) {
+        try { await hooks.event({ event }) } catch (err) { log(`event ${event.type} failed: ${err?.message ?? err}`) }
+      }
+    }
+  })().catch((err) => log(`event stream ended: ${err?.message ?? err}`))
+  return () => controller.abort()
+}
+
+export default { id: "geneseed-activity", server: GeneseedActivity, setup: setupV2 }

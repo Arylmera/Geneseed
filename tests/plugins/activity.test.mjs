@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 import fs from "node:fs"
 import path from "node:path"
 
-import GeneseedActivity from "../../adapters/opencode/plugins/geneseed-activity.js"
+import { GeneseedActivity } from "../../adapters/opencode/plugins/geneseed-activity.js"
 import { makeSandbox } from "../helpers/sandbox.mjs";
 const { sidOf, nextStatus, applyEvent, safeName, enabledFromFlag, acctTotals, errStr } = GeneseedActivity
 

@@ -61,7 +61,7 @@ async function load(env, tag) {
   try {
     const mod = await import(`${PLUGIN}?case=${tag}`)
     const client = stubClient()
-    const plugin = await mod.default({ directory: repo, client })
+    const plugin = await mod.default.server({ directory: repo, client })
     return { plugin, client }
   } finally {
     for (const [k, v] of Object.entries(saved)) {
@@ -138,8 +138,8 @@ test("two instances in one process each get their own project's block", async ()
   await fs.mkdir(other, { recursive: true })
   await fs.writeFile(path.join(other, "README.md"), "# Other Repo\nhello\n")
   const mod = await import(`${PLUGIN}?case=two-roots`)
-  const a = await mod.default({ directory: repo, client: stubClient() })
-  const b = await mod.default({ directory: other, client: stubClient() })
+  const a = await mod.default.server({ directory: repo, client: stubClient() })
+  const b = await mod.default.server({ directory: other, client: stubClient() })
   const outA = { messages: [userMsg("sa")] }
   await a["experimental.chat.messages.transform"]({}, outA)
   const outB = { messages: [userMsg("sb")] }

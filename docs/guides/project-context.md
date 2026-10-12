@@ -99,7 +99,7 @@ A line is simply left out when its source is missing.
 
 ## How OpenCode delivers it
 
-By default, the plugin delivers the context invisibly. It prepends the context to each request through OpenCode's experimental `experimental.chat.messages.transform` hook, so nothing appears in the conversation. Because it is re-sent with every request, the context also survives compaction. If your OpenCode build lacks that hook, the plugin notices and falls back to posting a visible `PROJECT CONTEXT` message.
+By default, the plugin delivers the context invisibly. It prepends the context to each request through OpenCode's experimental `experimental.chat.messages.transform` hook, so nothing appears in the conversation. Because it is re-sent with every request, the context also survives compaction. If your OpenCode build lacks that hook, the plugin notices and falls back to posting a visible `PROJECT CONTEXT` message. On OpenCode 2 the same invisible delivery goes through its stable per-request `context` hook, so no fallback is needed.
 
 - `GENESEED_CONTEXT_VISIBLE=1` always shows the visible block, so you can see what the agent received.
 - `GENESEED_CONTEXT_INJECT=off` turns injection off. The agent then relies on the instruction in `AGENT.md` to read the docs itself.

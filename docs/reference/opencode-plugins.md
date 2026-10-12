@@ -14,6 +14,15 @@ Every plugin installs in the same step as the rest of the harness: `geneseed set
 
 Every plugin swallows its own errors — none can block or crash a session. Each plugin's page lists the variables that tune it.
 
+## OpenCode 2
+
+The same files work on OpenCode 1 (1.3.4 or newer) and OpenCode 2. OpenCode 2 rewrote the plugin API, and each plugin carries both halves. You don't need to configure anything. Two differences show on OpenCode 2:
+
+- **A guard block shows up as a failed tool call.** The call never runs. The model gets an error that starts with `[geneseed-guard] blocked:` and gives the reason.
+- **The Activity view shows no todo list or files-touched count.** OpenCode 2 publishes no event for either.
+
+If a plugin seems silent on OpenCode 2, check that `~/.config/opencode/plugins/` holds the current files. Copies from before this change fail to load with *"Plugin must export a default definition with an id and an effect or setup function"*. Running `geneseed rebuild-all` replaces them.
+
 ## The plugins
 
 - [geneseed-context](plugin-context.md): Puts your project docs, rules, profile, memory index and wiki in front of the agent.

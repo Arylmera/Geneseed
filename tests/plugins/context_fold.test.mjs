@@ -25,7 +25,7 @@ before(async () => {
   await fs.writeFile(path.join(tmp, "geneseed-wiki.jsonc"), `{ "wikis": [] }`)
   process.env.GENESEED_WIKI = path.join(tmp, "geneseed-wiki.jsonc")
   const mod = await import("../../adapters/opencode/plugins/geneseed-context.js?case=fold")
-  const plugin = await mod.default({ directory: repo, client: {} })
+  const plugin = await mod.default.server({ directory: repo, client: {} })
   const output = { context: [] }
   await plugin["experimental.session.compacting"]({}, output)
   text = output.context[0] ?? ""

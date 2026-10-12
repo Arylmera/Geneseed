@@ -157,4 +157,50 @@ export const GeneseedNotify = async ({ client }) => {
 // off the factory instead — reachable via `import`, invisible to the loader.
 Object.assign(GeneseedNotify, { lastUserMs, shouldNotify, notifyCommand })
 
-export default GeneseedNotify
+// ---- OpenCode 2 ----------------------------------------------------------------
+// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
+// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
+// each loader ignores the other's — so this file serves both majors unchanged.
+//
+// V2 core never publishes `session.idle` (deprecated in its schema). The turn boundary is
+// the execution pair instead: `session.execution.started` stamps when the agent began,
+// `session.execution.succeeded`/`failed` ends it — so the turn length comes straight off
+// the events, no transcript read. An interrupted execution is the user's own doing (or a
+// shutdown) and is not announced. Events are `{ type, created, data }`, not V1's
+// `{ type, properties }`.
+async function setupV2(ctx) {
+  if (OFF) return
+  const started = new Map()
+  const controller = new AbortController()
+  void (async () => {
+    for await (const ev of ctx.event.subscribe({ signal: controller.signal })) {
+      const sid = ev?.data?.sessionID
+      if (!sid) continue
+      if (ev.type === "session.execution.started") { started.set(sid, ev.created); continue }
+      if (ev.type === "session.execution.interrupted" || ev.type === "session.deleted") { started.delete(sid); continue }
+      if (ev.type !== "session.execution.succeeded" && ev.type !== "session.execution.failed") continue
+      const begin = started.get(sid) ?? null
+      started.delete(sid)
+      try {
+        let title = "", parentID
+        try {
+          const info = await ctx.session.get({ sessionID: sid })
+          title = info?.title ?? ""
+          parentID = info?.parentID
+        } catch {}
+        const now = typeof ev.created === "number" ? ev.created : Date.now()
+        if (!shouldNotify({ now, lastUserMs: begin, parentID, title, minMs: MIN_MS })) {
+          log(`skipped ${sid} (child/throwaway or turn under ${MIN_MS}ms)`)
+          continue
+        }
+        deliver(TITLE, title ? `Done: ${title}` : "Agent finished — your turn.")
+        log(`notified for ${sid}`)
+      } catch (err) {
+        log(`skipped: ${err?.message ?? err}`)
+      }
+    }
+  })().catch((err) => log(`event stream ended: ${err?.message ?? err}`))
+  return () => controller.abort()
+}
+
+export default { id: "geneseed-notify", server: GeneseedNotify, setup: setupV2 }

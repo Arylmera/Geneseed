@@ -143,6 +143,49 @@ export const GeneseedPonytail = async () => ({
 // any that isn't a function — a bare helper export crashes startup ("null is not an
 // object") or logs "not a function". Hang the test helpers off the factory instead;
 // they ride along for `import`, invisible to the loader. Upgrade path: none needed.
-Object.assign(GeneseedPonytail, { normalizeMode, defaultMode, ponytailInstructions })
+Object.assign(GeneseedPonytail, { normalizeMode, defaultMode, ponytailInstructions, levelFromPrompt })
 
-export default GeneseedPonytail
+// --- OpenCode 2 --------------------------------------------------------------
+// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
+// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
+// each loader ignores the other's — so this file serves both majors unchanged.
+//
+// V2 has neither hook. `session.hook("context")` carries the outgoing system parts (the
+// ruleset is pushed there), and there is no `command.execute.before`: a markdown command
+// expands its template into the prompt, so the switch is read off the prompt instead —
+// the first line of PONYTAIL_COMMAND_BODY (js/hosts/opencode.mjs), `Ponytail level
+// requested: <args>`. Change that line and this pattern together.
+const PONYTAIL_PROMPT_RE = /^Ponytail level requested:[ \t]*(.*)$/m
+
+// The level a `/ponytail` prompt asks for: undefined when the text is not one, null
+// when its argument is no known level, else the level (empty argument = `full`).
+function levelFromPrompt(text) {
+  const m = PONYTAIL_PROMPT_RE.exec(String(text ?? ""))
+  if (!m || m.index !== 0) return undefined
+  const arg = m[1].trim()
+  return normalizeMode(arg) || (arg ? null : "full")
+}
+
+async function setupV2(ctx) {
+  await ctx.session.hook("prompt", (event) => {
+    try {
+      const mode = levelFromPrompt(event?.prompt?.text)
+      if (mode === undefined) return
+      if (!mode) { log("ignored unknown level"); return }
+      writeMode(mode)
+      log(`ponytail ${mode}`)
+    } catch (err) {
+      log(`prompt hook error: ${err?.message ?? err}`)
+    }
+  })
+  await ctx.session.hook("context", (event) => {
+    try {
+      const text = ponytailInstructions(readMode())
+      if (text && Array.isArray(event?.system)) event.system.push({ type: "text", text })
+    } catch (err) {
+      log(`context hook error: ${err?.message ?? err}`)
+    }
+  })
+}
+
+export default { id: "geneseed-ponytail", server: GeneseedPonytail, setup: setupV2 }

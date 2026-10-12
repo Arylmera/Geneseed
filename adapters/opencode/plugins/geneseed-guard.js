@@ -633,4 +633,37 @@ export const GeneseedGuard = async (ctx) => {
   }
 }
 
-export default GeneseedGuard
+// ---- OpenCode 2 ----------------------------------------------------------------
+// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
+// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
+// each loader ignores the other's — so this file serves both majors unchanged.
+//
+// V2 runs the same gates through `tool.hook("execute.before")`, but cannot block the
+// V1 way: a V2 hook that throws is a defect, which fails the whole agent step instead
+// of the one call (only a `Tool.Error` settles a call cleanly, and a hook cannot raise
+// one). So a deny RENAMES the call: core then finds no tool by that name and settles it
+// with a `Tool.Error` whose text carries the reason — the call never runs, the model sees
+// why, the session continues. The input is emptied as well, for code mode, which runs the
+// original tool whatever the event's name says; every tool this guard gates requires
+// arguments, so `{}` fails validation there before anything executes.
+//
+// `permission.evaluate` (V2's deny hook) was not used: it sees only the action and a
+// resource list (the shell tool's is per sub-command), not the full input the content
+// scan and the patch-path gates need.
+async function setupV2(ctx) {
+  const hooks = await GeneseedGuard({
+    worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory,
+  })
+  await ctx.tool.hook("execute.before", async (event) => {
+    try {
+      await hooks["tool.execute.before"]({ tool: event.tool }, { args: event.input })
+    } catch (err) {
+      const why = String(err?.message || "")
+      if (!why.startsWith("[geneseed-guard]")) return
+      event.tool = why
+      event.input = {}
+    }
+  })
+}
+
+export default { id: "geneseed-guard", server: GeneseedGuard, setup: setupV2 }

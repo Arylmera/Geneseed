@@ -301,6 +301,23 @@ async function writeMemories(output, memDir, existing) {
   return written
 }
 
+// The distil's reply into the store: a child session's one agent lesson, else memory
+// files plus their MEMORY.md lines. Shared by the V1 and V2 runs.
+async function storeDistil(output, { isChild, memDir, agentName, existing }) {
+  if (!output.trim() || output.trim().toUpperCase() === "NOTHING") return
+  if (isChild) {
+    const lesson = output.trim().split("\n")[0].replace(/^[-*]\s*/, "").trim()
+    if (lesson.length < 10 || lesson.length > 300) return // junk / truncation guard
+    const f = await appendAgentLesson(memDir, agentName, lesson)
+    console.error(`[geneseed-learn] agent lesson -> ${f}`)
+    return
+  }
+  const written = await writeMemories(output, memDir, existing)
+  if (written.length) {
+    console.error(`[geneseed-learn] wrote ${written.length} memory file(s): ${written.join(", ")}`)
+  }
+}
+
 export const GeneseedLearn = async (ctx) => {
   const { client } = ctx ?? {}
   const ours = new Set()       // throwaway distil sessions — never mine our own output
@@ -376,18 +393,7 @@ export const GeneseedLearn = async (ctx) => {
         if (newId) await client.session.delete({ path: { id: newId } }).catch(() => {})
       }
 
-      if (!output.trim() || output.trim().toUpperCase() === "NOTHING") return
-      if (isChild) {
-        const lesson = output.trim().split("\n")[0].replace(/^[-*]\s*/, "").trim()
-        if (lesson.length < 10 || lesson.length > 300) return // junk / truncation guard
-        const f = await appendAgentLesson(memDir, agentName, lesson)
-        console.error(`[geneseed-learn] agent lesson -> ${f}`)
-        return
-      }
-      const written = await writeMemories(output, memDir, existing)
-      if (written.length) {
-        console.error(`[geneseed-learn] wrote ${written.length} memory file(s): ${written.join(", ")}`)
-      }
+      await storeDistil(output, { isChild, memDir, agentName, existing })
     } catch (err) {
       // Never break the session over a memory write.
       console.error(`[geneseed-learn] skipped: ${err?.message ?? err}`)
@@ -426,6 +432,114 @@ export const GeneseedLearn = async (ctx) => {
 
 // OpenCode treats every export as a plugin and rejects non-functions; hang the test
 // helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedLearn, { writeMemories, resolveAgentName, appendAgentLesson })
+Object.assign(GeneseedLearn, { writeMemories, resolveAgentName, appendAgentLesson, flattenV2 })
 
-export default GeneseedLearn
+// ---- OpenCode 2 ----------------------------------------------------------------
+// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
+// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
+// each loader ignores the other's — so this file serves both majors unchanged.
+//
+// What differs on V2:
+//   - The debounce re-arms on `session.execution.succeeded`: V2 core never publishes
+//     `session.idle` (deprecated in its schema), and the execution pair is its turn
+//     boundary. Events are `{ type, data }`, not `{ type, properties }`.
+//   - The transcript is `session.context()` — the messages after the last compaction —
+//     typed `user` (text) / `assistant` (content parts, `model: { providerID, id }`).
+//   - The distil is one stateless `generate.text({ prompt, model })` call with the
+//     session's own model: no throwaway session to create, guard against and delete.
+function flattenV2(messages) {
+  const lines = []
+  let model = null
+  for (const m of messages || []) {
+    if (m?.type === "user") {
+      const text = String(m.text ?? "").trim()
+      if (text) lines.push(`user: ${text}`)
+    } else if (m?.type === "assistant") {
+      const text = (m.content || [])
+        .filter((p) => p?.type === "text" && typeof p.text === "string")
+        .map((p) => p.text).join("\n").trim()
+      if (text) lines.push(`assistant: ${text}`)
+      if (m.model?.providerID && m.model?.id) model = m.model
+    }
+  }
+  return { notes: lines.join("\n\n"), model }
+}
+
+async function setupV2(ctx) {
+  const root = ctx?.location?.project?.directory || ctx?.location?.directory || process.cwd()
+  const timers = new Map()
+  const inFlight = new Set()
+  let warnedNoDir = false
+
+  async function runDistill(sid) {
+    if (await sovereignBypass(root)) return
+    if (inFlight.has(sid)) return
+    inFlight.add(sid)
+    try {
+      const meta = await ctx.session.get({ sessionID: sid }).catch(() => null)
+      if (String(meta?.title ?? "").startsWith("geneseed-")) return
+      const isChild = !!meta?.parentID
+      const agentName = isChild ? resolveAgentName(meta) : null
+      if (isChild && !agentName) return
+
+      const memDir = await resolveMemoryDir()
+      if (!memDir) {
+        if (!warnedNoDir) {
+          warnedNoDir = true
+          console.error("[geneseed-learn] no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY.")
+        }
+        return
+      }
+
+      let { notes, model } = flattenV2(await ctx.session.context({ sessionID: sid }))
+      if (notes.length < MIN_NOTES_CHARS) return
+      notes = notes.slice(-MAX_NOTES_CHARS)
+      if (!model) {
+        const env = envModel()
+        model = env ? { providerID: env.providerID, id: env.modelID } : null
+      }
+      if (!model) {
+        console.error("[geneseed-learn] could not determine a model — set $GENESEED_MODEL=provider/model.")
+        return
+      }
+
+      const existing = await existingSlugs(memDir)
+      const prompt = isChild
+        ? [AGENT_LESSON_PROMPT, "", "NOTES:", notes].join("\n")
+        : buildPrompt(notes, existing)
+      const reply = await ctx.generate.text({
+        prompt, model: { providerID: model.providerID, id: model.id, ...(model.variant ? { variant: model.variant } : {}) },
+      })
+      await storeDistil(String(reply?.text ?? ""), { isChild, memDir, agentName, existing })
+    } catch (err) {
+      console.error(`[geneseed-learn] skipped: ${err?.message ?? err}`)
+    } finally {
+      inFlight.delete(sid)
+    }
+  }
+
+  const controller = new AbortController()
+  void (async () => {
+    for await (const ev of ctx.event.subscribe({ signal: controller.signal })) {
+      const sid = ev?.data?.sessionID
+      if (!sid) continue
+      if (ev.type === "session.deleted") {
+        const t = timers.get(sid)
+        if (t) clearTimeout(t)
+        timers.delete(sid)
+        continue
+      }
+      if (ev.type !== "session.execution.succeeded") continue
+      const prev = timers.get(sid)
+      if (prev) clearTimeout(prev)
+      timers.set(sid, setTimeout(() => { timers.delete(sid); runDistill(sid) }, DEBOUNCE_MS))
+    }
+  })().catch((err) => console.error(`[geneseed-learn] event stream ended: ${err?.message ?? err}`))
+  return () => {
+    controller.abort()
+    for (const t of timers.values()) clearTimeout(t)
+    timers.clear()
+  }
+}
+
+export default { id: "geneseed-learn", server: GeneseedLearn, setup: setupV2 }

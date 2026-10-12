@@ -5,7 +5,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import path from "node:path"
-import GeneseedLearn from "../../adapters/opencode/plugins/geneseed-learn.js"
+import { GeneseedLearn } from "../../adapters/opencode/plugins/geneseed-learn.js"
 const { resolveAgentName, appendAgentLesson } = GeneseedLearn
 import { makeSandbox } from "../helpers/sandbox.mjs";
 

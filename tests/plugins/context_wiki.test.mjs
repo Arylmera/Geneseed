@@ -51,7 +51,7 @@ before(async () => {
   const repo = path.join(tmp, "repo")
   await fs.mkdir(repo)
   const mod = await import("../../adapters/opencode/plugins/geneseed-context.js")
-  const plugin = await mod.default({ directory: repo, client: {} })
+  const plugin = await mod.default.server({ directory: repo, client: {} })
   const output = { context: [] }
   await plugin["experimental.session.compacting"]({}, output)
   text = output.context[0] ?? ""
@@ -98,7 +98,7 @@ test("a legacy wiki.jsonc under $GENESEED_HARNESS is still read", async () => {
   process.env.GENESEED_HARNESS = harness
   try {
     const mod = await import("../../adapters/opencode/plugins/geneseed-context.js?legacy-wiki")
-    const plugin = await mod.default({ directory: path.join(tmp, "repo"), client: {} })
+    const plugin = await mod.default.server({ directory: path.join(tmp, "repo"), client: {} })
     const output = { context: [] }
     await plugin["experimental.session.compacting"]({}, output)
     assert.match(output.context[0] ?? "", /----- OldBrain\/ARCHITECTURE\.md -----/)
