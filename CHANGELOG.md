@@ -11,6 +11,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Changed
 - MCP is read-only in the web console and in `geneseed mcp`. Each active install lists only the servers its config already holds, enabled or disabled, with its config path and an **Open folder** button. The **Add** button, the on/off switch and the three built-in presets are gone. Which servers to wire depends on you and on your host, so you edit the config yourself; [MCP servers](docs/guides/mcp.md) still has the blocks for MarkItDown, GitLab and Filesystem. Geneseed no longer writes any MCP config, and the `POST /api/mcp` endpoint is removed.
 
+## [4.0.1] — 2026-10-12
+
+Patch: the web console could not tell apart two project installs of the same host (#244).
+
+### Fixed
+- Two project installs of one host (two repos on Bob, say) are now separate rows in the web console. Both used to get the id `bob:project`, so the Installs table showed both as selected and the topbar harness selector always switched back to the first. The id now carries the install root, and the selector names a project install by its folder. All four hosts had the bug and all four are covered by a test. Nothing is re-emitted; run `geneseed web restart` after updating.
+
 ## [4.0.0] — 2026-10-11
 
 Major: a host-compatibility pass against the current IBM Bob, Claude Code, OpenCode and OpenClaude docs (#240), the host opportunities and a root-scan guard (#241), and author notes kept out of what the agent reads (#242). It is a major because three behaviours change visibly: Claude Code gates now block when they cannot run, OpenCode no longer falls back to `~/.claude/CLAUDE.md`, and the silent *process 8* migration is gone.
