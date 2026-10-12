@@ -56,12 +56,22 @@ the unit glob). Run it after touching anything under `js/hosts/hooks*` or `bin/g
 node tests/host_canary.mjs
 ```
 
-Installs the real OpenCode V1 and V2 from npm (~400 MB), starts each on a throwaway home with
-`adapters/opencode/plugins/`, and fails when the host logs `failed to load plugin` for one of
-ours. Run it after touching any OpenCode plugin. It is the only check that meets the host itself:
-every other gate compares the code with itself or with a mock, which is why OpenCode 2 refusing
-all seven plugins survived a whole-repo refactor pass. CI runs it weekly against `latest`
-(`.github/workflows/host-canary.yml`). It proves the plugins *load*, not that their hooks fire.
+Installs the real hosts from npm (~600 MB): OpenCode V1 and V2, Claude Code, and OpenClaude. It
+points each at a throwaway home holding what this checkout installs, and fails on the host's own
+verdict:
+- OpenCode logs `failed to load plugin` for one of ours.
+- `claude doctor` lists an invalid setting in our `settings.json`. Claude otherwise ignores a bad
+  hook entry silently.
+- A logged-out `-p` run shows no SessionStart running our context hook.
+
+Run it after touching an OpenCode plugin, a host emitter or the hook binary; `--only <host>`
+narrows it. It is the only check that meets the hosts themselves: every other gate compares the
+code with itself or with a mock, which is why OpenCode 2 refusing all seven plugins survived a
+whole-repo refactor pass. CI runs it weekly against `latest` (`.github/workflows/host-canary.yml`).
+
+It proves what *loads*, not the hooks that need a model turn. No model is ever called: there are
+no credentials in the sandbox, and every provider URL points at a closed port. Bob is not covered,
+because IBM does not publish Bob Shell on npm.
 
 ```bash
 node bin/geneseed-cli.mjs doctor --all
