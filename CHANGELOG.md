@@ -8,6 +8,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- On OpenCode 2, the Activity view now names each tool call. OpenCode 2 sends a tool's name only when its input starts streaming, not with the call itself, so every tool card read "undefined".
+
+### Added
+- A host canary, `node tests/host_canary.mjs`. It installs the real OpenCode 1, OpenCode 2, Claude Code and OpenClaude from npm and points each at a throwaway home holding the Geneseed install. It fails when a host refuses one of our OpenCode plugins, reports one of our Claude settings as invalid, or never runs our session-start hook. It never calls a model and needs no account. It runs in CI every Monday against the latest releases and on every pull request that changes what Geneseed installs, so the next host release that breaks the contract is caught within a week rather than by a user. IBM Bob is not covered, because Bob Shell is not published on npm.
+
 ## [4.0.2] — 2026-10-12
 
 Patch: none of the OpenCode plugins loaded on OpenCode 2, and MCP is read-only.

@@ -1,0 +1,42 @@
+name: host-canary
+
+# THE REAL HOSTS, LOADING WHAT WE INSTALL. `tests/host_canary.mjs` installs OpenCode V1 and V2,
+# Claude Code and OpenClaude from npm, points each at a throwaway home holding this checkout's
+# install, and fails on the host's own verdict: OpenCode's "failed to load plugin", Claude's
+# `doctor` listing an invalid setting of ours, or a SessionStart that never ran our context hook.
+# Every other gate in this repo compares the code with itself, so none of them could see OpenCode 2
+# refuse all seven plugins (4.0.2, c6a17d9). Bob is skipped: IBM does not publish it on npm.
+#
+# Weekly against `latest`, so a host release that breaks our contract turns this red within a
+# week; and on any PR that changes what we install or how a hook starts. No model is ever called:
+# no credentials exist in the sandbox and every provider URL points at a closed port.
+# Not part of ci.yml: it downloads ~600 MB and depends on npm being up, which a PR's verdict
+# should not.
+on:
+  schedule:
+    - cron: "41 5 * * 1" # Mondays 05:41 UTC
+  pull_request:
+    paths:
+      - "adapters/opencode/plugins/**"
+      - "js/hosts/**"
+      - "js/build/**"
+      - "bin/geneseed-hook.mjs"
+      - "bin/build-driver.mjs"
+      - "tests/host_canary.mjs"
+      - ".github/workflows/host-canary.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      # No `npm ci`: the canary and the emit it runs import only node: builtins and vendored code.
+      - name: every host loads what Geneseed installs
+        run: node tests/host_canary.mjs

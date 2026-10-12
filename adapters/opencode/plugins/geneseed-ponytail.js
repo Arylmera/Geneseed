@@ -146,9 +146,8 @@ export const GeneseedPonytail = async () => ({
 Object.assign(GeneseedPonytail, { normalizeMode, defaultMode, ponytailInstructions, levelFromPrompt })
 
 // --- OpenCode 2 --------------------------------------------------------------
-// OpenCode 2 loads `export default { id, setup }` and rejects the bare factory V1 takes;
-// V1 (>= 1.3.4) loads `export default { id, server }`. One object carries both keys —
-// each loader ignores the other's — so this file serves both majors unchanged.
+// `export default { id, server, setup }` serves V1 (>= 1.3.4) and V2 from one file — why, and
+// each V1 hook's V2 counterpart: adapters/opencode/HOW-OPENCODE-LOADS.md.
 //
 // V2 has neither hook. `session.hook("context")` carries the outgoing system parts (the
 // ruleset is pushed there), and there is no `command.execute.before`: a markdown command
