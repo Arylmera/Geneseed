@@ -31,7 +31,7 @@ import { openclaudeDualHarnessNotes } from '../../js/inspect/doctor.mjs';
 import { NOTE, isDoctorNote } from '../../js/inspect/scan.mjs';
 import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
-  projectQualifies, installDeactivate, installReactivate,
+  projectQualifies, installDeactivate, installReactivate, installUninstall,
 } from '../../js/maintain/uninstall.mjs';
 import {
   emitHostScopeOf, installState, installTargets, openclaudeDualHarnessRoot,
@@ -1059,6 +1059,54 @@ test('uninstall keeps an edited owned file unless --force', () => {
     assert.equal(rc2, 0);
     assert.ok(!fs.existsSync(edited), '--force did not delete the edited owned file');
     assert.ok(!fs.existsSync(manifest), '--force left the manifest behind');
+  });
+});
+
+// Fix round 1 (reviewer finding): `.gitignore` is a real Claude-family owned file that lives
+// DIRECTLY under the cfg dir, outside `ownedDirsFor`'s watch list (`agents/`, `skills/`) —
+// `claudeUninstall`'s own prune empties and removes both of those dirs once every file in them
+// is gone, so the only thing left behind by an edited `.gitignore` is the file itself, nothing
+// `ownedDirsFor`'s directory-existence proxy can see. Before the fix, `installUninstall`'s root
+// marker step (step 3) saw no directory survivor and no `failed` entry, so it deleted
+// `.geneseed-emit` and deregistered the install while `.gitignore` sat on disk, orphaned — a
+// later `--force` would have had nothing left to resolve the install by. `kept` folded into
+// that gate closes it.
+test('uninstall keeps a kept file outside ownedDirsFor from orphaning the install', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    const cfg = path.join(repo, '.claude');
+    const manifest = path.join(cfg, GLOBAL_MANIFEST);
+    const rootMarker = path.join(repo, '.geneseed-emit');
+    const edited = path.join(cfg, '.gitignore');
+    assert.ok(fs.statSync(edited).isFile(), 'the fixture assumption — .gitignore ships — is wrong');
+    assert.ok(fs.statSync(rootMarker).isFile(), 'sanity: the claude project emit writes no root marker');
+    fs.writeFileSync(edited, `${fs.readFileSync(edited, 'utf8')}\nmine`, 'utf8');
+
+    const [rc, out, err] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+    // `agents/` and `skills/` are both fully removed and pruned away — the directory-existence
+    // proxy alone would have seen nothing survive.
+    assert.ok(!fs.existsSync(path.join(cfg, 'agents')), 'agents/ should have been fully unlinked and pruned');
+    assert.ok(!fs.existsSync(path.join(cfg, 'skills')), 'skills/ should have been fully unlinked and pruned');
+    assert.ok(fs.statSync(edited).isFile(), 'an edited owned file outside agents/skills was deleted');
+    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'));
+    assert.match(err, /\[uninstall\] kept 1 file\(s\) you edited: \.gitignore — rerun with --force to delete/);
+    assert.ok(fs.statSync(manifest).isFile(), 'the manifest was deleted even though a file survived');
+    assert.ok(fs.statSync(rootMarker).isFile(),
+      'the root marker was deleted while a kept edited file was orphaned on disk');
+    assert.match(out, /INCOMPLETE/);
+    // A retry (same as `cmdUninstall` would run internally) must report the kept file by name
+    // in `incomplete`, not only by the directory-existence proxy — the fix the reviewer asked
+    // for, checked at the data level rather than through the printed "see the WARN above".
+    const retry = installUninstall(repo, 'claude', 'project', 'keep', false);
+    assert.ok(retry.incomplete && retry.incomplete.includes('.gitignore'),
+      `kept file was not named in incomplete: ${JSON.stringify(retry.incomplete)}`);
+
+    const [rc2] = captured(() => cmdUninstall(uninstallArgs(repo, { force: true })));
+    assert.equal(rc2, 0);
+    assert.ok(!fs.existsSync(edited), '--force did not delete the edited owned file');
+    assert.ok(!fs.existsSync(manifest), '--force left the manifest behind');
+    assert.ok(!fs.existsSync(rootMarker), '--force left the root marker behind');
   });
 });
 
