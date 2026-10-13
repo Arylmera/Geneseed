@@ -12,6 +12,12 @@ import { get, post } from './http.js'
 // mutation — flipping its on/off toggle.)
 
 const overview = () => get('/api/overview')
+// The Ledger Overview's four reads: every installed harness (sync, drift, always-on cost), skill
+// and agent calls over 30 days, gate asks per rule per day, and whether a newer release exists.
+const fleet = () => get('/api/fleet')
+const usage = () => get('/api/usage')
+const gates = () => get('/api/gates')
+const update = () => get('/api/update')
 // The newest file-backed entries across the harness. Its own endpoint rather than a field on
 // the overview: it stats every candidate file, which the overview (fetched on every mutation)
 // has no business paying for.
@@ -150,6 +156,10 @@ const excludes = () => get('/api/excludes')
 const excludeMutate = (action, path) => post('/api/excludes', { action, path })
 
 export const api = {
+  fleet,
+  usage,
+  gates,
+  update,
   loops,
   activeLoops,
   setLoopPreset,

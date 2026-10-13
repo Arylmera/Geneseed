@@ -17,6 +17,10 @@ describe('api surface', () => {
   it('exposes every endpoint the UI uses', () => {
     const names = [
       'overview',
+      'fleet',
+      'usage',
+      'gates',
+      'update',
       'setup',
       'doctor',
       'themes',

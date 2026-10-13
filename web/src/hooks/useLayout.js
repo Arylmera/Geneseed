@@ -17,7 +17,11 @@ const LAYOUT_KEY = 'geneseed-layout'
 // every existing user on the old dashboard. The four old lenses are one click away on
 // the Overview's own View control.
 export const LAYOUTS = [
-  { id: 'overview', short: 'Overview', tagline: 'Health, three charts, what needs you.' },
+  {
+    id: 'overview',
+    short: 'Overview',
+    tagline: 'Every install, what needs you, cost, usage and gates.',
+  },
   { id: 'cultivar', short: 'Cultivar', tagline: 'Hero, KPIs & genome grid.' },
   { id: 'greenhouse', short: 'Greenhouse', tagline: 'Ring, tiles & mix donut.' },
   { id: 'operator', short: 'Operator', tagline: 'Dense terminal readout.' },
