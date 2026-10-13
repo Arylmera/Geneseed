@@ -65,7 +65,6 @@
   "DESC_RELEASE": "<one-line description: cut a release — bump, changelog, tag, kept in sync>",
   "DESC_INGEST": "<one-line description: convert a PDF/Office/web doc into clean markdown before reading>",
   "DESC_RESEARCH": "<one-line description: answer from the open web, verifying each claim against independent sources>",
-  "DESC_HERDR": "<one-line description: drive herdr from inside it — split panes, spawn agents, read panes>",
   "DESC_RULE": "<one-line description: ask whether the user wants a standing rule or a durable memory, then write the memory or pressure-test the rule before adopting it in user-rules.md — and tend the memory set: merge, retire, promote>",
   "DESC_PROFILE": "<one-line description: interview the user and draft or refresh PROFILE.md — who they are, how they work, how they like answers pitched; identity only, rules go to user-rules.md>",
   "DESC_GENESEED": "<one-line description: operate the deployed Geneseed harness — find installs and their settings, read files, status, doctor, diff, rebuild one setting on request — and make the user's own OpenCode colour theme>",

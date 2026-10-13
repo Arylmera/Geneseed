@@ -65,7 +65,6 @@
   "DESC_RELEASE": "Cut a release — raise the version, write the roadbook entry, tag it, all three in sync.",
   "DESC_INGEST": "Bring a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Find the answer out on the open road — search wide, then prove every claim against independent sources before you trust it.",
-  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Ask first — standing rule, or just something to remember? Then log the memory, or lean on the rule till it holds every corner before bolting it into user-rules.md — and keep the memory stash serviced: merge, scrap, promote.",
   "DESC_PROFILE": "Stamp the rider's plate into PROFILE.md — who they are, what they ride, how they like the road called; identity only, club rules bolt into user-rules.md.",
   "DESC_GENESEED": "Operate the deployed Geneseed harness — find each install and its settings, read its files, run status, doctor and diff, and rebuild it with one setting changed when the user asks — and lay down the rider's own OpenCode paint job.",

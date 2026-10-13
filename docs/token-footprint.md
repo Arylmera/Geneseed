@@ -93,7 +93,7 @@ until 2026-09 it did, and the whole harness was paid twice per session.
   `<!-- invocation: user -->` renders `disable-model-invocation: true`; Claude
   Code and Bob then drop its description from the always-on skill metadata and
   only `/name` opens it. The three teaching skills (`teach`, `quiz`, `learn-mode`)
-  and `herdr` carry it today.
+  carry it today.
 - **Aliases cost 0 always-on.** A merged skill's old names (`<!-- aliases: -->`)
   ship as user-only stubs on Claude Code, Bob and OpenClaude, and as `/name` commands
   on OpenCode — never in the model's catalogue, so a rename or merge is free.

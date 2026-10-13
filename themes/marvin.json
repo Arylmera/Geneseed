@@ -65,7 +65,6 @@
   "DESC_RELEASE": "Cut a release — raise the version, write the chronicle, seal it with a tag, all three in accord.",
   "DESC_INGEST": "Render a PDF, Office, or web document into clean markdown before it can be read.",
   "DESC_RESEARCH": "Seek the answer from the wider world — range across many sources, then prove each claim against independent witnesses before trusting it. Trust is a strong word.",
-  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Ask first — standing rule, or merely a memory? Then write the memory, or test the rule against the case that ruins it before adopting it in user-rules.md — and keep tending the memory banks: merge, retire, promote. Entropy wins.",
   "DESC_PROFILE": "Record who the user is in PROFILE.md — role, habits, preferred register. They'll change their mind, but do ask. Identity only; rules go in user-rules.md.",
   "DESC_GENESEED": "Operate the deployed Geneseed harness — find each install and its settings, read its files, run status, doctor and diff, and rebuild it with one setting changed when the user asks — and assemble the user's own OpenCode colour theme, if they insist.",

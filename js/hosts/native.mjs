@@ -242,7 +242,7 @@ function isReadonly(text) {
  * description leaves the model's always-on catalogue and the model never self-triggers it.
  * Same precedent as `isReadonly` — a phrase in the spec, not a second manifest to keep in
  * step. Which skills carry it is an authoring decision: the teaching skills a human runs on
- * themselves, and the ones gated on an environment the model cannot see (a herdr pane).
+ * themselves.
  */
 const USER_INVOKED_RE = /<!--\s*invocation:\s*user\s*-->/;
 export function isUserInvokedOnly(text) {

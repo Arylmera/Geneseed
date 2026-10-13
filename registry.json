@@ -260,13 +260,6 @@
       "added": "2026-06-03",
       "last_verified": "2026-09-06"
     },
-    "skills/herdr": {
-      "status": "approved",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-06-13",
-      "last_verified": "2026-09-06"
-    },
     "skills/ingest": {
       "status": "approved",
       "version": "1.0.0",

@@ -65,7 +65,6 @@
   "DESC_RELEASE": "Ship the release — bump the version, write the recap, tag it, all in sync.",
   "DESC_INGEST": "Bring a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Work the scouting report — search wide, then confirm every claim against independent sources before you call it.",
-  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Ask first — standing house rule, or just one for the notes? Then log the memory, or run the rule against the play that breaks it before it goes on the board in user-rules.md — and keep tending the film room: merge, cut, promote.",
   "DESC_PROFILE": "Write the scouting report in PROFILE.md — position, playing style, how they want the play called; identity only, team rules go on the board in user-rules.md.",
   "DESC_GENESEED": "Operate the deployed Geneseed harness — find each install and its settings, read its files, run status, doctor and diff, and rebuild it with one setting changed when the user asks — and train up the user's own OpenCode colour theme.",

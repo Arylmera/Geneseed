@@ -429,8 +429,8 @@ test('a real global uninstall takes back only the skill denies it owns', () => {
     const cfg = globalInstall(d);
     const target = path.join(cfg, 'opencode.json');
     const before = JSON.parse(fs.readFileSync(target, 'utf8'));
-    assert.equal(before.permission.skill.herdr, 'deny',
-      'herdr carries `<!-- invocation: user -->` and must start denied');
+    assert.equal(before.permission.skill.teach, 'deny',
+      'teach carries `<!-- invocation: user -->` and must start denied');
     // A user's own policy for an unrelated name — Geneseed's manifest does not own `mine`.
     before.permission.skill.mine = 'deny';
     fs.writeFileSync(target, JSON.stringify(before));
@@ -438,7 +438,7 @@ test('a real global uninstall takes back only the skill denies it owns', () => {
     uninstallGlobal(cfg, false);
 
     const after = JSON.parse(fs.readFileSync(target, 'utf8'));
-    assert.ok(!('herdr' in after.permission.skill), 'an owned deny survived a real uninstall');
+    assert.ok(!('teach' in after.permission.skill), 'an owned deny survived a real uninstall');
     assert.equal(after.permission.skill.mine, 'deny',
       "a name Geneseed's manifest never owned was removed by uninstall");
   });
@@ -450,12 +450,12 @@ test('a real re-emit sweeps a stale skill deny once --exclude-skills drops it', 
     const cfg = globalInstall(d);
     const target = path.join(cfg, 'opencode.json');
     let perm = JSON.parse(fs.readFileSync(target, 'utf8')).permission;
-    assert.equal(perm.skill.herdr, 'deny', 'herdr did not start denied');
+    assert.equal(perm.skill.teach, 'deny', 'teach did not start denied');
 
-    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+    globalReemit(d, cfg, ['--exclude-skills', 'teach']);
 
     perm = JSON.parse(fs.readFileSync(target, 'utf8')).permission;
-    assert.ok(!('herdr' in perm.skill), 'an excluded skill kept a stale deny after a re-emit');
+    assert.ok(!('teach' in perm.skill), 'an excluded skill kept a stale deny after a re-emit');
     // A still-wanted deny rides along unaffected.
     assert.equal(perm.skill.quiz, 'deny', 'a still-wanted deny was swept along with the stale one');
   });
@@ -475,15 +475,15 @@ test("a user's own deny on a Geneseed skill survives a re-emit and an uninstall"
     const cfg = globalInstall(d);
     const target = path.join(cfg, 'opencode.json');
     const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
-    assert.ok(man.skill_denies.includes('herdr') && !man.skill_denies.includes('brainstorm'),
+    assert.ok(man.skill_denies.includes('teach') && !man.skill_denies.includes('brainstorm'),
       `the manifest does not record exactly the denies Geneseed wrote: ${man.skill_denies}`);
     // brainstorm is model-invocable, so Geneseed never denies it: this one is the user's.
     editJson(target, (c) => { c.permission.skill.brainstorm = 'deny'; });
 
-    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+    globalReemit(d, cfg, ['--exclude-skills', 'teach']);
     let skill = JSON.parse(fs.readFileSync(target, 'utf8')).permission.skill;
     assert.equal(skill.brainstorm, 'deny', "a re-emit swept the user's own deny on a Geneseed skill");
-    assert.ok(!('herdr' in skill), "Geneseed's own stale deny survived the re-emit");
+    assert.ok(!('teach' in skill), "Geneseed's own stale deny survived the re-emit");
 
     uninstallGlobal(cfg, false);
     skill = JSON.parse(fs.readFileSync(target, 'utf8')).permission.skill;
@@ -496,14 +496,14 @@ test('a deny the user wrote before the first emit is never recorded as Geneseed\
     const cfg = path.join(d, 'cfg');
     fs.mkdirSync(cfg, { recursive: true });
     fs.writeFileSync(path.join(cfg, 'opencode.json'),
-      JSON.stringify({ permission: { bash: {}, skill: { herdr: 'deny' } } }));
+      JSON.stringify({ permission: { bash: {}, skill: { teach: 'deny' } } }));
     globalReemit(d, cfg);
     const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
-    assert.ok(!man.skill_denies.includes('herdr'), 'a pre-existing user deny was claimed');
+    assert.ok(!man.skill_denies.includes('teach'), 'a pre-existing user deny was claimed');
     assert.ok(man.skill_denies.includes('quiz'), 'a deny Geneseed did write went unrecorded');
     uninstallGlobal(cfg, false);
     const skill = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.skill;
-    assert.deepEqual(skill, { herdr: 'deny' });
+    assert.deepEqual(skill, { teach: 'deny' });
   });
 });
 
@@ -522,9 +522,9 @@ test('a manifest with no skill_denies record sweeps nothing on re-emit', () => {
   withDir((d) => {
     const cfg = globalInstall(d);
     editJson(path.join(cfg, GLOBAL_MANIFEST), (m) => { delete m.skill_denies; });
-    globalReemit(d, cfg, ['--exclude-skills', 'herdr']);
+    globalReemit(d, cfg, ['--exclude-skills', 'teach']);
     const skill = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.skill;
-    assert.equal(skill.herdr, 'deny', 'a deny with no recorded provenance was swept');
+    assert.equal(skill.teach, 'deny', 'a deny with no recorded provenance was swept');
   });
 });
 

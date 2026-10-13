@@ -65,7 +65,6 @@
   "DESC_RELEASE": "Cut a release — raise the version, write the race report, seal it with a tag, all three in sync.",
   "DESC_INGEST": "Bring a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Hunt the answer across the open circuit — search wide, then prove every claim against independent sources before you call it.",
-  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Ask first — standing house rule, or just one for the notebook? Then log it, or run the rule through the replay from every angle before it goes on the board in user-rules.md — and tend the memory bank besides: merge, retire, promote.",
   "DESC_PROFILE": "Build the player profile in PROFILE.md — position, form, how they like the commentary pitched; identity only, the rulebook stays in user-rules.md.",
   "DESC_GENESEED": "Operate the deployed Geneseed harness — find each install and its settings, read its files, run status, doctor and diff, and rebuild it with one setting changed when the user asks — and roll out the viewer's own OpenCode colour theme.",

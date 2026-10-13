@@ -85,7 +85,7 @@ const VALUED_FLAGS = [
   ['--exclude-rules', 'excludeRules', 'process 7,craft 2', ['craft.2', 'process.7']],
   // Skills left out of the install: a comma list too, bound sorted so the marker it writes is
   // stable whatever order the names were typed in.
-  ['--exclude-skills', 'excludeSkills', 'herdr,daydream', ['daydream', 'herdr']],
+  ['--exclude-skills', 'excludeSkills', 'quiz,daydream', ['daydream', 'quiz']],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],
