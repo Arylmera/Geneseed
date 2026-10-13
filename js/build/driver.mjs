@@ -199,10 +199,21 @@ function writeManifestAtomic(file, data) {
  * same "never clobber an edit" rule `claimer` enforces on the write side, applied to the
  * delete side. `'unknown'`/`'unmodified'` fall straight through to the ordinary delete below,
  * which is what keeps a pre-Task-3 manifest (no `hashes` at all) behaving exactly as before.
+ *
+ * `editRefused` (Task 4, fix round 1): the rels `claimer` already refused to (over)write this
+ * SAME emit because the user had edited them. Such a rel drops out of `owned` (never written),
+ * which makes it look exactly like `stale` — a rel this build stopped shipping — and without
+ * this exclusion `pruneOwned` would independently re-run `ownedState`, see `'modified'` again,
+ * and print its OWN "kept your edited... (no longer shipped)" right under `claimer`'s "kept
+ * your edited... delete it to get Geneseed's copy back": two warnings about one rel that is in
+ * fact still shipped. Excluded from `stale` before anything is checked or printed — silently,
+ * because `claimer` already said everything there is to say about it.
  */
-function pruneOwned(oc, oldOwned, owned, oldHashes = {}) {
+function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = []) {
   const now = new Set(owned);
-  const stale = [...new Set(oldOwned)].filter((r) => !now.has(r)).sort();
+  const alreadyWarned = new Set(editRefused);
+  const stale = [...new Set(oldOwned)]
+    .filter((r) => !now.has(r) && !alreadyWarned.has(r)).sort();
   const failed = [];
   for (const rel of ownedWithin(oc, stale)) {
     if (ownedState(oc, rel, oldHashes) === 'modified') {
@@ -315,10 +326,10 @@ function emitOpencode(cfg, args, out) {
       nativeCatalog: hostCatalogsNatively('opencode'), oldOwned, manifestExisted, agentPath,
       oldDenies, oldHashes,
     });
-  const { owned, stats, cfgName, skillDenies } = rendered;
+  const { owned, stats, cfgName, skillDenies, editRefused } = rendered;
 
   phaseLog('PRUNE');
-  pruneOwned(oc, oldOwned, owned, oldHashes);
+  pruneOwned(oc, oldOwned, owned, oldHashes, editRefused);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -373,10 +384,10 @@ function emitOpencodeGlobal(cfg, args, out) {
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
       oldOwned, agentPath, oldDenies, oldHashes,
     });
-  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies } = rendered;
+  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies, editRefused } = rendered;
 
   phaseLog('PRUNE');
-  pruneOwned(cfgDir, oldOwned, owned, oldHashes);
+  pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -428,10 +439,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
     hookOpts, oldHashes,
   });
-  const { owned, stats, memStatus, nbStatus, managed } = rendered;
+  const { owned, stats, memStatus, nbStatus, managed, editRefused } = rendered;
 
   phaseLog('PRUNE');
-  pruneOwned(cfgDir, oldOwned, owned, oldHashes);
+  pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {

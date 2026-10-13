@@ -632,6 +632,15 @@ test('ownedState table: unknown, missing, unmodified, modified', () => {
 const readManifestDoc = (cfgDir) => JSON.parse(readFileSync(path.join(cfgDir, GLOBAL_MANIFEST), 'utf8'));
 const DEVELOP_SKILL = path.join('skills', 'develop', 'SKILL.md');
 
+/**
+ * How many stderr LINES mention `needle` — fix round 1's own gate: `claimer`'s refusal and
+ * `pruneOwned`'s stale-check both read the same rel in the same emit (a claimer-refused edit
+ * drops its rel out of `owned`, which is indistinguishable from "no longer shipped" to a prune
+ * that does not know WHY it is missing), and before the fix both printed a line about it. The
+ * two warnings are about mutually exclusive situations and must never both fire for one rel.
+ */
+const linesMentioning = (err, needle) => err.split('\n').filter((l) => l.includes(needle)).length;
+
 test('rebuild keeps an edited skill', () => {
   withDir((root) => {
     const cfgDir = path.join(root, '.claude');
@@ -651,6 +660,12 @@ test('rebuild keeps an edited skill', () => {
     assert.ok(!readManifestOwned(cfgDir).includes('skills/develop/SKILL.md'),
       "an edited file Geneseed refused to overwrite must drop out of the manifest's owned set, "
       + 'or the next prune deletes the user\'s edit on the grounds that this install owns it');
+    // Fix round 1: the rel dropped out of `owned` above also makes it look STALE to the very
+    // same emit's own prune pass, which must not independently re-decide and print its own
+    // "...no longer shipped" line about a skill that is, in fact, still shipped.
+    assert.equal(linesMentioning(err, 'skills/develop/SKILL.md'), 1,
+      'claimer\'s refusal and pruneOwned\'s stale-check both fired for the same still-shipped '
+      + 'rel in the same emit — exactly one warning line may name it');
   });
 });
 
@@ -691,6 +706,10 @@ test('prune keeps an edited stale file', () => {
     assert.match(err, /\[geneseed\] kept your edited skills\/develop\/SKILL\.md \(no longer shipped\)/);
     assert.ok(!readManifestOwned(cfgDir).includes('skills/develop/SKILL.md'),
       'a skill this build no longer ships must not be re-claimed into owned');
+    // This skill was `excludeSkills`'d, not refused by `claimer` (it was never rendered, so
+    // `claimer` never saw its rel this emit) — exactly one line, pruneOwned's own, same as the
+    // rebuild scenario's gate above.
+    assert.equal(linesMentioning(err, 'skills/develop/SKILL.md'), 1);
   });
 });
 

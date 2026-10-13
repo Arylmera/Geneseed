@@ -203,6 +203,7 @@ export function emitClaudeRender(cfg, job) {
     memStatus,
     nbStatus,
     managed,
+    editRefused: [...claim.editRefused],
   };
 }
 

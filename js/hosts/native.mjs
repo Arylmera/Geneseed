@@ -477,11 +477,22 @@ function warnClaudeIgnored(overrides) {
  * `oldOwned` — it is not about which prior manifest owns `dest`, it is about what sits AT
  * `dest` on disk, and a caller with no `cfg` (`null` or `undefined` — they behave alike
  * throughout this closure) has no root to contain against at all. See `js/hosts/owned.mjs`.
+ *
+ * `claim.editRefused` (Task 4, fix round 1): the rels this closure refused because the user
+ * had edited them — the one piece of its own decision `pruneOwned` cannot re-derive from
+ * `owned` alone. A refused edit drops its rel OUT of `owned` (the file was not written), which
+ * makes it look exactly like a rel this build stopped shipping — `pruneOwned` would read it as
+ * stale, re-run `ownedState`, see `'modified'` again, and print ITS OWN "kept your edited...
+ * (no longer shipped)" right under this function's "kept your edited... delete it to get
+ * Geneseed's copy back" — two warnings about one rel that is in fact still shipped. The caller
+ * reads this set back off the closure and hands it to `pruneOwned` so that rel is excluded from
+ * the stale set entirely, silently, rather than re-evaluated.
  */
 export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
   const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
   let headerPrinted = false;
-  return (dest) => {
+  const editRefused = new Set();
+  const claim = (dest) => {
     if (cfg != null && !claimLeaf(cfg, dest, relPosix(cfg, dest))) return false;
     if (oldSet === null || cfg == null || !existsSync(dest)) return true;
     const rel = relPosix(cfg, dest);
@@ -492,6 +503,7 @@ export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
       // branch doing nothing extra, not a special case.
       if (ownedState(cfg, rel, oldHashes) === 'modified') {
         warn(`[geneseed] kept your edited ${rel} — delete it to get Geneseed's copy back`);
+        editRefused.add(rel);
         return false;
       }
       return true;
@@ -505,6 +517,8 @@ export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
       + 'clobbering it');
     return false;
   };
+  claim.editRefused = editRefused;
+  return claim;
 }
 
 /**

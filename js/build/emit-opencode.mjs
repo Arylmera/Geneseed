@@ -107,7 +107,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
 
   return {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands: commands.length, cfgName,
-    skillDenies,
+    skillDenies, editRefused: [...claim.editRefused],
   };
 }
 
@@ -146,7 +146,7 @@ export function emitOpencodeRender(cfg, job) {
   const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
 
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRefused,
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
     oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldHashes,
   });
@@ -158,6 +158,7 @@ export function emitOpencodeRender(cfg, job) {
     },
     cfgName,
     skillDenies,
+    editRefused,
   };
 }
 
@@ -225,7 +226,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // `manifestExisted` is deliberately not passed — the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRefused,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
     oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldHashes,
   });
@@ -252,5 +253,6 @@ export function emitOpencodeGlobalRender(cfg, job) {
     nbStatus,
     cfgName,
     skillDenies,
+    editRefused,
   };
 }
