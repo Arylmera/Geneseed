@@ -28,7 +28,8 @@
 ## Inputs
 - What the caller must provide (files, diff, scope, acceptance criteria).
 - Dispatches arrive as an envelope: goal, inputs, output contract, inherited
-  constraints (never commit/push; report gaps instead of inventing). When an
+  constraints (never commit/push; dispatch no sub-agents — review comes from the caller;
+  report gaps instead of inventing). When an
   envelope arrives incomplete, hold the caller to it via `spec-feedback:`.
 
 ## Allowed tools

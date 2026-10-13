@@ -5,7 +5,7 @@
 **Trigger:** the context window is filling, a session is ending mid-task, or work is passing to another agent or developer.
 
 ## Procedure
-1. Capture the state in the worklog (`WORKLOG.md` or the task's plan file): the goal, what's done, the step in progress, and the exact next step.
+1. Capture the state in the worklog (`WORKLOG.md` or the task's plan file), whose first line names its task or branch so a stale one is never resumed: the goal, what's done, the step in progress, and the exact next step.
 2. Record open decisions, dead ends already ruled out, blockers, and any irreversible changes already made ({{DOCTRINE:plan-before-acting}}) — so the next agent neither re-derives nor repeats them.
 3. Promote any durable fact or correction learned this session into {{MEMORY}} (§5), not just the worklog.
 4. Point to the live artifacts: branch name, changed files, how to run the tests, and where any failure reproduces. Link specs, plans, ADRs, issues and commits by path or URL — never copy them in.

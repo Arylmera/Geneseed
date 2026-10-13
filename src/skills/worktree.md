@@ -41,6 +41,8 @@ changes you did not make.
    git worktree remove ../<repo>-<slug>
    git branch -d <type>/<slug>
    ```
+   If `git worktree remove` refuses (modified or untracked files), never `--force`: list
+   `git status --porcelain -uall` and ask whether to commit, move or delete them.
    `git worktree prune` after a directory was deleted by hand. Leave nothing listed
    that no task owns.
 
