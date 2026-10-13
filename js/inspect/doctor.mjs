@@ -42,7 +42,7 @@ import { authoringProblems, loopProblems } from './checks-authoring.mjs';
 import {
   checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
-import { moduleMapProblems, scorecardProblems, shimProblems } from './checks-repo.mjs';
+import { hostMatrixProblems, moduleMapProblems, scorecardProblems, shimProblems } from './checks-repo.mjs';
 import { NOTE, isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
 
 /**
@@ -249,6 +249,7 @@ export function doctorCollect({
   problems = problems.concat(ran('openclaude_dual', 'OpenClaude dual harness',
     openclaudeDualHarnessNotes()));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
+  problems = problems.concat(ran('host_matrix', 'Host tables', hostMatrixProblems()));
   problems = problems.concat(ran('scorecard', 'Scorecard floor', scorecardProblems()));
   // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed
   // `rituals/harness.py` and compared that against a digest baked into `cli.json`, to catch a
