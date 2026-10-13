@@ -45,6 +45,15 @@ case where the seam is only known once the change is made.
    session ends mid-task. Leave no slice uncommitted and no test you could not make
    fail.
 
+## Anti-patterns — name the one you catch
+- **Implementation-coupled** — mocks an internal collaborator, tests a private method,
+  or checks through a side channel (querying the database instead of the interface).
+  The tell: it breaks on a refactor that changed no behaviour.
+- **Tautological** — the expected value is recomputed the way the code computes it, so
+  the test passes by construction and can never disagree with the code.
+- **Horizontal slicing** — all the tests first, then all the code: the tests pin an
+  imagined shape. One test, one implementation, repeat.
+
 ## Done when
 - Every behaviour changed is covered by a test written this session that was seen
   to fail before it passed, the whole suite ran at exit with its output shown and every
