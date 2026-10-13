@@ -16,11 +16,15 @@
    output format included, but never a {{LAW}}.
 4. For a large change, consider dispatching the
    [reviewer {{AGENT}}](../{{DIR_AGENTS}}/reviewer.md) to keep the main context clean.
+   When a spec exists and the diff spans more than a few files, run pass 3 in its own
+   subagent, handed only the diff command and the spec, alongside passes 1–2: a pass
+   that has already filled up on code findings stops reading the spec closely, and
+   kept apart, one axis's findings never mask the other's.
 5. Pass 1 — correctness: logic errors, edge cases, error handling, race
    conditions. Verify suspect behaviour by running tests, not by assuming.
 6. Pass 2 — quality: after `REVIEW.md`, the repo's documented standards (`CODING_STANDARDS.md`,
    `CONTRIBUTING.md`) override. Then, as judgement calls and skipping what tooling enforces:
-   mysterious name, duplication, feature envy, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, middle man, dead code, units that do too much.
+   mysterious name, duplication, feature envy, data clumps, primitive obsession, repeated switches, shotgun surgery, divergent change, speculative generality, message chains, middle man, refused bequest, dead code, units that do too much.
 7. Pass 3 — spec fidelity: flag anything asked for but missing, present but never
    asked for, or implemented wrong — quoting the spec line for each. Where the spec is silent,
    judge by what a reasonable user would expect: a crash, hang or data loss on an input the
