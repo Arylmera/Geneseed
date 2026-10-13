@@ -29,7 +29,7 @@ import { setupBuildArgs } from '../../js/build/generate.mjs';
 import { makeCfg, PACK_ORDER } from '../../js/build/source.mjs';
 import { trustOfDir } from '../../js/hosts/installs.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
-import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
+import { GLOBAL_MANIFEST, HOSTS } from '../../js/hosts/hosts.mjs';
 import { colorThemeFiles } from '../../js/hosts/opencode.mjs';
 import { installUninstall } from '../../js/maintain/uninstall.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -602,4 +602,32 @@ test('a non-default trust round-trips through setupBuildArgs and the driver pars
   assert.deepEqual(argv('prudent').slice(-2), ['--trust', 'prudent']);
   assert.equal(quiet(() => parseDriverArgs(argv('prudent')))[0].trust, 'prudent');
   assert.equal(quiet(() => parseDriverArgs(argv('balanced')))[0].trust, 'balanced');
+});
+
+// ---------------------------------------------------------------------------------------------
+// cross-host ownership — each host's manifest is pruned and uninstalled independently, so a
+// shared path would be deleted by one host's prune while another still serves it (rulesync's
+// orphan-sweep problem).
+
+test('no two hosts own the same path in one project emit', () => {
+  withDir((d) => {
+    const ownedSets = HOSTS.map(({ host, projectMarker }) => {
+      quiet(() => emitProjectInto(host, {
+        theme: 'neutral', out: path.join(d, 'bundle'), root: d, footprint: 'full',
+      }));
+      const markerDir = path.join(d, projectMarker);
+      const owned = readJson(markerDir, GLOBAL_MANIFEST).owned;
+      assert.ok(owned.length > 0, `${host} emitted an empty owned set`);
+      return { host, paths: new Set(owned.map((rel) => path.resolve(markerDir, rel))) };
+    });
+    for (let i = 0; i < ownedSets.length; i += 1) {
+      for (let j = i + 1; j < ownedSets.length; j += 1) {
+        const a = ownedSets[i];
+        const b = ownedSets[j];
+        const shared = [...a.paths].filter((p) => b.paths.has(p));
+        assert.deepEqual(shared, [],
+          `${a.host} and ${b.host} both own: ${shared.join(', ')}`);
+      }
+    }
+  });
 });
