@@ -9,6 +9,7 @@
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { readText, writeText } from '../lib/fs.mjs';
+import { claimLeaf } from '../hosts/owned.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { isDir } from '../lib/fs.mjs';
 import { relPosix } from '../lib/text.mjs';
@@ -162,8 +163,15 @@ function warnIfDowngrade(cfg, out) {
   }
 }
 
-/** `_build_render.write_version`. */
+/**
+ * `_build_render.write_version`. Returns the fingerprint on a successful write, or `null` when
+ * `claimLeaf` refuses `out`'s marker (a symlinked or hard-linked `VERSION_MARKER`) — every
+ * caller pushes `VERSION_MARKER` into `owned` only when this is not `null`, the same
+ * "skip the write, keep it out of owned" shape `claimer` uses.
+ */
 export function writeVersion(cfg, out) {
+  const dest = path.join(out, VERSION_MARKER);
+  if (!claimLeaf(out, dest, VERSION_MARKER)) return null;
   warnIfDowngrade(cfg, out);
   const fp = sourceFingerprint(cfg);
   const release = sourceReleaseVersion(cfg);
@@ -177,8 +185,7 @@ export function writeVersion(cfg, out) {
   // clock across a process boundary is not something the harness can do — which is
   // exactly why the choice is spelled out instead of relying on the comparison.
   const today = new Date().toLocaleDateString('sv-SE');
-  writeText(path.join(out, VERSION_MARKER),
-    `${fp} (built ${today}) [release ${release}]\n`);
+  writeText(dest, `${fp} (built ${today}) [release ${release}]\n`);
   return fp;
 }
 

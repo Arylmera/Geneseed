@@ -83,6 +83,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |
 | `mcp.mjs` | MCP server presets, the per-host `mcpServers` config read/write, and toggle state |
 | `link.mjs` | `geneseed link`/`unlink` — the PATH shim, and the only Windows USER-Path registry edit |
+| `owned.mjs` | Manifest rel -> path on disk decisions: `ownedWithin`, the containment boundary `uninstall.mjs` and the driver's prune both go through before acting on an `owned` list entry |
 
 **Before editing:** `hooks*.mjs` **are the hook path** — the verdict travels as JSON on stdout and
 every arm exits 0, so one stray printed byte turns a blocking gate silently permissive, and anything

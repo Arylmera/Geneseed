@@ -13,6 +13,7 @@ import {
   managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
   unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes,
 } from '../hosts/settings.mjs';
+import { claimLeaf } from '../hosts/owned.mjs';
 import { writeText } from '../lib/fs.mjs';
 import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
@@ -98,10 +99,16 @@ export function emitClaudeRender(cfg, job) {
   // slim shadow stub whose only job is to have the same filename.
   if (isBob && agentText !== null) {
     const rulesMd = path.join(cfgDir, 'rules', 'geneseed.md');
-    mkdirSync(path.dirname(rulesMd), { recursive: true });
-    writeText(rulesMd, scope === 'project' ? BOB_RULES_STUB
-      : stripCapabilityLinks(prefixedAgentText('../') || agentText));
-    owned.push('rules/geneseed.md');
+    // `claimLeaf` BEFORE `mkdirSync`: `safeLeaf` walks up to the nearest EXISTING ancestor
+    // (`resolvePath`'s own contract), so it needs no directory created first — and creating
+    // `rules/` first would plant an empty directory at a linked ancestor's target the moment
+    // before the refusal fires.
+    if (claimLeaf(cfgDir, rulesMd, 'rules/geneseed.md')) {
+      mkdirSync(path.dirname(rulesMd), { recursive: true });
+      writeText(rulesMd, scope === 'project' ? BOB_RULES_STUB
+        : stripCapabilityLinks(prefixedAgentText('../') || agentText));
+      owned.push('rules/geneseed.md');
+    }
   }
 
   ensureAgentOverridesStub(cfg, cfgDir);
@@ -160,15 +167,19 @@ export function emitClaudeRender(cfg, job) {
       : host === 'bob' ? ['settings.json'] : [])
       .concat(['context.json', WIKI_FILE, 'agent-overrides.json']);
     if (!existsSync(gi)) {
-      writeText(gi, `${giLines.join('\n')}\n`);
-      owned.push('.gitignore');
+      // `!existsSync(gi)` is exactly the case a DANGLING symlink also satisfies — it reads
+      // as absent — so `claimLeaf` (which lstats) runs before the write, not instead of
+      // this check.
+      if (claimLeaf(cfgDir, gi, '.gitignore')) {
+        writeText(gi, `${giLines.join('\n')}\n`);
+        owned.push('.gitignore');
+      }
     } else if (oldOwned.includes('.gitignore')) {
       owned.push('.gitignore');
     }
   }
 
-  writeVersion(cfg, cfgDir);
-  owned.push(VERSION_MARKER);
+  if (writeVersion(cfg, cfgDir) !== null) owned.push(VERSION_MARKER);
 
   shipLeanLaws(items, theme, cfgDir, owned, footprint);
 

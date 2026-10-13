@@ -14,6 +14,7 @@ import {
   writeAliasCommands, writePonytailCommand, writePrimaryAgent, writeTheme,
 } from '../hosts/opencode.mjs';
 import { mergeOpencodeJson, opencodeSentinelWrite } from '../hosts/settings.mjs';
+import { claimLeaf } from '../hosts/owned.mjs';
 import { isFile, readText, writeText } from '../lib/fs.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, build, phaseLog } from './bundle.mjs';
@@ -210,8 +211,11 @@ export function emitOpencodeGlobalRender(cfg, job) {
     // plain names. Memory links stay RELATIVE: in the global layout AGENT.md and the
     // store are siblings, so `memory/` resolves from AGENT.md's own location and stays
     // hermetic — no absolute path a doctor check would flag as an escape.
-    writeText(path.join(cfgDir, 'AGENT.md'), stripCapabilityLinks(agentText));
-    owned.push('AGENT.md');
+    const agentDest = path.join(cfgDir, 'AGENT.md');
+    if (claimLeaf(cfgDir, agentDest, 'AGENT.md')) {
+      writeText(agentDest, stripCapabilityLinks(agentText));
+      owned.push('AGENT.md');
+    }
   }
   // Co-owned, so never in `owned` — see `opencodeSentinelWrite`.
   opencodeSentinelWrite(cfgDir);
@@ -233,8 +237,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   ensureProfileStub(cfgDir);
   ensureExcludesStub(cfgDir);
 
-  writeVersion(cfg, cfgDir);
-  owned.push(VERSION_MARKER);
+  if (writeVersion(cfg, cfgDir) !== null) owned.push(VERSION_MARKER);
 
   shipLeanLaws(items, theme, cfgDir, owned, footprint);
 

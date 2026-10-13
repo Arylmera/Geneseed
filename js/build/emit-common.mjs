@@ -10,6 +10,7 @@
  * `emit-claude.mjs` do that; `bundle.mjs` renders the bundle they read from.
  */
 import path from 'node:path';
+import { claimLeaf } from '../hosts/owned.mjs';
 import { copyFile, writeText, isDir } from '../lib/fs.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { SRC_DIR_TOKENS, destRel } from './render.mjs';
@@ -183,9 +184,14 @@ export function shipLeanLaws(items, theme, cfgDir, owned, footprint) {
     // nothing to detect, not because the gate cannot see it.
     if (text !== null && parts.length && dirs.has(parts[0])) {
       const dest = path.join(cfgDir, ...parts);
-      mkdirSync(path.dirname(dest), { recursive: true });
-      writeText(dest, text);
-      owned.push(rel);
+      // `claimLeaf` BEFORE `mkdirSync`, for the same reason `emitClaudeRender`'s rules stub
+      // does: `safeLeaf` needs no directory created first, and creating one ahead of the
+      // refusal would plant it at a linked ancestor's target.
+      if (claimLeaf(cfgDir, dest, rel)) {
+        mkdirSync(path.dirname(dest), { recursive: true });
+        writeText(dest, text);
+        owned.push(rel);
+      }
     }
   }
 }
