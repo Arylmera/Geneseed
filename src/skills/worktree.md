@@ -3,11 +3,11 @@
 > {{DESC_WORKTREE}}
 
 **Trigger:** the user says "worktree" or "isolate this", or work must not share the
-checkout with work in flight. That covers a [pipeline](pipeline.md) crew needing its own tree, a second task starts while the first
-is uncommitted, another agent or session is editing this checkout, a risky migration
-or rewrite needs a disposable copy, or the user says "worktree", "isolate this",
-"don't touch my checkout". Also the first thing to reach for when `git status` shows
-changes you did not make.
+checkout with work in flight. That covers a [pipeline](pipeline.md) crew needing its own tree,
+a second task starting while the first is uncommitted, another agent or session editing this
+checkout, or a risky migration or rewrite that needs a disposable copy, or the user says "don't
+touch my checkout". Also the first thing to reach for when `git status` shows changes you did
+not make.
 
 ## Procedure
 1. **Look before you branch** ({{LAW:verify-before-asserting}}). `git status` and `git worktree list`

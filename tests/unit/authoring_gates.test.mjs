@@ -425,7 +425,7 @@ test('a listed folder that does not exist is flagged', async () => {
 
 test('the status of a known entity', () => {
   const registry = loadRegistry();
-  assert.equal(entityStatus(registry, 'skills/rule'), 'experimental');
+  assert.equal(entityStatus(registry, 'skills/loop'), 'experimental');
   assert.equal(entityStatus(registry, 'skills/commit'), 'approved');
 });
 
