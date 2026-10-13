@@ -488,6 +488,39 @@ test('shipLeanLaws refuses one symlinked file without aborting the rest', (t) =>
   } finally { sb.cleanup(); }
 });
 
+test('shipLeanLaws never mkdirs through a directory link before refusing', (t) => {
+  // Proves the claimLeaf-before-mkdirSync reorder: `doctrines` itself is a directory LINK
+  // out of the root, so the leaf (`pack/x.md`) does not exist yet and the guard falls to its
+  // nearest existing ancestor — exactly `safeLeaf`'s ancestor-containment branch. Before the
+  // reorder, `mkdirSync(path.dirname(dest), { recursive: true })` ran first and planted an
+  // empty `pack/` directory at the link's target the instant before the refusal fired.
+  const sb = makeSandbox('leaf-laws-dir-');
+  try {
+    const cfgDir = path.join(sb.path, 'cfg');
+    mkdirSync(cfgDir, { recursive: true });
+    const outsideDir = path.join(sb.path, 'outside-dir');
+    mkdirSync(outsideDir, { recursive: true });
+    const doctrinesDir = path.join(cfgDir, 'doctrines');
+    try {
+      symlinkSync(outsideDir, doctrinesDir, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (e) {
+      if (process.platform === 'win32' && e.code === 'EPERM') {
+        t.skip('directory links need privileges here');
+        return;
+      }
+      throw e;
+    }
+
+    const owned = [];
+    shipLeanLaws([{ rel: 'doctrines/pack/x.md', text: 'GENESEED X\n' }], {}, cfgDir, owned, 'full');
+
+    assert.equal(existsSync(path.join(outsideDir, 'pack')), false,
+      'a refusal must not have created a new directory at the link target before it fired');
+    assert.deepEqual(owned, [],
+      'the refused file must not land in owned');
+  } finally { sb.cleanup(); }
+});
+
 test('a full Claude project emit never writes VERSION_MARKER through a symlinked leaf', (t) => {
   // Covers both `writeVersion` callers at once: `emit-claude.mjs` and `emit-opencode.mjs`
   // call the exact same one-line guard inside `js/build/version.mjs`'s `writeVersion`, so
