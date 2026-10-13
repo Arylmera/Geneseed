@@ -55,11 +55,12 @@ import { mkdirSync } from 'node:fs';
 function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const {
     oldOwned, manifestExisted, agentPath, wireBase, overridesDir, oldDenies = [],
+    oldHashes = {},
   } = opts;
   ensureAgentOverridesStub(cfg, overridesDir);
   const overrides = loadAgentOverrides(overridesDir);
   // One claim for every writer below whose path lands in `owned` — see `claimer`.
-  const claim = claimer(oldOwned, dir, manifestExisted);
+  const claim = claimer(oldOwned, dir, manifestExisted, oldHashes);
 
   const { nAgents, nSkills, written, userOnlySkills } = writeNativeLayer(
     items, path.join(dir, 'agents'), path.join(dir, 'skills'), overrides,
@@ -130,7 +131,7 @@ export function emitOpencodeRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: _theme, out, root, footprint, nativeCatalog, oldOwned, manifestExisted, agentPath,
-    oldDenies,
+    oldDenies, oldHashes = {},
   } = job;
   const oc = path.join(root, '.opencode');
 
@@ -147,7 +148,7 @@ export function emitOpencodeRender(cfg, job) {
   const {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies,
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
-    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies,
+    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldHashes,
   });
 
   return {
@@ -196,6 +197,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath, oldDenies,
+    oldHashes = {},
   } = job;
 
   // No `lawsPrefix`: the standalone laws dir sits beside AGENT.md in <cfg>, so the lean
@@ -225,7 +227,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   const {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
-    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies,
+    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldHashes,
   });
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);

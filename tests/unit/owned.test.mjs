@@ -620,3 +620,99 @@ test('ownedState table: unknown, missing, unmodified, modified', () => {
       'the file named in the manifest is gone from disk');
   });
 });
+
+// -----------------------------------------------------------------------------------------
+// Task 4: a rebuild/prune never overwrites or deletes an owned file the user has edited.
+// `skills/develop/SKILL.md` is a real Claude-footprint skill, written by every project emit
+// below — the brief's own shape (a skill's SKILL.md), reached through the real dispatch path
+// rather than a unit call into `claimer`, so the proof is that the actual emit refuses, not
+// just the function in isolation.
+// -----------------------------------------------------------------------------------------
+
+const readManifestDoc = (cfgDir) => JSON.parse(readFileSync(path.join(cfgDir, GLOBAL_MANIFEST), 'utf8'));
+const DEVELOP_SKILL = path.join('skills', 'develop', 'SKILL.md');
+
+test('rebuild keeps an edited skill', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    const skillPath = path.join(cfgDir, DEVELOP_SKILL);
+    assert.ok(existsSync(skillPath), 'the fixture assumption — develop ships by default — is wrong');
+    writeFileSync(skillPath, `${readFileSync(skillPath, 'utf8')}\nmine`);
+
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out, root, footprint: 'full' }));
+
+    assert.ok(readFileSync(skillPath, 'utf8').endsWith('mine'),
+      'a rebuild overwrote a file the user had edited');
+    assert.match(err, /\[geneseed\] kept your edited skills\/develop\/SKILL\.md — delete it to get Geneseed's copy back/);
+    assert.ok(!readManifestOwned(cfgDir).includes('skills/develop/SKILL.md'),
+      "an edited file Geneseed refused to overwrite must drop out of the manifest's owned set, "
+      + 'or the next prune deletes the user\'s edit on the grounds that this install owns it');
+  });
+});
+
+test('third emit stays quiet-ish: the file is now the user\'s, claim-on-create applies', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    const skillPath = path.join(cfgDir, DEVELOP_SKILL);
+    writeFileSync(skillPath, `${readFileSync(skillPath, 'utf8')}\nmine`);
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    // Third emit: the manifest no longer owns the file (the rebuild above dropped it), so this
+    // is an ordinary pre-existing-and-unowned file — claim-on-create, not the edit guard.
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out, root, footprint: 'full' }));
+
+    assert.ok(readFileSync(skillPath, 'utf8').endsWith('mine'), 'the user\'s file was overwritten');
+    assert.match(err, /kept your existing skills\/develop\/SKILL\.md/);
+  });
+});
+
+test('prune keeps an edited stale file', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    const skillPath = path.join(cfgDir, DEVELOP_SKILL);
+    writeFileSync(skillPath, `${readFileSync(skillPath, 'utf8')}\nmine`);
+
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out, root, footprint: 'full', excludeSkills: ['develop'] }));
+
+    assert.ok(existsSync(skillPath), 'the prune deleted a stale file the user had edited');
+    assert.ok(readFileSync(skillPath, 'utf8').endsWith('mine'));
+    assert.match(err, /\[geneseed\] kept your edited skills\/develop\/SKILL\.md \(no longer shipped\)/);
+    assert.ok(!readManifestOwned(cfgDir).includes('skills/develop/SKILL.md'),
+      'a skill this build no longer ships must not be re-claimed into owned');
+  });
+});
+
+test('a manifest with no hashes (pre-Task-3) keeps today\'s behaviour: overwritten exactly as today', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
+    const doc = readManifestDoc(cfgDir);
+    delete doc.hashes;
+    writeFileSync(manifestPath, JSON.stringify(doc));
+
+    const skillPath = path.join(cfgDir, DEVELOP_SKILL);
+    const original = readFileSync(skillPath, 'utf8');
+    writeFileSync(skillPath, `${original}\nmine`);
+
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    assert.equal(readFileSync(skillPath, 'utf8'), original,
+      'a pre-Task-3 manifest with no hashes must keep today\'s behaviour — the edit is lost, '
+      + 'exactly as before this feature existed');
+  });
+});

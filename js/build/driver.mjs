@@ -50,7 +50,9 @@ import {
   GLOBAL_MANIFEST, HOSTS, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
-import { ownedHashes, ownedWithin } from '../hosts/owned.mjs';
+import {
+  hashesOf, ownedHashes, ownedState, ownedWithin,
+} from '../hosts/owned.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
@@ -192,12 +194,21 @@ function writeManifestAtomic(file, data) {
  * rel straight in, with no containment check, so a crafted per-repo manifest entry of
  * `../victim.txt` deleted a file outside the install the moment a re-emit called it stale.
  * `uninstall.mjs`'s owned-file walk already drew this boundary; the prune now goes through it.
+ *
+ * `oldHashes` (Task 4): a stale rel the user has EDITED is kept rather than deleted — the
+ * same "never clobber an edit" rule `claimer` enforces on the write side, applied to the
+ * delete side. `'unknown'`/`'unmodified'` fall straight through to the ordinary delete below,
+ * which is what keeps a pre-Task-3 manifest (no `hashes` at all) behaving exactly as before.
  */
-function pruneOwned(oc, oldOwned, owned) {
+function pruneOwned(oc, oldOwned, owned, oldHashes = {}) {
   const now = new Set(owned);
   const stale = [...new Set(oldOwned)].filter((r) => !now.has(r)).sort();
   const failed = [];
   for (const rel of ownedWithin(oc, stale)) {
+    if (ownedState(oc, rel, oldHashes) === 'modified') {
+      process.stderr.write(`[geneseed] kept your edited ${rel} (no longer shipped)\n`);
+      continue;
+    }
     const victim = path.join(oc, rel);
     try {
       if (isFile(victim)) {
@@ -290,6 +301,7 @@ function emitOpencode(cfg, args, out) {
   const { existed: manifestExisted, doc } = readManifest(manifestPath);
   const oldOwned = (doc && doc.owned) || [];
   const oldDenies = recordedDenies(doc);
+  const oldHashes = hashesOf(doc);
 
   const agentPathRel = relUnder(out, root);
   const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';
@@ -301,12 +313,12 @@ function emitOpencode(cfg, args, out) {
     {
       theme: args.theme, out, root, footprint: args.footprint,
       nativeCatalog: hostCatalogsNatively('opencode'), oldOwned, manifestExisted, agentPath,
-      oldDenies,
+      oldDenies, oldHashes,
     });
   const { owned, stats, cfgName, skillDenies } = rendered;
 
   phaseLog('PRUNE');
-  pruneOwned(oc, oldOwned, owned);
+  pruneOwned(oc, oldOwned, owned, oldHashes);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -350,6 +362,7 @@ function emitOpencodeGlobal(cfg, args, out) {
   const { doc } = readManifest(manifestPath);
   const oldOwned = (doc && doc.owned) || [];
   const oldDenies = recordedDenies(doc);
+  const oldHashes = hashesOf(doc);
 
   const agentPath = path.join(cfgDir, 'AGENT.md').split(path.sep).join('/');
 
@@ -358,12 +371,12 @@ function emitOpencodeGlobal(cfg, args, out) {
     {
       theme: args.theme, cfgDir, out,
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
-      oldOwned, agentPath, oldDenies,
+      oldOwned, agentPath, oldDenies, oldHashes,
     });
   const { owned, stats, memStatus, nbStatus, cfgName, skillDenies } = rendered;
 
   phaseLog('PRUNE');
-  pruneOwned(cfgDir, oldOwned, owned);
+  pruneOwned(cfgDir, oldOwned, owned, oldHashes);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -401,6 +414,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   const oldOwned = (doc && doc.owned) || [];
   const oldManaged = (doc && doc.managed && typeof doc.managed === 'object'
     && !Array.isArray(doc.managed)) ? doc.managed : {};
+  const oldHashes = hashesOf(doc);
 
   // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every
   // carrier but `CLAUDE.md`, so Bob's `AGENTS.md` does not resolve to one; for a `CLAUDE.md`
@@ -412,12 +426,12 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     out,
     footprint: args.footprint, nativeCatalog: hostCatalogsNatively(host),
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
-    hookOpts,
+    hookOpts, oldHashes,
   });
   const { owned, stats, memStatus, nbStatus, managed } = rendered;
 
   phaseLog('PRUNE');
-  pruneOwned(cfgDir, oldOwned, owned);
+  pruneOwned(cfgDir, oldOwned, owned, oldHashes);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {

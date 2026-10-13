@@ -33,7 +33,7 @@ import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { aliasesOf } from '../build/source.mjs';
-import { claimLeaf } from './owned.mjs';
+import { claimLeaf, ownedState } from './owned.mjs';
 
 /** What a folder skill writes where it needs its own directory — see `writeNativeLayer`. */
 const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
@@ -478,14 +478,24 @@ function warnClaudeIgnored(overrides) {
  * `dest` on disk, and a caller with no `cfg` (`null` or `undefined` — they behave alike
  * throughout this closure) has no root to contain against at all. See `js/hosts/owned.mjs`.
  */
-export function claimer(oldOwned, cfg, manifestExisted = true) {
+export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
   const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
   let headerPrinted = false;
   return (dest) => {
     if (cfg != null && !claimLeaf(cfg, dest, relPosix(cfg, dest))) return false;
     if (oldSet === null || cfg == null || !existsSync(dest)) return true;
     const rel = relPosix(cfg, dest);
-    if (oldSet.has(rel)) return true;
+    if (oldSet.has(rel)) {
+      // `'unknown'` (no hash recorded — a pre-Task-3 manifest, or a rel `ownedHashes` never
+      // hashed) and `'unmodified'` both fall through to the ordinary overwrite below: the
+      // constraint that a manifest without `hashes` keeps today's behaviour exactly is this
+      // branch doing nothing extra, not a special case.
+      if (ownedState(cfg, rel, oldHashes) === 'modified') {
+        warn(`[geneseed] kept your edited ${rel} — delete it to get Geneseed's copy back`);
+        return false;
+      }
+      return true;
+    }
     if (!manifestExisted && !headerPrinted) {
       warn('[geneseed] first emit over a pre-manifest install — existing files '
         + 'are treated as yours');
@@ -531,7 +541,8 @@ export function claimer(oldOwned, cfg, manifestExisted = true) {
  */
 export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, {
   host = 'opencode', oldOwned = null, cfg = null, manifestExisted = true,
-  theme = null, src = undefined, skillDirOf = null, claim = claimer(oldOwned, cfg, manifestExisted),
+  theme = null, src = undefined, skillDirOf = null, oldHashes = {},
+  claim = claimer(oldOwned, cfg, manifestExisted, oldHashes),
   // Bob (host-compat R1): its skills page documents only `name`/`description` — no
   // `disable-model-invocation` — and giving it the Claude-dialect alias SKILL.md (the
   // `host === 'claude'` branch below) would be an unverified key PLUS a visible duplicate
