@@ -50,6 +50,7 @@ import {
   GLOBAL_MANIFEST, HOSTS, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
+import { ownedWithin } from '../hosts/owned.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
@@ -185,11 +186,18 @@ function writeManifestAtomic(file, data) {
  * Runs AFTER the whole current set is on disk, so a live file is never momentarily absent
  * part-way through an emit. A pre-existing file that was never in the manifest is the
  * user's and is not reachable from here at all.
+ *
+ * `ownedWithin` filters the stale rels before this ever joins one with `oc` — F3
+ * (`docs/specs/2026-10-13-borrowed-hardening.md`): this loop used to `path.join` a manifest
+ * rel straight in, with no containment check, so a crafted per-repo manifest entry of
+ * `../victim.txt` deleted a file outside the install the moment a re-emit called it stale.
+ * `uninstall.mjs`'s owned-file walk already drew this boundary; the prune now goes through it.
  */
 function pruneOwned(oc, oldOwned, owned) {
   const now = new Set(owned);
+  const stale = [...new Set(oldOwned)].filter((r) => !now.has(r)).sort();
   const failed = [];
-  for (const rel of [...new Set(oldOwned)].filter((r) => !now.has(r)).sort()) {
+  for (const rel of ownedWithin(oc, stale)) {
     const victim = path.join(oc, rel);
     try {
       if (isFile(victim)) {

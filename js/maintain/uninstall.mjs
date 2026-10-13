@@ -59,6 +59,7 @@ import {
   resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
+import { ownedWithin } from '../hosts/owned.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
@@ -67,7 +68,7 @@ import {
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
-import { comparePaths, isAbsolutePath, within } from '../lib/paths.mjs';
+import { comparePaths, isAbsolutePath } from '../lib/paths.mjs';
 
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
 
@@ -179,23 +180,6 @@ function unlinkOwned(base, owned, label = '') {
     }
   }
   return [removed, failed];
-}
-
-/**
- * The manifest rels that resolve INSIDE `base` — the one security boundary every walk over
- * `owned` goes through (uninstall, both deactivates).
- *
- * `path.resolve(rroot, r)` and NOT `path.join`, which is the one line here that is a security
- * boundary rather than a translation. The Python is `(rroot / r).resolve()`, and pathlib's
- * `/` REPLACES the base when the right operand is absolute — so a manifest entry naming
- * `C:/evil.md` resolves outside the root and `_within` rejects it. `path.join` would have
- * concatenated it into `<root>/C:/evil.md`, which passes containment and would then be acted
- * on. `path.resolve` has pathlib's semantics for exactly this case, and collapses `..`
- * besides, which is why the guard runs on the resolved path rather than the lexical one.
- */
-function ownedWithin(base, rels) {
-  const rroot = resolvePath(base);
-  return rels.filter((r) => r && within(resolvePath(path.resolve(rroot, r)), rroot));
 }
 
 /** The two WARNs every reversal prints when an owned file survives. Identical in all three. */
