@@ -73,6 +73,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `hooks-context.mjs` | The `context` verb — SessionStart: session files plus the repo's context docs |
 | `hooks-learn.mjs` | The `learn` verb — Stop/SubagentStop/PreCompact distiller; the hook path's ONE spawn (`$GENESEED_LLM`) |
 | `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`) |
+| `usage.mjs` | The usage counter `tool-gate` runs: one `{day, kind, name}` line per Skill or subagent call into `notebook/usage.jsonl`. Hook path: builtins only, silent, never throws |
 | `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate. No spawn: the CLI and web console import it |
 | `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `currentBranch`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate and `js/loop/cli.mjs`'s commit-message writer |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json` (one `loadJsonObject` reader for all of them) and the managed blocks |
@@ -213,6 +214,7 @@ the deployed harness as JSON.
 | `catalog.mjs` | The Library read model: inventory, constitution tiers, memory/notebook/wiki/config items, `apiCatalog`/`apiItem`, `NotFound` |
 | `api.mjs` | The dashboard and settings reads: overview, recent, themes, setup, doctor, diff, installs, excludes, loops |
 | `update-check.mjs` | Is a newer release on npm? Answers from memory, refreshes in the background (a day when it got an answer, an hour when it did not), `null` on any failure, never asked under `node --test` |
+| `usage-api.mjs` | `GET /api/usage`: the 30-day skill and agent call counts across every installed harness, the never-fired list, and the 90-day prune of each `notebook/usage.jsonl` |
 | `user-files.mjs` | The fingerprint-guarded editors for `user-rules.md` (incl. memory promotion) and `PROFILE.md`, read and write |
 | `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv |
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |

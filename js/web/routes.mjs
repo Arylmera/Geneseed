@@ -25,6 +25,7 @@ import {
   apiRecent, apiSetup, apiThemes, apiUpdate,
 } from './api.mjs';
 import { NotFound, apiCatalog, apiItem } from './catalog.mjs';
+import { apiUsage } from './usage-api.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote } from './user-files.mjs';
 
 /**
@@ -148,6 +149,7 @@ export const STATE_ROUTES = {
   '/api/installs': apiInstalls,
   '/api/fleet': apiFleet,
   '/api/update': apiUpdate,
+  '/api/usage': apiUsage,
   '/api/excludes': apiExcludes,
   '/api/profile': apiProfile,
   '/api/diff': apiDiff,

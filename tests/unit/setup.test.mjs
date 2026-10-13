@@ -375,6 +375,8 @@ const p = (...s) => path.join('<H>', ...s);
 // source, Claude verdict I4 — PreToolUse ×2, Stop, SubagentStop, PreCompact), three for Bob,
 // whose contract has no SubagentStop/PreCompact and takes one PreToolUse group for both gates
 // (`claudeHookGroups`).
+// Claude-family hosts wire 7 hook groups since the usage counter's Skill|Agent|Task matcher
+// joined PreToolUse; Bob keeps 3 (its matcher-less tool-gate already counts).
 test('the end-of-setup summary tells the truth for every host', () => {
   const cases = {
     'opencode-global': [
@@ -391,14 +393,14 @@ test('the end-of-setup summary tells the truth for every host', () => {
     ],
     'claude-global': [
       ['ok', `CLAUDE.md written to ${p('.claude', 'CLAUDE.md')}`],
-      ['ok', `6 hook groups wired in ${p('.claude', 'settings.json')}`],
+      ['ok', `7 hook groups wired in ${p('.claude', 'settings.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
     ],
     claude: [
       ['ok', `CLAUDE.md written to ${p('proj', 'CLAUDE.md')}`],
-      ['ok', `6 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
+      ['ok', `7 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
@@ -412,7 +414,7 @@ test('the end-of-setup summary tells the truth for every host', () => {
     ],
     'openclaude-global': [
       ['ok', `CLAUDE.md written to ${p('.openclaude', 'CLAUDE.md')}`],
-      ['ok', `6 hook groups wired in ${p('.openclaude', 'settings.json')}`],
+      ['ok', `7 hook groups wired in ${p('.openclaude', 'settings.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW OpenClaude session to load it"],
       ['info', NEXT],

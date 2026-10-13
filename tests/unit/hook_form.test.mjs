@@ -654,6 +654,9 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
       PreToolUse: [
         { matcher: 'Bash|PowerShell', ...hGate(`& ${run} git-gate --root "${cfg}"`) },
         { matcher: 'Write|Edit|NotebookEdit', ...hGate(`& ${run} rule-gate --root "${cfg}"`) },
+        // The usage counter (js/hosts/usage.mjs) rides tool-gate WITHOUT onFailure: a counter
+        // that cannot start must never block a skill, so it is a plain handler like context's.
+        { matcher: 'Skill|Agent|Task', ...h(`& ${run} tool-gate --root "${cfg}"`) },
       ],
       SessionStart: [h(context)],
       Stop: [h(learn)],
@@ -695,12 +698,13 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
     for (const [shell, want] of [['powershell', 'powershell'], ['bash', undefined]]) {
       claims = emit(shell, claims);
       const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
-      for (const [event, n] of [['PreToolUse', 2], ['SessionStart', 1], ['Stop', 1],
+      for (const [event, n] of [['PreToolUse', 3], ['SessionStart', 1], ['Stop', 1],
         ['SubagentStop', 1], ['PreCompact', 1]]) {
         assert.equal(hooks[event].length, n, `${shell}: ${event} ${JSON.stringify(hooks[event])}`);
         for (const g of hooks[event]) assert.equal(g.hooks[0].shell, want, `${shell}: ${event}`);
       }
-      assert.equal(claims.length, 6, `${shell}: the claim set is not the six current groups`);
+      // Seven since the usage counter's Skill|Agent|Task group joined PreToolUse (three groups there).
+      assert.equal(claims.length, 7, `${shell}: the claim set is not the seven current groups`);
     }
   });
 });
@@ -728,11 +732,12 @@ test('an install emitted before onFailure existed upgrades to it on re-emit', ()
     writeFileSync(settings, JSON.stringify({ hooks: old }));
     const [, claims] = mergeClaudeSettings(settings, priorClaims, opts, null, [], 'claude', cfg);
     const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
-    assert.equal(hooks.PreToolUse.length, 2, JSON.stringify(hooks.PreToolUse));
+    assert.equal(hooks.PreToolUse.length, 3, JSON.stringify(hooks.PreToolUse));
+    // The two GATES upgrade to onFailure: block; the usage counter's group never carries it.
     for (const g of hooks.PreToolUse) {
-      assert.equal(g.hooks[0].onFailure, 'block', JSON.stringify(g));
+      assert.equal(g.hooks[0].onFailure, g.matcher === 'Skill|Agent|Task' ? undefined : 'block', JSON.stringify(g));
     }
-    assert.equal(claims.length, 6, 'the claim set is not the six current (upgraded) groups');
+    assert.equal(claims.length, 7, 'the claim set is not the seven current (upgraded) groups');
   });
 });
 
