@@ -10,7 +10,7 @@ import path from 'node:path';
 import {
   ALIASES_RE, PLUGIN_SRC, RETIRED_SKILL_IDS, ROOT, SRC, THEMES, WORKFLOW_SRC, aliasesOf, knownSkillIds,
 } from '../build/source.mjs';
-import { CLAUDE_STYLE, liveRecordedHooks } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, HOSTS, liveRecordedHooks } from '../hosts/hosts.mjs';
 import { claudeCfg, installTargets } from '../hosts/installs.mjs';
 import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
 import { COMMAND_SET } from '../hosts/opencode.mjs';
@@ -502,6 +502,81 @@ export function moduleMapProblems() {
     if (!onDisk.has(mod)) {
       problems.push(`[authoring] js/README.md has a row for js/${mod}, which does not exist — the map `
         + 'sends a reader to a file that is not there');
+    }
+  }
+  return problems;
+}
+
+/**
+ * Each host's label as the two hand-written tables below spell it, keyed by `HOSTS`' `host` id.
+ *
+ * Local to this arm rather than a column on `HOSTS` (`js/hosts/hosts.mjs`): `HOSTS` is the
+ * machine-facing table (config dirs, project markers, catalog flags), and a doc-table LABEL is
+ * a fact about two Markdown files, not about an install.
+ */
+const HOST_LABELS = { opencode: 'OpenCode', claude: 'Claude Code', bob: 'Bob', openclaude: 'OpenClaude' };
+
+/**
+ * The two hand-written, one-column-per-host tables, and the non-host columns each one carries
+ * (a header cell that is neither a `HOST_LABELS` value nor one of these is an unknown label
+ * that LOOKS like it was meant to be a host column).
+ */
+const HOST_MATRIX_FILES = [
+  { rel: 'docs/concepts/host-matrix.md', otherCols: new Set(['Capability']) },
+  { rel: 'docs/concepts/enforcement-table.md', otherCols: new Set(['id', 'Pack']) },
+];
+
+/** The first `| … |` table row of `text`, as trimmed, non-empty cells — its header. */
+function firstTableHeader(text) {
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (t.startsWith('|')) return t.split('|').map((c) => c.trim()).filter((c) => c.length > 0);
+  }
+  return null;
+}
+
+/**
+ * `js/README.md`'s sibling gate for the two hand-written host tables: each one's header row
+ * must name exactly the hosts `HOSTS` lists, by their `HOST_LABELS` spelling — no fewer (a new
+ * host shipped with no column) and no stray cell that merely LOOKS like a host label (a typo,
+ * or a host renamed in `HOST_LABELS` but not in the doc).
+ *
+ * A host with no `HOST_LABELS` entry is its own problem, independent of either file: nothing
+ * in a table header can be compared against a label that does not exist.
+ *
+ * `root` is a parameter (default: `ROOT`) so a test can point this at a temp copy with one
+ * column removed, rather than mutating the real docs tree.
+ */
+export function hostMatrixProblems(root = ROOT) {
+  const problems = [];
+  const expected = new Set();
+  for (const h of HOSTS) {
+    const label = HOST_LABELS[h.host];
+    if (!label) { problems.push(`[authoring] host ${h.host} has no HOST_LABELS entry`); continue; }
+    expected.add(label);
+  }
+  for (const { rel, otherCols } of HOST_MATRIX_FILES) {
+    let text;
+    try {
+      text = readText(path.join(root, ...rel.split('/')));
+    } catch (e) {
+      problems.push(`[authoring] ${rel} is unreadable: ${e.message}`);
+      continue;
+    }
+    const header = firstTableHeader(text);
+    if (!header) {
+      problems.push(`[authoring] ${rel} has no table header row`);
+      continue;
+    }
+    const present = new Set(header);
+    for (const label of [...expected].sort()) {
+      if (!present.has(label)) problems.push(`[authoring] ${rel} has no column for ${label}`);
+    }
+    for (const cell of header) {
+      if (!expected.has(cell) && !otherCols.has(cell)) {
+        problems.push(`[authoring] ${rel} column '${cell}' is not a host HOST_LABELS names or `
+          + 'a known non-host column — a stale or misspelled label');
+      }
     }
   }
   return problems;
