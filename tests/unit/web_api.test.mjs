@@ -1513,6 +1513,7 @@ const withGlobalInstalls = (hosts, fn) =>
 // claude is not seeded, and a host with nothing installed is not listed at all: installing is
 // the Installs page's job, not the Overview's. A global install is drift-checkable, so its row
 // carries a figure; the marker's mtime is the build time, and no marker means no build time.
+// No host here has a root file, so every cost is null (cost.test.mjs covers the arithmetic).
 test('the fleet lists only installed harnesses, each with its own sync verdict', () => {
   withGlobalInstallsFixture(['bob', 'opencode', 'openclaude'], ({ cfgs }) => {
     const st = neutral();
@@ -1537,6 +1538,8 @@ test('the fleet lists only installed harnesses, each with its own sync verdict',
       assert.equal(r.state, 'active');
       assert.equal(r.diffable, true, `${r.host}: a global install is drift-checkable`);
       for (const k of ['edited', 'added', 'missing']) assert.equal(typeof r.drift[k], 'number');
+      // The fixture seeds a manifest and no root file, so there is nothing to measure.
+      assert.equal(r.cost, null, `${r.host}: no carrier on disk, so no cost figure`);
     }
   });
 });

@@ -106,6 +106,7 @@ Everything that inspects an already-built or already-deployed harness and report
 | `validate.mjs` | The `--validate-only` verb: renders a sandbox, scans it for tokens and dead links, own exit contract |
 | `inventory.mjs` | The one catalog walk and its taxonomy tables, read by status, the TUI and the web console |
 | `status.mjs` | `geneseed status` and `version` — the panel data, counts, accent colour, version verdict |
+| `cost.mjs` | What one install injects every session, by part (root file, skill and agent lists, session files), in characters; owns `CARRIER_CEILING`, which the smoke test gates and the console draws |
 | `diff.mjs` | `geneseed diff` — what a deployed install has that a fresh render of `src/` does not |
 | `excludes.mjs` | `geneseed exclude add|remove|list` — the WRITER for `excludes.json`; `hooks.mjs` only reads it |
 | `registry.mjs` | `installs.json` under XDG — the persistent deploy-root list `rebuild-all` re-emits into |
