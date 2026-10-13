@@ -14,7 +14,8 @@ request or merge the branch.
 2. Review the change before anyone else sees it: run the
    [geneseed-code-review {{SKILL}}](geneseed-code-review.md) on the branch diff (dispatch the
    [reviewer {{AGENT}}](../{{DIR_AGENTS}}/reviewer.md) for a large one). Any `blocking`
-   finding stops the ship until it is fixed.
+   finding stops the ship until it is fixed, and every **Set aside:** line is ruled on
+   before pushing.
 3. Confirm the branch carries only this change's commits and is rebased/updated on
    the base branch; resolve any divergence before opening.
 4. Push the branch only with the user's explicit, per-push acceptance — on every
