@@ -38,15 +38,17 @@ case where the seam is only known once the change is made.
 6. With the slice green, tidy through the [refactor {{SKILL}}](refactor.md) — the tests
    are the safety net — then commit the slice through the [commit {{SKILL}}](commit.md)
    ({{DOCTRINE:consent-before-push}}). Loop from step 3, one slice at a time.
-7. **Exit.** When the last slice is in: run the whole affected suite once more, state
-   what was run and its result, and hand over — to the [ship {{SKILL}}](ship.md) when
+7. **Exit.** When the last slice is in: run the whole suite once, state what was run and
+   its result, and name every failure in it — including one this change did not cause
+   ({{DOCTRINE:cover-and-verify}}) — then hand over to the [ship {{SKILL}}](ship.md) when
    the change is ready for a PR, or to the [handoff {{SKILL}}](handoff.md) if the
    session ends mid-task. Leave no slice uncommitted and no test you could not make
    fail.
 
 ## Done when
 - Every behaviour changed is covered by a test written this session that was seen
-  to fail before it passed, the affected suite is green with its output shown, each
-  slice was committed on its own, and the work has been handed to ship or handoff.
+  to fail before it passed, the whole suite ran at exit with its output shown and every
+  failure named, each slice was committed on its own, and the work has been handed to
+  ship or handoff.
 
 <!-- INCLUDE: skills/_self-improvement.md -->
