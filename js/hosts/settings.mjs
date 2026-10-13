@@ -802,6 +802,10 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
         matcher: 'Write|Edit|NotebookEdit',
         hooks: [{ type: 'command', command: ruleGate, ...onFailureBlock }],
       },
+      // Usage counting (js/hosts/usage.mjs): `tool-gate` records a Skill or subagent call and
+      // judges nothing else about it. `Task` is the subagent tool's older name. No
+      // `onFailure: 'block'`: a counter that cannot start must never stop a skill.
+      { matcher: 'Skill|Agent|Task', hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"` }] },
     ],
     // One matcher-less group, not a `startup|clear` / `resume|compact` split (Claude verdict
     // I4): every SessionStart source — `startup`, `resume`, `clear`, `compact` and `fork` —

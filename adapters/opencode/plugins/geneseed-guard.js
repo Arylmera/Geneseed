@@ -546,11 +546,42 @@ function protectedCheck(p) {
 // substring stance: over-matching the class is harmless (see WRITE_TOOLS note).
 const WIKI_MUTATE_TOOLS = [...WRITE_TOOLS, "delete", "remove", "rename", "move", "trash"]
 
+// Usage counting: the same rules as js/hosts/usage.mjs, inline because a plugin cannot import
+// from the repo (V2 loads every .js in plugins/ as a plugin). One line per skill or subagent
+// call, the day and the name only, under <cfg>/notebook/usage.jsonl. Silent and never throws:
+// a counter must not change, slow or fail a tool call. tests/unit/usage.test.mjs holds this
+// copy and the hook's to one table.
+const USAGE_NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/
+function usageOf(tool, args) {
+  const t = String(tool || "").toLowerCase()
+  const a = args || {}
+  let kind = null
+  let name = null
+  if (!t.startsWith("mcp") && t.includes("skill")) { kind = "skill"; name = a.skill ?? a.name ?? a.skill_name }
+  else if (t === "agent" || t === "task") { kind = "agent"; name = a.subagent_type ?? a.agent }
+  if (!kind || typeof name !== "string") return null
+  name = name.trim().replace(/^\/+/, "")
+  return USAGE_NAME_RE.test(name) ? { kind, name } : null
+}
+async function recordUse(tool, args) {
+  try {
+    if (process.env.GENESEED_NO_USAGE) return
+    const use = usageOf(tool, args)
+    if (!use) return
+    const cfg = path.dirname(PLUGIN_DIR)
+    if (existsSync(path.join(cfg, ".usage-off"))) return
+    if (!(await isDir(path.join(cfg, "notebook")))) return
+    await fs.appendFile(path.join(cfg, "notebook", "usage.jsonl"),
+      `${JSON.stringify({ ts: new Date().toISOString().slice(0, 10), ...use })}\n`)
+  } catch { /* a counter never fails a tool call */ }
+}
+
 export const GeneseedGuard = async (ctx) => {
   // The session's working directory, the same resolution the context plugin uses.
   const root = () => ctx?.worktree || ctx?.directory || process.cwd()
   return {
     "tool.execute.before": async (input, output) => {
+      await recordUse(input?.tool || input?.name, output?.args || input?.args)
       if (OFF) return
       if (await sovereignBypass(root())) return
       const tool = (input?.tool || input?.name || "").toLowerCase()

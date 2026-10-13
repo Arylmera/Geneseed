@@ -59,6 +59,7 @@ import {
 } from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { selfAndParents, readStdin } from './hooks-prims.mjs';
+import { recordUse } from './usage.mjs';
 
 // ======================================================================================
 // git-gate — Doctrine process 5's tool-boundary backstop
@@ -627,6 +628,9 @@ function normaliseBobPayload(payload) {
 function toolGate(args) {
   if (sovereignBypass(args.root)) return 0;
   const payload = normaliseBobPayload(readPayload());
+  // Count a skill or subagent call before judging it: Bob runs this verb on every tool and
+  // Claude/OpenClaude route their `Skill|Agent|Task` matcher here (js/hosts/usage.mjs).
+  recordUse(args.root, payload);
   const ti = (payload && payload.tool_input) || {};
   return typeof ti.command === 'string' ? gitDecide(args, payload) : ruleDecide(args, payload);
 }
