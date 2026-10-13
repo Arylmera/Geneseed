@@ -30,6 +30,7 @@ import { makeCfg, PACK_ORDER } from '../../js/build/source.mjs';
 import { trustOfDir } from '../../js/hosts/installs.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { GLOBAL_MANIFEST, HOSTS } from '../../js/hosts/hosts.mjs';
+import { fileHash } from '../../js/hosts/owned.mjs';
 import { colorThemeFiles } from '../../js/hosts/opencode.mjs';
 import { installUninstall } from '../../js/maintain/uninstall.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -590,6 +591,31 @@ test('trustOfDir(d, host) reads only that host\'s project dir', () => {
     assert.equal(trustOfDir(d, 'opencode'), 'prudent');
     assert.equal(trustOfDir(d, 'bob'), null, 'bob has no loop skill here');
     assert.equal(trustOfDir(d), 'prudent', 'no host: HOSTS order, as every old caller had');
+  });
+});
+
+test('a Claude project manifest records a hash for every owned file, and only files', () => {
+  // `hashed from disk, so CRLF on Windows is inside the hash` — this reads the bytes `fileHash`
+  // itself read, through the SAME `.claude/<rel>` path a real install resolves to, rather than
+  // assuming a platform-independent digest. A CRLF-translated carrier on Windows and an
+  // untranslated one on POSIX would therefore each compare against their own platform's hash,
+  // which is the only comparison that could ever be stable.
+  withDir((d) => {
+    quiet(() => emitProjectInto('claude', {
+      theme: 'neutral', out: path.join(d, 'bundle'), root: d, footprint: 'full',
+    }));
+    const cfgDir = path.join(d, '.claude');
+    const doc = readJson(cfgDir, GLOBAL_MANIFEST);
+    assert.ok(Array.isArray(doc.owned) && doc.owned.length > 5,
+      'this emit should own more than a handful of files, or this comparison is thin');
+    const ownedFiles = doc.owned.filter((rel) => statSync(path.join(cfgDir, rel)).isFile());
+    assert.ok(ownedFiles.length > 0);
+    assert.deepEqual(Object.keys(doc.hashes).sort(), [...ownedFiles].sort(),
+      'the manifest must carry a hash for exactly the owned rels that are files');
+    for (const rel of ownedFiles) {
+      assert.equal(doc.hashes[rel], fileHash(path.join(cfgDir, rel)),
+        `hashes[${rel}] must equal fileHash of the file actually on disk`);
+    }
   });
 });
 

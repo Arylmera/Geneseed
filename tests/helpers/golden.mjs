@@ -19,6 +19,7 @@
 // stopped looking. `destamp` therefore ASSERTS before passing anything through, and the
 // corpus stamps are anchored on the MESSAGE that emits each value rather than on the shape of
 // the value alone. `tests/unit/destamp.test.mjs` is the gate on that.
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -26,6 +27,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { cellEnv, makeSandbox } from './sandbox.mjs';
+import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -259,6 +261,60 @@ export function filesIn(sandbox) {
     .map((p) => path.relative(sandbox, p).split(path.sep).join('/')));
 }
 
+/** `fileHash` (`js/hosts/owned.mjs`), independently, so a drift in the product's own sha256
+ * computation cannot silently excuse itself here. */
+function sha256Of(p) {
+  return createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+}
+
+const HASH_PLACEHOLDER = '<VERIFIED-HASH>';
+
+/**
+ * Task 3's own instance of the `UNCOMPARED`/`agent-overrides.json` problem above: `--idempotent`
+ * and `--deletion` compare TWO DIFFERENT sandboxes (`runCell` makes a fresh `makeSandbox()` per
+ * call), and `normalise()` exists to blank each sandbox's own absolute root path out of the
+ * TEXT it produced — a handful of owned files (command bricks, Bob's skill files) legitimately
+ * embed their own config dir's absolute path, so their raw bytes differ by sandbox location
+ * alone. A manifest's `hashes` entry for one of those files is a sha256 HEX DIGEST, and a hex
+ * digest is OPAQUE to a text substitution: `normalise()` can rewrite the path inside
+ * `command/ci-fix.md` itself, but it cannot reach inside an already-computed hash of that path
+ * to make two different-but-equally-correct digests compare equal. Left unhandled, every emit
+ * target with a self-referencing path (two of eight in this matrix) would fail both
+ * self-comparison gates on every run, forever, for a difference that is not a regression.
+ *
+ * THE FIX IS VERIFY-THEN-BLANK, never blank-outright, because the thing being neutralised must
+ * still be checked for correctness before it is excused: for every `hashes[rel]`, this recomputes
+ * `sha256` of the OWN sandbox's file at that rel (independently of `fileHash`, see `sha256Of`
+ * above) and ONLY replaces the value with a fixed placeholder when it matches. A hash that is
+ * wrong for its own sandbox's file — corrupted, stale, or naming a file that is now missing —
+ * is left exactly as recorded, so it can never coincidentally equal the placeholder OR another
+ * sandbox's correct value, and the whole-file comparison in `diffMaps` still reports the
+ * manifest as CHANGED. `tests/unit/golden_hash_normaliser.test.mjs` is the gate proving this:
+ * a corrupted hash must still surface as a difference, not be swallowed by this normaliser.
+ */
+function blankVerifiedManifestHashes(manifestPath, body) {
+  let text;
+  try {
+    text = body.toString('utf8');
+  } catch { return body; }
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch { return body; }
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)
+    || !doc.hashes || typeof doc.hashes !== 'object' || Array.isArray(doc.hashes)) {
+    return body;
+  }
+  const dir = path.dirname(manifestPath);
+  for (const [rel, hash] of Object.entries(doc.hashes)) {
+    if (typeof hash !== 'string') continue;
+    let actual = null;
+    try { actual = sha256Of(path.join(dir, rel)); } catch { actual = null; }
+    if (actual === hash) text = text.split(`"${hash}"`).join(`"${HASH_PLACEHOLDER}"`);
+  }
+  return Buffer.from(text, 'utf8');
+}
+
 /**
  * Every file produced by one cell, normalised, keyed by POSIX-relative path.
  *
@@ -270,7 +326,10 @@ export function snapshot(sandbox, roots) {
   const snap = new Map();
   for (const rel of [...filesIn(sandbox)].sort()) {
     try {
-      snap.set(rel, normalise(fs.readFileSync(path.join(sandbox, rel)), roots));
+      const abs = path.join(sandbox, rel);
+      let body = fs.readFileSync(abs);
+      if (path.basename(rel) === GLOBAL_MANIFEST) body = blankVerifiedManifestHashes(abs, body);
+      snap.set(rel, normalise(body, roots));
     } catch { /* vanished mid-walk: not a finding */ }
   }
   return snap;

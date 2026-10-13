@@ -50,7 +50,7 @@ import {
   GLOBAL_MANIFEST, HOSTS, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
-import { ownedWithin } from '../hosts/owned.mjs';
+import { ownedHashes, ownedWithin } from '../hosts/owned.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
@@ -314,6 +314,7 @@ function emitOpencode(cfg, args, out) {
       + 'Do not edit; removed on re-emit. A pre-existing file not in this '
       + 'list is yours and is never touched.',
     owned: [...owned].sort(),
+    hashes: ownedHashes(oc, owned),
     scope: 'project',
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
   });
@@ -370,6 +371,7 @@ function emitOpencodeGlobal(cfg, args, out) {
       + 'Do not edit; removed on re-emit. The memory and notebook '
       + 'stores are NOT listed — they are never deleted.',
     owned: [...owned].sort(),
+    hashes: ownedHashes(cfgDir, owned),
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
   });
 
@@ -425,6 +427,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
       + '(settings.json, or settings.local.json at PROJECT scope on Claude/OpenClaude) '
       + 'hooks so uninstall removes exactly those.',
     owned: [...owned].sort(),
+    hashes: ownedHashes(cfgDir, owned),
     managed,
     scope,
   });

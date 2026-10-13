@@ -7,14 +7,16 @@
 // (`unlinkOwned` -> `ownedWithin`); this is the same gate on the OTHER manifest-reading walk.
 import assert from 'node:assert/strict';
 import {
-  existsSync, linkSync, mkdirSync, readFileSync, symlinkSync, writeFileSync,
+  existsSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER } from '../../js/hosts/hosts.mjs';
-import { ownedWithin, safeLeaf } from '../../js/hosts/owned.mjs';
+import {
+  fileHash, hashesOf, ownedHashes, ownedState, ownedWithin, safeLeaf,
+} from '../../js/hosts/owned.mjs';
 import { claimer, writeNativeLayer } from '../../js/hosts/native.mjs';
 import { shipLeanLaws } from '../../js/build/emit-common.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -547,4 +549,74 @@ test('a full Claude project emit never writes VERSION_MARKER through a symlinked
     assert.ok(!readManifestOwned(cfgDir).includes(VERSION_MARKER),
       'the manifest must list only files Geneseed actually wrote');
   } finally { sb.cleanup(); }
+});
+
+// -----------------------------------------------------------------------------------------
+// `fileHash` / `ownedHashes` / `hashesOf` / `ownedState` — Task 3's four new helpers. No
+// behaviour change yet: nothing reads `ownedState` to change what a rebuild/prune/uninstall
+// does. This is only the plumbing a later task consumes.
+// -----------------------------------------------------------------------------------------
+
+test('fileHash is the sha256 hex of the bytes on disk', () => {
+  withDir((dir) => {
+    const p = path.join(dir, 'x.txt');
+    writeFileSync(p, 'hello\n');
+    // Measured against Node's own `crypto.createHash('sha256')` output for these exact bytes,
+    // not transcribed from memory — `printf 'hello\n' | sha256sum` agrees.
+    assert.equal(fileHash(p),
+      '5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03',
+    );
+  });
+});
+
+test('ownedHashes hashes only the owned rels that are files, inside root, sorted', () => {
+  withDir((dir) => {
+    mkdirSync(path.join(dir, 'a'), { recursive: true });
+    writeFileSync(path.join(dir, 'a', 'b.md'), 'B\n');
+    writeFileSync(path.join(dir, 'z.md'), 'Z\n');
+    // 'missing.md' is listed as owned but is not on disk (a prune's-eye view of a file that
+    // was deleted out from under the manifest); '../outside.md' resolves outside root and must
+    // never be hashed, exactly as `ownedWithin` already refuses to delete it.
+    const hashes = ownedHashes(dir, ['z.md', 'a/b.md', 'missing.md', '../outside.md']);
+    assert.deepEqual(Object.keys(hashes), ['a/b.md', 'z.md'],
+      'keys must be the sorted order ownedWithin+owned would produce, not the input order');
+    assert.equal(hashes['a/b.md'], fileHash(path.join(dir, 'a', 'b.md')));
+    assert.equal(hashes['z.md'], fileHash(path.join(dir, 'z.md')));
+  });
+});
+
+test('hashesOf table: only a well-shaped map of 64-lowercase-hex values round-trips', () => {
+  const valid = { a: 'a'.repeat(64) };
+  const table = [
+    [null, {}],
+    [[], {}],
+    [{ hashes: 3 }, {}],
+    [{ hashes: { a: 'zz' } }, {}],
+    [{ hashes: valid }, valid],
+  ];
+  for (const [doc, expected] of table) {
+    assert.deepEqual(hashesOf(doc), expected, `hashesOf(${JSON.stringify(doc)})`);
+  }
+});
+
+test('ownedState table: unknown, missing, unmodified, modified', () => {
+  withDir((dir) => {
+    const rel = 'a.md';
+    const p = path.join(dir, rel);
+    writeFileSync(p, 'original\n');
+    const hashes = { [rel]: fileHash(p) };
+
+    assert.equal(ownedState(dir, 'nowhere.md', hashes), 'unknown',
+      'no entry in the hash map at all — nothing recorded to compare against');
+    assert.equal(ownedState(dir, rel, hashes), 'unmodified',
+      'the bytes on disk still match the recorded hash');
+
+    writeFileSync(p, 'original\nx', { flag: 'a' }); // append one byte
+    assert.equal(ownedState(dir, rel, hashes), 'modified',
+      'one appended byte must flip this away from unmodified');
+
+    rmSync(p);
+    assert.equal(ownedState(dir, rel, hashes), 'missing',
+      'the file named in the manifest is gone from disk');
+  });
 });
