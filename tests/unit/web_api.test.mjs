@@ -22,7 +22,7 @@ import http from 'node:http';
 import { localHost, makeHandler } from '../../js/web/handler.mjs';
 import { buildPlan } from '../../js/web/server.mjs';
 import {
-  apiOverview, apiDiff, apiThemes, apiDoctor, apiInstalls, apiExcludes, apiRecent, apiSetup,
+  apiOverview, apiDiff, apiThemes, apiDoctor, apiFleet, apiInstalls, apiExcludes, apiRecent, apiSetup,
   viewCfg, apiLoops, apiLoopsActive,
 } from '../../js/web/api.mjs';
 import { NotFound, apiCatalog, apiItem, specDesc, wikiItems } from '../../js/web/catalog.mjs';
@@ -55,7 +55,8 @@ import {
   GLOBAL_MANIFEST, VERSION_MARKER, resolvePath, HOSTS as HOST_SPECS,
 } from '../../js/hosts/hosts.mjs';
 import { normcase } from '../../js/lib/paths.mjs';
-import { DOC_FOLDERS } from '../../js/build/source.mjs';
+import { DOC_FOLDERS, makeCfg } from '../../js/build/source.mjs';
+import { sourceFingerprint } from '../../js/build/version.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES } from '../../js/web/routes.mjs';
@@ -1505,6 +1506,40 @@ test('the install list marks exactly the current view selected', () => {
 // This wrapper only adds the `webState` the endpoints take.
 const withGlobalInstalls = (hosts, fn) =>
   withGlobalInstallsFixture(hosts, ({ tmp }) => fn({ st: neutral(), tmp }));
+
+// GET /api/fleet — every INSTALLED harness, each judged by its OWN version marker. Three seeded
+// hosts cover the three verdicts: bob's marker carries the source fingerprint (synced),
+// opencode's an older one (behind), openclaude has none (unknown — never "synced" by default).
+// claude is not seeded, and a host with nothing installed is not listed at all: installing is
+// the Installs page's job, not the Overview's. A global install is drift-checkable, so its row
+// carries a figure; the marker's mtime is the build time, and no marker means no build time.
+test('the fleet lists only installed harnesses, each with its own sync verdict', () => {
+  withGlobalInstallsFixture(['bob', 'opencode', 'openclaude'], ({ cfgs }) => {
+    const st = neutral();
+    st.stampDoctor([]);
+    const source = sourceFingerprint(makeCfg());
+    fs.writeFileSync(path.join(cfgs.bob, '.geneseed-version'), `${source} (built x)\n`);
+    fs.writeFileSync(path.join(cfgs.opencode, '.geneseed-version'), '000000000000 (built x)\n');
+
+    const fleet = apiFleet(st);
+    assert.equal(fleet.source_fp, source);
+    const by = Object.fromEntries(fleet.installs.map((r) => [r.host, r]));
+    assert.deepEqual(Object.keys(by).sort(), ['bob', 'openclaude', 'opencode'],
+      'claude has nothing installed and must not be listed');
+    assert.equal(by.bob.verdict, 'synced');
+    assert.equal(by.opencode.verdict, 'behind');
+    assert.equal(by.openclaude.verdict, 'unknown');
+    assert.equal(by.openclaude.installed_fp, null);
+    assert.equal(by.openclaude.built_epoch, null, 'no marker, no build time');
+    assert.equal(by.bob.built_epoch,
+      Math.floor(fs.statSync(path.join(cfgs.bob, '.geneseed-version')).mtimeMs / 1000));
+    for (const r of fleet.installs) {
+      assert.equal(r.state, 'active');
+      assert.equal(r.diffable, true, `${r.host}: a global install is drift-checkable`);
+      for (const k of ['edited', 'added', 'missing']) assert.equal(typeof r.drift[k], 'number');
+    }
+  });
+});
 
 test('the excludes endpoint round-trips an add and a remove', () => {
   withGlobalInstalls(['claude', 'bob'], ({ st, tmp }) => {

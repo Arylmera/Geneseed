@@ -21,7 +21,7 @@ import { percentDecode } from '../lib/text.mjs';
 import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, apiSelectView } from './actions.mjs';
 import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
 import {
-  apiDiff, apiDoctor, apiExcludes, apiInstalls, apiLoops, apiLoopsActive, apiOverview,
+  apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiLoops, apiLoopsActive, apiOverview,
   apiRecent, apiSetup, apiThemes,
 } from './api.mjs';
 import { NotFound, apiCatalog, apiItem } from './catalog.mjs';
@@ -146,6 +146,7 @@ export const STATE_ROUTES = {
   '/api/setup': apiSetup,
   '/api/doctor': apiDoctor,
   '/api/installs': apiInstalls,
+  '/api/fleet': apiFleet,
   '/api/excludes': apiExcludes,
   '/api/profile': apiProfile,
   '/api/diff': apiDiff,

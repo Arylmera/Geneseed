@@ -1,6 +1,6 @@
 /**
  * The web console's dashboard and settings reads — `overview`, `recent`, `themes`, `setup`,
- * `doctor`, `diff`, `installs`, `excludes` and the two `loops` reads.
+ * `doctor`, `diff`, `installs`, `fleet`, `excludes` and the two `loops` reads.
  *
  * WHAT IS NOT HERE, AND WHERE IT WENT: the Library read model (catalog sections, items, wiki,
  * memory, `NotFound`) is `catalog.mjs`; the `WebState` every endpoint reads from is `state.mjs`;
@@ -11,12 +11,13 @@
 import { statSync } from 'node:fs';
 import path from 'node:path';
 
-import { CONFIG, ROOT, THEMES, discoverNames } from '../build/source.mjs';
+import { CONFIG, ROOT, THEMES, discoverNames, makeCfg } from '../build/source.mjs';
+import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import { sourceReleaseVersion } from '../hosts/opencode.mjs';
 import { diffCollect } from '../inspect/diff.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
-import { CLAUDE_STYLE, HOSTS, resolvePath } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, HOSTS, VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
 import {
   footprintOfDir, installState, installTargets, modeOfDir, trustOfDir,
   postureOfDir, readJsonMaybe, themeOfDir,
@@ -140,6 +141,60 @@ export function apiInstalls(state) {
     modes: discoverNames('modes', 'direct'), trusts: Object.keys(PRESETS) };
 }
 
+
+/**
+ * EVERY INSTALLED HARNESS ON THE MACHINE, EACH JUDGED ON ITS OWN — the Overview's fleet table.
+ *
+ * Installed means `active` or `disabled`: a host with nothing installed is not listed, because
+ * installing belongs to the Installs page with its other settings (user, 2026-10-13).
+ *
+ * Its own route, not more fields on `/api/installs`: the sidebar refetches that list on every
+ * data revision, and the drift check below re-renders a whole emit per global install.
+ * ponytail: one `diffCollect` render per global install per request, fine for the handful a
+ * machine carries; cache per (root, build mtime) if a fleet ever grows past that.
+ *
+ * Each row reads ITS OWN `.geneseed-version`. `statusData().installed_fp` is the first carrier
+ * a fixed walk finds, which describes the wrong install as soon as two hosts are deployed.
+ * Every unknown stays `null` — `verdict: 'unknown'`, `drift: null` — never a reassuring zero.
+ */
+export function apiFleet(state) {
+  const sourceFp = sourceFingerprint(makeCfg());
+  const installs = [];
+  for (const [host, scope, root] of installTargets()) {
+    const st = installState(root, host, scope);
+    if (st !== 'active' && st !== 'disabled') continue;
+    const dir = viewCfg(host, scope, root);
+    const fp = readVersion(dir);
+    let drift = null;
+    if (st === 'active') {
+      try {
+        const { files } = diffCollect({ target: dir });
+        if (files !== null) {
+          drift = {
+            edited: files.filter((f) => f.status === 'edited').length,
+            added: files.filter((f) => f.status === 'added').length,
+            missing: files.filter((f) => f.status === 'missing').length,
+          };
+        }
+      } catch { /* an install that cannot be re-rendered reports no drift figure, not zero */ }
+    }
+    let built = null;
+    try { built = Math.floor(statSync(path.join(dir, VERSION_MARKER)).mtimeMs / 1000); } catch { /* never built */ }
+    installs.push({
+      id: `${host}:${scope}:${root}`, host, scope, path: root, state: st,
+      theme: themeOfDir(root, host),
+      footprint: footprintOfDir(root),
+      installed_fp: fp,
+      verdict: fp === null ? 'unknown' : fp === sourceFp ? 'synced' : 'behind',
+      // A project install has no drift check at all (`diffCollect` answers `files: null`), which
+      // the console must say as "not checkable" — so the fact travels apart from the figure.
+      diffable: drift !== null,
+      drift,
+      built_epoch: built,
+    });
+  }
+  return { installs, source_fp: sourceFp, doctor: state.doctor };
+}
 
 /** The dashboard aggregate. */
 export function apiOverview(state) {
