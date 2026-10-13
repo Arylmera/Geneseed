@@ -61,6 +61,11 @@ export function applyAccent(el, name, mode) {
     '--accent-text',
     light ? ACCENT_TEXT_LIGHT[name] || ACCENT_TEXT_LIGHT.cyan : hex,
   )
+  // A yellow accent IS the warning colour (#E8B53D on both), so under it every "needs a look"
+  // state read as decoration. The warning moves to orange for that accent alone; any other
+  // accent drops the override and the stylesheet's --warn applies again.
+  if (name === 'yellow') el.style.setProperty('--warn', light ? '#B4521C' : '#F08A4B')
+  else el.style.removeProperty('--warn')
 }
 
 // Each flavour's CURATED signature accent — used when the accent mode is 'curated'

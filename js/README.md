@@ -215,6 +215,7 @@ the deployed harness as JSON.
 | `catalog.mjs` | The Library read model: inventory, constitution tiers, memory/notebook/wiki/config items, `apiCatalog`/`apiItem`, `NotFound` |
 | `api.mjs` | The dashboard and settings reads: overview, recent, themes, setup, doctor, diff, installs, excludes, loops |
 | `update-check.mjs` | Is a newer release on npm? Answers from memory, refreshes in the background (a day when it got an answer, an hour when it did not), `null` on any failure, never asked under `node --test` |
+| `gates-api.mjs` | `GET /api/gates`: gate asks per rule per day over 30 days, read off every installed harness's `notebook/gates.jsonl` (the Overview's sparklines) |
 | `usage-api.mjs` | `GET /api/usage`: the 30-day skill and agent call counts across every installed harness, the never-fired list, and the 90-day prune of each `notebook/usage.jsonl` |
 | `user-files.mjs` | The fingerprint-guarded editors for `user-rules.md` (incl. memory promotion) and `PROFILE.md`, read and write |
 | `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv |

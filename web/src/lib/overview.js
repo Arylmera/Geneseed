@@ -2,38 +2,9 @@
 // fetched and returns plain rows for a chart or a list. Kept out of the component so a
 // table of inputs -> rows can pin them (__tests__/overview.test.js), and so the component
 // is only layout.
-import { editCount } from './format.js'
+import { editCount, relTime } from './format.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from './lawCats.js'
 import { gateAddress, parseRuleTitle } from './constitution.js'
-
-// The constitution's four tiers as one composition bar. `laws` is the catalog payload
-// (/api/catalog/laws) when it has loaded: it is the only source that says which
-// invariants are retired (only an older install still lists one — the canon removes a retired
-// rule now), so without it the invariant row carries no "retired" note rather than a guessed one. Doctrines count the rules in force, from the overview.
-export function constitutionMix(counts, laws, rulesStats) {
-  const items = laws?.items || []
-  const retired = items.filter(
-    (i) => (i.tier ?? 'invariant') === 'invariant' && parseRuleTitle(i.title).retired,
-  ).length
-  const invariants = (counts?.laws ?? 0) - retired
-  const d = counts?.doctrines || {}
-  return [
-    { key: 'ethos', label: 'Ethos', n: counts?.ontology ?? 0 },
-    {
-      key: 'invariants',
-      label: 'Invariants',
-      n: invariants,
-      note: laws && retired ? `+${retired} retired` : '',
-    },
-    {
-      key: 'doctrines',
-      label: 'Doctrines',
-      n: d.rules ?? 0,
-      note: d.total != null ? `${d.active} of ${d.total} packs` : '',
-    },
-    { key: 'yours', label: 'Your rules', n: rulesStats?.rules ?? 0 },
-  ]
-}
 
 // Skills per class, split by lifecycle stage. `experimental` is the one stage the chart
 // calls out; every other status (approved, a personal skill with none) counts as settled.
@@ -54,34 +25,6 @@ export function skillsByStage(items) {
   const experimental = rows.reduce((n, r) => n + r.exp, 0)
   const max = Math.max(1, ...rows.map((r) => r.n))
   return { rows, total, experimental, max }
-}
-
-// A run's kind, for the bar colour: `update` (git pull + rebuild), `rebuild` (build-all),
-// or `other` (install, build, deploy, doctor...). The console labels a voice build
-// `build (imperial · opencode-global)`, which is still a build.
-export function runKind(action) {
-  if (action === 'update') return 'update'
-  if (action === 'build-all') return 'rebuild'
-  return 'other'
-}
-
-// The last `n` finished runs as bars, oldest first: height is the duration relative to
-// the longest one shown (floored so a 0.1 s run is still a visible bar), `ok` whether it
-// exited cleanly. A run still going has no duration yet and is left out.
-export function runBars(runs, n = 20) {
-  const done = (runs || []).filter((r) => r.status !== 'running').slice(-n)
-  const longest = Math.max(0, ...done.map((r) => r.duration || 0))
-  return {
-    bars: done.map((r) => ({
-      id: r.id,
-      kind: runKind(r.action),
-      ok: r.status === 'done',
-      h: longest ? Math.max(0.06, (r.duration || 0) / longest) : 0.06,
-      tip: `${r.action} · ${r.status} · ${(r.duration ?? 0).toFixed(1)} s`,
-    })),
-    ok: done.filter((r) => r.status === 'done').length,
-    longest,
-  }
 }
 
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`
@@ -207,12 +150,130 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
   return out
 }
 
-// The health banner's verdict: 'bad' when the doctor failed, 'warn' when it passed but the
-// install drifted or its fingerprint no longer matches the source, else 'good'.
-export function healthTone(overview, setup) {
-  if (overview?.doctor && !overview.doctor.ok) return 'bad'
-  const diff = overview?.diff
-  const drift = diff ? editCount(diff) + (diff.missing ?? 0) : 0
-  const behind = setup && setup.installed_fp && setup.installed_fp !== setup.source_fp
-  return drift || behind ? 'warn' : 'good'
+// ---- the Ledger: every installed harness at once (/api/fleet, /api/usage, /api/gates) ----
+
+const driftOf = (i) => (i.drift ? i.drift.edited + i.drift.added + i.drift.missing : 0)
+
+// The verdict line. 'bad' when the doctor failed; 'warn' when an install is behind its source
+// or has hand edits; else 'good'. An install whose marker cannot be read ('unknown') does not
+// make the line warn on its own: the row says "not checked", and the line claims only what
+// was read.
+export function fleetVerdict(fleet) {
+  const all = fleet?.installs || []
+  const act = all.filter((i) => i.state === 'active')
+  const disabled = all.length - act.length
+  const behind = act.filter((i) => i.verdict === 'behind').length
+  const edited = act.reduce((n, i) => n + driftOf(i), 0)
+  const d = fleet?.doctor
+  const tone = d && !d.ok ? 'bad' : behind || edited ? 'warn' : 'good'
+  const head = {
+    good: 'Harness healthy.',
+    warn: 'Harness needs a look.',
+    bad: 'Harness has problems.',
+  }[tone]
+  const facts = [
+    plural(act.length, 'active install') + (disabled ? `, ${disabled} disabled` : ''),
+    !d
+      ? 'doctor not run yet'
+      : d.ok
+        ? 'doctor clean'
+        : `doctor found ${plural(d.problems.length, 'problem')}`,
+    behind ? `${plural(behind, 'install')} behind source` : 'all in step with source',
+    edited ? `${plural(edited, 'file')} hand-edited` : 'no hand edits',
+  ]
+  return { tone, head, facts }
+}
+
+// What an install injects every session, as chart segments (characters). The console
+// shows ≈ chars ÷ 4 tokens; the ceiling applies to the root file alone.
+export const COST_PARTS = [
+  ['carrier', 'Root file'],
+  ['skills', 'Skill list'],
+  ['agents', 'Agent list'],
+  ['context', 'Session files'],
+]
+export const costTotal = (c) => (c ? c.carrier + c.skills + c.agents + c.context : 0)
+export const approxTokens = (chars) => `≈${(chars / 4 / 1000).toFixed(1)}k`
+
+const installLabel = (i) => `${i.host} · ${i.scope}`
+
+// Needs attention for the Ledger: PROBLEMS first (doctor, behind, hand edits), each naming its
+// install, then the older per-install nudges as SUGGESTIONS (`sugg: true`, muted). Usage's
+// never-fired row is held back until 30 days are counted, so a fresh install is not told every
+// skill is unused. Rows carry `act` (a console action) or `href`, never both.
+export function ledgerNeeds({ fleet, usage, ...rest }) {
+  const out = []
+  const d = fleet?.doctor
+  if (d && !d.ok) {
+    out.push({
+      id: 'doctor',
+      tag: 'Doctor',
+      tone: 'bad',
+      title: `Doctor found ${plural(d.problems.length, 'problem')}`,
+      detail: d.problems[0] || '',
+      where: 'installs/doctor',
+      verb: 'Review',
+      href: '#/installs/doctor',
+    })
+  }
+  for (const i of (fleet?.installs || []).filter((x) => x.state === 'active')) {
+    if (i.verdict === 'behind') {
+      out.push({
+        id: `behind:${i.id}`,
+        tag: 'Behind',
+        tone: 'warn',
+        title: `${installLabel(i)} is behind its source`,
+        detail: i.built_epoch ? `built ${relTime(i.built_epoch)} ago` : 'never built',
+        where: i.host,
+        verb: 'Rebuild',
+        act: 'build-all',
+      })
+    }
+    const n = driftOf(i)
+    if (n) {
+      out.push({
+        id: `drift:${i.id}`,
+        tag: 'Drift',
+        tone: 'warn',
+        title: `${installLabel(i)}: ${plural(n, 'file')} edited by hand`,
+        detail: `${i.drift.edited} edited, ${i.drift.added} added, ${i.drift.missing} missing`,
+        where: 'installs/edits',
+        verb: 'Review',
+        href: '#/installs/edits',
+      })
+    }
+  }
+  if (usage && usage.days_counted >= 30 && usage.never?.length) {
+    const skills = usage.never.filter((x) => x.kind === 'skill').length
+    out.push({
+      id: 'usage',
+      tag: 'Usage',
+      tone: '',
+      sugg: true,
+      title: `${plural(skills, 'skill')} never fired in 30 days`,
+      detail: `${plural(usage.never.length - skills, 'agent')} too`,
+      where: 'library/skills',
+      verb: 'Triage',
+      href: '#/skills',
+    })
+  }
+  // The single-install nudges, minus what the fleet rows above now say per install.
+  const older = needsAttention({
+    ...rest,
+    overview: rest.overview && { ...rest.overview, doctor: null, diff: null },
+  })
+  for (const r of older) out.push({ ...r, sugg: true })
+  return out
+}
+
+// Gate rows for the sparklines, named by the rule's principle when the catalog has it.
+export function gateRows(gates, laws) {
+  return (gates?.rules || []).map((r) => {
+    const addr = gateAddress(r.rule)
+    const hit = (laws?.items || []).find((i) => i.name === addr)
+    return {
+      ...r,
+      name: hit ? parseRuleTitle(hit.title).name : r.rule === 'wiki' ? 'Wiki guard' : addr,
+    }
+  })
 }

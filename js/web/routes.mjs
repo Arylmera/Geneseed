@@ -26,6 +26,7 @@ import {
 } from './api.mjs';
 import { NotFound, apiCatalog, apiItem } from './catalog.mjs';
 import { apiUsage } from './usage-api.mjs';
+import { apiGates } from './gates-api.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote } from './user-files.mjs';
 
 /**
@@ -150,6 +151,7 @@ export const STATE_ROUTES = {
   '/api/fleet': apiFleet,
   '/api/update': apiUpdate,
   '/api/usage': apiUsage,
+  '/api/gates': apiGates,
   '/api/excludes': apiExcludes,
   '/api/profile': apiProfile,
   '/api/diff': apiDiff,

@@ -1,19 +1,20 @@
 import { describe, it, expect } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import {
-  constitutionMix,
-  healthTone,
+  costTotal,
+  fleetVerdict,
+  gateRows,
+  ledgerNeeds,
   needsAttention,
-  runBars,
-  runKind,
   skillsByStage,
 } from '../lib/overview.js'
+import { applyAccent } from '../lib/accents.js'
 
 // The Overview's derivations, as tables: payloads in, rows out, every expected value written
 // out. LAWS is an OLDER server's catalog (eleven invariants, IX and XI retired in place), kept
 // because a console can still be pointed at such an install. The payload shapes are the real endpoints' (/api/overview, /api/setup, /api/rules,
 // /api/activity, /api/profile, /api/catalog/{skills,laws}).
 
-const COUNTS = { laws: 11, ontology: 4, doctrines: { active: 5, total: 5, rules: 28 } }
 const LAWS = {
   items: [
     { name: 'ont:telos', title: 'Telos', tier: 'ontology' },
@@ -37,31 +38,6 @@ const LAWS = {
   ],
 }
 
-describe('constitutionMix', () => {
-  it('splits the invariants into active and retired once the catalog is in', () => {
-    // 11 invariants, two of them retired (IX, XI): 9 in force, "+2 retired" beside them.
-    expect(constitutionMix(COUNTS, LAWS, { rules: 3 })).toEqual([
-      { key: 'ethos', label: 'Ethos', n: 4 },
-      { key: 'invariants', label: 'Invariants', n: 9, note: '+2 retired' },
-      { key: 'doctrines', label: 'Doctrines', n: 28, note: '5 of 5 packs' },
-      { key: 'yours', label: 'Your rules', n: 3 },
-    ])
-  })
-
-  it('says nothing about retirement when no invariant is retired', () => {
-    // The shipped canon since 2026-09-30: nine laws, none retired — a retired rule is removed,
-    // not kept, so '+0 retired' would describe a state the canon no longer has.
-    const current = { items: LAWS.items.filter((i) => !/(retired)/.test(i.title)) }
-    const [, inv] = constitutionMix({ ...COUNTS, laws: 9 }, current, null)
-    expect(inv).toEqual({ key: 'invariants', label: 'Invariants', n: 9, note: '' })
-  })
-
-  it('claims no retired count before the catalog has loaded', () => {
-    const [, inv] = constitutionMix(COUNTS, null, null)
-    expect(inv).toEqual({ key: 'invariants', label: 'Invariants', n: 11, note: '' })
-  })
-})
-
 describe('skillsByStage', () => {
   it('counts per class in class order, experimental apart, unknown classes as personal', () => {
     const items = [
@@ -81,43 +57,6 @@ describe('skillsByStage', () => {
       experimental: 2,
       max: 3,
     })
-  })
-})
-
-describe('runBars', () => {
-  it.each([
-    ['update', 'update'],
-    ['build-all', 'rebuild'],
-    ['install', 'other'],
-    ['build (imperial · opencode-global)', 'other'],
-  ])('%s is a %s run', (action, kind) => expect(runKind(action)).toBe(kind))
-
-  it('scales to the longest run, floors tiny ones, drops a running job', () => {
-    const runs = [
-      { id: 'a', action: 'update', status: 'done', duration: 2 },
-      { id: 'b', action: 'build-all', status: 'failed', duration: 1 },
-      { id: 'c', action: 'install', status: 'done', duration: 0.05 },
-      { id: 'd', action: 'doctor', status: 'running' },
-    ]
-    const { bars, ok, longest } = runBars(runs)
-    expect(bars.map((b) => [b.id, b.kind, b.ok, b.h])).toEqual([
-      ['a', 'update', true, 1],
-      ['b', 'rebuild', false, 0.5],
-      // 0.05 / 2 = 0.025, floored to 0.06 so it is still a visible bar.
-      ['c', 'other', true, 0.06],
-    ])
-    expect([ok, longest]).toEqual([2, 2])
-  })
-
-  it('keeps only the last n', () => {
-    const runs = Array.from({ length: 25 }, (_, i) => ({
-      id: String(i),
-      action: 'install',
-      status: 'done',
-      duration: 1,
-    }))
-    const { bars } = runBars(runs)
-    expect(bars.map((b) => b.id)).toEqual(Array.from({ length: 20 }, (_, i) => String(i + 5)))
   })
 })
 
@@ -209,15 +148,173 @@ describe('needsAttention', () => {
   })
 })
 
-describe('healthTone', () => {
-  it.each([
-    [{ doctor: { ok: false, problems: ['x'] } }, null, 'bad'],
-    [{ doctor: { ok: true }, diff: { edited: 1, added: 0, missing: 0 } }, null, 'warn'],
-    [{ doctor: { ok: true } }, { installed_fp: 'a', source_fp: 'b' }, 'warn'],
-    [
-      { doctor: { ok: true }, diff: { edited: 0, added: 0, missing: 0 } },
-      { installed_fp: 'a', source_fp: 'a' },
-      'good',
-    ],
-  ])('%j + %j -> %s', (ov, setup, tone) => expect(healthTone(ov, setup)).toBe(tone))
+// ---- the Ledger (/api/fleet, /api/usage, /api/gates) ----
+// One fleet that raises every per-install problem: opencode is behind and has 3 hand-edited
+// files, claude is in step and clean, a bob project cannot be drift-checked (drift null), and
+// openclaude is disabled. The clock is pinned so "built 6d ago" is a written-out value.
+const NOW = Date.parse('2026-10-13T12:00:00Z')
+const FLEET = {
+  source_fp: 'abc',
+  doctor: { ok: true, problems: [] },
+  installs: [
+    {
+      id: 'oc',
+      host: 'opencode',
+      scope: 'global',
+      state: 'active',
+      verdict: 'behind',
+      diffable: true,
+      drift: { edited: 2, added: 1, missing: 0 },
+      built_epoch: NOW / 1000 - 6 * 86400,
+      cost: { carrier: 30000, skills: 12000, agents: 4000, context: 0, ceiling: 38890 },
+    },
+    {
+      id: 'cl',
+      host: 'claude',
+      scope: 'global',
+      state: 'active',
+      verdict: 'synced',
+      diffable: true,
+      drift: { edited: 0, added: 0, missing: 0 },
+      built_epoch: NOW / 1000,
+      cost: null,
+    },
+    {
+      id: 'bob',
+      host: 'bob',
+      scope: 'project',
+      state: 'active',
+      verdict: 'synced',
+      diffable: false,
+      drift: null,
+      built_epoch: null,
+      cost: null,
+    },
+    { id: 'ocl', host: 'openclaude', scope: 'global', state: 'disabled' },
+  ],
+}
+
+describe('fleetVerdict', () => {
+  it('warns on a behind or hand-edited install and counts what it read', () => {
+    expect(fleetVerdict(FLEET)).toEqual({
+      tone: 'warn',
+      head: 'Harness needs a look.',
+      facts: [
+        '3 active installs, 1 disabled',
+        'doctor clean',
+        '1 install behind source',
+        '3 files hand-edited',
+      ],
+    })
+  })
+  it('is bad when the doctor failed, whatever the installs say', () => {
+    const v = fleetVerdict({ ...FLEET, doctor: { ok: false, problems: ['x', 'y'] } })
+    expect([v.tone, v.facts[1]]).toEqual(['bad', 'doctor found 2 problems'])
+  })
+  it('is healthy for one clean install, and an unreadable marker alone does not warn', () => {
+    const one = {
+      doctor: { ok: true, problems: [] },
+      installs: [{ ...FLEET.installs[1], verdict: 'unknown' }],
+    }
+    expect(fleetVerdict(one)).toEqual({
+      tone: 'good',
+      head: 'Harness healthy.',
+      facts: ['1 active install', 'doctor clean', 'all in step with source', 'no hand edits'],
+    })
+  })
+})
+
+describe('ledgerNeeds', () => {
+  beforeEach(() => vi.useFakeTimers({ now: NOW }))
+  afterEach(() => vi.useRealTimers())
+  it('lists per-install problems first, then the older nudges as suggestions', () => {
+    const rows = ledgerNeeds({ fleet: FLEET, usage: null, ...ALL, overview: { ...ALL.overview } })
+    expect(rows.slice(0, 2)).toEqual([
+      {
+        id: 'behind:oc',
+        tag: 'Behind',
+        tone: 'warn',
+        title: 'opencode · global is behind its source',
+        detail: 'built 6d ago',
+        where: 'opencode',
+        verb: 'Rebuild',
+        act: 'build-all',
+      },
+      {
+        id: 'drift:oc',
+        tag: 'Drift',
+        tone: 'warn',
+        title: 'opencode · global: 3 files edited by hand',
+        detail: '2 edited, 1 added, 0 missing',
+        where: 'installs/edits',
+        verb: 'Review',
+        href: '#/installs/edits',
+      },
+    ])
+    // The single-install doctor and drift rows are NOT repeated: the fleet says them per install.
+    expect(rows.map((r) => r.id)).not.toContain('doctor')
+    expect(rows.map((r) => r.id)).not.toContain('drift')
+    expect(rows.slice(2).every((r) => r.sugg)).toBe(true)
+  })
+  it('raises the doctor from the fleet as the first problem', () => {
+    const rows = ledgerNeeds({
+      fleet: { ...FLEET, doctor: { ok: false, problems: ['shim moved'] } },
+    })
+    expect(rows[0]).toMatchObject({ id: 'doctor', tone: 'bad', detail: 'shim moved' })
+  })
+  it('holds the never-fired row back until 30 days are counted', () => {
+    const never = [
+      { kind: 'skill', name: 'a' },
+      { kind: 'skill', name: 'b' },
+      { kind: 'agent', name: 'c' },
+    ]
+    const ids = (u) => ledgerNeeds({ fleet: null, usage: u }).map((r) => r.id)
+    expect(ids({ days_counted: 29, never })).toEqual([])
+    expect(ledgerNeeds({ fleet: null, usage: { days_counted: 30, never } })).toEqual([
+      {
+        id: 'usage',
+        tag: 'Usage',
+        tone: '',
+        sugg: true,
+        title: '2 skills never fired in 30 days',
+        detail: '1 agent too',
+        where: 'library/skills',
+        verb: 'Triage',
+        href: '#/skills',
+      },
+    ])
+  })
+})
+
+describe('costTotal and gateRows', () => {
+  it('sums the four parts, and an unmeasured install costs nothing', () => {
+    expect(costTotal(FLEET.installs[0].cost)).toBe(46000)
+    expect(costTotal(null)).toBe(0)
+  })
+  it('names a gate by its principle when the catalog has it, else by its address', () => {
+    const rows = gateRows(
+      {
+        rules: [
+          { rule: 'process-1', n: 2, per_day: [] },
+          { rule: 'wiki', n: 1, per_day: [] },
+        ],
+      },
+      LAWS,
+    )
+    expect(rows.map((r) => r.name)).toEqual(['Persist Insight', 'Wiki guard'])
+  })
+})
+
+describe('applyAccent', () => {
+  // A yellow accent equals the warning colour, so the warning moves to orange under it, and
+  // only under it: switching to another accent drops the override.
+  it('moves --warn off a yellow accent and back', () => {
+    const el = document.createElement('div')
+    applyAccent(el, 'yellow', 'dark')
+    expect(el.style.getPropertyValue('--warn')).toBe('#F08A4B')
+    applyAccent(el, 'yellow', 'light')
+    expect(el.style.getPropertyValue('--warn')).toBe('#B4521C')
+    applyAccent(el, 'cyan', 'dark')
+    expect(el.style.getPropertyValue('--warn')).toBe('')
+  })
 })
