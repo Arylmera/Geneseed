@@ -8,10 +8,13 @@ to be acted on; or the user wants a review criterion recorded ("add a review rul
 
 ## Procedure
 1. Read every comment in full before changing anything. Group related comments.
-2. Classify each comment: correct, partially correct, wrong, or unclear.
+2. Classify each comment: correct, partially correct, wrong, or unclear. Any item unclear →
+   ask before implementing *any* item, since items may be related. A comment that conflicts
+   with a decision the user already made → ask the user.
 3. For anything you judge wrong or unclear, verify it against the code or a test before
    responding — do not comply blindly and do not dismiss blindly ({{LAW:verify-before-asserting}},
-   {{ONTOLOGY}}: {{ONT_CONDUCT}}).
+   {{ONTOLOGY}}: {{ONT_CONDUCT}}). A request to "implement it properly" → grep for real
+   callers first; no caller, no build.
 4. Respond to each comment: the change you will make and why, or a reasoned decline
    with evidence.
 5. Apply the accepted changes — one intent per commit ({{LAW:one-intent-one-act}}), each through the
