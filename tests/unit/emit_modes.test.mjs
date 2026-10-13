@@ -617,6 +617,7 @@ test('no two hosts own the same path in one project emit', () => {
       }));
       const markerDir = path.join(d, projectMarker);
       const owned = readJson(markerDir, GLOBAL_MANIFEST).owned;
+      assert.ok(owned.length > 0, `${host} emitted an empty owned set`);
       return { host, paths: new Set(owned.map((rel) => path.resolve(markerDir, rel))) };
     });
     for (let i = 0; i < ownedSets.length; i += 1) {
