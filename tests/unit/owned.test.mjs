@@ -361,7 +361,7 @@ test('writeNativeLayer never writes through a symlinked owned leaf', (t) => {
     assert.equal(readFileSync(outside, 'utf8'), 'not Geneseed\'s to overwrite\n',
       'the emit wrote through the symlink onto a file outside the install root');
     assert.ok(!value.written.includes(dest),
-      'a refused leaf must stay out of the manifest, or the next prune deletes the link');
+      'the manifest must list only files Geneseed actually wrote');
     assert.match(err, /refused skills\/x\/SKILL\.md: it is a link/,
       'the refusal must be visible — a silent skip is half a guard');
   } finally { f.sb.cleanup(); }
@@ -406,7 +406,7 @@ test('a full Bob project emit never writes rules/geneseed.md through a symlinked
       'the real Bob emit wrote through the symlink onto a file outside the install');
     assert.match(err, /refused rules\/geneseed\.md: it is a link/);
     assert.ok(!readManifestOwned(cfgDir).includes('rules/geneseed.md'),
-      'a refused rules/geneseed.md must stay out of owned, or the next prune deletes the link');
+      'the manifest must list only files Geneseed actually wrote');
   } finally { sb.cleanup(); }
 });
 
@@ -427,7 +427,7 @@ test('a full OpenCode-global emit never writes AGENT.md through a symlinked leaf
       'the real OpenCode-global emit wrote through the symlink onto a file outside the install');
     assert.match(err, /refused AGENT\.md: it is a link/);
     assert.ok(!readManifestOwned(cfgDir).includes('AGENT.md'),
-      'a refused AGENT.md must stay out of owned, or the next prune deletes the link');
+      'the manifest must list only files Geneseed actually wrote');
   } finally { sb.cleanup(); }
 });
 
@@ -451,7 +451,7 @@ test('a full Claude project emit never writes .gitignore through a dangling syml
       'the emit must not have created the dangling symlink\'s target by writing through it');
     assert.match(err, /refused \.gitignore: it is a link/);
     assert.ok(!readManifestOwned(cfgDir).includes('.gitignore'),
-      'a refused .gitignore must stay out of owned, or the next prune deletes the link');
+      'the manifest must list only files Geneseed actually wrote');
   } finally { sb.cleanup(); }
 });
 
@@ -545,6 +545,6 @@ test('a full Claude project emit never writes VERSION_MARKER through a symlinked
     // than a regex that would need them escaped.
     assert.ok(err.includes(`refused ${VERSION_MARKER}: it is a link`));
     assert.ok(!readManifestOwned(cfgDir).includes(VERSION_MARKER),
-      'a refused VERSION_MARKER must stay out of owned, or the next prune deletes the link');
+      'the manifest must list only files Geneseed actually wrote');
   } finally { sb.cleanup(); }
 });

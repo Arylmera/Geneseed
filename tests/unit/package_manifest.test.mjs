@@ -367,8 +367,6 @@ const WITHHELD = [
     + 'spawn bans, written-out expectations); `files[]` ships the user-facing doc folders only'],
   ['fuzz/', 'fuzz targets for THIS repository\'s hook gates, run by CI; like `tests/`, they '
     + 'prove the product and are not part of it'],
-  ['fuzz/owned.fuzz.mjs', 'the `ownedWithin` manifest-containment fuzz target, named for the '
-    + 'same reason as `fuzz/` itself — it proves the product and is not part of it'],
   ['tsconfig.json', 'type-checks THIS repository\'s JavaScript in CI (`npm run typecheck`); an install '
     + 'runs the code and never compiles anything'],
   ['stryker.config.json', 'the weekly Stryker run over THIS repository\'s settings parser; an install '

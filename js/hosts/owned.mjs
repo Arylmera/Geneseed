@@ -28,7 +28,7 @@ import { within } from '../lib/paths.mjs';
 
 /**
  * The manifest rels that resolve INSIDE `base` — the one security boundary every walk over
- * `owned` goes through (uninstall, both deactivates).
+ * `owned` goes through (uninstall, both deactivates, build prune (`pruneOwned` in js/build/driver.mjs)).
  *
  * `path.resolve(rroot, r)` and NOT `path.join`, which is the one line here that is a security
  * boundary rather than a translation. The Python is `(rroot / r).resolve()`, and pathlib's
