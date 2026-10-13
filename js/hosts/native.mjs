@@ -33,6 +33,7 @@ import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { aliasesOf } from '../build/source.mjs';
+import { safeLeaf } from './owned.mjs';
 
 /** What a folder skill writes where it needs its own directory — see `writeNativeLayer`. */
 const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
@@ -471,11 +472,20 @@ function warnClaudeIgnored(overrides) {
  * emit, shared by all of them, so the pre-manifest header still prints once.
  *
  * `oldOwned === null` (or no `cfg`) is a caller doing no ownership at all: claim everything.
+ *
+ * The leaf guard (`safeLeaf`) runs whenever `cfg !== null`, independently of `oldOwned` — it
+ * is not about which prior manifest owns `dest`, it is about what sits AT `dest` on disk, and
+ * a `cfg === null` caller has no root to contain against at all. See `js/hosts/owned.mjs`.
  */
 export function claimer(oldOwned, cfg, manifestExisted = true) {
   const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
   let headerPrinted = false;
   return (dest) => {
+    if (cfg !== null && !safeLeaf(cfg, dest)) {
+      warn(`[geneseed] refused ${relPosix(cfg, dest)}: it is a link — Geneseed writes only `
+        + 'regular files it owns');
+      return false;
+    }
     if (oldSet === null || cfg === null || !existsSync(dest)) return true;
     const rel = relPosix(cfg, dest);
     if (oldSet.has(rel)) return true;
