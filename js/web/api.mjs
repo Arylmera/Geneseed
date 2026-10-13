@@ -14,6 +14,7 @@ import path from 'node:path';
 import { CONFIG, ROOT, THEMES, discoverNames, makeCfg } from '../build/source.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import { sourceReleaseVersion } from '../hosts/opencode.mjs';
+import { alwaysOnCost } from '../inspect/cost.mjs';
 import { diffCollect } from '../inspect/diff.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
@@ -191,6 +192,9 @@ export function apiFleet(state) {
       diffable: drift !== null,
       drift,
       built_epoch: built,
+      // What this install injects every session, by part (characters); null when its carrier
+      // is missing, so the console says "not measured" rather than drawing an empty bar.
+      cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),
     });
   }
   return { installs, source_fp: sourceFp, doctor: state.doctor };

@@ -35,6 +35,7 @@ import { hostCatalogsNatively } from '../../js/hosts/hosts.mjs';
 import { STRUCTURE } from '../../js/build/render.mjs';
 import { walkFiles } from '../helpers/golden.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
+import { CARRIER_CEILING } from '../../js/inspect/cost.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const DRIVER = path.join(ROOT, 'bin', 'build-driver.mjs');
@@ -198,7 +199,9 @@ const FOOTPRINTS = ['full', 'lean'];
  * its shortest form. Measured `files` carrier after: full 62_076, lean 38_890 — each raised by
  * exactly the overrun (61_920 -> 62_076, 38_854 -> 38_890), not rounded.
  */
-const CEILING = { full: 62_076, lean: 38_890 };
+// The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
+// chart; the history above stays here, beside the gate that enforces it.
+const CEILING = CARRIER_CEILING;
 
 /**
  * mode -> { host, base, rel, native }. `base` is `out` (the `--out` bundle) or `home` (the

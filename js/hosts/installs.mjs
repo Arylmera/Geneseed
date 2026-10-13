@@ -181,7 +181,7 @@ const CARRIERS = [
  * `AGENTS.md` (`CLAUDE_SHAPED['bob-global']`'s summary says so) — which `HOSTS` has no column
  * for and this hard-codes, same as the un-narrowed `CARRIERS` above always did.
  */
-function carriersFor(host) {
+export function carriersFor(host) {
   const row = HOSTS.find((h) => h.host === host);
   if (!row) return CARRIERS;
   if (host === 'bob') return [path.join('rules', 'geneseed.md'), row.agentFile];
