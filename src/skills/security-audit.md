@@ -35,7 +35,13 @@ surface.
    (the [dependencies {{SKILL}}](dependencies.md) carries the tooling). A destructive
    capability exposed to an agent or a tool: its guard is enforced server-side, at the
    boundary the call crosses, never left to the caller's judgement ({{DOCTRINE:external-gate}}).
-6. **Report, don't fix.** Each finding as `file:line — attack — impact — fix`, ranked
+6. **Prove each finding before it stands.** Restate it as an attacker-controlled source
+   reaching an unguarded sink, traced through the real callers; one you cannot restate
+   that way is a lead to chase, not a finding. Reject the shortcuts that manufacture
+   false positives: *it looks dangerous* (a pattern is not a path — validation upstream
+   may stop it), *it was vulnerable elsewhere* (each call site has its own guards), *this
+   is clearly critical* (models overrate severity — argue the defender's case first).
+7. **Report, don't fix.** Each finding as `file:line — attack — impact — fix`, ranked
    critical → high → medium → note, with the evidence that made it a finding. Then the
    verdict — **ship / fix-then-ship / block** — and, for anything above medium, the
    test that would pin the fix. Applying fixes is a [develop {{SKILL}}](develop.md)
