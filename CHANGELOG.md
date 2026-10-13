@@ -8,7 +8,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.1.0] — 2026-10-13
+
+Minor: the planning, review, debugging and multi-agent skills take the lessons of Superpowers 7.0, and the host canary.
+
+### Changed
+- **brainstorm** asks which build choices (platform, language, key libraries) you want to own; one the agent makes goes in the decision list as its own call. It sizes the work: a quick task is just done, a small change keeps the confirmed list in chat as its spec, and only a project gets a spec file. A fresh subagent then reads that spec as the person who will build it and asks what they would have to guess, replacing the agent rereading its own spec.
+- **plan**: a step records decisions (files, signatures, the spec's values, the test, the check command), not code. A step is marked done only once its check has run green, with the command on the line. A decision taken without asking gets a `Ruling:` line that is reported at the end, and the mid-run "stop for review" clause is gone. The plan file names its task and its spec, and the spec wins a conflict.
+- **debug**: compare against the nearest working twin, trace a bad value back to where it was born, cite evidence as `file:line`, and probe a secret's presence, never its value. The CI branch diffs against the last green run first and replaces guessed sleeps with bounded waits.
+- **Code review**: where the spec says nothing, a crash, hang or data loss on an input it implies is still blocking. Findings end with a *Set aside* list the caller rules on, and `ship` rules on it before pushing. The base is `origin/<default branch>` after a fetch. The reviewer never moves HEAD and never dispatches another reviewer.
+- **pipeline / parallel-agents**: the developer↔tester loop gets two repair rounds, then one fresh developer, then stops (it allowed five, against `bound-the-loop`). An ambiguity is decided and recorded rather than stalling, small edits of one kind run as one unit, no dispatched agent dispatches its own, and an empty diff counts as a failure. `worktree` never forces a refused removal.
+- The `cover-and-verify` doctrine and `develop` run the whole suite once at the end and name every failure, including ones the change did not cause; per step, only the affected tests still run.
+
 ### Fixed
+- The daydream skill's cost line showed a mangled price on Claude Code, which replaces a dollar sign followed by a digit with the skill's arguments.
 - On OpenCode 2, the Activity view now names each tool call. OpenCode 2 sends a tool's name only when its input starts streaming, not with the call itself, so every tool card read "undefined".
 
 ### Added
