@@ -9,9 +9,9 @@
 // of blind substitution the file-level comment above warns against.
 //
 // So, as there: tested in BOTH directions. A correct hash is blanked (the false positive this
-// exists to remove); a WRONG hash — corrupted, or naming a file that is gone — is left exactly
-// as recorded, so it can never coincidentally agree with a placeholder or with anything else,
-// and the comparison gates still catch it.
+// exists to remove); a WRONG hash — corrupted, or naming a file that is gone — THROWS, the way
+// `destamp` does: left verbatim, a wrong hash that is wrong the same way in both sandboxes would
+// compare equal and the gate would stay green over a broken `fileHash`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -47,50 +47,36 @@ test('a manifest hash that matches its own sandbox file is blanked to a fixed pl
   });
 });
 
-test('a corrupted hash (one flipped hex digit) is left verbatim, never blanked', () => {
+test('a corrupted hash (one flipped hex digit) is a hard failure, never passed through', () => {
   // The mutation this normaliser must not swallow: a hash that is simply WRONG for the file it
   // claims to describe — exactly what a real regression in `ownedHashes`/`fileHash` would
-  // produce — must still read as a difference, not be excused into agreement with anything.
+  // produce. Left verbatim it could still compare equal when the SAME wrong value appears in
+  // both sandboxes (a wrong-but-deterministic hash), so it must stop the run outright.
   withDir((dir) => {
     fs.writeFileSync(path.join(dir, 'a.md'), 'HELLO\n');
     const hash = fileHash(path.join(dir, 'a.md'));
     const corrupted = `${hash.slice(0, -1)}${hash.at(-1) === '0' ? '1' : '0'}`;
     writeManifest(dir, { 'a.md': corrupted });
 
-    const body = snapshot(dir, []).get(GLOBAL_MANIFEST).toString('utf8');
-    assert.ok(body.includes(corrupted),
-      'a hash that does not match its own sandbox file must be left exactly as recorded');
-    assert.ok(!body.includes('<VERIFIED-HASH>'),
-      'a wrong hash must never be folded into the same placeholder a correct one gets');
+    assert.throws(() => snapshot(dir, []), /hashes\["a\.md"\] does not verify/,
+      'a hash that does not match its own sandbox file must throw');
   });
 });
 
-test('two sandboxes, one correct hash and one corrupted, still compare as CHANGED', () => {
-  withDir((good) => {
-    withDir((bad) => {
-      fs.writeFileSync(path.join(good, 'a.md'), 'HELLO\n');
-      fs.writeFileSync(path.join(bad, 'a.md'), 'HELLO\n');
-      const hash = fileHash(path.join(good, 'a.md'));
-      const corrupted = `${hash.slice(0, -1)}${hash.at(-1) === '0' ? '1' : '0'}`;
-      writeManifest(good, { 'a.md': hash });
-      writeManifest(bad, { 'a.md': corrupted });
-
-      const goodSnap = snapshot(good, []).get(GLOBAL_MANIFEST);
-      const badSnap = snapshot(bad, []).get(GLOBAL_MANIFEST);
-      assert.ok(!goodSnap.equals(badSnap),
-        'a corrupted hash must still make the two sandboxes compare CHANGED');
-    });
-  });
-});
-
-test('a hash recorded for a file the sandbox no longer has is left verbatim', () => {
+test('one wrong hash among correct ones still throws: each key is checked, not the map', () => {
   withDir((dir) => {
-    const hash = 'a'.repeat(64);
-    writeManifest(dir, { 'missing.md': hash }); // never written to disk
+    fs.writeFileSync(path.join(dir, 'a.md'), 'HELLO\n');
+    fs.writeFileSync(path.join(dir, 'b.md'), 'WORLD\n');
+    writeManifest(dir, { 'a.md': fileHash(path.join(dir, 'a.md')), 'b.md': 'b'.repeat(64) });
+    assert.throws(() => snapshot(dir, []), /hashes\["b\.md"\] does not verify/);
+  });
+});
 
-    const body = snapshot(dir, []).get(GLOBAL_MANIFEST).toString('utf8');
-    assert.ok(body.includes(hash),
-      'a hash naming a file this sandbox does not have must not be blanked');
+test('a hash recorded for a file the sandbox no longer has is a hard failure', () => {
+  withDir((dir) => {
+    writeManifest(dir, { 'missing.md': 'a'.repeat(64) }); // never written to disk
+    assert.throws(() => snapshot(dir, []), /hashes\["missing\.md"\] does not verify/,
+      'a hash naming a file this sandbox does not have can never be verified');
   });
 });
 

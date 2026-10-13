@@ -286,12 +286,13 @@ const HASH_PLACEHOLDER = '<VERIFIED-HASH>';
  * THE FIX IS VERIFY-THEN-BLANK, never blank-outright, because the thing being neutralised must
  * still be checked for correctness before it is excused: for every `hashes[rel]`, this recomputes
  * `sha256` of the OWN sandbox's file at that rel (independently of `fileHash`, see `sha256Of`
- * above) and ONLY replaces the value with a fixed placeholder when it matches. A hash that is
+ * above) and replaces THAT KEY's value with a fixed placeholder when it matches. A hash that is
  * wrong for its own sandbox's file — corrupted, stale, or naming a file that is now missing —
- * is left exactly as recorded, so it can never coincidentally equal the placeholder OR another
- * sandbox's correct value, and the whole-file comparison in `diffMaps` still reports the
- * manifest as CHANGED. `tests/unit/golden_hash_normaliser.test.mjs` is the gate proving this:
- * a corrupted hash must still surface as a difference, not be swallowed by this normaliser.
+ * THROWS, as `destamp` does: left verbatim, a hash that is wrong the same way in both
+ * sandboxes (a deterministic `fileHash` bug) would compare equal and keep the gate green.
+ * Per key, not a global split/join on the digest: two rels with identical content share a
+ * digest, and a text-wide replace would blank the second one without ever verifying it.
+ * `tests/unit/golden_hash_normaliser.test.mjs` is the gate proving both directions.
  */
 function blankVerifiedManifestHashes(manifestPath, body) {
   let text;
@@ -308,10 +309,17 @@ function blankVerifiedManifestHashes(manifestPath, body) {
   }
   const dir = path.dirname(manifestPath);
   for (const [rel, hash] of Object.entries(doc.hashes)) {
-    if (typeof hash !== 'string') continue;
     let actual = null;
     try { actual = sha256Of(path.join(dir, rel)); } catch { actual = null; }
-    if (actual === hash) text = text.split(`"${hash}"`).join(`"${HASH_PLACEHOLDER}"`);
+    if (actual !== hash) {
+      throw new Error(`${manifestPath}: hashes[${JSON.stringify(rel)}] does not verify against `
+        + `its own sandbox file (recorded ${hash}, on disk ${actual ?? 'absent'})`);
+    }
+    // The one `"<rel>": "<hash>"` pair — indented (the product's writer) or compact (a test's).
+    const key = JSON.stringify(rel);
+    const pair = [`${key}: "${hash}"`, `${key}:"${hash}"`].find((p) => text.includes(p));
+    if (!pair) throw new Error(`${manifestPath}: cannot locate hashes[${key}] in the text`);
+    text = text.replace(pair, () => pair.replace(`"${hash}"`, `"${HASH_PLACEHOLDER}"`));
   }
   return Buffer.from(text, 'utf8');
 }
@@ -326,12 +334,12 @@ function blankVerifiedManifestHashes(manifestPath, body) {
 export function snapshot(sandbox, roots) {
   const snap = new Map();
   for (const rel of [...filesIn(sandbox)].sort()) {
-    try {
-      const abs = path.join(sandbox, rel);
-      let body = fs.readFileSync(abs);
-      if (path.basename(rel) === GLOBAL_MANIFEST) body = blankVerifiedManifestHashes(abs, body);
-      snap.set(rel, normalise(body, roots));
-    } catch { /* vanished mid-walk: not a finding */ }
+    const abs = path.join(sandbox, rel);
+    let body;
+    try { body = fs.readFileSync(abs); } catch { continue; /* vanished mid-walk: not a finding */ }
+    // Outside the try: a manifest hash that fails to verify is a finding, never swallowed.
+    if (path.basename(rel) === GLOBAL_MANIFEST) body = blankVerifiedManifestHashes(abs, body);
+    snap.set(rel, normalise(body, roots));
   }
   return snap;
 }
