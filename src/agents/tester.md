@@ -42,11 +42,11 @@ to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
 independently.)*
 
 - **Seat(s):** tester — the development floor's validator, the other half of
-  the dev↔tester loop (capped at 5 iterations).
+  the dev↔tester loop (two repairs, then one fresh developer).
 - **Receives:** the developer's changed worktree.
 - **Delivers:** raw test + lint output with exit codes — the mechanical proof.
-  On failure, findings go back to the developer seat; on the 5th failure, the
-  pipeline stops and reports instead of looping again.
+  On failure, findings go back to the developer seat; when the fresh
+  developer fails too, the pipeline stops and reports instead of looping again.
 
 ## Self-improvement
 

@@ -79,4 +79,4 @@ No external dependencies -- pure Claude Code tools (Glob, Read, Write, Bash, Tas
 
 ## Cost
 
-Per run (~50 pairs): approximately $0.40-0.50 via Claude Code usage.
+Per run (~50 pairs): approximately 0.40-0.50 USD via Claude Code usage.

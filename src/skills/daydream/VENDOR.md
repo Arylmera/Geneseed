@@ -37,3 +37,7 @@ bump the commit above.
 `SKILL.md`'s frontmatter also carries `disable-model-invocation: true`, which upstream lacks: the
 skill is user-only (`/daydream`), so its description stays out of the model's always-on catalogue —
 it is personal to one vault. Re-apply it on update.
+
+The cost line in `SKILL.md` reads "0.40-0.50 USD" where upstream writes a dollar sign before the
+number: Claude Code substitutes a dollar sign followed by a digit with the skill's arguments, so
+upstream's text renders mangled. Re-apply it on update.
