@@ -12,10 +12,11 @@ import {
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { emitProjectInto } from '../../js/build/driver.mjs';
-import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
+import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
+import { GLOBAL_MANIFEST, VERSION_MARKER } from '../../js/hosts/hosts.mjs';
 import { ownedWithin, safeLeaf } from '../../js/hosts/owned.mjs';
 import { claimer, writeNativeLayer } from '../../js/hosts/native.mjs';
+import { shipLeanLaws } from '../../js/build/emit-common.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
 // ⚠ FIRST, as every emit test in this tier opens with: the per-repo opencode emit still runs
@@ -364,4 +365,153 @@ test('writeNativeLayer never writes through a symlinked owned leaf', (t) => {
     assert.match(err, /refused skills\/x\/SKILL\.md: it is a link/,
       'the refusal must be visible — a silent skip is half a guard');
   } finally { f.sb.cleanup(); }
+});
+
+// -----------------------------------------------------------------------------------------
+// `claimLeaf` at the writers that never go through `claim()` — the fix-round-1 finding:
+// `claimer` is only ONE path into `owned`. `rules/geneseed.md` (Bob), `.gitignore`, and the
+// OpenCode-global `AGENT.md` are written directly with `writeText` and pushed into `owned`
+// by hand, so a leaf planted at any of those exact paths bypassed the guard entirely before
+// this fix. One distinct writer shape per test, each through a FULL real emit (not a unit
+// call into the writer) so the proof is that the actual dispatch path refuses, not just the
+// function in isolation.
+// -----------------------------------------------------------------------------------------
+
+/** `quiet`, but keeps stderr so the refusal line and manifest content can be asserted. */
+function quietErr(fn) {
+  const ro = process.stdout.write.bind(process.stdout);
+  process.stdout.write = () => true;
+  try { return capturedErr(fn); } finally { process.stdout.write = ro; }
+}
+
+const readManifestOwned = (cfgDir) => JSON.parse(
+  readFileSync(path.join(cfgDir, GLOBAL_MANIFEST), 'utf8'),
+).owned;
+
+test('a full Bob project emit never writes rules/geneseed.md through a symlinked leaf', (t) => {
+  const sb = makeSandbox('leaf-bob-');
+  try {
+    const root = sb.path;
+    const outside = path.join(root, 'outside.txt');
+    writeFileSync(outside, 'not Geneseed\'s to overwrite\n');
+    const cfgDir = path.join(root, '.bob');
+    const rulesMd = path.join(cfgDir, 'rules', 'geneseed.md');
+    mkdirSync(path.dirname(rulesMd), { recursive: true });
+    if (!trySymlink(t, outside, rulesMd)) return;
+
+    const { err } = quietErr(() => emitProjectInto('bob',
+      { theme: 'neutral', out: path.join(root, 'bundle'), root, footprint: 'full' }));
+
+    assert.equal(readFileSync(outside, 'utf8'), 'not Geneseed\'s to overwrite\n',
+      'the real Bob emit wrote through the symlink onto a file outside the install');
+    assert.match(err, /refused rules\/geneseed\.md: it is a link/);
+    assert.ok(!readManifestOwned(cfgDir).includes('rules/geneseed.md'),
+      'a refused rules/geneseed.md must stay out of owned, or the next prune deletes the link');
+  } finally { sb.cleanup(); }
+});
+
+test('a full OpenCode-global emit never writes AGENT.md through a symlinked leaf', (t) => {
+  const sb = makeSandbox('leaf-ocg-');
+  try {
+    const cfgDir = path.join(sb.path, 'cfg');
+    mkdirSync(cfgDir, { recursive: true });
+    const outside = path.join(sb.path, 'outside.txt');
+    writeFileSync(outside, 'not Geneseed\'s to overwrite\n');
+    const dest = path.join(cfgDir, 'AGENT.md');
+    if (!trySymlink(t, outside, dest)) return;
+
+    const { err } = quietErr(() => emitGlobalInto('opencode',
+      { theme: 'neutral', out: null, cfgDir, footprint: 'full' }));
+
+    assert.equal(readFileSync(outside, 'utf8'), 'not Geneseed\'s to overwrite\n',
+      'the real OpenCode-global emit wrote through the symlink onto a file outside the install');
+    assert.match(err, /refused AGENT\.md: it is a link/);
+    assert.ok(!readManifestOwned(cfgDir).includes('AGENT.md'),
+      'a refused AGENT.md must stay out of owned, or the next prune deletes the link');
+  } finally { sb.cleanup(); }
+});
+
+test('a full Claude project emit never writes .gitignore through a dangling symlinked leaf', (t) => {
+  const sb = makeSandbox('leaf-gi-');
+  try {
+    const root = sb.path;
+    const cfgDir = path.join(root, '.claude');
+    mkdirSync(cfgDir, { recursive: true });
+    const gi = path.join(cfgDir, '.gitignore');
+    const nowhere = path.join(root, 'nowhere.txt');
+    if (!trySymlink(t, nowhere, gi)) return;
+    assert.equal(existsSync(gi), false,
+      'a dangling symlink reads as absent to existsSync — the shape this test proves the '
+      + 'emit does not treat as "free to write"');
+
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out: path.join(root, 'bundle'), root, footprint: 'full' }));
+
+    assert.equal(existsSync(nowhere), false,
+      'the emit must not have created the dangling symlink\'s target by writing through it');
+    assert.match(err, /refused \.gitignore: it is a link/);
+    assert.ok(!readManifestOwned(cfgDir).includes('.gitignore'),
+      'a refused .gitignore must stay out of owned, or the next prune deletes the link');
+  } finally { sb.cleanup(); }
+});
+
+test('shipLeanLaws refuses one symlinked file without aborting the rest', (t) => {
+  const sb = makeSandbox('leaf-laws-');
+  try {
+    const cfgDir = path.join(sb.path, 'cfg');
+    const doctrinesDir = path.join(cfgDir, 'doctrines');
+    mkdirSync(doctrinesDir, { recursive: true });
+    const outside = path.join(sb.path, 'outside.txt');
+    writeFileSync(outside, 'not Geneseed\'s to overwrite\n');
+    const dest = path.join(doctrinesDir, 'x.md');
+    if (!trySymlink(t, outside, dest)) return;
+
+    const owned = [];
+    const { err } = capturedErr(() => shipLeanLaws(
+      [
+        { rel: 'doctrines/x.md', text: 'GENESEED X\n' },
+        { rel: 'doctrines/y.md', text: 'GENESEED Y\n' },
+      ],
+      {}, cfgDir, owned, 'full',
+    ));
+
+    assert.equal(readFileSync(outside, 'utf8'), 'not Geneseed\'s to overwrite\n',
+      'shipLeanLaws wrote through the symlink onto a file outside the install');
+    assert.deepEqual(owned, ['doctrines/y.md'],
+      'the refused file must be skipped, not pushed into owned, and must not abort the '
+      + 'rest of the loop — the untouched sibling still lands in owned');
+    assert.match(err, /refused doctrines\/x\.md: it is a link/);
+    // `writeText` translates `\n` to the platform line ending (CRLF on Windows), so the
+    // comparison folds that back rather than asserting a platform-specific byte sequence.
+    assert.equal(readFileSync(path.join(doctrinesDir, 'y.md'), 'utf8').split('\r\n').join('\n'),
+      'GENESEED Y\n', 'the sibling file the symlink did not touch must still be written');
+  } finally { sb.cleanup(); }
+});
+
+test('a full Claude project emit never writes VERSION_MARKER through a symlinked leaf', (t) => {
+  // Covers both `writeVersion` callers at once: `emit-claude.mjs` and `emit-opencode.mjs`
+  // call the exact same one-line guard inside `js/build/version.mjs`'s `writeVersion`, so
+  // proving it here through the Claude emit proves the OpenCode-global emit's identical
+  // call site too.
+  const sb = makeSandbox('leaf-ver-');
+  try {
+    const root = sb.path;
+    const cfgDir = path.join(root, '.claude');
+    mkdirSync(cfgDir, { recursive: true });
+    const outside = path.join(root, 'outside.txt');
+    writeFileSync(outside, 'not Geneseed\'s to overwrite\n');
+    const dest = path.join(cfgDir, VERSION_MARKER);
+    if (!trySymlink(t, outside, dest)) return;
+
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out: path.join(root, 'bundle'), root, footprint: 'full' }));
+
+    assert.equal(readFileSync(outside, 'utf8'), 'not Geneseed\'s to overwrite\n',
+      'the real Claude emit wrote through the symlink onto a file outside the install');
+    // VERSION_MARKER (`.geneseed-version`) contains dots, so a plain substring check rather
+    // than a regex that would need them escaped.
+    assert.ok(err.includes(`refused ${VERSION_MARKER}: it is a link`));
+    assert.ok(!readManifestOwned(cfgDir).includes(VERSION_MARKER),
+      'a refused VERSION_MARKER must stay out of owned, or the next prune deletes the link');
+  } finally { sb.cleanup(); }
 });

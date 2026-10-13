@@ -12,6 +12,13 @@
  * says nothing about what sits at that path. A per-repo manifest can ship a rel that resolves
  * inside the root AND is itself a symlink or a hard link out — `claimer` runs `safeLeaf` on
  * every destination before it ever claims one.
+ *
+ * `claimLeaf` is `safeLeaf` plus the one sentence every refusal must print, because `claimer`
+ * is not the only writer whose path lands in `owned`: `writeVersion`, `shipLeanLaws`, and a
+ * handful of direct `writeText` calls in `emit-claude.mjs`/`emit-opencode.mjs` (the Bob rules
+ * stub, the project `.gitignore`, the OpenCode-global `AGENT.md`) push a rel into `owned`
+ * too, and the spec's intent — never write through a linked owned file — covers all of them,
+ * not just the ones that happen to go through a `claim()` closure.
  */
 import { lstatSync } from 'node:fs';
 import path from 'node:path';
@@ -68,4 +75,18 @@ export function safeLeaf(root, dest) {
     if (st.isFile() && st.nlink > 1) return false;
   }
   return within(resolvePath(dest), rroot);
+}
+
+/**
+ * `safeLeaf(root, dest)`, and on false the warning line every refusal prints — ONE sentence,
+ * so `claimer` and every direct owned-path writer below it say the same thing rather than
+ * each inventing its own wording. `rel` is the manifest spelling (POSIX, root-relative);
+ * callers that already have it (every one of them, since it is what they are about to push
+ * into `owned`) pass it straight through instead of re-deriving it from `dest`.
+ */
+export function claimLeaf(root, dest, rel) {
+  if (safeLeaf(root, dest)) return true;
+  process.stderr.write(`[geneseed] refused ${rel}: it is a link — Geneseed writes only `
+    + 'regular files it owns\n');
+  return false;
 }
