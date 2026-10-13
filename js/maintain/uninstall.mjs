@@ -59,7 +59,7 @@ import {
   resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
-import { ownedWithin } from '../hosts/owned.mjs';
+import { hashesOf, ownedState, ownedWithin } from '../hosts/owned.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
@@ -146,7 +146,7 @@ function pruneAncestors(start, stop) {
 
 /**
  * The manifest's `owned` list, unlinked one by one with the ancestor prune, returning
- * `[removed, failed]`.
+ * `[removed, failed, kept]`.
  *
  * The third copy of this loop in `_harness_mcp.py` and the reason it is one function here:
  * `_uninstall_global` (rooted at the target), `_claude_uninstall` (rooted at the cfg dir) and
@@ -158,15 +158,28 @@ function pruneAncestors(start, stop) {
  * `ownedWithin` first, the same containment boundary deactivate draws: the manifest is a file
  * on disk, and without it an `owned` entry of `../../.bashrc` was unlinked — and the prune
  * then climbed from ITS parent, which never meets `base`, removing empty directories as it went.
- * @returns {[number, string[]]}
+ *
+ * Task 5 (O-1's uninstall half): `hashes` is the manifest's recorded `hashes` map (`hashesOf`,
+ * `{}` for an older manifest — the constraint that keeps a hash-less install's behaviour
+ * unchanged). Unless `force`, a rel whose `ownedState` reads `'modified'` is left on disk rather
+ * than unlinked and lands in `kept`, not `failed` — it is not an error, the file just is not
+ * Geneseed's to delete any more once the user has edited it. `'unknown'` and `'missing'` are
+ * NOT `'modified'` and are unlinked exactly as before, so an older, hash-less manifest's
+ * uninstall is byte-identical to today's.
+ * @returns {[number, string[], string[]]}
  */
-function unlinkOwned(base, owned, label = '') {
+function unlinkOwned(base, owned, label = '', hashes = {}, force = false) {
   let removed = 0;
   const failed = [];
+  const kept = [];
   for (const rel of ownedWithin(base, owned)) {
     const victim = path.join(base, rel);
     try {
       if (isFile(victim)) {
+        if (!force && ownedState(base, rel, hashes) === 'modified') {
+          kept.push(`${label}${rel}`);
+          continue;
+        }
         unlinkSync(victim);
         removed += 1;
         pruneAncestors(path.dirname(victim), base);
@@ -179,13 +192,24 @@ function unlinkOwned(base, owned, label = '') {
       failed.push(`${label}${rel} (${e && e.message ? e.message : e})`);
     }
   }
-  return [removed, failed];
+  return [removed, failed, kept];
 }
 
 /** The two WARNs every reversal prints when an owned file survives. Identical in all three. */
 function warnSurvivors(failed) {
   printErr('[uninstall] WARN: could not remove '
     + `${failed.length} owned file(s): ${failed.join(', ')}\n`);
+}
+
+/**
+ * The message a reversal prints for every rel `unlinkOwned` left on disk because the user had
+ * edited it and `--force` was not given. Separate from `warnSurvivors`: a kept file is not an
+ * error (nothing failed), so it gets its own sentence rather than being folded into "could not
+ * remove" — the wording the brief fixes verbatim, including the literal `file(s)`.
+ */
+function warnKept(kept) {
+  printErr(`[uninstall] kept ${kept.length} file(s) you edited: ${kept.join(', ')}`
+    + ' — rerun with --force to delete\n');
 }
 
 function warnMarkersKept() {
@@ -316,11 +340,12 @@ function ownedOf(man) {
  * 'absent' and the retry the WARN promises would bounce off `cmdUninstall`'s own gate,
  * stranding the leftovers forever.
  */
-export function claudeUninstall(cfg, archiveMemory) {
+export function claudeUninstall(cfg, archiveMemory, force = false) {
   const man = claudeReadManifest(cfg);
   const managed = managedOf(man);
-  const [removed, failed] = unlinkOwned(cfg, ownedOf(man));
+  const [removed, failed, kept] = unlinkOwned(cfg, ownedOf(man), '', hashesOf(man), force);
   if (failed.length) warnSurvivors(failed);
+  if (kept.length) warnKept(kept);
   const hooks = managed.settings_hooks || [];
   const sf = settingsFile(cfg, managed);
   const unwired = unwireClaudeSettings(sf, hooks);
@@ -331,7 +356,7 @@ export function claudeUninstall(cfg, archiveMemory) {
   // Always EXCISE, never whole-file delete: even where Geneseed created CLAUDE.md the user
   // may have added prose since. The file goes only if the excision leaves it empty.
   managedBlockRemove(claudeMdPath(cfg, managed));
-  if (failed.length) warnMarkersKept();
+  if (failed.length || kept.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(cfg, m));
   let archived = null;
   if (archiveMemory && isDir(path.join(cfg, 'memory'))) {
@@ -348,11 +373,12 @@ export function claudeUninstall(cfg, archiveMemory) {
  * install and an OpenCode one can share one entry point: the Claude family has no
  * opencode.json to unmerge and a settings.json plus a managed block instead.
  */
-export function uninstallGlobal(target, archiveMemory, host = 'opencode') {
-  if (CLAUDE_STYLE.includes(host)) return claudeUninstall(target, archiveMemory);
+export function uninstallGlobal(target, archiveMemory, host = 'opencode', force = false) {
+  if (CLAUDE_STYLE.includes(host)) return claudeUninstall(target, archiveMemory, force);
   const man = claudeReadManifest(target);
-  const [removed, failed] = unlinkOwned(target, ownedOf(man));
+  const [removed, failed, kept] = unlinkOwned(target, ownedOf(man), '', hashesOf(man), force);
   if (failed.length) warnSurvivors(failed);
+  if (kept.length) warnKept(kept);
   for (const d of ['agents', 'skills', 'plugins']) {
     const p = path.join(target, d);
     if (isDir(p) && isEmptyDir(p)) rmdirQuiet(p);
@@ -360,7 +386,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode') {
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
     path.join(target, 'AGENT.md').split(path.sep).join('/'), skillPermissionNames(man));
   managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
-  if (failed.length) warnMarkersKept();
+  if (failed.length || kept.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
   let archived = null;
   if (archiveMemory && isDir(path.join(target, 'memory'))) {
@@ -415,20 +441,22 @@ export function installAgentEntryOf(instr) {
  * describing a file that no longer exists, which the fallback would then paper over with the
  * canonical spelling — and a bundle sub-dir layout would be left wired.
  */
-function opencodeProjectUninstall(root) {
+function opencodeProjectUninstall(root, force = false) {
   const entry = installAgentEntry(root, 'project');
   let removed = 0;
   let failed = [];
+  let kept = [];
   let man = null;
   const oc = path.join(root, '.opencode');
   const manifestPath = path.join(oc, GLOBAL_MANIFEST);
   if (isFile(manifestPath)) {
     man = claudeReadManifest(oc);
-    [removed, failed] = unlinkOwned(oc, ownedOf(man), '.opencode/');
+    [removed, failed, kept] = unlinkOwned(oc, ownedOf(man), '.opencode/', hashesOf(man), force);
     if (failed.length) warnSurvivors(failed);
+    if (kept.length) warnKept(kept);
     // Survivors gate, mirroring the other two reversals: `_project_qualifies` keys off the
     // manifest, so deleting it while an owned file survives makes the install unfindable.
-    if (!failed.length) {
+    if (!failed.length && !kept.length) {
       unlinkQuiet(manifestPath);
       if (isDir(oc) && isEmptyDir(oc)) rmdirQuiet(oc);
     } else {
@@ -491,7 +519,8 @@ export function ownedDirsFor(root, host, scope, data) {
  * gate while the reversal kept its manifest, and deleting the root markers here would then
  * contradict that "KEPT" promise. The reversal's own `failed` list closes that hole.
  */
-export function installUninstall(root, host = 'opencode', scope = 'global', memory = 'keep') {
+export function installUninstall(root, host = 'opencode', scope = 'global', memory = 'keep',
+  force = false) {
   if (!['keep', 'archive', 'delete'].includes(memory)) memory = 'keep';
   if (installState(root, host, scope) === 'absent') {
     return { ok: false, error: 'nothing installed here' };
@@ -501,13 +530,13 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
   //    install's, and they go with it.
   let summary;
   if (CLAUDE_STYLE.includes(host)) {
-    summary = claudeUninstall(data, false);
+    summary = claudeUninstall(data, false, force);
     rmtreeQuiet(path.join(data, DISABLED_STASH, host));
   } else if (installKind(root) === 'global') {
-    summary = uninstallGlobal(root, false, 'opencode');
+    summary = uninstallGlobal(root, false, 'opencode', force);
     rmtreeQuiet(path.join(root, DISABLED_STASH));
   } else {
-    summary = opencodeProjectUninstall(root);
+    summary = opencodeProjectUninstall(root, force);
     rmtreeQuiet(path.join(root, DISABLED_STASH));
   }
   // 2. Memory + notebook, independent of the owned-file removal above.
@@ -790,7 +819,7 @@ export function cmdUninstall(args) {
     }
   }
   const memory = args.archiveMemory ? 'archive' : 'keep';
-  const s = installUninstall(root, host, scope, memory);
+  const s = installUninstall(root, host, scope, memory, Boolean(args.force));
   if (!(s.ok ?? true)) {
     printErr(`[uninstall] failed: ${s.error || 'unknown error'}\n`);
     return 1;

@@ -956,8 +956,8 @@ test('an unknown target resolves to nothing', () => {
 // really about the same question: does it delete EXACTLY what Geneseed wrote, and nothing the
 // user did.
 
-const uninstallArgs = (target, { yes = true, archiveMemory = false } = {}) =>
-  ({ target, yes, archiveMemory });
+const uninstallArgs = (target, { yes = true, archiveMemory = false, force = false } = {}) =>
+  ({ target, yes, archiveMemory, force });
 
 test('a Claude project uninstall unwires hooks and keeps the user\'s prose', () => {
   withDir((d) => {
@@ -1030,6 +1030,35 @@ test('an OpenCode uninstall goes by the manifest and leaves a hand-authored file
     // …and the user's own file, in the very directory being cleaned, survived.
     assert.ok(fs.statSync(mine).isFile(), 'the hand-authored agent was deleted');
     assert.equal(fs.readFileSync(mine, 'utf8'), "hand authored, not Geneseed's");
+  });
+});
+
+// Task 5: an owned file the user edited since install survives an uninstall unless --force.
+// `agents/reviewer.md` is an owned file the opencode emit writes and hashes (Task 3's
+// `ownedHashes`), so editing it after install is the same "I changed Geneseed's file" shape
+// `owned.test.mjs`'s rebuild/prune tests already cover for the emit side; this is the uninstall
+// side of the same guard.
+test('uninstall keeps an edited owned file unless --force', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'opencode', path.join(d, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    const manifest = path.join(repo, '.opencode', GLOBAL_MANIFEST);
+    const edited = path.join(repo, '.opencode', 'agents', 'reviewer.md');
+    assert.ok(fs.statSync(edited).isFile(), 'the fixture assumption — reviewer.md ships — is wrong');
+    fs.writeFileSync(edited, `${fs.readFileSync(edited, 'utf8')}\nmine`, 'utf8');
+
+    const [rc, , err] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+    assert.ok(fs.statSync(edited).isFile(), 'an edited owned file was deleted without --force');
+    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'));
+    assert.match(err,
+      /\[uninstall\] kept 1 file\(s\) you edited: \.opencode\/agents\/reviewer\.md — rerun with --force to delete/);
+    assert.ok(fs.statSync(manifest).isFile(), 'the manifest was deleted even though a file survived');
+
+    const [rc2] = captured(() => cmdUninstall(uninstallArgs(repo, { force: true })));
+    assert.equal(rc2, 0);
+    assert.ok(!fs.existsSync(edited), '--force did not delete the edited owned file');
+    assert.ok(!fs.existsSync(manifest), '--force left the manifest behind');
   });
 });
 
