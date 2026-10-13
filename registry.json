@@ -72,11 +72,11 @@
       "last_verified": ""
     },
     "agents/researcher": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-09-06",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     },
     "agents/reviewer": {
       "status": "approved",
@@ -184,11 +184,11 @@
       "last_verified": "2026-09-06"
     },
     "skills/dependencies": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-08",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     },
     "skills/develop": {
       "status": "approved",
@@ -205,11 +205,11 @@
       "last_verified": "2026-09-06"
     },
     "skills/explain-changes": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-09-30",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     },
     "skills/forge-mcp": {
       "status": "approved",
@@ -247,11 +247,11 @@
       "last_verified": "2026-09-06"
     },
     "skills/git-history": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-08",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     },
     "skills/handoff": {
       "status": "approved",
@@ -380,18 +380,18 @@
       "last_verified": "2026-09-06"
     },
     "skills/rule": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-07",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     },
     "skills/security-audit": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-09-06",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     },
     "skills/ship": {
       "status": "approved",
@@ -401,11 +401,11 @@
       "last_verified": "2026-09-06"
     },
     "skills/skill-forge": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-09-06",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     },
     "skills/teach": {
       "status": "experimental",
@@ -415,11 +415,11 @@
       "last_verified": ""
     },
     "skills/token-report": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-07-29",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     },
     "skills/wayfinder": {
       "status": "approved",
@@ -443,11 +443,11 @@
       "last_verified": "2026-09-06"
     },
     "skills/worktree": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-09-06",
-      "last_verified": ""
+      "last_verified": "2026-10-13"
     }
   }
 }
