@@ -53,10 +53,12 @@ export function ownedWithin(base, rels) {
  * child subdirectory's own `..` entry adds one — so gating on `isFile()` is what keeps an
  * ordinary nested skill folder from tripping the hard-link branch on its own directories.
  *
- * A symlinked ROOT (`~/.claude` -> a dotfiles repo, a `CLAUDE_CONFIG_DIR` relocation, or a
- * link `js/hosts/link.mjs` made itself) is NOT this shape: `resolvePath` follows the root
- * link on both `root` and `dest`, so a leaf reached the ordinary way through a linked root
- * still resolves inside it and stays allowed — only the LEAF itself being a link is refused.
+ * A symlinked ROOT — `~/.claude` as a dotfiles repo's own symlink, or a `CLAUDE_CONFIG_DIR`
+ * env override pointing at one (`js/hosts/link.mjs` links the `geneseed` CLI binary onto
+ * PATH, a different concern entirely, and never a config root) — is NOT this shape:
+ * `resolvePath` follows the root link on both `root` and `dest`, so a leaf reached the
+ * ordinary way through a linked root still resolves inside it and stays allowed — only the
+ * LEAF itself being a link is refused.
  */
 export function safeLeaf(root, dest) {
   const rroot = resolvePath(root);

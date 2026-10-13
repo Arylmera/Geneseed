@@ -194,8 +194,8 @@ test('safeLeaf accepts a symlinked root', (t) => {
     if (!trySymlink(t, real, cfg)) return;
     const dest = path.join(cfg, 'agents', 'scribe.md');
     assert.equal(safeLeaf(cfg, dest), true,
-      'a config root that is itself a symlink (a dotfiles-repo install, CLAUDE_CONFIG_DIR, or '
-      + 'a link js/hosts/link.mjs made) must keep working — only the LEAF matters');
+      'a config root that is itself a symlink (a dotfiles-repo install, or a CLAUDE_CONFIG_DIR '
+      + 'env override pointing at one) must keep working — only the LEAF matters');
   } finally { sb.cleanup(); }
 });
 
@@ -289,8 +289,8 @@ test('claimer accepts a new file under a symlinked root', (t) => {
 
     const claim = claimer([], cfg);
     assert.equal(claim(dest), true,
-      'a symlinked config ROOT (a dotfiles-repo install, CLAUDE_CONFIG_DIR, or a link '
-      + 'js/hosts/link.mjs made) must keep working — claiming a brand-new leaf under it');
+      'a symlinked config ROOT (a dotfiles-repo install, or CLAUDE_CONFIG_DIR pointing at one) '
+      + 'must keep working — claiming a brand-new leaf under it');
   } finally { sb.cleanup(); }
 });
 
