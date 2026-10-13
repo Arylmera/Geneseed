@@ -28,6 +28,8 @@ Each install keeps a manifest, a list of the files Geneseed wrote. **Uninstall d
 - **OpenCode per repo:** `AGENT.md`, `.opencode/`, `laws/`, `agents/`, `skills/`, and the `instructions` entry in `opencode.json`.
 - **Claude Code, Bob, OpenClaude:** `agents/`, `skills/`, the marker files, Geneseed's managed block in the instructions file (`CLAUDE.md` or `AGENTS.md`), and Geneseed's own hooks and exclusions in `settings.json`. Your own settings keys and hooks stay.
 
+**A file Geneseed wrote that you have since edited is kept.** The manifest records each file's fingerprint, so uninstall can tell your edit apart from Geneseed's copy. It leaves the edited file in place, names it (`kept 1 file(s) you edited: ...`), and finishes the uninstall anyway: the file is yours now, and no later rebuild touches it. To delete edited files too, pass `--force`. Changing only the line endings, as a git checkout on another system does, is not an edit.
+
 It also removes the install's row from the registry of installs. Start a new session in your tool afterwards so it stops loading the old files.
 
 ## What it keeps

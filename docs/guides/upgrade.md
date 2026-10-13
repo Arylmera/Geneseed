@@ -48,6 +48,8 @@ A rebuild only replaces files the install's manifest says Geneseed owns. It leav
 
 The agent can refine its own deployed agent and skill files as it works, and so can you. A rebuild would overwrite those edits, so **setup, re-theme and upgrade export them first**. When the files they are about to overwrite differ from a fresh render, the differences are written to a markdown **improvements file** in `improvements/`, inside the install's own folder (for the OpenCode global install, `~/.config/opencode/improvements/`). The manifest does not list that folder, so rebuilds never overwrite it and uninstall never removes it.
 
+A rebuild also refuses to overwrite a file you edited. The manifest records a fingerprint of every file Geneseed wrote; when a file no longer matches it, the rebuild leaves it alone and prints `kept your edited <file> — delete it to get Geneseed's copy back`. From then on the file is yours and later rebuilds skip it. A file the new version no longer ships is kept the same way, with `(no longer shipped)`. Line-ending changes from a git checkout do not count as edits. Installs made before fingerprints existed are overwritten as before.
+
 To see the drift yourself, or to export it on demand:
 
 ```
