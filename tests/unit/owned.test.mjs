@@ -569,6 +569,22 @@ test('fileHash is the sha256 hex of the bytes on disk', () => {
   });
 });
 
+test('fileHash folds CRLF to LF: the two line-ending spellings of one text hash equal', () => {
+  withDir((dir) => {
+    const lf = path.join(dir, 'lf.txt');
+    const crlf = path.join(dir, 'crlf.txt');
+    writeFileSync(lf, 'a\nb\n');
+    writeFileSync(crlf, 'a\r\nb\r\n');
+    // A git checkout with autocrlf (or a teammate on the other OS) rewrites every line ending
+    // without anyone editing a byte of content; an EOL-sensitive hash read that as an edit to
+    // every owned file and froze the whole harness on the next rebuild.
+    assert.equal(fileHash(crlf), fileHash(lf));
+    // A lone `\r` is content, not a line ending git converts, so it still counts as a change.
+    writeFileSync(crlf, 'a\rb\n');
+    assert.notEqual(fileHash(crlf), fileHash(lf));
+  });
+});
+
 test('ownedHashes hashes only the owned rels that are files, inside root, sorted', () => {
   withDir((dir) => {
     mkdirSync(path.join(dir, 'a'), { recursive: true });
@@ -608,6 +624,8 @@ test('ownedState table: unknown, missing, unmodified, modified', () => {
 
     assert.equal(ownedState(dir, 'nowhere.md', hashes), 'unknown',
       'no entry in the hash map at all — nothing recorded to compare against');
+    assert.equal(ownedState(dir, 'constructor', hashes), 'unknown',
+      'an inherited Object.prototype key is not a recorded hash (Object.hasOwn, not a lookup)');
     assert.equal(ownedState(dir, rel, hashes), 'unmodified',
       'the bytes on disk still match the recorded hash');
 
@@ -666,6 +684,33 @@ test('rebuild keeps an edited skill', () => {
     assert.equal(linesMentioning(err, 'skills/develop/SKILL.md'), 1,
       'claimer\'s refusal and pruneOwned\'s stale-check both fired for the same still-shipped '
       + 'rel in the same emit — exactly one warning line may name it');
+  });
+});
+
+test('a line-ending flip of every owned file is not an edit: re-emit keeps ownership', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+    const before = readManifestOwned(cfgDir);
+
+    // What a committed install looks like after a checkout on the other OS (or with
+    // core.autocrlf): every text file's line endings flipped, not one byte of content changed.
+    for (const rel of before) {
+      const p = path.join(cfgDir, rel);
+      if (!existsSync(p)) continue;
+      const text = readFileSync(p, 'latin1');
+      const flipped = text.includes('\r\n') ? text.split('\r\n').join('\n') : text.split('\n').join('\r\n');
+      writeFileSync(p, flipped, 'latin1');
+    }
+
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out, root, footprint: 'full' }));
+
+    assert.equal(linesMentioning(err, 'kept your edited'), 0,
+      'a pure line-ending conversion was read as a user edit');
+    assert.deepEqual(readManifestOwned(cfgDir), before,
+      'owned shrank: files whose only change was their line endings were given away');
   });
 });
 

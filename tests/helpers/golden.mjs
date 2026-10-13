@@ -262,9 +262,10 @@ export function filesIn(sandbox) {
 }
 
 /** `fileHash` (`js/hosts/owned.mjs`), independently, so a drift in the product's own sha256
- * computation cannot silently excuse itself here. */
+ * computation cannot silently excuse itself here. Same `\r\n` -> `\n` fold, for its reason. */
 function sha256Of(p) {
-  return createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+  const folded = fs.readFileSync(p).toString('latin1').replaceAll('\r\n', '\n');
+  return createHash('sha256').update(folded, 'latin1').digest('hex');
 }
 
 const HASH_PLACEHOLDER = '<VERIFIED-HASH>';

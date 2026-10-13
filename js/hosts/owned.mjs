@@ -94,12 +94,17 @@ export function claimLeaf(root, dest, rel) {
 }
 
 /**
- * sha256 hex of the bytes on disk at `p` — no normalisation, no newline translation. Hashed
- * straight off disk, so CRLF on Windows is inside the hash: a manifest written on one platform
- * and read on another is not this function's problem to solve, only to represent faithfully.
+ * sha256 hex of the bytes on disk at `p`, with every `\r\n` folded to `\n` first. The fold is
+ * the point: a committed install is checked out by git with whatever line endings that clone's
+ * `core.autocrlf` / `.gitattributes` / OS asks for, and a teammate on the other OS gets every
+ * owned file's endings flipped without touching a byte of content. Hashed raw, that read as an
+ * edit to every file and the next rebuild froze the harness (measured: 95 false "kept your
+ * edited", owned 106 -> 11). A lone `\r` is not folded — git never writes one, so it is content.
+ * `latin1` maps each byte to one char and back, so the fold is byte-exact on any file, text or not.
  */
 export function fileHash(p) {
-  return createHash('sha256').update(readFileSync(p)).digest('hex');
+  const folded = readFileSync(p).toString('latin1').replaceAll('\r\n', '\n');
+  return createHash('sha256').update(folded, 'latin1').digest('hex');
 }
 
 /**
@@ -146,8 +151,8 @@ export function hashesOf(doc) {
  * see the constraint that a manifest without `hashes` keeps today's behaviour exactly.
  */
 export function ownedState(root, rel, hashes) {
+  if (!Object.hasOwn(hashes, rel)) return 'unknown';
   const expected = hashes[rel];
-  if (!expected) return 'unknown';
   const p = path.join(root, rel);
   if (!isFile(p)) return 'missing';
   return fileHash(p) === expected ? 'unmodified' : 'modified';

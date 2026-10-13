@@ -595,11 +595,9 @@ test('trustOfDir(d, host) reads only that host\'s project dir', () => {
 });
 
 test('a Claude project manifest records a hash for every owned file, and only files', () => {
-  // `hashed from disk, so CRLF on Windows is inside the hash` — this reads the bytes `fileHash`
-  // itself read, through the SAME `.claude/<rel>` path a real install resolves to, rather than
-  // assuming a platform-independent digest. A CRLF-translated carrier on Windows and an
-  // untranslated one on POSIX would therefore each compare against their own platform's hash,
-  // which is the only comparison that could ever be stable.
+  // This reads the bytes `fileHash` itself read, through the SAME `.claude/<rel>` path a real
+  // install resolves to, rather than transcribing a digest. `fileHash` folds CRLF to LF, so a
+  // Windows carrier and a POSIX one hash alike; that fold has its own row in owned.test.mjs.
   withDir((d) => {
     quiet(() => emitProjectInto('claude', {
       theme: 'neutral', out: path.join(d, 'bundle'), root: d, footprint: 'full',
