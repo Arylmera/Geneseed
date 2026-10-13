@@ -65,7 +65,6 @@
   "DESC_RELEASE": "Proclaim a new version — raise the number, inscribe the chronicle, seal it with a tag, all three in accord.",
   "DESC_INGEST": "Render a foreign document — PDF, Office, or web — into clean markdown before it may be read.",
   "DESC_RESEARCH": "Seek the answer from the wider world — range across many sources, then prove each claim against independent witnesses before you trust it.",
-  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Ask first — a standing edict, or a matter merely to be remembered? Then inscribe the memory, or try the edict against the case that would break it before it enters user-rules.md — and tend the memory: merge, retire, promote to law.",
   "DESC_PROFILE": "Inscribe the user's identity into PROFILE.md — grant audience, ask who they are and how they will to be served; identity only, edicts belong in user-rules.md.",
   "DESC_GENESEED": "Operate the deployed Geneseed harness — find each install and its settings, read its files, run status, doctor and diff, and rebuild it with one setting changed when the user asks — and forge the user's own OpenCode colour-rite.",

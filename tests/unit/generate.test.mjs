@@ -1493,7 +1493,7 @@ test('writeNativeLayer reports the claimed user-only skill stems, and only those
     const { userOnlySkills } = native(d);
     // Real authored skills carrying the literal `<!-- invocation: user -->` marker in
     // src/skills (skill-forge only DESCRIBES the convention in prose; it does not carry it).
-    for (const name of ['herdr', 'learn-mode', 'quiz', 'teach']) {
+    for (const name of ['learn-mode', 'quiz', 'teach']) {
       assert.ok(userOnlySkills.includes(name), `${name} missing from userOnlySkills: ${userOnlySkills}`);
     }
     // An ordinary, model-invocable skill gets no row.
@@ -2631,12 +2631,10 @@ test('a note: comment containing a nested <!-- or --> is refused by the doctor, 
   assert.ok(problems.some((p) => p.includes('x.md') && p.includes('nested')), problems.join('\n'));
 }));
 
-test('the real canon strips the author note from the on-disk laws copy, the full carrier, and herdr.md', () => {
+test('the real canon strips the author note from the on-disk laws copy, and the full carrier', () => {
   const laws = renderFile(cfg(), path.join(ROOT, 'src', 'laws', 'universal.md'),
     effectiveTheme(cfg(), 'neutral'), 'full');
   assert.ok(!laws.includes('Amend BOTH halves'), 'the on-disk laws copy still carries the maintainer note');
-  const herdr = rendered('skills/herdr.md');
-  assert.ok(!herdr.includes('Authoring note'), 'the rendered herdr skill still carries the maintainer note');
   // AGENT.md inlines laws/universal.md at full footprint — the carrier copy, not just the on-disk one.
   const agent = rendered('AGENT.md', 'neutral', 'full');
   assert.ok(!agent.includes('Amend BOTH halves'), 'the full carrier still inlines the maintainer note');

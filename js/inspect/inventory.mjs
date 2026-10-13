@@ -106,7 +106,7 @@ export const SKILL_CLASS = {
   // knowledge base, terminal) rather than about the user's code. They sat under
   // `understand` before, which made that class a grab-bag.
   wiki: 'harness', geneseed: 'harness', rule: 'harness', profile: 'harness',
-  herdr: 'harness', 'skill-forge': 'harness',
+  'skill-forge': 'harness',
   teach: 'learn', quiz: 'learn', 'learn-mode': 'learn',
 };
 

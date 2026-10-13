@@ -76,8 +76,8 @@ test('the flag refuses an unknown skill and a linked one, and normalises the res
   // Every linked skill is protected — the constitution would ship a dead link to it.
   for (const name of linkedSkillIds()) refuse(name, new RegExp(`'${name}' cannot be excluded`));
   assert.ok(linkedSkillIds().includes('council'), 'the scan found none of the known links');
-  const args = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'herdr, daydream,herdr']);
-  assert.deepEqual(args.excludeSkills, ['daydream', 'herdr'], 'not sorted and deduped');
+  const args = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'quiz, daydream,quiz']);
+  assert.deepEqual(args.excludeSkills, ['daydream', 'quiz'], 'not sorted and deduped');
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--exclude-skills', 'none']).excludeSkills, []);
 });
 
@@ -87,8 +87,8 @@ test('setupBuildArgs elides an empty exclusion and spells a non-empty one', () =
   for (const none of [null, []]) {
     assert.ok(!at(none).includes('--exclude-skills'), `${JSON.stringify(none)} grew a flag`);
   }
-  const argv = at(['daydream', 'herdr']);
-  assert.equal(argv[argv.indexOf('--exclude-skills') + 1], 'daydream,herdr');
+  const argv = at(['daydream', 'quiz']);
+  assert.equal(argv[argv.indexOf('--exclude-skills') + 1], 'daydream,quiz');
 });
 
 test('a global install keeps its excluded skills through a rebuild', () => {
@@ -96,12 +96,12 @@ test('a global install keeps its excluded skills through a rebuild', () => {
     const cfgDir = path.join(d, 'cfg');
     quiet(() => emitGlobalInto('opencode', {
       theme: 'neutral', out: path.join(d, 'out'), cfgDir, footprint: 'lean',
-      excludeSkills: ['herdr'],
+      excludeSkills: ['daydream'],
     }));
-    assert.ok(!fs.existsSync(path.join(cfgDir, 'skills', 'herdr')), 'the skill was emitted');
+    assert.ok(!fs.existsSync(path.join(cfgDir, 'skills', 'daydream')), 'the skill was emitted');
     const p = installProfile('opencode', 'global', cfgDir);
-    assert.deepEqual(p.excludeSkills, ['herdr']);
-    assert.equal(p.argv[p.argv.indexOf('--exclude-skills') + 1], 'herdr',
+    assert.deepEqual(p.excludeSkills, ['daydream']);
+    assert.equal(p.argv[p.argv.indexOf('--exclude-skills') + 1], 'daydream',
       'the rebuild argv would put the skill back');
   });
 });

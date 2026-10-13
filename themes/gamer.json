@@ -65,7 +65,6 @@
   "DESC_RELEASE": "Ship a patch — bump the version, write the patch notes, tag it, all in sync.",
   "DESC_INGEST": "Load a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Look up the answer online — scout wide, then cross-check every claim against independent sources before you call it.",
-  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Ask first — standing house rule, or just something to remember? Then save the memory, or test the rule against its worst case before binding it into user-rules.md — and tidy the save file: merge, delete, promote.",
   "DESC_PROFILE": "Fill in the player card in PROFILE.md — main role, loadout, preferred difficulty; identity only, house rules go in user-rules.md.",
   "DESC_GENESEED": "Operate the deployed Geneseed harness — find each install and its settings, read its files, run status, doctor and diff, and rebuild it with one setting changed when the user asks — and craft the user's own OpenCode colour theme.",

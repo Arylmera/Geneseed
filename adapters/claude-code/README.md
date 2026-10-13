@@ -92,27 +92,6 @@ hooks or plugins, the AGENT.md prose still carries the rule.
 > plugin. A `context.json` still overrides, and `"extend": true` layers a manifest
 > on top of discovery.
 
-## Bundled skill — `herdr`
-
-The canonical herdr skill lives in the Geneseed source tree at
-[`src/skills/herdr.md`](../../src/skills/herdr.md). The build renders it into
-every emit — `.opencode/skills/herdr/SKILL.md` for OpenCode hosts, the
-portable bundle for everyone else — so a deployed harness picks it up
-automatically alongside every other Geneseed skill.
-
-A copy is also kept at
-[`.claude/skills/herdr/SKILL.md`](../../.claude/skills/herdr/SKILL.md) so Claude
-Code running **inside this repo** (i.e. people working on Geneseed itself)
-discovers it directly, since the build doesn't write into `.claude/`. The two
-copies share content; keep them in sync when you edit either.
-
-Either way, you only need:
-
-- the **`herdr` binary** on your `PATH` (install via [herdr.dev](https://herdr.dev)),
-- the agent launched **inside a herdr pane** — the skill self-gates on
-  `HERDR_ENV=1` and stays silent everywhere else, so shipping it is harmless
-  for users who don't run herdr.
-
 ## Other tools
 
 This adapter is Claude-Code-specific. On tools without hooks, the harness still

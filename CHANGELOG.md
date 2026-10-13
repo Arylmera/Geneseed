@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Removed
+
+- The `herdr` skill. Orca now covers multi-pane and multi-agent work, so a skill limited to a herdr pane only added to the catalogue. It joins `RETIRED_SKILL_IDS`, so an install that excluded it still rebuilds. Skills: 47 → 46.
+
 ## [4.1.0] — 2026-10-13
 
 Minor: the planning, review, debugging and multi-agent skills take the lessons of Superpowers 7.0, and the host canary.

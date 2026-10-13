@@ -348,6 +348,7 @@ export function skillAliases(src = SRC) {
  */
 export const RETIRED_SKILL_IDS = {
   tickets: 'removed in the 2026-10 sharpen; plan slices the work now',
+  herdr: 'removed 2026-10; Orca covers multi-pane and multi-agent work',
 };
 
 /**
