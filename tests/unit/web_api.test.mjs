@@ -2685,6 +2685,26 @@ for (const host of ['claude', 'bob']) {
   });
 }
 
+// An owned file the user edited survives a remove as theirs (Task 5 + the PR B final review):
+// the web's remove is the same `installUninstall`, so its response must name the kept file or
+// the UI clears the row in silence and the user never learns the file is still on disk.
+test('a web remove reports an edited owned file it kept', () => {
+  const sb = makeSandbox();
+  const cwd = process.cwd();
+  try {
+    const root = emitProject(sb.path, 'claude');
+    const edited = path.join(root, '.claude', '.gitignore');
+    fs.appendFileSync(edited, '\nmine');
+    process.chdir(root);
+    const res = apiInstallToggle(neutral(),
+      { host: 'claude', path: process.cwd(), action: 'remove', memory: 'keep' });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.deepEqual(res.kept, ['.gitignore']);
+    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'), 'the edited file was deleted');
+    assert.equal(installState(root, 'claude', 'project'), 'absent');
+  } finally { process.chdir(cwd); sb.cleanup(); }
+});
+
 test('a removal de-registers through the registry prune', () => {
   withXdg((tmp) => {
     const root = seedOpencodeProject(path.join(tmp, 'deployed'));

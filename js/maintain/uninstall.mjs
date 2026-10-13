@@ -204,14 +204,16 @@ function warnSurvivors(failed) {
 /**
  * The message a reversal prints for every rel `unlinkOwned` left on disk because the user had
  * edited it and `--force` was not given. Separate from `warnSurvivors`: a kept file is not an
- * error (nothing failed), so it gets its own sentence rather than being folded into "could not
- * remove" — the wording the brief fixes verbatim, including the literal `file(s)`.
+ * error (nothing failed) — it is the user's now, exactly like a refused claim on re-emit, and
+ * the uninstall completes around it. So the hint is `--force` on the uninstall itself, not a
+ * retry: once it completes there is no install left to rerun against.
  */
 function warnKept(kept) {
   printErr(`[uninstall] kept ${kept.length} file(s) you edited: ${kept.join(', ')}`
-    + ' — rerun with --force to delete\n');
+    + ' — they are yours now (uninstall with --force to delete edited files too)\n');
 }
 
+/** Only a FAILED unlink keeps the manifest and markers — a kept edit never does. */
 function warnMarkersKept() {
   printErr('[uninstall] WARN: the manifest and markers were KEPT so '
     + '`geneseed uninstall` can be retried once the file(s) are '
@@ -356,7 +358,7 @@ export function claudeUninstall(cfg, archiveMemory, force = false) {
   // Always EXCISE, never whole-file delete: even where Geneseed created CLAUDE.md the user
   // may have added prose since. The file goes only if the excision leaves it empty.
   managedBlockRemove(claudeMdPath(cfg, managed));
-  if (failed.length || kept.length) warnMarkersKept();
+  if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(cfg, m));
   let archived = null;
   if (archiveMemory && isDir(path.join(cfg, 'memory'))) {
@@ -386,7 +388,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode', force 
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
     path.join(target, 'AGENT.md').split(path.sep).join('/'), skillPermissionNames(man));
   managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
-  if (failed.length || kept.length) warnMarkersKept();
+  if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
   let archived = null;
   if (archiveMemory && isDir(path.join(target, 'memory'))) {
@@ -456,7 +458,8 @@ function opencodeProjectUninstall(root, force = false) {
     if (kept.length) warnKept(kept);
     // Survivors gate, mirroring the other two reversals: `_project_qualifies` keys off the
     // manifest, so deleting it while an owned file survives makes the install unfindable.
-    if (!failed.length && !kept.length) {
+    // A kept (edited) file is not a survivor: it is the user's now, not this install's.
+    if (!failed.length) {
       unlinkQuiet(manifestPath);
       if (isDir(oc) && isEmptyDir(oc)) rmdirQuiet(oc);
     } else {
@@ -520,13 +523,12 @@ export function ownedDirsFor(root, host, scope, data) {
  * gate while the reversal kept its manifest, and deleting the root markers here would then
  * contradict that "KEPT" promise. The reversal's own `failed` list closes that hole.
  *
- * FIX ROUND 1: `summary.kept` closes the same hole for an EDITED file the reversal
- * deliberately left on disk (Task 5). `kept` is not a directory-existence proxy: an edited
- * owned file directly under the cfg dir (a Claude-family file) or outside `ownedDirsFor`'s
- * watch list entirely (Bob's `rules/geneseed.md`) would not make any watched directory
- * non-empty, so the `survivors` check alone would miss it and this step would delete the root
- * markers out from under a file the reversal just promised to keep — orphaning it, with no
- * directory or marker left to find it by on a later `--force` retry.
+ * A KEPT file (Task 5: the user edited it, no `--force`) is the opposite case: it is the
+ * user's now, exactly like a refused claim on re-emit, so it must NOT hold the install open —
+ * a manifest kept for it left the install 'active' and the next `rebuild-all`/`update`
+ * re-wired hooks into a repo the user had uninstalled. So a watched directory whose only
+ * remaining files are kept ones is not a survivor, and `kept` never gates the markers; it is
+ * returned so a caller (the web's remove) can name the files and the `--force` way out.
  */
 export function installUninstall(root, host = 'opencode', scope = 'global', memory = 'keep',
   force = false) {
@@ -559,25 +561,29 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
   // 3. The root markers, but only once the reversal's dirs are actually gone.
   const failed = summary.failed || [];
   const kept = summary.kept || [];
-  const survivors = ownedDirsFor(root, host, scope, data).filter((d) => existsSync(d));
-  if (survivors.length || failed.length || kept.length) {
-    if (survivors.length && !failed.length && !kept.length) {
-      // With `failed` or `kept` set the reversal already warned twice — no third
-      // overlapping WARN.
+  // `kept` rels are spelled relative to the reversal's own base: the cfg dir for the Claude
+  // family, the root for OpenCode (whose project reversal already prefixes `.opencode/`).
+  const keptAbs = new Set(kept.map((r) => path.join(CLAUDE_STYLE.includes(host) ? data : root, r)));
+  const survivors = ownedDirsFor(root, host, scope, data).filter((d) => existsSync(d)
+    && !(keptAbs.size && readdirSync(d, { recursive: true, withFileTypes: true })
+      .every((e) => e.isDirectory() || keptAbs.has(path.join(e.parentPath, e.name)))));
+  const withKept = (o) => (kept.length ? { ...o, kept } : o);
+  if (survivors.length || failed.length) {
+    if (survivors.length && !failed.length) {
+      // With `failed` set the reversal already warned twice — no third overlapping WARN.
       printErr('[uninstall] WARN: could not fully remove the install — still present: '
         + `${survivors.join(', ')}. The install marker was KEPT so you can retry `
         + '`geneseed uninstall` once the file(s) are unlocked/removable.\n');
     }
-    // `incomplete` names every reason the root markers stayed — directory survivors, a failed
-    // unlink, AND a deliberately kept edited file — deduped, so a kept file that also made its
-    // directory non-empty is not named twice.
-    const named = survivors.concat(failed, kept);
-    const out = {
+    // `incomplete` names every reason the root markers stayed — directory survivors and a
+    // failed unlink — deduped.
+    const named = survivors.concat(failed);
+    const out = withKept({
       ok: true,
       removed: summary.removed ?? 0,
       memory,
       incomplete: named.filter((f, i) => named.indexOf(f) === i),
-    };
+    });
     if (archived.length) out.archived = archived;
     return out;
   }
@@ -651,7 +657,7 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
   }
   // 4. Tidy an emptied marker dir (.claude/.bob/.openclaude) so no husk lingers in the repo.
   if (data !== root && isDir(data) && isEmptyDir(data)) rmdirQuiet(data);
-  const out = { ok: true, removed: summary.removed ?? 0, memory };
+  const out = withKept({ ok: true, removed: summary.removed ?? 0, memory });
   if (archived.length) out.archived = archived;
   return out;
 }
@@ -848,7 +854,8 @@ export function cmdUninstall(args) {
       + 'the install marker was kept — retry `geneseed uninstall` once they\'re '
       + `removable. ${cfgfile} updated where needed; memory/notebook ${mem}.\n`);
   } else {
-    printOut(`[uninstall] done — removed ${s.removed} file(s); ${cfgfile} updated where `
+    const keptNote = s.kept ? `, kept ${s.kept.length} you edited` : '';
+    printOut(`[uninstall] done — removed ${s.removed} file(s)${keptNote}; ${cfgfile} updated where `
       + `needed; memory/notebook ${mem}. Start a new session to apply.\n`);
   }
   if (scope === 'global') printSurvivingProjectInventory(root);

@@ -1033,80 +1033,80 @@ test('an OpenCode uninstall goes by the manifest and leaves a hand-authored file
   });
 });
 
-// Task 5: an owned file the user edited since install survives an uninstall unless --force.
-// `agents/reviewer.md` is an owned file the opencode emit writes and hashes (Task 3's
-// `ownedHashes`), so editing it after install is the same "I changed Geneseed's file" shape
-// `owned.test.mjs`'s rebuild/prune tests already cover for the emit side; this is the uninstall
-// side of the same guard.
-test('uninstall keeps an edited owned file unless --force', () => {
+// Task 5, as amended by the PR B final review: an owned file the user edited since install is
+// the USER's now — exactly like a refused claim on re-emit — so an uninstall leaves it on disk
+// and still COMPLETES. Keeping the manifest for it (Task 5's first shape) left the install
+// 'active', and the next `rebuild-all`/`update` re-wired hooks into a repo the user had just
+// uninstalled. `agents/reviewer.md` is an owned file the opencode emit writes and hashes, and it
+// sits under `.opencode/` — inside `ownedDirsFor`'s watch list, so this also proves a kept file
+// does not count as a directory survivor.
+const editOwned = (p) => fs.writeFileSync(p, `${fs.readFileSync(p, 'utf8')}\nmine`, 'utf8');
+
+test('uninstall keeps an edited owned file as the user\'s and completes', () => {
   withDir((d) => {
     const repo = projectInstall(path.join(d, 'repo'), 'opencode', path.join(d, 'home'));
     fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
     const manifest = path.join(repo, '.opencode', GLOBAL_MANIFEST);
     const edited = path.join(repo, '.opencode', 'agents', 'reviewer.md');
     assert.ok(fs.statSync(edited).isFile(), 'the fixture assumption — reviewer.md ships — is wrong');
-    fs.writeFileSync(edited, `${fs.readFileSync(edited, 'utf8')}\nmine`, 'utf8');
-
-    const [rc, , err] = captured(() => cmdUninstall(uninstallArgs(repo)));
-    assert.equal(rc, 0);
-    assert.ok(fs.statSync(edited).isFile(), 'an edited owned file was deleted without --force');
-    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'));
-    assert.match(err,
-      /\[uninstall\] kept 1 file\(s\) you edited: \.opencode\/agents\/reviewer\.md — rerun with --force to delete/);
-    assert.ok(fs.statSync(manifest).isFile(), 'the manifest was deleted even though a file survived');
-
-    const [rc2] = captured(() => cmdUninstall(uninstallArgs(repo, { force: true })));
-    assert.equal(rc2, 0);
-    assert.ok(!fs.existsSync(edited), '--force did not delete the edited owned file');
-    assert.ok(!fs.existsSync(manifest), '--force left the manifest behind');
-  });
-});
-
-// Fix round 1 (reviewer finding): `.gitignore` is a real Claude-family owned file that lives
-// DIRECTLY under the cfg dir, outside `ownedDirsFor`'s watch list (`agents/`, `skills/`) —
-// `claudeUninstall`'s own prune empties and removes both of those dirs once every file in them
-// is gone, so the only thing left behind by an edited `.gitignore` is the file itself, nothing
-// `ownedDirsFor`'s directory-existence proxy can see. Before the fix, `installUninstall`'s root
-// marker step (step 3) saw no directory survivor and no `failed` entry, so it deleted
-// `.geneseed-emit` and deregistered the install while `.gitignore` sat on disk, orphaned — a
-// later `--force` would have had nothing left to resolve the install by. `kept` folded into
-// that gate closes it.
-test('uninstall keeps a kept file outside ownedDirsFor from orphaning the install', () => {
-  withDir((d) => {
-    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
-    const cfg = path.join(repo, '.claude');
-    const manifest = path.join(cfg, GLOBAL_MANIFEST);
-    const rootMarker = path.join(repo, '.geneseed-emit');
-    const edited = path.join(cfg, '.gitignore');
-    assert.ok(fs.statSync(edited).isFile(), 'the fixture assumption — .gitignore ships — is wrong');
-    assert.ok(fs.statSync(rootMarker).isFile(), 'sanity: the claude project emit writes no root marker');
-    fs.writeFileSync(edited, `${fs.readFileSync(edited, 'utf8')}\nmine`, 'utf8');
+    editOwned(edited);
+    registryRecord(repo);
 
     const [rc, out, err] = captured(() => cmdUninstall(uninstallArgs(repo)));
     assert.equal(rc, 0);
-    // `agents/` and `skills/` are both fully removed and pruned away — the directory-existence
-    // proxy alone would have seen nothing survive.
-    assert.ok(!fs.existsSync(path.join(cfg, 'agents')), 'agents/ should have been fully unlinked and pruned');
-    assert.ok(!fs.existsSync(path.join(cfg, 'skills')), 'skills/ should have been fully unlinked and pruned');
-    assert.ok(fs.statSync(edited).isFile(), 'an edited owned file outside agents/skills was deleted');
-    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'));
-    assert.match(err, /\[uninstall\] kept 1 file\(s\) you edited: \.gitignore — rerun with --force to delete/);
-    assert.ok(fs.statSync(manifest).isFile(), 'the manifest was deleted even though a file survived');
-    assert.ok(fs.statSync(rootMarker).isFile(),
-      'the root marker was deleted while a kept edited file was orphaned on disk');
-    assert.match(out, /INCOMPLETE/);
-    // A retry (same as `cmdUninstall` would run internally) must report the kept file by name
-    // in `incomplete`, not only by the directory-existence proxy — the fix the reviewer asked
-    // for, checked at the data level rather than through the printed "see the WARN above".
-    const retry = installUninstall(repo, 'claude', 'project', 'keep', false);
-    assert.ok(retry.incomplete && retry.incomplete.includes('.gitignore'),
-      `kept file was not named in incomplete: ${JSON.stringify(retry.incomplete)}`);
+    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'), 'an edited owned file was deleted without --force');
+    assert.match(err, /\[uninstall\] kept 1 file\(s\) you edited: \.opencode\/agents\/reviewer\.md — they are yours now .*--force/);
+    assert.doesNotMatch(err, /KEPT/, 'a kept edit is not a failure: no "markers were KEPT" warning');
+    assert.doesNotMatch(out, /INCOMPLETE/);
+    assert.match(out, /\[uninstall\] done — removed \d+ file\(s\), kept 1 you edited;/);
+    assert.ok(!fs.existsSync(manifest), 'the manifest survived, so the install still reads as installed');
+    assert.ok(!fs.existsSync(path.join(repo, '.geneseed-emit')), 'the root marker survived');
+    // Not `installState`: for OpenCode it reads 'active' off any leftover `.opencode/` dir, the
+    // same answer a clean uninstall with a hand-authored file there gives (the test above). The
+    // signals a rebuild-all walks are the registry row and `projectQualifies`.
+    assert.equal(projectQualifies(repo, 'opencode'), false,
+      'a rebuild-all would re-wire this repo: the uninstall did not complete');
+    assert.deepEqual(registryRoots(), [], 'the registry still lists the uninstalled root');
+  });
+});
 
-    const [rc2] = captured(() => cmdUninstall(uninstallArgs(repo, { force: true })));
-    assert.equal(rc2, 0);
+test('uninstall --force deletes an edited owned file in the same run', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'opencode', path.join(d, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    const edited = path.join(repo, '.opencode', 'agents', 'reviewer.md');
+    editOwned(edited);
+
+    const [rc, , err] = captured(() => cmdUninstall(uninstallArgs(repo, { force: true })));
+    assert.equal(rc, 0);
     assert.ok(!fs.existsSync(edited), '--force did not delete the edited owned file');
-    assert.ok(!fs.existsSync(manifest), '--force left the manifest behind');
-    assert.ok(!fs.existsSync(rootMarker), '--force left the root marker behind');
+    assert.doesNotMatch(err, /kept \d+ file\(s\) you edited/);
+    assert.equal(projectQualifies(repo, 'opencode'), false);
+  });
+});
+
+// `.gitignore` is a real Claude-family owned file that lives DIRECTLY under the cfg dir, outside
+// `ownedDirsFor`'s watch list. Kept, it must neither strand the install half-removed nor be
+// deleted: the manifest, markers and registry row all go, the file stays, and the web/API caller
+// gets its name back in `kept` so it can say so.
+test('a kept file outside ownedDirsFor: the install is removed, the file stays, kept is reported', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    const cfg = path.join(repo, '.claude');
+    const edited = path.join(cfg, '.gitignore');
+    assert.ok(fs.statSync(edited).isFile(), 'the fixture assumption — .gitignore ships — is wrong');
+    editOwned(edited);
+    registryRecord(repo);
+
+    const [s] = captured(() => installUninstall(repo, 'claude', 'project', 'keep', false));
+    assert.equal(s.ok, true);
+    assert.deepEqual(s.kept, ['.gitignore'], 'the caller must learn which files were kept');
+    assert.equal(s.incomplete, undefined, 'a kept edit alone is not an incomplete uninstall');
+    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'));
+    assert.ok(!fs.existsSync(path.join(cfg, GLOBAL_MANIFEST)), 'the manifest survived');
+    assert.ok(!fs.existsSync(path.join(repo, '.geneseed-emit')), 'the root marker survived');
+    assert.equal(installState(repo, 'claude', 'project'), 'absent');
+    assert.deepEqual(registryRoots(), [], 'the registry still lists the uninstalled root');
   });
 });
 
