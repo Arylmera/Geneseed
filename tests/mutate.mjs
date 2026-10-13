@@ -121,8 +121,8 @@ export const MUTATIONS = [
     id: 'M5',
     name: 'break the ownership claim so an emit overwrites a file it never owned',
     file: 'js/hosts/native.mjs',
-    find: '    if (oldSet.has(rel)) return true;',
-    replace: '    if (rel || true) return true;',
+    find: '    if (oldSet.has(rel)) {',
+    replace: '    if (rel || true) {',
     gate: UNIT,
     why: "The class of bug that destroys a user's own file. IT SURVIVED A CELL GATE AND WAS "
       + "CARRIED AS UNGATED FOR A WHILE, and the reason is the design doc's own: the claim "

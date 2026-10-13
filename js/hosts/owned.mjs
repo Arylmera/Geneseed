@@ -20,11 +20,13 @@
  * too, and the spec's intent — never write through a linked owned file — covers all of them,
  * not just the ones that happen to go through a `claim()` closure.
  */
-import { lstatSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { resolvePath } from './hosts.mjs';
 import { within } from '../lib/paths.mjs';
+import { isFile } from '../lib/fs.mjs';
 
 /**
  * The manifest rels that resolve INSIDE `base` — the one security boundary every walk over
@@ -89,4 +91,69 @@ export function claimLeaf(root, dest, rel) {
   process.stderr.write(`[geneseed] refused ${rel}: it is a link — Geneseed writes only `
     + 'regular files it owns\n');
   return false;
+}
+
+/**
+ * sha256 hex of the bytes on disk at `p`, with every `\r\n` folded to `\n` first. The fold is
+ * the point: a committed install is checked out by git with whatever line endings that clone's
+ * `core.autocrlf` / `.gitattributes` / OS asks for, and a teammate on the other OS gets every
+ * owned file's endings flipped without touching a byte of content. Hashed raw, that read as an
+ * edit to every file and the next rebuild froze the harness (measured: 95 false "kept your
+ * edited", owned 106 -> 11). A lone `\r` is not folded — git never writes one, so it is content.
+ * `latin1` maps each byte to one char and back, so the fold is byte-exact on any file, text or not.
+ */
+export function fileHash(p) {
+  const folded = readFileSync(p).toString('latin1').replaceAll('\r\n', '\n');
+  return createHash('sha256').update(folded, 'latin1').digest('hex');
+}
+
+/**
+ * One sha256 per entry of `owned` that is both inside `root` (through `ownedWithin`, the same
+ * containment boundary every other owned-rel walk goes through) and a file that still exists —
+ * a rel a prune is about to delete, or one a crafted manifest named outside root, is skipped
+ * rather than hashed. Keys land in the same sorted order the manifest writers already give
+ * `owned` itself (`[...owned].sort()`), so the hash map a re-emit produces for an unchanged
+ * tree is byte-identical to the one before it — `golden.mjs --idempotent`'s whole point.
+ */
+export function ownedHashes(root, owned) {
+  const hashes = {};
+  for (const rel of ownedWithin(root, owned).sort()) {
+    const p = path.join(root, rel);
+    if (isFile(p)) hashes[rel] = fileHash(p);
+  }
+  return hashes;
+}
+
+/** `/^[0-9a-f]{64}$/` — the only shape a hash this module wrote ever takes. */
+const HEX64 = /^[0-9a-f]{64}$/;
+
+/**
+ * `doc.hashes` read back defensively: a manifest is a file on disk, as untrusted as any other
+ * (`ownedWithin`'s own docblock), so a hand-edited or corrupt `hashes` must read as "nothing
+ * recorded" rather than crash or poison a comparison with a value that was never really a
+ * sha256. ANY malformed entry zeroes the whole map rather than only dropping that one key —
+ * a map that is wrong in one place is not trustworthy in the rest either.
+ */
+export function hashesOf(doc) {
+  const h = doc && typeof doc === 'object' && !Array.isArray(doc) ? doc.hashes : undefined;
+  if (!h || typeof h !== 'object' || Array.isArray(h)) return {};
+  for (const v of Object.values(h)) {
+    if (typeof v !== 'string' || !HEX64.test(v)) return {};
+  }
+  return { ...h };
+}
+
+/**
+ * Where one owned file stands against its recorded hash — the table later tasks (rebuild,
+ * prune, uninstall) will branch on to stop clobbering a user's edit to a Geneseed-owned file.
+ * `'unknown'` is deliberately distinct from `'unmodified'`: an older manifest with no `hashes`
+ * entry for this rel (today's installs, pre-Task-3) must not be read as "proven untouched" —
+ * see the constraint that a manifest without `hashes` keeps today's behaviour exactly.
+ */
+export function ownedState(root, rel, hashes) {
+  if (!Object.hasOwn(hashes, rel)) return 'unknown';
+  const expected = hashes[rel];
+  const p = path.join(root, rel);
+  if (!isFile(p)) return 'missing';
+  return fileHash(p) === expected ? 'unmodified' : 'modified';
 }

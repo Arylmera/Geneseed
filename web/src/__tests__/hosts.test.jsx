@@ -311,6 +311,20 @@ describe('Installs / Hosts', () => {
     expect(api.installRemove).toHaveBeenCalledWith('opencode', 'C:/cfg', 'archive')
   })
 
+  it('Uninstall names the edited files it kept and the CLI way to delete them', async () => {
+    // An edited owned file survives a remove as the user's; a silent success would leave the
+    // user believing it was deleted, so the note names it and the --force escape hatch.
+    api.installRemove = vi.fn(async () => ({ ok: true, kept: ['.gitignore', 'skills/x/SKILL.md'] }))
+    render(<Hosts onAction={vi.fn()} />)
+    fireEvent.click(await screen.findByLabelText('remove opencode · global from C:/cfg'))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await answered()
+    expect(screen.getByRole('status').textContent).toBe(
+      'Removed. Kept 2 file(s) you edited: .gitignore, skills/x/SKILL.md — they are yours now ' +
+        '(the CLI geneseed uninstall --force deletes edited files too).',
+    )
+  })
+
   it('an absent install offers no switch and no Uninstall', async () => {
     render(<Hosts onAction={() => {}} />)
     await pick('Claude Code')

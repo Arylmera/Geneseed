@@ -280,6 +280,14 @@ export default function Hosts({
         return
       }
       setRemoving(null)
+      // An owned file the user edited is left on disk as theirs; say so, or the cleared row
+      // reads as "everything is gone".
+      if (res.kept?.length) {
+        setNote(
+          `Removed. Kept ${res.kept.length} file(s) you edited: ${res.kept.join(', ')} — they ` +
+            'are yours now (the CLI geneseed uninstall --force deletes edited files too).',
+        )
+      }
       onMutated?.()
     } catch (e) {
       setNote(e.message)

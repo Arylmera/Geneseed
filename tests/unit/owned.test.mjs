@@ -7,14 +7,16 @@
 // (`unlinkOwned` -> `ownedWithin`); this is the same gate on the OTHER manifest-reading walk.
 import assert from 'node:assert/strict';
 import {
-  existsSync, linkSync, mkdirSync, readFileSync, symlinkSync, writeFileSync,
+  existsSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER } from '../../js/hosts/hosts.mjs';
-import { ownedWithin, safeLeaf } from '../../js/hosts/owned.mjs';
+import {
+  fileHash, hashesOf, ownedHashes, ownedState, ownedWithin, safeLeaf,
+} from '../../js/hosts/owned.mjs';
 import { claimer, writeNativeLayer } from '../../js/hosts/native.mjs';
 import { shipLeanLaws } from '../../js/build/emit-common.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -547,4 +549,234 @@ test('a full Claude project emit never writes VERSION_MARKER through a symlinked
     assert.ok(!readManifestOwned(cfgDir).includes(VERSION_MARKER),
       'the manifest must list only files Geneseed actually wrote');
   } finally { sb.cleanup(); }
+});
+
+// -----------------------------------------------------------------------------------------
+// `fileHash` / `ownedHashes` / `hashesOf` / `ownedState` — Task 3's four new helpers. No
+// behaviour change yet: nothing reads `ownedState` to change what a rebuild/prune/uninstall
+// does. This is only the plumbing a later task consumes.
+// -----------------------------------------------------------------------------------------
+
+test('fileHash is the sha256 hex of the bytes on disk', () => {
+  withDir((dir) => {
+    const p = path.join(dir, 'x.txt');
+    writeFileSync(p, 'hello\n');
+    // Measured against Node's own `crypto.createHash('sha256')` output for these exact bytes,
+    // not transcribed from memory — `printf 'hello\n' | sha256sum` agrees.
+    assert.equal(fileHash(p),
+      '5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03',
+    );
+  });
+});
+
+test('fileHash folds CRLF to LF: the two line-ending spellings of one text hash equal', () => {
+  withDir((dir) => {
+    const lf = path.join(dir, 'lf.txt');
+    const crlf = path.join(dir, 'crlf.txt');
+    writeFileSync(lf, 'a\nb\n');
+    writeFileSync(crlf, 'a\r\nb\r\n');
+    // A git checkout with autocrlf (or a teammate on the other OS) rewrites every line ending
+    // without anyone editing a byte of content; an EOL-sensitive hash read that as an edit to
+    // every owned file and froze the whole harness on the next rebuild.
+    assert.equal(fileHash(crlf), fileHash(lf));
+    // A lone `\r` is content, not a line ending git converts, so it still counts as a change.
+    writeFileSync(crlf, 'a\rb\n');
+    assert.notEqual(fileHash(crlf), fileHash(lf));
+  });
+});
+
+test('ownedHashes hashes only the owned rels that are files, inside root, sorted', () => {
+  withDir((dir) => {
+    mkdirSync(path.join(dir, 'a'), { recursive: true });
+    writeFileSync(path.join(dir, 'a', 'b.md'), 'B\n');
+    writeFileSync(path.join(dir, 'z.md'), 'Z\n');
+    // 'missing.md' is listed as owned but is not on disk (a prune's-eye view of a file that
+    // was deleted out from under the manifest); '../outside.md' resolves outside root and must
+    // never be hashed, exactly as `ownedWithin` already refuses to delete it.
+    const hashes = ownedHashes(dir, ['z.md', 'a/b.md', 'missing.md', '../outside.md']);
+    assert.deepEqual(Object.keys(hashes), ['a/b.md', 'z.md'],
+      'keys must be the sorted order ownedWithin+owned would produce, not the input order');
+    assert.equal(hashes['a/b.md'], fileHash(path.join(dir, 'a', 'b.md')));
+    assert.equal(hashes['z.md'], fileHash(path.join(dir, 'z.md')));
+  });
+});
+
+test('hashesOf table: only a well-shaped map of 64-lowercase-hex values round-trips', () => {
+  const valid = { a: 'a'.repeat(64) };
+  const table = [
+    [null, {}],
+    [[], {}],
+    [{ hashes: 3 }, {}],
+    [{ hashes: { a: 'zz' } }, {}],
+    [{ hashes: valid }, valid],
+  ];
+  for (const [doc, expected] of table) {
+    assert.deepEqual(hashesOf(doc), expected, `hashesOf(${JSON.stringify(doc)})`);
+  }
+});
+
+test('ownedState table: unknown, missing, unmodified, modified', () => {
+  withDir((dir) => {
+    const rel = 'a.md';
+    const p = path.join(dir, rel);
+    writeFileSync(p, 'original\n');
+    const hashes = { [rel]: fileHash(p) };
+
+    assert.equal(ownedState(dir, 'nowhere.md', hashes), 'unknown',
+      'no entry in the hash map at all — nothing recorded to compare against');
+    assert.equal(ownedState(dir, 'constructor', hashes), 'unknown',
+      'an inherited Object.prototype key is not a recorded hash (Object.hasOwn, not a lookup)');
+    assert.equal(ownedState(dir, rel, hashes), 'unmodified',
+      'the bytes on disk still match the recorded hash');
+
+    writeFileSync(p, 'original\nx', { flag: 'a' }); // append one byte
+    assert.equal(ownedState(dir, rel, hashes), 'modified',
+      'one appended byte must flip this away from unmodified');
+
+    rmSync(p);
+    assert.equal(ownedState(dir, rel, hashes), 'missing',
+      'the file named in the manifest is gone from disk');
+  });
+});
+
+// -----------------------------------------------------------------------------------------
+// Task 4: a rebuild/prune never overwrites or deletes an owned file the user has edited.
+// `skills/develop/SKILL.md` is a real Claude-footprint skill, written by every project emit
+// below — the brief's own shape (a skill's SKILL.md), reached through the real dispatch path
+// rather than a unit call into `claimer`, so the proof is that the actual emit refuses, not
+// just the function in isolation.
+// -----------------------------------------------------------------------------------------
+
+const readManifestDoc = (cfgDir) => JSON.parse(readFileSync(path.join(cfgDir, GLOBAL_MANIFEST), 'utf8'));
+const DEVELOP_SKILL = path.join('skills', 'develop', 'SKILL.md');
+
+/**
+ * How many stderr LINES mention `needle` — fix round 1's own gate: `claimer`'s refusal and
+ * `pruneOwned`'s stale-check both read the same rel in the same emit (a claimer-refused edit
+ * drops its rel out of `owned`, which is indistinguishable from "no longer shipped" to a prune
+ * that does not know WHY it is missing), and before the fix both printed a line about it. The
+ * two warnings are about mutually exclusive situations and must never both fire for one rel.
+ */
+const linesMentioning = (err, needle) => err.split('\n').filter((l) => l.includes(needle)).length;
+
+test('rebuild keeps an edited skill', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    const skillPath = path.join(cfgDir, DEVELOP_SKILL);
+    assert.ok(existsSync(skillPath), 'the fixture assumption — develop ships by default — is wrong');
+    writeFileSync(skillPath, `${readFileSync(skillPath, 'utf8')}\nmine`);
+
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out, root, footprint: 'full' }));
+
+    assert.ok(readFileSync(skillPath, 'utf8').endsWith('mine'),
+      'a rebuild overwrote a file the user had edited');
+    assert.match(err, /\[geneseed\] kept your edited skills\/develop\/SKILL\.md — delete it to get Geneseed's copy back/);
+    assert.ok(!readManifestOwned(cfgDir).includes('skills/develop/SKILL.md'),
+      "an edited file Geneseed refused to overwrite must drop out of the manifest's owned set, "
+      + 'or the next prune deletes the user\'s edit on the grounds that this install owns it');
+    // Fix round 1: the rel dropped out of `owned` above also makes it look STALE to the very
+    // same emit's own prune pass, which must not independently re-decide and print its own
+    // "...no longer shipped" line about a skill that is, in fact, still shipped.
+    assert.equal(linesMentioning(err, 'skills/develop/SKILL.md'), 1,
+      'claimer\'s refusal and pruneOwned\'s stale-check both fired for the same still-shipped '
+      + 'rel in the same emit — exactly one warning line may name it');
+  });
+});
+
+test('a line-ending flip of every owned file is not an edit: re-emit keeps ownership', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+    const before = readManifestOwned(cfgDir);
+
+    // What a committed install looks like after a checkout on the other OS (or with
+    // core.autocrlf): every text file's line endings flipped, not one byte of content changed.
+    for (const rel of before) {
+      const p = path.join(cfgDir, rel);
+      if (!existsSync(p)) continue;
+      const text = readFileSync(p, 'latin1');
+      const flipped = text.includes('\r\n') ? text.split('\r\n').join('\n') : text.split('\n').join('\r\n');
+      writeFileSync(p, flipped, 'latin1');
+    }
+
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out, root, footprint: 'full' }));
+
+    assert.equal(linesMentioning(err, 'kept your edited'), 0,
+      'a pure line-ending conversion was read as a user edit');
+    assert.deepEqual(readManifestOwned(cfgDir), before,
+      'owned shrank: files whose only change was their line endings were given away');
+  });
+});
+
+test('third emit stays quiet-ish: the file is now the user\'s, claim-on-create applies', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    const skillPath = path.join(cfgDir, DEVELOP_SKILL);
+    writeFileSync(skillPath, `${readFileSync(skillPath, 'utf8')}\nmine`);
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    // Third emit: the manifest no longer owns the file (the rebuild above dropped it), so this
+    // is an ordinary pre-existing-and-unowned file — claim-on-create, not the edit guard.
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out, root, footprint: 'full' }));
+
+    assert.ok(readFileSync(skillPath, 'utf8').endsWith('mine'), 'the user\'s file was overwritten');
+    assert.match(err, /kept your existing skills\/develop\/SKILL\.md/);
+  });
+});
+
+test('prune keeps an edited stale file', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    const skillPath = path.join(cfgDir, DEVELOP_SKILL);
+    writeFileSync(skillPath, `${readFileSync(skillPath, 'utf8')}\nmine`);
+
+    const { err } = quietErr(() => emitProjectInto('claude',
+      { theme: 'neutral', out, root, footprint: 'full', excludeSkills: ['develop'] }));
+
+    assert.ok(existsSync(skillPath), 'the prune deleted a stale file the user had edited');
+    assert.ok(readFileSync(skillPath, 'utf8').endsWith('mine'));
+    assert.match(err, /\[geneseed\] kept your edited skills\/develop\/SKILL\.md \(no longer shipped\)/);
+    assert.ok(!readManifestOwned(cfgDir).includes('skills/develop/SKILL.md'),
+      'a skill this build no longer ships must not be re-claimed into owned');
+    // This skill was `excludeSkills`'d, not refused by `claimer` (it was never rendered, so
+    // `claimer` never saw its rel this emit) — exactly one line, pruneOwned's own, same as the
+    // rebuild scenario's gate above.
+    assert.equal(linesMentioning(err, 'skills/develop/SKILL.md'), 1);
+  });
+});
+
+test('a manifest with no hashes (pre-Task-3) keeps today\'s behaviour: overwritten exactly as today', () => {
+  withDir((root) => {
+    const cfgDir = path.join(root, '.claude');
+    const out = path.join(root, 'bundle');
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
+    const doc = readManifestDoc(cfgDir);
+    delete doc.hashes;
+    writeFileSync(manifestPath, JSON.stringify(doc));
+
+    const skillPath = path.join(cfgDir, DEVELOP_SKILL);
+    const original = readFileSync(skillPath, 'utf8');
+    writeFileSync(skillPath, `${original}\nmine`);
+
+    quiet(() => emitProjectInto('claude', { theme: 'neutral', out, root, footprint: 'full' }));
+
+    assert.equal(readFileSync(skillPath, 'utf8'), original,
+      'a pre-Task-3 manifest with no hashes must keep today\'s behaviour — the edit is lost, '
+      + 'exactly as before this feature existed');
+  });
 });

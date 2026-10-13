@@ -1415,6 +1415,21 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--force"
+          ],
+          "dest": "force",
+          "metavar": null,
+          "help": "also delete owned files you edited since install",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []

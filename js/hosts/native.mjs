@@ -33,7 +33,7 @@ import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { aliasesOf } from '../build/source.mjs';
-import { claimLeaf } from './owned.mjs';
+import { claimLeaf, ownedState } from './owned.mjs';
 
 /** What a folder skill writes where it needs its own directory — see `writeNativeLayer`. */
 const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
@@ -477,15 +477,37 @@ function warnClaudeIgnored(overrides) {
  * `oldOwned` — it is not about which prior manifest owns `dest`, it is about what sits AT
  * `dest` on disk, and a caller with no `cfg` (`null` or `undefined` — they behave alike
  * throughout this closure) has no root to contain against at all. See `js/hosts/owned.mjs`.
+ *
+ * `claim.editRefused` (Task 4, fix round 1): the rels this closure refused because the user
+ * had edited them — the one piece of its own decision `pruneOwned` cannot re-derive from
+ * `owned` alone. A refused edit drops its rel OUT of `owned` (the file was not written), which
+ * makes it look exactly like a rel this build stopped shipping — `pruneOwned` would read it as
+ * stale, re-run `ownedState`, see `'modified'` again, and print ITS OWN "kept your edited...
+ * (no longer shipped)" right under this function's "kept your edited... delete it to get
+ * Geneseed's copy back" — two warnings about one rel that is in fact still shipped. The caller
+ * reads this set back off the closure and hands it to `pruneOwned` so that rel is excluded from
+ * the stale set entirely, silently, rather than re-evaluated.
  */
-export function claimer(oldOwned, cfg, manifestExisted = true) {
+export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
   const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
   let headerPrinted = false;
-  return (dest) => {
+  const editRefused = new Set();
+  const claim = (dest) => {
     if (cfg != null && !claimLeaf(cfg, dest, relPosix(cfg, dest))) return false;
     if (oldSet === null || cfg == null || !existsSync(dest)) return true;
     const rel = relPosix(cfg, dest);
-    if (oldSet.has(rel)) return true;
+    if (oldSet.has(rel)) {
+      // `'unknown'` (no hash recorded — a pre-Task-3 manifest, or a rel `ownedHashes` never
+      // hashed) and `'unmodified'` both fall through to the ordinary overwrite below: the
+      // constraint that a manifest without `hashes` keeps today's behaviour exactly is this
+      // branch doing nothing extra, not a special case.
+      if (ownedState(cfg, rel, oldHashes) === 'modified') {
+        warn(`[geneseed] kept your edited ${rel} — delete it to get Geneseed's copy back`);
+        editRefused.add(rel);
+        return false;
+      }
+      return true;
+    }
     if (!manifestExisted && !headerPrinted) {
       warn('[geneseed] first emit over a pre-manifest install — existing files '
         + 'are treated as yours');
@@ -495,6 +517,8 @@ export function claimer(oldOwned, cfg, manifestExisted = true) {
       + 'clobbering it');
     return false;
   };
+  claim.editRefused = editRefused;
+  return claim;
 }
 
 /**
@@ -531,7 +555,8 @@ export function claimer(oldOwned, cfg, manifestExisted = true) {
  */
 export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, {
   host = 'opencode', oldOwned = null, cfg = null, manifestExisted = true,
-  theme = null, src = undefined, skillDirOf = null, claim = claimer(oldOwned, cfg, manifestExisted),
+  theme = null, src = undefined, skillDirOf = null, oldHashes = {},
+  claim = claimer(oldOwned, cfg, manifestExisted, oldHashes),
   // Bob (host-compat R1): its skills page documents only `name`/`description` — no
   // `disable-model-invocation` — and giving it the Claude-dialect alias SKILL.md (the
   // `host === 'claude'` branch below) would be an unverified key PLUS a visible duplicate

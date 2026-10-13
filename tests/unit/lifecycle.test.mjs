@@ -31,7 +31,7 @@ import { openclaudeDualHarnessNotes } from '../../js/inspect/doctor.mjs';
 import { NOTE, isDoctorNote } from '../../js/inspect/scan.mjs';
 import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
-  projectQualifies, installDeactivate, installReactivate,
+  projectQualifies, installDeactivate, installReactivate, installUninstall,
 } from '../../js/maintain/uninstall.mjs';
 import {
   emitHostScopeOf, installState, installTargets, openclaudeDualHarnessRoot,
@@ -956,8 +956,8 @@ test('an unknown target resolves to nothing', () => {
 // really about the same question: does it delete EXACTLY what Geneseed wrote, and nothing the
 // user did.
 
-const uninstallArgs = (target, { yes = true, archiveMemory = false } = {}) =>
-  ({ target, yes, archiveMemory });
+const uninstallArgs = (target, { yes = true, archiveMemory = false, force = false } = {}) =>
+  ({ target, yes, archiveMemory, force });
 
 test('a Claude project uninstall unwires hooks and keeps the user\'s prose', () => {
   withDir((d) => {
@@ -1030,6 +1030,83 @@ test('an OpenCode uninstall goes by the manifest and leaves a hand-authored file
     // …and the user's own file, in the very directory being cleaned, survived.
     assert.ok(fs.statSync(mine).isFile(), 'the hand-authored agent was deleted');
     assert.equal(fs.readFileSync(mine, 'utf8'), "hand authored, not Geneseed's");
+  });
+});
+
+// Task 5, as amended by the PR B final review: an owned file the user edited since install is
+// the USER's now — exactly like a refused claim on re-emit — so an uninstall leaves it on disk
+// and still COMPLETES. Keeping the manifest for it (Task 5's first shape) left the install
+// 'active', and the next `rebuild-all`/`update` re-wired hooks into a repo the user had just
+// uninstalled. `agents/reviewer.md` is an owned file the opencode emit writes and hashes, and it
+// sits under `.opencode/` — inside `ownedDirsFor`'s watch list, so this also proves a kept file
+// does not count as a directory survivor.
+const editOwned = (p) => fs.writeFileSync(p, `${fs.readFileSync(p, 'utf8')}\nmine`, 'utf8');
+
+test('uninstall keeps an edited owned file as the user\'s and completes', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'opencode', path.join(d, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    const manifest = path.join(repo, '.opencode', GLOBAL_MANIFEST);
+    const edited = path.join(repo, '.opencode', 'agents', 'reviewer.md');
+    assert.ok(fs.statSync(edited).isFile(), 'the fixture assumption — reviewer.md ships — is wrong');
+    editOwned(edited);
+    registryRecord(repo);
+
+    const [rc, out, err] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'), 'an edited owned file was deleted without --force');
+    assert.match(err, /\[uninstall\] kept 1 file\(s\) you edited: \.opencode\/agents\/reviewer\.md — they are yours now .*--force/);
+    assert.doesNotMatch(err, /KEPT/, 'a kept edit is not a failure: no "markers were KEPT" warning');
+    assert.doesNotMatch(out, /INCOMPLETE/);
+    assert.match(out, /\[uninstall\] done — removed \d+ file\(s\), kept 1 you edited;/);
+    assert.ok(!fs.existsSync(manifest), 'the manifest survived, so the install still reads as installed');
+    assert.ok(!fs.existsSync(path.join(repo, '.geneseed-emit')), 'the root marker survived');
+    // Not `installState`: for OpenCode it reads 'active' off any leftover `.opencode/` dir, the
+    // same answer a clean uninstall with a hand-authored file there gives (the test above). The
+    // signals a rebuild-all walks are the registry row and `projectQualifies`.
+    assert.equal(projectQualifies(repo, 'opencode'), false,
+      'a rebuild-all would re-wire this repo: the uninstall did not complete');
+    assert.deepEqual(registryRoots(), [], 'the registry still lists the uninstalled root');
+  });
+});
+
+test('uninstall --force deletes an edited owned file in the same run', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'opencode', path.join(d, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    const edited = path.join(repo, '.opencode', 'agents', 'reviewer.md');
+    editOwned(edited);
+
+    const [rc, , err] = captured(() => cmdUninstall(uninstallArgs(repo, { force: true })));
+    assert.equal(rc, 0);
+    assert.ok(!fs.existsSync(edited), '--force did not delete the edited owned file');
+    assert.doesNotMatch(err, /kept \d+ file\(s\) you edited/);
+    assert.equal(projectQualifies(repo, 'opencode'), false);
+  });
+});
+
+// `.gitignore` is a real Claude-family owned file that lives DIRECTLY under the cfg dir, outside
+// `ownedDirsFor`'s watch list. Kept, it must neither strand the install half-removed nor be
+// deleted: the manifest, markers and registry row all go, the file stays, and the web/API caller
+// gets its name back in `kept` so it can say so.
+test('a kept file outside ownedDirsFor: the install is removed, the file stays, kept is reported', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    const cfg = path.join(repo, '.claude');
+    const edited = path.join(cfg, '.gitignore');
+    assert.ok(fs.statSync(edited).isFile(), 'the fixture assumption — .gitignore ships — is wrong');
+    editOwned(edited);
+    registryRecord(repo);
+
+    const [s] = captured(() => installUninstall(repo, 'claude', 'project', 'keep', false));
+    assert.equal(s.ok, true);
+    assert.deepEqual(s.kept, ['.gitignore'], 'the caller must learn which files were kept');
+    assert.equal(s.incomplete, undefined, 'a kept edit alone is not an incomplete uninstall');
+    assert.ok(fs.readFileSync(edited, 'utf8').endsWith('mine'));
+    assert.ok(!fs.existsSync(path.join(cfg, GLOBAL_MANIFEST)), 'the manifest survived');
+    assert.ok(!fs.existsSync(path.join(repo, '.geneseed-emit')), 'the root marker survived');
+    assert.equal(installState(repo, 'claude', 'project'), 'absent');
+    assert.deepEqual(registryRoots(), [], 'the registry still lists the uninstalled root');
   });
 });
 

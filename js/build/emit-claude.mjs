@@ -52,7 +52,7 @@ export function emitClaudeRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: themeName, cfgDir, claudeMd, scope, out, footprint, host, nativeCatalog,
-    oldOwned,
+    oldOwned, oldHashes = {},
   } = job;
 
   // `os.path.relpath(cfg, claude_md.parent)` — note the reversed argument order, and
@@ -126,7 +126,7 @@ export function emitClaudeRender(cfg, job) {
   // One shared `claim` (see `claimer`): the skills/agents writer and the Bob command writer
   // below both push into the same `owned` list, so a pre-manifest-install warning still
   // prints once across the whole emit rather than once per writer.
-  const claim = claimer(oldOwned, cfgDir, true);
+  const claim = claimer(oldOwned, cfgDir, true, oldHashes);
   const { nAgents, nSkills, written } = writeNativeLayer(
     items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'),
     loadAgentOverrides(cfgDir),
@@ -203,6 +203,7 @@ export function emitClaudeRender(cfg, job) {
     memStatus,
     nbStatus,
     managed,
+    editRefused: [...claim.editRefused],
   };
 }
 
