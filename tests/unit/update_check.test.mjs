@@ -32,8 +32,8 @@ test('the first poll answers unknown and fetches once; the next poll has the ans
   assert.deepEqual(updateStatus(st, '4.1.0', { fetcher, now: 0 }),
     { current: '4.1.0', latest: null, available: null, checked_at: null });
   updateStatus(st, '4.1.0', { fetcher, now: 1 });
-  assert.equal(calls, 1, 'a poll during the fetch must not start a second one');
   await settle();
+  assert.equal(calls, 1, 'a poll during the fetch must not start a second one');
   assert.deepEqual(updateStatus(st, '4.1.0', { fetcher, now: 2 }),
     { current: '4.1.0', latest: '4.2.0', available: true, checked_at: 0 });
   assert.equal(calls, 1, 'a fresh answer is not re-asked');
@@ -56,5 +56,6 @@ test('a failed fetch is null, and is retried after an hour', async () => {
   assert.equal(updateStatus(st, '4.1.0', { fetcher, now: HOUR - 1 }).latest, null);
   assert.equal(calls, 1, 'not retried inside the hour');
   updateStatus(st, '4.1.0', { fetcher, now: HOUR + 1 });
+  await settle();
   assert.equal(calls, 2, 'retried once the hour is up');
 });
