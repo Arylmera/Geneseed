@@ -1,6 +1,6 @@
 /**
  * The web console's dashboard and settings reads — `overview`, `recent`, `themes`, `setup`,
- * `doctor`, `diff`, `installs`, `fleet`, `excludes` and the two `loops` reads.
+ * `doctor`, `diff`, `installs`, `fleet`, `update`, `excludes` and the two `loops` reads.
  *
  * WHAT IS NOT HERE, AND WHERE IT WENT: the Library read model (catalog sections, items, wiki,
  * memory, `NotFound`) is `catalog.mjs`; the `WebState` every endpoint reads from is `state.mjs`;
@@ -34,6 +34,7 @@ import {
   configItems, deployed, dget, memoryItems, notebookItems, wikiItems,
 } from './catalog.mjs';
 import { stampMinute } from './state.mjs';
+import { updateStatus } from './update-check.mjs';
 
 /**
  * `js/web/docs.mjs` imports these three from HERE, and that file is outside this split — so
@@ -413,6 +414,9 @@ export function apiLoopsActive() {
 }
 
 /** The source's release label, or null when it cannot be read. */
+/** Is a newer release on npm than the source this console serves? See update-check.mjs. */
+export const apiUpdate = (state) => updateStatus(state, releaseLabel());
+
 function releaseLabel() {
   const v = sourceReleaseVersion({ config: CONFIG });
   return v && v !== '0.0.0' ? v : null;

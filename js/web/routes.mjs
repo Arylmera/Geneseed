@@ -22,7 +22,7 @@ import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiM
 import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
 import {
   apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiLoops, apiLoopsActive, apiOverview,
-  apiRecent, apiSetup, apiThemes,
+  apiRecent, apiSetup, apiThemes, apiUpdate,
 } from './api.mjs';
 import { NotFound, apiCatalog, apiItem } from './catalog.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote } from './user-files.mjs';
@@ -147,6 +147,7 @@ export const STATE_ROUTES = {
   '/api/doctor': apiDoctor,
   '/api/installs': apiInstalls,
   '/api/fleet': apiFleet,
+  '/api/update': apiUpdate,
   '/api/excludes': apiExcludes,
   '/api/profile': apiProfile,
   '/api/diff': apiDiff,
