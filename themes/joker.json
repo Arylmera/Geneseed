@@ -20,6 +20,7 @@
   "DESC_ARCHITECT": "Writes the set before a single line is committed.",
   "DESC_DOCS": "Keeps the joke book and the notes once the work is done.",
   "DESC_SECURITY": "Goes over anything touching the security surface — no surprises in the act.",
+  "DESC_PERFORMANCE": "Times the act — finds which bit drags, and proves it with a stopwatch, not a hunch.",
   "DESC_EXPLORER": "Sends a scout — sweeps wide in a throwaway open-mic run, brings back only the read.",
   "DESC_RESEARCHER": "Sends a scout out of the club — reads the reviews everyone skipped, checks each twice, brings back only the ones that held up.",
   "DESC_ADVOCATE": "Argues for the bit — the laugh to be had, the opening, the cost of cutting it.",

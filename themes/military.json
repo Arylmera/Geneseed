@@ -20,6 +20,7 @@
   "DESC_ARCHITECT": "Draws the operation order before a round is fired.",
   "DESC_DOCS": "Files the after-action report and field manual once the work lands.",
   "DESC_SECURITY": "Runs the threat assessment on anything touching the security perimeter.",
+  "DESC_PERFORMANCE": "Runs the logistics audit — measures where time and memory go and names the choke point.",
   "DESC_EXPLORER": "Recon: sweeps wide in a throwaway context and reports only the intel.",
   "DESC_RESEARCHER": "Field intel: sweeps open sources, corroborates each claim against two independent reports, returns only the confirmed.",
   "DESC_ADVOCATE": "Makes the case to advance — the objective's value, the opening, the cost of holding back.",

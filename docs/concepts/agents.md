@@ -24,6 +24,7 @@ An **agent** is a specialist the main session can hand a piece of work to. Each 
 | `tester` | writes, runs and diagnoses tests |
 | `reviewer` | reviews a change for correctness and quality before it merges |
 | `security` | audits changes that touch the security surface |
+| `performance` | measures where time and memory go, names the bottleneck with numbers, proposes the fix |
 | `docs` | writes and updates user-facing documentation after code lands |
 
 ### The council

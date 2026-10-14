@@ -20,6 +20,7 @@
   "DESC_ARCHITECT": "Sorts the strategy before a single line is committed.",
   "DESC_DOCS": "Writes up the debrief and the notes once the work is done.",
   "DESC_SECURITY": "Goes over anything touching the security surface with a fine comb.",
+  "DESC_PERFORMANCE": "Reads the telemetry — finds where the lap time goes, with the data to prove it.",
   "DESC_EXPLORER": "Sends a scout — sweeps wide in a throwaway run, brings back only the read.",
   "DESC_RESEARCHER": "Reads the other teams' data — cross-checks every number against two sources, brings back only what held up.",
   "DESC_ADVOCATE": "Argues for the move — the time to be gained, the gap, the cost of lifting off.",

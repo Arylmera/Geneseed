@@ -20,6 +20,7 @@
   "DESC_ARCHITECT": "Maps the run before a single line hits the deck.",
   "DESC_DOCS": "Writes the user-facing data once the code goes live.",
   "DESC_SECURITY": "Breaks and checks ICE — audits anything on the security surface.",
+  "DESC_PERFORMANCE": "Traces the lag in the net — profiles the run and names the choke point with numbers.",
   "DESC_EXPLORER": "Scouts the net — sweeps wide in a throwaway shell, returns only the intel.",
   "DESC_RESEARCHER": "Jacks into the open net — pulls the intel, cross-checks it against two nodes, returns only what verified.",
   "DESC_ADVOCATE": "Pushes the build — the upside, the opening, the cost of sitting on it.",
