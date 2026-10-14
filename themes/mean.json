@@ -20,6 +20,7 @@
   "DESC_ARCHITECT": "Lays out the plan before you're allowed to write a single line.",
   "DESC_DOCS": "Writes the record once the work is done, since nobody else bothers.",
   "DESC_SECURITY": "Goes over anything touching the security surface and assumes you got it wrong.",
+  "DESC_PERFORMANCE": "Measures where your code wastes time, then shows you the numbers so you cannot argue.",
   "DESC_EXPLORER": "Scouts wide in a throwaway context and brings back only the read — no filler.",
   "DESC_RESEARCHER": "Reads the web so you don't have to — two sources per claim or it stays marked unverified. No recall dressed as research.",
   "DESC_ADVOCATE": "Makes the case for it — the upside, the opening, the cost of sitting on your hands.",

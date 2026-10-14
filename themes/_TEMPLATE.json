@@ -20,6 +20,7 @@
   "DESC_ARCHITECT": "<one-line description: produces a design/plan before code>",
   "DESC_DOCS": "<one-line description: writes user-facing docs after code lands>",
   "DESC_SECURITY": "<one-line description: audits changes touching the security surface>",
+  "DESC_PERFORMANCE": "<one-line description: measures where the time and memory go, names the bottleneck with numbers, never guesses>",
   "DESC_EXPLORER": "<one-line description: reads/searches widely, returns only distilled findings>",
   "DESC_RESEARCHER": "<one-line description: searches and fetches the open web, cross-checks every claim, returns sourced findings>",
   "DESC_ADVOCATE": "<council seat: argues the strongest case FOR the proposal>",

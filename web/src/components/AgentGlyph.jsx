@@ -3,7 +3,7 @@ import React from 'react'
 // A small animated emblem per agent, drawn from what the agent is for. Console-only: it
 // lives in web/src and never in src/agents, so the emitted harness and its token budget are
 // untouched. Every emblem sits on the same badge (a soft disc and a slow dashed ring) so the
-// eighteen read as one family; inside, a two-tone line drawing in the accent colour (`.ag-f`
+// nineteen read as one family; inside, a two-tone line drawing in the accent colour (`.ag-f`
 // marks a soft fill) with a few staggered motions (styles.css, `.ag-*`), all stilled by
 // prefers-reduced-motion. An agent with no drawing gets the generic emblem, so a new agent
 // never breaks the page; GLYPHS is exported so a test can list who is missing one.
@@ -144,6 +144,18 @@ export const GLYPHS = {
         <circle className="ag-f" cx="22" cy="30" r="9" />
         <path d="M29 37l8 8" strokeWidth="3" />
       </g>
+    </>
+  ),
+  // Measures before it names a cause: a stopwatch, its hand sweeping the lap.
+  performance: (
+    <>
+      <path d="M26 10h8M30 10v6M44 18l3-3" />
+      <circle className="ag-f" cx="30" cy="34" r="18" />
+      <path d="M30 19v3M45 34h-3M30 49v-3M15 34h3" opacity=".6" />
+      <g className="ag-orbit">
+        <path d="M30 34V22" />
+      </g>
+      <circle cx="30" cy="34" r="2" />
     </>
   ),
   // Wards the gates: a shield with a check, sending out a ripple.

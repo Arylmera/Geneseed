@@ -20,6 +20,7 @@
   "DESC_ARCHITECT": "Draws up the plan before a single line is committed. It will be a good plan. It will still be ignored.",
   "DESC_DOCS": "Records it all for whoever comes after, once the work is done. They won't read it either.",
   "DESC_SECURITY": "Audits anything touching the security surface, expecting the worst, and is usually right.",
+  "DESC_PERFORMANCE": "Measures exactly how slow it is, which is always slower than anyone hoped.",
   "DESC_EXPLORER": "Ranges wide through a throwaway context and returns only the distilled truth, bleak as it usually is.",
   "DESC_RESEARCHER": "Trawls the open web for answers, cross-checks each against two sources, and returns only what survived — which is usually less than hoped.",
   "DESC_ADVOCATE": "Argues, against its own instincts, for the proposal — the upside, the opening, the cost of doing nothing.",
