@@ -8,6 +8,32 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.2.0] — 2026-10-14
+
+Minor: the web console's Overview becomes a control panel over every installed harness, rebuild, prune and uninstall keep owned files you edited, and skill and subagent calls are counted.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating to wire the usage counter and record the per-file hashes that edit detection reads. An install built before 4.2.0 has no hashes, so until it is rebuilt its owned files are treated as before.
+- Run `geneseed web restart` to load the new console.
+
+### Added
+- **The Overview as a control panel.** The default Overview lists every installed harness on the machine: whether it matches its source, hand edits, its always-on cost against the root-file ceiling, its build time, and Rebuild when it is behind or edited. Below that: what needs attention, then charts of always-on cost by part, which skills and agents fire over 30 days, and gate asks per rule. Hosts with nothing installed are not listed; installing stays on the Installs page. The four older views are still in the Appearance palette. New read endpoints: `GET /api/fleet` (each install with its own sync verdict and always-on cost), `GET /api/usage`, `GET /api/gates` and `GET /api/update`.
+- **Update check.** The console shows "*x.y.z* available" with an Update button only when npm has a release newer than the running source, and "update check unavailable" when the check failed. It asks `registry.npmjs.org` at most once a day (once an hour after a failure, with a 3-second timeout). `GENESEED_NO_UPDATE_CHECK` turns it off.
+- **Usage counting.** Every Skill or subagent call appends one `{day, kind, name}` line to the install's `notebook/usage.jsonl`. It records counts only, never the prompt, arguments or paths, and adds no process and no model tokens. It is on by default. `GENESEED_NO_USAGE` or a `.usage-off` file in the install turns it off. On Claude Code and OpenClaude it is a new `Skill|Agent|Task` hook group with no `onFailure: block`, so a counter can never stop a skill. On Bob, skill detection is best-effort. Lines older than 90 days are pruned.
+
+### Changed
+- **Rebuild, prune and uninstall keep owned files you edited.** The manifest now records a hash of every owned file. A rebuild leaves an owned file you edited in place and tells you to delete it if you want Geneseed's copy back, and a prune does not remove it. Uninstall leaves it too, completes around it, and names it; `geneseed uninstall --force` deletes it anyway. The console's Remove does the same and names the files it kept. The hash ignores CRLF vs LF, so a checkout with the other OS's line endings does not count as an edit.
+- **review**: when a spec exists and the diff spans more than a few files, the spec-fidelity pass runs in its own subagent, given only the diff and the spec. The smell baseline gains message chains and refused bequest.
+- **security-audit**: a finding stands only once it is traced from an attacker-controlled source to an unguarded sink through the real callers. Until then it stays a lead. The skill also names three shortcuts that produce false positives.
+- **wayfinder**: each decision ticket has a type (research, prototype, grilling or task) that says how it gets resolved. Research tickets run in parallel when the map is charted, a ticket worked with the user resolves only in that live exchange, and a sweep that finds nothing unclear produces no map.
+- **develop** names three test anti-patterns: implementation-coupled, tautological and horizontal slicing.
+- Nine registry entities move from experimental to approved: researcher, git-history, dependencies, security-audit, worktree, token-report, explain-changes, rule and skill-forge.
+- `doctor` checks that the host matrix and the enforcement table have exactly one column per host.
+
+### Fixed
+- A prune no longer follows a manifest path outside the install. A per-repo manifest entry such as `../victim.txt` could delete a file outside the install on re-emit. Prune now applies the same containment check as uninstall.
+- An emit never writes through a symlink planted at an owned path. This covers every path an emit writes, including `rules/geneseed.md`, `.gitignore`, the OpenCode global `AGENT.md` and the version marker.
+
 ### Removed
 
 - The `herdr` skill. Orca now covers multi-pane and multi-agent work, so a skill limited to a herdr pane only added to the catalogue. It joins `RETIRED_SKILL_IDS`, so an install that excluded it still rebuilds. Skills: 47 → 46.
