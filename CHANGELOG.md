@@ -8,6 +8,19 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.3.0] — 2026-10-15
+
+Minor: a performance agent, and Deletion Is Deliberate says what counts as recoverable.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so installed harnesses carry the new agent and the amended law.
+
+### Added
+- **performance agent.** Measures where time is spent before it names a bottleneck, and answers "cannot measure" rather than guess. Read-only with a shell, so it can run benchmarks and profilers; it reports and leaves the fix to the developer. Dispatched on a reported slowdown, a change on a hot path, or as a council seat. Registered as experimental.
+
+### Changed
+- **Deletion Is Deliberate** defines recoverable: deleting work committed and pushed to a branch runs freely; deleting uncommitted, unpushed or untracked work asks. History-rewriting git verbs (force-push, `reset --hard`, `clean -f`) stay gated.
+
 ## [4.2.0] — 2026-10-14
 
 Minor: the web console's Overview becomes a control panel over every installed harness, rebuild, prune and uninstall keep owned files you edited, and skill and subagent calls are counted.
