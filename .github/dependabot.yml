@@ -18,6 +18,14 @@ updates:
     groups:
       root-dev:
         patterns: ["*"]
+    # Majors are a migration, not a bump: TypeScript 7 turns `strict` on by default (#277), and
+    # @types/node stays on the major of the Node floor (engines >=22.3) so it never types an API
+    # the floor lacks.
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /web
     schedule:
