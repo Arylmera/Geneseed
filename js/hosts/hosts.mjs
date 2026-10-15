@@ -19,6 +19,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
+import { mainWorktreeOf } from './gitref.mjs';
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
@@ -39,6 +40,11 @@ export const GATE_LEDGER = path.join('notebook', 'gates.jsonl');
  * under the transitive `child_process` ban that `hooks.mjs`'s `learn` verb breaks). A
  * second copy in `js/inspect/` was the alternative, and a copy is what let the `~user`
  * refusal diverge between the two CLIs once already (see `hooks.mjs`'s header).
+ *
+ * A LINKED GIT WORKTREE OF AN EXCLUDED REPO IS EXCLUDED TOO, wherever it sits on disk: the
+ * cwd matches, or the main worktree `mainWorktreeOf` reads off the `.git` file does. An
+ * exclusion names a repository the user keeps sovereign, not a folder; a worktree elsewhere
+ * (Orca's workspaces) otherwise woke the full global harness inside it.
  */
 export function sovereignBypass(root) {
   if (!root) return false;
@@ -49,12 +55,16 @@ export function sovereignBypass(root) {
   } catch {
     return false;
   }
-  let cwd;
+  let heres;
   try {
-    cwd = normcase(resolvePath(process.cwd()));
+    heres = [normcase(resolvePath(process.cwd()))];
   } catch {
     return false;
   }
+  try {
+    const main = mainWorktreeOf(process.cwd());
+    if (main) heres.push(normcase(resolvePath(main)));
+  } catch { /* an unresolvable main worktree degrades to the cwd test alone */ }
   for (const entry of entries) {
     const raw = (entry && typeof entry === 'object' ? entry.path : entry) || '';
     if (typeof raw !== 'string' || !raw.trim()) continue;
@@ -67,7 +77,7 @@ export function sovereignBypass(root) {
       // and this caller catches: the reference prints nothing here, so replaying the
       // message would be a stderr divergence on every hook call for one bad entry.
       //
-      // `resolvePath`, the same resolution as `cwd` above: symlinks and junctions are followed on
+      // `resolvePath`, the same resolution as `heres` above: symlinks and junctions are followed on
       // BOTH sides, so an entry spelled through a link matches the real directory the session
       // stands in (and the OpenCode plugins' `norm` applies the identical rule).
       base = withDiscardableStderr(
@@ -79,7 +89,7 @@ export function sovereignBypass(root) {
       // Skipping errs toward the gate staying ACTIVE, which is the safe direction.
       continue;
     }
-    if (cwd === base || cwd.startsWith(base + path.sep)) return true;
+    if (heres.some((h) => h === base || h.startsWith(base + path.sep))) return true;
   }
   return false;
 }

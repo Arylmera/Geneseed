@@ -32,6 +32,7 @@ function helperSource(src, name) {
 const COPIES = {
   norm: ["context", "guard", "learn"],
   sovereignBypass: ["context", "guard", "learn"],
+  mainWorktreeOf: ["context", "guard", "learn"],
   stripJsonc: ["context", "guard"],
 }
 

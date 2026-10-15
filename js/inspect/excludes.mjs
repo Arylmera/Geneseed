@@ -32,6 +32,28 @@ import { normcase, toPlatformPath } from '../lib/paths.mjs';
 const localSettings = (repo, host) =>
   path.join(repo, HOSTS.find((h) => h.host === host).projectMarker, 'settings.local.json');
 
+/** The `claudeMdExcludes` entry naming a Claude-family global install's CLAUDE.md, as wired. */
+const claudeMdEntry = (cfg) => resolvePath(path.join(cfg, 'CLAUDE.md')).split(path.sep).join('/');
+
+/**
+ * The worktree caveat, or null when it does not apply: a Claude-family install and an
+ * excluded folder that is a git repository (a `.git` there — no repo, no worktrees).
+ *
+ * WHY A WARNING AND NOT A WRITE: `settings.local.json` is gitignored, so a `git worktree add`
+ * of the excluded repo never carries it and the global CLAUDE.md loads there again (the hooks
+ * do stand down — `sovereignBypass` follows the worktree to its main repo). The one durable
+ * fix is the repo's TRACKED `settings.json`, and the user decided (2026-10) Geneseed never
+ * writes a tracked file in a repo it was told to leave alone — so it prints the snippet.
+ */
+function worktreeNote(host, cfg, repo) {
+  if (host !== 'claude' && host !== 'openclaude') return null;
+  if (!existsSync(path.join(repo, '.git'))) return null;
+  const marker = HOSTS.find((h) => h.host === host).projectMarker;
+  return `${host}: git worktrees of this repo do not get the gitignored `
+    + `${marker}/settings.local.json and still load the global CLAUDE.md — to stop that, commit `
+    + `to the repo's ${marker}/settings.json: "claudeMdExcludes": ["${claudeMdEntry(cfg)}"]`;
+}
+
 /** `_global_installs` — every host whose GLOBAL config dir carries a Geneseed manifest. */
 function globalInstalls() {
   const out = [];
@@ -112,8 +134,7 @@ export function excludeAdd(target) {
     const priorWired = (isDict(prior) ? get(prior, 'wired') : null) || {};
     const wired = {};
     if ((host === 'claude' || host === 'openclaude') && isDir(repo)) {
-      const entry = resolvePath(path.join(cfg, 'CLAUDE.md')).split(path.sep).join('/');
-      const added = wireClaudeExcludes(localSettings(repo, host), [entry]);
+      const added = wireClaudeExcludes(localSettings(repo, host), [claudeMdEntry(cfg)]);
       if (added.length) {
         wired.claude_md_excludes = added;
       } else if (get(priorWired, 'claude_md_excludes')) {
@@ -126,6 +147,8 @@ export function excludeAdd(target) {
       // own project-bypasses-global wiring, or a bailed write) — do NOT fabricate ownership,
       // or a later excludeRemove would strip wiring we never created.
       if (!added.length) messages.push(`${host}: claudeMdExcludes already present (kept)`);
+      const note = worktreeNote(host, cfg, repo);
+      if (note) messages.push(note);
     }
     if (host === 'bob' && isDir(repo)) {
       const stub = path.join(repo, '.bob', 'rules', 'geneseed.md');
@@ -249,6 +272,14 @@ export function cmdExclude(args) {
       const flag = missing.length
         ? `  (MISSING from: ${missing.join(', ')} — re-run \`geneseed exclude add\`)` : '';
       printOut(`  ${rec.path}  [${rec.hosts.slice().sort().join(', ')}]${flag}\n`);
+      for (const { host, cfg } of snap.installs) {
+        if (!rec.hosts.includes(host)) continue;
+        let note = null;
+        try {
+          note = worktreeNote(host, cfg, toPlatformPath(rec.path));
+        } catch { /* a broken resolver: the listing itself must still print */ }
+        if (note) printOut(`    note: ${note}\n`);
+      }
     }
     return 0;
   }

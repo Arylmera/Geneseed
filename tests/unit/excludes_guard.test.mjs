@@ -125,6 +125,58 @@ test('sovereignBypass survives a non-list excludes value', () => {
   } finally { sb.cleanup(); }
 });
 
+// A LINKED WORKTREE OF AN EXCLUDED REPO, built by hand the way `git worktree add` lays it out:
+// the main repo's `.git/worktrees/<n>/` holds `commondir` (`../..`, relative to itself) and
+// `gitdir`; the worktree's own `.git` is a FILE naming that directory, forward slashes as git
+// writes them. The worktree sits OUTSIDE the excluded path — Orca's workspaces folder — which is
+// exactly where a prefix match on cwd alone never reaches.
+function linkedWorktree(main, wt, name = 'wt') {
+  const gitdir = path.join(main, '.git', 'worktrees', name);
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(gitdir, 'commondir'), '../..\n');
+  fs.writeFileSync(path.join(gitdir, 'gitdir'), `${asPosix(path.join(wt, '.git'))}\n`);
+  fs.mkdirSync(path.join(wt, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${asPosix(gitdir)}\n`);
+}
+
+test('sovereignBypass follows a linked worktree to its excluded main repo', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'vault');
+    const other = path.join(sb.path, 'other-repo');
+    const wt = path.join(sb.path, 'orca', 'workspaces', 'vault', 'feature');
+    const otherWt = path.join(sb.path, 'orca', 'workspaces', 'other', 'feature');
+    linkedWorktree(repo, wt);
+    linkedWorktree(other, otherWt);
+    const cfg = excludesCfg(sb.path, [repo]);
+    inDir(wt, () => assert.equal(sovereignBypass(cfg), true, 'the worktree root was not excluded'));
+    inDir(path.join(wt, 'sub'), () => assert.equal(sovereignBypass(cfg), true,
+      'a subdirectory of the worktree was not excluded'));
+    inDir(otherWt, () => assert.equal(sovereignBypass(cfg), false,
+      'a worktree of an unrelated repo was excluded'));
+  } finally { sb.cleanup(); }
+});
+
+// Every malformed shape degrades to the cwd test alone — false here, never a throw.
+test('sovereignBypass ignores a malformed worktree link', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'vault');
+    const wt = path.join(sb.path, 'elsewhere', 'wt');
+    linkedWorktree(repo, wt);
+    const cfg = excludesCfg(sb.path, [repo]);
+    const dotgit = path.join(wt, '.git');
+    for (const bad of ['not a gitdir line\n', `gitdir: ${asPosix(path.join(sb.path, 'nope'))}\n`, '']) {
+      fs.writeFileSync(dotgit, bad);
+      inDir(wt, () => assert.equal(sovereignBypass(cfg), false, `.git = ${JSON.stringify(bad)}`));
+    }
+    // A gitdir with no `commondir` (a submodule's shape) names no main worktree either.
+    fs.writeFileSync(dotgit, `gitdir: ${asPosix(path.join(repo, '.git', 'worktrees', 'wt'))}\n`);
+    fs.unlinkSync(path.join(repo, '.git', 'worktrees', 'wt', 'commondir'));
+    inDir(wt, () => assert.equal(sovereignBypass(cfg), false, 'no commondir'));
+  } finally { sb.cleanup(); }
+});
+
 // ---------------------------------------------------------------------------------------------
 // The two hook verbs, driven as the CHILD PROCESSES they really are.
 //
@@ -363,6 +415,38 @@ test('the guard reads the file the add actually wrote', () => {
       assert.equal(sovereignBypass(cfgs.claude), true);
       assert.equal(sovereignBypass(cfgs.bob), true);
     });
+  });
+});
+
+// THE WORKTREE CAVEAT. `settings.local.json` is gitignored, so a worktree of the excluded repo
+// still loads the global CLAUDE.md; Geneseed writes no tracked file, so `add` and `list` print
+// the snippet to commit — for a git repo on a Claude-family install, and only there.
+function captureStdout(fn) {
+  const chunks = [];
+  const original = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (c) => { chunks.push(String(c)); return true; };
+  try { return { rc: fn(), out: chunks.join('') }; } finally { process.stdout.write = original; }
+}
+
+test("exclude add and list warn that a git repo's worktrees still load CLAUDE.md", () => {
+  withExcludes(['claude', 'bob'], ({ tmp, cfgs }) => {
+    const repo = path.join(tmp, 'vault');
+    const plain = path.join(tmp, 'notes');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    fs.mkdirSync(plain, { recursive: true });
+    const snippet = `"claudeMdExcludes": ["${asPosix(resolvePath(path.join(cfgs.claude, 'CLAUDE.md')))}"]`;
+
+    const notes = excludeAdd(repo).messages.filter((m) => m.includes('worktrees'));
+    assert.equal(notes.length, 1, `one note, claude only: ${JSON.stringify(notes)}`);
+    assert.ok(notes[0].startsWith('claude: '), notes[0]);
+    assert.ok(notes[0].includes(`.claude/settings.json: ${snippet}`), notes[0]);
+    assert.ok(!excludeAdd(plain).messages.some((m) => m.includes('worktrees')),
+      'a folder that is not a git repo has no worktrees to warn about');
+
+    const { rc, out } = captureStdout(() => cmdExclude({ action: 'list', path: null }));
+    assert.equal(rc, 0);
+    assert.equal(out.split('\n').filter((l) => l.includes('note: claude: git worktrees')).length, 1, out);
+    assert.ok(out.includes(snippet), out);
   });
 });
 

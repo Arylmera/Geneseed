@@ -42,6 +42,8 @@ What "dormant" means per host:
 
 `geneseed exclude remove` undoes all of it.
 
+**Git worktrees.** A linked worktree of an excluded repo (`git worktree add`) is excluded too, wherever it sits on disk: the hooks and plugins follow its `.git` file back to the main repository. The global `CLAUDE.md` is the exception on Claude Code and OpenClaude: `settings.local.json` is gitignored, so a worktree never gets it. Geneseed writes no tracked file in a repo you told it to leave alone, so `exclude add` and `exclude list` print the snippet to commit yourself in the repo's tracked `.claude/settings.json` (`.openclaude/` for OpenClaude): `"claudeMdExcludes": ["<path to the global CLAUDE.md>"]`.
+
 **Limits.** Globally installed skills and agents stay *listed* by the host — no host offers a per-repo switch for them. And a global install created *after* you added exclusions starts with an empty list: run `geneseed exclude add` again (`geneseed exclude list` flags installs whose lists differ).
 
 The web console has the same controls in the **Excluded folders** card on the Harness page, shown once a global install exists.
