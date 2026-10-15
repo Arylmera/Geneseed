@@ -35,4 +35,4 @@ If a plugin seems silent on OpenCode 2, check that `~/.config/opencode/plugins/`
 
 ## Excluded folders
 
-`geneseed-context`, `geneseed-guard` and `geneseed-learn` go dormant inside a folder listed in the global install's `excludes.json` (managed by `geneseed exclude`). See [Exclusions](../concepts/exclusions.md).
+`geneseed-context`, `geneseed-guard` and `geneseed-learn` go dormant inside a folder listed in the global install's `excludes.json` (managed by `geneseed exclude`), and inside any linked git worktree of such a folder. See [Exclusions](../concepts/exclusions.md).
