@@ -85,17 +85,41 @@ const norm = (p) => {
   }
   return process.platform === "win32" ? s.toLowerCase() : s
 }
+// A linked git worktree of an excluded repo is excluded too, wherever it sits on disk — twin of
+// js/hosts/gitref.mjs `mainWorktreeOf`: the worktree's `.git` FILE names its gitdir, whose
+// `commondir` names the shared `.git`; that directory's parent is the main worktree. null for
+// a main worktree, a submodule, a bare repo's worktree, or anything malformed.
+async function mainWorktreeOf(dir) {
+  try {
+    let root = path.resolve(dir)
+    for (;;) {
+      try { await fs.stat(path.join(root, ".git")); break } catch { /* walk up */ }
+      const up = path.dirname(root)
+      if (up === root) return null
+      root = up
+    }
+    const dotgit = path.join(root, ".git")
+    if (!(await fs.stat(dotgit)).isFile()) return null
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(await fs.readFile(dotgit, "utf8"))
+    if (!m) return null
+    const gitdir = path.resolve(root, m[1])
+    const common = path.resolve(gitdir, (await fs.readFile(path.join(gitdir, "commondir"), "utf8")).trim())
+    return path.basename(common) === ".git" ? path.dirname(common) : null
+  } catch { return null }
+}
 async function sovereignBypass(cwd) {
   try {
     const cfg = path.dirname(PLUGIN_DIR)           // plugins/ sits directly in <cfg>
     const raw = await fs.readFile(path.join(cfg, "excludes.json"), "utf8")
     const entries = (JSON.parse(raw).excludes) || []
     const here = norm(cwd || process.cwd())
+    const main = await mainWorktreeOf(cwd || process.cwd())
+    const heres = main ? [here, norm(main)] : [here]
     for (const e of entries) {
       const p = typeof e === "string" ? e : e && e.path
       if (typeof p !== "string" || !p.trim()) continue
       const base = norm(p.trim()).replace(/[\\/]+$/, "")
-      if (here === base || here.startsWith(base + path.sep)) return true
+      if (heres.some((h) => h === base || h.startsWith(base + path.sep))) return true
     }
   } catch { /* degrade to active */ }
   return false

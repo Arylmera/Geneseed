@@ -6,7 +6,7 @@
  * launched-loop evidence reader were duplicated in `js/hosts/hooks.mjs` (the hook's
  * `loopExempt`) and `js/loop/cli.mjs` (the CLI's commit-message writer) — two copies of the
  * same worktree-following walk that could silently drift apart. Both now import this one.
- * `js/hosts/hooks.mjs` is NOT a safe shared home for it: it pulls in `node:child_process`
+ * `js/hosts/hooks.mjs` is NOT a safe shared home for it: it pulls in `child_process`
  * (`spawnSync`, for the destructive-act guard's own concerns) and the hook-dispatch
  * machinery (`jsonDumpsCompact`, the ledger), none of which `js/loop/cli.mjs` — under a hard
  * `child_process` ban like every other closure that feeds `bin/geneseed-cli.mjs` — may ever
@@ -52,6 +52,30 @@ export function gitDirOf(root) {
     return path.resolve(root, m[1]);
   }
   return dotgit;
+}
+
+/**
+ * The MAIN worktree's root when `cwd` stands in a LINKED worktree (`git worktree add`), else
+ * null — a main worktree, a submodule (its gitdir has no `commondir`), a bare repository's
+ * worktree, no repo, or a malformed link. Never throws.
+ *
+ * WHY: a linked worktree can live anywhere on disk (Orca puts them under its own workspaces
+ * folder), so a path-prefix test against the repo the user EXCLUDED never matches it, and the
+ * global harness woke up inside a sovereign repo's worktree. The worktree's `.git` FILE names
+ * `<common>/.git/worktrees/<n>`, whose `commondir` (relative to it, usually `../..`) names the
+ * shared `.git`; that directory's parent is the main worktree. Read off disk, never by
+ * spawning git: `sovereignBypass` runs on every hook call and feeds the CLI's `child_process` ban.
+ */
+export function mainWorktreeOf(cwd) {
+  try {
+    const root = gitRootOf(cwd);
+    if (!root || !statSync(path.join(root, '.git')).isFile()) return null;
+    const gitdir = gitDirOf(root);
+    const common = path.resolve(gitdir, readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim());
+    return path.basename(common) === '.git' ? path.dirname(common) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
