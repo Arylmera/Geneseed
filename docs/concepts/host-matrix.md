@@ -19,7 +19,7 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 | Consent before every commit and push | 🔒 permission ask | 🪝 ask | 🪝 warning¹ | 🪝 ask² |
 | Rule-or-memory write needs your call | ⚙️ speed bump³ | 🪝 ask | 🪝 warning¹ | 🪝 ask² |
 | User-only skills hidden from the model | 🔒 `permission.skill` deny | ✅ `disable-model-invocation` | ✅ `/`-command, no skill | ✅ `disable-model-invocation` |
-| Sovereign-repo exclusions | ⚙️ plugins stand down | ✅ `claudeMdExcludes` | ✅ rules shadow stub | ✅ `claudeMdExcludes` |
+| Sovereign-repo exclusions⁵ | ⚙️ plugins stand down | ✅ `claudeMdExcludes` | ✅ rules shadow stub | ✅ `claudeMdExcludes` |
 | MCP server wiring | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcp.json` | ✅ `mcpServers` |
 | Colour themes · LSP · workflow runner · primary agent · `/`-commands | ✅ | ➖ | ➖ | ➖ |
 
@@ -29,6 +29,7 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 ² **OpenClaude** is a Claude Code fork and gets Claude's hooks and verdicts verbatim, in `~/.openclaude/settings.json` (global) or `.openclaude/settings.local.json` (per repo). **Unverified live** for the same reason.
 ³ OpenCode's plugin hook can only allow or throw — there is no "ask the user" — so this check stops the first such write once rather than prompting.
 ⁴ The checks differ in shape: OpenCode's guard plugin blocks writes *to* private-key and credential files by path; the Claude-shaped hook looks at the *content* being written for credential-shaped strings (cloud keys, tokens, private-key blocks) and asks. A `.env` file is exempt on the hook side — that is where a secret is allowed to live.
+⁵ A linked git worktree of an excluded repo is excluded too: the hooks and plugins follow its `.git` file back to the main repository. `claudeMdExcludes` is the exception — it lives in the gitignored `settings.local.json`, which a worktree never gets — so `geneseed exclude add` and `exclude list` print the snippet to commit yourself. See [Exclusions](exclusions.md).
 
 ## The one conditional row
 

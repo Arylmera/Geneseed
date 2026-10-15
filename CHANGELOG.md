@@ -8,6 +8,17 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.3.1] — 2026-10-15
+
+Patch: a folder excluded from the global harness now stays excluded in its git worktrees.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so installed hooks and OpenCode plugins carry the fix.
+- On Claude Code and OpenClaude, a worktree still loads the global `CLAUDE.md` until you commit the `claudeMdExcludes` snippet that `geneseed exclude list` prints into the repo's tracked settings file.
+
+### Fixed
+- **Exclusions cover git worktrees.** A session in a linked worktree of an excluded repo (`git worktree add`, or a tool that keeps worktrees elsewhere on disk) got the whole global harness, because the bypass only matched the working directory's path. The hooks and the three OpenCode plugins now follow the worktree's `.git` file back to the main repository, reading files only. `exclude add` and `exclude list` warn that `settings.local.json` never reaches a worktree and print the snippet to commit; Geneseed writes no tracked file. (#280)
+
 ## [4.3.0] — 2026-10-15
 
 Minor: a performance agent, and Deletion Is Deliberate says what counts as recoverable.
