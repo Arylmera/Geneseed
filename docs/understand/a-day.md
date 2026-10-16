@@ -72,7 +72,7 @@ and one line is added to its topic file, `memory/topics/project.md` (the topic i
 - [integration-tests-need-docker](../integration-tests-need-docker.md) — the integration suite needs a running Docker daemon
 ```
 
-`memory/MEMORY.md` stays a short map, one line per topic with its fact count. Next session, that map is in front of the agent before your first message, and the agent opens the topic file a task needs. Memory stays on your machine. `geneseed memory list` shows every fact and `geneseed memory rm <name>` removes one.
+`memory/MEMORY.md` stays a short map, one line per topic with its fact count. Next session, that map is in front of the agent before your first message, and the agent opens the topic file a task needs. If a later session refines that fact, learn updates the same file instead of adding a twin, keeping the old version in `memory/archive/`; if it shows the fact is obsolete, the file moves to `memory/archive/` and leaves the index. Memory stays on your machine. `geneseed memory list` shows every fact and `geneseed memory rm <name>` removes one.
 
 ---
 

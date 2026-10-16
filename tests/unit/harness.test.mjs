@@ -18,10 +18,12 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
-import { learnPromptHead, readNotes, resolveAgentName } from '../../js/hosts/hooks-learn.mjs';
+import {
+  buildLearnPrompt, learnPromptHead, readNotes, resolveAgentName,
+} from '../../js/hosts/hooks-learn.mjs';
 import {
   frontmatter, existingSlugs, writeMemories, memoryDropIndex, appendAgentLesson, consolidateMemory,
-  migrateMemoryIndex,
+  migrateMemoryIndex, readFacts,
 } from '../../js/hosts/memory-files.mjs';
 import { discoverContext, resolveContextSets } from '../../js/hosts/hooks-context.mjs';
 import {
@@ -113,7 +115,7 @@ test('writeMemories writes the new fact, skips the duplicate and indexes both', 
       + '---FILE---\n---\nname: dup\ndescription: x\n---\nbody';
     const written = writeMemories(out, d, new Set(['dup']));
 
-    assert.deepEqual(written, ['new-fact']);
+    assert.deepEqual(written, { created: ['new-fact'], updated: [], archived: [] });
     assert.ok(fs.statSync(path.join(d, 'new-fact.md')).isFile());
     assert.ok(!fs.existsSync(path.join(d, 'dup.md')),
       'a slug the caller declared as existing was overwritten');
@@ -136,7 +138,7 @@ test('writeMemories refuses a name that is not a plain slug', () => {
     const fact = (name) => `---\nname: ${name}\ndescription: x\n---\nbody\n`;
     const out = ['../escaped', 'sub/dir', '/abs', '..', 'Fine_Slug-2'].map(fact)
       .join('---FILE---\n');
-    assert.deepEqual(writeMemories(out, store, new Set()), ['Fine_Slug-2']);
+    assert.deepEqual(writeMemories(out, store, new Set()).created, ['Fine_Slug-2']);
     assert.ok(!fs.existsSync(path.join(d, 'escaped.md')), 'a ../ name wrote outside the store');
     assert.deepEqual(fs.readdirSync(store).sort(), ['Fine_Slug-2.md', 'MEMORY.md', 'topics']);
   });
@@ -152,7 +154,7 @@ test('writeMemories refuses reserved stems and case variants of a stored slug', 
     const fact = (name) => `---\nname: ${name}\ndescription: x\n---\nbody\n`;
     const out = ['MEMORY', 'memory', 'Readme', 'User-Prefs', 'fresh', 'FRESH'].map(fact)
       .join('---FILE---\n');
-    assert.deepEqual(writeMemories(out, d, existingSlugs(d)), ['fresh']);
+    assert.deepEqual(writeMemories(out, d, existingSlugs(d)).created, ['fresh']);
     assert.equal(fs.readFileSync(path.join(d, 'user-prefs.md'), 'utf8'), 'original\n');
     // The stored fact's flat line moves into the topic file as it was; the new one joins it.
     assert.equal(readLf(path.join(d, 'topics', 'misc.md')),
@@ -197,6 +199,158 @@ test('writeMemories adds to an existing topic and recounts the map', () => {
       '# project\n\n- [new](../new.md) — N\n- [Old One](../old.md) — hand hook\n');
     assert.equal(readLf(path.join(d, 'MEMORY.md')),
       mapOf('- [project](topics/project.md) — 2 facts'));
+  });
+});
+
+const NONE = { created: [], updated: [], archived: [] };
+
+// `action: update` REPLACES the stored fact with the model's merged text, under the STORED
+// spelling (the model wrote `Pref`, the file is `pref.md`), with the `action:` line dropped:
+// it is an instruction, not part of the fact. The fact's index line is regenerated from the
+// new description, hand title included, because the line it had describes a fact that is gone.
+// Each slug is acted on once per reply, so the archive after the update is not applied.
+// The model never saw the old body, so the old version is ARCHIVED first, bytes unchanged
+// (the `-N` counter applies, here past an `archive/pref.md` already there): every update is
+// reversible. The archived copy is not a fact, so no index line points at it.
+test('writeMemories update archives the old fact, writes the new one and refreshes its line', () => {
+  withDir((d) => {
+    factFile(d, 'pref', 'description: old desc', 'type: user');
+    const oldBody = fs.readFileSync(path.join(d, 'pref.md'), 'utf8');
+    fs.mkdirSync(path.join(d, 'archive'));
+    fs.writeFileSync(path.join(d, 'archive', 'pref.md'), 'older\n');
+    fs.mkdirSync(path.join(d, 'topics'));
+    fs.writeFileSync(path.join(d, 'topics', 'user.md'), '# user\n\n- [Hand](../pref.md) — old desc\n');
+    const out = '---\nname: Pref\naction: update\ndescription: merged desc\ntype: user\n---\nmerged body\n'
+      + '---FILE---\n---\nname: pref\naction: archive\n---\n';
+    const existing = existingSlugs(d);
+    assert.deepEqual(writeMemories(out, d, existing), { ...NONE, updated: ['pref'] });
+    assert.equal(readLf(path.join(d, 'pref.md')),
+      '---\nname: Pref\ndescription: merged desc\ntype: user\n---\nmerged body\n');
+    assert.deepEqual(fs.readdirSync(d).sort(), ['MEMORY.md', 'archive', 'pref.md', 'topics']);
+    assert.equal(fs.readFileSync(path.join(d, 'archive', 'pref-2.md'), 'utf8'), oldBody);
+    assert.equal(fs.readFileSync(path.join(d, 'archive', 'pref.md'), 'utf8'), 'older\n');
+    assert.equal(readLf(path.join(d, 'topics', 'user.md')),
+      '# user\n\n- [pref](../pref.md) — merged desc\n');
+    assert.ok(!readLf(path.join(d, 'MEMORY.md')).includes('archive'));
+    assert.deepEqual([...existing], ['pref']);
+  });
+});
+
+// An update or archive naming no stored fact is skipped, and so is an action nobody defined,
+// even on a new slug: an unknown verb is not read as a create. Nothing is written at all.
+test('writeMemories skips an update or archive of a missing slug, and an unknown action', () => {
+  withDir((d) => {
+    const out = ['update', 'archive', 'frobnicate']
+      .map((a) => `---\nname: ghost-${a}\naction: ${a}\ndescription: x\n---\nbody\n`)
+      .join('---FILE---\n');
+    assert.deepEqual(writeMemories(out, d, new Set()), NONE);
+    assert.deepEqual(fs.readdirSync(d), []);
+  });
+});
+
+// `action: archive` MOVES the fact into `archive/`, bytes unchanged, never deletes it. It leaves
+// the index (facts are read from the top level only), its emptied topic file goes, the map is
+// recounted, and `existing` forgets the slug.
+test('writeMemories archive moves the fact out of the index into archive/', () => {
+  withDir((d) => {
+    factFile(d, 'gone', 'description: G', 'topic: old-topic');
+    factFile(d, 'kept', 'description: K', 'topic: live');
+    consolidateMemory(d);
+    const before = fs.readFileSync(path.join(d, 'gone.md'), 'utf8');
+    const existing = existingSlugs(d);
+    assert.deepEqual(writeMemories('---\nname: gone\naction: archive\n---\n', d, existing),
+      { ...NONE, archived: ['gone'] });
+    assert.ok(!fs.existsSync(path.join(d, 'gone.md')));
+    assert.equal(fs.readFileSync(path.join(d, 'archive', 'gone.md'), 'utf8'), before);
+    assert.deepEqual(fs.readdirSync(path.join(d, 'topics')), ['live.md']);
+    assert.equal(readLf(path.join(d, 'MEMORY.md')), mapOf('- [live](topics/live.md) — 1 fact'));
+    assert.deepEqual([...existing], ['kept']);
+  });
+});
+
+// An archive never lands on a file already in `archive/`: the name takes the first free
+// `-N` counter from 2, and both older archives keep their bytes.
+test('writeMemories archive never overwrites an archived fact', () => {
+  withDir((d) => {
+    factFile(d, 'a', 'description: A');
+    fs.mkdirSync(path.join(d, 'archive'));
+    fs.writeFileSync(path.join(d, 'archive', 'a.md'), 'older\n');
+    fs.writeFileSync(path.join(d, 'archive', 'a-2.md'), 'older 2\n');
+    writeMemories('---\nname: a\naction: archive\n---\n', d, existingSlugs(d));
+    assert.deepEqual(fs.readdirSync(path.join(d, 'archive')).sort(), ['a-2.md', 'a-3.md', 'a.md']);
+    assert.equal(fs.readFileSync(path.join(d, 'archive', 'a.md'), 'utf8'), 'older\n');
+    assert.equal(fs.readFileSync(path.join(d, 'archive', 'a-2.md'), 'utf8'), 'older 2\n');
+    assert.match(fs.readFileSync(path.join(d, 'archive', 'a-3.md'), 'utf8'), /^---\nname: a\n/);
+  });
+});
+
+// A stored fact carrying any `force:` is out of learn's reach: the memory README's Bridge rule
+// has it revised inline with the supersession recorded (a `constraint` only by the user), and
+// the model never sees its body. Both the update and the archive are skipped, bytes unchanged.
+test('writeMemories never updates or archives a fact that carries a force', () => {
+  withDir((d) => {
+    factFile(d, 'locked', 'description: L', 'force: constraint');
+    factFile(d, 'chosen', 'description: C', 'force: choice');
+    const before = fs.readFileSync(path.join(d, 'locked.md'), 'utf8');
+    const out = '---\nname: locked\naction: update\ndescription: new\n---\nnew body\n'
+      + '---FILE---\n---\nname: chosen\naction: archive\n---\n';
+    assert.deepEqual(writeMemories(out, d, existingSlugs(d)), NONE);
+    assert.equal(fs.readFileSync(path.join(d, 'locked.md'), 'utf8'), before);
+    assert.ok(fs.existsSync(path.join(d, 'chosen.md')) && !fs.existsSync(path.join(d, 'archive')));
+  });
+});
+
+// The slug rule binds every action: `MEMORY`/`README` name the store's own files and a `../`
+// name points outside it, so an update or archive of one is refused even when the caller's
+// `existing` set (wrongly) claims it is stored. Nothing moves, nothing is rewritten.
+test('writeMemories refuses reserved and invalid slugs for update and archive', () => {
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'MEMORY.md'), 'index\n');
+    fs.writeFileSync(path.join(d, 'README.md'), 'readme\n');
+    const names = ['MEMORY', 'readme', '../escaped'];
+    const out = ['update', 'archive']
+      .flatMap((a) => names.map((n) => `---\nname: ${n}\naction: ${a}\n---\nx\n`))
+      .join('---FILE---\n');
+    assert.deepEqual(writeMemories(out, d, new Set(names)), NONE);
+    assert.equal(fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8'), 'index\n');
+    assert.equal(fs.readFileSync(path.join(d, 'README.md'), 'utf8'), 'readme\n');
+    assert.deepEqual(fs.readdirSync(d).sort(), ['MEMORY.md', 'README.md']);
+  });
+});
+
+// The model is shown each stored fact as `slug — description` (a fact with none as its bare
+// slug) and the topics in use, sorted and deduplicated, so it can merge instead of duplicate.
+// The head carries the action instructions whole, NOTHING clause included: the literal is
+// extracted from the plugin up to its first backtick, so one inside it would cut it short.
+test('the learn prompt lists stored facts with descriptions, and the topics in use', () => {
+  withDir((d) => {
+    factFile(d, 'alpha', 'description: A desc', 'topic: build');
+    factFile(d, 'beta', 'type: build');
+    factFile(d, 'gamma', 'description: G');
+    const prompt = buildLearnPrompt('the notes', readFacts(d));
+    assert.ok(prompt.includes(
+      "ALREADY STORED — 'slug — description', to update or archive, never to create:\n"
+      + '- alpha — A desc\n- beta\n- gamma — G\n\nTOPICS IN USE:\nbuild, misc\n\nNOTES:\nthe notes'),
+    prompt);
+    assert.ok(prompt.includes("'action: update'") && prompt.includes("'action: archive'"));
+    assert.ok(prompt.includes('When in doubt, output exactly: NOTHING.'));
+  });
+});
+
+// The fact lines are capped at 8 000 characters, so a large store cannot crowd the notes off
+// the model CLI's command line. The cut is said, with the count of facts left out, and the
+// shown and unshown add up to the store.
+test('the learn prompt caps the stored-fact list and says how many it left out', () => {
+  withDir((d) => {
+    for (let i = 0; i < 300; i += 1) {
+      factFile(d, `fact-${String(i).padStart(3, '0')}`, `description: ${'x'.repeat(60)}`);
+    }
+    const prompt = buildLearnPrompt('n', readFacts(d));
+    const shown = prompt.split('\n').filter((l) => l.startsWith('- fact-')).length;
+    const m = /^\((\d+) more stored facts not shown\)$/m.exec(prompt);
+    assert.ok(m, 'the cut was not reported');
+    assert.equal(shown + Number(m[1]), 300);
+    assert.ok(shown > 0 && shown * 72 <= 8000, `${shown} lines shown`);
   });
 });
 
@@ -351,7 +505,7 @@ test('learn (bob) returns immediately when the Stop payload has no transcript', 
 // all — not an empty index, which would look like a store that had been cleared.
 test('a NOTHING answer writes no files', () => {
   withDir((d) => {
-    assert.deepEqual(writeMemories('NOTHING', d, new Set()), []);
+    assert.deepEqual(writeMemories('NOTHING', d, new Set()), { created: [], updated: [], archived: [] });
     assert.ok(!fs.existsSync(path.join(d, 'MEMORY.md')));
   });
 });
@@ -1597,8 +1751,9 @@ test('consolidate skips the index and the readme, and reports duplicates', () =>
     fs.writeFileSync(path.join(mem, 'README.md'), 'not a fact\n', 'utf8');
     const report = consolidateMemory(mem);
     assert.ok(!readLf(path.join(mem, 'topics', 'misc.md')).includes('README.md'));
-    // REPORTED, NOT MERGED. Two facts with the same description are a judgement call for the
-    // user; consolidating them automatically would delete one of their memories.
+    // REPORTED, NOT MERGED. Two facts with the same description are a judgement call, the
+    // learn model's (an `action: update`) or the user's; a rebuild that merged them on its own
+    // would delete one of their memories.
     assert.deepEqual(report.duplicates, [['a', 'b']]);
   });
 });

@@ -13,8 +13,8 @@
 // on the first idle would therefore mine just turn 1 and miss the rest. So each idle
 // RE-ARMS a debounce timer (GENESEED_LEARN_DEBOUNCE_MS, default 60s) and the distil
 // runs once the session has been quiet for that long — i.e. at the real end. A
-// continued session simply re-arms and re-distils; slug dedup keeps writes
-// idempotent. (Trade-off: if OpenCode is killed inside the window the final distil
+// continued session simply re-arms and re-distils; a stored slug is never created
+// twice, though a re-distil may update or archive it. (Trade-off: if OpenCode is killed inside the window the final distil
 // is lost — still strictly better than capturing only turn 1, and far cheaper than
 // re-distilling every turn.)
 //
@@ -125,9 +125,21 @@ Markdown memory files in this exact format, separated by a line containing only
 name: <kebab-case-slug>
 description: <one-line summary>
 type: user | feedback | project | reference
+topic: <kebab-case-slug; reuse a topic from TOPICS IN USE below when one fits>
 ---
 <the fact, stated plainly. For 'feedback' and 'project', add **Why:** and
 **How to apply:** lines.>
+
+MERGE BEFORE YOU CREATE. The facts already stored are listed below as
+'slug — description'. Never create a fact under one of those slugs. Instead:
+  - If your memory refines, extends or corrects a stored fact, add the line
+    'action: update' to its frontmatter and use that fact's own name. Your text
+    REPLACES the stored file, so write the merged fact: keep everything the old
+    one says that is still true, then add or correct what the notes show.
+  - If the notes show a stored fact is now false or obsolete, output only
+    frontmatter holding its 'name:' and the line 'action: archive'. It is moved
+    out of the index, never deleted.
+  - With no 'action:' line, the memory is a NEW fact under a NEW slug.
 
 DEFAULT TO 'NOTHING'. Writing a memory is the rare exception, not the norm — most
 sessions should yield zero. Emit AT MOST ONE, and only if it is a GENERAL, reusable
@@ -252,29 +264,28 @@ function envModel() {
 const RESERVED_STEMS = new Set(["memory", "readme"])
 
 async function existingSlugs(memDir) {
-  const skip = RESERVED_STEMS
-  try {
-    const entries = await fs.readdir(memDir)
-    return new Set(
-      entries
-        .filter((f) => f.endsWith(".md"))
-        .map((f) => f.slice(0, -3))
-        .filter((s) => !skip.has(s.toLowerCase()))
-    )
-  } catch {
-    return new Set()
-  }
+  return new Set((await listMd(memDir)).map((f) => f.slice(0, -3)).filter((s) => !RESERVED_STEMS.has(s.toLowerCase())))
 }
 
-function buildPrompt(notes, existing) {
+// The stored facts' lines are capped at MAX_STORED_CHARS, a twin of buildLearnPrompt in
+// js/hosts/hooks-learn.mjs: a store of hundreds of facts would otherwise outgrow the notes.
+// A fact past the cap is only unlisted — writeMemories still refuses to create its slug.
+const MAX_STORED_CHARS = 8000
+function buildPrompt(notes, facts) {
   const parts = [LEARN_PROMPT_HEAD, ""]
-  if (existing.size) {
-    parts.push(
-      "ALREADY STORED — do NOT emit a memory matching any of these slugs " +
-        "(skip updates too; only genuinely new facts):"
-    )
-    for (const slug of [...existing].sort()) parts.push(`- ${slug}`)
-    parts.push("")
+  if (facts.size) {
+    parts.push("ALREADY STORED — 'slug — description', to update or archive, never to create:")
+    let used = 0
+    let shown = 0
+    for (const [slug, { desc }] of facts) {
+      const line = desc ? `- ${slug} — ${desc}` : `- ${slug}`
+      if (used + line.length > MAX_STORED_CHARS) break
+      parts.push(line)
+      used += line.length + 1
+      shown += 1
+    }
+    if (shown < facts.size) parts.push(`(${facts.size - shown} more stored facts not shown)`)
+    parts.push("", "TOPICS IN USE:", [...new Set([...facts.values()].map((f) => f.topic))].sort().join(", "), "")
   }
   parts.push("NOTES:", notes)
   return parts.join("\n")
@@ -296,25 +307,72 @@ function parseFrontmatter(chunk) {
 // js/hosts/hooks.mjs, inlined because this file ships standalone.
 const MEMORY_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/
 
-// Compared lowercase: on a case-insensitive filesystem (Windows, macOS) `User-Prefs`
-// and `user-prefs` are the same file, so a case variant would overwrite a stored fact.
+// The chunk without its frontmatter `action:` line, which is an instruction, not the fact.
+function stripAction(chunk) {
+  const lines = chunk.split("\n")
+  const close = lines.findIndex((l, i) => i > 0 && l.trim() === "---")
+  if (lines[0].trim() !== "---" || close < 0) return chunk
+  return lines.filter((l, i) => i === 0 || i >= close || !/^\s*action\s*:/.test(l)).join("\n")
+}
+
+// A fact with a `force:` is never updated or archived by learn (the memory README's Bridge
+// rule: revised inline with its supersession recorded, a constraint only by the user).
+async function hasForce(memDir, slug) {
+  try {
+    return !!parseFrontmatter((await fs.readFile(path.join(memDir, `${slug}.md`), "utf8")).replace(/\r\n/g, "\n")).force
+  } catch { return false }
+}
+
+// Move <slug>.md into archive/, never over a file already there (-2, -3, ... instead), and
+// never unlink: an archived fact leaves the index but stays on disk.
+async function archiveFact(memDir, slug) {
+  const adir = path.join(memDir, "archive")
+  await fs.mkdir(adir, { recursive: true })
+  let dest = path.join(adir, `${slug}.md`)
+  for (let n = 2; await fs.stat(dest).then(() => true, () => false); n += 1) dest = path.join(adir, `${slug}-${n}.md`)
+  await fs.rename(path.join(memDir, `${slug}.md`), dest)
+}
+
+// The twin of writeMemories in js/hosts/memory-files.mjs: no `action:` creates a NEW slug,
+// `action: update` archives the stored fact and writes the merged text in its place, `action: archive` moves it
+// to archive/. An update or archive of no stored fact, or of one with a `force:`, is skipped,
+// as is any other action, and each slug is acted on once. Compared lowercase: on a case-insensitive filesystem (Windows,
+// macOS) `User-Prefs` and `user-prefs` are the same file, so a case variant acts on the
+// stored spelling and never creates a second fact.
 async function writeMemories(output, memDir, existing) {
-  const taken = new Set([...existing].map((s) => s.toLowerCase()))
-  const written = []
+  const stored = new Map([...existing].map((s) => [s.toLowerCase(), s]))
+  const done = new Set()
+  const res = { created: [], updated: [], archived: [] }
   for (let chunk of output.split(/^---FILE---\s*$/m)) {
     chunk = chunk.trim()
     if (!chunk || chunk.toUpperCase() === "NOTHING") continue
     const fm = parseFrontmatter(chunk)
     const name = (fm.name || "").trim()
     const key = name.toLowerCase()
-    if (!MEMORY_SLUG_RE.test(name) || RESERVED_STEMS.has(key) || taken.has(key)) continue
-    await fs.writeFile(path.join(memDir, `${name}.md`), chunk.replace(/\n+$/, "") + "\n", "utf8")
-    existing.add(name)
-    taken.add(key)
-    written.push(name)
+    const action = (fm.action || "").trim().toLowerCase() || "create"
+    if (!MEMORY_SLUG_RE.test(name) || RESERVED_STEMS.has(key) || done.has(key)) continue
+    const slug = stored.get(key)
+    if (slug && action !== "create" && (await hasForce(memDir, slug))) continue
+    const body = stripAction(chunk).replace(/\n+$/, "") + "\n"
+    if (action === "create" && !slug) {
+      await fs.writeFile(path.join(memDir, `${name}.md`), body, "utf8")
+      existing.add(name)
+      stored.set(key, name)
+      res.created.push(name)
+    } else if (action === "update" && slug) {
+      await archiveFact(memDir, slug) // the old version first: the model never saw its body
+      await fs.writeFile(path.join(memDir, `${slug}.md`), body, "utf8")
+      res.updated.push(slug)
+    } else if (action === "archive" && slug) {
+      await archiveFact(memDir, slug)
+      existing.delete(slug)
+      stored.delete(key)
+      res.archived.push(slug)
+    } else continue
+    done.add(key)
   }
-  if (written.length) await rebuildIndex(memDir)
-  return written
+  if (res.created.length || res.updated.length || res.archived.length) await rebuildIndex(memDir, new Set(res.updated))
+  return res
 }
 
 // The two-level index, a twin of rebuildIndex in js/hosts/memory-files.mjs (this file ships
@@ -329,8 +387,14 @@ const MAP_LINE_RE = /^- \[[^\]]*\]\(topics\/[^)]+\.md\)/
 const readLines = async (p) => {
   try { return (await fs.readFile(p, "utf8")).replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n") } catch { return null }
 }
+// The core's sortPaths/globMd rule (js/lib/paths.mjs normcase): names fold case on Windows, so
+// the fact order inside a topic file, and which files count as .md, match the harness's.
+const fold = (s) => (process.platform === "win32" ? s.toLowerCase() : s)
 const listMd = async (dir) => {
-  try { return (await fs.readdir(dir)).filter((f) => f.endsWith(".md")).sort() } catch { return [] }
+  try {
+    return (await fs.readdir(dir)).filter((f) => fold(f).endsWith(".md"))
+      .sort((a, b) => (fold(a) < fold(b) ? -1 : fold(a) > fold(b) ? 1 : 0))
+  } catch { return [] }
 }
 async function writeIfChanged(p, text) {
   const old = await readLines(p)
@@ -343,7 +407,21 @@ function topicOf(fm) {
   return raw.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "misc"
 }
 
-async function rebuildIndex(memDir) {
+// Every top-level fact (never archive/ or agents/), in index order: slug -> { desc, topic }.
+async function readFacts(memDir) {
+  const facts = new Map()
+  for (const f of await listMd(memDir)) {
+    const slug = f.slice(0, -3)
+    if (RESERVED_STEMS.has(slug.toLowerCase())) continue
+    let fm
+    try { fm = parseFrontmatter((await fs.readFile(path.join(memDir, f), "utf8")).replace(/\r\n/g, "\n")) } catch { continue }
+    facts.set(slug, { desc: (fm.description || "").trim(), topic: topicOf(fm) })
+  }
+  return facts
+}
+
+// `fresh`: slugs just updated, whose old index line describes a fact that is gone.
+async function rebuildIndex(memDir, fresh = new Set()) {
   const tdir = path.join(memDir, "topics")
   const old = new Map()
   for (const f of [path.join(memDir, "MEMORY.md"), ...(await listMd(tdir)).map((t) => path.join(tdir, t))]) {
@@ -353,15 +431,9 @@ async function rebuildIndex(memDir) {
     }
   }
   const byTopic = new Map()
-  for (const f of await listMd(memDir)) {
-    const slug = f.slice(0, -3)
-    if (RESERVED_STEMS.has(slug.toLowerCase())) continue
-    let fm
-    try { fm = parseFrontmatter((await fs.readFile(path.join(memDir, f), "utf8")).replace(/\r\n/g, "\n")) } catch { continue }
-    const o = old.get(slug)
-    const desc = (fm.description || "").trim()
+  for (const [slug, { desc, topic }] of await readFacts(memDir)) {
+    const o = fresh.has(slug) ? null : old.get(slug)
     const line = o ? `- [${o.title}](../${slug}.md)${o.rest}` : `- [${slug}](../${slug}.md)` + (desc ? ` — ${desc}` : "")
-    const topic = topicOf(fm)
     if (!byTopic.has(topic)) byTopic.set(topic, [])
     byTopic.get(topic).push(line)
   }
@@ -396,9 +468,9 @@ async function storeDistil(output, { isChild, memDir, agentName, existing }) {
     console.error(`[geneseed-learn] agent lesson -> ${f}`)
     return
   }
-  const written = await writeMemories(output, memDir, existing)
-  if (written.length) {
-    console.error(`[geneseed-learn] wrote ${written.length} memory file(s): ${written.join(", ")}`)
+  const res = await writeMemories(output, memDir, existing)
+  for (const [verb, slugs] of [["wrote", res.created], ["updated", res.updated], ["archived", res.archived]]) {
+    if (slugs.length) console.error(`[geneseed-learn] ${verb} ${slugs.length} memory file(s): ${slugs.join(", ")}`)
   }
 }
 
@@ -455,7 +527,7 @@ export const GeneseedLearn = async (ctx) => {
       const existing = await existingSlugs(memDir)
       const prompt = isChild
         ? [AGENT_LESSON_PROMPT, "", "NOTES:", notes].join("\n")
-        : buildPrompt(notes, existing)
+        : buildPrompt(notes, await readFacts(memDir))
 
       // Distil in a throwaway session with the session's own model, then drop it.
       const session = await client.session.create({ body: { title: "geneseed-learn (auto)" } })
@@ -589,7 +661,7 @@ async function setupV2(ctx) {
       const existing = await existingSlugs(memDir)
       const prompt = isChild
         ? [AGENT_LESSON_PROMPT, "", "NOTES:", notes].join("\n")
-        : buildPrompt(notes, existing)
+        : buildPrompt(notes, await readFacts(memDir))
       const reply = await ctx.generate.text({
         prompt, model: { providerID: model.providerID, id: model.id, ...(model.variant ? { variant: model.variant } : {}) },
       })

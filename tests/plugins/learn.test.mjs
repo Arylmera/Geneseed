@@ -53,7 +53,7 @@ test("writeMemories: refuses a name that is not a plain slug, writes one that is
   const accepted = ["Plain_Slug-1", "x".repeat(100)]
   const output = [...refused, ...accepted].map(chunk).join("\n---FILE---\n")
   const written = await GeneseedLearn.writeMemories(output, memDir, new Set())
-  assert.deepEqual(written, accepted)
+  assert.deepEqual(written.created, accepted)
   assert.deepEqual((await fs.readdir(root)).sort(), ["memory"],
     "a memory was written outside the memory dir")
   assert.deepEqual((await fs.readdir(memDir)).sort(),
@@ -70,7 +70,7 @@ test("writeMemories: refuses reserved stems and case variants of a stored slug",
   const chunk = (name) => `---\nname: ${name}\ndescription: d\n---\nbody`
   const output = ["MEMORY", "memory", "Readme", "User-Prefs", "fresh", "FRESH"].map(chunk).join("\n---FILE---\n")
   const written = await GeneseedLearn.writeMemories(output, memDir, new Set(["user-prefs"]))
-  assert.deepEqual(written, ["fresh"])
+  assert.deepEqual(written, { created: ["fresh"], updated: [], archived: [] })
   assert.equal(await fs.readFile(path.join(memDir, "user-prefs.md"), "utf8"), "original\n")
   // The stored fact's flat line moves into its topic file as it was; the new one joins it.
   assert.equal(await fs.readFile(path.join(memDir, "topics", "misc.md"), "utf8"),
@@ -111,4 +111,56 @@ test("writeMemories: the plugin's two-level index matches the harness's", async 
     ["MEMORY.md", "topics/build-tools.md", "topics/misc.md", "topics/project.md"])
   assert.equal(plugin["topics/project.md"],
     "# project\n\n- [n2](../n2.md) — N2\n- [Old](../old.md) — hand hook\n")
+})
+
+// The same parity for the two other actions, on a store whose slugs differ in case: an update
+// (merged text replaces the stored file, its index line regenerated), an archive (the fact
+// moves into archive/, past an archive already holding its name), a skipped update of a
+// missing slug, a skipped archive of a `force: constraint` fact, and a create. Fact order
+// inside a topic file is the core's sortPaths order: case-folded on Windows (alpha, Beta,
+// locked, mid, Zeta), plain code-unit order elsewhere (Beta, Zeta, alpha, locked, mid). Written out per platform, so a plugin that sorted plainly on Windows fails.
+test("writeMemories: the plugin matches the harness on update, archive and mixed-case order", async () => {
+  const { writeMemories: harnessWrite } = await import("../../js/hosts/memory-files.mjs")
+  const fact = (slug, desc) => `---\nname: ${slug}\ndescription: ${desc}\ntopic: t\n---\nb\n`
+  const reply = ["---\nname: zeta\naction: update\ndescription: Z2\ntopic: t\n---\nmerged",
+    "---\nname: gone\naction: archive\n---",
+    "---\nname: ghost\naction: update\ndescription: x\n---\nb",
+    "---\nname: locked\naction: archive\n---",
+    fact("mid", "M")].join("\n---FILE---\n")
+  const seedStore = async () => {
+    const d = makeSandbox("gs-learn-").path
+    for (const [s, desc] of [["Zeta", "Z"], ["alpha", "A"], ["Beta", "B"], ["gone", "G"]]) {
+      await fs.writeFile(path.join(d, `${s}.md`), fact(s, desc))
+    }
+    await fs.writeFile(path.join(d, "locked.md"), "---\nname: locked\ndescription: L\ntopic: t\nforce: constraint\n---\nb\n")
+    await fs.mkdir(path.join(d, "archive"))
+    await fs.writeFile(path.join(d, "archive", "gone.md"), "older\n")
+    return d
+  }
+  const snapshot = async (d) => {
+    const out = {}
+    const rels = [...(await fs.readdir(d)).filter((f) => f.endsWith(".md")),
+      ...(await fs.readdir(path.join(d, "topics"))).map((t) => `topics/${t}`),
+      ...(await fs.readdir(path.join(d, "archive"))).map((t) => `archive/${t}`)]
+    for (const f of rels.sort()) out[f] = (await fs.readFile(path.join(d, f), "utf8")).replaceAll("\r\n", "\n")
+    return out
+  }
+  const existing = ["Zeta", "alpha", "Beta", "gone", "locked"]
+  const a = await seedStore()
+  const b = await seedStore()
+  const res = await GeneseedLearn.writeMemories(reply, a, new Set(existing))
+  assert.deepEqual(res, harnessWrite(reply, b, new Set(existing)))
+  assert.deepEqual(res, { created: ["mid"], updated: ["Zeta"], archived: ["gone"] })
+  const plugin = await snapshot(a)
+  assert.deepEqual(plugin, await snapshot(b))
+  assert.equal(plugin["Zeta.md"], "---\nname: zeta\ndescription: Z2\ntopic: t\n---\nmerged\n")
+  // The update archived Zeta's previous version first, so its old body survives, unindexed.
+  assert.equal(plugin["archive/Zeta.md"], fact("Zeta", "Z"))
+  assert.ok(!plugin["topics/t.md"].includes("archive") && !plugin["MEMORY.md"]?.includes("archive"))
+  assert.equal(plugin["archive/gone.md"], "older\n")
+  assert.equal(plugin["archive/gone-2.md"], fact("gone", "G"))
+  assert.ok(!("gone.md" in plugin) && !("ghost.md" in plugin) && "locked.md" in plugin)
+  const order = process.platform === "win32" ? ["alpha", "Beta", "locked", "mid", "Zeta"] : ["Beta", "Zeta", "alpha", "locked", "mid"]
+  const desc = { alpha: "A", Beta: "B", locked: "L", mid: "M", Zeta: "Z2" }
+  assert.equal(plugin["topics/t.md"], `# t\n\n${order.map((s) => `- [${s}](../${s}.md) — ${desc[s]}`).join("\n")}\n`)
 })

@@ -24,8 +24,9 @@ session; a memory records something *true* that would otherwise be lost or
 re-derived. Then take exactly one branch.
 
 ### Branch A — a fact to remember
-1. Search {{MEMORY}} for a file that already covers it. If one exists, update that
-   file — never mint a twin.
+1. Search {{MEMORY}} for a file that already covers it. If one exists, merge into it —
+   keep what is still true, add or correct the rest — never mint a twin. If the new
+   fact proves the old one wrong, archive the old one (move it into `archive/`).
 2. Ask which **binding force** the fact carries, in plain words, not jargon:
    *imposed by you, not mine to relax* (`constraint`) · *a choice taken among real
    alternatives* (`choice`) · *a stance I hold until evidence overturns it*
@@ -76,8 +77,8 @@ re-derived. Then take exactly one branch.
    `source:` to the memory's name and add `trial until:` about a month out — a
    promoted rule starts on probation.
 7. Show the exact text to the user and wait for explicit consent ({{LAW:deletion-is-deliberate}}) before
-   appending it. For a promotion, after the rule lands, delete or archive the source
-   memory (with the same consent) so the lesson is not loaded twice.
+   appending it. For a promotion, after the rule lands, archive the source memory into
+   `archive/` (with the same consent) so the lesson is not loaded twice.
 8. **Keep the set lean.** After writing, if the file holds more than ~15 rules or
    any rule no longer changes behaviour, say so and propose merges or prunes — every
    rule is loaded every session, and a bloated set dilutes the rules that matter.

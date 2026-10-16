@@ -1,7 +1,7 @@
 /**
- * `learn` — the Stop/SubagentStop/PreCompact verb: distil notes or a transcript into deduped
- * memory entries through the model CLI `$GENESEED_LLM` names. THE ONE SPAWN in the hook entry's
- * closure; the store's file format it writes through lives in `./memory-files.mjs`, which does
+ * `learn` — the Stop/SubagentStop/PreCompact verb: distil notes or a transcript into memory
+ * entries (a new fact, or an update or archive of a stored one) through the model CLI
+ * `$GENESEED_LLM` names. THE ONE SPAWN in the hook entry's closure; the store's file format it writes through lives in `./memory-files.mjs`, which does
  * not spawn and is what the CLI imports. See `js/hosts/hooks.mjs`'s header for the contract.
  */
 import path from 'node:path';
@@ -14,7 +14,7 @@ import {
 } from './hosts.mjs';
 import { readStdin, splitLines, splitWords } from './hooks-prims.mjs';
 import {
-  existingSlugs, writeMemories, consolidateMemory, appendAgentLesson,
+  existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
 } from './memory-files.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -163,13 +163,33 @@ export function readNotes(raw, meta = hookMeta(raw)) {
   return flat;
 }
 
-function buildLearnPrompt(notes, existing) {
+/**
+ * The prompt: the plugin's head, the stored facts as `slug \u2014 description` (so the model can
+ * merge into one or archive it), the topics in use, then the notes.
+ *
+ * THE FACT LINES ARE CAPPED at MAX_STORED_CHARS. A store of hundreds of facts would otherwise
+ * outgrow the notes, and the prompt rides on the model CLI's command line, which Windows caps
+ * at 32 767 characters (16 000 of notes + the head + this stays under it). A fact past the
+ * cap is only unlisted: `writeMemories` still refuses to create its slug. The plugin's
+ * `buildPrompt` is the twin.
+ */
+const MAX_STORED_CHARS = 8000;
+export function buildLearnPrompt(notes, facts) {
   const parts = [learnPromptHead(), ''];
-  if (existing.size) {
-    parts.push('ALREADY STORED \u2014 do NOT emit a memory matching any of these '
-      + 'slugs (skip updates too; only genuinely new facts):');
-    parts.push(...[...existing].sort().map((slug) => `- ${slug}`));
-    parts.push('');
+  if (facts.size) {
+    parts.push('ALREADY STORED \u2014 \'slug \u2014 description\', to update or archive, never to create:');
+    let used = 0;
+    let shown = 0;
+    for (const [slug, { desc }] of facts) {
+      const line = desc ? `- ${slug} \u2014 ${desc}` : `- ${slug}`;
+      if (used + line.length > MAX_STORED_CHARS) break;
+      parts.push(line);
+      used += line.length + 1;
+      shown += 1;
+    }
+    if (shown < facts.size) parts.push(`(${facts.size - shown} more stored facts not shown)`);
+    parts.push('', 'TOPICS IN USE:',
+      [...new Set([...facts.values()].map((f) => f.topic))].sort().join(', '), '');
   }
   parts.push('NOTES:', notes);
   return parts.join('\n');
@@ -329,7 +349,7 @@ export function cmdLearn(args) {
 
   const memDir = resolveMemoryDir(args.memory);
   const existing = memDir ? existingSlugs(memDir) : new Set();
-  const prompt = buildLearnPrompt(notes, existing);
+  const prompt = buildLearnPrompt(notes, memDir ? readFacts(memDir) : new Map());
 
   const llm = process.env.GENESEED_LLM;
   if (!llm) {
@@ -341,11 +361,17 @@ export function cmdLearn(args) {
   const proc = runLlm(llm, prompt);
   const output = proc.stdout;
   if (memDir && output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
-    const written = writeMemories(output, memDir, existing);
-    if (written.length) {
-      err(`[learn] wrote ${written.length} memory file(s) to `
-        + `${memDir}: ${written.join(', ')}\n`);
-    } else {
+    const { created, updated, archived } = writeMemories(output, memDir, existing);
+    if (created.length) {
+      err(`[learn] wrote ${created.length} memory file(s) to `
+        + `${memDir}: ${created.join(', ')}\n`);
+    }
+    if (updated.length) err(`[learn] updated ${updated.length} memory file(s): ${updated.join(', ')}\n`);
+    if (archived.length) {
+      err(`[learn] archived ${archived.length} memory file(s) to `
+        + `${path.join(memDir, 'archive')}: ${archived.join(', ')}\n`);
+    }
+    if (!created.length && !updated.length && !archived.length) {
       err('[learn] nothing new to store (all duplicates).\n');
     }
   } else {
