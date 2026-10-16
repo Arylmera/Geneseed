@@ -135,3 +135,25 @@ test("session files: the harness dir's changed files are injected, an untouched 
   assert.doesNotMatch(text, /----- PROFILE\.md -----/)
   assert.doesNotMatch(text, /----- memory\/MEMORY\.md -----/)
 })
+
+test("session files: a memory map with a misc topic carries the curation nudge", async () => {
+  // The plugin's copy of the hook's rule (tests/unit/claude.test.mjs pins the text): a `misc`
+  // topic, or a topic over 40 facts, appends one line asking for the memory-curator.
+  const h = path.join(tmp, "harness-nudge")
+  await fs.mkdir(path.join(h, "memory"), { recursive: true })
+  await fs.writeFile(path.join(h, "AGENT.md"), "# harness\n")
+  await fs.writeFile(path.join(h, "memory", "MEMORY.md"),
+    "# Memory Index\n\n- [misc](topics/misc.md) — 2 facts\n")
+  const plugin = await load({}, "nudge")
+  const output = { messages: [userMsg("s1")] }
+  const prev = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = h
+  try {
+    await plugin["experimental.chat.messages.transform"]({}, output)
+  } finally {
+    if (prev === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = prev
+  }
+  assert.match(output.messages[0].parts[0].text,
+    /— 2 facts\n\[memory\] A topic holds over 40 facts, or facts sit in misc: .*memory-curator agent/)
+})

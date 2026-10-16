@@ -2908,6 +2908,8 @@ test('promote moves a memory into a trial rule', () => {
     assert.equal(res.ok, true, JSON.stringify(res));
     assert.equal(res.deleted_memory, 'prefer-tabs');
     assert.ok(!fs.existsSync(path.join(mem, 'prefer-tabs.md')));
+    // The memory README's rule: a promoted fact is archived, not lost.
+    assert.ok(fs.existsSync(path.join(mem, 'archive', 'prefer-tabs.md')), 'the promoted fact was not archived');
 
     const rule = apiRules(box.state).rules[0];
     assert.equal(rule.status, 'trial', 'a promoted memory must start on trial, not approved');
@@ -3232,7 +3234,7 @@ test('POST /api/loops/preset is wired through POST_ROUTES with the handler\'s No
 // The memory-delete guard is CASE-FOLDED. On Windows and the default macOS filesystem
 // `memory.md` IS `MEMORY.md`, so a guard comparing `MEMORY` exactly let `memory` through and
 // deleted the index the agent reads at session start. Every spelling of a reserved name is a
-// 404 and leaves both reserved files in place; a real fact still deletes. (On a case-sensitive
+// 404 and leaves both reserved files in place; a real fact is still archived. (On a case-sensitive
 // filesystem the lowercase names 404 for a second reason — no such file — and the row still
 // holds.)
 test('memory delete refuses every case of the reserved names', () => {
@@ -3249,8 +3251,10 @@ test('memory delete refuses every case of the reserved names', () => {
     }
     assert.ok(fs.existsSync(path.join(mem, 'MEMORY.md')), 'the index was deleted');
     assert.ok(fs.existsSync(path.join(mem, 'README.md')), 'the store README was deleted');
-    assert.deepEqual(apiMemoryDelete(st, 'a'), { deleted: 'a' });
+    // A real fact is ARCHIVED, not unlinked: it leaves the store's top level for archive/.
+    assert.deepEqual(apiMemoryDelete(st, 'a'), { archived: 'a' });
     assert.equal(fs.existsSync(path.join(mem, 'a.md')), false);
+    assert.equal(fs.existsSync(path.join(mem, 'archive', 'a.md')), true, 'the fact was not archived');
   } finally { sb.cleanup(); }
 });
 

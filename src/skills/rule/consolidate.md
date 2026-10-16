@@ -1,6 +1,8 @@
 # {{SKILL}}: rule — consolidation flow
 
-Tends the {{MEMORY}} set as a whole.
+Tends the {{MEMORY}} set as a whole. A store too large for one careful read (a
+topic over 40 facts, or a `misc` topic) goes to the memory-curator {{AGENT}}
+instead: it runs this flow topic by topic in its own context and also assigns topics.
 
 1. **Read the whole set once**: `MEMORY.md`, its `topics/` files, every fact they
    index, and any file in `{{DIR_MEMORY}}/` they forgot, into a scratch table — name, type, the claim in one

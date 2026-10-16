@@ -35,6 +35,7 @@ import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
   globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES, sessionFiles,
+  CURATE_NUDGE, CURATE_TOPIC_MAX, memoryNudge,
 } from '../../js/hosts/hooks-context.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
@@ -1992,4 +1993,69 @@ test('both copies of the seed hashes are the stubs, and the two file lists agree
   for (const name of Object.keys(SESSION_SEEDS)) {
     assert.ok(SESSION_FILES.some((f) => path.posix.basename(f) === name), `${name} is never read`);
   }
+});
+
+// The memory map's curation nudge. Each row: the topic lines of a map -> whether the nudge is
+// appended. The rule: a topic over 40 facts, or any `misc` topic (facts with neither `topic:`
+// nor `type:`), asks for the memory-curator; a store that is only large never does, because a
+// curated large store would then be nagged every session.
+const MAP = (...topics) => ['# Memory Index', '',
+  'Each topic file lists its facts; open the one the task needs.', '',
+  ...topics.map(([t, n]) => `- [${t}](topics/${t}.md) — ${n} fact${n === 1 ? '' : 's'}`)].join('\n');
+const NUDGE_ROWS = [
+  { name: 'a topic at exactly 40 facts', map: MAP(['build', 40], ['web', 12]), nudge: false },
+  { name: 'a topic at 41 facts', map: MAP(['build', 41]), nudge: true },
+  { name: 'a misc topic of one fact', map: MAP(['build', 3], ['misc', 1]), nudge: true },
+  { name: 'many topics, 237 facts, none over 40', map: MAP(...Array.from({ length: 7 },
+    (_, i) => [`t${i}`, i === 0 ? 40 : 33])), nudge: false },
+  { name: 'a topic NAMED like misc but not misc', map: MAP(['miscellany', 2]), nudge: false },
+  { name: 'a hand-written line with a count, not a map line', map: '# Memory Index\n- notes — 99 facts',
+    nudge: false },
+];
+for (const row of NUDGE_ROWS) {
+  test(`the memory map nudges toward the curator: ${row.name}`, () => withDir((d) => {
+    fs.mkdirSync(path.join(d, 'memory'));
+    fs.writeFileSync(path.join(d, 'memory', 'MEMORY.md'), `${row.map}\n`);
+    const [mem] = sessionFiles(d).filter((f) => f.rel === 'memory/MEMORY.md');
+    assert.equal(mem.text, row.nudge ? `${row.map}\n${CURATE_NUDGE}` : row.map);
+    assert.equal(memoryNudge(row.map), row.nudge ? CURATE_NUDGE : '');
+  }));
+}
+
+test('the OpenCode context plugin carries the same curation nudge as the hook', () => {
+  // The plugin ships on its own and cannot import the hook, so it holds a copy: the threshold,
+  // the line it appends, and the map-line pattern must be the hook's, byte for byte.
+  const plugin = fs.readFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins',
+    'geneseed-context.js'), 'utf8');
+  assert.match(plugin, new RegExp(`const CURATE_TOPIC_MAX = ${CURATE_TOPIC_MAX}\\n`));
+  const text = plugin.match(/const CURATE_NUDGE = ("[^"]*")\s*\+\s*("[^"]*")/);
+  assert.ok(text, 'the plugin no longer declares CURATE_NUDGE');
+  assert.equal(JSON.parse(text[1]) + JSON.parse(text[2]), CURATE_NUDGE);
+  const hook = fs.readFileSync(path.join(ROOT, 'js', 'hosts', 'hooks-context.mjs'), 'utf8');
+  const re = (src) => src.match(/const MAP_COUNT_RE = (\/.*\/);?$/m)?.[1];
+  assert.ok(re(hook), 'the hook no longer declares MAP_COUNT_RE');
+  assert.equal(re(plugin), re(hook), 'the plugin MAP_COUNT_RE drifted from the hook');
+});
+
+test('a nudged memory map keeps the whole payload under 9 000 chars', () => {
+  // A map far over the budget, with a misc topic: the session file is cut with its marker, and
+  // the payload, nudge or not, stays under the host's cap. A map that fits carries the nudge.
+  withDir((d) => {
+    fs.mkdirSync(path.join(d, 'memory'));
+    const big = MAP(['misc', 2], ...Array.from({ length: 300 }, (_, i) => [`topic-${i}`, 5]));
+    fs.writeFileSync(path.join(d, 'memory', 'MEMORY.md'), `${big}\n`);
+    const prev = process.env.GENESEED_ROOT;
+    process.env.GENESEED_ROOT = d;
+    try {
+      let [rc, out] = capturedOut(() => cmdContext({ root: d }));
+      assert.equal(rc, 0);
+      assert.ok(out.includes('truncated (session budget)'), `the big map was not cut:\n${out.slice(0, 300)}`);
+      assert.ok(out.length < 9000, `payload ${out.length} chars is over budget`);
+      fs.writeFileSync(path.join(d, 'memory', 'MEMORY.md'), `${MAP(['misc', 2])}\n`);
+      [rc, out] = capturedOut(() => cmdContext({ root: d }));
+      assert.ok(out.includes(CURATE_NUDGE), `the nudge did not reach the payload:\n${out}`);
+    } finally {
+      if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
+    }
+  });
 });

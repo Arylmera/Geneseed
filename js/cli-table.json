@@ -909,7 +909,7 @@
     },
     {
       "name": "memory",
-      "help": "manage the memory store: list the facts the agent reads, or remove one by name",
+      "help": "manage the memory store: list the facts the agent reads, or remove one by name (archived into memory/archive/; --purge deletes)",
       "description": "",
       "positionals": [
         {
@@ -955,6 +955,36 @@
           "required": false,
           "nargs": null,
           "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--archived"
+          ],
+          "dest": "archived",
+          "metavar": null,
+          "help": "act on memory/archive/ instead: list the archived facts, or (with --purge) delete one",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--purge"
+          ],
+          "dest": "purge",
+          "metavar": null,
+          "help": "rm deletes the fact for good instead of archiving it (cannot be undone)",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
           "type": null,
           "hidden": false
         }

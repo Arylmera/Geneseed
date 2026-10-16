@@ -57,6 +57,13 @@
       "added": "2026-06-08",
       "last_verified": ""
     },
+    "agents/memory-curator": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-16",
+      "last_verified": ""
+    },
     "agents/operator": {
       "status": "approved",
       "version": "1.0.0",

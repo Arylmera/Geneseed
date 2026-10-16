@@ -3,7 +3,7 @@ import React from 'react'
 // A small animated emblem per agent, drawn from what the agent is for. Console-only: it
 // lives in web/src and never in src/agents, so the emitted harness and its token budget are
 // untouched. Every emblem sits on the same badge (a soft disc and a slow dashed ring) so the
-// nineteen read as one family; inside, a two-tone line drawing in the accent colour (`.ag-f`
+// twenty read as one family; inside, a two-tone line drawing in the accent colour (`.ag-f`
 // marks a soft fill) with a few staggered motions (styles.css, `.ag-*`), all stilled by
 // prefers-reduced-motion. An agent with no drawing gets the generic emblem, so a new agent
 // never breaks the page; GLYPHS is exported so a test can list who is missing one.
@@ -122,6 +122,16 @@ export const GLYPHS = {
         <path d="M14 18h36" />
         <path className="ag-f" d="M14 18l-5 12h10zM50 18l-5 12h10z" />
       </g>
+    </>
+  ),
+  // Keeps the memory in order: index cards rising in turn from a filing box.
+  'memory-curator': (
+    <>
+      <rect className="ag-rise ag-f" x="17" y="16" width="14" height="20" rx="1" />
+      <rect className="ag-rise ag-late ag-f" x="25" y="12" width="14" height="24" rx="1" />
+      <rect className="ag-rise ag-later ag-f" x="33" y="18" width="14" height="18" rx="1" />
+      <path d="M12 32h40v16a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2z" />
+      <path d="M26 40h12" opacity=".6" />
     </>
   ),
   // Holds every claim to two witnesses: a turning globe with a second eye in orbit.

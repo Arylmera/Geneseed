@@ -23,6 +23,7 @@
   "DESC_PERFORMANCE": "Checks the frame times — profiles the run and names the bottleneck before any tuning.",
   "DESC_EXPLORER": "Scouts the map — sweeps wide in a throwaway scout run, returns only the intel.",
   "DESC_RESEARCHER": "Reads the wiki and the patch notes — cross-checks every claim against two sources before it goes in the build guide.",
+  "DESC_MEMORY_CURATOR": "Sorts the inventory — stacks the duplicates, tags every item, stashes the old loot, asks before dropping any.",
   "DESC_ADVOCATE": "Calls for the play — the upside, the opening, the cost of passing it up.",
   "DESC_SKEPTIC": "Runs the counter — attacks the play for failure modes, risks, and assumptions nobody checked.",
   "DESC_PRAGMATIST": "Weighs the build — the cost, the effort, the complexity, and whether the payoff's worth it.",

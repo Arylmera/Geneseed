@@ -20,7 +20,7 @@ What a Claude Code or OpenClaude install writes, piece by piece. The **Kind** wo
 | learn hook | When the agent finishes a reply, and before compaction, distils durable facts from the recent conversation into `memory/`. Off until you set `GENESEED_LLM` to a model command such as `claude -p` | automatic | One model call each time it runs, once enabled | Leave `GENESEED_LLM` unset (the default) |
 | `skills/` | Written procedures you call by name, such as `brainstorm` or `plan` | on demand | ~4.1k tokens for names and descriptions; a skill's body loads only when called | No per-skill switch; `geneseed uninstall` removes them all |
 | `agents/` | Specialists the agent can delegate to, such as `reviewer` or `tester` | on demand | ~0.5k tokens | `geneseed uninstall` |
-| `memory/` | Durable facts, one per file, with a `MEMORY.md` index the context hook injects | automatic | 0 when fresh; grows as facts accumulate | `geneseed memory list`, then `geneseed memory rm <name>` |
+| `memory/` | Durable facts, one per file, with a `MEMORY.md` index the context hook injects | automatic | 0 when fresh; grows as facts accumulate | `geneseed memory list`, then `geneseed memory rm <name>` (archives; `--purge` deletes) |
 | `notebook/` | The agent's own working space: plans, scratch notes, and the gate log `gates.jsonl` | automatic | 0 when fresh; its index grows with use | Delete what you do not want; it is git-ignored and yours |
 | hook shim | `~/.geneseed/bin/geneseed-hook`, the one stable path every hook calls, so moving the Geneseed checkout does not break your hooks | automatic | Nothing on its own | Not removed by uninstall, since every install on the machine shares it. `GENESEED_HOME` moves it |
 
