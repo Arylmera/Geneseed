@@ -67,20 +67,28 @@ firmly it binds. Absent `force`, a memory is a plain fact under the rules below.
 inline (the date, what changed, and why) rather than deleting the history. The one
 exception: a `constraint` is not the agent's to overturn — surface the
 contradiction to the user and let them rule, then record their decision (often as
-a `tempered` memory). A memory with no `force` follows the ordinary "delete a
-memory that turns out to be wrong" rule.
+a `tempered` memory). A memory with no `force` follows the ordinary "archive a
+memory that turns out to be wrong" rule. The `learn` hook never updates or archives a
+memory that carries a `force`; revising one stays with the agent and the user.
 
 ## Rules
 
 - One fact per file. Before creating, check for an existing file that covers it
-  and update that instead — no duplicates.
-- Delete a memory that turns out to be wrong.
+  and update that instead, merging in what is new and keeping what is still true —
+  no duplicates. The `learn` hook does the same: it is shown every stored fact and
+  updates one (`action: update`) rather than writing a twin. It sees only each
+  fact's description, so it first moves the old version into `archive/`: every
+  update can be undone.
+- Archive a memory that turns out to be wrong or obsolete: move it into `archive/`
+  (`learn` does it with `action: archive`). An archived fact leaves the index but
+  stays on disk, under a `-2`, `-3`, … name if `archive/` already holds one of that
+  name. Deleting a file from `archive/` needs the user's consent
+  ({{LAW:deletion-is-deliberate}}). `archive/` is part of this git-ignored store.
 - Don't store what the repo already records (code structure, git history, the
   {{LAWS}}, `user-rules.md`). Store what was *non-obvious*.
 - When the same `feedback` lesson keeps recurring, propose promoting it into a
   standing rule in `user-rules.md` (the rule {{SKILL}}) — with the user's
-  consent, and delete or archive the memory once promoted so the lesson is not
-  loaded twice.
+  consent, and archive the memory once promoted so the lesson is not loaded twice.
 - After writing a file, rebuild the index (*The index* below) rather than editing it
   by hand — its counts are derived.
 - Verify a recalled memory still matches reality before acting on it
@@ -99,7 +107,8 @@ A fact's topic is its `topic:`, else its `type:`, else `misc`, normalised to
 lowercase `[a-z0-9-]`. Both levels are generated from the fact files:
 `geneseed learn --consolidate --memory <this dir>` rebuilds them (refreshing each
 hook from its `description`), and the `learn` hook rebuilds them after every fact it
-writes. A build moves a flat, one-line-per-fact `MEMORY.md` from an older install to
+writes, updates or archives. Only top-level fact files are indexed; `archive/` and
+`agents/` never are. A build moves a flat, one-line-per-fact `MEMORY.md` from an older install to
 this layout once, keeping each line's own title and hook; it never touches a fact file.
 
 ## Per-{{AGENT}} memory (`agents/` subdirectory)

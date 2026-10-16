@@ -10,7 +10,7 @@
  * and made the hook module a row in `tests/unit/hook_cli.test.mjs`'s spawn allow-list for a
  * spawn the CLI never makes. Everything here is fs-only; `hooks-learn.mjs` is the one spawner.
  */
-import { existsSync, mkdirSync, rmdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
@@ -97,7 +97,10 @@ function globMd(dir) {
 /** Stems that name the store's own files, never a fact — `MEMORY` is the index itself. */
 const RESERVED_STEMS = new Set(['memory', 'readme']);
 
-/** `_existing_slugs` — slugs already stored, so learn never re-emits a known fact. */
+/**
+ * `_existing_slugs` — slugs already stored. learn never CREATES one of these; it may only
+ * update or archive it by name (`writeMemories`).
+ */
 export function existingSlugs(memDir) {
   return new Set(globMd(memDir).map(stem).filter((s) => !RESERVED_STEMS.has(s.toLowerCase())));
 }
@@ -130,8 +133,11 @@ function topicSlug(raw) {
  */
 const topicOf = (fm) => topicSlug(fmGet(fm, 'topic') || fmGet(fm, 'type'));
 
-/** Every fact on disk, in the index's sort order: slug -> { desc, topic }. */
-function readFacts(memDir) {
+/**
+ * Every fact on disk, in the index's sort order: slug -> { desc, topic }. Top level only, so
+ * `archive/` and `agents/` are never facts. Exported for learn's prompt, which lists them.
+ */
+export function readFacts(memDir) {
   const facts = new Map();
   for (const name of sortPaths(globMd(memDir))) {
     const s = stem(name);
@@ -197,15 +203,16 @@ function pruneTopicsDir(memDir) {
  *
  * A fact the index already points at keeps its existing line, title and hook included,
  * unless `refresh` is set. That makes a migration or a learn run lossless. `consolidate`
- * passes `refresh`, because it exists to re-read the descriptions. Topic files no topic
- * uses any more are deleted: they are generated, never facts.
+ * passes `refresh`, because it exists to re-read the descriptions; learn passes the slugs
+ * it just UPDATED as `fresh`, because their old line describes a fact that is gone. Topic
+ * files no topic uses any more are deleted: they are generated, never facts.
  */
-function rebuildIndex(memDir, refresh) {
+function rebuildIndex(memDir, refresh, fresh = new Set()) {
   const facts = readFacts(memDir);
   const old = indexedFacts(memDir);
   const byTopic = new Map();
   for (const [slug, { desc, topic }] of facts) {
-    const o = refresh ? null : old.get(slug);
+    const o = refresh || fresh.has(slug) ? null : old.get(slug);
     const line = o ? `- [${o.title}](../${slug}.md)${o.rest}`
       : `- [${slug}](../${slug}.md)${desc ? ` — ${desc}` : ''}`;
     if (!byTopic.has(topic)) byTopic.set(topic, []);
@@ -238,34 +245,96 @@ export function migrateMemoryIndex(memDir) {
   return true;
 }
 
+/** The chunk without its frontmatter `action:` line, which is an instruction, not the fact. */
+function stripAction(chunk) {
+  const lines = chunk.split('\n');
+  const close = lines.findIndex((l, i) => i > 0 && l.trim() === '---');
+  if (lines[0].trim() !== '---' || close < 0) return chunk;
+  return lines.filter((l, i) => i === 0 || i >= close || !/^\s*action\s*:/.test(l)).join('\n');
+}
+
 /**
- * `_write_memories` — split the model output into files, write each NEW one, then rebuild
- * the two-level index from disk with the same builder `consolidate` uses. A rebuild rather
- * than an append, so a legacy flat index is migrated on the way and a topic count can never
- * drift from its file. `existing` is MUTATED, so a reply carrying the same slug
- * twice writes it once.
+ * Whether the stored fact carries a `force:`. Such a fact is never updated or archived by
+ * learn: the memory README's Bridge rule has it revised inline with its supersession
+ * recorded, a `constraint` only by the user, and the model sees no fact's body or `force:`.
+ */
+function hasForce(memDir, slug) {
+  try { return !!fmGet(frontmatter(readText(path.join(memDir, `${slug}.md`)))[0], 'force'); } catch {
+    return false;
+  }
+}
+
+/**
+ * Move `<slug>.md` into `archive/`, never over a file already there: a taken name gets
+ * `-2`, `-3`, ... A counter rather than a date, so a second archive the same day cannot
+ * collide. RENAME, never unlink: an archived fact leaves the index but stays on disk.
+ */
+function archiveFact(memDir, slug) {
+  const adir = path.join(memDir, 'archive');
+  mkdirSync(adir, { recursive: true });
+  let dest = path.join(adir, `${slug}.md`);
+  for (let n = 2; existsSync(dest); n += 1) dest = path.join(adir, `${slug}-${n}.md`);
+  renameSync(path.join(memDir, `${slug}.md`), dest);
+}
+
+/**
+ * `_write_memories` — split the model output into files and apply each, then rebuild the
+ * two-level index from disk with the same builder `consolidate` uses. A rebuild rather than
+ * an append, so a legacy flat index is migrated on the way and a topic count can never
+ * drift from its file. `existing` is MUTATED to match the store afterwards.
+ *
+ * A chunk's frontmatter `action:` says what to do with its `name:`:
+ *   - none (or `create`): write a NEW fact; a slug already stored is skipped;
+ *   - `update`: archive the stored fact (`archiveFact`), then write this text, which the
+ *     model has merged, in its place. The model sees only the description, so the old
+ *     body, links and extra frontmatter survive in `archive/` and every update is reversible;
+ *   - `archive`: move the stored fact to `archive/` (`archiveFact`).
+ * An update or archive naming no stored fact, or one carrying a `force:` (`hasForce`), is
+ * skipped, as is any other action, and each slug is acted on once per reply.
  *
  * A reserved stem is refused (`name: MEMORY` would overwrite the index), and names compare
  * LOWERCASE: on Windows and macOS `User-Prefs.md` and `user-prefs.md` are one file, so a
- * case variant of a stored slug would overwrite it.
+ * case variant of a stored slug would overwrite it. An update or archive therefore acts on
+ * the STORED spelling, whatever case the model used.
+ *
+ * Returns `{ created, updated, archived }`, each a list of slugs.
  */
 export function writeMemories(modelOutput, memDir, existing) {
-  const taken = new Set([...existing].map((s) => s.toLowerCase()));
-  const written = [];
+  const stored = new Map([...existing].map((s) => [s.toLowerCase(), s]));
+  const done = new Set();
+  const res = { created: [], updated: [], archived: [] };
   for (let chunk of modelOutput.split(FILE_SEP_RE)) {
     chunk = chunk.trim();
     if (!chunk || chunk.toUpperCase() === 'NOTHING') continue;
     const [fm] = frontmatter(chunk);
     const name = fmGet(fm, 'name').trim();
     const key = name.toLowerCase();
-    if (!MEMORY_SLUG_RE.test(name) || RESERVED_STEMS.has(key) || taken.has(key)) continue;
-    writeText(path.join(memDir, `${name}.md`), `${chunk.replace(/\n+$/, '')}\n`);
-    existing.add(name);
-    taken.add(key);
-    written.push(name);
+    const action = fmGet(fm, 'action').trim().toLowerCase() || 'create';
+    if (!MEMORY_SLUG_RE.test(name) || RESERVED_STEMS.has(key) || done.has(key)) continue;
+    const slug = stored.get(key);
+    if (slug && action !== 'create' && hasForce(memDir, slug)) continue;
+    const body = `${stripAction(chunk).replace(/\n+$/, '')}\n`;
+    if (action === 'create' && !slug) {
+      writeText(path.join(memDir, `${name}.md`), body);
+      existing.add(name);
+      stored.set(key, name);
+      res.created.push(name);
+    } else if (action === 'update' && slug) {
+      archiveFact(memDir, slug);   // the old version first: the model never saw its body
+      writeText(path.join(memDir, `${slug}.md`), body);
+      res.updated.push(slug);
+    } else if (action === 'archive' && slug) {
+      archiveFact(memDir, slug);
+      existing.delete(slug);
+      stored.delete(key);
+      res.archived.push(slug);
+    } else continue;
+    done.add(key);
   }
-  if (written.length) rebuildIndex(memDir, false);
-  return written;
+  if (res.created.length || res.updated.length || res.archived.length) {
+    rebuildIndex(memDir, false, new Set(res.updated));
+  }
+  return res;
 }
 
 /**
@@ -323,7 +392,8 @@ function dropLines(p, needle) {
 /**
  * `consolidate_memory` — rebuild both index levels from the fact files actually on disk:
  * index orphans, prune dead lines, refresh each line from its fact's description, report
- * duplicate descriptions (never auto-merge — nuance is the user's to keep). `added` and
+ * duplicate descriptions. It REPORTS them and never merges: merging is a judgement, made by
+ * the model at learn time (`writeMemories`'s `update`) or by the user, never by this rebuild. `added` and
  * `pruned` compare against the pointers of BOTH levels, so a migration counts as neither.
  */
 export function consolidateMemory(memDir) {

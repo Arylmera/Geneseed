@@ -14,10 +14,13 @@ Tends the {{MEMORY}} set as a whole.
    (the fact drifted — fix the claim, keep the lesson), *promote* (a `feedback` lesson
    that fired three times or more goes through Branch B of the rule {{SKILL}}), *retire* (wrong, superseded,
    or re-derivable by a fresh read). In doubt between keep and retire, keep and date it.
-4. **Show the plan, apply it with consent** ({{LAW:deletion-is-deliberate}} — retirement is
-   deletion). Merges keep both parents' `[[links]]`; rewrites keep the file name so
+4. **Show the plan, apply it with consent** ({{LAW:deletion-is-deliberate}}). To retire is to
+   archive: move the file into `{{DIR_MEMORY}}/archive/`, never delete it; deleting a file
+   from `archive/` is a further act that needs its own consent. A merge archives the
+   file that did not survive. Merges keep both parents' `[[links]]`; rewrites keep the file name so
    inbound links hold; every survivor keeps valid frontmatter and the `**Why** / **How
-   to apply**` lines its type demands. A memory holding a secret is retired on sight
+   to apply**` lines its type demands. A memory holding a secret is the exception:
+   archiving would keep it on disk, so propose deleting it outright, on sight
    ({{LAW:sealed-secrets}}).
 5. **Rebuild the index** with
    `geneseed learn --consolidate --memory <the {{DIR_MEMORY}}/ dir's path>`: one pointer line per
