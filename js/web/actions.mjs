@@ -276,7 +276,8 @@ export function apiPickFolder(done) {
 // ---- memory ------------------------------------------------------------------------------
 
 /**
- * One fact file, and its line in the MEMORY.md index.
+ * One fact file, and its line in the MEMORY.md index. The file is ARCHIVED into
+ * `memory/archive/`, never unlinked: the console has no purge, `geneseed memory rm --purge` does.
  *
  * `name` is a BARE SLUG: a path separator, or one of the two reserved names, is refused, so
  * this can only ever remove a fact inside the resolved memory dir. MEMORY.md is the index the
@@ -290,9 +291,9 @@ export function apiMemoryDelete(state, name) {
   // `memoryDelete` is the `geneseed memory rm` engine, and its reserved-name check is
   // CASE-FOLDED: this endpoint's own compared `MEMORY` exactly, so on Windows and macOS `memory`
   // resolved to MEMORY.md, passed, and deleted the index the agent reads at session start.
-  if (!memoryDelete(d, name)) throw new NotFound(name);
+  if (memoryDelete(d, name) === null) throw new NotFound(name);
   state.refresh();
-  return { deleted: name };
+  return { archived: name };
 }
 
 // ---- sovereign-repo exclusions -------------------------------------------------------------

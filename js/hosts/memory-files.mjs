@@ -268,13 +268,16 @@ function hasForce(memDir, slug) {
  * Move `<slug>.md` into `archive/`, never over a file already there: a taken name gets
  * `-2`, `-3`, ... A counter rather than a date, so a second archive the same day cannot
  * collide. RENAME, never unlink: an archived fact leaves the index but stays on disk.
+ * Returns the path it landed at. The index is the caller's: `geneseed memory rm` drops the
+ * line (`memoryDropIndex`), learn rebuilds both levels.
  */
-function archiveFact(memDir, slug) {
+export function archiveFact(memDir, slug) {
   const adir = path.join(memDir, 'archive');
   mkdirSync(adir, { recursive: true });
   let dest = path.join(adir, `${slug}.md`);
   for (let n = 2; existsSync(dest); n += 1) dest = path.join(adir, `${slug}-${n}.md`);
   renameSync(path.join(memDir, `${slug}.md`), dest);
+  return dest;
 }
 
 /**

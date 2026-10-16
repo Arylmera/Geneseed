@@ -146,6 +146,28 @@ const SEED_SHA256 = new Set([
 ]);
 export { SESSION_FILES, SEED_SHA256 };
 
+// A topic line of the memory map (`js/hosts/memory-files.mjs` writes it) and its fact count.
+const MAP_COUNT_RE = /^- \[([^\]]*)\]\(topics\/[^)]+\.md\) — (\d+) facts?$/;
+// Past this many facts a topic file stops being a quick read, and the curator splits it.
+const CURATE_TOPIC_MAX = 40;
+const CURATE_NUDGE = '[memory] A topic holds over 40 facts, or facts sit in misc: offer the user '
+  + 'to dispatch the memory-curator agent to merge, re-topic and archive this store.';
+export { CURATE_TOPIC_MAX, CURATE_NUDGE };
+
+/**
+ * The one-line curation nudge for a memory map, or ''. Read off the map's own counts, so it
+ * costs no extra file read on the hook path. Both triggers are ones a curation pass clears; a
+ * store that is merely LARGE is not one, since a curated large store would be nagged forever.
+ * The OpenCode context plugin carries the same rule (parity gated in tests/unit/claude.test.mjs).
+ */
+export function memoryNudge(map) {
+  for (const line of map.split('\n')) {
+    const m = MAP_COUNT_RE.exec(line.trim());
+    if (m && (m[1] === 'misc' || Number(m[2]) > CURATE_TOPIC_MAX)) return CURATE_NUDGE;
+  }
+  return '';
+}
+
 /**
  * The session files present under `hookRoot` and changed from their seed, as `{ rel, abs, text }`
  * (text CRLF-folded, trailing newlines trimmed). `$GENESEED_WIKI` overrides the wiki declaration,
@@ -164,7 +186,9 @@ export function sessionFiles(hookRoot) {
     let text;
     try { text = readFileSync(abs, 'utf8').replace(/\r\n/g, '\n'); } catch { continue; }
     if (SEED_SHA256.has(createHash('sha256').update(text).digest('hex'))) continue;
-    found.push({ rel, abs, text: text.replace(/\n+$/, '') });
+    text = text.replace(/\n+$/, '');
+    const nudge = rel.endsWith('MEMORY.md') ? memoryNudge(text) : '';
+    found.push({ rel, abs, text: nudge ? `${text}\n${nudge}` : text });
   }
   return found;
 }

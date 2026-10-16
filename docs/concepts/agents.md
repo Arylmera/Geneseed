@@ -26,6 +26,7 @@ An **agent** is a specialist the main session can hand a piece of work to. Each 
 | `security` | audits changes that touch the security surface |
 | `performance` | measures where time and memory go, names the bottleneck with numbers, proposes the fix |
 | `docs` | writes and updates user-facing documentation after code lands |
+| `memory-curator` | tidies a large memory store: merges duplicates, assigns topics, archives stale facts, proposes deletions for your approval |
 
 ### The council
 

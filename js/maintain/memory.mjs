@@ -25,11 +25,16 @@
  *
  * `memoryDropIndex` is the hook module's, not a copy: writing the fact and unwriting its
  * index line are two halves of one format, and the half that writes lives there.
+ *
+ * `rm` ARCHIVES BY DEFAULT. A removed fact moves into `archive/` (`archiveFact`, the helper
+ * learn uses), so a slip of the keyboard or a click in the console is reversible; only
+ * `--purge` unlinks. `--archived` points `list` and `rm` at `archive/` itself, and a file
+ * there can only be purged — it has nowhere further to go.
  */
 import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { memoryDropIndex } from '../hosts/memory-files.mjs';
+import { archiveFact, memoryDropIndex } from '../hosts/memory-files.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
 
@@ -58,13 +63,28 @@ export function memoryFacts(dir) {
     .map((n) => n.slice(0, -3)).filter(isFactName).sort();
 }
 
-/** `api_memory_delete`, minus the HTTP: the file, then its line in the index. */
-export function memoryDelete(dir, name) {
-  if (!isFactName(name)) return false;
+/**
+ * Take a fact out of the store and its line out of the index. Archived into `archive/` unless
+ * `purge`, which unlinks it. Returns where it went (the archive path, or '' when purged), or
+ * null when `name` is not a fact here.
+ */
+export function memoryDelete(dir, name, purge = false) {
+  if (!isFactName(name)) return null;
   const p = path.join(dir, `${name}.md`);
+  if (!isFile(p)) return null;
+  let dest = '';
+  if (purge) unlinkSync(p);
+  else dest = archiveFact(dir, name);
+  memoryDropIndex(dir, name);
+  return dest;
+}
+
+/** Unlink `archive/<name>.md`. True when a file went. The archive has no index to update. */
+export function memoryPurgeArchived(dir, name) {
+  if (!isFactName(name)) return false;
+  const p = path.join(dir, 'archive', `${name}.md`);
   if (!isFile(p)) return false;
   unlinkSync(p);
-  memoryDropIndex(dir, name);
   return true;
 }
 
@@ -78,13 +98,14 @@ export function cmdMemory(args) {
       + 'or run this from a directory with a memory/ store.\n');
     return 1;
   }
+  const where = args.archived ? path.join(dir, 'archive') : dir;
   if (args.action === 'list') {
-    const facts = memoryFacts(dir);
+    const facts = memoryFacts(where);
     if (!facts.length) {
-      printOut(`[memory] ${dir}: no facts.\n`);
+      printOut(`[memory] ${where}: no facts.\n`);
       return 0;
     }
-    printOut(`[memory] ${dir}\n`);
+    printOut(`[memory] ${where}\n`);
     for (const name of facts) printOut(`  ${name}\n`);
     return 0;
   }
@@ -92,14 +113,20 @@ export function cmdMemory(args) {
     printErr('[memory] rm needs the name of a fact.\n');
     return 2;
   }
-  if (!memoryDelete(dir, args.name)) {
+  if (args.archived && !args.purge) {
+    printErr('[memory] an archived fact can only be purged: add --purge to delete it.\n');
+    return 2;
+  }
+  const done = args.archived ? (memoryPurgeArchived(dir, args.name) ? '' : null)
+    : memoryDelete(dir, args.name, Boolean(args.purge));
+  if (done === null) {
     // ONE MESSAGE FOR BOTH REFUSALS, which is the endpoint's shape too — it raises the same
     // `NotFound(name)` for a reserved name, a name with a separator and a fact that is not
     // there. Telling a caller that `MEMORY` exists but is protected is a distinction this
     // verb has no reason to draw.
-    printErr(`[memory] no such fact '${args.name}' in ${dir}.\n`);
+    printErr(`[memory] no such fact '${args.name}' in ${where}.\n`);
     return 1;
   }
-  printOut(`[memory] deleted ${args.name}.\n`);
+  printOut(done ? `[memory] archived ${args.name} -> ${done}\n` : `[memory] deleted ${args.name}.\n`);
   return 0;
 }

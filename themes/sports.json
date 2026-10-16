@@ -23,6 +23,7 @@
   "DESC_PERFORMANCE": "Reads the telemetry — times the run and names where it loses pace.",
   "DESC_EXPLORER": "Sends the scout — sweeps wide in a throwaway scouting trip, returns only the report.",
   "DESC_RESEARCHER": "Sends the advance scout on the road — checks every stat against two sources before it makes the game plan.",
+  "DESC_MEMORY_CURATOR": "Cleans up the playbook — merges duplicate plays, files each by topic, benches the stale, asks before cutting any.",
   "DESC_ADVOCATE": "Makes the call to go for it — the upside, the opening, the cost of playing safe.",
   "DESC_SKEPTIC": "Plays the contrarian — breaks down the call for failure modes, risks, and unchecked assumptions.",
   "DESC_PRAGMATIST": "Weighs the game plan — the cost, the effort, the complexity, and whether the payoff's worth it.",

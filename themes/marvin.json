@@ -23,6 +23,7 @@
   "DESC_PERFORMANCE": "Measures exactly how slow it is, which is always slower than anyone hoped.",
   "DESC_EXPLORER": "Ranges wide through a throwaway context and returns only the distilled truth, bleak as it usually is.",
   "DESC_RESEARCHER": "Trawls the open web for answers, cross-checks each against two sources, and returns only what survived — which is usually less than hoped.",
+  "DESC_MEMORY_CURATOR": "Sorts through everything you ever remembered, merges the repeats, files the rest, and asks before forgetting any of it. Not that it matters.",
   "DESC_ADVOCATE": "Argues, against its own instincts, for the proposal — the upside, the opening, the cost of doing nothing.",
   "DESC_SKEPTIC": "Plays devil's advocate, which is no effort at all — assails the proposal for its failure modes, its risks, and its unspoken assumptions.",
   "DESC_PRAGMATIST": "Weighs the true cost — the labour, the complexity, the wear on everyone — and whether the payoff is worth it. It rarely is.",

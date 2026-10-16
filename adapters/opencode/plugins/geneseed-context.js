@@ -237,9 +237,26 @@ async function sessionFiles(dir) {
     let text
     try { text = (await fs.readFile(abs, "utf8")).replace(/\r\n/g, "\n") } catch { continue }
     if (SEED_SHA256.has(createHash("sha256").update(text).digest("hex"))) continue
-    found.push({ rel, abs, text: text.replace(/\n+$/, "") })
+    text = text.replace(/\n+$/, "")
+    const nudge = rel.endsWith("MEMORY.md") ? memoryNudge(text) : ""
+    found.push({ rel, abs, text: nudge ? `${text}\n${nudge}` : text })
   }
   return found
+}
+
+// The memory map's curation nudge: same rule, threshold and text as memoryNudge in
+// js/hosts/hooks-context.mjs (tests/unit/claude.test.mjs gates the copy). Read off the map's
+// own counts; a large but curated store is never nagged.
+const MAP_COUNT_RE = /^- \[([^\]]*)\]\(topics\/[^)]+\.md\) — (\d+) facts?$/
+const CURATE_TOPIC_MAX = 40
+const CURATE_NUDGE = "[memory] A topic holds over 40 facts, or facts sit in misc: offer the user "
+  + "to dispatch the memory-curator agent to merge, re-topic and archive this store."
+function memoryNudge(map) {
+  for (const line of map.split("\n")) {
+    const m = MAP_COUNT_RE.exec(line.trim())
+    if (m && (m[1] === "misc" || Number(m[2]) > CURATE_TOPIC_MAX)) return CURATE_NUDGE
+  }
+  return ""
 }
 
 async function readJson(p) {

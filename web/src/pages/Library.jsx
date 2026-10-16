@@ -149,7 +149,7 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
     const name = activeItem?.name
     if (!name) return
     const ok = await confirm(
-      `Forget the memory fact "${name}"? It is deleted from the store and the index.`,
+      `Forget the memory fact "${name}"? It leaves the index and moves to memory/archive/ (geneseed memory rm --archived --purge deletes it for good).`,
       { title: 'Forget this fact?', confirmLabel: 'Forget' },
     )
     if (!ok) return
@@ -166,14 +166,14 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
   }
 
   // Promote a memory fact into a standing trial rule in user-rules.md, the web twin of the
-  // rule skill's memory->rule flow. The fact is deleted after the promotion (keeping both
+  // rule skill's memory->rule flow. The fact is archived after the promotion (keeping both
   // would load the lesson twice), which is why the confirm spells that out. Lands on the
   // Rules tab so the new trial rule is immediately visible and editable.
   const onPromote = async () => {
     const name = activeItem?.name
     if (!name) return
     const ok = await confirm(
-      `Promote "${name}" into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact is deleted so the lesson isn't loaded twice.`,
+      `Promote "${name}" into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact moves to memory/archive/ so the lesson isn't loaded twice.`,
       { title: 'Promote to a rule?', confirmLabel: 'Promote' },
     )
     if (!ok) return

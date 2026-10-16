@@ -198,6 +198,11 @@ const FOOTPRINTS = ['full', 'lean'];
  * once (the PowerShell example and the "visits every directory" clause went), the lean one to
  * its shortest form. Measured `files` carrier after: full 62_076, lean 38_890 — each raised by
  * exactly the overrun (61_920 -> 62_076, 38_854 -> 38_890), not rounded.
+ *
+ * BOTH RAISED 2026-10-16, for the memory-curator agent: its row in the §3 agent table, which a
+ * gate requires for every agent file and which both footprints render. The row was cut once to
+ * its shortest form. Measured `files` carrier after: full 62_107, lean 38_976 — each raised by
+ * exactly the overrun (62_076 -> 62_107, 38_890 -> 38_976), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -245,7 +250,7 @@ const EXPECTED = {
 // — 3: learn-mode, quiz, teach) is the same story one level up: Bob gets NO
 // SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
-const N_AGENTS = 19;
+const N_AGENTS = 20;
 const N_SKILLS = 46;
 const N_ALIASES = 12;
 const N_USER_ONLY = 3;

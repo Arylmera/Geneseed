@@ -181,7 +181,7 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | `setup.mjs` | The install wizard, and the CLI's only synchronous stdin readers (`ask`/`confirm`/`askChoice`) |
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
-| `memory.mjs` | `geneseed memory list|rm` — CLI-side fact deletion, twin of the web DELETE endpoint |
+| `memory.mjs` | `geneseed memory list|rm` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint |
 
 **Before editing:** `update.mjs` is the one module that MUST spawn rather than import — the code on
 disk is replaced mid-run, so an in-process call would validate the *old* source and then render it.

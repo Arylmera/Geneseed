@@ -82,8 +82,13 @@ memory that carries a `force`; revising one stays with the agent and the user.
 - Archive a memory that turns out to be wrong or obsolete: move it into `archive/`
   (`learn` does it with `action: archive`). An archived fact leaves the index but
   stays on disk, under a `-2`, `-3`, … name if `archive/` already holds one of that
-  name. Deleting a file from `archive/` needs the user's consent
-  ({{LAW:deletion-is-deliberate}}). `archive/` is part of this git-ignored store.
+  name. `geneseed memory rm <name>` archives the same way. Deleting a file from
+  `archive/` needs the user's consent ({{LAW:deletion-is-deliberate}}):
+  `geneseed memory list --archived`, then `geneseed memory rm <name> --archived --purge`.
+  `archive/` is part of this git-ignored store.
+- When the store outgrows one careful read — a topic over 40 facts, or facts in
+  `misc` — the session context says so in one line; the memory-curator {{AGENT}} then
+  merges, assigns topics and archives in bulk, and proposes deletions for approval.
 - Don't store what the repo already records (code structure, git history, the
   {{LAWS}}, `user-rules.md`). Store what was *non-obvious*.
 - When the same `feedback` lesson keeps recurring, propose promoting it into a

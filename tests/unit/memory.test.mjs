@@ -4,8 +4,8 @@
  * ⚠ THERE IS NOTHING TO COMPARE IT TO. The reference had no `memory` subcommand: a fact was
  * written by the `learn` hook and removed from the web console, and that was all. So there is
  * no recorded help text and no acceptance cell, and no way to make either — every claim below
- * is absolute, which for a verb that DELETES means each one states what survived as well as
- * what went. `tests/unit/uninstall*.test.mjs` learned that shape first: a removal needs the
+ * is absolute, which for a verb that REMOVES (archives by default, deletes with `--purge`)
+ * means each one states what survived as well as what went. `tests/unit/uninstall*.test.mjs` learned that shape first: a removal needs the
  * gate pointed at both directions or it only ever proves that something happened.
  *
  * THE SEMANTICS ARE THE DELETE ENDPOINT'S, and the two places they part company are both
@@ -21,7 +21,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { isFactName, memoryDelete, memoryFacts } from '../../js/maintain/memory.mjs';
+import { isFactName, memoryDelete, memoryFacts, memoryPurgeArchived } from '../../js/maintain/memory.mjs';
 import { migrateMemoryIndex } from '../../js/hosts/memory-files.mjs';
 import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
 
@@ -76,10 +76,14 @@ test('the listing offers exactly the names the removal accepts', () => {
   assert.deepEqual(memoryFacts(path.join(ROOT, 'no', 'such', 'dir')), []);
 });
 
-test('removing a fact takes its file and its line in the index, and nothing else', () => {
+// REMOVING ARCHIVES: the fact moves to archive/ (returned as its new path) and leaves the
+// index; only `purge` unlinks it. A second archive of the same name never overwrites the first.
+test('removing a fact archives its file and drops its line in the index, and nothing else', () => {
   withStore((d) => {
-    assert.equal(memoryDelete(d, 'a-fact'), true);
+    assert.equal(memoryDelete(d, 'a-fact'), path.join(d, 'archive', 'a-fact.md'));
     assert.ok(!existsSync(path.join(d, 'a-fact.md')), 'the fact file survived');
+    assert.equal(readFileSync(path.join(d, 'archive', 'a-fact.md'), 'utf8'), 'first\n',
+      'the archived copy is not the fact');
     const idx = readFileSync(path.join(d, 'MEMORY.md'), 'utf8');
     assert.ok(!idx.includes('(a-fact.md)'), 'the index still names the deleted fact');
     // THE OTHER DIRECTION, which is the half a "did it delete" assertion cannot give: the
@@ -88,6 +92,26 @@ test('removing a fact takes its file and its line in the index, and nothing else
     assert.ok(idx.startsWith('# Memory Index'), 'the index heading was eaten');
     assert.ok(existsSync(path.join(d, 'b-fact.md')), 'the sibling fact was deleted');
     assert.ok(existsSync(path.join(d, 'README.md')), 'the store README was deleted');
+  });
+});
+
+test('purge unlinks the fact, and a same-name archive is never overwritten', () => {
+  withStore((d) => {
+    mkdirSync(path.join(d, 'archive'));
+    writeFileSync(path.join(d, 'archive', 'b-fact.md'), 'older\n', 'utf8');
+    assert.equal(memoryDelete(d, 'b-fact'), path.join(d, 'archive', 'b-fact-2.md'));
+    assert.equal(readFileSync(path.join(d, 'archive', 'b-fact.md'), 'utf8'), 'older\n');
+    assert.equal(memoryDelete(d, 'a-fact', true), '', 'a purge reported an archive path');
+    assert.ok(!existsSync(path.join(d, 'a-fact.md')), 'the purged fact survived');
+    assert.ok(!existsSync(path.join(d, 'archive', 'a-fact.md')), 'the purge archived instead');
+    assert.ok(!readFileSync(path.join(d, 'MEMORY.md'), 'utf8').includes('(a-fact.md)'));
+    // Purging from archive/ takes exactly the named file.
+    assert.equal(memoryPurgeArchived(d, 'b-fact'), true);
+    assert.ok(!existsSync(path.join(d, 'archive', 'b-fact.md')));
+    assert.ok(existsSync(path.join(d, 'archive', 'b-fact-2.md')), 'the purge took a sibling');
+    for (const bad of ['b-fact', 'MEMORY', '../a-fact', 'nope']) {
+      assert.equal(memoryPurgeArchived(d, bad), false, `${bad} reported a purge`);
+    }
   });
 });
 
@@ -101,7 +125,7 @@ test('removing a fact from a two-level index takes its topic line and recounts t
     const hint = 'Each topic file lists its facts; open the one the task needs.';
     assert.equal(lf(path.join(d, 'MEMORY.md')),
       `# Memory Index\n\n${hint}\n\n- [misc](topics/misc.md) — 2 facts\n`);
-    assert.equal(memoryDelete(d, 'a-fact'), true);
+    assert.equal(memoryDelete(d, 'a-fact'), path.join(d, 'archive', 'a-fact.md'));
     assert.ok(!existsSync(path.join(d, 'a-fact.md')), 'the fact file survived');
     assert.equal(lf(path.join(d, 'topics', 'misc.md')),
       '# misc\n\n- [Another](../b-fact.md) — the second one\n');
@@ -113,7 +137,7 @@ test('removing a fact from a two-level index takes its topic line and recounts t
 test('a name the store does not hold, or must not give up, removes nothing', () => {
   withStore((d) => {
     for (const name of ['nope', 'MEMORY', 'memory', 'README', '../a-fact', 'sub/a-fact']) {
-      assert.equal(memoryDelete(d, name), false, `${name} reported a deletion`);
+      assert.equal(memoryDelete(d, name), null, `${name} reported a removal`);
     }
     // The refusals are absolute about what SURVIVED — a guard that answered false after
     // unlinking would satisfy a return-value check on its own.
@@ -147,12 +171,33 @@ test('the verb lists, deletes, and says which store it acted on', () => {
 
     const gone = run(d, 'rm', 'a-fact');
     assert.equal(gone.status, 0, gone.stderr);
-    assert.match(gone.stdout, /deleted a-fact/);
+    assert.match(gone.stdout, /archived a-fact -> /);
     assert.ok(!existsSync(path.join(d, 'a-fact.md')));
 
     const again = run(d, 'rm', 'a-fact');
     assert.equal(again.status, 1, 'removing a fact twice reported success the second time');
     assert.match(again.stderr, /no such fact 'a-fact'/);
+
+    // --archived lists archive/, and there a fact can only be purged: without --purge the verb
+    // refuses with the usage code and the file stays.
+    const arch = run(d, 'list', '--archived');
+    assert.equal(arch.status, 0, arch.stderr);
+    assert.match(arch.stdout, /^ {2}a-fact$/m);
+    assert.ok(!/b-fact/.test(arch.stdout), 'a live fact was listed as archived');
+    const refused = run(d, 'rm', 'a-fact', '--archived');
+    assert.equal(refused.status, 2);
+    assert.match(refused.stderr, /add --purge/);
+    assert.ok(existsSync(path.join(d, 'archive', 'a-fact.md')), 'a refused purge deleted the file');
+    const purged = run(d, 'rm', 'a-fact', '--archived', '--purge');
+    assert.equal(purged.status, 0, purged.stderr);
+    assert.match(purged.stdout, /deleted a-fact\./);
+    assert.ok(!existsSync(path.join(d, 'archive', 'a-fact.md')));
+
+    const hard = run(d, 'rm', 'b-fact', '--purge');
+    assert.equal(hard.status, 0, hard.stderr);
+    assert.match(hard.stdout, /deleted b-fact\./);
+    assert.ok(!existsSync(path.join(d, 'b-fact.md')));
+    assert.ok(!existsSync(path.join(d, 'archive', 'b-fact.md')), '--purge archived instead');
   });
 });
 
@@ -194,4 +239,9 @@ test('the entry dispatches `memory` at this module, with the actions the table d
   assert.deepEqual(cmd.positionals[0].choices, ['list', 'rm']);
   assert.equal(cmd.positionals[0].required, true, 'the action became optional');
   assert.equal(cmd.positionals[1].nargs, '?', 'the fact name became required for `list` too');
+  // Deleting for good is opt-in: both switches are flags that default off.
+  for (const flag of ['--archived', '--purge']) {
+    const opt = cmd.options.find((o) => o.names.includes(flag));
+    assert.ok(opt?.is_flag && opt.default === false, `${flag} is not an off-by-default flag`);
+  }
 });
