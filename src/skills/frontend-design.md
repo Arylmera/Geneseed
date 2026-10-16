@@ -4,6 +4,7 @@
 
 **Trigger:** building a new UI or reshaping an existing one, and it should carry a
 deliberate point of view rather than read as a templated default.
+A presentation or slide deck goes to the [deck {{SKILL}}](../{{DIR_SKILLS}}/deck.md).
 
 **Requires:** a way to render and screenshot the result (a browser or the host's
 preview tool) — the second-pass critique in step 6 cannot run without one.

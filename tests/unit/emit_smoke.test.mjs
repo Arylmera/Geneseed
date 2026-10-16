@@ -203,6 +203,11 @@ const FOOTPRINTS = ['full', 'lean'];
  * gate requires for every agent file and which both footprints render. The row was cut once to
  * its shortest form. Measured `files` carrier after: full 62_107, lean 38_976 — each raised by
  * exactly the overrun (62_076 -> 62_107, 38_890 -> 38_976), not rounded.
+ *
+ * BOTH RAISED 2026-10-16, for the deck skill: one new row in the section 4 catalogue table, which
+ * every carrier carries. Rebased onto the memory-curator raise above. Measured `files` carrier
+ * after: full 62_219, lean 39_088 — each raised by exactly the overrun (62_107 -> 62_219,
+ * 38_976 -> 39_088), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -239,7 +244,8 @@ const EXPECTED = {
 // 18 specs. `agents/_template.md` does NOT ship: every host loads each `.md` in its agents dir
 // as an agent, so it would register a phantom `_template` agent.
 // Aliases (an old skill name kept answering `/name`, one per name in a skill's
-// `<!-- aliases: … -->` marker — 12 since the 2026-10 sharpen merged 56 skills into 47) are
+// `<!-- aliases: … -->` marker — 14: the 12 old names the 2026-10 sharpen kept answering, plus
+// `slides` and `presentation`, two synonym entry names for deck) are
 // extra `skills/<alias>/SKILL.md` folders on Claude and OpenClaude, and command files on
 // OpenCode AND Bob (host-compat O2/R1: Bob's skills page has no model-invocation key, so an
 // alias skill there would be a visible duplicate — it gets `.bob/commands/<alias>.md`
@@ -251,8 +257,8 @@ const EXPECTED = {
 // SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
 const N_AGENTS = 20;
-const N_SKILLS = 46;
-const N_ALIASES = 12;
+const N_SKILLS = 47;
+const N_ALIASES = 14;
 const N_USER_ONLY = 3;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
@@ -545,15 +551,15 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (30_500 / 19_250) is below the SMALLEST measured carrier (`opencode` and
-      // `opencode-global`, 51_542 / 28_607 on 2026-10-01) and far above any plausible stub.
+      // the ceiling (31_066 / 19_501) is below the SMALLEST measured carrier (`opencode` and
+      // `opencode-global`, 53_226 / 30_113 on 2026-10-16) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
       // each set describing a corpus that had already moved. The arithmetic held every time, so
       // nothing was ever red, and a comment that is only wrong never announces itself.
-      // Re-derive both whenever the constant above moves; the lean half of that constant moved
-      // on 2026-10-01 and these figures are that re-derivation.
+      // Re-derive both whenever the constant above moves; both halves moved on 2026-10-16 and
+      // these figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `
         + 'satisfied by a render that collapsed, so the floor is what says it did not');

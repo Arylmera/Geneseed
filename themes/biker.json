@@ -142,6 +142,7 @@
   "DESC_BRUNO": "Build, re-rack, or test a Bruno API collection — requests, environments, assertions, chaining — and never let a secret ride along.",
   "DESC_PROSE": "Write like a human, not a bot — strip the filler, keep it plain, mix up the rhythm, and trust whoever's reading.",
   "DESC_FRONTEND_DESIGN": "Design a UI with real attitude — pick palette, type, and layout for this job, not the stock defaults, then trim it down to one bold move.",
+  "DESC_DECK": "Build slides or a presentation as one offline HTML file — a quick interview, the outline signed off first, then a deck that rides on arrow keys and prints clean.",
   "DESC_WORKFLOW": "Run a saved route that sends your riders by script — many rolled out at once, their findings gathered and checked in one clean run.",
   "AGENT_COLORS": {
     "architect": "primary",

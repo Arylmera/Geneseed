@@ -142,6 +142,7 @@
   "DESC_BRUNO": "Conjure, reorganise or bind tests to a Bruno collection — requests, environments, assertions, chaining — every secret a placeholder, none let escape the circle.",
   "DESC_PROSE": "Pen prose for mortal eyes, not machine-cant — banish the filler, speak plainly, vary the cadence, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with intent — palette, type, and layout woven for this brief, not the common defaults; plan, scrutinise, and keep one bold flourish.",
+  "DESC_DECK": "Conjure slides or a presentation as one self-contained offline HTML tome — a short interview, the outline approved first, arrow-key navigation, one slide per printed page.",
   "DESC_WORKFLOW": "Invoke a saved ritual that binds your familiars by inscribed rite — many sent at once, their auguries gathered and proven in one deterministic casting.",
   "AGENT_COLORS": {
     "architect": "primary",

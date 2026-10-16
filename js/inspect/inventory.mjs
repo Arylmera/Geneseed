@@ -94,7 +94,7 @@ export const SKILL_CLASS = {
   loop: 'design', 'brick-forge': 'design',
   'codebase-design': 'design', wayfinder: 'design',
   develop: 'build', refactor: 'build', debug: 'build', dependencies: 'build',
-  'frontend-design': 'build', prototype: 'build',
+  'frontend-design': 'build', prototype: 'build', deck: 'build',
   'forge-mcp': 'build', bruno: 'build', worktree: 'build',
   'geneseed-code-review': 'review', 'fresh-eyes': 'review', 'security-audit': 'review',
   'roast-me': 'review', 'review-response': 'review', ponytail: 'review',

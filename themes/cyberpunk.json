@@ -142,6 +142,7 @@
   "DESC_BRUNO": "Forge, reorganise, or wire tests into a Bruno collection — requests, environments, assertions, chaining — every secret a placeholder.",
   "DESC_PROSE": "Write prose with a human pulse, not synthetic filler — strip the boilerplate, stay active, vary the cadence, trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with edge — palette, type, and layout forged for this brief, not the stock defaults; plan, critique, and keep one bold move.",
+  "DESC_DECK": "Build slides or a presentation as one self-contained offline HTML file — short interview, outline cleared first, keyboard-driven, no CDN, prints one slide per page.",
   "DESC_WORKFLOW": "Jack in a saved routine that drives your daemons on rails — parallel forks, staged pipelines, and verification, all in one deterministic run.",
   "AGENT_COLORS": {
     "architect": "primary",
