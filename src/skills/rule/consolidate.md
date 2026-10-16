@@ -2,8 +2,8 @@
 
 Tends the {{MEMORY}} set as a whole.
 
-1. **Read the whole set once**: `MEMORY.md`, every file it indexes, and any file in
-   `{{DIR_MEMORY}}/` it forgot, into a scratch table — name, type, the claim in one
+1. **Read the whole set once**: `MEMORY.md`, its `topics/` files, every fact they
+   index, and any file in `{{DIR_MEMORY}}/` they forgot, into a scratch table — name, type, the claim in one
    line, date written, and whether this session already saw it contradicted
    ({{DOCTRINE:context-economy}}: read to decide, not to reread).
 2. **Verify against the live repo, not memory** ({{LAW:verify-before-asserting}}): every path,
@@ -19,14 +19,16 @@ Tends the {{MEMORY}} set as a whole.
    inbound links hold; every survivor keeps valid frontmatter and the `**Why** / **How
    to apply**` lines its type demands. A memory holding a secret is retired on sight
    ({{LAW:sealed-secrets}}).
-5. **Rebuild `MEMORY.md`**: exactly one pointer line per surviving file, each with a
-   hook saying why a future session would open it — lost entries added, retired ones
-   removed, compaction archive lines kept short, no memory content.
+5. **Rebuild the index** with
+   `geneseed learn --consolidate --memory <the {{DIR_MEMORY}}/ dir's path>`: one pointer line per
+   surviving file in its `topics/<topic>.md`, and the `MEMORY.md` map recounted. Each
+   hook is the fact's `description`, so sharpen a weak hook there — it should say why a
+   future session would open the fact.
 6. **Exit with a count** — kept / merged / rewritten / promoted / retired — and the
    one or two lessons the pass surfaced (a category that keeps drifting, a kind of
    note nobody reads) as a proposal for how memories get written, not as a memory.
 
 ## Done when
 - Every memory was verified against the live repo, changes
-  were applied with consent, no secret remains, and `MEMORY.md` indexes the directory
-  exactly, one line per file.
+  were applied with consent, no secret remains, and the index (`MEMORY.md` and its
+  `topics/`) covers the directory exactly, one line per file.

@@ -33,7 +33,9 @@ re-derived. Then take exactly one branch.
 3. Infer the `type` (`user` | `feedback` | `project` | `reference`), draft the file
    per the {{MEMORY}} convention, and **show the exact content, frontmatter
    included** — so a wrong inference is visible before it is written, not after.
-4. On the user's word, write the file and add its one-line entry to `MEMORY.md`.
+4. On the user's word, write the file and rebuild the index
+   (`geneseed learn --consolidate --memory <the {{DIR_MEMORY}}/ dir's path>`) so its line
+   lands in `topics/<topic>.md` and the `MEMORY.md` map recounts.
 
 ### Branch B — a standing rule
 1. **Triage.** A rule earns its place only if it is all three of: *standing
@@ -93,7 +95,7 @@ adoption.
 
 ## Done when
 - For a rule or memory: the fork was put to the user, and then either a {{MEMORY}} file exists carrying its
-  `force`, its `type` and its `MEMORY.md` line — or a rule stands in the right
+  `force`, its `type` and its index line — or a rule stands in the right
   `user-rules.md`, having survived reformulation, its own counter-example and the
   {{LAWS}}, consented to explicitly, with any promoted source memory archived. The
   {{ONTOLOGY}}, {{LAWS}} and {{DOCTRINES}} files are untouched either way.

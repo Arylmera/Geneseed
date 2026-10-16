@@ -21,6 +21,7 @@ import { pathToFileURL } from 'node:url';
 import { learnPromptHead, readNotes, resolveAgentName } from '../../js/hosts/hooks-learn.mjs';
 import {
   frontmatter, existingSlugs, writeMemories, memoryDropIndex, appendAgentLesson, consolidateMemory,
+  migrateMemoryIndex,
 } from '../../js/hosts/memory-files.mjs';
 import { discoverContext, resolveContextSets } from '../../js/hosts/hooks-context.mjs';
 import {
@@ -94,6 +95,18 @@ const withDir = (fn) => {
   try { return fn(sb.path); } finally { sb.cleanup(); }
 };
 
+/** A file's text with CRLF folded: the store is written with the platform's newline. */
+const readLf = (p) => fs.readFileSync(p, 'utf8').replaceAll('\r\n', '\n');
+
+/** The MEMORY.md map the two-level index writes, for the given topic lines. */
+const mapOf = (...topicLines) => '# Memory Index\n\n'
+  + 'Each topic file lists its facts; open the one the task needs.\n\n'
+  + `${topicLines.join('\n')}\n`;
+
+/** A fact file with the given frontmatter lines. */
+const factFile = (dir, slug, ...fmLines) => fs.writeFileSync(path.join(dir, `${slug}.md`),
+  `---\nname: ${slug}\n${fmLines.join('\n')}\n---\nbody\n`, 'utf8');
+
 test('writeMemories writes the new fact, skips the duplicate and indexes both', () => {
   withDir((d) => {
     const out = '---\nname: new-fact\ndescription: a desc\n---\nthe fact\n'
@@ -105,9 +118,11 @@ test('writeMemories writes the new fact, skips the duplicate and indexes both', 
     assert.ok(!fs.existsSync(path.join(d, 'dup.md')),
       'a slug the caller declared as existing was overwritten');
 
-    const idx = fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8');
-    assert.match(idx, /new-fact/);
-    assert.match(idx, /a desc/);
+    // Two levels: the fact's line, description included, lands in its topic file (no `type:`,
+    // so `misc`), and MEMORY.md only names the topic and its count.
+    assert.equal(readLf(path.join(d, 'topics', 'misc.md')),
+      '# misc\n\n- [new-fact](../new-fact.md) — a desc\n');
+    assert.equal(readLf(path.join(d, 'MEMORY.md')), mapOf('- [misc](topics/misc.md) — 1 fact'));
   });
 });
 
@@ -123,7 +138,7 @@ test('writeMemories refuses a name that is not a plain slug', () => {
       .join('---FILE---\n');
     assert.deepEqual(writeMemories(out, store, new Set()), ['Fine_Slug-2']);
     assert.ok(!fs.existsSync(path.join(d, 'escaped.md')), 'a ../ name wrote outside the store');
-    assert.deepEqual(fs.readdirSync(store).sort(), ['Fine_Slug-2.md', 'MEMORY.md']);
+    assert.deepEqual(fs.readdirSync(store).sort(), ['Fine_Slug-2.md', 'MEMORY.md', 'topics']);
   });
 });
 
@@ -139,8 +154,84 @@ test('writeMemories refuses reserved stems and case variants of a stored slug', 
       .join('---FILE---\n');
     assert.deepEqual(writeMemories(out, d, existingSlugs(d)), ['fresh']);
     assert.equal(fs.readFileSync(path.join(d, 'user-prefs.md'), 'utf8'), 'original\n');
-    assert.match(fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8'),
-      /^# Memory Index\r?\n- \[user-prefs\]\(user-prefs\.md\)\r?\n- \[fresh\]/);  // CRLF on win32
+    // The stored fact's flat line moves into the topic file as it was; the new one joins it.
+    assert.equal(readLf(path.join(d, 'topics', 'misc.md')),
+      '# misc\n\n- [fresh](../fresh.md) — x\n- [user-prefs](../user-prefs.md)\n');
+  });
+});
+
+// A fact files under its `topic:`, else its `type:`, else `misc`. A `type:` nested under
+// `metadata:` (Claude Code's own memory shape) counts. The topic is normalised to a file stem:
+// lowercase, any run outside `[a-z0-9-]` becomes one `-`, edge dashes trimmed, empty is `misc`.
+test('the index groups facts by topic, then type, then misc, with normalised names', () => {
+  withDir((d) => {
+    factFile(d, 'a', 'description: A', 'topic: Build Tools!');
+    factFile(d, 'b', 'description: B', 'type: feedback');
+    factFile(d, 'c', 'description: C', 'metadata:', '  type: project');
+    factFile(d, 'd', 'description: D');
+    factFile(d, 'e', 'description: E', 'topic: ???', 'type: user');
+    consolidateMemory(d);
+    assert.deepEqual(fs.readdirSync(path.join(d, 'topics')).sort(),
+      ['build-tools.md', 'feedback.md', 'misc.md', 'project.md']);
+    assert.equal(readLf(path.join(d, 'topics', 'misc.md')),
+      '# misc\n\n- [d](../d.md) — D\n- [e](../e.md) — E\n');
+    assert.equal(readLf(path.join(d, 'MEMORY.md')), mapOf(
+      '- [build-tools](topics/build-tools.md) — 1 fact',
+      '- [feedback](topics/feedback.md) — 1 fact',
+      '- [misc](topics/misc.md) — 2 facts',
+      '- [project](topics/project.md) — 1 fact'));
+  });
+});
+
+// A learn run into a topic that already has a file appends to it and recounts the map; the
+// lines already there are kept as they were, hand-edited hook included.
+test('writeMemories adds to an existing topic and recounts the map', () => {
+  withDir((d) => {
+    factFile(d, 'old', 'description: from frontmatter', 'type: project');
+    fs.mkdirSync(path.join(d, 'topics'));
+    fs.writeFileSync(path.join(d, 'topics', 'project.md'),
+      '# project\n\n- [Old One](../old.md) — hand hook\n', 'utf8');
+    fs.writeFileSync(path.join(d, 'MEMORY.md'), mapOf('- [project](topics/project.md) — 1 fact'));
+    writeMemories('---\nname: new\ndescription: N\ntype: project\n---\nbody', d, existingSlugs(d));
+    assert.equal(readLf(path.join(d, 'topics', 'project.md')),
+      '# project\n\n- [new](../new.md) — N\n- [Old One](../old.md) — hand hook\n');
+    assert.equal(readLf(path.join(d, 'MEMORY.md')),
+      mapOf('- [project](topics/project.md) — 2 facts'));
+  });
+});
+
+// The emit-time migration of a flat MEMORY.md. LOSSLESS: each pointer keeps its own title and
+// hook, a note line the user wrote is carried into the map, only a dead pointer goes. And
+// IDEMPOTENT: the second run finds no flat pointer and writes nothing, mtime included.
+test('migrateMemoryIndex moves a flat index to topics once, losslessly', () => {
+  withDir((d) => {
+    factFile(d, 'alpha', 'description: from frontmatter', 'type: project');
+    factFile(d, 'beta', 'description: B');
+    fs.writeFileSync(path.join(d, 'MEMORY.md'), '# Memory Index\n\n'
+      + '- [Alpha Title](alpha.md) — hand hook\n- [dead](dead.md) — gone\n'
+      + '*Compacted by hand.*\n', 'utf8');
+    assert.equal(migrateMemoryIndex(d), true);
+    assert.equal(readLf(path.join(d, 'topics', 'project.md')),
+      '# project\n\n- [Alpha Title](../alpha.md) — hand hook\n');
+    assert.equal(readLf(path.join(d, 'topics', 'misc.md')), '# misc\n\n- [beta](../beta.md) — B\n');
+    const map = mapOf('- [misc](topics/misc.md) — 1 fact',
+      '- [project](topics/project.md) — 1 fact');
+    assert.equal(readLf(path.join(d, 'MEMORY.md')), `${map}\n*Compacted by hand.*\n`);
+    const before = fs.statSync(path.join(d, 'MEMORY.md')).mtimeMs;
+    assert.equal(migrateMemoryIndex(d), false);
+    assert.equal(fs.statSync(path.join(d, 'MEMORY.md')).mtimeMs, before);
+  });
+});
+
+// A store with no fact keeps its seed index byte for byte: the context hook recognises the
+// seed by its hash and skips it, and an empty `topics/` would be noise.
+test('migrateMemoryIndex leaves a seed-only store untouched', () => {
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'MEMORY.md'), '# Memory Index\n', 'utf8');
+    fs.writeFileSync(path.join(d, 'README.md'), 'conv\n', 'utf8');
+    assert.equal(migrateMemoryIndex(d), false);
+    assert.equal(fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8'), '# Memory Index\n');
+    assert.ok(!fs.existsSync(path.join(d, 'topics')));
   });
 });
 
@@ -1201,6 +1292,30 @@ test('the fact count sees the facts and skips the index and the readme', () => {
   });
 });
 
+// The two-level delete: the fact's line leaves its topic file and the map count follows; a
+// topic left empty loses its file and its map line, and the store's last fact returns MEMORY.md
+// to the seed bytes. `b` must not take `ab` with it.
+test('memoryDropIndex drops from the topic file and recounts the map', () => {
+  withDir((d) => {
+    factFile(d, 'ab', 'description: AB', 'type: project');
+    factFile(d, 'b', 'description: B', 'type: project');
+    factFile(d, 'c', 'description: C', 'type: user');
+    consolidateMemory(d);
+    memoryDropIndex(d, 'b');
+    assert.equal(readLf(path.join(d, 'topics', 'project.md')),
+      '# project\n\n- [ab](../ab.md) — AB\n');
+    assert.equal(readLf(path.join(d, 'MEMORY.md')), mapOf(
+      '- [project](topics/project.md) — 1 fact', '- [user](topics/user.md) — 1 fact'));
+    memoryDropIndex(d, 'c');
+    assert.ok(!fs.existsSync(path.join(d, 'topics', 'user.md')), 'an emptied topic file was kept');
+    assert.equal(readLf(path.join(d, 'MEMORY.md')),
+      mapOf('- [project](topics/project.md) — 1 fact'));
+    memoryDropIndex(d, 'ab');
+    assert.ok(!fs.existsSync(path.join(d, 'topics')), 'an emptied topics/ was kept');
+    assert.equal(readLf(path.join(d, 'MEMORY.md')), '# Memory Index\n');
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // Context discovery — what the agent is handed when a repo has no manifest.
 
@@ -1434,7 +1549,7 @@ test('a lesson collapses its whitespace onto one bullet', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// `learn --consolidate` — rebuild MEMORY.md from the fact files that are really on disk.
+// `learn --consolidate` — rebuild both index levels from the fact files that are really on disk.
 
 test('consolidate re-indexes an orphan and prunes a dead line', () => {
   withDir((mem) => {
@@ -1443,14 +1558,33 @@ test('consolidate re-indexes an orphan and prunes a dead line', () => {
     fs.writeFileSync(path.join(mem, 'MEMORY.md'),
       '# Memory Index\n- [gone](gone.md) — stale\n', 'utf8');
     const report = consolidateMemory(mem);
-    const index = fs.readFileSync(path.join(mem, 'MEMORY.md'), 'utf8');
-    assert.ok(index.includes('new-fact.md'), index);
-    assert.ok(!index.includes('gone.md'), index);
     // The DESCRIPTION is carried across, not just the link — an index of bare filenames is
-    // not something the agent can choose from.
-    assert.ok(index.includes('a new fact'), index);
+    // not something the agent can choose from. The fact files under its `type:`.
+    assert.equal(readLf(path.join(mem, 'topics', 'project.md')),
+      '# project\n\n- [new-fact](../new-fact.md) — a new fact\n');
+    assert.equal(readLf(path.join(mem, 'MEMORY.md')),
+      mapOf('- [project](topics/project.md) — 1 fact'));
     assert.deepEqual(report.added, ['new-fact']);
     assert.deepEqual(report.pruned, ['gone']);
+  });
+});
+
+// `added` and `pruned` read the pointers of BOTH levels, so consolidating an index that is
+// already two-level reports nothing new; it re-reads descriptions (refresh) and deletes a topic
+// file no fact uses any more.
+test('consolidate of a two-level index counts topic pointers and drops a stale topic', () => {
+  withDir((mem) => {
+    factFile(mem, 'kept', 'description: fresh desc', 'type: user');
+    fs.mkdirSync(path.join(mem, 'topics'));
+    fs.writeFileSync(path.join(mem, 'topics', 'user.md'),
+      '# user\n\n- [kept](../kept.md) — old desc\n', 'utf8');
+    fs.writeFileSync(path.join(mem, 'topics', 'stale.md'),
+      '# stale\n\n- [gone](../gone.md) — x\n', 'utf8');
+    const report = consolidateMemory(mem);
+    assert.deepEqual(report, { added: [], pruned: ['gone'], duplicates: [] });
+    assert.deepEqual(fs.readdirSync(path.join(mem, 'topics')), ['user.md']);
+    assert.equal(readLf(path.join(mem, 'topics', 'user.md')),
+      '# user\n\n- [kept](../kept.md) — fresh desc\n');
   });
 });
 
@@ -1462,8 +1596,7 @@ test('consolidate skips the index and the readme, and reports duplicates', () =>
     }
     fs.writeFileSync(path.join(mem, 'README.md'), 'not a fact\n', 'utf8');
     const report = consolidateMemory(mem);
-    const index = fs.readFileSync(path.join(mem, 'MEMORY.md'), 'utf8');
-    assert.ok(!index.includes('README.md'), index);
+    assert.ok(!readLf(path.join(mem, 'topics', 'misc.md')).includes('README.md'));
     // REPORTED, NOT MERGED. Two facts with the same description are a judgement call for the
     // user; consolidating them automatically would delete one of their memories.
     assert.deepEqual(report.duplicates, [['a', 'b']]);

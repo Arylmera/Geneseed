@@ -4,14 +4,18 @@
  *
  * Every stub is a literal here and an `ensure*` beside it, and the pairing is the contract:
  * the writer checks first and returns without writing when the file exists, because these are
- * the USER's files from the moment they exist. A stub body is bytes a recorded corpus compares
- * — changing one is a product change, not a tidy-up.
+ * the USER's files from the moment they exist. One exception: an emit also calls
+ * `migrateMemoryIndex` on the memory store, which rewrites a FLAT MEMORY.md (and its
+ * `topics/` files) into the two-level index once, losslessly, because a flat index overruns
+ * the session-start budget. Fact files are never touched. A stub body is bytes a recorded
+ * corpus compares — changing one is a product change, not a tidy-up.
  */
 import path from 'node:path';
 import { writeText } from '../lib/fs.mjs';
 import { isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
 import { EXCLUDES_FILE } from '../hosts/hosts.mjs';
+import { MEMORY_SEED } from '../hosts/memory-files.mjs';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
@@ -202,7 +206,7 @@ agent-overrides.json
 `;
 
 // ---------------------------------------------------------------------------
-// Seeded stubs — write-once, never overwrite
+// Seeded stubs — write-once, never overwrite (MEMORY.md: see the header's one exception)
 // ---------------------------------------------------------------------------
 
 /**
@@ -276,7 +280,8 @@ export const ensureBundleGitignore = stubWriter('.gitignore', BUNDLE_GITIGNORE);
  * right after the store dir is created, but never invent the dir themselves). */
 const storeIndexWriter = (file, header) => (dir) => { if (isDir(dir)) seed(path.join(dir, file), header); };
 
-const MEMORY_INDEX = '# Memory Index\n';
+// Owned by `js/hosts/memory-files.mjs`, which writes an emptied store back to these bytes.
+const MEMORY_INDEX = MEMORY_SEED;
 const NOTEBOOK_INDEX = '# Notebook Index\n';
 
 /** `_build_render.ensure_memory_index` — only inside an EXISTING store dir. */

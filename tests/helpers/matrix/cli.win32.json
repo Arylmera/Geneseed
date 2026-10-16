@@ -2662,7 +2662,9 @@
         "duplicate: beta-fact <-> gamma-fact"
       ],
       "expect_files": [
-        "repo/memory/MEMORY.md"
+        "repo/memory/MEMORY.md",
+        "repo/memory/topics/project.md",
+        "repo/memory/topics/reference.md"
       ],
       "id": "learn/consolidate",
       "steps": [

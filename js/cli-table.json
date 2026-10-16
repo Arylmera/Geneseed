@@ -619,7 +619,7 @@
           ],
           "dest": "consolidate",
           "metavar": null,
-          "help": "rebuild MEMORY.md from the fact files on disk: re-index orphans, prune dead lines, report duplicate descriptions",
+          "help": "rebuild the memory index (MEMORY.md and topics/) from the fact files on disk: re-index orphans, prune dead lines, report duplicate descriptions",
           "choices": null,
           "default": false,
           "required": false,

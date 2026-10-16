@@ -223,7 +223,11 @@ test("learn: an execution end distils the transcript into memory/", async () => 
   assert.deepEqual(gen[1].model, { providerID: "p", id: "m" })
   assert.match(gen[1].prompt, /NOTES:\nuser: the user prefers tabs/)
   assert.ok(existsSync(path.join(memDir, "prefers-tabs.md")))
-  assert.match(readFileSync(path.join(memDir, "MEMORY.md"), "utf8"), /\[prefers-tabs\]\(prefers-tabs\.md\) — tabs over spaces/)
+  // Two-level index (MEMORY.md is written last, so the topic file is already there): the
+  // fact's line sits in its topic file, the map names the topic and its count.
+  assert.match(readFileSync(path.join(memDir, "topics", "misc.md"), "utf8"),
+    /\[prefers-tabs\]\(\.\.\/prefers-tabs\.md\) — tabs over spaces/)
+  assert.match(readFileSync(path.join(memDir, "MEMORY.md"), "utf8"), /\[misc\]\(topics\/misc\.md\) — 1 fact/)
   cleanup()
 })
 

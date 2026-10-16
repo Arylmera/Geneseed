@@ -22,6 +22,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { isFactName, memoryDelete, memoryFacts } from '../../js/maintain/memory.mjs';
+import { migrateMemoryIndex } from '../../js/hosts/memory-files.mjs';
 import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -87,6 +88,25 @@ test('removing a fact takes its file and its line in the index, and nothing else
     assert.ok(idx.startsWith('# Memory Index'), 'the index heading was eaten');
     assert.ok(existsSync(path.join(d, 'b-fact.md')), 'the sibling fact was deleted');
     assert.ok(existsSync(path.join(d, 'README.md')), 'the store README was deleted');
+  });
+});
+
+// The same removal through a TWO-LEVEL index (the seeded flat one, migrated as a build would).
+// The fact's line leaves its topic file and the map's count drops by one; the sibling's line,
+// title and hook included, stays where it was.
+test('removing a fact from a two-level index takes its topic line and recounts the map', () => {
+  withStore((d) => {
+    assert.equal(migrateMemoryIndex(d), true);
+    const lf = (p) => readFileSync(p, 'utf8').replaceAll('\r\n', '\n');
+    const hint = 'Each topic file lists its facts; open the one the task needs.';
+    assert.equal(lf(path.join(d, 'MEMORY.md')),
+      `# Memory Index\n\n${hint}\n\n- [misc](topics/misc.md) — 2 facts\n`);
+    assert.equal(memoryDelete(d, 'a-fact'), true);
+    assert.ok(!existsSync(path.join(d, 'a-fact.md')), 'the fact file survived');
+    assert.equal(lf(path.join(d, 'topics', 'misc.md')),
+      '# misc\n\n- [Another](../b-fact.md) — the second one\n');
+    assert.equal(lf(path.join(d, 'MEMORY.md')),
+      `# Memory Index\n\n${hint}\n\n- [misc](topics/misc.md) — 1 fact\n`);
   });
 });
 

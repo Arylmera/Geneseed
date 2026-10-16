@@ -196,7 +196,8 @@ export function colorThemeProblems() {
  * rebuild able to clear it.
  *
  * Host-state files (context.json, MEMORY.md, the markers) are created once and never
- * rendered, so they are not in the render set and are correctly ignored. Notebook files
+ * rendered (MEMORY.md's one later write is `migrateMemoryIndex` moving a flat index to
+ * topics), so they are not in the render set and are correctly ignored. Notebook files
  * except its `.gitignore` are seed-once and agent-owned after the first build, so they are
  * compared only for EXISTENCE.
  */

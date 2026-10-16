@@ -57,7 +57,7 @@ test("writeMemories: refuses a name that is not a plain slug, writes one that is
   assert.deepEqual((await fs.readdir(root)).sort(), ["memory"],
     "a memory was written outside the memory dir")
   assert.deepEqual((await fs.readdir(memDir)).sort(),
-    ["MEMORY.md", ...accepted.map((n) => `${n}.md`)].sort())
+    ["MEMORY.md", "topics", ...accepted.map((n) => `${n}.md`)].sort())
 })
 
 // The twin of the harness rule (tests/unit/harness.test.mjs): `MEMORY` / `README` in any case
@@ -72,6 +72,43 @@ test("writeMemories: refuses reserved stems and case variants of a stored slug",
   const written = await GeneseedLearn.writeMemories(output, memDir, new Set(["user-prefs"]))
   assert.deepEqual(written, ["fresh"])
   assert.equal(await fs.readFile(path.join(memDir, "user-prefs.md"), "utf8"), "original\n")
-  assert.match(await fs.readFile(path.join(memDir, "MEMORY.md"), "utf8"),
-    /^# Memory Index\n- \[user-prefs\]\(user-prefs\.md\)\n- \[fresh\]/)
+  // The stored fact's flat line moves into its topic file as it was; the new one joins it.
+  assert.equal(await fs.readFile(path.join(memDir, "topics", "misc.md"), "utf8"),
+    "# misc\n\n- [fresh](../fresh.md) — d\n- [user-prefs](../user-prefs.md)\n")
+})
+
+// The plugin's two-level index is a hand-kept twin of js/hosts/memory-files.mjs's, so the same
+// reply into the same legacy store must leave the same files behind (CRLF folded: the harness
+// writes the platform newline, the plugin LF). The store mixes every grouping rule — `topic:`,
+// `type:`, a `type:` nested under `metadata:`, none — plus a hand hook, a dead pointer and a note.
+test("writeMemories: the plugin's two-level index matches the harness's", async () => {
+  const { writeMemories: harnessWrite } = await import("../../js/hosts/memory-files.mjs")
+  const reply = ["---\nname: n1\ndescription: N1\ntopic: Build Tools!\n---\nb",
+    "---\nname: n2\ndescription: N2\nmetadata:\n  type: project\n---\nb",
+    "---\nname: n3\ndescription: N3\n---\nb"].join("\n---FILE---\n")
+  const seedStore = async () => {
+    const d = makeSandbox("gs-learn-").path
+    await fs.writeFile(path.join(d, "old.md"), "---\nname: old\ndescription: fm\ntype: project\n---\nb\n")
+    await fs.writeFile(path.join(d, "MEMORY.md"),
+      "# Memory Index\n\n- [Old](old.md) — hand hook\n- [dead](dead.md) — gone\n*a note*\n")
+    return d
+  }
+  const snapshot = async (d) => {
+    const out = {}
+    for (const f of ["MEMORY.md", ...(await fs.readdir(path.join(d, "topics"))).map((t) => `topics/${t}`)]) {
+      out[f] = (await fs.readFile(path.join(d, f), "utf8")).replaceAll("\r\n", "\n")
+    }
+    return out
+  }
+  const a = await seedStore()
+  const b = await seedStore()
+  await GeneseedLearn.writeMemories(reply, a, new Set(["old"]))
+  harnessWrite(reply, b, new Set(["old"]))
+  const plugin = await snapshot(a)
+  assert.deepEqual(plugin, await snapshot(b))
+  // Not two empty stores agreeing: the expected layout, written out.
+  assert.deepEqual(Object.keys(plugin).sort(),
+    ["MEMORY.md", "topics/build-tools.md", "topics/misc.md", "topics/project.md"])
+  assert.equal(plugin["topics/project.md"],
+    "# project\n\n- [n2](../n2.md) — N2\n- [Old](../old.md) — hand hook\n")
 })

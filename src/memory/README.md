@@ -7,8 +7,8 @@
 > it in code, docs, or the project's `user-rules.md` instead.)
 
 Durable knowledge that must survive across sessions lives here as **one fact per
-file**. An agent reads `MEMORY.md` (the local index it creates) at the start of a
-session. A new fact is written through the rule {{SKILL}}, which settles with the user
+file**. An agent reads `MEMORY.md` (the local index map) at the start of a session,
+and opens the topic file a task needs (see *The index* below). A new fact is written through the rule {{SKILL}}, which settles with the user
 whether it is a fact for here or a standing rule ({{DOCTRINE:persist-insight}}) — never on the
 agent's own initiative. The one automatic writer is the `learn` hook, where the host
 runs it: a distiller the user opted into at install, not an agent's judgement call.
@@ -26,6 +26,7 @@ Each memory is a Markdown file with frontmatter:
 name: <short-kebab-case-slug>
 description: <one-line summary — used to judge relevance during recall>
 type: user | feedback | project | reference
+topic: <kebab-case-slug>                               # optional; index group, defaults to type
 force: constraint | choice | conviction | tempered   # optional
 ---
 
@@ -80,10 +81,26 @@ memory that turns out to be wrong" rule.
   standing rule in `user-rules.md` (the rule {{SKILL}}) — with the user's
   consent, and delete or archive the memory once promoted so the lesson is not
   loaded twice.
-- After writing a file, add one line to `MEMORY.md`:
-  `- [Title](file.md) — one-line hook`.
+- After writing a file, rebuild the index (*The index* below) rather than editing it
+  by hand — its counts are derived.
 - Verify a recalled memory still matches reality before acting on it
   ({{LAW:verify-before-asserting}}).
+
+## The index
+
+The index has two levels, so the part loaded every session stays small however many
+facts the store holds:
+
+- `MEMORY.md` — the map: one line per topic, `- [<topic>](topics/<topic>.md) — <N> facts`.
+- `topics/<topic>.md` — one line per fact in that topic,
+  `- [Title](../file.md) — one-line hook`.
+
+A fact's topic is its `topic:`, else its `type:`, else `misc`, normalised to
+lowercase `[a-z0-9-]`. Both levels are generated from the fact files:
+`geneseed learn --consolidate --memory <this dir>` rebuilds them (refreshing each
+hook from its `description`), and the `learn` hook rebuilds them after every fact it
+writes. A build moves a flat, one-line-per-fact `MEMORY.md` from an older install to
+this layout once, keeping each line's own title and hook; it never touches a fact file.
 
 ## Per-{{AGENT}} memory (`agents/` subdirectory)
 

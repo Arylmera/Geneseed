@@ -7,6 +7,7 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
+import { migrateMemoryIndex } from '../hosts/memory-files.mjs';
 import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub, writeAliasCommands } from '../hosts/opencode.mjs';
 import {
@@ -146,6 +147,7 @@ export function emitClaudeRender(cfg, job) {
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
   ensureMemoryIndex(path.join(cfgDir, 'memory'));
+  migrateMemoryIndex(path.join(cfgDir, 'memory'));
   const nbStatus = globalNotebook(cfgDir, items, out, cfg.src);
   ensureNotebookIndex(path.join(cfgDir, 'notebook'));
   // context.json too: the root names it as the project's own manifest, and until 2026-10 this

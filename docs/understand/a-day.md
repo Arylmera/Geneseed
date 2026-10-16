@@ -66,13 +66,13 @@ type: project
 The integration tests start Postgres in a container; run `docker info` before the suite.
 ```
 
-and one line is added to `memory/MEMORY.md`:
+and one line is added to its topic file, `memory/topics/project.md` (the topic is the fact's `topic:`, else its `type:`):
 
 ```markdown
-- [integration-tests-need-docker](integration-tests-need-docker.md) — the integration suite needs a running Docker daemon
+- [integration-tests-need-docker](../integration-tests-need-docker.md) — the integration suite needs a running Docker daemon
 ```
 
-Next session, that index is in front of the agent before your first message. Memory stays on your machine. `geneseed memory list` shows every fact and `geneseed memory rm <name>` removes one.
+`memory/MEMORY.md` stays a short map, one line per topic with its fact count. Next session, that map is in front of the agent before your first message, and the agent opens the topic file a task needs. Memory stays on your machine. `geneseed memory list` shows every fact and `geneseed memory rm <name>` removes one.
 
 ---
 
