@@ -142,6 +142,7 @@
   "DESC_BRUNO": "Build, reorganise, or write tests for a Bruno collection — requests, environments, assertions, chaining — every secret a placeholder.",
   "DESC_PROSE": "Write prose for a human, not a machine — cut the filler, active voice, vary cadence, trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with intent — palette, type, and layout chosen for this brief, not the standard-issue defaults; plan, critique, and keep one bold move.",
+  "DESC_DECK": "Build slides or a presentation as one self-contained offline HTML file — short interview, outline approved before generation, arrow-key navigation, one slide per printed page.",
   "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission.",
   "AGENT_COLORS": {
     "architect": "primary",

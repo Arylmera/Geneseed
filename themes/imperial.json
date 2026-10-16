@@ -142,6 +142,7 @@
   "DESC_BRUNO": "Raise, reshape, or set trials upon a Bruno collection — requests, environments, assertions, chaining — every secret a placeholder.",
   "DESC_PROSE": "Inscribe prose fit for human eyes, not machine-cant — strike the filler, speak plainly, vary the cadence, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design an interface with intent — palette, type, and layout forged for this brief, not the common defaults; plan, scrutinise, and keep one bold stroke.",
+  "DESC_DECK": "Forge slides or a presentation as one self-contained offline HTML scroll — a brief interrogation, the outline sanctioned first, arrow-key navigation, one slide per printed page.",
   "DESC_WORKFLOW": "Unleash a sealed battle-rite that marshals your Adepts by iron script — many loosed at once, their findings martialled and proven in one disciplined campaign.",
   "AGENT_COLORS": {
     "architect": "primary",

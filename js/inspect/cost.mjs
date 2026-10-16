@@ -28,7 +28,7 @@ import { isFile, readText } from '../lib/fs.mjs';
  * console draws it on the cost chart, so it lives here, once, where both read it. Raise it by
  * exactly the measured overrun and say why in that test's docblock, which keeps its history.
  */
-export const CARRIER_CEILING = { full: 62_107, lean: 38_976 };
+export const CARRIER_CEILING = { full: 62_219, lean: 39_088 };
 
 const decode = (p) => readText(p).split('\r\n').join('\n');
 

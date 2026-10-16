@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **deck skill.** Builds slides or a presentation as one self-contained offline HTML file: a short interview with defaults, the outline approved before generation, arrow-key, swipe and `#N` navigation, speaker notes on N, one slide per printed page; `/slides` and `/presentation` answer too. A `.pptx` request stays with the host's pptx skill.
+
 ## [4.4.0] — 2026-10-16
 
 Minor: the memory store scales — a two-level index, merge and archive at creation, and a memory-curator agent.

@@ -142,6 +142,7 @@
   "DESC_BRUNO": "<one-line description: build, reorganise or test a Bruno API collection — requests, environments, assertions, chaining — every secret a placeholder>",
   "DESC_PROSE": "<one-line description: write prose for a human that doesn't read like a model — cut filler, active voice, vary rhythm, trust the reader>",
   "DESC_FRONTEND_DESIGN": "<one-line description: design a UI with intent — palette/type/layout chosen for the brief, not templated defaults; plan tokens, critique against the brief, keep one bold move>",
+  "DESC_DECK": "<one-line description: build slides or a presentation as one self-contained offline HTML file — short interview, outline approved first, keys, URL hash, one slide per printed page>",
   "DESC_WORKFLOW": "<one-line description: run a saved, code-driven workflow that orchestrates subagents deterministically>",
   "AGENT_COLORS": {
     "architect": "primary",
