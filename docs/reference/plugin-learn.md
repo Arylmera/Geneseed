@@ -8,7 +8,7 @@ description: "Distils durable facts into memory/ once a session goes quiet."
 ---
 One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed in [Context and memory variables](env-context.md).
 
-**What it does.** Distils durable memories from the conversation into the install's `memory/` directory and keeps `MEMORY.md` up to date, de-duplicating against what is already stored. It is the OpenCode counterpart of the Claude Code `Stop` hook, but needs no API key and no model CLI: it distils with the **same model the session used**, through your OpenCode provider config. See [Memory](../concepts/memory.md).
+**What it does.** Distils durable memories from the conversation into the install's `memory/` directory and keeps its two-level index (`MEMORY.md` and `topics/`) up to date, de-duplicating against what is already stored. It is the OpenCode counterpart of the Claude Code `Stop` hook, but needs no API key and no model CLI: it distils with the **same model the session used**, through your OpenCode provider config. See [Memory](../concepts/memory.md).
 
 **When it runs.** After the session goes quiet. OpenCode signals "idle" after every turn, so each idle re-arms a timer and the distil runs once nothing has happened for `GENESEED_LEARN_DEBOUNCE_MS` (default 60 s). Trivial sessions are skipped.
 

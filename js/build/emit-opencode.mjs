@@ -8,6 +8,7 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
+import { migrateMemoryIndex } from '../hosts/memory-files.mjs';
 import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import {
   copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
@@ -233,6 +234,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
   ensureMemoryIndex(path.join(cfgDir, 'memory'));
+  migrateMemoryIndex(path.join(cfgDir, 'memory'));
   const nbStatus = globalNotebook(cfgDir, items, out, cfg.src);
   ensureNotebookIndex(path.join(cfgDir, 'notebook'));
   ensureWikiStub(cfgDir);

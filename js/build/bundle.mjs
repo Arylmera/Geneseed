@@ -12,6 +12,7 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
+import { migrateMemoryIndex } from '../hosts/memory-files.mjs';
 import { copyFile, isDir, isFile, readText, writeText } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson, formatReprAscii, isTruthy } from '../lib/json.mjs';
 import { OWNED_SRC_DIRS, SRC_DIRS_MARKER, TMPL_SPEC_RE } from './emit-common.mjs';
@@ -223,6 +224,7 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
   ensureProfileStub(out);
   ensureBundleGitignore(out);
   ensureMemoryIndex(path.join(out, theme[SRC_DIR_TOKENS.memory] ?? 'memory'));
+  migrateMemoryIndex(path.join(out, theme[SRC_DIR_TOKENS.memory] ?? 'memory'));
   ensureNotebookIndex(path.join(out, theme[SRC_DIR_TOKENS.notebook] ?? 'notebook'));
   process.stdout.write(`[geneseed] built theme '${themeName}' -> ${out} (${items.length} files)\n`);
 }

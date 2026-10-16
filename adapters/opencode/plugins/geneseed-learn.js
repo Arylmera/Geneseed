@@ -301,7 +301,6 @@ const MEMORY_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/
 async function writeMemories(output, memDir, existing) {
   const taken = new Set([...existing].map((s) => s.toLowerCase()))
   const written = []
-  const indexLines = []
   for (let chunk of output.split(/^---FILE---\s*$/m)) {
     chunk = chunk.trim()
     if (!chunk || chunk.toUpperCase() === "NOTHING") continue
@@ -313,20 +312,81 @@ async function writeMemories(output, memDir, existing) {
     existing.add(name)
     taken.add(key)
     written.push(name)
-    const desc = (fm.description || "").trim()
-    indexLines.push(`- [${name}](${name}.md)` + (desc ? ` — ${desc}` : ""))
   }
-  if (indexLines.length) {
-    const index = path.join(memDir, "MEMORY.md")
-    let current = "# Memory Index\n"
-    try { current = (await fs.readFile(index, "utf8")).replace(/\n+$/, "") + "\n" } catch {}
-    await fs.writeFile(index, current + indexLines.join("\n") + "\n", "utf8")
-  }
+  if (written.length) await rebuildIndex(memDir)
   return written
 }
 
+// The two-level index, a twin of rebuildIndex in js/hosts/memory-files.mjs (this file ships
+// standalone): MEMORY.md is a map of topics, each topics/<topic>.md lists its facts. A fact
+// already indexed keeps its line (title and hook), a new one gets its description, a topic
+// file no fact uses is deleted, and map lines the build did not generate are carried.
+const MEMORY_SEED = "# Memory Index\n"
+const MAP_HINT = "Each topic file lists its facts; open the one the task needs."
+const FACT_LINE_RE = /^- \[([^\]]*)\]\((?:\.\.\/)?([^/)]+)\.md\)(.*)$/
+const MAP_LINE_RE = /^- \[[^\]]*\]\(topics\/[^)]+\.md\)/
+
+const readLines = async (p) => {
+  try { return (await fs.readFile(p, "utf8")).replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n") } catch { return null }
+}
+const listMd = async (dir) => {
+  try { return (await fs.readdir(dir)).filter((f) => f.endsWith(".md")).sort() } catch { return [] }
+}
+async function writeIfChanged(p, text) {
+  const old = await readLines(p)
+  if (old && old.join("\n") + "\n" === text) return
+  await fs.writeFile(p, text, "utf8")
+}
+// `topic:`, else `type:` (a `type:` nested under `metadata:` reads the same: keys are trimmed).
+function topicOf(fm) {
+  const raw = (fm.topic || fm.type || "").trim()
+  return raw.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "misc"
+}
+
+async function rebuildIndex(memDir) {
+  const tdir = path.join(memDir, "topics")
+  const old = new Map()
+  for (const f of [path.join(memDir, "MEMORY.md"), ...(await listMd(tdir)).map((t) => path.join(tdir, t))]) {
+    for (const line of (await readLines(f)) ?? []) {
+      const m = FACT_LINE_RE.exec(line.trim())
+      if (m) old.set(m[2], { title: m[1], rest: m[3] })
+    }
+  }
+  const byTopic = new Map()
+  for (const f of await listMd(memDir)) {
+    const slug = f.slice(0, -3)
+    if (RESERVED_STEMS.has(slug.toLowerCase())) continue
+    let fm
+    try { fm = parseFrontmatter((await fs.readFile(path.join(memDir, f), "utf8")).replace(/\r\n/g, "\n")) } catch { continue }
+    const o = old.get(slug)
+    const desc = (fm.description || "").trim()
+    const line = o ? `- [${o.title}](../${slug}.md)${o.rest}` : `- [${slug}](../${slug}.md)` + (desc ? ` — ${desc}` : "")
+    const topic = topicOf(fm)
+    if (!byTopic.has(topic)) byTopic.set(topic, [])
+    byTopic.get(topic).push(line)
+  }
+  for (const f of await listMd(tdir)) {
+    if (!byTopic.has(f.slice(0, -3))) await fs.unlink(path.join(tdir, f))
+  }
+  if (byTopic.size) await fs.mkdir(tdir, { recursive: true })
+  else await fs.rmdir(tdir).catch(() => {})
+  const mapLines = []
+  for (const topic of [...byTopic.keys()].sort()) {
+    const lines = byTopic.get(topic)
+    await writeIfChanged(path.join(tdir, `${topic}.md`), `# ${topic}\n\n${lines.join("\n")}\n`)
+    mapLines.push(`- [${topic}](topics/${topic}.md) — ${lines.length} fact${lines.length === 1 ? "" : "s"}`)
+  }
+  const index = path.join(memDir, "MEMORY.md")
+  const carried = ((await readLines(index)) ?? []).filter((l) => {
+    const t = l.trim()
+    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t) && !FACT_LINE_RE.test(t)
+  })
+  const body = [...(mapLines.length ? ["", MAP_HINT, "", ...mapLines] : []), ...(carried.length ? ["", ...carried] : [])]
+  await writeIfChanged(index, body.length ? MEMORY_SEED + body.join("\n") + "\n" : MEMORY_SEED)
+}
+
 // The distil's reply into the store: a child session's one agent lesson, else memory
-// files plus their MEMORY.md lines. Shared by the V1 and V2 runs.
+// files plus their two-level index. Shared by the V1 and V2 runs.
 async function storeDistil(output, { isChild, memDir, agentName, existing }) {
   if (!output.trim() || output.trim().toUpperCase() === "NOTHING") return
   if (isChild) {

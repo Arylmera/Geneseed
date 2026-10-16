@@ -5,11 +5,12 @@
  * SPLIT FROM `learn` FOR THE CLI's SAKE. `learn` spawns the model CLI, and the web console
  * (`js/web/api.mjs`, `js/web/actions.mjs`), `geneseed memory` (`js/maintain/memory.mjs`) and the
  * loop catalogue (`js/loop/catalog.mjs`) imported the hook module only for `frontmatter` and
- * `memoryDropIndex` — which dragged `node:child_process` into `bin/geneseed-cli.mjs`'s closure
+ * `memoryDropIndex` — which dragged Node's child-process module into `bin/geneseed-cli.mjs`'s
+ * closure (the generator now imports this file too, and its spawn ban greps for that literal)
  * and made the hook module a row in `tests/unit/hook_cli.test.mjs`'s spawn allow-list for a
  * spawn the CLI never makes. Everything here is fs-only; `hooks-learn.mjs` is the one spawner.
  */
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, rmdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
@@ -23,6 +24,25 @@ const FILE_SEP_RE = /^---FILE---[^\S\n]*$/m;
 // silently lost.
 const MEMORY_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 const MAX_AGENT_BULLETS = 100;
+
+/**
+ * The seed MEMORY.md body. `js/build/stubs.mjs` seeds it from here, and an emptied store is
+ * written back to exactly these bytes, so the context hook's seed hash keeps skipping it.
+ */
+export const MEMORY_SEED = '# Memory Index\n';
+
+/**
+ * THE INDEX HAS TWO LEVELS. MEMORY.md is a map of topics, injected every session. Each
+ * `topics/<topic>.md` lists the facts under that topic, and the agent opens it on demand.
+ * A flat one-line-per-fact index overran the context hook's session budget at about 200
+ * facts and lost the newest ones, which is why it was split.
+ */
+const TOPICS = 'topics';
+const MAP_HINT = 'Each topic file lists its facts; open the one the task needs.';
+// A fact pointer: `- [title](slug.md)` in a legacy flat index, `- [title](../slug.md)` in a
+// topic file. The slug may not hold a `/`, so a map line (`topics/x.md`) is never a fact.
+const FACT_LINE_RE = /^- \[([^\]]*)\]\((?:\.\.\/)?([^/)]+)\.md\)(.*)$/;
+const MAP_LINE_RE = /^- \[[^\]]*\]\(topics\/[^)]+\.md\)/;
 
 /** `append_agent_lesson` — one dated bullet, capped at the newest MAX_AGENT_BULLETS. */
 export function appendAgentLesson(memDir, agent, lesson) {
@@ -82,9 +102,147 @@ export function existingSlugs(memDir) {
   return new Set(globMd(memDir).map(stem).filter((s) => !RESERVED_STEMS.has(s.toLowerCase())));
 }
 
+/** Lines of a text file, or null when it cannot be read. */
+function readLines(p) {
+  try { return splitLines(readText(p)); } catch { return null; }
+}
+
 /**
- * `_write_memories` — split the model output into files, write each NEW one, and append a
- * pointer line to MEMORY.md. `existing` is MUTATED, so a reply carrying the same slug
+ * Write `text` only when the file does not already hold it. A second run of a rebuild then
+ * touches nothing, which keeps `golden --idempotent` green and leaves the user's mtimes alone.
+ */
+function writeIfChanged(p, text) {
+  const old = readLines(p);
+  if (old && `${old.join('\n')}\n` === text) return;
+  writeText(p, text);
+}
+
+/** A topic name as a file stem: `[a-z0-9-]`, any other run becomes `-`, empty becomes `misc`. */
+function topicSlug(raw) {
+  return raw.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'misc';
+}
+
+/**
+ * The topic a fact files under: `topic:`, else `type:`, else `misc`.
+ *
+ * NESTED `type:` IS ACCEPTED ON PURPOSE. The flat frontmatter parser trims keys, so Claude
+ * Code's own memory shape, with `type:` indented under `metadata:`, reads as `type`.
+ */
+const topicOf = (fm) => topicSlug(fmGet(fm, 'topic') || fmGet(fm, 'type'));
+
+/** Every fact on disk, in the index's sort order: slug -> { desc, topic }. */
+function readFacts(memDir) {
+  const facts = new Map();
+  for (const name of sortPaths(globMd(memDir))) {
+    const s = stem(name);
+    if (RESERVED_STEMS.has(s.toLowerCase())) continue;
+    try {
+      const [fm] = frontmatter(readText(path.join(memDir, name)));
+      facts.set(s, { desc: fmGet(fm, 'description').trim(), topic: topicOf(fm) });
+    } catch { continue; }
+  }
+  return facts;
+}
+
+/**
+ * Every fact pointer the index holds now, from a flat MEMORY.md and from the topic files:
+ * slug -> { title, rest }. `rest` is everything after the link, hook text included.
+ */
+function indexedFacts(memDir) {
+  const found = new Map();
+  const tdir = path.join(memDir, TOPICS);
+  const files = [path.join(memDir, 'MEMORY.md'), ...globMd(tdir).map((f) => path.join(tdir, f))];
+  for (const f of files) {
+    for (const line of readLines(f) ?? []) {
+      const m = FACT_LINE_RE.exec(line.trim());
+      if (m) found.set(m[2], { title: m[1], rest: m[3] });
+    }
+  }
+  return found;
+}
+
+/**
+ * Rewrite MEMORY.md as the map: one line per topic file with its fact count.
+ *
+ * LINES THE MAP DID NOT GENERATE ARE CARRIED, so a note the user wrote into the index
+ * survives. `dropFlat` also drops legacy flat fact pointers; a rebuild passes it because it
+ * has just moved them into topic files. With no topic and nothing carried, the file goes
+ * back to the seed.
+ */
+function writeMap(memDir, dropFlat) {
+  const idx = path.join(memDir, 'MEMORY.md');
+  const carried = (readLines(idx) ?? []).filter((l) => {
+    const t = l.trim();
+    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t)
+      && !(dropFlat && FACT_LINE_RE.test(t));
+  });
+  const tdir = path.join(memDir, TOPICS);
+  const topics = globMd(tdir).map(stem).sort().map((t) => {
+    const n = (readLines(path.join(tdir, `${t}.md`)) ?? [])
+      .filter((l) => FACT_LINE_RE.test(l.trim())).length;
+    return `- [${t}](${TOPICS}/${t}.md) — ${n} fact${n === 1 ? '' : 's'}`;
+  });
+  const body = [...(topics.length ? ['', MAP_HINT, '', ...topics] : []),
+    ...(carried.length ? ['', ...carried] : [])];
+  writeIfChanged(idx, body.length ? `${MEMORY_SEED}${body.join('\n')}\n` : MEMORY_SEED);
+}
+
+/** Remove the topics dir when nothing is left in it. */
+function pruneTopicsDir(memDir) {
+  try { rmdirSync(path.join(memDir, TOPICS)); } catch { /* not empty, or absent */ }
+}
+
+/**
+ * Rebuild both index levels from the fact files on disk.
+ *
+ * A fact the index already points at keeps its existing line, title and hook included,
+ * unless `refresh` is set. That makes a migration or a learn run lossless. `consolidate`
+ * passes `refresh`, because it exists to re-read the descriptions. Topic files no topic
+ * uses any more are deleted: they are generated, never facts.
+ */
+function rebuildIndex(memDir, refresh) {
+  const facts = readFacts(memDir);
+  const old = indexedFacts(memDir);
+  const byTopic = new Map();
+  for (const [slug, { desc, topic }] of facts) {
+    const o = refresh ? null : old.get(slug);
+    const line = o ? `- [${o.title}](../${slug}.md)${o.rest}`
+      : `- [${slug}](../${slug}.md)${desc ? ` — ${desc}` : ''}`;
+    if (!byTopic.has(topic)) byTopic.set(topic, []);
+    byTopic.get(topic).push(line);
+  }
+  const tdir = path.join(memDir, TOPICS);
+  for (const f of globMd(tdir)) {
+    if (!byTopic.has(stem(f))) unlinkSync(path.join(tdir, f));
+  }
+  if (byTopic.size) mkdirSync(tdir, { recursive: true });
+  for (const [topic, lines] of byTopic) {
+    writeIfChanged(path.join(tdir, `${topic}.md`), `# ${topic}\n\n${lines.join('\n')}\n`);
+  }
+  if (!byTopic.size) pruneTopicsDir(memDir);
+  writeMap(memDir, true);
+  return { facts, old };
+}
+
+/**
+ * Move a flat MEMORY.md to the two-level index, once, at emit time.
+ *
+ * Acts only when MEMORY.md still holds a flat fact pointer and at least one fact exists, so
+ * a seed-only store and an already-migrated store are left alone. It rewrites MEMORY.md and
+ * `topics/*.md` only, never a fact file, and it keeps each pointer's own title and hook.
+ */
+export function migrateMemoryIndex(memDir) {
+  const lines = readLines(path.join(memDir, 'MEMORY.md'));
+  if (!lines?.some((l) => FACT_LINE_RE.test(l.trim())) || !existingSlugs(memDir).size) return false;
+  rebuildIndex(memDir, false);
+  return true;
+}
+
+/**
+ * `_write_memories` — split the model output into files, write each NEW one, then rebuild
+ * the two-level index from disk with the same builder `consolidate` uses. A rebuild rather
+ * than an append, so a legacy flat index is migrated on the way and a topic count can never
+ * drift from its file. `existing` is MUTATED, so a reply carrying the same slug
  * twice writes it once.
  *
  * A reserved stem is refused (`name: MEMORY` would overwrite the index), and names compare
@@ -94,7 +252,6 @@ export function existingSlugs(memDir) {
 export function writeMemories(modelOutput, memDir, existing) {
   const taken = new Set([...existing].map((s) => s.toLowerCase()));
   const written = [];
-  const indexLines = [];
   for (let chunk of modelOutput.split(FILE_SEP_RE)) {
     chunk = chunk.trim();
     if (!chunk || chunk.toUpperCase() === 'NOTHING') continue;
@@ -106,15 +263,8 @@ export function writeMemories(modelOutput, memDir, existing) {
     existing.add(name);
     taken.add(key);
     written.push(name);
-    const desc = fmGet(fm, 'description').trim();
-    indexLines.push(`- [${name}](${name}.md)${desc ? ` \u2014 ${desc}` : ''}`);
   }
-  if (indexLines.length) {
-    const index = path.join(memDir, 'MEMORY.md');
-    const current = existsSync(index) ? `${readText(index).replace(/\n+$/, '')}\n`
-      : '# Memory Index\n';
-    writeText(index, `${current}${indexLines.join('\n')}\n`);
-  }
+  if (written.length) rebuildIndex(memDir, false);
   return written;
 }
 
@@ -134,57 +284,57 @@ export function writeMemories(modelOutput, memDir, existing) {
  * so a hand-written index in a different shape still loses its entry. And the file is only
  * REWRITTEN when something actually changed, which keeps a delete of an unindexed fact from
  * touching the user's mtime.
+ *
+ * BOTH LEVELS: the `(<name>.md)` line of a legacy flat MEMORY.md, and the `(../<name>.md)`
+ * line of whichever topic file holds it. A topic file left with no fact is deleted, and the
+ * map's counts are refreshed only when a topic file changed. Matching the two exact forms
+ * keeps `b` from taking `ab.md` with it.
  */
 export function memoryDropIndex(memDir, name) {
-  const idx = path.join(memDir, 'MEMORY.md');
-  let lines;
-  try {
-    lines = splitLines(readText(idx));
-  } catch {
-    return;                       // the reference's `except OSError: return`
+  dropLines(path.join(memDir, 'MEMORY.md'), `(${name}.md)`);
+  const tdir = path.join(memDir, TOPICS);
+  let touched = false;
+  for (const f of globMd(tdir)) {
+    const p = path.join(tdir, f);
+    const left = dropLines(p, `(../${name}.md)`);
+    if (!left) continue;
+    touched = true;
+    if (!left.some((l) => FACT_LINE_RE.test(l.trim()))) {
+      try { unlinkSync(p); } catch { /* as below */ }
+    }
   }
-  const keep = lines.filter((ln) => !ln.includes(`(${name}.md)`));
-  if (keep.length === lines.length) return;
+  if (!touched) return;
+  pruneTopicsDir(memDir);
+  try { writeMap(memDir, false); } catch { /* the reference swallows OSError here too */ }
+}
+
+/** Drop every line holding `needle`; the kept lines when something went, else null. */
+function dropLines(p, needle) {
+  const lines = readLines(p);
+  if (!lines) return null;        // the reference's `except OSError: return`
+  const keep = lines.filter((ln) => !ln.includes(needle));
+  if (keep.length === lines.length) return null;
   try {
-    writeText(idx, `${keep.join('\n')}\n`);
+    writeText(p, `${keep.join('\n')}\n`);
   } catch { /* the reference swallows OSError here too */ }
+  return keep;
 }
 
 /**
- * `consolidate_memory` — rebuild MEMORY.md from the fact files actually on disk: index
- * orphans, prune dead lines, report duplicate descriptions (never auto-merge — nuance is
- * the user's to keep).
+ * `consolidate_memory` — rebuild both index levels from the fact files actually on disk:
+ * index orphans, prune dead lines, refresh each line from its fact's description, report
+ * duplicate descriptions (never auto-merge — nuance is the user's to keep). `added` and
+ * `pruned` compare against the pointers of BOTH levels, so a migration counts as neither.
  */
 export function consolidateMemory(memDir) {
-  const skip = RESERVED_STEMS;
-  const facts = new Map();
-  for (const name of sortPaths(globMd(memDir))) {
-    const s = stem(name);
-    if (skip.has(s.toLowerCase())) continue;
-    try {
-      facts.set(s, fmGet(frontmatter(readText(path.join(memDir, name)))[0], 'description').trim());
-    } catch { continue; }
-  }
-  const index = path.join(memDir, 'MEMORY.md');
-  const oldSlugs = new Set();
-  if (existsSync(index)) {
-    for (const line of splitLines(readText(index))) {
-      const m = /^- \[[^\]]*\]\(([^)]+)\.md\)/.exec(line.trim());
-      if (m) oldSlugs.add(m[1]);
-    }
-  }
-  const lines = ['# Memory Index', ''];
-  for (const [slug, desc] of facts) {
-    lines.push(`- [${slug}](${slug}.md)${desc ? ` \u2014 ${desc}` : ''}`);
-  }
-  writeText(index, `${lines.join('\n')}\n`);
+  const { facts, old } = rebuildIndex(memDir, true);
   const seen = new Map();
   const dups = [];
-  for (const [slug, desc] of facts) {
+  for (const [slug, { desc }] of facts) {
     if (desc && seen.has(desc)) dups.push([seen.get(desc), slug]);
     if (!seen.has(desc)) seen.set(desc, slug);
   }
-  const added = [...facts.keys()].filter((s) => !oldSlugs.has(s)).sort();
-  const pruned = [...oldSlugs].filter((s) => !facts.has(s)).sort();
+  const added = [...facts.keys()].filter((s) => !old.has(s)).sort();
+  const pruned = [...old.keys()].filter((s) => !facts.has(s)).sort();
   return { added, pruned, duplicates: dups };
 }
