@@ -8,6 +8,24 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.4.0] — 2026-10-16
+
+Minor: the memory store scales — a two-level index, merge and archive at creation, and a memory-curator agent.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating. It migrates every existing `memory/MEMORY.md` to the two-level index: only the index files are rewritten, never a fact file.
+- A large or untidy store (a topic over 40 facts, or a `misc` topic) now gets a one-line session nudge to dispatch the memory-curator agent; it merges and archives topic by topic and deletes nothing without your approval.
+- `geneseed memory rm` now archives into `memory/archive/`; pass `--purge` for the old deletion.
+
+### Added
+- **memory-curator agent.** Merges duplicate facts (archiving the merged-away versions), assigns missing topics, archives stale facts, and proposes deletion of archived ones; never touches a `force:` fact without a ruling. (#284)
+- **`geneseed memory list --archived`, `rm --purge`, `rm --archived --purge`.** (#284)
+
+### Changed
+- **Two-level memory index.** `MEMORY.md` is now a small map of topics; each `memory/topics/<topic>.md` lists its facts. A fact's optional `topic:` picks its group, else its `type:`, else `misc`. A flat index of 200+ facts overran the context hook's budget and the newest facts were cut. (#282)
+- **learn merges and archives.** The distiller sees the stored facts with their descriptions and the topics in use; it can update an existing fact (the old version is archived first) or archive a stale one, and tags new facts with a topic. Nothing is ever deleted; facts carrying `force:` are left alone. (#283)
+- **Memory deletion archives by default**, in the CLI and the web console. (#284)
+
 ## [4.3.1] — 2026-10-15
 
 Patch: a folder excluded from the global harness now stays excluded in its git worktrees.
