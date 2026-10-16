@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.4.1] — 2026-10-16
+
+A presentation skill.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so installs list the new skill.
+
 ### Added
 - **deck skill.** Builds slides or a presentation as one self-contained offline HTML file: a short interview with defaults, the outline approved before generation, arrow-key, swipe and `#N` navigation, speaker notes on N, one slide per printed page; `/slides` and `/presentation` answer too. A `.pptx` request stays with the host's pptx skill.
 
