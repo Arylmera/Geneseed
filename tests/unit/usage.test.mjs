@@ -81,11 +81,11 @@ test('the hook writes a day and a name, and honours the off switches', () => {
   } finally { sb.cleanup(); }
 });
 
-// The reader, over one opencode install on 2026-10-13: a call 95 days ago is pruned from the
-// file, one 40 days ago is kept in the file but sits outside the window, and three in the
+// The reader, over one opencode install on 2026-10-13: a call 95 days ago is skipped (so
+// `since` is not 10 Jul), one 40 days ago is read but sits outside the window, and three in the
 // window rank develop (2) over explorer (1). `since` is the oldest kept day, so 30 days are
 // counted. The install has skills develop + plan and agent explorer: plan never fired.
-test('the reader ranks the window, prunes past 90 days, and lists what never fired', () => {
+test('the reader ranks the window, skips past 90 days, and lists what never fired', () => {
   const sb = makeSandbox('usage-');
   try {
     const root = sb.path;
@@ -114,8 +114,25 @@ test('the reader ranks the window, prunes past 90 days, and lists what never fir
     assert.equal(got.per_day.length, 30);
     assert.deepEqual([got.per_day[17], got.per_day[28], got.per_day[29]], [1, 1, 1], '1 Oct, 12 Oct, 13 Oct');
     assert.equal(got.per_day.reduce((a, b) => a + b, 0), 3);
-    assert.deepEqual(lines(path.join(root, USAGE_LEDGER)).map((e) => e.ts),
-      ['2026-09-03', '2026-10-01', '2026-10-13', '2026-10-12'], 'the 95-day line and the garbage line are pruned');
+  } finally { sb.cleanup(); }
+});
+
+// The reader never writes: GET /api/usage runs while a hook may be appending, so a rewrite
+// between its read and its write would drop that append. A stale line, a garbage line and a
+// half-written tail (no newline yet: an append in flight) all stay byte-for-byte in the file.
+test('the reader leaves the ledger untouched, a half-written tail included', () => {
+  const sb = makeSandbox('usage-');
+  try {
+    const root = sb.path;
+    fs.writeFileSync(path.join(root, '.geneseed-manifest.json'), '{"owned": []}');
+    fs.mkdirSync(path.join(root, 'notebook'));
+    const file = path.join(root, USAGE_LEDGER);
+    const bytes = '{"ts":"2026-07-10","kind":"skill","name":"develop"}\nnot json\n'
+      + '{"ts":"2026-10-13","kind":"skill","name":"develop"}\n{"ts":"2026-10-13","kind":"sk';
+    fs.writeFileSync(file, bytes);
+    const got = usageSummary({ now: Date.parse('2026-10-13T12:00:00Z'), targets: [['opencode', 'global', root]] });
+    assert.equal(got.per_day.reduce((a, b) => a + b, 0), 1, 'only the whole in-window line counts');
+    assert.equal(fs.readFileSync(file, 'utf8'), bytes);
   } finally { sb.cleanup(); }
 });
 
