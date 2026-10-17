@@ -2,7 +2,7 @@
 // fetched and returns plain rows for a chart or a list. Kept out of the component so a
 // table of inputs -> rows can pin them (__tests__/overview.test.js), and so the component
 // is only layout.
-import { editCount, relTime } from './format.js'
+import { driftTotal, relTime } from './format.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from './lawCats.js'
 import { gateAddress, parseRuleTitle } from './constitution.js'
 
@@ -49,7 +49,7 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
     })
   }
   const diff = overview?.diff
-  const drift = diff ? editCount(diff) + (diff.missing ?? 0) : 0
+  const drift = driftTotal(diff)
   if (drift) {
     out.push({
       id: 'drift',
@@ -152,7 +152,7 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
 
 // ---- the Ledger: every installed harness at once (/api/fleet, /api/usage, /api/gates) ----
 
-const driftOf = (i) => (i.drift ? i.drift.edited + i.drift.added + i.drift.missing : 0)
+const driftOf = (i) => driftTotal(i.drift)
 
 // The verdict line. 'bad' when the doctor failed; 'warn' when an install is behind its source
 // or has hand edits; else 'good'. An install whose marker cannot be read ('unknown') does not

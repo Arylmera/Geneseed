@@ -1,6 +1,6 @@
 import React from 'react'
 import { go } from '../lib/router.js'
-import { editCount, relTime } from '../lib/format.js'
+import { driftTotal, relTime } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
 
 // The six pages, in the order a visit reads them: how the harness is doing, what it
@@ -82,7 +82,7 @@ function NavLink({ n, lit, count, onNavigate }) {
 function Vitals({ overview, onOpenVoice }) {
   if (!overview) return null
   const d = overview.doctor
-  const drift = editCount(overview.diff) + (overview.diff?.missing ?? 0)
+  const drift = driftTotal(overview.diff)
   return (
     <div className="sb-vitals">
       <div>

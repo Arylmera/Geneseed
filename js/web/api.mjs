@@ -116,6 +116,37 @@ export function viewCfg(host, scope, root) {
   return root;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The last `n` UTC days ending today, oldest first, as 'YYYY-MM-DD' — the ledger charts' window. */
+export const lastDays = (now, n = 30) => Array.from({ length: n }, (_, i) =>
+  new Date(now - (n - 1 - i) * DAY_MS).toISOString().slice(0, 10));
+
+/** `[host, scope, root, dir]` for each ACTIVE install in `targets` — where its ledgers live. */
+export function* activeInstalls(targets) {
+  for (const [host, scope, root] of targets) {
+    if (installState(root, host, scope) === 'active') yield [host, scope, root, viewCfg(host, scope, root)];
+  }
+}
+
+/** The edited/added/missing tally of a `diffCollect` file list. */
+const driftCounts = (files) => ({
+  edited: files.filter((f) => f.status === 'edited').length,
+  added: files.filter((f) => f.status === 'added').length,
+  missing: files.filter((f) => f.status === 'missing').length,
+});
+
+/**
+ * The fields every install row opens with, in this order. Theme is narrowed to this row's own
+ * host (host-compat B1): a shared repo otherwise answers every row with whichever host's
+ * carrier the host-agnostic scan favours.
+ */
+const installRowBase = (host, scope, root, state) => ({
+  id: `${host}:${scope}:${root}`, host, scope, path: root, state,
+  theme: themeOfDir(root, host),
+  footprint: footprintOfDir(root),
+});
+
 /**
  * The row `id` carries the ROOT, not only `host:scope`: two project installs of one host (two
  * repos on Bob, say) are both `bob:project`, and the console keys its selection, its React rows
@@ -127,12 +158,7 @@ export function apiInstalls(state) {
   const out = [];
   for (const [host, scope, root] of installTargets()) {
     out.push({
-      id: `${host}:${scope}:${root}`, host, scope, path: root,
-      state: installState(root, host, scope),
-      // Narrowed to this row's own host (host-compat B1): a shared repo otherwise answers
-      // every row with whichever host's carrier the host-agnostic scan favours.
-      theme: themeOfDir(root, host),
-      footprint: footprintOfDir(root),
+      ...installRowBase(host, scope, root, installState(root, host, scope)),
       posture: postureOfDir(root, host),
       mode: modeOfDir(root, host),
       trust: trustOfDir(root, host),
@@ -171,21 +197,13 @@ export function apiFleet(state) {
     if (st === 'active') {
       try {
         const { files } = diffCollect({ target: dir });
-        if (files !== null) {
-          drift = {
-            edited: files.filter((f) => f.status === 'edited').length,
-            added: files.filter((f) => f.status === 'added').length,
-            missing: files.filter((f) => f.status === 'missing').length,
-          };
-        }
+        if (files !== null) drift = driftCounts(files);
       } catch { /* an install that cannot be re-rendered reports no drift figure, not zero */ }
     }
     let built = null;
     try { built = Math.floor(statSync(path.join(dir, VERSION_MARKER)).mtimeMs / 1000); } catch { /* never built */ }
     installs.push({
-      id: `${host}:${scope}:${root}`, host, scope, path: root, state: st,
-      theme: themeOfDir(root, host),
-      footprint: footprintOfDir(root),
+      ...installRowBase(host, scope, root, st),
       installed_fp: fp,
       verdict: fp === null ? 'unknown' : fp === sourceFp ? 'synced' : 'behind',
       // A project install has no drift check at all (`diffCollect` answers `files: null`), which
@@ -208,13 +226,7 @@ export function apiOverview(state) {
   if (deployed(state)) {
     const { files } = diffCollect({
       target: state.target, theme: state.theme, emit: state.emit });
-    if (files !== null) {
-      diff = {
-        edited: files.filter((f) => f.status === 'edited').length,
-        added: files.filter((f) => f.status === 'added').length,
-        missing: files.filter((f) => f.status === 'missing').length,
-      };
-    }
+    if (files !== null) diff = driftCounts(files);
   }
   let buildTime = null;
   // The SAME mtime twice, on purpose. `build_time` is the stamp a person reads; `build_epoch`
@@ -413,10 +425,10 @@ export function apiLoopsActive() {
   return { loops: activeLoops() };
 }
 
-/** The source's release label, or null when it cannot be read. */
 /** Is a newer release on npm than the source this console serves? See update-check.mjs. */
 export const apiUpdate = (state) => updateStatus(state, releaseLabel());
 
+/** The source's release label, or null when it cannot be read. */
 function releaseLabel() {
   const v = sourceReleaseVersion({ config: CONFIG });
   return v && v !== '0.0.0' ? v : null;

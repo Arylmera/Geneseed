@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { relTime, promptPath, readiness, maxCount, editCount } from '../lib/format.js'
+import { relTime, promptPath, readiness, maxCount, editCount, driftTotal } from '../lib/format.js'
 
 describe('relTime', () => {
   beforeEach(() => {
@@ -61,5 +61,10 @@ describe('maxCount / editCount', () => {
     expect(editCount({ edited: 3, added: 1 })).toBe(4)
     expect(editCount({ edited: 2 })).toBe(2)
     expect(editCount(null)).toBe(0)
+  })
+  it('driftTotal adds missing to editCount, defaulting to 0', () => {
+    expect(driftTotal({ edited: 3, added: 1, missing: 2 })).toBe(6)
+    expect(driftTotal({ missing: 1 })).toBe(1)
+    expect(driftTotal(null)).toBe(0)
   })
 })

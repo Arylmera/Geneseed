@@ -1,6 +1,6 @@
 import React from 'react'
 import Tabs from '../../components/Tabs.jsx'
-import { editCount } from '../../lib/format.js'
+import { driftTotal } from '../../lib/format.js'
 import Hosts from './Hosts.jsx'
 import Diff from '../Diff.jsx'
 import Doctor from '../Doctor.jsx'
@@ -23,7 +23,7 @@ export default function Installs({
   const d = overview?.doctor
   const diff = overview?.diff
   const badges = {
-    edits: diff ? editCount(diff) + (diff.missing ?? 0) : null,
+    edits: diff ? driftTotal(diff) : null,
     doctor: !d ? null : d.ok ? 'clean' : d.problems.length,
   }
   return (
