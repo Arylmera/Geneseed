@@ -632,11 +632,28 @@ test('the only spawn in the hook entry is the model CLI', () => {
   // TRANSITIVE, because the verbs are dynamic imports one module deep: the per-file checks above
   // would not notice a gate or `context` module growing a spawn of its own. The walk follows the
   // entry's literal `import('…')` specifiers, so this is every module any hook verb can load.
+  //
+  // ONE OTHER SPAWNER, WITH A WRITTEN REASON (user decision, 2026-10-17): `js/hosts/loss.mjs`,
+  // Law IV calibrated to real loss. Whether a tree is dirty, which files are untracked and
+  // whether a branch's commits live elsewhere cannot be read off disk at a sane cost, so `git`
+  // answers — but only after `LOSS_CANDIDATE_RE` matched a destructive-looking form, never on an
+  // ordinary tool call. Pinned below the same way as learn's: one binding, one call site,
+  // `shell: false`, and the prefilter guarding the call in `hooks.mjs`.
   const spawners = [...importClosure(path.join(ROOT, ...HOOK.split('/')))]
     .filter((f) => importsChildProcess(readFileSync(f, 'utf8')))
-    .map((f) => path.relative(ROOT, f).replaceAll('\\', '/'));
-  assert.deepEqual(spawners, ['js/hosts/hooks-learn.mjs'],
-    'a hook verb other than learn reaches child_process — the gates run on every tool call');
+    .map((f) => path.relative(ROOT, f).replaceAll('\\', '/'))
+    .sort();
+  assert.deepEqual(spawners, ['js/hosts/hooks-learn.mjs', 'js/hosts/loss.mjs'],
+    'a hook verb other than learn and the Law IV state read reaches child_process — the gates run on every tool call');
+  const loss = read('js', 'hosts', 'loss.mjs');
+  assert.deepEqual([...loss.matchAll(/import\s+(.+?)\s+from\s+'node:child_process'/g)].map((m) => m[1]),
+    ['{ spawnSync }'], 'js/hosts/loss.mjs may import exactly one child_process binding');
+  assert.equal((loss.match(/(?<![.\w])spawnSync\s*\(/g) ?? []).length, 1,
+    'js/hosts/loss.mjs has more than one spawnSync call site');
+  assert.match(loss, /spawnSync\('git', \[[^\]]*\], \{[^}]*shell: false/,
+    'the Law IV spawn must run git itself, never through a shell');
+  assert.match(read('js', 'hosts', 'hooks.mjs'), /if \(LOSS_CANDIDATE_RE\.test\(command\)\) \{\s*(?:\/\/[^\n]*\s*)*const loss = lossReason\(/,
+    'hooks.mjs must reach lossReason (and its spawn) only behind the LOSS_CANDIDATE_RE prefilter');
 });
 
 test('the CLI entry reaches child_process only where it is declared', () => {

@@ -14,7 +14,7 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 | Agents · Skills · Memory · Notebook | ✅ | ✅ | ✅ | ✅ |
 | Project context loaded at session start | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook² |
 | Memory written back at session end (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook² |
-| Destructive git (force-push, `reset --hard`…) | 🔒 permission ask | 🪝 ask | 🪝 block¹ | 🪝 ask² |
+| Real data loss (force-push to `main`, discarding uncommitted work, `rm` of untracked files…) | ⚙️ block³ · 🔒 ask (reflog, gc) | 🪝 ask | 🪝 block¹ | 🪝 ask² |
 | Secrets kept out of files | ⚙️ block⁴ | 🪝 ask | 🪝 block¹ | 🪝 ask² |
 | Consent before every commit and push | 🔒 permission ask | 🪝 ask | 🪝 warning¹ | 🪝 ask² |
 | Rule-or-memory write needs your call | ⚙️ speed bump³ | 🪝 ask | 🪝 warning¹ | 🪝 ask² |
@@ -25,9 +25,9 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 
 ✅ native · ⚙️ OpenCode plugin · 🔒 `permission` entry in `opencode.json` · 🪝 `settings.json` hook · ➖ no host mechanism (the rule still applies as prose).
 
-¹ **Bob** has its own hook contract: Claude's event names, but it ignores a hook's output on `PreToolUse`, so the only way to refuse is exit code 2. Geneseed therefore blocks only the rules that admit no judgement call — secrets, destructive git, a recursive scan of a whole filesystem, and a write under a project's own protected-checks list — and turns the two consent checks into a logged warning. It has no `SubagentStop` or `PreCompact` event, so learn runs on `Stop` only. **Unverified live** — there is no Bob install on the authoring machine; the rules preamble still holds if a hook does not fire.
+¹ **Bob** has its own hook contract: Claude's event names, but it ignores a hook's output on `PreToolUse`, so the only way to refuse is exit code 2. Geneseed therefore blocks only the rules that admit no judgement call — secrets, real data loss, a recursive scan of a whole filesystem, and a write under a project's own protected-checks list — and turns the two consent checks into a logged warning. It has no `SubagentStop` or `PreCompact` event, so learn runs on `Stop` only. **Unverified live** — there is no Bob install on the authoring machine; the rules preamble still holds if a hook does not fire.
 ² **OpenClaude** is a Claude Code fork and gets Claude's hooks and verdicts verbatim, in `~/.openclaude/settings.json` (global) or `.openclaude/settings.local.json` (per repo). **Unverified live** for the same reason.
-³ OpenCode's plugin hook can only allow or throw — there is no "ask the user" — so this check stops the first such write once rather than prompting.
+³ OpenCode's plugin hook can only allow or throw — there is no "ask the user" — so the rule-or-memory check stops the first such write once rather than prompting, and a real data loss is blocked outright (as on Bob) rather than asked; `GENESEED_GUARD=warn` turns the block into a logged warning.
 ⁴ The checks differ in shape: OpenCode's guard plugin blocks writes *to* private-key and credential files by path; the Claude-shaped hook looks at the *content* being written for credential-shaped strings (cloud keys, tokens, private-key blocks) and asks. A `.env` file is exempt on the hook side — that is where a secret is allowed to live.
 ⁵ A linked git worktree of an excluded repo is excluded too: the hooks and plugins follow its `.git` file back to the main repository. `claudeMdExcludes` is the exception — it lives in the gitignored `settings.local.json`, which a worktree never gets — so `geneseed exclude add` and `exclude list` print the snippet to commit yourself. See [Exclusions](exclusions.md).
 

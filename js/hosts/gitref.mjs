@@ -16,7 +16,7 @@
  * loop exemption; upstream never calls that hook, so the twin was deleted (OpenCode verdict
  * I-2). This module has no copy to keep in step.
  */
-import { existsSync, statSync, lstatSync, readFileSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, statSync, lstatSync, readFileSync, readdirSync, openSync, readSync, closeSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -91,6 +91,52 @@ export function currentBranch(cwd) {
     return ref ? ref[1] : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The SHARED `.git` directory for `root`: the gitdir itself in a main worktree, the one its
+ * `commondir` names in a linked worktree. Refs under `refs/remotes/`, `refs/stash` and
+ * `packed-refs` live there, not in a worktree's private gitdir. Throws like `gitDirOf`.
+ */
+export function gitCommonDirOf(root) {
+  const gitdir = gitDirOf(root);
+  try {
+    return path.resolve(gitdir, readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim());
+  } catch {
+    return gitdir;
+  }
+}
+
+/**
+ * The branch names Deletion Is Deliberate treats as protected in `root`'s repository: `main`,
+ * `master`, and every remote's default branch — the target of each `refs/remotes/<r>/HEAD`
+ * symref (git writes those loose, never packed). A remote whose HEAD cannot be read simply adds
+ * nothing; `main`/`master` are always in. Throws when the gitdir itself cannot be found, so a
+ * caller can tell "no remote default" from "no repository".
+ */
+export function protectedBranches(root) {
+  const names = new Set(['main', 'master']);
+  const remotes = path.join(gitCommonDirOf(root), 'refs', 'remotes');
+  let dirs = [];
+  try { dirs = readdirSync(remotes); } catch { /* no remotes */ }
+  for (const r of dirs) {
+    try {
+      const m = /^ref:\s*refs\/remotes\/[^/]+\/(.+?)\s*$/m.exec(readFileSync(path.join(remotes, r, 'HEAD'), 'utf8'));
+      if (m) names.add(m[1]);
+    } catch { /* this remote has no HEAD symref */ }
+  }
+  return names;
+}
+
+/** Whether `root`'s repository holds a stash — `refs/stash` loose or in `packed-refs`. Throws like `gitDirOf`. */
+export function stashExists(root) {
+  const common = gitCommonDirOf(root);
+  if (existsSync(path.join(common, 'refs', 'stash'))) return true;
+  try {
+    return /^[0-9a-f]+ refs\/stash$/m.test(readFileSync(path.join(common, 'packed-refs'), 'utf8'));
+  } catch {
+    return false;
   }
 }
 

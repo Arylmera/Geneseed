@@ -18,7 +18,8 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   half of Doctrine process 5 (*consent before every commit and push*) and of the
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
   wired with `--no-consent`: commits and pushes pass without asking, while the
-  invariant-territory refusals (force-push, `reset --hard`) stay in every build. The hook inspects
+  Law IV refusals (asked only on real data loss: a force-push to `main`, a `reset --hard`
+  over uncommitted work, an `rm` git cannot undo) stay in every build. The hook inspects
   command and, when it runs a `git commit` or `git push` (bare, flagged, `-C <path>`,
   or chained like `git add . && git commit … && git push`), returns
   `permissionDecision: "ask"` so Claude Code **prompts on every such call**. Crucially

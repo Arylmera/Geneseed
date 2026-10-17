@@ -1,5 +1,5 @@
 // `doctor --probe` (js/inspect/checks-probe.mjs, #290): each installed gate is RUN, through the
-// host's shell, on a payload it must refuse (`git reset --hard HEAD`) and one it must let
+// host's shell, on a payload it must refuse (`git reflog expire --expire=now --all`) and one it must let
 // through (`git status`).
 //
 // THE GATE FAILS BOTH WAYS, and this file holds it to that. A probe that always reports ok
@@ -186,7 +186,9 @@ test('Bob: exit 2 refuses; the same gate without --host bob speaks JSON Bob neve
 });
 
 test('the payloads are the ones the docs and the ADR name', () => {
-  assert.equal(BAD_COMMAND, 'git reset --hard HEAD');
+  // State-independent on purpose: Law IV asks for `reflog expire` in every state, where
+  // `reset --hard` would pass on a clean tree since the gate asks only on real loss.
+  assert.equal(BAD_COMMAND, 'git reflog expire --expire=now --all');
   assert.equal(GOOD_COMMAND, 'git status');
   assert.ok(readFileSync(path.join(import.meta.dirname, '..', '..', 'docs', 'adr',
     '0002-no-spawn-on-the-generator-and-hook-path.md'), 'utf8').includes('doctor --probe'));

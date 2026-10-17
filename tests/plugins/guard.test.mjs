@@ -8,6 +8,7 @@ import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { GeneseedGuard } from "../../adapters/opencode/plugins/geneseed-guard.js"
 import { makeSandbox } from "../helpers/sandbox.mjs";
+import { LOSS_ROWS, makeLossWorkspace, rowCommand } from "../helpers/loss_repos.mjs"
 
 // The wiki manifest must be in place before the FIRST hook call — the guard caches
 // the protected prefixes on a TTL, so a hook call without $GENESEED_WIKI set would
@@ -36,6 +37,17 @@ after(async () => {
 })
 
 const hook = (await GeneseedGuard())["tool.execute.before"]
+
+// The block message if the guard blocked (threw), else null.
+async function denial(tool, args) {
+  try {
+    await hook({ tool, args }, {})
+    return null
+  } catch (err) {
+    if (String(err?.message || "").startsWith("[geneseed-guard]")) return String(err.message)
+    throw err
+  }
+}
 
 // Returns true if the guard blocked (threw); false if it allowed the call.
 async function blocked(tool, args) {
@@ -85,28 +97,21 @@ test("still blocks rm -rf / (no regression)", async () => {
 })
 
 // A recursive rm whose target is the filesystem root or the home dir — bare, globbed, or
-// after a `--` / split flags — is blocked. Bare `rm -rf /` GNU rm refuses on its own; the
-// globbed and `~` forms it does not. Any narrower target is ordinary work and passes.
-for (const [command, want] of [
-  ["rm -rf /*", true],
-  ["rm -rf ~/*", true],
-  ["rm -rf ~", true],
-  ["rm -rf ~/", true],
-  ["rm -rf -- /", true],
-  ["rm -r -f /", true],
-  ["rm -f -r /*", true],
-  ["rm --recursive --force /", true],
-  ["rm -Rf /", true],
-  ["rm -rf --no-preserve-root /", true],
-  ["cd x && rm -rf /* ", true],
-  ["rm -rf ./build", false],
-  ["rm -rf /tmp/x", false],
-  ["rm -rf ~/projects/old", false],
-  ["rm -rf build/*", false],
-  ["rm -f /", false],            // not recursive: rm refuses a directory without -r
+// after a `--` / split flags — is blocked as CATASTROPHIC (SHELL_BLOCK_RE), before any state is
+// read. Bare `rm -rf /` GNU rm refuses on its own; the globbed and `~` forms it does not.
+for (const command of [
+  "rm -rf /*", "rm -rf ~/*", "rm -rf ~", "rm -rf ~/", "rm -rf -- /", "rm -r -f /", "rm -f -r /*",
+  "rm --recursive --force /", "rm -Rf /", "rm -rf --no-preserve-root /", "cd x && rm -rf /* ",
 ]) {
-  test(`rm root/home guard: ${JSON.stringify(command)} -> ${want ? "blocked" : "allowed"}`, async () => {
-    assert.equal(await blocked("bash", { command }), want)
+  test(`rm root/home guard: ${JSON.stringify(command)} -> blocked as catastrophic`, async () => {
+    assert.match(await denial("bash", { command }), /catastrophic command/)
+  })
+}
+// A narrower target is not SHELL_BLOCK_RE's business: whatever this guard says about it comes
+// from the real-loss table (`lossReason`, rows below), never from the catastrophic tier.
+for (const command of ["rm -rf ./build", "rm -rf /tmp/x", "rm -rf ~/projects/old", "rm -rf build/*", "rm -f /"]) {
+  test(`rm root/home guard: ${JSON.stringify(command)} is not catastrophic`, async () => {
+    assert.doesNotMatch(String(await denial("bash", { command })), /catastrophic command/)
   })
 }
 
@@ -185,77 +190,93 @@ test("no notebook/ dir means no ledger and no mkdir", async () => {
 
 async function isFileAt(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
 
-// ---- SHELL_WARN_RE: Deletion Is Deliberate, the WARN tier --------------------------
-// Mirrors js/hosts/hooks.mjs's DESTRUCTIVE_GIT_RE (law-4) — `tool.execute.before` has no ask
-// tier, so these warn (console.error, logged but allowed) rather than block. Captures stderr
-// around the call rather than reusing `blocked()`, since a warn never throws.
-async function warned(command) {
-  const calls = []
-  const orig = console.error
-  console.error = (msg) => calls.push(String(msg))
+// ---- Deletion Is Deliberate, calibrated to real loss (the twin of js/hosts/loss.mjs) --------
+// The SAME table the Node hook is driven by (tests/helpers/loss_repos.mjs), against the same
+// kind of real repository. `tool.execute.before` has no ask tier, so a row the hook asks on is a
+// BLOCK here (Bob's behaviour) — except the `always` rows (`reflog expire`, `gc --prune`), which
+// OpenCode leaves to its static `permission.bash` glob (tests/unit/generate.test.mjs) so the
+// guard lets them through. The guard's own `git` inherits `process.env`, so the isolated git
+// config is set there for the length of the run.
+test("Law IV blocks exactly on real loss, per the shared policy table", async () => {
+  const ws = makeLossWorkspace()
+  const saved = { ...process.env }
+  Object.assign(process.env, ws.env)
   try {
-    await hook({ tool: "bash", args: { command } }, {})
+    const repoHook = (await GeneseedGuard({ directory: ws.repo, worktree: ws.repo }))["tool.execute.before"]
+    for (const row of LOSS_ROWS) {
+      const command = rowCommand(row, ws)
+      let why = null
+      await ws.inState(row.state, async () => {
+        try { await repoHook({ tool: "bash" }, { args: { command } }) } catch (err) { why = String(err?.message || err) }
+      })
+      const want = row.stop && !row.always
+      assert.equal(why !== null, want, `${command} [${row.state}]: ${why}`)
+      if (want) assert.match(why, /^\[geneseed-guard\] blocked: .*\(Deletion Is Deliberate\)/, command)
+    }
   } finally {
-    console.error = orig
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
+    Object.assign(process.env, saved)
+    ws.cleanup()
   }
-  return calls.some((m) => m.includes("WARN: irreversible op"))
-}
+})
 
-// B5 (claude-code.md / claude-verdict.md), confirmed live, all inside Law IV's "deletion of
-// what version control cannot restore": the long/modern spellings alongside the two acts this
-// list already had (force push, reset --hard).
-for (const cmd of [
-  "git push --force origin feature",
-  "git reset --hard HEAD~1",
-  "git clean --force",
-  "git branch --delete --force x",
-  "git branch --force --delete x",
-  "git restore .",
-  "git restore src/file.js",
-  // `--staged --worktree` together restores the working tree too, discarding exactly like
-  // plain `restore` — unlike `--staged` alone (see the negative below).
-  "git restore --staged --worktree x",
-  "git push origin :main",
-  "git push --delete origin x",
-  "git checkout -f",
-  "git checkout --force",
-  "git switch -f other",
-  // `git switch -h` lists `-f, --force` and `--discard-changes` as two separate options.
-  "git switch --force",
-  "git switch --discard-changes",
-  "git stash drop",
-  "git stash clear",
-  "git reflog expire --expire=now",
-  "git gc --prune=now",
-]) {
-  test(`SHELL_WARN_RE: ${JSON.stringify(cmd)} warns, never blocks`, async () => {
-    assert.equal(await blocked("bash", { command: cmd }), false, "a warn must never throw")
-    assert.equal(await warned(cmd), true, "expected a Deletion Is Deliberate warning")
-  })
-}
+// `workdir` (OpenCode's bash tool runs a command there) is where the guard reads the state —
+// the session directory alone would judge a different tree.
+test("Law IV reads the state in the bash tool's workdir", async () => {
+  const ws = makeLossWorkspace()
+  const saved = { ...process.env }
+  Object.assign(process.env, ws.env)
+  try {
+    const elsewhere = (await GeneseedGuard({ directory: ws.outside, worktree: ws.outside }))["tool.execute.before"]
+    await ws.inState("dirty", async () => {
+      await assert.rejects(elsewhere({ tool: "bash" }, { args: { command: "git reset --hard", workdir: ws.repo } }),
+        /Deletion Is Deliberate/)
+    })
+    await elsewhere({ tool: "bash" }, { args: { command: "git reset --hard", workdir: ws.repo } })
+  } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
+    Object.assign(process.env, saved)
+    ws.cleanup()
+  }
+})
 
-// Negatives, same rule as the Node gate: `--staged` ALONE only unstages, and an un-forced
-// `branch --delete` refuses on an unmerged branch exactly like `-d`, so neither warns. And
-// because `restore`/`stash drop`/`stash clear` have no required flag or use ordinary English
-// words, they are anchored to VERB POSITION — a command whose MESSAGE or FILENAME merely
-// contains the word must never warn. And `worktree remove -f`/`--force` is routine
-// housekeeping by user decision (2026-10-17), not a Law IV deletion, so it never warns either.
-for (const cmd of [
-  "git worktree remove --force ../x",
-  "git worktree remove -f x",
-  "git restore --staged x",
-  "git restore --staged .",
-  "git branch --delete merged",
-  "git add src/restore.js",
-  "git checkout restore-ui-fix",
-  'git commit -m "restore working behavior"',
-  'git stash push -m "clear old state"',
-  'git commit -m "drop the old flag"',
-]) {
-  test(`SHELL_WARN_RE: ${JSON.stringify(cmd)} does not warn`, async () => {
-    assert.equal(await warned(cmd), false)
-  })
-}
+// The block between the twin markers is js/hosts/loss.mjs verbatim (`export ` dropped): the
+// plugin is copied whole into an OpenCode install and cannot import it, so the copy is gated.
+test("the loss twin block is byte-identical to js/hosts/loss.mjs", async () => {
+  const cut = (s) => {
+    const b = s.indexOf("// ---- loss twin: BEGIN"), e = s.indexOf("// ---- loss twin: END")
+    assert.ok(b >= 0 && e > b, "twin markers missing")
+    return s.slice(b, e).replace(/^export /gm, "")
+  }
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/loss.mjs"), "utf8")
+  const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  assert.equal(cut(guardSrc), cut(hookSrc), "the guard's loss block drifted from js/hosts/loss.mjs")
+})
+
+// Not a verb, or not a loss: `--staged` ALONE only unstages, an un-forced `branch --delete`
+// refuses on an unmerged branch exactly like `-d`, a word in a commit message or a file name is
+// not a command, and `worktree remove -f`/`--force` is routine housekeeping (user decision,
+// 2026-10-17). None of them blocks, in a real repository with a dirty tree.
+test("not a verb, or not a loss: never blocks", async () => {
+  const ws = makeLossWorkspace()
+  const saved = { ...process.env }
+  Object.assign(process.env, ws.env)
+  try {
+    const repoHook = (await GeneseedGuard({ directory: ws.repo, worktree: ws.repo }))["tool.execute.before"]
+    for (const command of [
+      "git worktree remove --force ../x", "git worktree remove -f x", "git restore --staged x",
+      "git restore --staged .", "git branch --delete merged", "git add src/restore.js",
+      "git checkout restore-ui-fix", 'git commit -m "restore working behavior"',
+      'git stash push -m "clear old state"', 'git commit -m "drop the old flag"',
+    ]) {
+      await ws.inState("dirty", () => repoHook({ tool: "bash" }, { args: { command } }))
+    }
+  } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
+    Object.assign(process.env, saved)
+    ws.cleanup()
+  }
+})
 
 // ---- content secret scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide) -----
 // The path check above only ever saw the FILENAME; this is the body that would land on disk.

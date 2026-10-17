@@ -1345,36 +1345,33 @@ test('an EXISTING opencode.json has its git gate re-wired when the pack comes ba
     const bashOf = () => JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
 
     // A file that already has a `permission` block, wired with the process pack OFF: the two
-    // process keys are absent and the Law IV keys are not — `rm -rf` plus the same destructive
-    // git verbs Claude's git-gate asks on (DESTRUCTIVE_GIT_RE). B5's long/modern-spelling gaps
-    // (claude-code.md / claude-verdict.md) are added below the original set — `git restore` is
-    // deliberately NOT here: a glob cannot express "ask unless `--staged` alone", so it stays
-    // guard-only (the OpenCode guard plugin's `SHELL_WARN_RE`), documented at `LAW_IV_BASH`.
+    // process keys are absent and the Law IV keys are not. Since Law IV was calibrated to real
+    // loss (user decision, 2026-10-17) the Law IV keys are only what loses data in EVERY state —
+    // `reflog expire` and `gc --prune` — beside the long-standing `rm -rf *`: whether anything
+    // else would lose data is state a glob cannot read, so the OpenCode guard plugin's
+    // `lossReason` (the twin of js/hosts/loss.mjs) decides those.
     mergeOpencodeJson(p, 'AGENT.md', ['craft']);
     for (const k of ['git commit*', 'git push*']) {
       assert.ok(!(k in bashOf()), `${k} was wired into a build whose process pack is off`);
     }
-    for (const k of ['rm -rf *', 'git push --force*', 'git push -f*', 'git push *--force*',
-      'git push * -f*', 'git push *+*', 'git reset --hard*', 'git reset * --hard*',
-      'git clean -f*', 'git clean * -f*', 'git branch -D*', 'git checkout -- *',
-      // B5 gaps, glob form:
-      'git clean --force*', 'git clean * --force*',
+    for (const k of ['rm -rf *', 'git reflog expire*', 'git gc --prune*', 'git gc * --prune*']) {
+      assert.equal(bashOf()[k], 'ask', `${k} is Law IV's and rides no pack toggle`);
+    }
+    // The state-dependent globs the calibration removed — and the worktree-removal ones before
+    // them (housekeeping, user decision, 2026-10-17) — are no longer written: each would ask on
+    // a clean tree, a pushed branch or a feature-branch force push, where nothing is lost.
+    for (const k of ['git push --force*', 'git push -f*', 'git push *--force*', 'git push * -f*',
+      'git push *+*', 'git reset --hard*', 'git reset * --hard*', 'git clean -f*', 'git clean * -f*',
+      'git branch -D*', 'git checkout -- *', 'git clean --force*', 'git clean * --force*',
       'git branch *--delete*--force*', 'git branch *--force*--delete*',
       'git checkout -f*', 'git checkout * -f*', 'git checkout --force*', 'git checkout * --force*',
       'git switch -f*', 'git switch * -f*', 'git switch --force*', 'git switch * --force*',
       'git switch --discard-changes*', 'git switch * --discard-changes*',
-      'git reflog expire*', 'git gc --prune*', 'git gc * --prune*',
-      'git stash drop*', 'git stash clear*',
-      'git push *--delete*', 'git push * :*']) {
-      assert.equal(bashOf()[k], 'ask', `${k} is Law IV's and rides no pack toggle`);
-    }
-    // Worktree removal is housekeeping, not a Law IV deletion (user decision, 2026-10-17).
-    for (const k of ['git worktree remove -f*', 'git worktree remove --force*',
-      'git worktree remove * -f*', 'git worktree remove * --force*']) {
+      'git stash drop*', 'git stash clear*', 'git push *--delete*', 'git push * :*',
+      'git worktree remove -f*', 'git worktree remove --force*',
+      'git worktree remove * -f*', 'git worktree remove * --force*', 'git restore*']) {
       assert.ok(!(k in bashOf()), `${k} was dropped from LAW_IV_BASH and must not be written`);
     }
-    assert.ok(!('git restore*' in bashOf()),
-      'git restore* would over-ask on `--staged` alone; it is guard-only, not a LAW_IV_BASH glob');
 
     // Off -> on: the direction that was fail-OPEN. The file already has a `permission` key, so
     // the old `!has(config,'permission')` guard never looked at it again.
@@ -1416,8 +1413,8 @@ test('a pack toggle never removes a permission entry the user may own', () => {
       "a user's own `git commit*: ask` was deleted by a build that toggled a pack off");
     assert.equal(perm.bash['git push*'], 'allow',
       'a user who deliberately re-scoped one of our keys had their edit reverted');
-    // The invariant half is still WIRED into a file that never had it.
-    assert.equal(perm.bash['git push --force*'], 'ask');
+    // The invariant half (Law IV's always-loss keys) is still WIRED into a file that never had it.
+    assert.equal(perm.bash['git reflog expire*'], 'ask');
   });
 });
 
@@ -2100,8 +2097,9 @@ test('the opencode permission gate follows the process pack, and Law IV never do
         `${k} survived --doctrines craft — the boundary now asks for a rule the prompt lost`);
     }
     // Law IV is an always-on invariant and its entries are NOT the process pack's to remove.
-    // Without this the toggle would quietly disarm force-push and `rm -rf` on every narrow build.
-    for (const k of ['rm -rf *', 'git push --force*', 'git push -f*']) {
+    // Without this the toggle would quietly disarm `rm -rf` and the reflog/gc prune asks on every
+    // narrow build (the state-aware rest of Law IV lives in the guard plugin, not in globs).
+    for (const k of ['rm -rf *', 'git reflog expire*', 'git gc --prune*']) {
       assert.equal(bashOf(off)[k], 'ask', `${k} went with the process pack`);
     }
     // An unknown selection is not a narrow one: the pre-migration caller passes nothing.
@@ -2156,8 +2154,10 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
   // is fine. Task 6 removed the dead `permission.ask` loop exemption and left OpenCode asking
   // on every push; this is the static replacement — an unconditional `allow` for the exact
   // refspec shapes the loop engine pushes (loopExempt's `pushSegmentOk`: `[-u|--set-upstream]
-  // <remote> HEAD:<branch>` or `HEAD:refs/heads/<branch>`), placed where `findLast` lets Law IV's
-  // destructive-git asks (force, `+refspec`, `--delete`, bare `:`) still win over it.
+  // <remote> HEAD:<branch>` or `HEAD:refs/heads/<branch>`). A force, `+refspec`, `--delete` or
+  // bare-`:` push to loop/* still asks: since 2026-10-17 not through a Law IV glob (loop/* is
+  // never protected, so Law IV has nothing to guard there) but through this chain's own
+  // token-count tiers or, where no allow key matches at all, the blanket `git push*` ask.
   //
   // ⚠ FIX ROUND 1 (control review, verified against upstream `Wildcard.match`): `*` is a dotall
   // `.*`, and `.test()` only needs SOME decomposition to exist, so the plain allow glob matched
@@ -2188,7 +2188,8 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
       ['git push origin HEAD:refs/heads/loop/x', 'allow'],
       ['git push -u origin HEAD:loop/x', 'allow'],
       ['git push --set-upstream origin HEAD:refs/heads/loop/x', 'allow'],
-      // Law IV's existing anywhere-in-the-command globs, unaffected by this chain.
+      // A flag before the remote is a second token (tier 2 asks); a `+`/`:`/`--delete` form
+      // matches no allow key, so the blanket `git push*` ask is the last match.
       ['git push --force origin HEAD:loop/x', 'ask'],
       ['git push origin +HEAD:loop/x', 'ask'],
       ['git push origin --delete loop/x', 'ask'],
@@ -2209,7 +2210,7 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
       ['git push -u origin main HEAD:loop/x', 'ask'],
       ['git push origin HEAD:loop/x main', 'ask'],
       // Flags before the refspec, colon-free, with a real remote — exactly the shape (2)
-      // exists for. `--mirror`/`--all` have no dedicated LAW_IV_BASH key (git itself refuses to
+      // exists for. `--mirror`/`--all` have no LAW_IV_BASH key (git itself refuses to
       // pair them with an explicit refspec, so the loop engine could never emit this shape
       // either way), so this chain is their ONLY guard when a refspec is present.
       ['git push --all origin HEAD:loop/x', 'ask'],
@@ -2225,15 +2226,15 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
       assert.equal(evaluateBash(bash, cmd), want, `${cmd} -> expected ${want}`);
     }
 
-    // Every tier sits strictly between the consent `git push*` ask and Law IV's first
-    // destructive-push key, IN THE ORDER the chain's re-opening/re-closing depends on —
-    // `findLast` means anything placed after a key can still override it.
+    // Every tier sits after the consent `git push*` ask, IN THE ORDER the chain's
+    // re-opening/re-closing depends on — `findLast` means anything placed after a key can still
+    // override it. (Law IV's keys follow, but carry no push glob since 2026-10-17.)
     const keys = Object.keys(bash);
     const idx = (k) => keys.indexOf(k);
     const order = [
       'git push*', 'git push * HEAD:loop/*', 'git push * * HEAD:loop/*',
       'git push -u * HEAD:loop/*', 'git push -u * * HEAD:loop/*',
-      'git push * HEAD:loop/* ?*', 'git push --force*',
+      'git push * HEAD:loop/* ?*', 'git reflog expire*',
     ];
     const idxs = order.map(idx);
     assert.ok(idxs.every((i) => i >= 0), `a key this chain depends on is missing: ${order}`);
@@ -2246,6 +2247,34 @@ test('a push to loop/* is allowed, statically, but --force/+refspec/--delete to 
     // loop refspec present at all.
     for (const k of keys.filter((kk) => kk.includes('loop/'))) {
       assert.ok(!wildcardMatch('git push -u origin HEAD:main', k), `${k} matches a push to main`);
+    }
+  });
+});
+
+test('a force push or delete of main/master asks statically on OpenCode; mainline, a feature branch and loop/* do not', () => {
+  // The one state-free Law IV loss a glob CAN name (2026-10-17): `PROTECTED_GLOBS` asks for a
+  // forced push to, or a delete of, `main`/`master` even with the guard plugin off or in `warn`
+  // mode. Judged through the real findLast+Wildcard.match oracle: the LAST matching key must be
+  // one of those globs for the ask rows, and must not be for the rest — a near name (`mainline`),
+  // a feature branch or a loop push keeps whatever verdict it had (the consent ask, or the loop
+  // chain's allow), so the globs add asks only where `main`/`master` would be lost.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md', PACK_ORDER);
+    const bash = JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
+    const keys = Object.keys(bash);
+    const lastMatch = (cmd) => [...keys].reverse().find((k) => wildcardMatch(cmd, k));
+    const isProtectedGlob = (k) => Boolean(k) && /(?:main|master)$/.test(k) && bash[k] === 'ask';
+    for (const cmd of ['git push -f origin main', 'git push --force origin master',
+      'git push origin --force-with-lease main', 'git push origin +HEAD:main', 'git push origin +main',
+      'git push -f origin HEAD:main', 'git push origin :master', 'git push --delete origin main',
+      'git push origin :refs/heads/main', 'git branch -D master', 'git branch --delete --force main']) {
+      assert.ok(isProtectedGlob(lastMatch(cmd)), `${cmd} -> last match ${lastMatch(cmd)}, expected a protected-branch ask`);
+    }
+    for (const [cmd, want] of [['git push -f origin feature', 'ask'], ['git push origin HEAD:loop/x', 'allow'],
+      ['git push -f origin mainline', 'ask'], ['git push origin main', 'ask'], ['git branch -D feature', 'ask']]) {
+      assert.ok(!isProtectedGlob(lastMatch(cmd)), `${cmd} matched a protected-branch glob (${lastMatch(cmd)})`);
+      assert.equal(evaluateBash(bash, cmd), want, `${cmd} -> expected ${want}, unchanged by the protected globs`);
     }
   });
 });
@@ -2447,7 +2476,7 @@ test('the opencode permission gate follows the consent RULE, not merely its pack
     assert.equal(bashOf(kept)['git commit*'], 'ask',
       'excluding process 7 took the consent gate with it');
     // Rule IV's entries are never the doctrine's to remove, whichever axis narrowed.
-    for (const k of ['rm -rf *', 'git push --force*']) {
+    for (const k of ['rm -rf *', 'git reflog expire*']) {
       assert.equal(bashOf(gone)[k], 'ask', `${k} went with the consent rule`);
     }
     // A caller that knows nothing of the axis is not a caller excluding everything.
