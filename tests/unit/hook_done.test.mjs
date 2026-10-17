@@ -76,6 +76,18 @@ test('runsUnpiped: the segment rule, written out', () => {
     ['npm test | tail; npm test', 'npm test', true],        // one unpiped run is enough
     ['cd web &&  npm   test', 'npm test', true],              // whitespace collapsed
     ['npm run build', 'npm test', false],
+    // A whole command only: at a segment start, ended by whitespace, a separator or the end.
+    ['npm run lint:fix', 'npm run lint', false],             // a longer command is not the check
+    ['npm testing', 'npm test', false],
+    ['git commit -m "ran npm test"', 'npm test', false],    // a mention in a message
+    ['git commit -m "x; npm test"', 'npm test', false],     // a separator inside quotes is text
+    ['echo npm test', 'npm test', false],                   // an argument, not a command
+    ['echo "a\\"; npm test"', 'npm test', false],           // an escaped quote keeps the string open
+    ['npm test -- --watch=false', 'npm test', true],        // arguments are allowed
+    ['cd x && npm test', 'npm test', true],
+    ['cd x; npm test', 'npm test', true],
+    ['cd x\nnpm test', 'npm test', true],
+    ['npm test&& echo ok', 'npm test', true],
   ];
   for (const [cmd, line, want] of rows) assert.equal(runsUnpiped(cmd, line), want, cmd);
 });

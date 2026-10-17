@@ -51,14 +51,30 @@ export function readDoneChecks(root) {
 }
 
 /**
- * True when `command` runs `line` with no pipe after it in the same segment. A segment ends at
- * `&&`, `||`, `;` or a newline; a single `|` before that end is a pipe. Whitespace is collapsed
- * on both sides. shortcut: quotes are not parsed — a `|` inside a quoted argument after the
- * check reads as a pipe, which only ever refuses a pass, never grants one.
+ * True when `command` runs `line` as a whole command with no pipe after it in the same segment.
+ * A segment ends at `&&`, `||`, `;` or a newline; a single `|` before that end is a pipe. The
+ * check must open a segment (the start, or right after one of those separators) and be followed
+ * by the end, whitespace or a separator, never by more of a word (`npm run lint:fix` does not
+ * prove `npm run lint`); a match inside a quoted string (`-m "ran npm test"`) is text, not a run.
+ * Whitespace is collapsed on both sides. shortcut: the shell is not parsed — a prefix such as
+ * `sudo`/`time`/`env X=1`, a subshell, or a `|` inside a quoted argument after the check all read
+ * as "not run". Every approximation here refuses a pass, so the gate errs toward a reminder.
  */
 export function runsUnpiped(command, line) {
   const cmd = String(command).replace(/[ \t]+/g, ' ');
   for (let i = cmd.indexOf(line); i !== -1; i = cmd.indexOf(line, i + 1)) {
+    const next = cmd[i + line.length];
+    if (next !== undefined && !/[\s;&|]/.test(next)) continue;
+    const head = cmd.slice(0, i);
+    if (!/(^|&&|\|\||;|\n) ?$/.test(head)) continue;
+    let quote = '', esc = false;
+    for (const ch of head) {
+      if (esc) esc = false;
+      else if (ch === '\\' && quote !== "'") esc = true;
+      else if (quote) { if (ch === quote) quote = ''; }
+      else if (ch === '"' || ch === "'") quote = ch;
+    }
+    if (quote) continue;
     const rest = cmd.slice(i + line.length);
     let piped = false;
     for (let j = 0; j < rest.length; j += 1) {

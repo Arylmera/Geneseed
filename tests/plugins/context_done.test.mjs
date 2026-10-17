@@ -70,11 +70,19 @@ test("runsUnpiped stays in parity with js/hosts/hooks-done.mjs (twin)", async ()
   const m = src.match(/function runsUnpiped\(command, line\) \{[\s\S]*?\n\}\n/)
   assert.ok(m, "runsUnpiped not found in geneseed-context.js")
   const twin = new Function(`${m[0]}; return runsUnpiped`)()
+  // Written out, so the twins are held to the rule and not merely to each other.
   const rows = [
-    ["npm test", "npm test"], ["npm test 2>&1", "npm test"], ["npm test | tail", "npm test"],
-    ["npm test |tail", "npm test"], ["npm test && echo ok | cat", "npm test"],
-    ["npm test || exit 1", "npm test"], ["npm test | tail; npm test", "npm test"],
-    ["cd web &&  npm   test", "npm test"], ["npm run build", "npm test"], ["a\tnpm test\n| x", "npm test"],
+    ["npm test", "npm test", true], ["npm test 2>&1", "npm test", true], ["npm test | tail", "npm test", false],
+    ["npm test |tail", "npm test", false], ["npm test && echo ok | cat", "npm test", true],
+    ["npm test || exit 1", "npm test", true], ["npm test | tail; npm test", "npm test", true],
+    ["cd web &&  npm   test", "npm test", true], ["npm run build", "npm test", false],
+    ["a\tnpm test\n| x", "npm test", false], // `a npm test`: an argument of `a`, not a command
+    ["npm run lint:fix", "npm run lint", false], ['git commit -m "ran npm test"', "npm test", false],
+    ['git commit -m "x; npm test"', "npm test", false], ["echo npm test", "npm test", false],
+    ["npm test -- --watch=false", "npm test", true], ["cd x && npm test", "npm test", true],
   ]
-  for (const [cmd, line] of rows) assert.equal(twin(cmd, line), nodeRunsUnpiped(cmd, line), cmd)
+  for (const [cmd, line, want] of rows) {
+    assert.equal(nodeRunsUnpiped(cmd, line), want, `node: ${cmd}`)
+    assert.equal(twin(cmd, line), want, `twin: ${cmd}`)
+  }
 })
