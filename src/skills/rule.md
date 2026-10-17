@@ -73,7 +73,11 @@ re-derived. Then take exactly one branch.
    rebuild would have seeded it.
 6. **Draft in the file's own format**: the next free `## R<n> — Title` heading, an
    optional `(scope: user|project | source: …)` metadata line, then the rule in one
-   short paragraph, plain and testable. For a promotion from {{MEMORY}}, set
+   short paragraph, plain and testable. For a rule the user stated, `source:` keeps
+   their own words and the day they said them — `source: user 2026-10-16 "never push
+   red"` — one sentence at most: it is what later tells a stale rule from a changed
+   mind. The metadata line splits on `|`, so write any `|` inside the quote as `/` and
+   say so when you show the draft. For a promotion from {{MEMORY}}, set
    `source:` to the memory's name and add `trial until:` about a month out — a
    promoted rule starts on probation.
 7. Show the exact text to the user and wait for explicit consent ({{LAW:deletion-is-deliberate}}) before
@@ -90,7 +94,12 @@ the user picks "rule" out of impatience and the set inflates.
 **Review flow** (on request, or when a `trial until:` date has passed): for each rule
 due, ask whether it actually fired since adoption — graduate it (drop the trial
 marker), demote it back to a {{MEMORY}} fact, or delete it. Same consent gate as
-adoption.
+adoption. Two more cases are due at any time:
+- **Contradicted.** The user's later words contradict a rule: the rule is the suspect.
+  Quote both — its `source:` and the new words — and ask which stands.
+- **Broken while only read.** A rule nothing checks but reading it, broken twice
+  anyway, is step 1's mechanical case: propose the hook or check rather than
+  rewording it.
 
 **Consolidation flow** → read [rule/consolidate.md](rule/consolidate.md) and follow it.
 

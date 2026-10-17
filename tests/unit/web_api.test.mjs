@@ -2892,6 +2892,20 @@ test('duplicate rule ids warn', () => {
   });
 });
 
+// A stated rule's `source:` carries the user's quoted words (rule.md step 6). The metadata
+// line splits on `|` with no escape, which is why the skill writes a `|` in a quote as `/`:
+// colons and parentheses inside the quote survive, a pipe cuts it.
+test('a quoted rule source round-trips, and a pipe inside it cuts the quote', () => {
+  withRules((box) => {
+    fs.writeFileSync(box.file, '## R1 — Green before push\n'
+      + '(scope: user | source: user 2026-10-16 "never push red: (ever)")\nRun the suite.\n\n'
+      + '## R2 — Piped\n(scope: user | source: user 2026-10-16 "a | b")\nBody.\n');
+    const [quoted, piped] = apiRules(box.state).rules;
+    assert.equal(quoted.source, 'user 2026-10-16 "never push red: (ever)"');
+    assert.equal(piped.source, 'user 2026-10-16 "a');
+  });
+});
+
 test('promote moves a memory into a trial rule', () => {
   withRules((box) => {
     const mem = path.join(box.cfg, 'memory');
