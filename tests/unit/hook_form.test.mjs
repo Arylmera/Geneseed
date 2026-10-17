@@ -31,17 +31,19 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import path from 'node:path';
 import test, { after } from 'node:test';
 
-import { installsReferencingShim, shimProblems } from '../../js/inspect/checks-repo.mjs';
+import { shimProblems } from '../../js/inspect/checks-repo.mjs';
 import { gateSummary, statusData, statusLines } from '../../js/inspect/status.mjs';
 import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
 import {
   SHIM_ARGV, claudeHookShell, ephemeralCheckout, hookPrefix, hookRunnerEntry, hookShimBody,
   hookShimPath, writeHookShim,
 } from '../../js/hosts/shim.mjs';
-import { hookShellProblems } from '../../js/hosts/installs.mjs';
+import { hookShellProblems, installsReferencingShim } from '../../js/hosts/installs.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { ROOT } from '../../js/build/source.mjs';
-import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
+import {
+  makeSandbox, restoreProcessHome, sandboxProcessHome, withGeneseedHome,
+} from '../helpers/sandbox.mjs';
 
 // ⚠ FIRST, AND FOR THE WHOLE FILE. `hookPrefix` WRITES the shim, at a path that comes from the
 // ENVIRONMENT and not from any argument — so without this every run of this file rewrites the
@@ -135,32 +137,18 @@ function withPlatform(value, fn) {
   }
 }
 
-/** Run `fn` with `GENESEED_HOME` pointed at a fresh empty directory (or at `at`). */
-function withHome(fn, at = null) {
-  const sb = makeSandbox('hookform-');
-  const saved = process.env.GENESEED_HOME;
-  process.env.GENESEED_HOME = at === null ? sb.path : at(sb.path);
-  try {
-    return fn(sb.path);
-  } finally {
-    if (saved === undefined) delete process.env.GENESEED_HOME;
-    else process.env.GENESEED_HOME = saved;
-    sb.cleanup();
-  }
-}
-
 // ---------------------------------------------------------------------------------------------
 // THE FAIL-OPEN / FAIL-CLOSED PARTITION
 
 test('the hook groups are the Claude settings shape', () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cmds = allCommands(path.join(home, 'cfg'));
     assert.ok(cmds.length > 0, 'no hook commands emitted — the shape assumption is broken');
   });
 });
 
 test('every non-gate hook ends with its shell-specific exit 0 swallow', () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     let checked = 0;
     for (const [event, cmd, shell] of allCommands(path.join(home, 'cfg'))) {
       if (GATES.some((g) => cmd.includes(` ${g} `))) continue;   // deliberately blocking
@@ -179,7 +167,7 @@ test('every non-gate hook ends with its shell-specific exit 0 swallow', () => {
 // auto-compaction summarises it. One command, because `learn` routes on the payload's
 // `hook_event_name` and a second spelling would be a second thing to keep in step.
 test('Stop, SubagentStop and PreCompact all run one and the same learn command', () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const groups = claudeHookGroups(path.join(home, 'cfg'), HOOK_OPTS());
     const cmds = ['Stop', 'SubagentStop', 'PreCompact'].map((ev) => {
       assert.equal((groups[ev] ?? []).length, 1, `${ev} is not exactly one group`);
@@ -197,7 +185,7 @@ test('Stop, SubagentStop and PreCompact all run one and the same learn command',
 // default. A normal gate run (exit 0 plus a schema-valid decision document) is neither of those,
 // so it is never affected: the field changes only what happens when the gate did NOT run.
 test('onFailure: "block" sits on the two Claude PreToolUse gates, and nowhere else', () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const groups = claudeHookGroups(path.join(home, 'cfg'), HOOK_OPTS());
     const [gitGate, ruleGate] = groups.PreToolUse.map((g) => g.hooks[0]);
     assert.equal(gitGate.onFailure, 'block', JSON.stringify(gitGate));
@@ -214,7 +202,7 @@ test('every gate hook is emitted, and none of them ends with || exit 0', () => {
   // hooks actually decline the escape hatch — a gate that grew `|| exit 0` would be exempted
   // from the rule by this very list and fail OPEN on every crash, which is the failure the whole
   // partition exists to prevent.
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cmds = allCommands(path.join(home, 'cfg')).map(([, c]) => c);
     for (const gate of GATES) {
       const mine = cmds.filter((c) => c.includes(` ${gate} `));
@@ -233,7 +221,7 @@ test('every gate hook is emitted, and none of them ends with || exit 0', () => {
 // THE SHIM
 
 test('the shim is written and runs this runtime', () => {
-  withHome(() => {
+  withGeneseedHome(() => {
     const { runner, entry } = hookRunnerEntry();
     const p = hookShimPath();
     assert.notEqual(writeHookShim(p, hookShimBody(runner, entry)), null,
@@ -305,7 +293,7 @@ test('an unchanged shim is not rewritten', () => {
   // Windows cannot replace a file a firing hook is executing right now, so an unchanged shim
   // must never be rewritten — otherwise a rebuild during a live session raises a sharing
   // violation into the build.
-  withHome(() => {
+  withGeneseedHome(() => {
     const { runner, entry } = hookRunnerEntry();
     const p = hookShimPath();
     const body = hookShimBody(runner, entry);
@@ -319,7 +307,7 @@ test('an unchanged shim is not rewritten', () => {
 test('a stale shim is refreshed', () => {
   // The body carries the checkout path, and refreshing it on every emit is what replaces the
   // self-heal the old checkout-in-the-command form gave for free.
-  withHome(() => {
+  withGeneseedHome(() => {
     const { runner, entry } = hookRunnerEntry();
     const p = hookShimPath();
     writeHookShim(p, hookShimBody(runner, entry));
@@ -378,7 +366,7 @@ test('the doctor gate reports a shim pointing at nothing', () => {
   // REGRESSION: this gate was first written to run AFTER doctor's emit loop, which rewrites the
   // shim — so it could only ever observe the freshly repaired file and reported clean no matter
   // how broken things were. It samples before the loop now; this pins the detection itself.
-  withHome(() => {
+  withGeneseedHome(() => {
     const { runner, entry } = hookRunnerEntry();
     const p = hookShimPath();
     writeHookShim(p, hookShimBody(runner, entry));
@@ -400,7 +388,7 @@ test('neither shim shape reports its own argv placeholder', () => {
   // $@, which does not exist — every hook in every install was dead`.
   //
   // THE BODIES COME FROM THE GENERATOR, both ways, not from a transcription — see the header.
-  withHome(() => {
+  withGeneseedHome(() => {
     const { runner, entry } = hookRunnerEntry();
     const p = hookShimPath();
     mkdirSync(path.dirname(p), { recursive: true });
@@ -427,7 +415,7 @@ test('neither shim shape reports its own argv placeholder', () => {
 test('the doctor gate is silent when no shim exists', () => {
   // A source checkout that has never emitted owns no shim, and `hookPrefix` falls back to the
   // direct form when it cannot write one. Neither is a defect.
-  withHome(() => {
+  withGeneseedHome(() => {
     assert.ok(!existsSync(hookShimPath()));
     assert.deepEqual(shimProblems(), []);
   });
@@ -446,7 +434,7 @@ test('shimProblems reports a deleted shim only when a live install still names i
   // round): `writeInstall`'s shim and this test's own `hookShimPath()` must agree on which
   // file ('.cmd' or bare) they mean, which was true only by accident on a win32 runner.
   for (const plat of [process.platform, process.platform === 'win32' ? 'linux' : 'win32']) {
-    withPlatform(plat, () => withHome((home) => {
+    withPlatform(plat, () => withGeneseedHome((home) => {
       const cfg = path.join(home, 'cfg');
       mkdirSync(cfg, { recursive: true });
       // writes settings.json + manifest + (via hookPrefix) the shim, all shaped for `plat`
@@ -471,7 +459,7 @@ test('installsReferencingShim matches the exact shim path, not merely its marker
   // once more than one GENESEED_HOME can exist on a machine (a relocated one, or this very test
   // running beside a real install): an install whose shim is healthy must never be reported as
   // dead because some OTHER shim, sharing nothing but the filename, is missing.
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const real = hookShimPath();
     const other = path.join(home, 'elsewhere', '.geneseed', 'bin', 'geneseed-hook.cmd');
     const writeReferencing = (cfg, shimPath) => {
@@ -497,7 +485,7 @@ test('installsReferencingShim matches the exact shim path, not merely its marker
 test('the sniff recognises both the legacy and the shim shape', () => {
   // During migration both shapes are in the wild. Dropping the legacy marker would make every
   // not-yet-migrated install invisible to the orphan scan — an orphan the user deletes by hand.
-  withHome(() => {
+  withGeneseedHome(() => {
     const legacy = `"python" "${path.join(String(ROOT), 'rituals', 'harness.py')}" git-gate`;
     const shim = `"${hookShimPath()}" git-gate`;
     for (const cmd of [legacy, shim]) {
@@ -557,7 +545,7 @@ test('a checkout under the temp root, or a git worktree, is not a durable owner'
 });
 
 test('an emit from a disposable checkout leaves a live shim alone', () => {
-  withHome(() => {
+  withGeneseedHome(() => {
     const { runner, entry } = hookRunnerEntry();
     const p = hookShimPath();
     writeHookShim(p, hookShimBody(runner, entry));
@@ -586,7 +574,7 @@ test('a disposable checkout still writes a shim nobody else owns', () => {
   // it; if "disposable" meant "never writes", those emits would silently take the fallback and
   // this file's other assertions would be gating a branch the product never reaches. An absent
   // shim — and equally a dead one — is no worse for being written from a temp copy.
-  withHome(() => {
+  withGeneseedHome(() => {
     const p = hookShimPath();
     assert.ok(!existsSync(p));
     const sb = makeSandbox('hookform-first-');
@@ -657,7 +645,7 @@ test('claudeHookShell finds Git Bash the way the docs and the upstream detector 
 });
 
 test('the PowerShell form is emitted for Claude on win32 without Git Bash, and only there', () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'cfg');
     const winOpts = { ...HOOK_OPTS(), platform: 'win32' };
     const run = hookPrefix(winOpts);
@@ -711,7 +699,7 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
   // Git Bash removed (or installed) between two emits: the handler changes, so the recorded group
   // is no longer canonical and `mergeClaudeSettings` must prune it, or every hook runs twice,
   // once in a form that fails open.
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'cfg');
     mkdirSync(cfg, { recursive: true });
     const settings = path.join(cfg, 'settings.json');
@@ -740,7 +728,7 @@ test('an install emitted before onFailure existed upgrades to it on re-emit', ()
   // replace-not-stack rule the hook-shell-flip test above pins, now for a field instead of a
   // shell. A re-emit that merely appended would leave both the old (fails open on a crash) and
   // the new (fails closed) git-gate command wired at once.
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'cfg');
     mkdirSync(cfg, { recursive: true });
     const settings = path.join(cfg, 'settings.json');
@@ -785,7 +773,7 @@ function writeInstall(cfg, shell, platform = 'win32') {
 }
 
 test('doctor names a Claude install whose hook form no longer matches the machine', () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, '.claude');
     mkdirSync(cfg, { recursive: true });
     const write = (shell) => writeInstall(cfg, shell);
@@ -822,7 +810,7 @@ test('doctor names a Claude install whose hook form no longer matches the machin
 test('status shows a fail-open hook form in the gates row, and adds nothing when there is none', () => {
   // Sandboxed: `gateSummary` judges only the config dirs it is handed, here one Claude global
   // (`.geneseed-emit` says so) emitted for Git Bash, read on a machine forced to have none.
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude-cfg');
     mkdirSync(cfg, { recursive: true });
     writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
@@ -845,7 +833,7 @@ test('status marks the gates DEAD when the shim itself is gone but a live instal
   // `'win32'` passed to `gateSummary` below only steers its UNRELATED `fail_open` check
   // (Task 15); it does not make the shim this test writes and reads agree in shape.
   for (const plat of [process.platform, process.platform === 'win32' ? 'linux' : 'win32']) {
-    withPlatform(plat, () => withHome((home) => {
+    withPlatform(plat, () => withGeneseedHome((home) => {
       const cfg = path.join(home, 'claude-cfg');
       mkdirSync(cfg, { recursive: true });
       writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
@@ -873,7 +861,7 @@ test('status marks the gates DEAD when the shim itself is gone but a live instal
 test('the PowerShell form escapes $ and backtick inside its double-quoted paths', () => {
   // A Windows path may hold either; unescaped, PowerShell expands `$x` and eats the backtick, so
   // `--root` names another directory and the gate answers for the wrong install.
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'a$b`c');
     const winOpts = { ...HOOK_OPTS(), platform: 'win32' };
     const run = hookPrefix(winOpts);
@@ -894,7 +882,7 @@ test('the PowerShell form escapes $ and backtick inside its double-quoted paths'
 test('the PowerShell form runs the gate under pwsh and Windows PowerShell', {
   skip: process.platform !== 'win32' && 'win32 only',
 }, () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'cfg');
     mkdirSync(cfg, { recursive: true });
     const groups = withHookShell('powershell', () => claudeHookGroups(cfg, HOOK_OPTS()));

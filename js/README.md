@@ -82,7 +82,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |
 | `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |
-| `mcp.mjs` | MCP server presets, the per-host `mcpServers` config read/write, and toggle state |
+| `mcp.mjs` | Reads each host's MCP config (`mcpServers`, or OpenCode's `mcp`) and where it lives — read-only since 2026-10: the user edits the file, Geneseed only shows it |
 | `link.mjs` | `geneseed link`/`unlink` — the PATH shim, and the only Windows USER-Path registry edit |
 | `owned.mjs` | Manifest rel -> path on disk decisions: `ownedWithin`, the containment boundary `uninstall.mjs` and the driver's prune both go through before acting on an `owned` list entry |
 
@@ -101,7 +101,7 @@ Everything that inspects an already-built or already-deployed harness and report
 |---|---|
 | `doctor.mjs` | The `geneseed doctor` **driver** only: picks themes, runs the checks, prints the verdict |
 | `checks-build.mjs` | Gates over what the build PRODUCED: links, tokens, theme parity, OpenCode colours, bundle drift |
-| `checks-repo.mjs` | Gates over the repo's own records: `registry.json`, committed secrets, the hook shim, vendored pins |
+| `checks-repo.mjs` | Gates over the repo's own records: `registry.json`, committed secrets, the hook shim, vendored pins and folder skills, skill aliases and side files, this module map, the host tables, the scorecard ratchet |
 | `checks-authoring.mjs` | `authoringProblems`, the aggregate self-consistency gate: spec purpose lines, the learn-prompt literal, `node --check` over the plugins (the doctor's one default spawn), then the groups below |
 | `checks-probe.mjs` | `doctor --probe` (opt-in): runs each live install's own gate command through the host's shell on a must-refuse and a must-pass payload — the doctor's second spawn; the OpenCode guard plugin is imported and called in-process instead, through both plugin APIs |
 | `checks-constitution.mjs` | The constitution: rule declarations and citations, LEAN blocks, `HOOK_PINNED`, theme vocabulary, the console's `LAW_META`/`DOCTRINE_META` |
@@ -114,7 +114,8 @@ Everything that inspects an already-built or already-deployed harness and report
 | `diff.mjs` | `geneseed diff` — what a deployed install has that a fresh render of `src/` does not |
 | `excludes.mjs` | `geneseed exclude add|remove|list` — the WRITER for `excludes.json`; `hooks.mjs` only reads it |
 | `registry.mjs` | `installs.json` under XDG — the persistent deploy-root list `rebuild-all` re-emits into |
-| `scorecard.mjs` | `geneseed scorecard` — a port of the AI Harness Scorecard (upstream pinned in its docblock): the repo walk, the CI-YAML subset parser, `assessRepo`, the text/JSON renderers. Pure: no spawn, no network |
+| `scorecard.mjs` | `geneseed scorecard` — a port of the AI Harness Scorecard (upstream pinned in its docblock): the repo walk, the CI-YAML parsing, `assessRepo`, the text/JSON renderers. Pure: no spawn, no network |
+| `scorecard-yaml.mjs` | The YAML 1.1 subset the scorecard reads CI configs with, plus Python's `str()`/`bool()` over its values; `scorecard.mjs` re-exports it. Its ceiling is in its `ponytail:` note |
 | `scorecard-svg.mjs` | The scorecard as an SVG card for a README (`geneseed scorecard --svg`): grade plus one bar per pillar, deterministic so doctor can compare the committed card byte for byte |
 | `scorecard-checks.mjs` | The scorecard's 31 checks in five pillars, ported line for line — ids, points, partial scores, evidence and fixes as upstream writes them |
 

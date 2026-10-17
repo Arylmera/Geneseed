@@ -69,11 +69,11 @@ import {
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs now read them.
 import {
-  defaultTheme, hookShellProblems, installedDefaults, installTargets, legacyProcessCarrierOfDir,
-  openclaudeDualHarnessRoots, readJsonMaybe, readMaybe,
+  defaultTheme, hookShellProblems, installedDefaults, installTargets, installsReferencingShim,
+  legacyProcessCarrierOfDir, openclaudeDualHarnessRoots, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
-import { installsReferencingShim } from './checks-repo.mjs';
+import { isDoctorNote } from './scan.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
@@ -211,20 +211,21 @@ export function gateSummary(cfgDirs, platform = process.platform) {
   // `dead` is the machine shim's missing targets: every gate below is armed on paper and never
   // runs, so it outranks `armed` in the row. A shim that exists but names a moved checkout
   // (`shimDead`) and a shim that is simply GONE while a live install still names it
-  // (`installsReferencingShim`, Task 1's fix round — `onFailure: "block"` makes a dead gate
-  // block instead of silently passing, so this stopped being a quiet failure) are the same
-  // row here: both mean "every hook of every install naming this shim cannot run".
-  // `fail_open` (Task 15): Claude installs whose bash-form hooks now run under PowerShell. Only
-  // present when non-empty, so every recorded `--json` panel keeps its shape.
-  // Only the dirs it was handed, and only those that are Claude's global (`isHostGlobalDir`);
+  // (`installsReferencingShim` — `onFailure: "block"` makes a dead gate block instead of
+  // silently passing, so a missing shim is no longer a quiet failure) are the same row here:
+  // both mean "every hook of every install naming this shim cannot run".
+  // `fail_open`: Claude installs whose bash-form hooks now run under PowerShell, where a gate
+  // fails open. Only present when non-empty, so every recorded `--json` panel keeps its shape.
+  // Only the dirs it was handed, and only those that are a host's global (`isHostGlobalDir`,
+  // which throws when a host's `configDir()` cannot resolve — read here as "not that host's");
   // `platform` is injectable so a test on Linux still exercises the win32 branch.
-  const isClaude = (c) => { try { return isHostGlobalDir('claude', c); } catch { return false; } };
-  const claude = cfgDirs.filter(isClaude).map((c) => ['claude', 'global', c]);
-  const failOpen = hookShellProblems(claude, platform).filter((p) => !p.startsWith('[note] '));
+  const isGlobal = (host, c) => { try { return isHostGlobalDir(host, c); } catch { return false; } };
+  const claude = cfgDirs.filter((c) => isGlobal('claude', c)).map((c) => ['claude', 'global', c]);
+  const failOpen = hookShellProblems(claude, platform).filter((p) => !isDoctorNote(p));
   // Same `cfgDirs`, widened to every Claude-STYLE host (`CLAUDE_STYLE`: claude, bob,
   // openclaude — all three share this one machine-wide shim), for `installsReferencingShim`.
   const styleTargets = cfgDirs.flatMap((c) => CLAUDE_STYLE
-    .filter((host) => { try { return isHostGlobalDir(host, c); } catch { return false; } })
+    .filter((host) => isGlobal(host, c))
     .map((host) => [host, 'global', c]));
   const shimPath = hookShimPath();
   const dead = shimDead();

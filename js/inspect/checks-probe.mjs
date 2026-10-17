@@ -25,8 +25,7 @@
  * `GENESEED_GATE_PROBE=1` keeps the probe's asks out of the gate ledger (`ledger()` in
  * `js/hosts/hooks.mjs`), so `status` never counts a doctor run as a refusal.
  */
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import os from 'node:os';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { liveRecordedHooks } from '../hosts/hosts.mjs';
@@ -34,7 +33,7 @@ import { claudeCfg, installState, installTargets } from '../hosts/installs.mjs';
 import { SHIM_MARK, claudeGitBashPath } from '../hosts/shim.mjs';
 import { which } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
-import { NOTE, withTempDir } from './scan.mjs';
+import { NOTE, withTempDir, withTempDirAsync } from './scan.mjs';
 import { spawnSync } from 'node:child_process';
 
 /**
@@ -43,7 +42,7 @@ import { spawnSync } from 'node:child_process';
  * runs everything through `tool-gate --host bob`. OpenCode's guard is an in-process plugin with
  * no command: `guardProbe` below imports it instead.
  */
-export const PROBED_VERB = { claude: 'git-gate', openclaude: 'git-gate', bob: 'tool-gate' };
+const PROBED_VERB = { claude: 'git-gate', openclaude: 'git-gate', bob: 'tool-gate' };
 
 export const BAD_COMMAND = 'git reset --hard HEAD';
 export const GOOD_COMMAND = 'git status';
@@ -51,7 +50,7 @@ export const GOOD_COMMAND = 'git status';
 const PROBE_TIMEOUT_MS = 20_000;
 
 /** A PreToolUse payload in Claude's shape — the shape every probed host's gate reads. */
-export function probePayload(command, cwd) {
+function probePayload(command, cwd) {
   return JSON.stringify({
     session_id: 'geneseed-probe', hook_event_name: 'PreToolUse', tool_name: 'Bash',
     tool_input: { command }, cwd,
@@ -64,7 +63,7 @@ export function probePayload(command, cwd) {
  * `shell: "powershell"` wins; Bob runs `cmd /c` on Windows; Claude/OpenClaude run Git Bash
  * there (`claudeGitBashPath`, the rule `claudeHookShell` uses); `sh -c` everywhere else.
  */
-export function probeShell(host, handler, platform = process.platform, env = process.env) {
+function probeShell(host, handler, platform = process.platform, env = process.env) {
   const cmd = handler.command;
   if (handler.shell === 'powershell') {
     const ps = which('powershell') || which('pwsh');
@@ -173,10 +172,10 @@ export function gateProbe(targets = installTargets(), { platform = process.platf
 
 // ---- OpenCode: the guard plugin, probed in-process ------------------------------------------
 
-export const GUARD_PLUGIN = 'geneseed-guard.js';
+const GUARD_PLUGIN = 'geneseed-guard.js';
 /** The guard blocks catastrophic shell (`SHELL_BLOCK_RE`); destructive git is the permission
  * prompt's job there, and only WARNS in the guard — so its must-refuse payload is this one. */
-export const GUARD_BAD_COMMAND = 'rm -rf /';
+const GUARD_BAD_COMMAND = 'rm -rf /';
 
 /** The guard plugin of an OpenCode install: `<global>/plugins/` or `<repo>/.opencode/plugins/`
  * (`emitOpencodeInto` copies the plugins to `<dir>/plugins`). */
@@ -203,7 +202,7 @@ async function quietProbe(fn) {
  * (`setupV2`'s docblock). An unexpected throw is not a refusal — it is rethrown, and the caller
  * reports the guard as broken.
  */
-export async function runGuard(mod, cwd) {
+async function runGuard(mod, cwd) {
   const v1 = async (command) => {
     const hooks = await mod.server({ worktree: cwd, directory: cwd });
     try {
@@ -233,7 +232,7 @@ export async function runGuard(mod, cwd) {
 }
 
 /** The verdict for one API's pair — null when sound. */
-export function guardVerdict([badRefused, goodRefused]) {
+function guardVerdict([badRefused, goodRefused]) {
   if (!badRefused) return `registered but not refusing — \`${GUARD_BAD_COMMAND}\` went through`;
   if (goodRefused) return `refuses everything — \`${GOOD_COMMAND}\` was refused too`;
   return null;
@@ -275,7 +274,8 @@ export async function guardProbe(targets = installTargets(), env = process.env) 
           + '({ id, server, setup }) — run: geneseed rebuild-all');
         continue;
       }
-      verdicts = await withTempDirAsync((tmp) => quietProbe(() => runGuard(mod, tmp)));
+      verdicts = await withTempDirAsync(
+        (tmp) => quietProbe(() => runGuard(mod, tmp)), 'geneseed-probe-');
     } catch (e) {
       problems.push(`${label}: does not run (${e?.message || e})`);
       continue;
@@ -286,10 +286,4 @@ export async function guardProbe(targets = installTargets(), env = process.env) 
     if (!bad.length) probed.push(`${path.normalize(file)} (guard, in-process)`);
   }
   return { problems, probed };
-}
-
-/** `withTempDir` for an async body: the dir outlives the promise, then goes. */
-async function withTempDirAsync(fn) {
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-probe-'));
-  try { return await fn(tmp); } finally { rmSync(tmp, { recursive: true, force: true }); }
 }

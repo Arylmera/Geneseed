@@ -14,8 +14,10 @@
  */
 import path from 'node:path';
 import { PLUGIN_SRC, SRC } from '../build/source.mjs';
+import { HOSTS } from '../hosts/hosts.mjs';
 import { descBlockProblem, firstBlockquote } from '../hosts/native.mjs';
 import { readText } from '../lib/fs.mjs';
+import { blankCodeSpans } from '../lib/text.mjs';
 import { which } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import {
@@ -25,15 +27,15 @@ import {
 import { constitutionProblems, leanBlockProblems } from './checks-constitution.mjs';
 import { countTableProblems } from './checks-counts.mjs';
 import { catalogProblems } from '../loop/catalog.mjs';
-import { blankCodeSpans, globSorted, isDir, isFile, rglob } from './scan.mjs';
+import { globSorted, isDir, isFile, rglob } from './scan.mjs';
 import { spawnSync } from 'node:child_process';
 
-// The four harness ids `js/web/docs.mjs`'s `HARNESS_OPEN_RE` accepts, comma-separated, in its
-// own `HARNESSES` constant. Not imported: `js/web/docs.mjs` pulls in the web daemon's CLI
-// reference, status and update modules, and `inspect/` has no existing import from `web/` to
-// extend — paying that weight on every `doctor --all` for one id list is not "cheap" reuse.
-// Inlined instead, so it must be kept in step by hand if `HARNESSES` ever changes.
-const HARNESS_IDS = 'opencode|claude|openclaude|bob';
+// The harness ids `js/web/docs.mjs`'s `HARNESS_OPEN_RE` accepts — its `HARNESSES`, keyed by the
+// same host ids as `HOSTS`. Not imported from there: `js/web/docs.mjs` pulls in the web daemon's
+// CLI reference, status and update modules, a weight every `doctor --all` would pay for one id
+// list. `HOSTS` is the ids' own home and already in doctor's import closure. Alternation order
+// does not matter: the pattern is anchored at both ends.
+const HARNESS_IDS = HOSTS.map((h) => h.host).join('|');
 
 /**
  * The comment bodies (trimmed) that are known to be FUNCTIONAL — consumed by the render, a
