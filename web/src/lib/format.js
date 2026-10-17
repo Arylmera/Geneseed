@@ -69,6 +69,9 @@ export const maxCount = (counts) => Math.max(...SECTION_ORDER.map((k) => counts?
 // Local edits awaiting export = edited + added files from the diff summary.
 export const editCount = (diff) => (diff?.edited ?? 0) + (diff?.added ?? 0)
 
+// Every drifted file = edited + added + missing; 0 when there is no diff.
+export const driftTotal = (diff) => editCount(diff) + (diff?.missing ?? 0)
+
 // How many RULES bind this install: every invariant, plus the doctrine rules the
 // packs it built in actually switched on.
 //

@@ -17,8 +17,8 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { USAGE_LEDGER, USAGE_OFF } from '../hosts/usage.mjs';
-import { installState, installTargets } from '../hosts/installs.mjs';
-import { viewCfg } from './api.mjs';
+import { installTargets } from '../hosts/installs.mjs';
+import { activeInstalls, lastDays } from './api.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WINDOW = 30;
@@ -50,16 +50,14 @@ function readLedger(file, cutoff) {
 }
 
 export function usageSummary({ now = Date.now(), targets = installTargets() } = {}) {
-  const days = Array.from({ length: WINDOW }, (_, i) => day(now - (WINDOW - 1 - i) * DAY_MS));
+  const days = lastDays(now, WINDOW);
   const first = days[0];
   const perDay = new Array(WINDOW).fill(0);
   const counts = new Map();
   const never = [];
   let since = null;
   let enabled = !process.env.GENESEED_NO_USAGE;
-  for (const [host, scope, root] of targets) {
-    if (installState(root, host, scope) !== 'active') continue;
-    const dir = viewCfg(host, scope, root);
+  for (const [host, scope, root, dir] of activeInstalls(targets)) {
     const install = `${host}:${scope}:${root}`;
     if (existsSync(path.join(dir, USAGE_OFF))) enabled = false;
     const entries = readLedger(path.join(dir, USAGE_LEDGER), day(now - KEEP_DAYS * DAY_MS));

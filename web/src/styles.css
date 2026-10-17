@@ -2341,7 +2341,6 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
   gap: 8px; font-size: 13px; }
 .legend li { display: flex; align-items: center; gap: 8px; }
 .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-.legend-label { flex: 1; color: var(--text-2); }
 .hbars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
   gap: 7px; font-size: 12px; }
 .hbars li { display: flex; align-items: center; gap: 10px; }
@@ -2350,7 +2349,6 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
   border-radius: 2px; }
 .hb-track > span { border-radius: 2px; }
 .hb-ok { background: var(--accent); }
-.hb-exp { background: var(--warn); }
 .hb-n { min-width: 22px; text-align: right; }
 .hbar { display: block; flex: 1; min-width: 40px; height: 8px; border-radius: 3px;
   background: var(--surface-3); overflow: hidden; }
@@ -2372,7 +2370,6 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
 .health-dot { width: 10px; height: 10px; flex: none; border-radius: 99px; background: var(--tone);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 14%, transparent); }
 .health p { margin: 0; flex: 1; min-width: 0; }
-.health-built { font-size: 12px; white-space: nowrap; }
 /* The COLUMNS live on the list and every row inherits them (subgrid): with a grid per row,
    the auto-width action column sized itself row by row and the path column drifted. */
 .needs { list-style: none; margin: 0 -20px -18px; padding: 0; display: grid; column-gap: 16px;

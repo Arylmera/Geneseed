@@ -12,21 +12,18 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { GATE_LEDGER } from '../hosts/hosts.mjs';
-import { installState, installTargets } from '../hosts/installs.mjs';
-import { viewCfg } from './api.mjs';
+import { installTargets } from '../hosts/installs.mjs';
+import { activeInstalls, lastDays } from './api.mjs';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const WINDOW = 30;
 
 export function gateDays({ now = Date.now(), targets = installTargets() } = {}) {
-  const days = Array.from({ length: WINDOW }, (_, i) =>
-    new Date(now - (WINDOW - 1 - i) * DAY_MS).toISOString().slice(0, 10));
+  const days = lastDays(now, WINDOW);
   const index = new Map(days.map((d, i) => [d, i]));
   const by = new Map();
-  for (const [host, scope, root] of targets) {
-    if (installState(root, host, scope) !== 'active') continue;
+  for (const [, , , dir] of activeInstalls(targets)) {
     let raw;
-    try { raw = readFileSync(path.join(viewCfg(host, scope, root), GATE_LEDGER), 'utf8'); } catch { continue; }
+    try { raw = readFileSync(path.join(dir, GATE_LEDGER), 'utf8'); } catch { continue; }
     for (const line of raw.split('\n')) {
       let e;
       try { e = JSON.parse(line); } catch { continue; }

@@ -1,7 +1,7 @@
 import React from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
-import { relTime } from '../../lib/format.js'
+import { driftTotal, relTime } from '../../lib/format.js'
 import { CountUp, useCountUp } from '../../lib/motion.js'
 import {
   COST_PARTS,
@@ -115,13 +115,14 @@ function FleetRow({ i, n, onAction, onOpen }) {
       </tr>
     )
   }
-  const drift = i.drift ? i.drift.edited + i.drift.added + i.drift.missing : 0
+  const drift = driftTotal(i.drift)
   const sync = {
     synced: <span className="pill good">in step</span>,
     behind: <span className="pill warn">behind source</span>,
     unknown: <span className="pill off">not checked</span>,
   }[i.verdict]
   const total = costTotal(i.cost)
+  const ceilPct = i.cost && Math.round((i.cost.carrier / i.cost.ceiling) * 100)
   return (
     <tr>
       {where}
@@ -142,16 +143,11 @@ function FleetRow({ i, n, onAction, onOpen }) {
       </td>
       <td>
         {i.cost ? (
-          <div
-            className="ldg-cost"
-            title={`root file ${Math.round((i.cost.carrier / i.cost.ceiling) * 100)}% of the ${i.footprint} ceiling`}
-          >
+          <div className="ldg-cost" title={`root file ${ceilPct}% of the ${i.footprint} ceiling`}>
             <CarrierRing cost={i.cost} i={n} />
             <span>
               <TokCount chars={total} />
-              <span className="dim ldg-sub">
-                root file {Math.round((i.cost.carrier / i.cost.ceiling) * 100)}% of ceiling
-              </span>
+              <span className="dim ldg-sub">root file {ceilPct}% of ceiling</span>
             </span>
           </div>
         ) : (
