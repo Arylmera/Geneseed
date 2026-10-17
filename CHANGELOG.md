@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Bob gates now block on Windows.** The hook shim (`~/.geneseed/bin/geneseed-hook.cmd`) ended with a bare `exit /b`, which returns 0 under `cmd /c` whatever the gate exited. As a result, Bob's exit-2 refusals (Laws I and IV, protected checks, root scans) went through. The shim now ends with `exit /b %ERRORLEVEL%`. Claude Code and OpenClaude were not affected, because their gates answer through stdout and exit 0. Run `geneseed rebuild-all` once to rewrite the shim (#290).
+
 ## [4.4.1] — 2026-10-16
 
 A presentation skill.
