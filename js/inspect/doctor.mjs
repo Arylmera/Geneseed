@@ -39,7 +39,7 @@ import {
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { authoringProblems, loopProblems } from './checks-authoring.mjs';
-import { gateProbe } from './checks-probe.mjs';
+import { gateProbe, guardProbe } from './checks-probe.mjs';
 import {
   checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
@@ -189,7 +189,7 @@ export function claudeBobEmitProblems(themeName) {
  */
 export function doctorCollect({
   theme = null, allThemes = false, bundle = null, noBundle = false, groups = null,
-  probe = false, probed = null,
+  probe = false, probed = null, extraProbeProblems = [],
 } = {}) {
   const available = themeFiles().map(stemOf);
   if (!available.length) return [[], ['[doctor] no themes found']];
@@ -244,7 +244,9 @@ export function doctorCollect({
   // misbehave under PowerShell (Task 15) — context/learn fail open, and since Task 1 the two
   // gates fail CLOSED instead (`onFailure: "block"`). The reverse direction is a note.
   problems = problems.concat(ran('hook_shell', 'Hook shell', hookShellProblems()));
-  if (probeRun) problems = problems.concat(ran('probe', 'Gate probe', probeRun.problems));
+  if (probeRun) {
+    problems = problems.concat(ran('probe', 'Gate probe', [...probeRun.problems, ...extraProbeProblems]));
+  }
   // A machine check like the shim's: OPENCODE_CONFIG_DIR adds a dir, it does not replace one.
   const shadow = opencodeShadowedInstall();
   problems = problems.concat(ran('opencode_dirs', 'OpenCode config dirs', shadow
@@ -289,10 +291,19 @@ function captureBoth(fn) {
  * maintainer sweep. The cross-theme parity check runs in every mode.
  */
 export function cmdDoctor(args) {
-  const probed = [];
+  // `--probe` alone is asynchronous: the OpenCode guard is probed by importing the installed
+  // plugin (`guardProbe`), and `import()` has no synchronous form. Every other path stays
+  // synchronous, because `validate` and `setup` call this and read its number directly.
+  if (args.probe) return guardProbe().then((guard) => doctorReport(args, guard));
+  return doctorReport(args, null);
+}
+
+function doctorReport(args, guard) {
+  const probed = guard ? [...guard.probed] : [];
   const [themes, collected] = doctorCollect({
     theme: args.theme, allThemes: Boolean(args.all), bundle: args.bundle,
     noBundle: Boolean(args.noBundle), probe: Boolean(args.probe), probed,
+    extraProbeProblems: guard ? guard.problems : [],
   });
   if (!themes.length) {
     printOut(`${collected.length ? collected[0] : '[doctor] no themes found'}\n`);

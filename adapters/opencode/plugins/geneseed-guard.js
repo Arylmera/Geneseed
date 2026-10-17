@@ -128,6 +128,9 @@ function log(msg) { console.error(`[geneseed-guard] ${msg}`) }
 // at the newest MAX_LEDGER_LINES like the hook's; never throws, never decides.
 const MAX_LEDGER_LINES = 1000
 async function ledger(rule) {
+  // `geneseed doctor --probe` blocks on purpose; its blocks are not the user's (the twin of
+  // the same line in js/hosts/hooks.mjs). The record only — never the decision.
+  if (process.env.GENESEED_GATE_PROBE) return
   try {
     const bases = []
     if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
