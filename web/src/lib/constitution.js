@@ -42,13 +42,13 @@ export function gateAddress(key) {
   return m[1] === 'law' ? toRoman(Number(m[2])) : `${m[1]}.${m[2]}`
 }
 
-// The rules a hook enforces at the tool boundary, by catalog address. Transcribed from
-// js/hosts/hooks.mjs, whose `ask(args, <gate>, <id>, ...)` calls are the gates: Law I's
-// secret scan and process 1's persist check (rule-gate), Law IV's history rewrite and
-// process 5's commit/push consent (git-gate), rigor 5's protected checks (rule-gate), and
-// ops 2's root-scan check (git-gate).
-// __tests__/constitution.test.js reads that file and fails when the two drift apart.
-export const HOOK_GATED = new Set(['I', 'IV', 'process.1', 'process.5', 'rigor.5', 'ops.2'])
+// The rules a hook enforces, by catalog address. Transcribed from the doctor's HOOK_PINNED
+// (js/inspect/checks-constitution.mjs): Law I's secret scan and process 1's persist check
+// (rule-gate), Law III's Stop-hook done gate (js/hosts/hooks-done.mjs), Law IV's history
+// rewrite and process 5's commit/push consent (git-gate), rigor 5's protected checks
+// (rule-gate), and ops 2's root-scan check (git-gate).
+// __tests__/constitution.test.js reads that pin and fails when the two drift apart.
+export const HOOK_GATED = new Set(['I', 'III', 'IV', 'process.1', 'process.5', 'rigor.5', 'ops.2'])
 
 // "Enforced by" for one row: a hook gate, or the instruction text alone.
 export const enforcedBy = (addr) => (HOOK_GATED.has(addr) ? 'Hook gate' : 'Instruction')
