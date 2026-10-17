@@ -8,9 +8,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.5.0] — 2026-10-17
+
+Minor: gates that are proven, not just present — a done gate at turn end, `doctor --probe`, and Bob's refusals restored on Windows.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating: it rewrites the Windows hook shim (Bob's gates block again) and re-emits the rule skill.
+- The done gate is off until a project lists its checks in `.geneseed/done-checks.txt`.
+
 ### Added
 - **Done gate (#289).** A project that lists its checks in `.geneseed/done-checks.txt` gets *Verify Before Asserting* enforced when a turn ends: on Claude Code and OpenClaude, a turn that edited files cannot end until every listed check has passed, unpiped, after the last edit (at most one block per turn). OpenCode 1 gets a reminder on the next request; Bob and OpenCode 2 are not judged and log so. The gate lives inside `learn`, before its model call, so the emitted settings are unchanged. The list protects itself through *External Gate*.
 - **`geneseed doctor --probe`.** This is opt-in. For each live Claude Code, OpenClaude and Bob install, it runs the installed gate command exactly as the host's settings spell it, through the host's own shell. It sends `git reset --hard HEAD`, which the gate must refuse, and `git status`, which it must let through. A gate that allows both, refuses both, or does not run is a doctor failure. The probe runs under your terminal's environment, not the host app's. Its asks are kept out of the gate ledger (`GENESEED_GATE_PROBE`). The OpenCode guard plugin is probed in-process: the installed file is imported and its hook called through both plugin APIs, with `rm -rf /` as the call it must refuse, and `GENESEED_GUARD=off|warn` reported as a note. The PowerShell-fallback warning now suggests running the probe (#290).
+
+### Changed
+- **A stated rule keeps the user's own words.** The rule skill now writes `source: user <date> "<their sentence>"` for a rule the user stated, so a stale rule can be told from a changed mind. Its review flow gains two cases: a rule the user's later words contradict, and a rule only checked by reading that was broken twice (#288).
 
 ### Fixed
 - **Bob gates now block on Windows.** The hook shim (`~/.geneseed/bin/geneseed-hook.cmd`) ended with a bare `exit /b`, which returns 0 under `cmd /c` whatever the gate exited. As a result, Bob's exit-2 refusals (Laws I and IV, protected checks, root scans) went through. The shim now ends with `exit /b %ERRORLEVEL%`. Claude Code and OpenClaude were not affected, because their gates answer through stdout and exit 0. Run `geneseed rebuild-all` once to rewrite the shim (#290).
