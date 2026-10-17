@@ -5,6 +5,8 @@
 // - Claude's `Skill` carries `tool_input.skill`, its subagent tool `Agent` (formerly `Task`)
 //   carries `subagent_type` — read off a real Claude Code transcript, 2026-10-13;
 // - OpenCode's `skill` tool names the skill `name`, `task` the subagent `subagent_type`;
+//   OpenCode 2 hands its hook `subagent` (the pre-alias name, @opencode/cli 2.0.32
+//   packages/core/src/tool/plugin/subagent.ts) with the type under `agent`;
 // - Bob is best-effort: any non-MCP tool whose name contains "skill" (its tool name is unverified);
 // - a leading `/` is dropped (a slash-command spelling), and a name that is not a plain
 //   identifier — a path, a sentence, an empty string — is not counted at all;
@@ -29,6 +31,7 @@ const TABLE = [
   [{ tool_name: 'Task', tool_input: { subagent_type: 'reviewer' } }, { kind: 'agent', name: 'reviewer' }],
   [{ tool: 'skill', args: { name: 'plan' } }, { kind: 'skill', name: 'plan' }],
   [{ tool: 'task', args: { subagent_type: 'architect' } }, { kind: 'agent', name: 'architect' }],
+  [{ tool: 'subagent', args: { agent: 'tester' } }, { kind: 'agent', name: 'tester' }],
   [{ tool: 'use_skill', input: { skill_name: 'debug' } }, { kind: 'skill', name: 'debug' }],
   [{ tool_name: 'Skill', tool_input: { skill: '/commit' } }, { kind: 'skill', name: 'commit' }],
   [{ tool_name: 'Skill', tool_input: { skill: '../../etc/passwd' } }, null],
@@ -62,6 +65,28 @@ test('the OpenCode plugin counts the same table into its own install', async () 
     }
     const want = TABLE.map(([, w]) => w).filter(Boolean);
     assert.deepEqual(lines(path.join(cfg, USAGE_LEDGER)).map(({ kind, name }) => ({ kind, name })), want);
+  } finally { sb.cleanup(); }
+});
+
+// V2 reaches the counter only through `setup`'s `tool.hook("execute.before")`, so its own
+// subagent call is driven there: `subagent` with `{ agent }`, the shape 2.0.32 sends.
+test('the OpenCode plugin counts a V2 subagent call through setup', async () => {
+  const sb = makeSandbox('usage-');
+  try {
+    const cfg = path.join(sb.path, 'cfg');
+    fs.mkdirSync(path.join(cfg, 'plugins'), { recursive: true });
+    fs.mkdirSync(path.join(cfg, 'notebook'));
+    const copy = path.join(cfg, 'plugins', 'geneseed-guard.js');
+    fs.copyFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins', 'geneseed-guard.js'), copy);
+    const mod = await import(pathToFileURL(copy).href);
+    let v2 = null;
+    await mod.default.setup({
+      location: { project: { directory: sb.path }, directory: sb.path },
+      tool: { hook: async (_name, fn) => { v2 = fn; } },
+    });
+    await v2({ tool: 'subagent', input: { agent: 'explorer', description: 'x', prompt: 'y' } });
+    assert.deepEqual(lines(path.join(cfg, USAGE_LEDGER)).map(({ kind, name }) => ({ kind, name })),
+      [{ kind: 'agent', name: 'explorer' }]);
   } finally { sb.cleanup(); }
 });
 
