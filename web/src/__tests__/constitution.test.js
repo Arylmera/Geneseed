@@ -45,29 +45,34 @@ describe('gateAddress', () => {
 })
 
 describe('HOOK_GATED', () => {
-  it('names the six rules a hook enforces, and nothing else reads as a gate', () => {
+  // Law III joined in #293: the Stop-hook done gate blocks and records `law-3`.
+  it('names the seven rules a hook enforces, and nothing else reads as a gate', () => {
     expect([...HOOK_GATED].sort()).toEqual([
       'I',
+      'III',
       'IV',
       'ops.2',
       'process.1',
       'process.5',
       'rigor.5',
     ])
-    expect(enforcedBy('IV')).toBe('Hook gate')
-    expect(enforcedBy('III')).toBe('Instruction')
+    expect(enforcedBy('III')).toBe('Hook gate')
+    expect(enforcedBy('II')).toBe('Instruction')
   })
 
-  // The set is transcribed from js/hosts/hooks.mjs, where every gate is an
-  // `ask(args, '<gate>', '<id>', ...)` call. Read the ids back out of that file: a gate
-  // added or dropped there fails here until the Constitution's "Enforced by" column agrees.
-  it('matches the ask() ids in js/hosts/hooks.mjs', () => {
+  // The set is transcribed from the doctor's HOOK_PINNED, the one list of every hook-gated
+  // rule — the tool-boundary `ask()` gates in js/hosts/hooks.mjs and the done gate in
+  // js/hosts/hooks-done.mjs alike. Read the labels back out of that file: a rule pinned or
+  // unpinned there fails here until the Constitution's "Enforced by" column agrees.
+  it('matches the doctor HOOK_PINNED in js/inspect/checks-constitution.mjs', () => {
     const src = readFileSync(
       // vitest runs from web/ (jsdom gives import.meta.url no file scheme).
-      resolve(process.cwd(), '../js/hosts/hooks.mjs'),
+      resolve(process.cwd(), '../js/inspect/checks-constitution.mjs'),
       'utf8',
     )
-    const ids = [...src.matchAll(/ask\(args, '[a-z-]+', '([a-z]+-\d+)'/g)].map((m) => m[1])
-    expect(new Set(ids.map(gateAddress))).toEqual(HOOK_GATED)
+    const body = /export const HOOK_PINNED = \{([^}]*)\}/.exec(src)[1]
+    const labels = [...body.matchAll(/'[a-z-]+': '([^']+)'/g)].map((m) => m[1].replace(' ', '.'))
+    expect(labels.length).toBeGreaterThan(0)
+    expect(new Set(labels)).toEqual(HOOK_GATED)
   })
 })

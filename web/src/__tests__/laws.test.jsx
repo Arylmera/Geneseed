@@ -187,8 +187,8 @@ describe('Constitution page', () => {
 
   it('states each rule’s status and what enforces it', async () => {
     // Status is Active or Retired; "Enforced by" is Hook gate for the rules a hook
-    // enforces at the tool boundary (lib/constitution.js HOOK_GATED, gated against
-    // js/hosts/hooks.mjs) and Instruction for the rest. The Latin name is the voice's half of
+    // enforces (lib/constitution.js HOOK_GATED, gated against the doctor's HOOK_PINNED;
+    // Law III by the Stop-hook done gate) and Instruction for the rest. The Latin name is the voice's half of
     // the title, and a title without one leaves the column empty.
     api.catalog.mockResolvedValue({
       section: 'laws',
@@ -214,7 +214,7 @@ describe('Constitution page', () => {
     expect(rows).toEqual([
       ['I', 'Sealed Secrets', '', 'Active', 'Hook gate'],
       ['II', 'One Intent, One Act', '', 'Active', 'Instruction'],
-      ['III', 'Verify Before Asserting', '', 'Active', 'Instruction'],
+      ['III', 'Verify Before Asserting', '', 'Active', 'Hook gate'],
       ['IX', 'External Gate', 'Porta Externa', 'Retired', 'None'],
     ])
   })
