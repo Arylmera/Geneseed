@@ -14,27 +14,18 @@ import { spawnSync } from 'node:child_process';
 import { ROOT } from '../../js/build/source.mjs';
 import { hookShimPath, shimDead } from '../../js/hosts/shim.mjs';
 import { gateSummary, statusLines, statusData } from '../../js/inspect/status.mjs';
-import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
+import { cellEnv, makeSandbox, withGeneseedHome } from '../helpers/sandbox.mjs';
 
 const CLI = path.join(ROOT, 'bin', 'geneseed-cli.mjs');
 
 /** Write a shim into `home` whose quoted target does not exist; returns that target. */
 function deadShim(home) {
   const env = cellEnv(home);
-  const p = withEnv(env, () => hookShimPath());
+  const p = withGeneseedHome(() => hookShimPath(), env.GENESEED_HOME);
   const gone = path.join(home, 'moved-checkout', 'bin', 'geneseed-hook.mjs');
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, `#!/bin/sh\nexec "${process.execPath}" "${gone}" "$@"\n`, 'utf8');
   return gone;
-}
-
-function withEnv(env, fn) {
-  const saved = process.env.GENESEED_HOME;
-  process.env.GENESEED_HOME = env.GENESEED_HOME;
-  try { return fn(); } finally {
-    if (saved === undefined) delete process.env.GENESEED_HOME;
-    else process.env.GENESEED_HOME = saved;
-  }
 }
 
 function cli(home, args, extra = {}) {
@@ -74,14 +65,14 @@ test('a dead shim: the status gates row says DEAD, not armed', () => {
   const sb = makeSandbox('shimstatus-');
   try {
     const gone = deadShim(sb.path);
-    withEnv(cellEnv(sb.path), () => {
+    withGeneseedHome(() => {
       const g = gateSummary([]);
       assert.deepEqual(g.dead, [gone]);
       const row = statusLines({ ...statusData(), gates: g }, false)
         .find((l) => l.includes('gates'));
       assert.ok(row.includes(`DEAD — hook shim points at ${gone}; run: geneseed rebuild-all`),
         row);
-    });
+    }, cellEnv(sb.path).GENESEED_HOME);
   } finally {
     sb.cleanup();
   }
@@ -97,7 +88,7 @@ test('emitting a Claude install repairs a dead shim', () => {
         '--out', path.join(sb.path, 'proj')],
       { cwd: ROOT, encoding: 'utf8', env: cellEnv(sb.path), windowsHide: true, maxBuffer: 1 << 26 });
     assert.equal(r.status, 0, (r.stderr || r.stdout).slice(-1500));
-    withEnv(cellEnv(sb.path), () => assert.deepEqual(shimDead(), []));
+    withGeneseedHome(() => assert.deepEqual(shimDead(), []), cellEnv(sb.path).GENESEED_HOME);
   } finally {
     sb.cleanup();
   }

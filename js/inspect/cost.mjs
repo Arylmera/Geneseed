@@ -6,8 +6,9 @@
  *
  * Four parts, each the thing the host loads before the user types:
  * - `carrier`  the root instruction file (`AGENT.md`, `CLAUDE.md`, Bob's `rules/geneseed.md` or
- *              `AGENTS.md`), CRLF decoded exactly as the smoke test decodes it, so the figure
- *              and `CARRIER_CEILING` are the same measurement.
+ *              `AGENTS.md`), CRLF folded to LF as the smoke test folds it, so the figure and
+ *              `CARRIER_CEILING` are the same measurement. `readText` also folds a lone CR,
+ *              which the smoke test does not, so the two agree on any carrier without one.
  * - `skills`   the name + description every native skill lists (aliases included: they are
  *              SKILL.md files the host lists like any other).
  * - `agents`   the same for native agents; Bob has none, its agents table is in the carrier.
@@ -30,8 +31,6 @@ import { isFile, readText } from '../lib/fs.mjs';
  */
 export const CARRIER_CEILING = { full: 62_219, lean: 39_088 };
 
-const decode = (p) => readText(p).split('\r\n').join('\n');
-
 /**
  * A frontmatter value as the host shows it. The emit writes descriptions JSON-escaped
  * (`—` for one em dash), and `frontmatter()` has already stripped the quotes, so the
@@ -48,7 +47,7 @@ function fmValue(raw) {
 /** name + description of one spec file; `fallbackName` for agents, whose name is the file stem. */
 function listedChars(file, fallbackName) {
   let fm;
-  try { [fm] = frontmatter(decode(file)); } catch { return 0; }
+  try { [fm] = frontmatter(readText(file)); } catch { return 0; }
   const name = fmValue(fm.get('name')) || fallbackName;
   return name.length + fmValue(fm.get('description')).length;
 }
@@ -61,7 +60,7 @@ function listedChars(file, fallbackName) {
 export function alwaysOnCost({ host, root, dir, footprint }) {
   const carrierPath = carriersFor(host).map((rel) => path.join(root, rel)).find(isFile);
   if (!carrierPath) return null;
-  const carrier = decode(carrierPath).length;
+  const carrier = readText(carrierPath).length;
 
   let skills = 0;
   const skillsDir = path.join(dir, 'skills');

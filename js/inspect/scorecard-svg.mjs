@@ -12,10 +12,10 @@
  * on every machine, which is what lets doctor compare them. Colours follow the viewer's theme
  * through a `prefers-color-scheme` block, which GitHub honours inside an `<img>` SVG.
  */
-import { round1 } from './scorecard.mjs';
+import { computeGrade, round1 } from './scorecard.mjs';
 
-/** The grade band a percentage falls in — the same thresholds as the overall grade. */
-const band = (pct) => (pct >= 85 ? 'a' : pct >= 70 ? 'b' : pct >= 55 ? 'c' : pct >= 40 ? 'd' : 'f');
+/** The grade band a percentage falls in — the overall grade's own thresholds, never a copy. */
+const band = (pct) => computeGrade(pct).toLowerCase();
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
