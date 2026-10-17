@@ -8,6 +8,25 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.6.0] — 2026-10-17
+
+Minor: a refactor and cleanup pass over everything since 3.15.0, and the nine gate and counter bugs it turned up.
+
+### Upgrade notes
+- **Node 22.7.0 or newer is now required** (was 22.3.0). `doctor --probe` imports the installed OpenCode guard plugin, an ES module under a package.json with no `type`; Node detects that syntax by default only from 22.7.0 (#303).
+- Run `geneseed rebuild-all` once after updating so the installed hooks and OpenCode plugins pick up the fixes below.
+
+### Fixed
+- **Bob no longer blocks removing a secret.** The credential scan read the text being replaced (`search`, and the SEARCH half of an `apply_diff`), so an agent deleting a leaked key was hard-refused. Only what is written is scanned now; planting a key still blocks (#304).
+- **The done gate needs the whole command.** A declared check such as `npm run lint` was counted as run by `npm run lint:fix`, by `echo npm run lint`, or by a commit message naming it. The check must now open a command segment, end at a boundary and sit outside quotes, on Claude Code and OpenCode alike (#307).
+- **The OpenCode done reminder counts only edits inside the project.** An `apply_patch` outside the repo armed it, and a folder named like `..cache/` was taken for outside (#310). The wiki `put` had the same over-strict path check (#312).
+- **Usage counting.** The OpenCode guard no longer counts Skill and subagent calls in a repo listed in `excludes.json` (#308), and OpenCode 2's `subagent` tool is now counted (#311). The console's usage endpoint only reads the ledger and never rewrites it, so a concurrent append can no longer be lost (#305).
+- **The console shows *Verify Before Asserting* as hook-gated**, matching the doctor, since the done gate enforces it (#306).
+- The dead-shim warning names the release (4.0.0) instead of an internal plan step (#302).
+
+### Changed
+- Behaviour-preserving refactors across inspect, the OpenCode plugins and emitters, hosts, the web layer, and maintain/build (#297–#301). The scorecard's YAML reader moved to `js/inspect/scorecard-yaml.mjs`. Unused exports and duplicated helpers were removed, and parity tests now pin more of the code the OpenCode plugins share.
+
 ## [4.5.0] — 2026-10-17
 
 Minor: gates that are proven, not just present — a done gate at turn end, `doctor --probe`, and Bob's refusals restored on Windows.
