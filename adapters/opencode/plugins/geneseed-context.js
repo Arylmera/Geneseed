@@ -905,6 +905,18 @@ async function readDoneChecks(root) {
 function runsUnpiped(command, line) {
   const cmd = String(command).replace(/[ \t]+/g, " ")
   for (let i = cmd.indexOf(line); i !== -1; i = cmd.indexOf(line, i + 1)) {
+    const next = cmd[i + line.length]
+    if (next !== undefined && !/[\s;&|]/.test(next)) continue
+    const head = cmd.slice(0, i)
+    if (!/(^|&&|\|\||;|\n) ?$/.test(head)) continue
+    let quote = "", esc = false
+    for (const ch of head) {
+      if (esc) esc = false
+      else if (ch === "\\" && quote !== "'") esc = true
+      else if (quote) { if (ch === quote) quote = "" }
+      else if (ch === '"' || ch === "'") quote = ch
+    }
+    if (quote) continue
     const rest = cmd.slice(i + line.length)
     let piped = false
     for (let j = 0; j < rest.length; j += 1) {
