@@ -41,6 +41,7 @@ const UNIT_MAINTAINER = ['--test', 'tests/unit/maintainer_tools.test.mjs'];
 const UNIT_DRIVER = ['--test', 'tests/unit/node_driver.test.mjs'];
 const UNIT_HOOK_FORM = ['--test', 'tests/unit/hook_form.test.mjs'];
 const UNIT_HOOK_CLI = ['--test', 'tests/unit/hook_cli.test.mjs'];
+const UNIT_HOOK_DONE = ['--test', 'tests/unit/hook_done.test.mjs'];
 const IDEMPOTENT = ['tests/golden.mjs', '--idempotent', '--only', 'neutral/claude'];
 // A GLOB, not a directory. `node --test tests/unit/` resolves the path as a MODULE and fails to
 // load it — `# pass 0, # fail 1` with no test having run, which as a mutation control reads
@@ -603,6 +604,28 @@ export const MUTATIONS = [
       + 'every content wave. The claim that survives that is a phrase one: a mark from craft 5\'s '
       + 'full half must be ABSENT at lean, which is what `generate.test.mjs` asserts and what this '
       + 'row exists to prove is load-bearing.',
+  },
+  {
+    id: 'M35',
+    name: 'the done gate never blocks',
+    file: 'js/hosts/hooks-done.mjs',
+    find: '    if (!missing.length) return false;\n',
+    replace: '    return false;\n',
+    gate: UNIT_HOOK_DONE,
+    why: 'A gate that never fires satisfies every "allows" row, and on Stop an allow is silence: '
+      + 'nothing anywhere would show the turn was let through unproven. `hook_done.test.mjs` runs '
+      + 'the real hook binary on an unproven turn and requires the JSON verdict.',
+  },
+  {
+    id: 'M36',
+    name: 'a piped check counts as a pass',
+    file: 'js/hosts/hooks-done.mjs',
+    find: "      if (rest[j] === '|') { piped = true; break; }\n",
+    replace: '',
+    gate: UNIT_HOOK_DONE,
+    why: 'A pipe exits with its LAST stage, so `npm test | tail` is green on a red suite and its '
+      + 'result carries no `is_error`. Without the pipe rule the gate would accept exactly the '
+      + 'proof that proves nothing; the segment table in `hook_done.test.mjs` pins it.',
   },
 ];
 

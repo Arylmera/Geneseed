@@ -545,6 +545,9 @@ function ruleStoreTarget(p) {
 // line; the list protects itself. Found from the WRITE TARGET up to the first `.git`, re-read on
 // every write (a short file, read only on a write call). No ask tier here, so a hit is a deny.
 const SENSOR_LIST = ".geneseed/protected-checks.txt"
+// The done gate's list (#289, js/hosts/hooks-done.mjs) protects itself the same way, with or
+// without a protected-checks list: emptying it would disarm the gate. Twin of js/hosts/hooks.mjs.
+const DONE_LIST = ".geneseed/done-checks.txt"
 function protectedCheck(p) {
   try {
     const target = path.resolve(p)
@@ -554,9 +557,10 @@ function protectedCheck(p) {
       if (up === root) return null
       root = up
     }
-    const text = readFileSync(path.join(root, SENSOR_LIST), "utf8")
     const fold = (s) => nocase(s.replace(/\\/g, "/"))
     const rel = fold(path.relative(root, target))
+    if (rel === fold(DONE_LIST)) return DONE_LIST
+    const text = readFileSync(path.join(root, SENSOR_LIST), "utf8")
     const entries = [SENSOR_LIST, ...text.split(/\r?\n/).map((l) => l.trim().replace(/[\\/]+$/, ""))
       .filter((l) => l && !l.startsWith("#"))]
     return entries.find((e) => rel === fold(e) || rel.startsWith(fold(e) + "/")) ?? null
@@ -635,7 +639,7 @@ export const GeneseedGuard = async (ctx) => {
             if (SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
             if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
             const sensor = protectedCheck(p)
-            if (sensor) { await deny(`${p} is a protected check (${sensor}, listed in ${SENSOR_LIST}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
+            if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
             const store = ruleStoreTarget(p)
             if (store && !RULE_STORE_BUMPED.has(p)) {
               RULE_STORE_BUMPED.add(p)

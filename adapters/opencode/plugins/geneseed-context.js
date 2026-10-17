@@ -877,6 +877,76 @@ async function alreadyInjected(client, sid) {
   return false
 }
 
+// ---- The done gate (#289): the OpenCode twin of js/hosts/hooks-done.mjs ----------------
+// OpenCode has no turn-end event a plugin can block on, so its ceiling is a reminder: on the
+// request AFTER a turn that edited files without the project's declared checks passing
+// (`.geneseed/done-checks.txt`), one invisible user message says which checks are owed. Only V1
+// (`messages.transform`, whose tool parts carry `state.status` and the shell's
+// `metadata.exit`); OpenCode 2's message shape for tool calls is unverified, so V2 is not
+// judged and says so once. Fails open on every shape it does not recognise (ADR 0007).
+// `runsUnpiped` is a hand-mirrored twin; tests/plugins/context_done.test.mjs runs both on one table.
+const DONE_LIST = ".geneseed/done-checks.txt"
+const DONE_EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch", "multiedit"])
+const DONE_SHELL_TOOLS = new Set(["bash", "shell"])
+
+async function readDoneChecks(root) {
+  try {
+    const text = await fs.readFile(path.join(root, DONE_LIST), "utf8")
+    return text.split(/\r?\n/).map((l) => l.trim().replace(/\s+/g, " ")).filter((l) => l && !l.startsWith("#"))
+  } catch {
+    return []
+  }
+}
+
+function runsUnpiped(command, line) {
+  const cmd = String(command).replace(/[ \t]+/g, " ")
+  for (let i = cmd.indexOf(line); i !== -1; i = cmd.indexOf(line, i + 1)) {
+    const rest = cmd.slice(i + line.length)
+    let piped = false
+    for (let j = 0; j < rest.length; j += 1) {
+      const two = rest.slice(j, j + 2)
+      if (two === "&&" || two === "||" || rest[j] === ";" || rest[j] === "\n") break
+      if (rest[j] === "|") { piped = true; break }
+    }
+    if (!piped) return true
+  }
+  return false
+}
+
+// The checks still owed, judged over the previous turn and the current one: a reminder lasts
+// one turn, not the whole session. Our own injected messages (`geneseed-*` ids) open no turn.
+function doneOwed(messages, checks, root) {
+  const prompts = []
+  messages.forEach((m, i) => {
+    if (m?.info?.role === "user" && !String(m.info.id ?? "").startsWith("geneseed-")) prompts.push(i)
+  })
+  const from = prompts.length >= 2 ? prompts[prompts.length - 2] : 0
+  const tools = []
+  for (const m of messages.slice(from)) {
+    for (const p of m?.parts ?? []) if (p?.type === "tool" && p.state) tools.push(p)
+  }
+  let lastEdit = -1
+  tools.forEach((p, i) => {
+    if (!DONE_EDIT_TOOLS.has(String(p.tool).toLowerCase()) || p.state.status === "error") return
+    const fp = p.state.input?.filePath ?? p.state.input?.file_path
+    if (typeof fp === "string" && fp) {
+      const rel = path.relative(root, path.resolve(root, fp))
+      if (rel.startsWith("..") || path.isAbsolute(rel)) return
+    }
+    lastEdit = i
+  })
+  if (lastEdit === -1) return []
+  const passed = new Set()
+  for (const p of tools.slice(lastEdit + 1)) {
+    const command = DONE_SHELL_TOOLS.has(String(p.tool).toLowerCase()) && p.state.input?.command
+    if (typeof command !== "string" || p.state.status !== "completed") continue
+    const exit = p.state.metadata?.exit
+    if (typeof exit === "number" && exit !== 0) continue
+    for (const check of checks) if (runsUnpiped(command, check)) passed.add(check)
+  }
+  return checks.filter((c) => !passed.has(c))
+}
+
 export const GeneseedContext = async (ctx) => {
   const { client } = ctx
   const done = new Set()
@@ -1002,6 +1072,27 @@ export const GeneseedContext = async (ctx) => {
     // detects that and takes over with the visible delivery.
     "experimental.chat.messages.transform": async (_input, output) => {
       transformSeen = true                  // the hook exists on this build
+      // The done gate's reminder: FIRST, and independent of the context block:
+      // INJECT_OFF and the visible delivery leave it on, and no early return below can skip it.
+      // Its own function, so its early returns end the reminder, never the context injection.
+      await (async () => {
+        if (!output || !Array.isArray(output.messages) || !output.messages.length) return
+        const sid = output.messages[0]?.info?.sessionID
+        if (await sovereignBypass(root) || await skipSession(sid)) return
+        const checks = await readDoneChecks(root)
+        if (!checks.length) return
+        const owed = doneOwed(output.messages, checks, root)
+        if (!owed.length) return
+        const stamp = Date.now()
+        output.messages.unshift({
+          info: { id: `geneseed-done-${stamp}`, role: "user", sessionID: sid, time: { created: stamp } },
+          parts: [{ id: `geneseed-done-part-${stamp}`, type: "text", text:
+            "Geneseed (Verify Before Asserting) — files were edited, and these checks from "
+            + `${DONE_LIST} have not passed since the last edit: ${owed.join("; ")}. Run them unpiped `
+            + "before reporting the work done, or say plainly that they were not run and why." }],
+        })
+        log("transform: done-gate reminder injected")
+      })().catch((err) => log(`done-gate error: ${err?.message ?? err}`))
       if (INJECT_OFF || !TRANSFORM || fallbackVisible) return
       if (await sovereignBypass(root)) return
       try {
@@ -1070,6 +1161,11 @@ async function setupV2(ctx) {
     } catch {
       return false
     }
+  }
+
+  // The done gate is not judged on OpenCode 2 (see `doneOwed`): said once, where its log goes.
+  if ((await readDoneChecks(root).catch(() => [])).length) {
+    console.error(`[geneseed-context] done gate: ${DONE_LIST} found, but OpenCode 2 turns are not judged.`)
   }
 
   if (!VISIBLE) {
