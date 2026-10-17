@@ -8,6 +8,19 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Upgrade notes
+- OpenCode: as with the 4.7.0 worktree keys, an existing `opencode.json` keeps the state-dependent Law IV keys the calibration below removed from `permission.bash` — the force-push forms (`git push --force*`, `git push -f*`, `git push *--force*`, `git push * -f*`, `git push *+*`), `git reset --hard*`, `git reset * --hard*`, the `git clean` force forms, `git branch -D*` and both `--delete`/`--force` orders, `git checkout -- *`, the `git checkout`/`git switch` force and `--discard-changes` forms, `git stash drop*`, `git stash clear*`, `git push *--delete*` and `git push * :*`. An existing `opencode.json` keeps them and they keep asking; delete them by hand to get the calibrated behaviour. `git reflog expire*` and `git gc --prune*` stay Geneseed's, and new keys ask for a force push to, or a delete of, `main`/`master` by name, so those still ask with the guard plugin off.
+- `geneseed doctor --probe` now sends `git reflog expire --expire=now --all` as the call a gate must refuse, instead of `git reset --hard HEAD`, which passes on a clean tree.
+
+### Changed
+- **Deletion Is Deliberate asks only on real data loss.** The gate used to ask on every destructive-looking git form. It now reads the repository's state and asks only when a command would destroy something nothing else holds:
+  - deleting or force-pushing `main`, `master` or a remote's default branch, locally or remotely;
+  - `branch -D` of a branch whose commits are on no remote and not merged into HEAD;
+  - `reset --hard`, `checkout -f`/`-- <paths>`, `switch --discard-changes`, `restore` and `clean -f` over uncommitted or untracked work that actually exists;
+  - `stash drop`/`clear` while a stash exists, and `reflog expire` and `gc --prune` always;
+  - **new:** removing files (`rm`, `rmdir`, `del`, `erase`, `Remove-Item`/`ri`/`rd`) that git cannot restore — untracked, ignored or modified files, a `.git`, or anything outside a repository.
+  The same commands on a clean tree, a pushed or merged branch, a feature-branch force push and an `rm` of tracked, unmodified files pass. When the gate cannot tell — a glob or variable it would have to expand, a `cd` it cannot follow, `sh -c`/`xargs`, git failing or missing — it asks and says it could not verify. To read the state the git gate runs `git` itself (ADR 0002 amended), only once a command already looked destructive; ordinary tool calls are unaffected. On every host: an ask on Claude Code and OpenClaude, exit 2 on Bob, and on OpenCode a block by the guard plugin, which has no ask tier (`GENESEED_GUARD=warn` downgrades it), with `reflog expire`/`gc --prune` and the `main`/`master` force/delete forms also asked by static `permission.bash` globs.
+
 ## [4.7.0] — 2026-10-17
 
 Minor: the Deletion Is Deliberate gate stops asking on worktree removal.

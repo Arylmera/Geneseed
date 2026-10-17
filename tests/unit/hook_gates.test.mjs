@@ -19,6 +19,7 @@ import path from 'node:path';
 
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
+import { LOSS_ROWS, makeLossWorkspace, rowCommand } from '../helpers/loss_repos.mjs';
 
 /** `bin/geneseed-hook.mjs <verb> [--root R]` with `stdin` on fd 0. */
 function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd = null, env = null } = {}) {
@@ -56,6 +57,10 @@ const WIRED_GROUPS = ['context', 'git-gate', 'learn']
   .map((verb) => ({ event: 'X', group: { hooks: [{ type: 'command', command: `hook ${verb} --root r` }] } }));
 const WIRED_MANIFEST = JSON.stringify({ managed: { settings_hooks: WIRED_GROUPS } });
 const WIRED_SETTINGS = JSON.stringify({ hooks: { X: WIRED_GROUPS.map((r) => r.group) } });
+
+// A Law IV act that loses data in EVERY state, so a row about the plumbing (the ledger, Bob's exit
+// code, the stand-down) does not depend on whether the process's cwd happens to be a dirty tree.
+const LAW4_ALWAYS = 'git reflog expire --expire=now --all';
 
 const bashPayload = (command) =>
   JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
@@ -120,7 +125,7 @@ test('an ask writes one ledger line naming the rule; a defer writes nothing', ()
   withLedgerRoot((root, ledger) => {
     assertDefers(hookRun('git-gate', { root, stdin: bashPayload('git status') }), 'status');
     assert.ok(!fs.existsSync(ledger), 'a defer must not touch the ledger');
-    askDecision(hookRun('git-gate', { root, stdin: bashPayload('git push --force') }), 'force');
+    askDecision(hookRun('git-gate', { root, stdin: bashPayload(LAW4_ALWAYS) }), 'force');
     askDecision(hookRun('git-gate', { root, stdin: bashPayload('git commit -m x') }), 'commit');
     askDecision(hookRun('rule-gate', { root, stdin: 'not json' }), 'not-json');
     const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
@@ -141,7 +146,7 @@ test('an ask writes one ledger line naming the rule; a defer writes nothing', ()
 // code with and without it, on Claude's ask tier and on Bob's exit-2 tier alike.
 test('GENESEED_GATE_PROBE skips the ledger line and never changes the verdict', () => {
   withLedgerRoot((root, ledger) => {
-    const stdin = bashPayload('git reset --hard HEAD');
+    const stdin = bashPayload(LAW4_ALWAYS);
     const probeEnv = { ...process.env, GENESEED_GATE_PROBE: '1' };
     for (const [verb, host] of [['git-gate', null], ['tool-gate', 'bob']]) {
       const probed = hookRun(verb, { root, stdin, host, env: probeEnv });
@@ -287,79 +292,70 @@ test('the alternate path key is read, and a well-formed but empty path defers', 
 });
 
 // ---------------------------------------------------------------------------------------------
-// Law IV at the boundary: a history-destroying git verb asks even when no commit/push is
-// present. `git checkout -- <path>` is included because it reverts to the INDEX and eats
-// unstaged work — the mistake this repo's own memory records. `push --force` trips this gate
-// rather than process 5's, because the stronger reason is the one the user should read.
-
-test('a destructive git verb asks under Deletion Is Deliberate', () => {
-  for (const cmd of ['git reset --hard HEAD~1',
-    'git clean -fd',
-    'git branch -D feature',
-    'git checkout -- src/',
-    'git push --force-with-lease',
-    'cd /repo && git reset --hard origin/main',
-    // The flag need not follow the verb, and a `+refspec` is a force push with no flag at all.
-    // Each of these slipped past when the regex wanted `--hard`/`-f`/`--force` right after it.
-    'git push -f origin main',
-    'git push origin -f',
-    'git push origin +main',
-    'git reset -q --hard',
-    'git clean -d -f',
-    'git clean -d -xf']) {
-    const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
-    assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
-  }
+// Law IV at the boundary, CALIBRATED TO REAL LOSS (user decision, 2026-10-17): the gate asks
+// only when a command would destroy something nothing else holds — a protected branch, an
+// unpushed unmerged branch, uncommitted work, a stash, the reflog, a file git cannot restore —
+// judged against the REAL state of a real repository, and it asks whenever it cannot tell. Every
+// row of `tests/helpers/loss_repos.mjs`'s table runs twice: on Claude's dialect (`git-gate`, the
+// payload's `cwd` naming the repo while the process stands elsewhere) it must ask or defer, and
+// on Bob's (`tool-gate --host bob`, Bob's own payload shape with no `cwd`, so the process cwd is
+// the repo) it must exit 2 or pass. `--no-consent` takes process 5 out of the Claude run, so only
+// Law IV can speak; on Bob process 5 is a warning with exit 0, never a BLOCKED line.
+test('Law IV asks exactly on real loss, per the shared policy table, on Claude and Bob', () => {
+  const ws = makeLossWorkspace();
+  try {
+    for (const row of LOSS_ROWS) {
+      const cmd = rowCommand(row, ws);
+      const what = `${cmd} [${row.state}]`;
+      ws.inState(row.state, () => {
+        const claude = hookRun('git-gate', { env: ws.env, extra: ['--no-consent'],
+          stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: ws.repo }) });
+        if (row.stop) {
+          const dec = askDecision(claude, what);
+          assert.match(dec.permissionDecisionReason, /Deletion Is Deliberate/, what);
+        } else {
+          assertDefers(claude, what);
+        }
+        const bob = hookRun('tool-gate', { host: 'bob', cwd: ws.repo, env: ws.env,
+          stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
+        assert.equal(bob.rc, row.stop ? 2 : 0, `bob: ${what}: ${bob.err}`);
+        assert.equal(/BLOCKED: Geneseed \(Deletion Is Deliberate\)/.test(bob.err), row.stop, `bob: ${what}: ${bob.err}`);
+      });
+    }
+  } finally { ws.cleanup(); }
 });
 
-// B5 confirmed-live gaps (claude-code.md / claude-verdict.md): the long/modern spellings of
-// the same Law IV acts above — all inside "deletion of what version control cannot restore".
-// `restore`/`switch`/`checkout -f` discard uncommitted work the same way `checkout -- ` does;
-// `stash drop/clear` deletes stashed work; `reflog expire` and `gc --prune=now` delete the safety
-// net reflog/dangling commits provide; `push :branch`/`push --delete` deletes a remote branch, the same act `--force` push
-// trips this gate for rather than process 5's.
-test('the B5 long/modern-spelling gaps ask under Deletion Is Deliberate too', () => {
-  for (const cmd of [
-    'git clean --force',
-    'git branch --delete --force x',
-    'git branch --force --delete x',
-    'git restore .',
-    'git restore src/file.js',
-    'git -C /repo restore .',
-    'cd /repo && git restore .',
-    // `--staged --worktree` together restores BOTH the index and the working tree, so it
-    // discards exactly like plain `restore` — unlike `--staged` alone (see the negative below).
-    'git restore --staged --worktree x',
-    'git push origin :main',
-    'git push --delete origin x',
-    'git checkout -f',
-    'git checkout --force',
-    'git switch -f other',
-    // git switch -h lists these as two SEPARATE options, not one flag's long and short spelling.
-    'git switch --force',
-    'git switch --discard-changes',
-    'git stash drop',
-    'git stash clear',
-    'git reflog expire --expire=now',
-    'git gc --prune=now']) {
-    const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
-    assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
-  }
+// FAIL CLOSED, and SAYS SO. A command the gate cannot read (a glob it would have to expand) and a
+// git it cannot run (PATH without git: the one spawn fails) both ask, and the reason tells the
+// user the gate could not verify — never a silent pass, and never a reason claiming a loss it
+// did not see.
+test('Law IV fails closed with a "could not verify" reason when it cannot read the state', () => {
+  const ws = makeLossWorkspace();
+  try {
+    const run = (command, env) => hookRun('git-gate', { env, extra: ['--no-consent'],
+      stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: ws.repo }) });
+    const glob = askDecision(run('rm -rf *.txt', ws.env), 'glob');
+    assert.match(glob.permissionDecisionReason, /could not verify/);
+    const noGit = askDecision(run('git reset --hard', { ...ws.env, PATH: '', Path: '' }), 'no git');
+    assert.match(noGit.permissionDecisionReason, /could not verify/);
+    // The same clean-tree reset passes once git can answer — the ask above was the missing git.
+    assertDefers(run('git reset --hard', ws.env), 'clean reset with git on PATH');
+  } finally { ws.cleanup(); }
 });
 
 // User decision (2026-10-17): removing a worktree, forced or not, is routine agent housekeeping,
 // not a Law IV deletion — so `worktree remove -f`/`--force` passes the git gate like a plain
 // `worktree remove`, on Claude (defer: rc 0, no stdout) and on Bob (rc 0, no BLOCKED line).
-// The forms beside it that discard history still ask on Claude and block (rc 2) on Bob, so
-// the carve-out is that one verb, not a loosened gate.
-test('git worktree remove --force/-f passes; branch -D and reset --hard still ask', () => {
+// The two acts beside it that delete the recovery net in EVERY state still ask on Claude and
+// block (rc 2) on Bob, so the carve-out is that one verb, not a loosened gate.
+test('git worktree remove --force/-f passes; reflog expire and gc --prune still ask', () => {
   for (const cmd of ['git worktree remove --force ../x', 'git worktree remove -f x']) {
     assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
     const bob = hookRun('git-gate', { stdin: bashPayload(cmd), host: 'bob' });
     assertDefers(bob, `bob: ${cmd}`);
     assert.doesNotMatch(bob.err, /BLOCKED/, `bob: ${cmd}`);
   }
-  for (const cmd of ['git branch -D x', 'git reset --hard']) {
+  for (const cmd of [LAW4_ALWAYS, 'git gc --prune=now']) {
     const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
     assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
     const bob = hookRun('git-gate', { stdin: bashPayload(cmd), host: 'bob' });
@@ -465,7 +461,7 @@ test('git-gate --no-consent skips only the process-5 ask; Law IV still asks', ()
   const opts = (command) => ({ stdin: bashPayload(command), extra: ['--no-consent'] });
   assertDefers(hookRun('git-gate', opts('git commit -m x')), 'commit');
   assertDefers(hookRun('git-gate', opts('git push origin main')), 'push');
-  const law4 = askDecision(hookRun('git-gate', opts('git reset --hard HEAD~1')), 'reset --hard');
+  const law4 = askDecision(hookRun('git-gate', opts(LAW4_ALWAYS)), 'reset --hard');
   assert.match(law4.permissionDecisionReason, /Deletion Is Deliberate/);
 });
 
@@ -507,10 +503,10 @@ test('a global git-gate stands down for a project install; the project gate stil
         { root, host, stdin: bashPayload(command), cwd: repo, env: e, extra });
       // The global is silent even on Law IV: the project's own gate is about to judge it.
       assertDefers(run(gcfg, 'git commit -m x'), `${folder}: global gate on a commit`);
-      assertDefers(run(gcfg, 'git reset --hard HEAD~1'), `${folder}: global gate on reset --hard`);
+      assertDefers(run(gcfg, LAW4_ALWAYS), `${folder}: global gate on reset --hard`);
       // The project built with --no-consent: its commit passes, its Law IV still asks.
       assertDefers(run(pcfg, 'git commit -m x', ['--no-consent']), `${folder}: project --no-consent`);
-      askDecision(run(pcfg, 'git reset --hard HEAD~1', ['--no-consent']), `${folder}: project law-4`);
+      askDecision(run(pcfg, LAW4_ALWAYS, ['--no-consent']), `${folder}: project law-4`);
       // The opt-out un-silences the global.
       askDecision(run(gcfg, 'git commit -m x', [], { ...env, GENESEED_STACK_GLOBAL: '1' }),
         `${folder}: GENESEED_STACK_GLOBAL`);
@@ -542,7 +538,7 @@ test('a gate stays loud unless a project gate replaces it: other globals, cd els
   // Two ways the first cut broke it, each a written-out row driven through the real entry point:
   //   * another GLOBAL in the project dir (`CLAUDE_CONFIG_DIR=~/.claude-work`, a session started
   //     in `~`, where `~/.claude` is still there with or without its emit marker) is not a
-  //     project install — nothing replaces the relocated global's gate, so `git push --force`
+  //     project install — nothing replaces the relocated global's gate, so `LAW4_ALWAYS`
   //     must still ask;
   //   * the agent `cd`s from project A into repo B: B's project install was never loaded (Claude
   //     loads project hooks from `$CLAUDE_PROJECT_DIR`, the session's root), so the gate keys on
@@ -566,7 +562,7 @@ test('a gate stays loud unless a project gate replaces it: other globals, cd els
     const env = { ...process.env, ...homeOverrides(home), CLAUDE_CONFIG_DIR: work };
     for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT', 'GENESEED_LLM', 'CLAUDE_PROJECT_DIR']) delete env[k];
     const force = (cwd, e = env) => hookRun('git-gate',
-      { root: work, stdin: bashPayload('git push --force'), cwd, env: e });
+      { root: work, stdin: bashPayload(LAW4_ALWAYS), cwd, env: e });
 
     askDecision(force(home), 'another global ~/.claude (with emit marker) silenced the gate');
     askDecision(force(repoA, { ...env, CLAUDE_PROJECT_DIR: home }),
@@ -629,7 +625,7 @@ test('only the session\'s own project dir silences: no walk up, for any host', (
       ['a project .claude/ carrying a hand-written claude-global emit marker', hand, hand, 'ask'],
     ];
     for (const [label, cpd, cwd, want] of rows) {
-      const r = hookRun('git-gate', { root: work, stdin: bashPayload('git push --force'), cwd,
+      const r = hookRun('git-gate', { root: work, stdin: bashPayload(LAW4_ALWAYS), cwd,
         env: cpd ? { ...env, CLAUDE_PROJECT_DIR: cpd } : env });
       if (want === 'ask') askDecision(r, label); else assertDefers(r, label);
     }
@@ -644,9 +640,9 @@ test('only the session\'s own project dir silences: no walk up, for any host', (
 
 test('bob: Laws I and IV exit 2 with the reason on stderr; consent rules warn and exit 0', () => {
   for (const [verb, stdin, what] of [
-    ['tool-gate', bashPayload('git reset --hard'), 'Deletion Is Deliberate'],
+    ['tool-gate', bashPayload(LAW4_ALWAYS), 'Deletion Is Deliberate'],
     ['tool-gate', contentPayload('src/a.js', 'AKIAIOSFODNN7EXAMPLE'), 'Sealed Secrets'],
-    ['git-gate', bashPayload('git push --force'), 'Deletion Is Deliberate']]) {
+    ['git-gate', bashPayload(LAW4_ALWAYS), 'Deletion Is Deliberate']]) {
     const r = hookRun(verb, { stdin, host: 'bob' });
     assert.equal(r.rc, 2, `${what}: expected exit 2, got ${r.rc}`);
     assert.equal(r.out, '', `${what}: Bob ignores stdout, nothing should be there: ${r.out}`);
@@ -665,7 +661,7 @@ test('bob: a deny is ledgered, a warning is not', () => {
   withLedgerRoot((root, ledger) => {
     hookRun('tool-gate', { root, host: 'bob', stdin: bashPayload('git commit -m x') });
     assert.ok(!fs.existsSync(ledger));
-    hookRun('tool-gate', { root, host: 'bob', stdin: bashPayload('git push --force') });
+    hookRun('tool-gate', { root, host: 'bob', stdin: bashPayload(LAW4_ALWAYS) });
     const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     assert.deepEqual(lines.map((l) => l.rule), ['law-4']);
   });
@@ -729,7 +725,7 @@ test('bob apply_diff: a secret only in SEARCH passes, in REPLACE blocks', () => 
 
 test('bob-shaped execute_command with a destructive git act still blocks (rc 2)', () => {
   const r = hookRun('tool-gate', {
-    stdin: bobPayload('execute_command', { command: 'git push --force' }),
+    stdin: bobPayload('execute_command', { command: LAW4_ALWAYS }),
     host: 'bob',
   });
   assert.equal(r.rc, 2, `execute_command/force-push: expected exit 2, got ${r.rc}, stderr=${r.err}`);
@@ -740,7 +736,7 @@ test('a Claude-shaped payload is unchanged by the Bob normalisation', () => {
   // Same assertion as the existing Bob dialect test above, re-run through `tool-gate` with the
   // ALREADY-Claude-shaped payload, to prove the new normalisation step is a no-op here: nothing
   // it sets (`tool_input`, `tool_name`, `hook_event_name`) was missing to begin with.
-  const r = hookRun('tool-gate', { stdin: bashPayload('git push --force'), host: 'bob' });
+  const r = hookRun('tool-gate', { stdin: bashPayload(LAW4_ALWAYS), host: 'bob' });
   assert.equal(r.rc, 2, `claude-shaped unchanged: expected exit 2, got ${r.rc}`);
   assert.match(r.err, /Deletion Is Deliberate/);
   // process-5 (consent) has no block tier on Bob: a stderr nudge, exit 0 — a defer, not a block.

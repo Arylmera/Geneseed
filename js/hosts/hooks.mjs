@@ -58,6 +58,7 @@ import {
   GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
+import { LOSS_CANDIDATE_RE, lossReason } from './loss.mjs';
 import { selfAndParents, readStdin } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 
@@ -71,45 +72,13 @@ import { recordUse } from './usage.mjs';
 // one line and a `commit` on the next are two commands, not one.
 const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 
-// Law IV's boundary half: the git verbs that rewrite or discard history. Law IX (now rigor 5)
-// says a rule in a prompt is a request and a rule at a boundary is a constraint; before this
-// regex the harness enforced one doctrine rule and no law. `checkout --` is listed because it
-// reverts to the INDEX and eats unstaged work; `checkout <branch>` is not. `clean -f` matches
-// any flag cluster carrying `f` (`-fd`, `-xf`), in any position (`clean -d -f`), and never `-n`.
-// `reset`, `clean` and `push` take their flags ANYWHERE after the verb (`reset -q --hard`,
-// `push -f origin main`), so each reads `[^\n]*` up to the flag rather than requiring it next.
-// A forced push is `--force*`, a `-f` cluster, or a `+refspec` (`push origin +main`) — the last
-// is a force push with no flag at all. `push --force*` trips this gate rather than process 5's
-// so the stronger reason is the one the user reads.
-//
-// B5 (claude-code.md / claude-verdict.md) found the long/modern spellings of the same acts
-// still passed: `clean --force` (the long flag, not a `-f` cluster), `branch --delete --force`
-// (the long form of `-D`, EITHER flag order — `--force --delete` is the same act; an un-forced
-// `--delete` refuses on an unmerged branch exactly like `-d`, so it stays OUT; `-D --force`/
-// `--delete -f`/`-d --force`/`-df` are the SAME act again and are a known ceiling this does not
-// chase — add them if a probe ever shows one in real use), `checkout -f`/`--force` and
-// `switch -f`/`--force`/`--discard-changes`
-// (git's own `-h` lists `-f, --force` AND a separate `--discard-changes` for switch — both
-// discard uncommitted work the same way `checkout --` does), `reflog expire` and `gc
-// --prune=now` (delete the reflog/dangling-commit safety net recovery depends on), and `push
-// :branch`/`push --delete` (deletes a remote branch — the colon form needs a space before the
-// `:` so `push origin HEAD:main`, an ordinary refspec, is not caught).
-//
-// `worktree remove --force`/`-f` is deliberately NOT here (user decision, 2026-10-17): removing
-// a worktree is routine agent housekeeping, so it passes like a plain `worktree remove`. The
-// OpenCode guard's `SHELL_WARN_RE` and `LAW_IV_BASH` (js/hosts/settings.mjs) dropped it too.
-//
-// `restore` and `stash drop`/`stash clear` are carved OUT of the shared `\bgit\b[^\n]*\b(…)`
-// wrapper above and anchored to the verb position instead (`git`, an optional `-C <path>`, then
-// the verb immediately): every other arm here needs a flag that is vanishingly unlikely in a
-// commit message or a filename, but "restore" needs no flag at all and "drop"/"clear" are
-// ordinary English, so `git commit -m "restore working behavior"` or `git stash push -m "clear
-// old state"` would otherwise trip Law IV on the MESSAGE TEXT, not the command. Anchoring to
-// the verb position is also what lets `restore` ask for `--staged --worktree` together (that
-// combination DOES discard working-tree changes, unlike `--staged` alone) while still deferring
-// on `--staged` alone.
-const DESTRUCTIVE_GIT_RE =
-  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s(?:-[a-zA-Z]*f|--force\b)|branch\b[^\n]*\s(?:-D\b|--delete\b[^\n]*--force\b|--force\b[^\n]*--delete\b)|checkout\s+--\s|checkout\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b)|switch\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b|--discard-changes\b)|reflog\b[^\n]*\bexpire\b|gc\b[^\n]*--prune\b|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S|\s--delete\b|\s:\S))|\bgit(?:\s+-C\s+\S+)*\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))|\bgit(?:\s+-C\s+\S+)*\s+stash\s+(?:drop|clear)\b/;
+// Law IV's boundary half lives in `./loss.mjs`: it asks only when a command would really lose
+// data — a protected branch deleted or force-pushed, an unpushed unmerged branch deleted,
+// uncommitted work discarded on a tree that holds some, a stash dropped while one exists, the
+// reflog or unreachable commits pruned, a removal of what git cannot restore — and fails closed
+// when it cannot tell (user decision, 2026-10-17, replacing the form-only `DESTRUCTIVE_GIT_RE`).
+// `LOSS_CANDIDATE_RE` is the cheap prefilter: an ordinary command fails it and never reaches the
+// parse or the one `git` spawn behind it. `worktree remove --force` stays out, as before.
 
 // `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
 // false allow publishes. So the exemption holds only when the ENTIRE command is built from
@@ -465,9 +434,15 @@ const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t);
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
-  if (DESTRUCTIVE_GIT_RE.test(command)) {
-    return ask(args, 'git-gate', 'law-4', 'Geneseed (Deletion Is Deliberate) \u2014 a history-rewriting or '
-      + 'discarding git act needs confirmation bound to this specific command');
+  if (LOSS_CANDIDATE_RE.test(command)) {
+    // A pass here FALLS THROUGH: a force push to a feature branch loses nothing, but it is still
+    // a push, and process 5 below still asks for it.
+    const loss = lossReason(scanSegments(command).map((seg) => seg.match(SCAN_TOKEN_RE) || []),
+      (payload && payload.cwd) || process.cwd());
+    if (loss) {
+      return ask(args, 'git-gate', 'law-4', `Geneseed (Deletion Is Deliberate) \u2014 ${loss}. `
+        + 'Confirm this specific command, or leave the data in place.');
+    }
   }
   // Before `--no-consent`: that flag drops the process pack's rule, not this one.
   const scan = rootScan(command);

@@ -84,58 +84,41 @@ const consentRuleOn = (d, excluded = []) =>
  * doctrine section — and a boundary that keeps asking for a rule the install did not adopt is
  * the one disagreement the tiering is not allowed to produce. (It does NOT follow that the
  * string is gone from the bundle; see `claudeHookGroups` for what D5 ships anyway and why.)
- * `rm -rf *`, the force pushes and the history-discarding git verbs (`reset --hard`,
- * `clean -f`, `branch -D`, `checkout --`) stay in EVERY build: they are Law IV's territory —
- * an always-on invariant — not the process pack's. They mirror `DESTRUCTIVE_GIT_RE` in
- * js/hosts/hooks.mjs, so Claude's git-gate and OpenCode's permission ask about the same acts;
- * before, OpenCode only logged the last four. A glob is not a regex, so the mirror is the
- * closest glob for each act rather than an exact copy: the `* ` forms catch a flag that comes
- * after other words (`push origin -f`, `reset -q --hard`, `clean -d -f`) and `git push *+*`
- * a `+refspec` force push. The regex stays the stricter reader — it also sees a flag cluster
- * with `f` not first (`clean -d -xf`), which a glob cannot say without matching `--exclude=f`.
+ * `rm -rf *` and the Law IV keys stay in EVERY build: they are Law IV's territory — an
+ * always-on invariant — not the process pack's.
  *
- * B5's (claude-code.md / claude-verdict.md) long/modern spellings, added here appended (never
- * reorder: OpenCode's permission engine evaluates key order with `findLast`, so moving an
- * existing key can change which VALUE wins on a file that already disagrees with one — adding
- * only is always safe, since every key here maps to the same `'ask'`). `clean --force`, the
- * long flag; `branch --delete --force`, the long form of `-D` (both orders, since a glob has
- * no "either order" — an un-forced `--delete` already refuses on an unmerged branch exactly
- * like `-d`, so it is deliberately NOT a key here; `-D --force`/`--delete -f`/`-d --force`/
- * `-df` are the same act again and are a known ceiling this does not chase); `checkout
- * -f`/`--force` and `switch -f`/`--force`/`--discard-changes` (git's own `switch -h` lists
- * `-f, --force` and `--discard-changes` as two separate options); `reflog expire`; `gc
- * --prune` (matched bare, since a `--prune` with no `=now` still eventually prunes); and `push
- * *--delete*` / `push * :*` (a literal space before the colon, so `push origin HEAD:main`, an
- * ordinary refspec, does not match).
+ * LAW IV HERE IS ONLY WHAT LOSES DATA IN EVERY STATE (user decision, 2026-10-17). The gate asks
+ * only when a command would really lose data, and whether it would — a dirty tree, an untracked
+ * file, an unpushed branch, a protected target, a stash — is STATE, which a glob cannot read. So
+ * the state-aware decisions moved into the OpenCode guard plugin (`lossReason`, the twin of
+ * js/hosts/loss.mjs, which BLOCKS a real loss because `tool.execute.before` has no ask tier), and
+ * this list keeps what loses data whatever the state: the protected-branch forms below, and the
+ * two acts that delete the recovery net, `reflog expire` and `gc --prune` (matched bare and with a word before it, since a `--prune` with no `=now`
+ * still eventually prunes). Every force-push, `reset --hard`, `clean -f`, `branch -D`,
+ * `checkout`/`switch` force, `stash drop`/`clear` and remote-delete glob this list used to carry
+ * was REMOVED, the way PR #313 removed `git worktree remove -f`: removal from this list also
+ * removes the keys from `OWNED_BASH`, so an `opencode.json` written before keeps them — neither
+ * taken back nor reported as stranded, since Geneseed no longer claims them. They still ask
+ * there (fail-safe, one prompt); the user deletes them by hand (the CHANGELOG upgrade note says
+ * which). The process-5 `git push*` ask still covers every push while that rule is on.
  *
- * `git worktree remove -f`/`--force` was a key here and was REMOVED (user decision, 2026-10-17:
- * worktree removal is routine housekeeping, not a Law IV deletion). Removal from this list also
- * removes the four globs from `OWNED_BASH`, so an `opencode.json` written before keeps them —
- * neither taken back nor reported as stranded, since Geneseed no longer claims them. Its user
- * deletes them by hand (the CHANGELOG upgrade note says so).
- *
- * `git restore` is DELIBERATELY NOT HERE. Its rule is "ask unless `--staged` appears ALONE" —
- * `--staged --worktree` together still discards the working tree — and a glob has no negation,
- * so the closest glob (`git restore*`) would ask on the harmless `--staged`-alone case too. The
- * regex (`DESTRUCTIVE_GIT_RE`) gets that exactly right; `stash drop`/`clear` have the SAME
- * `restore` anchoring concern in the regex (a bare word / ordinary English, matched there only
- * in verb position) but no false-positive risk as a glob, since OpenCode matches a glob against
- * the FULL sub-command text (`opencode-verdict.md` CR-6) — `git stash drop*` cannot match a
- * DIFFERENT sub-command like `git stash push -m "clear old state"`, so they ARE glob keys here.
- * Guard-only acts (currently just `restore`) still warn via the OpenCode guard plugin's
- * `SHELL_WARN_RE` — see `adapters/opencode/plugins/geneseed-guard.js`.
+ * PROTECTED BRANCHES BY NAME are the one state-free loss a glob CAN say: a force push to, or a
+ * delete of, `main`/`master` loses work whatever the tree holds. So `PROTECTED_GLOBS` asks for
+ * those forms even when the guard plugin is off or in `warn` mode (a remote's OTHER default
+ * branch needs `refs/remotes/<r>/HEAD`, which only the guard reads). Every key ENDS in the
+ * branch name — never in a literal `" *"`, which upstream's `Wildcard.match` makes optional —
+ * so `mainline` or `HEAD:loop/x` never match, and none matches a push that is not forced or a
+ * delete. They come last, so `findLast` lets them win over the loop chain's allows.
  */
-const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 'git push * -f*',
-  'git push *+*', 'git reset --hard*', 'git reset * --hard*', 'git clean -f*', 'git clean * -f*',
-  'git branch -D*', 'git checkout -- *',
-  'git clean --force*', 'git clean * --force*',
-  'git branch *--delete*--force*', 'git branch *--force*--delete*',
-  'git checkout -f*', 'git checkout * -f*', 'git checkout --force*', 'git checkout * --force*',
-  'git switch -f*', 'git switch * -f*', 'git switch --force*', 'git switch * --force*',
-  'git switch --discard-changes*', 'git switch * --discard-changes*',
-  'git reflog expire*', 'git gc --prune*', 'git gc * --prune*',
-  'git stash drop*', 'git stash clear*',
-  'git push *--delete*', 'git push * :*'];
+const PROTECTED_GLOBS = ['main', 'master'].flatMap((b) => [
+  `git push --force* ${b}`, `git push * --force* ${b}`, `git push -f* ${b}`, `git push * -f* ${b}`,
+  `git push --force* *:${b}`, `git push * --force* *:${b}`, `git push -f* *:${b}`, `git push * -f* *:${b}`,
+  `git push * +${b}`, `git push * +*:${b}`, `git push * +*:refs/heads/${b}`,
+  `git push * :${b}`, `git push * :refs/heads/${b}`, `git push *--delete* ${b}`,
+  `git branch -D ${b}`, `git branch * -D ${b}`,
+  `git branch *--delete*--force* ${b}`, `git branch *--force*--delete* ${b}`,
+]);
+const LAW_IV_BASH = ['git reflog expire*', 'git gc --prune*', 'git gc * --prune*', ...PROTECTED_GLOBS];
 
 /**
  * User decision (2026-10-10): a loop runs on its own `loop/*` branch, never `main`/`master`, so
@@ -150,12 +133,13 @@ const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 
  *
  * ORDER IS LOAD-BEARING. `PUSH_CHAIN` (which `defaultPermission` and `OWNED_BASH` both read)
  * puts these AFTER `git push*`'s ask (so a loop
- * push is not swallowed by the blanket consent ask) and BEFORE `LAW_IV_BASH` (so `findLast`
- * — OpenCode's own `permission.bash` evaluator — lets a force push, a `+refspec`, or a
- * `--delete`/bare-`:` push still ask even when the target is `loop/*`; those LAW_IV_BASH keys
- * match the same command and come later, so they win). Never move this block to before
- * `git push*` or after `LAW_IV_BASH` — either moves the `findLast` boundary the ordering above
- * depends on.
+ * push is not swallowed by the blanket consent ask) and BEFORE `LAW_IV_BASH`. Never move this
+ * block to before `git push*` or after `LAW_IV_BASH` — either moves the `findLast` boundary the
+ * ordering above depends on. Since `LAW_IV_BASH` keeps no push glob (2026-10-17), a forced or
+ * `+refspec` push to `loop/*` is no longer re-asked by Law IV: `loop/*` is never a protected
+ * branch, so it loses nothing Law IV guards. The tiers below still ask for every 2+-token prefix
+ * (`-f origin` included), and `git push*` still asks for a `+HEAD:loop/x` or `:loop/x` form,
+ * which no allow key matches.
  */
 const LOOP_PUSH_ALLOW = ['git push * HEAD:loop/*', 'git push * HEAD:refs/heads/loop/*'];
 
@@ -211,9 +195,9 @@ const LOOP_PUSH_ALLOW = ['git push * HEAD:loop/*', 'git push * HEAD:refs/heads/l
  * as a legitimate bare remote) — indistinguishable from a real remote name by token count alone,
  * and not a practical gap: a leading `-`/`--` token is parsed by git as an OPTION, never as the
  * remote, so this exact shape either errors (no remote given) or reads the refspec text itself
- * as the remote and fails to resolve it — it does not reach a working push to `main`. Still
- * caught by `LAW_IV_BASH`'s existing anywhere-in-the-command globs regardless of position
- * (`'git push *--force*'`, `'git push * -f*'`, et al.), independently of this chain.
+ * as the remote and fails to resolve it — it does not reach a working push to `main`. (Before
+ * 2026-10-17 `LAW_IV_BASH`'s force-push globs re-asked it too; they are gone, and the OpenCode
+ * guard's `lossReason` now judges a forced push by its real target.)
  */
 const LOOP_PUSH_ASK_EXTRA = ['git push * * HEAD:loop/*', 'git push * * HEAD:refs/heads/loop/*'];
 const LOOP_PUSH_ALLOW_FLAG = [

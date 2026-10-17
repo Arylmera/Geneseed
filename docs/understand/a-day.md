@@ -16,12 +16,12 @@ The agent interviews you briefly and drafts `PROFILE.md`: your role, your stack,
 
 ### 1. The agent tries to push
 
-You ask the agent to clean up a branch and it decides to force-push. A gate runs before the shell does, so the command waits for you. On Claude Code it looks like this (the prompt's layout depends on your version; the reason text is Geneseed's):
+You ask the agent to clean up history and it decides to force-push `main`. A gate runs before the shell does, so the command waits for you. (A force-push to its own feature branch would not stop here: the gate asks only when data would really be lost.) On Claude Code it looks like this (the prompt's layout depends on your version; the reason text is Geneseed's):
 
 ```text
-● Bash(git push --force origin feature/login)
-  Geneseed (Deletion Is Deliberate) — a history-rewriting or discarding git act
-  needs confirmation bound to this specific command
+● Bash(git push --force origin main)
+  Geneseed (Deletion Is Deliberate) — `git push` would force-push the protected
+  branch main. Confirm this specific command, or leave the data in place.
   Do you want to proceed?  Yes / No
 ```
 
@@ -30,10 +30,10 @@ An ordinary `git commit` or `git push` gets a milder question when the **process
 Bob has no prompt, so the same force-push is refused outright:
 
 ```text
-[geneseed] BLOCKED: Geneseed (Deletion Is Deliberate) — a history-rewriting or discarding git act needs confirmation bound to this specific command
+[geneseed] BLOCKED: Geneseed (Deletion Is Deliberate) — `git push` would force-push the protected branch main. Confirm this specific command, or leave the data in place.
 ```
 
-On OpenCode the question comes from OpenCode's own permission prompt, which Geneseed configures in `opencode.json`. Every catch goes into a log, and `geneseed status` counts the catches by rule.
+OpenCode has no prompt a plugin can raise, so Geneseed's guard plugin refuses it the same way. Every catch goes into a log, and `geneseed status` counts the catches by rule.
 
 ### 2. You call a skill by name
 

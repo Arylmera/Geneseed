@@ -22,7 +22,7 @@ Most of the harness is *asked*. A few rules, where one mistake is expensive and 
 
 On Claude Code and OpenClaude the hooks never block silently. They make the host **ask you**, with the reason shown:
 
-- **Destructive git**: a force-push, `reset --hard`, `clean -f`, `branch -D` or `checkout --`. Wired in every build.
+- **Real data loss**: a force-push or delete of `main`/`master`/the remote's default branch, `branch -D` of an unpushed unmerged branch, `reset --hard`/`checkout --`/`clean -f` and the like over uncommitted work, a stash dropped, the reflog pruned, an `rm` of files git cannot restore. Judged against the repository's real state, so the same command on a clean tree passes; when the gate cannot tell, it asks. Wired in every build.
 - **Commit and push**: every `git commit` and `git push`, including chained one-liners and `git -C <path>`. This question belongs to the **process** pack. Build without it and the git gate stays wired. Only this question goes away, and destructive git is still caught.
 - **A scan of a whole filesystem**: a recursive `find`, `du`, `grep -r`, `rg` or `Get-ChildItem -Recurse` rooted at `/`, `/c` or `C:\`, which in Git Bash walks every drive for hours. Wired in every build.
 - **Credentials**: a write or edit whose content looks like a real key (AWS, GitHub, Anthropic, Slack, or a private-key block), anywhere except a `.env` file.

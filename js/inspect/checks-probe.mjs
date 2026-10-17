@@ -6,7 +6,7 @@
  * shim's paths and `hookShellProblems` infers shell drift — none of them observes a verdict. So
  * this runs each live install's own gate command, AS ITS SETTINGS SPELL IT, through the shell
  * the host would use, on two canned payloads: one Law IV call that every build must refuse
- * (`git reset --hard HEAD`, also in Bob's `BLOCK_RULES`) and one that must pass (`git status`).
+ * (`git reflog expire --expire=now --all`, Law IV in Bob's `BLOCK_RULES`) and one that must pass (`git status`).
  * Both directions are judged, because "allows everything" and "refuses everything" (the
  * PowerShell-fallback case `hookShellProblems` can only infer) are both broken gates.
  *
@@ -44,7 +44,9 @@ import { spawnSync } from 'node:child_process';
  */
 const PROBED_VERB = { claude: 'git-gate', openclaude: 'git-gate', bob: 'tool-gate' };
 
-export const BAD_COMMAND = 'git reset --hard HEAD';
+// A Law IV act that loses data in EVERY state: since the gate asks only on real loss
+// (2026-10-17), a state-dependent act such as `reset --hard` would pass on a clean tree.
+export const BAD_COMMAND = 'git reflog expire --expire=now --all';
 export const GOOD_COMMAND = 'git status';
 
 const PROBE_TIMEOUT_MS = 20_000;

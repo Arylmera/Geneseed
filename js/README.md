@@ -76,7 +76,8 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`) |
 | `usage.mjs` | The usage counter `tool-gate` runs: one `{day, kind, name}` line per Skill or subagent call into `notebook/usage.jsonl`. Hook path: builtins only, silent, never throws |
 | `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate. No spawn: the CLI and web console import it |
-| `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `currentBranch`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate and `js/loop/cli.mjs`'s commit-message writer |
+| `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `gitCommonDirOf`, `currentBranch`, `protectedBranches`, `stashExists`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate, `loss.mjs` and `js/loop/cli.mjs`'s commit-message writer |
+| `loss.mjs` | Law IV calibrated to real loss: `lossReason` decides whether a command would really lose data (protected branch, unpushed branch, dirty tree, stash, reflog, files git cannot restore) and fails closed. The gate path's one `git` spawn, reached only after `LOSS_CANDIDATE_RE` matched. Twin: the OpenCode guard plugin |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json` (one `loadJsonObject` reader for all of them) and the managed blocks |
 | `shim.mjs` | The machine-wide hook shim: its path, body, liveness (`shimDead`, read on every CLI run), `hookPrefix`/`hookRunnerEntry`. Kept cheap to import |
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
