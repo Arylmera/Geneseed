@@ -184,15 +184,22 @@ export function shipLeanLaws(items, theme, cfgDir, owned, footprint) {
     // nothing to detect, not because the gate cannot see it.
     if (text !== null && parts.length && dirs.has(parts[0])) {
       const dest = path.join(cfgDir, ...parts);
-      // `claimLeaf` BEFORE `mkdirSync`, for the same reason `emitClaudeRender`'s rules stub
-      // does: `safeLeaf` needs no directory created first, and creating one ahead of the
-      // refusal would plant it at a linked ancestor's target.
-      if (claimLeaf(cfgDir, dest, rel)) {
-        mkdirSync(path.dirname(dest), { recursive: true });
-        writeText(dest, text);
-        owned.push(rel);
-      }
+      claimAndWrite(cfgDir, dest, rel, text, owned);
     }
   }
 }
 
+/**
+ * Claim-on-create one leaf: write `text` to `dest` and own `rel` only when `claimLeaf`
+ * allows it. `claimLeaf` runs BEFORE `mkdirSync`: `safeLeaf` walks up to the nearest
+ * EXISTING ancestor (`resolvePath`'s own contract), so it needs no directory created first —
+ * and creating the parent first would plant an empty directory at a linked ancestor's target
+ * the moment before the refusal fires. A leaf directly in an existing `root` makes the
+ * `mkdirSync` a no-op.
+ */
+export function claimAndWrite(root, dest, rel, text, owned) {
+  if (!claimLeaf(root, dest, rel)) return;
+  mkdirSync(path.dirname(dest), { recursive: true });
+  writeText(dest, text);
+  owned.push(rel);
+}

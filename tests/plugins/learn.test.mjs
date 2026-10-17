@@ -8,6 +8,7 @@ import path from "node:path"
 import { GeneseedLearn } from "../../adapters/opencode/plugins/geneseed-learn.js"
 const { resolveAgentName, appendAgentLesson } = GeneseedLearn
 import { makeSandbox } from "../helpers/sandbox.mjs";
+import { buildLearnPrompt, learnPromptHead } from "../../js/hosts/hooks-learn.mjs"
 
 test("resolveAgentName: reads agent from session meta, rejects garbage", () => {
   assert.equal(resolveAgentName({ agent: "reviewer" }), "reviewer")
@@ -163,4 +164,25 @@ test("writeMemories: the plugin matches the harness on update, archive and mixed
   const order = process.platform === "win32" ? ["alpha", "Beta", "locked", "mid", "Zeta"] : ["Beta", "Zeta", "alpha", "locked", "mid"]
   const desc = { alpha: "A", Beta: "B", locked: "L", mid: "M", Zeta: "Z2" }
   assert.equal(plugin["topics/t.md"], `# t\n\n${order.map((s) => `- [${s}](../${s}.md) — ${desc[s]}`).join("\n")}\n`)
+})
+
+test("buildPrompt stays in parity with js/hosts/hooks-learn.mjs's buildLearnPrompt (twin)", async () => {
+  const src = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-learn.js"), "utf8")
+  const m = src.match(/const MAX_STORED_CHARS = \d+\nfunction buildPrompt\(notes, facts\) \{[\s\S]*?\n\}\n/)
+  assert.ok(m, "MAX_STORED_CHARS + buildPrompt not found in geneseed-learn.js")
+  // The head is the plugin's own literal either way: learnPromptHead() extracts it from this file.
+  const twin = new Function("LEARN_PROMPT_HEAD", `${m[0]}; return buildPrompt`)(learnPromptHead())
+  const fact = (desc, topic) => ({ desc, topic })
+  // 200 lines of ~70 chars run well past MAX_STORED_CHARS (8000), so the cap and the
+  // "more stored facts not shown" line are both exercised.
+  const many = new Map(Array.from({ length: 200 }, (_, i) =>
+    [`fact-${i}`, fact(`a stored lesson long enough to count, number ${i} of many`, `t${i % 3}`)]))
+  const rows = [
+    ["empty store", "some notes", new Map()],
+    ["one fact", "notes — with a dash", new Map([["alpha", fact("A thing", "general")]])],
+    ["no description", "n", new Map([["bare", fact("", "z")], ["dup", fact("D", "z")]])],
+    ["over the cap", "n", many],
+  ]
+  for (const [label, notes, facts] of rows) assert.equal(twin(notes, facts), buildLearnPrompt(notes, facts), label)
+  assert.match(buildLearnPrompt("n", many), /more stored facts not shown/, "the cap row must reach the cap")
 })

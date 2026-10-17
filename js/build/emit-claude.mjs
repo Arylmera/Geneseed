@@ -7,24 +7,21 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import { migrateMemoryIndex } from '../hosts/memory-files.mjs';
 import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import { ensureAgentOverridesStub, writeAliasCommands } from '../hosts/opencode.mjs';
 import {
   managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
   unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes,
 } from '../hosts/settings.mjs';
-import { claimLeaf } from '../hosts/owned.mjs';
-import { writeText } from '../lib/fs.mjs';
 import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
-import { assertSourceComplete, phaseLog } from './bundle.mjs';
+import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs';
 import {
-  globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
+  claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
 import { renderAll, renderFile } from './render.mjs';
 import {
-  BOB_RULES_STUB, ensureContextStub, ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex,
+  BOB_RULES_STUB, ensureContextStub, ensureExcludesStub, ensureNotebookIndex,
   ensureProfileStub,
   ensureRulesStub, ensureWikiStub, WIKI_FILE,
 } from './stubs.mjs';
@@ -100,16 +97,8 @@ export function emitClaudeRender(cfg, job) {
   // slim shadow stub whose only job is to have the same filename.
   if (isBob && agentText !== null) {
     const rulesMd = path.join(cfgDir, 'rules', 'geneseed.md');
-    // `claimLeaf` BEFORE `mkdirSync`: `safeLeaf` walks up to the nearest EXISTING ancestor
-    // (`resolvePath`'s own contract), so it needs no directory created first — and creating
-    // `rules/` first would plant an empty directory at a linked ancestor's target the moment
-    // before the refusal fires.
-    if (claimLeaf(cfgDir, rulesMd, 'rules/geneseed.md')) {
-      mkdirSync(path.dirname(rulesMd), { recursive: true });
-      writeText(rulesMd, scope === 'project' ? BOB_RULES_STUB
-        : stripCapabilityLinks(prefixedAgentText('../') || agentText));
-      owned.push('rules/geneseed.md');
-    }
+    claimAndWrite(cfgDir, rulesMd, 'rules/geneseed.md', scope === 'project' ? BOB_RULES_STUB
+      : stripCapabilityLinks(prefixedAgentText('../') || agentText), owned);
   }
 
   ensureAgentOverridesStub(cfg, cfgDir);
@@ -146,8 +135,7 @@ export function emitClaudeRender(cfg, job) {
   }
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
-  ensureMemoryIndex(path.join(cfgDir, 'memory'));
-  migrateMemoryIndex(path.join(cfgDir, 'memory'));
+  ensureMemoryStore(path.join(cfgDir, 'memory'));
   const nbStatus = globalNotebook(cfgDir, items, out, cfg.src);
   ensureNotebookIndex(path.join(cfgDir, 'notebook'));
   // context.json too: the root names it as the project's own manifest, and until 2026-10 this
@@ -172,10 +160,7 @@ export function emitClaudeRender(cfg, job) {
       // `!existsSync(gi)` is exactly the case a DANGLING symlink also satisfies — it reads
       // as absent — so `claimLeaf` (which lstats) runs before the write, not instead of
       // this check.
-      if (claimLeaf(cfgDir, gi, '.gitignore')) {
-        writeText(gi, `${giLines.join('\n')}\n`);
-        owned.push('.gitignore');
-      }
+      claimAndWrite(cfgDir, gi, '.gitignore', `${giLines.join('\n')}\n`, owned);
     } else if (oldOwned.includes('.gitignore')) {
       owned.push('.gitignore');
     }
