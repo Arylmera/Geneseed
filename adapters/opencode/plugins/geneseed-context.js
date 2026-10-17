@@ -929,6 +929,33 @@ function runsUnpiped(command, line) {
   return false
 }
 
+// An `apply_patch` call names its targets only in `patchText` markers. Copied from
+// geneseed-guard.js (tests/plugins/helper_parity.test.mjs holds the copies equal); `from` is
+// the pre-move path of an `Update File` + `Move to`, `path` where the file lands.
+function patchSections(patchText) {
+  const out = []
+  let current = null
+  const flush = () => { if (current) out.push(current) }
+  const lines = String(patchText).split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    let m = /^\*\*\* (?:Add|Delete) File:\s*(.+)$/.exec(line)
+    if (m) { flush(); current = { from: "", path: m[1].trim(), added: [] }; continue }
+    m = /^\*\*\* Update File:\s*(.+)$/.exec(line)
+    if (m) {
+      flush()
+      let from = "", p = m[1].trim()
+      const mv = /^\*\*\* Move to:\s*(.+)$/.exec(lines[i + 1] || "")
+      if (mv) { from = p; p = mv[1].trim(); i++ }
+      current = { from, path: p, added: [] }
+      continue
+    }
+    if (current && line.startsWith("+") && !line.startsWith("+++")) current.added.push(line.slice(1))
+  }
+  flush()
+  return out
+}
+
 // The checks still owed, judged over the previous turn and the current one: a reminder lasts
 // one turn, not the whole session. Our own injected messages (`geneseed-*` ids) open no turn.
 function doneOwed(messages, checks, root) {
@@ -941,14 +968,21 @@ function doneOwed(messages, checks, root) {
   for (const m of messages.slice(from)) {
     for (const p of m?.parts ?? []) if (p?.type === "tool" && p.state) tools.push(p)
   }
+  // The Node hook's `within()`: `..cache/x` is inside the root, `../x` is not.
+  const inside = (fp) => {
+    const rel = path.relative(root, path.resolve(root, fp))
+    return !(rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel))
+  }
   let lastEdit = -1
   tools.forEach((p, i) => {
     if (!DONE_EDIT_TOOLS.has(String(p.tool).toLowerCase()) || p.state.status === "error") return
-    const fp = p.state.input?.filePath ?? p.state.input?.file_path
-    if (typeof fp === "string" && fp) {
-      const rel = path.relative(root, path.resolve(root, fp))
-      if (rel.startsWith("..") || path.isAbsolute(rel)) return
-    }
+    const input = p.state.input ?? {}
+    const fp = input.filePath ?? input.file_path
+    const targets = typeof fp === "string" && fp ? [fp]
+      : typeof input.patchText === "string" ? patchSections(input.patchText).flatMap((s) => [s.from, s.path]).filter(Boolean)
+      : []
+    // No derivable target: counted — the reminder is fail-open, a missed one is the worse error.
+    if (targets.length && !targets.some(inside)) return
     lastEdit = i
   })
   if (lastEdit === -1) return []
