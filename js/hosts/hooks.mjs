@@ -256,7 +256,9 @@ const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5', 'ops-2']);
  */
 const MAX_LEDGER_LINES = 1000;
 function ledger(root, verb, rule) {
-  if (!root) return;
+  // `doctor --probe` asks on purpose; its asks are not the user's. Read here, on the rare ask
+  // path only: the variable silences the RECORD, never the decision.
+  if (!root || process.env.GENESEED_GATE_PROBE) return;
   try {
     const file = path.join(root, GATE_LEDGER);
     appendFileSync(file, `${JSON.stringify({

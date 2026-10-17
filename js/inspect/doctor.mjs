@@ -39,6 +39,7 @@ import {
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { authoringProblems, loopProblems } from './checks-authoring.mjs';
+import { gateProbe } from './checks-probe.mjs';
 import {
   checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
@@ -188,6 +189,7 @@ export function claudeBobEmitProblems(themeName) {
  */
 export function doctorCollect({
   theme = null, allThemes = false, bundle = null, noBundle = false, groups = null,
+  probe = false, probed = null,
 } = {}) {
   const available = themeFiles().map(stemOf);
   if (!available.length) return [[], ['[doctor] no themes found']];
@@ -208,6 +210,11 @@ export function doctorCollect({
   // placed after them could only ever observe the freshly repaired file and would be dead
   // code that always reports clean. Reported in its usual slot further down.
   const shimProbs = shimProblems();
+  // `--probe` (js/inspect/checks-probe.mjs) runs the installed gates THROUGH the shim, so it is
+  // sampled here for the same reason: after the emits it could only meet a repaired shim.
+  // `probed` collects the gates that behaved, for `cmdDoctor`'s summary line.
+  const probeRun = probe ? gateProbe() : null;
+  if (probeRun && probed) probed.push(...probeRun.probed);
   let problems = [];
   withTempDir((tmp) => {
     for (const themeName of themes) {
@@ -237,6 +244,7 @@ export function doctorCollect({
   // misbehave under PowerShell (Task 15) — context/learn fail open, and since Task 1 the two
   // gates fail CLOSED instead (`onFailure: "block"`). The reverse direction is a note.
   problems = problems.concat(ran('hook_shell', 'Hook shell', hookShellProblems()));
+  if (probeRun) problems = problems.concat(ran('probe', 'Gate probe', probeRun.problems));
   // A machine check like the shim's: OPENCODE_CONFIG_DIR adds a dir, it does not replace one.
   const shadow = opencodeShadowedInstall();
   problems = problems.concat(ran('opencode_dirs', 'OpenCode config dirs', shadow
@@ -281,9 +289,10 @@ function captureBoth(fn) {
  * maintainer sweep. The cross-theme parity check runs in every mode.
  */
 export function cmdDoctor(args) {
+  const probed = [];
   const [themes, collected] = doctorCollect({
     theme: args.theme, allThemes: Boolean(args.all), bundle: args.bundle,
-    noBundle: Boolean(args.noBundle),
+    noBundle: Boolean(args.noBundle), probe: Boolean(args.probe), probed,
   });
   if (!themes.length) {
     printOut(`${collected.length ? collected[0] : '[doctor] no themes found'}\n`);
@@ -303,6 +312,12 @@ export function cmdDoctor(args) {
   const note = scoped
     ? `  (scoped to installed theme '${themes[0]}'; run with --all to sweep every theme)` : '';
   for (const n of notes) printOut(`${n}\n`);
+  // The probe's line on success, and the limit it cannot see past, said every time.
+  if (args.probe) {
+    printOut(`[probe] ${probed.length} gate(s) refused a destructive call and let a safe one `
+      + `through${probed.length ? `: ${probed.join(', ')}` : ''} — under this terminal's `
+      + 'environment, not the host app\'s\n');
+  }
   if (problems.length) {
     printOut(`[doctor] ${problems.length} problem(s) across ${themes.length} theme(s):\n`);
     for (const p of problems) printOut(`  - ${p}\n`);

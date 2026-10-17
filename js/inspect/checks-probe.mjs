@@ -1,0 +1,169 @@
+/**
+ * `geneseed doctor --probe` — prove each installed gate still REFUSES, not just that it exists.
+ *
+ * A gate that is registered, launches and then allows everything looks exactly like a working
+ * one: `onFailure: "block"` (ADR 0007) covers a gate that never starts, `shimProblems` covers the
+ * shim's paths and `hookShellProblems` infers shell drift — none of them observes a verdict. So
+ * this runs each live install's own gate command, AS ITS SETTINGS SPELL IT, through the shell
+ * the host would use, on two canned payloads: one Law IV call that every build must refuse
+ * (`git reset --hard HEAD`, also in Bob's `BLOCK_RULES`) and one that must pass (`git status`).
+ * Both directions are judged, because "allows everything" and "refuses everything" (the
+ * PowerShell-fallback case `hookShellProblems` can only infer) are both broken gates.
+ *
+ * WHY THIS SPAWNS, and why it is opt-in. ADR 0002 allows a CLI spawn only as a declared row of
+ * `ALLOWED_SPAWNS` (`tests/unit/hook_cli.test.mjs`); this is the row that runs INSTALLED code
+ * rather than the checkout's, which is why it waits for `--probe` instead of riding every
+ * `doctor`. It runs only a command that `liveRecordedHooks` returns — recorded in our own
+ * manifest AND live in the settings — and that still carries `geneseed-hook`, a gate verb and
+ * `--root`; anything else is reported and never run. Nothing the payloads name is executed:
+ * the gate only reads them, from an empty temp dir.
+ *
+ * WHAT A PASS DOES NOT CLAIM. The probe runs under doctor's environment — this terminal's PATH
+ * and HOME — not the host app's. A host launched with a different environment (an empty HOME, a
+ * PATH without the shell's tools) can still break a gate that passes here.
+ *
+ * `GENESEED_GATE_PROBE=1` keeps the probe's asks out of the gate ledger (`ledger()` in
+ * `js/hosts/hooks.mjs`), so `status` never counts a doctor run as a refusal.
+ */
+import path from 'node:path';
+import { liveRecordedHooks } from '../hosts/hosts.mjs';
+import { claudeCfg, installState, installTargets } from '../hosts/installs.mjs';
+import { SHIM_MARK, claudeGitBashPath } from '../hosts/shim.mjs';
+import { which } from '../lib/paths.mjs';
+import { NO_WINDOW } from '../lib/proc.mjs';
+import { withTempDir } from './scan.mjs';
+import { spawnSync } from 'node:child_process';
+
+/**
+ * The gate that refuses Law IV on each host (`claudeHookGroups`, `js/hosts/settings.mjs`). On
+ * Claude and OpenClaude it is `git-gate`; `tool-gate` there only counts Skill/Agent calls. Bob
+ * runs everything through `tool-gate --host bob`. OpenCode's guard is an in-process plugin with
+ * no command, and is not probed here.
+ */
+export const PROBED_VERB = { claude: 'git-gate', openclaude: 'git-gate', bob: 'tool-gate' };
+
+export const BAD_COMMAND = 'git reset --hard HEAD';
+export const GOOD_COMMAND = 'git status';
+
+const PROBE_TIMEOUT_MS = 20_000;
+
+/** A PreToolUse payload in Claude's shape — the shape every probed host's gate reads. */
+export function probePayload(command, cwd) {
+  return JSON.stringify({
+    session_id: 'geneseed-probe', hook_event_name: 'PreToolUse', tool_name: 'Bash',
+    tool_input: { command }, cwd,
+  });
+}
+
+/**
+ * The shell a host runs this handler under, as `{ exe, argv, label, verbatim }` — or null when
+ * that shell is not on this machine. Mirrors the emit's own rule: an explicit
+ * `shell: "powershell"` wins; Bob runs `cmd /c` on Windows; Claude/OpenClaude run Git Bash
+ * there (`claudeGitBashPath`, the rule `claudeHookShell` uses); `sh -c` everywhere else.
+ */
+export function probeShell(host, handler, platform = process.platform, env = process.env) {
+  const cmd = handler.command;
+  if (handler.shell === 'powershell') {
+    const ps = which('powershell') || which('pwsh');
+    return ps ? { exe: ps, argv: ['-NoProfile', '-NonInteractive', '-Command', cmd], label: 'PowerShell' }
+      : null;
+  }
+  if (platform !== 'win32') return { exe: which('sh') || '/bin/sh', argv: ['-c', cmd], label: 'sh' };
+  if (host === 'bob') {
+    // `/s /c "<cmd>"` with verbatim arguments: cmd strips the outer quotes and keeps the
+    // command's own quoting. Node's default quoting would turn its `"` into `\"`, which cmd
+    // does not unescape.
+    const cmdExe = env.ComSpec || env.COMSPEC || which('cmd');
+    return cmdExe ? { exe: cmdExe, argv: ['/d', '/s', '/c', `"${cmd}"`], label: 'cmd', verbatim: true }
+      : null;
+  }
+  const bash = claudeGitBashPath(env);
+  return bash ? { exe: bash, argv: ['-c', cmd], label: 'Git Bash' } : null;
+}
+
+const ASK_RE = /"permissionDecision":\s*"(?:ask|deny)"/;
+
+/** Did the gate refuse? Exit 2 on Bob; on Claude-shaped hosts exit 2 or an ask/deny verdict. */
+export function refused(host, r) {
+  if (host === 'bob') return r.status === 2;
+  return r.status === 2 || (r.status === 0 && ASK_RE.test(r.stdout || ''));
+}
+
+/**
+ * The verdict for one gate, from its two runs — null when the gate is sound, or the problem.
+ * Pure, so the whole verdict table is pinned without spawning.
+ */
+export function probeVerdict(host, bad, good) {
+  for (const r of [bad, good]) {
+    if (r.status !== 0 && r.status !== 2) {
+      const why = r.error ? r.error : `exit ${r.status}`;
+      const tail = (r.stderr || '').trim().split(/\r?\n/).pop();
+      return `does not run (${why}${tail ? `: ${tail}` : ''})${host === 'claude'
+        ? ' — Claude blocks every matching call while this lasts (onFailure: block)'
+        : ' — the host lets every call through while this lasts'}`;
+    }
+  }
+  if (!refused(host, bad)) return `registered but not refusing — \`${BAD_COMMAND}\` went through`;
+  if (refused(host, good)) return `refuses everything — \`${GOOD_COMMAND}\` was refused too`;
+  return null;
+}
+
+/** Is this recorded command one of ours for `verb`? A gate verb, `--root`, and our shim. */
+export function isOurGate(command, verb) {
+  return command.includes(` ${verb} --root`) && command.includes(SHIM_MARK);
+}
+
+/** One spawn of one handler on one payload. THE ONE SPAWN of this module. */
+function runOnce(shell, payload, cwd, env) {
+  const r = spawnSync(shell.exe, shell.argv, {
+    input: payload, cwd, env, encoding: 'utf-8', timeout: PROBE_TIMEOUT_MS,
+    windowsVerbatimArguments: Boolean(shell.verbatim), ...NO_WINDOW,
+  });
+  const e = /** @type {NodeJS.ErrnoException | undefined} */ (r.error);
+  const error = e ? (e.code === 'ETIMEDOUT' ? 'timed out' : e.message) : null;
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr, error };
+}
+
+/**
+ * Probe every live Claude-shaped install. Returns `{ problems, probed }`: `problems` in
+ * doctor's line format, `probed` the labels of the gates that ran and behaved.
+ * `targets`, `platform` and `env` are parameters so a test hands it a sandboxed install.
+ */
+export function gateProbe(targets = installTargets(), { platform = process.platform, env = process.env } = {}) {
+  const problems = [];
+  const probed = [];
+  for (const [host, scope, root] of targets) {
+    const verb = PROBED_VERB[host];
+    if (!verb || installState(root, host, scope) !== 'active') continue;
+    const cfg = claudeCfg(root, scope, host);
+    const gates = liveRecordedHooks(cfg)
+      .filter(([event, h]) => event === 'PreToolUse' && h.command.includes(` ${verb} --root`));
+    if (!gates.length) {
+      problems.push(`[probe] ${cfg}: no live ${verb} hook in its settings — nothing refuses `
+        + 'a destructive call at the boundary — run: geneseed rebuild-all');
+      continue;
+    }
+    for (const [, handler] of gates) {
+      const label = `[probe] ${cfg}: ${verb}`;
+      if (!isOurGate(handler.command, verb)) {
+        problems.push(`${label} not probed — its command does not run ${SHIM_MARK}, and doctor `
+          + 'runs nothing else from a settings file');
+        continue;
+      }
+      const shell = probeShell(host, handler, platform, env);
+      if (!shell) {
+        problems.push(`${label} does not run — the shell ${host} would use is not on this machine`);
+        continue;
+      }
+      const verdict = withTempDir((tmp) => {
+        const runEnv = { ...env, GENESEED_GATE_PROBE: '1', CLAUDE_PROJECT_DIR: tmp };
+        const bad = runOnce(shell, probePayload(BAD_COMMAND, tmp), tmp, runEnv);
+        const good = runOnce(shell, probePayload(GOOD_COMMAND, tmp), tmp, runEnv);
+        return probeVerdict(host, bad, good);
+      }, 'geneseed-probe-');
+      if (verdict) problems.push(`${label} under ${shell.label} ${verdict}`);
+      else probed.push(`${path.normalize(cfg)} (${verb}, ${shell.label})`);
+    }
+  }
+  return { problems, probed };
+}

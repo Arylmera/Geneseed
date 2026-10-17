@@ -285,18 +285,27 @@ const GIT_BASH_NAMES = new Set(['bash.exe', 'sh.exe', 'bash', 'sh']);
  */
 export function claudeHookShell(env = process.env, platform = process.platform) {
   if (platform !== 'win32') return 'bash';
+  return claudeGitBashPath(env) ? 'bash' : 'powershell';
+}
+
+/**
+ * The Git Bash `claudeHookShell` finds on Windows, as a path — or null. One rule, two readers:
+ * the emit only needs to know WHETHER, `doctor --probe` (`js/inspect/checks-probe.mjs`) needs
+ * the file itself, to run a gate through the same shell Claude would.
+ */
+export function claudeGitBashPath(env = process.env) {
   const read = (name) => Object.entries(env).find(([k]) => k.toUpperCase() === name)?.[1];
   const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
   const forced = read('CLAUDE_CODE_GIT_BASH_PATH');
   if (forced && GIT_BASH_NAMES.has(path.basename(forced).toLowerCase()) && isFile(forced)) {
-    return 'bash';
+    return forced;
   }
   for (const raw of (read('PATH') || '').split(';')) {
     const dir = raw.replace(/"/g, '');
-    if (dir && isFile(path.join(dir, 'git.exe'))
-      && isFile(path.join(dir, '..', 'bin', 'bash.exe'))) return 'bash';
+    const bash = dir ? path.join(dir, '..', 'bin', 'bash.exe') : '';
+    if (dir && isFile(path.join(dir, 'git.exe')) && isFile(bash)) return path.resolve(bash);
   }
-  return 'powershell';
+  return null;
 }
 
 /**

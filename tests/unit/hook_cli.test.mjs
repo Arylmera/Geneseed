@@ -467,6 +467,21 @@ const ALLOWED_SPAWNS = {
     what: '`node --check <plugin>`',
     literals: ["spawnSync(node, ['--check', js]", "const node = which('node');"],
   },
+  // ADDED 2026-10-17 (#290, `doctor --probe`): the one row that runs INSTALLED code rather than
+  // the checkout's, which is why it is opt-in. Pinned to its three shells and to the shape
+  // check: it runs a recorded gate command carrying `geneseed-hook`, never any other string.
+  'inspect/checks-probe.mjs': {
+    binding: '{ spawnSync }',
+    calls: 1,
+    what: '`sh -c` / Git Bash `-c` / `powershell -NoProfile -NonInteractive -Command` / '
+      + '`cmd /d /s /c` over an install\'s own recorded gate command',
+    literals: ['const r = spawnSync(shell.exe, shell.argv, {',
+      "argv: ['-NoProfile', '-NonInteractive', '-Command', cmd]",
+      "argv: ['-c', cmd]",
+      "argv: ['/d', '/s', '/c', `\"${cmd}\"`]",
+      'return command.includes(` ${verb} --root`) && command.includes(SHIM_MARK);',
+      'if (!isOurGate(handler.command, verb)) {'],
+  },
   'maintain/setup.mjs': {
     binding: '{ spawnSync }',
     calls: 1,

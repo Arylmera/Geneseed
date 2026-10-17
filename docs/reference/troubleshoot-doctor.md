@@ -35,6 +35,34 @@ If the drift is your own edits, export them first — `geneseed diff` (or the co
 
 **Confirm.** `geneseed doctor` no longer reports the bundle.
 
+## `[probe] … registered but not refusing` / `refuses everything` / `does not run`
+
+> `[probe] ~/.claude: git-gate under Git Bash registered but not refusing — …`
+
+These come only from `geneseed doctor --probe`. It runs each installed gate exactly as the host's
+settings spell it, through the host's own shell, on `git reset --hard HEAD` (which must be refused)
+and `git status` (which must go through).
+
+**Cause.**
+- **Not refusing:** the gate launches but lets a destructive call through. Usually something in
+  the install tells it to stand down: an exclusion covering the temp folder, or a command that
+  lost its `--host bob`.
+- **Refuses everything:** the gate asks on every call. This is typically the hooks emitted for
+  one shell and run under another.
+- **Does not run:** the shim or its runner is gone, or the shell is missing.
+
+**Fix.**
+
+```bash
+geneseed rebuild-all
+```
+
+**Confirm.** `geneseed doctor --probe` prints `[probe] N gate(s) refused a destructive call and let
+a safe one through`.
+
+The probe runs under *this terminal's* environment (PATH, HOME), not the host app's. A host started
+with a different environment can still break a gate that passes here.
+
 ## `registry.json unreadable` / `registry.json is not valid JSON`
 
 > `[authoring] registry.json unreadable: …`

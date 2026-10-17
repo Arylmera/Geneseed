@@ -763,7 +763,8 @@ export function hookShellProblems(targets = installTargets(), platform = process
     out.push(was === 'bash'
       ? `[hooks] ${cfg}: hooks were emitted for Git Bash, which is no longer found, so Claude `
         + 'Code runs them under PowerShell where context/learn fail open (no effect) and '
-        + 'git-gate/rule-gate now BLOCK every call instead of gating it - run: geneseed rebuild-all'
+        + 'git-gate/rule-gate now BLOCK every call instead of gating it - run: geneseed rebuild-all, '
+        + 'then confirm with: geneseed doctor --probe'
       : `[note] ${cfg}: hooks were emitted for PowerShell, but Git Bash is now found - they work, `
         + 'and pay PowerShell startup on every call; geneseed rebuild-all switches them back');
   }

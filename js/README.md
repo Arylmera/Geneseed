@@ -101,7 +101,8 @@ Everything that inspects an already-built or already-deployed harness and report
 | `doctor.mjs` | The `geneseed doctor` **driver** only: picks themes, runs the checks, prints the verdict |
 | `checks-build.mjs` | Gates over what the build PRODUCED: links, tokens, theme parity, OpenCode colours, bundle drift |
 | `checks-repo.mjs` | Gates over the repo's own records: `registry.json`, committed secrets, the hook shim, vendored pins |
-| `checks-authoring.mjs` | `authoringProblems`, the aggregate self-consistency gate: spec purpose lines, the learn-prompt literal, `node --check` over the plugins (the doctor's one spawn), then the groups below |
+| `checks-authoring.mjs` | `authoringProblems`, the aggregate self-consistency gate: spec purpose lines, the learn-prompt literal, `node --check` over the plugins (the doctor's one default spawn), then the groups below |
+| `checks-probe.mjs` | `doctor --probe` (opt-in): runs each live install's own gate command through the host's shell on a must-refuse and a must-pass payload — the doctor's second spawn |
 | `checks-constitution.mjs` | The constitution: rule declarations and citations, LEAN blocks, `HOOK_PINNED`, theme vocabulary, the console's `LAW_META`/`DOCTRINE_META` |
 | `checks-counts.mjs` | The hand-written counts: AGENT.md tables, README badges and prose, `SHIPPED.md`, held against `src/` |
 | `scan.mjs` | The shared walk/sort/strip/test primitives every `checks-*` uses. Owns no judgement itself |

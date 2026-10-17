@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **`geneseed doctor --probe`.** This is opt-in. For each live Claude Code, OpenClaude and Bob install, it runs the installed gate command exactly as the host's settings spell it, through the host's own shell. It sends `git reset --hard HEAD`, which the gate must refuse, and `git status`, which it must let through. A gate that allows both, refuses both, or does not run is a doctor failure. The probe runs under your terminal's environment, not the host app's. Its asks are kept out of the gate ledger (`GENESEED_GATE_PROBE`). The PowerShell-fallback warning now suggests running it (#290).
+
 ### Fixed
 - **Bob gates now block on Windows.** The hook shim (`~/.geneseed/bin/geneseed-hook.cmd`) ended with a bare `exit /b`, which returns 0 under `cmd /c` whatever the gate exited. As a result, Bob's exit-2 refusals (Laws I and IV, protected checks, root scans) went through. The shim now ends with `exit /b %ERRORLEVEL%`. Claude Code and OpenClaude were not affected, because their gates answer through stdout and exit 0. Run `geneseed rebuild-all` once to rewrite the shim (#290).
 

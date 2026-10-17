@@ -37,6 +37,11 @@ mechanisms: its own permission prompt (`opencode.json`, static globs) and the gu
 See [ADR 0008](../adr/0008-host-parity-ceiling-of-the-weakest-host.md) for why a gate that only
 one host can run still ships for every host it can.
 
+A gate that is registered but broken looks exactly like a working one. `geneseed doctor --probe`
+runs the installed Claude Code, OpenClaude and Bob gates through each host's own shell, on one call
+they must refuse and one they must let through
+([Doctor findings](../reference/troubleshoot-doctor.md)).
+
 ### Everything else: asked only, on every host
 
 Every other rule carries no gate on any host. A human reads them because the model was told to
