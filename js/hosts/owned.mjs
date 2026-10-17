@@ -144,11 +144,25 @@ export function hashesOf(doc) {
 }
 
 /**
- * Where one owned file stands against its recorded hash — the table later tasks (rebuild,
- * prune, uninstall) will branch on to stop clobbering a user's edit to a Geneseed-owned file.
- * `'unknown'` is deliberately distinct from `'unmodified'`: an older manifest with no `hashes`
- * entry for this rel (today's installs, pre-Task-3) must not be read as "proven untouched" —
- * see the constraint that a manifest without `hashes` keeps today's behaviour exactly.
+ * An OpenCode manifest's `skill_denies` — the `permission.skill` denies Geneseed itself added
+ * (`opencodeLayer` records them; a deny the user wrote, even on a Geneseed skill, is never in
+ * it) — or `[]` when the manifest, or the key, is absent or malformed, which sweeps nothing.
+ * Unlike the Law IV `permission.bash` gates (permanent, never taken back — see
+ * `reconcileOpencodePermission`), a skill-visibility deny is reversible: once uninstalled there
+ * is no skill left to hide, and the name is the user's to reuse. One home because rebuild's
+ * deny sweep and uninstall must agree on what Geneseed owns.
+ */
+export function recordedDenies(doc) {
+  const d = doc && doc.skill_denies;
+  return Array.isArray(d) ? d.filter((n) => typeof n === 'string') : [];
+}
+
+/**
+ * Where one owned file stands against its recorded hash — the table rebuild, prune and
+ * uninstall branch on so none of them clobbers a user's edit to a Geneseed-owned file.
+ * `'unknown'` is deliberately distinct from `'unmodified'`: a manifest written before hashes
+ * were recorded has no entry for this rel, and must not be read as "proven untouched" — a
+ * manifest without `hashes` keeps the pre-hash behaviour exactly.
  */
 export function ownedState(root, rel, hashes) {
   if (!Object.hasOwn(hashes, rel)) return 'unknown';

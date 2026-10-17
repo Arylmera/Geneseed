@@ -223,7 +223,7 @@ export function installProfile(host, scope, root, notify = null) {
   // one of them. `null` (no marker) stays `null` so the argv omits the flag, as it always did.
   const excludeRules = excludedRulesOfDir(root, host);
   // Skills left out stay left out: an upgrade that forgot them would put them all back.
-  const excludeSkills = excludedSkillsOfDir(root, notify, host);
+  const excludeSkills = excludedSkillsOfDir(root, host, notify);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludeSkills);

@@ -567,10 +567,10 @@ const EXCLUDED_SKILLS_RE = /^Excluded skills:[ \t]*(.+?)[ \t]*$/m;
  * name drops out (`resolveSkillNames`), so a skill merge does not quietly re-admit everything
  * else the install left out. Silent unless the caller passes `notify` — status, diff and the
  * console call this on every read; the replays that rebuild an install (`rebuild-all`,
- * `upgrade`, `migrate`) pass it. `host` is last, after `notify`, for the same reason
- * `trustOfDir` puts it last: every existing positional call keeps working unchanged.
+ * `upgrade`, `migrate`) pass it. `host` comes second, the same `(d, host)` order as its
+ * siblings `excludedRulesOfDir`/`doctrinesOfDir`, so the marker readers call alike.
  */
-export function excludedSkillsOfDir(d, notify = null, host = null) {
+export function excludedSkillsOfDir(d, host = null, notify = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
@@ -614,9 +614,6 @@ export function emitHostScopeOf(root) {
   if (emit === null) return null;
   return EMIT_HOST_SCOPE.get(emit.trim()) ?? null;
 }
-
-// `DISABLED_STASH` moved to `hosts.mjs`: the hook stand-down reads it and must not import this.
-export { DISABLED_STASH };
 
 /**
  * `_harness_mcp._claude_cfg` — where a Claude-STYLE install keeps its manifest.
@@ -733,12 +730,12 @@ export function installTargets() {
 
 /**
  * Each Claude install whose emitted hook FORM no longer matches this machine's hook shell
- * (`claudeHookShell`; Task 15) — the "Git Bash removed after the emit" gap, which otherwise
+ * (`claudeHookShell`) — the "Git Bash removed after the emit" gap, which otherwise
  * reports nothing: hooks signal through stdout and Claude treats a parse error as non-blocking.
  *
  * Bash form with Git Bash now gone is a PROBLEM: `context`/`learn` fail open under PowerShell
- * (no `onFailure`, so a launch failure there is still non-blocking) and, since Task 1, the two
- * gates fail CLOSED instead (`onFailure: "block"` blocks every Bash/PowerShell/Write/Edit/
+ * (no `onFailure`, so a launch failure there is still non-blocking) while the two gates,
+ * being gates, fail CLOSED instead (`onFailure: "block"` blocks every Bash/PowerShell/Write/Edit/
  * NotebookEdit call until `rebuild-all` re-emits the PowerShell form) — worse for the user
  * either way, so the message below still reports it as drift needing a rebuild; it does not
  * distinguish the two outcomes. PowerShell form with Git Bash now present is a `[note]`: the hooks work,

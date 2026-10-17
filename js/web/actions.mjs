@@ -574,7 +574,7 @@ export function apiInstallCmd(state, body) {
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root, host);
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, null, host));
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -675,6 +675,6 @@ export function apiDeployCmd(state, body) {
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root, host);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, null, host));
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

@@ -80,7 +80,7 @@ test('a replayed install drops a retired name and says so only when asked', asyn
     fs.writeFileSync(path.join(d, 'AGENT.md'), '# Agent\n\nExcluded skills: tickets\n');
     assert.deepEqual(excludedSkillsOfDir(d), [], 'the silent read');
     const heard = [];
-    assert.deepEqual(excludedSkillsOfDir(d, (n) => heard.push(n)), []);
+    assert.deepEqual(excludedSkillsOfDir(d, null, (n) => heard.push(n)), []);
     assert.deepEqual(heard, [`'tickets' no longer ships (${RETIRED_SKILL_IDS.tickets}) — exclusion dropped`]);
   });
 });
@@ -95,7 +95,7 @@ test('a replayed install that excluded one half of a merged skill excludes the w
   await withSandbox('gsalias-', (d) => {
     fs.writeFileSync(path.join(d, 'AGENT.md'), '# Agent\n\nExcluded skills: deps-audit\n');
     const heard = [];
-    assert.deepEqual(excludedSkillsOfDir(d, (n) => heard.push(n)), ['dependencies']);
+    assert.deepEqual(excludedSkillsOfDir(d, null, (n) => heard.push(n)), ['dependencies']);
     assert.deepEqual(heard, [DEPS_NOTICE]);
   });
 });
