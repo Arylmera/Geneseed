@@ -676,6 +676,38 @@ test('bob-shaped write_file with a secret still blocks (rc 2), not a silent defe
   assert.match(r.err, /Sealed Secrets/);
 });
 
+// Law I scans only what a call WRITES. `search_and_replace`'s `search` and an `apply_diff`
+// SEARCH half are text leaving the file — a secret there is being removed, and blocking that
+// would stop the agent cleaning up a leak. Same rule as Claude's `old_string`, never scanned.
+const bobBlocksSecret = (tool, input, label) => {
+  const r = hookRun('tool-gate', { stdin: bobPayload(tool, input), host: 'bob' });
+  assert.equal(r.rc, 2, `${label}: expected exit 2, got ${r.rc}, stderr=${r.err}`);
+  assert.match(r.err, /Sealed Secrets/);
+};
+const roodiff = (search, replace) =>
+  `<<<<<<< SEARCH\n:start_line:1\n-------\n${search}\n=======\n${replace}\n>>>>>>> REPLACE`;
+
+test('bob search_and_replace: removing a secret passes, planting one blocks', () => {
+  assertDefers(hookRun('tool-gate', { host: 'bob', stdin: bobPayload('search_and_replace',
+    { path: 'a.js', search: 'AKIAIOSFODNN7EXAMPLE', replace: '' }) }), 'search_and_replace/remove');
+  bobBlocksSecret('search_and_replace',
+    { path: 'a.js', search: 'x', replace: 'AKIAIOSFODNN7EXAMPLE' }, 'search_and_replace/plant');
+});
+
+test('bob apply_diff: a secret only in SEARCH passes, in REPLACE blocks', () => {
+  assertDefers(hookRun('tool-gate', { host: 'bob', stdin: bobPayload('apply_diff',
+    { path: 'a.js', diff: roodiff('k = "AKIAIOSFODNN7EXAMPLE"', 'k = process.env.K') }) }),
+  'apply_diff/remove');
+  bobBlocksSecret('apply_diff',
+    { path: 'a.js', diff: roodiff('k = 1', 'k = "AKIAIOSFODNN7EXAMPLE"') }, 'apply_diff/plant');
+  // Second block: the secret is planted by the later REPLACE half only.
+  bobBlocksSecret('apply_diff', { path: 'a.js',
+    diff: `${roodiff('a', 'b')}\n\n${roodiff('c', 'AKIAIOSFODNN7EXAMPLE')}` }, 'apply_diff/plant-2nd');
+  // A diff with no SEARCH/REPLACE markers is an unknown shape: scanned whole (fail closed).
+  bobBlocksSecret('apply_diff', { path: 'a.js', diff: '+k = "AKIAIOSFODNN7EXAMPLE"' },
+    'apply_diff/unmarked');
+});
+
 test('bob-shaped execute_command with a destructive git act still blocks (rc 2)', () => {
   const r = hookRun('tool-gate', {
     stdin: bobPayload('execute_command', { command: 'git push --force' }),
