@@ -8,7 +8,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.7.0] — 2026-10-17
+
+Minor: the Deletion Is Deliberate gate stops asking on worktree removal.
+
 ### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so installed hooks and OpenCode plugins pick up the change.
 - OpenCode: an `opencode.json` written by an earlier version keeps the four `git worktree remove … -f`/`--force` keys under `permission.bash`. Geneseed no longer claims them, so it neither removes nor reports them; delete them by hand to stop the prompt.
 
 ### Changed
