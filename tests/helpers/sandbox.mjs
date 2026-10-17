@@ -137,6 +137,25 @@ export async function withSandbox(prefix, fn) {
   }
 }
 
+/**
+ * Run `fn(sandbox)` with `GENESEED_HOME` pointed at a fresh sandbox, or at `at`: a path (then no
+ * sandbox is made and `fn` gets `undefined`), or a function of the sandbox path. The variable is
+ * restored — deleted when it was unset — whatever `fn` does, because every later test in the
+ * process resolves the machine-wide shim through it.
+ */
+export function withGeneseedHome(fn, at = null) {
+  const sb = typeof at === 'string' ? null : makeSandbox('gshome-');
+  const saved = process.env.GENESEED_HOME;
+  process.env.GENESEED_HOME = typeof at === 'string' ? at : at === null ? sb.path : at(sb.path);
+  try {
+    return fn(sb?.path);
+  } finally {
+    if (saved === undefined) delete process.env.GENESEED_HOME;
+    else process.env.GENESEED_HOME = saved;
+    sb?.cleanup();
+  }
+}
+
 // The stack of live process-home sandboxes — a stack rather than a flag so a nested call (the
 // positive control in the sandbox test runs one inside a suite that may already have one)
 // restores to what it displaced.

@@ -23,24 +23,13 @@ import { claudeGitBashPath, hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import {
   BAD_COMMAND, GOOD_COMMAND, gateProbe, guardPluginPath, guardProbe, isOurGate, probeVerdict, refused,
 } from '../../js/inspect/checks-probe.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import { makeSandbox, withGeneseedHome } from '../helpers/sandbox.mjs';
 
 // The probe needs the shell the host would use. CI's Windows runners carry Git Bash; a
 // Windows machine without it cannot run a bash-form Claude hook at all, so there is nothing
 // to probe there and the spawning tests skip with that reason.
 const NO_SHELL = process.platform === 'win32' && !claudeGitBashPath()
   ? 'no Git Bash on this Windows machine — the shell Claude would run the gate under' : false;
-
-function withHome(fn) {
-  const sb = makeSandbox('probe-');
-  const saved = process.env.GENESEED_HOME;
-  process.env.GENESEED_HOME = sb.path;
-  try { return fn(sb.path); } finally {
-    if (saved === undefined) delete process.env.GENESEED_HOME;
-    else process.env.GENESEED_HOME = saved;
-    sb.cleanup();
-  }
-}
 
 /** A live install at `cfg` exactly as an emit for `host` writes it: settings + manifest. */
 function writeInstall(cfg, host, edit = (g) => g) {
@@ -98,7 +87,7 @@ test('isOurGate: a gate verb, --root, and our shim — all three', () => {
 // The real installs, run.
 
 test('a sound Claude and OpenClaude install pass, and the probe leaves no ledger line', { skip: NO_SHELL }, () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     for (const host of ['claude', 'openclaude']) {
       const cfg = path.join(home, host);
       writeInstall(cfg, host);
@@ -113,7 +102,7 @@ test('a sound Claude and OpenClaude install pass, and the probe leaves no ledger
 });
 
 test('a gate that allows everything fails as "not refusing"', { skip: NO_SHELL }, () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude');
     writeInstall(cfg, 'claude', swapGate('git-gate', fixtureGate(home, 'geneseed-hook-defer', '', 'git-gate', cfg)));
     const { problems, probed } = gateProbe([['claude', 'global', cfg]]);
@@ -124,7 +113,7 @@ test('a gate that allows everything fails as "not refusing"', { skip: NO_SHELL }
 });
 
 test('a gate that refuses everything fails as "refuses everything"', { skip: NO_SHELL }, () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude');
     writeInstall(cfg, 'claude', swapGate('git-gate', fixtureGate(home, 'geneseed-hook-ask', ASK, 'git-gate', cfg)));
     const { problems } = gateProbe([['claude', 'global', cfg]]);
@@ -134,7 +123,7 @@ test('a gate that refuses everything fails as "refuses everything"', { skip: NO_
 });
 
 test('a gate that crashes fails as "does not run"', { skip: NO_SHELL }, () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude');
     writeInstall(cfg, 'claude', swapGate('git-gate',
       fixtureGate(home, 'geneseed-hook-crash', 'process.exit(1);', 'git-gate', cfg)));
@@ -147,7 +136,7 @@ test('a gate that crashes fails as "does not run"', { skip: NO_SHELL }, () => {
 test('a sovereign exclusion over the probe dir is a gate that refuses nothing', { skip: NO_SHELL }, () => {
   // The realistic "registered but not refusing": the gate is ours and healthy, and something
   // in the install tells it to stand down where the probe runs.
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude');
     writeInstall(cfg, 'claude');
     writeFileSync(path.join(cfg, 'excludes.json'), JSON.stringify({ excludes: [path.parse(home).root] }));
@@ -158,7 +147,7 @@ test('a sovereign exclusion over the probe dir is a gate that refuses nothing', 
 });
 
 test('a recorded command that is not ours is reported and never run', { skip: NO_SHELL }, () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude');
     const marker = path.join(home, 'ran.txt');
     const body = `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'x');\n`;
@@ -171,7 +160,7 @@ test('a recorded command that is not ours is reported and never run', { skip: NO
 });
 
 test('an install with no live gate is a problem, not a silent pass', () => {
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude');
     writeInstall(cfg, 'claude', (g) => ({ ...g, PreToolUse: g.PreToolUse.filter((x) => x.matcher !== 'Bash|PowerShell') }));
     const { problems } = gateProbe([['claude', 'global', cfg]]);
@@ -183,7 +172,7 @@ test('an install with no live gate is a problem, not a silent pass', () => {
 test('Bob: exit 2 refuses; the same gate without --host bob speaks JSON Bob never reads', { skip: NO_SHELL && process.platform !== 'win32' ? NO_SHELL : false }, () => {
   // On Windows Bob runs `cmd /c`, so Git Bash is not needed here. The broken twin is the
   // exact 2026-09 Bob bug: Claude's verdict dialect on a host that only reads exit codes.
-  withHome((home) => {
+  withGeneseedHome((home) => {
     const cfg = path.join(home, 'bob');
     writeInstall(cfg, 'bob');
     const ok = gateProbe([['bob', 'global', cfg]]);

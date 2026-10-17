@@ -44,7 +44,7 @@ import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
-import { claudeHookShell } from './shim.mjs';
+import { claudeHookShell, hookShimPath } from './shim.mjs';
 
 /**
  * `Path.read_text(encoding="utf-8")`, or null where Python raises OSError.
@@ -767,6 +767,44 @@ export function hookShellProblems(targets = installTargets(), platform = process
         + 'then confirm with: geneseed doctor --probe'
       : `[note] ${cfg}: hooks were emitted for PowerShell, but Git Bash is now found - they work, `
         + 'and pay PowerShell startup on every call; geneseed rebuild-all switches them back');
+  }
+  return out;
+}
+
+/**
+ * Every active Claude-STYLE install (`CLAUDE_STYLE`: claude, bob, openclaude — the hosts that
+ * share this one machine-wide shim) whose LIVE, recorded hooks still name `shimPath` by exact
+ * string, keyed by its own config dir.
+ *
+ * Split out of `shimProblems` (`js/inspect/checks-repo.mjs`) for the case `shimDeadPaths`
+ * cannot see: that function reads paths back OUT of the shim body, so it has nothing to read once the shim file is gone
+ * outright (deleted, not moved-and-regenerated) — a plain `isFile` check upstream then calls
+ * that clean, the same as a source checkout that never emitted. `liveRecordedHooks` is already
+ * "the manifest claims it AND the settings file still runs it" (`js/hosts/hosts.mjs`), so a
+ * disabled or never-wired install cannot appear here — only installs for which the missing
+ * shim is a live, standing failure. It also keeps only handlers whose `command` is a string,
+ * so the match below needs no type guard of its own.
+ *
+ * MATCHES THE EXACT PATH, not merely a command that mentions the shim's filename
+ * (`geneseed-hook`): the shim path is baked per `GENESEED_HOME`, so a machine with more than
+ * one Geneseed home (a relocated one, or a sandboxed test run beside a real install) must not
+ * let an install naming a DIFFERENT, perfectly healthy shim answer for this one.
+ *
+ * LIVES HERE, beside the `claudeCfg` and `installTargets` it is built on, because neither
+ * reader owns the install walk: doctor's `shimProblems`, and `status`'s `gateSummary`
+ * (`js/inspect/status.mjs`), which folds the same answer into its `dead` field — the one
+ * `statusLines` renders as a `DEAD` gates row. Two readers of one fact, not two copies.
+ *
+ * `targets` is a parameter, the same convention `hookShellProblems` uses, so a test can hand
+ * it a sandboxed `[host, scope, root]` triple instead of walking this machine's real config
+ * dirs and registry — the live default every production caller takes.
+ */
+export function installsReferencingShim(shimPath = hookShimPath(), targets = installTargets()) {
+  const out = [];
+  for (const [host, scope, root] of targets) {
+    if (!CLAUDE_STYLE.includes(host)) continue;
+    const cfg = claudeCfg(root, scope, host);
+    if (liveRecordedHooks(cfg).some(([, h]) => h.command.includes(shimPath))) out.push(cfg);
   }
   return out;
 }
