@@ -8,6 +8,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Upgrade notes
+- OpenCode: an `opencode.json` written by an earlier version keeps the four `git worktree remove … -f`/`--force` keys under `permission.bash`. Geneseed no longer claims them, so it neither removes nor reports them; delete them by hand to stop the prompt.
+
+### Changed
+- **`git worktree remove --force` no longer asks.** Removing a worktree is routine agent housekeeping, so the *Deletion Is Deliberate* gate now lets `worktree remove -f`/`--force` through like a plain `worktree remove`, on every host: the Claude Code/OpenClaude/Bob git-gate, OpenCode's permission globs and the guard plugin's warning. Every other destructive git form is gated as before.
+
 ## [4.6.0] — 2026-10-17
 
 Minor: a refactor and cleanup pass over everything since 3.15.0, and the nine gate and counter bugs it turned up.

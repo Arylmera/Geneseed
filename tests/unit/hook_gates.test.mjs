@@ -315,9 +315,8 @@ test('a destructive git verb asks under Deletion Is Deliberate', () => {
 // B5 confirmed-live gaps (claude-code.md / claude-verdict.md): the long/modern spellings of
 // the same Law IV acts above — all inside "deletion of what version control cannot restore".
 // `restore`/`switch`/`checkout -f` discard uncommitted work the same way `checkout -- ` does;
-// `stash drop/clear` deletes stashed work; `worktree remove --force` can discard an uncommitted
-// worktree; `reflog expire` and `gc --prune=now` delete the safety net reflog/dangling commits
-// provide; `push :branch`/`push --delete` deletes a remote branch, the same act `--force` push
+// `stash drop/clear` deletes stashed work; `reflog expire` and `gc --prune=now` delete the safety
+// net reflog/dangling commits provide; `push :branch`/`push --delete` deletes a remote branch, the same act `--force` push
 // trips this gate for rather than process 5's.
 test('the B5 long/modern-spelling gaps ask under Deletion Is Deliberate too', () => {
   for (const cmd of [
@@ -341,11 +340,31 @@ test('the B5 long/modern-spelling gaps ask under Deletion Is Deliberate too', ()
     'git switch --discard-changes',
     'git stash drop',
     'git stash clear',
-    'git worktree remove --force ../wt',
     'git reflog expire --expire=now',
     'git gc --prune=now']) {
     const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
     assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
+  }
+});
+
+// User decision (2026-10-17): removing a worktree, forced or not, is routine agent housekeeping,
+// not a Law IV deletion — so `worktree remove -f`/`--force` passes the git gate like a plain
+// `worktree remove`, on Claude (defer: rc 0, no stdout) and on Bob (rc 0, no BLOCKED line).
+// The forms beside it that discard history still ask on Claude and block (rc 2) on Bob, so
+// the carve-out is that one verb, not a loosened gate.
+test('git worktree remove --force/-f passes; branch -D and reset --hard still ask', () => {
+  for (const cmd of ['git worktree remove --force ../x', 'git worktree remove -f x']) {
+    assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
+    const bob = hookRun('git-gate', { stdin: bashPayload(cmd), host: 'bob' });
+    assertDefers(bob, `bob: ${cmd}`);
+    assert.doesNotMatch(bob.err, /BLOCKED/, `bob: ${cmd}`);
+  }
+  for (const cmd of ['git branch -D x', 'git reset --hard']) {
+    const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
+    assert.ok(dec.permissionDecisionReason.includes('Deletion Is Deliberate'), dec.permissionDecisionReason);
+    const bob = hookRun('git-gate', { stdin: bashPayload(cmd), host: 'bob' });
+    assert.equal(bob.rc, 2, `bob: ${cmd} expected exit 2, got ${bob.rc}`);
+    assert.ok(bob.err.includes('Deletion Is Deliberate'), bob.err);
   }
 });
 

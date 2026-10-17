@@ -103,11 +103,16 @@ const consentRuleOn = (d, excluded = []) =>
  * like `-d`, so it is deliberately NOT a key here; `-D --force`/`--delete -f`/`-d --force`/
  * `-df` are the same act again and are a known ceiling this does not chase); `checkout
  * -f`/`--force` and `switch -f`/`--force`/`--discard-changes` (git's own `switch -h` lists
- * `-f, --force` and `--discard-changes` as two separate options); `worktree remove -f`/`--force` (both
- * flag-then-path and path-then-flag order); `reflog expire`; `gc --prune` (matched bare, since
- * a `--prune` with no `=now` still eventually prunes); and `push *--delete*` / `push * :*` (a
- * literal space before the colon, so `push origin HEAD:main`, an ordinary refspec, does not
- * match).
+ * `-f, --force` and `--discard-changes` as two separate options); `reflog expire`; `gc
+ * --prune` (matched bare, since a `--prune` with no `=now` still eventually prunes); and `push
+ * *--delete*` / `push * :*` (a literal space before the colon, so `push origin HEAD:main`, an
+ * ordinary refspec, does not match).
+ *
+ * `git worktree remove -f`/`--force` was a key here and was REMOVED (user decision, 2026-10-17:
+ * worktree removal is routine housekeeping, not a Law IV deletion). Removal from this list also
+ * removes the four globs from `OWNED_BASH`, so an `opencode.json` written before keeps them —
+ * neither taken back nor reported as stranded, since Geneseed no longer claims them. Its user
+ * deletes them by hand (the CHANGELOG upgrade note says so).
  *
  * `git restore` is DELIBERATELY NOT HERE. Its rule is "ask unless `--staged` appears ALONE" —
  * `--staged --worktree` together still discards the working tree — and a glob has no negation,
@@ -128,8 +133,6 @@ const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 
   'git checkout -f*', 'git checkout * -f*', 'git checkout --force*', 'git checkout * --force*',
   'git switch -f*', 'git switch * -f*', 'git switch --force*', 'git switch * --force*',
   'git switch --discard-changes*', 'git switch * --discard-changes*',
-  'git worktree remove -f*', 'git worktree remove --force*',
-  'git worktree remove * -f*', 'git worktree remove * --force*',
   'git reflog expire*', 'git gc --prune*', 'git gc * --prune*',
   'git stash drop*', 'git stash clear*',
   'git push *--delete*', 'git push * :*'];

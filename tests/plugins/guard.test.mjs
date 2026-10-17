@@ -225,7 +225,6 @@ for (const cmd of [
   "git switch --discard-changes",
   "git stash drop",
   "git stash clear",
-  "git worktree remove --force ../wt",
   "git reflog expire --expire=now",
   "git gc --prune=now",
 ]) {
@@ -239,8 +238,11 @@ for (const cmd of [
 // `branch --delete` refuses on an unmerged branch exactly like `-d`, so neither warns. And
 // because `restore`/`stash drop`/`stash clear` have no required flag or use ordinary English
 // words, they are anchored to VERB POSITION — a command whose MESSAGE or FILENAME merely
-// contains the word must never warn.
+// contains the word must never warn. And `worktree remove -f`/`--force` is routine
+// housekeeping by user decision (2026-10-17), not a Law IV deletion, so it never warns either.
 for (const cmd of [
+  "git worktree remove --force ../x",
+  "git worktree remove -f x",
   "git restore --staged x",
   "git restore --staged .",
   "git branch --delete merged",
