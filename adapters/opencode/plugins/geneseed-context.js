@@ -670,8 +670,10 @@ async function wikiSets() {
 
     const recs = new Map()   // abs -> { rel, abs, load, desc }
     const put = (abs, load, desc) => {
-      let rel = path.relative(w.path, abs).split(path.sep).join("/")
-      if (rel.startsWith("..")) rel = abs.split(path.sep).join("/")   // outside the root
+      const raw = path.relative(w.path, abs)
+      // outside the root: "..", "../…" or another drive — not a name like "..cache"
+      const outside = raw === ".." || raw.startsWith(".." + path.sep) || path.isAbsolute(raw)
+      const rel = (outside ? abs : raw).split(path.sep).join("/")
       const prev = recs.get(abs)
       recs.set(abs, { rel: `${name}/${rel}`, abs, load, desc: desc || prev?.desc || "" })
     }
