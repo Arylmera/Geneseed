@@ -27,6 +27,7 @@ On Claude Code and OpenClaude the hooks never block silently. They make the host
 - **A scan of a whole filesystem**: a recursive `find`, `du`, `grep -r`, `rg` or `Get-ChildItem -Recurse` rooted at `/`, `/c` or `C:\`, which in Git Bash walks every drive for hours. Wired in every build.
 - **Credentials**: a write or edit whose content looks like a real key (AWS, GitHub, Anthropic, Slack, or a private-key block), anywhere except a `.env` file.
 - **Your rules and memory**: any write by the agent to `user-rules.md` or to the memory store. Whether something is a standing rule or a fact to remember is your call.
+- **Ending a turn without the proof**: only in a project that lists its checks in `.geneseed/done-checks.txt`. A turn that edited files cannot end until every listed check has passed since the last edit. The agent is stopped once, then the turn may end.
 
 If a gate crashes, it asks instead of letting the call through. If it cannot start at all (a deleted or broken shim) or times out, Claude Code blocks the call instead: see [Troubleshoot hooks](../reference/troubleshoot-hooks.md) to recover. Other shell commands, `rm -rf` included, go through Claude Code's normal permission flow.
 

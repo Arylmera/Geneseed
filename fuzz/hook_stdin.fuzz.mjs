@@ -77,3 +77,46 @@ for (const verb of ['git-gate', 'rule-gate']) {
     }), { numRuns: RUNS });
   });
 }
+
+// The done gate (#289) rides `learn` on Stop, where stdout is a verdict too: whatever the
+// transcript holds — torn lines, wrong types, random tool calls — `learn` exits 0 and prints
+// nothing or exactly one `{"decision":"block"}`. `$GENESEED_LLM` is unset, so nothing spawns.
+const toolLine = fc.record({
+  name: fc.constantFrom('Edit', 'Write', 'Bash', 'PowerShell', 'Read', 'NotebookEdit'),
+  input: fc.oneof(fc.jsonValue(), command.map((c) => ({ command: c })),
+    fc.constantFrom({ file_path: 'a.js' }, { file_path: '../out.js' }, { file_path: 7 })),
+  err: fc.oneof(fc.boolean(), fc.constant(undefined)),
+}).map(({ name, input, err }, i) => [
+  JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: `t${i}`, name, input }] } }),
+  JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: `t${i}`, is_error: err }] } }),
+].join('\n'));
+const transcript = fc.array(fc.oneof(toolLine, fc.string(), fc.jsonValue().map((v) => JSON.stringify(v))),
+  { maxLength: 12 }).map((lines) => lines.join('\n'));
+
+test('learn keeps its Stop contract with the done gate armed, on any transcript', () => {
+  fc.assert(fc.property(transcript, fc.boolean(), (text, active) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-fuzz-'));
+    try {
+      fs.mkdirSync(path.join(dir, '.git'));
+      fs.mkdirSync(path.join(dir, '.geneseed'));
+      fs.writeFileSync(path.join(dir, '.geneseed', 'done-checks.txt'), 'npm test\n');
+      fs.writeFileSync(path.join(dir, 't.jsonl'), text);
+      const inFile = path.join(dir, 'stdin');
+      fs.writeFileSync(inFile, JSON.stringify({ hook_event_name: 'Stop', cwd: dir,
+        transcript_path: path.join(dir, 't.jsonl'), stop_hook_active: active }));
+      const env = { ...process.env };
+      delete env.GENESEED_LLM;
+      delete env.GENESEED_LEARN_CHILD;
+      const fd = fs.openSync(inFile, 'r');
+      let p;
+      try {
+        p = spawnSync(process.execPath, [HOOK, 'learn', '--memory', path.join(dir, 'install', 'memory')],
+          { cwd: dir, encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], env });
+      } finally { fs.closeSync(fd); }
+      assert.equal(p.status, 0, `learn exited ${p.status}\nstderr: ${p.stderr}`);
+      if (p.stdout === '') return;
+      assert.equal(active, false, 'a block after a block: the cap must let the turn end');
+      assert.equal(JSON.parse(p.stdout).decision, 'block');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }), { numRuns: RUNS });
+});

@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Done gate (#289).** A project that lists its checks in `.geneseed/done-checks.txt` gets *Verify Before Asserting* enforced when a turn ends: on Claude Code and OpenClaude, a turn that edited files cannot end until every listed check has passed, unpiped, after the last edit (at most one block per turn). OpenCode 1 gets a reminder on the next request; Bob and OpenCode 2 are not judged and log so. The gate lives inside `learn`, before its model call, so the emitted settings are unchanged. The list protects itself through *External Gate*.
+
 ## [4.4.1] — 2026-10-16
 
 A presentation skill.
