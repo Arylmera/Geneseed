@@ -63,7 +63,7 @@ export const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g
  * `Path.rglob("*")` restricted to files, skipping `__pycache__` as Python's callers do.
  *
  * `recursive: true, withFileTypes: true` (Node >= 20.1, `parentPath` >= 21.4 — this repo
- * requires >= 22.3) replaces a hand-rolled walk; the order it yields is NOT the walk's
+ * requires >= 22.7) replaces a hand-rolled walk; the order it yields is NOT the walk's
  * order, but `sourceFingerprint`, this function's one caller, re-sorts every result by a
  * plain string key before it is ever observed, so no caller depends on it.
  */

@@ -12,7 +12,7 @@ Each entry gives the likely cause, the fix, and how to confirm it worked. First 
 
 The one-step installer (`./install`, `install.cmd`, `install.command`) checks Node first and stops:
 
-> `xx  Node v20.11.0 is too old — Geneseed needs 22.3 or newer.`
+> `xx  Node v20.11.0 is too old — Geneseed needs 22.7 or newer.`
 
 **Cause.** No Node on PATH, or an older one — Linux distribution packages are often behind.
 
@@ -24,15 +24,15 @@ The one-step installer (`./install`, `install.cmd`, `install.command`) checks No
 node --version
 ```
 
-prints 22.3 or newer, and the installer's first line reads `ok  Node v…`.
+prints 22.7 or newer, and the installer's first line reads `ok  Node v…`.
 
-## `geneseed needs Node 22.3 or newer`
+## `geneseed needs Node 22.7 or newer`
 
 Run without the installer — `npx geneseed`, a global npm install, or a hook — on an older Node, every Geneseed command stops with one sentence:
 
-> `geneseed needs Node 22.3 or newer; this is Node 20.18.1. Install a current Node from https://nodejs.org (or your package manager), then run the command again.`
+> `geneseed needs Node 22.7 or newer; this is Node 20.18.1. Install a current Node from https://nodejs.org (or your package manager), then run the command again.`
 
-**Cause.** The `node` on PATH is older than 22.3. npm only *warns* about the engine requirement, so a global install succeeds anyway. A hook prints the same sentence and lets the tool call through rather than block it, so on Claude Code, Bob or OpenClaude the hooks are off until Node is upgraded.
+**Cause.** The `node` on PATH is older than 22.7. npm only *warns* about the engine requirement, so a global install succeeds anyway. A hook prints the same sentence and lets the tool call through rather than block it, so on Claude Code, Bob or OpenClaude the hooks are off until Node is upgraded.
 
 **Fix.** Install the current Node.js LTS (see above), open a **new** terminal, and run the command again.
 

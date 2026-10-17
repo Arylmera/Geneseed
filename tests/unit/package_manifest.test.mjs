@@ -692,6 +692,11 @@ const API_FLOOR = [
   // `ExperimentalWarning` on stderr — the stream this port compares byte-for-byte in 294
   // harness cells. So the floor is where it stops warning, not where it starts existing.
   ['fs.cpSync (stable)', '22.3.0', /\bcpSync\b/],
+  // js/inspect/checks-probe.mjs — doctor --probe imports the INSTALLED OpenCode guard plugin, an
+  // ES module under a package.json with no "type" (OpenCode's own). Syntax detection is on by
+  // default from v22.7.0 (nodejs/node#53619); below it the import fails to parse and the probe
+  // reports a working guard as "does not run".
+  ['ESM syntax detection (guard probe import)', '22.7.0', /await import\(pathToFileURL\(file\)\.href\)/],
   // js/lib/fs.mjs — formatValue's toJSON writes verbatim text. Its own comment says "Node >= 21".
   ['JSON.rawJSON', '21.0.0', /\bJSON\.rawJSON\b/],
   ['Object.hasOwn', '16.9.0', /\bObject\.hasOwn\b/],

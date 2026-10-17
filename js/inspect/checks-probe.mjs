@@ -268,6 +268,9 @@ export async function guardProbe(targets = installTargets(), env = process.env) 
     }
     let verdicts;
     try {
+      // ESM under OpenCode's typeless package.json: parses only with syntax detection (Node >=
+      // 22.7, the floor). Its MODULE_TYPELESS_PACKAGE_JSON warning fires a tick later, inside
+      // quietProbe's stderr swap, so the doctor never prints it.
       const mod = (await import(pathToFileURL(file).href)).default;
       if (mod?.id !== 'geneseed-guard' || typeof mod.server !== 'function' || typeof mod.setup !== 'function') {
         problems.push(`${label}: not probed — it does not export the Geneseed guard `

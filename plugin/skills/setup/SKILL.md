@@ -8,7 +8,7 @@ description: Install the Geneseed harness into Claude Code, globally or for the 
 This plugin carries no harness of its own. Geneseed is a build: it renders laws, agents, skills,
 memory and hooks for the machine it runs on, so the install goes through its CLI.
 
-1. Check `node --version` is 22.3 or later. If not, stop and point the user to https://nodejs.org.
+1. Check `node --version` is 22.7 or later. If not, stop and point the user to https://nodejs.org.
 2. Ask the user two things, and wait for the answers:
    - **Scope.** *Global* writes to `~/.claude` and every repo inherits it (recommended). *This repo*
      writes `CLAUDE.md`, `.claude/` and the hooks into the current repository only.

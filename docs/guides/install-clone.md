@@ -6,7 +6,7 @@ kind: "concept"
 section: "Install"
 description: "Install from a git clone when npm is out of reach, or when you want to change the harness."
 ---
-Clone the repository when npm is out of reach (for example, a corporate network with no registry access), or when you want to change the harness rather than just use it. A clone needs **git** as well as Node 22.3 or newer. git is what updates the clone.
+Clone the repository when npm is out of reach (for example, a corporate network with no registry access), or when you want to change the harness rather than just use it. A clone needs **git** as well as Node 22.7 or newer. git is what updates the clone.
 
 Each OS has a one-step installer at the root of the clone. It checks for Node and git. If one is missing, it names what to install and where to get it, then stops. **It never installs anything itself.** When the checks pass, it runs the setup wizard and offers to open the web console.
 

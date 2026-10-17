@@ -24,7 +24,7 @@
   "author": "Guillaume Lemer",
   "type": "module",
   "engines": {
-    "node": ">=22.3.0"
+    "node": ">=22.7.0"
   },
   "bin": {
     "geneseed": "bin/geneseed-cli.mjs",

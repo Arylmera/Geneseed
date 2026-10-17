@@ -10,9 +10,9 @@
  */
 import path from 'node:path';
 
-export const NODE_FLOOR = '22.3.0';
+export const NODE_FLOOR = '22.7.0';
 
-/** Numeric, not string, comparison: '22.10.0' is above '22.3.0'. */
+/** Numeric, not string, comparison: '22.10.0' is above '22.7.0'. */
 export function belowFloor(version, floor = NODE_FLOOR) {
   const v = version.replace(/^v/, '').split('.').map(Number);
   const f = floor.split('.').map(Number);
@@ -23,7 +23,8 @@ export function belowFloor(version, floor = NODE_FLOOR) {
 }
 
 if (belowFloor(process.versions.node)) {
-  process.stderr.write(`geneseed needs Node 22.3 or newer; this is Node ${process.versions.node}. `
+  process.stderr.write(`geneseed needs Node ${NODE_FLOOR.replace(/\.0$/, '')} or newer; `
+    + `this is Node ${process.versions.node}. `
     + 'Install a current Node from https://nodejs.org (or your package manager), then run the '
     + 'command again.\n');
   process.exit(path.basename(process.argv[1] || '').startsWith('geneseed-hook') ? 0 : 1);
