@@ -262,9 +262,10 @@ test('both shim shapes forward argv and stay silent', () => {
   assert.ok(win.startsWith('@echo off'), win);
   assert.ok(win.includes('setlocal'), 'the cmd shim leaks its variables into the agent\'s env');
   assert.ok(win.includes('%*'), 'the cmd shim does not forward argv with its quotes intact');
-  // Bare `exit /b` propagates the LIVE errorlevel; plain `exit` would kill the parent cmd.exe
-  // before the emitted `|| exit 0` could evaluate.
-  assert.match(win, /(?:^|\r\n)exit \/b\r\n/);
+  // `exit /b %ERRORLEVEL%` on its own line: a bare `exit /b` returns 0 under `cmd /c` whatever
+  // the runner exited (the test below measures it), and plain `exit` would kill the parent
+  // cmd.exe before the emitted `|| exit 0` could evaluate.
+  assert.match(win, /(?:^|\r\n)exit \/b %ERRORLEVEL%\r\n$/);
 
   const posix = hookShimBody(runner, entry, 'linux');
   assert.ok(posix.startsWith('#!/bin/sh'), posix);
@@ -275,6 +276,29 @@ test('both shim shapes forward argv and stay silent', () => {
     assert.ok(!body.replace('@echo off', '').includes('echo '),
       `the ${name} shim prints something of its own, which corrupts a gate's verdict`);
   }
+});
+
+// THE REPRODUCING TEST for the bare-`exit /b` shim (#290). Bob runs a hook as `cmd /d /s /c
+// "<command>"` and refuses a call only by exit 2, so the shim must hand the runner's code back
+// through cmd. The real body, with an entry that exits 2 and one that exits 0: before the fix the
+// first came back 0 and every Bob block on Windows went through. Both directions, so a shim
+// that always returned 2 would fail too.
+test('the Windows shim hands the runner\'s exit code back through cmd /c', {
+  skip: process.platform !== 'win32' && 'cmd.exe exists only on Windows',
+}, () => {
+  const sb = makeSandbox('shimexit-');
+  try {
+    for (const code of [2, 0]) {
+      const entry = path.join(sb.path, `exit${code}.mjs`);
+      writeFileSync(entry, `process.exit(${code});\n`);
+      const shim = path.join(sb.path, `shim${code}.cmd`);
+      writeFileSync(shim, hookShimBody(process.execPath, entry, 'win32'));
+      const r = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `""${shim}" tool-gate"`], {
+        windowsVerbatimArguments: true, windowsHide: true, encoding: 'utf8',
+      });
+      assert.equal(r.status, code, `runner exited ${code}, cmd /c reported ${r.status}: ${r.stderr}`);
+    }
+  } finally { sb.cleanup(); }
 });
 
 test('an unchanged shim is not rewritten', () => {
