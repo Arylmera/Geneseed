@@ -90,11 +90,14 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 // chase — add them if a probe ever shows one in real use), `checkout -f`/`--force` and
 // `switch -f`/`--force`/`--discard-changes`
 // (git's own `-h` lists `-f, --force` AND a separate `--discard-changes` for switch — both
-// discard uncommitted work the same way `checkout --` does), `worktree remove --force`/`-f`
-// (can discard an uncommitted worktree), `reflog expire` and `gc --prune=now` (delete the
-// reflog/dangling-commit safety net recovery depends on), and `push :branch`/`push --delete`
-// (deletes a remote branch — the colon form needs a space before the `:` so `push origin
-// HEAD:main`, an ordinary refspec, is not caught).
+// discard uncommitted work the same way `checkout --` does), `reflog expire` and `gc
+// --prune=now` (delete the reflog/dangling-commit safety net recovery depends on), and `push
+// :branch`/`push --delete` (deletes a remote branch — the colon form needs a space before the
+// `:` so `push origin HEAD:main`, an ordinary refspec, is not caught).
+//
+// `worktree remove --force`/`-f` is deliberately NOT here (user decision, 2026-10-17): removing
+// a worktree is routine agent housekeeping, so it passes like a plain `worktree remove`. The
+// OpenCode guard's `SHELL_WARN_RE` and `LAW_IV_BASH` (js/hosts/settings.mjs) dropped it too.
 //
 // `restore` and `stash drop`/`stash clear` are carved OUT of the shared `\bgit\b[^\n]*\b(…)`
 // wrapper above and anchored to the verb position instead (`git`, an optional `-C <path>`, then
@@ -106,7 +109,7 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 // combination DOES discard working-tree changes, unlike `--staged` alone) while still deferring
 // on `--staged` alone.
 const DESTRUCTIVE_GIT_RE =
-  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s(?:-[a-zA-Z]*f|--force\b)|branch\b[^\n]*\s(?:-D\b|--delete\b[^\n]*--force\b|--force\b[^\n]*--delete\b)|checkout\s+--\s|checkout\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b)|switch\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b|--discard-changes\b)|worktree\b[^\n]*\bremove\b[^\n]*(?:-[a-zA-Z]*f\b|--force\b)|reflog\b[^\n]*\bexpire\b|gc\b[^\n]*--prune\b|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S|\s--delete\b|\s:\S))|\bgit(?:\s+-C\s+\S+)*\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))|\bgit(?:\s+-C\s+\S+)*\s+stash\s+(?:drop|clear)\b/;
+  /\bgit\b[^\n]*\b(?:reset\b[^\n]*\s--hard\b|clean\b[^\n]*\s(?:-[a-zA-Z]*f|--force\b)|branch\b[^\n]*\s(?:-D\b|--delete\b[^\n]*--force\b|--force\b[^\n]*--delete\b)|checkout\s+--\s|checkout\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b)|switch\b[^\n]*\s(?:-[a-zA-Z]*f\b|--force\b|--discard-changes\b)|reflog\b[^\n]*\bexpire\b|gc\b[^\n]*--prune\b|push\b[^\n]*(?:\s--force|\s-[a-zA-Z]*f\b|\s\+\S|\s--delete\b|\s:\S))|\bgit(?:\s+-C\s+\S+)*\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))|\bgit(?:\s+-C\s+\S+)*\s+stash\s+(?:drop|clear)\b/;
 
 // `loopExempt` — a WHITELIST, not the blacklist this replaced. A false ask costs one prompt; a
 // false allow publishes. So the exemption holds only when the ENTIRE command is built from

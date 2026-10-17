@@ -228,7 +228,6 @@ const SHELL_WARN_RE = [
   /\bgit\s+switch\b[^\n]*\s(-[a-zA-Z]*f\b|--force\b|--discard-changes\b)/,
   /\bgit\s+restore\b(?:(?![^\n]*--staged\b)|(?=[^\n]*--staged\b)(?=[^\n]*--worktree\b))/,
   /\bgit\s+stash\s+(drop|clear)\b/,
-  /\bgit\s+worktree\b[^\n]*\bremove\b[^\n]*(-[a-zA-Z]*f\b|--force\b)/,
   /\bgit\s+reflog\b[^\n]*\bexpire\b/,
   /\bgit\s+gc\b[^\n]*--prune\b/,
 ]

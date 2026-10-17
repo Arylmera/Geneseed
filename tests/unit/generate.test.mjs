@@ -1363,12 +1363,15 @@ test('an EXISTING opencode.json has its git gate re-wired when the pack comes ba
       'git checkout -f*', 'git checkout * -f*', 'git checkout --force*', 'git checkout * --force*',
       'git switch -f*', 'git switch * -f*', 'git switch --force*', 'git switch * --force*',
       'git switch --discard-changes*', 'git switch * --discard-changes*',
-      'git worktree remove -f*', 'git worktree remove --force*',
-      'git worktree remove * -f*', 'git worktree remove * --force*',
       'git reflog expire*', 'git gc --prune*', 'git gc * --prune*',
       'git stash drop*', 'git stash clear*',
       'git push *--delete*', 'git push * :*']) {
       assert.equal(bashOf()[k], 'ask', `${k} is Law IV's and rides no pack toggle`);
+    }
+    // Worktree removal is housekeeping, not a Law IV deletion (user decision, 2026-10-17).
+    for (const k of ['git worktree remove -f*', 'git worktree remove --force*',
+      'git worktree remove * -f*', 'git worktree remove * --force*']) {
+      assert.ok(!(k in bashOf()), `${k} was dropped from LAW_IV_BASH and must not be written`);
     }
     assert.ok(!('git restore*' in bashOf()),
       'git restore* would over-ask on `--staged` alone; it is guard-only, not a LAW_IV_BASH glob');
