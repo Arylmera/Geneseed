@@ -563,6 +563,14 @@ function ruleGate(args) {
   return ruleDecide(args, readPayload());
 }
 
+// The REPLACE halves of a Roo-style `apply_diff` (`<<<<<<< SEARCH … ======= <new> >>>>>>> REPLACE`).
+// A diff without those markers is a shape we do not know, so it is returned whole: fail closed.
+function diffReplaced(diff) {
+  if (typeof diff !== 'string') return diff;
+  const halves = [...diff.matchAll(/^=======\r?\n([\s\S]*?)^>>>>>>> REPLACE/gm)].map((m) => m[1]);
+  return halves.length ? halves.join('\n') : diff;
+}
+
 function ruleDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   // NotebookEdit names its target `notebook_path`; the settings matcher routes it here too.
@@ -575,9 +583,11 @@ function ruleDecide(args, payload) {
   // cheap, harmless guard in case that ever changes.
   // `diff` (Bob's `apply_diff`) and `replace`/`search` (`search_and_replace`) are Roo-lineage
   // field names the Bob docs never confirm (bob-verdict.md I1) — accepted when present, never
-  // required, same as every field above.
+  // required, same as every field above. Only WRITTEN text is scanned: `search` and a diff's
+  // SEARCH halves are text leaving the file (like Claude's `old_string`), so a secret there is
+  // being removed — blocking it would stop the agent cleaning up a leak.
   const edits = Array.isArray(ti.edits) ? ti.edits.map((e) => e && e.new_string) : [];
-  const body = [ti.content, ti.new_string, ti.new_source, ti.diff, ti.replace, ti.search, ...edits]
+  const body = [ti.content, ti.new_string, ti.new_source, diffReplaced(ti.diff), ti.replace, ...edits]
     .filter((v) => typeof v === 'string').join('\n');
   if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
     return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
