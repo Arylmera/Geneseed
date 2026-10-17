@@ -41,7 +41,10 @@ If the drift is your own edits, export them first — `geneseed diff` (or the co
 
 These come only from `geneseed doctor --probe`. It runs each installed gate exactly as the host's
 settings spell it, through the host's own shell, on `git reset --hard HEAD` (which must be refused)
-and `git status` (which must go through).
+and `git status` (which must go through). An OpenCode install's guard plugin has no command to
+run: the probe imports it and calls its hook through both plugin APIs (V1 and V2), with `rm -rf /`
+as the call it must refuse. `GENESEED_GUARD=off` or `warn` in your terminal makes that a note,
+not a failure.
 
 **Cause.**
 - **Not refusing:** the gate launches but lets a destructive call through. Usually something in
