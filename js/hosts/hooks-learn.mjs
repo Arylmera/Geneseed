@@ -13,6 +13,7 @@ import {
   globalHookStandingDown, hookProjectDir, resolveMemoryDir, sovereignBypass,
 } from './hosts.mjs';
 import { readStdin, splitLines, splitWords } from './hooks-prims.mjs';
+import { doneGate } from './hooks-done.mjs';
 import {
   existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
 } from './memory-files.mjs';
@@ -308,6 +309,10 @@ export function cmdLearn(args) {
   // by either check in this block.
   const hookEvent = typeof meta.hook_event_name === 'string' ? meta.hook_event_name
     : (typeof meta.event === 'string' ? meta.event : null);
+
+  // The done gate (#289) judges the turn BEFORE anything here spawns, and only on Stop. A block
+  // means the turn goes on, so there is nothing to distil yet: the next Stop will.
+  if (hookEvent === 'Stop' && !args.file && doneGate(meta, args)) return 0;
 
   // I2 (Bob): its Stop payload never carries `transcript_path`, so there is never a transcript
   // to distil — and the bare envelope itself is not notes text (that would waste a model call

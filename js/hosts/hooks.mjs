@@ -255,6 +255,8 @@ const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5', 'ops-2']);
  * information a trimmed file loses. The re-read happens on the ask path only.
  */
 const MAX_LEDGER_LINES = 1000;
+// Exported for the done gate (`./hooks-done.mjs`), which records from Stop, not from `ask`.
+export function recordGate(root, verb, rule) { ledger(root, verb, rule); }
 function ledger(root, verb, rule) {
   // `doctor --probe` asks on purpose; its asks are not the user's. Read here, on the rare ask
   // path only: the variable silences the RECORD, never the decision.
@@ -535,11 +537,15 @@ const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
  * not seen here; CI running the checks is the boundary that holds against that.
  */
 export const SENSOR_LIST = '.geneseed/protected-checks.txt';
+// The done gate's list (`./hooks-done.mjs`, #289) protects itself too, with or without a
+// protected-checks list: emptying it would disarm the gate it feeds.
+export const DONE_LIST = '.geneseed/done-checks.txt';
 function protectedCheck(p) {
   try {
     const target = resolvePath(p);
     const root = gitRootOf(path.dirname(target));
     if (!root) return null;
+    if (normcase(path.relative(root, target)) === normcase(DONE_LIST)) return DONE_LIST;
     const text = readFileSync(path.join(root, SENSOR_LIST), 'utf8');
     // `normcase` folds case AND slashes on Windows, so both sides go through it, the trailing
     // separator of the prefix included.
@@ -581,7 +587,8 @@ function ruleDecide(args, payload) {
   const sensor = protectedCheck(p);
   if (sensor) {
     return ask(args, 'rule-gate', 'rigor-5', `Geneseed (External Gate) — ${p} is a protected `
-      + `check (${sensor}, listed in ${SENSOR_LIST}). A check the agent can edit is not a `
+      + `check (${sensor === DONE_LIST ? 'the done gate list itself'
+        : `${sensor}, listed in ${SENSOR_LIST}`}). A check the agent can edit is not a `
       + 'check: fix the code, not the check, unless the user asks for this edit.');
   }
   const target = ruleGateTarget(p, args.root);

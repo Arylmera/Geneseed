@@ -345,6 +345,14 @@ test("blocks a write under a protected check path, not beside it", async () => {
   assert.equal(await blocked("write", { filePath: path.join(repo, "src", "a.js") }), false)
 })
 
+test("the done gate's list protects itself, with or without a protected-checks list (#289)", async () => {
+  const repo = path.join(tmp, "done-listed")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  assert.equal(await blocked("write", { filePath: path.join(repo, ".geneseed", "done-checks.txt") }), true)
+  assert.equal(await blocked("write", { filePath: path.join(repo, ".geneseed", "notes.txt") }), false)
+})
+
 // The manifest was `wiki.jsonc` before the `geneseed-` prefix; an install not yet re-emitted still
 // has only that name, and its protected folders must stay protected. A fresh module instance (the
 // query string) so the main instance's cached prefixes do not answer; $GENESEED_WIKI unset so the
