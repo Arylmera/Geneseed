@@ -37,13 +37,12 @@ import path from 'node:path';
 
 import { main as driverMain } from '../build/driver.mjs';
 import { ROOT } from '../build/source.mjs';
-import { CLAUDE_STYLE } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, settingsFile } from '../hosts/hosts.mjs';
 import {
   claudeCfg, claudeReadManifest, EMIT_HOST_SCOPE, installState, installTargets,
   legacyProcessCarrierOfDir, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile } from '../build/generate.mjs';
-import { settingsFile } from './uninstall.mjs';
 import {
   autostartPaths, autostartStale, hookShimPath, migrateShape, shimHome,
 } from '../hosts/shim.mjs';
@@ -65,7 +64,7 @@ const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
  * BOTH HALVES READ BACK AN EXISTING RESOLVER rather than a second hand-rolled copy
  * (host-compat B1/B2): `claudeCfg` (`js/hosts/installs.mjs`) is the cfg dir — `root` itself
  * for a global install, `<root>/<projectMarker>` (`.claude`/`.bob`/`.openclaude`) for a
- * project one — and `settingsFile` (`js/maintain/uninstall.mjs`) is the file name inside it,
+ * project one — and `settingsFile` (`js/hosts/hosts.mjs`) is the file name inside it,
  * read off the install's OWN manifest. The manifest is the authority, not a guess at the
  * canonical name: a pre-existing `bob-global` install with no `managed.settings_file` yet
  * recorded carries the bare, pre-nesting `settings.json` it was actually written with, not

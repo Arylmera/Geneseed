@@ -52,14 +52,14 @@ import { confirm } from '../lib/prompt.mjs';
 import {
   claudeCfg, claudeReadManifest, doctrinesOfDir, EMIT_HOST_SCOPE, emitHostScopeOf,
   excludedRulesOfDir, installKind, installState,
-  registeredTargets, DISABLED_STASH,
+  registeredTargets,
 } from '../hosts/installs.mjs';
 import {
-  CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir,
+  CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir,
   resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
-import { hashesOf, ownedState, ownedWithin } from '../hosts/owned.mjs';
+import { hashesOf, ownedState, ownedWithin, recordedDenies } from '../hosts/owned.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
@@ -225,18 +225,6 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
   '.geneseed-footprint', VERSION_MARKER];
 
 /**
- * The CURRENT manifest's `skill_denies` — the `permission.skill` denies Geneseed itself added
- * (`opencodeLayer` in emit-opencode.mjs records them; a deny the user wrote, even on a Geneseed
- * skill, is never in it). Task 4 (O-1) wires one per user-only skill, and unlike the Law IV
- * `permission.bash` gates (permanent invariants, never taken back — see
- * `reconcileOpencodePermission`), a skill-visibility deny is reversible: once uninstalled there
- * is no skill left to hide, and the name is the user's to reuse. No record takes back nothing.
- */
-function skillPermissionNames(man) {
-  return Array.isArray(man.skill_denies) ? man.skill_denies.filter((n) => typeof n === 'string') : [];
-}
-
-/**
  * `_harness_mcp._unmerge_opencode_json` — drop one `instructions` entry, leave every other
  * key intact.
  *
@@ -313,10 +301,6 @@ export function archiveStore(store) {
   return dest;
 }
 
-// `settingsFile` lives in `hosts.mjs` (the hook stand-down reads it, and must not import this
-// module); re-exported here for `migrate`.
-export { settingsFile };
-
 /** `_harness_mcp._claude_md_path` — where the manifest says the managed block lives. */
 function claudeMdPath(cfg, managed) {
   const rel = ((managed && managed.claude_md) || {}).rel || 'CLAUDE.md';
@@ -386,7 +370,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode', force 
     if (isDir(p) && isEmptyDir(p)) rmdirQuiet(p);
   }
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
-    path.join(target, 'AGENT.md').split(path.sep).join('/'), skillPermissionNames(man));
+    path.join(target, 'AGENT.md').split(path.sep).join('/'), recordedDenies(man));
   managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
   if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
@@ -476,7 +460,7 @@ function opencodeProjectUninstall(root, force = false) {
   const am = path.join(root, 'AGENT.md');
   if (isFile(am)) { unlinkQuiet(am); removed += 1; }
   const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry,
-    man ? skillPermissionNames(man) : []);
+    man ? recordedDenies(man) : []);
   const result = { removed, unmerged, archived: null };
   if (failed.length) result.failed = failed;
   if (kept.length) result.kept = kept;
@@ -587,6 +571,21 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
     if (archived.length) out.archived = archived;
     return out;
   }
+  reconcileRootMarkers(root, host, scope);
+  // 4. Tidy an emptied marker dir (.claude/.bob/.openclaude) so no husk lingers in the repo.
+  if (data !== root && isDir(data) && isEmptyDir(data)) rmdirQuiet(data);
+  const out = withKept({ ok: true, removed: summary.removed ?? 0, memory });
+  if (archived.length) out.archived = archived;
+  return out;
+}
+
+/**
+ * `installUninstall`'s step 3 once nothing of THIS host's install survived: drop, rewrite or
+ * keep the root markers depending on whether another host is still installed at `root`. Its
+ * own function because the survivor argument below is the whole of it, and the caller must
+ * only reach it after the reversal (step 1) has unlinked this host's own manifest/markers.
+ */
+function reconcileRootMarkers(root, host, scope) {
   // The root markers are ONE PER ROOT (`generate.mjs`'s "THE MARKER IS TRUSTED ONLY FOR ITS
   // OWN HOST") and `registryRoots` keeps a row alive only while `.geneseed-emit` exists there
   // — so in a repo sharing two project installs (`.claude/` + `.opencode/` at the same cwd,
@@ -655,11 +654,6 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
     if (scope === 'global' || host === 'opencode') unlinkQuiet(path.join(root, '.geneseed-theme'));
     unlinkQuiet(path.join(root, VERSION_MARKER));
   }
-  // 4. Tidy an emptied marker dir (.claude/.bob/.openclaude) so no husk lingers in the repo.
-  if (data !== root && isDir(data) && isEmptyDir(data)) rmdirQuiet(data);
-  const out = withKept({ ok: true, removed: summary.removed ?? 0, memory });
-  if (archived.length) out.archived = archived;
-  return out;
 }
 
 /**

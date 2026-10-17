@@ -51,7 +51,7 @@ import {
   openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
 import {
-  hashesOf, ownedHashes, ownedState, ownedWithin,
+  hashesOf, ownedHashes, ownedState, ownedWithin, recordedDenies,
 } from '../hosts/owned.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
@@ -255,15 +255,6 @@ function readManifest(manifestPath) {
     try { doc = parseJson(readFileSync(manifestPath, 'utf8')); } catch { doc = null; }
   }
   return { existed, doc };
-}
-
-/**
- * An OpenCode manifest's `skill_denies` — the `permission.skill` denies Geneseed itself added
- * (see `opencodeLayer`) — or `[]` when absent or malformed, which sweeps nothing.
- */
-function recordedDenies(doc) {
-  const d = doc && doc.skill_denies;
-  return Array.isArray(d) ? d.filter((n) => typeof n === 'string') : [];
 }
 
 /** The "+ primary agent, N command(s)" tail both OpenCode summary lines share. */
