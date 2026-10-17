@@ -10,7 +10,7 @@ Geneseed builds a harness (the rules, agents, skills and hooks your AI coding to
 
 ## The 5-minute path
 
-The only prerequisite is **Node 22.3 or newer**.
+The only prerequisite is **Node 22.7 or newer**.
 
 ```
 npx geneseed setup
@@ -30,7 +30,7 @@ Next: [Verify it works](verify.md). To see what the install just wrote, read [Wh
 
 ## Prerequisites
 
-- **Node 22.3 or newer.** This is the only hard requirement. Geneseed has zero runtime dependencies, and nothing it installs needs a second interpreter.
+- **Node 22.7 or newer.** This is the only hard requirement. Geneseed has zero runtime dependencies, and nothing it installs needs a second interpreter.
 - **Your agent tool**: OpenCode (recommended), Claude Code, IBM Bob, OpenClaude, or any tool that reads a root instructions file.
 - **git**, for a clone only. A clone updates itself with `git pull`.
 - *Optional:* a document converter (MarkItDown, Pandoc or Docling) if you want the agent to read PDFs and Office files. See [Reading non-markdown docs](read-non-markdown.md).

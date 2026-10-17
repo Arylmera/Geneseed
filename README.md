@@ -8,7 +8,7 @@
 [![CI](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml/badge.svg)](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml)
 [![AI Harness Scorecard](https://img.shields.io/badge/AI%20Harness%20Scorecard-A%2095.3%2F100-brightgreen)](#ai-harness-scorecard)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node >= 22.3](https://img.shields.io/badge/node-%3E%3D22.3-5fa04e)](package.json)
+[![Node >= 22.7](https://img.shields.io/badge/node-%3E%3D22.7-5fa04e)](package.json)
 [![zero dependencies](https://img.shields.io/badge/deps-zero-success)](package.json)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
 [![Skills](https://img.shields.io/badge/skills-47-blueviolet)](src/skills/)
@@ -75,7 +75,7 @@ geneseed-build --theme imperial  # Warhammer 40k voice, identical structure
 
 ### ⚡ The short way — `npx`
 
-The harness is published on npm as **[`geneseed`](https://www.npmjs.com/package/geneseed)** — three commands (`geneseed`, `geneseed-hook`, `geneseed-build`), zero dependencies. One command, nothing cloned, nothing else to install. The only prerequisite is **Node ≥ 22.3**.
+The harness is published on npm as **[`geneseed`](https://www.npmjs.com/package/geneseed)** — three commands (`geneseed`, `geneseed-hook`, `geneseed-build`), zero dependencies. One command, nothing cloned, nothing else to install. The only prerequisite is **Node ≥ 22.7**.
 
 ```bash
 npx geneseed setup            # the guided wizard
@@ -102,9 +102,9 @@ Every other route (Claude Code, Bob, OpenClaude, plain `AGENT.md`, per-repo inst
 
 ### 🧬 The long way — a git checkout
 
-Cloning is the route when npm is out of reach (a corporate network with no registry access) or when you intend to *change* the harness rather than use it. It needs **git** and the same **Node ≥ 22.3** as everything else — there is nothing extra to install.
+Cloning is the route when npm is out of reach (a corporate network with no registry access) or when you intend to *change* the harness rather than use it. It needs **git** and the same **Node ≥ 22.7** as everything else — there is nothing extra to install.
 
-**One step: run the installer at the root of the clone.** It checks that Node ≥ 22.3 and git are there and, when one is missing, says exactly what to install and where (on a managed PC: Software Center / Company Portal) — it never installs anything itself. Then it runs the setup wizard — which opens by listing the AI coding tools it can install into (OpenCode, Claude Code, IBM Bob, OpenClaude), each `ok` or with its install link, and asks before going on when none is there — and offers to open the web console.
+**One step: run the installer at the root of the clone.** It checks that Node ≥ 22.7 and git are there and, when one is missing, says exactly what to install and where (on a managed PC: Software Center / Company Portal) — it never installs anything itself. Then it runs the setup wizard — which opens by listing the AI coding tools it can install into (OpenCode, Claude Code, IBM Bob, OpenClaude), each `ok` or with its install link, and asks before going on when none is there — and offers to open the web console.
 
 ```bash
 git clone https://github.com/Arylmera/Geneseed.git
@@ -124,11 +124,11 @@ cd Geneseed
 
 Afterwards, `./geneseed setup` (`.\geneseed.cmd setup`) re-runs the wizard and bare `./geneseed` (`.\geneseed.cmd`) opens the web console. PowerShell runs a `.cmd` directly, so that is the PowerShell spelling too.
 
-Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PATH`, and nothing else. Set `GENESEED_NODE` to an absolute path if `node` is not on `PATH` — under a version manager that only patches interactive shells, say. The wizard is plain text prompts on every console, old or new.
+Both launchers are thin shims over the Node CLI: they need `node` (22.7+) on `PATH`, and nothing else. Set `GENESEED_NODE` to an absolute path if `node` is not on `PATH` — under a version manager that only patches interactive shells, say. The wizard is plain text prompts on every console, old or new.
 
 ### 🟩 One runtime — Node, and nothing else
 
-Node ≥ 22.3 is the entire dependency list — every command, all five hook verbs, the web console and both generators run from it, and nothing any bundle ships needs a second interpreter.
+Node ≥ 22.7 is the entire dependency list — every command, all five hook verbs, the web console and both generators run from it, and nothing any bundle ships needs a second interpreter.
 
 ### ✅ After installing
 

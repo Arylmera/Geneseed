@@ -24,8 +24,8 @@ echo.
 
 "%NODE%" --version >nul 2>nul
 if errorlevel 1 goto :nonode
-rem engines.node in package.json is >=22.3.0; below that the CLI fails on syntax, not with a hint.
-"%NODE%" -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=3)?0:1)"
+rem engines.node in package.json is >=22.7.0; below that the CLI fails on syntax, not with a hint.
+"%NODE%" -e "const [a,b]=process.versions.node.split('.').map(Number);process.exit(a>22||(a===22&&b>=7)?0:1)"
 if errorlevel 1 goto :oldnode
 "%NODE%" -e "console.log('  ok  Node '+process.version)"
 
@@ -55,7 +55,7 @@ goto :done
 echo   xx  Node.js not found.
 goto :nodehelp
 :oldnode
-"%NODE%" -e "console.log('  xx  Node '+process.version+' is too old - Geneseed needs 22.3 or newer.')"
+"%NODE%" -e "console.log('  xx  Node '+process.version+' is too old - Geneseed needs 22.7 or newer.')"
 :nodehelp
 echo       Install the current Node.js LTS: https://nodejs.org/
 echo       On a managed PC, ask IT or look for "Node.js LTS" in Software Center / Company Portal.
