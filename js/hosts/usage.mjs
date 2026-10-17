@@ -26,8 +26,9 @@ const NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/;
 /**
  * `{kind, name}` for a skill or subagent call, else null. Reads the Claude shape (`tool_name` /
  * `tool_input`: `Skill` → `skill`, `Agent` or the older `Task` → `subagent_type`), OpenCode's
- * (`skill` → `name`, `task` → `subagent_type`) and, best-effort, Bob's (`tool` / `input`, any
- * tool whose name contains "skill"): Bob's skill tool name is unverified, no Bob runs here.
+ * (`skill` → `name`, `task` → `subagent_type`; V2 hooks see the pre-alias `subagent` → `agent`)
+ * and, best-effort, Bob's (`tool` / `input`, any tool whose name contains "skill"): Bob's skill
+ * tool name is unverified, no Bob runs here.
  */
 export function usageOf(payload) {
   if (!payload || typeof payload !== 'object') return null;
@@ -38,7 +39,7 @@ export function usageOf(payload) {
   if (!tool.startsWith('mcp') && tool.includes('skill')) {
     kind = 'skill';
     name = ti.skill ?? ti.name ?? ti.skill_name;
-  } else if (tool === 'agent' || tool === 'task') {
+  } else if (tool === 'agent' || tool === 'task' || tool === 'subagent') {
     kind = 'agent';
     name = ti.subagent_type ?? ti.agent;
   }

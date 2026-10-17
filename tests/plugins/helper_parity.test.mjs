@@ -36,6 +36,7 @@ const COPIES = {
   stripJsonc: ["context", "guard"],
   isFile: ["context", "guard"],
   isDir: ["context", "guard", "learn"],
+  patchSections: ["guard", "context"],
 }
 
 for (const [helper, plugins] of Object.entries(COPIES)) {

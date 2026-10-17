@@ -109,6 +109,34 @@ test("a legacy wiki.jsonc under $GENESEED_HARNESS is still read", async () => {
   }
 })
 
+// An entry is inside the wiki unless its relative path is "..", starts with "../", or is
+// absolute. A folder whose name merely begins with ".." (`..cache/`) is inside, so it keeps
+// the wiki-relative label; a real escape (`../escape.md`) is labelled by its absolute path.
+test("a '..cache/' folder is inside the wiki; '../escape.md' is not", async () => {
+  const vault = path.join(tmp, "Brain")
+  await fs.mkdir(path.join(vault, "..cache"), { recursive: true })
+  await fs.writeFile(path.join(vault, "..cache", "note.md"), "# Cached\n")
+  await fs.writeFile(path.join(tmp, "escape.md"), "# Escaped\n")
+  const manifest = path.join(tmp, "dotdot-wiki.jsonc")
+  await fs.writeFile(manifest, JSON.stringify({ wikis: [{
+    name: "Dots", path: vault,
+    entries: [{ path: "..cache/note.md", load: "eager" }, { path: "../escape.md", load: "eager" }] }] }))
+  const prevWiki = process.env.GENESEED_WIKI
+  process.env.GENESEED_WIKI = manifest
+  try {
+    const mod = await import("../../adapters/opencode/plugins/geneseed-context.js?dotdot-wiki")
+    const plugin = await mod.default.server({ directory: path.join(tmp, "repo"), client: {} })
+    const output = { context: [] }
+    await plugin["experimental.session.compacting"]({}, output)
+    const out = output.context[0] ?? ""
+    assert.match(out, /----- Dots\/\.\.cache\/note\.md -----/)
+    assert.doesNotMatch(out, /Dots\/\.\.\/escape\.md/)
+    assert.ok(out.includes(`Dots/${path.join(tmp, "escape.md").split(path.sep).join("/")}`))
+  } finally {
+    process.env.GENESEED_WIKI = prevWiki
+  }
+})
+
 test("the lazy listing truncates at the cap with a visible count", () => {
   assert.match(text, /\[\+1 more notes in this wiki — explore its folders on demand\]/)
 })

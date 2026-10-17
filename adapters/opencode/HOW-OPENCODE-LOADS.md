@@ -94,7 +94,7 @@ changed for each plugin:
 | `@opencode-ai/plugin` `tool()` helper | `@opencode/plugin`; a plain JSON-schema `input` needs no helper |
 | `todo.updated`, session `summary` diffs | no V2 event. The activity cards show no todos or files on V2 |
 | tool part carries its name | `session.tool.called` has no name; it rides on `session.tool.input.started` |
-| tools `bash`, `apply_patch`, `task` | renamed `shell`, `patch`, `subagent` (the old ids are aliases). The guard's substring classes cover both spellings |
+| tools `bash`, `apply_patch`, `task` | renamed `shell`, `patch`, `subagent` (the old ids are aliases). The guard's substring classes cover both spellings; its usage counter takes `subagent` (type under `agent`) beside `task`, since the hook sees the name before alias resolution |
 
 None of this is checked by a mock alone: `node tests/host_canary.mjs` starts the real V1 and V2
 and fails on the host's own `failed to load plugin` log line.

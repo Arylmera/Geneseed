@@ -591,7 +591,7 @@ function usageOf(tool, args) {
   let kind = null
   let name = null
   if (!t.startsWith("mcp") && t.includes("skill")) { kind = "skill"; name = a.skill ?? a.name ?? a.skill_name }
-  else if (t === "agent" || t === "task") { kind = "agent"; name = a.subagent_type ?? a.agent }
+  else if (t === "agent" || t === "task" || t === "subagent") { kind = "agent"; name = a.subagent_type ?? a.agent }
   if (!kind || typeof name !== "string") return null
   name = name.trim().replace(/^\/+/, "")
   return USAGE_NAME_RE.test(name) ? { kind, name } : null
