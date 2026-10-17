@@ -52,6 +52,15 @@ test("the V1 transform reminds after an unproven edit, and only then", async () 
     ["a failed edit changed nothing", [user("u1"), tool("edit", { filePath: path.join(repo, "a.js") }, "error"), user("u2")], false],
     ["an edit outside the project", [user("u1"), tool("write", { filePath: path.join(tmp, "x.js") }), user("u2")], false],
     ["the edit is two turns old: the reminder lasts one turn", [user("u0"), edit, user("u1"), user("u2")], false],
+    // `..cache` is a name inside the root, not a step out of it: the Node hook's `within()` rule.
+    ["an edit of <root>/..cache/x.js is inside the project", [user("u1"), tool("edit", { filePath: path.join(repo, "..cache", "x.js") }), user("u2")], true],
+    ["a relative edit climbing out of the root", [user("u1"), tool("edit", { filePath: "../x.js" }), user("u2")], false],
+    // apply_patch carries only `patchText`: its marker paths (root-relative) decide.
+    ["an apply_patch entirely outside the project", [user("u1"), tool("apply_patch", { patchText: "*** Begin Patch\n*** Add File: ../out.js\n+x\n*** Update File: ../a.js\n*** Move to: ../b.js\n*** End Patch" }), user("u2")], false],
+    ["an apply_patch touching one project file", [user("u1"), tool("apply_patch", { patchText: "*** Begin Patch\n*** Add File: ../out.js\n+x\n*** Delete File: a.js\n*** End Patch" }), user("u2")], true],
+    ["an apply_patch moving a file into the project", [user("u1"), tool("apply_patch", { patchText: "*** Begin Patch\n*** Update File: ../a.js\n*** Move to: a.js\n*** End Patch" }), user("u2")], true],
+    // No path derivable: counted, because a missed reminder is the worse error (fail-open gate).
+    ["an edit whose target cannot be derived", [user("u1"), tool("patch", { patchText: "garbage" }), user("u2")], true],
   ]
   for (const [what, messages, want] of rows) assert.equal(await reminded(messages), want, what)
 })
