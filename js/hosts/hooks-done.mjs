@@ -126,8 +126,10 @@ export function doneDecide(transcript, checks, root, cwd = root) {
 /**
  * The Stop-side wrapper `cmdLearn` calls first. Returns true when it printed a block (the turn
  * goes on, so `learn` must not distil yet); false in every other case, with nothing on stdout.
+ * `install` is the root `cmdLearn` already derived from `--memory` (null without one), so the
+ * ledger lands in the same root its sovereignty check read.
  */
-export function doneGate(meta, args) {
+export function doneGate(meta, args, install) {
   try {
     const cwd = typeof meta.cwd === 'string' && meta.cwd ? meta.cwd : process.cwd();
     const root = gitRootOf(cwd);
@@ -148,7 +150,6 @@ export function doneGate(meta, args) {
     }
     const missing = doneDecide(transcript, checks, root, cwd);
     if (!missing.length) return false;
-    const install = args.memory ? path.dirname(args.memory) : null;
     if (meta.stop_hook_active === true) {
       recordGate(install, 'done-gate-cap', 'law-3');
       err(`[done-gate] cap reached — turn ends with unproven checks: ${missing.join('; ')}\n`);

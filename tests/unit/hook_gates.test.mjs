@@ -9,37 +9,25 @@
 //
 // DRIVEN AS THE CHILD PROCESSES THEY REALLY ARE, with stdin from a seeded file, which is P5i's
 // finding: faking a TTY or a pipe in process is where this kind of test goes wrong, and on
-// Windows a redirected stdin still reads as a TTY to the reference. `tests/unit/
-// excludes_guard.test.mjs` established the shape; this file needs one variant it does not have,
+// Windows a redirected stdin still reads as a TTY to the reference. `tests/helpers/hook_run.mjs`
+// holds the shared runner; this file needs one variant `excludes_guard.test.mjs` does not have,
 // because the rule gate must also be exercised with NO `--root` at all.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 
-import { ROOT } from '../../js/build/source.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
+import { spawnHook } from '../helpers/hook_run.mjs';
 
 /** `bin/geneseed-hook.mjs <verb> [--root R]` with `stdin` on fd 0. */
 function hookRun(verb, { root = null, stdin = '', host = null, extra = [], cwd = null, env = null } = {}) {
-  const sb = makeSandbox();
-  try {
-    const inFile = path.join(sb.path, 'stdin.json');
-    fs.writeFileSync(inFile, stdin);
-    const fd = fs.openSync(inFile, 'r');
-    try {
-      const argv = [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), verb];
-      if (root !== null) argv.push('--root', root);
-      if (host !== null) argv.push('--host', host);
-      argv.push(...extra);
-      const proc = spawnSync(process.execPath, argv, {
-        encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], ...(cwd ? { cwd } : {}),
-        ...(env ? { env } : {}),
-      });
-      return { rc: proc.status, out: proc.stdout, err: proc.stderr };
-    } finally { fs.closeSync(fd); }
-  } finally { sb.cleanup(); }
+  const argv = [verb];
+  if (root !== null) argv.push('--root', root);
+  if (host !== null) argv.push('--host', host);
+  argv.push(...extra);
+  const proc = spawnHook(argv, stdin, { ...(cwd ? { cwd } : {}), ...(env ? { env } : {}) });
+  return { rc: proc.status, out: proc.stdout, err: proc.stderr };
 }
 
 /** The `hookSpecificOutput` of an ask decision, asserting the envelope on the way. */

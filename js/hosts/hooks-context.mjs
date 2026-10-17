@@ -150,7 +150,7 @@ export { SESSION_FILES, SEED_SHA256 };
 const MAP_COUNT_RE = /^- \[([^\]]*)\]\(topics\/[^)]+\.md\) — (\d+) facts?$/;
 // Past this many facts a topic file stops being a quick read, and the curator splits it.
 const CURATE_TOPIC_MAX = 40;
-const CURATE_NUDGE = '[memory] A topic holds over 40 facts, or facts sit in misc: offer the user '
+const CURATE_NUDGE = `[memory] A topic holds over ${CURATE_TOPIC_MAX} facts, or facts sit in misc: offer the user `
   + 'to dispatch the memory-curator agent to merge, re-topic and archive this store.';
 export { CURATE_TOPIC_MAX, CURATE_NUDGE };
 
@@ -192,9 +192,6 @@ export function sessionFiles(hookRoot) {
   }
   return found;
 }
-
-// Moved to `hosts.mjs` so the gates and `learn` share it; re-exported for this verb's callers.
-export { globalHookStandingDown };
 
 /** `_disp` — relative to the repo root when it sits under it, else verbatim. */
 function disp(pathStr, root) {
