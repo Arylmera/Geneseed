@@ -148,6 +148,25 @@ test('an ask writes one ledger line naming the rule; a defer writes nothing', ()
   });
 });
 
+// `GENESEED_GATE_PROBE` is how `doctor --probe` keeps its own asks out of `status`'s counts.
+// It must silence the RECORD and nothing else: the same payload gives the same bytes and exit
+// code with and without it, on Claude's ask tier and on Bob's exit-2 tier alike.
+test('GENESEED_GATE_PROBE skips the ledger line and never changes the verdict', () => {
+  withLedgerRoot((root, ledger) => {
+    const stdin = bashPayload('git reset --hard HEAD');
+    const probeEnv = { ...process.env, GENESEED_GATE_PROBE: '1' };
+    for (const [verb, host] of [['git-gate', null], ['tool-gate', 'bob']]) {
+      const probed = hookRun(verb, { root, stdin, host, env: probeEnv });
+      assert.ok(!fs.existsSync(ledger), `${verb}: a probe ask must not touch the ledger`);
+      const live = hookRun(verb, { root, stdin, host });
+      assert.deepEqual([probed.rc, probed.out], [live.rc, live.out], `${verb}: the verdict moved`);
+      assert.equal(fs.readFileSync(ledger, 'utf8').trim().split('\n').length, 1,
+        `${verb}: the live ask writes its line`);
+      fs.rmSync(ledger);
+    }
+  });
+});
+
 // The cap. 1000 lines is the ceiling; the 1001st ask drops the OLDEST line, never the newest,
 // so `status` keeps counting the asks that still describe how this install is being used.
 test('the ledger keeps the newest 1000 lines and drops the oldest on the next ask', () => {

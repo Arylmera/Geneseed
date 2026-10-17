@@ -258,7 +258,9 @@ const MAX_LEDGER_LINES = 1000;
 // Exported for the done gate (`./hooks-done.mjs`), which records from Stop, not from `ask`.
 export function recordGate(root, verb, rule) { ledger(root, verb, rule); }
 function ledger(root, verb, rule) {
-  if (!root) return;
+  // `doctor --probe` asks on purpose; its asks are not the user's. Read here, on the rare ask
+  // path only: the variable silences the RECORD, never the decision.
+  if (!root || process.env.GENESEED_GATE_PROBE) return;
   try {
     const file = path.join(root, GATE_LEDGER);
     appendFileSync(file, `${JSON.stringify({

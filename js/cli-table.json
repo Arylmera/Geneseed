@@ -473,6 +473,21 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--probe"
+          ],
+          "dest": "probe",
+          "metavar": null,
+          "help": "also run each installed gate, as its settings spell it, on a destructive and a safe payload: it must refuse the first and let the second through (runs under this terminal's environment, not the host app's)",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
