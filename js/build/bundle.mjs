@@ -24,6 +24,16 @@ import {
 import { writeVersion } from './version.mjs';
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 
+/**
+ * Seed the memory index, then move a flat one to topics — the pair every emit runs on its
+ * memory store, in that order. Here and not in `js/hosts/memory-files.mjs`: `stubs.mjs`
+ * imports that module, so the reverse import would be a cycle.
+ */
+export function ensureMemoryStore(memDir) {
+  ensureMemoryIndex(memDir);
+  migrateMemoryIndex(memDir);
+}
+
 // ---------------------------------------------------------------------------
 // Source completeness
 // ---------------------------------------------------------------------------
@@ -223,8 +233,7 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
   ensureRulesStub(out);
   ensureProfileStub(out);
   ensureBundleGitignore(out);
-  ensureMemoryIndex(path.join(out, theme[SRC_DIR_TOKENS.memory] ?? 'memory'));
-  migrateMemoryIndex(path.join(out, theme[SRC_DIR_TOKENS.memory] ?? 'memory'));
+  ensureMemoryStore(path.join(out, theme[SRC_DIR_TOKENS.memory] ?? 'memory'));
   ensureNotebookIndex(path.join(out, theme[SRC_DIR_TOKENS.notebook] ?? 'notebook'));
   process.stdout.write(`[geneseed] built theme '${themeName}' -> ${out} (${items.length} files)\n`);
 }

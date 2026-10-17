@@ -34,6 +34,8 @@ const COPIES = {
   sovereignBypass: ["context", "guard", "learn"],
   mainWorktreeOf: ["context", "guard", "learn"],
   stripJsonc: ["context", "guard"],
+  isFile: ["context", "guard"],
+  isDir: ["context", "guard", "learn"],
 }
 
 for (const [helper, plugins] of Object.entries(COPIES)) {

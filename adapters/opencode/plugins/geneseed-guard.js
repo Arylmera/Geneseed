@@ -2,7 +2,10 @@
 //
 // Enforces the safety Laws at the tool boundary (`tool.execute.before`), the same
 // "enforce by injection, don't just instruct" stance as the context plugin:
-//   - Sealed Secrets:  block writes to private-key / credential files.
+//   - Sealed Secrets:  block writes to private-key / credential files, and any write whose
+//     added content carries a credential-shaped string (`.env`-shaped targets exempt).
+//   - External Gate:  block writes to a check listed in `.geneseed/protected-checks.txt`,
+//     and to the done gate's own list `.geneseed/done-checks.txt`.
 //   - Deletion Is Deliberate:  block catastrophic shell commands.
 //   - Commands Must Return:  block a recursive scan rooted at a whole filesystem (find /).
 //   - Persist Insight (rule vs memory):  speed-bump the first write to user-rules.md
@@ -10,7 +13,10 @@
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in geneseed-wiki.jsonc.
 // High-confidence patterns only, so legitimate work is never caught. Borderline cases
-// (.env edits, force-push) are WARNED, not blocked.
+// (.env edits, force-push) are WARNED, not blocked. Every block is recorded in the gate
+// ledger (`<cfg>/notebook/gates.jsonl`) under the hook's rule key (`law-1`, `rigor-5`,
+// `law-4`, `ops-2`, `process-1`, `wiki`); every skill or subagent call, blocked or not, is
+// counted in `<cfg>/notebook/usage.jsonl` when that `notebook/` exists and `.usage-off` does not.
 //
 // GENESEED_GUARD=off    disable entirely.
 // GENESEED_GUARD=warn   downgrade every block to a warning (log, but allow).
@@ -317,23 +323,10 @@ const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t)
 // (`packages/opencode/src/patch/index.ts` `parsePatchHeader`): `*** Add File:`,
 // `*** Update File:` (optionally followed by `*** Move to:`, both the old and the new
 // path count) and `*** Delete File:`. The `+`-prefixed body lines are the new file
-// content, never a path, and are not scanned here — no gate in this file inspects
-// write content, only the target path.
+// content, never a path: `parsePatchSections` below collects them for the content secret
+// scan, and this list carries only the target paths, both sides of a move included.
 function parsePatchPaths(patchText) {
-  const out = []
-  const lines = String(patchText).split(/\r?\n/)
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    let m = /^\*\*\* (?:Add|Delete) File:\s*(.+)$/.exec(line)
-    if (m) { out.push(m[1].trim()); continue }
-    m = /^\*\*\* Update File:\s*(.+)$/.exec(line)
-    if (m) {
-      out.push(m[1].trim())
-      const mv = /^\*\*\* Move to:\s*(.+)$/.exec(lines[i + 1] || "")
-      if (mv) { out.push(mv[1].trim()); i++ }
-    }
-  }
-  return out.filter(Boolean)
+  return patchSections(patchText).flatMap((s) => [s.from, s.path]).filter(Boolean)
 }
 
 // Returns every candidate path for this call, normalized (backslashes -> `/`) and,
@@ -362,6 +355,12 @@ function pickPath(args, cwd) {
 // land, so content is attributed to it, not the pre-move path. `*** Delete File:` sections
 // collect no `+` lines (nothing is being written).
 function parsePatchSections(patchText) {
+  return patchSections(patchText).filter((s) => s.path)
+}
+// The one marker parser both lists derive from. `from` is the pre-move path of an
+// `Update File` followed by `Move to` (empty otherwise); `path` is where the file lands.
+// Unfiltered: an empty marker path is dropped by each caller on its own terms.
+function patchSections(patchText) {
   const out = []
   let current = null
   const flush = () => { if (current) out.push(current) }
@@ -369,20 +368,20 @@ function parsePatchSections(patchText) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     let m = /^\*\*\* (?:Add|Delete) File:\s*(.+)$/.exec(line)
-    if (m) { flush(); current = { path: m[1].trim(), added: [] }; continue }
+    if (m) { flush(); current = { from: "", path: m[1].trim(), added: [] }; continue }
     m = /^\*\*\* Update File:\s*(.+)$/.exec(line)
     if (m) {
       flush()
-      let p = m[1].trim()
+      let from = "", p = m[1].trim()
       const mv = /^\*\*\* Move to:\s*(.+)$/.exec(lines[i + 1] || "")
-      if (mv) { p = mv[1].trim(); i++ }
-      current = { path: p, added: [] }
+      if (mv) { from = p; p = mv[1].trim(); i++ }
+      current = { from, path: p, added: [] }
       continue
     }
     if (current && line.startsWith("+") && !line.startsWith("+++")) current.added.push(line.slice(1))
   }
   flush()
-  return out.filter((s) => s.path)
+  return out
 }
 
 // The content a write/edit/apply_patch call would actually land on disk, per FILE — what the
@@ -428,8 +427,12 @@ const hasAny = (name, parts) => parts.some((s) => name.includes(s))
 // geneseed-wiki.jsonc (the machine-level knowledge-base manifest) may list `protected` folders
 // per wiki. Mutating anything under one is denied. Same resolution chain as the
 // context plugin: $GENESEED_WIKI -> $GENESEED_HARNESS/geneseed-wiki.jsonc -> beside the install.
-async function isFile(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
-async function isDir(p) { try { return (await fs.stat(p)).isDirectory() } catch { return false } }
+async function isFile(p) {
+  try { return (await fs.stat(p)).isFile() } catch { return false }
+}
+async function isDir(p) {
+  try { return (await fs.stat(p)).isDirectory() } catch { return false }
+}
 
 // The wiki manifest is JSONC (the seeded stub carries a commented example): strip // and
 // /* */ comments plus trailing commas before parsing — string-aware, so quoted

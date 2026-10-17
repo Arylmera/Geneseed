@@ -304,7 +304,7 @@ function parseFrontmatter(chunk) {
 
 // A memory `name:` becomes a FILENAME and the model writes it, so it is a plain slug or
 // nothing — no separator, no `..`, no drive. The same rule as MEMORY_SLUG_RE in
-// js/hosts/hooks.mjs, inlined because this file ships standalone.
+// js/hosts/memory-files.mjs, inlined because this file ships standalone.
 const MEMORY_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/
 
 // The chunk without its frontmatter `action:` line, which is an instruction, not the fact.

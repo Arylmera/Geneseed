@@ -8,23 +8,21 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
-import { migrateMemoryIndex } from '../hosts/memory-files.mjs';
 import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import {
   copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
   writeAliasCommands, writePonytailCommand, writePrimaryAgent, writeTheme,
 } from '../hosts/opencode.mjs';
 import { mergeOpencodeJson, opencodeSentinelWrite } from '../hosts/settings.mjs';
-import { claimLeaf } from '../hosts/owned.mjs';
 import { isFile, readText, writeText } from '../lib/fs.mjs';
 import { relPosix } from '../lib/text.mjs';
-import { assertSourceComplete, build, phaseLog } from './bundle.mjs';
+import { assertSourceComplete, build, phaseLog, ensureMemoryStore } from './bundle.mjs';
 import {
-  globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
+  claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
 import { renderAll } from './render.mjs';
 import {
-  ensureExcludesStub, ensureMemoryIndex, ensureNotebookIndex, ensureProfileStub, ensureRulesStub,
+  ensureExcludesStub, ensureNotebookIndex, ensureProfileStub, ensureRulesStub,
   ensureWikiStub,
 } from './stubs.mjs';
 import { writeVersion } from './version.mjs';
@@ -216,10 +214,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
     // store are siblings, so `memory/` resolves from AGENT.md's own location and stays
     // hermetic — no absolute path a doctor check would flag as an escape.
     const agentDest = path.join(cfgDir, 'AGENT.md');
-    if (claimLeaf(cfgDir, agentDest, 'AGENT.md')) {
-      writeText(agentDest, stripCapabilityLinks(agentText));
-      owned.push('AGENT.md');
-    }
+    claimAndWrite(cfgDir, agentDest, 'AGENT.md', stripCapabilityLinks(agentText), owned);
   }
   // Co-owned, so never in `owned` — see `opencodeSentinelWrite`.
   opencodeSentinelWrite(cfgDir);
@@ -233,8 +228,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   });
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
-  ensureMemoryIndex(path.join(cfgDir, 'memory'));
-  migrateMemoryIndex(path.join(cfgDir, 'memory'));
+  ensureMemoryStore(path.join(cfgDir, 'memory'));
   const nbStatus = globalNotebook(cfgDir, items, out, cfg.src);
   ensureNotebookIndex(path.join(cfgDir, 'notebook'));
   ensureWikiStub(cfgDir);

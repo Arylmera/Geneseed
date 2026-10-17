@@ -194,8 +194,12 @@ const EXCLUDE_DIRS = new Set([
   ".venv", "__pycache__", ".opencode", ".harness",
 ])
 
-async function isFile(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
-async function isDir(p) { try { return (await fs.stat(p)).isDirectory() } catch { return false } }
+async function isFile(p) {
+  try { return (await fs.stat(p)).isFile() } catch { return false }
+}
+async function isDir(p) {
+  try { return (await fs.stat(p)).isDirectory() } catch { return false }
+}
 
 // ---- session files (the harness's own) --------------------------------------
 // The files AGENT.md names for session start, relative to the HARNESS dir — the dir that
@@ -947,6 +951,31 @@ function doneOwed(messages, checks, root) {
   return checks.filter((c) => !passed.has(c))
 }
 
+// The session-scope rule, once for both majors and both deliveries: a child/subagent session
+// inherits its parent's context, and a geneseed-* session (learn distils, geneseed-wf:*
+// children) must stay clean.
+const isSkippedSession = (meta) =>
+  Boolean(meta?.parentID ?? meta?.parentId) || String(meta?.title ?? "").startsWith("geneseed-")
+
+// The rule as a per-sid cached filter over `getMeta(sid)` (each major's own session.get shape).
+// Cached because the transform runs on EVERY request; a failed lookup is NOT cached, so the
+// next request re-checks.
+function sessionSkipper(getMeta) {
+  const cache = new Map()
+  return async (sid) => {
+    if (!sid) return false
+    const hit = cache.get(sid)
+    if (hit !== undefined) return hit
+    try {
+      const skip = isSkippedSession(await getMeta(sid))
+      cache.set(sid, skip)
+      return skip
+    } catch {
+      return false
+    }
+  }
+}
+
 export const GeneseedContext = async (ctx) => {
   const { client } = ctx
   const done = new Set()
@@ -963,15 +992,12 @@ export const GeneseedContext = async (ctx) => {
       // context). The sid is only marked done AFTER the guards pass — marking it
       // earlier would permanently skip a session when a transient session.get
       // failure let it through the title check.
-      let title = "", parent
+      let meta
       try {
         const info = await client.session.get({ path: { id: sid } })
-        const meta = info?.data ?? info
-        title = meta?.title ?? ""
-        parent = meta?.parentID ?? meta?.parentId
+        meta = info?.data ?? info
       } catch {}
-      if (parent) { log("skipped: child/subagent session"); return }
-      if (title.startsWith("geneseed-")) { log("skipped: geneseed-* session"); return }
+      if (isSkippedSession(meta)) { log("skipped: child/subagent or geneseed-* session"); return }
 
       if (await alreadyInjected(client, sid)) { log("skipped: already injected (marker present)"); return }
       done.add(sid)
@@ -998,28 +1024,13 @@ export const GeneseedContext = async (ctx) => {
     }
   }
 
-  // Session-scope filter for the INVISIBLE delivery, mirroring injectVisible's
-  // guards: child/subagent sessions inherit the parent's context, and geneseed-*
-  // sessions (learn distils, geneseed-wf:* children) must stay clean — without this
-  // the transform prepends the full context block to every request of every session
-  // in-process. Cached per sid (the transform runs on EVERY request); a transient
-  // session.get failure is NOT cached so the next request re-checks.
-  const sessionSkip = new Map()
-  async function skipSession(sid) {
-    if (!sid) return false
-    const hit = sessionSkip.get(sid)
-    if (hit !== undefined) return hit
-    try {
-      const info = await client.session.get({ path: { id: sid } })
-      const meta = info?.data ?? info
-      const skip = Boolean(meta?.parentID ?? meta?.parentId) ||
-        String(meta?.title ?? "").startsWith("geneseed-")
-      sessionSkip.set(sid, skip)
-      return skip
-    } catch {
-      return false
-    }
-  }
+  // Session-scope filter for the INVISIBLE delivery, the same rule as injectVisible's
+  // guards — without it the transform prepends the full context block to every request of
+  // every session in-process.
+  const skipSession = sessionSkipper(async (sid) => {
+    const info = await client.session.get({ path: { id: sid } })
+    return info?.data ?? info
+  })
 
   return {
     event: async ({ event }) => {
@@ -1072,13 +1083,15 @@ export const GeneseedContext = async (ctx) => {
     // detects that and takes over with the visible delivery.
     "experimental.chat.messages.transform": async (_input, output) => {
       transformSeen = true                  // the hook exists on this build
+      // One scope decision per request, shared by the done gate and the context block:
+      // both end on an empty request, an excluded repo, or a skipped session.
+      if (!output || !Array.isArray(output.messages) || !output.messages.length) return
+      const sid = output.messages[0]?.info?.sessionID
+      if (await sovereignBypass(root) || await skipSession(sid)) return
       // The done gate's reminder: FIRST, and independent of the context block:
       // INJECT_OFF and the visible delivery leave it on, and no early return below can skip it.
       // Its own function, so its early returns end the reminder, never the context injection.
       await (async () => {
-        if (!output || !Array.isArray(output.messages) || !output.messages.length) return
-        const sid = output.messages[0]?.info?.sessionID
-        if (await sovereignBypass(root) || await skipSession(sid)) return
         const checks = await readDoneChecks(root)
         if (!checks.length) return
         const owed = doneOwed(output.messages, checks, root)
@@ -1094,11 +1107,7 @@ export const GeneseedContext = async (ctx) => {
         log("transform: done-gate reminder injected")
       })().catch((err) => log(`done-gate error: ${err?.message ?? err}`))
       if (INJECT_OFF || !TRANSFORM || fallbackVisible) return
-      if (await sovereignBypass(root)) return
       try {
-        if (!output || !Array.isArray(output.messages) || !output.messages.length) return
-        const sid = output.messages[0]?.info?.sessionID
-        if (await skipSession(sid)) return
         // Already present this request? (idempotent across plugin copies / retries.)
         const present = output.messages.some((m) =>
           (m?.parts ?? []).some((p) => typeof p?.text === "string" && p.text.includes(MARKER)))
@@ -1146,22 +1155,12 @@ const v2Model = (ref) => (ref?.providerID && ref?.id ? `${ref.providerID}/${ref.
 async function setupV2(ctx) {
   const root = repoRoot({ worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory })
   const blockCache = { text: null, at: 0 }
-  // Same scope rule as V1's skipSession: child/subagent sessions inherit the parent's
-  // context, geneseed-* sessions stay clean. A failed lookup is not cached.
-  const sessionSkip = new Map()
-  async function skipSession(sid) {
-    if (!sid) return false
-    const hit = sessionSkip.get(sid)
-    if (hit !== undefined) return hit
-    try {
-      const info = await ctx.session.get({ sessionID: sid })
-      const skip = Boolean(info?.parentID) || String(info?.title ?? "").startsWith("geneseed-")
-      sessionSkip.set(sid, skip)
-      return skip
-    } catch {
-      return false
-    }
-  }
+  // Same scope rule as V1's skipSession. V2's info names the parent `parentID` only, so only
+  // that and the title are passed on.
+  const skipSession = sessionSkipper(async (sid) => {
+    const info = await ctx.session.get({ sessionID: sid })
+    return { parentID: info?.parentID, title: info?.title }
+  })
 
   // The done gate is not judged on OpenCode 2 (see `doneOwed`): said once, where its log goes.
   if ((await readDoneChecks(root).catch(() => [])).length) {
@@ -1205,7 +1204,7 @@ async function setupV2(ctx) {
       if (ev?.type !== "session.created" || INJECT_OFF) continue
       const d = ev.data ?? {}
       try {
-        if (d.parentID || String(d.title ?? "").startsWith("geneseed-")) continue
+        if (isSkippedSession({ parentID: d.parentID, title: d.title })) continue
         if (await sovereignBypass(root)) continue
         const { block } = await resolveBlock(root)
         if (!block) continue
