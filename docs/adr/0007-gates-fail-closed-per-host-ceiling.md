@@ -1,7 +1,7 @@
 # 0007 — Gates fail closed, each host to its own ceiling
 
 - **Status:** Accepted
-- **Date:** 2026-10 (`onFailure: "block"` since Task 1 of the host-opportunities series)
+- **Date:** 2026-10 (`onFailure: "block"` since 4.0.0, #241)
 
 ## Context
 

@@ -202,7 +202,7 @@ export function shimProblems(targets = installTargets()) {
   if (!isFile(p)) {
     return installsReferencingShim(p, targets).map((cfg) => `[shim] ${p} does not exist, but ${cfg} `
       + 'still runs its hooks through it — every hook in that install is dead, and (since '
-      + "Task 1) Claude's git-gate/rule-gate now BLOCK instead of silently passing. Run: "
+      + "Geneseed 4.0.0) Claude's git-gate/rule-gate now BLOCK instead of silently passing. Run: "
       + 'geneseed rebuild-all');
   }
   let body;
