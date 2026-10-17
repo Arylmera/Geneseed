@@ -293,12 +293,12 @@ export function cmdLearn(args) {
   }
 
   // The Stop/SubagentStop hook always passes `--memory <cfg>/memory`; inside an excluded
-  // folder the global install must not learn.
-  if (args.memory && sovereignBypass(path.dirname(toPlatformPath(args.memory)))) return 0;
+  // folder the global install must not learn. The done gate's ledger lives in the same root.
+  const install = args.memory ? path.dirname(toPlatformPath(args.memory)) : null;
+  if (install && sovereignBypass(install)) return 0;
   // Same install root, and a project install of this host beside it learns on its own Stop: a
   // second LLM call, and the global store learning facts the project owns (Claude B4).
-  if (args.memory && globalHookStandingDown(path.dirname(toPlatformPath(args.memory)),
-    hookProjectDir(), args.host, 'learn')) return 0;
+  if (install && globalHookStandingDown(install, hookProjectDir(), args.host, 'learn')) return 0;
 
   const raw = args.file ? readText(args.file) : readStdin();
   const meta = hookMeta(raw);
@@ -312,7 +312,7 @@ export function cmdLearn(args) {
 
   // The done gate (#289) judges the turn BEFORE anything here spawns, and only on Stop. A block
   // means the turn goes on, so there is nothing to distil yet: the next Stop will.
-  if (hookEvent === 'Stop' && !args.file && doneGate(meta, args)) return 0;
+  if (hookEvent === 'Stop' && !args.file && doneGate(meta, args, install)) return 0;
 
   // I2 (Bob): its Stop payload never carries `transcript_path`, so there is never a transcript
   // to distil — and the bare envelope itself is not notes text (that would waste a model call

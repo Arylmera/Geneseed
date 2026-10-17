@@ -27,7 +27,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 
 import {
   excludeAdd, excludeRemove, excludesSnapshot, cmdExclude,
@@ -35,7 +34,7 @@ import {
 import { resolvePath, sovereignBypass } from '../../js/hosts/hosts.mjs';
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
 import { withGlobalInstalls } from '../helpers/installs_fixture.mjs';
-import { ROOT } from '../helpers/web_fixture.mjs';
+import { spawnHook } from '../helpers/hook_run.mjs';
 
 const asPosix = (p) => p.split(path.sep).join('/');
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -185,18 +184,8 @@ test('sovereignBypass ignores a malformed worktree link', () => {
 // host actually runs, and it makes "silent" mean bytes rather than a mock's call count.
 
 function hookRun(verb, { cwd, root, stdin = '' }) {
-  const sb = makeSandbox();
-  try {
-    const inFile = path.join(sb.path, 'stdin.json');
-    fs.writeFileSync(inFile, stdin);
-    const fd = fs.openSync(inFile, 'r');
-    try {
-      const proc = spawnSync(process.execPath,
-        [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), verb, '--root', root],
-        { cwd, encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'] });
-      return { rc: proc.status, out: proc.stdout, err: proc.stderr };
-    } finally { fs.closeSync(fd); }
-  } finally { sb.cleanup(); }
+  const proc = spawnHook([verb, '--root', root], stdin, { cwd });
+  return { rc: proc.status, out: proc.stdout, err: proc.stderr };
 }
 
 test('context says nothing at all inside an excluded tree', () => {

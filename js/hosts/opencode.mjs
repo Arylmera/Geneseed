@@ -28,6 +28,7 @@ import { jsonDumps, jsonDumpsIndent, parseJson } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { sourceReleaseVersion } from '../build/version.mjs';
 import { aliasesOf } from '../build/source.mjs';
+import { lstripNewlines } from './settings.mjs';
 import {
   firstBlockquote, isUserInvokedOnly, skillDescription, stripSkillBodyLinks, pointSideFiles,
   pushOverrideLines,
@@ -295,7 +296,7 @@ export function writePrimaryAgent(cfg, agentsDir, overrides, claim = (_dest) => 
       || !statSync(cfg.primaryAgentSrc).isFile()) {
     return null;
   }
-  const body = readText(cfg.primaryAgentSrc).replace(/^\n+/, '');
+  const body = lstripNewlines(readText(cfg.primaryAgentSrc));
   const desc = 'Primary orchestrator — works by the harness Rules and delegates to the '
     + 'capability subagents.';
   const fm = [`description: ${jsonDumps(desc)}`, 'mode: primary', 'color: primary'];
@@ -309,19 +310,43 @@ export function writePrimaryAgent(cfg, agentsDir, overrides, claim = (_dest) => 
   return dest;
 }
 
-/** `_build_emit._write_command_layer` — the opt-in /slash commands. */
-export function writeCommandLayer(cfg, items, commandDir, claim = (_dest) => true,
-  skillDirOf = (n) => path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/')) {
-  if (!truthyEnv('GENESEED_COMMANDS')) return [];
-  const byName = new Map();
+/**
+ * The top-level skills of `items` (`src/skills/<stem>.md`, no `_` partials) as ordered
+ * `[stem, text]` pairs — the one parse both command writers below share.
+ */
+function topLevelSkills(cfg, items) {
+  /** @type {[string, string][]} */
+  const found = [];
   for (const { text, src } of items) {
     if (text === null) continue;
     const sp = path.relative(cfg.src, src).split(path.sep);
     if (sp.length === 2 && sp[0] === 'skills' && sp[1].endsWith('.md')
         && !sp[1].startsWith('_')) {
-      byName.set(sp[1].slice(0, -3), text);
+      found.push([sp[1].slice(0, -3), text]);
     }
   }
+  return found;
+}
+
+/** Both command writers' default `skillDirOf`: the skill's own directory beside `commandDir`. */
+const siblingSkillDir = (commandDir) => (n) =>
+  path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/');
+
+/** A command has no base directory, so a side-file pointer names the skill's own. */
+function commandBody(text, stem, skillDir) {
+  return stripSkillBodyLinks(pointSideFiles(lstripNewlines(text), stem, skillDir));
+}
+
+function writeCommandFile(dest, desc, body) {
+  mkdirSync(path.dirname(dest), { recursive: true });
+  writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${body}`);
+}
+
+/** `_build_emit._write_command_layer` — the opt-in /slash commands. */
+export function writeCommandLayer(cfg, items, commandDir, claim = (_dest) => true,
+  skillDirOf = siblingSkillDir(commandDir)) {
+  if (!truthyEnv('GENESEED_COMMANDS')) return [];
+  const byName = new Map(topLevelSkills(cfg, items));
   const written = [];
   for (const [name, skill] of Object.entries(COMMAND_SET)) {
     // A command runs a skill; `--exclude-skills` took that skill out, so the command goes too.
@@ -333,10 +358,7 @@ export function writeCommandLayer(cfg, items, commandDir, claim = (_dest) => tru
     const dest = path.join(commandDir, `${name}.md`);
     if (!claim(dest)) continue;
     const desc = firstBlockquote(text);
-    // A command has no base directory, so a side-file pointer names the skill's own.
-    const body = stripSkillBodyLinks(pointSideFiles(text.replace(/^\n+/, ''), skill, skillDirOf(skill)));
-    mkdirSync(path.dirname(dest), { recursive: true });
-    writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${body}`);
+    writeCommandFile(dest, desc, commandBody(text, skill, skillDirOf(skill)));
     written.push(dest);
   }
   return written;
@@ -358,22 +380,15 @@ export function writeCommandLayer(cfg, items, commandDir, claim = (_dest) => tru
  * (Task 4) — it keeps its SKILL.md and does not need a second, command-shaped copy.
  */
 export function writeAliasCommands(cfg, items, commandDir, claim = (_dest) => true,
-  skillDirOf = (n) => path.join(path.dirname(commandDir), 'skills', n).split(path.sep).join('/'),
-  alsoUserOnly = false) {
+  skillDirOf = siblingSkillDir(commandDir), alsoUserOnly = false) {
   const written = [];
-  for (const { text, src } of items) {
-    if (text === null) continue;
-    const sp = path.relative(cfg.src, src).split(path.sep);
-    if (sp.length !== 2 || sp[0] !== 'skills' || !sp[1].endsWith('.md') || sp[1].startsWith('_')) continue;
-    const stem = sp[1].slice(0, -3);
-    const body = stripSkillBodyLinks(pointSideFiles(text.replace(/^\n+/, ''), stem, skillDirOf(stem)));
+  for (const [stem, text] of topLevelSkills(cfg, items)) {
+    const body = commandBody(text, stem, skillDirOf(stem));
     const names = alsoUserOnly && isUserInvokedOnly(text) ? [...aliasesOf(text), stem] : aliasesOf(text);
     for (const name of names) {
       const dest = path.join(commandDir, `${name}.md`);
       if (!claim(dest)) continue;
-      mkdirSync(path.dirname(dest), { recursive: true });
-      const desc = name === stem ? skillDescription(text) : `Alias of ${stem}.`;
-      writeText(dest, `---\ndescription: ${jsonDumps(desc)}\n---\n\n${body}`);
+      writeCommandFile(dest, name === stem ? skillDescription(text) : `Alias of ${stem}.`, body);
       written.push(dest);
     }
   }

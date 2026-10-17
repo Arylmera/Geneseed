@@ -9,8 +9,9 @@
  * `js/build/driver.mjs`, and through it the whole generator, for the two-line
  * `hookRunnerEntry`, which now lives here beside the `hookPrefix` that consumes its answer.
  *
- * Keep this module's imports to `node:` builtins, `js/lib/fs.mjs` and `./hosts.mjs`: being
- * cheap to load is its whole reason to exist.
+ * Keep this module's imports to `node:` builtins, `js/lib/fs.mjs`, `./hosts.mjs` and
+ * `./hooks-prims.mjs` (whose only import, `js/lib/paths.mjs`, `./hosts.mjs` already loads):
+ * being cheap to load is its whole reason to exist.
  */
 import {
   chmodSync, existsSync, mkdirSync, realpathSync, renameSync, statSync, writeFileSync,
@@ -19,6 +20,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { readText, isOsError } from '../lib/fs.mjs';
 import { expanduser } from './hosts.mjs';
+import { isFile } from './hooks-prims.mjs';
 
 /** The checkout this module ships in — `js/build/source.mjs`'s `ROOT`, computed locally so the
  * shim does not import the source loader. */
@@ -295,7 +297,6 @@ export function claudeHookShell(env = process.env, platform = process.platform) 
  */
 export function claudeGitBashPath(env = process.env) {
   const read = (name) => Object.entries(env).find(([k]) => k.toUpperCase() === name)?.[1];
-  const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
   const forced = read('CLAUDE_CODE_GIT_BASH_PATH');
   if (forced && GIT_BASH_NAMES.has(path.basename(forced).toLowerCase()) && isFile(forced)) {
     return forced;

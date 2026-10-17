@@ -34,6 +34,11 @@ import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from 
 import { relPosix } from '../lib/text.mjs';
 import { aliasesOf } from '../build/source.mjs';
 import { claimLeaf, ownedState } from './owned.mjs';
+// `lstripNewlines` on spec bodies is a no-op on every input the generator produces today
+// (measured: no file under `src/` and no rendered spec in any theme begins with a newline), so
+// mutating it away leaves the parity gate green — correctly, there is no reachable behaviour to
+// detect. Kept because a spec author adding a leading blank line is one commit from needing it.
+import { lstripNewlines } from './settings.mjs';
 
 /** What a folder skill writes where it needs its own directory — see `writeNativeLayer`. */
 const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
@@ -703,17 +708,4 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     if (claimedSkills.has(stem) && claim(dest)) write(dest, stripSkillBodyLinks(text));
   }
   return { nAgents, nSkills, written, userOnlySkills };
-}
-
-/**
- * `str.lstrip("\n")` — only newlines, not all whitespace.
- *
- * Currently a no-op on every input the generator produces: measured, no file under `src/`
- * and no rendered spec in any of the 14 themes begins with a newline. Mutating it away
- * leaves the parity gate green, and that is correct rather than a hole — there is no
- * reachable behaviour to detect. Kept because it is what the Python does, and a spec
- * author adding a leading blank line is one commit away from making it matter.
- */
-function lstripNewlines(text) {
-  return text.replace(/^\n+/, '');
 }

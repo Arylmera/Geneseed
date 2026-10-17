@@ -55,6 +55,8 @@ export function sovereignBypass(root) {
   } catch {
     return false;
   }
+  // Nothing to match, so no reason to pay for the cwd and `.git` reads below on every hook call.
+  if (!entries.length) return false;
   let heres;
   try {
     heres = [normcase(resolvePath(process.cwd()))];

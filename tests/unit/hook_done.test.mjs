@@ -9,11 +9,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 
-import { ROOT } from '../../js/build/source.mjs';
 import { doneDecide, runsUnpiped } from '../../js/hosts/hooks-done.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
+import { spawnHook } from '../helpers/hook_run.mjs';
 
 const R = path.resolve('/proj');
 const CHECKS = ['npm run lint', 'node --test'];
@@ -99,22 +98,16 @@ function project({ checks = 'npm run lint\n', transcriptRows = [], host = null, 
   const payload = host === 'bob' ? { event: 'Stop', session_id: 's' }
     : { hook_event_name: 'Stop', session_id: 's', cwd: proj, transcript_path: transcript,
       stop_hook_active: active };
-  const inFile = path.join(sb.path, 'stdin.json');
-  fs.writeFileSync(inFile, JSON.stringify(payload));
   const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) };
   delete env.GENESEED_LLM;
   delete env.GENESEED_LEARN_CHILD;
-  const fd = fs.openSync(inFile, 'r');
   try {
-    const argv = [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn',
-      '--memory', path.join(install, 'memory'), ...(host ? ['--host', host] : [])];
-    const p = spawnSync(process.execPath, argv,
-      { encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], cwd: proj, env });
+    const argv = ['learn', '--memory', path.join(install, 'memory'), ...(host ? ['--host', host] : [])];
+    const p = spawnHook(argv, JSON.stringify(payload), { cwd: proj, env });
     let ledger = '';
     try { ledger = fs.readFileSync(path.join(install, 'notebook', 'gates.jsonl'), 'utf8'); } catch { /* none */ }
     return { rc: p.status, out: p.stdout, err: p.stderr, ledger };
   } finally {
-    fs.closeSync(fd);
     sb.cleanup();
   }
 }
@@ -168,17 +161,10 @@ test('rule-gate: the done list protects itself, its neighbours do not', () => {
   try {
     const proj = path.join(sb.path, 'proj');
     fs.mkdirSync(path.join(proj, '.git'), { recursive: true });
-    const write = (rel) => {
-      const inFile = path.join(sb.path, 'in.json');
-      fs.writeFileSync(inFile, JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write',
-        tool_input: { file_path: path.join(proj, rel), content: 'npm test\n' } }));
-      const fd = fs.openSync(inFile, 'r');
-      try {
-        return spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'rule-gate'],
-          { encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], cwd: proj,
-            env: { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) } });
-      } finally { fs.closeSync(fd); }
-    };
+    const write = (rel) => spawnHook(['rule-gate'],
+      JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Write',
+        tool_input: { file_path: path.join(proj, rel), content: 'npm test\n' } }),
+      { cwd: proj, env: { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) } });
     const guarded = write('.geneseed/done-checks.txt');
     assert.equal(guarded.status, 0, guarded.stderr);
     const dec = JSON.parse(guarded.stdout).hookSpecificOutput;

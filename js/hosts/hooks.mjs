@@ -445,6 +445,8 @@ export function rootScan(command) {
       const m = /^-path[=:](.+)$/i.exec(t);
       return m ? m[1] : t;
     });
+    // For ls/dir a PowerShell `-Recurse` abbreviation counts from `-re` up: a bare `-r` there is the
+    // POSIX reverse flag (`ls -r /`, `dir -r C:\`). gci/Get-ChildItem keep the full abbreviation set.
     if (!always && !argv.some((a) => (grep && GREP_RECURSE_RE.test(a))
       || (ls && (LS_RECURSE_RE.test(a) || (a.length >= 3 && PS_RECURSE_RE.test(a))))
       || (ps && PS_RECURSE_RE.test(a)))) continue;
@@ -452,8 +454,6 @@ export function rootScan(command) {
   }
   return null;
 }
-// For ls/dir a PowerShell `-Recurse` abbreviation counts from `-re` up: a bare `-r` there is the
-// POSIX reverse flag (`ls -r /`, `dir -r C:\`). gci/Get-ChildItem keep the full abbreviation set.
 const unquote = (t) => t.replace(/^["']+|["']+$/g, '');
 // A QUOTED token is data — a grep pattern (`grep -rn "/" src`), a path named in a search
 // (`rg "/mnt/c" README.md`) — never a root target; only an unquoted root is one.
@@ -527,19 +527,19 @@ const SECRET_RE =
   /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
 
+export const SENSOR_LIST = '.geneseed/protected-checks.txt';
+// The done gate's list (`./hooks-done.mjs`, #289) protects itself too, with or without a
+// protected-checks list: emptying it would disarm the gate it feeds.
+export const DONE_LIST = '.geneseed/done-checks.txt';
 /**
  * External Gate's boundary half: the checks an agent is judged by must sit outside what it can
  * edit, or a failing check is one edit away from a passing one. A project opts in by listing
  * them, one repo-relative path per line (`#` comments), in `.geneseed/protected-checks.txt` at
  * its git root — found by walking up from the WRITE TARGET, not the cwd, so a session in one repo
  * writing into another reads that other repo's list. The list protects itself. Returns the entry
- * the path falls under, or null. ponytail: a write tool only — a shell `sed -i` or redirect is
+ * the path falls under, or null. shortcut: a write tool only — a shell `sed -i` or redirect is
  * not seen here; CI running the checks is the boundary that holds against that.
  */
-export const SENSOR_LIST = '.geneseed/protected-checks.txt';
-// The done gate's list (`./hooks-done.mjs`, #289) protects itself too, with or without a
-// protected-checks list: emptying it would disarm the gate it feeds.
-export const DONE_LIST = '.geneseed/done-checks.txt';
 function protectedCheck(p) {
   try {
     const target = resolvePath(p);

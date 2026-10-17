@@ -145,7 +145,8 @@ const LAW_IV_BASH = ['git push --force*', 'git push -f*', 'git push *--force*', 
  * `-u origin`/`--set-upstream origin`/any remote through its leading `*`; the second key covers
  * the `refs/heads/` spelling the same way.
  *
- * ORDER IS LOAD-BEARING. `defaultPermission` appends these AFTER `git push*`'s ask (so a loop
+ * ORDER IS LOAD-BEARING. `PUSH_CHAIN` (which `defaultPermission` and `OWNED_BASH` both read)
+ * puts these AFTER `git push*`'s ask (so a loop
  * push is not swallowed by the blanket consent ask) and BEFORE `LAW_IV_BASH` (so `findLast`
  * — OpenCode's own `permission.bash` evaluator — lets a force push, a `+refspec`, or a
  * `--delete`/bare-`:` push still ask even when the target is `loop/*`; those LAW_IV_BASH keys
@@ -222,18 +223,22 @@ const LOOP_PUSH_ASK_FLAG_EXTRA = [
 ];
 const LOOP_PUSH_ASK_TRAILING = ['git push * HEAD:loop/* ?*', 'git push * HEAD:refs/heads/loop/* ?*'];
 
+/**
+ * The tiers after `git push*`, in the `findLast` order the docblocks above depend on — ONE
+ * ordered table, so `defaultPermission` and `OWNED_BASH` cannot disagree about it.
+ */
+const PUSH_CHAIN = [
+  [LOOP_PUSH_ALLOW, 'allow'], [LOOP_PUSH_ASK_EXTRA, 'ask'], [LOOP_PUSH_ALLOW_FLAG, 'allow'],
+  [LOOP_PUSH_ASK_FLAG_EXTRA, 'ask'], [LOOP_PUSH_ASK_TRAILING, 'ask'], [LAW_IV_BASH, 'ask'],
+];
+
 function defaultPermission(doctrines = null, excluded = []) {
   const bash = { 'rm -rf *': 'ask' };
   if (consentRuleOn(doctrines, excluded)) {
     bash['git commit*'] = 'ask';
     bash['git push*'] = 'ask';
   }
-  for (const k of LOOP_PUSH_ALLOW) bash[k] = 'allow';
-  for (const k of LOOP_PUSH_ASK_EXTRA) bash[k] = 'ask';
-  for (const k of LOOP_PUSH_ALLOW_FLAG) bash[k] = 'allow';
-  for (const k of LOOP_PUSH_ASK_FLAG_EXTRA) bash[k] = 'ask';
-  for (const k of LOOP_PUSH_ASK_TRAILING) bash[k] = 'ask';
-  for (const k of LAW_IV_BASH) bash[k] = 'ask';
+  for (const [keys, verdict] of PUSH_CHAIN) for (const k of keys) bash[k] = verdict;
   return { bash };
 }
 
@@ -245,8 +250,7 @@ function defaultPermission(doctrines = null, excluded = []) {
  * the pack returns, and to name it when this build no longer wants it but will not remove it.
  */
 const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*',
-  ...LOOP_PUSH_ALLOW, ...LOOP_PUSH_ASK_EXTRA, ...LOOP_PUSH_ALLOW_FLAG, ...LOOP_PUSH_ASK_FLAG_EXTRA,
-  ...LOOP_PUSH_ASK_TRAILING, ...LAW_IV_BASH];
+  ...PUSH_CHAIN.flatMap(([keys]) => keys)];
 
 /**
  * Bring an ALREADY-WRITTEN `permission` block back into line with the pack selection, and
@@ -626,7 +630,8 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // skill reconcile above never ran either — the unwired skill denies are folded into THIS
     // one WARN rather than going unmentioned (a dedicated `skillOpaque` needs `perm` to be a
     // dict to even look at `perm.skill`, which this case by definition is not).
-    const names = [...OWNED_BASH.filter((k) => has(defaultPermission(doctrines, excluded).bash, k)),
+    const wanted = defaultPermission(doctrines, excluded).bash;
+    const names = [...OWNED_BASH.filter((k) => has(wanted, k)),
       ...(!permIsObject ? skillNames : [])];
     process.stderr.write(`[geneseed] WARN: "permission" in ${path.basename(target)} `
       + `${opaque}, so Geneseed cannot wire its own gates into it — including `
@@ -1236,7 +1241,8 @@ export function managedBlockRead(p, blockId = 'GENESEED') {
   return stripNewlines(inner.slice(0, inner.indexOf(end)));
 }
 
-function lstripNewlines(s) {
+/** `str.lstrip("\n")`; the one copy — `native.mjs` and `opencode.mjs` import it from here. */
+export function lstripNewlines(s) {
   return s.replace(/^\n+/, '');
 }
 

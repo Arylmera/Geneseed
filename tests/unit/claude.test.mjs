@@ -34,12 +34,12 @@ import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
-  globalHookStandingDown, cmdContext, SEED_SHA256, SESSION_FILES, sessionFiles,
+  cmdContext, SEED_SHA256, SESSION_FILES, sessionFiles,
   CURATE_NUDGE, CURATE_TOPIC_MAX, memoryNudge,
 } from '../../js/hosts/hooks-context.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
-  openclaudeConfigDir,
+  openclaudeConfigDir, globalHookStandingDown,
 } from '../../js/hosts/hosts.mjs';
 import { BOB_RULES_STUB, SESSION_SEEDS } from '../../js/build/stubs.mjs';
 import {
