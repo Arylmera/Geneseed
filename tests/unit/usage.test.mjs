@@ -65,6 +65,33 @@ test('the OpenCode plugin counts the same table into its own install', async () 
   } finally { sb.cleanup(); }
 });
 
+// A repo listed in <cfg>/excludes.json is where the global install goes dormant, so the plugin
+// must not count there — the order Claude's toolGate keeps (bypass first, then recordUse).
+// Both plugin APIs are driven: V1 `server` and V2 `setup` (which delegates to the V1 hook).
+test('the OpenCode plugin counts nothing in an excluded repo, on V1 and V2', async () => {
+  const sb = makeSandbox('usage-');
+  try {
+    const cfg = path.join(sb.path, 'cfg');
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(path.join(cfg, 'plugins'), { recursive: true });
+    fs.mkdirSync(path.join(cfg, 'notebook'));
+    fs.mkdirSync(repo);
+    fs.writeFileSync(path.join(cfg, 'excludes.json'), JSON.stringify({ excludes: [{ path: repo }] }));
+    const copy = path.join(cfg, 'plugins', 'geneseed-guard.js');
+    fs.copyFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins', 'geneseed-guard.js'), copy);
+    const mod = await import(pathToFileURL(copy).href);
+    const hooks = await mod.default.server({ directory: repo, worktree: repo });
+    await hooks['tool.execute.before']({ tool: 'skill' }, { args: { name: 'plan' } });
+    let v2 = null;
+    await mod.default.setup({
+      location: { project: { directory: repo }, directory: repo },
+      tool: { hook: async (_name, fn) => { v2 = fn; } },
+    });
+    await v2({ tool: 'skill', input: { name: 'plan' } });
+    assert.deepEqual(lines(path.join(cfg, USAGE_LEDGER)), [], 'an excluded repo appended to usage.jsonl');
+  } finally { sb.cleanup(); }
+});
+
 test('the hook writes a day and a name, and honours the off switches', () => {
   const sb = makeSandbox('usage-');
   try {
