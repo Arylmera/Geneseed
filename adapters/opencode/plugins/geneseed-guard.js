@@ -615,9 +615,12 @@ export const GeneseedGuard = async (ctx) => {
   const root = () => ctx?.worktree || ctx?.directory || process.cwd()
   return {
     "tool.execute.before": async (input, output) => {
+      // Bypass before counting, the order Claude's toolGate keeps: an excluded repo is
+      // dormant, so nothing is written there. GENESEED_GUARD=off still counts — Claude's
+      // hook has no such switch; GENESEED_NO_USAGE / .usage-off stop the counter.
+      if (await sovereignBypass(root())) return
       await recordUse(input?.tool || input?.name, output?.args || input?.args)
       if (OFF) return
-      if (await sovereignBypass(root())) return
       const tool = (input?.tool || input?.name || "").toLowerCase()
       const args = output?.args || input?.args || {}
       // `rule` is the ledger key, spelled as js/hosts/hooks.mjs spells it (`law-1`,
