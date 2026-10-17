@@ -10,10 +10,11 @@
  * is not told every skill is unused. `never` lists installed skills and agents with no call in
  * the window, alias stubs included (an alias that never fires is exactly what to prune).
  *
- * Lines older than 90 days are dropped from the ledger when it is read — the daemon prunes, so
- * the hook path only ever appends. Garbage lines are skipped, never fatal.
+ * Lines older than 90 days are skipped when read, never rewritten: a hook may append at any
+ * moment, and a GET that rewrote the file would drop that append (or prune a half-written tail).
+ * Garbage lines are skipped, never fatal.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { USAGE_LEDGER, USAGE_OFF } from '../hosts/usage.mjs';
@@ -27,24 +28,22 @@ const day = (ms) => new Date(ms).toISOString().slice(0, 10);
 
 const listOr = (dir) => { try { return readdirSync(dir); } catch { return []; } };
 
-/** The ledger's parsed lines, pruned to `KEEP_DAYS` (rewritten only when something was dropped). */
+/**
+ * The ledger's parsed lines from the last `KEEP_DAYS`. Read-only.
+ * shortcut: the file is never pruned and grows ~60 bytes per call; if it ever matters, rotate it on
+ * the writer side by atomic rename and read both files here.
+ */
 function readLedger(file, cutoff) {
   let raw;
   try { raw = readFileSync(file, 'utf8'); } catch { return []; }
-  const lines = raw.split('\n').filter(Boolean);
-  const kept = [];
   const out = [];
-  for (const line of lines) {
+  for (const line of raw.split('\n')) {
     let e;
     try { e = JSON.parse(line); } catch { continue; }
     if (!e || typeof e.ts !== 'string' || typeof e.name !== 'string'
       || (e.kind !== 'skill' && e.kind !== 'agent')) continue;
     if (e.ts < cutoff) continue;
-    kept.push(line);
     out.push(e);
-  }
-  if (kept.length !== lines.length) {
-    try { writeFileSync(file, kept.length ? `${kept.join('\n')}\n` : ''); } catch { /* read-only: keep serving */ }
   }
   return out;
 }
