@@ -118,12 +118,12 @@ describe('Constitution page', () => {
     const { container } = render(<Laws />)
     await waitFor(() => expect(container.querySelector('.band-head')).toBeTruthy())
     expect([...container.querySelectorAll('.band-head .tier-h')].map((h) => h.textContent)).toEqual(
-      ['Ethos', 'Invariants', 'Craft', 'Process', 'Ops'],
+      ['Ethos', 'Dictates', 'Craft', 'Process', 'Ops'],
     )
     // The tier strip names the four tiers, the fourth (yours) linking to Personal.
     expect([...container.querySelectorAll('.tier-name')].map((n) => n.textContent)).toEqual([
       'Ethos',
-      'Invariants',
+      'Dictates',
       'Doctrines',
       'Your rules',
     ])
@@ -150,7 +150,7 @@ describe('Constitution page', () => {
     ).toBeTruthy()
     const all = screen.getByRole('button', { name: /^All/ })
     expect(all.textContent).toBe(`All ${INV.length + DOC.length}`)
-    fireEvent.click(screen.getByRole('button', { name: /^Invariants/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Dictates/ }))
     expect(screen.getByText('Telos')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'Sealed' } })
     expect(screen.getByText('Telos')).toBeTruthy()
@@ -238,7 +238,7 @@ describe('Constitution page', () => {
     window.location.hash = '#/laws'
     render(<Laws setup={{ gates: { asks: { 'process-5': 4 }, total: 4, standing_down: [] } }} />)
     await waitFor(() => expect(screen.getByText('Sealed Secrets')).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: /^Invariants/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Dictates/ }))
     expect(screen.queryByText('Automate Repetition')).toBeNull()
     const gate = document.querySelector('.gate-row')
     expect(gate.querySelector('.gate-name').textContent).toBe('Consent Before Push')
@@ -287,7 +287,7 @@ describe('Constitution page', () => {
     const { container } = render(<Laws />)
     await waitFor(() => expect(screen.getByText('Sealed Secrets')).toBeTruthy())
     expect([...container.querySelectorAll('.band-head .tier-h')].map((h) => h.textContent)).toEqual(
-      ['Invariants'],
+      ['Dictates'],
     )
     expect(screen.getByText(/predates the three-tier constitution/)).toBeTruthy()
   })

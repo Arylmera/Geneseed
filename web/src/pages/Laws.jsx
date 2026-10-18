@@ -628,7 +628,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
     },
     {
       key: 'invariants',
-      name: 'Invariants',
+      name: 'Dictates',
       n: activeInv,
       fill: laws.length ? activeInv / laws.length : 0,
       sub:
@@ -660,7 +660,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
 
   const TABS_ = [
     ['all', 'All', laws.length + allRules.length],
-    ['invariants', 'Invariants', laws.length],
+    ['invariants', 'Dictates', laws.length],
     ['doctrines', 'Doctrines', allRules.length],
   ]
   const showInv = tab === 'all' || tab === 'invariants'
@@ -743,7 +743,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
           </div>
           {showInv && invRows.length > 0 && (
             <>
-              {bandHead('Invariants', 'laws/universal.md')}
+              {bandHead('Dictates', 'laws/universal.md')}
               {invRows.map((l) => (
                 <LawRow
                   key={l.addr}

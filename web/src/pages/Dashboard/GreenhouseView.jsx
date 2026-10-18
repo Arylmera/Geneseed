@@ -307,7 +307,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
               toggle: an install running three of four packs must LOOK different from one
               running all four. */}
           <BTile
-            label="Invariants"
+            label="Dictates"
             value={c.laws ?? '—'}
             sub={
               c.doctrines

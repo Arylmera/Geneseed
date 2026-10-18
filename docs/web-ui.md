@@ -77,8 +77,8 @@ streams the output of background jobs and keeps their history across reloads.
   **Operator** (a searchable table of every deployed capability). Headlines reflect the
   active theme's voice.
 
-  The KPI band reads **Agents · Skills · Invariants · Local edits**. That third tile is
-  labelled *Invariants* and not *Constitution* on purpose: its value is the invariant count
+  The KPI band reads **Agents · Skills · Dictates · Local edits**. That third tile is
+  labelled *Dictates* (the name AGENT.md gives the laws) and not *Constitution* on purpose: its value is the law count
   alone, and calling it the constitution would under-report the ontology and the doctrine
   packs. The two Status *layouts* that have room for it add the missing half: Greenhouse
   puts an active-packs fraction under the tile (`3/4 packs · N rules`), and the Operator HUD
@@ -95,7 +95,7 @@ streams the output of background jobs and keeps their history across reloads.
   content the page last read — if an agent session edited the file meanwhile, the save
   409s and the page reloads instead of clobbering it.
 - **Constitution** (`#/laws`) — the whole governance surface on one page, in three bands:
-  the **Ethos** (four prose sections), the **Invariants** (the nine numbered Rules, with
+  the **Ethos** (four prose sections), the **Dictates** (the nine numbered Rules, with
   a class facet — only non-empty classes render, and two of the six have had no invariant
   since the split), and the **Doctrines** (one group per pack, each marked active or not for
   this install). Rule IV carries one switch of its own, the install's deletion gate
