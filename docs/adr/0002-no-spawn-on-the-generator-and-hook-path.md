@@ -21,7 +21,9 @@ tool call of every agent session, where a spawn costs time and a console window 
   fsmonitor) to learn whether a tree is dirty, which files are untracked, and whether a branch's
   commits live elsewhere. None of these can be read off disk at a sane cost. It is reached only
   after a destructive-looking command matched the gate's prefilter, so an ordinary tool call
-  still spawns nothing. If git is missing or fails, the gate asks.
+  still spawns nothing. If git is missing or fails, the gate asks. The one exception that is not
+  destructive-looking: a plain `git checkout <x>` while `main`, `master` or the default branch is
+  checked out runs `git rev-parse` to tell a branch switch from a path discard.
 - `bin/geneseed-cli.mjs`, the user-facing CLI, spawns only from modules on a declared allow-list
   (`ALLOWED_SPAWNS`), each row naming the exact argv it may start — `git` for update, `node --check`
   for doctor, the web daemon relaunching this program, and so on. A new spawn is a new row with its

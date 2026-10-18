@@ -384,9 +384,10 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   `2026-06-17-opencode-color-themes` spec).
 - **Runtime guard plugin** (`geneseed-guard.js`, installed with the others). Enforces
   the safety Laws at the tool boundary: **blocks** writes to private-key/credential
-  files (Sealed Secrets), catastrophic shell like `rm -rf /` (Deletion Is Deliberate), and any mutation under
+  files (Sealed Secrets), catastrophic shell like `rm -rf /` and every command that would really lose data, judged
+  against the repository's state (Deletion Is Deliberate), and any mutation under
   a declared wiki's `protected` folders (AGENT.md §8, from `geneseed-wiki.jsonc`); **warns** on
-  `.env` writes and force-push. `GENESEED_GUARD=off` disables it, `=warn` downgrades
+  `.env` writes. `GENESEED_GUARD=off` disables it, `=warn` downgrades
   blocks to warnings. Every **block** appends one line to the install's
   `notebook/gates.jsonl` (rule `law-1` / `law-4` / `process-1` / `wiki`, a timestamp,
   never the path or command) — the same ledger the Claude-family hooks write, so
@@ -398,8 +399,8 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   auto-falls back to the visible `session.created` message. `GENESEED_CONTEXT_VISIBLE=1`
   forces the visible block (legacy `GENESEED_CONTEXT_TRANSFORM=0/off` does the same).
 - **Default permissions.** A fresh `opencode.json` gets a minimal policy that **asks**
-  before `rm -rf *` and a force-push — those are **Rule IV**'s territory and are in every
-  build — and, **on an install that built the `process` pack in**, before every
+  before `git reflog expire`, `git gc --prune` and a force-push or delete of `main`/`master` —
+  **Rule IV**'s territory, in every build; the guard plugin decides every other data loss — and, **on an install that built the `process` pack in**, before every
   `git commit` and `git push` (the host-level backstop for **Consent Before Push**: the
   agent never records or shares code unprompted, on any branch). Build with
   `--doctrines` leaving `process` out and those two entries are simply not written.
