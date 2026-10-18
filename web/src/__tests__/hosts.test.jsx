@@ -371,6 +371,19 @@ describe('Installs / Hosts', () => {
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull()
   })
 
+  // The counterpart of scopedRefresh.test: an install toggle changes install state, so it
+  // still asks App for the app-wide refresh (overview + every panel), once.
+  it('an install toggle still triggers the app-wide refresh', async () => {
+    const onMutated = vi.fn()
+    render(<Hosts onAction={() => {}} onMutated={onMutated} />)
+    fireEvent.click(await screen.findByRole('switch', { name: 'activate opencode · global' }))
+    await answered()
+    await waitFor(() =>
+      expect(api.installToggle).toHaveBeenCalledWith('opencode', 'C:/cfg', 'deactivate'),
+    )
+    await waitFor(() => expect(onMutated).toHaveBeenCalledTimes(1))
+  })
+
   it('says so when a config holds no MCP server, rather than offering one', async () => {
     vi.mocked(api.mcp).mockResolvedValueOnce({
       targets: [

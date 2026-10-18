@@ -1,6 +1,7 @@
 import React from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
+import { useRules } from '../../hooks/useRules.js'
 import { driftTotal, relTime } from '../../lib/format.js'
 import { CountUp, useCountUp } from '../../lib/motion.js'
 import {
@@ -416,7 +417,7 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
   const { data: usage } = useAsync(() => soft(api.usage()), [dataRev])
   const { data: gates } = useAsync(() => soft(api.gates()), [dataRev])
   const { data: update } = useAsync(() => soft(api.update()), [dataRev])
-  const { data: rules } = useAsync(() => soft(api.rules()), [dataRev])
+  const { data: rules } = useRules(dataRev)
   const { data: activity } = useAsync(() => soft(api.activity()), [dataRev])
   const { data: profile } = useAsync(() => soft(api.profile()), [dataRev])
   const { data: skills } = useAsync(() => soft(api.catalog('skills')), [dataRev], 'catalog:skills')
