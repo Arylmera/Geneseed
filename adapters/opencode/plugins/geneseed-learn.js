@@ -46,7 +46,9 @@ const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 // Sovereign-repo bypass — twin of the harness's own `sovereignBypass()`.
 // <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
 // this GLOBAL install goes dormant. Any error degrades to "not excluded".
-const norm = (p) => {
+// Twin of js/hosts/hosts.mjs `resolvePath`: the absolute path with symlinks and junctions
+// followed, the way the Claude/Bob hook resolves one. `norm` folds its case for matching.
+function resolvePath(p) {
   // Expand a leading "~" / "~/…" to the home dir — a hand-edited excludes.json entry
   // like "~/vault" must resolve the same way here as it does for the Claude/Bob
   // hook guard.
@@ -65,6 +67,10 @@ const norm = (p) => {
     tail.unshift(path.basename(cur))
     cur = up
   }
+  return s
+}
+const norm = (p) => {
+  const s = resolvePath(p)
   return process.platform === "win32" ? s.toLowerCase() : s
 }
 // A linked git worktree of an excluded repo is excluded too, wherever it sits on disk — twin of

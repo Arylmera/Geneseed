@@ -1036,6 +1036,26 @@ test('the list itself is protected, and Bob blocks rather than asks', () => {
   } finally { sb.cleanup(); }
 });
 
+// The target is read twice, as written and with links followed, and a hit on either asks: a
+// link from outside into a protected folder (only the followed reading is in the repo) and a
+// protected folder that links out of the repo (only the written reading is) both ask. The
+// OpenCode guard holds the same rows. A junction needs no privilege on Windows.
+test('protected checks follow links in both directions', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'tests/\nspecs/\n');
+    const outside = path.join(sb.path, 'outside');
+    fs.mkdirSync(path.join(repo, 'tests'));
+    fs.mkdirSync(path.join(outside, 'real-specs'), { recursive: true });
+    fs.symlinkSync(path.join(repo, 'tests'), path.join(outside, 'into-tests'), 'junction');
+    fs.symlinkSync(path.join(outside, 'real-specs'), path.join(repo, 'specs'), 'junction');
+    for (const p of [path.join(outside, 'into-tests', 'a.test.js'), path.join(repo, 'specs', 'a.test.js')]) {
+      askDecision(hookRun('rule-gate', { stdin: writePayload(p) }), p);
+    }
+    ruleDefers(path.join(outside, 'real-specs', 'a.test.js'));
+  } finally { sb.cleanup(); }
+});
+
 test('no list in the repo protects nothing, even with one above the repo', () => {
   const sb = makeSandbox();
   try {

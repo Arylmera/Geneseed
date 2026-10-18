@@ -59,7 +59,9 @@ const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 // Sovereign-repo bypass — twin of the harness's own `sovereignBypass()`.
 // <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
 // this GLOBAL install goes dormant. Any error degrades to "not excluded".
-const norm = (p) => {
+// Twin of js/hosts/hosts.mjs `resolvePath`: the absolute path with symlinks and junctions
+// followed, the way the Claude/Bob hook resolves one. `norm` folds its case for matching.
+function resolvePath(p) {
   // Expand a leading "~" / "~/…" to the home dir — a hand-edited excludes.json entry
   // like "~/vault" must resolve the same way here as it does for the Claude/Bob
   // hook guard.
@@ -78,6 +80,10 @@ const norm = (p) => {
     tail.unshift(path.basename(cur))
     cur = up
   }
+  return s
+}
+const norm = (p) => {
+  const s = resolvePath(p)
   return process.platform === "win32" ? s.toLowerCase() : s
 }
 // A linked git worktree of an excluded repo is excluded too, wherever it sits on disk — twin of
@@ -234,8 +240,9 @@ const SHELL_BLOCK_RE = [
 // the Bob behaviour — and `GENESEED_GUARD=warn` downgrades it to a log line.
 //
 // The fs-only readers below are the twins of js/hosts/gitref.mjs (gitRootOf, gitDirOf,
-// gitCommonDirOf, currentBranch, protectedBranches, stashExists); the block between the twin
-// markers is js/hosts/loss.mjs verbatim, and tests/plugins/guard.test.mjs diffs it.
+// gitCommonDirOf, currentBranch, protectedBranches, stashExists) — tests/plugins/guard.test.mjs
+// compares each with its gitref.mjs original, quotes, semicolons and layout aside; the block
+// between the twin markers is js/hosts/loss.mjs verbatim, and the same file diffs it.
 function gitRootOf(cwd) {
   try {
     let dir = path.resolve(cwd)
@@ -1178,19 +1185,20 @@ function ruleStoreTarget(p) {
 // must not edit in `.geneseed/protected-checks.txt` at its git root, one repo-relative path per
 // line; the list protects itself. Found from the WRITE TARGET up to the first `.git`, re-read on
 // every write (a short file, read only on a write call). No ask tier here, so a hit is a deny.
+// The target is read twice — as written, and with links followed — and a hit on either is a hit:
+// a link from outside into a protected folder and a protected folder that links out are both
+// caught, so following links never loosens the gate.
 const SENSOR_LIST = ".geneseed/protected-checks.txt"
 // The done gate's list (#289, js/hosts/hooks-done.mjs) protects itself the same way, with or
 // without a protected-checks list: emptying it would disarm the gate. Twin of js/hosts/hooks.mjs.
 const DONE_LIST = ".geneseed/done-checks.txt"
 function protectedCheck(p) {
+  return protectedIn(path.resolve(p)) ?? protectedIn(resolvePath(p))
+}
+function protectedIn(target) {
   try {
-    const target = path.resolve(p)
-    let root = path.dirname(target)
-    while (!existsSync(path.join(root, ".git"))) {
-      const up = path.dirname(root)
-      if (up === root) return null
-      root = up
-    }
+    const root = gitRootOf(path.dirname(target))
+    if (!root) return null
     const fold = (s) => nocase(s.replace(/\\/g, "/"))
     const rel = fold(path.relative(root, target))
     if (rel === fold(DONE_LIST)) return DONE_LIST
