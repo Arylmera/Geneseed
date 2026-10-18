@@ -569,7 +569,9 @@ function ruleDecide(args, payload) {
   const edits = Array.isArray(ti.edits) ? ti.edits.map((e) => e && e.new_string) : [];
   const body = [ti.content, ti.new_string, ti.new_source, diffReplaced(ti.diff), ti.replace, ...edits]
     .filter((v) => typeof v === 'string').join('\n');
-  if (body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
+  // `--no-secrets-gate`: the install switched Law I's scan off (user decision 2026-10-18). Only
+  // this check stands down; the protected checks and process 1 below still run.
+  if (!args.noSecretsGate && body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
     return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
       + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
       + 'tracked file.');

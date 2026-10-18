@@ -43,7 +43,8 @@ These come only from `geneseed doctor --probe`. It runs each installed gate exac
 settings spell it, through the host's own shell, on `git reflog expire --expire=now --all` (which must be refused)
 and `git status` (which must go through). A gate wired with `--no-deletion-gate` lets the first one
 through by design, so it is probed on `find / -name geneseed-probe` instead — a root-wide scan it
-must still refuse. An OpenCode install's guard plugin has no command to
+must still refuse. `--no-secrets-gate` and `--no-done-gate` change nothing here: neither judges a
+shell command. An OpenCode install's guard plugin has no command to
 run: the probe imports it and calls its hook through both plugin APIs (V1 and V2), with `rm -rf /`
 as the call it must refuse. `GENESEED_GUARD=off` or `warn` in your terminal makes that a note,
 not a failure.

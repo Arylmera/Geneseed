@@ -312,7 +312,9 @@ export function cmdLearn(args) {
 
   // The done gate (#289) judges the turn BEFORE anything here spawns, and only on Stop. A block
   // means the turn goes on, so there is nothing to distil yet: the next Stop will.
-  if (hookEvent === 'Stop' && !args.file && doneGate(meta, args, install)) return 0;
+  // `--no-done-gate` (the install switched Law III's gate off) skips the check, never the
+  // distillation below.
+  if (hookEvent === 'Stop' && !args.file && !args.noDoneGate && doneGate(meta, args, install)) return 0;
 
   // I2 (Bob): its Stop payload never carries `transcript_path`, so there is never a transcript
   // to distil — and the bare envelope itself is not notes text (that would waste a model call

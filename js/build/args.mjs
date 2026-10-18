@@ -104,6 +104,8 @@ const FLAGS = {
   // Law IV's gate switch. No `harness.config.json` key feeds it, deliberately: a rebuild elides
   // the flag when armed, so a config default could disarm an armed install on its next upgrade.
   '--no-deletion-gate': 'noDeletionGate',
+  // Laws I and III, the same contract (`GATE_SWITCHES` in source.mjs).
+  '--no-secrets-gate': 'noSecretsGate', '--no-done-gate': 'noDoneGate',
   '-v': 'verbose', '--verbose': 'verbose',
 };
 
@@ -312,6 +314,7 @@ export function parseArgs(argv, defaults) {
     excludeSkills: defaults.excludeSkills ?? [],
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false, noDeletionGate: false,
+    noSecretsGate: false, noDoneGate: false,
   };
   const { tokens } = nodeParseArgs({
     args: argv, options: PARSE_OPTIONS, allowPositionals: true, strict: false, tokens: true,

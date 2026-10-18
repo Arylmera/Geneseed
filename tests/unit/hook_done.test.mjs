@@ -95,7 +95,9 @@ test('runsUnpiped: the segment rule, written out', () => {
 // ---- through the real hook binary ------------------------------------------------------
 
 /** A git project with a done list, an install root, and a Stop payload runner. */
-function project({ checks = 'npm run lint\n', transcriptRows = [], host = null, active = false } = {}) {
+function project({
+  checks = 'npm run lint\n', transcriptRows = [], host = null, active = false, extra = [],
+} = {}) {
   const sb = makeSandbox();
   const proj = path.join(sb.path, 'proj');
   fs.mkdirSync(path.join(proj, '.git'), { recursive: true });
@@ -114,7 +116,8 @@ function project({ checks = 'npm run lint\n', transcriptRows = [], host = null, 
   delete env.GENESEED_LLM;
   delete env.GENESEED_LEARN_CHILD;
   try {
-    const argv = ['learn', '--memory', path.join(install, 'memory'), ...(host ? ['--host', host] : [])];
+    const argv = ['learn', '--memory', path.join(install, 'memory'), ...(host ? ['--host', host] : []),
+      ...extra];
     const p = spawnHook(argv, JSON.stringify(payload), { cwd: proj, env });
     let ledger = '';
     try { ledger = fs.readFileSync(path.join(install, 'notebook', 'gates.jsonl'), 'utf8'); } catch { /* none */ }
@@ -155,6 +158,20 @@ test('learn on Stop: every allow path prints nothing on stdout', () => {
     assert.equal(r.out, '', `${what}: stdout must stay empty, got ${JSON.stringify(r.out)}`);
     assert.equal(r.ledger, '', `${what}: an allow records nothing`);
   }
+});
+
+// `--no-done-gate` (user decision 2026-10-18): the install switched Law III's gate off. The same
+// unproven turn that blocks above ends silently, with nothing in the ledger — and Bob's
+// "not judged" line goes quiet, while learn's own I2 line still runs (learning is not skipped).
+test('learn --no-done-gate: the unproven turn ends, and learning still runs', () => {
+  const r = project({ transcriptRows: [prompt(), editIn], extra: ['--no-done-gate'] });
+  assert.equal(r.rc, 0, r.err);
+  assert.equal(r.out, '', 'a disarmed done gate printed a verdict');
+  assert.equal(r.ledger, '', 'a disarmed done gate recorded an ask');
+  const bob = project({ host: 'bob', extra: ['--no-done-gate'] });
+  assert.equal(bob.rc, 0);
+  assert.equal(bob.err.includes('[done-gate]'), false, bob.err);
+  assert.match(bob.err, /no transcript available \(bob\)/);
 });
 
 test('learn on Stop, Bob: not judged, and says so on stderr only', () => {

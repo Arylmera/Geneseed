@@ -7,7 +7,7 @@ section: "Configuration"
 description: "Three ways to switch things off: one rule, one skill, or every hook in a folder."
 link: {"hash": "#/harness", "label": "Manage in Harness →"}
 ---
-Geneseed has three ways to switch something off, and they work at different scales (plus one on/off switch for Law IV's gate, below):
+Geneseed has three ways to switch something off, and they work at different scales (plus an on/off switch for the hook gates of Laws I, III and IV, below):
 
 | | Sovereign repo | Per-rule exclusion | Per-skill exclusion |
 | --- | --- | --- | --- |
@@ -88,3 +88,20 @@ Limits:
 - **A global install beside a project install.** On Claude Code and OpenClaude the global `git-gate` stands down for a project install, so the project's switch decides. Bob's `tool-gate` and the OpenCode guard do not stand down: an armed global install still refuses real loss inside a project whose own install is off.
 - **An existing `opencode.json` keeps its Law IV keys.** Switching off does not remove `permission.bash` entries already written — Geneseed cannot tell its own from yours — so the build warns that it keeps them and they keep asking. Delete them by hand.
 - **An older hook shim silences the whole gate.** The flag is new. While the machine's shared hook shim still points at an older checkout, that checkout refuses the flag and the gate verb lets every call through on a disarmed install — on Claude Code and OpenClaude the root-scan and consent checks too, on Bob also *Sealed Secrets* and *External Gate*. Update the checkout the shim points at (`geneseed rebuild-all`) before switching the gate off.
+
+### Law I secrets gate and Law III done gate — on or off
+
+The same switch, for two more gates. Both are armed by default, and the Rule's text in the carrier still binds the agent with either off.
+
+```bash
+geneseed build --emit claude-global --no-secrets-gate   # Sealed Secrets
+geneseed build --emit claude-global --no-done-gate      # Verify Before Asserting
+```
+
+The console's Constitution page has a switch on Rule I's and Rule III's rows too (*Enforced by* reads **Gate off** while one is off); the other Rules show *no gate*, because only their text enforces them. The install records `Secrets gate: off` / `Done gate: off` beside `Deletion gate:`, written only when off; rebuilds, upgrades and `geneseed status` carry them like Law IV's.
+
+What stops, per host:
+- **`--no-secrets-gate`**: the credential scan of `rule-gate` (Claude Code, OpenClaude) and of `tool-gate` (Bob, which then no longer exits 2 for it), and on OpenCode the guard plugin's *Sealed Secrets* block — both the key/credential file path block and the content scan. *External Gate*, *Persist Insight*, the deletion gate and the root-scan check stay.
+- **`--no-done-gate`**: the done check `learn` runs on Stop (Claude Code, OpenClaude; on Bob, the "turn not judged" log line), and on OpenCode the context plugin's reminder (OpenCode 1) and its one-line notice (OpenCode 2). Learning itself still runs, and `.geneseed/done-checks.txt` stays protected by *External Gate*.
+
+Limits: OpenCode reads both switches from the install's `AGENT.md` when it starts, so restart it after flipping one. A global install beside a project install: `rule-gate` and Bob's `tool-gate` do not stand down for a project install on any host, and neither does the OpenCode guard, so an armed global install still asks about (or blocks) a credential write inside a project whose own install has the secrets gate off. `learn` does stand down on Claude Code and OpenClaude, so there the project's done gate switch decides. And the older-shim limit above is sharper for the done gate: its flag rides on `learn`, so while the shim points at an older checkout an install with the done gate off **loses learning too**, not only the gate. Run `geneseed rebuild-all` before switching either gate off.

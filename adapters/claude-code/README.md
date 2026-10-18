@@ -20,7 +20,9 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   wired with `--no-consent`: commits and pushes pass without asking, while the
   Law IV refusals (asked only on real data loss: a force-push to `main`, a `reset --hard`
   over uncommitted work, an `rm` git cannot undo) stay in every build unless the install is
-  built `--no-deletion-gate`, which appends that flag and stands the real-loss check down. The hook inspects
+  built `--no-deletion-gate`, which appends that flag and stands the real-loss check down
+  (`--no-secrets-gate` does the same for `rule-gate`'s credential scan, `--no-done-gate` for
+  `learn`'s done check). The hook inspects
   command and, when it runs a `git commit` or `git push` (bare, flagged, `-C <path>`,
   or chained like `git add . && git commit … && git push`), returns
   `permissionDecision: "ask"` so Claude Code **prompts on every such call**. Crucially

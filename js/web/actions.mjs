@@ -46,8 +46,8 @@ import {
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, deletionGateOfDir, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir,
-  footprintOfDir,
+  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir,
+  footprintOfDir, gatesOfDir,
   installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import {
@@ -131,13 +131,17 @@ function bodyExcludeRules(body) {
 }
 
 /**
- * Law IV's gate switch across the trust boundary: only a real JSON boolean counts. Anything
- * else — a string `"false"`, a number, absence — is `null`, and the caller keeps the install's
- * own answer, so a malformed body can never disarm the gate by accident.
+ * The gate switches across the trust boundary (`deletionGate`, `secretsGate`, `doneGate`), each
+ * on its own: only a real JSON boolean counts. Anything else — a string `"false"`, a number,
+ * absence — falls back to the install's own answer for THAT gate, so a malformed or partial body
+ * can never disarm (or re-arm) a gate it did not name.
  */
-function bodyDeletionGate(body) {
-  const v = bget(body, 'deletionGate');
-  return typeof v === 'boolean' ? v : null;
+function bodyGates(body, root, host) {
+  const own = gatesOfDir(root, host);
+  return Object.fromEntries(Object.entries(own).map(([k, v]) => {
+    const said = bget(body, k);
+    return [k, typeof said === 'boolean' ? said : v];
+  }));
 }
 
 /**
@@ -501,8 +505,8 @@ export function apiRestore(state, files) {
       // re-states a rule whose hook gate the install deliberately left unwired.
       excludeRules: excludedRulesOfDir(target),
       excludeSkills: excludedSkillsOfDir(target),
-      // Law IV's gate switch: a restored AGENT.md must keep the install's `Deletion gate:` line.
-      deletionGate: deletionGateOfDir(target),
+      // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
+      ...gatesOfDir(target),
     }));
     for (const raw of (isTruthy(files) ? files : [])) {
       const rel = stripWhitespace(formatValue(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
@@ -585,12 +589,12 @@ export function apiInstallCmd(state, body) {
   // the silence a pre-2.3 carrier gives on packs. Unspecified therefore keeps the install's
   // own answer, and a pre-marker install answers the empty list — which is what it has.
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root, host);
-  // Law IV's gate switch (the Constitution page's toggle): a strict boolean in the body, else
-  // the install's own answer — so a pack Apply, which sends none, keeps the switch as it is.
-  const deletionGate = bodyDeletionGate(body) ?? deletionGateOfDir(root, host);
+  // The gate switches (the Constitution page's toggles): a strict boolean per gate in the body,
+  // else the install's own answer — so a pack Apply keeps every switch as it is.
+  const gates = bodyGates(body, root, host);
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), deletionGate);
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates.deletionGate, gates);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -689,9 +693,9 @@ export function apiDeployCmd(state, body) {
   // and `PreToolUse::Bash` went with them. `doctrinesForBuild` resolves unknown to ALL packs.
   const doctrines = bodyDoctrines(body) ?? doctrinesForBuild(root, host);
   const excludeRules = bodyExcludeRules(body) ?? excludedRulesOfDir(root, host);
-  const deletionGate = bodyDeletionGate(body) ?? deletionGateOfDir(root, host);
+  const gates = bodyGates(body, root, host);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), deletionGate);
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates.deletionGate, gates);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

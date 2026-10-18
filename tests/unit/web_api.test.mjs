@@ -1471,6 +1471,46 @@ test('the overview reports the viewed install\'s deletion gate', () => {
   });
 });
 
+// Laws I and III get the same two switches (user decision 2026-10-18). Each key is parsed ON ITS
+// OWN: the console spreads the whole install into every body, so a key it did not name, or one
+// that is not a boolean, must fall back to THAT gate's own carrier line — never to a neighbour's.
+test('the secrets and done gate switches each reach the install command only as a boolean', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const argv = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
+    const flags = (a) => a.filter((t) => /^--no-(secrets|done|deletion)-gate$/.test(t));
+    // The sandboxed ~/.claude outlives one cell (the deletion cell above leaves a carrier there),
+    // so this one starts from an armed carrier of its own.
+    fs.mkdirSync(cl, { recursive: true });
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '# x\n\nActive packs: craft\n');
+    assert.deepEqual(flags(argv({})), [], 'an armed install grew a gate flag on a plain rebuild');
+    assert.deepEqual(flags(argv({ secretsGate: false })), ['--no-secrets-gate'], 'secrets: false');
+    assert.deepEqual(flags(argv({ doneGate: false })), ['--no-done-gate'], 'done: false');
+    assert.deepEqual(flags(argv({ secretsGate: false, doneGate: false, deletionGate: false })),
+      ['--no-secrets-gate', '--no-done-gate', '--no-deletion-gate'], 'all three, in law order');
+    for (const bad of ['false', 0, null, 'off', {}]) {
+      assert.deepEqual(flags(argv({ secretsGate: bad, doneGate: bad })), [],
+        `a non-boolean ${JSON.stringify(bad)} disarmed a gate`);
+    }
+    // A carrier with Law I off: a body naming only the done gate keeps Law I off.
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '# x\n\nActive packs: craft\nSecrets gate: off\n');
+    assert.deepEqual(flags(argv({ doneGate: false })), ['--no-secrets-gate', '--no-done-gate']);
+    assert.deepEqual(flags(argv({ secretsGate: 'true' })), ['--no-secrets-gate'], 'a string re-armed it');
+    assert.deepEqual(flags(argv({ secretsGate: true })), [], 'true did not re-arm');
+  });
+});
+
+test('the overview reports the viewed install\'s secrets and done gates', () => {
+  withThreeInstalls(({ st, oc }) => {
+    const ov = apiOverview(st);
+    assert.ok(ov.install, 'the fixture\'s active install is not the viewed one, so this proves nothing');
+    assert.equal(ov.install.secretsGate, true, 'no marker must read as armed');
+    assert.equal(ov.install.doneGate, true, 'no marker must read as armed');
+    fs.writeFileSync(path.join(oc, 'AGENT.md'), '# x\n\nActive packs: craft\nDone gate: off\n');
+    const next = apiOverview(st).install;
+    assert.deepEqual([next.secretsGate, next.doneGate, next.deletionGate], [true, false, true]);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // The harness selector: `apiSelectView` re-points the whole console at a detected install
 // (target, theme, emit) and `apiInstalls` marks the current one selected.

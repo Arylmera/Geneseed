@@ -58,7 +58,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { THEMES, ROOT, makeCfg } from '../build/source.mjs';
+import { GATE_SWITCHES, THEMES, ROOT, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
@@ -422,8 +422,9 @@ export function statusLines(d, color = false) {
     const excl = p.excludeRules?.length ? `excluding ${p.excludeRules.join(',')}` : 'no rules excluded';
     rows.push([`${p.host}:${p.scope}`, [p.state, p.theme, p.footprint, `${p.posture}/${p.mode}/${p.trust}`,
       packs, excl, ...(p.excludeSkills?.length ? [`skills off: ${p.excludeSkills.join(',')}`] : []),
-      // Elided when armed. Law IV's text still binds; only its tool-boundary gate is off.
-      ...(p.deletionGate === false ? ['deletion gate: off (Law IV text still binds)'] : [])]
+      // Each elided when armed. The law's text still binds; only its tool-boundary gate is off.
+      ...GATE_SWITCHES.filter((g) => p[g.key] === false)
+        .map((g) => `${g.marker.toLowerCase()}: off (Law ${g.law} text still binds)`)]
       .join(` ${DOT} `) + where]);
   }
 

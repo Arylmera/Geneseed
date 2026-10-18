@@ -726,7 +726,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
  * remove. `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
  */
 export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude',
-  deletionGate = true) {
+  deletionGate = true, { secretsGate = true, doneGate = true } = {}) {
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -760,20 +760,25 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // `--no-deletion-gate` only when the install switched Law IV's gate off, so an armed
     // install's command stays byte-identical (and an older shim never sees the flag).
     const dg = deletionGate === false ? ' --no-deletion-gate' : '';
+    // Law I's secret scan and Law III's done gate, under the same contract (user decision
+    // 2026-10-18): each flag only when that gate is off.
+    const sg = secretsGate === false ? ' --no-secrets-gate' : '';
+    const dn = doneGate === false ? ' --no-done-gate' : '';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
       // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
       // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
-      // `tool-gate` only ever EXITS 2 for Laws I and IV (IV unless built `--no-deletion-gate`), and for a
+      // `tool-gate` only ever EXITS 2 for Laws I and IV (unless built `--no-secrets-gate` /
+      // `--no-deletion-gate`), and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
       // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
-      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${dg}` }] }],
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
       // if Bob ever starts sending one, learning on Bob starts working with no emit change —
       // dropping the group would need a second one re-added later for the same reason.
-      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b} || exit 0` }] }],
+      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b}${dn} || exit 0` }] }],
     };
   }
   // OpenClaude takes Claude's whole group set and verdicts unchanged. `context` needs the host
@@ -786,8 +791,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`
     + (deletionGate === false ? ' --no-deletion-gate' : '');
-  const ruleGate = `${run} rule-gate --root "${cfg}"`;
-  const learn = `${run} learn ${mem}${h} || exit 0`;
+  // `--no-secrets-gate` skips only rule-gate's credential scan (rigor 5 and process 1 still
+  // run); `--no-done-gate` only learn's done check, never the distillation. One `learn` string
+  // feeds Stop, SubagentStop and PreCompact, and the flag sits before `|| exit 0`.
+  const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`;
+  const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
   // out, or exits anything but 0 or 2 — even one whose stdout happens to be valid JSON — now
   // BLOCKS the tool call instead of sliding through as the non-blocking default. Only safe to
@@ -924,14 +932,15 @@ function readSettingsForMerge(p, consequence) {
  * global that never stood down for a project install.
  */
 export function mergeClaudeSettings(p, priorHooks = null, hookOpts = {},
-  doctrines = null, excluded = [], host = 'claude', cfgDir = path.dirname(p), deletionGate = true) {
+  doctrines = null, excluded = [], host = 'claude', cfgDir = path.dirname(p), deletionGate = true,
+  gates = {}) {
   const prior = (priorHooks || []).filter(isDict);
   const loaded = readSettingsForMerge(p, 'Hooks were not wired.');
   if (!loaded) return [p, prior];
   const [config, hadComments] = loaded;
   let hooks = get(config, 'hooks');
   if (!isDict(hooks)) hooks = {};
-  const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host, deletionGate);
+  const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host, deletionGate, gates);
   const canonFlat = [];
   for (const [event, groups] of Object.entries(canonical)) {
     for (const g of groups) canonFlat.push({ event, group: g });

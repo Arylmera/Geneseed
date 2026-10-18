@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
-import { HOOK_GATED, enforcedBy, gateAddress, parseRuleTitle } from '../lib/constitution.js'
+import {
+  GATE_SWITCH,
+  HOOK_GATED,
+  enforcedBy,
+  gateAddress,
+  parseRuleTitle,
+} from '../lib/constitution.js'
 
 // A catalog title -> { latin, name, retired }. The prefix (`Rule IV — `, `Doctrine craft 1 — `)
 // is the address, which the table prints in its own column; the Latin half is the voice's,
@@ -74,5 +80,23 @@ describe('HOOK_GATED', () => {
     const labels = [...body.matchAll(/'[a-z-]+': '([^']+)'/g)].map((m) => m[1].replace(' ', '.'))
     expect(labels.length).toBeGreaterThan(0)
     expect(new Set(labels)).toEqual(HOOK_GATED)
+  })
+
+  // GATE_SWITCH is transcribed from the server's GATE_SWITCHES (js/build/source.mjs), the one
+  // table of switchable gates. Read the law and key of each row back out of that file: a gate
+  // added or renamed there fails here until the Constitution's toggles agree.
+  it('matches GATE_SWITCHES in js/build/source.mjs', () => {
+    const src = readFileSync(resolve(process.cwd(), '../js/build/source.mjs'), 'utf8')
+    const body = /export const GATE_SWITCHES = \[([\s\S]*?)\];/.exec(src)[1]
+    const rows = [...body.matchAll(/key: '([a-zA-Z]+)'[^}]*law: '([IVX]+)'/g)].map((m) => [
+      m[2],
+      m[1],
+    ])
+    expect(rows.length).toBeGreaterThan(0)
+    expect(Object.fromEntries(rows)).toEqual(
+      Object.fromEntries(Object.entries(GATE_SWITCH).map(([law, g]) => [law, g.key])),
+    )
+    // A switch on a law no hook gates would toggle nothing.
+    for (const law of Object.keys(GATE_SWITCH)) expect(HOOK_GATED.has(law)).toBe(true)
   })
 })

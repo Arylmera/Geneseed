@@ -399,7 +399,8 @@ export function resolveSkillNames(names, {
  */
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
-  excludeRules = [], excludeSkills = [], noDeletionGate = false,
+  excludeRules = [], excludeSkills = [], noDeletionGate = false, noSecretsGate = false,
+  noDoneGate = false,
 } = {}) {
   return {
     root: ROOT,
@@ -430,5 +431,22 @@ export function makeCfg({
     // Law IV's deletion gate (`--no-deletion-gate`). Armed unless switched off in so many words:
     // only a literal `true` disarms, so every caller that never heard of the switch keeps it.
     deletionGate: noDeletionGate !== true,
+    // Law I's secret scan (`--no-secrets-gate`) and Law III's done gate (`--no-done-gate`), the
+    // same contract (user decision 2026-10-18; see GATE_SWITCHES).
+    secretsGate: noSecretsGate !== true,
+    doneGate: noDoneGate !== true,
   };
 }
+
+/**
+ * The laws whose hook gate an install can switch off, in law order: the cfg/profile key, the
+ * build flag, the carrier marker (`<marker>: off`, written only when off) and the law. ONE
+ * table, so the flag, the marker, the rebuild argv, the read-back and `status` cannot drift
+ * apart. Every gate is ARMED by default and the law's text binds either way. The deletion row
+ * is #319's, unchanged: existing installs carry its flag and marker.
+ */
+export const GATE_SWITCHES = [
+  { key: 'secretsGate', flag: '--no-secrets-gate', arg: 'noSecretsGate', marker: 'Secrets gate', law: 'I' },
+  { key: 'doneGate', flag: '--no-done-gate', arg: 'noDoneGate', marker: 'Done gate', law: 'III' },
+  { key: 'deletionGate', flag: '--no-deletion-gate', arg: 'noDeletionGate', marker: 'Deletion gate', law: 'IV' },
+];

@@ -10,6 +10,10 @@
  * last-writer-wins: an older `geneseed-hook` would refuse a new verb or flag, and the Stop
  * command's `|| exit 0` would then skip learning too, silently. Arming on a project FILE keeps
  * every emitted settings file byte-identical, so a stale shim only means "no done gate".
+ * The ONE flag is the off switch, `--no-done-gate` (user decision 2026-10-18): it is emitted
+ * only on an install built with the gate off, so armed settings stay byte-identical — but on
+ * such an install a stale shim refuses the flag and that install loses LEARNING too, not just a
+ * gate it already switched off. Hence "run rebuild-all before switching it off" (exclusions.md).
  *
  * WHY STDOUT JSON AND NOT EXIT 2. The emitted Stop command ends in `|| exit 0`, which swallows
  * a 2. `{"decision":"block"}` on exit 0 is the one signal that survives the existing wiring.

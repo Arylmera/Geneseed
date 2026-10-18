@@ -50,10 +50,19 @@ export function gateAddress(key) {
 // __tests__/constitution.test.js reads that pin and fails when the two drift apart.
 export const HOOK_GATED = new Set(['I', 'III', 'IV', 'process.1', 'process.5', 'rigor.5', 'ops.2'])
 
-// "Enforced by" for one row: a hook gate, or the instruction text alone. Law IV's gate can be
-// switched off per install (`--no-deletion-gate`); its text still binds, so the row reads
-// "Gate off" rather than "Instruction".
-export const enforcedBy = (addr, { deletionGate = true } = {}) => {
-  if (addr === 'IV' && deletionGate === false) return 'Gate off'
+// The laws whose hook gate an install can switch off, by catalog address: the key the
+// overview's `install` reports it under, and the switch's name. Transcribed from the server's
+// GATE_SWITCHES (js/build/source.mjs: `--no-secrets-gate`, `--no-done-gate`, `--no-deletion-gate`).
+export const GATE_SWITCH = {
+  I: { key: 'secretsGate', label: 'Secrets gate' },
+  III: { key: 'doneGate', label: 'Done gate' },
+  IV: { key: 'deletionGate', label: 'Deletion gate' },
+}
+
+// "Enforced by" for one row: a hook gate, or the instruction text alone. A switchable law's gate
+// can be off per install (`gates` is the overview's `install`); its text still binds, so the row
+// reads "Gate off" rather than "Instruction". Anything but an explicit `false` is armed.
+export const enforcedBy = (addr, gates = {}) => {
+  if (GATE_SWITCH[addr] && gates?.[GATE_SWITCH[addr].key] === false) return 'Gate off'
   return HOOK_GATED.has(addr) ? 'Hook gate' : 'Instruction'
 }

@@ -34,7 +34,7 @@ import { readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
-import { PACK_ORDER, readPackText, resolveRuleIds, ruleCanon } from './source.mjs';
+import { GATE_SWITCHES, PACK_ORDER, readPackText, resolveRuleIds, ruleCanon } from './source.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
@@ -444,10 +444,12 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   const skipped = [...(cfg.excludeSkills ?? [])].sort();
   // It fills a template line of its own, so its value carries the blank line around it.
   theme.EXCLUDED_SKILLS_LINE = skipped.length ? `\nExcluded skills: ${skipped.join(', ')}\n` : '';
-  // Law IV's gate switch, under the same contract: written only when OFF, so a default build
-  // stays byte-identical and a missing line reads back as armed (`deletionGateOfDir`). The
-  // OpenCode guard plugin reads this line at load, so its wording is a parsed contract.
-  theme.DELETION_GATE_LINE = cfg.deletionGate === false ? '\nDeletion gate: off' : '';
+  // The gate switches (`GATE_SWITCHES`: Laws I, III, IV), under the same contract: a line is
+  // written only when its gate is OFF, so a default build stays byte-identical and a missing
+  // line reads back as armed (`gatesOfDir`). The OpenCode plugins read these lines at load, so
+  // their wording is a parsed contract.
+  theme.GATE_LINES = GATE_SWITCHES.filter((g) => cfg[g.key] === false)
+    .map((g) => `\n${g.marker}: off`).join('');
   return theme;
 }
 

@@ -98,9 +98,10 @@ streams the output of background jobs and keeps their history across reloads.
   the **Ethos** (four prose sections), the **Dictates** (the nine numbered Rules, with
   a class facet — only non-empty classes render, and two of the six have had no invariant
   since the split), and the **Doctrines** (one group per pack, each marked active or not for
-  this install). Rule IV carries one switch of its own, the install's deletion gate
-  (`--no-deletion-gate`; *Enforced by* reads *Gate off* while it is off) — flipping it asks,
-  then rebuilds the install once. Every row expands to its full body, lazily fetched. The rail entry is
+  this install). Rules I, III and IV each carry a switch for the install's hook gate — the
+  secrets gate, the done gate and the deletion gate (`--no-secrets-gate`, `--no-done-gate`,
+  `--no-deletion-gate`; *Enforced by* reads *Gate off* while one is off) — flipping one asks,
+  then rebuilds the install once; the other Rules read *no gate*. Every row expands to its full body, lazily fetched. The rail entry is
   labelled *Constitution* while the route, the id and the badge key stay `laws`; deep links
   are `#/item/law/ont:telos`, `#/item/law/IV` and `#/item/law/process.5` — three address
   shapes that cannot collide, because a slug carries a colon no numeral has and a doctrine
