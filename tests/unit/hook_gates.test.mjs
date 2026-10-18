@@ -522,6 +522,51 @@ test('--no-deletion-gate keeps ops 2, Law I and process 5', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+// Law IV's CATASTROPHIC class (`catastrophic`, js/hosts/loss.mjs): a recursive removal of a root,
+// a drive or the home directory reads no state and stands whatever `--no-deletion-gate` says (user
+// decision, 2026-10-18) — with the gate armed AND disarmed it asks on Claude and exits 2 on Bob,
+// as `law-4`. It is judged in program position after the structure stripping, so a background `&`
+// or a `sudo` in front changes nothing, and a commit message that only names `rm -rf /` is prose.
+// The safe forms never reach it: with the gate off they pass outright. A heredoc is judged only
+// when a SHELL reads it: fed to `bash` it is commands, fed to `cat` or `git commit -F -` it is data,
+// and passes with the gate armed as well as off.
+
+const HEREDOC_BODY = "<<'EOF'\nrm -rf /\nEOF";
+const CATASTROPHIC_ROWS = ['rm -rf /', 'rm -rf ~', 'rm -rf C:\\', 'Remove-Item -Recurse -Force C:\\',
+  'sudo rm -rf /', 'true & rm -rf /', 'rd /s/q C:\\', `bash ${HEREDOC_BODY}`];
+const SAFE_ROWS = ['rm -rf ./build', 'rm -rf node_modules', 'git commit -m "never rm -rf /"'];
+const FED_DATA_ROWS = [`cat ${HEREDOC_BODY}`, `git commit -F - ${HEREDOC_BODY}`];
+
+test('the catastrophic class asks on Claude and exits 2 on Bob, deletion gate on or off', () => {
+  for (const gate of [[], ['--no-deletion-gate']]) {
+    for (const cmd of CATASTROPHIC_ROWS) {
+      const what = `${cmd} ${gate.join(' ') || '(armed)'}`;
+      const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), extra: [...gate, '--no-consent'] }), what);
+      assert.match(dec.permissionDecisionReason, /Deletion Is Deliberate\) \u2014 `.*` would destroy a filesystem root/, what);
+      const bob = hookRun('tool-gate', { host: 'bob', extra: gate,
+        stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
+      assert.equal(bob.rc, 2, `bob: ${what}: ${bob.err}`);
+      assert.match(bob.err, /BLOCKED: .*would destroy a filesystem root/, `bob: ${what}`);
+    }
+  }
+  for (const cmd of SAFE_ROWS) {
+    assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), extra: ['--no-deletion-gate', '--no-consent'] }), cmd);
+    const bob = hookRun('tool-gate', { host: 'bob', extra: ['--no-deletion-gate', '--no-consent'],
+      stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
+    assert.equal(bob.rc, 0, `bob: ${cmd}: ${bob.err}`);
+  }
+  for (const gate of [[], ['--no-deletion-gate']]) {
+    for (const cmd of FED_DATA_ROWS) {
+      const what = `${cmd} ${gate.join(' ') || '(armed)'}`;
+      assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), extra: [...gate, '--no-consent'] }), what);
+      const bob = hookRun('tool-gate', { host: 'bob', extra: [...gate, '--no-consent'],
+        stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
+      assert.equal(bob.rc, 0, `bob: ${what}: ${bob.err}`);
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
 // `--no-secrets-gate`: the switch an install built `--no-secrets-gate` wires onto `rule-gate`
 // (Claude, OpenClaude) and `tool-gate` (Bob), user decision 2026-10-18. It stands down Law I's
 // credential scan and NOTHING else: the same secret-bearing write into a protected check still

@@ -58,7 +58,7 @@ import {
   GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
-import { LOSS_CANDIDATE_RE, lossReason, stripStructure } from './loss.mjs';
+import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import { selfAndParents, readStdin } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 
@@ -438,8 +438,18 @@ const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t);
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
-  // `--no-deletion-gate`: the install switched Law IV's boundary off (user decision,
-  // 2026-10-17). Only this check stands down — ops 2 and process 5 below still run.
+  // Law IV's catastrophic class (a root, a drive, the home dir, a disk): no state makes it safe,
+  // so it runs BEFORE the switch below and whatever it says (user decision, 2026-10-18). On
+  // Claude an ask is the strongest verdict the hook has; on Bob, `law-4` exits 2.
+  const doomed = catastrophic(command, lossSegments);
+  if (doomed) {
+    return ask(args, 'git-gate', 'law-4', `Geneseed (Deletion Is Deliberate) \u2014 \`${doomed.slice(0, 80)}\` `
+      + 'would destroy a filesystem root, a drive, the home directory or a whole disk, which nothing '
+      + 'could restore. This check stands even with the deletion gate off.');
+  }
+  // `--no-deletion-gate`: the install switched Law IV's real-loss boundary off (user decision,
+  // 2026-10-17). Only this check stands down — the catastrophic class above, ops 2 and process 5
+  // below still run.
   if (!args.noDeletionGate && LOSS_CANDIDATE_RE.test(command)) {
     // A pass here FALLS THROUGH: a force push to a feature branch loses nothing, but it is still
     // a push, and process 5 below still asks for it.

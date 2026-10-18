@@ -104,7 +104,7 @@ const consentRuleOn = (d, excluded = []) =>
  *
  * `rm -rf *` WENT TOO (user ruling, 2026-10-17): a blanket ask on every recursive removal is the
  * glob-cannot-read-state problem again — the guard's `lossReason` lets an `rm` of tracked,
- * unmodified files through and blocks one git cannot restore, and its `SHELL_BLOCK_RE` still
+ * unmodified files through and blocks one git cannot restore, and its `catastrophic()` still
  * blocks `rm -rf /`, `~` and the drive-root forms outright. Same stranded-key handling as above:
  * an existing `opencode.json` keeps its `rm -rf *` key, asking, until the user deletes it.
  *

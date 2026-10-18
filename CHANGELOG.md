@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **`rm -rf /` asks on Claude Code, OpenClaude and Bob even with the deletion gate off.** These hosts had no catastrophic-command check of their own: a recursive removal of `/`, a drive root or the home directory was caught only by Law IV's real-loss check, so `--no-deletion-gate` let it through unasked. `git-gate` (and Bob's `tool-gate`) now run the catastrophic class before that switch and whatever it says: a recursive removal of `/`, `C:\`, `/c` or `~`/`$HOME` (`rm`, `rd`/`del /s`, `Remove-Item -Recurse`), `mkfs` on a device, `dd` over a raw disk, `format C:` and a fork bomb ask on Claude Code and OpenClaude and exit 2 on Bob, as `law-4`. It judges the program after the shell structure is stripped, so `sudo rm -rf /`, `true & rm -rf /`, `(rm -rf /)`, `rm -rf /;`, `bash -c 'rm -rf /'` and a heredoc or here-string fed to a shell (`bash <<'EOF'`) are caught, and a commit message or a heredoc fed to `cat` or `git commit -F -` that only names `rm -rf /` is not. The check is one definition shared with the OpenCode guard (the loss twin block, pinned byte for byte), which now also blocks `rm -rf C:\`, `rm -rf /;`, `rd /s/q C:\` and `bash -c 'rm -rf /'`; its own stricter text match stays on top (it still blocks a command that only quotes one, and any `Remove-Item -Recurse -Force`). Ordinary commands are unaffected.
+
 ## [4.9.2] — 2026-10-18
 
 Patch: the review pass — faster emits, console and Stop; Build and setup keep your gate switches; protected checks follow links both ways.

@@ -218,6 +218,11 @@ const SECRET_CONTENT_RE =
 
 // Catastrophic, effectively irreversible shell → BLOCK. Both Unix and Windows shells,
 // since OpenCode runs natively on Windows and the agent may emit cmd / PowerShell.
+// The catastrophic class itself is `catastrophic()` in the loss twin block below — one definition,
+// shared with the hook (js/hosts/loss.mjs), judged in program position and run whatever the
+// deletion gate's switch says. This raw text match is OpenCode's own stricter layer on top of it:
+// it also blocks a command that only quotes one (a heredoc fed to `cat` included) and any
+// `Remove-Item -Recurse -Force`, whatever its target.
 const SHELL_BLOCK_RE = [
   // rm -rf /, ~, /*, ~/* — flags may be split (-r -f), long (--recursive), or end with
   // `--`; the lookahead insists one of them recurses. The target must be the root or
@@ -865,6 +870,104 @@ function lossReason(segments, cwd, { always = true, split } = {}) {
     return `the gate could not verify what this command would lose (${e.message})`;
   }
 }
+
+/**
+ * THE CATASTROPHIC CLASS — what no state can make safe: a recursive removal of a filesystem root,
+ * a drive root or the home directory, a device format or raw-disk overwrite, a fork bomb. Unlike
+ * `lossReason` it reads no state, and it stands whatever the deletion gate's switch says (user
+ * decision 2026-10-18): `--no-deletion-gate` silences the real-loss check, never this one. Judged
+ * in PROGRAM position, segment by segment after `stripStructure` and the wrappers, so `true & rm
+ * -rf /`, `sudo rm -rf /`, `(rm -rf /)` and `rm -rf /;` are caught and a commit message that only
+ * names `rm -rf /` is not. A shell or `eval` (`bash -c '…'`, `pwsh -Command …`) and a `$(…)` body
+ * are judged as commands of their own, and so is what a shell reads on stdin: a heredoc or
+ * here-string fed to `bash`/`sh`/`pwsh`/`cmd`… (`bash <<'EOF'` over `rm -rf /`). One fed to any
+ * other program (`cat <<EOF`, `git commit -F - <<EOF`) is data. The fork bomb spans `|`/`&`/`;`, so
+ * it is tested on the whole command. `split` cuts a command into raw-token segments, as for
+ * `lossReason`. Returns the offending text, or null.
+ */
+const CATASTROPHIC_CANDIDATE_RE = /(?:^|[^\w-])(?:rm|rmdir|rd|del|erase|remove-item|ri|mkfs(?:\.\w+)?|dd|format)(?:\.exe)?(?![\w-])|:\(\)/i;
+const FORK_BOMB_RE = /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/;
+// `/`, a Git Bash or WSL drive (`/c`, `/mnt/c`), a Windows drive (`C:`, `C:\`), the home dir — globbed or not.
+const ROOT_TARGET_RE = /^(?:\/|~[\\/]?|\$\{?HOME\}?[\\/]?|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i;
+const RM_RECURSE_RE = /^(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)$/;
+// PowerShell's `-Recurse` (or any prefix of it) and cmd.exe's `/s`, alone or glued (`/s/q`).
+const PS_CMD_RECURSE_RE = /^(?:-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?|(?:\/[a-z]+)*\/s(?:\/[a-z]+)*)$/i;
+const leadingFlags = (w) => { let i = 0; while (i < w.length && /^[-/][\w-]+$/.test(w[i])) i += 1; return w.slice(i); };
+// The programs that run what they read on stdin as commands.
+const STDIN_SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'fish', 'pwsh', 'powershell', 'cmd']);
+// The same lexer as the splitter's (a comment, a quoted run, a heredoc opener, a newline), so the
+// openers it finds are the ones left in the segments' tokens, in the same order.
+const HEREDOC_SCAN_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2|\n/g;
+/** Every heredoc body in `command`, in opener order; an unterminated one runs to the end, as in bash. */
+function heredocBodies(command) {
+  const out = [];
+  const tags = [];
+  const re = new RegExp(HEREDOC_SCAN_RE);
+  let m;
+  while ((m = re.exec(command))) {
+    if (m[3]) { tags.push([m[1], m[3]]); continue; }
+    if (m[0] !== '\n' || !tags.length) continue;
+    let start = re.lastIndex;
+    while (tags.length) {
+      const [dash, tag] = tags.shift();
+      const body = [];
+      while (start < command.length) {
+        const end = command.indexOf('\n', start);
+        const line = command.slice(start, end < 0 ? command.length : end).replace(/\r$/, '');
+        start = end < 0 ? command.length : end + 1;
+        if ((dash ? line.replace(/^\t+/, '') : line) === tag) break;
+        body.push(line);
+      }
+      out.push(body.join('\n'));
+    }
+    re.lastIndex = start;
+  }
+  return out;
+}
+function catastrophic(command, split, depth = 0) {
+  if (!CATASTROPHIC_CANDIDATE_RE.test(command)) return null;
+  if (FORK_BOMB_RE.test(command)) return command.trim();
+  const bodies = command.includes('<<') ? heredocBodies(command) : [];
+  let next = 0;
+  for (const raw of split(command).map(stripStructure)) {
+    const text = raw.join(' ');
+    // What this segment feeds on stdin: each heredoc opener takes the next body, a here-string its word.
+    const fed = [];
+    raw.forEach((t, i) => {
+      if (t.startsWith('<<<')) fed.push(word(t.length > 3 ? t.slice(3) : raw[i + 1] || '').replace(OPAQUE, ''));
+      else if (t.startsWith('<<')) fed.push(bodies[next++] ?? '');
+    });
+    for (const body of depth < 4 ? substitutions(text) : []) {
+      const v = catastrophic(body, split, depth + 1);
+      if (v) return v;
+    }
+    let w = words(raw).map((t) => t.replace(OPAQUE, ''));
+    while (w.length && (/^\w+=/.test(w[0]) || WRAPPERS.has(progOf(w[0])))) {
+      w = /^\w+=/.test(w[0]) ? w.slice(1) : pastWrapper(progOf(w[0]), w.slice(1)) || leadingFlags(w.slice(1));
+    }
+    if (!w.length) continue;
+    const prog = progOf(w[0]);
+    for (const body of STDIN_SHELLS.has(prog) && depth < 4 ? fed : []) {
+      const v = catastrophic(body, split, depth + 1);
+      if (v) return v;
+    }
+    const args = w.slice(1).map((a) => a.replace(/^-(?:literal)?path[=:]/i, ''));
+    // cmd.exe's `/s` `/q` are switches, not the Git Bash drives `/s` `/q`.
+    const root = () => args.some((a) => ROOT_TARGET_RE.test(a) && !(CMD_SWITCH_PROGS.has(prog) && /^\/[a-z]$/i.test(a)));
+    let hit = false;
+    if (prog === 'rm') hit = args.some((a) => RM_RECURSE_RE.test(a)) && root();
+    else if (RM_PROGS.has(prog)) hit = args.some((a) => PS_CMD_RECURSE_RE.test(a)) && root();
+    else if (/^mkfs(?:\.\w+)?$/.test(prog)) hit = args.some((a) => a.startsWith('/dev/'));
+    else if (prog === 'dd') hit = args.some((a) => /^of=\/dev\/(?:sd|nvme|hd|disk)/.test(a));
+    else if (prog === 'format') hit = args.some((a) => /^[a-z]:/i.test(a));
+    else if (INDIRECT.has(prog) && depth < 4) {
+      const v = catastrophic(leadingFlags(w.slice(1)).join(' '), split, depth + 1);
+      if (v) return v;
+    }
+    if (hit) return text.trim();
+  }
+  return null;
+}
 // ---- loss twin: END
 
 // A recursive scan rooted at a whole filesystem (Commands Must Return) → BLOCK. Twin of
@@ -1319,7 +1422,8 @@ export const GeneseedGuard = async (ctx) => {
         // classes, and the shell check must still run after the write check.
         if (hasAny(tool, SHELL_TOOLS)) {
           const c = pickCommand(args)
-          if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { await deny(`catastrophic command (Deletion Is Deliberate): ${c.slice(0, 80)}`, "law-4"); return }
+          const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
+          if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(`catastrophic command (Deletion Is Deliberate): ${c.slice(0, 80)}`, "law-4"); return }
           const scan = c && rootScan(c)
           if (scan) {
             await deny(`\`${scan.slice(0, 80)}\` recursively scans a whole filesystem root (Commands Must Return) — ` +
@@ -1329,7 +1433,6 @@ export const GeneseedGuard = async (ctx) => {
           if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
             // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
             const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
-            const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
             const loss = lossReason(cut(c), wd, { always: false, split: cut })
             if (loss) { await deny(`${loss} (Deletion Is Deliberate) — confirm with the user first`, "law-4"); return }
           }
