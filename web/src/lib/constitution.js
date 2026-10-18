@@ -47,16 +47,44 @@ export function gateAddress(key) {
 // (rule-gate), Law III's Stop-hook done gate (js/hosts/hooks-done.mjs), Law IV's history
 // rewrite and process 5's commit/push consent (git-gate), rigor 5's protected checks
 // (rule-gate), and ops 2's root-scan check (git-gate).
-// __tests__/constitution.test.js reads that pin and fails when the two drift apart.
+// Transcribed, not imported: that module is node-side. __tests__/constitution.test.js imports
+// the pin and fails when the two drift apart.
 export const HOOK_GATED = new Set(['I', 'III', 'IV', 'process.1', 'process.5', 'rigor.5', 'ops.2'])
 
 // The laws whose hook gate an install can switch off, by catalog address: the key the
 // overview's `install` reports it under, and the switch's name. Transcribed from the server's
 // GATE_SWITCHES (js/build/source.mjs: `--no-secrets-gate`, `--no-done-gate`, `--no-deletion-gate`).
+// __tests__/constitution.test.js imports that table and fails when the two drift apart.
 export const GATE_SWITCH = {
   I: { key: 'secretsGate', label: 'Secrets gate' },
   III: { key: 'doneGate', label: 'Done gate' },
   IV: { key: 'deletionGate', label: 'Deletion gate' },
+}
+
+// What each switch's confirm says it does, by the same address: `arm` when it re-arms, `off`
+// when it switches off. Display copy for the Constitution's gate toggles; a module constant so
+// it is not rebuilt on every render.
+export const GATE_COPY = {
+  I: {
+    arm: 'Writes that would carry a credential-shaped string are refused again.',
+    off:
+      'A write carrying a credential-shaped string (on OpenCode, also a write to a key ' +
+      'file) stops being refused. Rule I’s text still binds the agent; protected checks, ' +
+      'real data loss and commit/push consent stay gated.',
+  },
+  III: {
+    arm: 'A turn that edited files cannot end before the project’s declared checks pass.',
+    off:
+      'A turn that edited files may end without the checks in .geneseed/done-checks.txt ' +
+      'passing. Rule III’s text still binds the agent; every other gate stays.',
+  },
+  IV: {
+    arm: 'Commands that would lose data nothing else holds ask again.',
+    off:
+      'Commands that would really lose data — discarding uncommitted work, deleting an ' +
+      'unpushed branch, removing untracked files — stop asking. Rule IV’s text still binds ' +
+      'the agent; secrets, root-wide scans and commit/push consent stay gated.',
+  },
 }
 
 // "Enforced by" for one row: a hook gate, or the instruction text alone. A switchable law's gate

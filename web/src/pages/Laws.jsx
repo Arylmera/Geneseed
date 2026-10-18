@@ -1,17 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
 import { useRules } from '../hooks/useRules.js'
+import { useRuleSelection } from '../hooks/useRuleSelection.js'
 import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { LAW_CATS, PACK_CATS } from '../lib/lawCats.js'
-import { GATE_SWITCH, enforcedBy, gateAddress, parseRuleTitle } from '../lib/constitution.js'
+import { GATE_COPY, GATE_SWITCH, enforcedBy, parseRuleTitle } from '../lib/constitution.js'
 import Seg from '../components/Seg.jsx'
-import CatalogRow from '../components/CatalogRow.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
+import LawRow from './Laws/LawRow.jsx'
+import TierStrip from './Laws/TierStrip.jsx'
+import GateAsks from './Laws/GateAsks.jsx'
+import PackPanel from './Laws/PackPanel.jsx'
 
 // THE FILENAME AND THE ROUTE STAY `laws`. tests/helpers/cli_golden.mjs hard-requires this path,
 // doctor's lawMetaProblems reads this ONE file out of web/src, and the npm partition ships it
@@ -213,144 +217,40 @@ const DOCTRINE_META = {
   ],
 }
 
-// Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.
-// The full rule bodies are kept lightly marked-up in src/, so a minimal formatter is enough — we
-// don't need the full Markdown renderer here.
-function LawText({ text }) {
-  const parts = String(text).split(/(`[^`]+`|\*[^*]+\*)/g)
-  return (
-    <>
-      {parts.map((p, i) => {
-        if (p.startsWith('`') && p.endsWith('`')) return <code key={i}>{p.slice(1, -1)}</code>
-        if (p.startsWith('*') && p.endsWith('*') && p.length > 2)
-          return <em key={i}>{p.slice(1, -1)}</em>
-        return <React.Fragment key={i}>{p}</React.Fragment>
-      })}
-    </>
-  )
-}
-
-// One expandable row of the constitution table, shared by all three tiers via CatalogRow
-// (the lazy-load/expand-panel machinery). The address is the catalog's `name`: a Roman
-// numeral, `<pack>.<n>` or `ont:<id>`; `no` is what the No. column prints.
-function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
-  const head = (
-    <>
-      <span className="law-no">
-        <span className="x" aria-hidden="true">
-          ›
-        </span>
-        {law.no}
-      </span>
-      <span className="law-name">
-        <span>{law.name}</span>
-        {law.ess ? <span className="law-princ">{law.ess}</span> : null}
-      </span>
-      <span className="law-latin">{law.latin}</span>
-      <span className={`law-status ${law.statusTone}`}>{law.status}</span>
-      <span
-        className={`law-enf${law.enf === 'Hook gate' ? ' hook' : law.enf === 'Gate off' ? ' gate-off' : ''}`}
-      >
-        {law.enf}
-      </span>
-    </>
-  )
-  return (
-    <CatalogRow
-      addr={law.addr}
-      isOpen={isOpen}
-      onToggle={onToggle}
-      className={`law-row${toggleCol ? ' has-toggle' : ''}${isOpen ? ' on' : ''}${law.off ? ' law-off' : ''}`}
-      style={{ '--cc': law.c }}
-      head={head}
-      toggleCol={toggleCol}
-      renderBody={(detail) => (
-        <p>
-          <LawText text={detail.body || law.ess} />
-        </p>
-      )}
-      srcLine={`$ geneseed law ${law.addr} · ${law.src}`}
-    />
-  )
-}
-
-// The four tiers as one strip: each with its count, a bar for how much of it is in force,
-// and a line on what the count means. The tier the table is showing is lit; the fourth
-// (your own rules) lives on the Personal page and links there.
-function TierStrip({ tiers, current }) {
-  return (
-    <div className="tier-strip">
-      {tiers.map((t, i) => {
-        const body = (
-          <>
-            <span className="tier-k mono">TIER {i + 1}</span>
-            <span className="tier-top">
-              <span className="tier-name">{t.name}</span>
-              <span className="tier-n mono">{t.n}</span>
-            </span>
-            <span className="tier-bar" aria-hidden="true">
-              <span style={{ width: `${Math.round(t.fill * 100)}%` }} />
-            </span>
-            <span className="tier-sub">{t.sub}</span>
-          </>
-        )
-        return t.href ? (
-          <a key={t.key} className="tier" href={t.href}>
-            {body}
-          </a>
-        ) : (
-          <div key={t.key} className={`tier${current === t.key ? ' on' : ''}`}>
-            {body}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// How often each hook gate stopped to ask, from the gate ledger (`setup.gates`). The ledger
-// keys by gate id (`process-5`); lib/constitution.js turns that into the rule's address,
-// and the catalog names it.
-function GateAsks({ gates, byAddr, onJump }) {
-  const asks = Object.entries(gates?.asks || {}).sort((a, b) => b[1] - a[1])
-  const max = Math.max(1, ...asks.map(([, n]) => n))
-  return (
-    <section className="panel" aria-labelledby="gate-asks">
-      <div className="panel-head">
-        <h2 id="gate-asks">Gate asks</h2>
-        <span className="mono dim">{gates?.total ?? 0} in ledger</span>
-      </div>
-      {asks.length ? (
-        <ul className="gate-list">
-          {asks.map(([gate, n]) => {
-            const addr = gateAddress(gate)
-            return (
-              <li key={gate}>
-                {/* The whole entry is the control: it takes you to the rule in the table. */}
-                <button type="button" className="gate-row" onClick={() => onJump(addr)}>
-                  <span className="gate-top">
-                    <span className="gate-name">{byAddr[addr]?.name || addr}</span>
-                    <span className="mono dim">{addr}</span>
-                    <span className="mono gate-n">{n}</span>
-                  </span>
-                  <span className="hbar warn" aria-hidden="true">
-                    <span style={{ width: `${(n / max) * 100}%` }} />
-                  </span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      ) : (
-        <p className="sub">No gate has asked yet.</p>
-      )}
-      <p className="panel-note">
-        {gates?.standing_down?.length
-          ? `Standing down: ${gates.standing_down.join(', ')}.`
-          : 'None standing down.'}
-      </p>
-    </section>
-  )
+// The doctrine rows, grouped by pack in the order the server sends them (PACK_ORDER, the reading
+// order, not alphabetical). Every pack is here whether or not it is built in. Pure over the
+// catalog items, so the page can build it before its early returns and hand it to the selection.
+function doctrinePacks(items) {
+  const packs = []
+  for (const it of items) {
+    if (it.tier !== 'doctrine') continue
+    let pack = packs.find((p) => p.pack === it.pack)
+    if (!pack) {
+      pack = {
+        pack: it.pack,
+        title: it.packTitle || it.pack,
+        desc: it.packDesc || '',
+        // ⚠ `packActive`, NOT the first rule's `active`. A pack is on when the install built
+        // it in AT ALL; with the per-rule axis its first rule can be the excluded one.
+        active: it.packActive !== false,
+        rules: [],
+      }
+      packs.push(pack)
+    }
+    const [, ess] = DOCTRINE_META[it.name] || [it.pack, '']
+    const t = parseRuleTitle(it.title)
+    pack.rules.push({
+      addr: it.name,
+      no: `${it.pack} ${it.name.split('.')[1] || ''}`,
+      name: t.name,
+      latin: t.latin,
+      ess,
+      enf: enforcedBy(it.name),
+      c: PACK_CATS[it.pack] || 'var(--text-3)',
+      src: `doctrines/${it.pack}.md`,
+    })
+  }
+  return packs
 }
 
 // `selected` is the address from a #/item/law/<address> deep link (Spotlight, the
@@ -395,36 +295,22 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   // `data`, which is null on the first render; a `useState` placed after `if (!data)` makes
   // React see a different number of hooks between the loading render and the loaded one
   // and throw, taking the whole page down rather than just the control.
-  const allItems = data?.items || []
-  // ⚠ THE UNIT IS THE RULE, not the pack. The selection below is a list of rule ADDRESSES
-  // (`process.7`), and the pack axis is DERIVED from it when Apply builds the request: a
-  // pack with every rule off drops out of `--doctrines` entirely, so the rendered AGENT.md
-  // never carries a pack header with nothing under it.
-  const deployedRules = allItems
-    .filter((i) => i.tier === 'doctrine' && i.active !== false)
-    .map((i) => i.name)
-  const deployedKey = deployedRules.join(',')
-  const [picked, setPicked] = useState([])
-  // Re-sync on the VALUE, never on the payload's identity: `data` is a fresh object on every
-  // refetch, so an identity dependency would discard a half-made selection. Adjusted during
-  // render against the last-synced key (React's "adjust state on prop change").
-  const [syncedKey, setSyncedKey] = useState('')
-  if (syncedKey !== deployedKey) {
-    setSyncedKey(deployedKey)
-    setPicked(deployedKey ? deployedKey.split(',') : [])
-  }
-
-  if (error) return <ErrorState error={error} />
-  if (!data) return <Loading />
-
+  const items = data?.items || []
+  const packs = doctrinePacks(items)
   // The gate switches (Laws I, III, IV), as the deployed install reports them
   // (`overview.install.secretsGate` / `doneGate` / `deletionGate`). Anything but an explicit
   // `false` — an older daemon, no install — reads as armed.
   const armed = (addr) => overview?.install?.[GATE_SWITCH[addr].key] !== false
   const gateArmed = armed('IV')
+  // Nothing to rebuild means nothing to toggle: a source render with no deployed install
+  // still READS, it just cannot be changed from here.
+  const install = overview?.install
+  const canApply = Boolean(install && onAction)
+  const sel = useRuleSelection({ items, packs, install, canApply, onAction, gateArmed })
+  const { deployedRules, isOn, toggleRule, packOn, packState, allRules } = sel
 
-  const items = allItems
-  const isOn = (addr) => picked.includes(addr)
+  if (error) return <ErrorState error={error} />
+  if (!data) return <Loading />
 
   const ontology = items
     .filter((it) => it.tier === 'ontology')
@@ -471,37 +357,6 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
       }
     })
 
-  // Grouped by pack, in the order the server sends them (PACK_ORDER, the reading order, not
-  // alphabetical). Every pack is here whether or not it is built in.
-  const packs = []
-  for (const it of items) {
-    if (it.tier !== 'doctrine') continue
-    let pack = packs.find((p) => p.pack === it.pack)
-    if (!pack) {
-      pack = {
-        pack: it.pack,
-        title: it.packTitle || it.pack,
-        desc: it.packDesc || '',
-        // ⚠ `packActive`, NOT the first rule's `active`. A pack is on when the install built
-        // it in AT ALL; with the per-rule axis its first rule can be the excluded one.
-        active: it.packActive !== false,
-        rules: [],
-      }
-      packs.push(pack)
-    }
-    const [, ess] = DOCTRINE_META[it.name] || [it.pack, '']
-    const t = parseRuleTitle(it.title)
-    pack.rules.push({
-      addr: it.name,
-      no: `${it.pack} ${it.name.split('.')[1] || ''}`,
-      name: t.name,
-      latin: t.latin,
-      ess,
-      enf: enforcedBy(it.name),
-      c: PACK_CATS[it.pack] || 'var(--text-3)',
-      src: `doctrines/${it.pack}.md`,
-    })
-  }
   // A doctrine row's status is the STAGED switch against what is deployed: a rule the
   // install carries reads Active, one it excludes reads Off, and a rule whose switch was
   // flipped but not applied says so rather than reporting the staged state as fact.
@@ -512,95 +367,14 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
     return { ...r, off: !on, status, statusTone: on ? 'ok' : on === live ? '' : 'warn' }
   }
 
-  // ---- the pack selection: STAGED here, applied once -------------------------------------
-  //
-  // ⚠ ONE REBUILD, NOT ONE PER TOGGLE. A selection is a SET: acting on each click would
-  // re-emit the install once per switch, each rebuild describing a state nobody asked for.
-  // So the switches edit local state and `Apply` sends the whole selection.
-  const toggleRule = (addr) =>
-    setPicked((cur) => (cur.includes(addr) ? cur.filter((a) => a !== addr) : [...cur, addr]))
-  // A pack is on when any of its rules is; its switch turns every rule on or every rule off.
-  const packOn = (p) => p.rules.some((r) => isOn(r.addr))
-  const togglePack = (p) => {
-    const addrs = p.rules.map((r) => r.addr)
-    setPicked((cur) =>
-      packOn(p) ? cur.filter((a) => !addrs.includes(a)) : [...new Set([...cur, ...addrs])],
-    )
-  }
-  // ⚠ A STAGED PACK MUST NOT READ AS A DEPLOYED ONE. `p.active` is what the install built;
-  // `packOn(p)` is what the switches currently say. Where they differ the line says so.
-  const packState = (p) => {
-    const on = p.rules.filter((r) => isOn(r.addr)).length
-    if (!on) return p.active ? 'staged off' : 'not built in'
-    if (!p.active) return `staged on · ${on} of ${p.rules.length}`
-    return `${on} of ${p.rules.length} active`
-  }
   // What the install excludes today: a rule that is off inside a pack it still builds in.
   const deployedExcluded = packs
     .filter((p) => p.active)
     .flatMap((p) => p.rules.filter((r) => !deployedRules.includes(r.addr)).map((r) => r.addr))
-  const allRules = packs.flatMap((p) => p.rules.map((r) => r.addr))
-  const pickedRules = allRules.filter(isOn)
-  const dirty = pickedRules.join(',') !== deployedKey
-  const CONSENT = 'process.5'
-  const losingConsent = deployedRules.includes(CONSENT) && !picked.includes(CONSENT)
-  // Nothing to rebuild means nothing to toggle: a source render with no deployed install
-  // still READS, it just cannot be changed from here.
-  const install = overview?.install
-  const canApply = Boolean(install && onAction)
-
-  // ⚠ TWO AXES OUT OF ONE SELECTION. The user only ever touches rules; the request carries
-  // both `doctrines` (the packs with at least one rule left) and `excludeRules` (the rules
-  // dropped from the packs that survive).
-  const applyPacks = async () => {
-    if (!canApply || !dirty) return
-    const keptPacks = packs.filter((p) => p.rules.some((r) => isOn(r.addr))).map((p) => p.pack)
-    const excludeRules = packs
-      .filter((p) => keptPacks.includes(p.pack))
-      .flatMap((p) => p.rules.filter((r) => !isOn(r.addr)).map((r) => r.addr))
-    const warn = losingConsent
-      ? '\n\nprocess 5 carries commit/push consent. Dropping it also removes the git-gate ' +
-        'hook, so commits and pushes stop being confirmed at the tool boundary. ' +
-        (gateArmed
-          ? '(Real data loss stays gated: that is Rule IV’s, not the pack’s.)'
-          : '(Rule IV’s deletion gate is off on this install, so real data loss is not asked about either.)')
-      : ''
-    const what = pickedRules.length
-      ? `${pickedRules.length} of ${allRules.length} doctrine rules`
-      : 'no doctrine rules'
-    const ok = await confirm(
-      `Rebuild ${install.host} · ${install.scope} with ${what}? ` +
-        `It rebuilds in place, non-destructive.${warn}`,
-      { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild' },
-    )
-    if (ok) onAction('install', { ...install, doctrines: keptPacks, excludeRules })
-  }
 
   // ⚠ ONE SWITCH, APPLIED AT ONCE. Unlike the rule selection it is not a set: a click asks, and
   // a yes rebuilds the install with the opposite switch. Every other axis rides along unchanged
   // (`install` is spread, and the server reads the rest back off the install, per gate).
-  const GATE_COPY = {
-    I: {
-      arm: 'Writes that would carry a credential-shaped string are refused again.',
-      off:
-        'A write carrying a credential-shaped string (on OpenCode, also a write to a key ' +
-        'file) stops being refused. Rule I’s text still binds the agent; protected checks, ' +
-        'real data loss and commit/push consent stay gated.',
-    },
-    III: {
-      arm: 'A turn that edited files cannot end before the project’s declared checks pass.',
-      off:
-        'A turn that edited files may end without the checks in .geneseed/done-checks.txt ' +
-        'passing. Rule III’s text still binds the agent; every other gate stays.',
-    },
-    IV: {
-      arm: 'Commands that would lose data nothing else holds ask again.',
-      off:
-        'Commands that would really lose data — discarding uncommitted work, deleting an ' +
-        'unpushed branch, removing untracked files — stop asking. Rule IV’s text still binds ' +
-        'the agent; secrets, root-wide scans and commit/push consent stay gated.',
-    },
-  }
   const toggleGate = async (addr) => {
     if (!canApply) return
     const { key, label } = GATE_SWITCH[addr]
@@ -695,7 +469,6 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   const shownCount =
     (showInv ? invRows.length : 0) +
     (showDoc ? packs.reduce((n, p) => n + p.rules.filter(match).length, 0) : 0)
-  const maxPack = Math.max(1, ...packs.map((p) => p.rules.length))
 
   return (
     <>
@@ -853,77 +626,13 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
         </section>
 
         <aside className="aside-stack">
-          <section className="panel" aria-labelledby="doc-packs">
-            <div className="panel-head">
-              <h2 id="doc-packs">Doctrine packs</h2>
-              <span className="mono dim">
-                {packs.filter(packOn).length}/{packs.length} on
-              </span>
-            </div>
-            {packs.length ? (
-              <ul className="pack-list">
-                {packs.map((p) => {
-                  const on = p.rules.filter((r) => isOn(r.addr)).length
-                  return (
-                    <li key={p.pack} className={packOn(p) ? '' : 'off'}>
-                      <span className="pl-name" title={p.desc}>
-                        {p.title}
-                      </span>
-                      <span className="hbar" aria-hidden="true">
-                        <span style={{ width: `${(on / maxPack) * 100}%` }} />
-                      </span>
-                      <span className="mono pl-n">{on}</span>
-                      {canApply ? (
-                        <button
-                          type="button"
-                          className={`sw-toggle${packOn(p) ? ' on' : ''}`}
-                          role="switch"
-                          aria-checked={packOn(p)}
-                          aria-label={`${p.title} pack`}
-                          onClick={() => togglePack(p)}
-                        />
-                      ) : null}
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <p className="sub">This install predates the three-tier constitution.</p>
-            )}
-            {canApply && packs.length > 0 && (
-              <>
-                {losingConsent && (
-                  <p className="pack-warn" role="status" aria-live="polite">
-                    Dropping <b>process 5</b> also removes the commit/push consent gate:{' '}
-                    <code>git commit</code> and <code>git push</code> stop being confirmed at the
-                    tool boundary.{' '}
-                    {gateArmed
-                      ? 'Real data loss stays gated by Rule IV.'
-                      : 'Rule IV’s deletion gate is off on this install too.'}
-                  </p>
-                )}
-                <div className="pack-apply">
-                  <button type="button" className="btn" onClick={applyPacks} disabled={!dirty}>
-                    Apply{dirty ? ` (${pickedRules.length}/${allRules.length} rules)` : ''}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => setPicked(deployedKey ? deployedKey.split(',') : [])}
-                    disabled={!dirty}
-                  >
-                    Revert
-                  </button>
-                </div>
-                <p className="panel-note" role="status" aria-live="polite">
-                  {dirty
-                    ? `Not applied yet. Apply rebuilds ${install.host} · ${install.scope} once, ` +
-                      'with every change together.'
-                    : 'Matches the deployed install. Changing a pack rebuilds it.'}
-                </p>
-              </>
-            )}
-          </section>
+          <PackPanel
+            packs={packs}
+            sel={sel}
+            canApply={canApply}
+            install={install}
+            gateArmed={gateArmed}
+          />
           <GateAsks gates={setup?.gates} byAddr={byAddr} onJump={jumpToRule} />
         </aside>
       </div>
