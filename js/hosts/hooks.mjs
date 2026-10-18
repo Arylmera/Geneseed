@@ -58,7 +58,7 @@ import {
   GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
-import { LOSS_CANDIDATE_RE, lossReason } from './loss.mjs';
+import { LOSS_CANDIDATE_RE, lossReason, stripStructure } from './loss.mjs';
 import { selfAndParents, readStdin } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 
@@ -349,13 +349,14 @@ const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-c
 const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g;
 const SCAN_WRAPPERS = new Set(['sudo', 'command', '\\builtin', 'time', 'nice']);
 // One left-to-right pass: a comment (`#` starting a word, to the end of the line — an apostrophe
-// in it is no quote), a quoted run (kept whole, so its `;`/`|` is data), a separator, or a
+// in it is no quote), a quoted run (kept whole, so its `;`/`|` is data), a separator (a lone `&`
+// backgrounds a command and runs the next, but `2>&1`, `<&3`, `&>` and `|&` are not one), or a
 // heredoc opener (`<<TAG`, `<<-TAG`, `<< 'TAG'`, `<<"TAG"` — never the here-string `<<<`).
 // Every alternative consumes at least one character, and none can backtrack past its start.
-const SCAN_SPLIT_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g;
+const SCAN_SPLIT_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<![&<>|])&(?![&>])|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g;
 
 /**
- * The command cut at `|`/`;`/`&&`/`||`/newline OUTSIDE quotes, with every heredoc body (the
+ * The command cut at `|`/`;`/`&`/`&&`/`||`/newline OUTSIDE quotes, with every heredoc body (the
  * lines after `<<TAG` up to the `TAG` line; `<<-` lets it be tab-indented) dropped: both are data.
  * Without this, `git commit -F - <<'EOF'` — the mandated multi-line commit form — or a quoted
  * `-m "fix; find / loop"` whose text merely names a root scan reads as one, which on Bob and
@@ -401,7 +402,8 @@ export function rootScan(command) {
   if (!SCAN_WORD_RE.test(command)) return null;
   for (const seg of scanSegments(command)) {
     // Tokens keep their quotes until the root test, so a quoted `"a:"` can be told from a bare `C:`.
-    let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t));
+    // `(find / …)`, `then find / …`: the grammar around the command is not its program.
+    let toks = stripStructure(seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t));
     while (toks.length && SCAN_WRAPPERS.has(unquote(toks[0]))) toks = toks.slice(1);
     if (!toks.length) continue;
     // The program word without its path (either slash) or an `.exe` suffix: `C:\tools\rg.exe`.
@@ -427,6 +429,8 @@ export function rootScan(command) {
   return null;
 }
 const unquote = (t) => t.replace(/^["']+|["']+$/g, '');
+// The segments `lossReason` reads: raw tokens, quotes still on — also how it cuts a `$(…)` body.
+const lossSegments = (s) => scanSegments(s).map((seg) => seg.match(SCAN_TOKEN_RE) || []);
 // A QUOTED token is data — a grep pattern (`grep -rn "/" src`), a path named in a search
 // (`rg "/mnt/c" README.md`) — never a root target; only an unquoted root is one.
 const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t);
@@ -439,8 +443,8 @@ function gitDecide(args, payload) {
   if (!args.noDeletionGate && LOSS_CANDIDATE_RE.test(command)) {
     // A pass here FALLS THROUGH: a force push to a feature branch loses nothing, but it is still
     // a push, and process 5 below still asks for it.
-    const loss = lossReason(scanSegments(command).map((seg) => seg.match(SCAN_TOKEN_RE) || []),
-      (payload && payload.cwd) || process.cwd());
+    const loss = lossReason(lossSegments(command), (payload && payload.cwd) || process.cwd(),
+      { split: lossSegments });
     if (loss) {
       return ask(args, 'git-gate', 'law-4', `Geneseed (Deletion Is Deliberate) \u2014 ${loss}. `
         + 'Confirm this specific command, or leave the data in place.');

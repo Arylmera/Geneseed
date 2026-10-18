@@ -544,6 +544,15 @@ for (const [command, want] of [
   })
 }
 
+// The hook's twin cases (tests/unit/hook_gates.test.mjs, STRUCTURE_SCAN_CASES): a lone `&` and a
+// subshell do not hide a root scan; a redirection's `&` is no separator.
+test("a lone & or a subshell does not hide a root scan", async () => {
+  for (const command of ["true & find / -name x", "(find / -name x)"]) {
+    await assert.rejects(hook({ tool: "bash", args: { command } }, {}), /Commands Must Return/, command)
+  }
+  await hook({ tool: "bash", args: { command: "find . -name x 2>&1" } }, {})
+})
+
 test("a root-scan block names Commands Must Return and a directory to search instead", async () => {
   await assert.rejects(hook({ tool: "bash", args: { command: "find / -name x" } }, {}),
     /Commands Must Return.*specific directory/)
