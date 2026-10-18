@@ -8,9 +8,10 @@
  */
 import path from 'node:path';
 import { buildInto, emitGlobalInto, emitProjectInto } from '../build/driver.mjs';
+import { GATE_SWITCHES } from '../build/source.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
 import {
-  deletionGateOfDir, doctrinesOfDir, excludedRulesOfDir, modeOfDir, postureOfDir,
+  doctrinesOfDir, excludedRulesOfDir, gatesOfDir, modeOfDir, postureOfDir,
 } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
@@ -33,7 +34,8 @@ export const VALIDATE_USAGE = [
   'usage: geneseed validate [-h] [--theme THEME] [--emit EMIT] [--out OUT] [--root ROOT]',
   '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
   '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES]',
-  '                         [--exclude-skills SKILLS] [--no-deletion-gate] [-v]',
+  '                         [--exclude-skills SKILLS] [--no-secrets-gate] [--no-done-gate]',
+  '                         [--no-deletion-gate] [-v]',
   '',
   "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
   "Takes the generator's render flags (see geneseed-build --help) except --sync-themes and",
@@ -129,6 +131,7 @@ export function cmdValidate(args) {
       theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
       trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
       excludeSkills: args.excludeSkills, deletionGate: args.noDeletionGate ? false : null,
+      secretsGate: args.noSecretsGate ? false : null, doneGate: args.noDoneGate ? false : null,
     };
     let scanDirs;
     try {
@@ -170,11 +173,13 @@ export function cmdValidate(args) {
     const at = scanDirs[0];
     const packs = doctrinesOfDir(at);
     const excluded = excludedRulesOfDir(at);
+    const gates = gatesOfDir(at);
     printOut(`[validate-only] rendered at posture=${postureOfDir(at) ?? '?'} `
       + `mode=${modeOfDir(at) ?? '?'} packs=${packs ? packs.join(',') || 'none' : '?'} `
       + `excluded=${excluded.map((id) => id.replace('.', ' ')).join(', ') || 'none'}`
-      // Elided when armed, so an armed dry run prints the line it always did.
-      + `${deletionGateOfDir(at) ? '' : ' deletion-gate=off'}\n`);
+      // Each elided when armed, so an armed dry run prints the line it always did.
+      + `${GATE_SWITCHES.filter((g) => gates[g.key] === false)
+        .map((g) => ` ${g.marker.toLowerCase().replace(' ', '-')}=off`).join('')}\n`);
     printOut(`[validate-only] would write ${written.length} file(s) under ${args.out}`
       + (args.root ? ` (root ${args.root})` : '')
       + ' — nothing was actually written (sandboxed).\n');

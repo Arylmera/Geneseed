@@ -6,7 +6,7 @@ import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { LAW_CATS, PACK_CATS } from '../lib/lawCats.js'
-import { enforcedBy, gateAddress, parseRuleTitle } from '../lib/constitution.js'
+import { GATE_SWITCH, enforcedBy, gateAddress, parseRuleTitle } from '../lib/constitution.js'
 import Seg from '../components/Seg.jsx'
 import CatalogRow from '../components/CatalogRow.jsx'
 import FilterInput from '../components/FilterInput.jsx'
@@ -419,9 +419,11 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
 
-  // Law IV's gate switch, as the deployed install reports it (`overview.install.deletionGate`).
-  // Anything but an explicit `false` — an older daemon, no install — reads as armed.
-  const gateArmed = overview?.install?.deletionGate !== false
+  // The gate switches (Laws I, III, IV), as the deployed install reports them
+  // (`overview.install.secretsGate` / `doneGate` / `deletionGate`). Anything but an explicit
+  // `false` — an older daemon, no install — reads as armed.
+  const armed = (addr) => overview?.install?.[GATE_SWITCH[addr].key] !== false
+  const gateArmed = armed('IV')
 
   const items = allItems
   const isOn = (addr) => picked.includes(addr)
@@ -463,7 +465,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
         retired: t.retired,
         status: t.retired ? 'Retired' : 'Active',
         statusTone: t.retired ? '' : 'ok',
-        enf: t.retired ? 'None' : enforcedBy(it.name, { deletionGate: gateArmed }),
+        enf: t.retired ? 'None' : enforcedBy(it.name, overview?.install),
         cat,
         c: LAW_CATS[cat].c,
         off: t.retired,
@@ -578,25 +580,45 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
 
   // ⚠ ONE SWITCH, APPLIED AT ONCE. Unlike the rule selection it is not a set: a click asks, and
   // a yes rebuilds the install with the opposite switch. Every other axis rides along unchanged
-  // (`install` is spread, and the server reads the rest back off the install).
-  const toggleGate = async () => {
+  // (`install` is spread, and the server reads the rest back off the install, per gate).
+  const GATE_COPY = {
+    I: {
+      arm: 'Writes that would carry a credential-shaped string are refused again.',
+      off:
+        'A write carrying a credential-shaped string (on OpenCode, also a write to a key ' +
+        'file) stops being refused. Rule I’s text still binds the agent; protected checks, ' +
+        'real data loss and commit/push consent stay gated.',
+    },
+    III: {
+      arm: 'A turn that edited files cannot end before the project’s declared checks pass.',
+      off:
+        'A turn that edited files may end without the checks in .geneseed/done-checks.txt ' +
+        'passing. Rule III’s text still binds the agent; every other gate stays.',
+    },
+    IV: {
+      arm: 'Commands that would lose data nothing else holds ask again.',
+      off:
+        'Commands that would really lose data — discarding uncommitted work, deleting an ' +
+        'unpushed branch, removing untracked files — stop asking. Rule IV’s text still binds ' +
+        'the agent; secrets, root-wide scans and commit/push consent stay gated.',
+    },
+  }
+  const toggleGate = async (addr) => {
     if (!canApply) return
-    const next = !gateArmed
+    const { key, label } = GATE_SWITCH[addr]
+    const name = label.toLowerCase()
+    const next = !armed(addr)
     const where = `${install.host} · ${install.scope}`
     const ok = await confirm(
       next
-        ? `Re-arm the deletion gate on ${where}? Commands that would lose data nothing else ` +
-            'holds ask again. It rebuilds in place, non-destructive.'
-        : `Switch the deletion gate off on ${where}? Commands that would really lose data — ` +
-            'discarding uncommitted work, deleting an unpushed branch, removing untracked ' +
-            'files — stop asking. Rule IV’s text still binds the agent; secrets, root-wide ' +
-            'scans and commit/push consent stay gated. It rebuilds in place, non-destructive.',
+        ? `Re-arm the ${name} on ${where}? ${GATE_COPY[addr].arm} It rebuilds in place, non-destructive.`
+        : `Switch the ${name} off on ${where}? ${GATE_COPY[addr].off} It rebuilds in place, non-destructive.`,
       {
-        title: next ? 'Re-arm the deletion gate?' : 'Switch the deletion gate off?',
+        title: next ? `Re-arm the ${name}?` : `Switch the ${name} off?`,
         confirmLabel: next ? 'Re-arm' : 'Switch off',
       },
     )
-    if (ok) onAction('install', { ...install, deletionGate: next })
+    if (ok) onAction('install', { ...install, [key]: next })
   }
 
   // Substring narrowing over address, name, Latin name and principle; display-only, so the
@@ -751,16 +773,21 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
                   isOpen={open === l.addr}
                   onToggle={() => toggle(l.addr)}
                   toggleCol={
-                    canApply && l.addr === 'IV' && !l.retired ? (
+                    !canApply || l.retired ? null : GATE_SWITCH[l.addr] ? (
                       <button
                         type="button"
-                        className={`sw-toggle${gateArmed ? ' on' : ''}`}
+                        className={`sw-toggle${armed(l.addr) ? ' on' : ''}`}
                         role="switch"
-                        aria-checked={gateArmed}
-                        aria-label="Deletion gate"
-                        onClick={toggleGate}
+                        aria-checked={armed(l.addr)}
+                        aria-label={GATE_SWITCH[l.addr].label}
+                        onClick={() => toggleGate(l.addr)}
                       />
-                    ) : null
+                    ) : (
+                      // A text-only law: nothing at the tool boundary to switch off.
+                      <span className="no-gate" title="Enforced by its text alone: no hook gate">
+                        no gate
+                      </span>
+                    )
                   }
                 />
               ))}

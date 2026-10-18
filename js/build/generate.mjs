@@ -35,12 +35,12 @@ import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { main as driverMain } from './driver.mjs';
-import { makeCfg, PACK_ORDER } from './source.mjs';
+import { GATE_SWITCHES, makeCfg, PACK_ORDER } from './source.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  deletionGateOfDir, excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, installState, installTargets,
+  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, gatesOfDir, installState, installTargets,
   legacyProcessCarrierOfDir, modeOfDir, postureOfDir, readMaybe, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
@@ -102,8 +102,9 @@ const BUILD_FORWARD = [
 export function cmdBuild(args) {
   const argv = [];
   for (const [key, flag] of BUILD_FORWARD) if (args[key] != null) argv.push(flag, args[key]);
-  // The one bare switch `build` forwards: it takes no value, so it is not a BUILD_FORWARD row.
-  if (args.noDeletionGate) argv.push('--no-deletion-gate');
+  // The bare switches `build` forwards (the gate switches): they take no value, so they are
+  // not BUILD_FORWARD rows.
+  for (const g of GATE_SWITCHES) if (args[g.arg]) argv.push(g.flag);
   return driverMain(argv);
 }
 
@@ -140,7 +141,8 @@ export function cmdBuild(args) {
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, deletionGate = true) {
+  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, deletionGate = true,
+  { secretsGate = true, doneGate = true } = {}) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -168,9 +170,11 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   // feeds it), so the flag's absence and `none` are the same answer, and every argv that
   // excludes nothing stays the bytes it was before the flag existed.
   if (excludeSkills?.length) argv.push('--exclude-skills', excludeSkills.join(','));
-  // Law IV's gate elides when armed: the driver's default IS armed (no config key feeds it), so
-  // only an explicit `false` speaks, and every armed argv stays the bytes it was.
-  if (deletionGate === false) argv.push('--no-deletion-gate');
+  // The gate switches elide when armed: the driver's default IS armed (no config key feeds
+  // them), so only an explicit `false` speaks, and every armed argv stays the bytes it was.
+  // Law order, so a Law IV-only install still ends on `--no-deletion-gate` as it did.
+  const gates = { secretsGate, doneGate, deletionGate };
+  for (const g of GATE_SWITCHES) if (gates[g.key] === false) argv.push(g.flag);
   return argv;
 }
 
@@ -229,12 +233,12 @@ export function installProfile(host, scope, root, notify = null) {
   const excludeRules = excludedRulesOfDir(root, host);
   // Skills left out stay left out: an upgrade that forgot them would put them all back.
   const excludeSkills = excludedSkillsOfDir(root, host, notify);
-  // Law IV's gate switch: a rebuild that forgot it would silently re-arm (or, read wrong, disarm)
+  // The gate switches: a rebuild that forgot one would silently re-arm (or, read wrong, disarm)
   // the install. A missing marker reads as armed.
-  const deletionGate = deletionGateOfDir(root, host);
+  const gates = gatesOfDir(root, host);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludeSkills, deletionGate);
+    PACK_ORDER, excludeRules, trust, excludeSkills, gates.deletionGate, gates);
   // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
   // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
   // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
@@ -243,7 +247,7 @@ export function installProfile(host, scope, root, notify = null) {
   return {
     host, scope, root, state: installState(root, host, scope),
     emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, excludeSkills,
-    deletionGate, argv,
+    ...gates, argv,
   };
 }
 

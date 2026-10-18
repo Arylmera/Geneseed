@@ -240,6 +240,36 @@
         },
         {
           "names": [
+            "--no-secrets-gate"
+          ],
+          "dest": "no_secrets_gate",
+          "metavar": null,
+          "help": "switch Law I's secret scan off for this install: a credential-shaped write stops being refused (Sealed Secrets' text still binds); written to the carrier as 'Secrets gate: off' and replayed by rebuilds",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-done-gate"
+          ],
+          "dest": "no_done_gate",
+          "metavar": null,
+          "help": "switch Law III's done gate off for this install: a turn may end with the project's declared checks unproven (Verify Before Asserting's text still binds); written to the carrier as 'Done gate: off' and replayed by rebuilds",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--no-deletion-gate"
           ],
           "dest": "no_deletion_gate",
@@ -665,6 +695,21 @@
           "dest": "consolidate",
           "metavar": null,
           "help": "rebuild the memory index (MEMORY.md and topics/) from the fact files on disk: re-index orphans, prune dead lines, report duplicate descriptions",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-done-gate"
+          ],
+          "dest": "no_done_gate",
+          "metavar": null,
+          "help": "skip the done gate on Stop (set by the emit when the install was built --no-done-gate); learning still runs",
           "choices": null,
           "default": false,
           "required": false,
@@ -1150,6 +1195,21 @@
           "is_flag": false,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--no-secrets-gate"
+          ],
+          "dest": "no_secrets_gate",
+          "metavar": null,
+          "help": "skip the Sealed Secrets credential scan (set by the emit when the install was built --no-secrets-gate); the protected checks and the persist check still run",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -1420,6 +1480,21 @@
           "dest": "no_deletion_gate",
           "metavar": null,
           "help": "skip the Deletion Is Deliberate real-loss check (set by the emit when the install was built --no-deletion-gate); Sealed Secrets, the root-scan check and the protected checks still refuse",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-secrets-gate"
+          ],
+          "dest": "no_secrets_gate",
+          "metavar": null,
+          "help": "skip the Sealed Secrets credential scan (set by the emit when the install was built --no-secrets-gate); the deletion, root-scan and protected checks still refuse",
           "choices": null,
           "default": false,
           "required": false,

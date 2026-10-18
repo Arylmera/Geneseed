@@ -75,16 +75,21 @@ const VERBS = {
     flags: HOSTED,
     switches: { '--no-consent': 'noConsent', '--no-deletion-gate': 'noDeletionGate' },
   },
-  'rule-gate': { load: gates, fn: 'cmdRuleGate', flags: HOSTED },
+  'rule-gate': {
+    load: gates, fn: 'cmdRuleGate', flags: HOSTED, switches: { '--no-secrets-gate': 'noSecretsGate' },
+  },
   'tool-gate': {
-    load: gates, fn: 'cmdToolGate', flags: HOSTED, switches: { '--no-deletion-gate': 'noDeletionGate' },
+    load: gates,
+    fn: 'cmdToolGate',
+    flags: HOSTED,
+    switches: { '--no-deletion-gate': 'noDeletionGate', '--no-secrets-gate': 'noSecretsGate' },
   },
   learn: {
     load: () => import('../js/hosts/hooks-learn.mjs'),
     fn: 'cmdLearn',
     // `--host` only keys the global stand-down's marker (js/hosts/hosts.mjs); learn has no dialect.
     flags: { '--memory': 'memory', '--host': 'host' },
-    switches: { '--consolidate': 'consolidate' },
+    switches: { '--consolidate': 'consolidate', '--no-done-gate': 'noDoneGate' },
     positional: 'file',
   },
 };
@@ -104,7 +109,7 @@ function die(code, msg) {
 function parse(spec, argv) {
   const args = {
     root: null, host: null, memory: null, consolidate: false, noConsent: false,
-    noDeletionGate: false, file: null,
+    noDeletionGate: false, noSecretsGate: false, noDoneGate: false, file: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];

@@ -895,6 +895,21 @@ const DONE_LIST = ".geneseed/done-checks.txt"
 const DONE_EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch", "multiedit"])
 const DONE_SHELL_TOOLS = new Set(["bash", "shell"])
 
+// Law III's gate switch (`--no-done-gate`, user decision 2026-10-18): the build writes
+// `Done gate: off` into the install's AGENT.md only when the gate is off. Read ONCE, at the first
+// use, from the harness dir (a switch flip takes an OpenCode restart); anything unreadable reads
+// as ARMED. Off silences the reminder and the V2 notice, nothing else.
+let doneGateOffOnce = null
+function doneGateOff() {
+  doneGateOffOnce ??= (async () => {
+    const dir = await harnessDir()
+    if (!dir) return false
+    const text = await fs.readFile(path.join(dir, "AGENT.md"), "utf8")
+    return /^Done gate:[ \t]*off[ \t]*\r?$/m.test(text)
+  })().catch(() => false)
+  return doneGateOffOnce
+}
+
 async function readDoneChecks(root) {
   try {
     const text = await fs.readFile(path.join(root, DONE_LIST), "utf8")
@@ -1140,6 +1155,7 @@ export const GeneseedContext = async (ctx) => {
       // INJECT_OFF and the visible delivery leave it on, and no early return below can skip it.
       // Its own function, so its early returns end the reminder, never the context injection.
       await (async () => {
+        if (await doneGateOff()) return
         const checks = await readDoneChecks(root)
         if (!checks.length) return
         const owed = doneOwed(output.messages, checks, root)
@@ -1211,7 +1227,7 @@ async function setupV2(ctx) {
   })
 
   // The done gate is not judged on OpenCode 2 (see `doneOwed`): said once, where its log goes.
-  if ((await readDoneChecks(root).catch(() => [])).length) {
+  if (!(await doneGateOff()) && (await readDoneChecks(root).catch(() => [])).length) {
     console.error(`[geneseed-context] done gate: ${DONE_LIST} found, but OpenCode 2 turns are not judged.`)
   }
 

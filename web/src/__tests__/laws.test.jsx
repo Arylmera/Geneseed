@@ -518,7 +518,7 @@ describe('Constitution page — the deletion gate switch', () => {
     expect(law4Row(container).querySelector('.law-enf').textContent).toBe('Hook gate')
     const gate = container.querySelector('[aria-label="Deletion gate"]')
     expect(gate.getAttribute('aria-checked')).toBe('true')
-    // The only invariant with a switch: the others are not the user's to turn off.
+    // One switch per gate: the Deletion gate's label names row IV's alone.
     expect(
       container.querySelectorAll('.law-row.has-toggle [aria-label="Deletion gate"]').length,
     ).toBe(1)
@@ -572,5 +572,76 @@ describe('Constitution page — the deletion gate switch', () => {
     await waitFor(() => expect(law4Row(container)).toBeTruthy())
     expect(container.querySelector('[aria-label="Deletion gate"]')).toBeNull()
     expect(law4Row(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// Laws I and III get the same switch (`--no-secrets-gate`, `--no-done-gate`, user decision
+// 2026-10-18), read off `overview.install.secretsGate` / `doneGate`. Every other active law's
+// toggle column says "no gate": its text is all there is, so there is nothing to switch off.
+
+const lawRow = (c, addr) => c.querySelector(`[data-addr="${addr}"]`)
+
+describe('Constitution page — the secrets and done gate switches', () => {
+  beforeEach(() => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW4, ...DOC] })
+  })
+
+  it('an armed install shows a switch on I, III and IV, and "no gate" on II', async () => {
+    const { container } = render(gatePage({ ...INSTALL }))
+    await waitFor(() => expect(lawRow(container, 'IV')).toBeTruthy())
+    for (const [addr, label] of [
+      ['I', 'Secrets gate'],
+      ['III', 'Done gate'],
+      ['IV', 'Deletion gate'],
+    ]) {
+      const s = lawRow(container, addr).querySelector('[role="switch"]')
+      expect(s.getAttribute('aria-label')).toBe(label)
+      expect(s.getAttribute('aria-checked')).toBe('true')
+      expect(lawRow(container, addr).querySelector('.law-enf').textContent).toBe('Hook gate')
+    }
+    expect(lawRow(container, 'II').querySelector('[role="switch"]')).toBeNull()
+    expect(lawRow(container, 'II').querySelector('.no-gate').textContent).toBe('no gate')
+    expect(lawRow(container, 'II').querySelector('.law-enf').textContent).toBe('Instruction')
+  })
+
+  it('a law whose gate is off reads Gate off; its neighbours stay armed', async () => {
+    const { container } = render(gatePage({ ...INSTALL, secretsGate: false }))
+    await waitFor(() => expect(lawRow(container, 'I')).toBeTruthy())
+    expect(lawRow(container, 'I').querySelector('.law-enf').textContent).toBe('Gate off')
+    expect(
+      container.querySelector('[aria-label="Secrets gate"]').getAttribute('aria-checked'),
+    ).toBe('false')
+    expect(lawRow(container, 'III').querySelector('.law-enf').textContent).toBe('Hook gate')
+    expect(lawRow(container, 'IV').querySelector('.law-enf').textContent).toBe('Hook gate')
+  })
+
+  it('flipping the done gate asks, then rebuilds once with that one key flipped', async () => {
+    const onAction = vi.fn()
+    const { container } = render(gatePage({ ...INSTALL, doneGate: true }, onAction))
+    await waitFor(() => expect(container.querySelector('[aria-label="Done gate"]')).toBeTruthy())
+    fireEvent.click(container.querySelector('[aria-label="Done gate"]'))
+    await answered()
+    expect(askConfirm).toHaveBeenCalledTimes(1)
+    expect(askConfirm.mock.calls[0][0]).toMatch(/done gate off/)
+    expect(askConfirm.mock.calls[0][0]).toMatch(/text still binds/)
+    expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, doneGate: false }]])
+  })
+
+  it('re-arming the secrets gate asks to re-arm', async () => {
+    const onAction = vi.fn()
+    const { container } = render(gatePage({ ...INSTALL, secretsGate: false }, onAction))
+    await waitFor(() => expect(container.querySelector('[aria-label="Secrets gate"]')).toBeTruthy())
+    fireEvent.click(container.querySelector('[aria-label="Secrets gate"]'))
+    await answered()
+    expect(askConfirm.mock.calls[0][0]).toMatch(/Re-arm the secrets gate/)
+    expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, secretsGate: true }]])
+  })
+
+  it('without an install to rebuild there is no toggle column at all', async () => {
+    const { container } = render(gatePage(null, undefined))
+    await waitFor(() => expect(lawRow(container, 'I')).toBeTruthy())
+    expect(container.querySelector('[role="switch"][aria-label$="gate"]')).toBeNull()
+    expect(container.querySelector('.no-gate')).toBeNull()
   })
 })

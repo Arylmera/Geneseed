@@ -17,7 +17,7 @@ One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed
 
 **When it runs.** On every request: the context rides invisibly in the request's message list, so it also survives compaction. If your OpenCode build lacks that (experimental) hook, the plugin notices and falls back to one visible message at session start, re-pushed when the session compacts.
 
-**The done gate's reminder.** In a project with `.geneseed/done-checks.txt` (see [Hooks](../concepts/hooks.md)), a request that follows a turn which edited files without every listed check passing since gets one more invisible message naming the checks owed. OpenCode has no turn-end event a plugin can block on, so this is a reminder, not a block. OpenCode 1 only: on OpenCode 2 the turn is not judged, and the plugin logs that once. `GENESEED_CONTEXT_INJECT=off` does not turn it off; removing the file does.
+**The done gate's reminder.** In a project with `.geneseed/done-checks.txt` (see [Hooks](../concepts/hooks.md)), a request that follows a turn which edited files without every listed check passing since gets one more invisible message naming the checks owed. OpenCode has no turn-end event a plugin can block on, so this is a reminder, not a block. OpenCode 1 only: on OpenCode 2 the turn is not judged, and the plugin logs that once. `GENESEED_CONTEXT_INJECT=off` does not turn it off; removing the file does, and so does an install built `--no-done-gate` (`Done gate: off` in its `AGENT.md`, read once when OpenCode starts), which also silences the OpenCode 2 log line.
 
 **What you see.** Normally nothing — the context is there, but not shown. With the visible fallback, a `PROJECT CONTEXT` block at the top of the session.
 

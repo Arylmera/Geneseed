@@ -124,26 +124,28 @@ const MODE = (process.env.GENESEED_GUARD || "on").toLowerCase()
 const OFF = ["off", "0", "false", "no"].includes(MODE)
 const WARN_ONLY = MODE === "warn"
 
-// Law IV's gate switch (`--no-deletion-gate`, user decision 2026-10-17). The build writes
-// `Deletion gate: off` into the install's AGENT.md only when the gate is off; this reads it ONCE
-// at load, from the same harness dir the context plugin resolves ($GENESEED_HARNESS, else
-// <plugin dir>/.. for a global install, else <plugin dir>/../.. for a project one), so flipping
-// the switch takes an OpenCode restart. Anything unreadable or unexpected reads as ARMED. It
-// stands down only the real-loss check below — catastrophic commands, root scans, secrets and
-// protected checks still block.
-function deletionGateOff() {
+// The gate switches (`--no-deletion-gate` 2026-10-17, `--no-secrets-gate` 2026-10-18, user
+// decisions). The build writes `Deletion gate: off` / `Secrets gate: off` into the install's
+// AGENT.md only when that gate is off; this reads the carrier ONCE at load, from the same
+// harness dir the context plugin resolves ($GENESEED_HARNESS, else <plugin dir>/.. for a global
+// install, else <plugin dir>/../.. for a project one), so flipping a switch takes an OpenCode
+// restart. Anything unreadable or unexpected reads as ARMED. Each stands down only its own check
+// below (the real-loss check; the Sealed Secrets path block and content scan) — catastrophic
+// commands, root scans and protected checks still block.
+function carrierText() {
   try {
     const dirs = [path.resolve(PLUGIN_DIR, ".."), path.resolve(PLUGIN_DIR, "..", "..")]
     if (process.env.GENESEED_HARNESS) dirs.unshift(process.env.GENESEED_HARNESS)
     for (const d of dirs) {
-      let text
-      try { text = readFileSync(path.join(d, "AGENT.md"), "utf8") } catch { continue }
-      return /^Deletion gate:[ \t]*off[ \t]*\r?$/m.test(text)
+      try { return readFileSync(path.join(d, "AGENT.md"), "utf8") } catch { continue }
     }
   } catch { /* fall through: armed */ }
-  return false
+  return ""
 }
-const DELETION_GATE_OFF = deletionGateOff()
+const CARRIER_TEXT = carrierText()
+const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, "m").test(CARRIER_TEXT)
+const DELETION_GATE_OFF = gateOff("Deletion gate")
+const SECRETS_GATE_OFF = gateOff("Secrets gate")
 
 function log(msg) { console.error(`[geneseed-guard] ${msg}`) }
 
@@ -1168,7 +1170,7 @@ export const GeneseedGuard = async (ctx) => {
           // blocks the whole call (see `pickPath` for why this is not a single path).
           const paths = pickPath(args, cwd)
           for (const p of paths) {
-            if (SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
+            if (!SECRETS_GATE_OFF && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
             if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
             const sensor = protectedCheck(p)
             if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
@@ -1185,7 +1187,7 @@ export const GeneseedGuard = async (ctx) => {
           // FILE, not pooled — a patch touching `.env` AND an ordinary file must still catch a
           // secret in the ordinary file; only the hunk whose OWN path is `.env`-shaped is
           // exempt, same as the path WARN tier above.
-          for (const { path: cp, content } of pickAddedContentByPath(args, cwd)) {
+          for (const { path: cp, content } of SECRETS_GATE_OFF ? [] : pickAddedContentByPath(args, cwd)) {
             if (SECRET_WARN_RE.some((re) => re.test(cp))) continue
             if (SECRET_CONTENT_RE.test(content)) {
               await deny(`${cp} would carry a credential-shaped string (Sealed Secrets) — secrets `

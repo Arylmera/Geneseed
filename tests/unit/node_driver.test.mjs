@@ -100,6 +100,8 @@ const BARE_FLAGS = [
   ['--sync-themes', 'syncThemes'],
   ['--validate-only', 'validateOnly'],
   ['--no-deletion-gate', 'noDeletionGate'],
+  ['--no-secrets-gate', 'noSecretsGate'],
+  ['--no-done-gate', 'noDoneGate'],
   ['-v', 'verbose'],
   ['--verbose', 'verbose'],
 ];

@@ -522,6 +522,53 @@ test('--no-deletion-gate keeps ops 2, Law I and process 5', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+// `--no-secrets-gate`: the switch an install built `--no-secrets-gate` wires onto `rule-gate`
+// (Claude, OpenClaude) and `tool-gate` (Bob), user decision 2026-10-18. It stands down Law I's
+// credential scan and NOTHING else: the same secret-bearing write into a protected check still
+// asks (rigor 5) on Claude and still exits 2 on Bob, and Law IV still refuses on Bob.
+
+const SECRET_BODY = 'const k = "AKIAIOSFODNN7EXAMPLE";';
+
+test('--no-secrets-gate passes a credential write on Claude and Bob; armed, both refuse', () => {
+  const claude = (extra) => hookRun('rule-gate', { extra,
+    stdin: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: 'src/a.js', content: SECRET_BODY } }) });
+  const armed = askDecision(claude([]), 'armed rule-gate');
+  assert.match(armed.permissionDecisionReason, /Sealed Secrets/);
+  assertDefers(claude(['--no-secrets-gate']), 'rule-gate --no-secrets-gate');
+  const bob = (extra) => hookRun('tool-gate', { host: 'bob', extra,
+    stdin: JSON.stringify({ event: 'PreToolUse', tool: 'write_file', input: { path: 'src/a.js', content: SECRET_BODY } }) });
+  const bobArmed = bob([]);
+  assert.equal(bobArmed.rc, 2, `bob armed: ${bobArmed.err}`);
+  assert.match(bobArmed.err, /Sealed Secrets/);
+  const bobOff = bob(['--no-secrets-gate']);
+  assert.equal(bobOff.rc, 0, `bob off: ${bobOff.err}`);
+  assert.doesNotMatch(bobOff.err, /Sealed Secrets/);
+});
+
+test('--no-secrets-gate keeps the protected checks and Law IV', () => {
+  const sb = makeSandbox('gssecoff-');
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(repo, '.geneseed'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.geneseed', 'protected-checks.txt'), 'tests/\n');
+    const target = path.join(repo, 'tests', 'a.test.js');
+    const claude = askDecision(hookRun('rule-gate', { extra: ['--no-secrets-gate'],
+      stdin: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: target, content: SECRET_BODY } }) }),
+    'protected write, secrets off');
+    assert.match(claude.permissionDecisionReason, /External Gate/);
+    const bob = (input) => hookRun('tool-gate', { host: 'bob', extra: ['--no-secrets-gate'],
+      stdin: JSON.stringify({ event: 'PreToolUse', tool: 'write_file', input }) });
+    const bobProtected = bob({ path: target, content: SECRET_BODY });
+    assert.equal(bobProtected.rc, 2, `bob protected: ${bobProtected.err}`);
+    assert.match(bobProtected.err, /External Gate/);
+    const bobLaw4 = hookRun('tool-gate', { host: 'bob', extra: ['--no-secrets-gate'],
+      stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: LAW4_ALWAYS } }) });
+    assert.equal(bobLaw4.rc, 2, `bob reflog: ${bobLaw4.err}`);
+  } finally { sb.cleanup(); }
+});
+
+// ---------------------------------------------------------------------------------------------
 // GLOBAL BESIDE PROJECT (host-compat Claude B4). Claude runs EVERY matching hook and the
 // strictest verdict wins, so when a global and a project install of the same host coexist, the
 // global git-gate used to ask process 5 on every commit even though the project was built with

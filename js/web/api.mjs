@@ -20,7 +20,7 @@ import { doctorCollect } from '../inspect/doctor.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { CLAUDE_STYLE, HOSTS, VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
 import {
-  deletionGateOfDir, footprintOfDir, installState, installTargets, modeOfDir, trustOfDir,
+  footprintOfDir, gatesOfDir, installState, installTargets, modeOfDir, trustOfDir,
   postureOfDir, readJsonMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -247,9 +247,10 @@ export function apiOverview(state) {
   for (const [host, scope, root] of installTargets()) {
     try {
       if (samePath(viewCfg(host, scope, root), state.target)) {
-        // `deletionGate`: Law IV's gate switch, for the Constitution page's toggle on row IV.
+        // `deletionGate`/`secretsGate`/`doneGate`: the gate switches, for the Constitution
+        // page's toggles on rows IV, I and III.
         install = { host, scope, path: root, footprint: footprintOfDir(root),
-          deletionGate: deletionGateOfDir(root, host) };
+          ...gatesOfDir(root, host) };
         break;
       }
     } catch { /* an unreadable candidate just isn't a match */ }
