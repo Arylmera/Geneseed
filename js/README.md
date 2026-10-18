@@ -1,6 +1,6 @@
 # `js/` — the module map
 
-Sixty-nine modules in eight folders. This page is the address book: **what each one owns**, and
+Every module under `js/`, in eight folders. This page is the address book: **what each one owns**, and
 **which file to open first** for a given task. It is not documentation of behaviour — every module
 has a docblock for that, and the docblock is the thing to read before editing.
 
@@ -26,8 +26,28 @@ js/ui/        what it prints at a terminal
 js/web/       the `geneseed web` console
 ```
 
-Dependency direction is one-way: `lib/` ← everything; `build/` ← `hosts/`; `inspect/` and `web/`
-read what `build/` produced. Nothing in `lib/` imports anything above it.
+**Dependency direction is only partly one-way, and no test or doctor arm enforces any of it.**
+`lib/` is the one true leaf: it imports only Node builtins and itself, and every other folder
+imports it. A few modules sit just above it and are read from almost everywhere: `build/source.mjs`
+(the source paths, the rule canon, `aliasesOf`), `hosts/hosts.mjs` (the host config dirs) and
+`loop/score.mjs` (builtins only, by its docblock). Above those, the folders are domains, not
+layers. These pairs import each other (relative imports between folders, measured 2026-10):
+
+| pair | edges A→B / B→A | the smaller direction |
+|---|---|---|
+| build ↔ hosts | 24 / 5 | hosts reads `build/source.mjs` (`installs`, `link`, `native`, `opencode`) and `build/version.mjs` (`opencode`) |
+| build ↔ inspect | 2 / 23 | `build/driver.mjs` records deploy roots in `inspect/registry.mjs`; `build/catalog.mjs` reads `inspect/inventory.mjs` |
+| build ↔ loop | 4 / 1 | `loop/catalog.mjs` reads `build/source.mjs` |
+| build ↔ ui | 2 / 1 | `ui/cli.mjs` reads `ROOT` from `build/source.mjs` |
+| build ↔ web | 1 / 9 | `build/generate.mjs` lazily imports `web/daemon.mjs` to restart a stale console after `rebuild-all` |
+| hosts ↔ inspect | 1 / 36 | `hosts/installs.mjs` reads `inspect/registry.mjs`'s deploy roots |
+| ui ↔ web | 1 / 1 | `ui/menu.mjs` starts the daemon; `web/docs.mjs` renders `ui/cli.mjs`'s CLI reference |
+| maintain ↔ web | 1 / 6 | `maintain/update.mjs` lazily imports `web/daemon.mjs` for the same restart |
+
+The only gates over the import graph are the transitive closure walks in
+`tests/unit/hook_cli.test.mjs`. They pin which modules the generator and CLI entries may pull
+`child_process` into, not which folder imports which. Adding a cross-folder import is therefore a
+review question, not a test failure.
 
 ---
 
@@ -108,7 +128,7 @@ Everything that inspects an already-built or already-deployed harness and report
 | `checks-constitution.mjs` | The constitution: rule declarations and citations, LEAN blocks, `HOOK_PINNED`, theme vocabulary, the console's `LAW_META`/`DOCTRINE_META` |
 | `checks-counts.mjs` | The hand-written counts: AGENT.md tables, README badges and prose, `SHIPPED.md`, held against `src/` |
 | `scan.mjs` | The shared walk/sort/strip/test primitives every `checks-*` uses. Owns no judgement itself |
-| `validate.mjs` | The `--validate-only` verb: renders a sandbox, scans it for tokens and dead links, own exit contract |
+| `validate.mjs` | The `validate` verb (the generator's old `--validate-only`): renders a sandbox, scans it for tokens and dead links, own exit contract |
 | `inventory.mjs` | The one catalog walk and its taxonomy tables, read by status, the TUI and the web console |
 | `status.mjs` | `geneseed status` and `version` — the panel data, counts, accent colour, version verdict |
 | `cost.mjs` | What one install injects every session, by part (root file, skill and agent lists, session files), in characters; owns `CARRIER_CEILING`, which the smoke test gates and the console draws |
@@ -182,15 +202,16 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | module | owns |
 |---|---|
 | `update.mjs` | `upgrade`/`sync-self`/`bootstrap` — git pull, doctor gate, rebuild, each via a respawn |
-| `setup.mjs` | The install wizard, and the CLI's only synchronous stdin readers (`ask`/`confirm`/`askChoice`) |
+| `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers |
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
 | `memory.mjs` | `geneseed memory list|rm` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint |
 
 **Before editing:** `update.mjs` is the one module that MUST spawn rather than import — the code on
 disk is replaced mid-run, so an in-process call would validate the *old* source and then render it.
-`setup.mjs` is the whole program's stdin layer, not just setup's. `memory.mjs` hard-unlinks user
-facts with no archive path.
+The stdin readers are not here: they live in `js/lib/prompt.mjs`, shared by `setup.mjs`,
+`uninstall.mjs` and `js/web/server.mjs`. `memory.mjs` deletes user facts: `rm` moves a fact into
+`archive/` by default, but `--purge` unlinks it and nothing can bring it back.
 
 ## `js/ui/` — the terminal
 
@@ -243,9 +264,9 @@ and inline lists are held against a surface list written out in
 | a law (invariant) | `src/laws/universal.md` — `### {{LAW:<id>}} <Principle>`; cite by id, never by number | `docs/extending.md` §2c. Author both LEAN halves: the lean footprint ships nothing else |
 | to remove or retire a rule | `docs/extending.md` §2e | `RETIRED_RULE_IDS` in `js/build/source.mjs` — a retired id is never reused |
 | a skill or an agent | `src/skills/<name>.md` or `src/agents/<name>.md` | `docs/extending.md` §3 — eight steps. Write the FILE before the table row or the build aborts |
-| a doctor check | `js/inspect/checks-{build,repo,authoring}.mjs` | register with `ran(...)` in `doctor.mjs`, then a PLANTED FAULT in `tests/unit/harness.test.mjs` |
+| a doctor check | `js/inspect/checks-{build,repo,authoring,constitution,counts}.mjs`; `checks-probe.mjs` for a check that runs a live install's gates | wire it in one of two ways. Give it its own `ran(...)` group in `doctor.mjs`, as the module map and the host tables have. Or append it to `authoringProblems`, which is how the constitution and count checks run. Then add a PLANTED FAULT in `tests/unit/harness.test.mjs` (`tests/unit/doctor_probe.test.mjs` for the probe) |
 | a web endpoint | GET → `js/web/api.mjs`; POST → `js/web/actions.mjs` | declare it in `js/web/routes.mjs`; the partition test probes the real handler |
-| a CLI verb | `js/cli-table.json` — the table IS the parser | the `VERBS` row in `bin/geneseed-cli.mjs`, the row count in `cli_table.test.mjs`, `NATIVE` in **two** test files |
+| a CLI verb | `js/cli-table.json` — the table IS the parser | the `VERBS` row in `bin/geneseed-cli.mjs`, the row count in `cli_table.test.mjs`, and, for a Node-native verb with no recorded cell, `NATIVE` in `tests/unit/hook_cli.test.mjs` |
 | a hook verb | `js/hosts/hooks.mjs` (a gate) or its own `js/hosts/hooks-<verb>.mjs` | `claudeHookGroups` in `settings.mjs`, the `VERBS` row (with its `load`) in `bin/geneseed-hook.mjs`. Keep the import graph tiny |
 | a console doc page | `docs/<understand|guides|concepts|reference>/<id>.md` — the stem is the id | `docs/extending.md` §4c. Only `kind: "concept"` gets `{N_*}` substitution |
 | an OpenCode plugin | `adapters/opencode/plugins/geneseed-<name>.js` | `docs/extending.md` §4a — the `geneseed-` prefix is mechanically load-bearing |
