@@ -8,6 +8,17 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Deletion Is Deliberate and the root-scan check no longer fail open when shell structure hides the program word.** `true & git reset --hard`, `(git reset --hard)`, `if …; then git reset --hard; fi`, `{ rm x; }`, `echo $(rm x)`, `` echo `rm x` ``, `sudo -u root rm x`, `env -u FOO rm x`, `nice -n 5 rm x`, `timeout 5 rm x`, `true & find / …` and `(find / …)` passed where the plain form asks. The `reset --hard` forms had regressed in 4.7.0. Several changes close it, on Claude Code, OpenClaude and Bob (`git-gate`/`tool-gate`) and in the OpenCode guard:
+  - A lone `&` now separates commands. `2>&1`, `<&3`, `&>` and `|&` still do not.
+  - Leading `(`, `{`, `!`, `then`, `do` and `else` are stripped before the program word, and so are closing `)`/`}`.
+  - A command substitution is judged as a command of its own.
+  - Wrappers drop their value-taking flags. `timeout` is now a wrapper.
+  - A removal that names no path asks: `… | Remove-Item`, `ri -Force`.
+  - `find -delete` asks, and `unlink` counts as a removal.
+  - Behind all of these, a removal word written unquoted after a program the gate does not read asks ("could not verify"). That covers a wrapper it does not know (`setsid rm x`), a wrapper flag of unknown arity, `ForEach-Object { Remove-Item $_ }` and `case … rm …`. So does `ssh host rm x`. The exceptions are programs whose `rm` is their own subcommand (npm, pnpm, yarn, bun, cargo, brew, docker, podman) and programs that never run their arguments (echo, printf, the grep family, `which`, `type`, `man`, `Get-Command`, `Get-Help`).
+  - Proven-safe forms still pass: a clean tree, a tracked clean file, a quoted pattern, and a `$(cat <<'EOF' … EOF)` commit message.
+
 ## [4.9.0] — 2026-10-18
 
 Minor: on/off switches for the Sealed Secrets and done gates, and the console calls the laws Dictates.
