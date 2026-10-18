@@ -99,6 +99,33 @@ const EXCLUDED_INSTALL = {
     + 'Excluded rules: craft 2, process 5\n',
 };
 
+/**
+ * Two hook GATES switched off on the install being re-run — the other axis the wizard does not
+ * ask about. Re-running setup over it used to re-arm both gates without a word while keeping the
+ * exclusions above, because nothing read a gate line. The pre-selected emit is `claude-global`
+ * (the marker above), so the install being re-run is `~/.claude` and its carrier is where the
+ * lines go. Law I stays armed so a wizard that disarmed everything is told apart from one that
+ * preserved what the carrier says.
+ */
+const GATED_INSTALL = {
+  ...WIZARD_INSTALL,
+  '.claude/CLAUDE.md': '# deployed\n\nActive packs: craft, rigor, ops, process, comms\n'
+    + 'Done gate: off\nDeletion gate: off\n',
+};
+
+/**
+ * The same `off` lines on ANOTHER host's install: the OpenCode global carrier, while the wizard
+ * re-runs `claude-global` and `~/.claude` has no carrier at all. Gates come only from the install
+ * being re-run, so this must stay armed — carrying `off` across would disarm a boundary nobody
+ * switched off on this install (parent ruling, 2026-10-18).
+ */
+const GATED_ELSEWHERE_INSTALL = {
+  ...WIZARD_INSTALL,
+  '.config/opencode/AGENT.md': '# deployed\n\n**Artisan** — the posture lead\n\n'
+    + '**Foreman** — the mode lead\n\nActive packs: craft, rigor, ops, process, comms\n'
+    + 'Done gate: off\n',
+};
+
 const OPTS = [['alpha', 'the first'], ['beta', ''], ['gamma', 'the third']];
 const NUMERIC_OPTS = [['2', 'the key two'], ['1', 'the key one']];
 
@@ -190,6 +217,10 @@ function wizardJobs() {
     // at all), so a wizard that always emits the flag and one that never does each fail exactly
     // one of the two.
     ['wizard-eof-excluded', [['collect_setup_lines', []]], '', EXCLUDED_HOME],
+    // And the gate switches, the same way: preserved, never asked, matched against `wizard-eof`.
+    ['wizard-eof-gated', [['collect_setup_lines', []]], '', GATED_HOME],
+    // ...and never from another host's install.
+    ['wizard-eof-gated-elsewhere', [['collect_setup_lines', []]], '', GATED_ELSEWHERE_HOME],
   ].map(([name, cases, stdin, home]) => [name, cases.map(([fn, args]) => ({ fn, args })),
     stdin, home]);
 }
@@ -236,6 +267,8 @@ function seed(name, tree) {
 const HOME = seed('home', WIZARD_INSTALL);
 const NARROW_HOME = seed('home-narrow', NARROWED_INSTALL);
 const EXCLUDED_HOME = seed('home-excluded', EXCLUDED_INSTALL);
+const GATED_HOME = seed('home-gated', GATED_INSTALL);
+const GATED_ELSEWHERE_HOME = seed('home-gated-elsewhere', GATED_ELSEWHERE_INSTALL);
 
 /** One probe process, stdin from a seeded FILE, WHOLE stdout back as BYTES. */
 function runSeeded(cases, stdin, home = HOME) {
@@ -444,6 +477,38 @@ test('a re-run keeps the RULES an install excluded, without asking about them', 
     'the wizard grew a per-rule question; that is a decision, not a side effect');
 });
 
+test('a re-run keeps the GATES an install switched off, without asking about them', () => {
+  // The same silent widening as the rules above, on the boundary itself: a re-run that dropped
+  // `Done gate: off` / `Deletion gate: off` would re-arm both hooks with nothing printed.
+  const gated = runs()['wizard-eof-gated'];
+  assert.deepEqual(gated.results, [{
+    theme: 'pirate', posture: 'artisan', mode: 'foreman',
+    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null,
+    gates: { secretsGate: true, doneGate: false, deletionGate: false },
+    emit: 'claude-global', out: null, root: null, footprint: 'full',
+  }], 'a re-run over an install with switched-off gates did not carry them back');
+  // ...and into the plan line, in law order, Law I still armed.
+  assert.ok(/--no-done-gate --no-deletion-gate\r?\n/.test(gated.text),
+    `the plan line dropped the switches:\n${gated.text}`);
+  assert.ok(!gated.text.includes('--no-secrets-gate'), 'an armed gate was disarmed');
+  // THE MATCHED HALF: an all-armed install carries no `gates` key and spells no flag.
+  const plain = runs()['wizard-eof'];
+  assert.equal('gates' in plain.results[0], false);
+  assert.ok(!/-gate\b/.test(plain.text.split('About to run:')[1] ?? ''),
+    `an armed install spelled a gate flag:\n${plain.text}`);
+});
+
+test('a re-run takes its gates from the install being re-run, never from another host\'s', () => {
+  // OpenCode's global carrier says `Done gate: off`; the wizard re-runs `claude-global`, whose
+  // dir has no carrier. Fail closed: no gate key in the selection, no gate flag in the plan.
+  const other = runs()['wizard-eof-gated-elsewhere'];
+  assert.equal(other.results[0].emit, 'claude-global', 'the fixture no longer re-runs claude-global');
+  assert.equal('gates' in other.results[0], false,
+    `another host's off line reached this install: ${JSON.stringify(other.results[0])}`);
+  assert.ok(!/-gate\b/.test(other.text.split('About to run:')[1] ?? ''),
+    `the claude-global plan carries a gate flag from the OpenCode install:\n${other.text}`);
+});
+
 test('the packs gate offers every pack, in narrative order, with what dropping one costs', () => {
   // The blurbs are the only description of a pack an installer ever sees, so their presence is
   // asserted rather than assumed — and `process`' one names the consent gate, because turning
@@ -518,7 +583,8 @@ test('the summary job produces rows and not an empty list', () => {
   // three states (null = no carrier said, [] = a carrier said `none`, a list = it named packs);
   // `excludeRules` and `excludeSkills` have only two, because their markers are written only
   // when something IS excluded and their absence is therefore an answer — `[]` here, since this
-  // install excluded neither. All are present for the same reason: the wizard must not fall
+  // install excluded neither. No `gates`: they are read off the one install being re-run, never
+  // this machine-wide walk. All are present for the same reason: the wizard must not fall
   // through this walk to `cwd/Harness`.
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
@@ -537,7 +603,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 16, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 18, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {

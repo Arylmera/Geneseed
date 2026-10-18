@@ -99,9 +99,10 @@ const VALUED_FLAGS = [
 const BARE_FLAGS = [
   ['--sync-themes', 'syncThemes'],
   ['--validate-only', 'validateOnly'],
-  ['--no-deletion-gate', 'noDeletionGate'],
+  // The gate switches, in law order (`GATE_SWITCHES`).
   ['--no-secrets-gate', 'noSecretsGate'],
   ['--no-done-gate', 'noDoneGate'],
+  ['--no-deletion-gate', 'noDeletionGate'],
   ['-v', 'verbose'],
   ['--verbose', 'verbose'],
 ];
@@ -688,10 +689,13 @@ test('--help names every flag the parser takes', () => {
     'js/build/args.mjs\'s VALUED table and this file\'s frozen list disagree — the help text '
     + 'renders straight out of that table, so a flag missing from BOTH would otherwise be '
     + 'invisible to every gate in the repo');
-  assert.deepEqual(objectKeys(text, 'const FLAGS = {'), BARE_FLAGS.map((f) => f[0]),
-    'js/build/args.mjs\'s FLAGS table and this file\'s frozen list disagree');
-
+  // FLAGS is no longer a literal throughout (its gate rows are spread from `GATE_SWITCHES`), so
+  // its keys are read off the usage line it renders: every bare `[--flag]` but `-h`, in order.
   const said = help('--help').stdout;
+  const bare = [...said.split(/\r?\n/)[0].matchAll(/\[(-{1,2}[a-z-]+)\]/g)].map((m) => m[1])
+    .filter((f) => f !== '-h');
+  assert.deepEqual(bare, BARE_FLAGS.map((f) => f[0]),
+    'js/build/args.mjs\'s FLAGS table and this file\'s frozen list disagree');
   for (const [flag, dest, value, parsed = value] of VALUED_FLAGS) {
     // ACCEPTED, not merely listed: a help text naming a flag the parser refuses is the same drift
     // read from the other end, and it binds the dest this table names — which is the only way

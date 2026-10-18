@@ -21,7 +21,7 @@ import { build } from '../../js/build/bundle.mjs';
 import { ROOT, makeCfg } from '../../js/build/source.mjs';
 import { parseDriverArgs, emitGlobalInto } from '../../js/build/driver.mjs';
 import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
-import { deletionGateOfDir } from '../../js/hosts/installs.mjs';
+import { gatesOfDir } from '../../js/hosts/installs.mjs';
 import { claudeHookGroups } from '../../js/hosts/settings.mjs';
 import { hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import { statusData, statusLines } from '../../js/inspect/status.mjs';
@@ -60,19 +60,19 @@ test('the marker is written only when off, right under Active packs:, and reads 
     const at = lines.indexOf('Deletion gate: off');
     assert.ok(at > 0, 'the Deletion gate: off line is missing or misspelled');
     assert.match(lines[at - 1], /^Active packs: /, 'the marker left the Active packs: block');
-    assert.equal(deletionGateOfDir(off), false, 'read-back of an off install');
+    assert.equal(gatesOfDir(off).deletionGate, false, 'read-back of an off install');
 
     const on = path.join(d, 'on');
     quiet(() => build(makeCfg(), 'neutral', on));
     assert.ok(!agentLines(on).some((l) => l.startsWith('Deletion gate:')), 'a default build grew a marker');
-    assert.equal(deletionGateOfDir(on), true, 'no line reads as armed');
+    assert.equal(gatesOfDir(on).deletionGate, true, 'no line reads as armed');
 
     // Anything but exactly `off` is armed: a gate is the thing a misread must never take away.
     const odd = path.join(d, 'odd');
     fs.mkdirSync(odd);
     fs.writeFileSync(path.join(odd, 'AGENT.md'), '# x\n\nActive packs: craft\nDeletion gate: maybe\n');
-    assert.equal(deletionGateOfDir(odd), true, 'an unknown value disarmed the gate');
-    assert.equal(deletionGateOfDir(path.join(d, 'nowhere')), true, 'no carrier disarmed the gate');
+    assert.equal(gatesOfDir(odd).deletionGate, true, 'an unknown value disarmed the gate');
+    assert.equal(gatesOfDir(path.join(d, 'nowhere')).deletionGate, true, 'no carrier disarmed the gate');
   });
 });
 
@@ -80,7 +80,7 @@ test('the driver flag parses to the switch, and setupBuildArgs spells it only wh
   assert.equal(parseDriverArgs(['--emit', 'files']).noDeletionGate, false);
   assert.equal(parseDriverArgs(['--emit', 'files', '--no-deletion-gate']).noDeletionGate, true);
   const at = (gate) => setupBuildArgs('neutral', 'files', null, null, 'lean', 'peer', 'direct',
-    null, undefined, null, undefined, null, gate);
+    null, undefined, null, undefined, null, { deletionGate: gate });
   for (const armed of [undefined, true, null]) {
     assert.ok(!at(armed).includes('--no-deletion-gate'), `${armed} grew the flag`);
   }
@@ -148,7 +148,7 @@ test('the gate commands carry --no-deletion-gate only when off, on Claude, OpenC
   withDir((d) => {
     const cfg = path.join(d, 'cfg');
     const gateCmd = (host, gate) => {
-      const groups = claudeHookGroups(cfg, hookRunnerEntry(), null, [], host, gate);
+      const groups = claudeHookGroups(cfg, hookRunnerEntry(), null, [], host, { deletionGate: gate });
       const verb = host === 'bob' ? ' tool-gate ' : ' git-gate ';
       return Object.values(groups).flatMap((gs) => gs.flatMap((g) => g.hooks.map((h) => h.command)))
         .filter((c) => c.includes(verb));
@@ -162,7 +162,7 @@ test('the gate commands carry --no-deletion-gate only when off, on Claude, OpenC
     }
     // Claude's Skill|Agent|Task counter (`tool-gate` without `--host bob`) judges no shell
     // command, so it never needs the switch.
-    const counter = Object.values(claudeHookGroups(cfg, hookRunnerEntry(), null, [], 'claude', false))
+    const counter = Object.values(claudeHookGroups(cfg, hookRunnerEntry(), null, [], 'claude', { deletionGate: false }))
       .flatMap((gs) => gs.flatMap((g) => g.hooks.map((h) => h.command))).filter((c) => c.includes(' tool-gate '));
     assert.ok(counter.every((c) => !c.includes('--no-deletion-gate')), counter.join(' | '));
   });

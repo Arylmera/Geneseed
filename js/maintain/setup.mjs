@@ -46,13 +46,13 @@ import path from 'node:path';
 
 import { main as driverMain, resolveOut } from '../build/driver.mjs';
 import { playLine } from '../ui/anim.mjs';
-import { discoverNames, PACK_ORDER } from '../build/source.mjs';
+import { discoverNames, GATE_SWITCHES, PACK_ORDER } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
-  claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, installedDefaults,
+  claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, gatesOfDir, installedDefaults,
   readJsonMaybe, themeFiles,
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
@@ -242,6 +242,24 @@ function askDoctrines(deployed = null) {
  * whole, `null` included, because `askDoctrines` distinguishes "no carrier said" from "a
  * carrier said none" and the two open the question differently.
  */
+/**
+ * The gate switches of the one install a setup answer re-runs: the chosen emit's global config
+ * dir, or the project/bundle root it names. Never another host's install — carrying its `off`
+ * across would disarm a gate nobody switched off here. FAILS CLOSED: no install there, or a dir
+ * that cannot be resolved, reads as all armed (`gatesOfDir` already fails closed per line).
+ */
+function targetGates(emit, out) {
+  const [host, scope] = EMIT_HOST_SCOPE.get(emit) ?? [];
+  try {
+    if (!host) return gatesOfDir(resolveOut(out || 'Harness'));
+    const dir = scope === 'global'
+      ? HOSTS.find((h) => h.host === host).configDir() : resolveOut(out || '.');
+    return gatesOfDir(dir, host);
+  } catch {
+    return Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, true]));
+  }
+}
+
 export function collectSetupLines() {
   printOut('Geneseed setup — answer a few questions; nothing is written until you confirm.\n');
   const inst = installedDefaults();
@@ -279,14 +297,20 @@ export function collectSetupLines() {
   const excludeRules = inst.excludeRules?.length ? inst.excludeRules : null;
   // Skills left out are preserved the same way, and elide when there are none.
   const excludeSkills = inst.excludeSkills?.length ? inst.excludeSkills : null;
+  // The gate switches too: a re-run that dropped them would re-arm every gate its owner switched
+  // off. Read off the install THIS answer targets, never the machine walk above (`targetGates`).
+  // `setupBuildArgs` elides an armed gate, so an all-armed install prints what it always did.
+  const gates = targetGates(emit, out);
+  const gated = Object.values(gates).some((on) => on === false);
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
-      excludeRules, undefined, excludeSkills).join(' ')}\n`);
+      excludeRules, undefined, excludeSkills, gates).join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
-  // The key only when there is something to carry, so a selection that excludes no skill is
-  // the same object it was before the flag existed.
+  // The key only when there is something to carry, so a selection that excludes no skill and
+  // switches off no gate is the same object it was before either existed.
   return {
     theme, posture, mode, doctrines, excludeRules, ...(excludeSkills ? { excludeSkills } : {}),
+    ...(gated ? { gates } : {}),
     emit, out, root, footprint,
   };
 }
@@ -470,7 +494,7 @@ export function setupLines() {
   }
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
-    doctrines = null, excludeRules = null, excludeSkills = null,
+    doctrines = null, excludeRules = null, excludeSkills = null, gates = {},
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, and the self-improvement loops
@@ -489,7 +513,7 @@ export function setupLines() {
   // runs must carry the pack selection the plan line just previewed, or the wizard would print
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
-    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills);
+    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates);
   printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {

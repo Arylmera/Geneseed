@@ -11,11 +11,10 @@
  * declared next door in `routes.mjs`; the daemon that starts it is in `daemon.mjs`.
  */
 import { resolvePath } from '../hosts/hosts.mjs';
-import { doctrinesForBuild } from '../hosts/installs.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { parseIntStrict, percentDecode } from '../lib/text.mjs';
 import { preflight } from '../maintain/update.mjs';
-import { apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildOverride, mcpTargetPaths } from './actions.mjs';
+import { apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildActionCmds, mcpTargetPaths } from './actions.mjs';
 import { NotFound } from './catalog.mjs';
 import { openUrl, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
@@ -301,20 +300,9 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       if (jid === null) return sendJson(res, { error: 'busy' }, 409, ae);
       return sendJson(res, { job_id: jid }, 202, ae);
     }
-    // Build can be re-themed/re-targeted from the UI picker; the other actions self-resolve
-    // the deployed theme downstream. Footprint, posture and mode always follow the current
-    // install, so a re-theme preserves lean/full, the register and the operating mode.
-    const [theme, emit] = action === 'build'
-      ? buildOverride(state, body) : [state.theme, state.emit];
-    // The pack selection follows the install like footprint/posture/mode, and is read here
-    // rather than left to the table's default: a console Build must re-emit the constitution
-    // the deployment already carries. Unknown (no `Active packs:` marker) resolves to ALL
-    // packs — never to `harness.config.json`, which would drop the consent gate.
-    const cmds = actionCommands(action, {
-      theme, emit, footprint: state.footprint, posture: state.posture, mode: state.mode,
-      trust: state.trust,
-      doctrines: doctrinesForBuild(state.target),
-    });
+    // Build resolves its argv off the install (`buildActionCmds`); the other actions take no
+    // axes and self-resolve the deployed theme downstream.
+    const cmds = action === 'build' ? buildActionCmds(state, body) : actionCommands(action);
     if (!isTruthy(cmds)) {
       return sendJson(res, { error: `unknown action ${action}` }, 404, ae);
     }

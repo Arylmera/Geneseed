@@ -23,6 +23,9 @@ import { ROOT, makeCfg } from '../../js/build/source.mjs';
 import { parseDriverArgs, emitGlobalInto } from '../../js/build/driver.mjs';
 import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
 import { gatesOfDir } from '../../js/hosts/installs.mjs';
+import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
+import { buildActionCmds } from '../../js/web/actions.mjs';
+import { webState } from '../../js/web/state.mjs';
 import { claudeHookGroups } from '../../js/hosts/settings.mjs';
 import { hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import { statusData, statusLines } from '../../js/inspect/status.mjs';
@@ -79,13 +82,24 @@ test('each marker is written only when off, in law order under Active packs:, an
   });
 });
 
+test('a CRLF carrier\'s off line reads as off', () => {
+  // Pinned, not fixed: a review read `(.+?)[ \t]*$` as capturing `off\r`, but a JS multiline
+  // `$` also matches before `\r`, so the reader already agrees with the OpenCode plugins'
+  // `\r?`. This cell keeps it that way if the pattern is ever rewritten.
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'AGENT.md'),
+      '# x\r\n\r\nActive packs: craft\r\nSecrets gate: off\r\nDeletion gate: off \r\n');
+    assert.deepEqual(gatesOfDir(d), { secretsGate: false, doneGate: true, deletionGate: false });
+  });
+});
+
 test('the driver flags parse to the switches, and setupBuildArgs spells each only when off', () => {
   const p = parseDriverArgs(['--emit', 'files']);
   assert.deepEqual([p.noSecretsGate, p.noDoneGate], [false, false]);
   const q = parseDriverArgs(['--emit', 'files', '--no-secrets-gate', '--no-done-gate']);
   assert.deepEqual([q.noSecretsGate, q.noDoneGate], [true, true]);
   const at = (deletion, gates) => setupBuildArgs('neutral', 'files', null, null, 'lean', 'peer', 'direct',
-    null, undefined, null, undefined, null, deletion, gates);
+    null, undefined, null, undefined, null, { ...gates, deletionGate: deletion });
   const flags = (argv) => argv.filter((t) => t.endsWith('-gate'));
   for (const armed of [undefined, {}, { secretsGate: true, doneGate: null }]) {
     assert.deepEqual(flags(at(undefined, armed)), [], `${JSON.stringify(armed)} grew a flag`);
@@ -120,7 +134,7 @@ test('a global OpenCode install keeps both switches through a rebuild', () => {
 test('the hook commands carry --no-secrets-gate / --no-done-gate only when off', () => {
   withDir((d) => {
     const cfg = path.join(d, 'cfg');
-    const cmds = (host, gates) => Object.entries(claudeHookGroups(cfg, hookRunnerEntry(), null, [], host, true, gates))
+    const cmds = (host, gates) => Object.entries(claudeHookGroups(cfg, hookRunnerEntry(), null, [], host, gates))
       .flatMap(([event, gs]) => gs.flatMap((g) => g.hooks.map((h) => ({ event, matcher: g.matcher, command: h.command }))));
     for (const host of ['claude', 'openclaude', 'bob']) {
       const armed = cmds(host);
@@ -262,4 +276,33 @@ test('doctor --probe is unaffected by the two new switches', () => {
   const run = 'node "x/geneseed-hook.mjs" tool-gate --root "c" --host bob';
   assert.equal(badCommandFor(`${run} --no-secrets-gate`), BAD_COMMAND);
   assert.equal(badCommandFor(`${run} --no-secrets-gate --no-deletion-gate`), DISARMED_BAD_COMMAND);
+});
+
+// The console's Build re-emits the viewed install. It used to build its argv from the axes it
+// carried itself — no gates, `--exclude-rules none`, no skills — so a Build silently re-armed a
+// switched-off gate and handed back every excluded rule and skill. It now takes the argv the
+// install's profile owns (`installProfile`), with only the theme the picker chose swapped in.
+test('a console Build keeps a switched-off gate, an excluded rule and an excluded skill', () => {
+  withDir((d) => {
+    const cfgDir = path.join(d, 'oc');
+    quiet(() => emitGlobalInto('opencode', {
+      theme: 'neutral', out: path.join(d, 'out'), cfgDir, footprint: 'lean',
+      doneGate: false, excludeRules: ['process.5'], excludeSkills: ['daydream'],
+    }));
+    // What makes the console call it deployed (`deployed(state)`): the build writes it, the
+    // render alone does not.
+    fs.writeFileSync(path.join(cfgDir, GLOBAL_MANIFEST), '{"owned": []}');
+    const st = webState('neutral', cfgDir);
+    st.selectView(cfgDir);
+    const [cmd] = buildActionCmds(st, { theme: 'imperial', emit: 'opencode-global' });
+    const argv = cmd.slice(2);
+    const after = (flag) => argv[argv.indexOf(flag) + 1];
+    assert.equal(after('--theme'), 'imperial', 'the picked theme did not reach the argv');
+    assert.equal(after('--emit'), 'opencode-global');
+    assert.equal(after('--exclude-rules'), 'process.5', `the excluded rule was dropped: ${argv.join(' ')}`);
+    assert.equal(after('--exclude-skills'), 'daydream', `the excluded skill was dropped: ${argv.join(' ')}`);
+    assert.deepEqual(argv.filter((t) => t.endsWith('-gate')), ['--no-done-gate'],
+      `the Build re-armed the done gate (or disarmed another): ${argv.join(' ')}`);
+    assert.equal(after('--config-dir'), cfgDir, 'a global Build must name its own dir');
+  });
 });

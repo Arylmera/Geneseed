@@ -11,6 +11,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Changed
 - **Emits no longer read back what they just wrote to hash it.** The owned-file hashes in `.geneseed-manifest.json` are now computed from the text `writeText` recorded at write time (a copied binary, or a file rewritten since by any other writer, is still read), and the claim-on-create closure (`claimer`) resolves the config root once per emit instead of once per file. The per-file symlink and hard-link checks are unchanged, and manifests are byte-identical to before. A global re-emit runs about a quarter faster (measured on Windows: claude-global 560 → 424 ms, opencode-global 716 → 542 ms, median of 7).
 
+### Fixed
+- **The console's Build no longer re-arms switched-off gates or restores excluded rules and skills.** Rebuilding a deployed install from the console (the theme picker) assembled its own argv: no gate switches, `--exclude-rules none` and no excluded skills. It now takes the argv the install's own profile gives `rebuild-all` and `status`, with only the picked theme swapped in. A global install's Build also names its own `--config-dir`, and a project install's its own `--out`/`--root`.
+- **Re-running `geneseed setup` no longer re-arms switched-off gates.** The wizard kept an install's excluded rules and skills but read none of its `Secrets gate:` / `Done gate:` / `Deletion gate:` lines, so holding Enter through a re-run switched every gate back on. It now carries them into the build like the exclusions, without asking about them.
+
 ## [4.9.1] — 2026-10-18
 
 Patch: Deletion Is Deliberate and the root-scan check no longer fail open behind shell structure; the console stops re-running the doctor on every change.

@@ -11,7 +11,7 @@ import { parseArgs as nodeParseArgs } from 'node:util';
 import { withPlatformNewlines } from '../lib/fs.mjs';
 import path from 'node:path';
 import {
-  CONFIG, discoverNames, PACK_ORDER, knownRuleIds, knownSkillIds, linkedSkillIds, resolveSkillNames,
+  CONFIG, discoverNames, GATE_SWITCHES, PACK_ORDER, knownRuleIds, knownSkillIds, linkedSkillIds, resolveSkillNames,
 } from './source.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
 // what lets it sit inside this module's `child_process` ban.
@@ -101,11 +101,10 @@ const VALUED = {
 };
 const FLAGS = {
   '--sync-themes': 'syncThemes', '--validate-only': 'validateOnly',
-  // Law IV's gate switch. No `harness.config.json` key feeds it, deliberately: a rebuild elides
-  // the flag when armed, so a config default could disarm an armed install on its next upgrade.
-  '--no-deletion-gate': 'noDeletionGate',
-  // Laws I and III, the same contract (`GATE_SWITCHES` in source.mjs).
-  '--no-secrets-gate': 'noSecretsGate', '--no-done-gate': 'noDoneGate',
+  // The gate switches (`GATE_SWITCHES`, law order). No `harness.config.json` key feeds them,
+  // deliberately: a rebuild elides a flag when armed, so a config default could disarm an armed
+  // install on its next upgrade.
+  ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.flag, g.arg])),
   '-v': 'verbose', '--verbose': 'verbose',
 };
 
@@ -306,6 +305,8 @@ function usage() {
  * this one) refuses the whole typed token, `-bogus`, once.
  */
 export function parseArgs(argv, defaults) {
+  // Typed open: the gate rows are spread in from `GATE_SWITCHES`, and `cfgDir` is set only when given.
+  /** @type {Record<string, any>} */
   const args = {
     theme: defaults.theme, posture: defaults.posture, mode: defaults.mode,
     trust: defaults.trust,
@@ -313,8 +314,8 @@ export function parseArgs(argv, defaults) {
     excludeRules: defaults.excludeRules,
     excludeSkills: defaults.excludeSkills ?? [],
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
-    syncThemes: false, validateOnly: false, verbose: false, noDeletionGate: false,
-    noSecretsGate: false, noDoneGate: false,
+    syncThemes: false, validateOnly: false, verbose: false,
+    ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.arg, false])),
   };
   const { tokens } = nodeParseArgs({
     args: argv, options: PARSE_OPTIONS, allowPositionals: true, strict: false, tokens: true,

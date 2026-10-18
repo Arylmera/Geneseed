@@ -141,8 +141,7 @@ export function cmdBuild(args) {
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, deletionGate = true,
-  { secretsGate = true, doneGate = true } = {}) {
+  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -172,9 +171,9 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   if (excludeSkills?.length) argv.push('--exclude-skills', excludeSkills.join(','));
   // The gate switches elide when armed: the driver's default IS armed (no config key feeds
   // them), so only an explicit `false` speaks, and every armed argv stays the bytes it was.
+  // `gates` is one object keyed as `GATE_SWITCHES` keys it (`gatesOfDir`, a profile, a body).
   // Law order, so a Law IV-only install still ends on `--no-deletion-gate` as it did.
-  const gates = { secretsGate, doneGate, deletionGate };
-  for (const g of GATE_SWITCHES) if (gates[g.key] === false) argv.push(g.flag);
+  for (const g of GATE_SWITCHES) if (gates?.[g.key] === false) argv.push(g.flag);
   return argv;
 }
 
@@ -238,7 +237,7 @@ export function installProfile(host, scope, root, notify = null) {
   const gates = gatesOfDir(root, host);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludeSkills, gates.deletionGate, gates);
+    PACK_ORDER, excludeRules, trust, excludeSkills, gates);
   // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
   // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
   // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second

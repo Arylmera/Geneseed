@@ -58,7 +58,7 @@ import {
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg. golden.py's 259 cells all build one, which is what made the move safe.
 import {
-  ROOT, makeCfg,
+  GATE_SWITCHES, ROOT, makeCfg,
 } from './source.mjs';
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
@@ -648,24 +648,21 @@ const PROJECT_EMITS = {
  * carry straight past the parameter default.
  */
 function axesCfg({
-  posture, mode, trust, doctrines, excludeRules, excludeSkills,
-  deletionGate = null, secretsGate = null, doneGate = null,
+  posture, mode, trust, doctrines, excludeRules, excludeSkills, ...gates
 }) {
   return makeCfg({
     ...(posture ? { posture } : {}), ...(mode ? { mode } : {}), ...(trust ? { trust } : {}),
     ...(doctrines ? { doctrines } : {}), ...(excludeRules ? { excludeRules } : {}),
     ...(excludeSkills ? { excludeSkills } : {}),
-    // Only an explicit `false` disarms; `null` (no opinion) keeps the gate.
-    ...(deletionGate === false ? { noDeletionGate: true } : {}),
-    ...(secretsGate === false ? { noSecretsGate: true } : {}),
-    ...(doneGate === false ? { noDoneGate: true } : {}),
+    // The gate switches (`GATE_SWITCHES` keys): only an explicit `false` disarms; `null` (no
+    // opinion) keeps the gate.
+    ...Object.fromEntries(GATE_SWITCHES.filter((g) => gates[g.key] === false).map((g) => [g.arg, true])),
   });
 }
 
 export function emitProjectInto(host, {
   theme, out, root, footprint = 'full', posture = null, mode = null, trust = null,
-  doctrines = null, excludeRules = null, excludeSkills = null, deletionGate = null,
-  secretsGate = null, doneGate = null,
+  doctrines = null, excludeRules = null, excludeSkills = null, ...gates
 }) {
   const emit = PROJECT_EMITS[host];
   // The axes ride the same rail into every `*Into`, and for the same reason: a drift reader
@@ -674,7 +671,7 @@ export function emitProjectInto(host, {
   // checked an all-packs render nobody asked for.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, deletionGate, secretsGate, doneGate }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, ...gates }),
     { theme, footprint, root }, out,
   ));
 }
@@ -689,16 +686,16 @@ export function emitProjectInto(host, {
  */
 export function buildInto({
   theme, out, footprint = 'lean', posture = null, mode = null, trust = null, doctrines = null,
-  excludeRules = null, excludeSkills = null, deletionGate = null, secretsGate = null, doneGate = null,
+  excludeRules = null, excludeSkills = null, ...gates
 }) {
   return withPlatformNewlines(() => build(axesCfg({
-    posture, mode, trust, doctrines, excludeRules, excludeSkills, deletionGate, secretsGate, doneGate }),
+    posture, mode, trust, doctrines, excludeRules, excludeSkills, ...gates }),
     theme, out, { footprint, nativeCatalog: false }));
 }
 
 export function emitGlobalInto(host, {
   theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
-  excludeRules = null, excludeSkills = null, deletionGate = null, secretsGate = null, doneGate = null,
+  excludeRules = null, excludeSkills = null, ...gates
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -715,7 +712,7 @@ export function emitGlobalInto(host, {
   // the same scar the footprint left in `diffCollect`, one axis over each time.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, deletionGate, secretsGate, doneGate }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, ...gates }),
     { theme, footprint, root: null, cfgDir }, out,
   ));
 }

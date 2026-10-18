@@ -726,7 +726,9 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
  * remove. `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
  */
 export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude',
-  deletionGate = true, { secretsGate = true, doneGate = true } = {}) {
+  gates = {}) {
+  // One object keyed as `GATE_SWITCHES` keys it; only an explicit `false` disarms a gate.
+  const { secretsGate = true, doneGate = true, deletionGate = true } = gates ?? {};
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -932,15 +934,14 @@ function readSettingsForMerge(p, consequence) {
  * global that never stood down for a project install.
  */
 export function mergeClaudeSettings(p, priorHooks = null, hookOpts = {},
-  doctrines = null, excluded = [], host = 'claude', cfgDir = path.dirname(p), deletionGate = true,
-  gates = {}) {
+  doctrines = null, excluded = [], host = 'claude', cfgDir = path.dirname(p), gates = {}) {
   const prior = (priorHooks || []).filter(isDict);
   const loaded = readSettingsForMerge(p, 'Hooks were not wired.');
   if (!loaded) return [p, prior];
   const [config, hadComments] = loaded;
   let hooks = get(config, 'hooks');
   if (!isDict(hooks)) hooks = {};
-  const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host, deletionGate, gates);
+  const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host, gates);
   const canonFlat = [];
   for (const [event, groups] of Object.entries(canonical)) {
     for (const g of groups) canonFlat.push({ event, group: g });

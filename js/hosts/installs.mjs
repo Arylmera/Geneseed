@@ -609,9 +609,6 @@ export function gatesOfDir(d, host = null) {
   return Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, gateOfDir(d, g.marker, host)]));
 }
 
-/** Law IV's switch alone (#319's reader, kept for its callers). */
-export const deletionGateOfDir = (d, host = null) => gateOfDir(d, 'Deletion gate', host);
-
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
 
 /** `_harness_mcp._claude_read_manifest`. */
@@ -838,7 +835,11 @@ export function installsReferencingShim(shimPath = hookShimPath(), targets = ins
 // ---- what this machine installed (`_harness_setup._installed_defaults`) --------------------
 
 /**
- * `_harness_setup._installed_defaults` — all six keys.
+ * `_harness_setup._installed_defaults` — eight keys: `theme`, `posture`, `mode`, `emit`,
+ * `footprint`, `doctrines`, `excludeRules`, `excludeSkills`. NOT the gate switches: a walk
+ * across every install on the machine would carry one host's `off` into another's re-run, and
+ * for a gate that disarms a boundary its owner never switched off — `setup` reads them off the
+ * one install it is re-running (`targetGates` in js/maintain/setup.mjs).
  *
  * It carried only `theme` and `emit` for four phases because those are the two `status`
  * prints and the two `doctor` reads, and the port's keep-vs-delete rule is "part of an
