@@ -2544,6 +2544,7 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-status.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
 .law-enf { font-size: 13px; color: var(--text-2); }
 .law-enf.hook { color: var(--accent-text); font-weight: 600; }
+.law-enf.gate-off { color: var(--warn); font-weight: 600; }
 .law-row.law-off .law-no, .law-row.law-off .law-name > span:first-child { color: var(--text-3); }
 .law-expand { padding: 4px 20px 18px 46px; border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--accent) 4%, transparent); }

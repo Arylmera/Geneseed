@@ -1439,6 +1439,38 @@ test('a bogus rule list poisons the whole value and falls back to the install', 
   });
 });
 
+// Law IV's gate switch across the same boundary (the Constitution page's toggle on row IV). Only a
+// real JSON boolean counts; anything else falls back to the install's own `Deletion gate:` line,
+// so a malformed body can never disarm a gate — and a body that says nothing (the pack Apply, the
+// footprint switch) keeps the switch exactly as deployed, in both directions.
+test('the deletion gate switch reaches the install command only as a boolean, else the install keeps it', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const argv = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
+    assert.equal(argv({ deletionGate: false }).at(-1), '--no-deletion-gate', 'false did not disarm');
+    for (const bad of ['false', 0, null, 'off', {}]) {
+      assert.ok(!argv({ deletionGate: bad }).includes('--no-deletion-gate'),
+        `a non-boolean ${JSON.stringify(bad)} disarmed an armed install`);
+    }
+    assert.ok(!argv({}).includes('--no-deletion-gate'), 'an armed install lost its gate on a plain rebuild');
+    // A disarmed install: its carrier says so, and a body that says nothing keeps it off.
+    fs.mkdirSync(cl, { recursive: true });
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '# x\n\nActive packs: craft\nDeletion gate: off\n');
+    assert.equal(argv({}).at(-1), '--no-deletion-gate', 'a plain rebuild re-armed a disarmed install');
+    assert.equal(argv({ deletionGate: 'true' }).at(-1), '--no-deletion-gate', 'a string re-armed it');
+    assert.ok(!argv({ deletionGate: true }).includes('--no-deletion-gate'), 'true did not re-arm');
+  });
+});
+
+test('the overview reports the viewed install\'s deletion gate', () => {
+  withThreeInstalls(({ st, oc }) => {
+    const ov = apiOverview(st);
+    assert.ok(ov.install, 'the fixture\'s active install is not the viewed one, so this proves nothing');
+    assert.equal(ov.install.deletionGate, true, 'no marker must read as armed');
+    fs.writeFileSync(path.join(oc, 'AGENT.md'), '# x\n\nActive packs: craft\nDeletion gate: off\n');
+    assert.equal(apiOverview(st).install.deletionGate, false);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // The harness selector: `apiSelectView` re-points the whole console at a detected install
 // (target, theme, emit) and `apiInstalls` marks the current one selected.

@@ -182,7 +182,7 @@ export function emitClaudeRender(cfg, job) {
   // WIRE — see `claudeWire` below. One child per emit, so the two halves are two
   // functions rather than two spawns; the seam between them is a call, not a process.
   const managed = claudeWire(job, claudeMdText, agentText !== null, cfg.doctrines,
-    cfg.excludeRules);
+    cfg.excludeRules, cfg.deletionGate);
 
   return {
     owned,
@@ -215,7 +215,8 @@ export function emitClaudeRender(cfg, job) {
  * not needed for it: Python tests `os.environ.get(...)` for truthiness and an env var is
  * always a string, so `''` is the only falsy value either language sees.
  */
-function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRules = []) {
+function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRules = [],
+  deletionGate = true) {
   phaseLog('WIRE');
   const { cfgDir, claudeMd, scope, host, oldManaged, preambleExclude, hookOpts } = job;
   const old = oldManaged && typeof oldManaged === 'object' && !Array.isArray(oldManaged)
@@ -279,7 +280,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   // DECIDES the install's packs, so the marker on disk is still the previous build's.
   const [, managedHooks] = mergeClaudeSettings(
     settingsPath, oldSf === settingsName ? get(old, 'settings_hooks') : null, hookOpts,
-    doctrines, excludeRules, host, cfgDir,
+    doctrines, excludeRules, host, cfgDir, deletionGate,
   );
   managed.settings_hooks = managedHooks;
 

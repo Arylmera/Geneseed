@@ -434,7 +434,9 @@ const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t);
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
-  if (LOSS_CANDIDATE_RE.test(command)) {
+  // `--no-deletion-gate`: the install switched Law IV's boundary off (user decision,
+  // 2026-10-17). Only this check stands down — ops 2 and process 5 below still run.
+  if (!args.noDeletionGate && LOSS_CANDIDATE_RE.test(command)) {
     // A pass here FALLS THROUGH: a force push to a feature branch loses nothing, but it is still
     // a push, and process 5 below still asks for it.
     const loss = lossReason(scanSegments(command).map((seg) => seg.match(SCAN_TOKEN_RE) || []),

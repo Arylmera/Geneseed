@@ -535,9 +535,9 @@ export const MUTATIONS = [
     name: 'fold the Claude wire stage away',
     file: 'js/build/emit-claude.mjs',
     find: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, '
-      + "excludeRules = []) {\n  phaseLog('WIRE');\n",
+      + "excludeRules = [],\n  deletionGate = true) {\n  phaseLog('WIRE');\n",
     replace: 'function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, '
-      + 'excludeRules = []) {\n',
+      + 'excludeRules = [],\n  deletionGate = true) {\n',
     gate: UNIT,
     why: "THE EXACT SHAPE THE REFERENCE'S OWN VACUITY GUARD WAS BUILT FOR. An emit whose wire "
       + 'was folded into its render sibling still renders, still prunes, still manifests and is '

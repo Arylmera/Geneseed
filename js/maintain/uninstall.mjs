@@ -51,7 +51,7 @@ import { hookRunnerEntry } from '../hosts/shim.mjs';
 import { confirm } from '../lib/prompt.mjs';
 import {
   claudeCfg, claudeReadManifest, doctrinesOfDir, EMIT_HOST_SCOPE, emitHostScopeOf,
-  excludedRulesOfDir, installKind, installState,
+  deletionGateOfDir, excludedRulesOfDir, installKind, installState,
   registeredTargets,
 } from '../hosts/installs.mjs';
 import {
@@ -1173,8 +1173,11 @@ function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   const excluded = excludedRulesOfDir(root, host).length ? excludedRulesOfDir(root, host)
     : excludedRulesOfDir(cfg, host);
   // `host` reaches the group builder: a Bob reactivate must re-wire Gemini-named groups.
+  // Law IV's gate switch, the same two-carrier read: off only when a carrier says so, so a
+  // reactivate never disarms an install that did not ask for it.
+  const deletionGate = deletionGateOfDir(root, host) && deletionGateOfDir(cfg, host);
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed),
-    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host, cfg);
+    managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host, cfg, deletionGate);
   // `and data` — a manifest that did not parse is not one to write back.
   if (!deepEquals(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
     managed.settings_hooks = claims;

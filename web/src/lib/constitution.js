@@ -50,5 +50,10 @@ export function gateAddress(key) {
 // __tests__/constitution.test.js reads that pin and fails when the two drift apart.
 export const HOOK_GATED = new Set(['I', 'III', 'IV', 'process.1', 'process.5', 'rigor.5', 'ops.2'])
 
-// "Enforced by" for one row: a hook gate, or the instruction text alone.
-export const enforcedBy = (addr) => (HOOK_GATED.has(addr) ? 'Hook gate' : 'Instruction')
+// "Enforced by" for one row: a hook gate, or the instruction text alone. Law IV's gate can be
+// switched off per install (`--no-deletion-gate`); its text still binds, so the row reads
+// "Gate off" rather than "Instruction".
+export const enforcedBy = (addr, { deletionGate = true } = {}) => {
+  if (addr === 'IV' && deletionGate === false) return 'Gate off'
+  return HOOK_GATED.has(addr) ? 'Hook gate' : 'Instruction'
+}

@@ -247,7 +247,11 @@ function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
       </span>
       <span className="law-latin">{law.latin}</span>
       <span className={`law-status ${law.statusTone}`}>{law.status}</span>
-      <span className={`law-enf${law.enf === 'Hook gate' ? ' hook' : ''}`}>{law.enf}</span>
+      <span
+        className={`law-enf${law.enf === 'Hook gate' ? ' hook' : law.enf === 'Gate off' ? ' gate-off' : ''}`}
+      >
+        {law.enf}
+      </span>
     </>
   )
   return (
@@ -415,6 +419,10 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
 
+  // Law IV's gate switch, as the deployed install reports it (`overview.install.deletionGate`).
+  // Anything but an explicit `false` — an older daemon, no install — reads as armed.
+  const gateArmed = overview?.install?.deletionGate !== false
+
   const items = allItems
   const isOn = (addr) => picked.includes(addr)
 
@@ -455,7 +463,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
         retired: t.retired,
         status: t.retired ? 'Retired' : 'Active',
         statusTone: t.retired ? '' : 'ok',
-        enf: t.retired ? 'None' : enforcedBy(it.name),
+        enf: t.retired ? 'None' : enforcedBy(it.name, { deletionGate: gateArmed }),
         cat,
         c: LAW_CATS[cat].c,
         off: t.retired,
@@ -553,7 +561,9 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
     const warn = losingConsent
       ? '\n\nprocess 5 carries commit/push consent. Dropping it also removes the git-gate ' +
         'hook, so commits and pushes stop being confirmed at the tool boundary. ' +
-        '(rm -rf and force-push stay gated: those are Rule IV’s, not the pack’s.)'
+        (gateArmed
+          ? '(Real data loss stays gated: that is Rule IV’s, not the pack’s.)'
+          : '(Rule IV’s deletion gate is off on this install, so real data loss is not asked about either.)')
       : ''
     const what = pickedRules.length
       ? `${pickedRules.length} of ${allRules.length} doctrine rules`
@@ -564,6 +574,29 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
       { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild' },
     )
     if (ok) onAction('install', { ...install, doctrines: keptPacks, excludeRules })
+  }
+
+  // ⚠ ONE SWITCH, APPLIED AT ONCE. Unlike the rule selection it is not a set: a click asks, and
+  // a yes rebuilds the install with the opposite switch. Every other axis rides along unchanged
+  // (`install` is spread, and the server reads the rest back off the install).
+  const toggleGate = async () => {
+    if (!canApply) return
+    const next = !gateArmed
+    const where = `${install.host} · ${install.scope}`
+    const ok = await confirm(
+      next
+        ? `Re-arm the deletion gate on ${where}? Commands that would lose data nothing else ` +
+            'holds ask again. It rebuilds in place, non-destructive.'
+        : `Switch the deletion gate off on ${where}? Commands that would really lose data — ` +
+            'discarding uncommitted work, deleting an unpushed branch, removing untracked ' +
+            'files — stop asking. Rule IV’s text still binds the agent; secrets, root-wide ' +
+            'scans and commit/push consent stay gated. It rebuilds in place, non-destructive.',
+      {
+        title: next ? 'Re-arm the deletion gate?' : 'Switch the deletion gate off?',
+        confirmLabel: next ? 'Re-arm' : 'Switch off',
+      },
+    )
+    if (ok) onAction('install', { ...install, deletionGate: next })
   }
 
   // Substring narrowing over address, name, Latin name and principle; display-only, so the
@@ -659,7 +692,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
 
       <div className="split">
         <section
-          className={`panel flush law-wrap${canApply && showDoc ? ' with-toggle' : ''}`}
+          className={`panel flush law-wrap${canApply ? ' with-toggle' : ''}`}
           aria-label="Rules"
         >
           {/* Ethos sits ABOVE the tabs and the filter, and neither touches it: its four
@@ -717,6 +750,18 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
                   law={l}
                   isOpen={open === l.addr}
                   onToggle={() => toggle(l.addr)}
+                  toggleCol={
+                    canApply && l.addr === 'IV' && !l.retired ? (
+                      <button
+                        type="button"
+                        className={`sw-toggle${gateArmed ? ' on' : ''}`}
+                        role="switch"
+                        aria-checked={gateArmed}
+                        aria-label="Deletion gate"
+                        onClick={toggleGate}
+                      />
+                    ) : null
+                  }
                 />
               ))}
             </>
@@ -826,7 +871,10 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
                   <p className="pack-warn" role="status" aria-live="polite">
                     Dropping <b>process 5</b> also removes the commit/push consent gate:{' '}
                     <code>git commit</code> and <code>git push</code> stop being confirmed at the
-                    tool boundary. <code>rm -rf</code> and force-push stay gated.
+                    tool boundary.{' '}
+                    {gateArmed
+                      ? 'Real data loss stays gated by Rule IV.'
+                      : 'Rule IV’s deletion gate is off on this install too.'}
                   </p>
                 )}
                 <div className="pack-apply">

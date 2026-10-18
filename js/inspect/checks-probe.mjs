@@ -7,6 +7,8 @@
  * this runs each live install's own gate command, AS ITS SETTINGS SPELL IT, through the shell
  * the host would use, on two canned payloads: one Law IV call that every build must refuse
  * (`git reflog expire --expire=now --all`, Law IV in Bob's `BLOCK_RULES`) and one that must pass (`git status`).
+ * A gate wired `--no-deletion-gate` passes the Law IV call by design, so `badCommandFor` swaps in a
+ * root-wide scan (ops 2) it must still refuse — a disarmed install is not a gate that stopped working.
  * Both directions are judged, because "allows everything" and "refuses everything" (the
  * PowerShell-fallback case `hookShellProblems` can only infer) are both broken gates.
  *
@@ -47,6 +49,13 @@ const PROBED_VERB = { claude: 'git-gate', openclaude: 'git-gate', bob: 'tool-gat
 // A Law IV act that loses data in EVERY state: since the gate asks only on real loss
 // (2026-10-17), a state-dependent act such as `reset --hard` would pass on a clean tree.
 export const BAD_COMMAND = 'git reflog expire --expire=now --all';
+// An install built `--no-deletion-gate` passes BAD_COMMAND by design, so its gate is probed on
+// what it must still refuse: a recursive scan of a whole filesystem (ops 2, in Bob's
+// `BLOCK_RULES` too).
+export const DISARMED_BAD_COMMAND = 'find / -name geneseed-probe';
+/** The must-refuse payload for one gate command, as its own flags say it is wired. */
+export const badCommandFor = (command) => (/ --no-deletion-gate(?:\s|$)/.test(command)
+  ? DISARMED_BAD_COMMAND : BAD_COMMAND);
 export const GOOD_COMMAND = 'git status';
 
 const PROBE_TIMEOUT_MS = 20_000;
@@ -97,7 +106,7 @@ export function refused(host, r) {
  * The verdict for one gate, from its two runs — null when the gate is sound, or the problem.
  * Pure, so the whole verdict table is pinned without spawning.
  */
-export function probeVerdict(host, bad, good) {
+export function probeVerdict(host, bad, good, badCommand = BAD_COMMAND) {
   for (const r of [bad, good]) {
     if (r.status !== 0 && r.status !== 2) {
       const why = r.error ? r.error : `exit ${r.status}`;
@@ -107,7 +116,7 @@ export function probeVerdict(host, bad, good) {
         : ' — the host lets every call through while this lasts'}`;
     }
   }
-  if (!refused(host, bad)) return `registered but not refusing — \`${BAD_COMMAND}\` went through`;
+  if (!refused(host, bad)) return `registered but not refusing — \`${badCommand}\` went through`;
   if (refused(host, good)) return `refuses everything — \`${GOOD_COMMAND}\` was refused too`;
   return null;
 }
@@ -161,9 +170,10 @@ export function gateProbe(targets = installTargets(), { platform = process.platf
       }
       const verdict = withTempDir((tmp) => {
         const runEnv = { ...env, GENESEED_GATE_PROBE: '1', CLAUDE_PROJECT_DIR: tmp };
-        const bad = runOnce(shell, probePayload(BAD_COMMAND, tmp), tmp, runEnv);
+        const badCommand = badCommandFor(handler.command);
+        const bad = runOnce(shell, probePayload(badCommand, tmp), tmp, runEnv);
         const good = runOnce(shell, probePayload(GOOD_COMMAND, tmp), tmp, runEnv);
-        return probeVerdict(host, bad, good);
+        return probeVerdict(host, bad, good, badCommand);
       }, 'geneseed-probe-');
       if (verdict) problems.push(`${label} under ${shell.label} ${verdict}`);
       else probed.push(`${path.normalize(cfg)} (${verb}, ${shell.label})`);

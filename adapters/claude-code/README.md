@@ -19,7 +19,8 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
   wired with `--no-consent`: commits and pushes pass without asking, while the
   Law IV refusals (asked only on real data loss: a force-push to `main`, a `reset --hard`
-  over uncommitted work, an `rm` git cannot undo) stay in every build. The hook inspects
+  over uncommitted work, an `rm` git cannot undo) stay in every build unless the install is
+  built `--no-deletion-gate`, which appends that flag and stands the real-loss check down. The hook inspects
   command and, when it runs a `git commit` or `git push` (bare, flagged, `-C <path>`,
   or chained like `git add . && git commit … && git push`), returns
   `permissionDecision: "ask"` so Claude Code **prompts on every such call**. Crucially

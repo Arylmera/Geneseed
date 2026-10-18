@@ -10,7 +10,7 @@ import path from 'node:path';
 import { buildInto, emitGlobalInto, emitProjectInto } from '../build/driver.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
 import {
-  doctrinesOfDir, excludedRulesOfDir, modeOfDir, postureOfDir,
+  deletionGateOfDir, doctrinesOfDir, excludedRulesOfDir, modeOfDir, postureOfDir,
 } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
@@ -33,7 +33,7 @@ export const VALIDATE_USAGE = [
   'usage: geneseed validate [-h] [--theme THEME] [--emit EMIT] [--out OUT] [--root ROOT]',
   '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
   '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES]',
-  '                         [--exclude-skills SKILLS] [-v]',
+  '                         [--exclude-skills SKILLS] [--no-deletion-gate] [-v]',
   '',
   "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
   "Takes the generator's render flags (see geneseed-build --help) except --sync-themes and",
@@ -128,7 +128,7 @@ export function cmdValidate(args) {
     const opts = {
       theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
       trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
-      excludeSkills: args.excludeSkills,
+      excludeSkills: args.excludeSkills, deletionGate: args.noDeletionGate ? false : null,
     };
     let scanDirs;
     try {
@@ -172,7 +172,9 @@ export function cmdValidate(args) {
     const excluded = excludedRulesOfDir(at);
     printOut(`[validate-only] rendered at posture=${postureOfDir(at) ?? '?'} `
       + `mode=${modeOfDir(at) ?? '?'} packs=${packs ? packs.join(',') || 'none' : '?'} `
-      + `excluded=${excluded.map((id) => id.replace('.', ' ')).join(', ') || 'none'}\n`);
+      + `excluded=${excluded.map((id) => id.replace('.', ' ')).join(', ') || 'none'}`
+      // Elided when armed, so an armed dry run prints the line it always did.
+      + `${deletionGateOfDir(at) ? '' : ' deletion-gate=off'}\n`);
     printOut(`[validate-only] would write ${written.length} file(s) under ${args.out}`
       + (args.root ? ` (root ${args.root})` : '')
       + ' — nothing was actually written (sandboxed).\n');
