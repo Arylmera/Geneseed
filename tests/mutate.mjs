@@ -54,8 +54,8 @@ export const MUTATIONS = [
     id: 'M1',
     name: "drop writeText's os.linesep translation",
     file: 'js/lib/fs.mjs',
-    find: "writeFileSync(path, EOL === '\\n' ? text : text.replaceAll('\\n', EOL), 'utf8');",
-    replace: "writeFileSync(path, text, 'utf8');",
+    find: "const out = EOL === '\\n' ? text : text.replaceAll('\\n', EOL);",
+    replace: 'const out = text;',
     gate: UNIT_MAINTAINER,
     why: 'Every emitted file on Windows would carry LF where the reference wrote CRLF. This is '
       + 'the single most platform-specific behaviour in the product, and THE MUTATION IS A NO-OP '

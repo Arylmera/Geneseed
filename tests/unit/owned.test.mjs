@@ -7,7 +7,7 @@
 // (`unlinkOwned` -> `ownedWithin`); this is the same gate on the OTHER manifest-reading walk.
 import assert from 'node:assert/strict';
 import {
-  existsSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync,
+  existsSync, linkSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
@@ -15,8 +15,9 @@ import test, { after } from 'node:test';
 import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER } from '../../js/hosts/hosts.mjs';
 import {
-  fileHash, hashesOf, ownedHashes, ownedState, ownedWithin, safeLeaf,
+  fileHash, hashesOf, ownedHashes, ownedState, ownedWithin, safeLeaf, textHash,
 } from '../../js/hosts/owned.mjs';
+import { textWrites, withWriteRecord, writeText } from '../../js/lib/fs.mjs';
 import { claimer, writeNativeLayer } from '../../js/hosts/native.mjs';
 import { shipLeanLaws } from '../../js/build/emit-common.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -294,6 +295,39 @@ test('claimer accepts a new file under a symlinked root', (t) => {
     assert.equal(claim(dest), true,
       'a symlinked config ROOT (a dotfiles-repo install, or CLAUDE_CONFIG_DIR pointing at one) '
       + 'must keep working — claiming a brand-new leaf under it');
+  } finally { sb.cleanup(); }
+});
+
+// `claimer` resolves its root ONCE, when it is built — and an emit builds it before a fresh
+// install's root exists. Through a linked ancestor (`junction` on win32, no privilege needed)
+// the early resolution must still contain a leaf claimed once the root is created, and still
+// refuse one reached through a link out of it.
+test('claimer built before its root exists, under a linked ancestor, still guards leaves', (t) => {
+  const sb = makeSandbox('leaf-');
+  try {
+    const real = path.join(sb.path, 'real');
+    mkdirSync(real, { recursive: true });
+    const linked = path.join(sb.path, 'linked');
+    try {
+      symlinkSync(real, linked, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (e) {
+      if (process.platform === 'win32' && e.code === 'EPERM') {
+        t.skip('directory links need privileges here');
+        return;
+      }
+      throw e;
+    }
+    const cfg = path.join(linked, 'cfg');
+    const claim = claimer([], cfg);
+    mkdirSync(path.join(cfg, 'skills'), { recursive: true });
+    assert.equal(claim(path.join(cfg, 'skills', 'x', 'SKILL.md')), true,
+      'a new leaf under a root created after the claimer must be claimable');
+    const outside = path.join(sb.path, 'outside');
+    mkdirSync(outside, { recursive: true });
+    symlinkSync(outside, path.join(cfg, 'skills', 'y'),
+      process.platform === 'win32' ? 'junction' : 'dir');
+    assert.equal(claim(path.join(cfg, 'skills', 'y', 'SKILL.md')), false,
+      'a leaf reached through a link out of the root must still be refused');
   } finally { sb.cleanup(); }
 });
 
@@ -599,6 +633,57 @@ test('ownedHashes hashes only the owned rels that are files, inside root, sorted
     assert.equal(hashes['a/b.md'], fileHash(path.join(dir, 'a', 'b.md')));
     assert.equal(hashes['z.md'], fileHash(path.join(dir, 'z.md')));
   });
+});
+
+// `textHash` — the write-time twin of `fileHash` that lets `ownedHashes` skip reading back
+// what this emit just wrote. It must equal `fileHash` of the bytes `writeText` puts on disk
+// under BOTH newline translations, and the text carries the case that tells a correct twin
+// from a naive one: an embedded `\r\n`, which the CRLF translation turns into `\r\r\n` (folds
+// to `\r\n`), so hashing the text BEFORE translation would disagree on Windows. Both
+// translations are written raw here, so the LF half runs on a Windows box too.
+test('textHash equals fileHash of the written bytes, under CRLF and LF translation', () => {
+  withDir((dir) => {
+    const text = 'é line\nemoji 🜂\nembedded\r\nlone\rcr\n\n';
+    for (const eol of ['\r\n', '\n']) {
+      const out = eol === '\n' ? text : text.replaceAll('\n', eol);
+      const p = path.join(dir, `t${eol.length}.md`);
+      writeFileSync(p, out, 'utf8');
+      assert.equal(textHash(out), fileHash(p), `eol ${JSON.stringify(eol)}`);
+    }
+  });
+});
+
+// `ownedHashes` takes a recorded write ONLY while the file's size and mtime still match the
+// stat taken at write time — a two-direction gate: a record that matches is used (the planted
+// text, not the disk, decides the hash: the read was skipped), and a file rewritten since by
+// a writer that does not record (here a raw `writeFileSync` of a longer text) is read back.
+test('ownedHashes uses a recorded write while size and mtime match, else reads the file', () => {
+  withDir((dir) => {
+    const p = path.join(dir, 'a.md');
+    textWrites.map = new Map();
+    try {
+      writeText(p, 'recorded\n');
+      assert.equal(ownedHashes(dir, ['a.md'])['a.md'], fileHash(p));
+      const st = statSync(p);
+      textWrites.map.set(path.resolve(p), { text: 'planted!\n', size: st.size, mtimeMs: st.mtimeMs });
+      assert.equal(ownedHashes(dir, ['a.md'])['a.md'], textHash('planted!\n'),
+        'a record matching the stat must be trusted without reading the file');
+      writeFileSync(p, 'rewritten, longer\n');
+      assert.equal(ownedHashes(dir, ['a.md'])['a.md'], fileHash(p),
+        'a file rewritten since the record must be read back, not hashed from the record');
+    } finally { textWrites.map = null; }
+  });
+});
+
+// `withWriteRecord` arms the record for one emit and must disarm it on every exit — a throw
+// included, or a long-lived in-process caller (the web daemon) keeps paying a stat and holding
+// the text of every later `writeText`.
+test('withWriteRecord disarms the write record on return and on throw', () => {
+  assert.equal(withWriteRecord(() => textWrites.map instanceof Map), true,
+    'the record must be armed while the emit runs');
+  assert.equal(textWrites.map, null, 'disarmed after a normal return');
+  assert.throws(() => withWriteRecord(() => { throw new Error('emit failed'); }), /emit failed/);
+  assert.equal(textWrites.map, null, 'disarmed after a throw');
 });
 
 test('hashesOf table: only a well-shaped map of 64-lowercase-hex values round-trips', () => {

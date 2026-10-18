@@ -31,6 +31,29 @@ import {
   appendFileSync, writeFileSync, readFileSync, copyFileSync, statSync, utimesSync,
 } from 'node:fs';
 import { EOL } from 'node:os';
+import { resolve } from 'node:path';
+
+/**
+ * What `writeText` wrote while an emit has armed this (`withWriteRecord` below, around the
+ * three manifest-writing emits in `js/build/driver.mjs`): resolved path ->
+ * `{ text, size, mtimeMs }`, the translated text and a stat taken right after the write.
+ * `ownedHashes` (`js/hosts/owned.mjs`) hashes that text instead of reading the file back —
+ * the read-back was ~25% of `doctor --all` — and only while the file's size and mtime still
+ * match, so a later rewrite by any writer that does not record (a raw `writeFileSync`, a
+ * rename) falls back to the read. `copyFile` and `appendText` drop the entry outright.
+ * `null`, the default, records nothing: no other caller pays the stat or retains the text.
+ */
+export const textWrites = { map: null };
+
+/**
+ * Run one emit with `textWrites` armed, and disarm it on EVERY exit: an emit that throws inside
+ * a long-lived process (the web daemon emits in-process) would otherwise leave every later
+ * `writeText` paying a stat and keeping its text in memory.
+ */
+export function withWriteRecord(fn) {
+  textWrites.map = new Map();
+  try { return fn(); } finally { textWrites.map = null; }
+}
 /**
  * `Path.write_text(text, encoding="utf-8")`.
  *
@@ -49,7 +72,12 @@ import { EOL } from 'node:os';
  * The same vendored skill folder can contain files from both categories.
  */
 export function writeText(path, text) {
-  writeFileSync(path, EOL === '\n' ? text : text.replaceAll('\n', EOL), 'utf8');
+  const out = EOL === '\n' ? text : text.replaceAll('\n', EOL);
+  writeFileSync(path, out, 'utf8');
+  if (textWrites.map) {
+    const st = statSync(path);
+    textWrites.map.set(resolve(path), { text: out, size: st.size, mtimeMs: st.mtimeMs });
+  }
 }
 
 /**
@@ -62,6 +90,7 @@ export function writeText(path, text) {
  * invisible in an editor and a whole-file difference to the gate.
  */
 export function appendText(path, text) {
+  textWrites.map?.delete(resolve(path));
   appendFileSync(path, EOL === '\n' ? text : text.replaceAll('\n', EOL), 'utf8');
 }
 
@@ -94,6 +123,7 @@ export function readText(path) {
  * mode the Python side has and nothing depends on. Mode is not copied here.
  */
 export function copyFile(src, dest) {
+  textWrites.map?.delete(resolve(dest));
   copyFileSync(src, dest);
   const st = statSync(src);
   utimesSync(dest, st.atime, st.mtime);
@@ -216,7 +246,7 @@ export function withPlatformNewlines(fn) {
  */
 const NOT_THERE = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 'EBADF']);
 
-function statOrNull(p) {
+export function statOrNull(p) {
   try {
     return statSync(p);
   } catch (e) {
