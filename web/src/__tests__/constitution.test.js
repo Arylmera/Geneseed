@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import {
   GATE_SWITCH,
@@ -8,6 +6,11 @@ import {
   gateAddress,
   parseRuleTitle,
 } from '../lib/constitution.js'
+// The server's own tables, imported rather than regex-read out of their source. Their import
+// closure is relative and `node:` modules only (no bare specifier, so web's own `npm ci` is
+// enough) and loads cleanly under vitest's jsdom environment.
+import { HOOK_PINNED } from '../../../js/inspect/checks-constitution.mjs'
+import { GATE_SWITCHES } from '../../../js/build/source.mjs'
 
 // A catalog title -> { latin, name, retired }. The prefix (`Rule IV — `, `Doctrine craft 1 — `)
 // is the address, which the table prints in its own column; the Latin half is the voice's,
@@ -68,30 +71,19 @@ describe('HOOK_GATED', () => {
 
   // The set is transcribed from the doctor's HOOK_PINNED, the one list of every hook-gated
   // rule — the tool-boundary `ask()` gates in js/hosts/hooks.mjs and the done gate in
-  // js/hosts/hooks-done.mjs alike. Read the labels back out of that file: a rule pinned or
-  // unpinned there fails here until the Constitution's "Enforced by" column agrees.
+  // js/hosts/hooks-done.mjs alike. Its labels (`process 5`) become addresses (`process.5`): a
+  // rule pinned or unpinned there fails here until the Constitution's "Enforced by" column agrees.
   it('matches the doctor HOOK_PINNED in js/inspect/checks-constitution.mjs', () => {
-    const src = readFileSync(
-      // vitest runs from web/ (jsdom gives import.meta.url no file scheme).
-      resolve(process.cwd(), '../js/inspect/checks-constitution.mjs'),
-      'utf8',
-    )
-    const body = /export const HOOK_PINNED = \{([^}]*)\}/.exec(src)[1]
-    const labels = [...body.matchAll(/'[a-z-]+': '([^']+)'/g)].map((m) => m[1].replace(' ', '.'))
+    const labels = Object.values(HOOK_PINNED).map((l) => l.replace(' ', '.'))
     expect(labels.length).toBeGreaterThan(0)
     expect(new Set(labels)).toEqual(HOOK_GATED)
   })
 
   // GATE_SWITCH is transcribed from the server's GATE_SWITCHES (js/build/source.mjs), the one
-  // table of switchable gates. Read the law and key of each row back out of that file: a gate
-  // added or renamed there fails here until the Constitution's toggles agree.
+  // table of switchable gates: a gate added or renamed there fails here until the
+  // Constitution's toggles agree.
   it('matches GATE_SWITCHES in js/build/source.mjs', () => {
-    const src = readFileSync(resolve(process.cwd(), '../js/build/source.mjs'), 'utf8')
-    const body = /export const GATE_SWITCHES = \[([\s\S]*?)\];/.exec(src)[1]
-    const rows = [...body.matchAll(/key: '([a-zA-Z]+)'[^}]*law: '([IVX]+)'/g)].map((m) => [
-      m[2],
-      m[1],
-    ])
+    const rows = GATE_SWITCHES.map((g) => [g.law, g.key])
     expect(rows.length).toBeGreaterThan(0)
     expect(Object.fromEntries(rows)).toEqual(
       Object.fromEntries(Object.entries(GATE_SWITCH).map(([law, g]) => [law, g.key])),
