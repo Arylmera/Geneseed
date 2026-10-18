@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.9.1] — 2026-10-18
+
+Patch: Deletion Is Deliberate and the root-scan check no longer fail open behind shell structure; the console stops re-running the doctor on every change.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so installed hooks and OpenCode plugins pick up the fix.
+
 ### Fixed
 - **Deletion Is Deliberate and the root-scan check no longer fail open when shell structure hides the program word.** `true & git reset --hard`, `(git reset --hard)`, `if …; then git reset --hard; fi`, `{ rm x; }`, `echo $(rm x)`, `` echo `rm x` ``, `sudo -u root rm x`, `env -u FOO rm x`, `nice -n 5 rm x`, `timeout 5 rm x`, `true & find / …` and `(find / …)` passed where the plain form asks. The `reset --hard` forms had regressed in 4.7.0. Several changes close it, on Claude Code, OpenClaude and Bob (`git-gate`/`tool-gate`) and in the OpenCode guard:
   - A lone `&` now separates commands. `2>&1`, `<&3`, `&>` and `|&` still do not.
