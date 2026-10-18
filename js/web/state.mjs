@@ -63,6 +63,9 @@ export function webState(theme = null, target = null) {
     // beside it rather than inside so `/api/overview` (fetched after every mutation) does not
     // carry every group.
     _doctorRun: null,
+    // `diffCollect`'s memo of `expected` renders, made on first use by `api.mjs` (`memoOf`);
+    // it re-renders on its own key change, so `refresh()` leaves it alone.
+    renderMemo: null,
   };
   // The INSTALL ROOT (== build --out). For globals it IS the data dir; a claude/bob/openclaude
   // PROJECT install keeps its data under <repo>/.claude|.bob|.openclaude while the markers

@@ -15,7 +15,7 @@ import { CONFIG, ROOT, THEMES, discoverNames, makeCfg } from '../build/source.mj
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import { sourceReleaseVersion } from '../hosts/opencode.mjs';
 import { alwaysOnCost } from '../inspect/cost.mjs';
-import { diffCollect } from '../inspect/diff.mjs';
+import { diffCollect, renderMemo } from '../inspect/diff.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { CLAUDE_STYLE, HOSTS, VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
 import {
@@ -130,6 +130,12 @@ export function* activeInstalls(targets) {
   }
 }
 
+/**
+ * The state's memo of `expected` renders, made on first use: overview and fleet diff the same
+ * install on every refresh, and only the compare has to run again (see `renderMemo`).
+ */
+const memoOf = (state) => (state.renderMemo ??= renderMemo());
+
 /** The edited/added/missing tally of a `diffCollect` file list. */
 const driftCounts = (files) => ({
   edited: files.filter((f) => f.status === 'edited').length,
@@ -179,8 +185,9 @@ export function apiInstalls(state) {
  *
  * Its own route, not more fields on `/api/installs`: the sidebar refetches that list on every
  * data revision, and the drift check below re-renders a whole emit per global install.
- * ponytail: one `diffCollect` render per global install per request, fine for the handful a
- * machine carries; cache per (root, build mtime) if a fleet ever grows past that.
+ * Each global install's `expected` render is memoised on the state (`renderMemo`, keyed on the
+ * source fingerprint computed once per request and every axis), so a refresh re-runs only the
+ * compare; the memo holds a handful of installs, enough for any machine seen so far.
  *
  * Each row reads ITS OWN `.geneseed-version`. `statusData().installed_fp` is the first carrier
  * a fixed walk finds, which describes the wrong install as soon as two hosts are deployed.
@@ -197,7 +204,7 @@ export function apiFleet(state) {
     let drift = null;
     if (st === 'active') {
       try {
-        const { files } = diffCollect({ target: dir });
+        const { files } = diffCollect({ target: dir, memo: memoOf(state), sourceFp });
         if (files !== null) drift = driftCounts(files);
       } catch { /* an install that cannot be re-rendered reports no drift figure, not zero */ }
     }
@@ -226,7 +233,7 @@ export function apiOverview(state) {
   let diff = null;
   if (deployed(state)) {
     const { files } = diffCollect({
-      target: state.target, theme: state.theme, emit: state.emit });
+      target: state.target, theme: state.theme, emit: state.emit, memo: memoOf(state) });
     if (files !== null) diff = driftCounts(files);
   }
   let buildTime = null;

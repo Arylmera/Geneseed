@@ -35,11 +35,15 @@
  *     directly rather than by comparison, because a check made tolerant of a value owes one
  *     somewhere else.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { emitGlobalInto } from '../build/driver.mjs';
+import { PRIMARY_AGENT_SRC, emitGlobalInto } from '../build/driver.mjs';
+import { rglobFiles } from '../build/emit-common.mjs';
+import { CONFIG, makeCfg } from '../build/source.mjs';
+import { sourceFingerprint } from '../build/version.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
@@ -53,6 +57,7 @@ import {
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
+import { relPosix } from '../lib/text.mjs';
 
 /**
  * `_harness_core._T0` — this process's start, in epoch seconds.
@@ -121,6 +126,81 @@ export function withStdoutSwallowed(fn) {
   }
 }
 
+/** A manifest's `rel`, spelled the way the expected snapshot keys it. */
+const posixRel = (rel) => rel.split('\\').join('/');
+
+/**
+ * Render the `expected` tree for `host` at `axes` into a temp dir and SNAPSHOT it — every file,
+ * not only the owned ones, because a rel the DEPLOYED manifest claims is looked up here too and
+ * its presence decides "edited" against "added". The temp dir is gone before this returns.
+ *
+ * The one place a render depends on WHERE it is installed: a global Bob emit writes each
+ * folder skill's absolute directory into its SKILL.md (see `writeNativeLayer`), so the
+ * reference render names the temp tree. Mapped back to the deployed dir here, or every such
+ * skill reads as edited. A deployment that has since MOVED still differs, and that is real
+ * drift — its skills point at a directory that is no longer theirs. A side-file pointer (and a
+ * global OpenCode command's) spells the same directory `/`-separated, so that spelling is
+ * mapped too.
+ */
+function renderExpected(host, axes, deployedDir) {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-diff-'));
+  try {
+    const expected = path.join(tmp, 'expected');
+    withStdoutSwallowed(() => emitGlobalInto(host, {
+      ...axes, out: path.join(tmp, 'bundle'), cfgDir: expected,
+    }));
+    const posix = (p) => p.split(path.sep).join('/');
+    const texts = new Map();
+    for (const p of rglobFiles(expected)) {
+      texts.set(relPosix(expected, p), readText(p).split(expected).join(deployedDir)
+        .split(posix(expected)).join(posix(deployedDir)));
+    }
+    return { owned: ownedSet(expected), texts };
+  } finally {
+    // `tempfile.TemporaryDirectory()`'s cleanup, which runs on the exception path too.
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/**
+ * A memo for `diffCollect`'s `expected` render — opt-in, so `geneseed diff` and every other
+ * caller still renders afresh. The web console passes one: `/api/overview` and `/api/fleet`
+ * both diff the selected install on every refresh, and the render is ~0.6 s of each.
+ *
+ * ONLY THE RENDER IS MEMOISED, NEVER THE RESULT: the compare against the deployed tree runs on
+ * every call, because catching a hand edit there is the whole point of the drift figure.
+ * One entry per deployed dir, at most `cap` of them (least recently used goes first); `renders`
+ * counts real renders, for the tests.
+ */
+export function renderMemo(cap = 4) {
+  return { cap, renders: 0, entries: new Map() };
+}
+
+/**
+ * The memoised `renderExpected`. The key is everything the render reads: the source
+ * fingerprint, the two render inputs it does not hash (`harness.config.json` and the
+ * orchestrator agent), the host and every axis. A deployed dir whose key changed is
+ * re-rendered in place, and a fingerprint change drops every entry from the old source.
+ */
+function memoExpected(memo, host, axes, deployedDir, sourceFp) {
+  const fp = sourceFp ?? sourceFingerprint(makeCfg());
+  const extra = createHash('sha256');
+  for (const p of [CONFIG, PRIMARY_AGENT_SRC]) extra.update(`${readMaybe(p) ?? ''}\0`);
+  const key = JSON.stringify([fp, extra.digest('hex'), host, axes]);
+  const hit = memo.entries.get(deployedDir);
+  memo.entries.delete(deployedDir);
+  if (hit && hit.key === key) {
+    memo.entries.set(deployedDir, hit);
+    return hit.exp;
+  }
+  for (const [d, e] of memo.entries) if (e.fp !== fp) memo.entries.delete(d);
+  const exp = renderExpected(host, axes, deployedDir);
+  memo.renders += 1;
+  memo.entries.set(deployedDir, { key, fp, exp });
+  while (memo.entries.size > memo.cap) memo.entries.delete(memo.entries.keys().next().value);
+  return exp;
+}
+
 /**
  * `_harness_diff._diff_collect` — returns `{target, theme, files}`, with `files === null` for
  * "nothing to compare here".
@@ -140,7 +220,9 @@ export function withStdoutSwallowed(fn) {
  * choice, which is the same defect with teeth. `rebuild-all` never had it: it reads
  * `postureOfDir`/`modeOfDir` per install root, and this now asks the same two questions.
  */
-export function diffCollect({ target = null, theme = null, emit = null, footprint = null } = {}) {
+export function diffCollect({
+  target = null, theme = null, emit = null, footprint = null, memo = null, sourceFp = null,
+} = {}) {
   // `Path(target).expanduser()` — expanded and NOT resolved, which is the opposite of
   // `cmd_version`'s `.expanduser().resolve()` two files over. It is observable: `target` is
   // printed on the summary line, so `--target .` reports `.` here and an absolute path
@@ -165,69 +247,58 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
 
   const fp = footprint || footprintOfDir(dir);
 
+  // Every input the render reads off the deployment, in ONE object: it is what the render is
+  // called with AND what the memo keys on, so the two cannot drift apart.
+  const axes = {
+    theme: themeName, footprint: fp,
+    // The third register read off the deployment, for the same reason as the other two: an
+    // install built with `--doctrines craft` compared against an `expected` rendered at all
+    // four reports its entire doctrines section — and its `Active packs:` line — as drift.
+    // `null` (no marker) means unknown and renders at all four, which `doctrinesForBuild`
+    // makes explicit rather than leaving to `makeCfg`'s parameter default two layers down.
+    posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
+    // The loop skill's preset, or its `Default trust preset:` line reads as edited.
+    trust: trustOfDir(dir, host),
+    // The excluded rules, or an install built `--exclude-rules "process 5"` reads its
+    // carrier as drift: `expected` would re-state the rule the deployment took away.
+    excludeRules: excludedRulesOfDir(dir),
+    // The excluded skills, or every skill the install left out reads as deleted.
+    excludeSkills: excludedSkillsOfDir(dir),
+    // The gate switches, or a disarmed install reads its `<gate>: off` line as drift.
+    ...gatesOfDir(dir),
+  };
+  const deployedDir = resolvePath(dir);
+  const exp = memo
+    ? memoExpected(memo, host, axes, deployedDir, sourceFp)
+    : renderExpected(host, axes, deployedDir);
+
   const files = [];
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-diff-'));
-  try {
-    const expected = path.join(tmp, 'expected');
-    withStdoutSwallowed(() => emitGlobalInto(host, {
-      theme: themeName, out: path.join(tmp, 'bundle'), cfgDir: expected, footprint: fp,
-      // The third register read off the deployment, for the same reason as the other two: an
-      // install built with `--doctrines craft` compared against an `expected` rendered at all
-      // four reports its entire doctrines section — and its `Active packs:` line — as drift.
-      // `null` (no marker) means unknown and renders at all four, which `doctrinesForBuild`
-      // makes explicit rather than leaving to `makeCfg`'s parameter default two layers down.
-      posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
-      // The loop skill's preset, or its `Default trust preset:` line reads as edited.
-      trust: trustOfDir(dir, host),
-      // The excluded rules, or an install built `--exclude-rules "process 5"` reads its
-      // carrier as drift: `expected` would re-state the rule the deployment took away.
-      excludeRules: excludedRulesOfDir(dir),
-      // The excluded skills, or every skill the install left out reads as deleted.
-      excludeSkills: excludedSkillsOfDir(dir),
-      // The gate switches, or a disarmed install reads its `<gate>: off` line as drift.
-      ...gatesOfDir(dir),
-    }));
-    // The one place a render depends on WHERE it is installed: a global Bob emit writes each
-    // folder skill's absolute directory into its SKILL.md (see `writeNativeLayer`), so the
-    // reference render names the temp tree. Mapped back to the deployed dir before comparing,
-    // or every such skill reads as edited. A deployment that has since MOVED still differs,
-    // and that is real drift — its skills point at a directory that is no longer theirs.
-    // A side-file pointer (and a global OpenCode command's) spells the same directory
-    // `/`-separated, so that spelling is mapped too.
-    const deployedDir = resolvePath(dir);
-    const posix = (p) => p.split(path.sep).join('/');
-    const rels = [...new Set([...ownedSet(dir), ...ownedSet(expected)])].sort();
-    for (const rel of rels) {
-      const a = path.join(dir, rel);
-      const b = path.join(expected, rel);
-      if (isFile(a) && isFile(b)) {
-        // `read_text(errors="replace")` — Node's utf8 decoder substitutes U+FFFD for the
-        // same bytes, and `readText` folds the line endings the way `Path.read_text` does.
-        const ta = readText(a);
-        const tb = readText(b).split(expected).join(deployedDir)
-          .split(posix(expected)).join(posix(deployedDir));
-        if (cmpKey(rel, ta) !== cmpKey(rel, tb)) {
-          const diff = unifiedDiff(splitLines(tb), splitLines(ta), {
-            fromfile: `source/${rel}`, tofile: `deployed/${rel}`, lineterm: '',
-          });
-          files.push({ rel, status: 'edited', diff });
-        }
-      } else if (isFile(a)) {
-        const body = splitLines(readText(a));
-        files.push({
-          rel,
-          status: 'added',
-          diff: ['(only in deployed — your addition)', '', ...body.map((ln) => `+${ln}`)],
+  const rels = [...new Set([...ownedSet(dir), ...exp.owned])].sort();
+  for (const rel of rels) {
+    const a = path.join(dir, rel);
+    const tb = exp.texts.get(posixRel(rel));
+    if (isFile(a) && tb !== undefined) {
+      // `read_text(errors="replace")` — Node's utf8 decoder substitutes U+FFFD for the
+      // same bytes, and `readText` folds the line endings the way `Path.read_text` does.
+      const ta = readText(a);
+      if (cmpKey(rel, ta) !== cmpKey(rel, tb)) {
+        const diff = unifiedDiff(splitLines(tb), splitLines(ta), {
+          fromfile: `source/${rel}`, tofile: `deployed/${rel}`, lineterm: '',
         });
-      } else {
-        files.push({
-          rel, status: 'missing', diff: ['(in source, not deployed — re-emit to add)'],
-        });
+        files.push({ rel, status: 'edited', diff });
       }
+    } else if (isFile(a)) {
+      const body = splitLines(readText(a));
+      files.push({
+        rel,
+        status: 'added',
+        diff: ['(only in deployed — your addition)', '', ...body.map((ln) => `+${ln}`)],
+      });
+    } else {
+      files.push({
+        rel, status: 'missing', diff: ['(in source, not deployed — re-emit to add)'],
+      });
     }
-  } finally {
-    // `tempfile.TemporaryDirectory()`'s cleanup, which runs on the exception path too.
-    rmSync(tmp, { recursive: true, force: true });
   }
   // Already sorted by `rel` above; the Python sorts again after the loop and so does this,
   // because the two sorts are over different things — that one is over the RECORDS, and a
