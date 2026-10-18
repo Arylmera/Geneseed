@@ -19,6 +19,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   - Behind all of these, a removal word written unquoted after a program the gate does not read asks ("could not verify"). That covers a wrapper it does not know (`setsid rm x`), a wrapper flag of unknown arity, `ForEach-Object { Remove-Item $_ }` and `case … rm …`. So does `ssh host rm x`. The exceptions are programs whose `rm` is their own subcommand (npm, pnpm, yarn, bun, cargo, brew, docker, podman) and programs that never run their arguments (echo, printf, the grep family, `which`, `type`, `man`, `Get-Command`, `Get-Help`).
   - Proven-safe forms still pass: a clean tree, a tracked clean file, a quoted pattern, and a `$(cat <<'EOF' … EOF)` commit message.
 
+### Changed
+- **The console stops re-running the doctor when nothing it checks has changed.** A memory delete no longer drops the cached verdict (~3.6 s saved on the next overview); a finished job, an install toggle and a view switch still do. The Doctor page, the Greenhouse and Operator HUD lenses now read the cached run (groups and themes included) instead of running every check on each visit; the page's *Re-run checks* button asks for a fresh run (`GET /api/doctor?fresh=1`). The server warms the cache right after it starts listening, so an overview requested a few seconds later answers in ~0.15 s rather than ~3.8 s.
+
 ## [4.9.0] — 2026-10-18
 
 Minor: on/off switches for the Sealed Secrets and done gates, and the console calls the laws Dictates.

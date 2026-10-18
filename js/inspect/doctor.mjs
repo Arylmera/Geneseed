@@ -25,9 +25,10 @@
  * that this tool never shells back to the generator — is asserted directly instead.
  *
  * WHAT `doctorCollect` DOES NOT REACH, MEASURED RATHER THAN ASSUMED. It takes `groups` and
- * `cmdDoctor` does not pass it: that parameter is the WEB's, and `apiDoctor` in
- * `js/web/api.mjs` is its only caller. `ran` exists for it — four lines of accumulator that
- * keep the Doctor page's per-check cards a parameter rather than a rewrite.
+ * `cmdDoctor` does not pass it: that parameter is the WEB's, and `runDoctor` in
+ * `js/web/state.mjs` (the cache `apiDoctor` serves) is its only caller. `ran` exists for it —
+ * four lines of accumulator that keep the Doctor page's per-check cards a parameter rather
+ * than a rewrite.
  */
 import path from 'node:path';
 import { emitGlobalInto, emitProjectInto, main as driverMain } from '../build/driver.mjs';

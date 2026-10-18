@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { useAsync } from '../hooks/useAsync.js'
@@ -47,10 +47,13 @@ function CheckCard({ group, i }) {
 }
 
 export default function Doctor() {
-  const { data, error, reload, setData } = useAsync(() => api.doctor(), [])
+  // Mount reads the daemon's cached verdict; only Re-run asks for a fresh one.
+  const fresh = useRef(false)
+  const { data, error, reload, setData } = useAsync(() => api.doctor(fresh.current), [])
   // Re-running clears the result first so the button reads "Running…" and the
   // sandbox-build loading copy shows while every theme is re-validated.
   const rerun = () => {
+    fresh.current = true
     setData(null)
     reload()
   }
