@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // three address shapes deep-links to the right row.
 
 vi.mock('../api/index.js', () => ({
-  api: { catalog: vi.fn(), item: vi.fn() },
+  api: { catalog: vi.fn(), item: vi.fn(), rules: vi.fn(() => Promise.resolve(null)) },
 }))
 
 // Every confirm answers yes, and the questions a page asked are read off

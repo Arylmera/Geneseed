@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
+import { useRules } from '../hooks/useRules.js'
 import Tabs from '../components/Tabs.jsx'
 import Rules from './Rules.jsx'
 import Profile from './Profile.jsx'
@@ -87,11 +88,11 @@ function RuleCards({ rules, profile, facts, notes }) {
 // change. Rules and Profile are editors; Memory and Notebook are the Library reader
 // locked to one kind, so an entry opened here keeps its address on this page.
 export default function Personal({ tab = 'rules', item, setup, dataRev }) {
-  // Bumped by the rules editor after every write, so the cards above it follow.
-  const [rev, setRev] = useState(0)
   const soft = (p) => Promise.resolve(p).catch(() => null)
-  const { data: rules } = useAsync(() => soft(api.rules()), [dataRev, rev])
-  const { data: profile } = useAsync(() => soft(api.profile()), [dataRev, rev])
+  // Each editor reloads only its own file after a write, so the cards above it follow. Not
+  // the app-wide `dataRev`: neither file feeds the overview, the fleet or an install.
+  const { data: rules, reload: reloadRules } = useRules(dataRev)
+  const { data: profile, reload: reloadProfile } = useAsync(() => soft(api.profile()), [dataRev])
   const { data: notebook } = useAsync(() => soft(api.catalog('notebook')), [dataRev], 'catalog')
   // The notebook's own index and README are furniture, not notes.
   const notes = notebook
@@ -118,10 +119,10 @@ export default function Personal({ tab = 'rules', item, setup, dataRev }) {
       {tab === 'rules' && (
         <>
           <RuleCards rules={rules} profile={profile} facts={facts} notes={notes} />
-          <Rules onChanged={() => setRev((v) => v + 1)} />
+          <Rules onChanged={reloadRules} />
         </>
       )}
-      {tab === 'profile' && <Profile onChanged={() => setRev((v) => v + 1)} />}
+      {tab === 'profile' && <Profile onChanged={reloadProfile} />}
       {(tab === 'memory' || tab === 'notebook') && (
         <Library
           key={tab}
@@ -129,6 +130,7 @@ export default function Personal({ tab = 'rules', item, setup, dataRev }) {
           base={`#/personal/${tab}`}
           selected={item}
           dataRev={dataRev}
+          onRulesChanged={reloadRules}
         />
       )}
     </>

@@ -5,6 +5,7 @@ import { Icon } from '../components/Icon.jsx'
 import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from '../lib/lawCats.js'
 import { useAsync } from '../hooks/useAsync.js'
+import { dropRules } from '../hooks/useRules.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
@@ -68,7 +69,15 @@ export function splitSkills(items) {
 // Personal's Memory and Notebook tabs render this same component with `lock` (one kind,
 // no kinds column) and `base` (the tab's own address, `#/personal/memory`), so an entry
 // opened there stays on the Personal page.
-export default function Library({ overview, section, selected, dataRev, lock, base }) {
+export default function Library({
+  overview,
+  section,
+  selected,
+  dataRev,
+  lock,
+  base,
+  onRulesChanged,
+}) {
   const confirm = useConfirm()
   const [sec, setSec] = useState(() => resolveSec(section, lock))
   const [q, setQ] = useState('')
@@ -181,6 +190,10 @@ export default function Library({ overview, section, selected, dataRev, lock, ba
     try {
       const cur = await api.rules()
       await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true })
+      // The Rules tab must show the promoted rule: a mounted Personal (its own Memory tab)
+      // reloads its read; a Personal mounted next must not be served the cached old copy.
+      dropRules()
+      onRulesChanged?.()
       go('#/personal/rules')
     } catch (e) {
       setActionErr(`Could not promote: ${e.message}`)

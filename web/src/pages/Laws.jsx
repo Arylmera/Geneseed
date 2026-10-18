@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
+import { useRules } from '../hooks/useRules.js'
 import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -358,10 +359,7 @@ function GateAsks({ gates, byAddr, onJump }) {
 export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   const confirm = useConfirm()
   const { data, error } = useAsync(() => api.catalog('laws'), [dataRev], 'catalog:laws')
-  const { data: rulesData } = useAsync(
-    () => Promise.resolve(api.rules?.()).catch(() => null),
-    [dataRev],
-  )
+  const { data: rulesData } = useRules(dataRev)
   const [tab, setTab] = useState('all')
   const [q, setQ] = useState('')
   const open = selected || null

@@ -7,11 +7,21 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 // under the old revision simply stops being addressed. Session-lifetime, a few
 // JSON catalogs — no eviction needed.
 const CACHE = new Map()
+// Mounted consumers per cache key, so a fetch that lands updates every one of them,
+// not only the instance that asked.
+const SUBS = new Map()
 
 // Tests re-mock the api between cases; without this the memo would serve one
 // case's catalog to the next. Runtime code never calls it.
 export function clearAsyncCache() {
   CACHE.clear()
+}
+
+// Drop every memoised entry under one `key`, whatever its deps: a write that lands
+// before the page that reads it is mounted (Library's memory->rule promote) has no
+// mounted `reload()` to call, and the next mount must not be served the old copy.
+export function dropAsyncKey(key) {
+  for (const ck of CACHE.keys()) if (ck.startsWith(`${key}|`)) CACHE.delete(ck)
 }
 
 // Standardises the load-once-with-loading-and-error pattern that every page
@@ -24,7 +34,11 @@ export function clearAsyncCache() {
 // remount with the same key + deps serves the memoised result instead of
 // refetching. An explicit `reload()` always hits the network and refreshes the
 // cache, so mutation flows keep their force-refetch semantics.
-export function useAsync(fn, deps = [], key = null) {
+//
+// `revalidate` (keyed calls only) makes a cache hit stale-while-revalidate: the
+// memoised value paints at once and one fetch per mount replaces it — for a file
+// something outside the console writes (user-rules.md, by an agent session).
+export function useAsync(fn, deps = [], key = null, { revalidate = false } = {}) {
   const ck = key === null ? null : `${key}|${deps.join('\u001F')}`
   const [data, setData] = useState(() => (ck !== null && CACHE.has(ck) ? CACHE.get(ck) : null))
   const [error, setError] = useState('')
@@ -46,10 +60,15 @@ export function useAsync(fn, deps = [], key = null) {
   const reload = useCallback(() => {
     setLoading(true)
     setError('')
+    // The key this fetch answers — not whatever the deps have moved on to by the time
+    // it lands.
+    const at = ckRef.current
     return Promise.resolve(fnRef.current())
       .then((d) => {
-        if (ckRef.current !== null) CACHE.set(ckRef.current, d)
         setData(d)
+        if (at === null) return
+        CACHE.set(at, d)
+        for (const set of SUBS.get(at) || []) set(d)
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
@@ -58,15 +77,24 @@ export function useAsync(fn, deps = [], key = null) {
   }, deps)
 
   useEffect(() => {
-    // A cache hit answers the (re)mount without a fetch; `ck` changes exactly
-    // when `reload` does, so keying the effect on reload covers both.
-    if (ckRef.current !== null && CACHE.has(ckRef.current)) {
-      setData(CACHE.get(ckRef.current))
+    // A cache hit answers the (re)mount without a fetch (unless `revalidate`); `ck`
+    // changes exactly when `reload` does, so keying the effect on reload covers both.
+    const at = ckRef.current
+    if (at !== null) {
+      if (!SUBS.has(at)) SUBS.set(at, new Set())
+      SUBS.get(at).add(setData)
+    }
+    const unsubscribe = () => SUBS.get(at)?.delete(setData)
+    if (at !== null && CACHE.has(at)) {
+      setData(CACHE.get(at))
       setError('')
       setLoading(false)
-      return
+      if (!revalidate) return unsubscribe
     }
     reload()
+    return unsubscribe
+    // `revalidate` is a per-call-site constant, not a refetch trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload])
 
   return { data, error, loading, reload, setData }

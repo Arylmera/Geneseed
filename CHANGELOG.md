@@ -10,6 +10,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 - **Emits no longer read back what they just wrote to hash it.** The owned-file hashes in `.geneseed-manifest.json` are now computed from the text `writeText` recorded at write time (a copied binary, or a file rewritten since by any other writer, is still read), and the claim-on-create closure (`claimer`) resolves the config root once per emit instead of once per file. The per-file symlink and hard-link checks are unchanged, and manifests are byte-identical to before. A global re-emit runs about a quarter faster (measured on Windows: claude-global 560 → 424 ms, opencode-global 716 → 542 ms, median of 7).
+- **The console reads user-rules.md once, under one key, and a rules or profile write reloads only its own file.** Personal's cards, the Overview's ledger and the Constitution page's "Your rules" tier share one cached `/api/rules` read (`web/src/hooks/useRules.js`), so a rule written on Personal shows on the other two at once. Each visit to one of those pages paints the cached copy and refetches it once, so a rule an agent session wrote shows without waiting for a build. On Personal, a rules write no longer refetches the profile and a profile save no longer refetches the rules. A memory fact promoted to a rule from the Library drops the cached copy, so the Rules tab it lands on shows the new rule. Install changes (build, toggle, switch, edits) still refresh the whole console.
 
 ## [4.9.1] — 2026-10-18
 
