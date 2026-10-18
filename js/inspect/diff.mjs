@@ -54,6 +54,7 @@ import {
   trustOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
+import { safeLeaf } from '../hosts/owned.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
@@ -277,6 +278,7 @@ export function diffCollect({
   for (const rel of rels) {
     const a = path.join(dir, rel);
     const tb = exp.texts.get(posixRel(rel));
+    let rec = null;
     if (isFile(a) && tb !== undefined) {
       // `read_text(errors="replace")` — Node's utf8 decoder substitutes U+FFFD for the
       // same bytes, and `readText` folds the line endings the way `Path.read_text` does.
@@ -285,20 +287,27 @@ export function diffCollect({
         const diff = unifiedDiff(splitLines(tb), splitLines(ta), {
           fromfile: `source/${rel}`, tofile: `deployed/${rel}`, lineterm: '',
         });
-        files.push({ rel, status: 'edited', diff });
+        rec = { rel, status: 'edited', diff };
       }
     } else if (isFile(a)) {
       const body = splitLines(readText(a));
-      files.push({
+      rec = {
         rel,
         status: 'added',
         diff: ['(only in deployed — your addition)', '', ...body.map((ln) => `+${ln}`)],
-      });
+      };
     } else {
-      files.push({
-        rel, status: 'missing', diff: ['(in source, not deployed — re-emit to add)'],
-      });
+      rec = { rel, status: 'missing', diff: ['(in source, not deployed — re-emit to add)'] };
     }
+    if (rec === null) continue;
+    // A path that is, or sits under, a link the emit refused to write through (a skill dir the
+    // user junctioned to their own copy) is theirs: no rebuild can clear it, so it is not drift.
+    // `safeLeaf` is the claimer's own test, so "linked" here is exactly "refused" there — and
+    // it runs only on a path that differs, because it lstats and resolves.
+    if (!safeLeaf(dir, a, deployedDir)) {
+      rec = { rel, status: 'linked', diff: ['(a link — yours; Geneseed leaves it alone)'] };
+    }
+    files.push(rec);
   }
   // Already sorted by `rel` above; the Python sorts again after the loop and so does this,
   // because the two sorts are over different things — that one is over the RECORDS, and a
@@ -307,8 +316,13 @@ export function diffCollect({
   return { target: dir, theme: themeName, files };
 }
 
+/** The records that are drift: everything but a `linked` path, which is the user's own. */
+export const drifted = (files) => files.filter((f) => f.status !== 'linked');
+
 /** `_harness_diff._improvements_md` — pure; `when` is the caller's timestamp. */
-export function improvementsMd(target, theme, files, when) {
+export function improvementsMd(target, theme, allFiles, when) {
+  // A linked path is never a back-port item: the file is the user's, not a local edit of ours.
+  const files = drifted(allFiles);
   const edited = files.filter((f) => f.status === 'edited');
   const added = files.filter((f) => f.status === 'added');
   const missing = files.filter((f) => f.status === 'missing');
@@ -398,7 +412,8 @@ export function exportImprovements(target = null, theme = null, outPath = null) 
   const collected = diffCollect({ target, theme });
   // Python's `if not files` — null AND the empty list both return, which is why the caller
   // gets `files` back rather than a bare path and can tell the two apart itself.
-  if (!collected.files || collected.files.length === 0) return [null, collected.files];
+  // A linked path alone is not drift, or every update would export an empty report.
+  if (!collected.files || drifted(collected.files).length === 0) return [null, collected.files];
   return [writeImprovements(collected.target, collected.theme, collected.files, outPath),
     collected.files];
 }
@@ -454,14 +469,18 @@ export function cmdDiff(args) {
   const edited = files.filter((f) => f.status === 'edited');
   const added = files.filter((f) => f.status === 'added');
   const missing = files.filter((f) => f.status === 'missing');
+  const linked = files.filter((f) => f.status === 'linked');
   printOut(`[diff] deployed ${target}  vs  source (theme: ${theme})\n`);
   printOut(`[diff] ${edited.length} edited, ${added.length} added-in-deployed, `
     + `${missing.length} missing-from-deployed\n`);
+  // Its own line, printed only when there is one, so the summary above is unchanged otherwise.
+  if (linked.length) printOut(`[diff] ${linked.length} linked (yours, left alone)\n`);
   for (const f of edited) printOut(`  ~ ${f.rel}   (edited in deployed — review to back-port)\n`);
   for (const f of added) printOut(`  + ${f.rel}   (only in deployed — your addition)\n`);
   for (const f of missing) printOut(`  - ${f.rel}   (in source, not deployed — re-emit to add)\n`);
+  for (const f of linked) printOut(`  = ${f.rel}   (a link — yours, left alone)\n`);
   if (args.out) {
-    if (files.length) {
+    if (drifted(files).length) {
       // Bare `--out` is argparse's `nargs="?"` const: True, meaning "the default timestamped
       // path". `parse()` gives a flag `true` and an option a string, so the two arrive
       // distinguishable here without a third kind of entry in the VERBS table.

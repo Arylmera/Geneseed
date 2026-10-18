@@ -41,9 +41,7 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       return n
     })
   const toggleAll = () =>
-    setSel((s) =>
-      s.size === data.files.length ? new Set() : new Set(data.files.map((f) => f.rel)),
-    )
+    setSel((s) => (s.size === files.length ? new Set() : new Set(files.map((f) => f.rel))))
 
   // Export is a job like any other: it streams into the console, can be cancelled there,
   // and its finish refreshes the page through `dataRev`. It used to run its own poll
@@ -95,7 +93,10 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       </div>
     )
 
-  const files = data.files
+  // A linked path is the user's own link, which no restore or rebuild touches: it is listed
+  // apart, never selectable, and never counted as a local edit.
+  const files = data.files.filter((f) => f.status !== 'linked')
+  const linked = data.files.filter((f) => f.status === 'linked')
   const editedCount = files.filter((f) => f.status === 'edited').length
   const addedCount = files.filter((f) => f.status === 'added').length
   const missingCount = files.filter((f) => f.status === 'missing').length
@@ -129,6 +130,11 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       </div>
 
       {note ? <p className="sub mb-14">{note}</p> : null}
+      {linked.length ? (
+        <p className="sub dim mb-14" title={linked.map((f) => f.rel).join('\n')}>
+          {linked.length} linked — yours, left alone
+        </p>
+      ) : null}
 
       {files.length === 0 ? (
         <div className="empty">

@@ -138,6 +138,12 @@ function FleetRow({ i, n, onAction, onOpen }) {
           </span>
         ) : drift ? (
           <span className="mono t-warn">{drift} edited</span>
+        ) : i.drift?.linked ? (
+          // The user's own links: shown, so their absence from the count is explained, but
+          // muted and with no Rebuild, because no rebuild clears them.
+          <span className="mono dim" title="Yours: links Geneseed leaves alone">
+            {i.drift.linked} linked
+          </span>
         ) : (
           <span className="mono dim">none</span>
         )}

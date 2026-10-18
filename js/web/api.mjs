@@ -136,11 +136,15 @@ export function* activeInstalls(targets) {
  */
 const memoOf = (state) => (state.renderMemo ??= renderMemo());
 
-/** The edited/added/missing tally of a `diffCollect` file list. */
+/**
+ * The edited/added/missing tally of a `diffCollect` file list, and apart from it the `linked`
+ * paths — the user's own links, which the console never adds into a drift total.
+ */
 const driftCounts = (files) => ({
   edited: files.filter((f) => f.status === 'edited').length,
   added: files.filter((f) => f.status === 'added').length,
   missing: files.filter((f) => f.status === 'missing').length,
+  linked: files.filter((f) => f.status === 'linked').length,
 });
 
 /**
