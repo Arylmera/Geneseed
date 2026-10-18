@@ -9,6 +9,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Changed
+- **The console stops re-rendering an install to measure its drift on every refresh.** The overview and the fleet table each rendered the selected install's expected tree afresh (~0.6 s per install per call); the render is now memoised per install, keyed on the source fingerprint and every axis the install was built with (theme, footprint, posture, mode, packs, trust, excluded rules and skills, gate switches), and re-done the moment any of them changes. The comparison against the deployed tree still runs on every call, so a hand edit shows at once. Measured on a two-install sandbox: overview ~0.75 s → ~0.2 s, fleet ~1.5 s → ~0.32 s after the first refresh. `geneseed diff` is unchanged.
 - **Emits no longer read back what they just wrote to hash it.** The owned-file hashes in `.geneseed-manifest.json` are now computed from the text `writeText` recorded at write time (a copied binary, or a file rewritten since by any other writer, is still read), and the claim-on-create closure (`claimer`) resolves the config root once per emit instead of once per file. The per-file symlink and hard-link checks are unchanged, and manifests are byte-identical to before. A global re-emit runs about a quarter faster (measured on Windows: claude-global 560 → 424 ms, opencode-global 716 → 542 ms, median of 7).
 
 ### Fixed
