@@ -10,6 +10,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 - **The console stops re-running the doctor when nothing it checks has changed.** A memory delete no longer drops the cached verdict (~3.6 s saved on the next overview); a finished job, an install toggle and a view switch still do. The Doctor page, the Greenhouse and Operator HUD lenses now read the cached run (groups and themes included) instead of running every check on each visit; the page's *Re-run checks* button asks for a fresh run (`GET /api/doctor?fresh=1`). The server warms the cache right after it starts listening, so an overview requested a few seconds later answers in ~0.15 s rather than ~3.8 s.
+- **The console stops re-rendering an install to measure its drift on every refresh.** The overview and the fleet table each rendered the selected install's expected tree afresh (~0.6 s per install per call); the render is now memoised per install, keyed on the source fingerprint and every axis the install was built with (theme, footprint, posture, mode, packs, trust, excluded rules and skills, gate switches), and re-done the moment any of them changes. The comparison against the deployed tree still runs on every call, so a hand edit shows at once. Measured on a two-install sandbox: overview ~0.75 s → ~0.2 s, fleet ~1.5 s → ~0.32 s after the first refresh. `geneseed diff` is unchanged.
 
 ## [4.9.0] — 2026-10-18
 
