@@ -74,7 +74,8 @@ const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
 
 // Law IV's boundary half lives in `./loss.mjs`: it asks only when a command would really lose
 // data — a protected branch deleted or force-pushed, an unpushed unmerged branch deleted,
-// uncommitted work discarded on a tree that holds some, a stash dropped while one exists, the
+// unpushed commits abandoned by `reset --hard`, uncommitted work discarded (other than by
+// `reset --hard`, user decision 2026-10-18) on a tree that holds some, a stash dropped while one exists, the
 // reflog or unreachable commits pruned, a removal of what git cannot restore — and fails closed
 // when it cannot tell (user decision, 2026-10-17, replacing the form-only `DESTRUCTIVE_GIT_RE`).
 // `LOSS_CANDIDATE_RE` is the cheap prefilter: an ordinary command fails it and never reaches the

@@ -24,8 +24,8 @@ import { makeSandbox } from './sandbox.mjs';
  * A workspace: `bare.git` (the remote), `repo` (a clone of it on `main`, with `origin/HEAD` ->
  * `develop`, so a non-`main` default branch is protected too), and `outside` (a directory in no
  * repository). `repo` holds tracked `tracked.txt` and `build/out.txt`, an always-present ignored
- * `ignored.log`, and branches `pushed` (tip on origin), `merged` (tip reachable from HEAD, never
- * pushed) and `unpushed` (one commit nowhere else), plus a local `master` at `unpushed`'s tip — a
+ * `ignored.log`, and branches `pushed` (one commit past `main`, tip on origin), `merged` (tip
+ * reachable from HEAD, never pushed) and `unpushed` (one commit nowhere else), plus a local `master` at `unpushed`'s tip — a
  * protected name whose commit no remote holds, so force-moving it strands that commit.
  */
 export function makeLossWorkspace() {
@@ -61,6 +61,10 @@ export function makeLossWorkspace() {
   git(repo, 'branch', 'merged');
   git(repo, 'push', '-q', 'origin', 'main', 'develop', 'pushed');
   git(repo, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/develop');
+  git(repo, 'checkout', '-q', 'pushed');
+  git(repo, 'commit', '-q', '--allow-empty', '-m', 'on origin');
+  git(repo, 'push', '-q', 'origin', 'pushed');
+  git(repo, 'checkout', '-q', 'main');
   git(repo, 'checkout', '-q', '-b', 'unpushed');
   git(repo, 'commit', '-q', '--allow-empty', '-m', 'only here');
   git(repo, 'branch', 'master');
@@ -123,10 +127,18 @@ export const LOSS_ROWS = [
   { cmd: 'git branch -D pushed', state: 'clean', stop: false },
   { cmd: 'git branch -D merged', state: 'clean', stop: false },
   { cmd: 'git branch -df unpushed', state: 'clean', stop: true },
-  // Discarding uncommitted work: only when the tree holds some.
-  { cmd: 'git reset --hard', state: 'dirty', stop: true },
+  // `reset --hard` (user decision, 2026-10-18): what is in progress may break, what exists must be
+  // protected. The uncommitted work it discards passes; it asks only when it would abandon a
+  // commit HEAD reaches that neither the target nor any remote does — and when it cannot tell.
+  { cmd: 'git reset --hard', state: 'dirty', stop: false },
   { cmd: 'git reset --hard', state: 'clean', stop: false },
-  { cmd: 'git reset -q --hard HEAD', state: 'dirty', stop: true },
+  { cmd: 'git reset -q --hard HEAD', state: 'dirty', stop: false },
+  { cmd: 'git reset --hard HEAD~1', state: 'clean', branch: 'unpushed', stop: true },
+  { cmd: 'git reset --hard HEAD~1', state: 'clean', branch: 'pushed', stop: false },   // on origin
+  { cmd: 'git reset --hard origin/main', state: 'clean', branch: 'unpushed', stop: true },
+  { cmd: 'git reset --hard nosuchref', state: 'clean', stop: true },   // cannot verify
+  { cmd: 'git reset --hard "$REF"', state: 'clean', stop: true },   // cannot verify
+  // Every other discard of uncommitted work: only when the tree holds some.
   { cmd: 'git checkout -- tracked.txt', state: 'dirty', stop: true },
   { cmd: 'git checkout -- tracked.txt', state: 'clean', stop: false },
   { cmd: 'git checkout -- build', state: 'dirty', stop: false },   // the change is elsewhere
@@ -166,8 +178,8 @@ export const LOSS_ROWS = [
   { cmd: 'rm -rf *.txt', state: 'clean', stop: true },
   { cmd: 'rm "$FILE"', state: 'clean', stop: true },
   { cmd: 'sh -c "rm -rf build"', state: 'clean', stop: true },
-  { cmd: 'cd "$DIR" && git reset --hard', state: 'clean', stop: true },
-  { cmd: 'git -C {outside} reset --hard', state: 'clean', stop: true },
+  { cmd: 'cd "$DIR" && git reset --hard HEAD', state: 'clean', stop: true },
+  { cmd: 'git -C {outside} reset --hard HEAD', state: 'clean', stop: true },
   // Protected-branch-only forms (user ruling, 2026-10-17): a discard of path changes without
   // `--`, or a forced `git rm`, stops only while a protected branch is checked out...
   { cmd: 'git checkout tracked.txt', state: 'dirty', stop: true },
@@ -205,10 +217,11 @@ export const LOSS_ROWS = [
   // Shell structure must not hide the program word (fail-open probes, 2026-10-18): a lone `&`
   // runs the next command, `(`/`{`/`then` stand before it, a wrapper's flag takes a value, a
   // substitution runs its body. Each stops exactly where the plain form does.
-  { cmd: 'true & git reset --hard', state: 'dirty', stop: true },
-  { cmd: '(git reset --hard)', state: 'dirty', stop: true },
-  { cmd: '(cd . && git reset --hard)', state: 'dirty', stop: true },
-  { cmd: 'if true; then git reset --hard; fi', state: 'dirty', stop: true },
+  { cmd: 'true & git checkout -f', state: 'dirty', stop: true },
+  { cmd: '(git checkout -f)', state: 'dirty', stop: true },
+  { cmd: '(cd . && git checkout -f)', state: 'dirty', stop: true },
+  { cmd: 'if true; then git checkout -f; fi', state: 'dirty', stop: true },
+  { cmd: '(git reset --hard HEAD~1)', state: 'clean', branch: 'unpushed', stop: true },
   { cmd: '{ rm untracked.txt; }', state: 'untracked', stop: true },
   { cmd: 'echo $(rm untracked.txt)', state: 'untracked', stop: true },
   { cmd: 'echo `rm untracked.txt`', state: 'untracked', stop: true },

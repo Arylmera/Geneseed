@@ -336,10 +336,13 @@ test('Law IV fails closed with a "could not verify" reason when it cannot read t
       stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: ws.repo }) });
     const glob = askDecision(run('rm -rf *.txt', ws.env), 'glob');
     assert.match(glob.permissionDecisionReason, /could not verify/);
-    const noGit = askDecision(run('git reset --hard', { ...ws.env, PATH: '', Path: '' }), 'no git');
+    const noGit = askDecision(run('git reset --hard HEAD', { ...ws.env, PATH: '', Path: '' }), 'no git');
     assert.match(noGit.permissionDecisionReason, /could not verify/);
-    // The same clean-tree reset passes once git can answer — the ask above was the missing git.
-    assertDefers(run('git reset --hard', ws.env), 'clean reset with git on PATH');
+    // The same reset passes once git can answer — the ask above was the missing git.
+    assertDefers(run('git reset --hard HEAD', ws.env), 'reset to HEAD with git on PATH');
+    // A reset target git cannot resolve is not proven to abandon nothing, so it asks — and says why.
+    const noRef = askDecision(run('git reset --hard nosuchref', ws.env), 'unresolvable target');
+    assert.match(noRef.permissionDecisionReason, /could not verify/);
   } finally { ws.cleanup(); }
 });
 

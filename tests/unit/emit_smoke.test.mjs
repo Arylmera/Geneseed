@@ -208,6 +208,13 @@ const FOOTPRINTS = ['full', 'lean'];
  * every carrier carries. Rebased onto the memory-curator raise above. Measured `files` carrier
  * after: full 62_219, lean 39_088 — each raised by exactly the overrun (62_107 -> 62_219,
  * 38_976 -> 39_088), not rounded.
+ *
+ * LEAN RAISED 2026-10-18, FULL UNTOUCHED, for the `reset --hard` carve-out to Deletion Is
+ * Deliberate (user decision: what is in progress may break, what exists must be protected). The
+ * lean half had to name the exception or the agent would keep asking out of respect for the law;
+ * "(except `reset --hard`)" is its shortest form. The full half was reworded to fit its ceiling
+ * unchanged. Measured `files` carrier after: lean 39_111 — raised by exactly the overrun
+ * (39_088 -> 39_111), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -551,15 +558,15 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (31_066 / 19_501) is below the SMALLEST measured carrier (`opencode` and
+      // the ceiling (31_109 / 19_555) is below the SMALLEST measured carrier (`opencode` and
       // `opencode-global`, 53_226 / 30_113 on 2026-10-16) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
       // each set describing a corpus that had already moved. The arithmetic held every time, so
       // nothing was ever red, and a comment that is only wrong never announces itself.
-      // Re-derive both whenever the constant above moves; both halves moved on 2026-10-16 and
-      // these figures are that re-derivation.
+      // Re-derive both whenever the constant above moves; lean moved on 2026-10-18 and these
+      // figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `
         + 'satisfied by a render that collapsed, so the floor is what says it did not');

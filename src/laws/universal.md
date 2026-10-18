@@ -72,21 +72,21 @@ governs the goal).
 Real data loss and any irreversible, financial, privilege-changing or
 outward-facing act (publishing, sending data to a third party) need explicit
 confirmation bound to that act, or a durable authorization covering it; one
-yes never stretches to the next. Real loss: deleting what version control
-cannot restore (untracked, modified, unpushed or unmerged work), discarding
-uncommitted changes, rewriting, deleting or force-moving main, master or the
-default branch, or erasing reflog/gc data. Classify every action as Create,
-Read, Update, or Delete and tier by reversibility: what git restores — an
-edit, removing tracked clean files, force-pushing your own branch, removing a
-worktree — runs freely.
+yes never stretches to the next. Real loss: deleting what git cannot restore
+(untracked, modified, unpushed or unmerged work), discarding uncommitted work,
+rewriting, deleting or force-moving main, master or the default branch, or
+pruning reflog/gc. Classify every action as Create, Read, Update, or Delete
+and tier by reversibility: what git restores — an edit, tracked clean files,
+force-pushing your own branch, a worktree — runs freely, as does
+`reset --hard` over a dirty tree.
 <!-- LEAN:else -->
 Real data loss — deleting untracked, modified, unpushed, unmerged work,
-discarding uncommitted work, deleting or force-moving main, master or the
-default branch, pruning reflog/gc — and any irreversible, financial,
-privilege-changing or outward-facing act need explicit confirmation bound to
-that act, or a durable authorization covering it; one yes never stretches to
-the next. What git restores runs freely: tracked clean files, a worktree,
-force-pushing your own branch.
+discarding uncommitted work (except `reset --hard`), deleting or
+force-moving main, master or the default branch, pruning reflog/gc — and any
+irreversible, financial, privilege-changing or outward-facing act need
+explicit confirmation bound to that act, or a durable authorization covering
+it; one yes never stretches to the next. What git restores runs freely:
+tracked clean files, a worktree, force-pushing your own branch.
 <!-- LEAN:end -->
 
 ### {{LAW:surface-failures}} Surface Failures

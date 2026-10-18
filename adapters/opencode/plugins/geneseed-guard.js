@@ -577,6 +577,25 @@ function branchAct(rest, dir) {
   return null;
 }
 
+/**
+ * `git reset --hard [<target>]` — asks only when it would abandon COMMITS: one HEAD reaches that
+ * neither `<target>` nor any remote ref does. The uncommitted work it discards passes: what is in
+ * progress may break, what exists must be protected (user decision, 2026-10-18). No target is
+ * HEAD itself, which abandons nothing.
+ */
+function resetHardAct(rest, dir) {
+  const dd = rest.indexOf('--');
+  const target = (dd < 0 ? rest : rest.slice(0, dd)).find((a) => !a.startsWith('-'));
+  if (target === undefined) return null;
+  if (target.includes(OPAQUE)) unverified(`the target \`${target.replace(OPAQUE, '')}\` expands in the shell`);
+  repoRoot(dir);
+  const t = git(dir, ['rev-parse', '-q', '--verify', `${target}^{commit}`]);
+  if (t.status !== 0) unverified(`cannot resolve ${target} to a commit`);
+  const r = git(dir, ['rev-list', '-n1', 'HEAD', '--not', t.stdout.trim(), '--remotes']);
+  if (r.status !== 0) unverified(`cannot compare HEAD with ${target}: ${firstLine(r.stderr)}`);
+  return r.stdout.trim() ? `\`git reset --hard ${target}\` would abandon commits no remote and not ${target} holds` : null;
+}
+
 /** `git clean` — forced, it asks when `git clean -n` with the same selection lists anything. */
 function cleanAct(rest, dir) {
   const forced = rest.some((a) => a === '--force' || hasShort(a, 'f'));
@@ -618,7 +637,7 @@ function gitAct(args, dir, always) {
   const act = () => {
     switch (verb) {
       case 'reset':
-        return rest.includes('--hard') ? dirty(d, [], '`git reset --hard`') : null;
+        return rest.includes('--hard') ? resetHardAct(rest, d) : null;
       case 'checkout': {
         const forced = rest.some((a) => a === '--force' || hasShort(a, 'f')) && dirty(d, [], '`git checkout --force`');
         if (forced) return forced;
