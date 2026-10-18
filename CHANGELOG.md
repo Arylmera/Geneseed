@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **`git reset --hard` asks only when it would abandon commits, not over uncommitted work** (user decision: what is in progress may break, what exists must be protected). A dirty tree reset with `git reset --hard` or `git reset --hard HEAD` now passes on every host. `git reset --hard <target>` asks (exit 2 on Bob, a block on OpenCode) when HEAD reaches a commit that neither `<target>` nor any remote branch holds — `HEAD~1` over an unpushed commit, `origin/main` behind local work — on any branch, and passes when those commits are pushed. A target the gate cannot resolve (`nosuchref`, `"$REF"`, `@{u}`) asks, saying it could not verify. Every other discard (`checkout -f`, `checkout -- <paths>`, `switch --discard-changes`, `restore`, `clean -f`, `stash drop`/`clear`) is unchanged, as are `reset --soft`/`--mixed`/`--keep`/`--merge`. Law IV (*Deletion Is Deliberate*) names the exception in both halves so the agent does not ask out of respect for the law. Run `geneseed rebuild-all` to pick it up.
+
 ## [4.9.3] — 2026-10-18
 
 Patch: rm -rf / and other catastrophic commands are caught on every host even with the deletion gate off; a skill you replaced with a link reads as yours, not as an edit.

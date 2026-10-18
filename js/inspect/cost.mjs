@@ -35,7 +35,7 @@ import { isFile, readText } from '../lib/fs.mjs';
  * console draws it on the cost chart, so it lives here, once, where both read it. Raise it by
  * exactly the measured overrun and say why in that test's docblock, which keeps its history.
  */
-export const CARRIER_CEILING = { full: 62_219, lean: 39_088 };
+export const CARRIER_CEILING = { full: 62_219, lean: 39_111 };
 
 /**
  * A frontmatter value as the host shows it. The emit writes descriptions JSON-escaped

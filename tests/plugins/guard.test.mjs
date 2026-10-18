@@ -235,10 +235,10 @@ test("Law IV reads the state in the bash tool's workdir", async () => {
   try {
     const elsewhere = (await GeneseedGuard({ directory: ws.outside, worktree: ws.outside }))["tool.execute.before"]
     await ws.inState("dirty", async () => {
-      await assert.rejects(elsewhere({ tool: "bash" }, { args: { command: "git reset --hard", workdir: ws.repo } }),
+      await assert.rejects(elsewhere({ tool: "bash" }, { args: { command: "git checkout -f", workdir: ws.repo } }),
         /Deletion Is Deliberate/)
     })
-    await elsewhere({ tool: "bash" }, { args: { command: "git reset --hard", workdir: ws.repo } })
+    await elsewhere({ tool: "bash" }, { args: { command: "git checkout -f", workdir: ws.repo } })
   } finally {
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
     Object.assign(process.env, saved)
