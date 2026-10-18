@@ -525,8 +525,13 @@ export const DONE_LIST = '.geneseed/done-checks.txt';
  * not seen here; CI running the checks is the boundary that holds against that.
  */
 function protectedCheck(p) {
+  return protectedIn(path.resolve(p)) ?? protectedIn(resolvePath(p));
+}
+// One reading of the target. `protectedCheck` takes two — the path as written and the path with
+// links followed — so a link from outside into a protected folder and a protected folder that
+// links out of the repo are both caught: following links never loosens the gate.
+function protectedIn(target) {
   try {
-    const target = resolvePath(p);
     const root = gitRootOf(path.dirname(target));
     if (!root) return null;
     if (normcase(path.relative(root, target)) === normcase(DONE_LIST)) return DONE_LIST;

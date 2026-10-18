@@ -253,6 +253,30 @@ test("the loss twin block is byte-identical to js/hosts/loss.mjs", async () => {
   assert.equal(cut(guardSrc), cut(hookSrc), "the guard's loss block drifted from js/hosts/loss.mjs")
 })
 
+// The guard's fs-only git readers are twins of js/hosts/gitref.mjs (the plugin cannot import it).
+// The two files differ in house style — gitref.mjs has semicolons and single quotes, the guard
+// neither — so each function is cut out of both by brace matching and compared once comments,
+// semicolons, quote style and whitespace are folded away. Anything else that differs is drift.
+test("the guard's git readers match their js/hosts/gitref.mjs originals", async () => {
+  const fn = (src, name) => {
+    const b = src.indexOf(`function ${name}(`)
+    assert.ok(b >= 0, `${name} missing`)
+    let i = src.indexOf("{", b), depth = 0
+    for (; i < src.length; i++) {
+      if (src[i] === "{") depth++
+      else if (src[i] === "}" && --depth === 0) break
+    }
+    return src.slice(b, i + 1)
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
+      .replace(/'/g, '"').replace(/;/g, "").replace(/\s+/g, "")
+  }
+  const ref = await fs.readFile(path.join(process.cwd(), "js/hosts/gitref.mjs"), "utf8")
+  const guard = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  for (const name of ["gitRootOf", "gitDirOf", "gitCommonDirOf", "currentBranch", "protectedBranches", "stashExists"]) {
+    assert.equal(fn(guard, name), fn(ref, name), `the guard's ${name} drifted from js/hosts/gitref.mjs`)
+  }
+})
+
 // Not a verb, or not a loss: `--staged` ALONE only unstages, an un-forced `branch --delete`
 // refuses on an unmerged branch exactly like `-d`, a word in a commit message or a file name is
 // not a command, and `worktree remove -f`/`--force` is routine housekeeping (user decision,
@@ -374,6 +398,26 @@ test("the done gate's list protects itself, with or without a protected-checks l
   await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
   assert.equal(await blocked("write", { filePath: path.join(repo, ".geneseed", "done-checks.txt") }), true)
   assert.equal(await blocked("write", { filePath: path.join(repo, ".geneseed", "notes.txt") }), false)
+})
+
+// The write target is read twice, as written and with symlinks and junctions followed, and a hit
+// on either is a hit (the Claude/Bob hook does the same). A link from OUTSIDE into a protected
+// folder is caught by the followed reading (the written path has no `.git` above it); a protected
+// folder INSIDE the repo that links out is caught by the written reading (followed, it leaves the
+// repo). A junction needs no privilege on Windows, and the type is ignored elsewhere.
+test("protected checks follow links in both directions", async () => {
+  const repo = path.join(tmp, "linked-sensed")
+  const outside = path.join(tmp, "linked-outside")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.mkdir(path.join(repo, "tests"), { recursive: true })
+  await fs.mkdir(path.join(outside, "real-specs"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "tests/\nspecs/\n")
+  await fs.symlink(path.join(repo, "tests"), path.join(outside, "into-tests"), "junction")
+  await fs.symlink(path.join(outside, "real-specs"), path.join(repo, "specs"), "junction")
+  assert.equal(await blocked("write", { filePath: path.join(outside, "into-tests", "a.test.js") }), true)
+  assert.equal(await blocked("write", { filePath: path.join(repo, "specs", "a.test.js") }), true)
+  assert.equal(await blocked("write", { filePath: path.join(outside, "real-specs", "a.test.js") }), false)
 })
 
 // The manifest was `wiki.jsonc` before the `geneseed-` prefix; an install not yet re-emitted still

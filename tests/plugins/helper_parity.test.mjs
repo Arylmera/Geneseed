@@ -31,6 +31,7 @@ function helperSource(src, name) {
 // helper -> the plugins that carry a copy. A helper added to another plugin goes in its row.
 const COPIES = {
   norm: ["context", "guard", "learn"],
+  resolvePath: ["context", "guard", "learn"],
   sovereignBypass: ["context", "guard", "learn"],
   mainWorktreeOf: ["context", "guard", "learn"],
   stripJsonc: ["context", "guard"],
