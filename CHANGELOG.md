@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.9.2] — 2026-10-18
+
+Patch: the review pass — faster emits, console and Stop; Build and setup keep your gate switches; protected checks follow links both ways.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so installed hooks and OpenCode plugins pick up the changes.
+
 ### Changed
 - **A Stop no longer parses the whole transcript.** The done gate and `learn` each read the full session transcript on every Stop (real ones reach 50 MB), and an armed install with `GENESEED_LLM` set read it twice. Both now read backward from the end, in windows that start at 2 MB and grow fourfold: the done gate until the window holds the prompt that opened the turn (a turn longer than every window falls back to the whole file, so it is never judged on a truncated turn), `learn` until its notes hold the 16 000 characters it keeps, so the notes are the ones a full read gives. One Stop reads each window once, shared by both. On a generated 50 MB transcript (old and new interleaved, median of 10) the armed gate alone runs about 3× faster and gate + learn about 3× faster, and both now cost about the same as on a 1 KB transcript: a Stop no longer grows with the session.
 - **The console stops re-rendering an install to measure its drift on every refresh.** The overview and the fleet table each rendered the selected install's expected tree afresh (~0.6 s per install per call); the render is now memoised per install, keyed on the source fingerprint and every axis the install was built with (theme, footprint, posture, mode, packs, trust, excluded rules and skills, gate switches), and re-done the moment any of them changes. The comparison against the deployed tree still runs on every call, so a hand edit shows at once. Measured on a two-install sandbox: overview ~0.75 s → ~0.2 s, fleet ~1.5 s → ~0.32 s after the first refresh. `geneseed diff` is unchanged.
