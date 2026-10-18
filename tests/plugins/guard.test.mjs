@@ -96,20 +96,26 @@ test("still blocks rm -rf / (no regression)", async () => {
   assert.equal(await blocked("bash", { command: "rm -rf /" }), true)
 })
 
-// A recursive rm whose target is the filesystem root or the home dir — bare, globbed, or
-// after a `--` / split flags — is blocked as CATASTROPHIC (SHELL_BLOCK_RE), before any state is
-// read. Bare `rm -rf /` GNU rm refuses on its own; the globbed and `~` forms it does not.
+// A recursive rm whose target is the filesystem root, a drive or the home dir — bare, globbed,
+// or after a `--` / split flags — is blocked as CATASTROPHIC (`catastrophic`, the loss twin block
+// shared with js/hosts/loss.mjs), before any state is read. Bare `rm -rf /` GNU rm refuses on its
+// own; the globbed and `~` forms it does not. It is judged in program position after the structure
+// stripping, so a `sudo`, a background `&`, a subshell or a trailing `;` hides nothing.
 for (const command of [
   "rm -rf /*", "rm -rf ~/*", "rm -rf ~", "rm -rf ~/", "rm -rf -- /", "rm -r -f /", "rm -f -r /*",
   "rm --recursive --force /", "rm -Rf /", "rm -rf --no-preserve-root /", "cd x && rm -rf /* ",
+  "rm -rf C:\\", "sudo rm -rf /", "true & rm -rf /", "(rm -rf /)", "rm -rf /;", "bash -c 'rm -rf /'",
+  "rd /s/q C:\\", "bash <<'EOF'\nrm -rf C:\\\nEOF",
 ]) {
   test(`rm root/home guard: ${JSON.stringify(command)} -> blocked as catastrophic`, async () => {
     assert.match(await denial("bash", { command }), /catastrophic command/)
   })
 }
 // A narrower target is not SHELL_BLOCK_RE's business: whatever this guard says about it comes
-// from the real-loss table (`lossReason`, rows below), never from the catastrophic tier.
-for (const command of ["rm -rf ./build", "rm -rf /tmp/x", "rm -rf ~/projects/old", "rm -rf build/*", "rm -f /"]) {
+// from the real-loss table (`lossReason`, rows below), never from the catastrophic tier. Nor is a
+// heredoc fed to a program that is not a shell: `cat` only prints it.
+for (const command of ["rm -rf ./build", "rm -rf /tmp/x", "rm -rf ~/projects/old", "rm -rf build/*", "rm -f /",
+  "cat <<'EOF'\nrm -rf C:\\\nEOF"]) {
   test(`rm root/home guard: ${JSON.stringify(command)} is not catastrophic`, async () => {
     assert.doesNotMatch(String(await denial("bash", { command })), /catastrophic command/)
   })

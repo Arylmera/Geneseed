@@ -185,7 +185,7 @@ export function gateProbe(targets = installTargets(), { platform = process.platf
 // ---- OpenCode: the guard plugin, probed in-process ------------------------------------------
 
 const GUARD_PLUGIN = 'geneseed-guard.js';
-/** The guard blocks catastrophic shell (`SHELL_BLOCK_RE`); destructive git is the permission
+/** The guard blocks catastrophic shell (`catastrophic()`); destructive git is the permission
  * prompt's job there, and only WARNS in the guard — so its must-refuse payload is this one. */
 const GUARD_BAD_COMMAND = 'rm -rf /';
 
