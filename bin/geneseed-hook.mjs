@@ -70,10 +70,15 @@ const GATE_VERBS = new Set(['git-gate', 'rule-gate', 'tool-gate']);
 const VERBS = {
   context: { load: () => import('../js/hosts/hooks-context.mjs'), fn: 'cmdContext', flags: HOSTED },
   'git-gate': {
-    load: gates, fn: 'cmdGitGate', flags: HOSTED, switches: { '--no-consent': 'noConsent' },
+    load: gates,
+    fn: 'cmdGitGate',
+    flags: HOSTED,
+    switches: { '--no-consent': 'noConsent', '--no-deletion-gate': 'noDeletionGate' },
   },
   'rule-gate': { load: gates, fn: 'cmdRuleGate', flags: HOSTED },
-  'tool-gate': { load: gates, fn: 'cmdToolGate', flags: HOSTED },
+  'tool-gate': {
+    load: gates, fn: 'cmdToolGate', flags: HOSTED, switches: { '--no-deletion-gate': 'noDeletionGate' },
+  },
   learn: {
     load: () => import('../js/hosts/hooks-learn.mjs'),
     fn: 'cmdLearn',
@@ -98,7 +103,8 @@ function die(code, msg) {
  */
 function parse(spec, argv) {
   const args = {
-    root: null, host: null, memory: null, consolidate: false, noConsent: false, file: null,
+    root: null, host: null, memory: null, consolidate: false, noConsent: false,
+    noDeletionGate: false, file: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];

@@ -99,6 +99,7 @@ const VALUED_FLAGS = [
 const BARE_FLAGS = [
   ['--sync-themes', 'syncThemes'],
   ['--validate-only', 'validateOnly'],
+  ['--no-deletion-gate', 'noDeletionGate'],
   ['-v', 'verbose'],
   ['--verbose', 'verbose'],
 ];

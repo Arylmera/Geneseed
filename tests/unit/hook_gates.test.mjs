@@ -466,6 +466,62 @@ test('git-gate --no-consent skips only the process-5 ask; Law IV still asks', ()
 });
 
 // ---------------------------------------------------------------------------------------------
+// `--no-deletion-gate`: the switch an install built `--no-deletion-gate` wires onto `git-gate`
+// (Claude, OpenClaude) and `tool-gate` (Bob). It stands down Law IV's real-loss check and
+// NOTHING else (user decision, 2026-10-17): every row of the shared loss table that asks when
+// armed passes when disarmed, on Claude's dialect and on Bob's exit codes — while a root-wide
+// recursive scan (ops 2), a credential write (Law I) and a commit/push with consent on
+// (process 5) still ask, or still exit 2 on Bob.
+
+test('--no-deletion-gate passes every real-loss row on Claude and Bob', () => {
+  const ws = makeLossWorkspace();
+  try {
+    let stops = 0;
+    for (const row of LOSS_ROWS) {
+      const cmd = rowCommand(row, ws);
+      const what = `${cmd} [${row.state}]`;
+      if (row.stop) stops += 1;
+      ws.inState(row.state, () => {
+        assertDefers(hookRun('git-gate', { env: ws.env, extra: ['--no-consent', '--no-deletion-gate'],
+          stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: ws.repo }) }), what);
+        const bob = hookRun('tool-gate', { host: 'bob', cwd: ws.repo, env: ws.env,
+          extra: ['--no-deletion-gate'],
+          stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
+        assert.equal(bob.rc, 0, `bob: ${what}: ${bob.err}`);
+        assert.doesNotMatch(bob.err, /BLOCKED/, `bob: ${what}`);
+      });
+    }
+    // The table must hold rows that ask when armed, or every assertion above is vacuous.
+    assert.ok(stops >= 5, `only ${stops} asking rows in LOSS_ROWS`);
+  } finally { ws.cleanup(); }
+});
+
+test('--no-deletion-gate keeps ops 2, Law I and process 5', () => {
+  const off = ['--no-deletion-gate'];
+  for (const cmd of [LAW4_ALWAYS, 'git branch -D main']) {
+    assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), extra: [...off, '--no-consent'] }), cmd);
+  }
+  const scan = askDecision(hookRun('git-gate', { stdin: bashPayload('ls -R /'), extra: off }), 'ls -R /');
+  assert.match(scan.permissionDecisionReason, /Commands Must Return/);
+  const push = askDecision(hookRun('git-gate', { stdin: bashPayload('git push origin main'), extra: off }), 'push');
+  assert.match(push.permissionDecisionReason, /Consent Before Push/);
+  // A forced push to main: Law IV stands down, but the push is still a push.
+  const forced = askDecision(hookRun('git-gate',
+    { stdin: bashPayload('git push --force origin main'), extra: off }), 'force push');
+  assert.match(forced.permissionDecisionReason, /Consent Before Push/);
+  // Bob: the same three through `tool-gate`, by exit code.
+  const bob = (tool, input) => hookRun('tool-gate', { host: 'bob', extra: off,
+    stdin: JSON.stringify({ event: 'PreToolUse', tool, input }) });
+  assert.equal(bob('execute_command', { command: LAW4_ALWAYS }).rc, 0, 'bob: reflog expire');
+  const bobScan = bob('execute_command', { command: 'find / -name x' });
+  assert.equal(bobScan.rc, 2, `bob: root scan: ${bobScan.err}`);
+  assert.match(bobScan.err, /Commands Must Return/);
+  const bobSecret = bob('write_file', { path: 'src/a.js', content: 'const k = "AKIAIOSFODNN7EXAMPLE";' });
+  assert.equal(bobSecret.rc, 2, `bob: secret: ${bobSecret.err}`);
+  assert.match(bobSecret.err, /Sealed Secrets/);
+});
+
+// ---------------------------------------------------------------------------------------------
 // GLOBAL BESIDE PROJECT (host-compat Claude B4). Claude runs EVERY matching hook and the
 // strictest verdict wins, so when a global and a project install of the same host coexist, the
 // global git-gate used to ask process 5 on every commit even though the project was built with

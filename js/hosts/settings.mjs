@@ -225,13 +225,18 @@ const PUSH_CHAIN = [
   [LOOP_PUSH_ASK_FLAG_EXTRA, 'ask'], [LOOP_PUSH_ASK_TRAILING, 'ask'], [LAW_IV_BASH, 'ask'],
 ];
 
-function defaultPermission(doctrines = null, excluded = []) {
+// `deletionGate === false` (`--no-deletion-gate`) drops the `LAW_IV_BASH` tier and nothing else;
+// the keys stay OWNED, so an existing file reports them as stranded.
+function defaultPermission(doctrines = null, excluded = [], deletionGate = true) {
   const bash = {};
   if (consentRuleOn(doctrines, excluded)) {
     bash['git commit*'] = 'ask';
     bash['git push*'] = 'ask';
   }
-  for (const [keys, verdict] of PUSH_CHAIN) for (const k of keys) bash[k] = verdict;
+  for (const [keys, verdict] of PUSH_CHAIN) {
+    if (keys === LAW_IV_BASH && deletionGate === false) continue;
+    for (const k of keys) bash[k] = verdict;
+  }
   return { bash };
 }
 
@@ -499,7 +504,8 @@ export function loadJsonObject(p, { strict = false } = {}) {
  * `'add'`, which is what the boolean callers this replaced meant.
  */
 function warnCommentedJsonc(target, agentPath, permission,
-  includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = [], skillNames = []) {
+  includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = [], skillNames = [],
+  deletionGate = true) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
   process.stdout.write(`[${prefix}]     ${jsonDumps(agentPath)}\n`);
@@ -508,7 +514,7 @@ function warnCommentedJsonc(target, agentPath, permission,
       ? `[${prefix}] and its "permission".bash is missing gates this build wires — `
         + 'reconcile it by hand against:\n'
       : `[${prefix}] and, for Geneseed's default ask-gates, a "permission" key:\n`);
-    for (const line of jsonDumpsIndent(defaultPermission(doctrines, excluded)).split('\n')) {
+    for (const line of jsonDumpsIndent(defaultPermission(doctrines, excluded, deletionGate)).split('\n')) {
       process.stdout.write(`[${prefix}]     ${line}\n`);
     }
     if (skillNames.length) {
@@ -559,7 +565,7 @@ export function atomicWriteJson(p, config) {
  * every path that wrote nothing — unreadable, not an object, commented `.jsonc`, write
  * failure — so the caller keeps its previous record rather than claiming denies never written. */
 export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [], skillNames = [],
-  staleSkillNames = [], result = {}) {
+  staleSkillNames = [], result = {}, deletionGate = true) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
   const { state, data, hadComments, error } = loadJsonObject(target);
@@ -594,7 +600,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   let permIsObject = true;
   const added = [];
   if (addPerm) {
-    config.permission = defaultPermission(doctrines, excluded);
+    config.permission = defaultPermission(doctrines, excluded, deletionGate);
     if (skillNames.length) {
       config.permission.skill = defaultSkillPermission(skillNames);
       added.push(...skillNames);
@@ -603,7 +609,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     const perm = get(config, 'permission');
     permIsObject = isDict(perm);
     [permChanged, stranded, opaque] = reconcileOpencodePermission(perm,
-      defaultPermission(doctrines, excluded));
+      defaultPermission(doctrines, excluded, deletionGate));
     // Independent of the `bash` shape: a `permission.bash` the build cannot wire into must
     // not also block the UNRELATED `permission.skill` key from being reconciled.
     if (permIsObject) {
@@ -623,7 +629,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // skill reconcile above never ran either — the unwired skill denies are folded into THIS
     // one WARN rather than going unmentioned (a dedicated `skillOpaque` needs `perm` to be a
     // dict to even look at `perm.skill`, which this case by definition is not).
-    const wanted = defaultPermission(doctrines, excluded).bash;
+    const wanted = defaultPermission(doctrines, excluded, deletionGate).bash;
     const names = [...OWNED_BASH.filter((k) => has(wanted, k)),
       ...(!permIsObject ? skillNames : [])];
     process.stderr.write(`[geneseed] WARN: "permission" in ${path.basename(target)} `
@@ -643,9 +649,9 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   if (stranded.length) {
     process.stderr.write(`[geneseed] WARN: ${path.basename(target)} keeps `
       + `${stranded.map((k) => jsonDumps(k)).join(', ')} under "permission".bash — the `
-      + 'doctrine pack behind those gates is off in this build, but Geneseed cannot tell its '
-      + 'own entry from one you wrote, so it removes neither. Delete them by hand if you want '
-      + 'them gone.\n');
+      + 'rule behind those gates (a doctrine, or the deletion gate) is off in this build, but '
+      + 'Geneseed cannot tell its own entry from one you wrote, so it removes neither. Delete '
+      + 'them by hand if you want them gone.\n');
   }
   const addLsp = !has(config, 'lsp');
   if (addLsp) config.lsp = true;
@@ -666,7 +672,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // block to paste, split by which of the two situations the reader is actually in. It is
     // stdout, not stderr, because on this path the paste-in IS the output.
     warnCommentedJsonc(target, agentPath, addPerm ? 'add' : (permChanged && 'reconcile'),
-      addLsp, 'geneseed', doctrines, excluded, skillNames);
+      addLsp, 'geneseed', doctrines, excluded, skillNames, deletionGate);
     return target;
   }
   try {
@@ -719,7 +725,8 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
  * belongs in — the user's call — not how work is run, so it is not the process pack's to
  * remove. `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
  */
-export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude') {
+export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude',
+  deletionGate = true) {
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -750,14 +757,17 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // else. Unverified live: no Bob install on the authoring machine. Revisit a matcher only
     // once a live Bob session can confirm both the current tool list and the regex dialect.
     const b = ' --host bob';
+    // `--no-deletion-gate` only when the install switched Law IV's gate off, so an armed
+    // install's command stays byte-identical (and an older shim never sees the flag).
+    const dg = deletionGate === false ? ' --no-deletion-gate' : '';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
       // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
       // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
-      // `tool-gate` only ever EXITS 2 for Laws I and IV, which every build carries, and for a
+      // `tool-gate` only ever EXITS 2 for Laws I and IV (IV unless built `--no-deletion-gate`), and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
       // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
-      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}` }] }],
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${dg}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
@@ -774,7 +784,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   // `--host` on `git-gate` but not on `learn`, which then exits 1 under `|| exit 0` and skips.
   const h = host === 'openclaude' ? ' --host openclaude' : '';
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
-  const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`;
+  const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`
+    + (deletionGate === false ? ' --no-deletion-gate' : '');
   const ruleGate = `${run} rule-gate --root "${cfg}"`;
   const learn = `${run} learn ${mem}${h} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
@@ -913,14 +924,14 @@ function readSettingsForMerge(p, consequence) {
  * global that never stood down for a project install.
  */
 export function mergeClaudeSettings(p, priorHooks = null, hookOpts = {},
-  doctrines = null, excluded = [], host = 'claude', cfgDir = path.dirname(p)) {
+  doctrines = null, excluded = [], host = 'claude', cfgDir = path.dirname(p), deletionGate = true) {
   const prior = (priorHooks || []).filter(isDict);
   const loaded = readSettingsForMerge(p, 'Hooks were not wired.');
   if (!loaded) return [p, prior];
   const [config, hadComments] = loaded;
   let hooks = get(config, 'hooks');
   if (!isDict(hooks)) hooks = {};
-  const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host);
+  const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host, deletionGate);
   const canonFlat = [];
   for (const [event, groups] of Object.entries(canonical)) {
     for (const g of groups) canonFlat.push({ event, group: g });

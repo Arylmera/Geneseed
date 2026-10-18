@@ -583,6 +583,26 @@ export function excludedSkillsOfDir(d, host = null, notify = null) {
   }, [], host);
 }
 
+/** `Deletion gate: off` — written only when Law IV's gate was switched off. */
+const DELETION_GATE_RE = /^Deletion gate:[ \t]*(.+?)[ \t]*$/m;
+
+/**
+ * Whether a DEPLOYED install keeps Law IV's deletion gate armed — `true` (armed) or `false`
+ * (built `--no-deletion-gate`). Read back so `upgrade`, `rebuild-all`, `diff` and the console
+ * re-render the same switch. FAILS CLOSED: a missing line, a missing carrier, or any value but
+ * exactly `off` reads as armed, because the line is only ever written when the gate is off and
+ * a gate is the thing a misread must never take away.
+ */
+export function deletionGateOfDir(d, host = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    const m = DELETION_GATE_RE.exec(text);
+    if (!m) return undefined;
+    return m[1] !== 'off';
+  }, true, host);
+}
+
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
 
 /** `_harness_mcp._claude_read_manifest`. */

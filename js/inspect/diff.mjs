@@ -44,7 +44,8 @@ import {
   GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir,
+  EMIT_HOST_SCOPE, defaultTheme, deletionGateOfDir, doctrinesForBuild, excludedRulesOfDir,
+  excludedSkillsOfDir,
   footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
@@ -183,6 +184,8 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
       excludeRules: excludedRulesOfDir(dir),
       // The excluded skills, or every skill the install left out reads as deleted.
       excludeSkills: excludedSkillsOfDir(dir),
+      // Law IV's gate switch, or a disarmed install reads its `Deletion gate: off` line as drift.
+      deletionGate: deletionGateOfDir(dir),
     }));
     // The one place a render depends on WHERE it is installed: a global Bob emit writes each
     // folder skill's absolute directory into its SKILL.md (see `writeNativeLayer`), so the

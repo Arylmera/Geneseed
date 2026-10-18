@@ -399,7 +399,7 @@ export function resolveSkillNames(names, {
  */
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
-  excludeRules = [], excludeSkills = [],
+  excludeRules = [], excludeSkills = [], noDeletionGate = false,
 } = {}) {
   return {
     root: ROOT,
@@ -427,5 +427,8 @@ export function makeCfg({
     excludeRules: Array.isArray(excludeRules) ? [...excludeRules] : [],
     // Skill names left out of this install — same "unspecified takes nothing away" default.
     excludeSkills: Array.isArray(excludeSkills) ? [...excludeSkills] : [],
+    // Law IV's deletion gate (`--no-deletion-gate`). Armed unless switched off in so many words:
+    // only a literal `true` disarms, so every caller that never heard of the switch keeps it.
+    deletionGate: noDeletionGate !== true,
   };
 }

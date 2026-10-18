@@ -98,7 +98,9 @@ streams the output of background jobs and keeps their history across reloads.
   the **Ethos** (four prose sections), the **Invariants** (the nine numbered Rules, with
   a class facet — only non-empty classes render, and two of the six have had no invariant
   since the split), and the **Doctrines** (one group per pack, each marked active or not for
-  this install). Every row expands to its full body, lazily fetched. The rail entry is
+  this install). Rule IV carries one switch of its own, the install's deletion gate
+  (`--no-deletion-gate`; *Enforced by* reads *Gate off* while it is off) — flipping it asks,
+  then rebuilds the install once. Every row expands to its full body, lazily fetched. The rail entry is
   labelled *Constitution* while the route, the id and the badge key stay `laws`; deep links
   are `#/item/law/ont:telos`, `#/item/law/IV` and `#/item/law/process.5` — three address
   shapes that cannot collide, because a slug carries a colon no numeral has and a doctrine

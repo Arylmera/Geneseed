@@ -488,3 +488,89 @@ describe('Constitution page — doctrine toggles', () => {
     expect(screen.queryByText(/\$ geneseed build --doctrines/)).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------------------------
+// Law IV's deletion gate switch (`--no-deletion-gate`, user decision 2026-10-17). One switch on
+// row IV, read off `overview.install.deletionGate`: the badge says what the BOUNDARY does
+// ("Hook gate" armed, "Gate off" disarmed — the rule's text binds either way), and a click asks,
+// then rebuilds once with the opposite switch and every other field of the install unchanged.
+
+const LAW4 = {
+  name: 'IV',
+  title: 'Rule IV — Deletio Deliberata · Deletion Is Deliberate',
+  desc: '',
+  klass: 'security',
+  tier: 'invariant',
+}
+const gatePage = (install, onAction = () => {}) => (
+  <Laws overview={install ? { install } : {}} onAction={onAction} />
+)
+const law4Row = (c) => c.querySelector('[data-addr="IV"]')
+
+describe('Constitution page — the deletion gate switch', () => {
+  beforeEach(() => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW4, ...DOC] })
+  })
+
+  it('an armed install reads Hook gate with the switch on', async () => {
+    const { container } = render(gatePage({ ...INSTALL, deletionGate: true }))
+    await waitFor(() => expect(law4Row(container)).toBeTruthy())
+    expect(law4Row(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+    const gate = container.querySelector('[aria-label="Deletion gate"]')
+    expect(gate.getAttribute('aria-checked')).toBe('true')
+    // The only invariant with a switch: the others are not the user's to turn off.
+    expect(
+      container.querySelectorAll('.law-row.has-toggle [aria-label="Deletion gate"]').length,
+    ).toBe(1)
+  })
+
+  it('a disarmed install reads Gate off with the switch off', async () => {
+    const { container } = render(gatePage({ ...INSTALL, deletionGate: false }))
+    await waitFor(() => expect(law4Row(container)).toBeTruthy())
+    const enf = law4Row(container).querySelector('.law-enf')
+    expect(enf.textContent).toBe('Gate off')
+    expect(enf.classList.contains('hook')).toBe(false)
+    expect(
+      container.querySelector('[aria-label="Deletion gate"]').getAttribute('aria-checked'),
+    ).toBe('false')
+  })
+
+  it('an older daemon that sends no switch reads as armed', async () => {
+    const { container } = render(gatePage({ ...INSTALL }))
+    await waitFor(() => expect(law4Row(container)).toBeTruthy())
+    expect(law4Row(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+  })
+
+  it('flipping the switch asks, then rebuilds once with the opposite value', async () => {
+    const onAction = vi.fn()
+    const { container } = render(gatePage({ ...INSTALL, deletionGate: true }, onAction))
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label="Deletion gate"]')).toBeTruthy(),
+    )
+    fireEvent.click(container.querySelector('[aria-label="Deletion gate"]'))
+    await answered()
+    expect(askConfirm).toHaveBeenCalledTimes(1)
+    expect(askConfirm.mock.calls[0][0]).toMatch(/deletion gate off/)
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(onAction.mock.calls[0]).toEqual(['install', { ...INSTALL, deletionGate: false }])
+  })
+
+  it('a no answer rebuilds nothing', async () => {
+    askConfirm.mockResolvedValueOnce(false)
+    const onAction = vi.fn()
+    const { container } = render(gatePage({ ...INSTALL, deletionGate: false }, onAction))
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label="Deletion gate"]')).toBeTruthy(),
+    )
+    fireEvent.click(container.querySelector('[aria-label="Deletion gate"]'))
+    await answered()
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
+  it('shows no switch without an install to rebuild', async () => {
+    const { container } = render(gatePage(null, undefined))
+    await waitFor(() => expect(law4Row(container)).toBeTruthy())
+    expect(container.querySelector('[aria-label="Deletion gate"]')).toBeNull()
+    expect(law4Row(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+  })
+})

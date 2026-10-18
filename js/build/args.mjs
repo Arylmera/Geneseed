@@ -101,6 +101,9 @@ const VALUED = {
 };
 const FLAGS = {
   '--sync-themes': 'syncThemes', '--validate-only': 'validateOnly',
+  // Law IV's gate switch. No `harness.config.json` key feeds it, deliberately: a rebuild elides
+  // the flag when armed, so a config default could disarm an armed install on its next upgrade.
+  '--no-deletion-gate': 'noDeletionGate',
   '-v': 'verbose', '--verbose': 'verbose',
 };
 
@@ -308,7 +311,7 @@ export function parseArgs(argv, defaults) {
     excludeRules: defaults.excludeRules,
     excludeSkills: defaults.excludeSkills ?? [],
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
-    syncThemes: false, validateOnly: false, verbose: false,
+    syncThemes: false, validateOnly: false, verbose: false, noDeletionGate: false,
   };
   const { tokens } = nodeParseArgs({
     args: argv, options: PARSE_OPTIONS, allowPositionals: true, strict: false, tokens: true,

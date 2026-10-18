@@ -124,6 +124,27 @@ const MODE = (process.env.GENESEED_GUARD || "on").toLowerCase()
 const OFF = ["off", "0", "false", "no"].includes(MODE)
 const WARN_ONLY = MODE === "warn"
 
+// Law IV's gate switch (`--no-deletion-gate`, user decision 2026-10-17). The build writes
+// `Deletion gate: off` into the install's AGENT.md only when the gate is off; this reads it ONCE
+// at load, from the same harness dir the context plugin resolves ($GENESEED_HARNESS, else
+// <plugin dir>/.. for a global install, else <plugin dir>/../.. for a project one), so flipping
+// the switch takes an OpenCode restart. Anything unreadable or unexpected reads as ARMED. It
+// stands down only the real-loss check below — catastrophic commands, root scans, secrets and
+// protected checks still block.
+function deletionGateOff() {
+  try {
+    const dirs = [path.resolve(PLUGIN_DIR, ".."), path.resolve(PLUGIN_DIR, "..", "..")]
+    if (process.env.GENESEED_HARNESS) dirs.unshift(process.env.GENESEED_HARNESS)
+    for (const d of dirs) {
+      let text
+      try { text = readFileSync(path.join(d, "AGENT.md"), "utf8") } catch { continue }
+      return /^Deletion gate:[ \t]*off[ \t]*\r?$/m.test(text)
+    }
+  } catch { /* fall through: armed */ }
+  return false
+}
+const DELETION_GATE_OFF = deletionGateOff()
+
 function log(msg) { console.error(`[geneseed-guard] ${msg}`) }
 
 // ---- the gate ledger ------------------------------------------------------------
@@ -1192,7 +1213,7 @@ export const GeneseedGuard = async (ctx) => {
               "search a specific directory instead: the project, node_modules, ~/.npm, %APPDATA%", "ops-2")
             return
           }
-          if (c && LOSS_CANDIDATE_RE.test(c)) {
+          if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
             // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
             const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
             const loss = lossReason(scanSegments(c).map((seg) => seg.match(SCAN_TOKEN_RE) || []), wd, { always: false })

@@ -652,7 +652,9 @@ test('the only spawn in the hook entry is the model CLI', () => {
     'js/hosts/loss.mjs has more than one spawnSync call site');
   assert.match(loss, /spawnSync\('git', \[[^\]]*\], \{[^}]*shell: false/,
     'the Law IV spawn must run git itself, never through a shell');
-  assert.match(read('js', 'hosts', 'hooks.mjs'), /if \(LOSS_CANDIDATE_RE\.test\(command\)\) \{\s*(?:\/\/[^\n]*\s*)*const loss = lossReason\(/,
+  // The `--no-deletion-gate` switch may sit in FRONT of the prefilter (a conjunct that can only
+  // skip the spawn), never replace it.
+  assert.match(read('js', 'hosts', 'hooks.mjs'), /if \((?:!args\.noDeletionGate && )?LOSS_CANDIDATE_RE\.test\(command\)\) \{\s*(?:\/\/[^\n]*\s*)*const loss = lossReason\(/,
     'hooks.mjs must reach lossReason (and its spawn) only behind the LOSS_CANDIDATE_RE prefilter');
 });
 

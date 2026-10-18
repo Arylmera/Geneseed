@@ -647,17 +647,19 @@ const PROJECT_EMITS = {
  * mode readers return `null` for "undetectable" too, which an explicit `posture: null` would
  * carry straight past the parameter default.
  */
-function axesCfg({ posture, mode, trust, doctrines, excludeRules, excludeSkills }) {
+function axesCfg({ posture, mode, trust, doctrines, excludeRules, excludeSkills, deletionGate = null }) {
   return makeCfg({
     ...(posture ? { posture } : {}), ...(mode ? { mode } : {}), ...(trust ? { trust } : {}),
     ...(doctrines ? { doctrines } : {}), ...(excludeRules ? { excludeRules } : {}),
     ...(excludeSkills ? { excludeSkills } : {}),
+    // Only an explicit `false` disarms; `null` (no opinion) keeps the gate.
+    ...(deletionGate === false ? { noDeletionGate: true } : {}),
   });
 }
 
 export function emitProjectInto(host, {
   theme, out, root, footprint = 'full', posture = null, mode = null, trust = null,
-  doctrines = null, excludeRules = null, excludeSkills = null,
+  doctrines = null, excludeRules = null, excludeSkills = null, deletionGate = null,
 }) {
   const emit = PROJECT_EMITS[host];
   // The axes ride the same rail into every `*Into`, and for the same reason: a drift reader
@@ -665,7 +667,8 @@ export function emitProjectInto(host, {
   // edited on every narrowed install, and `validate --doctrines craft` that ignored its flag
   // checked an all-packs render nobody asked for.
   return withPlatformNewlines(() => emit(
-    axesCfg({ posture, mode, trust, doctrines, excludeRules, excludeSkills }), { theme, footprint, root }, out,
+    axesCfg({ posture, mode, trust, doctrines, excludeRules, excludeSkills, deletionGate }),
+    { theme, footprint, root }, out,
   ));
 }
 
@@ -679,15 +682,16 @@ export function emitProjectInto(host, {
  */
 export function buildInto({
   theme, out, footprint = 'lean', posture = null, mode = null, trust = null, doctrines = null,
-  excludeRules = null, excludeSkills = null,
+  excludeRules = null, excludeSkills = null, deletionGate = null,
 }) {
-  return withPlatformNewlines(() => build(axesCfg({ posture, mode, trust, doctrines, excludeRules, excludeSkills }),
+  return withPlatformNewlines(() => build(axesCfg({
+    posture, mode, trust, doctrines, excludeRules, excludeSkills, deletionGate }),
     theme, out, { footprint, nativeCatalog: false }));
 }
 
 export function emitGlobalInto(host, {
   theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
-  excludeRules = null, excludeSkills = null,
+  excludeRules = null, excludeSkills = null, deletionGate = null,
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -703,7 +707,7 @@ export function emitGlobalInto(host, {
   // edited on every install that chose a register, narrowed its packs or excluded a rule —
   // the same scar the footprint left in `diffCollect`, one axis over each time.
   return withPlatformNewlines(() => emit(
-    axesCfg({ posture, mode, trust, doctrines, excludeRules, excludeSkills }),
+    axesCfg({ posture, mode, trust, doctrines, excludeRules, excludeSkills, deletionGate }),
     { theme, footprint, root: null, cfgDir }, out,
   ));
 }

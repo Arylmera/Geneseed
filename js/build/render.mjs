@@ -444,6 +444,10 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   const skipped = [...(cfg.excludeSkills ?? [])].sort();
   // It fills a template line of its own, so its value carries the blank line around it.
   theme.EXCLUDED_SKILLS_LINE = skipped.length ? `\nExcluded skills: ${skipped.join(', ')}\n` : '';
+  // Law IV's gate switch, under the same contract: written only when OFF, so a default build
+  // stays byte-identical and a missing line reads back as armed (`deletionGateOfDir`). The
+  // OpenCode guard plugin reads this line at load, so its wording is a parsed contract.
+  theme.DELETION_GATE_LINE = cfg.deletionGate === false ? '\nDeletion gate: off' : '';
   return theme;
 }
 

@@ -237,6 +237,21 @@
           "is_flag": false,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--no-deletion-gate"
+          ],
+          "dest": "no_deletion_gate",
+          "metavar": null,
+          "help": "switch Law IV's deletion gate off for this install: the real-loss checks stop asking (Deletion Is Deliberate's text still binds); written to the carrier as 'Deletion gate: off' and replayed by rebuilds",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -574,6 +589,21 @@
           "dest": "no_consent",
           "metavar": null,
           "help": "skip the Consent Before Push commit/push ask (set by the emit when the process pack or that rule is off); Deletion Is Deliberate still asks",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-deletion-gate"
+          ],
+          "dest": "no_deletion_gate",
+          "metavar": null,
+          "help": "skip the Deletion Is Deliberate real-loss check (set by the emit when the install was built --no-deletion-gate); the root-scan and consent asks still run",
           "choices": null,
           "default": false,
           "required": false,
@@ -1380,6 +1410,21 @@
           "required": false,
           "nargs": null,
           "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-deletion-gate"
+          ],
+          "dest": "no_deletion_gate",
+          "metavar": null,
+          "help": "skip the Deletion Is Deliberate real-loss check (set by the emit when the install was built --no-deletion-gate); Sealed Secrets, the root-scan check and the protected checks still refuse",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
           "type": null,
           "hidden": false
         }
