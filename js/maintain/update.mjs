@@ -632,7 +632,7 @@ export async function installAxes(dir, { installProfile, setupBuildArgs }, notif
   if (legacyProcessCarrierOfDir(String(dir), 'opencode')) return null;
   const p = installProfile('opencode', 'global', String(dir), notify);
   return setupBuildArgs('', 'files', null, null, p.footprint, p.posture, p.mode, p.doctrines,
-    undefined, p.excludeRules, p.trust, p.excludeSkills, p.deletionGate, p).slice(4);
+    undefined, p.excludeRules, p.trust, p.excludeSkills, p).slice(4);
 }
 
 /**

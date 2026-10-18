@@ -1179,7 +1179,7 @@ function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   const gates = Object.fromEntries(Object.keys(atRoot).map((k) => [k, atRoot[k] && atCfg[k]]));
   const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed),
     managed.settings_hooks ?? null, hookRunnerEntry(), doctrines, excluded, host, cfg,
-    gates.deletionGate, gates);
+    gates);
   // `and data` — a manifest that did not parse is not one to write back.
   if (!deepEquals(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
     managed.settings_hooks = claims;

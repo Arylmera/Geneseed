@@ -130,8 +130,8 @@ export function cmdValidate(args) {
     const opts = {
       theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
       trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
-      excludeSkills: args.excludeSkills, deletionGate: args.noDeletionGate ? false : null,
-      secretsGate: args.noSecretsGate ? false : null, doneGate: args.noDoneGate ? false : null,
+      excludeSkills: args.excludeSkills,
+      ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, args[g.arg] ? false : null])),
     };
     let scanDirs;
     try {

@@ -38,7 +38,7 @@ import {
 } from '../build/source.mjs';
 import { withStdoutSwallowed } from '../inspect/diff.mjs';
 import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
-import { setupBuildArgs } from '../build/generate.mjs';
+import { installProfile, setupBuildArgs } from '../build/generate.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
 import {
@@ -61,6 +61,7 @@ import { stripWhitespace } from '../lib/text.mjs';
 import { memoryDelete } from '../maintain/memory.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { emitChoices, themeChoices, viewCfg } from './api.mjs';
+import { actionCommands } from './jobs.mjs';
 import { NotFound, deployed, memoryDir } from './catalog.mjs';
 
 /** One body field, `dflt` when the body is not an object or does not carry the key. */
@@ -440,6 +441,38 @@ export function buildOverride(state, body) {
 }
 
 /**
+ * The job steps for a Build POST.
+ *
+ * A DEPLOYED INSTALL REBUILT IN ITS OWN EMIT TAKES THE ARGV ITS PROFILE OWNS (`installProfile`,
+ * the one reader `rebuild-all`, `status` and `upgrade` share), with only the theme the picker
+ * chose swapped in. This path used to re-assemble the axes it happened to carry — no gate
+ * switches, `--exclude-rules none`, no excluded skills — so a console Build silently re-armed
+ * every switched-off gate and handed back every rule and skill its owner had left out.
+ *
+ * Nothing deployed (the first-deploy Onboarding form) or a re-target to another emit has no
+ * install of that emit to honour — a re-target is a FRESH target, by decision (2026-10-18), so it
+ * deliberately carries none of this install's switches or exclusions — and keeps the defaults it
+ * always had: footprint, posture
+ * and mode off the viewed dir, and ALL packs when unknown — never `harness.config.json`, which
+ * would drop the consent gate.
+ */
+export function buildActionCmds(state, body) {
+  const [theme, emit] = buildOverride(state, body);
+  const [host, scope] = EMIT_HOST_SCOPE.get(state.emit || '') ?? [];
+  if (host && deployed(state) && emit === state.emit) {
+    // `setupBuildArgs` always leads with `--theme <theme>`, so the swap is the head alone.
+    // `state.root`, not `target`: a project install's markers live at the repo root.
+    const [, , ...rest] = installProfile(host, scope, state.root).argv;
+    return actionCommands('build', { buildArgv: ['--theme', theme, ...rest] });
+  }
+  return actionCommands('build', {
+    theme, emit, footprint: state.footprint, posture: state.posture, mode: state.mode,
+    trust: state.trust,
+    doctrines: doctrinesForBuild(state.target),
+  });
+}
+
+/**
  * The global emit matching a deployed install's `.geneseed-emit`, so the EXPECTED render
  * uses the install's own host dialect.
  *
@@ -595,7 +628,7 @@ export function apiInstallCmd(state, body) {
   const gates = bodyGates(body, root, host);
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates.deletionGate, gates);
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -697,6 +730,6 @@ export function apiDeployCmd(state, body) {
   const gates = bodyGates(body, root, host);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates.deletionGate, gates);
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

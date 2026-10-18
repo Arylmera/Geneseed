@@ -421,14 +421,16 @@ export const INLINE_ACTIONS = ['restore', 'install', 'deploy'];
  * `harness.config.json` exactly as the pack list does, so `{"excludeRules":["process.5"]}`
  * there would take the consent gate out of a console Build that never asked for it. `[]` is
  * spelled `--exclude-rules none` and says "exclude nothing" out loud.
+ *
+ * `buildArgv`, when given, is used whole and the axes above are ignored: it is the argv a
+ * deployed install's profile owns (`buildActionCmds`), switches and exclusions included.
  */
 function actionTable({
   theme = 'neutral', emit = 'opencode-global', footprint = 'full',
   posture = 'peer', mode = 'direct', doctrines = [...PACK_ORDER], excludeRules = [],
-  trust = DEFAULT_PRESET,
+  trust = DEFAULT_PRESET, buildArgv = setupBuildArgs(theme, emit, null, null, footprint, posture,
+    mode, doctrines, PACK_ORDER, excludeRules, trust),
 } = {}) {
-  const buildArgv = setupBuildArgs(theme, emit, null, null, footprint, posture, mode,
-    doctrines, PACK_ORDER, excludeRules, trust);
   return {
     doctor: [[NODE(), CLI(), 'doctor']],
     build: [[NODE(), GEN(), ...buildArgv]],
