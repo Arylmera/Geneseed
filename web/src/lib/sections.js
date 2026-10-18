@@ -14,7 +14,7 @@ export const SECTIONS = {
   laws: {
     label: 'Constitution',
     type: 'law',
-    desc: 'ontology, invariants, doctrines',
+    desc: 'ontology, dictates, doctrines',
     icon: 'law',
   },
   memory: { label: 'Memory', type: 'memory', desc: 'durable facts', icon: 'library' },

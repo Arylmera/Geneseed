@@ -217,7 +217,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
     y: 78,
     r: fitRadius(
       [
-        { t: 'Invariants', size: 12.5, dy: -6 },
+        { t: 'Dictates', size: 12.5, dy: -6 },
         { t: `${counts.laws ?? 0}`, size: 13, dy: 12 },
       ],
       11,
@@ -361,10 +361,10 @@ export default function ConstitutionMap({ overview, dataRev }) {
         how it thinks, not a rule
       </text>
 
-      <Node hash="#/laws" part="sat" label={`Invariants: ${counts.laws ?? 0}, never broken`}>
+      <Node hash="#/laws" part="sat" label={`Dictates: ${counts.laws ?? 0}, never broken`}>
         <circle cx={invariants.x} cy={invariants.y} r={invariants.r} className="cm-sat-disc" />
         <text x={invariants.x} y={invariants.y - 6} textAnchor="middle" className="cm-sat-name">
-          Invariants
+          Dictates
         </text>
         <text x={invariants.x} y={invariants.y + 12} textAnchor="middle" className="cm-sat-big">
           {counts.laws ?? 0}

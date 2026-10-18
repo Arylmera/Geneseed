@@ -163,7 +163,7 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
         <CKpi label="SKILLS" value={c.skills ?? '—'} />
         {/* `c.laws` is the invariant count; `CKpi` has no sub slot, so the packs get their own
             cell rather than a label that over-claims what the number covers. */}
-        <CKpi label="INVARIANTS" value={c.laws ?? '—'} />
+        <CKpi label="DICTATES" value={c.laws ?? '—'} />
         <CKpi
           label="PACKS"
           value={c.doctrines ? `${c.doctrines.active}/${c.doctrines.total}` : '—'}
