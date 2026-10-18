@@ -41,6 +41,20 @@ describe('Diff', () => {
     expect(screen.getByText('1 edited')).toBeTruthy() // summary badge
   })
 
+  // A linked path is the user's own link: listed apart as "linked — yours", never as a
+  // selectable file, never in the edited count.
+  it('lists a linked path apart, not as an edit', async () => {
+    api.diff.mockResolvedValueOnce({
+      deployed: true,
+      diffable: true,
+      files: [{ rel: 'skills/grill-me/SKILL.md', status: 'linked', diff: ['(a link)'] }],
+    })
+    render(<Diff />)
+    await waitFor(() => expect(screen.getByText('1 linked — yours, left alone')).toBeTruthy())
+    expect(screen.getByText('In sync')).toBeTruthy()
+    expect(screen.queryByText('skills/grill-me/SKILL.md')).toBeNull()
+  })
+
   // Export runs as a console job (App's runAction): the page starts it and nothing else.
   // It used to poll api.job itself, in a loop nothing cancelled.
   it('hands the export to the job runner', async () => {

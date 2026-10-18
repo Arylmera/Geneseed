@@ -58,7 +58,7 @@ geneseed diff --full                   # with line-level diffs
 geneseed diff --out improvements.md    # write the improvements file
 ```
 
-`diff` compares the global OpenCode install by default. Pass `--target <config dir>` to compare another install. The improvements file is self-contained. To make the changes permanent, hand it to an agent in a Geneseed clone and ask it to fold them back into `src/`. Then they survive every future build. The web console's **Changes** page exports the same file.
+`diff` compares the global OpenCode install by default. Pass `--target <config dir>` to compare another install. A file you replaced with a link to your own copy (a skill folder junctioned or symlinked elsewhere, say) is listed as `linked`: Geneseed never writes through a link, so it is yours and not drift, and it stays out of the improvements file. The improvements file is self-contained. To make the changes permanent, hand it to an agent in a Geneseed clone and ask it to fold them back into `src/`. Then they survive every future build. The web console's **Changes** page exports the same file.
 
 ## Moving from a clone to npm
 

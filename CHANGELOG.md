@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **A skill you replaced with a link to your own copy no longer reads as a hand edit forever.** The emit rightly refuses to write through a link, but `geneseed diff` then compared the rendered file with your linked one and reported it as "edited — review to back-port", which no rebuild could clear. A deployed path that is, or sits under, a link the emit refuses (a junction on Windows, a symlink on POSIX — the same test the emit uses) is now `linked`: `geneseed diff` lists it in its own group ("linked (yours, left alone)"), it is not drift, and it never goes into an improvements file. The console keeps it out of every drift figure: the Overview's "Hand edits" cell shows it as a muted "N linked" when it is all there is, and the Local edits page lists it apart, not selectable for Restore. A regular file you edited is still `edited`.
+
 ## [4.9.2] — 2026-10-18
 
 Patch: the review pass — faster emits, console and Stop; Build and setup keep your gate switches; protected checks follow links both ways.
