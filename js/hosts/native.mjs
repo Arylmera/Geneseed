@@ -33,6 +33,7 @@ import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { aliasesOf } from '../build/source.mjs';
+import { resolvePath } from './hosts.mjs';
 import { claimLeaf, ownedState } from './owned.mjs';
 // `lstripNewlines` on spec bodies is a no-op on every input the generator produces today
 // (measured: no file under `src/` and no rendered spec in any theme begins with a newline), so
@@ -497,8 +498,9 @@ export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
   const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
   let headerPrinted = false;
   const editRefused = new Set();
+  const rroot = cfg != null ? resolvePath(cfg) : undefined;  // once per emit, not per leaf
   const claim = (dest) => {
-    if (cfg != null && !claimLeaf(cfg, dest, relPosix(cfg, dest))) return false;
+    if (cfg != null && !claimLeaf(cfg, dest, relPosix(cfg, dest), rroot)) return false;
     if (oldSet === null || cfg == null || !existsSync(dest)) return true;
     const rel = relPosix(cfg, dest);
     if (oldSet.has(rel)) {

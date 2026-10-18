@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **Emits no longer read back what they just wrote to hash it.** The owned-file hashes in `.geneseed-manifest.json` are now computed from the text `writeText` recorded at write time (a copied binary, or a file rewritten since by any other writer, is still read), and the claim-on-create closure (`claimer`) resolves the config root once per emit instead of once per file. The per-file symlink and hard-link checks are unchanged, and manifests are byte-identical to before. A global re-emit runs about a quarter faster (measured on Windows: claude-global 560 → 424 ms, opencode-global 716 → 542 ms, median of 7).
+
 ## [4.9.0] — 2026-10-18
 
 Minor: on/off switches for the Sealed Secrets and done gates, and the console calls the laws Dictates.

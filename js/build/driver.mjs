@@ -40,7 +40,7 @@ import { emitClaudeRender } from './emit-claude.mjs';
 import { emitOpencodeRender, emitOpencodeGlobalRender } from './emit-opencode.mjs';
 import { settingsIntegrityCheck } from '../hosts/settings.mjs';
 import { hookRunnerEntry } from '../hosts/shim.mjs';
-import { writeText, withPlatformNewlines, isFile } from '../lib/fs.mjs';
+import { writeText, withPlatformNewlines, isFile, withWriteRecord } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
@@ -555,9 +555,9 @@ const claudeShaped = (name) => (cfg, args, out) => {
   const claudeMd = path.join(configDir || carrierInLayer ? cfgDir : root, carrier);
   const hookOpts = hookRunnerEntry();
   before?.();
-  const r = emitClaudeCore(cfg, args, {
+  const r = withWriteRecord(() => emitClaudeCore(cfg, args, {
     cfgDir, claudeMd, scope: configDir ? 'global' : 'project', host, out, hookOpts,
-  });
+  }));
   process.stdout.write(summary(root ?? cfgDir, r));
   return configDir ? cfgDir : undefined;
 };
@@ -604,7 +604,7 @@ function writeMarkers(markerDir, emit, footprint) {
  * but this argument would overwrite the live install `diff` is only reading.
  */
 const GLOBAL_EMITS = {
-  opencode: emitOpencodeGlobal,
+  opencode: (...a) => withWriteRecord(() => emitOpencodeGlobal(...a)),
   claude: claudeShaped('claude-global'),
   bob: claudeShaped('bob-global'),
   openclaude: claudeShaped('openclaude-global'),
@@ -633,7 +633,7 @@ const PROJECT_EMITS = {
   // P2. `opencode` joins the three for `cmdValidate`, which has to be able to render EVERY
   // `--emit` choice into its sandbox and not only the three doctor already scans. Its call
   // shape is the Claude-shaped emits' exactly — `(cfg, args, out)` — so the row is the whole change.
-  opencode: emitOpencode,
+  opencode: (...a) => withWriteRecord(() => emitOpencode(...a)),
 };
 
 /**
