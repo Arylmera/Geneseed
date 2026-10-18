@@ -5,7 +5,8 @@
 //
 // Each row is written out: the command, the repository state it runs in, and whether the gate
 // must stop it (`stop: true` — ask on Claude, exit 2 on Bob, a block on OpenCode) or let it
-// through. `always: true` marks the two acts that lose data in EVERY state (`reflog expire`,
+// through. `branch` names the branch checked out for the row (`main` when absent; `pushed` stands
+// for a feature branch). `always: true` marks the two acts that lose data in EVERY state (`reflog expire`,
 // `gc --prune`): the hook asks for them, and OpenCode leaves them to its static `permission.bash`
 // glob (asserted in tests/unit/generate.test.mjs), so the guard lets them through.
 //
@@ -24,7 +25,8 @@ import { makeSandbox } from './sandbox.mjs';
  * `develop`, so a non-`main` default branch is protected too), and `outside` (a directory in no
  * repository). `repo` holds tracked `tracked.txt` and `build/out.txt`, an always-present ignored
  * `ignored.log`, and branches `pushed` (tip on origin), `merged` (tip reachable from HEAD, never
- * pushed) and `unpushed` (one commit nowhere else).
+ * pushed) and `unpushed` (one commit nowhere else), plus a local `master` at `unpushed`'s tip — a
+ * protected name whose commit no remote holds, so force-moving it strands that commit.
  */
 export function makeLossWorkspace() {
   const sb = makeSandbox('gsloss-');
@@ -61,13 +63,18 @@ export function makeLossWorkspace() {
   git(repo, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/develop');
   git(repo, 'checkout', '-q', '-b', 'unpushed');
   git(repo, 'commit', '-q', '--allow-empty', '-m', 'only here');
+  git(repo, 'branch', 'master');
   git(repo, 'checkout', '-q', 'main');
   fs.writeFileSync(path.join(repo, 'ignored.log'), 'noise\n');
 
-  /** Put `repo` into `state` for the length of `fn` — awaited when it returns a promise — then back to clean. */
-  function inState(state, fn) {
+  /**
+   * Put `repo` into `state`, on `branch` (`main` unless named), for the length of `fn` — awaited
+   * when it returns a promise — then back to clean on `main`.
+   */
+  function inState(state, fn, branch = 'main') {
     const tracked = path.join(repo, 'tracked.txt');
     const untracked = path.join(repo, 'untracked.txt');
+    if (branch !== 'main') git(repo, 'checkout', '-q', branch);
     if (state === 'dirty') fs.writeFileSync(tracked, 'one\nchanged\n');
     if (state === 'untracked') fs.writeFileSync(untracked, 'new\n');
     if (state === 'stash') {
@@ -78,6 +85,7 @@ export function makeLossWorkspace() {
       fs.writeFileSync(tracked, 'one\n');
       fs.rmSync(untracked, { force: true });
       if (state === 'stash') git(repo, 'stash', 'clear');
+      if (branch !== 'main') git(repo, 'checkout', '-q', 'main');
     };
     let result;
     try {
@@ -160,6 +168,35 @@ export const LOSS_ROWS = [
   { cmd: 'sh -c "rm -rf build"', state: 'clean', stop: true },
   { cmd: 'cd "$DIR" && git reset --hard', state: 'clean', stop: true },
   { cmd: 'git -C {outside} reset --hard', state: 'clean', stop: true },
+  // Protected-branch-only forms (user ruling, 2026-10-17): a discard of path changes without
+  // `--`, or a forced `git rm`, stops only while a protected branch is checked out...
+  { cmd: 'git checkout tracked.txt', state: 'dirty', stop: true },
+  { cmd: 'git checkout .', state: 'dirty', stop: true },
+  { cmd: 'git checkout main tracked.txt', state: 'dirty', stop: true },
+  { cmd: 'git checkout tracked.txt', state: 'clean', stop: false },
+  { cmd: 'git checkout pushed', state: 'dirty', stop: false },   // a branch switch, not a discard
+  { cmd: 'git checkout tracked.txt', state: 'dirty', branch: 'pushed', stop: false },
+  { cmd: 'git checkout .', state: 'dirty', branch: 'pushed', stop: false },
+  { cmd: 'git rm -f tracked.txt', state: 'dirty', stop: true },
+  { cmd: 'git rm -f tracked.txt', state: 'dirty', branch: 'pushed', stop: false },
+  { cmd: 'git rm -f tracked.txt', state: 'clean', stop: false },
+  { cmd: 'git rm tracked.txt', state: 'dirty', stop: false },   // git itself refuses without -f
+  { cmd: 'git rm --cached -f tracked.txt', state: 'dirty', stop: false },
+  // ...and force-moving a protected branch stops when its old tip's commits would be held by
+  // nothing — not the new target, not a remote. `master` carries the one unpushed commit.
+  { cmd: 'git branch -f master main', state: 'clean', stop: true },
+  { cmd: 'git branch -f master main', state: 'clean', branch: 'pushed', stop: true },
+  { cmd: 'git checkout -B master main', state: 'clean', stop: true },
+  { cmd: 'git switch -C master main', state: 'clean', branch: 'pushed', stop: true },
+  { cmd: 'git branch -f master "$START"', state: 'clean', stop: true },   // cannot verify
+  { cmd: 'git branch -f master unpushed', state: 'clean', stop: false },   // the tip stays reachable
+  { cmd: 'git checkout -B main', state: 'clean', stop: false },   // main is on origin
+  { cmd: 'git branch -f develop main', state: 'clean', stop: false },   // develop is on origin
+  { cmd: 'git branch -f unpushed main', state: 'clean', stop: false },   // not protected
+  // Additive forms pass on any branch.
+  { cmd: 'git checkout -b feature', state: 'dirty', stop: false },
+  { cmd: 'git switch -c feature', state: 'dirty', stop: false },
+  { cmd: 'git branch feature', state: 'clean', stop: false },
   // Not a deletion at all.
   { cmd: 'git commit -m "rm -rf everything, reset --hard"', state: 'clean', stop: false },
   { cmd: 'git worktree remove --force ../x', state: 'clean', stop: false },

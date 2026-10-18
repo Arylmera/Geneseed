@@ -208,9 +208,9 @@ test("Law IV blocks exactly on real loss, per the shared policy table", async ()
       let why = null
       await ws.inState(row.state, async () => {
         try { await repoHook({ tool: "bash" }, { args: { command } }) } catch (err) { why = String(err?.message || err) }
-      })
+      }, row.branch)
       const want = row.stop && !row.always
-      assert.equal(why !== null, want, `${command} [${row.state}]: ${why}`)
+      assert.equal(why !== null, want, `${command} [${row.state}, ${row.branch || "main"}]: ${why}`)
       if (want) assert.match(why, /^\[geneseed-guard\] blocked: .*\(Deletion Is Deliberate\)/, command)
     }
   } finally {

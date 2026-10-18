@@ -84,8 +84,8 @@ const consentRuleOn = (d, excluded = []) =>
  * doctrine section — and a boundary that keeps asking for a rule the install did not adopt is
  * the one disagreement the tiering is not allowed to produce. (It does NOT follow that the
  * string is gone from the bundle; see `claudeHookGroups` for what D5 ships anyway and why.)
- * `rm -rf *` and the Law IV keys stay in EVERY build: they are Law IV's territory — an
- * always-on invariant — not the process pack's.
+ * The Law IV keys stay in EVERY build: they are Law IV's territory — an always-on invariant —
+ * not the process pack's.
  *
  * LAW IV HERE IS ONLY WHAT LOSES DATA IN EVERY STATE (user decision, 2026-10-17). The gate asks
  * only when a command would really lose data, and whether it would — a dirty tree, an untracked
@@ -101,6 +101,12 @@ const consentRuleOn = (d, excluded = []) =>
  * taken back nor reported as stranded, since Geneseed no longer claims them. They still ask
  * there (fail-safe, one prompt); the user deletes them by hand (the CHANGELOG upgrade note says
  * which). The process-5 `git push*` ask still covers every push while that rule is on.
+ *
+ * `rm -rf *` WENT TOO (user ruling, 2026-10-17): a blanket ask on every recursive removal is the
+ * glob-cannot-read-state problem again — the guard's `lossReason` lets an `rm` of tracked,
+ * unmodified files through and blocks one git cannot restore, and its `SHELL_BLOCK_RE` still
+ * blocks `rm -rf /`, `~` and the drive-root forms outright. Same stranded-key handling as above:
+ * an existing `opencode.json` keeps its `rm -rf *` key, asking, until the user deletes it.
  *
  * PROTECTED BRANCHES BY NAME are the one state-free loss a glob CAN say: a force push to, or a
  * delete of, `main`/`master` loses work whatever the tree holds. So `PROTECTED_GLOBS` asks for
@@ -220,7 +226,7 @@ const PUSH_CHAIN = [
 ];
 
 function defaultPermission(doctrines = null, excluded = []) {
-  const bash = { 'rm -rf *': 'ask' };
+  const bash = {};
   if (consentRuleOn(doctrines, excluded)) {
     bash['git commit*'] = 'ask';
     bash['git push*'] = 'ask';
@@ -236,7 +242,7 @@ function defaultPermission(doctrines = null, excluded = []) {
  * has to be able to recognise a key that is Geneseed's business at all — to add it back when
  * the pack returns, and to name it when this build no longer wants it but will not remove it.
  */
-const OWNED_BASH = ['rm -rf *', 'git commit*', 'git push*',
+const OWNED_BASH = ['git commit*', 'git push*',
   ...PUSH_CHAIN.flatMap(([keys]) => keys)];
 
 /**

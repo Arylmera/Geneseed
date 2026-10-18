@@ -13,6 +13,10 @@
  *   - uncommitted work discarded (`reset --hard`, `checkout -f`/`-- <paths>`, `switch -f`/
  *     `--discard-changes`, `restore` beyond `--staged` alone, `clean -f`) — and only when the
  *     tree actually holds such work (for `clean`, what `git clean -n` says it would remove);
+ *   - only where a protected branch is concerned (user ruling, 2026-10-17): `checkout <paths>`
+ *     without `--` and `git rm -f` over changed files while a protected branch is checked out, and
+ *     `branch -f`/`checkout -B`/`switch -C` moving a protected branch off commits nothing else
+ *     holds — the same forms on a feature branch pass;
  *   - `stash drop`/`stash clear` while a stash exists; `reflog expire` and `gc --prune` always;
  *   - a file removal (`rm`, `rmdir`, `del`, `erase`, `Remove-Item`/`ri`/`rd`) of anything git
  *     cannot bring back: untracked, ignored or modified files, a repository's own `.git`, or
@@ -32,7 +36,10 @@
  * destructive-looking form and the parse below found one in program position: an ordinary
  * command never gets here (`js/hosts/hooks.mjs` tests the regex first), so the ~14 ms hook
  * budget is untouched for everything else. Refs, the remote default branch and the stash are
- * still read off disk (`./gitref.mjs`), which costs nothing.
+ * still read off disk (`./gitref.mjs`), which costs nothing. One ordinary form does pay: a plain
+ * `git checkout <x>` while a protected branch is checked out runs `git rev-parse` to tell a
+ * branch switch from a path discard (the branch is read off disk first, so a feature branch
+ * never pays it).
  *
  * TWIN: `adapters/opencode/plugins/geneseed-guard.js` carries the same decisions (the plugin is
  * copied whole into an OpenCode install and cannot import this). Keep the two in step;
@@ -217,14 +224,82 @@ function defaultPushTargets(dir) {
   return targets;
 }
 
+/**
+ * The checked-out branch when it is protected, null when HEAD is detached or unreadable, and
+ * undefined when it is a known unprotected branch — read off disk, so a feature branch passes the
+ * protected-branch-only forms below without running git (user ruling, 2026-10-17).
+ */
+function protectedHead(dir) {
+  const cur = currentBranch(dir);
+  return cur && !protectedBranches(repoRoot(dir)).has(cur) ? undefined : cur;
+}
+
+/** `lost` on the protected branch `cur`; an unknown HEAD cannot be cleared as unprotected, so it asks. */
+function onProtected(cur, lost) {
+  if (!lost) return null;
+  if (!cur) unverified('HEAD is detached or unreadable, so the gate cannot tell whether a protected branch is checked out');
+  return `${lost} on the protected branch ${cur}`;
+}
+
+/**
+ * `branch -f`, `checkout -B`, `switch -C` moving `name` to `start` (HEAD when absent): stops when
+ * `name` is protected and its old tip holds a commit neither `start` nor any remote ref reaches.
+ * A branch that does not exist yet is created, which loses nothing.
+ */
+function forceMove(dir, name, start, act) {
+  if (name === undefined) return null;   // git refuses the command on its own
+  if (name.includes(OPAQUE)) unverified(`the branch name \`${name.replace(OPAQUE, '')}\` expands in the shell`);
+  if (!protectedBranches(repoRoot(dir)).has(name)) return null;
+  const tip = git(dir, ['rev-parse', '-q', '--verify', `refs/heads/${name}`]);
+  if (tip.status === 1) return null;
+  if (tip.status !== 0) unverified(`cannot read the branch ${name}: ${firstLine(tip.stderr)}`);
+  const to = start ?? 'HEAD';
+  if (to.includes(OPAQUE)) unverified(`the start point \`${to.replace(OPAQUE, '')}\` expands in the shell`);
+  const r = git(dir, ['rev-list', '-n1', `refs/heads/${name}`, '--not', to, '--remotes']);
+  if (r.status !== 0) unverified(`cannot compare ${name} with ${to}: ${firstLine(r.stderr)}`);
+  return r.stdout.trim() ? `${act} ${name} would strand commits no remote and not ${to} holds` : null;
+}
+
+/**
+ * `git checkout` with no `--` and no force: `-B <protected>` force-moves it; otherwise, on a
+ * protected branch, positionals naming files (the first one is not a commit, or follows one)
+ * discard their changes. A lone commit-ish is a branch switch, which refuses to overwrite work.
+ */
+function checkoutAct(rest, dir) {
+  const pos = [];
+  let reset;
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === '-b' || a === '--orphan') return null;   // a new branch: additive
+    if (a === '-B') { reset = rest[i + 1]; i += 1; continue; }
+    if (a.startsWith('--pathspec-from-file')) unverified('checkout reads its paths from a file');
+    if (!a.startsWith('-')) pos.push(a);
+  }
+  if (reset !== undefined) return forceMove(dir, reset, pos[0], '`git checkout -B`');
+  if (!pos.length) return null;
+  const cur = protectedHead(dir);
+  if (cur === undefined) return null;
+  let paths = pos;
+  if (!pos[0].includes(OPAQUE) && git(dir, ['rev-parse', '-q', '--verify', `${pos[0]}^{commit}`]).status === 0) {
+    if (pos.length === 1) return null;
+    paths = pos.slice(1);
+  }
+  return onProtected(cur, dirty(dir, paths, '`git checkout <paths>`'));
+}
+
 /** `git branch` — a forced delete asks for a protected branch or one whose commits live nowhere else. */
 function branchAct(rest, dir) {
   const opts = rest.filter((a) => a.startsWith('-'));
   const del = opts.some((a) => a === '--delete' || a === '-D' || hasShort(a, 'd') || hasShort(a, 'D'));
   const force = opts.some((a) => a === '--force' || a === '-D' || hasShort(a, 'f') || hasShort(a, 'D'));
-  if (!del || !force) return null;   // an un-forced delete refuses an unmerged branch on its own
-  if (opts.some((a) => a === '-r' || a === '--remotes')) return null;   // a remote-tracking ref; `fetch` restores it
+  if (!force) return null;   // an un-forced delete refuses an unmerged branch on its own
   const names = rest.filter((a) => !a.startsWith('-'));
+  if (!del) {
+    // `branch -f <name> [<start>]`; a forced rename or copy (-M, -C) is another form.
+    if (opts.some((a) => a === '--move' || a === '--copy' || [...'mMcC'].some((c) => hasShort(a, c)))) return null;
+    return forceMove(dir, names[0], names[1], '`git branch -f`');
+  }
+  if (opts.some((a) => a === '-r' || a === '--remotes')) return null;   // a remote-tracking ref; `fetch` restores it
   const root = repoRoot(dir);
   const protectedSet = protectedBranches(root);
   for (const n of names) {
@@ -281,15 +356,30 @@ function gitAct(args, dir, always) {
       case 'reset':
         return rest.includes('--hard') ? dirty(d, [], '`git reset --hard`') : null;
       case 'checkout': {
-        if (rest.some((a) => a === '--force' || hasShort(a, 'f'))) return dirty(d, [], '`git checkout --force`');
+        const forced = rest.some((a) => a === '--force' || hasShort(a, 'f')) && dirty(d, [], '`git checkout --force`');
+        if (forced) return forced;
         const dd = rest.indexOf('--');
-        if (dd < 0) return null;
+        if (dd < 0) return checkoutAct(rest, d);
         const paths = rest.slice(dd + 1);
         return paths.length ? dirty(d, paths, '`git checkout --`') : null;
       }
-      case 'switch':
-        return rest.some((a) => a === '--force' || a === '--discard-changes' || hasShort(a, 'f'))
-          ? dirty(d, [], '`git switch --discard-changes`') : null;
+      case 'switch': {
+        const c = rest.findIndex((a) => a === '-C' || a === '--force-create');
+        const pos = c < 0 ? [] : rest.slice(c + 1).filter((a) => !a.startsWith('-'));
+        return (c >= 0 && forceMove(d, pos[0], pos[1], '`git switch -C`'))
+          || (rest.some((a) => a === '--force' || a === '--discard-changes' || hasShort(a, 'f'))
+            ? dirty(d, [], '`git switch --discard-changes`') : null);
+      }
+      case 'rm': {
+        // Only a forced removal discards changes: git refuses a modified file without -f, and
+        // `--cached` or `-n` keep the file. Protected branch only (user ruling, 2026-10-17).
+        if (!rest.some((a) => a === '--force' || hasShort(a, 'f'))) return null;
+        if (rest.some((a) => a === '--cached' || a === '--dry-run' || hasShort(a, 'n'))) return null;
+        if (rest.some((a) => a.startsWith('--pathspec-from-file'))) unverified('git rm reads its paths from a file');
+        const paths = rest.filter((a) => !a.startsWith('-'));
+        const cur = paths.length ? protectedHead(d) : undefined;
+        return cur === undefined ? null : onProtected(cur, dirty(d, paths, '`git rm -f`'));
+      }
       case 'restore': {
         const staged = rest.some((a) => a === '--staged' || hasShort(a, 'S'));
         const worktree = rest.some((a) => a === '--worktree' || hasShort(a, 'W'));

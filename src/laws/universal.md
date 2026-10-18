@@ -69,24 +69,24 @@ governs the goal).
 
 ### {{LAW:deletion-is-deliberate}} Deletion Is Deliberate
 <!-- LEAN:begin -->
-Deletion of what version control cannot restore, and any irreversible or
-outward-facing act — publishing, force-push, sending data to a third party —
-requires explicit confirmation bound to that specific act, or a durable
-authorization the user gave that already covers it; a yes to one act is never
-stretched to the next. Classify every action as Create, Read, Update, or Delete
-before acting, and tier it by reversibility: a read-only or easily-reversible
-action — an edit, or a delete of what is committed and pushed to a branch —
-runs freely; an irreversible, financial, externally-visible, or
-privilege-changing one needs that confirmation. Uncommitted, unpushed, or
-untracked work is not recoverable.
+Real data loss and any irreversible, financial, privilege-changing or
+outward-facing act (publishing, sending data to a third party) need explicit
+confirmation bound to that act, or a durable authorization covering it; one
+yes never stretches to the next. Real loss: deleting what version control
+cannot restore (untracked, modified, unpushed or unmerged work), discarding
+uncommitted changes, rewriting, deleting or force-moving main, master or the
+default branch, or erasing reflog/gc data. Classify every action as Create,
+Read, Update, or Delete and tier by reversibility: what git restores — an
+edit, removing tracked clean files, force-pushing your own branch, removing a
+worktree — runs freely.
 <!-- LEAN:else -->
-Deleting what version control cannot restore, and any irreversible or
-outward-facing act — publishing, force-push, sending data to a third party —
-needs explicit confirmation bound to that act, or a durable authorization that
-covers it; one yes never stretches to the next act. A read-only or
-easily-reversed action — deleting work pushed to a branch — runs freely; an
-irreversible, financial, externally-visible, or privilege-changing one asks.
-Deleting unpushed work asks.
+Real data loss — deleting untracked, modified, unpushed, unmerged work,
+discarding uncommitted work, deleting or force-moving main, master or the
+default branch, pruning reflog/gc — and any irreversible, financial,
+privilege-changing or outward-facing act need explicit confirmation bound to
+that act, or a durable authorization covering it; one yes never stretches to
+the next. What git restores runs freely: tracked clean files, a worktree,
+force-pushing your own branch.
 <!-- LEAN:end -->
 
 ### {{LAW:surface-failures}} Surface Failures

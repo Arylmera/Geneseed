@@ -306,7 +306,7 @@ test('Law IV asks exactly on real loss, per the shared policy table, on Claude a
   try {
     for (const row of LOSS_ROWS) {
       const cmd = rowCommand(row, ws);
-      const what = `${cmd} [${row.state}]`;
+      const what = `${cmd} [${row.state}, ${row.branch || 'main'}]`;
       ws.inState(row.state, () => {
         const claude = hookRun('git-gate', { env: ws.env, extra: ['--no-consent'],
           stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: ws.repo }) });
@@ -320,7 +320,7 @@ test('Law IV asks exactly on real loss, per the shared policy table, on Claude a
           stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
         assert.equal(bob.rc, row.stop ? 2 : 0, `bob: ${what}: ${bob.err}`);
         assert.equal(/BLOCKED: Geneseed \(Deletion Is Deliberate\)/.test(bob.err), row.stop, `bob: ${what}: ${bob.err}`);
-      });
+      }, row.branch);
     }
   } finally { ws.cleanup(); }
 });

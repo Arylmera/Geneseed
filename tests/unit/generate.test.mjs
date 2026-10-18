@@ -1347,14 +1347,14 @@ test('an EXISTING opencode.json has its git gate re-wired when the pack comes ba
     // A file that already has a `permission` block, wired with the process pack OFF: the two
     // process keys are absent and the Law IV keys are not. Since Law IV was calibrated to real
     // loss (user decision, 2026-10-17) the Law IV keys are only what loses data in EVERY state —
-    // `reflog expire` and `gc --prune` — beside the long-standing `rm -rf *`: whether anything
-    // else would lose data is state a glob cannot read, so the OpenCode guard plugin's
-    // `lossReason` (the twin of js/hosts/loss.mjs) decides those.
+    // `reflog expire` and `gc --prune`: whether anything else would lose data is state a glob
+    // cannot read, so the OpenCode guard plugin's `lossReason` (the twin of js/hosts/loss.mjs)
+    // decides those — the long-standing `rm -rf *` included (user ruling, 2026-10-17).
     mergeOpencodeJson(p, 'AGENT.md', ['craft']);
     for (const k of ['git commit*', 'git push*']) {
       assert.ok(!(k in bashOf()), `${k} was wired into a build whose process pack is off`);
     }
-    for (const k of ['rm -rf *', 'git reflog expire*', 'git gc --prune*', 'git gc * --prune*']) {
+    for (const k of ['git reflog expire*', 'git gc --prune*', 'git gc * --prune*']) {
       assert.equal(bashOf()[k], 'ask', `${k} is Law IV's and rides no pack toggle`);
     }
     // The state-dependent globs the calibration removed — and the worktree-removal ones before
@@ -1369,7 +1369,7 @@ test('an EXISTING opencode.json has its git gate re-wired when the pack comes ba
       'git switch --discard-changes*', 'git switch * --discard-changes*',
       'git stash drop*', 'git stash clear*', 'git push *--delete*', 'git push * :*',
       'git worktree remove -f*', 'git worktree remove --force*',
-      'git worktree remove * -f*', 'git worktree remove * --force*', 'git restore*']) {
+      'git worktree remove * -f*', 'git worktree remove * --force*', 'git restore*', 'rm -rf *']) {
       assert.ok(!(k in bashOf()), `${k} was dropped from LAW_IV_BASH and must not be written`);
     }
 
@@ -1382,9 +1382,13 @@ test('an EXISTING opencode.json has its git gate re-wired when the pack comes ba
     }
     // ...and an unknown selection (a pre-marker caller) is not a narrow one: it wires the gate
     // into a file that lacked it, exactly as an explicit all-four selection does.
+    // The file carries `rm -rf *`, as every opencode.json written before 2026-10-17 does: no
+    // longer Geneseed's key, so it is neither taken back nor reported as stranded.
     fs.writeFileSync(p, JSON.stringify({ permission: { bash: { 'rm -rf *': 'ask' } } }));
-    mergeOpencodeJson(p, 'AGENT.md');
+    const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md'));
     assert.equal(bashOf()['git commit*'], 'ask', 'unknown must fail CLOSED, as everywhere else');
+    assert.equal(bashOf()['rm -rf *'], 'ask', 'an rm -rf * key written by an earlier build was taken back');
+    assert.ok(!err.includes('rm -rf'), `the earlier rm -rf * key was reported:\n${err}`);
   });
 });
 
@@ -1424,7 +1428,8 @@ test('the default permission policy is added only when absent', () => {
     mergeOpencodeJson(p, 'AGENT.md');                                // fresh -> gets the default
     let data = JSON.parse(fs.readFileSync(p, 'utf8'));
     assert.ok('permission' in data);
-    assert.equal(data.permission.bash['rm -rf *'], 'ask');
+    assert.ok(!('rm -rf *' in data.permission.bash), 'the guard plugin decides rm, not a blanket glob');
+    assert.equal(data.permission.bash['git reflog expire*'], 'ask');
     // The Doctrine process 5 backstop: every commit AND push is gated, not only a force-push.
     assert.equal(data.permission.bash['git commit*'], 'ask');
     assert.equal(data.permission.bash['git push*'], 'ask');
@@ -1459,7 +1464,7 @@ test('a permission block Geneseed cannot wire into is reported, not passed over 
       assert.match(err, /WARN/, `${label} was accepted in silence`);
       assert.ok(err.includes(reason), `${label}: the warning did not name the shape:\n${err}`);
       // It names the gates that did NOT get wired — the whole point of telling anyone.
-      for (const k of ['"git commit*"', '"git push*"', '"rm -rf *"']) {
+      for (const k of ['"git commit*"', '"git push*"', '"git reflog expire*"']) {
         assert.ok(err.includes(k), `${label}: the warning did not name ${k}:\n${err}`);
       }
       // ...and the file is still exactly the user's answer. Reporting is not a licence to fix.
@@ -1474,7 +1479,7 @@ test('a permission block Geneseed cannot wire into is reported, not passed over 
     const p = path.join(d, 'opencode.json');
     fs.writeFileSync(p, '{"permission": {"bash": "allow"}}');
     const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', ['craft']));
-    assert.ok(err.includes('"rm -rf *"'), `the invariant gates went unnamed:\n${err}`);
+    assert.ok(err.includes('"git reflog expire*"'), `the invariant gates went unnamed:\n${err}`);
     for (const k of ['"git commit*"', '"git push*"']) {
       assert.ok(!err.includes(k),
         `a pack-off build named ${k} as unwired, but this build never wanted it:\n${err}`);
@@ -1509,7 +1514,7 @@ test('a fresh opencode.json gets a permission.skill deny row per user-only skill
     const data = JSON.parse(fs.readFileSync(p, 'utf8'));
     assert.deepEqual(data.permission.skill, { herdr: 'deny', quiz: 'deny' });
     // The bash gates still ride along unmodified.
-    assert.equal(data.permission.bash['rm -rf *'], 'ask');
+    assert.equal(data.permission.bash['git reflog expire*'], 'ask');
   });
 });
 
@@ -2097,9 +2102,9 @@ test('the opencode permission gate follows the process pack, and Law IV never do
         `${k} survived --doctrines craft — the boundary now asks for a rule the prompt lost`);
     }
     // Law IV is an always-on invariant and its entries are NOT the process pack's to remove.
-    // Without this the toggle would quietly disarm `rm -rf` and the reflog/gc prune asks on every
-    // narrow build (the state-aware rest of Law IV lives in the guard plugin, not in globs).
-    for (const k of ['rm -rf *', 'git reflog expire*', 'git gc --prune*']) {
+    // Without this the toggle would quietly disarm the reflog/gc prune asks on every narrow build
+    // (the state-aware rest of Law IV, `rm` included, lives in the guard plugin, not in globs).
+    for (const k of ['git reflog expire*', 'git gc --prune*']) {
       assert.equal(bashOf(off)[k], 'ask', `${k} went with the process pack`);
     }
     // An unknown selection is not a narrow one: the pre-migration caller passes nothing.
@@ -2476,7 +2481,7 @@ test('the opencode permission gate follows the consent RULE, not merely its pack
     assert.equal(bashOf(kept)['git commit*'], 'ask',
       'excluding process 7 took the consent gate with it');
     // Rule IV's entries are never the doctrine's to remove, whichever axis narrowed.
-    for (const k of ['rm -rf *', 'git reflog expire*']) {
+    for (const k of ['git reflog expire*', 'git gc --prune*']) {
       assert.equal(bashOf(gone)[k], 'ask', `${k} went with the consent rule`);
     }
     // A caller that knows nothing of the axis is not a caller excluding everything.

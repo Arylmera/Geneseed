@@ -25,7 +25,7 @@ Geneseed is a build that produces a harness. One source renders:
 
 It renders them for OpenCode, Claude Code, Bob, OpenClaude, or as a plain bundle for any tool that reads `AGENT.md`. The content is the same on every host. Only the wiring differs.
 
-Where the host lets it, Geneseed also installs **gates**: small programs that run before a tool call and stop a few things outright, such as a force-push or a credential written into a tracked file. Those rules do not depend on the model remembering them. [Enforced vs. asked](enforced-vs-asked.md) explains which rules a gate stops and which ones the model is only told about.
+Where the host lets it, Geneseed also installs **gates**: small programs that run before a tool call and stop a few things outright, such as a force-push to `main` or a credential written into a tracked file. Those rules do not depend on the model remembering them. [Enforced vs. asked](enforced-vs-asked.md) explains which rules a gate stops and which ones the model is only told about.
 
 ### Install once, use everywhere
 

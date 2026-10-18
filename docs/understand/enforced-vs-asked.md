@@ -22,14 +22,14 @@ Most of the harness is *asked*. A few rules, where one mistake is expensive and 
 
 On Claude Code and OpenClaude the hooks never block silently. They make the host **ask you**, with the reason shown:
 
-- **Real data loss**: a force-push or delete of `main`/`master`/the remote's default branch, `branch -D` of an unpushed unmerged branch, `reset --hard`/`checkout --`/`clean -f` and the like over uncommitted work, a stash dropped, the reflog pruned, an `rm` of files git cannot restore. Judged against the repository's real state, so the same command on a clean tree passes; when the gate cannot tell, it asks. Wired in every build.
+- **Real data loss**: a force-push or delete of `main`/`master`/the remote's default branch, force-moving one off commits nothing else holds, `branch -D` of an unpushed unmerged branch, `reset --hard`/`checkout --`/`clean -f` and the like over uncommitted work, a stash dropped, the reflog pruned, an `rm` of files git cannot restore. Judged against the repository's real state, so the same command on a clean tree passes; when the gate cannot tell, it asks. Wired in every build.
 - **Commit and push**: every `git commit` and `git push`, including chained one-liners and `git -C <path>`. This question belongs to the **process** pack. Build without it and the git gate stays wired. Only this question goes away, and destructive git is still caught.
 - **A scan of a whole filesystem**: a recursive `find`, `du`, `grep -r`, `rg` or `Get-ChildItem -Recurse` rooted at `/`, `/c` or `C:\`, which in Git Bash walks every drive for hours. Wired in every build.
 - **Credentials**: a write or edit whose content looks like a real key (AWS, GitHub, Anthropic, Slack, or a private-key block), anywhere except a `.env` file.
 - **Your rules and memory**: any write by the agent to `user-rules.md` or to the memory store. Whether something is a standing rule or a fact to remember is your call.
 - **Ending a turn without the proof**: only in a project that lists its checks in `.geneseed/done-checks.txt`. A turn that edited files cannot end until every listed check has passed since the last edit. The agent is stopped once, then the turn may end.
 
-If a gate crashes, it asks instead of letting the call through. If it cannot start at all (a deleted or broken shim) or times out, Claude Code blocks the call instead: see [Troubleshoot hooks](../reference/troubleshoot-hooks.md) to recover. Other shell commands, `rm -rf` included, go through Claude Code's normal permission flow.
+If a gate crashes, it asks instead of letting the call through. If it cannot start at all (a deleted or broken shim) or times out, Claude Code blocks the call instead: see [Troubleshoot hooks](../reference/troubleshoot-hooks.md) to recover. Other shell commands go through Claude Code's normal permission flow; an `rm` of files git cannot restore is the real-loss case above.
 
 **Bob** runs one combined gate and has no "ask": it refuses with exit code 2, and only for the rules that admit no judgement call: credentials, destructive git, a scan of a whole filesystem, and a write under a project's own protected-checks list. The commit/push and memory checks become a log line, and the call goes through. Bob's hook wiring follows its documentation but has not been tested on a live Bob install.
 
@@ -39,8 +39,8 @@ If a gate crashes, it asks instead of letting the call through. If it cannot sta
 
 On OpenCode, two mechanisms enforce rules:
 
-- **OpenCode's own permission prompt**, which Geneseed configures in `opencode.json`. It asks you before `rm -rf`, a force-push, `reset --hard`, `clean -f`, `branch -D` and `checkout --`, and, when the **process** pack is on, before every commit and push.
-- **The guard plugin**, which blocks outright: writes to key and credential files (`id_rsa`, `*.pem`, `.ssh/`, `.npmrc`…), catastrophic commands (`rm -rf /`, `rm -rf ~`, formatting or overwriting a disk), a recursive scan of a whole filesystem (`find /`, `du -sh /`, `Get-ChildItem C:\ -Recurse`), and any change inside a folder your wiki marks `protected`. It also refuses the first write to `user-rules.md` or memory once. Re-issue the write and it goes through.
+- **OpenCode's own permission prompt**, which Geneseed configures in `opencode.json`. It asks you before `git reflog expire`, `git gc --prune` and a force-push or delete of `main`/`master`, and, when the **process** pack is on, before every commit and push.
+- **The guard plugin**, which blocks outright: writes to key and credential files (`id_rsa`, `*.pem`, `.ssh/`, `.npmrc`…), catastrophic commands (`rm -rf /`, `rm -rf ~`, formatting or overwriting a disk), every other real data loss (the same state-aware decisions as the hook), a recursive scan of a whole filesystem (`find /`, `du -sh /`, `Get-ChildItem C:\ -Recurse`), and any change inside a folder your wiki marks `protected`. It also refuses the first write to `user-rules.md` or memory once. Re-issue the write and it goes through.
 
 The guard only warns on `.env` edits. It checks credentials by **file path**, not by content, so a key pasted into an ordinary source file is not caught here. One caveat about the process pack: if your `opencode.json` already has a `git commit*` entry, a rebuild without the pack leaves that entry in place and reports it. Geneseed cannot tell its own entry from one you typed.
 
