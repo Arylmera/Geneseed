@@ -26,7 +26,7 @@ import path from 'node:path';
 
 import { resolvePath } from './hosts.mjs';
 import { within } from '../lib/paths.mjs';
-import { isFile } from '../lib/fs.mjs';
+import { isFile, statOrNull, textWrites } from '../lib/fs.mjs';
 
 /**
  * The manifest rels that resolve INSIDE `base` — the one security boundary every walk over
@@ -68,9 +68,13 @@ export function ownedWithin(base, rels) {
  * `resolvePath` follows the root link on both `root` and `dest`, so a leaf reached the
  * ordinary way through a linked root still resolves inside it and stays allowed — only the
  * LEAF itself being a link is refused.
+ *
+ * `rroot` is `resolvePath(root)`, passed in by a caller that claims many leaves under one root
+ * (`claimer`, once per emit) — re-resolving it per leaf was ~2.6 s of `doctor --all`. Only the
+ * ROOT is hoisted: the lstat and the leaf's own `resolvePath` below stay per call, since they
+ * are the boundary.
  */
-export function safeLeaf(root, dest) {
-  const rroot = resolvePath(root);
+export function safeLeaf(root, dest, rroot = resolvePath(root)) {
   const st = lstatSync(dest, { throwIfNoEntry: false });
   if (st) {
     if (st.isSymbolicLink()) return false;
@@ -86,8 +90,8 @@ export function safeLeaf(root, dest) {
  * callers that already have it (every one of them, since it is what they are about to push
  * into `owned`) pass it straight through instead of re-deriving it from `dest`.
  */
-export function claimLeaf(root, dest, rel) {
-  if (safeLeaf(root, dest)) return true;
+export function claimLeaf(root, dest, rel, rroot = undefined) {
+  if (safeLeaf(root, dest, rroot)) return true;
   process.stderr.write(`[geneseed] refused ${rel}: it is a link — Geneseed writes only `
     + 'regular files it owns\n');
   return false;
@@ -108,18 +112,42 @@ export function fileHash(p) {
 }
 
 /**
+ * `fileHash` of a file whose whole content is `written`, computed from the string instead of
+ * read back — `written` must be EXACTLY what went to disk as utf8 (`writeText`'s translated
+ * text, never the text before its `\n` -> `os.EOL`: an embedded `\r\n` becomes `\r\r\n` on
+ * Windows, which folds to `\r\n`, not `\n`). CR and LF are single bytes that never occur
+ * inside a multi-byte utf8 sequence, so folding the string then encoding equals encoding then
+ * folding.
+ */
+export function textHash(written) {
+  return createHash('sha256').update(Buffer.from(written.replaceAll('\r\n', '\n'), 'utf8'))
+    .digest('hex');
+}
+
+/**
  * One sha256 per entry of `owned` that is both inside `root` (through `ownedWithin`, the same
  * containment boundary every other owned-rel walk goes through) and a file that still exists —
  * a rel a prune is about to delete, or one a crafted manifest named outside root, is skipped
  * rather than hashed. Keys land in the same sorted order the manifest writers already give
  * `owned` itself (`[...owned].sort()`), so the hash map a re-emit produces for an unchanged
  * tree is byte-identical to the one before it — `golden.mjs --idempotent`'s whole point.
+ *
+ * A file this emit wrote through `writeText` is hashed from the text it recorded
+ * (`textWrites`, `js/lib/fs.mjs`) rather than read back, while its size and mtime still match
+ * the stat taken at write time; anything else — a copied binary, an unrecorded rewrite — is read.
+ * shortcut: a same-size rewrite by a non-`writeText` writer inside one mtime tick would keep the
+ * stale record; no emit does that today (measured across golden's cells, 0 mismatches) — route
+ * such a writer through `writeText` or drop its entry if one ever appears.
  */
 export function ownedHashes(root, owned) {
   const hashes = {};
   for (const rel of ownedWithin(root, owned).sort()) {
     const p = path.join(root, rel);
-    if (isFile(p)) hashes[rel] = fileHash(p);
+    const st = statOrNull(p);
+    if (!st?.isFile()) continue;
+    const w = textWrites.map?.get(path.resolve(p));
+    hashes[rel] = w && w.size === st.size && w.mtimeMs === st.mtimeMs ? textHash(w.text)
+      : fileHash(p);
   }
   return hashes;
 }

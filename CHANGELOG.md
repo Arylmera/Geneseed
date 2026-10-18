@@ -9,6 +9,27 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Changed
+- **Emits no longer read back what they just wrote to hash it.** The owned-file hashes in `.geneseed-manifest.json` are now computed from the text `writeText` recorded at write time (a copied binary, or a file rewritten since by any other writer, is still read), and the claim-on-create closure (`claimer`) resolves the config root once per emit instead of once per file. The per-file symlink and hard-link checks are unchanged, and manifests are byte-identical to before. A global re-emit runs about a quarter faster (measured on Windows: claude-global 560 → 424 ms, opencode-global 716 → 542 ms, median of 7).
+
+## [4.9.1] — 2026-10-18
+
+Patch: Deletion Is Deliberate and the root-scan check no longer fail open behind shell structure; the console stops re-running the doctor on every change.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so installed hooks and OpenCode plugins pick up the fix.
+
+### Fixed
+- **Deletion Is Deliberate and the root-scan check no longer fail open when shell structure hides the program word.** `true & git reset --hard`, `(git reset --hard)`, `if …; then git reset --hard; fi`, `{ rm x; }`, `echo $(rm x)`, `` echo `rm x` ``, `sudo -u root rm x`, `env -u FOO rm x`, `nice -n 5 rm x`, `timeout 5 rm x`, `true & find / …` and `(find / …)` passed where the plain form asks. The `reset --hard` forms had regressed in 4.7.0. Several changes close it, on Claude Code, OpenClaude and Bob (`git-gate`/`tool-gate`) and in the OpenCode guard:
+  - A lone `&` now separates commands. `2>&1`, `<&3`, `&>` and `|&` still do not.
+  - Leading `(`, `{`, `!`, `then`, `do` and `else` are stripped before the program word, and so are closing `)`/`}`.
+  - A command substitution is judged as a command of its own.
+  - Wrappers drop their value-taking flags. `timeout` is now a wrapper.
+  - A removal that names no path asks: `… | Remove-Item`, `ri -Force`.
+  - `find -delete` asks, and `unlink` counts as a removal.
+  - Behind all of these, a removal word written unquoted after a program the gate does not read asks ("could not verify"). That covers a wrapper it does not know (`setsid rm x`), a wrapper flag of unknown arity, `ForEach-Object { Remove-Item $_ }` and `case … rm …`. So does `ssh host rm x`. The exceptions are programs whose `rm` is their own subcommand (npm, pnpm, yarn, bun, cargo, brew, docker, podman) and programs that never run their arguments (echo, printf, the grep family, `which`, `type`, `man`, `Get-Command`, `Get-Help`).
+  - Proven-safe forms still pass: a clean tree, a tracked clean file, a quoted pattern, and a `$(cat <<'EOF' … EOF)` commit message.
+
+### Changed
 - **The console stops re-running the doctor when nothing it checks has changed.** A memory delete no longer drops the cached verdict (~3.6 s saved on the next overview); a finished job, an install toggle and a view switch still do. The Doctor page, the Greenhouse and Operator HUD lenses now read the cached run (groups and themes included) instead of running every check on each visit; the page's *Re-run checks* button asks for a fresh run (`GET /api/doctor?fresh=1`). The server warms the cache right after it starts listening, so an overview requested a few seconds later answers in ~0.15 s rather than ~3.8 s.
 - **The console stops re-rendering an install to measure its drift on every refresh.** The overview and the fleet table each rendered the selected install's expected tree afresh (~0.6 s per install per call); the render is now memoised per install, keyed on the source fingerprint and every axis the install was built with (theme, footprint, posture, mode, packs, trust, excluded rules and skills, gate switches), and re-done the moment any of them changes. The comparison against the deployed tree still runs on every call, so a hand edit shows at once. Measured on a two-install sandbox: overview ~0.75 s → ~0.2 s, fleet ~1.5 s → ~0.32 s after the first refresh. `geneseed diff` is unchanged.
 

@@ -1170,6 +1170,36 @@ test('rootScan: quoted tokens are data, ls -r is reverse, comments are cut, ssh 
   for (const [c, refused] of REVIEW_CASES) assert.equal(Boolean(rootScan(c)), refused, JSON.stringify(c));
 });
 
+// Fail-open probes, 2026-10-18: a lone `&` backgrounds one command and runs the next, and a
+// subshell or group puts `(`/`{` before the program word — neither may hide a root scan. A
+// redirection's `&` (`2>&1`, `&>`) is no separator, so a scoped search beside one still passes.
+const STRUCTURE_SCAN_CASES = [
+  ['true & find / -name x', true],
+  ['(find / -name x)', true],
+  ['{ find / -name x; }', true],
+  ['if true; then find / -name x; fi', true],
+  ['find . -name x 2>&1', false],
+  ['ls -R src &> log', false],
+  ['echo a & ls src', false],
+];
+
+test('rootScan: a lone & and a subshell or group do not hide the scan', async () => {
+  const { rootScan } = await import('../../js/hosts/hooks.mjs');
+  for (const [c, refused] of STRUCTURE_SCAN_CASES) assert.equal(Boolean(rootScan(c)), refused, c);
+});
+
+// lossReason judges a `$(…)` body as a command of its own, so nesting recurses. Past a few
+// levels it stops and asks, rather than overflowing the stack (a gate error) or rescanning the
+// text once per level (a hook timeout, which blocks the call).
+test('lossReason: deeply nested substitutions ask, quickly and without throwing', async () => {
+  const { lossReason } = await import('../../js/hosts/loss.mjs');
+  const split = (s) => [s.split(/\s+/).filter(Boolean)];
+  const c = `echo ${'$(rm x '.repeat(50000)}`;
+  const t = Date.now();
+  assert.match(lossReason(split(c), process.cwd(), { split }), /could not verify/);
+  assert.ok(Date.now() - t < 2000, `lossReason took ${Date.now() - t} ms`);
+});
+
 test('rootScan never throws on random input', async () => {
   // A crash here is a gate error — an ask on every call. Cheap fuzz over the characters the
   // splitter and tokenizer treat specially.

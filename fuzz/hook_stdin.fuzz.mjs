@@ -58,7 +58,8 @@ function assertWellFormed(verb, input, r) {
 // Shapes a host could send, from garbage to almost-right.
 const fragment = fc.constantFrom('git', 'commit', 'push', '--force', '-C', '/repo', '&&', ';',
   '|', '-m', "'x'", '"y"', 'origin', 'main', 'reset', '--hard', 'rm', '-rf', '$(', ')', '`', '\\',
-  '\n', ' ');
+  '\n', ' ', '&', '2>&1', '(', '{', '}', 'then', 'sudo', '-u', 'timeout', 'Remove-Item', '-delete',
+  '<<EOF');
 const command = fc.array(fc.oneof(fragment, fc.string()), { maxLength: 12 }).map((a) => a.join(' '));
 const payload = fc.oneof(
   fc.uint8Array({ maxLength: 256 }).map((b) => Buffer.from(b)),
