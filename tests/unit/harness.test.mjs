@@ -21,6 +21,7 @@ import { pathToFileURL } from 'node:url';
 import {
   buildLearnPrompt, learnPromptHead, readNotes, resolveAgentName,
 } from '../../js/hosts/hooks-learn.mjs';
+import { tailReader } from '../../js/hosts/hooks-prims.mjs';
 import {
   frontmatter, existingSlugs, writeMemories, memoryDropIndex, appendAgentLesson, consolidateMemory,
   migrateMemoryIndex, readFacts,
@@ -616,6 +617,28 @@ test('readNotes appends last_assistant_message even if its text appeared earlier
       last_assistant_message: 'Done.' };
     const notes = readNotes('{}', meta);
     assert.equal(notes.split('Done.').length, 3, `expected the append, got: ${notes}`);
+  });
+});
+
+// READ FROM THE END: `learn` keeps the last 16 000 code points of the notes, so it reads the
+// transcript backward until its notes hold that much. A tail that is all tool output flattens
+// to NOTHING, so a fixed window would starve the notes; the reader must reach back past it. A
+// 4 KB window over ~260 KB stands in for the 2 MB window over a 50 MB transcript.
+test('readNotes from the tail keeps the same last 16 000 characters a whole read gives', () => {
+  withDir((d) => {
+    const transcript = path.join(d, 'transcript.jsonl');
+    const say = (i) => JSON.stringify({ message: { role: 'assistant', content: `note ${i} ${'n'.repeat(400)}` } });
+    const toolOut = JSON.stringify({ type: 'user', message: { role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: 't', content: 'o'.repeat(5000) }] } });
+    const rows = [...Array(500).keys()].map(say);
+    rows.push('{"message": {"role": "user", "content": "THE LAST TYPED WORDS"}}', ...Array(10).fill(toolOut));
+    fs.writeFileSync(transcript, `${rows.join('\n')}\n`);
+    const meta = { hook_event_name: 'Stop', transcript_path: transcript };
+    const whole = readNotes('{}', meta, tailReader(1 << 30));
+    const fromTail = readNotes('{}', meta, tailReader(4096));
+    assert.ok(fromTail.endsWith('user: THE LAST TYPED WORDS'), fromTail.slice(-200));
+    assert.ok(fromTail.length >= 32_000 && fromTail.length < whole.length, String(fromTail.length));
+    assert.equal(fromTail.slice(-16_000), whole.slice(-16_000));
   });
 });
 

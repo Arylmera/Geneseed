@@ -28,6 +28,11 @@
  *     result is not `is_error` — every non-zero exit, denial and timeout carries it (checked on
  *     14 000+ real Claude Code results, 2026-10-17).
  *
+ * READ FROM THE END (constant-cost Stop). Only the current turn matters, so the transcript is read
+ * backward in growing windows (`tailReader`) until the turn's opening prompt is inside one; a
+ * turn longer than every window falls back to the whole file. Never judged on a truncated turn:
+ * a window without a prompt answers "read more", not "no edit".
+ *
  * At most one block per turn: `stop_hook_active` is true when this Stop follows a block, and the
  * gate then lets the turn end and leaves a ledger line, so a gate that cries wolf gets found.
  */
@@ -37,7 +42,7 @@ import { readText, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { within } from '../lib/paths.mjs';
 import { gitRootOf } from './gitref.mjs';
 import { DONE_LIST, recordGate } from './hooks.mjs';
-import { splitLines } from './hooks-prims.mjs';
+import { splitLines, tailReader } from './hooks-prims.mjs';
 
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit', 'MultiEdit']);
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
@@ -102,17 +107,23 @@ function isPrompt(obj) {
 /**
  * The decision, over transcript TEXT: the checks that have not passed since the turn's last
  * edit, or [] when the turn may end (no edit, or every check passed after it). Exported for the
- * unit tier — a transcript is text no CLI cell can vary cheaply.
+ * unit tier — a transcript is text no CLI cell can vary cheaply. `whole` false means the text
+ * is only the file's tail: with no prompt in it the turn may start earlier, so the answer is
+ * null ("read more") — a turn judged from its middle could miss its edit and wrongly pass.
  */
-export function doneDecide(transcript, checks, root, cwd = root) {
+export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
   const entries = [];
   for (const line of splitLines(transcript)) {
     if (!line.trim()) continue;
     try { entries.push(JSON.parse(line)); } catch { /* a torn last line is not evidence */ }
   }
-  let start = 0;
+  let start = -1;
   for (let i = entries.length - 1; i >= 0; i -= 1) {
     if (isPrompt(entries[i])) { start = i + 1; break; }
+  }
+  if (start === -1) {
+    if (!whole) return null;
+    start = 0;
   }
   const calls = [];                      // tool_use blocks, in order
   const results = new Map();             // tool_use_id -> is_error
@@ -147,9 +158,10 @@ export function doneDecide(transcript, checks, root, cwd = root) {
  * The Stop-side wrapper `cmdLearn` calls first. Returns true when it printed a block (the turn
  * goes on, so `learn` must not distil yet); false in every other case, with nothing on stdout.
  * `install` is the root `cmdLearn` already derived from `--memory` (null without one), so the
- * ledger lands in the same root its sovereignty check read.
+ * ledger lands in the same root its sovereignty check read. `read` is `cmdLearn`'s per-Stop
+ * transcript reader, so the distillation after an allow reuses the windows read here.
  */
-export function doneGate(meta, args, install) {
+export function doneGate(meta, args, install, read = tailReader()) {
   try {
     const cwd = typeof meta.cwd === 'string' && meta.cwd ? meta.cwd : process.cwd();
     const root = gitRootOf(cwd);
@@ -160,15 +172,15 @@ export function doneGate(meta, args, install) {
       err(`[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
       return false;
     }
-    let transcript;
+    let missing;
     try {
-      transcript = readText(meta.transcript_path);
+      missing = read(meta.transcript_path,
+        (text, whole) => doneDecide(text, checks, root, cwd, whole));
     } catch {
       // No ask tier on Stop: blocking on an unreadable transcript would trap the user.
       err('[done-gate] transcript unreadable — turn not judged.\n');
       return false;
     }
-    const missing = doneDecide(transcript, checks, root, cwd);
     if (!missing.length) return false;
     if (meta.stop_hook_active === true) {
       recordGate(install, 'done-gate-cap', 'law-3');

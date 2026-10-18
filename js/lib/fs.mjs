@@ -29,6 +29,7 @@
  */
 import {
   appendFileSync, writeFileSync, readFileSync, copyFileSync, statSync, utimesSync,
+  openSync, fstatSync, readSync, closeSync,
 } from 'node:fs';
 import { EOL } from 'node:os';
 import { resolve } from 'node:path';
@@ -106,6 +107,46 @@ export function appendText(path, text) {
  */
 export function readText(path) {
   return readFileSync(path, 'utf8').replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+}
+
+/**
+ * The last `bytes` of a file, decoded as `readText` decodes it, and the byte offset the window
+ * began at (0: the whole file). A window that starts mid-line drops that partial line, cut at a
+ * newline BYTE before decoding — so a multibyte character the window split falls in the dropped
+ * part, and a `\r\n` split between its two bytes leaves only an empty line. One byte before the
+ * window is read too, so a window that starts exactly on a line keeps it. Throws as
+ * `readFileSync` does (missing, unreadable, a directory).
+ */
+export function readTail(path, bytes) {
+  const fd = openSync(path, 'r');
+  try {
+    const st = fstatSync(fd);
+    // Windows opens a directory without complaint and reports size 0: refuse it as readFileSync does.
+    if (st.isDirectory()) {
+      throw Object.assign(new Error(`EISDIR: illegal operation on a directory, read '${path}'`),
+        { code: 'EISDIR' });
+    }
+    const size = st.size;
+    const start = Math.max(0, size - bytes);
+    const from = start > 0 ? start - 1 : 0;
+    const buf = Buffer.alloc(size - from);
+    let got = 0;
+    while (got < buf.length) {
+      const n = readSync(fd, buf, got, buf.length - got, from + got);
+      if (!n) break;
+      got += n;
+    }
+    let cut = 0;
+    if (start > 0) {
+      const read = buf.subarray(0, got);
+      const ends = [read.indexOf(0x0a), read.indexOf(0x0d)].filter((i) => i !== -1);
+      cut = ends.length ? Math.min(...ends) + 1 : got;   // no line end: nothing whole to decode
+    }
+    const text = buf.toString('utf8', cut, got).replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    return { text, start };
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /**

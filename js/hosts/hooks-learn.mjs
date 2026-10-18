@@ -12,7 +12,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 import {
   globalHookStandingDown, hookProjectDir, resolveMemoryDir, sovereignBypass,
 } from './hosts.mjs';
-import { readStdin, splitLines, splitWords } from './hooks-prims.mjs';
+import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs';
 import { doneGate } from './hooks-done.mjs';
 import {
   existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
@@ -94,15 +94,26 @@ function contentText(content) {
   return '';
 }
 
-/** Render a Claude-Code-style JSONL transcript into `role: text` notes. */
-function flattenTranscript(p) {
-  let raw;
+/**
+ * Render a Claude-Code-style JSONL transcript into `role: text` notes, read from the END: the
+ * window grows until its notes hold twice MAX_NOTES_CHARS UTF-16 units (so at least
+ * MAX_NOTES_CHARS code points) or it is the whole file. The window's notes are a suffix of the
+ * whole file's, so the tail `cmdLearn` keeps is the one a full read would give — and a tail of
+ * tool output, which flattens to nothing, just reads further back.
+ */
+function flattenTranscript(p, read) {
   try {
     // `errors="replace"`: Node's utf8 decoder already substitutes U+FFFD.
-    raw = readText(p);
+    return read(p, (raw, whole) => {
+      const flat = flattenText(raw);
+      return whole || flat.length >= 2 * MAX_NOTES_CHARS ? flat : null;
+    });
   } catch {
     return '';
   }
+}
+
+function flattenText(raw) {
   const acc = [];
   for (let line of splitLines(raw)) {
     line = line.trim();
@@ -152,11 +163,11 @@ function flattenTranscript(p) {
  * store, a transcript payload that is not JSON. Those are decisions over text, and the corpus
  * reaches none of them.
  */
-export function readNotes(raw, meta = hookMeta(raw)) {
+export function readNotes(raw, meta = hookMeta(raw), read = tailReader()) {
   if (!raw.trim()) return '';
   const tp = meta.agent_transcript_path || meta.transcript_path;
   if (!tp) return raw;
-  const flat = flattenTranscript(tp);
+  const flat = flattenTranscript(tp, read);
   const lastMsg = typeof meta.last_assistant_message === 'string'
     ? meta.last_assistant_message.trim() : '';
   if (!flat) return lastMsg || flat;
@@ -314,7 +325,9 @@ export function cmdLearn(args) {
   // means the turn goes on, so there is nothing to distil yet: the next Stop will.
   // `--no-done-gate` (the install switched Law III's gate off) skips the check, never the
   // distillation below.
-  if (hookEvent === 'Stop' && !args.file && !args.noDoneGate && doneGate(meta, args, install)) return 0;
+  // One reader for this Stop: an allowed turn's distillation reuses the windows the gate read.
+  const read = tailReader();
+  if (hookEvent === 'Stop' && !args.file && !args.noDoneGate && doneGate(meta, args, install, read)) return 0;
 
   // I2 (Bob): its Stop payload never carries `transcript_path`, so there is never a transcript
   // to distil — and the bare envelope itself is not notes text (that would waste a model call
@@ -334,7 +347,7 @@ export function cmdLearn(args) {
 
   // B3: a real hook call with `$GENESEED_LLM` unset has nothing to send a prompt to — stdout on
   // Stop/SubagentStop/PreCompact reaches only the debug log, never the user (docs `hooks.md`) —
-  // so reading and flattening the transcript (up to 16 KB, every turn) just to print it nowhere
+  // so reading and flattening the transcript (a 2 MB tail or more, every turn) just to print it nowhere
   // is pure waste. Checked BEFORE `readNotes`, which is what does that read. A manual
   // invocation keeps printing the prompt on an unset `$GENESEED_LLM` — that is the documented,
   // deliberate behaviour (docs/reference/env-context.md) for someone running `learn` by hand to
@@ -345,7 +358,7 @@ export function cmdLearn(args) {
     return 0;
   }
 
-  let notes = readNotes(raw, meta);
+  let notes = readNotes(raw, meta, read);
   if (!notes.trim()) {
     err('[learn] no notes or transcript content \u2014 nothing to distil.\n');
     return 0;
