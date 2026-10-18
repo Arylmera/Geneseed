@@ -202,6 +202,53 @@ export const LOSS_ROWS = [
   { cmd: 'git worktree remove --force ../x', state: 'clean', stop: false },
   { cmd: 'npm rm left-pad', state: 'clean', stop: false },
   { cmd: 'git status', state: 'dirty', stop: false },
+  // Shell structure must not hide the program word (fail-open probes, 2026-10-18): a lone `&`
+  // runs the next command, `(`/`{`/`then` stand before it, a wrapper's flag takes a value, a
+  // substitution runs its body. Each stops exactly where the plain form does.
+  { cmd: 'true & git reset --hard', state: 'dirty', stop: true },
+  { cmd: '(git reset --hard)', state: 'dirty', stop: true },
+  { cmd: '(cd . && git reset --hard)', state: 'dirty', stop: true },
+  { cmd: 'if true; then git reset --hard; fi', state: 'dirty', stop: true },
+  { cmd: '{ rm untracked.txt; }', state: 'untracked', stop: true },
+  { cmd: 'echo $(rm untracked.txt)', state: 'untracked', stop: true },
+  { cmd: 'echo `rm untracked.txt`', state: 'untracked', stop: true },
+  { cmd: 'sudo -u root rm -rf untracked.txt', state: 'untracked', stop: true },
+  { cmd: 'env -u FOO rm untracked.txt', state: 'untracked', stop: true },
+  { cmd: 'nice -n 5 rm untracked.txt', state: 'untracked', stop: true },
+  { cmd: 'timeout 5 rm untracked.txt', state: 'untracked', stop: true },
+  { cmd: 'unlink untracked.txt', state: 'untracked', stop: true },
+  // The general rule behind those: a removal word, unquoted, after a program the gate does not
+  // read — a wrapper it does not know, a pipeline loop, shell syntax, a wrapper flag of unknown
+  // arity — cannot be verified, so it asks. Only a short list of programs that never run their
+  // arguments, or whose `rm` is their own subcommand, passes (`npm rm`, `grep rm`).
+  { cmd: 'case x in *) rm untracked.txt;; esac', state: 'untracked', stop: true },
+  { cmd: 'sudo --user root rm untracked.txt', state: 'untracked', stop: true },
+  { cmd: 'setsid rm untracked.txt', state: 'untracked', stop: true },
+  { cmd: 'gci *.txt | ForEach-Object { Remove-Item $_ }', state: 'untracked', stop: true },
+  { cmd: 'gci *.txt | % { ri $_ }', state: 'untracked', stop: true },
+  { cmd: 'grep -rn rm src', state: 'clean', stop: false },
+  // A removal that names no path takes it from the pipe, and `find -delete` from its own walk:
+  // neither is readable here, so both ask.
+  { cmd: 'Get-ChildItem untracked.txt | Remove-Item', state: 'untracked', stop: true },
+  { cmd: 'gci *.txt | ri -Force', state: 'untracked', stop: true },
+  { cmd: 'find . -name x -delete', state: 'clean', stop: true },
+  // ...while what is provably safe still passes: `2>&1`, `&>` and `&&` are not a lone `&`, a
+  // wrapped or substituted removal of a tracked clean file loses nothing, a quoted pattern is
+  // data, and a commit message carried in `$(cat <<'EOF' … EOF)` is a heredoc, not a command.
+  { cmd: 'git reset --hard 2>&1 | tail', state: 'clean', stop: false },
+  { cmd: 'git push --force origin pushed 2>&1', state: 'clean', stop: false },
+  { cmd: 'git checkout -- tracked.txt &> log', state: 'clean', stop: false },
+  { cmd: 'rm -f missing.txt 2>&1', state: 'clean', stop: false },
+  { cmd: 'git status && rm tracked.txt', state: 'clean', stop: false },
+  { cmd: 'sudo -u root rm tracked.txt', state: 'clean', stop: false },
+  { cmd: 'timeout 5 rm tracked.txt', state: 'clean', stop: false },
+  { cmd: 'echo $(rm tracked.txt)', state: 'clean', stop: false },
+  { cmd: 'grep -rn "git reset --hard" src', state: 'clean', stop: false },
+  { cmd: 'git commit -m "$(cat <<\'EOF\'\nfix: drop the rm step\nEOF\n)"', state: 'clean', stop: false },
+  { cmd: 'npm run lint 2>&1 | tail', state: 'clean', stop: false },
+  { cmd: 'git status && ls', state: 'clean', stop: false },
+  { cmd: 'ls > out.txt 2>&1', state: 'clean', stop: false },
+  { cmd: 'git status &> log', state: 'clean', stop: false },
 ];
 
 /** `row.cmd` with `{outside}` filled in (forward slashes: the commands are shell text). */

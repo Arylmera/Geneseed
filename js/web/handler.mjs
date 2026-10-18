@@ -130,7 +130,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
 
   function doGet(req, res, path, ae) {
     const route = STATE_ROUTES[path];
-    if (route !== undefined) return sendJson(res, route(state), 200, ae);
+    if (route !== undefined) return sendJson(res, route(state, req.url), 200, ae);
     // `pid` is what a restarting client waits on: the OLD server keeps answering this ping for
     // a moment after `/api/restart` returns, and a reload onto it fetches the old token.
     if (path === '/api/ping') {

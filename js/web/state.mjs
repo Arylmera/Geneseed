@@ -40,7 +40,10 @@ export function stampMinute(ms) {
  * THE CACHING IS BEHAVIOUR, NOT AN OPTIMISATION: `doctorCollect` renders a theme per call
  * and the console GETs `/api/overview` on mount and again after every mutation, so an
  * uncached `doctor` would put a full build on each of those requests. `refresh()` is what a mutation calls to
- * drop both.
+ * drop both — except where the mutation cannot change anything the doctor reads (the checkout,
+ * the hook shim, the hook shell, the OpenCode config dirs, the deployed install): a memory
+ * delete passes `{ doctor: false }` and keeps the ~3.6 s verdict. Rule and profile writes do not
+ * call `refresh()` at all. Every other caller keeps the default, so a new one is slow, never stale.
  */
 export function webState(theme = null, target = null) {
   const st = {
@@ -56,6 +59,10 @@ export function webState(theme = null, target = null) {
     trust: null,
     _inv: null,
     _doctor: null,
+    // The Doctor page's per-check cards and theme list, from the SAME run as `_doctor` — kept
+    // beside it rather than inside so `/api/overview` (fetched after every mutation) does not
+    // carry every group.
+    _doctorRun: null,
   };
   // The INSTALL ROOT (== build --out). For globals it IS the data dir; a claude/bob/openclaude
   // PROJECT install keeps its data under <repo>/.claude|.bob|.openclaude while the markers
@@ -87,15 +94,19 @@ export function webState(theme = null, target = null) {
   });
   Object.defineProperty(st, 'doctor', {
     get() {
-      if (st._doctor === null) {
-        const [, problems] = doctorCollect({ theme: st.theme });
-        st.stampDoctor(problems);
-      }
+      if (st._doctor === null) st.runDoctor();
       return st._doctor;
     },
   });
-  st.stampDoctor = (problems) => {
+  /** One fresh doctor run, cached whole: the verdict and the grouped detail of the same run. */
+  st.runDoctor = () => {
+    const groups = [];
+    const [themes, problems] = doctorCollect({ theme: st.theme, groups });
+    st.stampDoctor(problems, themes, groups);
+  };
+  st.stampDoctor = (problems, themes = [], groups = []) => {
     st._doctor = { ok: !problems.length, problems, checked_at: stampMinute(Date.now()) };
+    st._doctorRun = { themes, groups };
   };
   /**
    * The CURRENT install's mode, from its `.geneseed-emit` marker: the ROOT first (where
@@ -139,13 +150,26 @@ export function webState(theme = null, target = null) {
     st._inv = null;
     st._doctor = null;
   };
-  st.refresh = () => {
+  st.refresh = ({ doctor = true } = {}) => {
     st._inv = null;
-    st._doctor = null;
+    if (doctor) st._doctor = null;
     st.emit = st.detectEmit() || st.emit;
     const host = hostOf();
     st.theme = themeOfDir(st.root, host) || themeOfDir(st.target, host) || st.theme;
     readMarkers(host);
   };
   return st;
+}
+
+/**
+ * Run the doctor once in the background, right after the server binds, so the first
+ * `/api/overview` finds a verdict instead of paying the ~3.6 s itself. Still synchronous once it
+ * starts — the event loop is blocked for that run — so a request landing mid-run waits for it,
+ * no longer than it would have. The catch is not optional: a throw inside `setImmediate` is
+ * uncaught and would kill the daemon; a failed warm-up just leaves the cache cold.
+ */
+export function warmDoctor(st) {
+  setImmediate(() => {
+    try { if (st._doctor === null) st.runDoctor(); } catch { /* cold cache, computed on demand */ }
+  });
 }

@@ -297,16 +297,31 @@ function stashExists(root) {
  * a superset of what the parse acts on.
  */
 const LOSS_CANDIDATE_RE =
-  /\bgit\b[^\n]*\b(?:reset|clean|branch|checkout|switch|restore|stash|reflog|gc|push)\b|(?:^|[\s;&|("'])(?:rm|rmdir|del|erase|remove-item|ri|rd)(?:\.exe)?(?=[\s;&|)"']|$)/im;
+  /\bgit\b[^\n]*\b(?:reset|clean|branch|checkout|switch|restore|stash|reflog|gc|push)\b|(?:^|[\s;&|("'`])(?:rm|rmdir|unlink|del|erase|remove-item|ri|rd)(?:\.exe)?(?=[\s;&|)"'`]|$)|(?:^|\s)-delete(?=\s|$)/im;
 
 class Unverified extends Error {}
 const unverified = (why) => { throw new Unverified(why); };
 
-const RM_PROGS = new Set(['rm', 'rmdir', 'del', 'erase', 'remove-item', 'ri', 'rd']);
+const RM_PROGS = new Set(['rm', 'rmdir', 'unlink', 'del', 'erase', 'remove-item', 'ri', 'rd']);
 // cmd.exe's own removal verbs take `/s` `/q` switches, which are not paths.
 const CMD_SWITCH_PROGS = new Set(['rmdir', 'del', 'erase', 'rd']);
 const CD_PROGS = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
-const WRAPPERS = new Set(['sudo', 'doas', 'command', 'builtin', '\\builtin', 'time', 'nice', 'nohup', 'exec', 'env']);
+// A wrapper runs the command after its own flags: `<short flags taking a value>|<short flags taking
+// none>`. A flag in neither list (`env -S` runs a string, `env -C`/`sudo -D` change directory,
+// `command -v` only looks up) is not guessed at — the segment asks if it names a removal.
+const WRAPPERS = new Map([['sudo', 'ughpCUrtT|AbEHiknPSs'], ['doas', 'uC|ns'], ['command', '|p'],
+  ['builtin', '|'], ['\\builtin', '|'], ['time', 'fo|pav'], ['nice', 'n|'], ['nohup', '|'],
+  ['exec', 'a|cl'], ['env', 'u|i0v'], ['timeout', 'sk|v'], ['ionice', 'cn|t'], ['stdbuf', 'ioe|']]);
+const WRAPPER_LONG = new Set(['--preserve-status', '--foreground', '--verbose', '--login', '--preserve-env',
+  '--non-interactive', '--ignore-environment', '--null']);
+// Shell grammar that may stand before the program word (`(cd x && rm y)`, `if …; then rm y; fi`).
+const STRUCTURE = new Set(['(', '((', '{', '!', 'if', 'then', 'elif', 'else', 'do', 'while', 'until']);
+// The only programs this reader does not parse that may still name a removal word and pass: their
+// `rm`/`del` is their own subcommand (a package, a container), or they never run their arguments
+// (a substitution in one is judged on its own). Any other program over a removal word asks.
+const INERT = new Set(['npm', 'pnpm', 'yarn', 'bun', 'cargo', 'brew', 'docker', 'podman', 'echo', 'printf',
+  'grep', 'egrep', 'fgrep', 'rg', 'findstr', 'select-string', 'which', 'where', 'type', 'man', 'get-command',
+  'get-help']);
 // Programs that run ANOTHER command from their arguments or stdin: what they would remove is
 // not on this command line in a form the parse can read, so a removal word inside one asks.
 const INDIRECT = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'fish', 'pwsh', 'powershell', 'cmd',
@@ -671,6 +686,8 @@ function rmAct(prog, args, dir) {
     if (opts && CMD_SWITCH_PROGS.has(prog) && /^\/[a-zA-Z?]$/.test(a)) continue;
     targets.push(a);
   }
+  // `… | Remove-Item`, `ri -Force`: the paths come from the pipe, which this reader cannot see.
+  if (!targets.length) unverified(`\`${prog}\` names no path, so what it removes comes from elsewhere`);
   const groups = new Map();
   for (const t of targets) {
     const shown = t.replace(OPAQUE, '');
@@ -713,6 +730,69 @@ function rmAct(prog, args, dir) {
 const progOf = (w) => w.split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
 
 /**
+ * A segment's RAW tokens with the shell grammar around its command dropped: leading `(`, `{`,
+ * `!`, `then`, `do`… (a `(` glued to the first word too) and a closing `)`/`}`. Without it
+ * `(git reset --hard)` has `(git` for its program and `--hard)` for its flag. `rootScan`
+ * shares it, so `(find / …)` is a scan.
+ */
+function stripStructure(raw) {
+  const t = raw.slice();
+  while (t.length) {
+    if (STRUCTURE.has(t[0])) t.shift();
+    else if (/^\(+./.test(t[0])) t[0] = t[0].replace(/^\(+/, '');
+    else break;
+  }
+  while (t.length && (t[t.length - 1] === '}' || /^\)+$/.test(t[t.length - 1]))) t.pop();
+  if (t.length) t[t.length - 1] = t[t.length - 1].replace(/\)+$/, '');
+  return t;
+}
+
+/**
+ * The bodies of the command substitutions in `text` (`$(…)`, backticks, `<(…)`, `>(…)`) —
+ * single quotes hide them, double quotes do not. An unclosed one runs to the end of the text:
+ * the splitter already cut an unquoted `$(a; b)` at its `;`.
+ */
+function substitutions(text) {
+  const out = [];
+  let sq = false; let dq = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (sq) { if (c === "'") sq = false; continue; }
+    if (c === "'" && !dq) { sq = true; continue; }
+    if (c === '"') { dq = !dq; continue; }
+    if (c === '`') {
+      const end = text.indexOf('`', i + 1);
+      out.push(text.slice(i + 1, end < 0 ? text.length : end));
+      i = end < 0 ? text.length : end;
+    } else if ('$<>'.includes(c) && text[i + 1] === '(') {
+      let depth = 1; let j = i + 2;
+      for (; j < text.length && depth; j++) depth += text[j] === '(' ? 1 : text[j] === ')' ? -1 : 0;
+      out.push(text.slice(i + 2, depth ? text.length : j - 1));
+      i = j - 1;
+    }
+  }
+  return out;
+}
+
+/** `w` past wrapper `name`'s own flags (and `timeout`'s duration), or null when a flag is unknown. */
+function pastWrapper(name, w) {
+  const [takes, plain] = WRAPPERS.get(name).split('|');
+  let i = 0;
+  for (; i < w.length && w[i].length > 1 && w[i].startsWith('-'); i++) {
+    const a = w[i];
+    if (a === '--') { i += 1; break; }
+    if (a.startsWith('--')) { if (a.includes('=') || WRAPPER_LONG.has(a)) continue; return null; }
+    if (name === 'nice' && /^-\d+$/.test(a)) continue;
+    for (let j = 1; j < a.length; j++) {
+      if (takes.includes(a[j])) { if (j === a.length - 1) i += 1; break; }   // the value: the rest, or the next word
+      if (!plain.includes(a[j])) return null;
+    }
+  }
+  if (name === 'timeout' && /^\d/.test(w[i] || '')) i += 1;
+  return w.slice(i);
+}
+
+/**
  * The verdict for a whole command, given its segments as RAW token arrays (quotes still on —
  * `js/hosts/hooks.mjs` cuts and tokenises with the same lexer `rootScan` uses, so a quoted
  * `;` or a heredoc body is never a segment). Returns the reason it would lose data, or null
@@ -722,19 +802,33 @@ const progOf = (w) => w.split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '')
  * each host's ceiling for a crashed gate (docs/adr/0007-gates-fail-closed-per-host-ceiling.md).
  * `always: false` skips the two acts that lose data in every state (`reflog expire`, `gc --prune`)
  * — the OpenCode guard passes it, because a static `permission.bash` glob already asks for those.
+ * `split` cuts a command substitution's body into segments the same way (both callers pass their
+ * splitter); without it, a substitution that names a removal asks.
+ * @param {string[][]} segments
+ * @param {string} cwd
+ * @param {{ always?: boolean, split?: (text: string) => string[][] }} [options]
  */
-function lossReason(segments, cwd, { always = true } = {}) {
-  let dir = cwd;
-  try {
-    for (const raw of segments) {
-      let w = words(raw);
-      while (w.length && (/^\w+=/.test(w[0]) || WRAPPERS.has(progOf(w[0])))) {
-        const wrapper = progOf(w[0]);
-        w = w.slice(1);
-        // A wrapper's own flags (`sudo -u x`, `env -i`) are not the program.
-        if (wrapper !== 'command' && wrapper !== 'exec') while (w.length && w[0].startsWith('-')) w = w.slice(1);
+function lossReason(segments, cwd, { always = true, split } = {}) {
+  /** The first loss among `segs`, run from `start`; a substitution body is judged as a command. */
+  const judge = (segs, start, depth = 0) => {
+    let dir = start;
+    for (const raw of segs.map(stripStructure)) {
+      const text = raw.join(' ');
+      const named = LOSS_CANDIDATE_RE.test(text);
+      for (const body of named ? substitutions(text) : []) {
+        if (!LOSS_CANDIDATE_RE.test(body)) continue;
+        // Bounded: `$($($(…` nested past any real command would rescan the text once per level.
+        if (!split || depth >= 4) unverified('a command substitution names a removal');
+        const v = judge(split(body), dir, depth + 1);
+        if (v) return v;
       }
-      if (!w.length) continue;
+      let w = words(raw);
+      while (w && w.length && (/^\w+=/.test(w[0]) || WRAPPERS.has(progOf(w[0])))) {
+        const wrapper = progOf(w[0]);
+        w = /^\w+=/.test(w[0]) ? w.slice(1) : pastWrapper(wrapper, w.slice(1));
+        if (!w && named) unverified(`\`${wrapper}\` takes a flag the gate does not know`);
+      }
+      if (!w || !w.length) continue;
       const prog = progOf(w[0]);
       const args = w.slice(1);
       if (CD_PROGS.has(prog)) {
@@ -747,10 +841,18 @@ function lossReason(segments, cwd, { always = true } = {}) {
       else if (RM_PROGS.has(prog)) verdict = rmAct(prog, args, dir);
       else if (INDIRECT.has(prog) && LOSS_CANDIDATE_RE.test(args.join(' '))) {
         unverified(`\`${prog}\` runs a command the gate cannot read`);
+      } else if (named && !INERT.has(prog)
+        && LOSS_CANDIDATE_RE.test(raw.map((t) => t.replace(/"[^"]*"?|'[^']*'?/g, ' ')).join(' '))) {
+        // A program this reader does not know (a wrapper, a loop, shell syntax) over an unquoted
+        // removal word: it may run it, so it is not proven safe. A quoted word is data.
+        unverified(`\`${w[0].replace(OPAQUE, '')}\` is not a program the gate reads, and a removal follows it`);
       }
       if (verdict) return verdict;
     }
     return null;
+  };
+  try {
+    return judge(segments, cwd);
   } catch (e) {
     if (!(e instanceof Unverified)) throw e;
     return `the gate could not verify what this command would lose (${e.message})`;
@@ -776,9 +878,9 @@ const FS_ROOT_RE = /^(?:\/|\/[a-z]\/?|\/mnt\/[a-z]\/?|[a-z]:[\\/]?)\*?$/i
 const SCAN_WORD_RE = /\b(?:find|du|tree|rg|fd|where\.exe|grep|egrep|ls|dir|get-childitem|gci)\b/i
 const SCAN_TOKEN_RE = /(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g
 const SCAN_WRAPPERS = new Set(["sudo", "command", "\\builtin", "time", "nice"])
-// A comment (`#` starting a word), a quoted run (its `;`/`|` is data), a separator, or a heredoc
-// opener (never the `<<<` here-string).
-const SCAN_SPLIT_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g
+// A comment (`#` starting a word), a quoted run (its `;`/`|` is data), a separator (a lone `&`
+// too, never the one in `2>&1`/`<&3`/`&>`/`|&`), or a heredoc opener (never the `<<<` here-string).
+const SCAN_SPLIT_RE = /(?<![^\s;|&(])#[^\n]*|"[^"]*"?|'[^']*'?|\|\||&&|[|;\n]|(?<![&<>|])&(?![&>])|(?<!<)<<(?!<)(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/g
 // Cut at separators OUTSIDE quotes and drop every heredoc body (to its TAG line; `<<-` allows
 // tabs): a commit message that names a root scan is data, not a command to block.
 function scanSegments(command) {
@@ -812,7 +914,8 @@ function rootScan(command) {
   if (!SCAN_WORD_RE.test(command)) return null
   for (const seg of scanSegments(command)) {
     // Quotes kept until the root test, so a quoted "a:" is told from a bare C:.
-    let toks = (seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t))
+    // `(find / …)`, `then find / …`: the grammar around the command is not its program.
+    let toks = stripStructure(seg.match(SCAN_TOKEN_RE) || []).filter((t) => !/^\w+=/.test(t))
     while (toks.length && SCAN_WRAPPERS.has(unquote(toks[0]))) toks = toks.slice(1)
     if (!toks.length) continue
     // The program word without its path (either slash) or an `.exe` suffix.
@@ -1218,7 +1321,8 @@ export const GeneseedGuard = async (ctx) => {
           if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
             // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
             const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
-            const loss = lossReason(scanSegments(c).map((seg) => seg.match(SCAN_TOKEN_RE) || []), wd, { always: false })
+            const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
+            const loss = lossReason(cut(c), wd, { always: false, split: cut })
             if (loss) { await deny(`${loss} (Deletion Is Deliberate) — confirm with the user first`, "law-4"); return }
           }
         }

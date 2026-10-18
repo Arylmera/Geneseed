@@ -307,7 +307,8 @@ export function apiMemoryDelete(state, name) {
   // CASE-FOLDED: this endpoint's own compared `MEMORY` exactly, so on Windows and macOS `memory`
   // resolved to MEMORY.md, passed, and deleted the index the agent reads at session start.
   if (memoryDelete(d, name) === null) throw new NotFound(name);
-  state.refresh();
+  // The doctor reads nothing in the memory store, so its cached verdict survives (`refresh`).
+  state.refresh({ doctor: false });
   return { archived: name };
 }
 
