@@ -62,6 +62,19 @@ describe('Doctor', () => {
     expect(screen.getByText('dead link x in AGENT.md')).toBeTruthy()
   })
 
+  // Mount serves the daemon's cached run; only the Re-run button may ask for a fresh one (it is
+  // the ~3.6 s path), so the two calls must differ in exactly that argument.
+  it('mounts on the cached verdict and re-runs fresh', async () => {
+    api.doctor.mockClear()
+    render(<Doctor />)
+    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    expect(api.doctor).toHaveBeenCalledTimes(1)
+    expect(api.doctor).toHaveBeenLastCalledWith(false)
+    fireEvent.click(screen.getByText(/Re-run checks/))
+    await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(2))
+    expect(api.doctor).toHaveBeenLastCalledWith(true)
+  })
+
   it('shows loading state while data is null, with correct button label', async () => {
     // Never-resolving promise — loading state persists even after microtask flush
     api.doctor.mockImplementationOnce(() => new Promise(() => {}))

@@ -26,7 +26,7 @@ import {
   viewCfg, apiLoops, apiLoopsActive,
 } from '../../js/web/api.mjs';
 import { NotFound, apiCatalog, apiItem, specDesc, wikiItems } from '../../js/web/catalog.mjs';
-import { webState } from '../../js/web/state.mjs';
+import { warmDoctor, webState } from '../../js/web/state.mjs';
 import { apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE } from '../../js/web/user-files.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -3393,4 +3393,110 @@ test('the job map is trimmed to the persisted history', () => {
   assert.ok(jm._jobs.has('live'), 'the running job was dropped');
   assert.equal(jm._jobs.has('j4'), false, 'the oldest finished jobs were kept');
   assert.ok(jm._jobs.has(`j${JobManager.HISTORY_MAX + 4}`), 'the newest finished job was dropped');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The doctor cache survives what the doctor cannot see. A doctor run costs ~3.6 s, and the console
+// refetches the overview after EVERY mutation — so a mutation that drops the verdict puts that
+// run on the very next request. The rule: a memory delete and a rule write keep the cached
+// verdict (the doctor reads the checkout, the hook shim, the hook shell, the OpenCode config dirs
+// and the deployed install — never the memory store or user-rules.md); a finished job, an install
+// toggle and a view switch drop it, since each can change something the doctor reads. A planted
+// SENTINEL verdict stands in for a real run, so "kept" and "dropped" are both one equality.
+
+const SENTINEL = '[sentinel] planted by the test, never by doctorCollect';
+const plant = (st) => st.stampDoctor([SENTINEL], ['neutral'],
+  [{ check: 'build', label: 'Build scan (neutral)', problems: [SENTINEL] }]);
+
+test('a memory delete keeps the cached doctor verdict', () => {
+  const sb = makeSandbox();
+  try {
+    const mem = path.join(sb.path, 'memory');
+    fs.mkdirSync(mem, { recursive: true });
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'), '# Memory Index\n- [a](a.md) — x\n');
+    fs.writeFileSync(path.join(mem, 'a.md'), 'a fact\n');
+    const st = webState('neutral', sb.path);
+    plant(st);
+    assert.deepEqual(apiMemoryDelete(st, 'a'), { archived: 'a' });
+    assert.deepEqual(st.doctor.problems, [SENTINEL],
+      'a memory delete dropped the doctor verdict — the next overview pays a full doctor run');
+  } finally { sb.cleanup(); }
+});
+
+test('a rule write keeps the cached doctor verdict', () => {
+  withRules((box) => {
+    plant(box.state);
+    const r = apiRulesMutate(box.state, {
+      op: 'add', fingerprint: apiRules(box.state).fingerprint,
+      title: 'No emoji', body: 'Plain text only.', scope: 'project',
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.deepEqual(box.state.doctor.problems, [SENTINEL], 'a rule write dropped the verdict');
+  });
+});
+
+test('an install toggle drops the cached doctor verdict', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    const st = neutral();
+    plant(st);
+    const res = apiInstallToggle(st, { host: 'opencode', path: root, action: 'deactivate' });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.equal(st._doctor, null, 'an install toggle kept a verdict about the old install');
+  });
+});
+
+test('a view switch and a plain refresh drop the cached doctor verdict', () => {
+  const st = neutral();
+  plant(st);
+  st.refresh();
+  assert.equal(st._doctor, null, 'refresh() with no argument must stay the safe default');
+  plant(st);
+  st.selectView(st.target);
+  assert.equal(st._doctor, null, 'a view switch kept the previous view\'s verdict');
+});
+
+// The job path through the real handler, with a manager whose job "finishes" the moment it
+// starts — the onFinish callback is the thing under test, not the subprocess.
+test('a finished job drops the cached doctor verdict', async () => {
+  const st = neutral();
+  plant(st);
+  const jm = { busy: false, recent: () => [], get: () => null,
+    start: (_action, _cmds, onFinish) => { onFinish(0); return 'j1'; } };
+  const srv = http.createServer(makeHandler(st, jm, 'tok', path.join(ROOT, 'web', 'dist')));
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  try {
+    const res = await fetchStatus(srv.address().port, '/api/actions/doctor',
+      { method: 'POST', body: '{}', headers: { 'x-geneseed-token': 'tok' } });
+    assert.equal(res.status, 202, await res.text());
+    assert.equal(st._doctor, null, 'a finished job kept the verdict from before it ran');
+  } finally {
+    await new Promise((r) => { srv.close(r); });
+  }
+});
+
+// `/api/doctor` serves the cached run — groups and themes included — and re-runs only on
+// `?fresh=1`, the Doctor page's Re-run button. The fresh call is the one real doctor run here.
+test('the doctor endpoint serves the cache, and re-runs only when fresh', () => {
+  const st = neutral();
+  plant(st);
+  const cached = STATE_ROUTES['/api/doctor'](st, '/api/doctor');
+  assert.deepEqual(cached.problems, [SENTINEL]);
+  assert.deepEqual(cached.themes, ['neutral']);
+  assert.deepEqual(cached.groups.map((g) => g.check), ['build']);
+  const fresh = STATE_ROUTES['/api/doctor'](st, '/api/doctor?fresh=1');
+  assert.ok(!fresh.problems.includes(SENTINEL), 'a fresh run returned the planted verdict');
+  assert.ok(fresh.groups.length > 1, 'a fresh run carried no per-check groups');
+  assert.deepEqual(st.doctor.problems, fresh.problems, 'the fresh run was not cached');
+});
+
+// `serve()` calls `warmDoctor` once it is listening; the run lands on the NEXT turn of the event
+// loop, never inside the call, so binding and the ready line are not held up by it.
+test('the warm-up fills the doctor cache after the current turn', async () => {
+  const st = neutral();
+  warmDoctor(st);
+  assert.equal(st._doctor, null, 'the warm-up ran synchronously, inside the call');
+  await new Promise((r) => { setImmediate(r); });
+  assert.ok(st._doctor && Array.isArray(st._doctor.problems), 'the warm-up left the cache cold');
+  assert.ok(Array.isArray(st._doctorRun.groups) && st._doctorRun.groups.length > 0);
 });

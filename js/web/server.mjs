@@ -27,7 +27,7 @@ import { isFile, printOut } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
 import { parseIntStrict } from '../lib/text.mjs';
 import { promptLine } from '../lib/prompt.mjs';
-import { webState } from './state.mjs';
+import { warmDoctor, webState } from './state.mjs';
 import { clearDaemon, codeStamp, openUrl, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
 import { makeHandler } from './handler.mjs';
 import { JobManager } from './jobs.mjs';
@@ -165,6 +165,8 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
       printOut(`[web] Geneseed UI on ${url}  (theme: ${state.theme})\n`);
       printOut(daemon ? '[web] daemon ready.\n' : '[web] Ctrl-C to stop.\n');
       if (openBrowser) openUrl(url);
+      // After the record and the ready line, so `web start`'s wait loop already has its URL.
+      warmDoctor(state);
       // Node kills on SIGINT by default, which would skip this message and the record
       // cleanup in `srv.on('close', ...)` below — a foreground `--daemon-internal` server
       // stopped with Ctrl-C would otherwise leave a record pointing at a dead port.
