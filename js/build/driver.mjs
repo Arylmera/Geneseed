@@ -75,8 +75,11 @@ import { configDefaults, die, parseArgs } from './args.mjs';
 export { parseDriverArgs } from './args.mjs';
 
 
-/** `_build_emit.PRIMARY_AGENT_SRC`. */
-const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
+/**
+ * `_build_emit.PRIMARY_AGENT_SRC`. Exported for `diffCollect`'s render memo: a render input
+ * `sourceFingerprint` does not hash, so the memo keys on its bytes itself.
+ */
+export const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
 
 /** `_build_render.resolve_out` — absolute, or relative to the CURRENT WORKING DIRECTORY
  *  (not to ROOT), so the harness renders straight into any repository.
