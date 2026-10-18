@@ -10,6 +10,7 @@
 import { statSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { comparePaths } from '../lib/paths.mjs';
+import { readTail } from '../lib/fs.mjs';
 
 // ---- Python path and text primitives -------------------------------------------------
 // Small, and each one is here because a JS-idiomatic equivalent differs observably.
@@ -73,6 +74,30 @@ export function splitLines(text) {
   const parts = text.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/);
   if (parts.length && parts[parts.length - 1] === '') parts.pop();
   return parts;
+}
+
+/** The first window a Stop reads from a transcript's end; real transcripts reach 50 MB. */
+export const TAIL_BYTES = 2 * 1024 * 1024;
+
+/**
+ * A transcript reader for ONE hook invocation: `read(file, judge)` hands `judge(text, whole)`
+ * the file's last `bytes`, then a window four times larger, until `judge` answers (anything
+ * but null) or the window holds the whole file — where it must answer. Each window is read once
+ * per reader, so the done gate and `learn` share one read when both run on the same Stop.
+ * A read error (missing, unreadable) throws to the caller, uncached. Never a module-level cache:
+ * the host appends between Stops, and a test rewrites the same path.
+ */
+export function tailReader(bytes = TAIL_BYTES) {
+  const seen = new Map();
+  return (file, judge) => {
+    for (let n = bytes; ; n *= 4) {
+      const key = `${n}:${file}`;
+      if (!seen.has(key)) seen.set(key, readTail(file, n));
+      const { text, start } = seen.get(key);
+      const answer = judge(text, start === 0);
+      if (answer !== null || start === 0) return answer;
+    }
+  };
 }
 
 /** `str.split()` with no argument — runs of whitespace, ends stripped, no empties. */

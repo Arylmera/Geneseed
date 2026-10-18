@@ -11,6 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { doneDecide, runsUnpiped } from '../../js/hosts/hooks-done.mjs';
+import { tailReader } from '../../js/hosts/hooks-prims.mjs';
+import { readTail } from '../../js/lib/fs.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
 
@@ -202,5 +204,97 @@ test('rule-gate: the done list protects itself, its neighbours do not', () => {
     const free = write('.geneseed/notes.txt');
     assert.equal(free.status, 0);
     assert.equal(free.stdout, '', 'a neighbour of the done list must pass untouched');
+  } finally { sb.cleanup(); }
+});
+
+// READ FROM THE END (constant-cost Stop). `readTail` is the byte window, `tailReader` the
+// growing loop both Stop readers share. Small windows over small files stand in for the 2 MB
+// window over a 50 MB transcript: the loop is the same, only `bytes` differs.
+test('readTail: the window, its partial first line, and the decoding readText would do', () => {
+  const sb = makeSandbox();
+  try {
+    const f = path.join(sb.path, 't.txt');
+    const tailOf = (content, bytes) => { fs.writeFileSync(f, content); return readTail(f, bytes); };
+    // Each row: the file, the window, then the text and start offset expected.
+    const rows = [
+      ['a file shorter than the window is read whole', 'one\ntwo\n', 100, 'one\ntwo\n', 0],
+      ['a window cut mid-line drops the partial line', 'aaaa\nbbbb\ncc\n', 7, 'cc\n', 6],
+      ['a window that starts exactly on a line keeps it', 'aaaa\nbbbb\n', 5, 'bbbb\n', 5],
+      ['a window with no line end keeps nothing', 'aaaaaaaa', 4, '', 4],
+      ['CRLF normalises like readText', 'a\r\nb\r\n', 100, 'a\nb\n', 0],
+      ['a window split between \r and \n leaves only an empty line', 'aa\r\nbb\r\n', 5, '\nbb\n', 3],
+      // 'é' is two bytes (0xC3 0xA9); a 5-byte window over the 7-byte file starts on its second byte.
+      ['a multibyte character split by the window falls in the dropped part', 'xé\nyz\n', 5, 'yz\n', 2],
+    ];
+    for (const [what, content, bytes, text, start] of rows) {
+      assert.deepEqual(tailOf(content, bytes), { text, start }, what);
+    }
+    assert.throws(() => readTail(path.join(sb.path, 'missing.jsonl'), 10), /ENOENT/);
+    assert.throws(() => readTail(sb.path, 10), /EISDIR/, 'a directory must throw, never read as empty');
+  } finally { sb.cleanup(); }
+});
+
+/** A transcript file: `head` rows, then filler lines worth `pad` bytes, then `tail` rows. */
+function bigTranscript(dir, { head = [], pad = 0, tail = [] }) {
+  const f = path.join(dir, 't.jsonl');
+  const filler = JSON.stringify({ type: 'assistant', message: { role: 'assistant',
+    content: [{ type: 'text', text: 'x'.repeat(1000) }] } });
+  const lines = Math.ceil(pad / (filler.length + 1));
+  fs.writeFileSync(f, `${[jsonl(...head), ...Array(lines).fill(filler), jsonl(...tail)]
+    .filter(Boolean).join('\n')}\n`);
+  return f;
+}
+
+test('tailReader: a small last turn is judged from the first window alone', () => {
+  const sb = makeSandbox();
+  try {
+    const f = bigTranscript(sb.path, { head: [prompt('old'), edit()], pad: 200_000,
+      tail: [prompt(), edit(), bash('npm run lint')] });
+    const windows = [];
+    const owed = tailReader(4096)(f, (text, whole) => {
+      windows.push({ length: text.length, whole });
+      return doneDecide(text, CHECKS, R, R, whole);
+    });
+    assert.deepEqual(owed, ['node --test']);
+    assert.equal(windows.length, 1, 'read more than one window for a small turn');
+    assert.ok(windows[0].length <= 4096 && !windows[0].whole, JSON.stringify(windows));
+  } finally { sb.cleanup(); }
+});
+
+test('tailReader: a turn longer than the window still owes its checks', () => {
+  // The edit sits 200 KB before the end; a judgement on the 4 KB tail would see no edit and allow.
+  const sb = makeSandbox();
+  try {
+    const f = bigTranscript(sb.path, { head: [prompt(), edit()], pad: 200_000, tail: [bash('ls')] });
+    const wholeFile = fs.readFileSync(f, 'utf8');
+    assert.deepEqual(doneDecide(wholeFile, CHECKS, R), CHECKS, 'the fixture must owe both checks');
+    assert.equal(doneDecide(wholeFile.slice(-4000), CHECKS, R, R, false), null,
+      'a tail without a prompt must ask for more, not judge');
+    assert.deepEqual(tailReader(4096)(f, (text, whole) => doneDecide(text, CHECKS, R, R, whole)),
+      CHECKS);
+  } finally { sb.cleanup(); }
+});
+
+test('learn on Stop: a turn longer than the 2 MB window is still blocked', () => {
+  const pad = { type: 'assistant', message: { role: 'assistant',
+    content: [{ type: 'text', text: 'y'.repeat(100_000) }] } };
+  const r = project({ transcriptRows: [prompt(), editIn, ...Array(25).fill(pad), bash('ls')] });
+  assert.equal(r.rc, 0, r.err);
+  assert.equal(JSON.parse(r.out).decision, 'block');
+});
+
+// One Stop reads the transcript once: `cmdLearn` hands the same reader to the done gate and to
+// `readNotes`, so the second caller must get the first one's window back, not a fresh read.
+// Proven by changing the file between the two calls: a re-read would see the new line.
+test('tailReader: one reader reads each window once, so two callers share it', () => {
+  const sb = makeSandbox();
+  try {
+    const f = path.join(sb.path, 't.jsonl');
+    fs.writeFileSync(f, `${jsonl(prompt('first'))}\n`);
+    const read = tailReader(4096);
+    const seenByGate = read(f, (text) => text);
+    fs.appendFileSync(f, `${jsonl(prompt('appended after the gate read'))}\n`);
+    assert.equal(read(f, (text) => text), seenByGate, 'the second caller re-read the file');
+    assert.match(tailReader(4096)(f, (text) => text), /appended/, 'a new reader must see the append');
   } finally { sb.cleanup(); }
 });
