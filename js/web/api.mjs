@@ -16,7 +16,6 @@ import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import { sourceReleaseVersion } from '../hosts/opencode.mjs';
 import { alwaysOnCost } from '../inspect/cost.mjs';
 import { diffCollect } from '../inspect/diff.mjs';
-import { doctorCollect } from '../inspect/doctor.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { CLAUDE_STYLE, HOSTS, VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
 import {
@@ -79,13 +78,15 @@ export function apiSetup(state) {
   };
 }
 
-/** The same engine as the `doctor` verb, grouped per check. */
-export function apiDoctor(state) {
-  const groups = [];
-  const [themes, problems] = doctorCollect({ theme: state.theme, groups });
-  state.stampDoctor(problems);
-  return { themes, ok: !problems.length, problems, groups,
-    checked_at: state.doctor.checked_at };
+/**
+ * The same engine as the `doctor` verb, grouped per check — served from the state's cached run
+ * (a lens visit or a page mount no longer pays ~3.6 s), and re-run only when `fresh` is asked
+ * for: the Doctor page's Re-run button, as `GET /api/doctor?fresh=1`.
+ */
+export function apiDoctor(state, fresh = false) {
+  if (fresh) state.runDoctor();
+  const { ok, problems, checked_at } = state.doctor;
+  return { ...state._doctorRun, ok, problems, checked_at };
 }
 
 /**

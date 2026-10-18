@@ -165,8 +165,9 @@ streams the output of background jobs and keeps their history across reloads.
   added / missing files with per-file expansion and coloured unified-diff lines. Select
   files to **export an `improvements.md`** back-port, or **restore** them to source.
 - **Doctor** (`#/doctor`) — runs the same health engine as the `doctor` command (every
-  theme, parity, links, authoring gates, drift), grouping any problems per check. Re-run
-  on demand.
+  theme, parity, links, authoring gates, drift), grouping any problems per check. It shows
+  the server's last run — warmed at start, redone after a job, an install toggle or a view
+  switch — and **Re-run checks** runs every check again on demand.
 
 ### 🎨 Setup
 

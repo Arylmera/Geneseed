@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **The console stops re-running the doctor when nothing it checks has changed.** A memory delete no longer drops the cached verdict (~3.6 s saved on the next overview); a finished job, an install toggle and a view switch still do. The Doctor page, the Greenhouse and Operator HUD lenses now read the cached run (groups and themes included) instead of running every check on each visit; the page's *Re-run checks* button asks for a fresh run (`GET /api/doctor?fresh=1`). The server warms the cache right after it starts listening, so an overview requested a few seconds later answers in ~0.15 s rather than ~3.8 s.
+
 ## [4.9.0] — 2026-10-18
 
 Minor: on/off switches for the Sealed Secrets and done gates, and the console calls the laws Dictates.

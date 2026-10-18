@@ -55,6 +55,15 @@ describe('http get/post', () => {
     expect(global.fetch).toHaveBeenCalledWith('/api/overview')
   })
 
+  // The cached read and the explicit re-run are two URLs: only `?fresh=1` makes the daemon re-run.
+  it('asks for a fresh doctor run only when told to', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({})))
+    await api.doctor()
+    expect(global.fetch).toHaveBeenLastCalledWith('/api/doctor')
+    await api.doctor(true)
+    expect(global.fetch).toHaveBeenLastCalledWith('/api/doctor?fresh=1')
+  })
+
   it('throws the server-provided error message on failure', async () => {
     global.fetch = vi.fn(() => Promise.resolve(errResp(500, { error: 'boom' })))
     await expect(api.doctor()).rejects.toThrow('boom')

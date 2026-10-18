@@ -146,7 +146,9 @@ export const STATE_ROUTES = {
   '/api/recent': apiRecent,
   '/api/themes': apiThemes,
   '/api/setup': apiSetup,
-  '/api/doctor': apiDoctor,
+  // The one route here that reads its query: `?fresh=1` re-runs instead of serving the cache.
+  '/api/doctor': (state, url) => apiDoctor(state,
+    new URL(url || '', 'http://x').searchParams.has('fresh')),
   '/api/installs': apiInstalls,
   '/api/fleet': apiFleet,
   '/api/update': apiUpdate,

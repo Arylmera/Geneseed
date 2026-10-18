@@ -26,7 +26,8 @@ const activity = () => get('/api/activity')
 const activityDetail = (sid) => get('/api/activity/' + encodeURIComponent(sid))
 const activityToggle = (enabled) => post('/api/activity', { enabled })
 const setup = () => get('/api/setup')
-const doctor = () => get('/api/doctor')
+// Served from the daemon's cached run; `fresh` (the Doctor page's Re-run) runs every check again.
+const doctor = (fresh = false) => get(fresh ? '/api/doctor?fresh=1' : '/api/doctor')
 const themes = () => get('/api/themes')
 
 // ── Catalog ─────────────────────────────────────────────────────────────────
