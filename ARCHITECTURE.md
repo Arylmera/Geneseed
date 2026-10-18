@@ -38,12 +38,20 @@ src/ + themes/ ──render──▶ bundle (Harness/) ──emit──▶ host 
 `js/cli-table.json`. `bin/geneseed-hook.mjs` is what an emitted `settings.json` runs on every tool
 call. `bin/build-driver.mjs` is the generator.
 
+## Dependency direction
+
+Only `js/lib/` is a strict leaf: it imports nothing but Node builtins, and every other folder
+imports it. Above it the folders are domains, not layers. Several pairs import each other —
+`build/` and `hosts/` most of all, mostly through `build/source.mjs`. The measured pairs, and what
+each minority edge carries, are in [`js/README.md`](js/README.md#the-shape). This is convention,
+not an invariant: no test or doctor arm checks folder direction, `lib/`'s included. The only
+import-graph gates are the closure walks in `tests/unit/hook_cli.test.mjs`, and they constrain
+spawning (ADR 0002), not layering.
+
 ## Invariants
 
 Each one is enforced by a test or a doctor arm, not by convention.
 
-- **Dependencies point one way.** `lib/` ← everything; `build/` ← `hosts/`; `inspect/` and `web/`
-  read what `build/` produced. Nothing in `lib/` imports anything above it.
 - **Zero runtime dependencies.** Anything needed at run time is vendored as tracked source and
   imported by relative path. → [ADR 0001](docs/adr/0001-zero-runtime-dependencies.md)
 - **The generator cannot spawn, the hook path spawns in one place only, and the CLI spawns only
