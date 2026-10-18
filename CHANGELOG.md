@@ -8,11 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.9.0] — 2026-10-18
+
+Minor: on/off switches for the Sealed Secrets and done gates, and the console calls the laws Dictates.
+
 ### Added
 - **On/off switches for the Sealed Secrets and Verify Before Asserting gates**, beside Law IV's. `geneseed build --no-secrets-gate` stands down the credential scan (`rule-gate` on Claude Code and OpenClaude, `tool-gate` on Bob, the OpenCode guard's key-file block and content scan); `--no-done-gate` stands down the done check in `learn` on Stop (and OpenCode's reminder), while learning still runs. Both armed by default; the Rule's text still binds. The install records `Secrets gate: off` / `Done gate: off` beside its pack list; rebuilds, upgrades, `status`, `diff`, `validate` and the console keep them. The console's Constitution page now has a toggle column on every Rule: a switch on Rules I, III and IV, *no gate* on the others.
 
 ### Upgrade notes
 - The secrets and done gate switches: run `geneseed rebuild-all` before switching either off. While the machine's hook shim points at an older checkout, a disarmed install's `rule-gate`/`tool-gate` refuses the new flag and lets every write through (External Gate and Persist Insight too, and on Bob every check), and its `learn` refuses `--no-done-gate`, so that install stops learning as well. OpenCode reads both switches when it starts: restart it after flipping one.
+
+### Changed
+- **The console calls the laws Dictates**, the name AGENT.md gives them, instead of Invariants: the Laws tab and band, the dashboard KPI tile, the constitution map, Greenhouse and the Operator HUD. Routes and internal keys are unchanged (#321).
 
 ## [4.8.0] — 2026-10-18
 
