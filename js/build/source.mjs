@@ -203,7 +203,8 @@ const _upstreams = new Map();
 export function upstreams(src = SRC) {
   const file = path.join(src, 'upstreams.json');
   let text;
-  try { text = readRawText(file); } catch { return {}; }
+  // Not readRawText: its mtime key misses a rewrite inside one mtime tick (seen on Windows CI).
+  try { text = readFileSync(file, 'utf8'); } catch { return {}; }
   const hit = _upstreams.get(file);
   if (hit && hit.text === text) return hit.entries;
   const entries = JSON.parse(text);

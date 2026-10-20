@@ -407,7 +407,7 @@ above, with the upstream's licence text at `src/licenses/<key>.txt` as its `lice
 `null` here; two keys from one repo may share a file); a port from a listed upstream reuses its
 key. Put
 `{{CREDIT:<key>:<upstream path>}}` on its own line under the purpose blockquote; the render turns
-it into "*Adapted from [repo](url) (`path`) by author — license, modified.*", and for a skill the
+it into `` *Adapted from [repo](url) (`path`) by author — license, modified.* ``, and for a skill the
 emit adds `skills/<name>/LICENSE-<key>.txt` (an agent is one file, so it gets the line only). A
 skill drawn from two upstreams carries two tokens, as `debug` does. A new entry also needs a
 `` `<key>` `` bullet under README `## 🙏 Credits` — `proseMirrorProblems` gates that list both
