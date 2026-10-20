@@ -8,6 +8,27 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.10.0] — 2026-10-20
+
+Minor: opt-in kits (and a first one, `spring-boot`), credits for adapted content, a weekly upstream-drift check, and a web Kits tab.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating. Default installs are unchanged (no kit is on); enable one with `geneseed build --kits spring-boot` or the new **Installs → Kits** tab.
+
+### Added
+- **Kits: opt-in bundles of skills, agents and rules** (#343). `src/kits/<kit>.json` declares a kit; `--kits a,b` turns kits on (`none` turns all off), the install records `Active kits:` and `rebuild-all`, `update`, `migrate` and the web console keep it. A plain build warns before it drops a kit an install has; `status` lists kits and files you edited that were kept from a kit turned off. The doctor gates kit membership, links (kit → core only), registry rows and each kit's rules budget.
+- **The `spring-boot` kit** (#349), adapted from piomin/claude-ai-spring-boot (Apache-2.0) and rewritten for Spring Boot 4: skills `spring-boot`, `spring-data-jpa`, `spring-testing`; agents `spring-boot-engineer`, `spring-reviewer` and `spring-security` (both read-only), `kubernetes-specialist`, `docker-expert`, `devops-engineer`; kit rules. A banned-API gate keeps removed Boot APIs (`@MockBean`, `javax.persistence`, …) out of kit files.
+- **Credits for adapted content** (#342). `src/upstreams.json` records each upstream's repo, commit, author and licence; a `{{CREDIT:key:path}}` token renders an "Adapted from … modified." line and the skill ships the licence beside it. Superpowers, Matt Pocock's skills and vibe-wise ports are now credited; the README gains a Credits section, gated by the doctor.
+- **Weekly upstream-drift check** (#344, #351). A CI job compares every pinned upstream with its HEAD on the files Geneseed uses and keeps one tracking issue per upstream; vendored skills are compared on their folder only, and `"frozen": true` entries are skipped.
+- **Web console: Installs → Kits** (#350). One row per global and project install, a switch per kit, apply through the usual confirm and rebuild job.
+
+### Changed
+- `react-view-transitions` re-vendored at upstream HEAD (Next.js no longer needs the `experimental.viewTransition` flag; back/forward navigation and shared-element guidance updated) (#351).
+- `debug` proves a forced red landed by diffing against a pristine copy; `geneseed-code-review` searches the repo for its standards files (#351).
+
+### Fixed
+- The web install action no longer re-themes an install you are not viewing (#350).
+
 ## [4.9.4] — 2026-10-18
 
 Patch: `git reset --hard` asks only when it would abandon existing commits, not over uncommitted work.
