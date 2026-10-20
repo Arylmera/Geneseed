@@ -2,6 +2,8 @@
 
 > {{DESC_REVIEW_RESPONSE}}
 
+{{CREDIT:superpowers:skills/receiving-code-review/SKILL.md}}
+
 **Trigger:** review feedback has arrived — from a human or another agent — and is about
 to be acted on; or the user wants a review criterion recorded ("add a review rule…",
 "reviews should always check…").

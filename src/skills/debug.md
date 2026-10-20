@@ -3,6 +3,10 @@
 > {{DESC_DEBUG}}
 <!-- aliases: ci-fix -->
 
+{{CREDIT:superpowers:skills/systematic-debugging/SKILL.md}}
+
+{{CREDIT:mattpocock-skills:skills/engineering/diagnosing-bugs/SKILL.md}}
+
 **Trigger:** a test fails, code crashes or prints a stack trace, or returns the wrong result — load this FIRST. Load it before reading code or investigating, not only before proposing a fix. Also when a CI run, pipeline job or pre-merge check is red ("CI is failing", "fix the build") — then start with the CI branch.
 
 **No fix without a root cause.** A change you cannot tie to a cause you understand is

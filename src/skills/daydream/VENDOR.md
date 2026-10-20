@@ -5,13 +5,13 @@ skill. It rides along in the rendered bundle and is exempt from Geneseed's autho
 gates (token, dead-link, hermeticity, skill counts) — it is listed in the
 generator's `VENDORED_SKILL_DIRS`.
 
-- **Upstream:** https://github.com/glebis/claude-skills/tree/main/daydream
-- **Commit:** f47170dee300dd3d5da2a1c3c708986faeea3d5a
-- **Author:** Gleb Kalinin
-- **License:** MIT (declared in `.claude-plugin/plugin.json`). The text is in `LICENSE`,
-  copied from upstream's root `LICENSE` as added in 93677f479f40ab43520883e7a6c954b755ab39ef
-  (the pinned commit predates the file; its copyright line covers 2025-2026).
+- **Upstream key:** daydream (repo, pinned commit, author and licence: `src/upstreams.json`)
+- **Credit:** {{CREDIT:daydream:daydream}}
 - **Inspired by:** Gwern's [LLM Daydreaming](https://gwern.net/ai-daydreaming)
+
+The licence (MIT, declared upstream in `.claude-plugin/plugin.json`) is in `LICENSE`, copied
+from upstream's root `LICENSE` as added in 93677f479f40ab43520883e7a6c954b755ab39ef (the
+pinned commit predates the file; its copyright line covers 2025-2026).
 
 ## Geneseed adaptation
 
@@ -32,7 +32,7 @@ does not tell the model where a skill lives.
 
 To update, re-copy the upstream folder, re-apply the geneseed-wiki.jsonc adaptation, the
 frontmatter and the placeholder paths in `SKILL.md` / `instructions.md`, and
-bump the commit above.
+bump the `daydream` entry's `commit` in `src/upstreams.json`.
 
 `SKILL.md`'s frontmatter also carries `disable-model-invocation: true`, which upstream lacks: the
 skill is user-only (`/daydream`), so its description stays out of the model's always-on catalogue —

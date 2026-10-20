@@ -192,6 +192,44 @@ export function resolveRuleIds(text, src = SRC) {
     .replace(CITE_RE, (whole, kind, id) => { const r = known(kind, id); return r ? `*${r.name}*` : whole; });
 }
 
+/** `{{CREDIT:<key>:<path>}}` — `key` names a `src/upstreams.json` entry, `path` a file upstream. */
+export const CREDIT_RE = /\{\{CREDIT:([a-z0-9]+(?:-[a-z0-9]+)*):([A-Za-z0-9._/-]+)\}\}/g;
+
+const _upstreams = new Map();
+/**
+ * `src/upstreams.json`, parsed — memoised on its raw text the way `ruleCanon` is, so the web
+ * daemon sees an edit. A tree without the file credits nothing.
+ */
+export function upstreams(src = SRC) {
+  const file = path.join(src, 'upstreams.json');
+  let text;
+  try { text = readRawText(file); } catch { return {}; }
+  const hit = _upstreams.get(file);
+  if (hit && hit.text === text) return hit.entries;
+  const entries = JSON.parse(text);
+  _upstreams.set(file, { text, entries });
+  return entries;
+}
+
+/** The entry a credit key names, or null — `hasOwn`, so `constructor` is not a key. */
+export function upstreamOf(key, src = SRC) {
+  const u = upstreams(src);
+  return Object.hasOwn(u, key) ? u[key] : null;
+}
+
+/**
+ * Resolve every credit in `text` into its attribution line. An unknown key is left exactly as
+ * written, as `resolveRuleIds` leaves an unknown id, so the doctor can name it.
+ */
+export function resolveCredits(text, src = SRC) {
+  if (!text.includes('{{CREDIT:')) return text;
+  return text.replace(CREDIT_RE, (whole, key, file) => {
+    const u = upstreamOf(key, src);
+    return u ? `*Adapted from [${u.repo}](https://github.com/${u.repo}) (\`${file}\`) `
+      + `by ${u.author} — ${u.license}, modified.*` : whole;
+  });
+}
+
 /**
  * `_build_core.ROOT` — the checkout, from this file's own location (`js/..`).
  *

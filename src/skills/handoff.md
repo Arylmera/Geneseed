@@ -2,6 +2,8 @@
 
 > {{DESC_HANDOFF}}
 
+{{CREDIT:mattpocock-skills:skills/productivity/handoff/SKILL.md}}
+
 **Trigger:** the context window is filling, a session is ending mid-task, or work is passing to another agent or developer.
 
 ## Procedure

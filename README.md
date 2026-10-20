@@ -367,6 +367,17 @@ Three things that bite when you don't know them:
 - **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
 - **Publishing is deliberate and manual.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. It runs only from Actions → publish → Run workflow, and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
 
+## 🙏 Credits
+
+Some skills and one agent are adapted from other MIT-licensed skill collections. Each adapted skill names its source in its own text, and ships that upstream's licence beside it. `src/upstreams.json` pins every upstream to a commit.
+
+- `daydream` — [glebis/claude-skills](https://github.com/glebis/claude-skills) by Gleb Kalinin (MIT): the vendored `daydream` skill.
+- `react-view-transitions` — [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) by Vercel Engineering (MIT): the vendored `react-view-transitions` skill.
+- `mattpocock-skills` — [mattpocock/skills](https://github.com/mattpocock/skills) by Matt Pocock (MIT): the vocabulary and procedures behind codebase-design, wayfinder, prototype, develop, handoff and research, the merge-conflict step of git-history, the spec pass of geneseed-code-review, the question rounds of brainstorm, the slicing of plan, and the reproduction step of debug.
+- `mattpocock-skills-2509` — [mattpocock/skills](https://github.com/mattpocock/skills) by Matt Pocock (MIT), pinned at the later commit where its `pr` and `retro` skills first appear: the PR body of ship and the guardrail clause of rule.
+- `superpowers` — [obra/superpowers](https://github.com/obra/superpowers) by Jesse Vincent (MIT): the core of debug, the size step and builder check of brainstorm, the plan rules of plan, the reviewer brief behind geneseed-code-review and the reviewer agent, the review-handling steps of review-response, and the ruling format of pipeline and parallel-agents.
+- `vibe-wise` — [nykooi1/vibe-wise](https://github.com/nykooi1/vibe-wise) by Noah Kim (MIT): the state file, levels and checkpoints of learn-mode.
+
 ## 📄 License
 
 [MIT](LICENSE) — built by [@Arylmera](https://github.com/Arylmera).

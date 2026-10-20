@@ -2,6 +2,8 @@
 
 > {{DESC_DEVELOP}}
 
+{{CREDIT:mattpocock-skills:skills/engineering/tdd/SKILL.md}}
+
 **Trigger:** implementing a feature, fixing a bug, or changing code behaviour in a
 repo that has (or should have) a test suite — before writing implementation code.
 Covers both the test-first cycle (red → green → refactor) and the cover-alongside

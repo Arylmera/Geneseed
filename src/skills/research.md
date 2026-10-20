@@ -2,6 +2,8 @@
 
 > {{DESC_RESEARCH}}
 
+{{CREDIT:mattpocock-skills:skills/engineering/research/SKILL.md}}
+
 **Trigger:** a question needs current, external, or wide-ranging facts that are neither
 in this repository nor in the model's own knowledge. They are gathered and verified from
 the open web.

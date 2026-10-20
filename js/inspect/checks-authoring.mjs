@@ -21,7 +21,7 @@ import { blankCodeSpans } from '../lib/text.mjs';
 import { which } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import {
-  aliasProblems, folderSkillProblems, registryProblems, secretProblems, sideFileProblems,
+  aliasProblems, creditProblems, folderSkillProblems, registryProblems, secretProblems, sideFileProblems,
   vendorPinProblems,
 } from './checks-repo.mjs';
 import { constitutionProblems, leanBlockProblems } from './checks-constitution.mjs';
@@ -192,6 +192,7 @@ export function authoringProblems() {
   problems.push(...vendorPinProblems());
   problems.push(...folderSkillProblems());
   problems.push(...aliasProblems());
+  problems.push(...creditProblems());
   problems.push(...sideFileProblems());
   problems.push(...constitutionProblems());
   problems.push(...leanBlockProblems());

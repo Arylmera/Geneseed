@@ -2,6 +2,8 @@
 
 > {{DESC_PARALLEL_AGENTS}}
 
+{{CREDIT:superpowers:skills/subagent-driven-development/SKILL.md}}
+
 **Trigger:** two or more independent subtasks with no shared state or ordering between them — and a tool that can run subagents. The units run side by side and never see each other's work; when one agent must build on what the previous one produced, that is a relay — use [pipeline](pipeline.md).
 
 ## Procedure

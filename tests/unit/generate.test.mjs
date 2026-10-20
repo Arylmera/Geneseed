@@ -2574,6 +2574,24 @@ test('--config-dir on a per-repo emit is refused, not ignored', () => {
   });
 });
 
+test('a plain files emit ships neither upstreams.json nor licenses/', () => {
+  // Both are provenance the build reads, not product an agent reads: `.json` and `.txt` are in
+  // TEXT_SUFFIXES, so without the skip set in `renderAll` both would ride into every bundle.
+  // Both now hold real files (`licenses/` the retro-credited upstreams' licences), proven on a
+  // copied src so the build writes nowhere near the checkout.
+  withDir((d) => {
+    assert.ok(isFile(makeCfg().src, 'upstreams.json'), 'the real src/upstreams.json is missing');
+    assert.ok(isFile(makeCfg().src, 'licenses', 'superpowers.txt'), 'the real src/licenses/ is missing');
+    const src = path.join(d, 'src');
+    fs.cpSync(makeCfg().src, src, { recursive: true });
+    const out = path.join(d, 'bundle');
+    buildInto(out, { src });
+    const names = rglobFiles(out).map((p) => path.relative(out, p).split(path.sep).join('/'));
+    assert.ok(names.includes('AGENT.md'), 'the fixture build rendered nothing');
+    assert.deepEqual(names.filter((n) => /(^|\/)(upstreams\.json|licenses\/)/.test(n)), []);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // Stable rule ids. A rule is DECLARED by its heading (`### {{LAW:<id>}} <Principle>`) and CITED by
 // its id; the number is its position, computed at render time, and a citation renders as the

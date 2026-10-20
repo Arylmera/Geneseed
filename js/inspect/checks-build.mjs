@@ -9,7 +9,7 @@
 import path from 'node:path';
 import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
-import { CONFIG, makeCfg } from '../build/source.mjs';
+import { CONFIG, CREDIT_RE, makeCfg } from '../build/source.mjs';
 import { hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
 import { EMIT_HOST_SCOPE, footprintOfDir, themeFiles } from '../hosts/installs.mjs';
 import { isVendoredPath } from '../hosts/native.mjs';
@@ -79,6 +79,12 @@ export function checkBuild(themeName, out, isVendored = isVendoredPath) {
     // in the order they come back.
     for (const tok of sortedUnique(text.match(TOKEN_RE) ?? [])) {
       problems.push(`[${themeName}] unresolved token ${tok} in ${rel}`);
+    }
+    // `TOKEN_RE` cannot see a credit (colon, lowercase key): one left standing names no upstream.
+    if (text.includes('{{CREDIT:')) {
+      for (const tok of sortedUnique(text.match(CREDIT_RE) ?? ['{{CREDIT:'])) {
+        problems.push(`[${themeName}] unresolved token ${tok} in ${rel}`);
+      }
     }
     for (const p of linkProblems(md, text, outAbs, rel)) problems.push(`[${themeName}] ${p}`);
     for (const p of descriptionProblems(text, rel)) problems.push(`[${themeName}] ${p}`);

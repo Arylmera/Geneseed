@@ -2,6 +2,8 @@
 
 > {{DESC_WAYFINDER}}
 
+{{CREDIT:mattpocock-skills:skills/engineering/wayfinder/SKILL.md}}
+
 **Trigger:** a piece of work too large for one session and still in the fog —
 the destination can be named but the route to it cannot; the user says
 "wayfinder" or asks to chart a big effort before building anything.

@@ -3,6 +3,8 @@
 > {{DESC_RULE}}
 <!-- aliases: consolidate-memory -->
 
+{{CREDIT:mattpocock-skills-2509:skills/engineering/retro/SKILL.md}}
+
 **Trigger:** the user says "always…", "never…", "from now on…" or "remember that…". Anything the user wants to outlive this session counts: a standing rule ("make that a
 rule") or a durable fact ("note that…", "keep in mind…"). Also fires when a
 `feedback` {{MEMORY}} lesson keeps recurring and deserves promotion, or when

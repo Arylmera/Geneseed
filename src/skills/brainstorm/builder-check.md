@@ -1,5 +1,7 @@
 # {{SKILL}}: brainstorm — builder check
 
+{{CREDIT:superpowers:skills/brainstorming/builder-check-prompt.md}}
+
 The spec's author cannot read it cold: a re-read inherits the framing that wrote it. So a
 fresh reader does.
 

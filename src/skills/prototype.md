@@ -2,6 +2,8 @@
 
 > {{DESC_PROTOTYPE}}
 
+{{CREDIT:mattpocock-skills:skills/engineering/prototype/SKILL.md}}
+
 **Trigger:** a design question needs a runnable answer — "does this state
 model feel right?" or "what should this look like?" — before committing to a
 real implementation.

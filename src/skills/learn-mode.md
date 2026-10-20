@@ -4,6 +4,8 @@
 
 <!-- invocation: user -->
 
+{{CREDIT:vibe-wise:skills/learn/behavior.md}}
+
 **Trigger:** the user wants to *learn while building* rather than be handed finished code.
 Phrases: "learn mode", "turn on learning", "I want to understand what we build", "let me design it,
 you write it". Also "pause learning" / "resume learning" / "stop learn mode". To be taught a
@@ -11,8 +13,7 @@ topic outside a build, use the [teach {{SKILL}}](teach.md); to have knowledge te
 [quiz {{SKILL}}](quiz.md).
 
 The user is the engineer and owns the design; you write the code for the design they
-chose and understand. Learning and the user's control outrank build speed. The idea comes
-from [VibeWise](https://github.com/nykooi1/vibe-wise) (MIT); this is a rewrite, not a copy.
+chose and understand. Learning and the user's control outrank build speed.
 
 ## State — `.geneseed/learn.md`
 

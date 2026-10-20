@@ -103,8 +103,8 @@ function withRegistry(mutate, fn) {
 const row = (over = {}) => ({ status: 'approved', version: '1.0.0', owner: 'Someone',
   added: '2026-01-01', last_verified: '', ...over });
 
-const PINNED = '- **Upstream:** https://example.invalid/x\n'
-  + `- **Commit:** ${'a'.repeat(40)}\n- **License:** MIT\n`;
+// A third-party VENDOR.md names its `src/upstreams.json` entry; the commit and licence live there.
+const PINNED = '- **Upstream key:** daydream\n';
 
 const some = (problems, ...needles) => problems.some((p) => needles.every((n) => p.includes(n)));
 
@@ -280,21 +280,33 @@ test('a missing VENDOR.md is flagged', () => {
   });
 });
 
-test('a moving branch pin is flagged', () => {
-  // Re-copying months later changes the shipped skill, so a branch name is not a pin.
-  withFault('src/skills/daydream/VENDOR.md',
-    '- **Upstream:** https://example.invalid/x\n- **Commit:** main\n- **License:** MIT\n', () => {
-      assert.ok(some(F.checks.vendorPinProblems(), 'moving branch'));
+// The pin's own facts (a 40-hex commit, never a moving branch; a licence file that exists) are
+// `creditProblems`' rows in `tests/unit/credits.test.mjs`. What is left here: the key resolves,
+// and a first-party folder still records its licence.
+const VENDOR_ROWS = [
+  ['a key upstreams.json does not define', '- **Upstream key:** nope\n',
+    ["[authoring] skills/daydream/VENDOR.md names upstream key 'nope', which src/upstreams.json does not define"]],
+  ['neither a key nor a first-party upstream', '- **Upstream:** https://example.invalid/x\n',
+    ["[authoring] skills/daydream/VENDOR.md declares no '**Upstream key:**' "
+      + "(nor '**Upstream:** this repository' for a first-party folder)"]],
+  ['a first-party folder without a licence', '- **Upstream:** this repository (first-party)\n',
+    ["[authoring] skills/daydream/VENDOR.md records no '**License:**'"]],
+];
+for (const [name, text, expected] of VENDOR_ROWS) {
+  test(`vendorPinProblems: ${name}`, () => {
+    withFault('src/skills/daydream/VENDOR.md', text, () => {
+      assert.deepEqual(F.checks.vendorPinProblems(), expected);
     });
-});
+  });
+}
 
-test('a short pin and a missing license are flagged', () => {
-  withFault('src/skills/daydream/VENDOR.md',
-    '- **Upstream:** https://example.invalid/x\n- **Commit:** abc1234\n', () => {
-      const problems = F.checks.vendorPinProblems();
-      assert.ok(some(problems, '40-character'), problems.join('\n'));
-      assert.ok(some(problems, 'License'), problems.join('\n'));
-    });
+test('deleting a key from upstreams.json turns its VENDOR.md red', () => {
+  const doc = JSON.parse(readFileSync(path.join(F.co, 'src', 'upstreams.json'), 'utf8'));
+  delete doc.daydream;
+  withFault('src/upstreams.json', JSON.stringify(doc), () => {
+    assert.deepEqual(F.checks.vendorPinProblems(),
+      ["[authoring] skills/daydream/VENDOR.md names upstream key 'daydream', which src/upstreams.json does not define"]);
+  });
 });
 
 test('a first-party folder needs no pin', () => {
