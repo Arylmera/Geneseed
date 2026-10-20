@@ -2,6 +2,10 @@
 
 > {{DESC_CODE_REVIEW}}
 
+{{CREDIT:mattpocock-skills:skills/engineering/code-review/SKILL.md}}
+
+{{CREDIT:superpowers:skills/requesting-code-review/code-reviewer.md}}
+
 **Trigger:** reviewing changes before merge, or the user asks for a review — including "roast my code": same passes, findings unsoftened. Critiquing the user's own ask or plan is [roast-me](roast-me.md).
 
 ## Procedure

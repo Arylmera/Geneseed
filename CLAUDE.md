@@ -181,6 +181,17 @@ its own doctor arm.
 **Nothing propagates by itself.** Editing `src/` changes nothing on any machine until something
 re-emits, and `geneseed rebuild-all` is best-effort by contract.
 
+**Text adapted from outside is credited, or it is invisible.** `src/upstreams.json` is the one
+home of each upstream's repo, pinned commit, author, licence and `licenseFile`. A ported skill or
+agent carries `{{CREDIT:<key>:<upstream path>}}` under its purpose line, and the render turns it
+into an "Adapted from … modified." line in every install. A credited skill also ships
+`skills/<stem>/LICENSE-<key>.txt`, a copy of the entry's `licenseFile`; an agent gets the line
+only. A vendored folder ships its upstream's own LICENSE and names its key in `VENDOR.md`
+(`**Upstream key:**`). `creditProblems` (`js/inspect/checks-repo.mjs`) gates keys both ways, plus
+the commit and the licence file, and the README `## 🙏 Credits` list must name exactly the keys.
+None of that sees a port nobody marked: unmarked, it is indistinguishable from first-party text.
+So the token and the entry go in the same commit as the ported text — `docs/extending.md` §3.
+
 ## Conventions
 
 ESM only, `.mjs`, zero runtime dependencies. Docblocks in this repo carry *why*, not *what* — they

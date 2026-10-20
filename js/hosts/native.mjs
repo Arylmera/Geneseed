@@ -579,7 +579,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   let nAgents = 0;
   let nSkills = 0;
   const written = [];
-  const sideFiles = [];            // [stem, dest, text], written after the loop
+  const sideFiles = [];            // [stem, dest, text, source], written after the loop
   const claimedSkills = new Set(); // stems whose own SKILL.md claim held
   const userOnlySkills = [];       // claimed stems carrying the user-only marker
 
@@ -589,7 +589,13 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     written.push(dest);
   };
 
-  for (const { text, src: source } of items) {
+  for (const { text, src: source, rel, licenceOf } of items) {
+    // A credited skill's upstream licence: copied verbatim beside its SKILL.md, held like a side
+    // file until that claim holds. Routed by `licenceOf`, since `source` is the upstream's file.
+    if (licenceOf) {
+      sideFiles.push([licenceOf, path.join(skillsDir, licenceOf, path.posix.basename(rel)), null, source]);
+      continue;
+    }
     const sparts = relPosix(src, source).split('/');
 
     // Vendored third-party skill folders ride along verbatim, preserving their own
@@ -706,8 +712,12 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     if (kind === 'agent') nAgents += 1;
     else nSkills += 1;
   }
-  for (const [stem, dest, text] of sideFiles) {
-    if (claimedSkills.has(stem) && claim(dest)) write(dest, stripSkillBodyLinks(text));
+  for (const [stem, dest, text, source] of sideFiles) {
+    if (!claimedSkills.has(stem) || !claim(dest)) continue;
+    if (text !== null) { write(dest, stripSkillBodyLinks(text)); continue; }
+    mkdirSync(path.dirname(dest), { recursive: true });
+    copyFile(source, dest);
+    written.push(dest);
   }
   return { nAgents, nSkills, written, userOnlySkills };
 }

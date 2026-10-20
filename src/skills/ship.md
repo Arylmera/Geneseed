@@ -2,6 +2,8 @@
 
 > {{DESC_SHIP}}
 
+{{CREDIT:mattpocock-skills-2509:skills/engineering/pr/SKILL.md}}
+
 **Trigger:** the change is committed and verified, and it is time to open a pull
 request or merge the branch.
 

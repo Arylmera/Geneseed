@@ -3,6 +3,10 @@
 > {{DESC_BRAINSTORM}}
 <!-- aliases: grill-me -->
 
+{{CREDIT:superpowers:skills/brainstorming/SKILL.md}}
+
+{{CREDIT:mattpocock-skills:skills/productivity/grilling/SKILL.md}}
+
 **Trigger:** a new feature, behaviour change, or project arrives without a design, or the
 user says "brainstorm", "interview me" or "grill me". Also when goal, scope or success
 criteria are unstated ("let's design this", "clarify this first", "stress-test this plan"),

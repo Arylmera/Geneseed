@@ -2,6 +2,10 @@
 
 > {{DESC_PLAN}}
 
+{{CREDIT:superpowers:skills/writing-plans/SKILL.md}}
+
+{{CREDIT:mattpocock-skills:skills/engineering/to-tickets/SKILL.md}}
+
 **Trigger:** a task with more than a couple of steps, or touching several files
 ({{DOCTRINE:plan-before-acting}}).
 

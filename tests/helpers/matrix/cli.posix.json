@@ -5463,10 +5463,10 @@
     {
       "bin": "cli",
       "checkout": {
-        "src/skills/react-view-transitions/VENDOR.md": "# Vendor\n\n**Upstream:** https://example.invalid/x\n\n**Commit:** main\n\n**License:** MIT\n"
+        "src/upstreams.json": "{\n  \"daydream\": {\n    \"repo\": \"glebis/claude-skills\",\n    \"commit\": \"f47170dee300dd3d5da2a1c3c708986faeea3d5a\",\n    \"author\": \"Gleb Kalinin\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"skills/daydream/LICENSE\"\n  },\n  \"react-view-transitions\": {\n    \"repo\": \"vercel-labs/agent-skills\",\n    \"commit\": \"main\",\n    \"author\": \"Vercel Engineering\",\n    \"license\": \"MIT\",\n    \"licenseFile\": null\n  },\n  \"mattpocock-skills\": {\n    \"repo\": \"mattpocock/skills\",\n    \"commit\": \"391a2701dd948f94f56a39f7533f8eea9a859c87\",\n    \"author\": \"Matt Pocock\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/mattpocock-skills.txt\"\n  },\n  \"superpowers\": {\n    \"repo\": \"obra/superpowers\",\n    \"commit\": \"bb92a77741419a4ab5f06e711a283343f1ada0c3\",\n    \"author\": \"Jesse Vincent\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/superpowers.txt\"\n  },\n  \"vibe-wise\": {\n    \"repo\": \"nykooi1/vibe-wise\",\n    \"commit\": \"eefb53df406ab89e31444684ff32c1df205221f8\",\n    \"author\": \"Noah Kim\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/vibe-wise.txt\"\n  },\n  \"mattpocock-skills-2509\": {\n    \"repo\": \"mattpocock/skills\",\n    \"commit\": \"a7d038f6bf7f01b516408e95e2fb56e0b338fa6f\",\n    \"author\": \"Matt Pocock\",\n    \"license\": \"MIT\",\n    \"licenseFile\": \"licenses/mattpocock-skills.txt\"\n  }\n}\n"
       },
       "expect": [
-        "[authoring] skills/react-view-transitions/VENDOR.md pins 'main', a moving branch — record the commit sha instead"
+        "[authoring] src/upstreams.json entry 'react-view-transitions' pins 'main', a moving branch — record the commit sha instead"
       ],
       "expect_re": [
         "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
@@ -5493,10 +5493,11 @@
         "src/skills/react-view-transitions/VENDOR.md": null
       },
       "expect": [
-        "[authoring] skills/react-view-transitions/ has no VENDOR.md — its upstream, pinned commit and license are unrecorded"
+        "[authoring] skills/react-view-transitions/ has no VENDOR.md — its upstream, pinned commit and license are unrecorded",
+        "[authoring] src/upstreams.json entry 'react-view-transitions' is credited by no {{CREDIT:}} token and no VENDOR.md"
       ],
       "expect_re": [
-        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
+        "\\[doctor\\] 2 problem\\(s\\) across 1 theme\\(s\\)"
       ],
       "id": "doctor/a-vendored-skill-with-no-VENDOR-md",
       "steps": [

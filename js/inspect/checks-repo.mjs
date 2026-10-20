@@ -9,7 +9,8 @@
  */
 import path from 'node:path';
 import {
-  ALIASES_RE, PLUGIN_SRC, RETIRED_SKILL_IDS, ROOT, SRC, THEMES, WORKFLOW_SRC, aliasesOf, knownSkillIds,
+  ALIASES_RE, CREDIT_RE, PLUGIN_SRC, RETIRED_SKILL_IDS, ROOT, SRC, THEMES, WORKFLOW_SRC, aliasesOf,
+  knownSkillIds, upstreams,
 } from '../build/source.mjs';
 import { HOSTS } from '../hosts/hosts.mjs';
 import { installTargets, installsReferencingShim } from '../hosts/installs.mjs';
@@ -22,7 +23,7 @@ import { splitLines } from '../lib/udiff.mjs';
 import { ENTITY_STATUSES } from './inventory.mjs';
 import { assessRepo } from './scorecard.mjs';
 import { badgeUrl, renderSvg } from './scorecard-svg.mjs';
-import { isDir, isFile, rglob, srcStems } from './scan.mjs';
+import { isDir, isFile, rglob, srcStems, within } from './scan.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 /**
@@ -225,14 +226,17 @@ const MOVING_REFS = new Set(['main', 'master', 'develop', 'dev', 'head', 'latest
 
 /**
  * `_harness_build._vendor_pin_problems` — every vendored skill folder records where it came
- * from, under which license, and at WHICH immutable commit.
+ * from: `**Upstream key:** <key>`, naming its `src/upstreams.json` entry, which holds the repo,
+ * the pinned commit and the licence (`creditProblems` checks those facts).
  *
  * First-party folders that merely ride the vendored mechanism for their multi-file layout
- * declare that instead (`**Upstream:** this …`) and are exempt from the pin: there is no
- * upstream to drift against.
+ * declare that instead (`**Upstream:** this …`, plus a `**License:**`) and have no key: there is
+ * no upstream to drift against.
  */
 export function vendorPinProblems() {
   const problems = [];
+  let entries;
+  try { entries = upstreams(); } catch { entries = {}; }  // creditProblems names the bad JSON
   for (const name of VENDORED_SKILL_DIRS) {
     const folder = path.join(SRC, 'skills', name);
     if (!isDir(folder)) {
@@ -246,24 +250,92 @@ export function vendorPinProblems() {
         + 'pinned commit and license are unrecorded');
       continue;
     }
-    if (!/\*\*License:\*\*/.test(text)) {
-      problems.push(`[authoring] skills/${name}/VENDOR.md records no '**License:**'`);
-    }
     const upstream = /\*\*Upstream:\*\*\s*(\S+)/.exec(text);
-    if (!upstream) {
-      problems.push(`[authoring] skills/${name}/VENDOR.md declares no '**Upstream:**'`);
+    if (upstream && upstream[1].toLowerCase().startsWith('this')) {  // first-party
+      if (!/\*\*License:\*\*/.test(text)) {
+        problems.push(`[authoring] skills/${name}/VENDOR.md records no '**License:**'`);
+      }
       continue;
     }
-    if (upstream[1].toLowerCase().startsWith('this')) continue;  // first-party
-    const pin = /\*\*Commit:\*\*\s*(\S+)/.exec(text);
-    if (!pin) {
-      problems.push(`[authoring] skills/${name}/VENDOR.md has no '**Commit:**' pin`);
-    } else if (MOVING_REFS.has(pin[1].toLowerCase())) {
-      problems.push(`[authoring] skills/${name}/VENDOR.md pins '${pin[1]}', a `
-        + 'moving branch — record the commit sha instead');
-    } else if (!HEX40_RE.test(pin[1].toLowerCase())) {
-      problems.push(`[authoring] skills/${name}/VENDOR.md pin '${pin[1]}' is not `
-        + 'a 40-character commit sha');
+    const key = /\*\*Upstream key:\*\*\s*(\S+)/.exec(text);
+    if (!key) {
+      problems.push(`[authoring] skills/${name}/VENDOR.md declares no '**Upstream key:**' `
+        + "(nor '**Upstream:** this repository' for a first-party folder)");
+    } else if (!Object.hasOwn(entries, key[1])) {
+      problems.push(`[authoring] skills/${name}/VENDOR.md names upstream key '${key[1]}', `
+        + 'which src/upstreams.json does not define');
+    }
+  }
+  return problems;
+}
+
+/** The files a `{{CREDIT:` may sit in: those `renderAll` derives a licence copy for, plus agents. */
+const CREDITABLE_RE = /^(?:skills\/[^/_][^/]*(?:\/[^/_][^/]*)?|agents\/[^/_][^/]*)\.md$/;
+
+/**
+ * Every credit ships with what it promises. A `{{CREDIT:<key>:…}}` key resolves in
+ * `src/upstreams.json`; every entry there is credited by a token or a VENDOR.md
+ * `**Upstream key:**`; its `licenseFile` exists (the emit copies it, and throws mid-build if
+ * not); its commit is an immutable sha. A token in a `_` partial is refused: it is included
+ * into other files, whose raw source `renderAll` scans for the licence copy, so it would credit
+ * without shipping the licence. A `licenseFile: null` is only for a key credited from a vendored
+ * folder alone, which ships its upstream's own LICENSE: anywhere else the licence text must
+ * ship with the work, so a token outside those folders needs a licence file.
+ */
+export function creditProblems(src = SRC) {
+  let entries;
+  try { entries = upstreams(src); } catch {
+    return ['[authoring] src/upstreams.json is not valid JSON'];
+  }
+  const problems = [];
+  const used = new Set();
+  /** key -> the first non-vendored file whose token credits it. */
+  const needsLicence = new Map();
+  for (const file of rglob(src)) {
+    if (!file.endsWith('.md') || !isFile(file)) continue;
+    const rel = path.relative(src, file).split(path.sep).join('/');
+    const text = readText(file);
+    const vendorKey = path.basename(file) === 'VENDOR.md' && /\*\*Upstream key:\*\*\s*(\S+)/.exec(text);
+    if (vendorKey) used.add(vendorKey[1]);
+    if (!text.includes('{{CREDIT:')) continue;
+    if (!CREDITABLE_RE.test(rel)) {
+      problems.push(`[authoring] ${rel} carries a {{CREDIT:}} token, but only skills/<stem>.md, `
+        + 'skills/<stem>/*.md and agents/*.md may — the licence copy is derived for those alone');
+      continue;
+    }
+    for (const key of new Set([...text.matchAll(CREDIT_RE)].map((m) => m[1]))) {
+      used.add(key);
+      const sp = rel.split('/');
+      if (!(sp.length > 2 && VENDORED_SKILL_DIRS.has(sp[1])) && !needsLicence.has(key)) needsLicence.set(key, rel);
+      if (!Object.hasOwn(entries, key)) {
+        problems.push(`[authoring] ${rel} credits '${key}', which src/upstreams.json does not define`);
+      }
+    }
+  }
+  for (const [key, u] of Object.entries(entries)) {
+    const where = `src/upstreams.json entry '${key}'`;
+    if (!used.has(key)) problems.push(`[authoring] ${where} is credited by no {{CREDIT:}} token and no VENDOR.md`);
+    const pin = String(u.commit ?? '');
+    if (MOVING_REFS.has(pin.toLowerCase())) {
+      problems.push(`[authoring] ${where} pins '${pin}', a moving branch — record the commit sha instead`);
+    } else if (!HEX40_RE.test(pin.toLowerCase())) {
+      problems.push(`[authoring] ${where} pin '${pin}' is not a 40-character commit sha`);
+    }
+    for (const field of ['repo', 'author', 'license']) {
+      if (!u[field]) problems.push(`[authoring] ${where} has no '${field}'`);
+    }
+    if (!u.licenseFile) {
+      if (needsLicence.has(key)) {
+        problems.push(`[authoring] ${where} has licenseFile null, but ${needsLicence.get(key)} credits it `
+          + 'outside a vendored folder — its licence text must ship with the work');
+      }
+      continue;
+    }
+    // The emit copies it into every install, so it must be a file of this tree.
+    if (!within(path.resolve(src, u.licenseFile), path.resolve(src))) {
+      problems.push(`[authoring] ${where} names licenseFile '${u.licenseFile}', which resolves outside src/`);
+    } else if (!isFile(path.join(src, u.licenseFile))) {
+      problems.push(`[authoring] ${where} names licenseFile '${u.licenseFile}', which does not exist under src/`);
     }
   }
   return problems;

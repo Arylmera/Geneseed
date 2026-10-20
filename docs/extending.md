@@ -389,10 +389,31 @@ emit leaves the prior install intact.
    never fires. Hand-run, spends model calls on your own login, not part of the suite.
 
 **A vendored skill folder** (`src/skills/<name>/SKILL.md`) is a different shape: add it to
-`VENDORED_SKILL_DIRS` (`js/hosts/native.mjs:37` — the literal is frozen in
-`tests/unit/authoring_gates.test.mjs:312`), write a `VENDOR.md` carrying `**Upstream:**`,
-`**Commit:**` (a 40-hex commit, never a moving branch) and `**License:**`, add the registry row —
-and **skip steps 2, 4, 6, 7**: the flat-spec globs only see `*.md` at the top level.
+`VENDORED_SKILL_DIRS` (`js/hosts/native.mjs:48` — the literal is frozen in
+`tests/unit/authoring_gates.test.mjs:421`), add a `src/upstreams.json` entry (`repo`, `commit` —
+a 40-hex commit, never a moving branch — `author`, `license`, and `licenseFile`, a path under
+`src/` or `null`), write a `VENDOR.md` carrying `**Upstream key:** <that key>` and a
+`{{CREDIT:<key>:<upstream path>}}` line, which renders the attribution into every install (the
+folder ships its upstream's own LICENSE, so it gets no `LICENSE-<key>.txt` copy; a first-party
+folder writes `**Upstream:** this repository` and a `**License:**` instead, and has no entry),
+add the registry row — and **skip steps 2, 4, 6, 7**: the flat-spec globs only see `*.md` at the
+top level. The doctor (`vendorPinProblems`, `creditProblems`) refuses a key with no entry, an
+entry nothing credits, an entry missing `repo`/`author`/`license`, a bad commit, and a licence
+file that is missing or outside `src/`.
+
+**Porting a flat skill or an agent from another repository** is steps 1–9 plus a
+`{{CREDIT:}}` token. Only an upstream not yet in `src/upstreams.json` needs a new entry, as
+above, with the upstream's licence text at `src/licenses/<key>.txt` as its `licenseFile` (never
+`null` here; two keys from one repo may share a file); a port from a listed upstream reuses its
+key. Put
+`{{CREDIT:<key>:<upstream path>}}` on its own line under the purpose blockquote; the render turns
+it into `` *Adapted from [repo](url) (`path`) by author — license, modified.* ``, and for a skill the
+emit adds `skills/<name>/LICENSE-<key>.txt` (an agent is one file, so it gets the line only). A
+skill drawn from two upstreams carries two tokens, as `debug` does. A new entry also needs a
+`` `<key>` `` bullet under README `## 🙏 Credits` — `proseMirrorProblems` gates that list both
+ways. Do it in
+the commit that brings the text in: no gate can find an unmarked port afterwards, because nothing
+distinguishes it from first-party text.
 
 Two traps worth knowing before you write the spec:
 

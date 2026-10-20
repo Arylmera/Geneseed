@@ -40,6 +40,7 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
    every theme, `SKILL_CLASS`, a `registry.json` row, the README enumeration, then
    `doctor --all` and the suites. A skill that bundles a script or several files is a
    folder skill (`<name>/SKILL.md` + `VENDOR.md`), listed in `VENDORED_SKILL_DIRS`.
+   Text adapted from outside gets a `src/upstreams.json` entry and a `CREDIT` token (docs/extending.md §3, in the Geneseed source repo).
 5. **Merge or retire honestly.** When two skills fold into one: keep the best steps of
    each, rewrite the exit so the survivor routes to what the retired one led to, and
    remove the retired file and *every* reference to it (table row, sibling links, theme

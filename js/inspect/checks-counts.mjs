@@ -7,7 +7,7 @@
  * is the reader that feeds it.
  */
 import path from 'node:path';
-import { DOCS, DOC_FOLDERS, PLUGIN_SRC, ROOT, SRC, ruleCanon } from '../build/source.mjs';
+import { DOCS, DOC_FOLDERS, PLUGIN_SRC, ROOT, SRC, ruleCanon, upstreams } from '../build/source.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
 import { readText } from '../lib/fs.mjs';
 import { formatRepr } from '../lib/json.mjs';
@@ -25,7 +25,7 @@ import { existsSync, readdirSync } from 'node:fs';
  * so they drift silently — they already had. Pure over its inputs, so the corpus can feed it
  * crafted drift without touching the tree.
  */
-export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '') {
+export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '', upstreamKeys = undefined) {
   const problems = [];
   const { laws, agents, skills, plugins } = counts;
 
@@ -65,6 +65,32 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
     for (const orphan of [...listed].filter((s) => !skillStems.has(s)).sort()) {
       problems.push(`[authoring] README skills list names '${orphan}' but no `
         + `skills/${orphan}.md exists`);
+    }
+  }
+
+  // The README Credits section names EXACTLY the `src/upstreams.json` keys, both directions,
+  // as the skills row does. A missing section is a problem, or deleting it would turn the gate
+  // green. `upstreamKeys` is optional, like `plugins`, because the corpus predates it.
+  if (upstreamKeys !== undefined) {
+    const lines = readme.split('\n').map((ln) => ln.replace(/\r$/, ''));
+    const at = lines.findIndex((ln) => ln.trim() === '## 🙏 Credits');
+    if (at < 0) {
+      problems.push("[authoring] README has no '## 🙏 Credits' section — src/upstreams.json has "
+        + `${upstreamKeys.length} upstreams to credit`);
+    } else {
+      const end = lines.findIndex((ln, i) => i > at && ln.startsWith('## '));
+      const listed = new Set();
+      for (const ln of lines.slice(at + 1, end < 0 ? undefined : end).filter((l) => l.startsWith('- '))) {
+        const k = /^- `([^`]+)`/.exec(ln);
+        if (k) listed.add(k[1]);
+        else problems.push(`[authoring] README Credits bullet names no upstream key in backticks: '${ln}'`);
+      }
+      for (const key of [...upstreamKeys].filter((k) => !listed.has(k)).sort()) {
+        problems.push(`[authoring] README Credits omits upstream '${key}' (src/upstreams.json)`);
+      }
+      for (const key of [...listed].filter((k) => !upstreamKeys.includes(k)).sort()) {
+        problems.push(`[authoring] README Credits names '${key}', which src/upstreams.json does not define`);
+      }
     }
   }
 
@@ -242,6 +268,9 @@ export function countTableProblems() {
     problems.push('[authoring] SHIPPED.md carries no \'N laws, N agents, N skills\' line — '
       + 'deleting it is how that gate goes green while the count drifts');
   }
-  problems.push(...proseMirrorProblems(readme, web, counts, shippedSkills, shipped));
+  // A bad upstreams.json is creditProblems' to name; here it means no keys to hold the README to.
+  let upstreamKeys;
+  try { upstreamKeys = Object.keys(upstreams()); } catch { upstreamKeys = []; }
+  problems.push(...proseMirrorProblems(readme, web, counts, shippedSkills, shipped, upstreamKeys));
   return problems;
 }

@@ -1,0 +1,44 @@
+{
+  "daydream": {
+    "repo": "glebis/claude-skills",
+    "commit": "f47170dee300dd3d5da2a1c3c708986faeea3d5a",
+    "author": "Gleb Kalinin",
+    "license": "MIT",
+    "licenseFile": "skills/daydream/LICENSE"
+  },
+  "react-view-transitions": {
+    "repo": "vercel-labs/agent-skills",
+    "commit": "f8a72b9603728bb92a217a879b7e62e43ad76c81",
+    "author": "Vercel Engineering",
+    "license": "MIT",
+    "licenseFile": null
+  },
+  "mattpocock-skills": {
+    "repo": "mattpocock/skills",
+    "commit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
+    "author": "Matt Pocock",
+    "license": "MIT",
+    "licenseFile": "licenses/mattpocock-skills.txt"
+  },
+  "superpowers": {
+    "repo": "obra/superpowers",
+    "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+    "author": "Jesse Vincent",
+    "license": "MIT",
+    "licenseFile": "licenses/superpowers.txt"
+  },
+  "vibe-wise": {
+    "repo": "nykooi1/vibe-wise",
+    "commit": "eefb53df406ab89e31444684ff32c1df205221f8",
+    "author": "Noah Kim",
+    "license": "MIT",
+    "licenseFile": "licenses/vibe-wise.txt"
+  },
+  "mattpocock-skills-2509": {
+    "repo": "mattpocock/skills",
+    "commit": "a7d038f6bf7f01b516408e95e2fb56e0b338fa6f",
+    "author": "Matt Pocock",
+    "license": "MIT",
+    "licenseFile": "licenses/mattpocock-skills.txt"
+  }
+}

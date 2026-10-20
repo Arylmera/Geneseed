@@ -3,6 +3,10 @@
 > {{DESC_CODEBASE_DESIGN}}
 <!-- aliases: domain-modeling -->
 
+{{CREDIT:mattpocock-skills:skills/engineering/codebase-design/SKILL.md}}
+
+{{CREDIT:mattpocock-skills:skills/engineering/domain-modeling/SKILL.md}}
+
 **Trigger:** the user asks "where should the seam go", how to make a module testable through
 its interface, or for a glossary term or ADR. Also designing or reshaping a module's interface,
 a design talk that keeps stumbling over ambiguous terms, or another {{SKILL}} needing this vocabulary.

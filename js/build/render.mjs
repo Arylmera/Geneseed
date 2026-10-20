@@ -34,7 +34,10 @@ import { readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
-import { GATE_SWITCHES, PACK_ORDER, readPackText, resolveRuleIds, ruleCanon } from './source.mjs';
+import {
+  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, readPackText, resolveCredits, resolveRuleIds, ruleCanon, upstreamOf,
+} from './source.mjs';
+import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
@@ -66,6 +69,8 @@ export const SRC_DIR_TOKENS = {
 };
 
 const TEXT_SUFFIXES = new Set(['.md', '.tmpl', '.json', '.txt', '.yml', '.yaml']);
+/** Top-level `src/` entries the build reads but never ships: upstream-credit provenance. */
+const NOT_BUNDLED = new Set(['upstreams.json', 'licenses']);
 
 // Digits are legal after the first character: `DOC_<PACK>_<n>` (the doctrine rule titles) are
 // the first token names in the project to carry one, and without `0-9` here `{{DOC_CRAFT_1}}`
@@ -240,8 +245,8 @@ function readSource(cfg, p) {
   let seen = SRC_TEXT.get(cfg);
   if (!seen) SRC_TEXT.set(cfg, (seen = new Map()));
   let text = seen.get(p);
-  // Rule ids resolve here, once per file, so every stage after sees the addressed form.
-  if (text === undefined) seen.set(p, (text = resolveRuleIds(readText(p), cfg.src)));
+  // Rule ids and credits resolve here, once per file, so every stage after sees the addressed form.
+  if (text === undefined) seen.set(p, (text = resolveCredits(resolveRuleIds(readText(p), cfg.src), cfg.src)));
   return text;
 }
 
@@ -488,7 +493,8 @@ export function destRel(rel) {
  *
  * Returns `{ theme, items }` where each item is `{ rel, text, src }` — `rel` is the
  * themed POSIX output path, `text` is the rendered text or `null` for a binary that the
- * caller copies from `src`. Python returns a tuple of tuples; the object form is the
+ * caller copies from `src`. A credited skill's licence copy also carries `licenceOf` (the
+ * skill's stem), since its `src` is not under that skill. Python returns a tuple of tuples; the object form is the
  * same data with the field names the Python docstring already uses.
  * @param {any} cfg
  * @param {string} themeName
@@ -500,11 +506,13 @@ export function renderAll(cfg, themeName, {
   const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix });
   const items = [];
   const skipped = new Set(cfg.excludeSkills ?? []);
+  const licences = new Map();   // `<stem>/LICENSE-<key>.txt` -> the upstream's licence file
   for (const file of sortedSourceFiles(cfg.src)) {
     const rel = path.relative(cfg.src, file);
     // `--exclude-skills`: the one filter every host's emit and the plain bundle read through.
     const sp = rel.split(path.sep);
     if (sp[0] === 'skills' && sp.length >= 2 && skipped.has(sp[1].replace(/\.md$/, ''))) continue;
+    if (NOT_BUNDLED.has(sp[0])) continue;
     const outRel = destRel(themedRel(rel, theme)).split(path.sep).join('/');  // as_posix()
     // The on-disk `laws/`, `ontology/` and `doctrines/` are the "complete text" the two lean
     // pointers promise — §1's and the Doctrines section's. They render at full whatever the
@@ -513,9 +521,26 @@ export function renderAll(cfg, themeName, {
     // accident, which is a different thing from shipping whole by contract.
     // Keyed on the SOURCE rel, not the themed one, so a DIR_* rename cannot un-exempt them.
     const fp = /^(?:laws|ontology|doctrines)[\\/]/.test(rel) ? 'full' : footprint;
-    items.push(TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
-      ? { rel: outRel, text: renderFile(cfg, file, theme, fp, lawsPrefix, new Set(), nativeCatalog), src: file }
-      : { rel: outRel, text: null, src: file });
+    const text = TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
+      ? renderFile(cfg, file, theme, fp, lawsPrefix, new Set(), nativeCatalog) : null;
+    items.push({ rel: outRel, text, src: file });
+    // A credited skill ships its upstream's licence beside it, one copy per (skill, key). The
+    // token is gone from `text`, so the raw source is scanned; an unknown key or a null
+    // licenseFile yields no copy. A vendored folder's VENDOR.md carries a credit too, but the
+    // folder already ships its upstream's LICENSE verbatim, so it gets no second copy.
+    const stem = sp[0] === 'skills' && sp.length >= 2 ? sp[1].replace(/\.md$/, '') : null;
+    if (stem && !VENDORED_SKILL_DIRS.has(stem) && text !== null) {
+      for (const [, key] of readText(file).matchAll(CREDIT_RE)) {
+        const lic = upstreamOf(key, cfg.src)?.licenseFile;
+        if (lic) licences.set(`${stem}/LICENSE-${key}.txt`, path.join(cfg.src, lic));
+      }
+    }
+  }
+  // Copied, not rendered (`text: null`): the licence ships byte for byte. `licenceOf` names the
+  // skill, because the copy's `src` is the upstream's file, not a path under that skill.
+  for (const [name, lic] of [...licences].sort(([a], [b]) => comparePaths(a, b))) {
+    items.push({ rel: destRel(themedRel(path.join('skills', name), theme)).split(path.sep).join('/'),
+      text: null, src: lic, licenceOf: name.split('/')[0] });
   }
   return { theme, items };
 }

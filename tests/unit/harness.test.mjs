@@ -1256,6 +1256,43 @@ test('the prose mirror gate catches every drift class the badge regex is blind t
     .some((x) => x.includes('repeatable workflows')));
 });
 
+test('the README Credits section lists exactly the src/upstreams.json keys', () => {
+  // TWO DIRECTIONS, like the skills row: a key with no bullet ships a credit the README never
+  // names, and a bullet with no key names an upstream nothing pins. A deleted section is a
+  // problem too, or deleting it would be how the gate goes green. Each bullet leads with its
+  // key in backticks; that is what the arm reads.
+  const counts = { laws: 35, agents: 16, skills: 3 };
+  const stems = new Set();
+  const keys = ['alpha-up', 'beta'];
+  const section = '## 🙏 Credits\n\n'
+    + '- `alpha-up` — [o/alpha](https://github.com/o/alpha) by A (MIT): the alpha skill.\n'
+    + '- `beta` — [o/beta](https://github.com/o/beta) by B (MIT): the beta skill.\n\n';
+  const readme = `## 🤝 Contributing\n\nText.\n\n${section}## 📄 License\n\n[MIT](LICENSE)\n`;
+  const run = (r, k) => proseMirrorProblems(r, '', counts, stems, '', k);
+  const rows = [
+    ['every key has its bullet', readme, keys, []],
+    ['CRLF endings read the same', readme.replaceAll('\n', '\r\n'), keys, []],
+    ['no keys argument skips the arm', '', undefined, []],
+    ['a key with no bullet', readme.replace(/- `beta`[^\n]*\n/, ''), keys,
+      ["[authoring] README Credits omits upstream 'beta' (src/upstreams.json)"]],
+    ['a bullet with no key', readme, ['alpha-up'],
+      ["[authoring] README Credits names 'beta', which src/upstreams.json does not define"]],
+    ['a bullet that names no key', readme.replace('- `beta` —', '- beta —'), ['alpha-up'],
+      ["[authoring] README Credits bullet names no upstream key in backticks: "
+        + "'- beta — [o/beta](https://github.com/o/beta) by B (MIT): the beta skill.'"]],
+    // Two pins of one repo share a link but not a key; the key match is exact, not a prefix.
+    ['two keys of one repo, each with its bullet',
+      readme.replace('- `beta`', '- `alpha-up-2509` — [o/alpha](https://github.com/o/alpha) by A (MIT): later.\n- `beta`'),
+      [...keys, 'alpha-up-2509'], []],
+    ['the second key of one repo has no bullet', readme, [...keys, 'alpha-up-2509'],
+      ["[authoring] README Credits omits upstream 'alpha-up-2509' (src/upstreams.json)"]],
+    ['the section is missing', readme.replace(section, ''), keys,
+      ["[authoring] README has no '## 🙏 Credits' section — src/upstreams.json has 2 "
+        + 'upstreams to credit']],
+  ];
+  for (const [what, r, k, want] of rows) assert.deepEqual(run(r, k), want, what);
+});
+
 test('the count gate really reads the onboarding pages the prose arms are about', () => {
   // THE WIRING HALF, and the defect it was written for is worth naming: the web arms were fed
   // a file the console's onboarding prose had MOVED OUT OF. The read still succeeded, all
@@ -1439,6 +1476,15 @@ test('a spec whose first block is prose rather than a blockquote is flagged', ()
     problems.some((p) => p.includes('skills/zzz-fixture-probe.md')
       && p.includes("not a '>' blockquote")),
     JSON.stringify(problems));
+});
+
+test('a credit to an unknown upstream is flagged through the authoring gate', () => {
+  // The wiring, not the check: `creditProblems` has its own rows in credits.test.mjs, so this
+  // one proves only that `authoringProblems` still calls it — drop that line and this goes red.
+  const problems = withFault({
+    'src/skills/zzz-probe.md': '# x\n\n> {{DESC_COMMIT}}\n\n{{CREDIT:nope:a.md}}\n',
+  }, (root) => gate(root, 'm.authoringProblems()'));
+  assert.ok(problems.some((p) => p.includes("credits 'nope'")), JSON.stringify(problems));
 });
 
 // ---------------------------------------------------------------------------------------------
