@@ -45,6 +45,29 @@ export const GLYPHS = {
       <path className="ag-blink" d="M30 42h5" />
     </>
   ),
+  // Keeps build and delivery turning: a continuous loop drawn around its pipeline.
+  'devops-engineer': (
+    <>
+      <path d="M32 32c-5-9-18-9-18 0s13 9 18 0c5-9 18-9 18 0s-13 9-18 0z" opacity=".3" />
+      <path
+        className="ag-draw"
+        pathLength="100"
+        d="M32 32c-5-9-18-9-18 0s13 9 18 0c5-9 18-9 18 0s-13 9-18 0z"
+      />
+      <circle className="ag-pulse ag-f" cx="32" cy="32" r="3" />
+    </>
+  ),
+  // Packs the image: containers stacked and rising above the waves.
+  'docker-expert': (
+    <>
+      <rect className="ag-rise ag-f" x="14" y="36" width="10" height="9" />
+      <rect className="ag-rise ag-late ag-f" x="27" y="36" width="10" height="9" />
+      <rect className="ag-rise ag-later ag-f" x="40" y="36" width="10" height="9" />
+      <rect className="ag-rise ag-late ag-f" x="20" y="25" width="10" height="9" />
+      <rect className="ag-rise ag-later ag-f" x="34" y="25" width="10" height="9" />
+      <path d="M8 52c5 0 5-3 10-3s5 3 10 3 5-3 10-3 5 3 10 3 5-3 10-3" opacity=".5" />
+    </>
+  ),
   // Inscribes the record: lines written one after another, the quill moving along.
   docs: (
     <>
@@ -124,6 +147,17 @@ export const GLYPHS = {
       </g>
     </>
   ),
+  // Steers the cluster: a ship's wheel, its hub pulsing.
+  'kubernetes-specialist': (
+    <>
+      <circle cx="32" cy="32" r="16" />
+      <path
+        d="M32 8v13M32 43v13M8 32h13M43 32h13M15 15l9 9M40 40l9 9M49 15l-9 9M24 40l-9 9"
+        opacity=".6"
+      />
+      <circle className="ag-pulse ag-f" cx="32" cy="32" r="5" />
+    </>
+  ),
   // Keeps the memory in order: index cards rising in turn from a filing box.
   'memory-curator': (
     <>
@@ -184,6 +218,35 @@ export const GLYPHS = {
         <path d="M27 23a5 5 0 1 1 7 4.5c-1.5.8-2 2-2 3.5v1" />
         <circle cx="32" cy="36" r="1.2" />
       </g>
+    </>
+  ),
+  // Builds the Spring service end to end: a power ring with its stem live, a leaf swaying.
+  'spring-boot-engineer': (
+    <>
+      <path d="M22 20a16 16 0 1 0 20 0" />
+      <path className="ag-pulse" d="M32 12v18" />
+      <path className="ag-sway ag-f" d="M32 50c0-8 5-12 13-12 0 8-5 12-13 12z" />
+    </>
+  ),
+  // Reviews a Spring change with the framework in mind: a lens sweeping the lines, a leaf in the corner.
+  'spring-reviewer': (
+    <>
+      <path d="M12 18h26M12 26h18M12 34h22M12 42h14" opacity=".4" />
+      <path className="ag-sway ag-f" d="M42 28c0-8 4-12 11-12 0 8-4 12-11 12z" />
+      <g className="ag-sweep">
+        <circle className="ag-f" cx="24" cy="32" r="9" />
+        <path d="M31 39l8 8" strokeWidth="3" />
+      </g>
+    </>
+  ),
+  // Wards the Spring gates: a padlock whose shackle sends out a ripple.
+  'spring-security': (
+    <>
+      <path className="ag-ripple" d="M22 28v-6a10 10 0 0 1 20 0v6" />
+      <path d="M22 28v-6a10 10 0 0 1 20 0v6" />
+      <rect className="ag-f" x="16" y="28" width="32" height="24" rx="4" />
+      <circle cx="32" cy="38" r="3" />
+      <path className="ag-draw" pathLength="100" d="M32 41v6" />
     </>
   ),
   // Guards the long war: a sapling growing, its leaves swaying.

@@ -40,5 +40,12 @@
     "author": "Matt Pocock",
     "license": "MIT",
     "licenseFile": "licenses/mattpocock-skills.txt"
+  },
+  "piomin-spring-boot": {
+    "repo": "piomin/claude-ai-spring-boot",
+    "commit": "cf876a1041ac4692f32422261f6d67d7f12140d5",
+    "author": "Piotr Mińkowski",
+    "license": "Apache-2.0",
+    "licenseFile": "licenses/piomin-spring-boot.txt"
   }
 }

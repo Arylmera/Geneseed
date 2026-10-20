@@ -360,7 +360,7 @@ test('every known functional marker is silenced, including inside a fence or a c
     + '<!-- CATALOG:begin skills -->\ntable\n<!-- CATALOG:else -->\npointer\n<!-- CATALOG:end -->\n'
     + '<!-- INCLUDE: skills/_self-improvement.md -->\n'
     + '<!-- invocation: user -->\n<!-- aliases: x, y -->\n<!-- webfetch: allow -->\n'
-    + '<!--harness:claude-->\n<!-- bash: allow -->\n';
+    + '<!--harness:claude-->\n<!-- bash: allow -->\n<!-- banned: ok -->\n';
   withFault('src/zz-note.md', live, () => {
     assert.deepEqual(F.authoring.authorNoteProblems(), []);
   });

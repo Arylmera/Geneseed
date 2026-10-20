@@ -25,7 +25,8 @@ const FNS = {
   prompt_line: (a) => promptLine(a[0]),
   confirm: (a) => confirm(...a),
   ask_choice: (a) => askChoice(a[0], a[1], a[2]),
-  collect_setup_lines: () => collectSetupLines(),
+  // `args[0]`, when given, is a fixture `src` whose kits (or none) the kit question reads.
+  collect_setup_lines: (a) => collectSetupLines(a[0] ? loadKits(a[0]) : null),
   // The kit question over a fixture `src` (`args[1]`): the shipped tree has no kit to ask about.
   ask_kits: (a) => askKits(a[0], loadKits(a[1])),
   // `args[0]` FAKES `isTTY`, because a probe's stdin is a seeded file and every branch past the

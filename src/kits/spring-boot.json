@@ -1,0 +1,23 @@
+{
+  "description": "Spring Boot 4 / Java 21+ services: build, data access, testing, security review, and the container and cluster around them.",
+  "skills": ["spring-boot", "spring-data-jpa", "spring-testing"],
+  "agents": ["spring-boot-engineer", "spring-reviewer", "spring-security", "kubernetes-specialist", "docker-expert", "devops-engineer"],
+  "rules": "kits/spring-boot/rules.md",
+  "rulesWordBudget": 300,
+  "banned": ["@MockBean", "@SpyBean", "javax.persistence", "ClientHttpRequestFactories", "Spring Security 6"],
+  "catalogue": {
+    "skills": [
+      "| [spring-boot]({{DIR_SKILLS}}/spring-boot.md) | building or changing a Spring Boot service: controllers, configuration, REST clients, error handling, observability, packaging |",
+      "| [spring-data-jpa]({{DIR_SKILLS}}/spring-data-jpa.md) | Spring Data JPA or Hibernate work: entities, repositories, queries, transactions, schema migrations, N+1 and fetch problems |",
+      "| [spring-testing]({{DIR_SKILLS}}/spring-testing.md) | writing or fixing Spring Boot tests: slices, MockMvc, Testcontainers with service connections, mocking beans |"
+    ],
+    "agents": [
+      "| [spring-boot-engineer]({{DIR_AGENTS}}/spring-boot-engineer.md) | a Spring Boot feature or service must be implemented end to end in a Java codebase |",
+      "| [spring-reviewer]({{DIR_AGENTS}}/spring-reviewer.md) | a Spring Boot change needs a framework-aware review: layering, transactions, JPA, configuration, test slices |",
+      "| [spring-security]({{DIR_AGENTS}}/spring-security.md) | a Spring Security change (filter chain, method security, OAuth2/JWT, CORS/CSRF) needs a security pass |",
+      "| [kubernetes-specialist]({{DIR_AGENTS}}/kubernetes-specialist.md) | a Spring Boot service needs Kubernetes manifests, probes, resources or a rollout strategy reviewed or written |",
+      "| [docker-expert]({{DIR_AGENTS}}/docker-expert.md) | a Spring Boot service needs a Dockerfile, layered or native image, or container build reviewed or written |",
+      "| [devops-engineer]({{DIR_AGENTS}}/devops-engineer.md) | a Spring Boot service needs its build and delivery pipeline reviewed or improved, on whatever CI the project already uses |"
+    ]
+  }
+}

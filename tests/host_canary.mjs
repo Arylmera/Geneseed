@@ -9,6 +9,7 @@
  *   node tests/host_canary.mjs --plugins <dir>     # OpenCode: load another plugin dir
  *   node tests/host_canary.mjs --break             # Claude engines: emit, then corrupt one hook
  *   node tests/host_canary.mjs --keep              # keep each throwaway home, to read its logs
+ *   node tests/host_canary.mjs --kits spring-boot  # Claude engines: emit with these kits on (spec T3)
  *
  * `--plugins` and `--break` are the mutation proofs: each must turn its hosts red.
  *
@@ -62,6 +63,7 @@ const opt = (name, dflt) => {
 };
 const ONLY = opt('--only', '').split(',').filter(Boolean);
 const BREAK = argv.includes('--break');
+const KITS = opt('--kits', '');
 const PLUGINS = path.resolve(opt('--plugins', path.join(ROOT, 'adapters', 'opencode', 'plugins')));
 const IDS = fs.readdirSync(PLUGINS).filter((f) => f.endsWith('.js')).map((f) => f.slice(0, -3)).sort();
 if (IDS.length === 0) {
@@ -185,7 +187,7 @@ function checkClaudeEngine({ emit, configVar, configDir, doctor }) {
     for (const v of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete env[v];
     Object.assign(env, { ANTHROPIC_BASE_URL: 'http://127.0.0.1:9', OPENAI_BASE_URL: 'http://127.0.0.1:9' });
 
-    const e = run(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', emit, '--config-dir', cfg], { env });
+    const e = run(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', emit, '--config-dir', cfg, ...(KITS ? ['--kits', KITS] : [])], { env });
     if (e.status !== 0) return { problems: [`\`geneseed-build --emit ${emit}\` exited ${e.status}:\n${e.out}`] };
     const settingsFile = path.join(cfg, 'settings.json');
     if (BREAK) {

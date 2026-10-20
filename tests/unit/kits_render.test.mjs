@@ -210,3 +210,23 @@ test('kit on with --exclude-skills fx-skill: only the skill goes (R5)', async ()
     }
   });
 });
+
+// Table-driven: a selected kit whose manifest has no string `rules` stops the render with a named error.
+const BAD_RULES = [
+  ['rules missing', undefined],
+  ['rules is a number', 7],
+  ['rules is null', null],
+];
+for (const [name, rules] of BAD_RULES) {
+  test(`kit on, ${name}: the render throws "src/kits/fx.json has no 'rules' path"`, async () => {
+    await withSandbox('gskitr-', (d) => {
+      const src = kitSrc(d);
+      const file = path.join(src, 'kits/fx.json');
+      const m = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (rules === undefined) delete m.rules; else m.rules = rules;
+      fs.writeFileSync(file, JSON.stringify(m));
+      assert.throws(() => renderAll({ ...makeCfg({ kits: ['fx'] }), src }, 'neutral'),
+        { message: "src/kits/fx.json has no 'rules' path" });
+    });
+  });
+}

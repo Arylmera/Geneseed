@@ -206,7 +206,9 @@ function activeKits(cfg) {
   const kits = kitsOf(cfg);
   return cfg.kits.map((k) => {
     if (!kits.has(k)) throw new Error(`unknown kit '${k}' (no src/kits/${k}.json)`);
-    return [k, kits.get(k)];
+    const m = kits.get(k);
+    if (typeof m.rules !== 'string') throw new Error(`src/kits/${k}.json has no 'rules' path`);
+    return [k, m];
   });
 }
 

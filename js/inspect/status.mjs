@@ -255,7 +255,12 @@ export function keptKitFiles(host, scope, root, active) {
       : e.isFile() ? [`${rel}/${e.name}`] : []));
   };
   const kept = {};
-  for (const [kit, m] of loadKits()) {
+  let kits;
+  try { kits = loadKits(); } catch (e) {
+    process.stderr.write(`warning: kit rows skipped — ${e.message}\n`);
+    return null;
+  }
+  for (const [kit, m] of kits) {
     if (active.includes(kit)) continue;
     const rels = [
       ...(m.skills ?? []).flatMap((n) => [`skills/${n}.md`].filter((r) => existsSync(path.join(dir, r)))

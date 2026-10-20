@@ -479,6 +479,8 @@ it with `--kits` ([Kits](concepts/kits.md)). Nothing in the mechanism is specifi
 }
 ```
 
+- `banned` (optional): strings no member file may contain, in the skill and agent specs, a skill's side files (flat, `skills/<m>/*.md`) and the kit's `rules.md`; `doctor` refuses each hit, naming file and line. A line carrying `<!-- banned: ok -->` is exempt (a rule that names the construct in order to forbid it).
+
 `loadKits` (`js/build/source.mjs`) reads every `src/kits/*.json`; `src/kits/` itself never ships
 (`NOT_BUNDLED` in `js/build/render.mjs`). The members stay **flat** in `src/skills/` and
 `src/agents/`, never in a `src/kits/<kit>/skills/` folder: every host's native layer accepts only
@@ -511,9 +513,14 @@ enumerates skills would miss it. `src/kits/<kit>/` holds only `rules.md`.
    to a kit member (it would dangle in an install without the kit), and a kit file that links to
    another kit's member. Links run kit → core only. A kit's links to its own members do not
    protect them from `--exclude-skills`; its link to a core skill still protects that skill.
-5. **The setup wizard.** It asks its kits question only when at least one kit exists, so the
-   first kit adds one answer line to the stdin strings in `tests/unit/wizard.test.mjs`.
-6. **Golden cells** for the first kit: kit on, kit off, and kit turned off on rebuild.
+5. **The setup wizard.** It asks its kits question only when at least one kit exists. The shipped
+   `spring-boot` kit therefore added one answer line to the stdin strings in
+   `tests/unit/wizard.test.mjs`, and the `wizard-no-kit` job holds that the question is skipped on a
+   tree with no kit.
+6. **Golden cells**: the matrix (`tests/helpers/matrix/emit.*.json`) carries kit on for `claude` and
+   `opencode`, the kit-off baseline (`kits: []`, spelled `--kits none`), and three deletion cells
+   (kit on to off). One deletion cell sets `edit` (a map of sandbox path to appended text) so a member
+   is the user's own before the kit goes off, and `sovereign` excuses it: the prune keeps it (R6).
 
 **What a kit costs an install** — what to weigh before adding one:
 

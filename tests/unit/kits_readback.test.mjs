@@ -159,3 +159,29 @@ test('R6: an edited member of a kit turned off is kept, and status names it', ()
   }).join('\n');
   assert.match(text, /kept from inactive kit fx: agents\/fx-agent\.md/);
 });
+
+test('a kit manifest that does not parse degrades status and the wizard to one warning line, not a stack trace', async () => {
+  const bad = path.join(sandbox('gskits-bad-'), 'checkout');
+  copyCheckout(bad, { 'src/kits/fx.json': '{ nope' });
+  const atBad = (rel) => pathToFileURL(path.join(bad, rel)).href;
+  const { keptKitFiles } = await import(atBad('js/inspect/status.mjs'));
+  const { askKits } = await import(atBad('js/maintain/setup.mjs'));
+  const kept = capture(() => keptKitFiles('claude', 'global', sandbox('gskits-root-'), []));
+  assert.equal(kept.value, null);
+  assert.match(kept.err, /^warning: kit rows skipped — src\/kits\/fx\.json: .*\n$/);
+  const asked = capture(() => askKits(null));
+  assert.equal(asked.value, null);
+  assert.match(asked.err, /^warning: kit question skipped — src\/kits\/fx\.json: .*\n$/);
+});
+
+test('a broken kit manifest does not crash installedDefaults for a machine whose install has the kit on', async () => {
+  const bad = path.join(sandbox('gskits-badinst-'), 'checkout');
+  copyCheckout(bad, { 'src/kits/fx.json': '{ nope' });
+  const { installedDefaults } = await import(pathToFileURL(path.join(bad, 'js/hosts/installs.mjs')).href);
+  const work = sandbox('gskits-badcwd-');
+  fs.mkdirSync(path.join(work, 'Harness'));
+  fs.writeFileSync(path.join(work, 'Harness', 'AGENT.md'), 'Active kits: fx\n');
+  const was = process.cwd();
+  process.chdir(work);
+  try { assert.deepEqual(installedDefaults().kits, []); } finally { process.chdir(was); }
+});

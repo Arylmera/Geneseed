@@ -60,7 +60,9 @@ export function cellId(cell) {
     // ⚠ AN EMPTY SELECTION IS AN ANSWER, so the test is `!== undefined` and not truthiness:
     // `--doctrines none` is a real configuration and an id that omitted it would collide with
     // the default-build cell for the same theme and emit.
-    + (cell.doctrines !== undefined ? `/${cell.doctrines.join('+') || 'none'}` : '');
+    + (cell.doctrines !== undefined ? `/${cell.doctrines.join('+') || 'none'}` : '')
+    // Same rule for the kits axis: `--kits none` is a real configuration (the kit-off baseline).
+    + (cell.kits !== undefined ? `/kits:${cell.kits.join('+') || 'none'}` : '');
 }
 
 export function argvFor(cell, out) {
@@ -72,6 +74,8 @@ export function argvFor(cell, out) {
   // The driver refuses an empty `--doctrines `, so an empty list takes the literal `none` — the
   // same spelling `setupBuildArgs` uses and the same one `configDefaults` parses back.
   if (cell.doctrines !== undefined) a.push('--doctrines', cell.doctrines.join(',') || 'none');
+  // The same spelling for kits: the driver reads `--kits none` as no kit.
+  if (cell.kits !== undefined) a.push('--kits', cell.kits.join(',') || 'none');
   return a;
 }
 
@@ -408,7 +412,16 @@ export function runCell(gen, cell, { repeat = 1 } = {}) {
         const text = decodeStream(proc.stderr) || decodeStream(proc.stdout);
         return `${prefix}exit ${proc.status}: ${text.trim().slice(0, 400)}`;
       }
-      if (n === 1 && cell.before) seeded = filesIn(sb.path);
+      if (n === 1 && cell.before) {
+        seeded = filesIn(sb.path);
+        // `edit`: sandbox-relative path -> text appended AFTER the first emit, before the second.
+        // It is how a deletion cell makes an owned file the user's own (spec R6: the prune keeps it).
+        for (const [rel, extra] of Object.entries(cell.edit ?? {})) {
+          const target = path.join(sb.path, ...rel.split('/'));
+          if (!fs.existsSync(target)) return `edit target ${rel} was not emitted by the first configuration`;
+          fs.appendFileSync(target, extra);
+        }
+      }
     }
     if (seeded !== null) {
       const now = filesIn(sb.path);

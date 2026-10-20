@@ -932,7 +932,11 @@ export function installedDefaults() {
     if (!found.excludeRules?.length) found.excludeRules = excludedRulesOfDir(base);
     if (!found.excludeSkills?.length) found.excludeSkills = excludedSkillsOfDir(base);
     // Kits walk the same two-state way: no line and `none` both read `[]`.
-    if (!found.kits?.length) found.kits = kitsOfDir(base);
+    // A broken manifest must not crash the wizard here: the build that follows still fails loudly
+    // in `loadKits`. Not guarded inside `kitsOfDir`, which rebuild-all must keep failing on.
+    if (!found.kits?.length) {
+      try { found.kits = kitsOfDir(base); } catch { found.kits = []; }
+    }
   }
   return found;
 }
