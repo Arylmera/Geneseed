@@ -138,8 +138,8 @@ test("this repo's own workflows parse, with their schedules and jobs", () => {
     assert.ok(parseYamlSubset(readFileSync(wf + path.sep + n, 'utf8').replace(/\r\n?/g, '\n')) instanceof Map,
       `${n} no longer parses`);
   }
-  // The five files sorted by name; host-canary, mutate and scorecard run on `schedule:`, ci and
-  // publish do not.
+  // The six files sorted by name; host-canary, mutate, scorecard and upstream-drift run on
+  // `schedule:`, ci and publish do not. upstream-drift is one job, `drift` (weekly issue sync).
   // ci's last four jobs came with #211 (audit, pr-title), #213 (coverage) and the link check, in file order.
   const configs = parseCiConfigs(ROOT);
   assert.deepEqual(configs.map((c) => [c.ciType, c.hasSchedule, c.jobs.map((j) => j.name)]), [
@@ -149,6 +149,7 @@ test("this repo's own workflows parse, with their schedules and jobs", () => {
     ['github', true, ['mutate', 'stryker']],
     ['github', false, ['publish']],
     ['github', true, ['scorecard']],
+    ['github', true, ['drift']],
   ]);
   // `npm run lint` resolves through package.json to eslint — the whole of this repo's
   // linter_enforcement pass.
