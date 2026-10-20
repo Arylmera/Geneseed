@@ -194,6 +194,10 @@ streams the output of background jobs and keeps their history across reloads.
     card (shown once a global install exists) manages sovereign repos — folders where every
     global harness goes dormant (hooks stay silent, the global preamble never loads);
     add or remove one here, the web mirror of `harness exclude add|remove|list`.
+- **Kits** (`#/installs/kits`) — every install (disabled ones read-only) as a card with one switch per kit.
+  Toggling only stages the set; **Apply** asks first, then rebuilds that install with
+  exactly that set as a console job. Files you edited in a kit that is now off are kept,
+  and the row lists them.
 - **Settings** (`#/settings`) — a **Console direction** picker (the visual flavour of the
   console: Cultivar, Operator, Matrix or Atlas) with a **Dashboard layout** control (Auto follows each theme's designed Status
   lens; Cultivar / Greenhouse / Operator / Journal force one regardless of skin), the

@@ -20,7 +20,7 @@ export const PAGES = {
 export const TABS = {
   loops: ['templates', 'bricks', 'active'],
   personal: ['rules', 'profile', 'memory', 'notebook'],
-  installs: ['hosts', 'edits', 'doctor', 'server'],
+  installs: ['hosts', 'kits', 'edits', 'doctor', 'server'],
 }
 export const TAB_LABELS = {
   templates: 'Templates',
@@ -31,6 +31,7 @@ export const TAB_LABELS = {
   memory: 'Memory',
   notebook: 'Notebook',
   hosts: 'Hosts',
+  kits: 'Kits',
   edits: 'Local edits',
   doctor: 'Doctor',
   server: 'Server',

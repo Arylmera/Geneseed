@@ -11,22 +11,24 @@
 import { statSync } from 'node:fs';
 import path from 'node:path';
 
-import { CONFIG, ROOT, THEMES, discoverNames, makeCfg } from '../build/source.mjs';
+import { CONFIG, ROOT, THEMES, discoverNames, loadKits, makeCfg } from '../build/source.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import { sourceReleaseVersion } from '../hosts/opencode.mjs';
 import { alwaysOnCost } from '../inspect/cost.mjs';
+import { installProfile } from '../build/generate.mjs';
 import { diffCollect, renderMemo } from '../inspect/diff.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { CLAUDE_STYLE, HOSTS, VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
 import {
-  footprintOfDir, gatesOfDir, installState, installTargets, modeOfDir, trustOfDir,
+  footprintOfDir, gatesOfDir, installState, installTargets, legacyProcessCarrierOfDir, modeOfDir,
+  trustOfDir,
   postureOfDir, readJsonMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
 import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import { activeLoops } from '../loop/registry.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
-import { accentFor, statusData } from '../inspect/status.mjs';
+import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
 import { isFile } from '../lib/fs.mjs';
 import { comparePaths, normcase } from '../lib/paths.mjs';
 import {
@@ -229,6 +231,41 @@ export function apiFleet(state) {
     });
   }
   return { installs, source_fp: sourceFp, doctor: state.doctor };
+}
+
+/**
+ * EVERY INSTALL'S KITS — the Kits tab. Its own route, like `apiFleet`: it re-reads each carrier
+ * and the kit manifests, which the sidebar's `/api/installs` refetch must not pay for.
+ *
+ * `kits` per row is `installProfile(...).kits`, the reader `rebuild-all` uses, so the tab shows
+ * what a rebuild would keep. A malformed manifest answers 200 with `error` and EMPTY lists, never
+ * rows without kits (which would read as "no kit on") and never a 500. `editable:false` carries
+ * the two refusals `apiInstallCmd` makes, so the page can say why before the click.
+ */
+export function apiKits() {
+  let known;
+  try { known = loadKits(); } catch (e) {
+    return { kits: [], installs: [], error: String(e?.message ?? e) };
+  }
+  const kits = [...known].map(([name, m]) => ({
+    name, description: m.description ?? '', skills: m.skills ?? [], agents: m.agents ?? [] }));
+  const installs = [];
+  for (const [host, scope, root] of installTargets()) {
+    const st = installState(root, host, scope);
+    if (st === 'absent') continue;
+    try {
+      const p = installProfile(host, scope, root);
+      const reason = st === 'disabled' ? 'install is disabled — reactivate it first'
+        : legacyProcessCarrierOfDir(root, host) ? 'predates the comms pack — run geneseed setup for it first'
+          : null;
+      installs.push({ ...installRowBase(host, scope, root, st), kits: p.kits,
+        keptKitFiles: keptKitFiles(host, scope, root, p.kits), editable: reason === null, reason });
+    } catch (e) {
+      installs.push({ ...installRowBase(host, scope, root, 'unreadable'),
+        error: String(e?.message ?? e) });
+    }
+  }
+  return { kits, installs };
 }
 
 /** The dashboard aggregate. */

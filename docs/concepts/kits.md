@@ -47,6 +47,8 @@ An install with a kit on records it in its instructions file, under the skill se
 
 `geneseed status` shows `kits: spring-boot` on the install's row, and `status --json` carries the same list.
 
+In the web console, **Installs → Kits** (`#/installs/kits`) lists every install (disabled ones read-only) with one switch per kit. Toggling stages the set; **Apply** asks for confirmation, then rebuilds that one install with exactly that set as a console job (replace, not replay). Files you edited in a kit that is now off are kept, and the row names them so you can delete them by hand.
+
 ### What a kit adds to an install
 
 - **Its skills and agents.** They are written like any core skill or agent. The members of a kit that is off are not written at all.
