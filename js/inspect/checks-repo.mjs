@@ -324,6 +324,9 @@ export function creditProblems(src = SRC) {
     for (const field of ['repo', 'author', 'license']) {
       if (!u[field]) problems.push(`[authoring] ${where} has no '${field}'`);
     }
+    if (u.frozen !== undefined && typeof u.frozen !== 'boolean') {
+      problems.push(`[authoring] ${where} has frozen ${JSON.stringify(u.frozen)}, which is not a boolean`);
+    }
     if (!u.licenseFile) {
       if (needsLicence.has(key)) {
         problems.push(`[authoring] ${where} has licenseFile null, but ${needsLicence.get(key)} credits it `

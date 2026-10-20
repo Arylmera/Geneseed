@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 
+import { creditProblems } from '../../js/inspect/checks-repo.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { driftReport, githubCompare, scanCitedPaths, syncIssues } from '../upstream_drift.mjs';
 
@@ -37,14 +38,21 @@ test('scanner reads CREDIT tokens and VENDOR.md key lines', () => {
   } finally { sb.cleanup(); }
 });
 
-test('a VENDOR.md Upstream key overrides CREDIT paths: whole-repo, unfiltered', async () => {
+test('a VENDOR.md Upstream key narrows to its own CREDIT paths, dropping other files citations', () => {
   const sb = makeSandbox('drft-');
   const d = sb.path;
   try {
-    fs.writeFileSync(path.join(d, 'VENDOR.md'), '{{CREDIT:dd:daydream}}\n- **Upstream key:** dd (repo)\n');
-    const m = scanCitedPaths(d);
-    assert.equal(m.get('dd').size, 0);
-    assert.equal((await driftReport({ dd: ups.dd }, m, async () => ['skills/daydream/SKILL.md'])).length, 1);
+    fs.writeFileSync(path.join(d, 'VENDOR.md'), '{{CREDIT:dd:skills/dd}}\n- **Upstream key:** dd (repo)\n');
+    fs.writeFileSync(path.join(d, 'other.md'), '{{CREDIT:dd:docs/elsewhere.md}}\n');
+    assert.deepEqual([...scanCitedPaths(d).get('dd')], ['skills/dd']);
+  } finally { sb.cleanup(); }
+});
+
+test('a VENDOR.md with an Upstream key but no CREDIT token falls back to the whole repo: any change is one row', async () => {
+  const sb = makeSandbox('drft-');
+  try {
+    fs.writeFileSync(path.join(sb.path, 'VENDOR.md'), '- **Upstream key:** dd (repo)\n');
+    assert.equal((await driftReport({ dd: ups.dd }, scanCitedPaths(sb.path), async () => ['README.md'])).length, 1);
   } finally { sb.cleanup(); }
 });
 
@@ -71,4 +79,44 @@ test('real compare fails loud when the file list is truncated', async () => {
   const files = Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}` }));
   await assert.rejects(githubCompare(async () => ({ files }))('o/r', 'abc'), /truncated at 300 files/);
   assert.equal((await githubCompare(async () => ({ files: files.slice(1) }))('o/r', 'abc')).length, 299);
+});
+
+test('a vendored key is compared only inside its vendored folder and a root licence', async () => {
+  const sb = makeSandbox('drft-');
+  try {
+    fs.writeFileSync(path.join(sb.path, 'VENDOR.md'), '{{CREDIT:dd:skills/dd}}\n- **Upstream key:** dd (repo)\n');
+    const m = scanCitedPaths(sb.path);
+    const run = (files) => driftReport({ dd: ups.dd }, m, async () => files);
+    // Outside skills/dd/ and not the licence: README.md and another skill are not ours, so no row.
+    assert.deepEqual(await run(['README.md', 'skills/other/SKILL.md', 'skills/dd-extra/x.md']), []);
+    // Inside the folder, or the root LICENSE: one row naming exactly those files.
+    assert.deepEqual((await run(['README.md', 'skills/dd/SKILL.md', 'LICENSE']))[0].changed, ['skills/dd/SKILL.md', 'LICENSE']);
+  } finally { sb.cleanup(); }
+});
+
+test('a frozen key is skipped: no row and no compare call, however much changed', async () => {
+  let calls = 0;
+  const compare = async () => { calls++; return ['skills/x/SKILL.md']; };
+  assert.deepEqual(await driftReport({ sp: { ...ups.sp, frozen: true } }, cited, compare), []);
+  assert.equal(calls, 0);
+  assert.equal((await driftReport({ sp: ups.sp }, cited, compare)).length, 1); // unfrozen control
+});
+
+test('creditProblems still refuses a frozen key with a bad commit or a non-boolean flag', () => {
+  const sb = makeSandbox('drft-');
+  try {
+    fs.mkdirSync(path.join(sb.path, 'skills'));
+    fs.mkdirSync(path.join(sb.path, 'licenses'));
+    fs.writeFileSync(path.join(sb.path, 'licenses/k.txt'), 'MIT');
+    fs.writeFileSync(path.join(sb.path, 'skills/s.md'), '{{CREDIT:k:a.md}}\n');
+    const entry = { repo: 'o/r', author: 'a', license: 'MIT', licenseFile: 'licenses/k.txt' };
+    const run = (extra) => {
+      fs.writeFileSync(path.join(sb.path, 'upstreams.json'), JSON.stringify({ k: { ...entry, ...extra } }));
+      return creditProblems(sb.path).join('\n');
+    };
+    assert.equal(run({ commit: 'a'.repeat(40), frozen: true }), '');
+    assert.match(run({ commit: 'main', frozen: true }), /moving branch/);
+    assert.match(run({ commit: 'abc', frozen: true }), /not a 40-character/);
+    assert.match(run({ commit: 'a'.repeat(40), frozen: 'yes' }), /not a boolean/);
+  } finally { sb.cleanup(); }
 });
