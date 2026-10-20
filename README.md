@@ -369,7 +369,7 @@ Three things that bite when you don't know them:
 
 ## 🙏 Credits
 
-Some skills and one agent are adapted from other MIT-licensed skill collections. Each adapted skill names its source in its own text, and ships that upstream's licence beside it. `src/upstreams.json` pins every upstream to a commit.
+Some skills and agents are adapted from other open-source skill collections, under the MIT or Apache-2.0 licence (named on each entry below). Each adapted skill names its source in its own text, and ships that upstream's licence beside it. `src/upstreams.json` pins every upstream to a commit.
 
 - `daydream` — [glebis/claude-skills](https://github.com/glebis/claude-skills) by Gleb Kalinin (MIT): the vendored `daydream` skill.
 - `react-view-transitions` — [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) by Vercel Engineering (MIT): the vendored `react-view-transitions` skill.
@@ -377,6 +377,7 @@ Some skills and one agent are adapted from other MIT-licensed skill collections.
 - `mattpocock-skills-2509` — [mattpocock/skills](https://github.com/mattpocock/skills) by Matt Pocock (MIT), pinned at the later commit where its `pr` and `retro` skills first appear: the PR body of ship and the guardrail clause of rule.
 - `superpowers` — [obra/superpowers](https://github.com/obra/superpowers) by Jesse Vincent (MIT): the core of debug, the size step and builder check of brainstorm, the plan rules of plan, the reviewer brief behind geneseed-code-review and the reviewer agent, the review-handling steps of review-response, and the ruling format of pipeline and parallel-agents.
 - `vibe-wise` — [nykooi1/vibe-wise](https://github.com/nykooi1/vibe-wise) by Noah Kim (MIT): the state file, levels and checkpoints of learn-mode.
+- `piomin-spring-boot` — [piomin/claude-ai-spring-boot](https://github.com/piomin/claude-ai-spring-boot) by Piotr Mińkowski (Apache-2.0): the Spring Boot kit's skills and agents, rewritten and condensed for Boot 4.
 
 ## 📄 License
 

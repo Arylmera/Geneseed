@@ -286,12 +286,15 @@ export function countTableProblems() {
   return problems;
 }
 
+/** The `.md` files directly in `d`, sorted; none for a missing folder. */
+const mdIn = (d) => { try { return readdirSync(d).filter((f) => f.endsWith('.md')).sort(); } catch { return []; } };
+
 /**
  * The kit arm (spec A6, R3, R4, B7): each `src/kits/<kit>.json` against `src`. Refused: a
  * manifest that does not parse or lacks `description`/`rules`/`skills`/`agents`; a reserved kit
  * id (`RETIRED_KIT_IDS`); `rules` naming a missing file, or rendering (neutral theme) to more
  * words than its `rulesWordBudget` (default 300); a member in two kits, or a core one (a row in
- * AGENT.md.tmpl) — R3; a member with no spec or no `registry.json` row; and a core file linking a
+ * AGENT.md.tmpl) — R3; a member with no spec (or a vendored folder skill) or no `registry.json` row; a catalogue row not of the shape `| [<m>]({{DIR_*}}/<m>.md) | <text> |`, or a member without exactly one; any `banned` string (manifest) in a member file or the rules, unless the line carries `<!-- banned: ok -->`; and a core file linking a
  * kit member, which dangles with the kit off — R4. `registry.json` sits beside `src`, as at ROOT.
  */
 export function kitProblems(src = SRC) {
@@ -303,8 +306,10 @@ export function kitProblems(src = SRC) {
   let tmpl = '';
   try { tmpl = readText(path.join(src, 'AGENT.md.tmpl')); } catch { /* countTableProblems names it */ }
   for (const m of tmpl.matchAll(TMPL_SPEC_RE)) core[m[1] === 'AGENTS' ? 'agents' : 'skills'].add(m[2]);
-  let registry = {};
-  try { registry = JSON.parse(readText(path.join(path.dirname(src), 'registry.json'))).entities ?? {}; } catch {
+  // null = no usable registry: `registryProblems` already names that (and every member it lacks a
+  // row for), so a member's missing row is only reported here when there IS an entities object.
+  let registry = null;
+  try { registry = JSON.parse(readText(path.join(path.dirname(src), 'registry.json'))).entities ?? null; } catch {
     // registryProblems names an unreadable registry
   }
   const owner = new Map();
@@ -326,19 +331,41 @@ export function kitProblems(src = SRC) {
         else owner.set(key, kit);
         if (core[kind].has(name)) problems.push(`[authoring] ${key} is core (AGENT.md.tmpl lists it), but kit '${kit}' claims it`);
         if (!isFile(path.join(src, kind, `${name}.md`))) {
-          problems.push(`[authoring] kit '${kit}' lists ${key}, but src/${key}.md does not exist`);
+          problems.push(kind === 'skills' && isFile(path.join(src, kind, name, 'SKILL.md'))
+            ? `[authoring] kit '${kit}' lists ${name}, a vendored folder skill; kit members must be flat specs`
+            : `[authoring] kit '${kit}' lists ${key}, but src/${key}.md does not exist`);
         }
-        if (!Object.hasOwn(registry, key)) problems.push(`[authoring] ${key} (kit '${kit}') has no row in registry.json`);
+        if (registry !== null && !Object.hasOwn(registry, key)) problems.push(`[authoring] ${key} (kit '${kit}') has no row in registry.json`);
       }
     }
     // A6: a kit's catalogue rows are its own members' — a core row here would show twice with the
-    // kit on, or vanish with it off.
-    const rows = [...(m.catalogue?.skills ?? []), ...(m.catalogue?.agents ?? [])].join('\n');
-    for (const r of rows.matchAll(TMPL_SPEC_RE)) {
-      const kind = r[1] === 'AGENTS' ? 'agents' : 'skills';
-      if (!m[kind].includes(r[2])) {
-        problems.push(`[authoring] ${at} catalogue lists ${kind}/${r[2]}, which is not a member of kit '${kit}'`);
+    // kit on, or vanish with it off. Each row is `| [<m>]({{DIR_*}}/<m>.md) | <text> |`, one per member.
+    for (const kind of ['skills', 'agents']) {
+      const dir = kind === 'skills' ? 'SKILLS' : 'AGENTS';
+      const seen = new Map();
+      for (const row of m.catalogue?.[kind] ?? []) {
+        const hit = new RegExp(`^\\| \\[([a-z0-9-]+)\\]\\(\\{\\{DIR_${dir}\\}\\}/\\1\\.md\\) \\| \\S.* \\|$`).exec(row);
+        const named = hit?.[1] ?? row.match(/\{\{DIR_(?:AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/)?.[1];
+        if (named && !m[kind].includes(named)) {
+          problems.push(`[authoring] ${at} catalogue lists ${kind}/${named}, which is not a member of kit '${kit}'`);
+        } else if (!hit) {
+          problems.push(`[authoring] ${at} catalogue.${kind} row is not \`| [<member>]({{DIR_${dir}}}/<member>.md) | <text> |\`: ${row}`);
+        } else seen.set(named, (seen.get(named) ?? 0) + 1);
       }
+      for (const name of m[kind]) {
+        const n = seen.get(name) ?? 0;
+        if (n !== 1) problems.push(`[authoring] ${at} catalogue.${kind} has ${n} rows for ${name}, want exactly one`);
+      }
+    }
+    // T4: strings no member file may contain; a line carrying the marker is exempt (a rule that names the construct to forbid it).
+    const files = [m.rules, ...m.skills.flatMap((n) => [`skills/${n}.md`, ...mdIn(path.join(src, 'skills', n)).map((f) => `skills/${n}/${f}`)]),
+      ...m.agents.map((n) => `agents/${n}.md`)];
+    for (const rel of files) {
+      if (!isFile(path.join(src, rel))) continue;
+      readText(path.join(src, rel)).split('\n').forEach((line, i) => {
+        if (line.includes('<!-- banned: ok -->')) return;
+        for (const b of m.banned ?? []) if (line.includes(b)) problems.push(`[authoring] src/${rel}:${i + 1} contains '${b}', banned by kit '${kit}'`);
+      });
     }
     const rules = path.join(src, m.rules);
     if (!isFile(rules)) {

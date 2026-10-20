@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { build } from '../../js/build/bundle.mjs';
-import { makeCfg, knownSkillIds, linkedSkillIds } from '../../js/build/source.mjs';
+import { makeCfg, knownSkillIds, linkedSkillIds, kitMembers, loadKits } from '../../js/build/source.mjs';
 import { parseDriverArgs, emitGlobalInto } from '../../js/build/driver.mjs';
 import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
 import { excludedSkillsOfDir } from '../../js/hosts/installs.mjs';
@@ -63,9 +63,11 @@ test('the default build writes no Excluded skills line and reads back as nothing
     quiet(() => build(makeCfg(), 'neutral', d));
     assert.ok(!agentText(d).includes('Excluded skills:'), 'a default build grew a marker line');
     assert.deepEqual(excludedSkillsOfDir(d), []);
-    // Counted by stem: a skill with side files ships as both `debug.md` and `debug/`.
+    // Counted by stem: a skill with side files ships as both `debug.md` and `debug/`. A skill of a
+    // kit is not in a default build (kits are off unless named), so it is not counted.
     assert.equal(new Set(fs.readdirSync(path.join(d, 'skills')).filter((n) => !n.startsWith('_'))
-      .map((n) => n.replace(/\.md$/, ''))).size, knownSkillIds().length, 'a default build lost a skill');
+      .map((n) => n.replace(/\.md$/, ''))).size,
+    knownSkillIds().filter((s) => !kitMembers(loadKits()).skills.has(s)).length, 'a default build lost a skill');
   });
 });
 

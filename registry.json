@@ -22,6 +22,20 @@
       "added": "2026-07-13",
       "last_verified": ""
     },
+    "agents/devops-engineer": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
+      "last_verified": ""
+    },
+    "agents/docker-expert": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
+      "last_verified": ""
+    },
     "agents/docs": {
       "status": "approved",
       "version": "1.0.0",
@@ -55,6 +69,13 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-08",
+      "last_verified": ""
+    },
+    "agents/kubernetes-specialist": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
       "last_verified": ""
     },
     "agents/memory-curator": {
@@ -111,6 +132,27 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-06-08",
+      "last_verified": ""
+    },
+    "agents/spring-boot-engineer": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
+      "last_verified": ""
+    },
+    "agents/spring-reviewer": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
+      "last_verified": ""
+    },
+    "agents/spring-security": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
       "last_verified": ""
     },
     "agents/steward": {
@@ -427,6 +469,27 @@
       "owner": "Guillaume Lemer",
       "added": "2026-09-06",
       "last_verified": "2026-10-13"
+    },
+    "skills/spring-boot": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
+      "last_verified": ""
+    },
+    "skills/spring-data-jpa": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
+      "last_verified": ""
+    },
+    "skills/spring-testing": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-20",
+      "last_verified": ""
     },
     "skills/teach": {
       "status": "experimental",

@@ -29,7 +29,7 @@ import { tuiEntries, detailLines } from '../../js/ui/tui.mjs';
 import { catalogLines } from '../../js/build/catalog.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 import { doctrinesForBuild, doctrinesOfDir, themeFiles } from '../../js/hosts/installs.mjs';
-import { ROOT, SRC, PACK_ORDER, discoverNames } from '../../js/build/source.mjs';
+import { ROOT, SRC, PACK_ORDER, discoverNames, kitMembers, loadKits } from '../../js/build/source.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
 
 const themeNames = () => themeFiles().map((p) => path.basename(p, '.json'));
@@ -440,8 +440,10 @@ test('the end-of-setup summary tells the truth for every host', () => {
 // The inventory behind the catalogue.
 
 /** `src/<folder>/*.md` minus `_`-scaffolds, derived here rather than borrowed from the port. */
+// Kit members are off in a default build, so they are not part of the counts under test.
+const KIT = kitMembers(loadKits());
 const specStems = (folder) => fs.readdirSync(path.join(SRC, folder))
-  .filter((n) => n.endsWith('.md') && !n.startsWith('_'));
+  .filter((n) => n.endsWith('.md') && !n.startsWith('_') && !KIT[folder].has(n.slice(0, -3)));
 
 test('the inventory counts match the source tree and every entry has a body', () => {
   const inv = tuiInventory('neutral');

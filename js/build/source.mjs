@@ -241,18 +241,27 @@ export function resolveCredits(text, src = SRC) {
 
 /**
  * `src/kits/<kit>.json`, parsed, as `Map<kit, manifest>` in sorted kit order. A manifest is
- * `{ description, skills, agents, rules, rulesWordBudget, catalogue }`, the sole writer of its
+ * `{ description, skills, agents, rules, rulesWordBudget, catalogue, banned? }`, the sole writer of its
  * kit's membership; the `<kit>/` folder beside it holds the kit's `rules.md` and is not read
  * here. A tree without `src/kits/` has no kits.
  */
 export function loadKits(src = SRC) {
   const dir = path.join(src, 'kits');
   let names;
-  try { names = readdirSync(dir).filter((n) => n.endsWith('.json')).sort(); } catch { return new Map(); }
+  try { names = readdirSync(dir).filter((n) => n.endsWith('.json')).sort(); } catch (e) {
+    if (e.code === 'ENOENT') return new Map(); // only an absent src/kits means "no kits"
+    throw new Error(`src/kits: ${e.message}`, { cause: e });
+  }
   return new Map(names.map((n) => {
-    try { return [n.slice(0, -'.json'.length), JSON.parse(readFileSync(path.join(dir, n), 'utf8'))]; } catch (e) {
+    let m;
+    try { m = JSON.parse(readFileSync(path.join(dir, n), 'utf8')); } catch (e) {
       throw new Error(`src/kits/${n}: ${e.message}`, { cause: e });
     }
+    if (m === null || typeof m !== 'object' || Array.isArray(m)) throw new Error(`src/kits/${n}: a manifest must be a JSON object`);
+    if (m.banned !== undefined && !(Array.isArray(m.banned) && m.banned.every((b) => typeof b === 'string' && b))) {
+      throw new Error(`src/kits/${n}: 'banned' must be an array of non-empty strings`);
+    }
+    return [n.slice(0, -'.json'.length), m];
   }));
 }
 

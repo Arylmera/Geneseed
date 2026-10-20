@@ -42,7 +42,7 @@ import {
 } from '../../js/hosts/hosts.mjs';
 import { installProfile, rebuildAll, rebuildCommand } from '../../js/build/generate.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
-import { CONFIG, ROOT, SRC, makeCfg } from '../../js/build/source.mjs';
+import { CONFIG, ROOT, SRC, kitMembers, loadKits, makeCfg } from '../../js/build/source.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';
@@ -227,9 +227,11 @@ test('the downgrade warning can actually be produced', () => {
 // The status panel.
 
 /** `src/<folder>/*.md` minus `_`-scaffolds, derived HERE rather than borrowed from the port. */
+// Kit members are off in a default build, so they are not part of the counts under test.
+const KIT = kitMembers(loadKits());
 function specStems(folder) {
   return fs.readdirSync(path.join(SRC, folder))
-    .filter((n) => n.endsWith('.md') && !n.startsWith('_'));
+    .filter((n) => n.endsWith('.md') && !n.startsWith('_') && !KIT[folder].has(n.slice(0, -3)));
 }
 
 test('status reports derived counts, a well-formed version and every structural key', () => {

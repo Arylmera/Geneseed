@@ -233,7 +233,11 @@ function askDoctrines(deployed = null) {
  * wizard reads exactly the stdin it always did (and has no kit to carry: `kitsOfDir` drops an unshipped one).
  * Returns the kit list, or null for none (`setupBuildArgs` omits `--kits`).
  */
-export function askKits(deployed = null, kits = loadKits()) {
+export function askKits(deployed = null, kits = null) {
+  try { kits ??= loadKits(); } catch (e) {
+    process.stderr.write(`warning: kit question skipped — ${e.message}\n`);
+    return null;
+  }
   const on = (deployed ?? []).filter((k) => kits.has(k));
   if (!kits.size) return null;
   const opts = [...kits].map(([k, m]) => [k, m.description ?? '']);
@@ -278,7 +282,7 @@ function targetGates(emit, out) {
   }
 }
 
-export function collectSetupLines() {
+export function collectSetupLines(kitMap = null) {
   printOut('Geneseed setup — answer a few questions; nothing is written until you confirm.\n');
   const inst = installedDefaults();
   const theme = askChoice('Theme', themeOptions(), inst.theme || defaultTheme());
@@ -286,7 +290,7 @@ export function collectSetupLines() {
   const mode = askChoice('Mode', modeOptions(), inst.mode || defaultMode());
   const doctrines = askDoctrines(inst.doctrines);
   // Kits on stay on (spec A3); `kitsOfDir` already dropped a retired one.
-  const kits = askKits(inst.kits);
+  const kits = askKits(inst.kits, kitMap);
   const emit = askChoice('Install mode', EMIT_OPTIONS, inst.emit || 'opencode-global');
   const footprint = askChoice('Footprint', FOOTPRINT_OPTIONS,
     inst.footprint || 'lean');

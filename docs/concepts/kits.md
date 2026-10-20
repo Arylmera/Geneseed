@@ -10,7 +10,21 @@ A **kit** is an opt-in bundle of skills, agents and rules for one stack. Kits ar
 
 > **You already know this:** an optional dependency group, like `pip install pkg[postgres]`. The core install stays small, and you opt into the extra parts for your stack.
 
-The first kit is `spring-boot`, for Spring Boot 4 projects.
+The first kit is `spring-boot`, for Spring Boot 4 (Spring Framework 7, Java 21+) projects. It adds nine members:
+
+| Member | Kind | What it is for |
+|---|---|---|
+| `spring-boot` | skill | Building a Spring Boot service: web layer, configuration, security, HTTP clients, logging, cloud-native packaging, and a table of Boot 4 pitfalls |
+| `spring-data-jpa` | skill | Spring Data JPA and Hibernate: entities, repositories, transactions, N+1 and fetch problems, migrations |
+| `spring-testing` | skill | Spring Boot tests: slices, `MockMvcTester`, `@MockitoBean`, Testcontainers with `@ServiceConnection` |
+| `spring-boot-engineer` | agent | Implements a Spring Boot feature end to end |
+| `spring-reviewer` | agent | Framework-aware review: layering, transactions, JPA, configuration, test slices |
+| `spring-security` | agent | Security pass on a Spring Security change |
+| `kubernetes-specialist` | agent | Kubernetes manifests, probes, resources and rollout for a Spring Boot service |
+| `docker-expert` | agent | Dockerfile, layered or native image for a Spring Boot service |
+| `devops-engineer` | agent | Build and delivery pipeline, on whatever CI the project already uses |
+
+The kit is adapted from [piomin/claude-ai-spring-boot](https://github.com/piomin/claude-ai-spring-boot) by Piotr Mińkowski (Apache-2.0), rewritten and condensed for Boot 4. Each of its skill folders ships `LICENSE-piomin-spring-boot.txt`, and each agent carries a credit line.
 
 ### Switching kits on and off
 

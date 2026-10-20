@@ -24,7 +24,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
-import { SRC, knownSkillIds } from '../../js/build/source.mjs';
+import { SRC, knownSkillIds, kitMembers, loadKits } from '../../js/build/source.mjs';
 import { VENDORED_SKILL_DIRS, pointSideFiles, stripSkillBodyLinks, writeNativeLayer } from '../../js/hosts/native.mjs';
 import { writeAliasCommands } from '../../js/hosts/opencode.mjs';
 import { sideFileProblems } from '../../js/inspect/checks-repo.mjs';
@@ -165,9 +165,11 @@ test('the live tree passes the gate and lists a side-filed skill once', () => {
   assert.equal(ids.length, new Set(ids).size);
 });
 
-/** Every side file the live tree ships, as `<skill>/<file>`. */
+/** Every side file the live tree ships in a default (kit-less) build, as `<skill>/<file>`. */
+const KIT_SKILLS = kitMembers(loadKits()).skills;
 const LIVE = fs.readdirSync(path.join(SRC, 'skills'), { withFileTypes: true })
-  .filter((e) => e.isDirectory() && !e.name.startsWith('_') && !VENDORED_SKILL_DIRS.has(e.name))
+  .filter((e) => e.isDirectory() && !e.name.startsWith('_') && !VENDORED_SKILL_DIRS.has(e.name)
+    && !KIT_SKILLS.has(e.name))
   .flatMap((e) => fs.readdirSync(path.join(SRC, 'skills', e.name)).map((f) => `${e.name}/${f}`));
 
 /**

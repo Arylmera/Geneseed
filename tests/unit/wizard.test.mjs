@@ -184,22 +184,29 @@ function wizardJobs() {
     // Every sequence below carries a FOURTH answer, between mode and the install mode: the
     // Doctrine-packs gate. It is the one question with two levels, so the count of answers a
     // run consumes is no longer fixed — `all` costs one line and `choose` costs six.
-    ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n'],
-    ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\n\nn\n'],
+    // The shipped tree has a kit, so the Kits question sits between the packs gate and the install
+    // mode: every answer string below carries one more line for it (an empty line keeps the default,
+    // `none`; `wizard-files` types `2`, the `none` option, since `1` is the kit).
+    ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n\n'],
+    ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\n\n\nn\n'],
+    // The same six empty lines and an `n` on a tree with NO kit: the Kits question is not asked, so
+    // the `n` lands on the confirm and the wizard is declined. Were the question still asked, the `n`
+    // would be spent on it and the run would end confirmed.
+    ['wizard-no-kit', [['collect_setup_lines', [NO_KIT_SRC]]], '\n\n\n\n\n\nn\n'],
     // A PROJECT emit, the arm that asks a seventh question — `out` and `root` both from one
     // answer. `1` at the packs gate is `all`, the same answer an empty line gives.
-    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n1\n/tmp/somerepo\ny\n'],
+    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n\n3\n1\n/tmp/somerepo\ny\n'],
     // `files`, the other arm: one answer, `out` only, `root` left null. This is also the
     // per-pack arm — `choose`, then five y/n — and the subset it keeps is NON-CONTIGUOUS
     // (rigor and process, skipping craft, ops and comms), so a port that dropped the filter and kept
     // a prefix, a suffix or the whole list answers differently from one that reads each y/n.
     ['wizard-files', [['collect_setup_lines', []]],
-      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n7\nfull\n\ny\n'],
+      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\nno\n2\n7\nfull\n\ny\n'],
     // Every pack declined. A real configuration (invariants and ontology only), and the only
     // input that reaches `--doctrines none` — the spelling an empty list has to take, because
     // an empty `--doctrines ` is a usage error at the driver.
     ['wizard-no-packs', [['collect_setup_lines', []]],
-      '\n\n\nchoose\nno\nno\nno\nno\nno\n\n\n\n'],
+      '\n\n\nchoose\nno\nno\nno\nno\nno\n\n\n\n\n'],
     // EOF before the first question. Every reader returns its default, which is the PRE-SELECTED
     // one — so this is the case that fails if `installedDefaults` stopped answering posture, mode
     // or footprint.
@@ -221,8 +228,7 @@ function wizardJobs() {
     ['wizard-eof-gated', [['collect_setup_lines', []]], '', GATED_HOME],
     // ...and never from another host's install.
     ['wizard-eof-gated-elsewhere', [['collect_setup_lines', []]], '', GATED_ELSEWHERE_HOME],
-    // The Kits question, over fixture trees: the shipped one has no kit, which is why no wizard
-    // run above asks it and none of their answer strings changed. `none` typed over a deployed
+    // The Kits question, over fixture trees. `none` typed over a deployed
     // kit, then three EOFs: the deployed marker kept, a new install left kit-less, and a tree
     // with no kit at all: not asked, and the kit it does not ship is not carried.
     ['ask-kits', [['ask_kits', [['fx'], KIT_SRC]], ['ask_kits', [['fx'], KIT_SRC]],
@@ -546,6 +552,14 @@ test('the declined wizard returns null and the confirmed one does not', () => {
   }]);
 });
 
+test('the Kits question is asked only when the tree ships a kit', () => {
+  // `wizard-no-kit` is `wizard-declined` with the kit line removed from the answers: on a tree with no
+  // kit the `n` reaches the confirm, so the wizard is declined and the Kits menu never prints.
+  assert.deepEqual(runs()['wizard-no-kit'].results, [null]);
+  assert.ok(!runs()['wizard-no-kit'].text.includes('Kits:'), 'a tree with no kit still asked the Kits question');
+  assert.ok(runs()['wizard-declined'].text.includes('Kits:'), 'the shipped tree, which has a kit, did not ask');
+});
+
 test('the project arm asks a sixth question and the files arm does not', () => {
   // The two emit arms, and the difference is `root`. A project emit sets `out` AND `root` from the
   // one answer; `files` sets `out` only and leaves `root` null — the distinction that decides
@@ -624,7 +638,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 19, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 20, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {

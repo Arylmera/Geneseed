@@ -1327,6 +1327,28 @@
       "footprint": "lean",
       "doctrines": [],
       "theme": "neutral"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "kits": [
+        "spring-boot"
+      ],
+      "theme": "neutral"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "kits": [
+        "spring-boot"
+      ],
+      "theme": "neutral"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "kits": [],
+      "theme": "neutral"
     }
   ],
   "deletion_cells": [
@@ -1442,6 +1464,59 @@
       "footprint": "full",
       "label": "openclaude-global/lean-to-full",
       "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "claude",
+        "footprint": "lean",
+        "kits": [
+          "spring-boot"
+        ],
+        "theme": "neutral"
+      },
+      "emit": "claude",
+      "footprint": "lean",
+      "kits": [],
+      "label": "claude/kit-on-to-off",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "opencode",
+        "footprint": "lean",
+        "kits": [
+          "spring-boot"
+        ],
+        "theme": "neutral"
+      },
+      "emit": "opencode",
+      "footprint": "lean",
+      "kits": [],
+      "label": "opencode/kit-on-to-off",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "claude",
+        "footprint": "lean",
+        "kits": [
+          "spring-boot"
+        ],
+        "theme": "neutral"
+      },
+      "edit": {
+        "out/.claude/skills/spring-boot/web.md": "\n<!-- my own note -->\n"
+      },
+      "emit": "claude",
+      "footprint": "lean",
+      "kits": [],
+      "label": "claude/kit-on-to-off-edited-member-kept",
+      "sovereign": [
+        "skills/spring-boot/web.md"
+      ],
       "theme": "neutral"
     }
   ],
