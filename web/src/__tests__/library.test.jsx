@@ -75,6 +75,24 @@ describe('Library', () => {
     expect(api.catalog).toHaveBeenCalledWith('skills')
   })
 
+  it('badges a skill or agent that a kit ships, in the row and in the reader', async () => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items: [
+          { name: 'jpa', title: 'jpa', desc: '', kit: 'spring-boot' },
+          { name: 'plain', title: 'plain', desc: '' },
+        ],
+      }),
+    )
+    api.item.mockImplementation(() =>
+      Promise.resolve({ title: 'jpa', desc: '', body: 'b', links: [], kit: 'spring-boot' }),
+    )
+    render(<Library section="skills" selected="jpa" overview={overview({})} />)
+    await waitFor(() => expect(screen.getAllByText('kit: spring-boot')).toHaveLength(2))
+    expect(document.querySelectorAll('.lib-rows .tag.acc')).toHaveLength(1)
+  })
+
   // The lifecycle badge shows only where a skill deviates: approved renders nothing.
   it('badges only the non-approved skills', async () => {
     render(<Library section="skills" overview={overview({})} />)

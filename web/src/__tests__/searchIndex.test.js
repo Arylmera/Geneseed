@@ -36,6 +36,7 @@ describe('useSearchIndex', () => {
       ['Overview', '#/'],
       ['Constitution', '#/laws'],
       ['Library', '#/library'],
+      ['Kits', '#/kits'],
       ['Loops / Templates', '#/loops/templates'],
       ['Loops / Bricks', '#/loops/bricks'],
       ['Loops / Active', '#/loops/active'],

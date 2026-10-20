@@ -3,17 +3,17 @@ import { go } from '../lib/router.js'
 import { driftTotal, relTime } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
 
-// The six pages, in the order a visit reads them: how the harness is doing, what it
+// The seven pages, in the order a visit reads them: how the harness is doing, what it
 // obeys, what it knows, how it iterates, what is yours, and where it is installed. Each count reads data
 // the shell already holds (the overview and the installs list); a page with no honest
 // single number carries none rather than an invented one.
 const NAV = [
-  { hash: '#/', page: 'overview', label: 'Overview', icon: 'dashboard' },
+  { hash: '#/', page: 'overview', label: 'Overview', short: 'Home', icon: 'dashboard' },
   {
     hash: '#/laws',
     page: 'laws',
     label: 'Constitution',
-    // The phone tab bar's cell is 60px at 360px wide; "Constitution" is not.
+    // The phone tab bar's cell is ~51px at 360px wide; "Constitution" is not.
     short: 'Laws',
     icon: 'law',
     // Every entry the page lists: the ethos sections, the invariants (a retired one an older
@@ -35,6 +35,12 @@ const NAV = [
             0,
           )
         : null,
+  },
+  {
+    hash: '#/kits',
+    page: 'kits',
+    label: 'Kits',
+    icon: 'kit',
   },
   // Templates only: a brick is a part, the template is what a person runs.
   {
@@ -156,7 +162,7 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
   )
 }
 
-// The phone layout's bottom bar: the same six pages, always one thumb away. The drawer
+// The phone layout's bottom bar: the same seven pages, always one thumb away. The drawer
 // above still carries Docs, Activity and the vitals.
 export function TabBar({ route }) {
   return (

@@ -114,6 +114,11 @@ streams the output of background jobs and keeps their history across reloads.
   **Promote to rule** control turns a recurring lesson into a trial rule in
   `user-rules.md` — provenance recorded, the source fact deleted so it isn't loaded
   twice — landing you on the Rules page.
+- **Kits** (`#/kits`, `#/kits/<kit>`) — the list of shipped kits and, per kit, a detail page
+  with its rules, word budget, banned APIs, upstream credits and one switch per install.
+  `GET /api/kits` carries `rules`, `rulesWordBudget`, `banned` and `credits` per kit; the
+  catalog and item endpoints for skills and agents carry `kit` (the owning kit or `null`),
+  which the Library shows as a `kit:` badge.
 - **Loops** (`#/loops`) — the loop catalogue `geneseed loop` runs from, read-only, laid out
   like the Library: a rail of sections (**Templates**, **Bricks**, **Active**, each with its
   count; `#/loops/<section>/<item>` opens an entry), with the selected section's groups
@@ -194,7 +199,7 @@ streams the output of background jobs and keeps their history across reloads.
     card (shown once a global install exists) manages sovereign repos — folders where every
     global harness goes dormant (hooks stay silent, the global preamble never loads);
     add or remove one here, the web mirror of `harness exclude add|remove|list`.
-- **Kits** (`#/installs/kits`) — every install (disabled ones read-only) as a card with one switch per kit.
+- **Kits** (`#/installs/kits`) — every install (disabled ones read-only) as a panel with one switch per kit.
   Toggling only stages the set; **Apply** asks first, then rebuilds that install with
   exactly that set as a console job. Files you edited in a kit that is now off are kept,
   and the row lists them.

@@ -9,7 +9,7 @@ import { dropRules } from '../hooks/useRules.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
-import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
+import { GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
@@ -281,6 +281,9 @@ export default function Library({
               <div className="reader-tags">
                 <span className="tag acc">{label.replace(/s$/, '')}</span>
                 {skillCat ? <span className="tag">{skillCat.label}</span> : null}
+                {(item?.kit ?? activeItem.kit) ? (
+                  <KitBadge name={item?.kit ?? activeItem.kit} />
+                ) : null}
                 <StatusBadge status={status} />
               </div>
               <div className="reader-head">

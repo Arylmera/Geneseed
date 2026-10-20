@@ -27,6 +27,7 @@ import Overview from './pages/Overview/index.jsx'
 const Activity = lazy(() => import('./pages/Activity.jsx'))
 const ActivityDetail = lazy(() => import('./pages/ActivityDetail.jsx'))
 const Library = lazy(() => import('./pages/Library.jsx'))
+const Kits = lazy(() => import('./pages/Kits.jsx'))
 const Loops = lazy(() => import('./pages/Loops.jsx'))
 const Laws = lazy(() => import('./pages/Laws.jsx'))
 const Personal = lazy(() => import('./pages/Personal.jsx'))
@@ -184,6 +185,7 @@ export default function App() {
         dataRev={dataRev}
       />
     ),
+    kits: () => <Kits item={route.item} onAction={runAction} dataRev={dataRev} />,
     loops: () => <Loops tab={route.tab} item={route.item} dataRev={dataRev} />,
     personal: () => <Personal tab={route.tab} item={route.item} setup={setup} dataRev={dataRev} />,
     installs: () => (
@@ -264,7 +266,9 @@ export default function App() {
           />
           <main className="page" id="main" tabIndex={-1}>
             <div
-              className={['library', 'loops', 'docs'].includes(route.page) ? 'pad pad-wide' : 'pad'}
+              className={
+                ['library', 'kits', 'loops', 'docs'].includes(route.page) ? 'pad pad-wide' : 'pad'
+              }
             >
               <Suspense fallback={<Loading />}>
                 {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. A page reachable from

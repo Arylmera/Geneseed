@@ -157,7 +157,7 @@ geneseed web stop            # stop the daemon
 geneseed web status          # is it running, and where
 ```
 
-The sidebar has six pages: **Overview** (what's deployed, health, recent jobs), **Constitution** (the rules and doctrine switches), **Library** (skills, agents, the wiki), **Personal** (your rules, profile, memory, notebook), **Installs** (hosts, local edits, doctor, server) and **Docs** — this documentation, opening on the Understand track, with a map of what Geneseed put on your machine.
+The sidebar has eight pages: **Overview** (what's deployed, health, recent jobs), **Constitution** (the rules and doctrine switches), **Library** (skills, agents, the wiki), **Kits** (opt-in stack bundles), **Loops** (the loop catalogue), **Personal** (your rules, profile, memory, notebook), **Installs** (hosts, local edits, doctor, server) and **Docs** — this documentation, opening on the Understand track, with a map of what Geneseed put on your machine.
 
 It binds to `127.0.0.1` only and runs entirely offline — no npm needed at runtime; the UI build ships in `web/dist/`. Mutating actions run in the background and report back as toasts (fire-and-notify), guarded by a per-session token so other sites can't trigger them. A global **Spotlight** search in the topbar jumps to any agent, skill, rule, doc, or MCP server. Rebuild the UI after changing anything under `web/src/` with `cd web && npm install && npm run build`. If `web/dist/` is missing (fresh clone, never built), `geneseed web` offers to run that build for you — answer `Y` and it installs, builds, and starts the server; in non-interactive shells it prints the manual recipe instead.
 

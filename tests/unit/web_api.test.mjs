@@ -1426,6 +1426,53 @@ test('GET /api/kits answers 200-shaped error and empty lists for a malformed man
   } finally { sb.cleanup(); }
 });
 
+// The Kits pages read rules, budget, banned list and credits straight from `/api/kits`, and the
+// Library reads `kit` off each skill/agent row. Values are those of the shipped spring-boot kit.
+test('GET /api/kits carries rules, budget, banned list and resolved credits per kit', () => {
+  const k = apiKits(neutral()).kits.find((x) => x.name === 'spring-boot');
+  assert.match(k.rules, /^\S/);
+  assert.equal(k.rulesWordBudget, 300);
+  assert.deepEqual(k.banned,
+    ['@MockBean', '@SpyBean', 'javax.persistence', 'ClientHttpRequestFactories', 'Spring Security 6']);
+  assert.deepEqual(k.credits, [{
+    key: 'piomin-spring-boot', repo: 'piomin/claude-ai-spring-boot', author: 'Piotr Mińkowski',
+    license: 'Apache-2.0', commit: 'cf876a1041ac4692f32422261f6d67d7f12140d5',
+    compareUrl: 'https://github.com/piomin/claude-ai-spring-boot/compare/'
+      + 'cf876a1041ac4692f32422261f6d67d7f12140d5...HEAD' }]);
+});
+
+test('GET /api/kits skips a credit key src/upstreams.json does not know instead of failing', async () => {
+  const sb = makeSandbox();
+  try {
+    const co = path.join(sb.path, 'checkout');
+    const rules = 'x {{CREDIT:no-such-key:a.md}}';
+    copyCheckout(co, { 'src/kits/spring-boot/rules.md': rules });
+    const mod = await import(pathToFileURL(path.join(co, 'js/web/api.mjs')).href);
+    const k = mod.apiKits(neutral()).kits[0];
+    assert.equal(k.rules, rules);
+    assert.deepEqual(k.credits.map((c) => c.key), ['piomin-spring-boot']);
+  } finally { sb.cleanup(); }
+});
+
+// The default render leaves kit members out (kits are opt-in), so the fixture adds one of each.
+test('catalog skill/agent rows and items name their kit, or null outside every kit', () => {
+  const base = neutral();
+  const inv = base.inventory;
+  const member = (name) => ({ name, desc: 'd', body: 'b', status: 'active', klass: 'build' });
+  const st = { ...base, inventory: { ...inv,
+    skills: [...inv.skills, member('spring-boot'), member('spring-testing')],
+    agents: [...inv.agents, member('spring-reviewer'), member('docker-expert')] } };
+  const skills = apiCatalog(st, 'skills').items;
+  assert.equal(skills.find((r) => r.name === 'spring-boot').kit, 'spring-boot');
+  assert.equal(skills.find((r) => r.name === 'plan').kit, null);
+  const agents = apiCatalog(st, 'agents').items;
+  assert.equal(agents.find((r) => r.name === 'spring-reviewer').kit, 'spring-boot');
+  assert.equal(agents.find((r) => r.name === 'reviewer').kit, null);
+  assert.equal(apiItem(st, 'skill', 'spring-testing').kit, 'spring-boot');
+  assert.equal(apiItem(st, 'agent', 'docker-expert').kit, 'spring-boot');
+  assert.equal(apiItem(st, 'skill', 'plan').kit, null);
+});
+
 test('a kits body REPLACES the install kits: [] and "none" drop them, a name sets them', () => {
   withKitInstalls(({ st, oc }) => {
     for (const none of [[], 'none']) {

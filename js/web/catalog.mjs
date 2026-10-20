@@ -24,6 +24,7 @@ import { readText, withDiscardableStderr, isDir, isFile } from '../lib/fs.mjs';
 import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
+import { loadKits } from '../build/source.mjs';
 
 /** A requested catalog section or item that does not exist. */
 export class NotFound extends Error {}
@@ -466,16 +467,29 @@ function constitutionItems(inv) {
   ];
 }
 
+/** `Map<'skills/x' | 'agents/y', kit>` from the shipped manifests; a broken manifest means no badges, not a 500. */
+function kitOwners() {
+  const owner = new Map();
+  try {
+    for (const [kit, m] of loadKits()) {
+      for (const n of m.skills ?? []) owner.set(`skill:${n}`, kit);
+      for (const n of m.agents ?? []) owner.set(`agent:${n}`, kit);
+    }
+  } catch { /* shortcut: unreadable manifests hide the badge; apiKits reports the error */ }
+  return owner;
+}
+
 export function apiCatalog(state, section) {
   if (!SECTIONS.includes(section)) throw new NotFound(section);
   const inv = state.inventory;
   let items;
+  const owner = kitOwners();
   if (section === 'agents') {
     items = inv.agents.map((e) => ({ name: e.name, title: e.name, desc: e.desc,
-      source: e.source ?? null, status: e.status ?? 'unknown' }));
+      source: e.source ?? null, status: e.status ?? 'unknown', kit: owner.get(`agent:${e.name}`) ?? null }));
   } else if (section === 'skills') {
     items = inv.skills.map((e) => ({ name: e.name, title: e.name, desc: e.desc,
-      source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown' }));
+      source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown', kit: owner.get(`skill:${e.name}`) ?? null }));
   } else if (section === 'laws') {
     items = constitutionItems(inv);
   } else if (section === 'memory') {
@@ -499,6 +513,7 @@ export function apiItem(state, type, name) {
       links: resolveLinks(state, e.body), source: e.source ?? null };
     if (type === 'skill') out.klass = e.klass ?? 'build';
     out.status = e.status ?? 'unknown';
+    out.kit = kitOwners().get(`${type}:${name}`) ?? null;
     return out;
   }
   if (type === 'law') {

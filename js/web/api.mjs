@@ -8,10 +8,10 @@
  * bind paths to these functions are `routes.mjs`. This file imports none of its route siblings,
  * which is what keeps the old `api ↔ actions` and `api ↔ activity` cycles from coming back.
  */
-import { statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { CONFIG, ROOT, THEMES, discoverNames, loadKits, makeCfg } from '../build/source.mjs';
+import { CONFIG, CREDIT_RE, ROOT, SRC, THEMES, discoverNames, loadKits, makeCfg, upstreamOf } from '../build/source.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import { sourceReleaseVersion } from '../hosts/opencode.mjs';
 import { alwaysOnCost } from '../inspect/cost.mjs';
@@ -22,7 +22,7 @@ import { CLAUDE_STYLE, HOSTS, VERSION_MARKER, resolvePath } from '../hosts/hosts
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, legacyProcessCarrierOfDir, modeOfDir,
   trustOfDir,
-  postureOfDir, readJsonMaybe, themeOfDir,
+  postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
 import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
@@ -233,6 +233,31 @@ export function apiFleet(state) {
   return { installs, source_fp: sourceFp, doctor: state.doctor };
 }
 
+/** Source files of a kit member: `<dir>/<name>.md`, or every `.md` in a `<dir>/<name>/` folder. */
+function memberTexts(dir, name) {
+  const one = readMaybe(path.join(SRC, dir, `${name}.md`));
+  if (one !== null && one !== undefined) return [one];
+  const d = path.join(SRC, dir, name);
+  try { return readdirSync(d).filter((f) => f.endsWith('.md')).map((f) => readMaybe(path.join(d, f)) ?? ''); } catch { return []; }
+}
+
+/** Upstream credits cited by a kit's rules and member sources; an unknown key is skipped, never a 500. */
+function kitCredits(m, rules) {
+  const texts = [rules, ...(m.skills ?? []).flatMap((n) => memberTexts('skills', n)),
+    ...(m.agents ?? []).flatMap((n) => memberTexts('agents', n))];
+  const keys = new Set();
+  for (const t of texts) for (const x of t.matchAll(CREDIT_RE)) keys.add(x[1]);
+  const out = [];
+  for (const key of [...keys].sort()) {
+    let u;
+    try { u = upstreamOf(key); } catch { u = null; }
+    if (!u) continue;
+    out.push({ key, repo: u.repo, author: u.author, license: u.license, commit: u.commit,
+      compareUrl: `https://github.com/${u.repo}/compare/${u.commit}...HEAD` });
+  }
+  return out;
+}
+
 /**
  * EVERY INSTALL'S KITS — the Kits tab. Its own route, like `apiFleet`: it re-reads each carrier
  * and the kit manifests, which the sidebar's `/api/installs` refetch must not pay for.
@@ -247,8 +272,12 @@ export function apiKits() {
   try { known = loadKits(); } catch (e) {
     return { kits: [], installs: [], error: String(e?.message ?? e) };
   }
-  const kits = [...known].map(([name, m]) => ({
-    name, description: m.description ?? '', skills: m.skills ?? [], agents: m.agents ?? [] }));
+  const kits = [...known].map(([name, m]) => {
+    const rules = readMaybe(path.join(SRC, 'kits', name, 'rules.md')) ?? '';
+    return { name, description: m.description ?? '', skills: m.skills ?? [], agents: m.agents ?? [],
+      rules, rulesWordBudget: m.rulesWordBudget ?? null, banned: m.banned ?? [],
+      credits: kitCredits(m, rules) };
+  });
   const installs = [];
   for (const [host, scope, root] of installTargets()) {
     const st = installState(root, host, scope);

@@ -30,6 +30,7 @@ vi.mock('../pages/Activity.jsx', () => ({ default: stub('Activity') }))
 vi.mock('../pages/ActivityDetail.jsx', () => ({ default: stub('ActivityDetail') }))
 vi.mock('../pages/Library.jsx', () => ({ default: stub('Library') }))
 vi.mock('../pages/Laws.jsx', () => ({ default: stub('Laws') }))
+vi.mock('../pages/Kits.jsx', () => ({ default: stub('Kits') }))
 vi.mock('../pages/Loops.jsx', () => ({ default: stub('Loops') }))
 vi.mock('../pages/Personal.jsx', () => ({ default: stub('Personal') }))
 vi.mock('../pages/Installs/index.jsx', () => ({ default: stub('Installs') }))
@@ -79,6 +80,8 @@ const TABLE = [
   ['#/item/memory/a%20b', 'Library section=memory selected=a b', 'Library', 'Library'],
   ['#/item/notebook/x%2Fy', 'Library section=notebook selected=x/y', 'Library', 'Library'],
   ['#/section/config', 'Library section=config', 'Library', 'Library'],
+  ['#/kits', 'Kits', 'Kits', 'Kits'],
+  ['#/kits/spring-boot', 'Kits item=spring-boot', 'Kits', 'Kits'],
   ['#/loops', 'Loops tab=templates', 'Loops', 'Templates'],
   ['#/loops/templates/bugfix', 'Loops tab=templates item=bugfix', 'Loops', 'Templates'],
   ['#/personal', 'Personal tab=rules', 'Personal', 'Rules'],
