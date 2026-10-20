@@ -221,6 +221,12 @@ function wizardJobs() {
     ['wizard-eof-gated', [['collect_setup_lines', []]], '', GATED_HOME],
     // ...and never from another host's install.
     ['wizard-eof-gated-elsewhere', [['collect_setup_lines', []]], '', GATED_ELSEWHERE_HOME],
+    // The Kits question, over fixture trees: the shipped one has no kit, which is why no wizard
+    // run above asks it and none of their answer strings changed. `none` typed over a deployed
+    // kit, then three EOFs: the deployed marker kept, a new install left kit-less, and a tree
+    // with no kit at all: not asked, and the kit it does not ship is not carried.
+    ['ask-kits', [['ask_kits', [['fx'], KIT_SRC]], ['ask_kits', [['fx'], KIT_SRC]],
+      ['ask_kits', [[], KIT_SRC]], ['ask_kits', [['fx'], NO_KIT_SRC]]], 'none\n'],
   ].map(([name, cases, stdin, home]) => [name, cases.map(([fn, args]) => ({ fn, args })),
     stdin, home]);
 }
@@ -269,6 +275,10 @@ const NARROW_HOME = seed('home-narrow', NARROWED_INSTALL);
 const EXCLUDED_HOME = seed('home-excluded', EXCLUDED_INSTALL);
 const GATED_HOME = seed('home-gated', GATED_INSTALL);
 const GATED_ELSEWHERE_HOME = seed('home-gated-elsewhere', GATED_ELSEWHERE_INSTALL);
+/** A `src` holding one kit, `fx`, and one holding none — what `askKits` reads its menu from. */
+const KIT_SRC = seed('src-kit', { 'kits/fx.json': JSON.stringify({
+  description: 'Fixture kit', skills: [], agents: [], rules: 'kits/fx/rules.md' }) });
+const NO_KIT_SRC = seed('src-no-kit', { 'skills/x.md': '# x\n' });
 
 /** One probe process, stdin from a seeded FILE, WHOLE stdout back as BYTES. */
 function runSeeded(cases, stdin, home = HOME) {
@@ -579,17 +589,28 @@ test('the summary job produces rows and not an empty list', () => {
     'the opencode PROJECT emit did not reach the LSP rows');
   assert.ok(!results[3].some(([, t]) => t.includes('Java 21+ (jdtls)')),
     'a claude emit reached the LSP rows, which are opencode-only');
-  // Eight keys, and the three exclusion/pack ones are the only lists. `doctrines` distinguishes
+  // Nine keys, and the four exclusion/pack/kit ones are the only lists. `doctrines` distinguishes
   // three states (null = no carrier said, [] = a carrier said `none`, a list = it named packs);
   // `excludeRules` and `excludeSkills` have only two, because their markers are written only
   // when something IS excluded and their absence is therefore an answer — `[]` here, since this
-  // install excluded neither. No `gates`: they are read off the one install being re-run, never
+  // install excluded neither. `kits` has the same two states (no `Active kits:` line is `[]`,
+  // spec A3), `[]` here since this install has no kit. No `gates`: they are read off the one install being re-run, never
   // this machine-wide walk. All are present for the same reason: the wizard must not fall
   // through this walk to `cwd/Harness`.
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
-    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: [], excludeSkills: [],
+    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: [], excludeSkills: [], kits: [],
   });
+});
+
+test('the kit question defaults to the deployed marker, and is not asked without a kit', () => {
+  const { results, text } = runs()['ask-kits'];
+  assert.deepEqual(results, [null, ['fx'], null, null]);
+  // Asked three times, never for the kit-less tree; each menu marks its default.
+  assert.equal(text.split(/\r?\n/).filter((l) => l === 'Kits:').length, 3);
+  const defaults = text.split(/\r?\n/).filter((l) => l.endsWith('(default)'));
+  assert.deepEqual(defaults, ['  1) fx — Fixture kit   (default)', '  1) fx — Fixture kit   (default)',
+    '  2) none — no kit   (default)']);
 });
 
 test('every job wrote something, and every newline in it is the platform\'s', () => {
@@ -603,7 +624,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 18, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 19, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {

@@ -58,12 +58,12 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { GATE_SWITCHES, THEMES, ROOT, makeCfg } from '../build/source.mjs';
+import { GATE_SWITCHES, THEMES, ROOT, loadKits, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
-  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, CLAUDE_STYLE, GATE_LEDGER,
+  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, CLAUDE_STYLE, GATE_LEDGER, HOSTS,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
@@ -238,6 +238,35 @@ export function gateSummary(cfgDirs, platform = process.platform) {
 }
 
 /** `_harness_status._status_data`. */
+/**
+ * Spec R6: the member files of every kit NOT on in this install that are still on disk — the ones
+ * `pruneOwned` kept because their owner edited them — as `{ kit: [rel, ...] }`, or `null` when
+ * there are none. No new state: the kit manifests say which rels a member owns (`skills/<m>.md`,
+ * `skills/<m>/...`, `agents/<m>.md`), the install's layer dir says where to look.
+ */
+export function keptKitFiles(host, scope, root, active) {
+  const marker = HOSTS.find((h) => h.host === host)?.projectMarker;
+  const dir = scope === 'global' || !marker ? root : path.join(root, marker);
+  const walk = (rel) => {
+    const abs = path.join(dir, rel);
+    let entries;
+    try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return []; }
+    return entries.flatMap((e) => (e.isDirectory() ? walk(`${rel}/${e.name}`)
+      : e.isFile() ? [`${rel}/${e.name}`] : []));
+  };
+  const kept = {};
+  for (const [kit, m] of loadKits()) {
+    if (active.includes(kit)) continue;
+    const rels = [
+      ...(m.skills ?? []).flatMap((n) => [`skills/${n}.md`].filter((r) => existsSync(path.join(dir, r)))
+        .concat(walk(`skills/${n}`))),
+      ...(m.agents ?? []).map((n) => `agents/${n}.md`).filter((r) => existsSync(path.join(dir, r))),
+    ].sort();
+    if (rels.length) kept[kit] = rels;
+  }
+  return Object.keys(kept).length ? kept : null;
+}
+
 export function statusData() {
   const inst = installedDefaults();
   const theme = inst.theme || defaultTheme();
@@ -304,10 +333,12 @@ export function statusData() {
     installs: installTargets().map(([host, scope, root]) => {
       try {
         const p = installProfile(host, scope, root);
+        // Only when something is kept, so `--json` without kits stays the bytes it was.
+        const kept = keptKitFiles(host, scope, root, p.kits);
         const rebuild = legacyProcessCarrierOfDir(root, host)
           ? "geneseed setup  # pre-comms carrier (names 'process 8') — run setup for this install, not a rebuild"
           : rebuildCommand(p.argv);
-        return { ...p, rebuild };
+        return { ...p, ...(kept ? { keptKitFiles: kept } : {}), rebuild };
       } catch (e) {
         return { host, scope, root, state: 'unreadable', error: String(e?.message ?? e) };
       }
@@ -422,10 +453,15 @@ export function statusLines(d, color = false) {
     const excl = p.excludeRules?.length ? `excluding ${p.excludeRules.join(',')}` : 'no rules excluded';
     rows.push([`${p.host}:${p.scope}`, [p.state, p.theme, p.footprint, `${p.posture}/${p.mode}/${p.trust}`,
       packs, excl, ...(p.excludeSkills?.length ? [`skills off: ${p.excludeSkills.join(',')}`] : []),
+      ...(p.kits?.length ? [`kits: ${p.kits.join(',')}`] : []),
       // Each elided when armed. The law's text still binds; only its tool-boundary gate is off.
       ...GATE_SWITCHES.filter((g) => p[g.key] === false)
         .map((g) => `${g.marker.toLowerCase()}: off (Law ${g.law} text still binds)`)]
       .join(` ${DOT} `) + where]);
+    // R6: a member its owner edited outlives its kit; name it, so turning the kit off is visible.
+    for (const [kit, rels] of Object.entries(p.keptKitFiles ?? {})) {
+      rows.push([`${p.host}:${p.scope}`, `kept from inactive kit ${kit}: ${rels.join(', ')}${where}`]);
+    }
   }
 
   const labelW = Math.max(...rows.map(([k]) => codePointLength(k)));

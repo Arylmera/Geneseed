@@ -40,7 +40,7 @@ import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, gatesOfDir, installState, installTargets,
+  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitsOfDir, gatesOfDir, installState, installTargets,
   legacyProcessCarrierOfDir, modeOfDir, postureOfDir, readMaybe, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
@@ -95,7 +95,7 @@ function sysExit(msg) {
 const BUILD_FORWARD = [
   ['theme', '--theme'], ['emit', '--emit'], ['footprint', '--footprint'],
   ['posture', '--posture'], ['mode', '--mode'], ['trust', '--trust'], ['doctrines', '--doctrines'],
-  ['excludeRules', '--exclude-rules'], ['excludeSkills', '--exclude-skills'], ['out', '--out'], ['root', '--root'],
+  ['excludeRules', '--exclude-rules'], ['excludeSkills', '--exclude-skills'], ['kits', '--kits'], ['out', '--out'], ['root', '--root'],
   ['configDir', '--config-dir'],
 ];
 
@@ -141,7 +141,7 @@ export function cmdBuild(args) {
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}) {
+  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}, kits = null) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -174,6 +174,9 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   // `gates` is one object keyed as `GATE_SWITCHES` keys it (`gatesOfDir`, a profile, a body).
   // Law order, so a Law IV-only install still ends on `--no-deletion-gate` as it did.
   for (const g of GATE_SWITCHES) if (gates?.[g.key] === false) argv.push(g.flag);
+  // Kits elide when none is on, as skills do: no config key feeds them, so absence and `none`
+  // are the same answer. Last, so an argv naming no kit is the bytes it always was.
+  if (kits?.length) argv.push('--kits', [...kits].sort().join(','));
   return argv;
 }
 
@@ -235,9 +238,11 @@ export function installProfile(host, scope, root, notify = null) {
   // The gate switches: a rebuild that forgot one would silently re-arm (or, read wrong, disarm)
   // the install. A missing marker reads as armed.
   const gates = gatesOfDir(root, host);
+  // Kits on stay on (spec A3); one this checkout no longer ships drops with a notice (R2).
+  const kits = kitsOfDir(root, host, notify);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludeSkills, gates);
+    PACK_ORDER, excludeRules, trust, excludeSkills, gates, kits);
   // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
   // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
   // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
@@ -246,7 +251,7 @@ export function installProfile(host, scope, root, notify = null) {
   return {
     host, scope, root, state: installState(root, host, scope),
     emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, excludeSkills,
-    ...gates, argv,
+    kits, ...gates, argv,
   };
 }
 

@@ -25,7 +25,7 @@ import {
   vendorPinProblems,
 } from './checks-repo.mjs';
 import { constitutionProblems, leanBlockProblems } from './checks-constitution.mjs';
-import { countTableProblems } from './checks-counts.mjs';
+import { countTableProblems, kitProblems } from './checks-counts.mjs';
 import { catalogProblems } from '../loop/catalog.mjs';
 import { globSorted, isDir, isFile, rglob } from './scan.mjs';
 import { spawnSync } from 'node:child_process';
@@ -114,7 +114,7 @@ export function authorNoteProblems(src = SRC) {
 export {
   HOOK_PINNED, constitutionProblems, doctrineMetaProblems, lawMetaProblems, leanBlockProblems,
 } from './checks-constitution.mjs';
-export { countTableProblems, proseMirrorProblems } from './checks-counts.mjs';
+export { countTableProblems, kitProblems, proseMirrorProblems } from './checks-counts.mjs';
 
 /**
  * The shipped loop catalogue parses and every shipped template passes the engine's own graph
@@ -197,6 +197,7 @@ export function authoringProblems() {
   problems.push(...constitutionProblems());
   problems.push(...leanBlockProblems());
   problems.push(...countTableProblems());
+  problems.push(...kitProblems());
   problems.push(...authorNoteProblems());
   return problems;
 }

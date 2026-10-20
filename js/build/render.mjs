@@ -35,7 +35,7 @@ import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
 import {
-  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, readPackText, resolveCredits, resolveRuleIds, ruleCanon, upstreamOf,
+  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, upstreamOf,
 } from './source.mjs';
 import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
@@ -69,8 +69,9 @@ export const SRC_DIR_TOKENS = {
 };
 
 const TEXT_SUFFIXES = new Set(['.md', '.tmpl', '.json', '.txt', '.yml', '.yaml']);
-/** Top-level `src/` entries the build reads but never ships: upstream-credit provenance. */
-const NOT_BUNDLED = new Set(['upstreams.json', 'licenses']);
+/** Top-level `src/` entries the build reads but never ships: upstream-credit provenance, and the
+ * kit manifests (a kit's members ship flat from `skills/` and `agents/`). */
+const NOT_BUNDLED = new Set(['upstreams.json', 'licenses', 'kits']);
 
 // Digits are legal after the first character: `DOC_<PACK>_<n>` (the doctrine rule titles) are
 // the first token names in the project to carry one, and without `0-9` here `{{DOC_CRAFT_1}}`
@@ -165,11 +166,57 @@ export function substitute(text, theme) {
 }
 
 /** `_build_render._resolve_catalogs`. */
-function resolveCatalogs(text, nativeCatalog, excludeSkills = []) {
+function resolveCatalogs(text, nativeCatalog, excludeSkills = [], cfg = null) {
   // `true`/`false` still mean "both kinds", for the plain-bundle callers that pass a boolean.
   const nat = nativeCatalog === true ? { skills: true, agents: true } : (nativeCatalog || {});
-  return text.replace(CATALOG_BLOCK_RE, (_m, kind, table, pointer) => (nat[kind] ? pointer
-    : kind === 'skills' ? dropExcludedSkillRows(table, excludeSkills) : table));
+  return text.replace(CATALOG_BLOCK_RE, (_m, kind, table, pointer) => {
+    if (nat[kind]) return pointer;
+    // Active kits' rows close the table, before `--exclude-skills` drops rows (R5: exclusion wins).
+    const full = withTableRows(table, activeKits(cfg).flatMap(([, m]) => m.catalogue?.[kind] ?? []));
+    return kind === 'skills' ? dropExcludedSkillRows(full, excludeSkills) : full;
+  });
+}
+
+/**
+ * `rows` inserted after the last row of the block's first table — inside it, not after the
+ * folder-skills list that follows §4's table (a table row there renders as broken markup). A
+ * block with no table gets them at its end; no rows returns the block as it was.
+ */
+function withTableRows(block, rows) {
+  if (!rows.length) return block;
+  const lines = block.split('\n');
+  let i = lines.findIndex((l) => l.startsWith('|'));
+  if (i < 0) i = lines.length - 1;
+  else while (i < lines.length && lines[i].startsWith('|')) i++;
+  lines.splice(i, 0, ...rows);
+  return lines.join('\n');
+}
+
+/** `loadKits(cfg.src)`, read once per cfg: a render asks for it per CATALOG block. */
+const KITS = new WeakMap();
+function kitsOf(cfg) {
+  let kits = KITS.get(cfg);
+  if (!kits) KITS.set(cfg, (kits = loadKits(cfg.src)));
+  return kits;
+}
+
+/** `[kit, manifest]` for each kit `cfg.kits` names, in its (sorted) order. */
+function activeKits(cfg) {
+  if (!cfg?.kits?.length) return [];
+  const kits = kitsOf(cfg);
+  return cfg.kits.map((k) => {
+    if (!kits.has(k)) throw new Error(`unknown kit '${k}' (no src/kits/${k}.json)`);
+    return [k, kits.get(k)];
+  });
+}
+
+/**
+ * The Kits block: each active kit's rules.md, rendered against `theme`. Exported because a
+ * carrier re-rendered with prefixed DIR_* tokens (`prefixedAgentText`) must rebuild it too.
+ */
+export function kitsBody(cfg, theme, lawsPrefix = '') {
+  return activeKits(cfg).map(([, m]) => `\n${renderFile(cfg, path.join(cfg.src, m.rules), theme,
+    'full', lawsPrefix).trim()}\n`).join('');
 }
 
 /**
@@ -281,7 +328,7 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
     return inner;
   });
 
-  text = resolveCatalogs(text, nativeCatalog, cfg.excludeSkills ?? []);
+  text = resolveCatalogs(text, nativeCatalog, cfg.excludeSkills ?? [], cfg);
   text = resolveLean(text, footprint);
   return substitute(text, theme);
 }
@@ -449,6 +496,12 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   const skipped = [...(cfg.excludeSkills ?? [])].sort();
   // It fills a template line of its own, so its value carries the blank line around it.
   theme.EXCLUDED_SKILLS_LINE = skipped.length ? `\nExcluded skills: ${skipped.join(', ')}\n` : '';
+  // Kits, under the same contract: both empty with no kit, so a default build stays
+  // byte-identical. The marker has the skills line's shape so one parser reads both; the block is
+  // each active kit's rules.md, plain text (no rule ids, no LEAN halves), the same at either footprint.
+  const kits = activeKits(cfg);
+  theme.KITS_LINE = kits.length ? `\nActive kits: ${kits.map(([k]) => k).join(', ')}\n` : '';
+  theme.KITS_BODY = kitsBody(cfg, theme, lawsPrefix);
   // The gate switches (`GATE_SWITCHES`: Laws I, III, IV), under the same contract: a line is
   // written only when its gate is OFF, so a default build stays byte-identical and a missing
   // line reads back as armed (`gatesOfDir`). The OpenCode plugins read these lines at load, so
@@ -506,6 +559,8 @@ export function renderAll(cfg, themeName, {
   const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix });
   const items = [];
   const skipped = new Set(cfg.excludeSkills ?? []);
+  // Members of every kit `--kits` did not name: kit logic, not `excludeSkills`, so no marker.
+  const off = kitMembers(new Map([...kitsOf(cfg)].filter(([k]) => !(cfg.kits ?? []).includes(k))));
   const licences = new Map();   // `<stem>/LICENSE-<key>.txt` -> the upstream's licence file
   for (const file of sortedSourceFiles(cfg.src)) {
     const rel = path.relative(cfg.src, file);
@@ -513,6 +568,7 @@ export function renderAll(cfg, themeName, {
     const sp = rel.split(path.sep);
     if (sp[0] === 'skills' && sp.length >= 2 && skipped.has(sp[1].replace(/\.md$/, ''))) continue;
     if (NOT_BUNDLED.has(sp[0])) continue;
+    if (sp.length >= 2 && Object.hasOwn(off, sp[0]) && off[sp[0]].has(sp[1].replace(/\.md$/, ''))) continue;
     const outRel = destRel(themedRel(rel, theme)).split(path.sep).join('/');  // as_posix()
     // The on-disk `laws/`, `ontology/` and `doctrines/` are the "complete text" the two lean
     // pointers promise — §1's and the Doctrines section's. They render at full whatever the

@@ -65,6 +65,7 @@ import {
 // registry to find every install it must re-emit, and a CLI verb may not reach into a driver
 // for a reader. See js/inspect/registry.mjs.
 import { registryRecord, registryRoots } from '../inspect/registry.mjs';
+import { kitsOfDir } from '../hosts/installs.mjs';
 
 // P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
 // of textual surgery over committed files with a corpus of its own, and it is the half of the
@@ -651,12 +652,12 @@ const PROJECT_EMITS = {
  * carry straight past the parameter default.
  */
 function axesCfg({
-  posture, mode, trust, doctrines, excludeRules, excludeSkills, ...gates
+  posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates
 }) {
   return makeCfg({
     ...(posture ? { posture } : {}), ...(mode ? { mode } : {}), ...(trust ? { trust } : {}),
     ...(doctrines ? { doctrines } : {}), ...(excludeRules ? { excludeRules } : {}),
-    ...(excludeSkills ? { excludeSkills } : {}),
+    ...(excludeSkills ? { excludeSkills } : {}), ...(kits ? { kits } : {}),
     // The gate switches (`GATE_SWITCHES` keys): only an explicit `false` disarms; `null` (no
     // opinion) keeps the gate.
     ...Object.fromEntries(GATE_SWITCHES.filter((g) => gates[g.key] === false).map((g) => [g.arg, true])),
@@ -665,7 +666,7 @@ function axesCfg({
 
 export function emitProjectInto(host, {
   theme, out, root, footprint = 'full', posture = null, mode = null, trust = null,
-  doctrines = null, excludeRules = null, excludeSkills = null, ...gates
+  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, ...gates
 }) {
   const emit = PROJECT_EMITS[host];
   // The axes ride the same rail into every `*Into`, and for the same reason: a drift reader
@@ -674,7 +675,7 @@ export function emitProjectInto(host, {
   // checked an all-packs render nobody asked for.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, ...gates }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
     { theme, footprint, root }, out,
   ));
 }
@@ -689,16 +690,16 @@ export function emitProjectInto(host, {
  */
 export function buildInto({
   theme, out, footprint = 'lean', posture = null, mode = null, trust = null, doctrines = null,
-  excludeRules = null, excludeSkills = null, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, ...gates
 }) {
   return withPlatformNewlines(() => build(axesCfg({
-    posture, mode, trust, doctrines, excludeRules, excludeSkills, ...gates }),
+    posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
     theme, out, { footprint, nativeCatalog: false }));
 }
 
 export function emitGlobalInto(host, {
   theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
-  excludeRules = null, excludeSkills = null, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, ...gates
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -715,7 +716,7 @@ export function emitGlobalInto(host, {
   // the same scar the footprint left in `diffCollect`, one axis over each time.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, ...gates }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
     { theme, footprint, root: null, cfgDir }, out,
   ));
 }
@@ -747,6 +748,25 @@ export function main(argv) {
       throw e;
     }
   });
+}
+
+/**
+ * Spec B3: a build does what its flags say, so one without `--kits` turns off a kit the target
+ * install has on. Said BEFORE the emit rewrites the marker. The target is the emit's own: the
+ * config dir for a `-global` emit, `out` otherwise. `kitsOfDir` has already dropped a kit this
+ * checkout no longer ships, so the advice never names one `--kits` would refuse. Best-effort.
+ */
+function warnDroppedKits(args, out) {
+  try {
+    const global = args.emit.endsWith('-global');
+    const host = global ? args.emit.slice(0, -'-global'.length) : (args.emit === 'files' ? null : args.emit);
+    const target = global ? (args.cfgDir ?? HOSTS.find((h) => h.host === host).configDir()) : out;
+    for (const k of kitsOfDir(target, host).filter((x) => !args.kits.includes(x))) {
+      process.stderr.write(`[geneseed] WARN: this install has kit ${k}; this build turns it off — `
+        + `pass --kits ${k} to keep it
+`);
+    }
+  } catch { /* a warning never fails a build */ }
 }
 
 function run(argv) {
@@ -783,6 +803,7 @@ function run(argv) {
     args.cfgDir = resolveOut(args.cfgDir);
   }
   const cfg = makeCfg(args);
+  warnDroppedKits(args, out);
 
   // The marker directory is the emit's TARGET, which for a global emit is the config dir it
   // just rendered into and not `--out` at all — so the emit returns it rather than the

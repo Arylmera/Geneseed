@@ -19,7 +19,7 @@ import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs'
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
-import { renderAll, renderFile } from './render.mjs';
+import { kitsBody, renderAll, renderFile } from './render.mjs';
 import {
   BOB_RULES_STUB, ensureContextStub, ensureExcludesStub, ensureNotebookIndex,
   ensureProfileStub,
@@ -82,6 +82,8 @@ export function emitClaudeRender(cfg, job) {
       ptheme[tok] = prefix + (ptheme[tok] ?? tok.split('_').slice(1).join('_').toLowerCase());
     }
     ptheme.AT_HARNESS = prefix;
+    // The Kits block was substituted with the unprefixed DIR_* tokens; rebuild it, or its links dangle.
+    ptheme.KITS_BODY = kitsBody(cfg, ptheme, '');
     // Same catalogue decision as the renderAll above — a re-render that forgot it would
     // quietly put the stripped tables back.
     return renderFile(cfg, tmplItem.src, ptheme, footprint, '', new Set(), nativeCatalog);

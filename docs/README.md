@@ -42,7 +42,7 @@
 
 **Memory** — [Memory](concepts/memory.md) · [Notebook](concepts/notebook.md)
 
-**Configuration** — [Footprint](concepts/footprint.md) · [Themes](concepts/themes.md) · [Exclusions](concepts/exclusions.md) · [Code intelligence (LSP)](concepts/lsp.md)
+**Configuration** — [Footprint](concepts/footprint.md) · [Themes](concepts/themes.md) · [Exclusions](concepts/exclusions.md) · [Kits](concepts/kits.md) · [Code intelligence (LSP)](concepts/lsp.md)
 
 **Working together** — [Collaboration](concepts/collaboration.md) · [Foreman mode](concepts/foreman-mode.md)
 

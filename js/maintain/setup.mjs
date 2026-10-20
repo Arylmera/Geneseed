@@ -46,7 +46,7 @@ import path from 'node:path';
 
 import { main as driverMain, resolveOut } from '../build/driver.mjs';
 import { playLine } from '../ui/anim.mjs';
-import { discoverNames, GATE_SWITCHES, PACK_ORDER } from '../build/source.mjs';
+import { discoverNames, GATE_SWITCHES, PACK_ORDER, loadKits } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
@@ -228,6 +228,24 @@ function askDoctrines(deployed = null) {
 }
 
 /**
+ * The Kits question (spec A5): one pick, a kit or `none`, defaulting to what the install has on
+ * (`deployed`, its `Active kits:` marker). Asked ONLY when this checkout ships a kit, so a kit-less
+ * wizard reads exactly the stdin it always did (and has no kit to carry: `kitsOfDir` drops an unshipped one).
+ * Returns the kit list, or null for none (`setupBuildArgs` omits `--kits`).
+ */
+export function askKits(deployed = null, kits = loadKits()) {
+  const on = (deployed ?? []).filter((k) => kits.has(k));
+  if (!kits.size) return null;
+  const opts = [...kits].map(([k, m]) => [k, m.description ?? '']);
+  // shortcut: one pick per run, so several deployed kits are offered as one "keep" option; ask
+  // per kit once a second kit ships.
+  if (on.length > 1) opts.push([on.join(','), 'keep the installed kits']);
+  opts.push(['none', 'no kit']);
+  const pick = askChoice('Kits', opts, on.length ? on.join(',') : 'none');
+  return pick === 'none' ? null : pick.split(',');
+}
+
+/**
  * `_harness_setup._collect_setup_lines` — the six questions, the plan, the confirm.
  *
  * Returns the selection, or null when the confirm is declined. Every default is the
@@ -267,6 +285,8 @@ export function collectSetupLines() {
   const posture = askChoice('Posture', postureOptions(), inst.posture || defaultPosture());
   const mode = askChoice('Mode', modeOptions(), inst.mode || defaultMode());
   const doctrines = askDoctrines(inst.doctrines);
+  // Kits on stay on (spec A3); `kitsOfDir` already dropped a retired one.
+  const kits = askKits(inst.kits);
   const emit = askChoice('Install mode', EMIT_OPTIONS, inst.emit || 'opencode-global');
   const footprint = askChoice('Footprint', FOOTPRINT_OPTIONS,
     inst.footprint || 'lean');
@@ -304,13 +324,13 @@ export function collectSetupLines() {
   const gated = Object.values(gates).some((on) => on === false);
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
-      excludeRules, undefined, excludeSkills, gates).join(' ')}\n`);
+      excludeRules, undefined, excludeSkills, gates, kits).join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
   // The key only when there is something to carry, so a selection that excludes no skill and
   // switches off no gate is the same object it was before either existed.
   return {
     theme, posture, mode, doctrines, excludeRules, ...(excludeSkills ? { excludeSkills } : {}),
-    ...(gated ? { gates } : {}),
+    ...(gated ? { gates } : {}), ...(kits ? { kits } : {}),
     emit, out, root, footprint,
   };
 }
@@ -494,7 +514,7 @@ export function setupLines() {
   }
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
-    doctrines = null, excludeRules = null, excludeSkills = null, gates = {},
+    doctrines = null, excludeRules = null, excludeSkills = null, gates = {}, kits = null,
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, and the self-improvement loops
@@ -513,7 +533,7 @@ export function setupLines() {
   // runs must carry the pack selection the plan line just previewed, or the wizard would print
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
-    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates);
+    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates, kits);
   printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {

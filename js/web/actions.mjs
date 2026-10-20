@@ -46,7 +46,7 @@ import {
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir,
+  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir,
   footprintOfDir, gatesOfDir,
   installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
@@ -539,6 +539,8 @@ export function apiRestore(state, files) {
       // re-states a rule whose hook gate the install deliberately left unwired.
       excludeRules: excludedRulesOfDir(target),
       excludeSkills: excludedSkillsOfDir(target),
+      // The kits: a restored AGENT.md keeps its Kits block and `Active kits:` line.
+      kits: kitsOfDir(target),
       // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
       ...gatesOfDir(target),
     }));
@@ -628,7 +630,7 @@ export function apiInstallCmd(state, body) {
   const gates = bodyGates(body, root, host);
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates);
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -730,6 +732,6 @@ export function apiDeployCmd(state, body) {
   const gates = bodyGates(body, root, host);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates);
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

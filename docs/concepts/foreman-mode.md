@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 15
+order: 16
 title: "Foreman mode"
 kind: "concept"
 section: "Working together"

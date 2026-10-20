@@ -11,7 +11,8 @@
 import { readFileSync } from 'node:fs';
 
 import { installedDefaults } from '../../js/hosts/installs.mjs';
-import { collectSetupLines, setupSummaryLines } from '../../js/maintain/setup.mjs';
+import { loadKits } from '../../js/build/source.mjs';
+import { askKits, collectSetupLines, setupSummaryLines } from '../../js/maintain/setup.mjs';
 import { ask, askChoice, confirm, promptLine } from '../../js/lib/prompt.mjs';
 import { webFirstOk } from '../../js/ui/menu.mjs';
 
@@ -25,6 +26,8 @@ const FNS = {
   confirm: (a) => confirm(...a),
   ask_choice: (a) => askChoice(a[0], a[1], a[2]),
   collect_setup_lines: () => collectSetupLines(),
+  // The kit question over a fixture `src` (`args[1]`): the shipped tree has no kit to ask about.
+  ask_kits: (a) => askKits(a[0], loadKits(a[1])),
   // `args[0]` FAKES `isTTY`, because a probe's stdin is a seeded file and every branch past the
   // isatty test would otherwise be dead — the one input no cell and no ordinary job can vary.
   // `process.stdin.isTTY` is a plain property; it is put back afterwards.

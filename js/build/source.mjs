@@ -90,6 +90,14 @@ export const RETIRED_RULE_IDS = {
   'absence-is-a-claim': { was: 'Law XI', liveAs: null, note: 'folded into verify-before-asserting' },
 };
 
+/**
+ * Kit ids that must never name a kit (`src/kits/<id>.json`), the reason beside each — the
+ * contract `RETIRED_RULE_IDS` keeps for rules. `none` was never a kit: `--kits none` means no kits.
+ */
+export const RETIRED_KIT_IDS = {
+  none: 'reserved: --kits none switches every kit off',
+};
+
 /** @type {Array<[number, string]>} */
 const ROMAN = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
   [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
@@ -232,6 +240,34 @@ export function resolveCredits(text, src = SRC) {
 }
 
 /**
+ * `src/kits/<kit>.json`, parsed, as `Map<kit, manifest>` in sorted kit order. A manifest is
+ * `{ description, skills, agents, rules, rulesWordBudget, catalogue }`, the sole writer of its
+ * kit's membership; the `<kit>/` folder beside it holds the kit's `rules.md` and is not read
+ * here. A tree without `src/kits/` has no kits.
+ */
+export function loadKits(src = SRC) {
+  const dir = path.join(src, 'kits');
+  let names;
+  try { names = readdirSync(dir).filter((n) => n.endsWith('.json')).sort(); } catch { return new Map(); }
+  return new Map(names.map((n) => {
+    try { return [n.slice(0, -'.json'.length), JSON.parse(readFileSync(path.join(dir, n), 'utf8'))]; } catch (e) {
+      throw new Error(`src/kits/${n}: ${e.message}`, { cause: e });
+    }
+  }));
+}
+
+/** Every skill and agent the kits handed in claim (a `loadKits` Map, or a subset of one). */
+export function kitMembers(kits) {
+  const skills = new Set();
+  const agents = new Set();
+  for (const m of kits.values()) {
+    for (const s of m.skills ?? []) skills.add(s);
+    for (const a of m.agents ?? []) agents.add(a);
+  }
+  return { skills, agents };
+}
+
+/**
  * `_build_core.ROOT` — the checkout, from this file's own location (`js/..`).
  *
  * NOT redirectable, and that is a property rather than a gap. The Python side is
@@ -334,20 +370,47 @@ export function knownSkillIds(src = SRC) {
  * not listed, so a new link protects its target the day it is written.
  */
 export function linkedSkillIds(src = SRC) {
-  const linked = new Set();
+  // A kit's links to its own members do not protect them (spec R5: excluding a kit skill is
+  // allowed); a kit file's link to a CORE skill still does, or excluding it would leave the link dead.
+  return [...new Set(specLinks(src).filter((l) => l.kind === 'skills' && !(l.kit && l.kit === l.owner))
+    .map((l) => l.name))].sort();
+}
+
+/**
+ * Every `{{DIR_SKILLS}}/<name>` / `{{DIR_AGENTS}}/<name>` link in `src`'s .md/.tmpl files, outside
+ * the §4 skills catalogue table: `{ rel, kind, name, kit, owner }`. `kit` is the kit that owns the
+ * file (`kits/<kit>.json`, `kits/<kit>/**`, a member's spec or side file), `owner` the kit the
+ * target is a member of; each null for core. `linkedSkillIds` and the doctor's R4 arm
+ * (`kitProblems`) read the same walk.
+ */
+export function specLinks(src = SRC) {
+  // Member -> its kit, per kind; the first kit wins a member two kits claim (R3 names that).
+  const owners = { skills: new Map(), agents: new Map() };
+  for (const [kit, m] of loadKits(src)) {
+    for (const kind of ['skills', 'agents']) for (const n of m[kind] ?? []) if (!owners[kind].has(n)) owners[kind].set(n, kit);
+  }
+  // Under kits/, only `<kit>.json` and `<kit>/**` belong to a kit; any other file there (a README) is nobody's.
+  const ofKit = (sp) => (sp[0] === 'kits'
+    ? (sp.length > 2 ? sp[1] : /\.json$/.test(sp[1]) ? sp[1].slice(0, -'.json'.length) : null)
+    : (sp.length >= 2 && Object.hasOwn(owners, sp[0]) && owners[sp[0]].get(sp[1].replace(/\.md$/, ''))) || null);
+  const links = [];
   const walk = (d) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const f = path.join(d, e.name);
       if (e.isDirectory()) walk(f);
       else if (/\.(md|tmpl)$/.test(e.name)) {
+        const sp = path.relative(src, f).split(path.sep);
         const text = readFileSync(f, 'utf8')
           .replace(/<!-- CATALOG:begin skills -->[\s\S]*?<!-- CATALOG:end -->/, '');
-        for (const m of text.matchAll(/\{\{DIR_SKILLS\}\}\/([a-z0-9-]+)/g)) linked.add(m[1]);
+        for (const m of text.matchAll(/\{\{DIR_(SKILLS|AGENTS)\}\}\/([a-z0-9-]+)/g)) {
+          const kind = m[1].toLowerCase();
+          links.push({ rel: sp.join('/'), kind, name: m[2], kit: ofKit(sp), owner: owners[kind].get(m[2]) ?? null });
+        }
       }
     }
   };
   walk(src);
-  return [...linked].sort();
+  return links;
 }
 
 /**
@@ -451,7 +514,7 @@ export const GATE_SWITCHES = [
  */
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
-  excludeRules = [], excludeSkills = [], ...switches
+  excludeRules = [], excludeSkills = [], kits = [], ...switches
 } = {}) {
   return {
     root: ROOT,
@@ -479,6 +542,8 @@ export function makeCfg({
     excludeRules: Array.isArray(excludeRules) ? [...excludeRules] : [],
     // Skill names left out of this install — same "unspecified takes nothing away" default.
     excludeSkills: Array.isArray(excludeSkills) ? [...excludeSkills] : [],
+    // Kits switched on for this install — off unless named, so a default build is unchanged.
+    kits: Array.isArray(kits) ? [...kits] : [],
     // The gate switches (`GATE_SWITCHES`: `secretsGate`, `doneGate`, `deletionGate`), each armed
     // unless its `no*` arg says so in so many words: only a literal `true` disarms, so every
     // caller that never heard of a switch keeps the gate.

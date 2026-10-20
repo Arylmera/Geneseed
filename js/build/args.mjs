@@ -11,7 +11,8 @@ import { parseArgs as nodeParseArgs } from 'node:util';
 import { withPlatformNewlines } from '../lib/fs.mjs';
 import path from 'node:path';
 import {
-  CONFIG, discoverNames, GATE_SWITCHES, PACK_ORDER, knownRuleIds, knownSkillIds, linkedSkillIds, resolveSkillNames,
+  CONFIG, discoverNames, GATE_SWITCHES, PACK_ORDER, SRC, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits,
+  resolveSkillNames, skillAliases,
 } from './source.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
 // what lets it sit inside this module's `child_process` ban.
@@ -32,7 +33,7 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
 export function configDefaults() {
   const d = {
     theme: 'neutral', posture: 'peer', mode: 'direct', trust: DEFAULT_PRESET,
-    doctrines: [...PACK_ORDER], excludeRules: [], excludeSkills: [],
+    doctrines: [...PACK_ORDER], excludeRules: [], excludeSkills: [], kits: [],
   };
   if (!existsSync(CONFIG)) return d;
   try {
@@ -96,6 +97,7 @@ export function configDefaults() {
 const VALUED = {
   '--theme': 'theme', '--posture': 'posture', '--mode': 'mode', '--trust': 'trust',
   '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules', '--exclude-skills': 'excludeSkills',
+  '--kits': 'kits',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
   '--footprint': 'footprint', '--root': 'root', '--config-dir': 'cfgDir',
 };
@@ -196,13 +198,13 @@ function parseExcludeRules(value) {
  * through `resolveSkillNames` and leave one stderr line each; the linked refusal stays for a
  * name typed as itself.
  */
-function parseExcludeSkills(value) {
+export function parseExcludeSkills(value, src = SRC) {
   const s = value.trim();
   if (s === 'none' || s === '') return [];
-  const known = knownSkillIds();
-  const linked = linkedSkillIds();
+  const known = knownSkillIds(src);
+  const linked = linkedSkillIds(src);
   const names = s.split(',').map((x) => x.trim()).filter(Boolean);
-  const { ids, notices, unknown } = resolveSkillNames(names, { known, linked });
+  const { ids, notices, unknown } = resolveSkillNames(names, { known, linked, aliases: skillAliases(src) });
   if (unknown.length) {
     die(2, `argument --exclude-skills: unknown skill '${unknown[0]}' (choose from `
       + `${known.filter((k) => !linked.includes(k)).join(', ')}, or 'none')`);
@@ -214,6 +216,23 @@ function parseExcludeSkills(value) {
   }
   for (const n of notices) process.stderr.write(`[geneseed] --exclude-skills: ${n}\n`);
   return ids;
+}
+
+/**
+ * `--kits a,b` / `--kits none` -> the cfg's kit list, sorted and deduped for the same marker
+ * stability as `--exclude-skills`. `none` and '' mean no kits; an unknown kit is refused, naming
+ * the known ones (spec R1). No `harness.config.json` key feeds it, for `excludeSkills`' reason.
+ */
+export function parseKits(value, known = [...loadKits().keys()]) {
+  const s = value.trim();
+  if (s === 'none' || s === '') return [];
+  const names = [...new Set(s.split(',').map((x) => x.trim()).filter(Boolean))].sort();
+  const unknown = names.find((n) => !known.includes(n));
+  if (unknown) {
+    const choices = known.length ? `${known.join(', ')}, or 'none'` : "'none'";
+    die(2, `argument --kits: unknown kit '${unknown}' (choose from ${choices})`);
+  }
+  return names;
 }
 
 /**
@@ -313,6 +332,7 @@ export function parseArgs(argv, defaults) {
     doctrines: defaults.doctrines,
     excludeRules: defaults.excludeRules,
     excludeSkills: defaults.excludeSkills ?? [],
+    kits: defaults.kits ?? [],
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false,
     ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.arg, false])),
@@ -356,6 +376,7 @@ export function parseArgs(argv, defaults) {
   if (typeof args.doctrines === 'string') args.doctrines = parseDoctrines(args.doctrines);
   if (typeof args.excludeRules === 'string') args.excludeRules = parseExcludeRules(args.excludeRules);
   if (typeof args.excludeSkills === 'string') args.excludeSkills = parseExcludeSkills(args.excludeSkills);
+  if (typeof args.kits === 'string') args.kits = parseKits(args.kits);
   return args;
 }
 
