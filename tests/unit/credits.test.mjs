@@ -217,7 +217,7 @@ const RETRO_CREDITED = {
   'skills/debug.md': [SP, MP],
   'skills/develop.md': [MP],
   'skills/geneseed-code-review.md': [MP, SP],
-  'skills/git-history.md': [MP],
+  'skills/git-history.md': ['mattpocock-skills-frozen'],
   'skills/handoff.md': [MP],
   'skills/learn-mode.md': ['vibe-wise'],
   'skills/parallel-agents.md': [SP],

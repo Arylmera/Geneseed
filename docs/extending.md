@@ -392,7 +392,7 @@ emit leaves the prior install intact.
 `VENDORED_SKILL_DIRS` (`js/hosts/native.mjs:48` — the literal is frozen in
 `tests/unit/authoring_gates.test.mjs:421`), add a `src/upstreams.json` entry (`repo`, `commit` —
 a 40-hex commit, never a moving branch — `author`, `license`, and `licenseFile`, a path under
-`src/` or `null`), write a `VENDOR.md` carrying `**Upstream key:** <that key>` and a
+`src/` or `null`; an optional `"frozen": true` marks text left at its pin on purpose: the weekly drift job skips it, `creditProblems` still validates it), write a `VENDOR.md` carrying `**Upstream key:** <that key>` and a
 `{{CREDIT:<key>:<upstream path>}}` line, which renders the attribution into every install (the
 folder ships its upstream's own LICENSE, so it gets no `LICENSE-<key>.txt` copy; a first-party
 folder writes `**Upstream:** this repository` and a `**License:**` instead, and has no entry),

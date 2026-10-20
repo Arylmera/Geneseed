@@ -3,7 +3,7 @@
 > {{DESC_GIT_HISTORY}}
 <!-- aliases: git-archaeology, git-rescue -->
 
-{{CREDIT:mattpocock-skills:skills/engineering/resolving-merge-conflicts/SKILL.md}}
+{{CREDIT:mattpocock-skills-frozen:skills/engineering/resolving-merge-conflicts/SKILL.md}}
 
 **Trigger:** something must be learned *from* the git history, or it needs repair.
 Learn: when a regression came in, who last touched a line and why, where a symbol or

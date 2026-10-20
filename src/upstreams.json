@@ -1,21 +1,21 @@
 {
   "daydream": {
     "repo": "glebis/claude-skills",
-    "commit": "f47170dee300dd3d5da2a1c3c708986faeea3d5a",
+    "commit": "b8e34966661bd7b6834af6a0548ce3ccd371ee30",
     "author": "Gleb Kalinin",
     "license": "MIT",
     "licenseFile": "skills/daydream/LICENSE"
   },
   "react-view-transitions": {
     "repo": "vercel-labs/agent-skills",
-    "commit": "f8a72b9603728bb92a217a879b7e62e43ad76c81",
+    "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
     "author": "Vercel Engineering",
     "license": "MIT",
     "licenseFile": null
   },
   "mattpocock-skills": {
     "repo": "mattpocock/skills",
-    "commit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
+    "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
     "author": "Matt Pocock",
     "license": "MIT",
     "licenseFile": "licenses/mattpocock-skills.txt"
@@ -34,9 +34,17 @@
     "license": "MIT",
     "licenseFile": "licenses/vibe-wise.txt"
   },
+  "mattpocock-skills-frozen": {
+    "repo": "mattpocock/skills",
+    "commit": "391a2701dd948f94f56a39f7533f8eea9a859c87",
+    "author": "Matt Pocock",
+    "license": "MIT",
+    "licenseFile": "licenses/mattpocock-skills.txt",
+    "frozen": true
+  },
   "mattpocock-skills-2509": {
     "repo": "mattpocock/skills",
-    "commit": "a7d038f6bf7f01b516408e95e2fb56e0b338fa6f",
+    "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
     "author": "Matt Pocock",
     "license": "MIT",
     "licenseFile": "licenses/mattpocock-skills.txt"

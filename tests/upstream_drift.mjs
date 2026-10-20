@@ -6,9 +6,10 @@
  * we adapted from it. A pin that silently ages means our adaptation misses upstream fixes, and
  * nothing else in the repo would notice. Weekly CI runs this and keeps ONE issue per drifted key.
  *
- * A key cited only by a VENDOR.md `Upstream key:` line has no file path, so there is nothing to
- * narrow on: any change in its repo counts as drift (noisy, but a vendored folder is a
- * whole-repo copy, so that is honest).
+ * A key a VENDOR.md claims (`Upstream key:`) is compared only on the paths that VENDOR.md's own
+ * `{{CREDIT:}}` tokens name (the vendored folder upstream) plus a root LICENSE file: the rest of
+ * its repo is not ours. A VENDOR.md with no token still falls back to the whole repo.
+ * An upstreams.json entry with `"frozen": true` is skipped: its text was pinned on purpose.
  *
  * `driftReport` is pure: `compare(repo, commit)` is injected (resolves to the changed file
  * paths since `commit`), so the unit test never touches the network.
@@ -26,7 +27,7 @@ const LABEL = 'upstream-drift';
 export function scanCitedPaths(srcDir) {
   const cited = new Map();
   const add = (key) => cited.get(key) ?? cited.set(key, new Set()).get(key);
-  const whole = new Set(); // keys a VENDOR.md claims whole-repo: they override their CREDIT paths
+  const vendored = new Map(); // key -> the CREDIT paths of its VENDOR.md: they replace every other citation
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
@@ -35,14 +36,17 @@ export function scanCitedPaths(srcDir) {
         const text = fs.readFileSync(p, 'utf8');
         for (const m of text.matchAll(CREDIT_RE)) add(m[1]).add(m[2]);
         if (e.name === 'VENDOR.md') {
-          for (const m of text.matchAll(/^- \*\*Upstream key:\*\*\s*(\S+)/gm)) { add(m[1]); whole.add(m[1]); }
+          for (const m of text.matchAll(/^- \*\*Upstream key:\*\*\s*(\S+)/gm)) {
+            add(m[1]);
+            vendored.set(m[1], new Set([...text.matchAll(CREDIT_RE)].filter((c) => c[1] === m[1]).map((c) => c[2])));
+          }
         }
       }
     }
   };
   walk(srcDir);
-  for (const key of whole) cited.get(key).clear();
-  return cited;
+  for (const [key, paths] of vendored) cited.set(key, paths);
+  return Object.assign(cited, { vendored });
 }
 
 const touches = (file, p) => file === p || file.startsWith(p.replace(/\/$/, '') + '/');
@@ -52,9 +56,10 @@ export async function driftReport(upstreams, citedPaths, compare) {
   const rows = [];
   for (const [key, up] of Object.entries(upstreams)) {
     const paths = citedPaths.get(key);
-    if (!paths) continue; // not cited anywhere: nothing of ours depends on it
+    if (!paths || up.frozen) continue; // not cited anywhere, or frozen on purpose: no drift to report
     const files = await compare(up.repo, up.commit); // sequential on purpose: API rate limits
-    const changed = paths.size ? files.filter((f) => [...paths].some((p) => touches(f, p))) : files;
+    const licence = citedPaths.vendored?.has(key) && paths.size ? /^LICEN[CS]E[^/]*$/i : null; // vendored: its licence counts
+    const changed = paths.size ? files.filter((f) => licence?.test(f) || [...paths].some((p) => touches(f, p))) : files;
     if (changed.length) rows.push({ key, changed, url: `https://github.com/${up.repo}/compare/${up.commit}...HEAD` });
   }
   return rows;

@@ -1,6 +1,6 @@
 # Vendored skill — react-view-transitions
 
-This folder is a third-party skill vendored **verbatim** (two lines aside, below) into Geneseed, not a
+This folder is a third-party skill vendored **verbatim** (the frontmatter lines below aside) into Geneseed, not a
 Geneseed-authored skill. It rides along in the rendered bundle and is exempt from
 Geneseed's authoring gates (token, dead-link, hermeticity, skill counts) — it is
 listed in the generator's `VENDORED_SKILL_DIRS`.
@@ -9,14 +9,14 @@ listed in the generator's `VENDORED_SKILL_DIRS`.
   `src/upstreams.json`)
 - **Credit:** {{CREDIT:react-view-transitions:skills/react-view-transitions}}
 
-The licence is MIT, declared in the upstream README's `## License`. Upstream ships no LICENSE
-file (neither at the pinned commit nor on `main`), so there is no license text to carry here
+The licence is MIT, declared in the upstream repo README's `## License`. Upstream ships no LICENSE
+file (neither at the pinned commit nor on `main`; re-checked at 063bee94), so there is no license text to carry here
 and the entry's `licenseFile` is null; the README's declaration is the whole grant.
 
 The skill follows the [Agent Skills](https://agentskills.io/) format (`SKILL.md` +
 `references/`). Its internal links point at the upstream project's own files; do not
 "fix" them to Geneseed paths — that is why the folder is gate-exempt. To update,
-re-copy the upstream folder, re-apply the two deviations below, and bump the entry's `commit`
+re-copy the upstream folder (new or removed files included, e.g. `references/troubleshooting.md`), re-apply the deviations below, and bump the entry's `commit`
 in `src/upstreams.json`.
 
 **Deviation 1:** upstream's frontmatter says `name: vercel-react-view-transitions`;
