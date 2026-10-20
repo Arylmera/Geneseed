@@ -31,6 +31,7 @@ const TABLE = [
   ['#/personal/profile', { page: 'personal', tab: 'profile' }],
   ['#/personal/bogus', { page: 'personal', tab: 'rules' }],
   ['#/installs', { page: 'installs', tab: 'hosts' }],
+  ['#/installs/kits', { page: 'installs', tab: 'kits' }],
   ['#/installs/edits', { page: 'installs', tab: 'edits' }],
   ['#/installs/server', { page: 'installs', tab: 'server' }],
   // Personal's Memory and Notebook tabs carry an entry of their own, URI-decoded.

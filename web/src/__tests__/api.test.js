@@ -95,8 +95,13 @@ describe('http get/post', () => {
 
 describe('action', () => {
   it('maps a 409 conflict to a friendly "already running" error', async () => {
-    global.fetch = vi.fn(() => Promise.resolve(errResp(409)))
+    global.fetch = vi.fn(() => Promise.resolve(errResp(409, { error: 'busy' })))
     await expect(api.action('build', { theme: 'neutral' })).rejects.toThrow('already running')
+  })
+
+  it('keeps the server text on a non-busy 409', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(errResp(409, { error: 'unknown kit: nope' })))
+    await expect(api.action('install', {})).rejects.toThrow('unknown kit: nope')
   })
 
   it('returns the job id on success', async () => {

@@ -15,6 +15,8 @@ const overview = () => get('/api/overview')
 // The Ledger Overview's four reads: every installed harness (sync, drift, always-on cost), skill
 // and agent calls over 30 days, gate asks per rule per day, and whether a newer release exists.
 const fleet = () => get('/api/fleet')
+// Every kit this Geneseed ships, and per install which are on: the Installs / Kits tab.
+const kits = () => get('/api/kits')
 const usage = () => get('/api/usage')
 const gates = () => get('/api/gates')
 const update = () => get('/api/update')
@@ -61,7 +63,9 @@ async function action(name, opts) {
   try {
     return await post(`/api/actions/${name}`, opts || {})
   } catch (e) {
-    if (e.status === HTTP_CONFLICT) throw new Error('An action is already running.', { cause: e })
+    // Only startJob's `busy` is the single-flight case; install refusals are 409 too and keep their text.
+    if (e.status === HTTP_CONFLICT && e.body?.error === 'busy')
+      throw new Error('An action is already running.', { cause: e })
     throw e
   }
 }
@@ -158,6 +162,7 @@ const excludeMutate = (action, path) => post('/api/excludes', { action, path })
 
 export const api = {
   fleet,
+  kits,
   usage,
   gates,
   update,

@@ -22,7 +22,7 @@ import http from 'node:http';
 import { localHost, makeHandler } from '../../js/web/handler.mjs';
 import { buildPlan } from '../../js/web/server.mjs';
 import {
-  apiOverview, apiDiff, apiThemes, apiDoctor, apiFleet, apiInstalls, apiExcludes, apiRecent, apiSetup,
+  apiOverview, apiDiff, apiThemes, apiDoctor, apiFleet, apiInstalls, apiKits, apiExcludes, apiRecent, apiSetup,
   viewCfg, apiLoops, apiLoopsActive,
 } from '../../js/web/api.mjs';
 import { NotFound, apiCatalog, apiItem, specDesc, wikiItems } from '../../js/web/catalog.mjs';
@@ -58,6 +58,8 @@ import { normcase } from '../../js/lib/paths.mjs';
 import { DOC_FOLDERS, makeCfg } from '../../js/build/source.mjs';
 import { sourceFingerprint } from '../../js/build/version.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
+import { pathToFileURL } from 'node:url';
+import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES } from '../../js/web/routes.mjs';
 import { recordLoop } from '../../js/loop/registry.mjs';
@@ -1329,6 +1331,132 @@ test('an unknown (host, path) pair raises NotFound', () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// The Kits tab: `GET /api/kits` (`apiKits`) and the `kits` body of the install command. The real
+// `spring-boot` kit ships, so the fixture only needs the `Active kits:` line on the active carrier.
+
+/** `withThreeInstalls`, the active `oc` carrier already naming `spring-boot` as on. */
+function withKitInstalls(fn) {
+  return withThreeInstalls((ctx) => {
+    fs.writeFileSync(path.join(ctx.oc, 'AGENT.md'), '# Rules\nActive kits: spring-boot\n');
+    return fn(ctx);
+  });
+}
+
+/** The value following `--kits` in an argv, or `undefined` when the flag is absent. */
+const kitsFlag = (cmd) => (cmd.includes('--kits') ? cmd[cmd.indexOf('--kits') + 1] : undefined);
+
+test('GET /api/kits lists the shipped kits and each present install with its own kits', () => {
+  withKitInstalls(({ oc, proj }) => {
+    const res = apiKits(neutral());
+    assert.equal(res.error, undefined);
+    assert.equal(res.kits[0].name, 'spring-boot');
+    assert.equal(res.kits[0].skills.length, 3);
+    assert.equal(res.kits[0].agents.length, 6);
+    assert.ok(res.kits[0].description);
+    const active = res.installs.find((r) => samePath(r.path, oc));
+    assert.deepEqual(active.kits, ['spring-boot']);
+    assert.equal(active.editable, true);
+    assert.equal(active.reason, null);
+    assert.equal(active.keptKitFiles, null);
+    const off = res.installs.find((r) => samePath(r.path, proj));
+    assert.equal(off.state, 'disabled');
+    assert.equal(off.editable, false);
+    assert.match(off.reason, /reactivate it first/);
+    assert.ok(!res.installs.some((r) => r.host === 'claude'), 'an absent install was listed');
+  });
+});
+
+test('GET /api/kits names an edited member kept from a kit that is off', () => {
+  withThreeInstalls(({ oc }) => {
+    fs.mkdirSync(path.join(oc, 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(oc, 'agents', 'spring-reviewer.md'), 'edited by its owner\n');
+    const row = apiKits(neutral()).installs.find((r) => samePath(r.path, oc));
+    assert.deepEqual(row.kits, []);
+    assert.deepEqual(row.keptKitFiles, { 'spring-boot': ['agents/spring-reviewer.md'] });
+  });
+});
+
+test('GET /api/kits locks a legacy-carrier install with a reason naming setup', () => {
+  // `process 8` in the carrier is the pre-comms signature; reddens if the legacy arm is dropped.
+  withThreeInstalls(({ oc }) => {
+    fs.writeFileSync(path.join(oc, 'AGENT.md'), '# Rules\nActive kits: spring-boot\nprocess 8\n');
+    const row = apiKits(neutral()).installs.find((r) => samePath(r.path, oc));
+    assert.equal(row.editable, false);
+    assert.match(row.reason, /predates the comms pack.*geneseed setup/);
+    assert.ok(!row.reason.includes('`'), 'backticks show literally in the console');
+  });
+});
+
+test('GET /api/kits lists an install whose row cannot be built as unreadable, with the error', async () => {
+  // No fixture makes the real readers throw (they all swallow), so the copied checkout's
+  // `keptKitFiles` throws: reddens if the per-row catch is dropped (the whole call would throw).
+  const sb = makeSandbox();
+  const savedOc = process.env.OPENCODE_CONFIG_DIR;
+  try {
+    const co = path.join(sb.path, 'checkout');
+    const statusSrc = fs.readFileSync(path.join(import.meta.dirname, '../../js/inspect/status.mjs'), 'utf8');
+    const head = 'export function keptKitFiles(host, scope, root, active) {';
+    assert.ok(statusSrc.includes(head), 'the anchor moved');
+    copyCheckout(co, { 'js/inspect/status.mjs': statusSrc.replace(head, `${head} throw new Error('boom');`) });
+    const oc = path.join(sb.path, 'oc');
+    fs.mkdirSync(oc, { recursive: true });
+    fs.writeFileSync(path.join(oc, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    process.env.OPENCODE_CONFIG_DIR = oc;
+    const mod = await import(pathToFileURL(path.join(co, 'js/web/api.mjs')).href);
+    const row = mod.apiKits(neutral()).installs.find((r) => samePath(r.path, oc));
+    assert.equal(row.state, 'unreadable');
+    assert.match(row.error, /boom/);
+    assert.equal(row.kits, undefined);
+  } finally {
+    if (savedOc === undefined) delete process.env.OPENCODE_CONFIG_DIR; else process.env.OPENCODE_CONFIG_DIR = savedOc;
+    sb.cleanup();
+  }
+});
+
+test('GET /api/kits answers 200-shaped error and empty lists for a malformed manifest', async () => {
+  const sb = makeSandbox();
+  try {
+    const co = path.join(sb.path, 'checkout');
+    copyCheckout(co, { 'src/kits/x.json': '{' });
+    const mod = await import(pathToFileURL(path.join(co, 'js/web/api.mjs')).href);
+    const res = mod.apiKits(neutral());
+    assert.deepEqual([res.kits, res.installs], [[], []]);
+    assert.match(res.error, /src\/kits\/x\.json/);
+  } finally { sb.cleanup(); }
+});
+
+test('a kits body REPLACES the install kits: [] and "none" drop them, a name sets them', () => {
+  withKitInstalls(({ st, oc }) => {
+    for (const none of [[], 'none']) {
+      const cmd = apiInstallCmd(st, { host: 'opencode', path: oc, kits: none }).cmd.map(String);
+      assert.equal(kitsFlag(cmd), undefined, `${JSON.stringify(none)} still carried --kits`);
+    }
+    const replay = apiInstallCmd(st, { host: 'opencode', path: oc }).cmd.map(String);
+    assert.equal(kitsFlag(replay), 'spring-boot', 'an omitted key must keep the install kits');
+  });
+  withThreeInstalls(({ st, oc }) => {
+    const cmd = apiInstallCmd(st, { host: 'opencode', path: oc, kits: ['spring-boot'] }).cmd.map(String);
+    assert.deepEqual(cmd.slice(-2), ['--kits', 'spring-boot']);
+  });
+});
+
+test('an unknown kit is refused with an error and no command', () => {
+  withKitInstalls(({ st, oc }) => {
+    const res = apiInstallCmd(st, { host: 'opencode', path: oc, kits: ['ghost'] });
+    assert.ok(!('cmd' in res), JSON.stringify(res));
+    assert.match(res.error, /ghost/);
+    assert.match(res.error, /spring-boot/);
+  });
+});
+
+test('a kits body on a disabled or unknown install gets the existing refusals', () => {
+  withKitInstalls(({ st, proj }) => {
+    assert.match(apiInstallCmd(st, { host: 'opencode', path: proj, kits: [] }).error, /disabled/);
+    assert.throws(() => apiInstallCmd(st, { host: 'claude', path: '/no/such/root', kits: [] }), NotFound);
+  });
+});
+
 // The doctrine packs are the fourth value a build command carries out of a request body, and the
 // first that is a LIST. `includes(x)` closes a scalar in one call; a list has to be closed member
 // by member, or one bogus name rides into an argv beside three good ones.
@@ -1546,6 +1674,14 @@ test('selecting a view re-points target, theme and emit', () => {
     assert.ok(samePath(st.target, cl));
     assert.equal(st.theme, 'imperial', "the theme was not read from the selected install");
     assert.equal(st.emit, 'claude-global', 'the emit was not read from the selected install');
+  });
+});
+
+test('a kits change for the non-viewed install keeps THAT install theme, not the view theme', () => {
+  withTwoViews(({ st, cl }) => {
+    const cmd = apiInstallCmd(st, { host: 'claude', path: cl, kits: ['spring-boot'] }).cmd.map(String);
+    assert.equal(cmd[cmd.indexOf('--theme') + 1], 'imperial',
+      'the view theme (neutral) leaked into the other install rebuild');
   });
 });
 

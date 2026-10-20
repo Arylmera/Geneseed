@@ -34,7 +34,7 @@ import path from 'node:path';
 
 import { emitGlobalInto } from '../build/driver.mjs';
 import {
-  ROOT, discoverNames, knownRuleIds, PACK_ORDER,
+  ROOT, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
 } from '../build/source.mjs';
 import { withStdoutSwallowed } from '../inspect/diff.mjs';
 import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
@@ -48,7 +48,8 @@ import {
 import {
   EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir,
   footprintOfDir, gatesOfDir,
-  installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, trustOfDir,
+  installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, themeOfDir,
+  trustOfDir,
 } from '../hosts/installs.mjs';
 import {
   isDict, mcpCommented, mcpInstallTargets, mcpLoad, mcpServerNames, mcpState,
@@ -129,6 +130,15 @@ function bodyDoctrines(body) {
 function bodyExcludeRules(body) {
   return bodyList(body, 'excludeRules', knownRuleIds, knownRuleIds,
     (n) => n.trim().replace(/[ \t]+/, '.'));
+}
+
+/**
+ * A request body's `kits` — REPLACES the install's kits (the Kits tab sends the whole set it
+ * wants): `[]`/`'none'` give `[]`, an omitted key gives `null` (keep the install's own), and an
+ * unknown name gives `null` too, which `apiInstallCmd` refuses for a body that HAS the key.
+ */
+function bodyKits(body) {
+  return bodyList(body, 'kits', () => [...loadKits().keys()]);
 }
 
 /**
@@ -609,8 +619,9 @@ export function apiInstallCmd(state, body) {
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
   // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1) — see the
   // comment at `installProfile` in `js/build/generate.mjs`.
+  // The theme default is THIS install's own, not the viewed one's: the Kits tab acts on any row.
   const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {
-    theme: state.theme, footprint: footprintOfDir(root),
+    theme: themeOfDir(root, host) || state.theme, footprint: footprintOfDir(root),
     posture: postureOfDir(root, host) || 'peer',
     mode: modeOfDir(root, host) || 'direct', trust: trustOfDir(root, host) || DEFAULT_PRESET });
   // Unspecified means "keep what this install already has", exactly as theme, footprint,
@@ -628,9 +639,20 @@ export function apiInstallCmd(state, body) {
   // The gate switches (the Constitution page's toggles): a strict boolean per gate in the body,
   // else the install's own answer — so a pack Apply keeps every switch as it is.
   const gates = bodyGates(body, root, host);
+  // The page sends `kits` deliberately, so an unknown name is refused: ignoring it would run a
+  // no-op rebuild and report success. An omitted key keeps the install's own kits.
+  let kits = null;
+  try {
+    kits = bodyKits(body);
+    if (kits === null && bget(body, 'kits') !== null) {
+      return { error: `unknown kit in ${formatRepr(bget(body, 'kits'))} — this Geneseed ships: `
+        + [...loadKits().keys()].join(', ') };
+    }
+  } catch (e) { return { error: String(e?.message ?? e) }; }
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host));
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
+    kits ?? kitsOfDir(root, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
