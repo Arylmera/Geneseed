@@ -31,10 +31,20 @@ const installs = [
 const row = (label) => screen.getByText(label).closest('a')
 
 describe('Sidebar', () => {
-  it('lists the six pages in order, then Docs and Activity', () => {
+  it('lists the seven pages in order, then Docs and Activity', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
     expect([...document.querySelectorAll('a.sb-item .sb-label')].map((n) => n.textContent)).toEqual(
-      ['Overview', 'Constitution', 'Library', 'Loops', 'Personal', 'Installs', 'Docs', 'Activity'],
+      [
+        'Overview',
+        'Constitution',
+        'Library',
+        'Kits',
+        'Loops',
+        'Personal',
+        'Installs',
+        'Docs',
+        'Activity',
+      ],
     )
   })
 
@@ -70,20 +80,21 @@ describe('Sidebar', () => {
   })
 })
 
-// The phone bar: the same six pages as the rail. At 360px each cell is 60px, so the one
-// label that cannot fit at 11px (Constitution) carries its short name; the rail keeps the full one.
+// The phone bar: the same seven pages as the rail. At 360px each cell is ~51px, so the labels
+// that cannot fit at 11px (Constitution, Overview) carry a short name; the rail keeps the full one.
 describe('TabBar', () => {
-  it('carries the six pages, Constitution shortened to fit a phone cell', () => {
+  it('carries the seven pages, Constitution shortened to fit a phone cell', () => {
     render(<TabBar route={{ page: 'loops' }} />)
     const links = [...document.querySelectorAll('nav.tabbar a')]
     expect(links.map((a) => a.textContent)).toEqual([
-      'Overview',
+      'Home',
       'Laws',
       'Library',
+      'Kits',
       'Loops',
       'Personal',
       'Installs',
     ])
-    expect(links[3].getAttribute('aria-current')).toBe('page')
+    expect(links[4].getAttribute('aria-current')).toBe('page')
   })
 })

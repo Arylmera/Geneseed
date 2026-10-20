@@ -8,6 +8,7 @@ export const PAGES = {
   overview: 'Overview',
   laws: 'Constitution',
   library: 'Library',
+  kits: 'Kits',
   loops: 'Loops',
   personal: 'Personal',
   installs: 'Installs',
@@ -74,7 +75,7 @@ const tabOf = (page, t) => (TABS[page].includes(t) ? t : TABS[page][0])
 //   tab     - the Loops, Personal or Installs tab.
 //   item    - the selected entry's name, URI-decoded. Docs and Activity reuse the slot for
 //             their own sub-address: the docs page id, the activity session id.
-// Routes: #/ , #/<page>, #/<page>/<tab>[/<item>], #/section/<name>, #/item/<type>/<name>,
+// Routes: #/ , #/<page>, #/kits/<kit>, #/<page>/<tab>[/<item>], #/section/<name>, #/item/<type>/<name>,
 // #/docs/<page-id...>, #/activity/<sid>. Every one folds onto ONE page key, so App gives
 // every page ONE slot in the tree (see the warning in App.jsx).
 export function resolveRoute(hash) {
@@ -87,6 +88,7 @@ export function resolveRoute(hash) {
     return { page: section === 'laws' ? 'laws' : 'library', section, item }
   }
   if (head === 'docs') return { page: 'docs', item: dec(parts.slice(1).join('/')) }
+  if (head === 'kits') return a ? { page: 'kits', item: dec(a) } : { page: 'kits' }
   if (head === 'activity' && a) return { page: 'activity', item: dec(a) }
   // Skills and Agents were pages of their own; each is now a kind in the Library.
   if (head === 'skills' || head === 'agents') return { page: 'library', section: head }

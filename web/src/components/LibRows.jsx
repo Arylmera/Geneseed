@@ -2,6 +2,13 @@ import React, { useEffect, useRef } from 'react'
 import StatusBadge from './StatusBadge.jsx'
 import FilterInput from './FilterInput.jsx'
 
+// The origin of a skill or agent a kit ships, on its row and in its reader.
+export const KitBadge = ({ name }) => (
+  <span className="tag acc" title={`Ships with the ${name} kit`}>
+    kit: {name}
+  </span>
+)
+
 // The list pane, shared by the Library, the Loops page and the Docs (all three-pane: a rail
 // of sections, this list, a reader): the pane itself (LibList), its rows, and the filter.
 
@@ -60,9 +67,11 @@ export function LibRow({ item, isOpen, href, children }) {
       <span className="lr-name">
         {item.title || item.name}
         <StatusBadge status={item.status} />
+        {item.kit ? <KitBadge name={item.kit} /> : null}
         {children}
       </span>
       {item.desc ? <span className="lr-desc">{item.desc}</span> : null}
+      {item.meta ? <span className="lr-meta mono">{item.meta}</span> : null}
     </a>
   )
 }

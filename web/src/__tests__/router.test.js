@@ -19,6 +19,9 @@ const TABLE = [
   // The five pages and the two footer pages resolve to themselves.
   ['#/laws', { page: 'laws' }],
   ['#/library', { page: 'library' }],
+  // Kits: a list page whose item is the selected kit.
+  ['#/kits', { page: 'kits' }],
+  ['#/kits/spring-boot', { page: 'kits', item: 'spring-boot' }],
   ['#/loops', { page: 'loops', tab: 'templates' }],
   ['#/loops/bricks', { page: 'loops', tab: 'bricks' }],
   ['#/loops/active', { page: 'loops', tab: 'active' }],
@@ -105,11 +108,12 @@ describe('resolveRoute', () => {
 describe('PAGES', () => {
   // The breadcrumb and the sidebar print these; the laws page reads "Constitution" while
   // its route stays #/laws (doctor reads web/src/pages/Laws.jsx by that name).
-  it('names the eight pages', () => {
+  it('names the nine pages', () => {
     expect(PAGES).toEqual({
       overview: 'Overview',
       laws: 'Constitution',
       library: 'Library',
+      kits: 'Kits',
       loops: 'Loops',
       personal: 'Personal',
       installs: 'Installs',
