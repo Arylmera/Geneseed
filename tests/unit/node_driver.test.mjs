@@ -86,6 +86,9 @@ const VALUED_FLAGS = [
   // Skills left out of the install: a comma list too, bound sorted so the marker it writes is
   // stable whatever order the names were typed in.
   ['--exclude-skills', 'excludeSkills', 'quiz,daydream', ['daydream', 'quiz']],
+  // Kits switched on: `none` binds the empty list. It is the one value the shipped tree accepts
+  // while no kit ships; named kits are `tests/unit/kits.test.mjs`'s, on a fixture tree.
+  ['--kits', 'kits', 'none', []],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],

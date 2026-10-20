@@ -1181,6 +1181,66 @@ test('the gate flags table and badge drift', () => {
     `no table problem in ${JSON.stringify(problems)}`);
 });
 
+test('a kit member needs a row in its kit manifest, not the template, and counts in no badge', () => {
+  // A kit (spec A6) is off by default: its members' catalogue rows live in the manifest, and the
+  // badges, README list and SHIPPED triple count core only. With the manifest rows, the one
+  // problem left is the kit skill's SKILL_CLASS category — kept on purpose: the web inventory
+  // classifies every skill that can ship, kit or core. Without the rows, both specs are orphans.
+  const kit = (catalogue) => ({
+    'src/kits/fx.json': JSON.stringify({ description: 'Fx', skills: ['fx-skill'], agents: ['fx-agent'],
+      rules: 'kits/fx/rules.md', catalogue }),
+    'src/kits/fx/rules.md': '### Fx\n',
+    'src/skills/fx-skill.md': '# fx-skill\n',
+    'src/agents/fx-agent.md': '# fx-agent\n',
+  });
+  const rows = { skills: ['| [fx-skill]({{DIR_SKILLS}}/fx-skill.md) | x |'],
+    agents: ['| [fx-agent]({{DIR_AGENTS}}/fx-agent.md) | x |'] };
+  assert.deepEqual(withFault(kit(rows), (root) => gate(root, 'm.countTableProblems()')),
+    ['[authoring] skills/fx-skill.md has no category in SKILL_CLASS']);
+  assert.deepEqual(withFault(kit({}), (root) => gate(root, 'm.countTableProblems()')), [
+    '[authoring] agents/fx-agent.md exists but the AGENT.md table omits it',
+    '[authoring] skills/fx-skill.md exists but the AGENT.md table omits it',
+    '[authoring] skills/fx-skill.md has no category in SKILL_CLASS',
+  ]);
+});
+
+test('geneseed build --kits fx --exclude-skills fx-skill is accepted; a core link still refuses (R5)', () => {
+  // Through the real CLI of a checkout copy holding the kit. `fx-skill` is linked by the kit's
+  // rules.md and by its agent — kit links, which must not protect it — so the build excludes it
+  // (exclusion wins: the skill is gone, the agent and both marker lines stay). `council` is
+  // linked by core files, so excluding it is still refused with exit 2.
+  const faults = {
+    'src/kits/fx.json': JSON.stringify({ description: 'Fx', skills: ['fx-skill'], agents: ['fx-agent'],
+      rules: 'kits/fx/rules.md', catalogue: { skills: [], agents: [] } }),
+    'src/kits/fx/rules.md': '### Fx\n\nRead [fx-skill]({{DIR_SKILLS}}/fx-skill.md).\n',
+    'src/skills/fx-skill.md': '# {{SKILL}}: fx-skill\n\n> The fixture kit skill.\n',
+    'src/agents/fx-agent.md': '# {{AGENT}}: fx-agent\n\n> The fixture kit agent.\n\n'
+      + 'Load [fx-skill]({{DIR_SKILLS}}/fx-skill.md).\n',
+  };
+  const sb = makeSandbox('gs-kitcli-');
+  try {
+    withFault(faults, (root) => {
+      const build = (out, exclude) => spawnSync(process.execPath, [path.join(root, 'bin', 'geneseed-cli.mjs'),
+        'build', '--emit', 'files', '--out', out, '--kits', 'fx', '--exclude-skills', exclude], {
+        cwd: root, encoding: 'utf8', windowsHide: true,
+        env: { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) },
+      });
+      const out = path.join(sb.path, 'bundle');
+      const ok = build(out, 'fx-skill');
+      assert.equal(ok.status, 0, ok.stderr);
+      const agentMd = fs.readFileSync(path.join(out, 'AGENT.md'), 'utf8');
+      assert.match(agentMd, /^Active kits: fx\r?$/m);
+      assert.match(agentMd, /^Excluded skills: fx-skill\r?$/m);
+      assert.ok(fs.existsSync(path.join(out, 'skills', 'debug.md')), 'the bundle lays skills out elsewhere');
+      assert.ok(!fs.existsSync(path.join(out, 'skills', 'fx-skill.md')), 'the excluded kit skill shipped');
+      assert.ok(fs.existsSync(path.join(out, 'agents', 'fx-agent.md')), 'the kit agent did not ship');
+      const refused = build(path.join(sb.path, 'refused'), 'council');
+      assert.equal(refused.status, 2);
+      assert.match(refused.stderr, /'council' cannot be excluded/);
+    });
+  } finally { sb.cleanup(); }
+});
+
 test('the gate flags a law missing from LAW_CLASS', () => {
   // The gate that would have caught the Law XXXV 'craft' fallback: a numeral parsed out of
   // universal.md but absent from LAW_CLASS.

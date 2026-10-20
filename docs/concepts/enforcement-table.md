@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 24
+order: 25
 title: "Rule enforcement, by host"
 kind: "concept"
 section: "Harness"

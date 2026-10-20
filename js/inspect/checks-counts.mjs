@@ -7,7 +7,10 @@
  * is the reader that feeds it.
  */
 import path from 'node:path';
-import { DOCS, DOC_FOLDERS, PLUGIN_SRC, ROOT, SRC, ruleCanon, upstreams } from '../build/source.mjs';
+import {
+  DOCS, DOC_FOLDERS, PLUGIN_SRC, RETIRED_KIT_IDS, ROOT, SRC, kitMembers, loadKits, makeCfg, ruleCanon, specLinks, upstreams,
+} from '../build/source.mjs';
+import { effectiveTheme, renderFile } from '../build/render.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
 import { readText } from '../lib/fs.mjs';
 import { formatRepr } from '../lib/json.mjs';
@@ -153,8 +156,13 @@ export function countTableProblems() {
     return [`[authoring] AGENT.md.tmpl unreadable: ${e.message}`];
   }
 
+  // A kit member's row lives in its kit's manifest, not the template (spec A6). A manifest that
+  // does not parse is `kitProblems`' to name; here it means no kit rows.
+  let kits;
+  try { kits = loadKits(); } catch { kits = new Map(); }
+  const kitRows = [...kits.values()].flatMap((m) => [...(m.catalogue?.skills ?? []), ...(m.catalogue?.agents ?? [])]);
   const linked = { agents: new Set(), skills: new Set() };
-  for (const m of ttext.matchAll(TMPL_SPEC_RE)) {
+  for (const m of [ttext, ...kitRows].join('\n').matchAll(TMPL_SPEC_RE)) {
     if (m[2] !== '_template') linked[m[1] === 'AGENTS' ? 'agents' : 'skills'].add(m[2]);
   }
   for (const folder of ['agents', 'skills']) {
@@ -199,11 +207,14 @@ export function countTableProblems() {
   // the SHIPPED.md triple count it. It is added HERE rather than in `srcStems`, whose other
   // readers above — the AGENT.md table links and SKILL_CLASS — are about flat specs only.
   const skillsDir = path.join(SRC, 'skills');
+  // Core only: a kit is off by default, so its members are in no badge, README list or SHIPPED triple.
+  const members = kitMembers(kits);
   const shippedSkills = new Set([...skillFiles, ...(isDir(skillsDir) ? readdirSync(skillsDir) : [])
-    .filter((d) => !d.startsWith('_') && isFile(path.join(skillsDir, d, 'SKILL.md')))]);
+    .filter((d) => !d.startsWith('_') && isFile(path.join(skillsDir, d, 'SKILL.md')))]
+    .filter((s) => !members.skills.has(s)));
 
   const counts = {
-    agents: srcStems('agents').size,
+    agents: [...srcStems('agents')].filter((a) => !members.agents.has(a)).length,
     skills: shippedSkills.size,
     laws: lawNums.length,
     // Every doctrine rule in every pack, opt-in ones included: the laws badge alone told a
@@ -272,5 +283,85 @@ export function countTableProblems() {
   let upstreamKeys;
   try { upstreamKeys = Object.keys(upstreams()); } catch { upstreamKeys = []; }
   problems.push(...proseMirrorProblems(readme, web, counts, shippedSkills, shipped, upstreamKeys));
+  return problems;
+}
+
+/**
+ * The kit arm (spec A6, R3, R4, B7): each `src/kits/<kit>.json` against `src`. Refused: a
+ * manifest that does not parse or lacks `description`/`rules`/`skills`/`agents`; a reserved kit
+ * id (`RETIRED_KIT_IDS`); `rules` naming a missing file, or rendering (neutral theme) to more
+ * words than its `rulesWordBudget` (default 300); a member in two kits, or a core one (a row in
+ * AGENT.md.tmpl) — R3; a member with no spec or no `registry.json` row; and a core file linking a
+ * kit member, which dangles with the kit off — R4. `registry.json` sits beside `src`, as at ROOT.
+ */
+export function kitProblems(src = SRC) {
+  let kits;
+  try { kits = loadKits(src); } catch (e) { return [`[authoring] ${e.message}`]; }
+  if (!kits.size) return [];
+  const problems = [];
+  const core = { agents: new Set(), skills: new Set() };
+  let tmpl = '';
+  try { tmpl = readText(path.join(src, 'AGENT.md.tmpl')); } catch { /* countTableProblems names it */ }
+  for (const m of tmpl.matchAll(TMPL_SPEC_RE)) core[m[1] === 'AGENTS' ? 'agents' : 'skills'].add(m[2]);
+  let registry = {};
+  try { registry = JSON.parse(readText(path.join(path.dirname(src), 'registry.json'))).entities ?? {}; } catch {
+    // registryProblems names an unreadable registry
+  }
+  const owner = new Map();
+  const cfg = { ...makeCfg(), src };
+  let theme = null;
+  for (const [kit, m] of kits) {
+    const at = `src/kits/${kit}.json`;
+    if (Object.hasOwn(RETIRED_KIT_IDS, kit)) {
+      problems.push(`[authoring] ${at}: kit id '${kit}' is reserved (${RETIRED_KIT_IDS[kit]})`);
+    }
+    const lacking = ['description', 'rules', 'skills', 'agents'].filter((k) => (
+      k === 'skills' || k === 'agents' ? !Array.isArray(m[k]) : typeof m[k] !== 'string'));
+    for (const k of lacking) problems.push(`[authoring] ${at} has no '${k}'`);
+    if (lacking.length) continue;
+    for (const kind of ['skills', 'agents']) {
+      for (const name of m[kind]) {
+        const key = `${kind}/${name}`;
+        if (owner.has(key)) problems.push(`[authoring] ${key} is in two kits: '${owner.get(key)}' and '${kit}'`);
+        else owner.set(key, kit);
+        if (core[kind].has(name)) problems.push(`[authoring] ${key} is core (AGENT.md.tmpl lists it), but kit '${kit}' claims it`);
+        if (!isFile(path.join(src, kind, `${name}.md`))) {
+          problems.push(`[authoring] kit '${kit}' lists ${key}, but src/${key}.md does not exist`);
+        }
+        if (!Object.hasOwn(registry, key)) problems.push(`[authoring] ${key} (kit '${kit}') has no row in registry.json`);
+      }
+    }
+    // A6: a kit's catalogue rows are its own members' — a core row here would show twice with the
+    // kit on, or vanish with it off.
+    const rows = [...(m.catalogue?.skills ?? []), ...(m.catalogue?.agents ?? [])].join('\n');
+    for (const r of rows.matchAll(TMPL_SPEC_RE)) {
+      const kind = r[1] === 'AGENTS' ? 'agents' : 'skills';
+      if (!m[kind].includes(r[2])) {
+        problems.push(`[authoring] ${at} catalogue lists ${kind}/${r[2]}, which is not a member of kit '${kit}'`);
+      }
+    }
+    const rules = path.join(src, m.rules);
+    if (!isFile(rules)) {
+      problems.push(`[authoring] ${at}: rules '${m.rules}' does not exist`);
+      continue;
+    }
+    theme ??= effectiveTheme(cfg, 'neutral');
+    const words = renderFile(cfg, rules, theme).split(/\s+/).filter(Boolean).length;
+    const budget = m.rulesWordBudget ?? 300;
+    if (words > budget) {
+      problems.push(`[authoring] src/${m.rules} renders to ${words} words, over kit '${kit}' rulesWordBudget of ${budget}`);
+    }
+  }
+  // R4. A core member (R3, named above) is left out: every core file linking it would repeat that.
+  const r4 = new Set();
+  for (const l of specLinks(src)) {
+    // Links run kit -> core only: a core file, or ANOTHER kit's file, linking a member dangles
+    // whenever that member's kit is off.
+    if (!l.owner || l.kit === l.owner || core[l.kind].has(l.name)) continue;
+    r4.add(l.kit
+      ? `[authoring] src/${l.rel} (kit '${l.kit}') links ${l.kind}/${l.name}, a member of kit '${l.owner}' — links run kit → core only`
+      : `[authoring] src/${l.rel} links ${l.kind}/${l.name}, a kit member — the link dangles when the kit is off`);
+  }
+  problems.push(...r4);
   return problems;
 }

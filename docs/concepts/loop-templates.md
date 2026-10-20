@@ -2,7 +2,7 @@
 group: concepts
 kind: "concept"
 section: "Loops"
-order: 17
+order: 18
 title: "Loop templates"
 description: "Every shipped loop template, what it is for, and the notes that matter when you pick one."
 ---

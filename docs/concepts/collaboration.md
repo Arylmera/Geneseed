@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 14
+order: 15
 title: "Collaboration"
 kind: "concept"
 section: "Working together"

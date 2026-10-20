@@ -456,6 +456,82 @@ because a code span is not a link. Measured on 2026-10-08, with the neutral them
 footprint: debug's SKILL.md went from 1.64k to 1.18k tokens and rule's from 2.33k to 1.83k
 (chars/4).
 
+---
+
+## 3bis — Adding a KIT
+
+A kit is an opt-in bundle of skills, agents and rules for one stack, off unless an install names
+it with `--kits` ([Kits](concepts/kits.md)). Nothing in the mechanism is specific to one stack.
+
+**The manifest is the sole writer of membership.** `src/kits/<kit>.json`:
+
+```json
+{
+  "description": "One line: what the kit is for.",
+  "skills": ["<skill>"],
+  "agents": ["<agent>"],
+  "rules": "kits/<kit>/rules.md",
+  "rulesWordBudget": 300,
+  "catalogue": {
+    "skills": ["| [<skill>]({{DIR_SKILLS}}/<skill>.md) | when to reach for it |"],
+    "agents": ["| [<agent>]({{DIR_AGENTS}}/<agent>.md) | when to delegate to it |"]
+  }
+}
+```
+
+`loadKits` (`js/build/source.mjs`) reads every `src/kits/*.json`; `src/kits/` itself never ships
+(`NOT_BUNDLED` in `js/build/render.mjs`). The members stay **flat** in `src/skills/` and
+`src/agents/`, never in a `src/kits/<kit>/skills/` folder: every host's native layer accepts only
+`skills/<x>.md` and `agents/<x>.md` and would drop a nested file silently, and every check that
+enumerates skills would miss it. `src/kits/<kit>/` holds only `rules.md`.
+
+**Per-kit cost:**
+
+1. **Each member is a skill or an agent first.** §3 applies to it, with these differences:
+   - **No row in `AGENT.md.tmpl`.** Its catalogue row, a table row of the same shape, goes in
+     the manifest's `catalogue`. With the kit on, the render inserts the skill rows as the last
+     rows of the §4 skills table (before the folder-skills list) and the agent rows at the end of
+     the §3 agents table, on a host that does not catalogue that kind natively.
+     `countTableProblems` checks the template's links and the kits' catalogue rows together
+     against the flat specs, and `kitProblems` refuses a catalogue row for a non-member.
+   - **No README badge and no `SHIPPED.md` count.** Core counts exclude kit members, so
+     skip §3 steps 6 and 7.
+   - **Still** a `DESC_<NAME>` in every theme, a `SKILL_CLASS` entry for a skill (the members are
+     flat, so `srcStems('skills')` sees them), and a `registry.json` row.
+   - **An agent's web glyph, required:** an entry in `GLYPHS`
+     (`web/src/components/AgentGlyph.jsx`), then rebuild and commit `web/dist`.
+     `web/src/__tests__/agentGlyph.test.jsx` gates every `src/agents/*.md`, kit members included.
+2. **The manifest**, above.
+3. **`src/kits/<kit>/rules.md`**, the kit's rules. The render puts it in the carrier's Kits block,
+   after §2, only while the kit is on. It is plain text, not doctrine machinery: no rule ids, no
+   per-rule exclusion, no hook-ledger row, and the same text at either footprint.
+   `doctor` holds it to the manifest's `rulesWordBudget` (300 when unset).
+4. **Membership and links.** `doctor` (`kitProblems`) refuses a member listed in two kits, a
+   core skill listed in a kit, a member with no file or no registry row, a core file that links
+   to a kit member (it would dangle in an install without the kit), and a kit file that links to
+   another kit's member. Links run kit → core only. A kit's links to its own members do not
+   protect them from `--exclude-skills`; its link to a core skill still protects that skill.
+5. **The setup wizard.** It asks its kits question only when at least one kit exists, so the
+   first kit adds one answer line to the stdin strings in `tests/unit/wizard.test.mjs`.
+6. **Golden cells** for the first kit: kit on, kit off, and kit turned off on rebuild.
+
+**What a kit costs an install** — what to weigh before adding one:
+
+- **Hooks: zero.** The hook binary never reads a kit, so a kit adds no time to any tool call.
+- **The carrier:** the Kits block. Each kit is measured against its own
+  `rulesWordBudget`, not the core carrier ceiling, which stays measured on core alone.
+- **The skill listing:** one description per kit skill, every session, while the kit is on.
+- **An install without the kit: nothing.** Its members are not written, and a default build
+  stays byte-identical, with no `Active kits:` line.
+
+**Retiring a kit** puts its id in `RETIRED_KIT_IDS` (`js/build/source.mjs`), with the reason
+beside it. An install whose `Active kits:` line names it drops it wherever that line is read back
+(`rebuild-all`, `update`, `migrate`, `diff`, the web console), without failing; `rebuild-all`, `update` and `migrate` print a notice. `doctor` refuses a retired id on a new kit. `none` is
+already there: `--kits none` means no kits.
+
+**Kits are not packs.** Never add a kit to `PACK_ORDER`. A missing `Active packs:` line reads as
+every pack, so a kit there would switch itself on in every install built before it existed.
+
 
 ---
 

@@ -36,7 +36,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import {
-  CONFIG, GATE_SWITCHES, PACK_ORDER, THEMES, discoverNames, resolveSkillNames,
+  CONFIG, GATE_SWITCHES, PACK_ORDER, RETIRED_KIT_IDS, THEMES, discoverNames, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
   CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, isHostGlobalDir, liveRecordedHooks,
@@ -585,6 +585,33 @@ export function excludedSkillsOfDir(d, host = null, notify = null) {
   }, [], host);
 }
 
+/** `Active kits: spring-boot` — written only when a kit is on; the skills line's shape. */
+const KITS_RE = /^Active kits:[ \t]*(.+?)[ \t]*$/m;
+
+/**
+ * The kits a DEPLOYED install has on, read back so `rebuild-all`, `upgrade`, `migrate`, `diff`, the wizard
+ * and the console re-render them (spec A3). A missing line is `[]`: no kits, the old install's
+ * state. Unlike `excludedSkillsOfDir`, a name this checkout does not ship drops ALONE, with a
+ * notice (spec R2): a retired kit must never reach `--kits`, which refuses it and would fail the
+ * whole `rebuild-all`, and the kits beside it are still the owner's choice. Silent without `notify`.
+ */
+export function kitsOfDir(d, host = null, notify = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    const m = KITS_RE.exec(text);
+    if (!m) return undefined;
+    const known = loadKits();
+    const names = [...new Set(m[1].split(',').map((s) => s.trim()).filter(Boolean))].sort();
+    for (const k of names.filter((n) => !known.has(n))) {
+      notify?.(Object.hasOwn(RETIRED_KIT_IDS, k)
+        ? `kit '${k}' was retired (${RETIRED_KIT_IDS[k]}) — dropped`
+        : `kit '${k}' is not shipped by this Geneseed — dropped`);
+    }
+    return names.filter((n) => known.has(n));
+  }, [], host);
+}
+
 /**
  * Whether a DEPLOYED install keeps one law's hook gate armed — `true` (armed) or `false` (its
  * `<marker>: off` line, written by a build with that gate's `--no-*-gate` flag; `GATE_SWITCHES`).
@@ -861,7 +888,7 @@ export function installsReferencingShim(shimPath = hookShimPath(), targets = ins
 export function installedDefaults() {
   const found = {
     theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
-    excludeRules: null, excludeSkills: null,
+    excludeRules: null, excludeSkills: null, kits: null,
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
@@ -904,6 +931,8 @@ export function installedDefaults() {
     // indistinguishable here, which is exactly what the marker itself already says.
     if (!found.excludeRules?.length) found.excludeRules = excludedRulesOfDir(base);
     if (!found.excludeSkills?.length) found.excludeSkills = excludedSkillsOfDir(base);
+    // Kits walk the same two-state way: no line and `none` both read `[]`.
+    if (!found.kits?.length) found.kits = kitsOfDir(base);
   }
   return found;
 }

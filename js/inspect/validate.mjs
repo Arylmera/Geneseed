@@ -34,8 +34,8 @@ export const VALIDATE_USAGE = [
   'usage: geneseed validate [-h] [--theme THEME] [--emit EMIT] [--out OUT] [--root ROOT]',
   '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
   '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES]',
-  '                         [--exclude-skills SKILLS] [--no-secrets-gate] [--no-done-gate]',
-  '                         [--no-deletion-gate] [-v]',
+  '                         [--exclude-skills SKILLS] [--kits KITS] [--no-secrets-gate]',
+  '                         [--no-done-gate] [--no-deletion-gate] [-v]',
   '',
   "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
   "Takes the generator's render flags (see geneseed-build --help) except --sync-themes and",
@@ -130,7 +130,7 @@ export function cmdValidate(args) {
     const opts = {
       theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
       trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
-      excludeSkills: args.excludeSkills,
+      excludeSkills: args.excludeSkills, kits: args.kits,
       ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, args[g.arg] ? false : null])),
     };
     let scanDirs;

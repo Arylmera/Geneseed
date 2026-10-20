@@ -195,6 +195,21 @@
         },
         {
           "names": [
+            "--kits"
+          ],
+          "dest": "kits",
+          "metavar": null,
+          "help": "switch on opt-in kits, comma-separated; 'none' turns every kit off (default: no kits)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--out"
           ],
           "dest": "out",

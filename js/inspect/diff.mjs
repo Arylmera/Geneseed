@@ -49,7 +49,7 @@ import {
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir,
-  excludedSkillsOfDir, gatesOfDir,
+  excludedSkillsOfDir, gatesOfDir, kitsOfDir,
   footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
@@ -265,6 +265,8 @@ export function diffCollect({
     excludeRules: excludedRulesOfDir(dir),
     // The excluded skills, or every skill the install left out reads as deleted.
     excludeSkills: excludedSkillsOfDir(dir),
+    // The kits on, or every kit file reads as added and the Kits block as drift.
+    kits: kitsOfDir(dir),
     // The gate switches, or a disarmed install reads its `<gate>: off` line as drift.
     ...gatesOfDir(dir),
   };
