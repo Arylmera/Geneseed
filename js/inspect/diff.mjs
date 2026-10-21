@@ -321,8 +321,38 @@ export function diffCollect({
 /** The records that are drift: everything but a `linked` path, which is the user's own. */
 export const drifted = (files) => files.filter((f) => f.status !== 'linked');
 
+/** Where the self-improvement loops write, relative to an install's `notebook/`. */
+export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
+
+/**
+ * The self-improvement notes an install has accumulated, as `{rel, body}` sorted by `rel`.
+ *
+ * WHY THESE ARE NOT DRIFT. The loops used to edit the rendered skill and agent files in place,
+ * which the doctor reported as stale and the next rebuild erased. They now write a sidecar
+ * under the notebook — seed-once and agent-owned, never in the manifest, so no rebuild touches
+ * it. That makes the notes the back-port QUEUE rather than an endangered edit: `diff` lists
+ * them and `--out` carries them so they can reach `src/`, but the upgrade export does not
+ * fire on them alone, because there is nothing for the rebuild to destroy. Empty files are
+ * skipped — an agent that cleared its notes has nothing to back-port.
+ */
+export function collectNotes(dir) {
+  const notes = [];
+  for (const sub of NOTES_DIRS) {
+    const d = path.join(dir, 'notebook', sub);
+    let names;
+    try { names = readdirSync(d); } catch { continue; }
+    for (const n of names.filter((x) => x.endsWith('.md')).sort()) {
+      const a = path.join(d, n);
+      if (!isFile(a)) continue;
+      const body = readText(a);
+      if (body.trim()) notes.push({ rel: `notebook/${sub}/${n}`, body });
+    }
+  }
+  return notes;
+}
+
 /** `_harness_diff._improvements_md` — pure; `when` is the caller's timestamp. */
-export function improvementsMd(target, theme, allFiles, when) {
+export function improvementsMd(target, theme, allFiles, when, notes = []) {
   // A linked path is never a back-port item: the file is the user's, not a local edit of ours.
   const files = drifted(allFiles);
   const edited = files.filter((f) => f.status === 'edited');
@@ -351,6 +381,15 @@ export function improvementsMd(target, theme, allFiles, when) {
   };
   for (const f of files) {
     lines.push(`## \`${f.rel}\`  (${label[f.status]})`, '', '```diff', ...f.diff, '```', '');
+  }
+  // Only when there are notes, so a report without them stays byte-identical.
+  if (notes.length) {
+    lines.push('# Self-improvement notes', '',
+      'Corrections the agent recorded against a skill or agent instead of editing it.',
+      'Fold each one into the matching file under `src/`, then clear the note.', '');
+    for (const n of notes) {
+      lines.push(`## \`${n.rel}\``, '', '```markdown', ...splitLines(n.body), '```', '');
+    }
   }
   return `${lines.join('\n')}\n`;
 }
@@ -385,7 +424,9 @@ function stamp(d) {
  * the same instant, so a run that crosses a second boundary cannot name a file one second
  * away from what it says inside.
  */
-export function writeImprovements(target, theme, files, outPath = null) {
+export function writeImprovements(
+  target, theme, files, outPath = null, notes = collectNotes(target),
+) {
   const now = stamp(new Date());
   // `Path(out_path).expanduser()` — again NOT resolved, and again observable: the path is
   // printed, so `--out p.md` reports `p.md`.
@@ -393,7 +434,7 @@ export function writeImprovements(target, theme, files, outPath = null) {
     ? expanduser(outPath)
     : path.join(target, 'improvements', now.file);
   mkdirSync(path.dirname(p), { recursive: true });
-  writeText(p, improvementsMd(target, theme, files, now.when));
+  writeText(p, improvementsMd(target, theme, files, now.when, notes));
   return p;
 }
 
@@ -477,18 +518,21 @@ export function cmdDiff(args) {
     + `${missing.length} missing-from-deployed\n`);
   // Its own line, printed only when there is one, so the summary above is unchanged otherwise.
   if (linked.length) printOut(`[diff] ${linked.length} linked (yours, left alone)\n`);
+  const notes = collectNotes(target);
+  if (notes.length) printOut(`[diff] ${notes.length} self-improvement note(s) to back-port\n`);
   for (const f of edited) printOut(`  ~ ${f.rel}   (edited in deployed — review to back-port)\n`);
   for (const f of added) printOut(`  + ${f.rel}   (only in deployed — your addition)\n`);
   for (const f of missing) printOut(`  - ${f.rel}   (in source, not deployed — re-emit to add)\n`);
   for (const f of linked) printOut(`  = ${f.rel}   (a link — yours, left alone)\n`);
+  for (const n of notes) printOut(`  * ${n.rel}   (self-improvement note — review to back-port)\n`);
   if (args.out) {
-    if (drifted(files).length) {
+    if (drifted(files).length || notes.length) {
       // Bare `--out` is argparse's `nargs="?"` const: True, meaning "the default timestamped
       // path". `parse()` gives a flag `true` and an option a string, so the two arrive
       // distinguishable here without a third kind of entry in the VERBS table.
       const outPath = args.out === true ? null : args.out;
       printOut(`[diff] improvements file written: ${
-        writeImprovements(target, theme, files, outPath)}\n`);
+        writeImprovements(target, theme, files, outPath, notes)}\n`);
     } else {
       printOut('[diff] no differences — nothing written.\n');
     }

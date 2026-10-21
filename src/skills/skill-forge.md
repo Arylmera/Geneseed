@@ -3,7 +3,7 @@
 > {{DESC_SKILL_FORGE}}
 
 **Trigger:** a task has repeated and no {{SKILL}} covers it; a {{SKILL}}'s
-self-improvement loop produced an edit worth making; the user says "make this a
+notes in `{{DIR_NOTEBOOK}}/skill-notes/` hold a correction worth making; the user says "make this a
 skill", "write a skill for…", "fix the trigger of…"; or two {{SKILLS}} keep
 disambiguating against each other and should merge. Meta by nature: it edits the
 apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, {{LAW:deletion-is-deliberate}}).
@@ -12,8 +12,9 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
 1. **Reuse before authoring** ({{DOCTRINE:automate-repetition}}, {{DOCTRINE:search-before-creating}}). Read the catalogue — the
    host's skill list, or AGENT.md §4 — and the nearest existing {{SKILL}} in full. If
    its domain already covers the need, the change is an *edit* to that file (a step,
-   a trigger phrase, a done-when), not a new file. Name the skill by its domain, not
-   the situation that prompted it.
+   a trigger phrase, a done-when), not a new file — in an installed harness, a
+   shipped {{SKILL}} takes that edit in its notes file, since a rebuild overwrites it.
+   Name the skill by its domain, not the situation that prompted it.
 2. **Write the trigger first, then the procedure.** Start from
    `{{DIR_SKILLS}}/_template.md`. The purpose line says *what*; the **Trigger** line
    says *when*, in the words a user would actually say and the situations the model

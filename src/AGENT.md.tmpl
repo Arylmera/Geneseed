@@ -187,9 +187,9 @@ contract you do not already know.
 **Rule of delegation:** read-only investigation can be dispatched freely; any
 {{AGENT}} that *writes* must return a summary of exactly what it changed. Every
 {{AGENT}} spec ends with a **self-improvement loop**: when a report carries a
-`spec-feedback:` line, weigh it — fold a real flaw back into that {{AGENT}}'s
-file (with the user's assent); {{MEMORY}} gets a record only when it clears
-{{DOCTRINE:persist-insight}}'s bar.
+`spec-feedback:` line, weigh it — record a real flaw (with the user's assent) in
+`{{DIR_NOTEBOOK}}/agent-notes/<name>.md` and pass it to later dispatches;
+{{MEMORY}} gets a record only when it clears {{DOCTRINE:persist-insight}}'s bar.
 
 <!-- LEAN:begin -->
 **Dispatching a multi-part goal.** When a goal spans several capabilities,
@@ -293,8 +293,8 @@ When a task repeats and no {{SKILL}} covers it, forge one through the
 [skill-forge]({{DIR_SKILLS}}/skill-forge.md) {{SKILL}}: copy
 [`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
 domain ({{DOCTRINE:automate-repetition}}), and list it wherever this file carries a catalogue. Every {{SKILL}} ends with a
-**self-improvement loop** — honour it: fold what a run teaches back into the
-file, or into {{MEMORY}} ({{DOCTRINE:persist-insight}}).
+**self-improvement loop** — honour it: a lesson goes to its notes, never into
+the file, or to {{MEMORY}} ({{DOCTRINE:persist-insight}}).
 
 ---
 

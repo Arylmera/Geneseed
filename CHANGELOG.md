@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **Self-improvement writes to a sidecar, not the skill.** The skill and agent loops used to edit the rendered file in place, which the doctor reported as stale and the next rebuild erased. They now write corrections to `notebook/skill-notes/<name>.md` and `notebook/agent-notes/<name>.md` (seed-once, agent-owned, never overwritten), and read them back before the skill runs or the agent is dispatched. `geneseed diff` lists the notes and `--out` exports them for back-porting into `src/`.
+
 ## [4.10.0] — 2026-10-20
 
 Minor: opt-in kits (and a first one, `spring-boot`), credits for adapted content, a weekly upstream-drift check, and a web Kits tab.

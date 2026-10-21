@@ -215,6 +215,14 @@ const FOOTPRINTS = ['full', 'lean'];
  * "(except `reset --hard`)" is its shortest form. The full half was reworded to fit its ceiling
  * unchanged. Measured `files` carrier after: lean 39_111 — raised by exactly the overrun
  * (39_088 -> 39_111), not rounded.
+ *
+ * BOTH RAISED 2026-10-21 for the self-improvement sidecar (user decision: the
+ * loops write to notebook notes instead of the rendered skill/agent file, which the doctor
+ * reported as drift and the next rebuild erased). AGENT.md has to name the agent-notes path the
+ * caller writes and hands to later dispatches, or the agent loop keeps editing the spec. Trimmed
+ * to its shortest form first; both paragraphs sit outside the LEAN blocks, so both footprints
+ * pay it. Measured `files` carrier after: full 62_263, lean 39_156 — each raised by exactly the
+ * overrun (62_219 -> 62_263, 39_111 -> 39_156), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.

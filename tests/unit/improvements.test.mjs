@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  improvementsMd, cmpKey, writeImprovements, exportImprovements, flushExportNotes,
+  improvementsMd, cmpKey, writeImprovements, exportImprovements, flushExportNotes, collectNotes,
 } from '../../js/inspect/diff.mjs';
 import { VERSION_MARKER } from '../../js/hosts/hosts.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -166,4 +166,37 @@ test('the export notice says nothing when there is nothing fresh', () => {
     }
     assert.equal(out, '', `a stale-only directory still announced something:\n${out}`);
   });
+});
+
+// The self-improvement loops write a sidecar under the notebook instead of editing the rendered
+// file. The notes are not drift — no rebuild touches them — but they are the back-port queue,
+// so the report carries them. Three rules, each written out: skill notes and agent notes are
+// both collected, sorted by path; a blank or whitespace-only file is skipped (cleared notes
+// have nothing to back-port); a non-`.md` file is ignored.
+test('the self-improvement notes are collected and carried into the report', () => {
+  withDir((d) => {
+    const put = (rel, body) => {
+      const p = path.join(d, 'notebook', ...rel.split('/'));
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, body, 'utf8');
+    };
+    put('skill-notes/debug.md', '- step 3: run the failing test alone first\n');
+    put('skill-notes/empty.md', '  \n');
+    put('skill-notes/scratch.txt', 'not a note\n');
+    put('agent-notes/reviewer.md', '- needs the diff base in the envelope\n');
+    const notes = collectNotes(d);
+    assert.deepEqual(notes.map((n) => n.rel),
+      ['notebook/skill-notes/debug.md', 'notebook/agent-notes/reviewer.md']);
+    const md = improvementsMd(d, 'neutral', [], '2026-06-12 10:00:00', notes);
+    assert.ok(md.includes('# Self-improvement notes'), md);
+    assert.ok(md.includes('## `notebook/skill-notes/debug.md`'), md);
+    assert.ok(md.includes('- step 3: run the failing test alone first'), md);
+    assert.equal((md.match(/```markdown/g) ?? []).length, 2);
+  });
+  // No notebook at all is no notes, not a throw — most installs have never written one.
+  withDir((d) => assert.deepEqual(collectNotes(d), []));
+  // And without notes the report is byte-identical to what it was before notes existed.
+  assert.equal(improvementsMd('/cfg', 'neutral', FILES, 'w'),
+    improvementsMd('/cfg', 'neutral', FILES, 'w', []));
+  assert.ok(!improvementsMd('/cfg', 'neutral', FILES, 'w').includes('Self-improvement notes'));
 });

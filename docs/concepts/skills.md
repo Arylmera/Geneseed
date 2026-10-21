@@ -41,7 +41,7 @@ The full list, with each description, is in the catalog.
 
 ### Skills improve themselves
 
-Every skill ends with one beat of reflection: if a step misled or a step was missing, the agent proposes the exact edit to that skill and applies it only with your assent. Most runs end with nothing to change.
+Every skill ends with one beat of reflection: if a step misled or a step was missing, the agent writes the exact correction, with your assent, into that skill's notes file, `notebook/skill-notes/<name>.md`, and reads those notes the next time the skill runs. It never edits the installed skill itself: that file is rendered from `src/`, a rebuild would overwrite the edit, and `doctor` would report it as drift. Agents work the same way through `notebook/agent-notes/`. `geneseed diff` lists the notes so you can fold them back into `src/`. Most runs end with nothing to change.
 
 ### Old names keep working
 
