@@ -8,6 +8,24 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.13.0] — 2026-10-21
+
+Minor: sharper ported skills, a wiki that keeps its history, and self-improvement notes that carry their evidence.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` to get the new skill and agent text; nothing changes on a machine until something re-emits. Notes already in `notebook/skill-notes/` and `notebook/agent-notes/` keep working as written; only new lines take the new format.
+
+### Changed
+- **Self-improvement notes carry their evidence and their scope** (#366). A note is now one line, `- [skill|general] <correction> — seen: <what happened, against what was expected> (<date>)`, and an agent's `spec-feedback:` line takes the same shape. `seen:` is what a correction is judged by when `geneseed diff` hands it back for folding into `src/`, and pruning drops the lines without one first. `general` marks a correction that would fix other skills or agents too, so it belongs in a law, doctrine or memory rather than one file. The `geneseed diff` report explains both markers. Agents now share one self-improvement footer (`src/agents/_self-improvement.md`) instead of 29 copies; rendered agents differ only by the new wording.
+- **The wiki writes history, not the present** (#365). Wiki claims are dated, code claims cite `owner/repo@commit`, and a correction supersedes a claim rather than rewriting it. A new report-only lint pass lists contradictions, orphans and overtaken claims without restructuring the wiki. Adapted from mattpocock/skills' chief-of-staff.
+- **The mattpocock ports are sharpened against upstream `5beb35b`** (#365):
+  - `parallel-agents`: each slice branches off the integration tip when it is dispatched and merges the tip back before returning, so a later slice no longer misses its blocker's merged work. A whole-branch review follows.
+  - `codebase-design`: an interface is designed twice, and an ADR is not silently reopened.
+  - `research` and the `researcher` agent: one read in the source that owns a claim stands on its own; any other claim still needs two sources.
+  - `ship`: the docs check moves before the push it gates.
+  - `plan`, `wayfinder`, `prototype`, `develop`, `debug`, `rule`, `brainstorm`, `handoff` and `skill-forge` get smaller fixes: slice sizing, ticket graduation, mocking only at boundaries, checking for an existing guardrail before proposing one, and trigger pruning.
+  - New credits on `parallel-agents`, `skill-forge`, `brainstorm` and `wiki`.
+
 ## [4.12.0] — 2026-10-21
 
 Minor: a second opt-in kit, `react`, and the setup wizard asks about each kit on its own.
