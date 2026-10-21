@@ -87,11 +87,19 @@ jobs:
       # Fixed in both so the gate does not depend on which major a runner happens to bring,
       # and so the two files do not quietly diverge on the one line that decides whether the
       # suite is considered to have run at all.
+      #
+      # CONCURRENCY 8 ON LINUX, THE DEFAULT ON WINDOWS. The default is cores - 1 (3 on these
+      # runners). On Linux the suite's slow files mostly wait on child processes and one deliberate
+      # 30 s deadline, so 8 halves the step (2.1 -> 1.1 min, #361). On Windows it bought nothing:
+      # 9.7 min at 8 against 9.1 min at the default on an unchanged main the same hour —
+      # process creation there is CPU-bound, so the extra slots only queue.
       - name: node test suites (every tests/**/*.test.mjs)
         shell: bash
+        env:
+          CONCURRENCY: ${{ runner.os == 'Windows' && '3' || '8' }}
         run: |
           log="$(mktemp)"
-          node --test --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
+          node --test --test-concurrency="$CONCURRENCY" --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
           n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
           # The floor is COMPUTED: 90% of the `test(`/`it(` calls written in the tracked test
           # files. A fixed 500 let the suite lose half itself (a directory rename) and stay green;
@@ -173,11 +181,20 @@ jobs:
   # UBUNTU **AND** WINDOWS. Every Windows defect this project has shipped — CRLF/LF, 8.3 short
   # paths, console flashes, cp1252 — was invisible to a Linux-only job, and a platform that has
   # never run the gate is a platform the gate says nothing about.
+  #
+  # SPLIT IN TWO BY `cells`, because Windows set every release's wall clock. Run in sequence on
+  # windows-latest the emit half took 3.7 min and the CLI half 4 min (measured on the 4.11.1
+  # push), the longest leg of the whole workflow; as two jobs they overlap. Linux pays ~20 s of
+  # setup for the split, and loses nothing it checks.
+  #
+  # The default `--jobs` (one per core) on purpose: `--jobs 8` made both platforms slower in
+  # #361's run (Windows `--cli` 3.9 -> 8.4 min, Linux `--idempotent` 47 -> 70 s).
   node-cells:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        cells: [emit, cli]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -189,14 +206,17 @@ jobs:
       # are on from their second build onwards; `--deletion` is the only thing that makes the
       # write-before-delete prune actually delete.
       - name: golden — idempotence
+        if: matrix.cells == 'emit'
         run: node tests/golden.mjs --idempotent
       - name: golden — the prune
+        if: matrix.cells == 'emit'
         run: node tests/golden.mjs --deletion
       # The CLI/hook matrix's WRITTEN expectations: ~320 cells, each in its own sandbox, each
       # asserting what the verb must print (and must not). Only that absolute tier — the byte
       # recordings it once also compared were retired with the Python reference. Nothing ran
       # these for a month, and 27 had gone stale meanwhile.
       - name: golden — CLI expectations
+        if: matrix.cells == 'cli'
         run: node tests/golden.mjs --cli
 
   # THE LINUX CORPUS RECORDER LIVED HERE, AND IT IS GONE ON PURPOSE.
