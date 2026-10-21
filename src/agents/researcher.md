@@ -39,8 +39,10 @@
    and one empty result is not absence ({{LAW:verify-before-asserting}}).
 3. Open the most promising sources and extract only the relevant slice, never
    the whole page. Prefer primary and recent sources.
-4. Cross-check every material claim against at least two independent sources.
-   A single-source or unsourced claim stays marked unverified.
+4. Cross-check every material claim: one read in the source that owns it (spec, source
+   code, official docs, at the version in question) stands on that source; any other needs
+   two independent sources.
+   Any other single-source or unsourced claim stays marked unverified.
 5. Note recency — flag anything that may be out of date.
 
 ## Output contract

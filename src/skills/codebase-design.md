@@ -16,7 +16,8 @@ a design talk that keeps stumbling over ambiguous terms, or another {{SKILL}} ne
    `GLOSSARY-MAP.md` means several contexts — find the one in play) and the
    area's ADRs in `docs/adr/`; use their terms verbatim in code, tests, prose.
    When the user says how something works, check the code agrees; surface any
-   contradiction.
+   contradiction. An ADR is settled: a proposal that contradicts one says so,
+   and why the friction justifies reopening it — never silently.
 2. Use this vocabulary exactly — **module** (anything with an interface and an
    implementation, any scale), **interface** (all a caller must know: types,
    invariants, ordering, error modes, performance), **depth** (behaviour per
@@ -25,7 +26,10 @@ a design talk that keeps stumbling over ambiguous terms, or another {{SKILL}} ne
    "component", "service", "API", "boundary".
 3. Aim for **deep modules** — much behaviour behind a small interface: callers
    get leverage, maintainers get locality. To find what to deepen, start from
-   `git log` hot spots — what keeps changing.
+   `git log` hot spots — what keeps changing. Design a new or reshaped interface
+   twice before choosing: 2–3 radically different shapes (in parallel subagents
+   where the host runs them), compared on depth, locality and seam placement;
+   recommend one — a hybrid if parts combine — never a menu.
 4. Seams sparingly: the interface is the test surface. Internal seams for the
    module's own tests are fine but never exposed; a test that must reach past
    the interface means the wrong shape. One adapter is a hypothesis; a second

@@ -29,7 +29,8 @@ the destination can be named but the route to it cannot; the user says
    `wayfinder:<type>` label (or a `Type:` line), which names how it resolves:
    - **research** (agent alone) — a fact the decision waits on, from docs, an API or
      the web: a subagent runs the [research {{SKILL}}](research.md). Fire every research
-     ticket in parallel as soon as the map is charted.
+     ticket in parallel as soon as the map is charted. Then stop: charting is one session's work and
+     resolves no ticket itself.
    - **prototype** (with the user) — a rough artifact to react to when "how should it
      look or behave" is the question: the [prototype {{SKILL}}](prototype.md).
    - **grilling** (with the user, the default) — an interview through the
@@ -47,7 +48,10 @@ the destination can be named but the route to it cannot; the user says
    `Status: claimed`) so concurrent sessions skip it. Resolve it as its type says — read
    the label, the body never states it — write the decision into the ticket,
    gist-and-link it on the map, close it. At most one ticket per session (research
-   tickets excepted). New questions become tickets.
+   tickets excepted). New questions become tickets; fog the answer made specifiable
+   graduates to tickets and leaves **Not yet specified**; a ticket the answer invalidates
+   is updated or closed, and one now past the destination is closed with an **Out of
+   scope** line.
 5. In everything the user reads, refer to the map and tickets **by name**,
    never by bare issue number — the id rides inside the name's link.
 6. Stop when the frontier is empty: nothing left to decide means the way is

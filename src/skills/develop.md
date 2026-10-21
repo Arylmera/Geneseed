@@ -33,7 +33,7 @@ case where the seam is only known once the change is made.
      change ({{DOCTRINE:cover-and-verify}}), then break the implementation on purpose once to
      see the test go red before trusting it.
 4. Write the minimum code that makes it pass; add nothing the test doesn't demand.
-5. Run the *affected* tests and read the output ({{LAW:verify-before-asserting}}); on failure fix the
+5. Run the *affected* tests, and the typecheck where the project has one, and read the output ({{LAW:verify-before-asserting}}); on failure fix the
    cause, never mask it ({{LAW:cure-the-cause}}). Dispatch the
    [tester {{AGENT}}](../{{DIR_AGENTS}}/tester.md) for heavier or unfamiliar coverage,
    or when the blast radius is unclear.
@@ -50,7 +50,9 @@ case where the seam is only known once the change is made.
 ## Anti-patterns — name the one you catch
 - **Implementation-coupled** — mocks an internal collaborator, tests a private method,
   or checks through a side channel (querying the database instead of the interface).
-  The tell: it breaks on a refactor that changed no behaviour.
+  The tell: it breaks on a refactor that changed no behaviour. Mock only at system
+  boundaries — external APIs, time, randomness, sometimes the database or filesystem —
+  passed in rather than built inside; never a module you control.
 - **Tautological** — the expected value is recomputed the way the code computes it, so
   the test passes by construction and can never disagree with the code.
 - **Horizontal slicing** — all the tests first, then all the code: the tests pin an

@@ -14,7 +14,8 @@
  *      install names where every import came from), and get NO licence copy — they ship the
  *      upstream's own LICENSE verbatim.
  *   6. the shipped `src/` credits exactly the retro-credit list (docs/specs/2026-10-19-retro-credits.md
- *      in the main repo): the two VENDOR.md files plus 19 adapted files, and one licence copy per
+ *      in the main repo) plus later ports: the two VENDOR.md files plus 21 adapted files —
+ *      the list's 19, then skill-forge and wiki (2026-10-21) — and one licence copy per
  *      (skill, key) among them.
  *
  * 3 and 4 run on a copy of `src/` with daydream tokens planted, and look only at the planted keys;
@@ -220,7 +221,7 @@ const RETRO_CREDITED = {
   'skills/git-history.md': ['mattpocock-skills-frozen'],
   'skills/handoff.md': [MP],
   'skills/learn-mode.md': ['vibe-wise'],
-  'skills/parallel-agents.md': [SP],
+  'skills/parallel-agents.md': [SP, MP],
   'skills/pipeline.md': [SP],
   'skills/plan.md': [SP, MP],
   'skills/prototype.md': [MP],
@@ -228,7 +229,9 @@ const RETRO_CREDITED = {
   'skills/review-response.md': [SP],
   'skills/rule.md': ['mattpocock-skills-2509'],
   'skills/ship.md': ['mattpocock-skills-2509'],
+  'skills/skill-forge.md': [MP],
   'skills/wayfinder.md': [MP],
+  'skills/wiki.md': [MP],
 };
 
 test('the shipped render credits the vendored VENDOR.md files and the retro-credit list', () => {

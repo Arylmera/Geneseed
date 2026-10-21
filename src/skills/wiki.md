@@ -2,6 +2,8 @@
 
 > {{DESC_WIKI}}
 
+{{CREDIT:mattpocock-skills:skills/in-progress/chief-of-staff/SKILL.md}}
+
 **Trigger:** a task needs the user's machine-wide knowledge base, or has produced a
 durable cross-project fact worth writing back. The knowledge base is declared in
 `geneseed-wiki.jsonc` (AGENT.md §8).
@@ -33,13 +35,18 @@ machine. Each declared wiki gives you its root `path`, its `entries`, a
    Knowledge that matters only to you belongs in {{MEMORY}}, not the wiki.
 3. Search before creating ({{DOCTRINE:search-before-creating}}): if a note on the topic
    exists, extend or correct it instead of writing a duplicate.
-4. Write the note as a citizen of the graph: wikilinks to the notes it
+4. **Write history, not the present** — a note cannot keep up with the system
+   it describes. Date every claim ("On 2026-10-13, the user chose…"); a claim
+   about code also cites the commit it held at (`owner/repo@abc1234`); never
+   "currently" or "is" without one of the two beside it. To correct a claim,
+   add the new dated one and mark the old one superseded — do not rewrite it.
+5. Write the note as a citizen of the graph: wikilinks to the notes it
    relates to (an orphan note is a lost note), frontmatter where the house
    style carries it, the wiki's own heading and naming conventions.
-5. File it where the structure says it belongs. **Not confident where that
+6. File it where the structure says it belongs. **Not confident where that
    is? Drop it in the wiki's `inbox`** for the user to file — a misfiled note
    costs more than an unfiled one.
-6. **Never write under a `protected` folder**, and never restructure the
+7. **Never write under a `protected` folder**, and never restructure the
    wiki itself — moving, renaming, or deleting notes you did not create is
    the user's call ({{LAW:deletion-is-deliberate}}).
 
@@ -48,10 +55,16 @@ knowledge the user would want across projects, capture it into the wiki via
 the steps above, then link or trim the original so there is one home for the
 truth.
 
+**Lint** (when the user asks to tidy the wiki): walk the notes you were
+pointed at and report contradictions, orphans, missing links, and claims a
+newer source or commit has overtaken. Report, do not restructure — fixes go
+through Capture, one note at a time, with the user's go.
+
 ## Done when
 - The needed knowledge was found by walking entries and wikilinks — not by
   reading the vault wholesale; and
-- anything written follows the wiki's `conventions`, links into the graph,
-  sits in the right folder (or the `inbox`), and touches nothing `protected`.
+- anything written follows the wiki's `conventions`, dates its claims, links
+  into the graph, sits in the right folder (or the `inbox`), and touches
+  nothing `protected`.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

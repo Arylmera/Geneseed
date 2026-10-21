@@ -7,6 +7,8 @@
 
 {{CREDIT:mattpocock-skills:skills/productivity/grilling/SKILL.md}}
 
+{{CREDIT:mattpocock-skills:skills/productivity/to-questionnaire/SKILL.md}}
+
 **Trigger:** a new feature, behaviour change, or project arrives without a design, or the
 user says "brainstorm", "interview me" or "grill me". Also when goal, scope or success
 criteria are unstated ("let's design this", "clarify this first", "stress-test this plan"),
@@ -27,8 +29,11 @@ the design is skipped.
    libraries) the user wants to own. Existing work decides by default
    ({{DOCTRINE:respect-conventions}}); a choice you take goes in the ledger as **your
    call**, never as agreed. Stop when each is unambiguous. Facts are yours to find (read
-   the code, dispatch a subagent), never the user's. A decision someone else owns gets a drafted
-   `questionnaire-<slug>.md` for them — ask the user only who and what they need back.
+   the code, dispatch a subagent), never the user's; a pending lookup holds back only the
+   questions that depend on it. A decision someone else owns gets a drafted
+   `questionnaire-<slug>.md` for them — ask the user only who and what they need back. Most
+   important first (async gets one pass), one idea per question with an empty answer stub
+   under it, and say "I don't know" is a useful answer.
 3. **Ledger the decisions.** Name every KEY DECISION the answers imply or leave open —
    direction chosen, trade-offs accepted, load-bearing constraints, assumptions,
    non-goals. Surface each silent assumption as a decision to ratify, not a settled
