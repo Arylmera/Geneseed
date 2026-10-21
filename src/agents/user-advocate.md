@@ -39,13 +39,4 @@ independently.)*
 - **Delivers:** the consumer's verdict, same shape as its own output contract
   above.
 
-## Self-improvement
-
-If this spec misled you — an input you needed but were not given, a boundary
-that proved wrong, a step you could not execute — end your report with one line:
-`spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
-friction. The caller weighs the feedback and, with the user's assent, writes a real
-flaw into `{{DIR_NOTEBOOK}}/agent-notes/<name>.md` — never into this rendered file,
-which a rebuild overwrites — and hands those notes to every later dispatch of
-this {{AGENT}}. It records the feedback to {{MEMORY}} only if it clears
-{{DOCTRINE:persist-insight}}'s bar — most reports carry no feedback at all.
+<!-- INCLUDE: agents/_self-improvement.md -->
