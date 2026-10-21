@@ -367,8 +367,8 @@ export function improvementsMd(target, theme, allFiles, when, notes = []) {
     `- ${edited.length} edited · ${added.length} added in deployed · `
       + `${missing.length} missing from deployed`,
     '',
-    'The deployed harness drifted from a fresh render of `src/` — typically the',
-    'self-improvement loops editing agent/skill files in place. Hand this file to',
+    'The deployed harness drifted from a fresh render of `src/` — typically',
+    'agent/skill files edited in place, by hand or by an older harness. Hand this file to',
     'an agent in the Geneseed source repo and ask it to fold the changes below',
     'back into `src/`. Diffs read source -> deployed; the expected copy was',
     'rendered in the deployed theme, so only genuine local edits appear.',
