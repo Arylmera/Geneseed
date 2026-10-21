@@ -41,7 +41,8 @@
  * a cell could not have varied the answers at all.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { main as driverMain, resolveOut } from '../build/driver.mjs';
@@ -575,26 +576,83 @@ export function cmdSetup() {
 }
 
 /**
- * The AI coding tools Geneseed installs into, as `[label, present, url]` rows in HOSTS order.
+ * The AI coding tools Geneseed installs into, as `[label, present, url, where]` rows in HOSTS
+ * order. `where` is the path found OFF the PATH (see `userInstall`), else null.
  *
- * PRESENT MEANS THE COMMAND IS ON PATH, and nothing else. The config dir looked like a second
- * signal — a desktop-only install has one and no command — but GENESEED ITSELF CREATES IT: a
- * `bob-global` emit writes `~/.bob` on a machine that never had Bob, and the first run of this
- * check reported Bob present on exactly such a machine. A wrong "ok" sends the user to an
- * install mode for a tool they cannot open; a wrong "not found" costs one line they can ignore.
+ * PRESENT MEANS THE TOOL ITSELF WAS FOUND — its command on PATH, or its program in a per-user
+ * install location — and never its config dir. That dir looked like a signal — a desktop-only
+ * install has one and no command — but GENESEED ITSELF CREATES IT: a `bob-global` emit writes
+ * `~/.bob` on a machine that never had Bob, and the first run of this check reported Bob present
+ * on exactly such a machine. A wrong "ok" sends the user to an install mode for a tool they
+ * cannot open; a wrong "not found" costs a line, and `toolsReport` lets them name the path.
  *
  * NO SPAWN, deliberately. `which` walks PATH by hand, so asking costs nothing on the CLI's
  * child_process allow-list — a `claude --version` probe would have been a third entry there to
- * learn nothing `which` does not already say. `lookup` is the seam for the test, which cannot
- * rely on what this machine happens to have installed.
+ * learn nothing `which` does not already say. `lookup` and `userLookup` are the seams for the
+ * test, which cannot rely on what this machine happens to have installed.
  */
-export function hostTools({ lookup = which } = {}) {
+export function hostTools({ lookup = which, userLookup = userInstall } = {}) {
   return [
     ['OpenCode', 'opencode', 'https://opencode.ai/docs/'],
     ['Claude Code', 'claude', 'https://code.claude.com/docs/en/setup'],
     ['IBM Bob', 'bob', 'https://bob.ibm.com/'],
     ['OpenClaude', 'openclaude', 'https://openclaude.gitlawb.com/'],
-  ].map(([label, cmd, url]) => [label, Boolean(lookup(cmd)), url]);
+  ].map(([label, cmd, url]) => {
+    if (lookup(cmd)) return [label, true, url, null];
+    const where = userLookup(cmd);
+    return [label, Boolean(where), url, where || null];
+  });
+}
+
+/**
+ * Per-host off-PATH places: a bin dir a tool's own installer uses, and a name pattern for the
+ * desktop app folder. Only Bob ships as a desktop IDE; matching `claude` against app folders
+ * would find the Claude desktop chat app, which is not Claude Code.
+ */
+const USER_BIN_DIRS = {
+  opencode: ['.opencode/bin'],
+  claude: ['.claude/local'],
+  bob: [],
+  openclaude: [],
+};
+const APP_PATTERN = { bob: /\bbob\b/i };
+
+/**
+ * Where a tool installed FOR ONE USER lives when its installer did not put it on PATH — the
+ * report of 2026-10 was IBM Bob installed under the user's own profile, which `which` never sees.
+ *
+ * Three kinds of place, each one the tool's own program, never its config dir:
+ *   * a per-user bin dir: `~/.local/bin` and `~/bin` for every tool, plus the dir its own
+ *     installer uses (`USER_BIN_DIRS`) — an executable file, through `which` and its PATHEXT;
+ *   * on Windows, `%APPDATA%\npm` (a per-user `npm i -g`) and a desktop app folder under
+ *     `%LOCALAPPDATA%\Programs` whose name matches `APP_PATTERN`;
+ *   * on macOS, a matching `.app` in `/Applications` or `~/Applications`.
+ * The first hit wins. Everything a machine could differ on is a parameter, for the test.
+ */
+export function userInstall(cmd, {
+  home = os.homedir(), env = process.env, platform = process.platform,
+  find = which, list = listDir,
+} = {}) {
+  const bins = ['.local/bin', 'bin', ...(USER_BIN_DIRS[cmd] ?? [])].map((d) => path.join(home, d));
+  if (platform === 'win32' && env.APPDATA) bins.push(path.join(env.APPDATA, 'npm'));
+  const hit = find(cmd, bins.join(path.delimiter));
+  if (hit) return hit;
+  const pattern = APP_PATTERN[cmd];
+  if (!pattern) return null;
+  const appDirs = platform === 'win32'
+    ? (env.LOCALAPPDATA ? [path.join(env.LOCALAPPDATA, 'Programs')] : [])
+    : platform === 'darwin' ? ['/Applications', path.join(home, 'Applications')] : [];
+  for (const dir of appDirs) {
+    const name = list(dir).find((n) => pattern.test(n)
+      && (platform !== 'darwin' || n.endsWith('.app')));
+    if (name) return path.join(dir, name);
+  }
+  return null;
+}
+
+/** `readdirSync`, with a missing or unreadable dir as no entries. */
+function listDir(dir) {
+  try { return readdirSync(dir); } catch { return []; }
 }
 
 /**
@@ -602,16 +660,25 @@ export function hostTools({ lookup = which } = {}) {
  * answer knowing it — and when NONE is, ask whether to stop and install one first. It never
  * installs one: on a managed machine that is IT's call, and each tool has its own installer.
  * A missing tool among several present is a line, not a question; nobody needs all four.
+ * When none is found, the user can name where theirs is before being asked to stop — the
+ * search covers PATH and the usual per-user places, not every folder an installer may pick.
  * `false` is the user choosing to stop.
  */
 export function toolsReport(tools = hostTools()) {
   printOut('AI coding tools on this machine:\n');
-  for (const [label, present, url] of tools) {
-    printOut(present ? `  ok  ${label}\n` : `  --  ${label} not on PATH — install: ${url}\n`);
+  for (const [label, present, url, where] of tools) {
+    if (!present) printOut(`  --  ${label} not found — install: ${url}\n`);
+    else printOut(where ? `  ok  ${label} (${where}, not on PATH)\n` : `  ok  ${label}\n`);
   }
   if (tools.some(([, present]) => present)) { printOut('\n'); return true; }
-  printOut('\nNone of them is installed. Install the one you use (links above), then run setup '
-    + 'again — or go on and pick the plain bundle, which any AGENT.md tool can read.\n');
+  printOut('\nNone of them was found on PATH or in the usual per-user folders.\n');
+  // Quotes stripped: a path dragged into a Windows console arrives wrapped in them.
+  const given = ask('Installed somewhere else? Path to the tool (Enter to skip)')
+    .replace(/^"(.*)"$/, '$1');
+  if (given && existsSync(given)) { printOut(`  ok  ${given}\n\n`); return true; }
+  if (given) printOut(`  --  nothing at ${given}\n`);
+  printOut('Install the one you use (links above), then run setup again — or go on and pick the '
+    + 'plain bundle, which any AGENT.md tool can read.\n');
   if (confirm('Continue without one?', false)) { printOut('\n'); return true; }
   printOut('Stopped. Run setup again once a tool is installed.\n');
   return false;

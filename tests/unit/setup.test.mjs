@@ -23,7 +23,7 @@ import { spawnSync } from 'node:child_process';
 
 import { setupBuildArgs } from '../../js/build/generate.mjs';
 import {
-  doctrineOptions, hostTools, javaMajorOk, lspPrereqs, setupSummaryLines,
+  doctrineOptions, hostTools, userInstall, javaMajorOk, lspPrereqs, setupSummaryLines,
 } from '../../js/maintain/setup.mjs';
 import { tuiEntries, detailLines } from '../../js/ui/tui.mjs';
 import { catalogLines } from '../../js/build/catalog.mjs';
@@ -299,15 +299,59 @@ test('the java major version parses on both numbering schemes', () => {
   assert.equal(javaMajorOk('no version string here'), false);
 });
 
-// A tool is present when its command is on PATH — never on its config dir alone, which a
-// Geneseed emit creates on a machine that never had the tool. The four rows come in HOSTS order,
-// and an absent tool carries the URL the wizard prints beside it.
-test('hostTools reads only the command on PATH', () => {
-  const rows = hostTools({ lookup: (cmd) => (cmd === 'claude' ? '/bin/claude' : null) });
-  assert.deepEqual(rows.map(([label, present]) => [label, present]), [
-    ['OpenCode', false], ['Claude Code', true], ['IBM Bob', false], ['OpenClaude', false],
+// A tool is present when its command is on PATH or its program sits in a per-user install
+// location — never on its config dir alone, which a Geneseed emit creates on a machine that never
+// had the tool. The four rows come in HOSTS order, an absent tool carries the URL the wizard prints
+// beside it, and a tool found off PATH carries where (null when PATH found it).
+test('hostTools reads the command on PATH, then the per-user install', () => {
+  const rows = hostTools({
+    lookup: (cmd) => (cmd === 'claude' ? '/bin/claude' : null),
+    userLookup: (cmd) => (cmd === 'bob' ? '/home/u/.local/bin/bob' : null),
+  });
+  assert.deepEqual(rows.map(([label, present, , where]) => [label, present, where]), [
+    ['OpenCode', false, null], ['Claude Code', true, null],
+    ['IBM Bob', true, '/home/u/.local/bin/bob'], ['OpenClaude', false, null],
   ]);
   assert.equal(rows[0][2], 'https://opencode.ai/docs/');
+});
+
+// The per-user places, each written out (reported 2026-10: IBM Bob installed under the user's
+// profile, unseen by PATH):
+// - every tool: `~/.local/bin` and `~/bin`, searched as a PATH — so the find gets exactly those
+//   dirs plus the tool's own installer dir (`~/.opencode/bin` for OpenCode), and on Windows the
+//   per-user npm prefix `%APPDATA%\npm`;
+// - Bob only: a desktop app folder whose name holds the word "bob" — under
+//   `%LOCALAPPDATA%\Programs` on Windows, a `.app` in `/Applications` or `~/Applications` on macOS;
+// - nothing else: no app match for Claude Code (the Claude desktop app is not it), none on Linux,
+//   and a name merely containing the letters ("bobcat-tools") is not Bob.
+test('userInstall looks in the per-user bin dirs and, for Bob, the app folders', () => {
+  const seen = [];
+  const find = (cmd, dirs) => { seen.push(dirs); return null; };
+  const none = () => [];
+  assert.equal(userInstall('opencode', { home: '/h', platform: 'linux', env: {}, find, list: none }),
+    null);
+  assert.deepEqual(seen.pop().split(path.delimiter),
+    ['/h/.local/bin', '/h/bin', '/h/.opencode/bin'].map((p) => path.join(p)));
+  userInstall('bob', { home: 'H', platform: 'win32', env: { APPDATA: 'R' }, find, list: none });
+  assert.deepEqual(seen.pop().split(path.delimiter),
+    [path.join('H', '.local/bin'), path.join('H', 'bin'), path.join('R', 'npm')]);
+  const hitBin = userInstall('bob', { home: '/h', platform: 'linux', env: {},
+    find: () => '/h/.local/bin/bob', list: none });
+  assert.equal(hitBin, '/h/.local/bin/bob');
+  const apps = { [path.join('L', 'Programs')]: ['bobcat-tools', 'IBM Bob'],
+    '/Applications': ['IBM Bob.app'], [path.join('/h', 'Applications')]: [] };
+  const list = (d) => apps[d] ?? [];
+  const nofind = () => null;
+  assert.equal(userInstall('bob', { home: 'H', platform: 'win32', env: { LOCALAPPDATA: 'L' },
+    find: nofind, list }), path.join('L', 'Programs', 'IBM Bob'));
+  assert.equal(userInstall('bob', { home: '/h', platform: 'darwin', env: {}, find: nofind, list }),
+    path.join('/Applications', 'IBM Bob.app'));
+  assert.equal(userInstall('bob', { home: '/h', platform: 'linux', env: {}, find: nofind, list }),
+    null);
+  assert.equal(userInstall('claude', { home: 'H', platform: 'win32',
+    env: { LOCALAPPDATA: 'L' }, find: nofind, list: () => ['Claude', 'AnthropicClaude'] }), null);
+  assert.equal(userInstall('bob', { home: 'H', platform: 'win32', env: { LOCALAPPDATA: 'L' },
+    find: nofind, list: () => ['bobcat-tools'] }), null);
 });
 
 test('the prereq list has one row with a bool and a hint', () => {
