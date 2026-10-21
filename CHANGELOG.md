@@ -8,8 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.11.0] — 2026-10-21
+
+Minor: the self-improvement loops write to notebook notes instead of the installed skill or agent file, and the web console gains a Kits section.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so installed skills, agents and AGENT.md carry the new self-improvement footer. Lessons the loops wrote into installed files before this release are still exported by `upgrade` into `improvements/`, as before.
+
+### Added
+- **Web console: Kits section** (#353). A top-level Kits page between Library and Loops: a list and a detail page per kit (rules, banned APIs, members linked to the Library, upstream pin and compare link, a switch per install that rebuilds through the install job). Installs → Kits shares its staging and Apply control. `GET /api/kits` now carries rules, word budget, banned APIs and credits, and the Library shows a `kit:` badge on kit members.
+
 ### Changed
-- **Self-improvement writes to a sidecar, not the skill.** The skill and agent loops used to edit the rendered file in place, which the doctor reported as stale and the next rebuild erased. They now write corrections to `notebook/skill-notes/<name>.md` and `notebook/agent-notes/<name>.md` (seed-once, agent-owned, never overwritten), and read them back before the skill runs or the agent is dispatched. `geneseed diff` lists the notes and `--out` exports them for back-porting into `src/`.
+- **Self-improvement writes to a sidecar, not the skill** (#354). The skill and agent loops used to edit the rendered file in place, which the doctor reported as stale and the next rebuild erased. They now write corrections to `notebook/skill-notes/<name>.md` and `notebook/agent-notes/<name>.md` (seed-once, agent-owned, never overwritten), and read them back before the skill runs or the agent is dispatched. `geneseed diff` lists the notes and `--out` exports them for back-porting into `src/`. AGENT.md names the notes paths, so the carrier ceilings rise by exactly that text (full 62_263, lean 39_156).
 
 ## [4.10.0] — 2026-10-20
 
