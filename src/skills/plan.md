@@ -20,10 +20,13 @@
    which the work can be verified and reviewed. Cut the steps as **vertical slices** —
    thin end-to-end pieces, each green and verifiable on its own, never one horizontal
    layer at a time — and give each a `Blocked by:` line naming the slices it waits on
-   (`none` when it can start now). Sequence a wide refactor as expand → migrate
+   (`none` when it can start now). Size each slice to finish in one fresh context. When the
+   code fights the change, the first slice is a prefactor, behaviour unchanged, that makes
+   the change easy. Sequence a wide refactor as expand → migrate
    callers in batches → contract, so every slice leaves the build green. A step records
    decisions, not code: the files, the exact signatures and the spec's values, the test
-   that proves it, and the check command. Write a body only for an algorithm those leave
+   that proves it (through an existing seam, as high as possible; a new seam is a decision,
+   named as one), and the check command. Write a body only for an algorithm those leave
    open; a plan longer than the code it describes has written the code, and "TBD",
    "handle edge cases" or "add tests" decide nothing. The file's first line names the
    task or branch, then `Spec: <path>` when a spec exists — the spec outranks the plan

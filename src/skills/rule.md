@@ -47,8 +47,10 @@ re-derived. Then take exactly one branch.
    one), and *not already covered* (not a {{LAW}}, not an existing rule — extend
    the existing rule rather than minting a twin). A *mechanical* rule — a banned
    API, an import shape, a file location — belongs in a lint, hook or CI check the
-   team shares, not in prose: propose that instead, and report a repo with no such
-   guardrail as a finding. A criterion that only matters when *judging* work goes to
+   team shares, not in prose. Read the repo's own check scripts and CI workflow first —
+   a check that exists but is unwired or silently broken is the finding, not a new one —
+   then propose the cheapest of a custom lint rule, a pre-commit hook or a CI job; a repo
+   with no such guardrail is itself a finding. A criterion that only matters when *judging* work goes to
    `REVIEW.md` through the [review-response {{SKILL}}](review-response.md), not here.
    A failed triage goes back to the
    fork, named and explained; a lean rule set is the feature, not a failure.

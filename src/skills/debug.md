@@ -28,6 +28,6 @@ faster than thrashing; do not trade it away under pressure.
 **CI branch (a red run)** → read [debug/ci.md](debug/ci.md) and follow it.
 
 ## Done when
-- The failure is reproduced by a command that went red on it, root-caused, fixed at the cause, and that command passes with no new breakage; every tagged probe is gone.
+- The failure is reproduced by a command that went red on it, root-caused, fixed at the cause, and that command passes with no new breakage; every tagged probe is gone, and the step-1 repro is deleted or kept as the regression test.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

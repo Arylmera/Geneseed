@@ -20,14 +20,16 @@ real implementation.
    state the assumption.
 2. Throwaway from day one, and marked as such: place it near the code it
    prototypes for, but name it so a casual reader sees it is not production.
-   No persistence (state lives in memory), no tests, no error handling beyond
+   No persistence (state lives in memory) and no real mutations (a variant that must
+   write hits a stub), no tests, no error handling beyond
    what makes it runnable, no abstractions ({{DOCTRINE:smallest-viable-diff}}).
 3. One command to run, using the project's existing task runner — the user
    must be able to start it without thinking.
 4. Surface the full relevant state after every action or variant switch, so
    the user sees exactly what changed.
 5. When the question is answered: fold the validated decision (and a logic
-   prototype's pure module) into the real code, record the verdict and the
+   prototype's pure module) into the real code (a winning UI variant is rewritten to production standard, never
+   promoted as-is), record the verdict and the
    question it settled (issue comment, ADR, or commit message), park the prototype on a throwaway branch, and keep the
    main branch clean of prototype code.
 

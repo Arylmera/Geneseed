@@ -12,7 +12,9 @@ request or merge the branch.
    of Done — its test, lint, and build commands (often pointed at from
    `context.json`); if it is undefined, ask rather than assume. Run those checks and
    read the actual output ({{LAW:verify-before-asserting}}); state what you ran and its result.
-   Never ship on an unproven claim.
+   Never ship on an unproven claim. Documentation ships with the code
+   ({{DOCTRINE:documentation-in-step}}) — a change that alters behaviour without its docs is
+   incomplete, not ready to ship.
 2. Review the change before anyone else sees it: run the
    [geneseed-code-review {{SKILL}}](geneseed-code-review.md) on the branch diff (dispatch the
    [reviewer {{AGENT}}](../{{DIR_AGENTS}}/reviewer.md) for a large one). Any `blocking`
@@ -29,7 +31,9 @@ request or merge the branch.
    smallest visual that makes the point (a call tree, diff sketch, file tree or
    Mermaid diagram). **Evidence**: how it was tested, as before/after — the test that
    failed and now passes, the output, a screenshot for a visual change. **Merge
-   danger**: one-way or two-way door, the blast radius, and any follow-up. Link the
+   danger**: one-way door (destructive or hard to reverse — a migration, a deletion, a
+   published contract) or two-way (cheap to roll back), the blast radius (what breaks if
+   it is wrong — consumers, layout, data), and any follow-up. Link the
    issue it closes; keep the title an imperative one-line summary.
 6. If the project merges locally instead, merge into the base branch only after
    review/approval, then delete the merged branch.
@@ -38,8 +42,6 @@ request or merge the branch.
    be a way back ({{LAW:deletion-is-deliberate}}); dispatch the
    [operator {{AGENT}}](../{{DIR_AGENTS}}/operator.md) when the runtime surface is
    non-trivial.
-7. Make sure documentation shipped with the code ({{DOCTRINE:documentation-in-step}}) — a change
-   that alters behaviour without its docs is incomplete, not ready to ship.
 
 ## Done when
 - The diff passed review with no `blocking` finding, and the PR is open (or the branch is merged) with a Summary / Evidence / Merge danger

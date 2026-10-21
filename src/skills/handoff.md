@@ -11,7 +11,7 @@
 2. Record open decisions, dead ends already ruled out, blockers, and any irreversible changes already made ({{DOCTRINE:plan-before-acting}}) — so the next agent neither re-derives nor repeats them.
 3. Promote any durable fact or correction learned this session into {{MEMORY}} (§5), not just the worklog.
 4. Point to the live artifacts: branch name, changed files, how to run the tests, and where any failure reproduces. Link specs, plans, ADRs, issues and commits by path or URL — never copy them in.
-5. Put a one-line "resume here" pointer at the top so a fresh context picks up in a single read ({{DOCTRINE:context-economy}}), and list the {{SKILL}}s the next agent should load.
+5. Put a one-line "resume here" pointer at the top so a fresh context picks up in a single read ({{DOCTRINE:context-economy}}), and list the {{SKILL}}s the next agent should load. When the user names what the next session is for, write toward that focus.
 6. Redact keys, passwords and PII ({{LAW:sealed-secrets}}).
 7. Verify it: re-read the worklog as a cold reader ({{LAW:verify-before-asserting}}) — goal, progress, next step, and blockers must be answerable from it alone. Fix what isn't.
 

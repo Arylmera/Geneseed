@@ -2,6 +2,8 @@
 
 > {{DESC_SKILL_FORGE}}
 
+{{CREDIT:mattpocock-skills:skills/productivity/writing-for-agents/SKILL.md}}
+
 **Trigger:** a task has repeated and no {{SKILL}} covers it; a {{SKILL}}'s
 notes in `{{DIR_NOTEBOOK}}/skill-notes/` hold a correction worth making; the user says "make this a
 skill", "write a skill for…", "fix the trigger of…"; or two {{SKILLS}} keep
@@ -19,9 +21,11 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
    `{{DIR_SKILLS}}/_template.md`. The purpose line says *what*; the **Trigger** line
    says *when*, in the words a user would actually say and the situations the model
    would actually meet — the emitted `description:` is purpose + trigger, and it is
-   the only text the host matches a task against. Then the numbered procedure (each
+   the only text the host matches a task against. It is loaded every turn: one phrase per
+   distinct case it catches, never synonyms of one case. Then the numbered procedure (each
    step an action with a verification), and a **Done when** that a stranger could
-   check. Keep it to one coherent domain; a "Requires:" line only for a hard external
+   check. Then cut every sentence the model would obey untold, and every restatement of
+   what a config file or `--help` already says. Keep it to one coherent domain; a "Requires:" line only for a hard external
    prerequisite. When only the user should ever open it (a teaching drill, a tool
    gated on an environment the model cannot see), put the `invocation: user` HTML
    comment on the line after the purpose blockquote — the template shows it. Never
