@@ -18,7 +18,7 @@ import { alwaysOnCost } from '../inspect/cost.mjs';
 import { installProfile } from '../build/generate.mjs';
 import { diffCollect, renderMemo } from '../inspect/diff.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
-import { CLAUDE_STYLE, HOSTS, VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
+import { VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, legacyProcessCarrierOfDir, modeOfDir,
   trustOfDir,
@@ -34,7 +34,7 @@ import { comparePaths, normcase } from '../lib/paths.mjs';
 import {
   configItems, deployed, dget, memoryItems, notebookItems, wikiItems,
 } from './catalog.mjs';
-import { stampMinute } from './state.mjs';
+import { stampMinute, viewCfg } from './state.mjs';
 import { updateStatus } from './update-check.mjs';
 
 /**
@@ -108,16 +108,9 @@ export function apiDiff(state) {
 /** The union across every global install, verbatim. */
 export const apiExcludes = () => excludesSnapshot();
 
-/**
- * The data dir an install's inventory/memory/diff is read from. Host-driven, so a new
- * nested-marker host cannot silently read the bare root.
- */
-export function viewCfg(host, scope, root) {
-  if (scope === 'project' && CLAUDE_STYLE.includes(host)) {
-    return path.join(root, HOSTS.find((h) => h.host === host).projectMarker);
-  }
-  return root;
-}
+// `viewCfg` moved to `state.mjs`, which needs it to pick a default view and cannot import
+// this module back (this one imports `stampMinute` from it).
+export { viewCfg } from './state.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

@@ -475,6 +475,14 @@ export function buildActionCmds(state, body) {
     const [, , ...rest] = installProfile(host, scope, state.root).argv;
     return actionCommands('build', { buildArgv: ['--theme', theme, ...rest] });
   }
+  // Only a GLOBAL emit has a home of its own. Any other carries no folder on this route, so the
+  // generator fell back to its default `./Harness` — and jobs run with the Geneseed checkout as
+  // cwd, so a Bob "project" install landed inside the clone (reported 2026-10), where the doctor's
+  // bundle check then read it as 178 missing files. The `deploy` action takes a chosen folder.
+  if (!emit.endsWith('-global')) {
+    return { error: `${emit} installs into a folder you choose — use Deploy with a folder, `
+      + 'not Build' };
+  }
   return actionCommands('build', {
     theme, emit, footprint: state.footprint, posture: state.posture, mode: state.mode,
     trust: state.trust,

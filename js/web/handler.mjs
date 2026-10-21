@@ -303,6 +303,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     // Build resolves its argv off the install (`buildActionCmds`); the other actions take no
     // axes and self-resolve the deployed theme downstream.
     const cmds = action === 'build' ? buildActionCmds(state, body) : actionCommands(action);
+    if (cmds && Object.hasOwn(cmds, 'error')) return sendJson(res, cmds, 400, ae);
     if (!isTruthy(cmds)) {
       return sendJson(res, { error: `unknown action ${action}` }, 404, ae);
     }

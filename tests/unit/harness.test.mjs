@@ -2240,6 +2240,21 @@ test('an absent bundle is a no-op, not a failure', () => {
   assert.deepEqual(renderedProblems(path.join(ROOT, 'does-not-exist')), []);
 });
 
+// A Claude-shaped PROJECT install (claude, bob, openclaude) is not a bundle: its tree is a root
+// carrier plus a `.bob/`-style data dir, so compared against a portable render every file reads
+// "missing" and no rebuild clears it. The console's onboarding once put a Bob project install in
+// the checkout's ./Harness (reported 2026-10: 178 such lines). So such a dir yields nothing here;
+// an OpenCode project bundle is still compared (the test below).
+test('a Bob project install in the bundle dir is not read as a missing bundle', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    generate(['--emit', 'bob', '--theme', 'neutral', '--out', out, '--root', out],
+      path.join(d, 'home'));
+    fs.writeFileSync(path.join(out, '.geneseed-emit'), 'bob\n', 'utf8');
+    assert.deepEqual(renderedProblems(out), []);
+  });
+});
+
 test('an OpenCode bundle straight out of the emitter is not drift', () => {
   // Its AGENT.md differs from a portable render BY CONSTRUCTION — the catalogue tables are
   // collapsed to a pointer and the per-row spec links are stripped — so a check that renders

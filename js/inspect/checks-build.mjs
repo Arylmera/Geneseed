@@ -10,7 +10,7 @@ import path from 'node:path';
 import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
 import { CONFIG, CREDIT_RE, makeCfg } from '../build/source.mjs';
-import { hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
 import { EMIT_HOST_SCOPE, footprintOfDir, themeFiles } from '../hosts/installs.mjs';
 import { isVendoredPath } from '../hosts/native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
@@ -217,7 +217,13 @@ export function renderedProblems(bundle) {
   else themeName = 'neutral';
   let emit;
   try { emit = readText(path.join(bundle, '.geneseed-emit')).trim(); } catch { emit = ''; }
-  const host = (EMIT_HOST_SCOPE.get(emit) ?? ['', ''])[0];
+  const [host, scope] = EMIT_HOST_SCOPE.get(emit) ?? ['', ''];
+  // A Claude-shaped PROJECT install is not a bundle: its tree is `AGENTS.md`/`CLAUDE.md` plus a
+  // `.bob/`/`.claude/`/`.openclaude/` data dir, so every rendered file reads "missing" and no
+  // rebuild can clear it. The console's onboarding once put a Bob project install exactly here
+  // (`./Harness` under the checkout, reported 2026-10: 178 such lines). Its own drift is
+  // `geneseed diff`'s and `status`'s to report, not this committed-bundle check's.
+  if (scope === 'project' && CLAUDE_STYLE.includes(host)) return [];
   let items;
   try {
     // THE FIRST CALLER IN THE PORT THAT CATCHES A REFUSAL, and that is why the stderr is
