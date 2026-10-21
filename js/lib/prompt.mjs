@@ -12,6 +12,9 @@ import { readSync } from 'node:fs';
 import { printOut } from './fs.mjs';
 import { parseIntStrict } from './text.mjs';
 
+/** A cell to `Atomics.wait` on: the synchronous pause between `readLine`'s EAGAIN retries. */
+const PAUSE = new Int32Array(new SharedArrayBuffer(4));
+
 /**
  * `_harness_setup._ask` — `input(f"{prompt}{suffix}: ").strip()`, or the default at EOF.
  *
@@ -71,14 +74,28 @@ export function promptLine(prompt) {
  * the wizard's first non-ASCII answer is what exposed it, and the corpus caught it on the
  * first run. Scanning for the terminators a byte at a time is still correct: `\n` and `\r`
  * are ASCII, and no continuation byte of a UTF-8 sequence is below 0x80.
+ *
+ * EAGAIN IS "NOTHING TYPED YET", NOT EOF. Touching `process.stdin` — even `.isTTY`, which
+ * `cmdSetup` reads first — makes libuv put a terminal fd 0 in non-blocking mode, and from then
+ * on `readSync` throws EAGAIN until a key is pressed. Caught as EOF, every prompt took its
+ * default the instant it printed: setup's "Continue without one? (y/N)" answered itself N and
+ * the install stopped before anyone could type (reported 2026-10, reproduced under a pty). So
+ * it waits 20 ms and reads again; any other error is still the end of input. `read` is the
+ * test seam.
  */
-function readLine() {
+export function readLine(read = readSync) {
   const buf = Buffer.alloc(1);
   const bytes = [];
   let eof = false;
   for (;;) {
     let n = 0;
-    try { n = readSync(0, buf, 0, 1, null); } catch { eof = true; break; }
+    try {
+      n = read(0, buf, 0, 1, null);
+    } catch (e) {
+      if (e && e.code === 'EAGAIN') { Atomics.wait(PAUSE, 0, 0, 20); continue; }
+      eof = true;
+      break;
+    }
     if (n === 0) { eof = true; break; }
     if (buf[0] === 0x0a) break;
     if (buf[0] !== 0x0d) bytes.push(buf[0]);

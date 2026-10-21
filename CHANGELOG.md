@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Setup's prompts no longer answer themselves in a real terminal.** Reading `process.stdin` puts a terminal's input in non-blocking mode, and the line reader took the resulting `EAGAIN` for end of input: "Continue without one? (y/N)" printed and answered N at once, so `./install` stopped before anyone could type, and every other wizard question silently took its default. The reader now waits for the keypress.
+- **A tool installed for one user is found.** Setup looked only on PATH, so an IBM Bob installed under the user's profile read as missing. It now also checks `~/.local/bin`, `~/bin`, each tool's own installer dir (`~/.opencode/bin`, `~/.claude/local`), the per-user npm prefix on Windows, and Bob's desktop app folder (`%LOCALAPPDATA%\Programs` on Windows, `/Applications` and `~/Applications` on macOS); a tool found there is listed with its path. When nothing is found, setup asks for the tool's path before offering to stop. The double-clickable `install.command` now waits for Enter before its window can close, as `install.cmd` already did.
+
 ### Changed
 - **Self-improvement writes to a sidecar, not the skill.** The skill and agent loops used to edit the rendered file in place, which the doctor reported as stale and the next rebuild erased. They now write corrections to `notebook/skill-notes/<name>.md` and `notebook/agent-notes/<name>.md` (seed-once, agent-owned, never overwritten), and read them back before the skill runs or the agent is dispatched. `geneseed diff` lists the notes and `--out` exports them for back-porting into `src/`.
 
