@@ -192,16 +192,16 @@ test('an upgrade re-emits an opencode-global install on its OWN footprint and ex
 });
 
 test('a pulled source that fails the doctor returns 1 and leaves no bundle', async () => {
-  // `test_doctor_fail_returns_1_no_rebuild`, and the fault is a real one the doctor really
-  // rejects — a theme missing a template key, which is the theme-parity gate — rather than a
-  // mocked `(False, "doctor_fail", …)`. ⚠ LAST, because it leaves a broken tip on the origin.
-  const themePath = path.join(OTHER, 'themes', 'neutral.json');
-  const theme = JSON.parse(fs.readFileSync(themePath, 'utf8'));
-  assert.ok('VOICE' in theme, 'neutral.json no longer has a VOICE key — this fixture is stale');
-  delete theme.VOICE;
-  fs.writeFileSync(themePath, `${JSON.stringify(theme, null, 2)}\n`);
+  // `test_doctor_fail_returns_1_no_rebuild`. The pulled tip's doctor is a STAND-IN that exits 1
+  // at once: what this arm owns is the orchestration — the exit code, and no bundle written from
+  // a rolled-back tree — and that holds for any doctor that says no. Whether the REAL doctor
+  // rejects a real fault, and the rollback lands on the exact sha with the tree restored, is
+  // `update_git.test.mjs`'s "rolled back to the exact previous commit", which keeps the full
+  // sweep. A real sweep here cost a whole `doctor --all` (and a second one in the bootstrap arm
+  // below) to re-prove it. ⚠ LAST, because it leaves the failing tip on the origin.
+  fs.writeFileSync(path.join(OTHER, 'bin', 'geneseed-cli.mjs'), 'process.exit(1);\n');
   git(OTHER, 'add', '-A');
-  git(OTHER, 'commit', '-qm', 'break theme parity');
+  git(OTHER, 'commit', '-qm', 'a doctor that always fails');
   git(OTHER, 'push', '-q');
 
   const out = freshOut('doctorfail');
@@ -216,7 +216,7 @@ test('a pulled source that fails the doctor returns 1 and leaves no bundle', asy
 });
 
 test('bootstrap exits 1 over a failed update even when the setup it hands off to succeeds', async () => {
-  // Rides on the broken tip the doctor arm above left upstream, so the update step fails again.
+  // Rides on the failing tip the doctor arm above left upstream, so the update step fails again.
   // `setup` still runs — the user asked for it — but its exit code used to become bootstrap's,
   // so a script saw 0 over an update that never happened. The real `setup` exits 1 off a
   // terminal, which would hide that, so the handoff is a stand-in that succeeds.
