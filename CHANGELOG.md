@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **A clone install puts `geneseed` on your PATH on macOS and Linux.** `./install` never linked the command, and `geneseed link` wrote it to `~/.local/bin`, which macOS zsh does not search, so `geneseed` was not found (reported 2026-10). `./install` now runs `link` when `geneseed` is not found yet, and `link` offers, in a terminal, to add the folder to your shell's startup file (`~/.zshrc`, or `~/.bashrc` / `~/.bash_profile` for bash). It appends one marked block, never twice; `geneseed unlink` removes it. Outside a terminal it prints the line to add, as before.
+
 ## [4.11.1] — 2026-10-21
 
 Patch: the web console on a machine with only IBM Bob (or any host but OpenCode): it opens on the install you have, the first-deploy form asks a per-repo mode for its folder, and the doctor stops reading a misplaced project install as a broken bundle.

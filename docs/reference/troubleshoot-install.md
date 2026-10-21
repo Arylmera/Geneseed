@@ -97,7 +97,7 @@ reports `version "21` or higher.
 .\geneseed.cmd link
 ```
 
-On Windows, `link` writes to `%LOCALAPPDATA%\Geneseed\bin` and adds it to your user PATH — only **new** terminals see it, so close and reopen yours.
+On macOS and Linux, `link` offers to add `~/.local/bin` to your shell's startup file when it is not on your PATH; accept, then open a **new** terminal. On Windows, `link` writes to `%LOCALAPPDATA%\Geneseed\bin` and adds it to your user PATH — only **new** terminals see it, so close and reopen yours.
 
 **Confirm.**
 
