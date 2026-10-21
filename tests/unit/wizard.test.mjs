@@ -36,6 +36,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
+import { readLine } from '../../js/lib/prompt.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const PROBE = path.join(ROOT, 'tests', 'fixtures', 'pure_probe.mjs');
@@ -690,4 +691,21 @@ test('the wizard still plays the animation between the build and the summary', (
     'the animation runs BEFORE the build — it is the reveal for an install that already succeeded');
   assert.ok(src.indexOf('playLine(theme, true)') < src.indexOf('setupSummaryLines'),
     'the animation runs after the summary rather than before it');
+});
+
+// EAGAIN is "nothing typed yet", not EOF (reported 2026-10): once anything touches
+// `process.stdin`, a terminal fd 0 is non-blocking and `readSync` throws EAGAIN until a key is
+// pressed. Read as EOF, setup's y/N prompt answered itself before anyone could type. So two
+// EAGAINs then `y\n` must read as `y`, and any other error is still the end of input (null).
+test('readLine waits through EAGAIN and stops on any other error', () => {
+  const reader = (script) => (fd, buf) => {
+    const step = script.shift();
+    if (step instanceof Error) throw step;
+    if (step === undefined) return 0;
+    buf[0] = step.charCodeAt(0);
+    return 1;
+  };
+  const again = () => Object.assign(new Error('EAGAIN'), { code: 'EAGAIN' });
+  assert.equal(readLine(reader([again(), again(), 'y', '\n'])), 'y');
+  assert.equal(readLine(reader([Object.assign(new Error('EOF'), { code: 'EOF' })])), null);
 });
