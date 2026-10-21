@@ -796,8 +796,8 @@ export async function upgrade(ref = null, themeArg = null) {
  * `_harness_lifecycle.cmd_upgrade` — the harness verb, which is `export_improvements()` and
  * then `upgrade()`.
  *
- * THE EXPORT RUNS FIRST AND MUST NEVER BLOCK. The self-improvement loops edit the deployed
- * harness in place and the rebuild is about to overwrite those edits, so the drift has to be
+ * THE EXPORT RUNS FIRST AND MUST NEVER BLOCK. A deployed harness can carry in-place edits (by
+ * hand, or by a harness older than the notebook notes) and the rebuild is about to overwrite them, so the drift has to be
  * captured against the PRE-refresh source. Anything it throws is a warning on stderr and the
  * upgrade continues — a failed export is a lost note, a blocked upgrade is a broken install.
  */

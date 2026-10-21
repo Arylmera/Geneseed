@@ -521,8 +521,8 @@ export function setupLines() {
     doctrines = null, excludeRules = null, excludeSkills = null, gates = {}, kits = null,
   } = sel;
   if (emit === 'opencode-global') {
-    // The build below overwrites the deployed global harness, and the self-improvement loops
-    // may have edited it in place. Preserve that drift first.
+    // The build below overwrites the deployed global harness, which may carry hand edits (or
+    // in-place edits from a harness older than the notebook notes). Preserve that drift first.
     try {
       const [ipath] = exportImprovements();
       if (ipath) {
