@@ -99,6 +99,20 @@
       "added": "2026-06-08",
       "last_verified": ""
     },
+    "agents/react-engineer": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-21",
+      "last_verified": ""
+    },
+    "agents/react-reviewer": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-21",
+      "last_verified": ""
+    },
     "agents/researcher": {
       "status": "approved",
       "version": "1.0.0",
@@ -398,6 +412,20 @@
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-09-06",
+      "last_verified": ""
+    },
+    "skills/react": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-21",
+      "last_verified": ""
+    },
+    "skills/react-testing": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-21",
       "last_verified": ""
     },
     "skills/react-view-transitions": {

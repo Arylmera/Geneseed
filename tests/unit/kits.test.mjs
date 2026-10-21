@@ -99,18 +99,19 @@ test('parseKits refuses an unknown kit with exit 2 and names every known kit', (
   assert.equal(r.msg, "argument --kits: unknown kit 'gamma' (choose from alpha, beta, or 'none')");
 });
 
-// The shipped tree has exactly one kit, `spring-boot`: no flag, `none` and an empty value all mean no
-// kits; `--kits spring-boot` selects it; any other name is refused with exit 2, naming both the
-// reserved `none` and the one real kit.
-test('the shipped tree has exactly the spring-boot kit: --kits none passes, spring-boot selects it, any other name is refused', () => {
-  assert.deepEqual([...loadKits().keys()], ['spring-boot']);
+// The shipped tree has two kits, `react` and `spring-boot`, listed sorted: no flag, `none` and an
+// empty value all mean no kits; `--kits spring-boot` selects one, `--kits react,spring-boot` both; any
+// other name is refused with exit 2, naming the real kits and the reserved `none`.
+test('the shipped tree has the react and spring-boot kits: --kits none passes, each name selects its kit, any other name is refused', () => {
+  assert.deepEqual([...loadKits().keys()], ['react', 'spring-boot']);
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--kits', 'spring-boot']).kits, ['spring-boot']);
+  assert.deepEqual(parseDriverArgs(['--emit', 'files', '--kits', 'react,spring-boot']).kits, ['react', 'spring-boot']);
   assert.deepEqual(parseDriverArgs(['--emit', 'files']).kits, []);
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--kits', 'none']).kits, []);
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--kits=']).kits, []);
   const r = refusal(() => parseDriverArgs(['--emit', 'files', '--kits', 'foo']));
   assert.equal(r.code, 2);
-  assert.equal(r.msg, "argument --kits: unknown kit 'foo' (choose from spring-boot, or 'none')");
+  assert.equal(r.msg, "argument --kits: unknown kit 'foo' (choose from react, spring-boot, or 'none')");
 });
 
 test('makeCfg carries kits as a copy, and defaults to none', () => {

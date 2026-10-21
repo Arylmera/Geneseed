@@ -55,5 +55,12 @@
     "author": "Piotr Mińkowski",
     "license": "Apache-2.0",
     "licenseFile": "licenses/piomin-spring-boot.txt"
+  },
+  "everything-claude-code": {
+    "repo": "affaan-m/everything-claude-code",
+    "commit": "90606c8315ee09cafc303515c5f33024db6b9882",
+    "author": "Affaan Mustafa",
+    "license": "MIT",
+    "licenseFile": "licenses/everything-claude-code.txt"
   }
 }

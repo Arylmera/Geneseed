@@ -26,10 +26,22 @@ The first kit is `spring-boot`, for Spring Boot 4 (Spring Framework 7, Java 21+)
 
 The kit is adapted from [piomin/claude-ai-spring-boot](https://github.com/piomin/claude-ai-spring-boot) by Piotr Mińkowski (Apache-2.0), rewritten and condensed for Boot 4. Each of its skill folders ships `LICENSE-piomin-spring-boot.txt`, and each agent carries a credit line.
 
+The second kit is `react`, for React 18 or 19 apps built with Vite, in TypeScript or JavaScript, tested with Jest and React Testing Library. It adds four members:
+
+| Member | Kind | What it is for |
+|---|---|---|
+| `react` | skill | Components, hooks, state placement, data fetching, TypeScript or JavaScript, React security; side files for Vite (config, env variables, build failures) and accessibility |
+| `react-testing` | skill | Jest and Testing Library: role queries, `userEvent`, MSW network mocks, `jest-axe`, and the Jest configuration a Vite project needs |
+| `react-engineer` | agent | Implements a React feature, or makes a broken Vite build or Jest run green |
+| `react-reviewer` | agent | Framework-aware review: hooks, state, data fetching, accessibility, React security, tests |
+
+It is adapted from [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) by Affaan Mustafa (MIT), rewritten and condensed for Vite and Jest. It has no Server Components material: a Vite app has no server render.
+
 ### Switching kits on and off
 
 ```bash
 geneseed build --emit claude-global --kits spring-boot
+geneseed build --emit claude-global --kits react,spring-boot
 geneseed build --emit claude-global --kits none
 ```
 
@@ -37,7 +49,7 @@ geneseed build --emit claude-global --kits none
 
 A build does exactly what its flags say. A plain `build` without `--kits` therefore turns off a kit the install has on. Before it does, it warns: `this install has kit <k>; this build turns it off — pass --kits <k> to keep it`.
 
-The setup wizard asks one question listing the kits, with the install's current kits as the default. It asks it only when at least one kit exists.
+The setup wizard asks one yes/no question per kit, each defaulting to whether the install has that kit on. It asks them only when at least one kit exists.
 
 ### What an install records
 

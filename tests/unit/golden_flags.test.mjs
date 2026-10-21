@@ -20,10 +20,11 @@ import { cellId, argvFor } from '../helpers/golden.mjs';
 const DOC = loadMatrix();
 
 // 14 themes x 9 emits x 2 footprints = 252, plus 11 cells on the extra axes (posture, mode,
-// trust, doctrines), 3 on the kits axis (claude and opencode with the spring-boot kit, claude with
-// `--kits none`), and 12 deletion cells (9 lean-to-full / theme-swap, 3 kit on-to-off).
+// trust, doctrines), 5 on the kits axis (claude and opencode with the spring-boot kit, claude with
+// `--kits none`, claude with both kits at once, opencode with the react kit), and 12 deletion cells
+// (9 lean-to-full / theme-swap, 3 kit on-to-off).
 test('the exported matrix is the matrix', () => {
-  assert.equal(DOC.cells.length, 266);
+  assert.equal(DOC.cells.length, 268);
   assert.equal(DOC.deletion_cells.length, 12);
 });
 
@@ -85,7 +86,8 @@ test('the matrix really exercises the kits axis, and an empty kit list is spelle
   assert.notEqual(cellId({ ...base, kits: [] }), cellId(base));
   const kit = DOC.cells.filter((c) => c.kits !== undefined);
   assert.deepEqual(kit.map(cellId).sort(), ['neutral/claude/lean/kits:none',
-    'neutral/claude/lean/kits:spring-boot', 'neutral/opencode/lean/kits:spring-boot']);
+    'neutral/claude/lean/kits:react+spring-boot', 'neutral/claude/lean/kits:spring-boot',
+    'neutral/opencode/lean/kits:react', 'neutral/opencode/lean/kits:spring-boot']);
   const del = DOC.deletion_cells.filter((c) => c.before?.kits?.length);
   assert.equal(del.length, 3, 'the kit on-to-off deletion cells are missing');
   assert.ok(del.some((c) => c.edit), 'no deletion cell edits a member before the kit goes off (R6)');
@@ -120,7 +122,7 @@ test('--cli selects this platform\'s CLI matrix, and its narrowing flags narrow 
 
 test('every narrowing flag selects fewer cells, and none selects none', () => {
   const full = selectCells(DOC, parseArgs([]));
-  assert.equal(full.length, 266);
+  assert.equal(full.length, 268);
   for (const argv of [['--quick'], ['--emits', 'claude'], ['--only', 'neutral/claude'],
     ['--limit', '5'], ['--shard', '0/4']]) {
     const got = selectCells(DOC, parseArgs(argv));

@@ -1,0 +1,18 @@
+{
+  "description": "React on Vite, in TypeScript or JavaScript, tested with Jest and Testing Library: components, hooks, state, data fetching, accessibility, build and test failures, review.",
+  "skills": ["react", "react-testing"],
+  "agents": ["react-engineer", "react-reviewer"],
+  "rules": "kits/react/rules.md",
+  "rulesWordBudget": 300,
+  "banned": ["ReactDOM.render(", "findDOMNode", "enzyme", "react-test-renderer", "@testing-library/react-hooks"],
+  "catalogue": {
+    "skills": [
+      "| [react]({{DIR_SKILLS}}/react.md) | building or changing React components, hooks, state or data fetching in a Vite app; Vite config, env variables and build failures; accessibility |",
+      "| [react-testing]({{DIR_SKILLS}}/react-testing.md) | writing or fixing React tests with Jest and Testing Library, MSW network mocks, jest-axe; making Jest run against a Vite project |"
+    ],
+    "agents": [
+      "| [react-engineer]({{DIR_AGENTS}}/react-engineer.md) | a React component, page, hook or form must be implemented, or a broken Vite build or Jest run made green |",
+      "| [react-reviewer]({{DIR_AGENTS}}/react-reviewer.md) | a React change needs a framework-aware review: hooks, state, data fetching, accessibility, React security, tests |"
+    ]
+  }
+}

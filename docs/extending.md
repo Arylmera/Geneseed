@@ -513,10 +513,9 @@ enumerates skills would miss it. `src/kits/<kit>/` holds only `rules.md`.
    to a kit member (it would dangle in an install without the kit), and a kit file that links to
    another kit's member. Links run kit → core only. A kit's links to its own members do not
    protect them from `--exclude-skills`; its link to a core skill still protects that skill.
-5. **The setup wizard.** It asks its kits question only when at least one kit exists. The shipped
-   `spring-boot` kit therefore added one answer line to the stdin strings in
-   `tests/unit/wizard.test.mjs`, and the `wizard-no-kit` job holds that the question is skipped on a
-   tree with no kit.
+5. **The setup wizard.** It asks one yes/no per kit, and only when at least one kit exists. Each
+   shipped kit therefore adds one answer line to the stdin strings in `tests/unit/wizard.test.mjs`,
+   and the `wizard-no-kit` job holds that the questions are skipped on a tree with no kit.
 6. **Golden cells**: the matrix (`tests/helpers/matrix/emit.*.json`) carries kit on for `claude` and
    `opencode`, the kit-off baseline (`kits: []`, spelled `--kits none`), and three deletion cells
    (kit on to off). One deletion cell sets `edit` (a map of sandbox path to appended text) so a member

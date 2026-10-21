@@ -40,6 +40,8 @@
   "DESC_KUBERNETES_SPECIALIST": "Inscribes and inspects the Kubernetes manifests of a Spring Boot service — probes, resources, rollout — so the cluster holds the line.",
   "DESC_DOCKER_EXPERT": "Forges and inspects the Docker image of a Spring Boot service, layered or native, sealed for deployment.",
   "DESC_DEVOPS_ENGINEER": "Tends the build and delivery pipeline of a Spring Boot service, upon whatever CI the project already keeps.",
+  "DESC_REACT_ENGINEER": "Forges a React feature in a Vite app, TypeScript or JavaScript, or makes a broken build or Jest run green, from first rite to last.",
+  "DESC_REACT_REVIEWER": "Sits in judgement of a React change with knowledge of the framework — hooks, state, data fetching, accessibility, React security, tests.",
   "DESC_PLAN": "Set down the campaign-plan before the non-trivial task; mark your progress as the battle turns.",
   "DESC_DEPENDENCIES": "Survey every dependency of the machine — outdated, corrupted, abandoned, dead weight — into a risk-ordered plan, then ascend one change at a time, the trials green between.",
   "DESC_GIT_HISTORY": "Interrogate the chronicle, touching nothing — bisect, blame, and pickaxe — or reclaim a ruined archive and rewrite it without ruin — by reflog and undo, every rite warded by a backup.",
@@ -153,6 +155,8 @@
   "DESC_SPRING_BOOT": "Raise or reshape a Spring Boot service — controllers, configuration, REST clients, error handling, observability, packaging — by the rites of Boot 4.",
   "DESC_SPRING_DATA_JPA": "Conduct Spring Data JPA and Hibernate rites — entities, repositories, queries, transactions, migrations, the N+1 heresy and fetch ills.",
   "DESC_SPRING_TESTING": "Forge and mend Spring Boot trials — slices, MockMvc, Testcontainers with service connections, mocked beans.",
+  "DESC_REACT": "Raise or reshape React components in a Vite app — hooks, state, data fetching, env and build config, accessibility.",
+  "DESC_REACT_TESTING": "Forge and mend React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

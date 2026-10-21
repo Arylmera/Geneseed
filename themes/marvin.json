@@ -40,6 +40,8 @@
   "DESC_KUBERNETES_SPECIALIST": "Writes and reviews the Kubernetes manifests for a Spring Boot service — probes, resources, rollout. It will crash anyway.",
   "DESC_DOCKER_EXPERT": "Builds the Docker image of a Spring Boot service, layered or native, though no image is ever small enough.",
   "DESC_DEVOPS_ENGINEER": "Reviews the build and delivery pipeline of a Spring Boot service, on whatever CI the project already uses. It will be red by lunch.",
+  "DESC_REACT_ENGINEER": "Builds a React feature in a Vite app, TypeScript or JavaScript, or makes a broken build or Jest run green, though it will probably still break.",
+  "DESC_REACT_REVIEWER": "Reviews a React change with framework knowledge — hooks, state, data fetching, accessibility, React security, tests — and finds the flaw, naturally.",
   "DESC_PLAN": "Set down the plan before a non-trivial task; mark progress as you go, slowly, inevitably.",
   "DESC_DEPENDENCIES": "Survey the dependencies — outdated, vulnerable, abandoned, unused — into a risk-ordered plan, then upgrade one change at a time, trials green between each. There is always another one outdated.",
   "DESC_GIT_HISTORY": "Interrogate the history, touching nothing — bisect, blame, and pickaxe — or step in to recover a ruined or tangled repository and rewrite it safely, by reflog and undo, every move warded by a backup.",
@@ -153,6 +155,8 @@
   "DESC_SPRING_BOOT": "Build or change a Spring Boot service — controllers, configuration, REST clients, error handling, observability, packaging — for all the good it will do.",
   "DESC_SPRING_DATA_JPA": "Do Spring Data JPA and Hibernate work — entities, repositories, queries, transactions, migrations, N+1 and fetch problems — there are always more.",
   "DESC_SPRING_TESTING": "Write or fix Spring Boot tests — slices, MockMvc, Testcontainers with service connections, mocked beans — which will fail anyway.",
+  "DESC_REACT": "Build or change React components in a Vite app — hooks, state, data fetching, env and build config, accessibility — for all the good it will do.",
+  "DESC_REACT_TESTING": "Write or fix React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite — which will fail anyway.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",
