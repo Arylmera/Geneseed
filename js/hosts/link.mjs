@@ -74,6 +74,7 @@
 import {
   chmodSync, existsSync, lstatSync, mkdirSync, readlinkSync, rmSync,
 } from 'node:fs';
+import { isatty } from 'node:tty';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
@@ -81,11 +82,83 @@ import os from 'node:os';
 import { ROOT } from '../build/source.mjs';
 import { readMaybe } from './installs.mjs';
 import { printOut, printErr, writeText } from '../lib/fs.mjs';
+import { confirm } from '../lib/prompt.mjs';
 import { toPlatformPath, which } from '../lib/paths.mjs';
 
 const IS_WIN = process.platform === 'win32';
 /** What `cmdUnlink` recognises a written Unix launcher by — see `isOurLauncher`. */
 const SHIM_MARKER = 'GENESEED_LINK_SHIM';
+
+/** The lines that open and close the PATH block `link` writes into a shell startup file. */
+const RC_BEGIN = '# >>> geneseed >>> (added by `geneseed link`; `geneseed unlink` removes it)';
+const RC_END = '# <<< geneseed <<<';
+
+/**
+ * The startup file to put the bin dir on PATH in, for this login shell — or null when it is
+ * not one we know how to edit (fish, csh, none), where `link` prints the line instead.
+ *
+ * zsh reads `$ZDOTDIR/.zshrc` (default `~`). bash reads `~/.bashrc` on Linux, but macOS
+ * Terminal opens LOGIN shells, which read `~/.bash_profile` and not `~/.bashrc`. Pure, for the
+ * test: nothing here may touch the real user's files.
+ */
+export function shellRcFile({
+  shell = process.env.SHELL || '', home = os.homedir(), zdotdir = process.env.ZDOTDIR,
+  platform = process.platform,
+} = {}) {
+  const name = path.basename(shell);
+  if (name === 'zsh') return path.join(zdotdir || home, '.zshrc');
+  if (name === 'bash') return path.join(home, platform === 'darwin' ? '.bash_profile' : '.bashrc');
+  return null;
+}
+
+/**
+ * `text` with the PATH block for `dir` appended, or unchanged when a block is already there.
+ *
+ * The dir goes inside double quotes with `\`, `"`, `$` and backtick escaped, so a home path
+ * holding any of them stays one literal word to the shell rather than becoming code.
+ */
+export function withPathBlock(text, dir) {
+  if (text.includes(RC_BEGIN)) return text;
+  const quoted = dir.replace(/[\\"$`]/g, (c) => `\\${c}`);
+  const sep = text === '' || text.endsWith('\n') ? '' : '\n';
+  return `${text}${sep}${RC_BEGIN}\nexport PATH="${quoted}:$PATH"\n${RC_END}\n`;
+}
+
+/** `text` without the PATH block `withPathBlock` wrote; unchanged when there is none. */
+export function withoutPathBlock(text) {
+  const start = text.indexOf(RC_BEGIN);
+  if (start < 0) return text;
+  const end = text.indexOf(RC_END, start);
+  if (end < 0) return text;
+  let stop = end + RC_END.length;
+  if (text[stop] === '\n') stop += 1;
+  return text.slice(0, start) + text.slice(stop);
+}
+
+/**
+ * Put `dir` on PATH for future shells, ASKING first — macOS zsh does not search
+ * `~/.local/bin`, so a linked `geneseed` was not found (reported 2026-10). Only in a terminal:
+ * the web console's button and every test run without one, and get the printed line instead,
+ * so no gate can edit the developer's own startup file. Returns whether it wrote.
+ */
+function offerShellPath(dir) {
+  const rc = shellRcFile();
+  if (!rc || !isatty(0)) return false;
+  const text = readMaybe(rc) ?? '';
+  if (text.includes(RC_BEGIN)) {
+    printOut(`geneseed: ${rc} already adds it — open a NEW terminal, then run 'geneseed'.\n`);
+    return true;
+  }
+  if (!confirm(`geneseed: add '${dir}' to your PATH in ${rc}?`, true)) return false;
+  try {
+    writeText(rc, withPathBlock(text, dir));
+  } catch (e) {
+    printErr(`geneseed: could not write ${rc} (${asOsError(e)})\n`);
+    return false;
+  }
+  printOut(`geneseed: added it to ${rc} — open a NEW terminal, then run 'geneseed'.\n`);
+  return true;
+}
 
 /** `_harness_lifecycle._win_bin_dir`. */
 function winBinDir() {
@@ -267,7 +340,7 @@ export function cmdLink(args) {
   printOut(`geneseed: linked ${dest} -> ${entry}\n`);
   if ((process.env.PATH || '').split(path.delimiter).includes(targetDir)) {
     printOut(`geneseed: '${targetDir}' is on PATH — run 'geneseed' from anywhere.\n`);
-  } else {
+  } else if (!offerShellPath(targetDir)) {
     printOut(`geneseed: NOTE '${targetDir}' is not on your PATH. Add it, e.g.:\n`);
     printOut(`  echo 'export PATH="${targetDir}:$PATH"' >> ~/.zshrc   # or ~/.bashrc\n`);
   }
@@ -309,6 +382,20 @@ export function cmdUnlink() {
         printOut(`geneseed: removed ${f}\n`);
         removed = true;
       } catch { /* `except OSError: pass` */ }
+    }
+  }
+  // The PATH block `link` may have written, from each startup file it could have chosen.
+  const home = os.homedir();
+  const rcs = new Set([shellRcFile({ shell: 'zsh' }), path.join(home, '.bashrc'),
+    path.join(home, '.bash_profile')]);
+  for (const rc of rcs) {
+    const text = readMaybe(rc);
+    if (text === null || withoutPathBlock(text) === text) continue;
+    try {
+      writeText(rc, withoutPathBlock(text));
+      printOut(`geneseed: removed the PATH line from ${rc}\n`);
+    } catch (e) {
+      printErr(`geneseed: could not edit ${rc} (${asOsError(e)})\n`);
     }
   }
   if (!removed) printOut('geneseed: no linked launcher found on PATH\n');

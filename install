@@ -63,9 +63,17 @@ fi
 echo
 "$NODE" "$HERE/bin/geneseed-cli.mjs" setup || { echo; echo "Install did not finish — see the lines above."; finish 1; }
 
+# Put `geneseed` on PATH unless it already is. `link` writes ~/.local/bin/geneseed and, in this
+# terminal, asks before adding that dir to the shell's startup file — macOS zsh does not search
+# it, so a fresh install had no `geneseed` command (reported 2026-10). Not fatal either way.
+if ! command -v geneseed >/dev/null 2>&1; then
+  echo
+  "$NODE" "$HERE/bin/geneseed-cli.mjs" link || echo "  !!  Could not put geneseed on PATH — ./geneseed works from this folder."
+fi
+
 echo
 read -r -p "Open the Geneseed web console now? [Y/n] " answer || answer=n
 case "$answer" in [nN]*) ;; *) "$NODE" "$HERE/bin/geneseed-cli.mjs" home ;; esac
 echo
-echo "Done. Next time, run ./geneseed from this folder (or ./geneseed link to put it on PATH)."
+echo "Done. Run ./geneseed from this folder, or geneseed from a new terminal once it is on your PATH."
 finish 0
