@@ -8,6 +8,24 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.12.0] — 2026-10-21
+
+Minor: a second opt-in kit, `react`, and the setup wizard asks about each kit on its own.
+
+### Upgrade notes
+- Nothing to rebuild unless you want the new kit. Default installs are unchanged: no kit is on. To turn it on, run `geneseed build --emit <target> --kits react` (or `--kits react,spring-boot` for both), or use **Installs → Kits** in the web console.
+
+### Added
+- **The `react` kit** (#362), for React 18 or 19 apps built with Vite, in TypeScript or JavaScript, tested with Jest and React Testing Library. Skills `react` (with side files for Vite and accessibility) and `react-testing`; agents `react-engineer` and `react-reviewer` (read-only); kit rules, and a banned-API gate that keeps `ReactDOM.render(`, `findDOMNode`, Enzyme, `react-test-renderer` and `@testing-library/react-hooks` out of kit files. Adapted from affaan-m/everything-claude-code (MIT), rewritten and condensed for Vite and Jest, with no Server Components material.
+
+### Changed
+- **The setup wizard asks one yes/no per kit** (#362). A single pick could not turn on two kits at once.
+
+### Repository
+Not in the package; how Geneseed itself is built and checked.
+- CI's golden cells run as two parallel jobs per platform, emit and CLI (#361). On Windows that leg drops from about 7 minutes in sequence to about 4. The unit suite runs at `--test-concurrency=8` on Linux and in the publish job; Windows keeps the default, where the flag bought nothing. If branch protection names the old `node-cells (<os>)` checks, they now report as `node-cells (<os>, emit)` and `node-cells (<os>, cli)`.
+- The unit suite drops three repeated full-cost runs (#363): two update-flow arms use a doctor stand-in (the real rejection and exact rollback stay in `update_git`), the packaging test counts themes in process instead of a second `doctor --all`, and `--no-deletion-gate` replays only the 67 real-loss rows. 151 s to 139 s locally, same 2012 tests.
+
 ## [4.11.2] — 2026-10-21
 
 Patch: a clone install on macOS or Linux puts the `geneseed` command on your PATH.
