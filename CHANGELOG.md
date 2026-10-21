@@ -8,8 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.11.2] — 2026-10-21
+
+Patch: a clone install on macOS or Linux puts the `geneseed` command on your PATH.
+
+### Upgrade notes
+- Nothing to rebuild. If `geneseed` is not found in a new terminal, run `./geneseed link` from your clone and accept the offer to add `~/.local/bin` to your shell's startup file.
+
 ### Fixed
-- **A clone install puts `geneseed` on your PATH on macOS and Linux.** `./install` never linked the command, and `geneseed link` wrote it to `~/.local/bin`, which macOS zsh does not search, so `geneseed` was not found (reported 2026-10). `./install` now runs `link` when `geneseed` is not found yet, and `link` offers, in a terminal, to add the folder to your shell's startup file (`~/.zshrc`, or `~/.bashrc` / `~/.bash_profile` for bash). It appends one marked block, never twice; `geneseed unlink` removes it. Outside a terminal it prints the line to add, as before.
+- **A clone install puts `geneseed` on your PATH on macOS and Linux** (#359). `./install` never linked the command, and `geneseed link` wrote it to `~/.local/bin`, which macOS zsh does not search, so `geneseed` was not found (reported 2026-10). `./install` now runs `link` when `geneseed` is not found yet, and `link` offers, in a terminal, to add the folder to your shell's startup file (`~/.zshrc`, or `~/.bashrc` / `~/.bash_profile` for bash). It appends one marked block, never twice; `geneseed unlink` removes it. Outside a terminal it prints the line to add, as before.
 
 ## [4.11.1] — 2026-10-21
 
