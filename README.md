@@ -379,6 +379,7 @@ Some skills and agents are adapted from other open-source skill collections, und
 - `superpowers` — [obra/superpowers](https://github.com/obra/superpowers) by Jesse Vincent (MIT): the core of debug, the size step and builder check of brainstorm, the plan rules of plan, the reviewer brief behind geneseed-code-review and the reviewer agent, the review-handling steps of review-response, and the ruling format of pipeline and parallel-agents.
 - `vibe-wise` — [nykooi1/vibe-wise](https://github.com/nykooi1/vibe-wise) by Noah Kim (MIT): the state file, levels and checkpoints of learn-mode.
 - `piomin-spring-boot` — [piomin/claude-ai-spring-boot](https://github.com/piomin/claude-ai-spring-boot) by Piotr Mińkowski (Apache-2.0): the Spring Boot kit's skills and agents, rewritten and condensed for Boot 4.
+- `everything-claude-code` — [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) by Affaan Mustafa (MIT): the React kit's skills and agents, rewritten and condensed for Vite and Jest.
 
 ## 📄 License
 

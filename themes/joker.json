@@ -40,6 +40,8 @@
   "DESC_KUBERNETES_SPECIALIST": "Sets the Kubernetes stage for a Spring Boot service — manifests, probes, resources, rollout — so the show runs every night.",
   "DESC_DOCKER_EXPERT": "Packs the Docker image of a Spring Boot service, layered or native, light enough to carry on stage.",
   "DESC_DEVOPS_ENGINEER": "Tunes the build and delivery pipeline of a Spring Boot service, on whatever CI the venue already has.",
+  "DESC_REACT_ENGINEER": "Writes a React feature in a Vite app, TypeScript or JavaScript, or makes a broken build or Jest run green — setup, build, punchline.",
+  "DESC_REACT_REVIEWER": "Does the pre-show check on a React change with framework smarts — hooks, state, data fetching, accessibility, React security, tests.",
   "DESC_PLAN": "Write the set before a non-trivial bit; track your progress beat by beat.",
   "DESC_DEPENDENCIES": "Audit the dependencies — outdated, exploitable and reachable, abandoned, dead weight — into a risk-ordered plan, then swap in the new material one change at a time, trials green between each.",
   "DESC_GIT_HISTORY": "Replay the tapes to learn from the act, hands off — bisect, blame, and the pickaxe — or step in to recover a botched or tangled set and rewrite the history safely, reflog and undo, behind a backup.",
@@ -153,6 +155,8 @@
   "DESC_SPRING_BOOT": "Build or change a Spring Boot service — controllers, configuration, REST clients, error handling, observability, packaging — one beat at a time.",
   "DESC_SPRING_DATA_JPA": "Work the Spring Data JPA and Hibernate material — entities, repositories, queries, transactions, migrations, N+1 and fetch bits that bomb.",
   "DESC_SPRING_TESTING": "Write or fix Spring Boot tests — slices, MockMvc, Testcontainers with service connections, mocked beans — before opening night.",
+  "DESC_REACT": "Build or change React components in a Vite app — hooks, state, data fetching, env and build config, accessibility — one beat at a time.",
+  "DESC_REACT_TESTING": "Write or fix React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite — before opening night.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

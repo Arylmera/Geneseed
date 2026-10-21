@@ -229,9 +229,11 @@ function askDoctrines(deployed = null) {
 }
 
 /**
- * The Kits question (spec A5): one pick, a kit or `none`, defaulting to what the install has on
- * (`deployed`, its `Active kits:` marker). Asked ONLY when this checkout ships a kit, so a kit-less
- * wizard reads exactly the stdin it always did (and has no kit to carry: `kitsOfDir` drops an unshipped one).
+ * The Kits questions (spec A5): one yes/no per shipped kit, each defaulting to whether the install
+ * has it on (`deployed`, its `Active kits:` marker), so holding Enter keeps the installed set. A
+ * single pick could not hold two kits at once, which is why the menu became per kit when the second
+ * kit shipped. Asked ONLY when this checkout ships a kit, so a kit-less wizard reads exactly the
+ * stdin it always did (and has no kit to carry: `kitsOfDir` drops an unshipped one).
  * Returns the kit list, or null for none (`setupBuildArgs` omits `--kits`).
  */
 export function askKits(deployed = null, kits = null) {
@@ -240,14 +242,9 @@ export function askKits(deployed = null, kits = null) {
     return null;
   }
   const on = (deployed ?? []).filter((k) => kits.has(k));
-  if (!kits.size) return null;
-  const opts = [...kits].map(([k, m]) => [k, m.description ?? '']);
-  // shortcut: one pick per run, so several deployed kits are offered as one "keep" option; ask
-  // per kit once a second kit ships.
-  if (on.length > 1) opts.push([on.join(','), 'keep the installed kits']);
-  opts.push(['none', 'no kit']);
-  const pick = askChoice('Kits', opts, on.length ? on.join(',') : 'none');
-  return pick === 'none' ? null : pick.split(',');
+  const picked = [...kits].filter(([k, m]) => askChoice(`Kit ${k} — ${m.description ?? k}`,
+    [['yes', `install the ${k} kit`], ['no', `leave ${k} out`]], on.includes(k) ? 'yes' : 'no') === 'yes');
+  return picked.length ? picked.map(([k]) => k) : null;
 }
 
 /**

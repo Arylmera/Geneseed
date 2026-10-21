@@ -1351,10 +1351,11 @@ test('GET /api/kits lists the shipped kits and each present install with its own
   withKitInstalls(({ oc, proj }) => {
     const res = apiKits(neutral());
     assert.equal(res.error, undefined);
-    assert.equal(res.kits[0].name, 'spring-boot');
-    assert.equal(res.kits[0].skills.length, 3);
-    assert.equal(res.kits[0].agents.length, 6);
-    assert.ok(res.kits[0].description);
+    assert.deepEqual(res.kits.map((k) => k.name), ['react', 'spring-boot']);
+    const spring = res.kits.find((k) => k.name === 'spring-boot');
+    assert.equal(spring.skills.length, 3);
+    assert.equal(spring.agents.length, 6);
+    assert.ok(spring.description);
     const active = res.installs.find((r) => samePath(r.path, oc));
     assert.deepEqual(active.kits, ['spring-boot']);
     assert.equal(active.editable, true);
@@ -1428,7 +1429,8 @@ test('GET /api/kits answers 200-shaped error and empty lists for a malformed man
 });
 
 // The Kits pages read rules, budget, banned list and credits straight from `/api/kits`, and the
-// Library reads `kit` off each skill/agent row. Values are those of the shipped spring-boot kit.
+// Library reads `kit` off each skill/agent row. Values are those of the shipped spring-boot and react
+// kits: each manifest's own banned list, and the one upstream its members credit.
 test('GET /api/kits carries rules, budget, banned list and resolved credits per kit', () => {
   const k = apiKits(neutral()).kits.find((x) => x.name === 'spring-boot');
   assert.match(k.rules, /^\S/);
@@ -1440,6 +1442,11 @@ test('GET /api/kits carries rules, budget, banned list and resolved credits per 
     license: 'Apache-2.0', commit: 'cf876a1041ac4692f32422261f6d67d7f12140d5',
     compareUrl: 'https://github.com/piomin/claude-ai-spring-boot/compare/'
       + 'cf876a1041ac4692f32422261f6d67d7f12140d5...HEAD' }]);
+  const r = apiKits(neutral()).kits.find((x) => x.name === 'react');
+  assert.equal(r.rulesWordBudget, 300);
+  assert.deepEqual(r.banned,
+    ['ReactDOM.render(', 'findDOMNode', 'enzyme', 'react-test-renderer', '@testing-library/react-hooks']);
+  assert.deepEqual(r.credits.map((c) => [c.key, c.license]), [['everything-claude-code', 'MIT']]);
 });
 
 test('GET /api/kits skips a credit key src/upstreams.json does not know instead of failing', async () => {
@@ -1449,7 +1456,7 @@ test('GET /api/kits skips a credit key src/upstreams.json does not know instead 
     const rules = 'x {{CREDIT:no-such-key:a.md}}';
     copyCheckout(co, { 'src/kits/spring-boot/rules.md': rules });
     const mod = await import(pathToFileURL(path.join(co, 'js/web/api.mjs')).href);
-    const k = mod.apiKits(neutral()).kits[0];
+    const k = mod.apiKits(neutral()).kits.find((x) => x.name === 'spring-boot');
     assert.equal(k.rules, rules);
     assert.deepEqual(k.credits.map((c) => c.key), ['piomin-spring-boot']);
   } finally { sb.cleanup(); }

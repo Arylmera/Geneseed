@@ -40,6 +40,8 @@
   "DESC_KUBERNETES_SPECIALIST": "Sets the pit wall for a Spring Boot service on Kubernetes — manifests, probes, resources, rollout.",
   "DESC_DOCKER_EXPERT": "Preps the Docker image of a Spring Boot service, layered or native, ready for the grid.",
   "DESC_DEVOPS_ENGINEER": "Works the pit lane of build and delivery for a Spring Boot service, on whatever CI the team already runs.",
+  "DESC_REACT_ENGINEER": "Builds a React feature in a Vite app, TypeScript or JavaScript, or makes a broken build or Jest run green — lights out and away it goes.",
+  "DESC_REACT_REVIEWER": "Runs the scrutineering on a React change with framework know-how — hooks, state, data fetching, accessibility, React security, tests.",
   "DESC_PLAN": "Plot the strategy before a non-trivial stint; call your progress lap by lap.",
   "DESC_DEPENDENCIES": "Survey every component — outdated, on recall, discontinued, dead weight — into a risk-ordered upgrade plan, then fit one change at a time, trials green between each.",
   "DESC_GIT_HISTORY": "Replay the data to find when the lap fell apart or why a line was driven — bisect, blame, the pickaxe, hands off the car — or recover a crashed session and rewrite the history safely, reflog and rebase behind a backup lap.",
@@ -153,6 +155,8 @@
   "DESC_SPRING_BOOT": "Build or change a Spring Boot service — controllers, configuration, REST clients, error handling, observability, packaging — lap after lap.",
   "DESC_SPRING_DATA_JPA": "Work the Spring Data JPA and Hibernate setup — entities, repositories, queries, transactions, migrations, N+1 and fetch problems.",
   "DESC_SPRING_TESTING": "Write or fix Spring Boot tests — slices, MockMvc, Testcontainers with service connections, mocked beans — before the lights go out.",
+  "DESC_REACT": "Build or change React components in a Vite app — hooks, state, data fetching, env and build config, accessibility — lap after lap.",
+  "DESC_REACT_TESTING": "Write or fix React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite — before the lights go out.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

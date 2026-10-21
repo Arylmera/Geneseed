@@ -1349,6 +1349,23 @@
       "footprint": "lean",
       "kits": [],
       "theme": "neutral"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "kits": [
+        "react",
+        "spring-boot"
+      ],
+      "theme": "neutral"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "kits": [
+        "react"
+      ],
+      "theme": "neutral"
     }
   ],
   "deletion_cells": [

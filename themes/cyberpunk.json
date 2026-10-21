@@ -40,6 +40,8 @@
   "DESC_KUBERNETES_SPECIALIST": "Deploys and audits the Kubernetes manifests of a Spring Boot service — probes, resources, rollout — across the grid.",
   "DESC_DOCKER_EXPERT": "Packs the Docker image of a Spring Boot service, layered or native, lean for the net.",
   "DESC_DEVOPS_ENGINEER": "Tunes the build and delivery pipeline of a Spring Boot service, on whatever CI the crew already runs.",
+  "DESC_REACT_ENGINEER": "Jacks into a Vite app and ships a React feature, TypeScript or JavaScript, or makes a broken build or Jest run green.",
+  "DESC_REACT_REVIEWER": "Scans a React change with framework-aware eyes — hooks, state, data fetching, accessibility, React security, tests.",
   "DESC_PLAN": "Map the run before a non-trivial job; track progress as it executes.",
   "DESC_DEPENDENCIES": "Scan every dependency on the rig — outdated, exploitable, abandoned, dead weight — into a risk-ordered plan, then jack in each upgrade one swap at a time, tests green between.",
   "DESC_GIT_HISTORY": "Trace the history read-only — bisect, blame, pickaxe — or recover a corrupted repo and rewrite it clean — reflog, undo, rebase behind a backup branch.",
@@ -153,6 +155,8 @@
   "DESC_SPRING_BOOT": "Build or change a Spring Boot service — controllers, configuration, REST clients, error handling, observability, packaging — and push it live.",
   "DESC_SPRING_DATA_JPA": "Run Spring Data JPA and Hibernate jobs — entities, repositories, queries, transactions, migrations, N+1 and fetch glitches.",
   "DESC_SPRING_TESTING": "Write or fix Spring Boot tests — slices, MockMvc, Testcontainers with service connections, mocked beans — before the run.",
+  "DESC_REACT": "Build or change React components in a Vite app — hooks, state, data fetching, env and build config, accessibility — and push it live.",
+  "DESC_REACT_TESTING": "Write or fix React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite — before the run.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

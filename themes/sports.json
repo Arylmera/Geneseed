@@ -40,6 +40,8 @@
   "DESC_KUBERNETES_SPECIALIST": "Draws up the Kubernetes playbook for a Spring Boot service — manifests, probes, resources, rollout.",
   "DESC_DOCKER_EXPERT": "Preps the Docker image of a Spring Boot service lean, layered or native, ready for game day.",
   "DESC_DEVOPS_ENGINEER": "Coaches the build and delivery pipeline of a Spring Boot service, on whatever CI the club already uses.",
+  "DESC_REACT_ENGINEER": "Builds a React feature in a Vite app, TypeScript or JavaScript, or makes a broken build or Jest run green, full game plan to final whistle.",
+  "DESC_REACT_REVIEWER": "Runs the game film on a React change with framework know-how — hooks, state, data fetching, accessibility, React security, tests.",
   "DESC_PLAN": "Draw the game plan before a non-trivial task; track the score as it goes.",
   "DESC_DEPENDENCIES": "Audit the roster — outdated, injured and reachable, retired, dead weight — into a risk-ordered upgrade plan, then move up one change at a time, tests green between each.",
   "DESC_GIT_HISTORY": "Go to the tape, look but don't touch, to find when the regression landed or why the code's there — bisect, blame, pickaxe — or recover a blown or messy repo and rewrite history clean, every move backed up first.",
@@ -153,6 +155,8 @@
   "DESC_SPRING_BOOT": "Build or change a Spring Boot service — controllers, configuration, REST clients, error handling, observability, packaging — play by play.",
   "DESC_SPRING_DATA_JPA": "Run the Spring Data JPA and Hibernate drills — entities, repositories, queries, transactions, migrations, N+1 and fetch problems.",
   "DESC_SPRING_TESTING": "Write or fix Spring Boot tests — slices, MockMvc, Testcontainers with service connections, mocked beans — before kickoff.",
+  "DESC_REACT": "Build or change React components in a Vite app — hooks, state, data fetching, env and build config, accessibility — play by play.",
+  "DESC_REACT_TESTING": "Write or fix React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite — before kickoff.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

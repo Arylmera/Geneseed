@@ -40,6 +40,8 @@
   "DESC_KUBERNETES_SPECIALIST": "Writes or reviews Kubernetes manifests, probes, resources and rollout for a Spring Boot service.",
   "DESC_DOCKER_EXPERT": "Writes or reviews the Dockerfile and image build, layered or native, of a Spring Boot service.",
   "DESC_DEVOPS_ENGINEER": "Reviews and improves the build and delivery pipeline of a Spring Boot service, on whatever CI the project already uses.",
+  "DESC_REACT_ENGINEER": "Implements a React feature in a Vite app, TypeScript or JavaScript, or makes a broken build or Jest run green.",
+  "DESC_REACT_REVIEWER": "Reviews a React change with framework knowledge — hooks, state, data fetching, accessibility, React security, tests.",
   "DESC_PLAN": "Write a plan to a file before executing a non-trivial task; track progress as you go.",
   "DESC_DEPENDENCIES": "Audit the dependencies — outdated, vulnerable, abandoned, unused — into a risk-ordered plan, then upgrade one change at a time with the tests green between.",
   "DESC_GIT_HISTORY": "Learn from the git history read-only — bisect, blame, pickaxe — or recover and rewrite it safely — reflog, undo, rebase behind a backup branch.",
@@ -153,6 +155,8 @@
   "DESC_SPRING_BOOT": "Build or change a Spring Boot service — controllers, configuration, REST clients, error handling, observability, packaging.",
   "DESC_SPRING_DATA_JPA": "Do Spring Data JPA and Hibernate work — entities, repositories, queries, transactions, migrations, N+1 and fetch problems.",
   "DESC_SPRING_TESTING": "Write or fix Spring Boot tests — slices, MockMvc, Testcontainers with service connections, mocking beans.",
+  "DESC_REACT": "Build or change React components in a Vite app — hooks, state, data fetching, env and build config, accessibility.",
+  "DESC_REACT_TESTING": "Write or fix React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

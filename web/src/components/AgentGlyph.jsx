@@ -249,6 +249,31 @@ export const GLYPHS = {
       <path className="ag-draw" pathLength="100" d="M32 41v6" />
     </>
   ),
+  // Builds the React feature: an atom whose orbits turn around a live nucleus.
+  'react-engineer': (
+    <>
+      <g className="ag-spin">
+        <ellipse cx="32" cy="32" rx="20" ry="8" />
+        <ellipse cx="32" cy="32" rx="20" ry="8" transform="rotate(60 32 32)" />
+        <ellipse cx="32" cy="32" rx="20" ry="8" transform="rotate(120 32 32)" />
+      </g>
+      <circle className="ag-pulse ag-f" cx="32" cy="32" r="4" />
+    </>
+  ),
+  // Reviews a React change with the framework in mind: a lens sweeping over a still atom.
+  'react-reviewer': (
+    <>
+      <g opacity=".4">
+        <ellipse cx="30" cy="30" rx="18" ry="7" />
+        <ellipse cx="30" cy="30" rx="18" ry="7" transform="rotate(60 30 30)" />
+        <ellipse cx="30" cy="30" rx="18" ry="7" transform="rotate(120 30 30)" />
+      </g>
+      <g className="ag-sweep">
+        <circle className="ag-f" cx="30" cy="30" r="8" />
+        <path d="M36 36l9 9" strokeWidth="3" />
+      </g>
+    </>
+  ),
   // Guards the long war: a sapling growing, its leaves swaying.
   steward: (
     <>

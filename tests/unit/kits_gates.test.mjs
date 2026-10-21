@@ -177,10 +177,10 @@ test('kitProblems: a manifest that does not parse is a problem, not a crash', as
   });
 });
 
-// The shipped tree has exactly one kit, `spring-boot` (nine members, a registry row each, a catalogue row
-// each), and the kit gate reports nothing on it.
-test('kitProblems: the shipped tree, which has exactly the spring-boot kit, is clean', async () => {
-  assert.deepEqual([...loadKits().keys()], ['spring-boot']);
+// The shipped tree has two kits, `react` (four members) and `spring-boot` (nine), each member with a
+// registry row and a catalogue row, none in both kits, and the kit gate reports nothing on it.
+test('kitProblems: the shipped tree, which has the react and spring-boot kits, is clean', async () => {
+  assert.deepEqual([...loadKits().keys()], ['react', 'spring-boot']);
   assert.deepEqual(kitProblems(), []);
 });
 
