@@ -72,6 +72,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 import { which } from '../../js/lib/paths.mjs';
+import { themeFiles } from '../../js/hosts/installs.mjs';
 import { TMP_ROOT } from '../helpers/sandbox.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -1033,12 +1034,13 @@ test('the installed doctor sweeps every theme the checkout does', { skip: NO_NPM
     return m ? Number(m[1]) : null;
   };
   const installed = acceptance().runs.find((r) => r.argv[0] === 'doctor');
-  const here = runEntry(ROOT, 'geneseed-cli.mjs', ['doctor', '--all'],
-    path.join(tempDir('gs-doctor-'), 'home'));
+  // The checkout's side is read IN PROCESS, not off a second `doctor --all`: with `--all` the
+  // doctor sweeps exactly `themeFiles()` (`themesToCheck` in js/inspect/doctor.mjs), so this is
+  // the same number without a full sweep — which cost ~7 s on Linux and several times that on
+  // Windows, for one integer.
   const a = themes(installed.out);
-  const b = themes(here.out);
-  assert.ok(b !== null && b > 1,
-    `the checkout's own doctor --all printed no theme count to compare against:\n${here.out.slice(-800)}`);
+  const b = themeFiles().length;
+  assert.ok(b > 1, `the checkout lists ${b} theme file(s) — nothing to compare against`);
   assert.equal(a, b,
     'the installed doctor swept a different number of themes than the checkout — `themes/` '
     + `arrived as files but not as data (install ${a}, checkout ${b})`);

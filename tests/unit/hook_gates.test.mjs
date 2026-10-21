@@ -476,14 +476,17 @@ test('git-gate --no-consent skips only the process-5 ask; Law IV still asks', ()
 // recursive scan (ops 2), a credential write (Law I) and a commit/push with consent on
 // (process 5) still ask, or still exit 2 on Bob.
 
+// Only the `stop` rows, which is what "real-loss" names: a row that already passes ARMED is
+// asserted to pass by the Law IV test above, and disarming can only take a check away. Replaying
+// it here cost two hook spawns per row (55 of the 122) to re-prove nothing.
 test('--no-deletion-gate passes every real-loss row on Claude and Bob', () => {
   const ws = makeLossWorkspace();
   try {
     let stops = 0;
-    for (const row of LOSS_ROWS) {
+    for (const row of LOSS_ROWS.filter((r) => r.stop)) {
       const cmd = rowCommand(row, ws);
       const what = `${cmd} [${row.state}]`;
-      if (row.stop) stops += 1;
+      stops += 1;
       ws.inState(row.state, () => {
         assertDefers(hookRun('git-gate', { env: ws.env, extra: ['--no-consent', '--no-deletion-gate'],
           stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: ws.repo }) }), what);
