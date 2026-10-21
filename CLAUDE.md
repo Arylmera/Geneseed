@@ -30,12 +30,13 @@ npm run typecheck
 JSDoc annotation, and `strict` is off (`tsconfig.json` says why).
 
 ```bash
-node --test --test-reporter=tap "tests/**/*.test.mjs"
+node --test --test-concurrency=8 --test-reporter=tap "tests/**/*.test.mjs"
 ```
 
 **Quote the glob** — node expands it, not the shell — and keep `--test-reporter=tap`: CI gates on
 the reported *count*, not the exit code, because `node --test` over a glob that matches nothing
-prints `# tests 0` and exits 0. A gate that fails open.
+prints `# tests 0` and exits 0. A gate that fails open. `--test-concurrency=8` because the suite
+mostly waits on child processes: the default (cores − 1) took 151 s on 4 cores, 8 took 100 s.
 
 ```bash
 node tests/shim_intact.mjs

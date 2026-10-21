@@ -171,7 +171,9 @@ jobs:
         shell: bash
         run: |
           log="$(mktemp)"
-          node --test --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
+          # `--test-concurrency=8`: the suite waits on child processes more than on the CPU, so
+          # the default (cores - 1) leaves the runner idle — see the same step in the CI workflow.
+          node --test --test-concurrency=8 --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
           n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
           # The floor is COMPUTED: 90% of the `test(`/`it(` calls written in the tracked test
           # files. A fixed 500 let the suite lose half itself (a directory rename) and stay green;
