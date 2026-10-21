@@ -90,9 +90,9 @@ jobs:
       #
       # CONCURRENCY 8 ON LINUX, THE DEFAULT ON WINDOWS. The default is cores - 1 (3 on these
       # runners). On Linux the suite's slow files mostly wait on child processes and one deliberate
-      # 30 s deadline, so 8 halves the step (2.1 -> 1.1 min, #361). On Windows the same flag
-      # nearly doubled it (5.5 -> 9.7 min): process creation there is CPU-bound, and
-      # oversubscribing a 4-core runner only makes the spawns queue.
+      # 30 s deadline, so 8 halves the step (2.1 -> 1.1 min, #361). On Windows it bought nothing:
+      # 9.7 min at 8 against 9.1 min at the default on an unchanged main the same hour —
+      # process creation there is CPU-bound, so the extra slots only queue.
       - name: node test suites (every tests/**/*.test.mjs)
         shell: bash
         env:
