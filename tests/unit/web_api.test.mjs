@@ -26,7 +26,8 @@ import {
   viewCfg, apiLoops, apiLoopsActive,
 } from '../../js/web/api.mjs';
 import { NotFound, apiCatalog, apiItem, specDesc, wikiItems } from '../../js/web/catalog.mjs';
-import { warmDoctor, webState } from '../../js/web/state.mjs';
+import { fallbackView, warmDoctor, webState } from '../../js/web/state.mjs';
+import { buildActionCmds } from '../../js/web/actions.mjs';
 import { apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE } from '../../js/web/user-files.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -3682,4 +3683,46 @@ test('the warm-up fills the doctor cache after the current turn', async () => {
   await new Promise((r) => { setImmediate(r); });
   assert.ok(st._doctor && Array.isArray(st._doctor.problems), 'the warm-up left the cache cold');
   assert.ok(Array.isArray(st._doctorRun.groups) && st._doctorRun.groups.length > 0);
+});
+
+// THE VIEW ON A MACHINE WITHOUT OPENCODE (reported 2026-10: IBM Bob only). The console opened on
+// the OpenCode global dir, found nothing deployed there and showed the onboarding form over a
+// working ~/.bob. So when the current target holds no manifest, the first ACTIVE install is
+// shown: a global before a project (even when the project comes first), a project's view being
+// its data dir (`<root>/.bob`) with the root beside it; nothing when the current target is
+// deployed, or when no install is.
+test('the console falls back to the first active install when its target is empty', () => {
+  const sb = makeSandbox();
+  const d = sb.path;
+  try {
+    const manifest = (dir) => {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, '.geneseed-manifest.json'), '{}', 'utf8');
+    };
+    const empty = path.join(d, 'opencode');
+    fs.mkdirSync(empty);
+    const bobGlobal = path.join(d, 'dot-bob');
+    const proj = path.join(d, 'repo');
+    manifest(path.join(proj, '.bob'));
+    const projRow = ['bob', 'project', proj];
+    assert.deepEqual(fallbackView(empty, [['opencode', 'global', empty], projRow]),
+      [path.join(proj, '.bob'), proj]);
+    manifest(bobGlobal);
+    assert.deepEqual(fallbackView(empty, [projRow, ['bob', 'global', bobGlobal]]),
+      [bobGlobal, bobGlobal]);
+    assert.equal(fallbackView(bobGlobal, [projRow]), null);
+    assert.equal(fallbackView(empty, [['opencode', 'global', empty]]), null);
+  } finally { sb.cleanup(); }
+});
+
+// A non-global emit through Build carried no folder, so the generator's ./Harness landed in the
+// Geneseed checkout (the job's cwd). Build now refuses it with a pointer to Deploy, and a global
+// emit still builds.
+test('Build refuses a project emit when no install of it is in view', () => {
+  const st = { theme: 'neutral', emit: 'opencode-global', target: path.join(os.tmpdir(), 'gs-none'),
+    root: path.join(os.tmpdir(), 'gs-none'), footprint: 'full', posture: 'peer', mode: 'direct',
+    trust: 'balanced' };
+  const refused = buildActionCmds(st, { theme: 'neutral', emit: 'bob' });
+  assert.match(refused.error, /^bob installs into a folder you choose/);
+  assert.ok(Array.isArray(buildActionCmds(st, { theme: 'neutral', emit: 'bob-global' })));
 });

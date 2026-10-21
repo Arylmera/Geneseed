@@ -8,6 +8,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **The web console works on a machine without OpenCode.** It always opened on the OpenCode global dir, so with only IBM Bob installed the Overview showed the first-deploy form over a working `~/.bob`, and nothing could re-point it (the harness selector hides itself below two installs). When nothing is deployed where it looks, the console now shows the first active install it finds, a global before a project, and follows a first deploy to where it landed.
+- **The first-deploy form asks a project mode for its folder.** Picking a per-repo mode (`bob`, `claude`, `opencode`, `openclaude`) sent a Build with no folder, so the files landed in `Harness/` inside the Geneseed clone, where the host never looks. The form now asks for the folder (typed or Browse…) and deploys there; Build refuses a per-repo mode it has no folder for; the portable `files` bundle is left to the CLI. To remove an install misplaced this way, run `./geneseed uninstall --target Harness --yes` in the clone, then delete `Harness/`.
+- **The doctor's committed-bundle check no longer reads a Claude, Bob or OpenClaude project install as a broken bundle.** Such a tree has a `.bob/`-style data dir, not the bundle layout, so every file read "missing" (178 lines on the reported machine) and no rebuild could clear them.
+
 ## [4.11.0] — 2026-10-21
 
 Minor: the self-improvement loops write to notebook notes instead of the installed skill or agent file, the web console gains a Kits section, and `./install` waits for your answers and finds tools installed for one user.

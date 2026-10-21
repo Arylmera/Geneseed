@@ -27,7 +27,7 @@ import { isFile, printOut } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
 import { parseIntStrict } from '../lib/text.mjs';
 import { promptLine } from '../lib/prompt.mjs';
-import { warmDoctor, webState } from './state.mjs';
+import { fallbackView, warmDoctor, webState } from './state.mjs';
 import { clearDaemon, codeStamp, openUrl, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
 import { makeHandler } from './handler.mjs';
 import { JobManager } from './jobs.mjs';
@@ -132,6 +132,12 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
     }
   }
   const state = webState(theme);
+  // The daemon record and the job file stay at the DEFAULT target, captured before the view
+  // moves: `geneseed web stop`/`status` find them through `webState(theme).target`, which never
+  // moves, and a view that followed a Bob-only install into ~/.bob would hide the record.
+  const home = state.target;
+  const fallback = fallbackView(home);
+  if (fallback) state.selectView(...fallback);
   if (!existsSync(join(state.target, GLOBAL_MANIFEST))) {
     printOut(`[web] no deployed harness at ${state.target}.\n`);
     printOut('      Run `geneseed setup` first — serving anyway (read-only UI).\n');
@@ -143,7 +149,7 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   const holder = {};
   // The console's job list survives a reload and a restart because it is a FILE on disk,
   // not held in process memory.
-  const jm = new JobManager(join(state.target, '.geneseed-web-runs.json'));
+  const jm = new JobManager(join(home, '.geneseed-web-runs.json'));
   const srv = createServer(makeHandler(state, jm, token, dist, holder));
   holder.srv = srv;
   return new Promise((done) => {
@@ -157,7 +163,7 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
       const hostPort = /** @type {import('node:net').AddressInfo} */ (srv.address()).port;
       const url = `http://127.0.0.1:${hostPort}`;
       if (daemon) {
-        writeDaemon(state.target, {
+        writeDaemon(home, {
           pid: process.pid, port: hostPort, url,
           token, theme: state.theme, started: Math.floor(Date.now() / 1000), code: startCode,
         });
@@ -177,8 +183,8 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
       });
       srv.on('close', () => {
         if (daemon) {
-          const st = readDaemon(state.target);
-          if (!st || st.pid === process.pid) clearDaemon(state.target);
+          const st = readDaemon(home);
+          if (!st || st.pid === process.pid) clearDaemon(home);
         }
         done(0);
       });
