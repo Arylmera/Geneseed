@@ -223,6 +223,12 @@ const FOOTPRINTS = ['full', 'lean'];
  * to its shortest form first; both paragraphs sit outside the LEAN blocks, so both footprints
  * pay it. Measured `files` carrier after: full 62_263, lean 39_156 — each raised by exactly the
  * overrun (62_219 -> 62_263, 39_111 -> 39_156), not rounded.
+ *
+ * BOTH RAISED 2026-10-22, for comms 4 (Simplified Technical English), a new rule (user
+ * decision: every generated agent writes its prose in ASD-STE100). Both halves were cut once
+ * to fit — the first draft cost 1_606 full and 670 lean. Measured `files` carrier before, on
+ * main at 3cbde0f: full 62_263, lean 39_156 (headroom 0 / 0). After: full 63_266, lean 39_628
+ * — each raised by exactly the overrun, not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -494,8 +500,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack, n: String(i + 1), key: idKey('DOC', m[1]) });
     });
   }
-  assert.equal(rules.length, 29,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 29 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27; comms 3 joined 2026-10-09); either the `
+  assert.equal(rules.length, 30,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 30 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27; comms 3 joined 2026-10-09; comms 4 joined 2026-10-22); either the `
     + 'declaration shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in

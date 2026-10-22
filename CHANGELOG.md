@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Doctrine comms 4, Simplified Technical English.** Every generated agent writes the prose of its replies and reports in ASD-STE100: one topic per sentence (at most 20 words in an instruction, 25 in a description), imperative steps with one action each and the condition first, the active voice, no -ing forms, no dropped articles, and one word per meaning. Code, commands, paths, identifiers and quoted output stay as they are. STE is an English standard and the ontology imposes no language, so an answer in another language keeps that language and the same sentence rules; the theme keeps its voice. It is in the toggleable comms pack, not a law, per DESIGN.md Decision 7: `--exclude-rules "comms 4"` turns it off. The carrier ceilings rise by 1 003 characters (full) and 472 (lean). Run `geneseed rebuild-all` to get it.
+
 ## [4.14.0] — 2026-10-22
 
 Minor: the React kit supports webpack projects as well as Vite.

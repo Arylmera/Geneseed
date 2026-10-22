@@ -215,6 +215,11 @@ const DOCTRINE_META = {
     'After non-trivial work, name the calls you made alone, riskiest first; never one to ask about.',
     'declare-the-judgment-calls',
   ],
+  'comms.4': [
+    'comms',
+    'Write prose in ASD-STE100: short sentences, one meaning per word, imperative steps.',
+    'simplified-technical-english',
+  ],
 }
 
 // The doctrine rows, grouped by pack in the order the server sends them (PACK_ORDER, the reading
