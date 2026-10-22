@@ -8,8 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.14.0] — 2026-10-22
+
+Minor: the React kit supports webpack projects as well as Vite.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` to get the new kit text; nothing changes on a machine until something re-emits.
+
 ### Changed
-- **The `react` kit supports webpack as well as Vite.** The `react` skill reads the bundler from `package.json` and loads its side file: the new `react/webpack.md` (config, client-side routing with `historyApiFallback` and `publicPath`, `DefinePlugin` env values, a webpack build-failure table) or `react/vite.md`. The kit rules, both agents, the Jest configuration table in `react-testing` and every theme's descriptions now name both bundlers. Run `geneseed rebuild-all` to pick it up.
+- **The `react` kit supports webpack as well as Vite** (#368). The `react` skill reads the bundler from `package.json` and loads its side file: the new `react/webpack.md` (config, client-side routing with `historyApiFallback` and `publicPath`, `DefinePlugin` env values, a webpack build-failure table) or `react/vite.md`. The kit rules, both agents, the Jest configuration table in `react-testing` and every theme's descriptions now name both bundlers.
 
 ## [4.13.0] — 2026-10-21
 
