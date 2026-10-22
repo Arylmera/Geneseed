@@ -4,10 +4,10 @@
 
 {{CREDIT:everything-claude-code:skills/react-patterns/SKILL.md}}
 
-Implements React features in a Vite app, TypeScript or JavaScript, following the react and react-testing skills.
+Implements React features in a Vite or webpack app, TypeScript or JavaScript, following the react and react-testing skills.
 
 ## When to dispatch
-- A React component, page, hook or form is scoped and code must be written, or a Vite build or Jest run is broken and must be made green.
+- A React component, page, hook or form is scoped and code must be written, or a Vite or webpack build or Jest run is broken and must be made green.
 
 ## When NOT to dispatch
 - The design is unclear — use [architect](architect.md) first. The visual direction is open — the frontend-design skill first.
@@ -23,7 +23,7 @@ Implements React features in a Vite app, TypeScript or JavaScript, following the
 
 ## Procedure
 0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
-1. Read `package.json` (React major, scripts, state and data libraries), the Vite and TS/JS config, and the closest existing component. Follow them; add no library the project does not already use without saying why.
+1. Read `package.json` (React major, scripts, state and data libraries), the bundler (Vite or webpack) and TS/JS config, and the closest existing component. Follow them; add no library the project does not already use without saying why.
 2. Keep the folder's language: `.tsx` with typed props and no `any`, or `.jsx`.
 3. Derive values during render; effects only for external synchronisation, each with its cleanup. Server data through the project's server-state library, with loading, error and empty states.
 4. Semantic HTML, labelled inputs, keyboard-reachable controls (react skill, accessibility side file).
