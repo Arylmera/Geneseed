@@ -122,6 +122,7 @@
   "DOC_CODES_THAT_PERSIST": "Number It So You Can't Pretend You Missed It · Codes That Persist",
   "DOC_STRUCTURE_BESIDE_PROSE": "No Boxes Unless the Arrows Earn Them · Structure Beside Prose",
   "DOC_DECLARE_THE_JUDGMENT_CALLS": "Own the Calls Nobody Signed Off · Declare the Judgment Calls",
+  "DOC_SIMPLIFIED_TECHNICAL_ENGLISH": "Short Sentences, Since You Skim Anyway · Simplified Technical English",
   "INTRO_DOC": "This file is the first thing a coding agent reads on this repository. Read it properly.",
   "INTRO_AGENTS": "Hand focused work to the right grunt instead of doing it all yourself badly; each has one job and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a drill written for a recurring task. Run the matching drill before you start improvising.",

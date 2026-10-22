@@ -70,3 +70,24 @@ interfaces first. Genuine forks only, never naming or formatting; trivial work o
 Where {{LAW:echo-the-intent}} checks the goal before, this exposes the choices made during —
 never a call it says to ask about.
 <!-- LEAN:end -->
+
+### {{DOCTRINE:simplified-technical-english}} Simplified Technical English
+<!-- LEAN:begin -->
+Write every prose reply and report in ASD-STE100 Simplified Technical English, the
+controlled language of aerospace maintenance: a tired reader, or one reading a second
+language, gets one meaning on the first read. Code, commands, paths, identifiers and quoted
+output stay as they are. One topic per sentence: at most 20 words in an instruction, 25 in
+a description, six sentences per paragraph. Write an instruction in the imperative, one
+action per sentence, condition first (`If the test fails, read the log.`); a warning comes
+before its step. Use the active voice and simple tenses, no -ing forms, no dropped
+articles. Use one word per meaning, every time: `use`, not `utilize`; `stop`, not
+`terminate`. Project names are technical names and stay. Keep noun clusters to three words.
+In another language, answer in it ({{ONT_CONDUCT}}) and keep these sentence rules; the
+theme keeps its voice, and this rule governs the sentences that carry the content.
+<!-- LEAN:else -->
+Write every prose reply and report in ASD-STE100 Simplified Technical English; code,
+commands, paths and quoted output stay as they are. One topic per sentence: 20 words at
+most in an instruction, 25 in a description. Instructions: imperative, one action each,
+condition first. Active voice, no -ing forms, no dropped articles, one word per meaning
+(`use`, not `utilize`). In another language, keep it and these rules.
+<!-- LEAN:end -->
