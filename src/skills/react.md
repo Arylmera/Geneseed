@@ -4,14 +4,14 @@
 
 {{CREDIT:everything-claude-code:skills/react-patterns/SKILL.md}}
 
-**Trigger:** writing or changing React components, hooks, state or data fetching in a client-rendered app built with Vite, in TypeScript (`.tsx`) or JavaScript (`.jsx`). Load it for any React task, then read the side file the task needs. Tests go to the [react-testing {{SKILL}}](react-testing.md). Visual direction (palette, type, layout) belongs to the [frontend-design {{SKILL}}](frontend-design.md); this one owns how the components are built.
+**Trigger:** writing or changing React components, hooks, state or data fetching in a client-rendered app built with Vite or webpack, in TypeScript (`.tsx`) or JavaScript (`.jsx`). Load it for any React task, then read the side file the task needs. Tests go to the [react-testing {{SKILL}}](react-testing.md). Visual direction (palette, type, layout) belongs to the [frontend-design {{SKILL}}](frontend-design.md); this one owns how the components are built.
 
-Target stack: React 18 or 19, Vite, TypeScript or JavaScript. Read `package.json` first: the React major decides which APIs exist (`use`, `useActionState`, `useOptimistic` and `ref` as a plain prop are React 19 only). No Server Components and no `"use server"`: a Vite SPA has no server render.
+Target stack: React 18 or 19, Vite or webpack, TypeScript or JavaScript. Read `package.json` first: the React major decides which APIs exist (`use`, `useActionState`, `useOptimistic` and `ref` as a plain prop are React 19 only). No Server Components and no `"use server"`: a client-rendered SPA has no server render. The bundler is the one `package.json` depends on and the `build` script calls; read its side file, never the other's.
 
 ## Working loop
-1. Read `package.json`, `vite.config.*`, `tsconfig.json` or `jsconfig.json`, and the ESLint config. Match the language of the folder you are in: a `.jsx` folder stays JavaScript unless the task is the migration.
+1. Read `package.json`, the bundler config (`vite.config.*` or `webpack.config.*`), `tsconfig.json` or `jsconfig.json`, and the ESLint config. Match the language of the folder you are in: a `.jsx` folder stays JavaScript unless the task is the migration.
 2. Find the nearest existing component that does something similar and follow its structure, styling approach and state library before adding another.
-3. Implement, then run the project's own lint, typecheck (when TypeScript) and test scripts and read the output. `vite build` does not type-check; `tsc --noEmit` is a separate step.
+3. Implement, then run the project's own lint, typecheck (when TypeScript) and test scripts and read the output. Neither `vite build` nor a transpile-only webpack loader type-checks; `tsc --noEmit` is a separate step.
 
 ## Rules of the render
 - Render is a pure function of props and state. No fetch, subscription, timer or mutation in the render body.
@@ -50,10 +50,11 @@ Measure before memoising. `React.memo`, `useMemo` and `useCallback` only when th
 - `dangerouslySetInnerHTML` only with a sanitiser (DOMPurify) at the same call site.
 - A URL from user data in `href` or `src` is checked for an `http(s):` scheme first.
 - No session token in `localStorage`; it is readable by any injected script.
-- Everything in `import.meta.env.VITE_*` is public in the bundle; never put a secret there.
+- Every env value the bundler inlines is public in the bundle (`import.meta.env.VITE_*` on Vite, `process.env.*` defined by webpack's `DefinePlugin`); never put a secret there.
 
 ## Side files
-- **Vite config, env variables, aliases, proxy, build failures** -> read [react/vite.md](react/vite.md) and follow it.
+- **Vite project: config, env variables, aliases, proxy, build failures** -> read [react/vite.md](react/vite.md) and follow it.
+- **webpack project: config, client-side routing, env variables, aliases, proxy, build failures** -> read [react/webpack.md](react/webpack.md) and follow it.
 - **Accessibility: forms, keyboard, focus, ARIA, modals** -> read [react/a11y.md](react/a11y.md) and follow it.
 
 ## Done when

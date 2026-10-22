@@ -4,7 +4,7 @@
 
 {{CREDIT:everything-claude-code:skills/react-testing/SKILL.md}}
 
-**Trigger:** writing or fixing tests for React components, hooks or pages in a Vite project tested with Jest and React Testing Library, in TypeScript or JavaScript; or getting Jest to run at all against Vite-shaped code. React-specific; core test discipline lives in the develop skill. End-to-end flows across pages belong to the project's browser tests (Playwright, Cypress), not here.
+**Trigger:** writing or fixing tests for React components, hooks or pages in a Vite or webpack project tested with Jest and React Testing Library, in TypeScript or JavaScript; or getting Jest to run at all against bundler-shaped code. React-specific; core test discipline lives in the develop skill. End-to-end flows across pages belong to the project's browser tests (Playwright, Cypress), not here.
 
 Target stack: Jest, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, MSW for network mocks, `jest-axe`.
 
@@ -44,15 +44,17 @@ One `renderWithProviders` in a test-utils file wraps the router (`MemoryRouter`)
 ## Accessibility
 `expect(await axe(container)).toHaveNoViolations()` (`jest-axe`) on every interactive component. jsdom has no layout: contrast and focus visibility need a browser.
 
-## Jest in a Vite project
-Vite and Jest resolve code differently; each gap is configured once in `jest.config.*`:
+## Jest beside the bundler
+The bundler and Jest resolve code differently; each gap is configured once in `jest.config.*`. Rows marked Vite or webpack apply only to that bundler:
 
 | Gap | Fix |
 |---|---|
 | No DOM | `testEnvironment: 'jsdom'` with `jest-environment-jsdom` installed; with MSW 2 use `jest-fixed-jsdom`, which keeps Node's `fetch` globals |
 | JSX / TS not transformed | `babel-jest` with `@babel/preset-env`, `@babel/preset-react` (`runtime: 'automatic'`), `@babel/preset-typescript`; or `ts-jest` / `@swc/jest`, whichever the project has |
-| `import.meta.env` is a syntax error | Read env in one module (`src/config/env.ts`) and replace it in tests via `moduleNameMapper` or `jest.mock`; do not scatter `import.meta.env` |
-| Path aliases (`@/...`) | Mirror Vite's `resolve.alias` in `moduleNameMapper` |
+| Vite: `import.meta.env` is a syntax error | Read env in one module (`src/config/env.ts`) and replace it in tests via `moduleNameMapper` or `jest.mock`; do not scatter `import.meta.env` |
+| Path aliases (`@/...`) | Mirror the bundler's `resolve.alias` in `moduleNameMapper` |
+| webpack: `process.env.X` is `undefined` in tests | Jest does not run `DefinePlugin`; set the values in a `setupFiles` module |
+| webpack: `require.context is not a function` | Jest has no `require.context`; import the modules explicitly, or mock the module that calls it |
 | CSS and asset imports | `identity-obj-proxy` for CSS modules, a file stub for images and SVG |
 | ESM-only package in `node_modules` | Let it through `transformIgnorePatterns: ['node_modules/(?!(pkg-a|pkg-b)/)']` |
 | `toBeInTheDocument` undefined | `import '@testing-library/jest-dom'` in a `setupFilesAfterEnv` file |

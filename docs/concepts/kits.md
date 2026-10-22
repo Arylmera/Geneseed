@@ -26,16 +26,16 @@ The first kit is `spring-boot`, for Spring Boot 4 (Spring Framework 7, Java 21+)
 
 The kit is adapted from [piomin/claude-ai-spring-boot](https://github.com/piomin/claude-ai-spring-boot) by Piotr Mińkowski (Apache-2.0), rewritten and condensed for Boot 4. Each of its skill folders ships `LICENSE-piomin-spring-boot.txt`, and each agent carries a credit line.
 
-The second kit is `react`, for React 18 or 19 apps built with Vite, in TypeScript or JavaScript, tested with Jest and React Testing Library. It adds four members:
+The second kit is `react`, for React 18 or 19 apps built with Vite or webpack, in TypeScript or JavaScript, tested with Jest and React Testing Library. It adds four members:
 
 | Member | Kind | What it is for |
 |---|---|---|
-| `react` | skill | Components, hooks, state placement, data fetching, TypeScript or JavaScript, React security; side files for Vite (config, env variables, build failures) and accessibility |
-| `react-testing` | skill | Jest and Testing Library: role queries, `userEvent`, MSW network mocks, `jest-axe`, and the Jest configuration a Vite project needs |
-| `react-engineer` | agent | Implements a React feature, or makes a broken Vite build or Jest run green |
+| `react` | skill | Components, hooks, state placement, data fetching, TypeScript or JavaScript, React security; side files for Vite and for webpack (config, client-side routing, env variables, build failures), read by whichever the project uses, and accessibility |
+| `react-testing` | skill | Jest and Testing Library: role queries, `userEvent`, MSW network mocks, `jest-axe`, and the Jest configuration a Vite or webpack project needs |
+| `react-engineer` | agent | Implements a React feature, or makes a broken Vite or webpack build or Jest run green |
 | `react-reviewer` | agent | Framework-aware review: hooks, state, data fetching, accessibility, React security, tests |
 
-It is adapted from [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) by Affaan Mustafa (MIT), rewritten and condensed for Vite and Jest. It has no Server Components material: a Vite app has no server render.
+It is adapted from [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) by Affaan Mustafa (MIT), rewritten and condensed for Vite and Jest; the webpack side file is first-party. It has no Server Components material: a client-rendered app has no server render.
 
 ### Switching kits on and off
 
