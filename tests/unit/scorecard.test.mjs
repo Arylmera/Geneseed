@@ -141,13 +141,15 @@ test("this repo's own workflows parse, with their schedules and jobs", () => {
   // The six files sorted by name; host-canary, mutate, scorecard and upstream-drift run on
   // `schedule:`, ci and publish do not. upstream-drift is one job, `drift` (weekly issue sync).
   // ci's last four jobs came with #211 (audit, pr-title), #213 (coverage) and the link check, in file order.
+  // publish gained `release-check` ahead of `publish` on 2026-10-23, when a version bump on main
+  // began to release itself: the cheap "is this version on npm yet?" job gates the expensive one.
   const configs = parseCiConfigs(ROOT);
   assert.deepEqual(configs.map((c) => [c.ciType, c.hasSchedule, c.jobs.map((j) => j.name)]), [
     ['github', false, ['validate', 'node-cells', 'package-no-python', 'web', 'audit', 'pr-title',
       'coverage', 'links']],
     ['github', true, ['canary']],
     ['github', true, ['mutate', 'stryker']],
-    ['github', false, ['publish']],
+    ['github', false, ['release-check', 'publish']],
     ['github', true, ['scorecard']],
     ['github', true, ['drift']],
   ]);

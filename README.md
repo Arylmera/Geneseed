@@ -294,7 +294,7 @@ Geneseed/
 │                         Docs pages; maintainer notes beside them (extending, design-history…);
 │                         specs/, reviews/, superpowers/ are local working docs — git-ignored
 ├── adapters/             per-host glue (opencode/, claude-code/, bob/, openclaude/)
-└── .github/workflows/    ci.yml (doctor + tests) · publish.yml (npm, OIDC, manual only)
+└── .github/workflows/    ci.yml (doctor + tests) · publish.yml (npm, OIDC, on a version bump)
 ```
 
 ## 🧪 Validate & test
@@ -304,7 +304,7 @@ node bin/geneseed-cli.mjs doctor      # every theme + parity + authoring + drift
 node --test --test-reporter=tap "tests/**/*.test.mjs"   # the suites (node expands the glob)
 ```
 
-`doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every push and PR, on both Linux and Windows. Publishing is a separate, manually-triggered workflow (`.github/workflows/publish.yml`) — see [Contributing](#-contributing).
+`doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every push and PR, on both Linux and Windows. Publishing is a separate workflow (`.github/workflows/publish.yml`) that runs when CI finishes green on `main` and releases only a version npm does not have yet — see [Contributing](#-contributing).
 
 ### AI Harness Scorecard
 
@@ -365,7 +365,7 @@ Three things that bite when you don't know them:
 
 - **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. What holds it honest is `tests/unit/cli_table.test.mjs` — change a flag here and that suite is what tells you.
 - **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
-- **Publishing is deliberate and manual.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. It runs only from Actions → publish → Run workflow, and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
+- **The version bump is the release.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. When CI finishes green on a push to `main` and the version in `harness.config.json` is not on npm yet, it publishes that version, then creates the `v<version>` tag and the GitHub release from the CHANGELOG. Actions → publish → Run workflow still works by hand (a dry run by default), and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
 
 ## 🙏 Credits
 
