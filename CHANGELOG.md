@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.17.1] — 2026-10-23
+
+Patch: the web console's Update button works on a global npm install and re-checks for updates while the page is open.
+
+### Changed
+- **The web console's Update button follows the install.** On a clone it runs `upgrade`, as before. On a global npm install it now runs `npm install -g geneseed@latest` and then the new package's `rebuild-all`, where it used to fail with "not a git checkout". On any other copy (an npx cache, a project's `node_modules`, an unzipped folder) it shows the command to run instead of a button. A clone also says whether there is anything to pull ("3 commits to pull", "up to date") from a daily background `git fetch`. An Overview page left open asks again every hour and when its tab comes back into view, so it shows a new release within a day.
+
 ## [4.17.0] — 2026-10-23
 
 Minor: doctrine comms 5 Mark the Ask; a version bump on main now releases itself; two Bob fixes.
@@ -20,8 +27,6 @@ Minor: doctrine comms 5 Mark the Ask; a version bump on main now releases itself
 
 ### Changed
 - **The version bump is the release.** `publish.yml` now also runs when CI finishes green on a push to `main`. If the version in `harness.config.json` is not on npm yet, it re-runs its gates against the commit CI tested, publishes it, and creates the `v<version>` tag and the GitHub release from that version's CHANGELOG section; otherwise it stops after one cheap check. A PR's CI run, a red one or a fork's never publishes. The manual dispatch stays, still a dry run by default.
-
-- **The web console's Update button follows the install.** On a clone it runs `upgrade`, as before. On a global npm install it now runs `npm install -g geneseed@latest` and then the new package's `rebuild-all`, where it used to fail with "not a git checkout". On any other copy (an npx cache, a project's `node_modules`, an unzipped folder) it shows the command to run instead of a button. A clone also says whether there is anything to pull ("3 commits to pull", "up to date") from a daily background `git fetch`. An Overview page left open asks again every hour and when its tab comes back into view, so it shows a new release within a day.
 
 ### Fixed
 - Bob: a gate block no longer promises a confirmation Bob cannot give. Bob has no ask tier, so "Confirm this specific command" sent the model round the gate (a retry with `-Confirm:$false`, then `git clean`) and finally to "disable the Geneseed hook". Every Bob block now says that nothing in the chat lifts it, and that the user can act outside Bob. Claude's wording is unchanged.
