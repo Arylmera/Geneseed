@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.15.1] — 2026-10-23
+
+Patch: two host fixes. The first npm release since 4.14.0, so it also carries 4.15.0's comms 4 doctrine.
+
+### Upgrade notes
+- Run `geneseed rebuild-all`; nothing changes on a machine until something re-emits.
+
 ### Fixed
 - OpenCode 1.x: the guard and learn plugins no longer write `[geneseed-guard] …` / `[geneseed-learn] …` lines in red over the TUI input box. Their messages now go to OpenCode's own log (`client.app.log`, service `geneseed-guard` / `geneseed-learn`). OpenCode 2 and a refused log call still use stderr. The workflow plugin's one-line load banner stays on stderr.
 - IBM Bob: the first reply now starts with the theme's readiness line. Both Bob carriers (global `rules/geneseed.md`, the project's `AGENTS.md` block) open with a short first-reply override; without it, Bob's own greeting won. A bare "hi" still gets Bob's fixed welcome. Run `geneseed rebuild-all` to pick it up.
