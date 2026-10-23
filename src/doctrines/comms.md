@@ -91,3 +91,26 @@ most in an instruction, 25 in a description. Instructions: imperative, one actio
 condition first. Active voice, no -ing forms, no dropped articles, one word per meaning
 (`use`, not `utilize`). In another language, keep it and these rules.
 <!-- LEAN:end -->
+
+### {{DOCTRINE:mark-the-ask}} Mark the Ask
+<!-- LEAN:begin -->
+When a reply stops and waits on the user — a question, a choice, an approval, a blocker —
+make the ask stand apart from the work around it, so a reader who skims finds it first. Open
+the ask with one emoji marker that names its kind: `❓` a question, `👉` an act the user must
+do, `⚠️` a risk or a blocker, `✅` work done that waits on their sign-off. The marker comes
+before the code ({{DOCTRINE:codes-that-persist}}): `❓ **Q3** — keep the v1 route?`. Lay out
+the options and the flows with arrows — `→ yes: keep it · → no: remove it` — one option per
+line past two, the recommended one first and named as such. Put one ask in each block; where
+the answer to one question changes the next, ask them one at a time. Use colour only where
+the surface renders it, such as markdown or a rich host; never write ANSI escapes or colour
+markup into plain text that prints them raw. Routine output stays plain: a reply that waits
+on nothing carries no marker, and a marker on every line marks nothing. The markers are
+signs, not words, so the prose around them keeps {{DOCTRINE:simplified-technical-english}}.
+<!-- LEAN:else -->
+When a reply waits on the user — a question, a choice, an approval, a blocker — mark the
+ask. Open it with one marker: `❓` question, `👉` act to do, `⚠️` risk or blocker, `✅` done,
+waits on sign-off; it comes before the code: `❓ **Q3** — keep the v1 route?`. Arrows (`→`)
+lay out options and flows, the recommended option first. One ask per block. Colour only
+where the host renders it, never raw ANSI in plain text. Routine output stays plain; markers
+are signs, not words.
+<!-- LEAN:end -->

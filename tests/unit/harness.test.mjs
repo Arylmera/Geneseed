@@ -1459,7 +1459,8 @@ test('every doctrine rule carries a DOCTRINE_META principle', () => {
   // leaves the total alone, and comms 2 (structure beside prose) is new.
   // 29 since comms 3 (declare the judgment calls) was appended on 2026-10-09.
   // 30 since comms 4 (Simplified Technical English) was appended on 2026-10-22.
-  assert.equal(addrs.length, 30, `${addrs.length} rules parsed — expected 30`);
+  // 31 since comms 5 (mark the ask) was appended on 2026-10-23.
+  assert.equal(addrs.length, 31, `${addrs.length} rules parsed — expected 31`);
   assert.deepEqual(doctrineMetaProblems(addrs, doctrineRules().map((r) => r.id)), []);
 });
 

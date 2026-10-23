@@ -235,6 +235,11 @@ const FOOTPRINTS = ['full', 'lean'];
  * lost to the host's "when in doubt, don't spawn", and foreman never delegated. Trimmed from 86
  * to 37 chars first; the table sits outside the LEAN blocks, so both footprints pay it. After:
  * full 63_299, lean 39_661 — each raised by exactly the overrun (33), not rounded.
+ *
+ * BOTH RAISED 2026-10-23, for comms 5 (mark the ask), a new rule (user decision: an ask that
+ * waits on the user carries an emoji marker and arrows, so it stands apart from the work).
+ * Measured `files` carrier before: full 63_299, lean 39_661 (headroom 0 / 0). After: full
+ * 64_413, lean 40_173 — each raised by exactly the overrun (1_114 / 512), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -506,8 +511,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack, n: String(i + 1), key: idKey('DOC', m[1]) });
     });
   }
-  assert.equal(rules.length, 30,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 30 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27; comms 3 joined 2026-10-09; comms 4 joined 2026-10-22); either the `
+  assert.equal(rules.length, 31,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 31 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27; comms 3 joined 2026-10-09; comms 4 joined 2026-10-22; comms 5 joined 2026-10-23); either the `
     + 'declaration shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in
