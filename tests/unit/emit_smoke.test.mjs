@@ -229,6 +229,12 @@ const FOOTPRINTS = ['full', 'lean'];
  * to fit — the first draft cost 1_606 full and 670 lean. Measured `files` carrier before, on
  * main at 3cbde0f: full 62_263, lean 39_156 (headroom 0 / 0). After: full 63_266, lean 39_628
  * — each raised by exactly the overrun, not rounded.
+ *
+ * BOTH RAISED 2026-10-23, for the mode precedence row (user decision: the mode binds how work
+ * runs, so it leaves the "inform only" row of PROFILE/posture/theme). A mode that only informed
+ * lost to the host's "when in doubt, don't spawn", and foreman never delegated. Trimmed from 86
+ * to 37 chars first; the table sits outside the LEAN blocks, so both footprints pay it. After:
+ * full 63_299, lean 39_661 — each raised by exactly the overrun (33), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.

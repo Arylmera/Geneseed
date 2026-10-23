@@ -357,7 +357,7 @@ export async function statusDaemon(theme = null, port = null) {
  * `rebuild-all` when the running one is stale. EXCEPT inside a web job (`GENESEED_WEB_JOB`,
  * set by `js/web/jobs.mjs`): restarting here would kill the process tracking that very job,
  * leaving the console stuck on 'running'; the server restarts itself after an update job, and
- * shows its stale banner otherwise. `onlyIfStale` is `rebuild-all`'s: after an `upgrade`
+ * after a rebuild-all job when it is stale (`js/web/handler.mjs`). `onlyIfStale` is `rebuild-all`'s: after an `upgrade`
  * (which bounces, then runs `rebuild-all`) the console is current, and bouncing it again
  * would drop the open tab for nothing. Never throws — no rebuild fails over a console.
  */
@@ -368,7 +368,7 @@ export async function bounceDaemonIfRunning(theme, log, { onlyIfStale = false } 
   }
   if (process.env.GENESEED_WEB_JOB) {
     log(onlyIfStale
-      ? '[geneseed] the web console is running old code — use its Restart banner.'
+      ? '[geneseed] the web console is running old code — it restarts itself after this job.'
       : '[geneseed] web daemon will restart itself after this job to load the new code.');
     return;
   }
