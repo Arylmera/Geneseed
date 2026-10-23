@@ -34,7 +34,23 @@ geneseed upgrade imperial     # the same, switching the theme
 
 A dirty working tree, or a folder that is not a git clone, is reported rather than force-updated. `update` and `sync-self` are aliases of `upgrade`. `bootstrap` does the same and then opens the setup wizard (`--no-setup` skips the wizard).
 
-In the web console, the **Update** button on the Overview runs `upgrade`. On a clone it is always there, also when the release check cannot reach npm, because `main` moves between releases. When the update is done, the console restarts and the page reloads. If you ran `git pull` yourself, the Overview shows a banner that the console runs old code. Click **Rebuild** on an install that is behind: the console restarts after the rebuild and reloads the page. If no install is behind, click **Restart** in the banner.
+## The Update button in the web console
+
+The **Update** button on the Overview picks its route from how this copy of Geneseed is installed:
+
+| Install | What **Update** runs | When the button shows |
+|---|---|---|
+| A clone (or a worktree) | `geneseed upgrade` | Always, because `main` moves between releases. |
+| A global npm install (`npm root -g`/geneseed) | `npm install -g geneseed@latest`, then `geneseed rebuild-all` from the new package | When npm has a newer release. |
+| Anything else (an npx cache, a project's `node_modules`, an unzipped copy) | Nothing. The Overview shows the command to run instead. | Never. |
+
+On a clone, the Overview also says whether there is anything to pull. Once a day the console runs `git fetch` in the background and counts the commits upstream has that the clone does not: "3 commits to pull", or "up to date". The fetch has the same timeout as `upgrade` (`GENESEED_NET_TIMEOUT`, 120 s by default). If the fetch fails, the Overview shows the release check instead, and the button stays. `GENESEED_NO_UPDATE_CHECK` turns off both the npm check and the fetch.
+
+The console asks npm for the latest release once a day. An Overview page that stays open asks the console again every hour, and each time you come back to its tab, so it shows a new release within a day.
+
+The npm route never uses `sudo` and never retries. If npm refuses (no permission on the global folder, a proxy, a private registry), the job log shows npm's own output. Fix the cause, or run the two commands yourself.
+
+When the update is done, the console restarts and the page reloads. If you ran `git pull` yourself, the Overview shows a banner that the console runs old code. Click **Rebuild** on an install that is behind: the console restarts after the rebuild and reloads the page. If no install is behind, click **Restart** in the banner.
 
 ## What an upgrade keeps
 

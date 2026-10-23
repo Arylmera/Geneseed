@@ -33,8 +33,10 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import fs from 'node:fs';
+
 import {
-  INLINE_ACTIONS, PORTED_ACTIONS, actionCommands,
+  INLINE_ACTIONS, JobManager, PORTED_ACTIONS, actionCommands, npmUpdateCommands, updatePlan,
 } from '../../js/web/jobs.mjs';
 import { apiDeployCmd } from '../../js/web/actions.mjs';
 import { webState } from '../../js/web/state.mjs';
@@ -224,6 +226,98 @@ test('the deploy argv resolves the body it is handed', () => {
       ['--theme', 'imperial', '--emit', 'opencode', '--out', '<TARGET>', '--root', '<TARGET>',
         '--footprint', 'lean', '--posture', 'mentor', '--mode', 'foreman',
         '--doctrines', 'craft,rigor,ops,process,comms', '--exclude-rules', 'none']);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The Update button's route per install kind (`updatePlan`). Every dependency is injected, so
+// nothing here spawns git or npm. The rules:
+// - git: the preflight decides; ready runs the table's single `upgrade` row, a refusal is its
+//   own code and message;
+// - npm-global: `npm install -g geneseed@latest`, then `rebuild-all` from this package's own
+//   CLI path (which IS the folder npm replaces, run as a fresh process), from the home folder,
+//   with the Windows shell opted into for `npm.cmd`;
+// - npm-global with npm gone, and `other`: a `manual` refusal naming the npm command.
+
+const READY = () => ({ ok: true, code: 'ready', kind: 'info', message: '' });
+
+test('the npm update argv is npm install -g, then the new package rebuild-all', () => {
+  assert.deepEqual(npmUpdateCommands('npm'), [
+    ['npm', 'install', '-g', 'geneseed@latest'],
+    [process.execPath, path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'rebuild-all'],
+  ]);
+});
+
+test('a git install runs upgrade when the preflight is ready, and refuses with its code', () => {
+  let npmAsked = 0;
+  const npm = () => { npmAsked += 1; return 'npm'; };
+  const ok = updatePlan('git', { pre: READY, npm });
+  assert.deepEqual(ok.cmds, actionCommands('update'));
+  assert.equal(ok.opts, undefined, 'a git job keeps the default cwd, the checkout');
+  const dirty = updatePlan('git', { npm,
+    pre: () => ({ ok: false, code: 'dirty', kind: 'info', message: 'local changes' }) });
+  assert.deepEqual(dirty, { refuse: { precondition: 'dirty', kind: 'info', message: 'local changes' } });
+  assert.equal(npmAsked, 0);
+});
+
+test('an npm-global install runs npm from the home folder, never the preflight', () => {
+  let preAsked = 0;
+  const plan = updatePlan('npm-global', { pre: () => { preAsked += 1; return READY(); },
+    npm: () => '/bin/npm', home: () => '/home/u' });
+  assert.deepEqual(plan, { cmds: npmUpdateCommands('/bin/npm'),
+    opts: { cwd: '/home/u', winShell: true } });
+  assert.equal(preAsked, 0, 'preflight answers not_git on an npm install, so it is never asked');
+});
+
+test('other, and npm-global without npm, refuse with the command to run by hand', () => {
+  for (const [kind, npm] of [['other', () => '/bin/npm'], ['npm-global', () => null]]) {
+    const plan = updatePlan(kind, { pre: READY, npm });
+    assert.equal(plan.refuse.precondition, 'manual', kind);
+    assert.ok(plan.refuse.message.includes('`npm install -g geneseed@latest`'), kind);
+    assert.equal(plan.cmds, undefined, kind);
+  }
+});
+
+// The job runner itself: a step runs in the cwd the job names, and on Windows a `.cmd` step
+// (npm is `npm.cmd` there) runs through the shell instead of failing to spawn.
+const finished = async (jm, jid) => {
+  for (let i = 0; i < 400 && jm.get(jid).status === 'running'; i += 1) {
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return jm.get(jid);
+};
+
+test('a job step runs in the cwd the job names', async () => {
+  const sb = makeSandbox('webjobs-cwd-');
+  try {
+    const jm = new JobManager();
+    const jid = jm.start('t', [[process.execPath, '-e', 'console.log(process.cwd())']], null,
+      { cwd: sb.path });
+    const j = await finished(jm, jid);
+    assert.equal(j.status, 'done', j.output);
+    assert.ok(j.output.includes(sb.path), j.output);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+// The shell is an opt-in of the npm job alone: a job that does not ask never reaches cmd.exe,
+// even with a `.cmd` head — Node then refuses the spawn and the job fails.
+test('a .cmd step runs through the shell on Windows only when the job opts in', { skip: process.platform !== 'win32' }, async () => {
+  const sb = makeSandbox('webjobs-cmd-');
+  try {
+    const cmd = path.join(sb.path, 'fake npm.cmd');
+    fs.writeFileSync(cmd, '@echo off\r\necho args=%*\r\n');
+    const jm = new JobManager();
+    const argv = [[cmd, 'install', '-g', 'geneseed@latest']];
+    const j = await finished(jm, jm.start('t', argv, null, { winShell: true }));
+    assert.equal(j.status, 'done', j.output);
+    assert.ok(j.output.includes('args=install -g geneseed@latest'), j.output);
+    const no = await finished(jm, jm.start('t', argv));
+    assert.equal(no.status, 'failed', no.output);
+    assert.ok(!no.output.includes('args='), no.output);
   } finally {
     sb.cleanup();
   }

@@ -150,6 +150,8 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   // The console's job list survives a reload and a restart because it is a FILE on disk,
   // not held in process memory.
   const jm = new JobManager(join(home, '.geneseed-web-runs.json'));
+  // Read by `/api/update`, whose background `git fetch` must not race a running update's pull.
+  state.jobBusy = () => jm.busy;
   const srv = createServer(makeHandler(state, jm, token, dist, holder));
   holder.srv = srv;
   return new Promise((done) => {
