@@ -11,6 +11,23 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Fixed
 - Bob: a gate block no longer promises a confirmation Bob cannot give. Bob has no ask tier, so "Confirm this specific command" sent the model round the gate (a retry with `-Confirm:$false`, then `git clean`) and finally to "disable the Geneseed hook". Every Bob block now says that nothing in the chat lifts it, and that the user can act outside Bob. Claude's wording is unchanged.
 
+## [4.16.0] — 2026-10-23
+
+Minor: foreman mode now really delegates, and the web console updates and rebuilds a clone without a manual restart.
+
+### Upgrade notes
+- Run `geneseed rebuild-all`; nothing changes on a machine until something re-emits. The precedence table changes in every install, not only in foreman ones.
+
+### Changed
+- Foreman mode: the mode now binds how work runs. It has its own row in the precedence table; `PROFILE.md`, posture and theme still only inform.
+- Foreman triage is a count, not a judgement: a task is substantial when it changes 2 or more files, needs a new or changed test, needs about 5 reads before the first edit, or asks for a feature, a fix, a review, an audit or an investigation. When unsure, the session delegates.
+- Pipelines: the parent session dispatches one background crew lead and goes back to the user. The crew lead picks the crew from the whole agent roster (the floor is only the minimum) and runs the relay. `pipeline` now has a per-host table; on a host where the crew lead cannot start subagents, it plays each role in turn.
+
+### Fixed
+- Web console: a git clone always gets the **Update** button, also when the npm release check gets no answer.
+- Web console: a rebuild on a console running old code (after a manual `git pull`) now restarts it and reloads the page.
+- Docs: the pipeline loop limit is 2 repair rounds, then one fresh developer, not "five rounds".
+
 ## [4.15.1] — 2026-10-23
 
 Patch: two host fixes. The first npm release since 4.14.0, so it also carries 4.15.0's comms 4 doctrine.

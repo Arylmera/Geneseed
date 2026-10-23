@@ -522,3 +522,27 @@ test('the setup snapshot\'s missing interpreter field is gated where the snapsho
     'tests/unit/web_api.test.mjs no longer asserts the setup snapshot has NO interpreter-version '
     + 'key — a field with nothing honest to put in it would now be free to grow back by silence');
 });
+
+test('a rebuild-all on a stale server says it restarts afterwards; on a current one it does not', async () => {
+  // After a manual `git pull` the daemon serves old code; a Rebuild there must end in a restart
+  // and a reload, as Update does, or the page keeps showing the old console. The JobManager is a
+  // stub: a real one would start a real rebuild of the developer's installs.
+  const started = [];
+  const jm = { busy: false, recent: () => [], start: (action) => { started.push(action); return 'j1'; } };
+  const st = webState('neutral');
+  const srv = http.createServer(makeHandler(st, jm, 'tok', 'nowhere', {}));
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  const post = async () => (await fetch(`http://127.0.0.1:${srv.address().port}/api/actions/build-all`, {
+    method: 'POST', body: '{}', headers: { 'X-Geneseed-Token': 'tok', 'Content-Type': 'application/json' },
+  })).json();
+  try {
+    st.daemonStale = () => true;
+    assert.deepEqual(await post(), { job_id: 'j1', restarts: true });
+    st.daemonStale = () => false;
+    assert.deepEqual(await post(), { job_id: 'j1' },
+      'a current server must not ask the console to wait for a restart that never comes');
+    assert.deepEqual(started, ['build-all', 'build-all']);
+  } finally {
+    srv.close();
+  }
+});

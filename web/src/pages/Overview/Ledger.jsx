@@ -23,24 +23,32 @@ const pct = (n, of) => `${of ? Math.min(100, (n / of) * 100) : 0}%`
 
 function VersionChip({ update, onAction }) {
   if (!update) return null
-  if (update.latest === null) {
-    return (
+  const chip =
+    update.latest === null ? (
       <span className="mono dim ver-chip">{update.current ?? ''} · update check unavailable</span>
+    ) : update.available ? (
+      <span className="mono ver-chip">
+        {update.current} <span className="ver-new">{update.latest} available</span>
+      </span>
+    ) : (
+      <span className="mono dim ver-chip">{update.current} · latest</span>
     )
-  }
-  if (update.available) {
-    return (
-      <>
-        <span className="mono ver-chip">
-          {update.current} <span className="ver-new">{update.latest} available</span>
-        </span>
-        <button type="button" className="btn" onClick={() => onAction('update')}>
-          Update
-        </button>
-      </>
-    )
-  }
-  return <span className="mono dim ver-chip">{update.current} · latest</span>
+  // A git clone can always pull: main moves between releases, and the release check may be
+  // unanswered behind a proxy. An npm install updates only when a release is out.
+  if (!update.available && !update.git) return chip
+  return (
+    <>
+      {chip}
+      <button
+        type="button"
+        className={update.available ? 'btn' : 'btn ghost'}
+        title={update.git ? 'git pull, then rebuild every install' : undefined}
+        onClick={() => onAction('update')}
+      >
+        Update
+      </button>
+    </>
+  )
 }
 
 function Verdict({ fleet }) {
