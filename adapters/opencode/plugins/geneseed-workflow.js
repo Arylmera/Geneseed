@@ -25,7 +25,21 @@ import * as path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const DEBUG = !!process.env.GENESEED_DEBUG
-function dlog(m) { if (DEBUG) console.error(`[geneseed-workflow] ${m}`) }
+function dlog(m) { if (DEBUG) say(m, "debug") }
+// OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
+// writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
+// client and keep stderr, as does a refused log call, so no line is lost. Never throws:
+// a log line must not break a tool call.
+let LOG_CLIENT = null
+function say(msg, level = "warn") {
+  try {
+    if (LOG_CLIENT?.app?.log) {
+      Promise.resolve(LOG_CLIENT.app.log({ body: { service: "geneseed-workflow", level, message: msg } })).catch(() => console.error(`[geneseed-workflow] ${msg}`))
+      return
+    }
+  } catch { /* fall through to stderr */ }
+  console.error(`[geneseed-workflow] ${msg}`)
+}
 
 const __dir = path.dirname(fileURLToPath(import.meta.url))
 const WORKFLOWS_DIR = process.env.GENESEED_WORKFLOWS_DIR
@@ -184,7 +198,9 @@ const NAME_DESCRIPTION = "saved workflow name; omit to list available"
 const ARGS_DESCRIPTION = "inputs passed to the workflow script as `args` (object, or a JSON object string)"
 
 // One-line load banner (always on) so a restart visibly confirms the plugin loaded and the
-// `workflow` tool is registered. tests/host_canary.mjs reads it as V1's proof of load.
+// `workflow` tool is registered. tests/host_canary.mjs reads it as V1's proof of load, so it
+// stays on stderr, not `say`: `opencode debug config` never prints a `client.app.log` line. It
+// runs once, before the TUI draws, so it does not land in the input box as `say`'s lines did.
 async function loadBanner(warn = "") {
   try {
     const names = await listWorkflows()
@@ -194,6 +210,7 @@ async function loadBanner(warn = "") {
 
 export const GeneseedWorkflow = async (ctx) => {
   const { client, directory, worktree } = ctx
+  if (client) LOG_CLIENT = client
   let toolHelper
   try { ({ tool: toolHelper } = await import("@opencode-ai/plugin")) }
   catch { dlog("@opencode-ai/plugin tool helper unavailable — registering a raw tool def") }

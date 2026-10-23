@@ -153,7 +153,21 @@ const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, "m")
 const DELETION_GATE_OFF = gateOff("Deletion gate")
 const SECRETS_GATE_OFF = gateOff("Secrets gate")
 
-function log(msg) { console.error(`[geneseed-guard] ${msg}`) }
+// OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
+// writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
+// client and keep stderr, as does a refused log call, so no line is lost. Never throws:
+// a log line must not break a tool call.
+let LOG_CLIENT = null
+function say(msg, level = "warn") {
+  try {
+    if (LOG_CLIENT?.app?.log) {
+      Promise.resolve(LOG_CLIENT.app.log({ body: { service: "geneseed-guard", level, message: msg } })).catch(() => console.error(`[geneseed-guard] ${msg}`))
+      return
+    }
+  } catch { /* fall through to stderr */ }
+  console.error(`[geneseed-guard] ${msg}`)
+}
+const log = (msg) => say(msg)
 
 // ---- the gate ledger ------------------------------------------------------------
 // The twin of `ledger()` in js/hosts/hooks.mjs: one JSON line per BLOCK into
@@ -1369,6 +1383,7 @@ async function recordUse(tool, args) {
 }
 
 export const GeneseedGuard = async (ctx) => {
+  if (ctx?.client) LOG_CLIENT = ctx.client
   // The session's working directory, the same resolution the context plugin uses.
   const root = () => ctx?.worktree || ctx?.directory || process.cwd()
   return {
