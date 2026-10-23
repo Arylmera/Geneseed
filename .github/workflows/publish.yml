@@ -68,16 +68,35 @@ name: publish
 # named above stops matching the file it is written in, which is the only local symptom
 # that exists.
 #
-# The trigger is MANUAL, deliberately: Actions → publish → Run workflow. There is no
-# automatic trigger of any kind, and the gate above forbids adding one. Bump the version in
+# THE RELEASE IS THE VERSION BUMP. Since 2026-10-23 (owner's decision: a release must not wait on
+# a human clicking a button) this workflow also runs when the CI workflow finishes on `main`. The
+# `release-check` job reads the version in `harness.config.json` at the commit CI just tested and
+# asks the registry for it: already published means there is nothing to release, and the run stops
+# there. A version npm does not have yet means the commit IS a release, and `publish` runs every
+# gate below, publishes it, then creates the `v<version>` tag and the GitHub release from that
+# version's CHANGELOG section. So the one deliberate act is still the bump: change the version in
 # `harness.config.json` first (`package.json` mirrors it and a fork fails
-# `tests/unit/package_manifest.test.mjs`'s "version mirrors harness.config.json") —
-# never with `npm version`, which edits only one of the two.
+# `tests/unit/package_manifest.test.mjs`'s "version mirrors harness.config.json") — never with
+# `npm version`, which edits only one of the two — add the CHANGELOG section, and merge.
 #
-# ⚠ THE DEFAULT IS A DRY RUN, and that is the whole point of the switch: the dangerous path is
-# the one you have to ask for. Leaving `dry_run` ticked runs every gate below and then
-# `npm publish --dry-run`, which uploads nothing. Untick it — deliberately, once, having read
-# the version you are about to burn — to publish for real. There is no way back after 72 hours.
+# ⚠ ONLY A GREEN CI RUN ON A PUSH TO `main` CAN RELEASE. A `workflow_run` also fires for a CI run
+# on a pull request (a fork's branch can even be called `main`), and for a red one; the
+# `release-check` condition refuses all of those by name, and `tests/unit/docs.test.mjs` pins it.
+# A merge, a PR or a clock never triggers this file directly — no `push:`, `pull_request:` or
+# `schedule:` key.
+#
+# ⚠ `workflow_run` RUNS ON THE LATEST `main`, NOT ON THE TESTED COMMIT. `github.sha` is whatever
+# `main` points at when the run starts; the commit CI tested is
+# `github.event.workflow_run.head_sha`. Every step below reads `SHA`, which is that commit, so a
+# push that lands while CI runs cannot be published under a run that never tested it.
+#
+# A manual run stays possible: Actions → publish → Run workflow.
+#
+# ⚠ THE MANUAL DEFAULT IS A DRY RUN, and that is the whole point of the switch: on a dispatch, the
+# dangerous path is the one you have to ask for. Leaving `dry_run` ticked runs every gate below and
+# then `npm publish --dry-run`, which uploads nothing. Untick it — deliberately, once, having read
+# the version you are about to burn — to publish for real. There is no way back after 72 hours. An
+# automatic run has no inputs, so it always publishes for real.
 #
 #   gh workflow run publish.yml -f dry_run=true      # rehearse (the default)
 #   gh workflow run publish.yml -f dry_run=false     # ⚠ THE REAL ONE
@@ -89,20 +108,75 @@ on:
         description: "Rehearse: run every gate, then pack and report instead of uploading."
         type: boolean
         default: true
+  # The CI workflow, by its `name:` (this file may name no workflow FILE but its own — see the
+  # trusted-publisher note above).
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
-  checks: read # the "CI was green for this commit" gate below
-  id-token: write # mints the OIDC token npm exchanges for the publish grant
+
+# Two releases never race: a second run waits for the first instead of cancelling it mid-upload.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  # The commit to release: the one CI tested on an automatic run, the dispatched ref otherwise.
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  publish:
-    # main or a release tag only. A dispatch can name ANY ref, and a published version cannot be
-    # taken back after 72 hours — a feature branch is never what a release should be cut from.
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+  release-check:
+    # A green CI run on a PUSH to `main`, or a human dispatch. Nothing else — see the header.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.need.outputs.release }}
+      version: ${{ steps.need.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SHA }}
+      # A dispatch always goes on: a human asked, and a real run of a version npm already has is
+      # refused by the registry itself. An automatic run goes on only for a version npm lacks. A
+      # registry that cannot be reached reads as "lacks", which is safe for the same reason.
+      - name: is this commit a release?
+        id: need
+        shell: bash
+        run: |
+          v="$(node -p "require('./harness.config.json').version")"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && npm view "geneseed@$v" version >/dev/null 2>&1; then
+            echo "geneseed@$v is already on npm — nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "geneseed@$v is not on npm — releasing it"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: release-check
+    # main or a release tag only. A dispatch can name ANY ref, and a published version cannot be
+    # taken back after 72 hours — a feature branch is never what a release should be cut from.
+    if: >-
+      needs.release-check.outputs.release == 'true' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the tag and the GitHub release, after the upload
+      checks: read # the "CI was green for this commit" gate below
+      id-token: write # mints the OIDC token npm exchanges for the publish grant
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SHA }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Trusted publishing needs Node >= 22.14.0. `engines` in package.json says
@@ -121,19 +195,19 @@ jobs:
       # THE COMMIT MUST HAVE PASSED CI. The gates below re-run the tree checks, but not lint, the
       # golden self-comparisons, the Windows jobs or the no-interpreter package job — those are
       # CI's alone. Read off the commit's check runs by JOB name (this file may name no workflow
-      # file but its own — see the trusted-publisher note above), ignoring this run's own job.
+      # file but its own — see the trusted-publisher note above), ignoring this workflow's jobs.
       - name: CI passed for this commit
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          runs="$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs?per_page=100" \
-            --jq '[.check_runs[] | select(.name != "publish")]')"
+          runs="$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name != "publish" and .name != "release-check")]')"
           bad="$(jq -r '[.[] | select(.status != "completed" or (.conclusion | IN("success","skipped","neutral") | not)) | .name] | join(", ")' <<<"$runs")"
           ok="$(jq '[.[] | select(.name | startswith("validate (")) | select(.conclusion == "success")] | length' <<<"$runs")"
           echo "validate jobs green: $ok"
-          if [ -n "$bad" ]; then echo "not green for ${{ github.sha }}: $bad"; exit 1; fi
-          if [ "$ok" -lt 1 ]; then echo "no green validate job ran on ${{ github.sha }} — push it through CI first"; exit 1; fi
+          if [ -n "$bad" ]; then echo "not green for $SHA: $bad"; exit 1; fi
+          if [ "$ok" -lt 1 ]; then echo "no green validate job ran on $SHA — push it through CI first"; exit 1; fi
 
       # `workflow_dispatch` can run against any ref, including one CI never saw, and a
       # published version cannot be taken back after 72 hours. Re-run the two gates that
@@ -238,6 +312,26 @@ jobs:
       #
       # `inputs.dry_run`, NOT `github.event.inputs.dry_run`: the latter is a STRING, so the
       # non-empty `'false'` is truthy and the guard would silently invert into a real publish on
-      # the very run that asked to rehearse. The typed `inputs` context gives a real boolean.
+      # the very run that asked to rehearse. The typed `inputs` context gives a real boolean. An
+      # automatic run has no inputs, so `inputs.dry_run` is empty and the publish is real.
       - name: publish
         run: npm publish ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      # AFTER the upload, never before: a tag and a release for a version npm refused would announce
+      # something nobody can install. An existing release (cut by hand) is left alone, and an
+      # existing tag is reused by `gh release create`. The notes are the version's own CHANGELOG
+      # section, heading excluded.
+      - name: tag and GitHub release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release-check.outputs.version }}
+        shell: bash
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "release v$VERSION already exists"
+            exit 0
+          fi
+          notes="$(mktemp)"
+          awk -v h="## [$VERSION]" 'index($0, h) == 1 {p=1; next} p && /^## \[/ {exit} p' CHANGELOG.md > "$notes"
+          gh release create "v$VERSION" --target "$SHA" --title "$VERSION" --notes-file "$notes"

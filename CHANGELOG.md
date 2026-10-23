@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **The version bump is the release.** `publish.yml` now also runs when CI finishes green on a push to `main`. If the version in `harness.config.json` is not on npm yet, it re-runs its gates against the commit CI tested, publishes it, and creates the `v<version>` tag and the GitHub release from that version's CHANGELOG section; otherwise it stops after one cheap check. A PR's CI run, a red one or a fork's never publishes. The manual dispatch stays, still a dry run by default.
+
 ### Fixed
 - Bob: a gate block no longer promises a confirmation Bob cannot give. Bob has no ask tier, so "Confirm this specific command" sent the model round the gate (a retry with `-Confirm:$false`, then `git clean`) and finally to "disable the Geneseed hook". Every Bob block now says that nothing in the chat lifts it, and that the user can act outside Bob. Claude's wording is unchanged.
 - Bob: read-only agents now stay read-only. Bob ignores Claude's `disallowedTools`, so every reviewer, explorer and council seat got Bob's default `read, edit, execute`. The Bob emit now writes Bob's own `groups:` key (`read`, plus `execute` for an agent that opts into bash). An `agent-overrides.json` value is not applied on Bob and a warning says so: Bob drops an agent that carries `model:`. Run `geneseed rebuild-all`.

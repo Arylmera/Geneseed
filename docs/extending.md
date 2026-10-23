@@ -856,8 +856,11 @@ gated. Every other appearance is derived at runtime (`.geneseed-version` markers
 why no test pins a version string and none should.
 
 Do not run `npm version`. Bump the two files by hand, add the `CHANGELOG` section, update
-`SHIPPED.md`, rebuild `web/dist` if `web/src` moved, run the seven commands from §1, push, tag,
-then rehearse and fire the workflow:
+`SHIPPED.md`, rebuild `web/dist` if `web/src` moved, run the seven commands from §1, and merge to
+`main`. **The bump is the release** (since 2026-10-23): when CI finishes green on that push,
+`publish.yml` sees a version npm does not have, re-runs its gates, publishes it, and creates the
+`v<version>` tag and the GitHub release from the version's CHANGELOG section. A push that does not
+change the version stops at the `release-check` job. A manual rehearsal still works:
 
 ```bash
 gh workflow run publish.yml -f dry_run=true

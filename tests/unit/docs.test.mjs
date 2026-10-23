@@ -243,15 +243,38 @@ test('the publish workflow mints an OIDC token and carries no registry credentia
   }
 });
 
-test('publishing is triggered by hand and never by a push', () => {
+// ⚠ CHANGED 2026-10-23, owner's decision: a release no longer waits on a human. The rule was "a
+// merge, a PR or a clock must never publish"; it is now "only a green CI run on a push to main
+// can, and only for a version npm does not have yet". So the workflow still carries no direct
+// `push:`, `pull_request:` or `schedule:` trigger, a human can still dispatch it, and the one
+// automatic path is `workflow_run` on CI — restricted to `main` in the trigger AND, because a
+// `workflow_run` also fires for a PR's CI run and for a red one, refused in the job condition
+// unless the run succeeded, came from a push, on `main`, in this repository.
+test('publishing is triggered by hand or by a green CI run on main, never directly', () => {
   const wf = publishWorkflow();
   const m = /^on:\n([\s\S]*?)(?=^\w)/m.exec(wf.text);
   assert.ok(m, 'the workflow has no `on:` block');
   assert.ok(m[1].includes('workflow_dispatch'), 'publishing must be startable by a human');
   for (const auto of ['push:', 'pull_request:', 'schedule:']) {
     assert.ok(!m[1].includes(auto),
-      `\`${auto}\` triggers the publish workflow — a merge, a PR or a clock must never publish`);
+      `\`${auto}\` triggers the publish workflow — only a green CI run on main may release`);
   }
+  const run = /workflow_run:\n((?:\s{4}.*\n)+)/.exec(m[1]);
+  assert.ok(run, 'the automatic path is a `workflow_run` on CI');
+  assert.match(run[1], /branches:\s*\[main\]/, 'the `workflow_run` trigger must be limited to main');
+  for (const guard of [
+    "github.event.workflow_run.conclusion == 'success'",
+    "github.event.workflow_run.event == 'push'",
+    "github.event.workflow_run.head_branch == 'main'",
+    'github.event.workflow_run.head_repository.full_name == github.repository',
+  ]) {
+    assert.ok(wf.text.includes(guard),
+      `the release-check condition lost \`${guard}\` — a PR's or a red CI run could then publish`);
+  }
+  // The tested commit, not the latest main: `github.sha` on a `workflow_run` is whatever main
+  // points at when the run starts.
+  assert.match(wf.text, /SHA: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/,
+    'the release must be cut from the commit CI tested');
 });
 
 test('the publish workflow publishes once', () => {
