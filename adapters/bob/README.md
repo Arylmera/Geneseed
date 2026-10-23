@@ -99,7 +99,7 @@ What the global emit writes into `~/.bob/settings/settings.json`:
 | event | verb | how the verdict travels |
 | --- | --- | --- |
 | `SessionStart` | `context --host bob` | plain stdout, as on Claude |
-| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV, rigor-5 and ops-2: **exit 2**, reason on stderr; process 1/5: a stderr line, exit 0 |
+| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV, rigor-5 and ops-2: **exit 2**, reason on stderr — it says no chat confirmation lifts the block, since Bob has no ask tier; process 1/5: a stderr line, exit 0 |
 | `Stop` | `learn` | never a verdict |
 
 No matcher on `PreToolUse`, deliberately: Bob's tools page already drifts from its own

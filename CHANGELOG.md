@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- Bob: a gate block no longer promises a confirmation Bob cannot give. Bob has no ask tier, so "Confirm this specific command" sent the model round the gate (a retry with `-Confirm:$false`, then `git clean`) and finally to "disable the Geneseed hook". Every Bob block now says that nothing in the chat lifts it, and that the user can act outside Bob. Claude's wording is unchanged.
+
 ## [4.15.1] — 2026-10-23
 
 Patch: two host fixes. The first npm release since 4.14.0, so it also carries 4.15.0's comms 4 doctrine.

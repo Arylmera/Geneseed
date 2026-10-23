@@ -65,6 +65,17 @@ const LAW4_ALWAYS = 'git reflog expire --expire=now --all';
 const bashPayload = (command) =>
   JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
 
+/**
+ * A Bob block is final: Bob has no ask tier, and consent typed in the chat never reaches the
+ * hook. So the reason must not offer a confirmation, must say nothing in the chat lifts it, and
+ * must point at the one real way out — the user acting outside Bob — never at the hook itself.
+ */
+function assertBobBlockIsHonest(stderr, what) {
+  assert.doesNotMatch(stderr, /Confirm this specific command/, `bob offers a confirmation: ${what}`);
+  assert.match(stderr, /no approval step/, `bob: ${what}: ${stderr}`);
+  assert.match(stderr, /themself, outside Bob/, `bob: ${what}: ${stderr}`);
+}
+
 test('every commit and push form asks', () => {
   // The four shapes a real command arrives in. `git add . && git commit …` is the one a
   // naive "starts with git commit" check misses, and `-C /repo` is the one a "second word is
@@ -320,6 +331,12 @@ test('Law IV asks exactly on real loss, per the shared policy table, on Claude a
           stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
         assert.equal(bob.rc, row.stop ? 2 : 0, `bob: ${what}: ${bob.err}`);
         assert.equal(/BLOCKED: Geneseed \(Deletion Is Deliberate\)/.test(bob.err), row.stop, `bob: ${what}: ${bob.err}`);
+        if (row.stop) {
+          // Claude can ask, so its reason offers the confirmation; Bob cannot (exit 2 is final),
+          // so promising one there sent the model to "disable the Geneseed hook" (live, 2026-10-23).
+          assert.match(askDecision(claude, what).permissionDecisionReason, /Confirm this specific command/, what);
+          assertBobBlockIsHonest(bob.err, what);
+        }
       }, row.branch);
     }
   } finally { ws.cleanup(); }
@@ -525,6 +542,8 @@ test('--no-deletion-gate keeps ops 2, Law I and process 5', () => {
   const bobSecret = bob('write_file', { path: 'src/a.js', content: 'const k = "AKIAIOSFODNN7EXAMPLE";' });
   assert.equal(bobSecret.rc, 2, `bob: secret: ${bobSecret.err}`);
   assert.match(bobSecret.err, /Sealed Secrets/);
+  assertBobBlockIsHonest(bobSecret.err, 'secret');
+  assertBobBlockIsHonest(bobScan.err, 'root scan');
 });
 
 // ---------------------------------------------------------------------------------------------
