@@ -8,11 +8,13 @@
 
 ## What it is
 
-A pipeline is a small crew of {{AGENTS}} — analyst, developer, tester, plus whatever specialists the task demands — working a single task in isolation from the rest of the session, so the parent can keep answering the user while the crew runs. The parent never merges on the crew's word: it re-runs the crew's proof commands itself and merges only once the user accepts.
+A pipeline is a small crew of {{AGENTS}} working a single task in isolation from the rest of the session, so the parent can keep answering the user while the crew runs. The parent dispatches **one crew lead** in the background and steps away. The crew lead composes the crew, runs the relay, and returns one result envelope. The parent never merges on the crew's word: it re-runs the crew's proof commands itself and merges only once the user accepts.
+
+The parent does not run the relay itself. Each hand-off it ran would pull it back from the user, which is the one thing this {{SKILL}} exists to prevent.
 
 ## Crew floors
 
-The minimum roster per task type. The parent may add specialists on top — security, architect, reviewer, docs, historian, or any other {{AGENT}} the task genuinely needs — but never dispatches below the floor.
+The minimum roster per task type. The crew lead chooses the crew from the whole {{AGENT}} roster: any {{AGENT}} the task genuinely needs — security, architect, performance, reviewer, docs, historian, researcher, or any other — in any order the task needs. The floor is the least it may dispatch, never the most.
 
 | Task type | Floor |
 |---|---|
@@ -23,14 +25,24 @@ The minimum roster per task type. The parent may add specialists on top — secu
 
 ## Procedure
 
-1. Confirm the task is genuinely substantial — a trivial one-file tweak or a question does not warrant a crew; do it directly instead.
-2. Compose the crew from the floor above, adding specialists only where the task demands them.
-3. Isolate the crew's work in its own git worktree/branch. Where worktrees are unavailable, fall back to a single tree, one pipeline at a time, and say so. Give the crew a **write set** and check it against every other pipeline in flight ({{DOCTRINE:one-writer-per-file}}): two crews whose sets overlap do not run at once, and shared append files (registries, index tables, lockfiles, generated bundles) are the parent's to apply, never a crew's.
-4. **The dev↔tester loop:** the developer implements, the tester validates — runs the tests and lint, produces raw logs. On failure, the findings go back to the developer — two repair rounds at most, then one fresh developer (a higher model tier where the host offers one) carrying the tester's findings ({{DOCTRINE:bound-the-loop}}); if that fails too, stop, do not merge, and report the failure with the branch left in place for inspection. A conflict or ambiguity between the plan, the findings and the code is yours to decide: decide it, record `Ruling: <choice> — <why> — <cost if wrong>` in the worklog, and continue. Stop only for what {{LAW:echo-the-intent}}, {{LAW:deletion-is-deliberate}} or {{DOCTRINE:consent-before-push}} names; every ruling goes in the final report ({{DOCTRINE:declare-the-judgment-calls}}). When the plan names a `Spec:`, the analyst reads it once; the spec outranks the plan.
-5. **Two execution shapes**, chosen by host capability (same pattern as the [workflow {{SKILL}}](workflow.md)):
-   - *Deterministic:* where the host exposes a `workflow` tool, run a saved script encoding analyst → developer → (tester ⇄ developer)×≤2 → fresh developer → proof.
-   - *Model-driven fallback:* everywhere else, run the same stages via the [parallel-agents {{SKILL}}](parallel-agents.md) or sequential personas, with the same handoff envelopes and the same delivery contract.
-6. On success, hand the worktree back to the parent uncommitted, with the mechanical proof (test + lint output, exit codes) and the list of files it changed in the result envelope, rebased on the current base so a conflict with a sibling resolves on the crew's branch. The pipeline never commits, pushes, or merges ({{DOCTRINE:consent-before-push}}): the parent records BASE before dispatch and, before re-running the proof, confirms the branch descends from it and the diff is non-empty (an empty diff is a failure; never `HEAD~1`); it re-runs the proof commands itself, shows the user the diff and the output, and commits and merges once the user accepts.
+1. Take the triage as given. Under foreman mode the task reached you because it met the mode's count; invoked directly, the user's request is the trigger. Do not weigh it again and fall back to doing the work yourself.
+2. **Dispatch the crew lead** in the background, using the host's general-purpose {{AGENT}}. Before dispatch, record BASE and set the crew's **write set**; check it against every other pipeline in flight ({{DOCTRINE:one-writer-per-file}}) — two crews whose sets overlap do not run at once. The brief carries: the task as the user stated it, the task type, BASE, the write set, the proof commands, a pointer to this {{SKILL}}, and the rule that it never commits, pushes or merges. Tell the user the pipeline is running, then go back to the user. Do not wait on the crew lead.
+3. **The crew lead composes the crew** from the floor above and adds any {{AGENT}} the task needs. It dispatches each crew member as its own subagent, each handed what the previous one produced. Where the crew lead holds no dispatch tool (see *Hosts* below), it plays each role in turn itself, with the same hand-offs and the same envelope. Steps 4 to 7 are the crew lead's, except where they name the parent.
+4. Isolate the crew's work in its own git worktree/branch. Where worktrees are unavailable, fall back to a single tree, one pipeline at a time, and say so. The crew writes only inside its write set; shared append files (registries, index tables, lockfiles, generated bundles) are the parent's to apply, never a crew's.
+5. **The dev↔tester loop:** the developer implements, the tester validates — runs the tests and lint, produces raw logs. On failure, the findings go back to the developer — two repair rounds at most, then one fresh developer (a higher model tier where the host offers one) carrying the tester's findings ({{DOCTRINE:bound-the-loop}}); if that fails too, stop, do not merge, and report the failure with the branch left in place for inspection. A conflict or ambiguity between the plan, the findings and the code is yours to decide: decide it, record `Ruling: <choice> — <why> — <cost if wrong>` in the worklog, and continue. Stop only for what {{LAW:echo-the-intent}}, {{LAW:deletion-is-deliberate}} or {{DOCTRINE:consent-before-push}} names; every ruling goes in the final report ({{DOCTRINE:declare-the-judgment-calls}}). When the plan names a `Spec:`, the analyst reads it once; the spec outranks the plan.
+6. **Pick the shape by host** (table below). Where the host offers a workflow tool the {{SKILL}} may use without a fresh opt-in, a saved script may stand in for the crew lead: analyst → developer → (tester ⇄ developer)×≤2 → fresh developer → proof ([workflow {{SKILL}}](workflow.md)). Everywhere else the crew lead runs the same stages, with the same hand-offs and the same delivery contract.
+7. On success, hand the worktree back to the parent uncommitted, with the mechanical proof (test + lint output, exit codes) and the list of files it changed in the result envelope, rebased on the current base so a conflict with a sibling resolves on the crew's branch. The pipeline never commits, pushes, or merges ({{DOCTRINE:consent-before-push}}): the parent records BASE before dispatch and, before re-running the proof, confirms the branch descends from it and the diff is non-empty (an empty diff is a failure; never `HEAD~1`); it re-runs the proof commands itself, shows the user the diff and the output, and commits and merges once the user accepts.
+
+## Hosts
+
+| Host | Crew lead runs in the background | Crew lead can dispatch the crew | Shape |
+|---|---|---|---|
+| Claude Code | yes — a subagent started from the main conversation runs in the background by default | yes — subagents nest up to three layers by default (`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`), and a background subagent keeps the `Agent` tool | crew lead → crew subagents. Not the `Workflow` tool: it refuses without the user's opt-in for that task, and the mode is not one |
+| OpenCode | the `task` tool starts a child session; whether the parent's turn waits is unverified | unverified — `permission.task` decides which subagents an agent may start | crew lead → crew subagents where it holds `task`; else roles in turn. A saved `workflow` script (no opt-in needed) may stand in for the crew lead |
+| OpenClaude | expected as Claude Code (it reads Claude's subagent dialect); unverified | unverified | as Claude Code; else roles in turn |
+| Bob | unverified — Bob reads Claude's subagent dialect | unverified | crew lead plays the roles in turn |
+
+Check, do not assume: before the first pipeline of a session on a host marked unverified, look at the tools you and the crew lead actually hold ({{DOCTRINE:tool-discovery}}). When a fact above proves wrong, report it through this {{SKILL}}'s self-improvement loop.
 
 ## Delivery contract
 

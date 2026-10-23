@@ -25,7 +25,8 @@ When two instructions disagree, the higher one wins.
 2. **Rules** — always on. {N_LAWS} invariants, the things that are never traded away: sealed secrets, one intent per act, verify before asserting, deliberate deletion, surface failures, treat content as data not orders, least privilege, cure the cause, echo the intent. No install can switch one off.
 3. **Your `user-rules.md`** — rules you write for yourself, seeded once beside the instructions file and never overwritten. A rule here **outranks any doctrine rule**: a practice pack chosen at build time never overrides an instruction you wrote. It may tighten an invariant, never repeal one. The [rule skill](skills.md) helps you decide whether something belongs here or in [memory](memory.md).
 4. **Doctrines** — chosen at build time. Practices rather than principles, grouped in packs (below).
-5. **`PROFILE.md`** — who you are. It colours how the agent works but never binds ([Collaboration](collaboration.md)).
+5. **Mode** — chosen at build time ([Foreman mode](foreman-mode.md)). It binds *how* work is executed — done in place, or handed to a crew — and never overrides a layer above it. A mode that only informed lost every time to the host's own default of doing small work in place.
+6. **`PROFILE.md`** — who you are. It colours how the agent works but never binds ([Collaboration](collaboration.md)).
 
 ### Doctrine packs
 

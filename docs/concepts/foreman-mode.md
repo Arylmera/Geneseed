@@ -21,8 +21,10 @@ The agent works every task itself, turn by turn. Nothing is spawned; you talk to
 
 The session sorts every request:
 
-- **Trivial** — a quick answer, a one-file tweak, a question: done directly, as in direct mode.
-- **Substantial** — handed to a **pipeline** running in the background. The session tells you it is running and stays free to answer you.
+- **Substantial** — handed to a **pipeline** running in the background. The session tells you it is running and stays free to answer you. A task counts as substantial when any one of these holds: it changes two or more files, it needs a new or changed test, it needs about five reads or searches before the first edit, or it asks for a feature, a fix, a review, an audit or an investigation.
+- **Trivial** — none of those holds: a question answered from what is already in context, a one-file tweak, a single command. Done directly, as in direct mode.
+
+When the session is unsure, it delegates. The count exists because "substantial" left to judgement lost every time to the host's own default of doing small work in place.
 
 Expect a substantial task to cost more (a crew runs instead of one agent) in exchange for a session that never blocks on a long job.
 
@@ -37,11 +39,11 @@ A **pipeline** is a small crew of agents working one task in isolation. The mini
 | research | `explorer`; add `researcher` when the question leaves the repository |
 | review or audit | `reviewer` + `skeptic` |
 
-The session adds specialists on top when the task needs them — `security`, `architect`, `reviewer` and so on — never fewer than the minimum.
+The session does not run the crew itself. It starts one **crew lead** in the background and goes back to you. The crew lead picks the crew from the whole agent roster — `security`, `architect`, `performance`, `reviewer` and so on, as the task needs, never fewer than the minimum — and passes the work from one agent to the next. On Claude Code each crew member is its own subagent. On a host where the crew lead cannot start subagents, it plays each role in turn. The `pipeline` skill has the table per host.
 
 The crew works in its own git worktree and branch. When worktrees are unavailable it falls back to the main tree, one pipeline at a time, and says so. Two pipelines whose sets of files overlap do not run at once.
 
-Inside the crew, the developer implements and the tester runs the tests and lint. Failures go back to the developer, at most five rounds; after that the crew stops and reports the failure, leaving the branch for you to inspect.
+Inside the crew, the developer implements and the tester runs the tests and lint. Failures go back to the developer for at most two repair rounds, then to one fresh developer carrying the tester's findings; if that fails too, the crew stops and reports the failure, leaving the branch for you to inspect.
 
 ### A pipeline never commits or merges
 
