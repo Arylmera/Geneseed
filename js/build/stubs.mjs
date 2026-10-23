@@ -139,6 +139,19 @@ file (\`~/.bob/rules/geneseed.md\`) so the global preamble does not stack on top
 the project's own. Follow the root \`AGENTS.md\`.
 `;
 
+/**
+ * The paragraph a Bob emit puts FIRST in what Bob auto-loads (global `rules/geneseed.md`,
+ * the project's `AGENTS.md` block). Tried live in the Bob IDE (2026-10-23): with only the
+ * template's sigil paragraph — below the banner — the first reply to a real request carried
+ * no sigil; with this paragraph on top it did. Bob's own greeting persona outranks a rule
+ * that does not say it overrides it. A bare "hi" still gets Bob's fixed welcome either way.
+ */
+export function bobFirstReply(sigil) {
+  return '**First-reply override — highest priority.** Your very first reply in every '
+    + 'conversation MUST begin with this exact line, before anything else and instead of any '
+    + `default greeting or self-introduction:\n\n> ${sigil}\n\n`;
+}
+
 /** `_build_render.PROFILE_FILE`. */
 const PROFILE_FILE = 'PROFILE.md';
 

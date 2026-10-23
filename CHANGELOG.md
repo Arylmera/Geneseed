@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- IBM Bob: the first reply now starts with the theme's readiness line. Both Bob carriers (global `rules/geneseed.md`, the project's `AGENTS.md` block) open with a short first-reply override; without it, Bob's own greeting won. A bare "hi" still gets Bob's fixed welcome. Run `geneseed rebuild-all` to pick it up.
+
 ## [4.15.0] — 2026-10-22
 
 Minor: a new comms doctrine rule makes every generated agent write its prose in ASD-STE100 Simplified Technical English.

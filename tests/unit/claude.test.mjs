@@ -2059,3 +2059,32 @@ test('a nudged memory map keeps the whole payload under 9 000 chars', () => {
     }
   });
 });
+
+test('a Bob emit opens what Bob auto-loads with the first-reply override; Claude does not', () => {
+  // Live in the Bob IDE (2026-10-23) the template's sigil paragraph, under the banner, lost to
+  // Bob's greeting persona; a paragraph on top that says it overrides the greeting won. So
+  // both Bob carriers START with it, naming the same sigil line the template carries further
+  // down, and a Claude emit (whose model follows the template) gets no such paragraph.
+  const OVERRIDE = /^\*\*First-reply override — highest priority\.\*\*[^\n]*\n\n> ([^\n]+)\n/;
+  const opensWithOverride = (text, what) => {
+    const m = OVERRIDE.exec(text);
+    assert.ok(m, `${what} does not open with the first-reply override`);
+    assert.ok(text.indexOf(`> ${m[1]}`, m[0].length) > 0, `${what}: the override names a sigil the template does not`);
+  };
+  withoutStackGlobal(() => withDir((d) => {
+    const cfg = path.join(d, 'dotbob');
+    globalEmit('bob', path.join(d, 'bundle'), cfg);
+    opensWithOverride(read(cfg, 'rules', 'geneseed.md').replace(/\r\n/g, '\n'), 'global rules/geneseed.md');
+
+    const repo = path.join(d, 'bobrepo');
+    fs.mkdirSync(repo);
+    projectEmit('bob', repo, undefined);
+    const block = read(repo, 'AGENTS.md').split('<!-- BEGIN GENESEED -->')[1].replace(/^\r?\n/, '');
+    opensWithOverride(block.replace(/\r\n/g, '\n'), 'project AGENTS.md block');
+
+    const crepo = path.join(d, 'clauderepo');
+    fs.mkdirSync(crepo);
+    projectEmit('claude', crepo, undefined);
+    assert.ok(!read(crepo, 'CLAUDE.md').includes('First-reply override'), 'Claude got the Bob-only override');
+  }));
+});
