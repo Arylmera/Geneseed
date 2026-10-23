@@ -3,6 +3,7 @@ import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
+import StaleBanner from '../../components/StaleBanner.jsx'
 import Onboarding from '../Dashboard/Onboarding.jsx'
 import Ledger from './Ledger.jsx'
 import { docsHostOf } from '../../hooks/useHarness.js'
@@ -99,7 +100,13 @@ export default function Overview({
         onAction={onAction}
         onRetry={onRetry}
         dataRev={dataRev}
-        banner={banner}
+        banner={
+          <>
+            {/* The older dashboards render their own (Dashboard/index.jsx). */}
+            {overview.daemon_stale ? <StaleBanner /> : null}
+            {banner}
+          </>
+        }
       />
     )
   }

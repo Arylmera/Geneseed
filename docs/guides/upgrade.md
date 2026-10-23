@@ -34,6 +34,8 @@ geneseed upgrade imperial     # the same, switching the theme
 
 A dirty working tree, or a folder that is not a git clone, is reported rather than force-updated. `update` and `sync-self` are aliases of `upgrade`. `bootstrap` does the same and then opens the setup wizard (`--no-setup` skips the wizard).
 
+In the web console, the **Update** button on the Overview runs `upgrade`. On a clone it is always there, also when the release check cannot reach npm, because `main` moves between releases. When the update is done, the console restarts and the page reloads. If you ran `git pull` yourself, the Overview shows a banner that the console runs old code. Click **Rebuild** on an install that is behind: the console restarts after the rebuild and reloads the page. If no install is behind, click **Restart** in the banner.
+
 ## What an upgrade keeps
 
 A rebuild only replaces files the install's manifest says Geneseed owns. It leaves these alone:
