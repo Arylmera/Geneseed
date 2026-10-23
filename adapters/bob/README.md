@@ -20,8 +20,11 @@ limitation to be aware of on a shared repo.
   preamble as a delimited **managed block** (your prose around it survives a
   re-emit; the block is replaced, never stacked).
 - **`.bob/`** layer:
-  - `agents/<name>.md` — the **Claude subagent dialect** verbatim (`name` +
-    `description` + a `disallowedTools:` denylist for read-only agents).
+  - `agents/<name>.md` — **Bob's agent dialect**: `name` + `description`, and for a
+    read-only agent a `groups:` list of `read` (plus `execute` when the spec opts into
+    bash). An editing agent states no groups and keeps Bob's default `read, edit, execute`.
+    Bob ignores Claude's `disallowedTools`, and an `agent-overrides.json` value is not
+    applied (Bob refuses a `model:` key).
   - `skills/<name>/SKILL.md` — **byte-identical** to every other host; skills
     are model-invoked via the `skill` tool. The one exception is the folder skills'
     own directory — see *Bob-ism 3*.

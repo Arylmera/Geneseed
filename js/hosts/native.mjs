@@ -376,6 +376,24 @@ function claudeAgentFrontmatter(stem, text, overrides) {
   return fm;
 }
 
+/**
+ * Bob's agent dialect, read from its 2.2.3 runtime (`bob-code/dist/extension.js`; Bob's persona
+ * docs pages 404). Bob ignores Claude's `disallowedTools`, so the Claude dialect left every
+ * read-only agent with Bob's default groups `read, edit, execute` (live review 2026-10-23, F2).
+ * An ALLOWLIST of capability groups rather than a `denyTools` list of tool names: a tool Bob adds
+ * to the edit group later is shut without an emit change. `browser`/`mcp` stay out for every
+ * read-only agent, the webfetch marker included — which group holds Bob's web fetch is unverified.
+ * No `model:`: Bob throws on the key and drops the agent silently (`warnBobIgnored` says so).
+ */
+function bobAgentFrontmatter(stem, text) {
+  const fm = [`name: ${stem}`, `description: ${jsonDumps(agentDescription(text))}`];
+  if (isReadonly(text)) {
+    fm.push('groups:', '  - read');
+    if (text.includes(BASH_MARKER)) fm.push('  - execute');
+  }
+  return fm;
+}
+
 /** `_build_emit._opencode_agent_frontmatter`. */
 function opencodeAgentFrontmatter(stem, text, overrides, theme = null) {
   const fm = [`description: ${jsonDumps(agentDescription(text))}`, 'mode: subagent'];
@@ -464,6 +482,19 @@ function warnClaudeIgnored(overrides) {
   for (const key of ignored) {
     warn(`[geneseed] WARN: agent-overrides.json sets '${key}', which Claude-family hosts do `
       + "not support — only 'model' is applied");
+  }
+}
+
+/** Bob's agents take none of the four override keys — `model:` would even drop the agent. */
+function warnBobIgnored(overrides) {
+  const keys = new Set();
+  for (const entry of Object.values(overrides)) {
+    if (!isDict(entry)) continue;
+    for (const key of OVERRIDE_KEYS) if (key === 'model' ? isTruthy(entry[key]) : given(entry[key])) keys.add(key);
+  }
+  for (const key of keys) {
+    warn(`[geneseed] WARN: agent-overrides.json sets '${key}', which Bob's agents do not `
+      + 'support — it is not applied');
   }
 }
 
@@ -568,14 +599,15 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
   // `disable-model-invocation` — and giving it the Claude-dialect alias SKILL.md (the
   // `host === 'claude'` branch below) would be an unverified key PLUS a visible duplicate
   // in the model's catalogue (exactly the OpenCode problem this file already dodges for
-  // aliases). `bobDialect` suppresses both for Bob only, while `host: 'claude'` keeps every
-  // OTHER Claude-dialect choice (agent frontmatter, `warnClaudeIgnored`) — Bob still renders
-  // those verbatim. The caller (`emit-claude.mjs`) routes the suppressed names through
+  // aliases). `bobDialect` suppresses both for Bob only, and gives its agents Bob's own
+  // frontmatter (`bobAgentFrontmatter`) — `host: 'claude'` keeps every OTHER Claude-dialect
+  // choice. The caller (`emit-claude.mjs`) routes the suppressed names through
   // `writeAliasCommands(..., alsoUserOnly: true)` into `.bob/commands/*.md` instead (O2).
   bobDialect = false,
 } = {}) {
   const ov = overrides || {};
-  if (host === 'claude') warnClaudeIgnored(ov);
+  if (bobDialect) warnBobIgnored(ov);
+  else if (host === 'claude') warnClaudeIgnored(ov);
   let nAgents = 0;
   let nSkills = 0;
   const written = [];
@@ -653,8 +685,9 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     let kind;
     let userOnly = false;
     if (folder === 'agents') {
-      fm = host === 'claude' ? claudeAgentFrontmatter(stem, text, ov)
-        : opencodeAgentFrontmatter(stem, text, ov, theme);
+      if (bobDialect) fm = bobAgentFrontmatter(stem, text);
+      else if (host === 'claude') fm = claudeAgentFrontmatter(stem, text, ov);
+      else fm = opencodeAgentFrontmatter(stem, text, ov, theme);
       dest = path.join(agentsDir, `${stem}.md`);
       kind = 'agent';
     } else {
