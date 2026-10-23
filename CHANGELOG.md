@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.17.0] — 2026-10-23
+
+Minor: doctrine comms 5 Mark the Ask; a version bump on main now releases itself; two Bob fixes.
+
+### Upgrade notes
+- Run `geneseed rebuild-all`; nothing changes on a machine until something re-emits.
+
 ### Added
 - **Doctrine comms 5, Mark the Ask.** When a reply stops and waits on the user (a question, a choice, an approval, a blocker), the agent marks the ask so a reader who skims finds it first: one leading emoji marker for its kind (`❓` question, `👉` act to do, `⚠️` risk or blocker, `✅` done, waits on sign-off), placed before the reference code (`❓ **Q3** — keep the v1 route?`), arrows (`→`) for options and flows with the recommended option first, and one ask per block. Colour is used only where the host renders it, never as raw ANSI in plain text. Routine output stays plain, and the prose around a marker keeps Simplified Technical English. It is in the toggleable comms pack, not a law, per DESIGN.md Decision 7: `--exclude-rules "comms 5"` turns it off. The carrier ceilings rise by 1 114 characters (full) and 512 (lean). Run `geneseed rebuild-all` to get it.
 
