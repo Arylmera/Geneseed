@@ -1207,6 +1207,44 @@ test('read-only agents get a permission block and an editing agent does not', ()
   });
 });
 
+// Bob 2.2.3's own agent frontmatter reader (`Kfn` in bob-code/dist/extension.js), copied so the
+// assertions below read what Bob reads: `key: value` lines, and `  - item` lines appended to the
+// key above them. Bob takes `groups` (default read/edit/execute) and never reads Claude's
+// `disallowedTools`, so a Claude-dialect read-only agent got edit and execute on Bob.
+const bobFrontmatter = (text) => {
+  const fm = {};
+  let key = '';
+  for (const line of text.split(/\r?\n---/)[0].split(/\r?\n/)) {
+    const item = line.match(/^\s+-\s+(.+)/);
+    if (item && key) { fm[key] = [...(Array.isArray(fm[key]) ? fm[key] : []), item[1].trim()]; continue; }
+    const kv = line.match(/^(\w+):\s*(.*)/);
+    if (!kv) continue;
+    key = kv[1];
+    if (kv[2].trim() !== '') fm[key] = kv[2].trim();
+  }
+  return fm;
+};
+
+test('Bob agents carry Bob\'s own groups: read-only stays read-only, bash opt-in adds execute', () => {
+  withDir((d) => {
+    writeNativeLayer(itemsOf(), path.join(d, 'agents'), path.join(d, 'skills'),
+      { reviewer: { model: 'x/y' } }, { src: cfg().src, host: 'claude', bobDialect: true });
+    const agent = (n) => bobFrontmatter(read(d, 'agents', `${n}.md`));
+    // skeptic never opted into bash: read alone. reviewer opted in: read + execute, never edit.
+    // The pair is the point — one `read` proves nothing about whether the marker is read at all.
+    assert.deepEqual(agent('skeptic').groups, ['read']);
+    assert.deepEqual(agent('reviewer').groups, ['read', 'execute']);
+    // An editing agent states nothing, so it keeps Bob's default read/edit/execute.
+    assert.equal(agent('tester').groups, undefined);
+    for (const n of ['skeptic', 'reviewer', 'tester']) {
+      assert.equal(agent(n).disallowedTools, undefined, `${n} still carries Claude's key`);
+    }
+    // Bob throws on `model:` and drops the agent unseen, so an override must not reach it.
+    assert.equal(agent('reviewer').model, undefined);
+    assert.equal(agent('reviewer').name, 'reviewer');
+  });
+});
+
 test('agent overrides are absent, parsed, or malformed — never fatal', () => {
   withDir((d) => {
     assert.deepEqual(loadAgentOverrides(d), {});                     // absent -> {}
