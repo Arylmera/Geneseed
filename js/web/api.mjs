@@ -8,7 +8,7 @@
  * bind paths to these functions are `routes.mjs`. This file imports none of its route siblings,
  * which is what keeps the old `api ↔ actions` and `api ↔ activity` cycles from coming back.
  */
-import { readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, CREDIT_RE, ROOT, SRC, THEMES, discoverNames, loadKits, makeCfg, upstreamOf } from '../build/source.mjs';
@@ -500,7 +500,11 @@ export function apiLoopsActive() {
 }
 
 /** Is a newer release on npm than the source this console serves? See update-check.mjs. */
-export const apiUpdate = (state) => updateStatus(state, releaseLabel());
+// `git`: a clone updates by `git pull` whatever npm says — main moves between releases, and a
+// work proxy can leave the release check unanswered — so the console always offers Update there.
+// `.git` is a file in a worktree, a folder in a clone; existence covers both.
+export const apiUpdate = (state) => ({ ...updateStatus(state, releaseLabel()),
+  git: existsSync(path.join(ROOT, '.git')) });
 
 /** The source's release label, or null when it cannot be read. */
 function releaseLabel() {

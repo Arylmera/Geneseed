@@ -300,6 +300,17 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       if (jid === null) return sendJson(res, { error: 'busy' }, 409, ae);
       return sendJson(res, { job_id: jid }, 202, ae);
     }
+    // A rebuild-all on a STALE server (a manual `git pull` under it) restarts it afterwards, as
+    // an update does: otherwise the rebuild lands and the page keeps serving the old code.
+    // `restarts` tells the console to wait for the new server and reload.
+    if (action === 'build-all' && state.daemonStale?.()) {
+      const jid = jm.start(action, actionCommands(action), (rc) => {
+        state.refresh();
+        if (rc === 0) requestRestart(state.theme);
+      });
+      if (jid === null) return sendJson(res, { error: 'busy' }, 409, ae);
+      return sendJson(res, { job_id: jid, restarts: true }, 202, ae);
+    }
     // Build resolves its argv off the install (`buildActionCmds`); the other actions take no
     // axes and self-resolve the deployed theme downstream.
     const cmds = action === 'build' ? buildActionCmds(state, body) : actionCommands(action);

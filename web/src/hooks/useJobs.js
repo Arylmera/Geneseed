@@ -45,7 +45,9 @@ export function useJobs({ onFinish, onError } = {}) {
     if (!activeId) return
     // Update jobs end with the server restarting itself to load the pulled
     // code, so the poller can lose it mid-bounce — reconnect instead of dying.
-    const isUpdate = runs.find((r) => r.id === activeId)?.action === 'update'
+    // A rebuild on a stale server does the same; the server says so (`restarts`).
+    const run = runs.find((r) => r.id === activeId)
+    const isUpdate = run?.action === 'update' || !!run?.restarts
     // The pid of the server running the update, so the reload waits for the NEW one — the old
     // server answers pings for a moment after it queues its own restart.
     let oldPid = null
@@ -73,7 +75,9 @@ export function useJobs({ onFinish, onError } = {}) {
         if (j.status !== 'running') {
           clearInterval(t)
           setActiveId(null)
-          if (isUpdate) {
+          // The server restarts only after a job that succeeded; a failed one stays on this
+          // server, so it gets the soft refresh rather than 30 s of waiting for a new pid.
+          if (isUpdate && j.status === 'done') {
             // The restart is already queued server-side; give it a beat to go
             // down, then reload once it answers again.
             waitForServerThenReload(2000, oldPid)
@@ -101,11 +105,18 @@ export function useJobs({ onFinish, onError } = {}) {
 
   const runAction = async (name, opts) => {
     try {
-      const { job_id } = await api.action(name, opts)
+      const { job_id, restarts } = await api.action(name, opts)
       const label = name === 'build' && opts?.theme ? `build (${opts.theme} · ${opts.emit})` : name
       setRuns((rs) => [
         ...rs,
-        { id: job_id, action: label, status: 'running', output: '', started: Date.now() / 1000 },
+        {
+          id: job_id,
+          action: label,
+          status: 'running',
+          output: '',
+          started: Date.now() / 1000,
+          restarts: !!restarts,
+        },
       ])
       setActiveId(job_id)
       setConsoleOpen(true)
