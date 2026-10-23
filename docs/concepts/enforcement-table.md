@@ -64,7 +64,8 @@ follow them, not because a tool call was ever inspected.
 **Doctrine: rigor** — `idempotent-by-default` · `honest-tests` · `cover-and-verify` ·
 `prove-the-gate`.
 
-**Doctrine: comms** — `codes-that-persist` · `structure-beside-prose` · `declare-the-judgment-calls`.
+**Doctrine: comms** — `codes-that-persist` · `structure-beside-prose` · `declare-the-judgment-calls` ·
+`simplified-technical-english` · `mark-the-ask`.
 
 ---
 

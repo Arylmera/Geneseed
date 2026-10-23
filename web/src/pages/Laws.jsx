@@ -220,6 +220,11 @@ const DOCTRINE_META = {
     'Write prose in ASD-STE100: short sentences, one meaning per word, imperative steps.',
     'simplified-technical-english',
   ],
+  'comms.5': [
+    'comms',
+    'Mark an ask that waits on the user with an emoji and arrows; routine output stays plain.',
+    'mark-the-ask',
+  ],
 }
 
 // The doctrine rows, grouped by pack in the order the server sends them (PACK_ORDER, the reading
