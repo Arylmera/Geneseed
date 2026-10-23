@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- OpenCode 1.x: the guard and learn plugins no longer write `[geneseed-guard] …` / `[geneseed-learn] …` lines in red over the TUI input box. Their messages now go to OpenCode's own log (`client.app.log`, service `geneseed-guard` / `geneseed-learn`). OpenCode 2 and a refused log call still use stderr. The workflow plugin's one-line load banner stays on stderr.
+
 ## [4.15.0] — 2026-10-22
 
 Minor: a new comms doctrine rule makes every generated agent write its prose in ASD-STE100 Simplified Technical English.

@@ -38,6 +38,21 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
 
+// OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
+// writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
+// client and keep stderr, as does a refused log call, so no line is lost. Never throws:
+// a log line must not break a tool call.
+let LOG_CLIENT = null
+function say(msg, level = "warn") {
+  try {
+    if (LOG_CLIENT?.app?.log) {
+      Promise.resolve(LOG_CLIENT.app.log({ body: { service: "geneseed-learn", level, message: msg } })).catch(() => console.error(`[geneseed-learn] ${msg}`))
+      return
+    }
+  } catch { /* fall through to stderr */ }
+  console.error(`[geneseed-learn] ${msg}`)
+}
+
 // The plugin's own directory. In the global install the layout is
 // <cfg>/plugins/geneseed-learn.js beside <cfg>/memory, so the store can be found
 // relative to this file — no manual `export GENESEED_HARNESS` needed.
@@ -471,17 +486,18 @@ async function storeDistil(output, { isChild, memDir, agentName, existing }) {
     const lesson = output.trim().split("\n")[0].replace(/^[-*]\s*/, "").trim()
     if (lesson.length < 10 || lesson.length > 300) return // junk / truncation guard
     const f = await appendAgentLesson(memDir, agentName, lesson)
-    console.error(`[geneseed-learn] agent lesson -> ${f}`)
+    say(`agent lesson -> ${f}`, "info")
     return
   }
   const res = await writeMemories(output, memDir, existing)
   for (const [verb, slugs] of [["wrote", res.created], ["updated", res.updated], ["archived", res.archived]]) {
-    if (slugs.length) console.error(`[geneseed-learn] ${verb} ${slugs.length} memory file(s): ${slugs.join(", ")}`)
+    if (slugs.length) say(`${verb} ${slugs.length} memory file(s): ${slugs.join(", ")}`, "info")
   }
 }
 
 export const GeneseedLearn = async (ctx) => {
   const { client } = ctx ?? {}
+  if (client) LOG_CLIENT = client
   const ours = new Set()       // throwaway distil sessions — never mine our own output
   const timers = new Map()     // sid -> debounce timer, re-armed on each idle
   const inFlight = new Set()   // sid currently being distilled (guards against overlap)
@@ -510,8 +526,8 @@ export const GeneseedLearn = async (ctx) => {
       if (!memDir) {
         if (!warnedNoDir) {
           warnedNoDir = true
-          console.error(
-            "[geneseed-learn] no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY."
+          say(
+            "no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY."
           )
         }
         return
@@ -524,8 +540,8 @@ export const GeneseedLearn = async (ctx) => {
       notes = notes.slice(-MAX_NOTES_CHARS)
       model = model ?? envModel()
       if (!model) {
-        console.error(
-          "[geneseed-learn] could not determine a model — set $GENESEED_MODEL=provider/model."
+        say(
+          "could not determine a model — set $GENESEED_MODEL=provider/model."
         )
         return
       }
@@ -540,7 +556,7 @@ export const GeneseedLearn = async (ctx) => {
       const newId = session?.id ?? session?.data?.id
       if (!newId) {
         // Prompting with {id: undefined} would 404 silently on every idle.
-        console.error("[geneseed-learn] session.create returned no id — skipping this distil.")
+        say("session.create returned no id — skipping this distil.")
         return
       }
       ours.add(newId)
@@ -558,7 +574,7 @@ export const GeneseedLearn = async (ctx) => {
       await storeDistil(output, { isChild, memDir, agentName, existing })
     } catch (err) {
       // Never break the session over a memory write.
-      console.error(`[geneseed-learn] skipped: ${err?.message ?? err}`)
+      say(`skipped: ${err?.message ?? err}`)
     } finally {
       inFlight.delete(sid)
     }
@@ -647,7 +663,7 @@ async function setupV2(ctx) {
       if (!memDir) {
         if (!warnedNoDir) {
           warnedNoDir = true
-          console.error("[geneseed-learn] no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY.")
+          say("no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY.")
         }
         return
       }
@@ -660,7 +676,7 @@ async function setupV2(ctx) {
         model = env ? { providerID: env.providerID, id: env.modelID } : null
       }
       if (!model) {
-        console.error("[geneseed-learn] could not determine a model — set $GENESEED_MODEL=provider/model.")
+        say("could not determine a model — set $GENESEED_MODEL=provider/model.")
         return
       }
 
@@ -673,7 +689,7 @@ async function setupV2(ctx) {
       })
       await storeDistil(String(reply?.text ?? ""), { isChild, memDir, agentName, existing })
     } catch (err) {
-      console.error(`[geneseed-learn] skipped: ${err?.message ?? err}`)
+      say(`skipped: ${err?.message ?? err}`)
     } finally {
       inFlight.delete(sid)
     }
@@ -695,7 +711,7 @@ async function setupV2(ctx) {
       if (prev) clearTimeout(prev)
       timers.set(sid, setTimeout(() => { timers.delete(sid); runDistill(sid) }, DEBOUNCE_MS))
     }
-  })().catch((err) => console.error(`[geneseed-learn] event stream ended: ${err?.message ?? err}`))
+  })().catch((err) => say(`event stream ended: ${err?.message ?? err}`))
   return () => {
     controller.abort()
     for (const t of timers.values()) clearTimeout(t)

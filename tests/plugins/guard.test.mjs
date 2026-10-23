@@ -625,3 +625,23 @@ test("the root-scan constants stay in parity with js/hosts/hooks.mjs's rootScan"
   }
   for (const name of names) assert.equal(pick(guardSrc, name), pick(hookSrc, name), `${name} drifted`)
 })
+
+// OpenCode 1.x draws a plugin's stderr over its TUI input box, so with a V1 client the
+// guard's BLOCKED line must go to `client.app.log` and print nothing. Last in the file:
+// the client sticks to the module for the rest of the run.
+test("with a V1 client, guard messages go to client.app.log, not stderr", async () => {
+  const logged = []
+  const client = { app: { log: async (req) => { logged.push(req.body); return true } } }
+  const v1 = (await GeneseedGuard({ client, directory: tmp }))["tool.execute.before"]
+  const printed = []
+  const orig = console.error
+  console.error = (...a) => printed.push(a.join(" "))
+  try {
+    await assert.rejects(v1({ tool: "bash", args: { command: "rm -rf /" } }, {}), /\[geneseed-guard\] blocked/)
+  } finally { console.error = orig }
+  assert.deepEqual(printed, [])
+  assert.equal(logged.length, 1)
+  assert.equal(logged[0].service, "geneseed-guard")
+  assert.equal(logged[0].level, "warn")
+  assert.match(logged[0].message, /^BLOCKED: catastrophic command/)
+})
