@@ -197,6 +197,20 @@ const setHost = (args) => { HOST = (args && args.host) || 'claude'; };
 const BOB_DENY_EXIT = 2;
 
 /**
+ * Said after every Bob block. Exit 2 is final on Bob — no ask tier, and consent typed in the
+ * chat never reaches the hook — so a reason that invites a confirmation sends the model looking
+ * for a way round: live (2026-10-23) it retried with `-Confirm:$false`, then `git clean`, then
+ * told the user to disable the Geneseed hook. This names the one real way out instead.
+ */
+const BOB_FINAL = ' Bob has no approval step for this gate: neither a confirmation in the chat '
+  + 'nor a retry in another form lifts it. Leave it, or ask the user to do it themself, outside '
+  + 'Bob. Never suggest disabling the Geneseed hook.';
+
+/** Law IV's real-loss tail, where the host can ask. Bob's is `BOB_FINAL`, appended by `ask`. */
+const confirmTail = () => (HOST === 'bob' ? 'Leave the data in place.'
+  : 'Confirm this specific command, or leave the data in place.');
+
+/**
  * On Bob, which has no ask tier, which rules are worth a hard block. Laws I and IV: a
  * credential in a tracked file and a history-discarding git act are wrong in every context,
  * so refusing them costs nothing. rigor-5 (External Gate) joins them: a protected check the
@@ -260,7 +274,7 @@ function ask(args, verb, rule, reason) {
     }
     ledger(args && args.root, verb, rule);
     // stdout is not read on Bob's PreToolUse; the reason goes where Bob's hook log looks.
-    err(`[geneseed] BLOCKED: ${reason}\n`);
+    err(`[geneseed] BLOCKED: ${reason}${BOB_FINAL}\n`);
     return BOB_DENY_EXIT;
   }
   ledger(args && args.root, verb, rule);
@@ -458,7 +472,7 @@ function gitDecide(args, payload) {
       { split: lossSegments });
     if (loss) {
       return ask(args, 'git-gate', 'law-4', `Geneseed (Deletion Is Deliberate) \u2014 ${loss}. `
-        + 'Confirm this specific command, or leave the data in place.');
+        + confirmTail());
     }
   }
   // Before `--no-consent`: that flag drops the process pack's rule, not this one.
