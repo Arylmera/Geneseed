@@ -21,7 +21,7 @@ import {
 } from './emit-common.mjs';
 import { kitsBody, renderAll, renderFile } from './render.mjs';
 import {
-  BOB_RULES_STUB, ensureContextStub, ensureExcludesStub, ensureNotebookIndex,
+  BOB_RULES_STUB, bobFirstReply, ensureContextStub, ensureExcludesStub, ensureNotebookIndex,
   ensureProfileStub,
   ensureRulesStub, ensureWikiStub, WIKI_FILE,
 } from './stubs.mjs';
@@ -100,7 +100,7 @@ export function emitClaudeRender(cfg, job) {
   if (isBob && agentText !== null) {
     const rulesMd = path.join(cfgDir, 'rules', 'geneseed.md');
     claimAndWrite(cfgDir, rulesMd, 'rules/geneseed.md', scope === 'project' ? BOB_RULES_STUB
-      : stripCapabilityLinks(prefixedAgentText('../') || agentText), owned);
+      : bobFirstReply(theme.LOADED_SIGIL) + stripCapabilityLinks(prefixedAgentText('../') || agentText), owned);
   }
 
   ensureAgentOverridesStub(cfg, cfgDir);
@@ -179,6 +179,8 @@ export function emitClaudeRender(cfg, job) {
   let claudeMdText = null;
   if (agentText !== null && !(isBob && scope === 'global')) {
     claudeMdText = stripCapabilityLinks(prefixedAgentText(lawsPrefix) || agentText);
+    // Bob only: its greeting persona outranks the template's sigil paragraph — see `bobFirstReply`.
+    if (isBob) claudeMdText = bobFirstReply(theme.LOADED_SIGIL) + claudeMdText;
   }
 
   // WIRE — see `claudeWire` below. One child per emit, so the two halves are two
