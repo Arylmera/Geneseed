@@ -8,7 +8,7 @@
  * bind paths to these functions are `routes.mjs`. This file imports none of its route siblings,
  * which is what keeps the old `api ↔ actions` and `api ↔ activity` cycles from coming back.
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, CREDIT_RE, ROOT, SRC, THEMES, discoverNames, loadKits, makeCfg, upstreamOf } from '../build/source.mjs';
@@ -35,7 +35,7 @@ import {
   configItems, deployed, dget, memoryItems, notebookItems, wikiItems,
 } from './catalog.mjs';
 import { stampMinute, viewCfg } from './state.mjs';
-import { updateStatus } from './update-check.mjs';
+import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
 
 /**
  * `js/web/docs.mjs` imports these three from HERE, and that file is outside this split — so
@@ -499,12 +499,26 @@ export function apiLoopsActive() {
   return { loops: activeLoops() };
 }
 
-/** Is a newer release on npm than the source this console serves? See update-check.mjs. */
-// `git`: a clone updates by `git pull` whatever npm says — main moves between releases, and a
-// work proxy can leave the release check unanswered — so the console always offers Update there.
-// `.git` is a file in a worktree, a folder in a clone; existence covers both.
-export const apiUpdate = (state) => ({ ...updateStatus(state, releaseLabel()),
-  git: existsSync(path.join(ROOT, '.git')) });
+/**
+ * Is a newer release on npm than the source this console serves, and how would this copy take
+ * it? See update-check.mjs.
+ *
+ * `install` picks the Update route (`git`, `npm-global`, `other`); `git` is kept beside it for a
+ * console bundle older than the field. `behind` is a clone's own "up to date": commits upstream
+ * holds that it does not, null when unknown — a clone can always pull, since `main` moves between
+ * releases and a work proxy can leave the release check unanswered. `command` is what to run by
+ * hand when the console cannot update this copy itself.
+ */
+export function apiUpdate(state) {
+  const install = installKind();
+  return {
+    ...updateStatus(state, releaseLabel()),
+    install,
+    git: install === 'git',
+    behind: install === 'git' ? gitBehind(state, { busy: Boolean(state.jobBusy?.()) }) : null,
+    command: install === 'other' ? MANUAL_UPDATE : null,
+  };
+}
 
 /** The source's release label, or null when it cannot be read. */
 function releaseLabel() {

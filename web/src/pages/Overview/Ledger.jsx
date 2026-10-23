@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import { useRules } from '../../hooks/useRules.js'
@@ -21,10 +21,29 @@ import {
 const soft = (p) => p.catch(() => null)
 const pct = (n, of) => `${of ? Math.min(100, (n / of) * 100) : 0}%`
 
+// The page re-asks /api/update this often while it stays open, and again when its tab comes
+// back into view. The daemon answers from its own once-a-day check, so this costs no upstream
+// request; it only bounds how long an open page goes without learning what the daemon learnt.
+export const UPDATE_POLL_MS = 60 * 60 * 1000
+
 function VersionChip({ update, onAction }) {
   if (!update) return null
+  // `install` picks the route; a daemon older than the field only sent `git`.
+  const install = update.install ?? (update.git ? 'git' : 'npm-global')
+  const behind = install === 'git' && typeof update.behind === 'number' ? update.behind : null
   const chip =
-    update.latest === null ? (
+    behind !== null ? (
+      behind > 0 ? (
+        <span className="mono ver-chip">
+          {update.current ?? ''}{' '}
+          <span className="ver-new">
+            {behind} commit{behind === 1 ? '' : 's'} to pull
+          </span>
+        </span>
+      ) : (
+        <span className="mono dim ver-chip">{update.current ?? ''} · up to date</span>
+      )
+    ) : update.latest === null ? (
       <span className="mono dim ver-chip">{update.current ?? ''} · update check unavailable</span>
     ) : update.available ? (
       <span className="mono ver-chip">
@@ -33,16 +52,35 @@ function VersionChip({ update, onAction }) {
     ) : (
       <span className="mono dim ver-chip">{update.current} · latest</span>
     )
+  // A copy the console cannot update itself gets the command to run, never a button that fails.
+  if (install === 'other') {
+    if (!update.available || !update.command) return chip
+    return (
+      <>
+        {chip}
+        <span className="dim">
+          update with <code className="mono">{update.command}</code>
+        </span>
+      </>
+    )
+  }
   // A git clone can always pull: main moves between releases, and the release check may be
   // unanswered behind a proxy. An npm install updates only when a release is out.
-  if (!update.available && !update.git) return chip
+  if (install !== 'git' && !update.available) return chip
+  const due = behind === null ? Boolean(update.available) : behind > 0
+  const title =
+    install === 'git'
+      ? behind === 0
+        ? 'Nothing to pull: up to date with upstream. Pulls and rebuilds every install anyway.'
+        : 'git pull, then rebuild every install'
+      : 'npm install -g geneseed@latest, then rebuild every install'
   return (
     <>
       {chip}
       <button
         type="button"
-        className={update.available ? 'btn' : 'btn ghost'}
-        title={update.git ? 'git pull, then rebuild every install' : undefined}
+        className={due ? 'btn' : 'btn ghost'}
+        title={title}
         onClick={() => onAction('update')}
       >
         Update
@@ -430,7 +468,28 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
   const { data: fleet } = useAsync(() => soft(api.fleet()), [dataRev])
   const { data: usage } = useAsync(() => soft(api.usage()), [dataRev])
   const { data: gates } = useAsync(() => soft(api.gates()), [dataRev])
-  const { data: update } = useAsync(() => soft(api.update()), [dataRev])
+  // A failed re-poll (the daemon restarting under it) keeps the last answer rather than hiding
+  // the chip and the button until the next good one.
+  const lastUpdate = useRef(null)
+  const { data: update, reload: reloadUpdate } = useAsync(
+    () =>
+      soft(api.update()).then((u) => {
+        if (u) lastUpdate.current = u
+        return lastUpdate.current
+      }),
+    [dataRev],
+  )
+  useEffect(() => {
+    const timer = setInterval(reloadUpdate, UPDATE_POLL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') reloadUpdate()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [reloadUpdate])
   const { data: rules } = useRules(dataRev)
   const { data: activity } = useAsync(() => soft(api.activity()), [dataRev])
   const { data: profile } = useAsync(() => soft(api.profile()), [dataRev])

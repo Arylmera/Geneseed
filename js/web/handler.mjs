@@ -13,13 +13,13 @@
 import { resolvePath } from '../hosts/hosts.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { parseIntStrict, percentDecode } from '../lib/text.mjs';
-import { preflight } from '../maintain/update.mjs';
 import { apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildActionCmds, mcpTargetPaths } from './actions.mjs';
 import { NotFound } from './catalog.mjs';
 import { openUrl, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
-import { actionCommands } from './jobs.mjs';
+import { actionCommands, updatePlan } from './jobs.mjs';
 import { POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, readJsonBody } from './routes.mjs';
+import { installKind } from './update-check.mjs';
 import { isFile } from '../lib/fs.mjs';
 import { readFileSync, statSync } from 'node:fs';
 import { basename, dirname, extname, join, sep } from 'node:path';
@@ -287,16 +287,26 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       return startJob(res, 'deploy', [plan.cmd], ae);
     }
     if (action === 'update') {
-      const pre = preflight();
-      if (!pre.ok) {
-        return sendJson(res,
-          { precondition: pre.code, kind: pre.kind, message: pre.message }, 422, ae);
+      // The route follows the install (`updatePlan`); a refusal is the same friendly 422.
+      // The daily background `git fetch` still running would hold `.git` locks the update's own
+      // fetch needs, and fail it as `fetch_failed`; it ends within GENESEED_NET_TIMEOUT.
+      if (state._behind?.inflight) {
+        return sendJson(res, { precondition: 'checking', kind: 'info',
+          message: 'The console is checking upstream right now. Try Update again in a moment.' },
+        422, ae);
       }
+      const plan = updatePlan(installKind());
+      if (plan.refuse) return sendJson(res, plan.refuse, 422, ae);
       // `requestRestart` declines on a foreground server, which then shows its stale banner.
-      const jid = jm.start('update', actionCommands('update'), (rc) => {
+      const jid = jm.start('update', plan.cmds, (rc) => {
         state.refresh();
-        if (rc === 0) requestRestart(state.theme);
-      });
+        if (rc === 0) {
+          // The old answers ("3 commits to pull") are about the code just replaced.
+          delete state._behind;
+          delete state._update;
+          requestRestart(state.theme);
+        }
+      }, plan.opts);
       if (jid === null) return sendJson(res, { error: 'busy' }, 409, ae);
       return sendJson(res, { job_id: jid }, 202, ae);
     }

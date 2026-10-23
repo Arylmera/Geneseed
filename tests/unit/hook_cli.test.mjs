@@ -536,12 +536,32 @@ const ALLOWED_SPAWNS = {
     binding: '{ spawn, spawnSync }',
     calls: 1,
     spawnCalls: 1,
-    what: '`node bin/geneseed-cli.mjs <verb>` (the job) and `taskkill /T` (its cancel)',
+    // AMENDED 2026-10-23: the Update button on a global npm install runs `npm install -g
+    // geneseed@latest` and then the new package's `rebuild-all` (`npmUpdateCommands`), through the
+    // same call site. `npm` is `which('npm')`, and `npm.cmd` on Windows needs the shell — an
+    // opt-in only that job sets (`winShell`), so body-derived argvs never reach cmd.exe.
+    what: '`node bin/geneseed-cli.mjs <verb>` (the job), `npm install -g geneseed@latest` + '
+      + '`node bin/geneseed-cli.mjs rebuild-all` (the npm update) and `taskkill /T` (its cancel)',
     literals: ["spawnSync(taskkill, ['/T', '/F', '/PID', String(child.pid)]", "const taskkill = which('taskkill');",
       'const NODE = () => process.execPath;',
       "const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');",
       "const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');",
-      'p = spawn(cmd[0], cmd.slice(1), {'],
+      "[npm, 'install', '-g', 'geneseed@latest'],",
+      "[NODE(), CLI(), 'rebuild-all'],",
+      "npm = () => which('npm')",
+      'const shell = winShell && process.platform === \'win32\'',
+      'p = spawn(shell ? `"${cmd[0]}"` : cmd[0], cmd.slice(1), {'],
+  },
+  // ADDED 2026-10-23: how this copy was installed, so the Update button runs the route that can
+  // update it. Read-only — `npm root -g` prints a folder — and only when the package sits in a
+  // `node_modules`, so a clone never spawns it.
+  'web/update-check.mjs': {
+    binding: '{ spawnSync }',
+    calls: 1,
+    spawnCalls: 0,
+    what: '`npm root -g`',
+    literals: ["const r = spawnSync(win ? `\"${npm}\"` : npm, ['root', '-g'], {",
+      "const npm = which('npm');"],
   },
   // ADDED 2026-08-27: `/api/pick-folder`'s native dialog, a user override of the permanent
   // decline the port's `DECLINED_POST` set used to record (retired since; see git history).

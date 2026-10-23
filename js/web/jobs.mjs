@@ -84,6 +84,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { StringDecoder } from 'node:string_decoder';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { ROOT, PACK_ORDER } from '../build/source.mjs';
@@ -93,6 +94,8 @@ import { isDict } from '../hosts/mcp.mjs';
 import { readText, writeText, isFile } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
 import { jsonDumpsCompact, parseJson, isTruthy } from '../lib/json.mjs';
+import { preflight } from '../maintain/update.mjs';
+import { MANUAL_UPDATE } from './update-check.mjs';
 
 /**
  * Terminate a job's WHOLE process tree.
@@ -255,9 +258,11 @@ export class JobManager {
 
   /**
    * `cmds` is a LIST OF ARGVS, run in order, stopping at the first failure. `null` when a
-   * job is already running, which the HTTP layer maps to 409.
+   * job is already running, which the HTTP layer maps to 409. `cwd` defaults to this checkout;
+   * the npm update passes another, since npm cannot replace a folder a child sits in on Windows.
+   * `winShell` is the npm update's too, and only its: see `_run`.
    */
-  start(action, cmds, onDone = null) {
+  start(action, cmds, onDone = null, { cwd = ROOT, winShell = false } = {}) {
     if (this._busy) return null;
     this._busy = true;
     const jid = randomBytes(8).toString('hex');
@@ -272,7 +277,7 @@ export class JobManager {
     });
     // Hand the work to the scheduler and return the id NOW, so the 202 goes out before the
     // child has produced a byte.
-    void this._run(jid, cmds, onDone);
+    void this._run(jid, cmds, onDone, cwd, winShell);
     return jid;
   }
 
@@ -286,15 +291,22 @@ export class JobManager {
     }
   }
 
-  async _run(jid, cmds, onDone = null) {
+  async _run(jid, cmds, onDone = null, cwd = ROOT, winShell = false) {
     let rc = 0;
     let p = null;
     try {
       for (let i = 0; i < cmds.length; i += 1) {
         const cmd = cmds[i];
         this._append(jid, `$ ${cmd.map((c) => String(c)).join(' ')}\n`);
-        p = spawn(cmd[0], cmd.slice(1), {
-          cwd: ROOT,
+        // `npm.cmd` on Windows: Node refuses to spawn a batch file without a shell (the reason
+        // `npmBuild` gives in server.mjs). OPT-IN per job, never sniffed off the argv: only the
+        // npm update asks, and its argv is constants — `install`/`deploy`/`build` carry
+        // body-derived arguments that must never reach cmd.exe.
+        const shell = winShell && process.platform === 'win32'
+          && /\.(cmd|bat)$/i.test(String(cmd[0]));
+        p = spawn(shell ? `"${cmd[0]}"` : cmd[0], cmd.slice(1), {
+          cwd,
+          shell,
           stdio: ['ignore', 'pipe', 'pipe'],
           // No console window for a child of a windowless daemon.
           windowsHide: true,
@@ -455,6 +467,51 @@ export function actionCommands(action, opts = {}) {
   // `null` for anything the table does not name, which the HTTP layer maps to
   // `{"error": "unknown action <x>"}` at 404.
   return Object.hasOwn(table, action) ? table[action] : null;
+}
+
+/**
+ * The `update` action on a GLOBAL NPM install, which `upgrade` (a git pull) cannot update:
+ * `npm install -g geneseed@latest`, then the NEW package's `rebuild-all`. `CLI()` IS the new
+ * package: `installKind` only says `npm-global` when ROOT is the folder npm installs into, and the
+ * step is a fresh process started after npm replaced it, so it loads the code npm just wrote.
+ * Outside the table, whose rows are frozen in tests/unit/web_jobs.test.mjs, because its argv
+ * depends on which npm is on this machine.
+ *
+ * No `sudo`, no elevation, no retry: a permission or proxy refusal is npm's own output in the job
+ * log, which is the one place the user can read how to fix it.
+ */
+export function npmUpdateCommands(npm) {
+  return [
+    [npm, 'install', '-g', 'geneseed@latest'],
+    [NODE(), CLI(), 'rebuild-all'],
+  ];
+}
+
+/**
+ * The Update button's job for an install kind (`installKind`, update-check.mjs): `{ cmds, opts }`
+ * to start, or `{ refuse }`, the 422 body the console shows as an info popup.
+ *
+ * THE KIND IS READ BEFORE `preflight`, which asks git and answers `not_git` for every copy that
+ * is not a clone, an npm install included. An `other` copy is told what to run instead: `upgrade`
+ * there would `git pull` whatever repository the copy happens to sit inside. The npm job runs in
+ * the home folder, not ROOT: on Windows npm cannot replace a folder a child's cwd is in.
+ * The dependencies are injectable for the tests, which must not spawn git or npm.
+ */
+export function updatePlan(install, {
+  pre = preflight, npm = () => which('npm'), home = homedir,
+} = {}) {
+  if (install === 'git') {
+    const p = pre();
+    if (!p.ok) return { refuse: { precondition: p.code, kind: p.kind, message: p.message } };
+    return { cmds: actionCommands('update'), opts: undefined };
+  }
+  const exe = install === 'npm-global' ? npm() : null;
+  if (!exe) {
+    return { refuse: { precondition: 'manual', kind: 'info',
+      message: `The console cannot update this copy. Run \`${MANUAL_UPDATE}\` for a global npm `
+        + 'install, or `git pull` in a clone.' } };
+  }
+  return { cmds: npmUpdateCommands(exe), opts: { cwd: home(), winShell: true } };
 }
 
 /** `actionTable`'s own keys — the table IS the declaration, so this cannot drift from it. */
