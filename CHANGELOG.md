@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.19.0] — 2026-10-24
+
+Minor: shared console building blocks, rule summaries kept next to their rules, and `global` as a documented rule scope.
+
 ### Added
 - **Shared console building blocks.** `PageHeader` (one primary action), `EmptyState`, `DataTable`, `Stat`, `Bar`/`StackBar`, `Ring` and `Popover`, on a 7-step type scale, an 8-step spacing scale and named z-index layers. Pages adopt them in the next release.
 - **`global` is a documented rule scope.** The `rule` skill names `project`, `global` and `user`, and the console's scope select offers `global`. A scope it does not list is still kept as written.
