@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.18.1] — 2026-10-24
+
+Patch: the web console's light mode meets WCAG AA, and console installs default to lean.
+
 ### Fixed
 - **Light mode meets WCAG AA in every flavour, mode and accent.** Accent and status text use darker text companions (`--accent-text`, `--good-text`, `--warn-text`, `--bad-text`), measured against each flavour's real surfaces; button text is chosen by contrast, so a light cyan, amber or green button now carries dark text; every control shows a 2 px focus ring; the light topbar is solid and light cards keep their flavour; the page behind the console and the browser's theme colour follow the active mode. A warning next to an amber accent turns orange, so it no longer looks like the accent. `contrast.test.js` checks all of it against the real stylesheet.
 
