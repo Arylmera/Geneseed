@@ -98,7 +98,7 @@ function AboutSection() {
 }
 
 // The settings page: the console direction picker, machine maintenance
-// (PATH/uninstall, git-pull update), server control, and the About colophon.
+// (PATH link/unlink, git-pull update), server control, and the About colophon.
 // Per-install detail and building live on the Hosts tab and the Overview.
 export default function Settings({
   overview,
@@ -268,9 +268,14 @@ export default function Settings({
         <div className="card-head">
           <h3>Maintenance</h3>
         </div>
+        {/* No Uninstall here: a machine-wide button had no install to target and always removed
+            the OpenCode global. Each install's own panel in Hosts uninstalls that install. */}
         <p className="sub mb-16">
-          Put <code>geneseed</code> on your PATH so it runs from any directory, or remove a global
-          install. Your memory store is always kept. Each runs live in the console.
+          Update this Geneseed copy, or add <code>geneseed</code> to your PATH (or remove it) so it
+          runs from any directory. Each runs live in the console.
+        </p>
+        <p className="sub mb-16">
+          Each install has its own Uninstall in <a href="#/installs">Hosts</a>.
         </p>
         <div className="row wrap gap-10">
           <button className="btn ghost" onClick={() => onAction('update')}>
@@ -283,19 +288,6 @@ export default function Settings({
           </button>
           <button className="btn ghost" onClick={() => onAction('unlink')}>
             Remove from PATH
-          </button>
-          <button
-            className="btn ghost"
-            onClick={async () => {
-              const ok = await confirm(
-                'Uninstall the global Geneseed harness? Your memory store is kept; everything else this install added is removed.',
-                { title: 'Uninstall Geneseed?', confirmLabel: 'Uninstall' },
-              )
-              if (ok) onAction('uninstall')
-            }}
-          >
-            <Icon name="clear" />
-            Uninstall
           </button>
         </div>
       </div>

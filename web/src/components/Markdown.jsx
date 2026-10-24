@@ -6,7 +6,37 @@ import { marked } from 'marked'
 // page holds the POST token, so one `<img onerror>` in a clipping could drive
 // /api/install. Raw HTML stays allowed (docs use <div align>, <kbd>, <sub>);
 // what goes is anything that runs script or leaves the page by a non-web scheme.
-const DROP_TAGS = 'script,style,iframe,frame,frameset,object,embed,link,meta,base,form'
+// SVG animation (SMIL) can write `javascript:` into an href after the walk, and a
+// nested <template> keeps its content in a fragment the walk never enters, so both
+// go whole. Names are compared lower-cased: the parser keeps SVG's camelCase
+// (`animateMotion`), which a CSS type selector would match case-sensitively.
+// Raw-text elements (xmp, noembed, noframes, noscript, plaintext) hide markup as
+// text in one parse that the next parse, under MathML/SVG, reads as elements.
+const DROP_TAGS = new Set([
+  'script',
+  'style',
+  'iframe',
+  'frame',
+  'frameset',
+  'object',
+  'embed',
+  'link',
+  'meta',
+  'base',
+  'form',
+  'template',
+  'animate',
+  'set',
+  'animatemotion',
+  'animatetransform',
+  'discard',
+  'animatecolor',
+  'xmp',
+  'noembed',
+  'noframes',
+  'noscript',
+  'plaintext',
+])
 const URL_ATTRS = new Set([
   'href',
   'src',
@@ -28,14 +58,34 @@ function safeUrl(value) {
 
 // Exported for the test that pins it. A <template> parses inert: nothing in it
 // loads or runs until it is attached, so the walk happens before any harm can.
+// `style` goes too: untrusted CSS can lay a transparent full-viewport link over
+// the console, or beacon out through `background:url()`. Remote <img src> is
+// left to the page CSP (`img-src`), not filtered twice here.
+// The sink parses the output again, and a serialise-then-parse can build elements
+// the walk never saw (mutation XSS). So the pass repeats until its output is
+// stable; markup that never settles is refused whole.
 export function sanitizeHtml(html) {
+  for (let i = 0; i < 4; i++) {
+    const next = sanitizePass(html)
+    if (next === html) return next
+    html = next
+  }
+  return ''
+}
+
+function sanitizePass(html) {
   const t = document.createElement('template')
   t.innerHTML = html
-  t.content.querySelectorAll(DROP_TAGS).forEach((el) => el.remove())
   t.content.querySelectorAll('*').forEach((el) => {
+    if (DROP_TAGS.has(el.localName.toLowerCase())) return el.remove()
     for (const { name, value } of [...el.attributes]) {
       const n = name.toLowerCase()
-      if (n.startsWith('on') || n === 'srcdoc' || (URL_ATTRS.has(n) && !safeUrl(value))) {
+      if (
+        n.startsWith('on') ||
+        n === 'srcdoc' ||
+        n === 'style' ||
+        (URL_ATTRS.has(n) && !safeUrl(value))
+      ) {
         el.removeAttribute(name)
       }
     }

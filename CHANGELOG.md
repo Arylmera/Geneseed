@@ -8,6 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Security
+- **Restore acts only on what the diff offers.** `POST /api/actions/restore` trusted the client's file list: one call could reset `user-rules.md`, `PROFILE.md` or a memory file to its seed, or delete a file the diff never listed. It now restores only the paths `/api/diff` offers, computed on the server. It never touches the files written once and then left to you (`user-rules.md`, `PROFILE.md`, `memory/`, `notebook/`). An added file is moved to `archived-restore/<stamp>/` in the install instead of being deleted.
+- **The web console cannot be framed or driven from another site.** Every response carries a Content-Security-Policy with `frame-ancestors 'none'` and a per-response nonce on the token script, plus `X-Frame-Options: DENY`, `nosniff` and `Referrer-Policy: no-referrer`. One request guard checks the exact Host and port, refuses a cross-site `/api` request (`Sec-Fetch-Site`, foreign `Origin`), and compares the token in constant time. A repeated `GET /api/doctor?fresh=1` reuses a run less than 3 s old. The server sets request and header timeouts.
+- **The markdown sanitizer drops SVG animation elements, `template`, raw-text elements and `style` attributes.** These closed a `javascript:` link set through `<set>`/`<animate>`, a full-page overlay drawn with `style`, and a mutation XSS through `xmp`, `noembed`, `noframes`, `noscript` or `plaintext`.
+
+### Fixed
+- **Settings › Maintenance no longer offers an Uninstall.** It ran `geneseed uninstall --yes` with no target, so it always removed the OpenCode global install, whichever install you were viewing. Each install keeps its own Uninstall in Installs › Hosts.
+- **Editing a rule keeps its scope.** A rule written `scope: global` was saved back as `project` on every Edit or Graduate. A scope the editor does not list is now kept as written. A rule body with a line that reads as a rule heading (`## …`) is refused with a 400, because it could create a second rule with a forged id. So is a `|` in the scope or source.
+
 ## [4.17.1] — 2026-10-23
 
 Patch: the web console's Update button works on a global npm install and re-checks for updates while the page is open.

@@ -153,6 +153,10 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   // Read by `/api/update`, whose background `git fetch` must not race a running update's pull.
   state.jobBusy = () => jm.busy;
   const srv = createServer(makeHandler(state, jm, token, dist, holder));
+  // A client trickling headers or a body (slowloris) would hold a socket forever otherwise; every
+  // real request here is a few KB from the same machine.
+  srv.requestTimeout = 30_000;
+  srv.headersTimeout = 10_000;
   holder.srv = srv;
   return new Promise((done) => {
     srv.on('error', () => {

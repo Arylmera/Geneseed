@@ -19,7 +19,7 @@ import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
 import { splitLines } from '../lib/udiff.mjs';
 import { isFactName } from '../maintain/memory.mjs';
 import { apiMemoryDelete, bget, strOr } from './actions.mjs';
-import { NotFound, memoryDir } from './catalog.mjs';
+import { BadRequest, NotFound, memoryDir } from './catalog.mjs';
 
 /** Splits on runs of `WHITESPACE` (not `\s`), dropping empty strings. */
 const splitWords = (s) => s.split(new RegExp(`[${WHITESPACE}]+`)).filter(Boolean);
@@ -80,6 +80,14 @@ const RULE_HEAD_RE = new RegExp(
   + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
 );
 
+/**
+ * A line `parseRules` reads as the edge of a rule: `## ` ends the current block, and a
+ * `RULE_HEAD_RE` line opens one (a non-breaking space after `##` does the second, not the first).
+ * ONE predicate for both the parser and `ruleFields`, so a body the writer accepts can never
+ * split or forge a rule when read back.
+ */
+const isRuleEdge = (line) => line.startsWith('## ') || RULE_HEAD_RE.test(line);
+
 /** Advisory only; nothing blocks past it. */
 const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
 
@@ -119,7 +127,7 @@ export function parseRules(text) {
     if (!m) continue;
     let end = lines.length;
     for (let j = idx + 1; j < lines.length; j += 1) {
-      if (lines[j].startsWith('## ')) { end = j; break; }
+      if (isRuleEdge(lines[j])) { end = j; break; }
     }
     const rid = Number(m[1]);
     if (seen.has(rid)) warnings.push(`duplicate rule id R${rid}`);
@@ -184,18 +192,27 @@ function ruleBlock(rid, title, scope, source, trialUntil, body) {
  * `\p{Nd}` here and not `\d`, unlike `RULE_HEAD_RE` above: this is a pure predicate over a
  * string that stays a string, so accepting any Unicode decimal digit costs nothing and
  * needs no numeric parse afterward.
+ *
+ * REFUSED, NEVER REWRITTEN: a body line that `isRuleEdge` reads would truncate this rule and
+ * could forge another rule's id, and a `|` in the scope or source would forge a metadata field. An
+ * unknown scope (`global`, written by hand) is kept as written — coercing it to `project` made
+ * every Edit or Graduate silently change the user's rule.
  */
 function ruleFields(body) {
   const title = splitWords(strOr(bget(body, 'title'))).join(' ');
   const text = stripWhitespace(strOr(bget(body, 'body')));
-  if (!title) throw new Error('a rule needs a title');
-  if (!text) throw new Error('a rule needs body text');
-  let scope = bget(body, 'scope');
-  if (scope !== 'user' && scope !== 'project') scope = 'project';
+  if (!title) throw new BadRequest('a rule needs a title');
+  if (!text) throw new BadRequest('a rule needs body text');
+  if (splitLines(text).some(isRuleEdge)) {
+    throw new BadRequest('a rule body cannot have a line that starts with "## " (a rule heading)');
+  }
+  const scope = splitWords(strOr(bget(body, 'scope'))).join(' ') || 'project';
+  if (scope.includes('|')) throw new BadRequest('a rule scope cannot contain "|"');
   const source = splitWords(strOr(bget(body, 'source'))).join(' ');
+  if (source.includes('|')) throw new BadRequest('a rule source cannot contain "|" (write it as "/")');
   const trial = stripWhitespace(strOr(bget(body, 'trial_until')));
   if (trial && !/^\p{Nd}{4}-\p{Nd}{2}-\p{Nd}{2}$/u.test(trial)) {
-    throw new Error('trial until must be YYYY-MM-DD');
+    throw new BadRequest('trial until must be YYYY-MM-DD');
   }
   return [title, text, scope, source, trial];
 }

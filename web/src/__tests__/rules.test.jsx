@@ -104,6 +104,37 @@ describe('Rules', () => {
     )
   })
 
+  // A hand-written scope outside project/user: the select must show it (not "project") and
+  // a save must send it back unchanged.
+  it('editing a scope: global rule keeps global in the form and the payload', async () => {
+    const globalRule = { ...PAYLOAD.rules[0], scope: 'global' }
+    api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, rules: [globalRule] }))
+    render(<Rules />)
+    await waitFor(() => expect(screen.getByText('No emoji in commits')).toBeTruthy())
+    fireEvent.click(screen.getByText('No emoji in commits'))
+    fireEvent.click(screen.getByText('Edit'))
+    expect(screen.getByLabelText('Rule scope').value).toBe('global')
+    fireEvent.click(screen.getByText('Save rule'))
+    await waitFor(() =>
+      expect(api.rulesMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ op: 'update', id: 1, scope: 'global' }),
+      ),
+    )
+  })
+
+  it('a body line starting "## " shows the error and does not save', async () => {
+    render(<Rules />)
+    await waitFor(() => expect(screen.getByText('Add rule')).toBeTruthy())
+    fireEvent.click(screen.getByText('Add rule'))
+    fireEvent.change(screen.getByLabelText('Rule title'), { target: { value: 'New rule' } })
+    fireEvent.change(screen.getByLabelText('Rule body'), {
+      target: { value: 'Line A\n## R2 — x' },
+    })
+    expect(screen.getByRole('alert').textContent).toMatch(/cannot start with “## ”/)
+    fireEvent.click(screen.getByText('Save rule'))
+    expect(api.rulesMutate).not.toHaveBeenCalled()
+  })
+
   it('a 409 conflict shows the reload notice instead of clobbering', async () => {
     const err = new Error('conflict')
     err.status = 409

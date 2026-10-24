@@ -6,34 +6,93 @@
  * surface testable at all. Keep the arity.
  *
  * What it actually uses of HTTP is small and deliberate — a whole-buffer `gzipSync` over a few
- * content types, two Cache-Control policies, a CSRF token on POST only, and a Host guard against
- * DNS rebinding. No streaming, no SSE, no ranges, no cookies, no CORS. The routes it honours are
+ * content types, two Cache-Control policies, one set of security headers (CSP with a per-response
+ * nonce) on every response, and one request guard (`requestGuard`) in front of every route. No
+ * streaming, no SSE, no ranges, no cookies, no CORS. The routes it honours are
  * declared next door in `routes.mjs`; the daemon that starts it is in `daemon.mjs`.
  */
 import { resolvePath } from '../hosts/hosts.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { parseIntStrict, percentDecode } from '../lib/text.mjs';
 import { apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildActionCmds, mcpTargetPaths } from './actions.mjs';
-import { NotFound } from './catalog.mjs';
+import { BadRequest, NotFound } from './catalog.mjs';
 import { openUrl, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands, updatePlan } from './jobs.mjs';
 import { POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, readJsonBody } from './routes.mjs';
 import { installKind } from './update-check.mjs';
 import { isFile } from '../lib/fs.mjs';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { basename, dirname, extname, join, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 /**
- * DNS-rebinding guard. `h.split(":", 1)[0]` keeps everything before the FIRST colon, so
- * `localhost:4747` passes and a bare IPv6 literal would not — which is what the `[::1]`
- * prefix check above it is for.
+ * DNS-rebinding guard, HOSTNAME ONLY. `h.split(":", 1)[0]` keeps everything before the FIRST
+ * colon, so `localhost:4747` passes and a bare IPv6 literal would not — which is what the `[::1]`
+ * prefix check above it is for. The server itself no longer calls it: `requestGuard` matches the
+ * exact `name:port` instead, which this looser predicate cannot express.
  */
 export function localHost(host) {
   const h = (host || '').trim().toLowerCase();
   if (h.startsWith('[::1]')) return true;
   return ['127.0.0.1', 'localhost'].includes(h.split(':', 1)[0]);
+}
+
+/**
+ * Sent on EVERY response, merged last so no caller's `extra` can weaken one. `frame-ancestors` +
+ * `X-Frame-Options` stop a foreign page from framing the console and clickjacking its buttons; the
+ * CSP admits the one inline script (the token) by `nonce`, so an injected `<script>` cannot run
+ * and read the token. `style-src 'unsafe-inline'` because the React UI sets `style=` attributes.
+ */
+export function securityHeaders(nonce) {
+  return {
+    'X-Frame-Options': 'DENY',
+    'Content-Security-Policy': "frame-ancestors 'none'; default-src 'self'; "
+      + `script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; `
+      + "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; "
+      + "manifest-src 'self'; base-uri 'none'; form-action 'none'",
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+  };
+}
+
+/**
+ * THE one request guard, answered before dispatch (and before a POST body is read). `null` =
+ * pass, else `{ code, body }`.
+ *
+ * - Host must be an allowed hostname AT THIS SOCKET'S PORT, exactly: the hostname stops DNS
+ *   rebinding, the port stops another local server's page from posing as this origin.
+ * - `/api/*`: a cross-site or same-site fetch, or a foreign `Origin`, is refused even on GET —
+ *   the reads expose paths and memories. A request with neither header (curl, Node) passes.
+ * - Any non-GET: the CSRF token, compared in constant time so its bytes cannot be timed out.
+ */
+export function requestGuard(req, token) {
+  const host = req.headers.host || '';
+  // Exact `name:port`, not `localHost` + a suffix test: that pair let `[::1]x.evil:4747` and
+  // `localhost:1:4747` through. Lower-cased the way browsers send it.
+  const want = `:${req.socket.localPort}`;
+  const h = host.trim().toLowerCase();
+  if (!['127.0.0.1', 'localhost', '[::1]'].includes(h.endsWith(want) ? h.slice(0, -want.length) : '')) {
+    return { code: 403, body: { error: 'forbidden host' } };
+  }
+  const path = (req.url || '').split('?', 1)[0];
+  if (path.startsWith('/api/')) {
+    const site = req.headers['sec-fetch-site'];
+    const origin = req.headers.origin;
+    if (site === 'cross-site' || site === 'same-site'
+        || (origin !== undefined && origin !== `http://${host}`)) {
+      return { code: 403, body: { error: 'forbidden origin' } };
+    }
+  }
+  if (req.method !== 'GET') {
+    const got = Buffer.from(String(req.headers['x-geneseed-token'] ?? ''), 'utf-8');
+    const want = Buffer.from(token, 'utf-8');
+    if (got.length !== want.length || !timingSafeEqual(got, want)) {
+      return { code: 403, body: { error: 'forbidden' } };
+    }
+  }
+  return null;
 }
 
 const GZIP_TYPES = ['application/json', 'text/', 'image/svg+xml',
@@ -74,7 +133,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   // page stayed blank with nothing logged on either side.
   const distReal = resolvePath(dist);
 
-  function sendBytes(res, body, ctype, code = 200, extra = null, acceptEncoding = '', gzStore = null) {
+  function sendBytes(res, body, ctype, code = 200, extra = null, acceptEncoding = '', gzStore = null,
+    nonce = randomBytes(16).toString('base64')) {
     const headers = { ...(extra || {}) };
     if (body.length >= GZIP_MIN && GZIP_TYPES.some((t) => ctype.startsWith(t))
         && (acceptEncoding || '').includes('gzip')) {
@@ -86,6 +146,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       'Content-Type': ctype,
       'Content-Length': String(body.length),
       ...headers,
+      ...securityHeaders(nonce),
     });
     res.end(body);
   }
@@ -114,8 +175,10 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     }
     let data = entry.data;
     let extra = null;
+    // Fresh per response; for index.html the same value goes in the token script and its CSP.
+    const nonce = randomBytes(16).toString('base64');
     if (basename(fp) === 'index.html') {
-      const inject = Buffer.from(`<script>window.__GENESEED_TOKEN__="${token}";</script>`, 'utf-8');
+      const inject = Buffer.from(`<script nonce="${nonce}">window.__GENESEED_TOKEN__="${token}";</script>`, 'utf-8');
       data = replaceOnce(data, Buffer.from('</head>'), Buffer.concat([inject, Buffer.from('</head>')]));
       extra = { 'Cache-Control': 'no-store' };
       // The injected bytes differ from `entry.data`, so the gz cache must not serve them.
@@ -124,7 +187,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       extra = { 'Cache-Control': 'public, max-age=31536000, immutable' };
     }
     return sendBytes(res, data, CTYPES[extname(fp)] || 'application/octet-stream',
-      200, extra, acceptEncoding, entry);
+      200, extra, acceptEncoding, entry, nonce);
   }
 
   function doGet(req, res, path, ae) {
@@ -154,19 +217,6 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         : sendJson(res, { error: 'no such job' }, 404, ae);
     }
     return serveStatic(res, path, ae);
-  }
-
-  /** The Host and token guards, answered BEFORE a byte of the body is read. `true` = refused. */
-  function refusePost(req, res, ae) {
-    if (!localHost(req.headers.host)) {
-      sendJson(res, { error: 'forbidden host' }, 403, ae);
-      return true;
-    }
-    if (req.headers['x-geneseed-token'] !== token) {
-      sendJson(res, { error: 'forbidden' }, 403, ae);
-      return true;
-    }
-    return false;
   }
 
   function doPost(req, res, path, ae, body) {
@@ -346,10 +396,13 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     const ae = req.headers['accept-encoding'] || '';
     const path = (req.url || '').split('?', 1)[0];
     try {
+      // GUARD FIRST, BODY SECOND: a refused request is DISCARDED (`resume`, nothing buffered).
+      const refused = requestGuard(req, token);
+      if (refused) {
+        sendJson(res, refused.body, refused.code, ae);
+        return req.resume();
+      }
       if (req.method === 'GET') {
-        if (!localHost(req.headers.host)) {
-          return sendJson(res, { error: 'forbidden host' }, 403, ae);
-        }
         try {
           return doGet(req, res, path, ae);
         } catch (e) {
@@ -363,13 +416,10 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         }
       }
       if (req.method === 'POST') {
-        // GUARDS FIRST, BODY SECOND. The Host and token checks need no body, so they answer
-        // before one is read — a refused request is DISCARDED (`resume`, nothing buffered), never
-        // collected. A body over `MAX_BODY` is refused on its declared length, and the socket is
-        // closed rather than drained. Otherwise the body is buffered before routing regardless
+        // The guard above needed no body, so it answered before one was read. A body over
+        // `MAX_BODY` is refused on its declared length, and the socket is closed rather than drained. Otherwise the body is buffered before routing regardless
         // of what the route needs it for: Node's parser owns the message boundary, so unread
         // bytes are discarded when the response ends rather than mis-parsed as the next request.
-        if (refusePost(req, res, ae)) return req.resume();
         const length = parseIntStrict(String(req.headers['content-length'] ?? '')) ?? 0;
         if (length > MAX_BODY) {
           res.setHeader('Connection', 'close');
@@ -387,6 +437,9 @@ export function makeHandler(state, jm, token, dist, holder = null) {
             if (e instanceof NotFound) {
               return sendJson(res, { error: `not found: ${e.message}` }, 404, ae);
             }
+            // A body the route refused on its content (a rule body with a `## ` heading) is
+            // the caller's to fix: 400, not the 500 of a server fault.
+            if (e instanceof BadRequest) return sendJson(res, { error: e.message }, 400, ae);
             return sendJson(res, { error: String(e && e.message ? e.message : e) }, 500, ae);
           }
         });

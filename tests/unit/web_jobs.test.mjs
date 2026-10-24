@@ -52,7 +52,7 @@ const OPTS = { theme: 'imperial', emit: 'claude-global', footprint: 'lean',
   posture: 'mentor', mode: 'foreman', doctrines: ['craft'] };
 
 /**
- * The eight rows, their entry point, and the TAIL each produces under `OPTS` — every value
+ * The seven rows, their entry point, and the TAIL each produces under `OPTS` — every value
  * measured from the reference before the cut. Frozen here rather than read from
  * `js/web/jobs.mjs`, because the table under test IS that module's own declaration
  * (`PORTED_ACTIONS = Object.keys(actionTable())`), so a gate that read it would agree with any
@@ -73,7 +73,6 @@ const ARGVS = {
   doctor: { entry: 'bin/geneseed-cli.mjs', tail: ['doctor'] },
   export: { entry: 'bin/geneseed-cli.mjs', tail: ['diff', '--out'] },
   link: { entry: 'bin/geneseed-cli.mjs', tail: ['link'] },
-  uninstall: { entry: 'bin/geneseed-cli.mjs', tail: ['uninstall', '--yes'] },
   unlink: { entry: 'bin/geneseed-cli.mjs', tail: ['unlink'] },
   // P8c. The tail is what makes this row worth having rather than merely moving: the action is
   // named `update` and the argv must name `upgrade`, which is the subparser both runtimes carry.
@@ -98,11 +97,11 @@ const INLINE_PROBES = {
   deploy: 'actions__install-and-deploy-refuse-every-body-they-cannot-validate.json',
 };
 
-test('the action table is the eight rows this phase measured', () => {
+test('the action table is the seven rows this phase measured', () => {
   // THE CONTROL FOR EVERYTHING BELOW. If the table grew or lost a row, the partition assertions
   // could still hold perfectly while this file's whole argument had quietly stopped being true.
   assert.deepEqual([...PORTED_ACTIONS].sort(), Object.keys(ARGVS).sort(),
-    'js/web/jobs.mjs dispatches on a different set of actions than this file freezes — a ninth '
+    'js/web/jobs.mjs dispatches on a different set of actions than this file freezes — an eighth '
     + 'row needs a measured tail here, or it ships with no gate on its argv at all');
 });
 

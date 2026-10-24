@@ -89,7 +89,9 @@ const sorted = (xs) => [...xs].sort();
 webFixture();
 
 const holder = {};
-const server = http.createServer(makeHandler(webState('neutral'), new JobManager(), TOKEN, DIST,
+// Named, so the doctor-cooldown test can swap `runDoctor` for a counter on the live server.
+const sharedState = webState('neutral');
+const server = http.createServer(makeHandler(sharedState, new JobManager(), TOKEN, DIST,
   holder));
 holder.srv = server;
 await new Promise((r) => { server.listen(0, '127.0.0.1', r); });
@@ -324,6 +326,22 @@ test('a refused POST is answered before its body arrives', async () => {
   assert.equal(r.status, 403);
 });
 
+test('a rule body the route refuses answers 400, not 500', async () => {
+  // A `## ` line in a rule body would forge a rule heading, so `ruleFields` refuses it. That is
+  // the caller's input to fix: a 400 carrying the reason. Before `BadRequest` it fell to the
+  // 500 arm, which reads as a server fault. The file is untouched either way.
+  const got = await request('GET', '/api/rules');
+  const { fingerprint } = JSON.parse(got.body.toString('utf8'));
+  const body = JSON.stringify({ op: 'add', fingerprint, title: 'Ghost', body: 'Line A\n## R9 — forged' });
+  const r = await request('POST', '/api/rules', { body, headers: {
+    'X-Geneseed-Token': TOKEN, 'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(body) } });
+  assert.equal(r.status, 400);
+  assert.match(JSON.parse(r.body.toString('utf8')).error, /a rule heading/);
+  const after = await request('GET', '/api/rules');
+  assert.equal(JSON.parse(after.body.toString('utf8')).fingerprint, fingerprint);
+});
+
 test('a POST body over the cap is refused on its declared length', async () => {
   // 1 MiB + 1 byte, with the right token: 413, and the connection closed rather than drained.
   // Before, it was buffered whole and handed to the route.
@@ -358,6 +376,104 @@ test('an unknown api path falls through to the SPA', async () => {
 test('a foreign Host is refused', async () => {
   const r = await request('GET', '/api/overview', { headers: { Host: 'evil.com' } });
   assert.equal(r.status, 403);
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE SECURITY HEADERS AND THE REQUEST GUARD. Every response carries the same four headers; the
+// CSP differs only by its per-response nonce, so the policy is compared with the nonce masked.
+
+const CSP = "frame-ancestors 'none'; default-src 'self'; script-src 'self' 'nonce-<N>'; "
+  + "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
+  + "connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; "
+  + "form-action 'none'";
+const NONCE = /'nonce-([A-Za-z0-9+/=]+)'/;
+
+for (const p of ['/', '/api/ping']) {
+  test(`${p} carries the four security headers`, async () => {
+    const r = await request('GET', p);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers['x-frame-options'], 'DENY');
+    assert.equal(r.headers['x-content-type-options'], 'nosniff');
+    assert.equal(r.headers['referrer-policy'], 'no-referrer');
+    const csp = r.headers['content-security-policy'] ?? '';
+    assert.match(csp, NONCE);
+    assert.equal(csp.replace(NONCE, "'nonce-<N>'"), CSP);
+  });
+}
+
+test('the token script carries the nonce its own CSP names, fresh per response', async () => {
+  // The only inline script on the page is the token; CSP admits it by nonce, so the attribute and
+  // the header must agree, and a nonce reused across responses would be a guessable one.
+  const nonces = [];
+  for (let i = 0; i < 2; i++) {
+    const r = await request('GET', '/');
+    const n = r.headers['content-security-policy'].match(NONCE)[1];
+    assert.ok(r.body.toString('utf8').includes(`<script nonce="${n}">window.__GENESEED_TOKEN__=`),
+      'the token script does not carry the CSP nonce');
+    nonces.push(n);
+  }
+  assert.notEqual(nonces[0], nonces[1]);
+});
+
+// A cross-site or same-site fetch of /api/* is refused even though it is a GET: the API answers
+// with install paths and memories a foreign page must not read. Same-origin or absent passes.
+for (const [name, headers, status] of [
+  ['Sec-Fetch-Site: cross-site', { 'Sec-Fetch-Site': 'cross-site' }, 403],
+  ['Sec-Fetch-Site: same-site', { 'Sec-Fetch-Site': 'same-site' }, 403],
+  ['a foreign Origin', { Origin: 'http://evil.com' }, 403],
+  ['its own Origin, same-origin', { Origin: '<self>', 'Sec-Fetch-Site': 'same-origin' }, 200],
+]) {
+  test(`an /api GET with ${name} answers ${status}`, async () => {
+    if (headers.Origin === '<self>') headers.Origin = `http://127.0.0.1:${PORT}`;
+    const r = await request('GET', '/api/ping', { headers });
+    assert.equal(r.status, status);
+    if (status === 403) {
+      assert.deepEqual(JSON.parse(r.body.toString('utf8')), { error: 'forbidden origin' });
+    }
+  });
+}
+
+test('a Host with the right name and the wrong port is refused', async () => {
+  // The hostname allowlist stops DNS rebinding; the port pin stops another local server's page
+  // (a dev server on :3000 is also "localhost") from reaching this one.
+  const r = await request('GET', '/api/ping', { headers: { Host: '127.0.0.1:1' } });
+  assert.equal(r.status, 403);
+  assert.deepEqual(JSON.parse(r.body.toString('utf8')), { error: 'forbidden host' });
+});
+
+test('a Host is matched as an exact name:port, never by prefix or suffix', async () => {
+  // A prefix test on `[::1]` or a suffix test on `:<port>` would let each of these through; only
+  // the three local names, followed by THIS port, pass.
+  for (const h of [`[::1]x.evil:${PORT}`, `localhost:1:${PORT}`, `127.0.0.1`, `evil.localhost:${PORT}`]) {
+    const r = await request('GET', '/api/ping', { headers: { Host: h } });
+    assert.equal(r.status, 403, h);
+  }
+  for (const h of [`localhost:${PORT}`, `[::1]:${PORT}`, `LOCALHOST:${PORT}`]) {
+    assert.equal((await request('GET', '/api/ping', { headers: { Host: h } })).status, 200, h);
+  }
+});
+
+test('a POST with a same-length wrong token is refused', async () => {
+  // The wrong-length case is the 'wrong-token' tests above; this one reaches the byte compare.
+  const r = await rawPost('/api/rules', { token: 'x'.repeat(TOKEN.length), declared: 1, send: '{' });
+  assert.equal(r.status, 403);
+});
+
+test('a second fresh doctor run inside the cooldown reuses the first', async () => {
+  // `?fresh=1` costs a whole doctor run (~3.6 s, blocking the loop); a page that loops on it must
+  // not turn the daemon into a busy-wait. Two fresh asks back to back run the doctor once.
+  const real = sharedState.runDoctor;
+  let calls = 0;
+  sharedState.runDoctor = () => { calls++; sharedState.stampDoctor([], [], []); };
+  try {
+    for (let i = 0; i < 2; i++) {
+      assert.equal((await request('GET', '/api/doctor?fresh=1')).status, 200);
+    }
+    assert.equal(calls, 1);
+  } finally {
+    sharedState.runDoctor = real;
+    delete sharedState._doctorFreshAt;  // a later fresh-doctor test must not inherit the window
+  }
 });
 
 // ---------------------------------------------------------------------------------------------

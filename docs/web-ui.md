@@ -44,6 +44,15 @@ so other sites can't trigger builds, deletes, or shutdown. Mutating actions (bui
 update, export, restore, memory-delete, uninstall) run in the background and report back
 as toasts (fire-and-notify). Read-only browsing needs no token.
 
+Every request passes one guard first: the `Host` must be `127.0.0.1`, `localhost` or `[::1]`
+**at the server's own port** (DNS rebinding, other local servers), `/api/*` refuses a
+`Sec-Fetch-Site` of `cross-site`/`same-site` or a foreign `Origin` (so another site cannot read
+the API either), and every write compares the token in constant time. Every response carries
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and a
+strict CSP (`frame-ancestors 'none'`, same-origin only, the one inline token script admitted by
+a per-response nonce). `?fresh=1` on the doctor re-runs at most once per 3 s, and the server
+drops a request whose headers take over 10 s or whose whole request takes over 30 s.
+
 ## The rail
 
 The left rail mirrors the harness's own shape:
@@ -89,7 +98,9 @@ streams the output of background jobs and keeps their history across reloads.
 
 - **Rules** (`#/rules`) — your own standing rules, read from and written to the
   `user-rules.md` beside the deployed AGENT.md (the seed-once file no update ever
-  touches). List with scope (user/project) and trial chips, add/edit/retire forms, a
+  touches). List with scope (user/project, or any other scope written by hand, which a
+  save keeps as written) and trial chips, add/edit/retire forms (a body line starting
+  `## ` is refused: the file would read it as a new rule heading), a
   **Graduate** action that adopts a trial rule for good, and a budget meter that turns
   amber as the always-loaded set gets heavy. Every write carries the fingerprint of the
   content the page last read — if an agent session edited the file meanwhile, the save
@@ -169,6 +180,9 @@ streams the output of background jobs and keeps their history across reloads.
 - **Changes** (`#/diff`) — the diff between the deployed harness and the source: edited /
   added / missing files with per-file expansion and coloured unified-diff lines. Select
   files to **export an `improvements.md`** back-port, or **restore** them to source.
+  Restore acts only on files the diff lists, and never on your own files (`user-rules.md`,
+  `PROFILE.md`, `memory/`, `notebook/`). An added file is moved into
+  `archived-restore/<date-time>/` in the install, not deleted.
 - **Doctor** (`#/doctor`) — runs the same health engine as the `doctor` command (every
   theme, parity, links, authoring gates, drift), grouping any problems per check. It shows
   the server's last run — warmed at start, redone after a job, an install toggle or a view
@@ -207,8 +221,8 @@ streams the output of background jobs and keeps their history across reloads.
   console: Cultivar, Operator, Matrix or Atlas) with a **Dashboard layout** control (Auto follows each theme's designed Status
   lens; Cultivar / Greenhouse / Operator / Journal force one regardless of skin), the
   install snapshot (deployed/target/theme/version/memory store), a Maintenance card (PATH
-  link/unlink, uninstall), an offline package download, server controls (Stop), and the
-  **About** colophon — project + creator credits and the source link, folded in from the
+  link/unlink and Update; each install is uninstalled from its own panel in Hosts), an
+  offline package download, server controls (Stop), and the **About** colophon — project + creator credits and the source link, folded in from the
   retired `#/about` tab (which still resolves here). Build, update, and MCP wiring live in
   the Harness tab.
 

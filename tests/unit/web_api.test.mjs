@@ -530,6 +530,7 @@ for (const footprint of ['lean', 'full']) {
 // Restore renders its expected copy at the install's OWN footprint. Rendered at `full` on a lean
 // install it rewrites AGENT.md with the inlined laws and DELETES laws/universal.md — which only
 // the lean emit writes — so "discard my local edit" silently converted the install to full.
+// `laws/universal.md` is unedited, so the diff does not offer it and naming it is an error.
 test('restore keeps a lean install lean', () => {
   const sb = makeSandbox();
   try {
@@ -540,7 +541,8 @@ test('restore keeps a lean install lean', () => {
 
     const res = apiRestore(webState('neutral', cfg), ['AGENT.md', 'laws/universal.md']);
 
-    assert.deepEqual(res.errors, []);
+    assert.equal(res.errors.length, 1);
+    assert.match(res.errors[0], /^laws\/universal\.md: /);
     assert.deepEqual(res.deleted, [],
       'restore deleted a file the lean emit writes — it rendered at the wrong footprint');
     assert.ok(fs.statSync(path.join(cfg, 'laws', 'universal.md')).isFile());
@@ -800,7 +802,19 @@ test('the doctor groups are exactly the flat problem list', () => {
 // ---------------------------------------------------------------------------------------------
 // Restore.
 
-test('restore rewrites an edit, deletes an addition and rejects bad paths', () => {
+/** Claim `rels` in the install's manifest, the way an older emit that wrote them would have. */
+function ownInManifest(cfg, ...rels) {
+  const man = path.join(cfg, GLOBAL_MANIFEST);
+  const data = JSON.parse(fs.readFileSync(man, 'utf8'));
+  data.owned = [...new Set([...data.owned, ...rels])].sort();
+  fs.writeFileSync(man, JSON.stringify(data));
+}
+
+// Restore acts ONLY on what `/api/diff` offers, computed server-side. A file the install does not
+// own — `zz-extra.md`, dropped in by hand — is never in the drift list, so naming it in the POST is
+// an error and its bytes stay put. It used to be unlinked: the endpoint trusted the client's list,
+// and one POST deleted any file under the install (an audit removed `auth-secret.json` that way).
+test('restore rewrites an edit and refuses a path the diff does not offer', () => {
   const sb = makeSandbox();
   try {
     const cfg = emitInto(path.join(sb.path, 'cfg'));
@@ -810,14 +824,75 @@ test('restore rewrites an edit, deletes an addition and rejects bad paths', () =
     fs.writeFileSync(agent, `${original}\nLOCAL EDIT\n`);
     const extra = path.join(cfg, 'zz-extra.md');
     fs.writeFileSync(extra, 'local only\n');
+    const extraBytes = fs.readFileSync(extra);
 
     const res = apiRestore(st, ['AGENT.md', 'zz-extra.md', 'bogus.md', '../escape.md']);
 
     assert.ok(res.restored.includes('AGENT.md'), 'the edited file was not restored');
     assert.equal(fs.readFileSync(agent, 'utf8'), original);
-    assert.ok(res.deleted.includes('zz-extra.md'), 'the added file was not deleted');
-    assert.ok(!fs.existsSync(extra));
-    assert.equal(res.errors.length, 2, 'the unknown name and the traversal must both error');
+    assert.deepEqual(res.deleted, [], 'restore removed a file the diff never offered');
+    assert.ok(fs.readFileSync(extra).equals(extraBytes), 'a non-diff path was touched');
+    assert.equal(res.errors.length, 3,
+      'the unowned file, the unknown name and the traversal must all error');
+  } finally { sb.cleanup(); }
+});
+
+// An 'added' file is one the install's manifest owns and the source no longer renders. Restore
+// MOVES it into `archived-restore/<stamp>/` inside the install — the `archived-<name>/<stamp>`
+// shape uninstall uses for memory — so "discard" is recoverable, and the next diff does not list
+// the archive (nothing owns it). The rel itself reads `missing` afterwards, as it did after the
+// old unlink: the manifest still claims it until the next emit prunes it.
+test('restore archives an added file instead of deleting it', () => {
+  const sb = makeSandbox();
+  try {
+    const cfg = emitInto(path.join(sb.path, 'cfg'));
+    const added = path.join(cfg, 'agents', 'zz-retired.md');
+    fs.writeFileSync(added, 'an agent the source no longer ships\n');
+    const bytes = fs.readFileSync(added);
+    ownInManifest(cfg, 'agents/zz-retired.md');
+    const before = diffCollect({ target: cfg }).files.find((f) => f.rel === 'agents/zz-retired.md');
+    assert.equal(before?.status, 'added', 'the fixture did not make an added file');
+
+    const res = apiRestore(webState('neutral', cfg), ['agents/zz-retired.md']);
+
+    assert.deepEqual(res.errors, []);
+    assert.deepEqual(res.deleted, ['agents/zz-retired.md']);
+    assert.ok(!fs.existsSync(added), 'the added file is still in place');
+    assert.equal(path.dirname(res.archive), path.join(cfg, 'archived-restore'));
+    assert.ok(fs.readFileSync(path.join(res.archive, 'agents', 'zz-retired.md')).equals(bytes),
+      'the archived copy is not the deleted file byte for byte');
+    const after = diffCollect({ target: cfg }).files.map((f) => f.rel);
+    assert.deepEqual(after.filter((r) => r.startsWith('archived-restore/')), [],
+      'the archive shows up as drift');
+  } finally { sb.cleanup(); }
+});
+
+// The seed-once files are the user's after the first build — never in a render's owned set, so
+// the diff never offers them. Restore refuses them EVEN WHEN it does: a manifest that claims
+// them (hand-edited, or a future emit bug) must not turn "restore" into "reset my rules to the
+// stub". Forced into the manifest here so the drift check alone cannot be what refuses them.
+test('restore never replaces a seed-once user file', () => {
+  const sb = makeSandbox();
+  try {
+    const cfg = emitInto(path.join(sb.path, 'cfg'));
+    const rels = ['user-rules.md', 'PROFILE.md', 'memory/MEMORY.md', 'notebook/NOTEBOOK.md'];
+    const before = new Map();
+    for (const rel of rels) {
+      fs.appendFileSync(path.join(cfg, rel), '\nMY OWN EDIT\n');
+      before.set(rel, fs.readFileSync(path.join(cfg, rel)));
+    }
+    ownInManifest(cfg, ...rels);
+    const offered = diffCollect({ target: cfg }).files.map((f) => f.rel);
+    assert.ok(rels.every((r) => offered.includes(r)), 'the fixture did not put the seeds in the diff');
+
+    const res = apiRestore(webState('neutral', cfg), rels);
+
+    assert.deepEqual(res.restored, []);
+    assert.deepEqual(res.deleted, []);
+    assert.equal(res.errors.length, rels.length);
+    for (const rel of rels) {
+      assert.ok(fs.readFileSync(path.join(cfg, rel)).equals(before.get(rel)), `${rel} was replaced`);
+    }
   } finally { sb.cleanup(); }
 });
 

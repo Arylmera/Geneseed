@@ -44,10 +44,10 @@
  * `taskkill /T` is a machine primitive here, not this program.
  *
  * ---------------------------------------------------------------------------------------
- * THE ACTION SURFACE — `doctor`, `build`, `build-all`, `export`, `uninstall`, `update`,
- * `link` and `unlink` each name a verb `bin/geneseed-cli.mjs` runs, plus the three
- * `INLINE_ACTIONS` the dispatcher answers without the table. `tests/unit/web_jobs.test.mjs`
- * holds the union against a written-out list, so a ninth action cannot appear unchecked.
+ * THE ACTION SURFACE — `doctor`, `build`, `build-all`, `export`, `update`, `link` and
+ * `unlink` each name a verb `bin/geneseed-cli.mjs` runs, plus the three `INLINE_ACTIONS` the
+ * dispatcher answers without the table. `tests/unit/web_jobs.test.mjs` holds the union against
+ * a written-out list, so an eighth action cannot appear unchecked.
  *
  * ---------------------------------------------------------------------------------------
  * THREE DETAILS OF `_run`, EACH A COMMENT EXPLAINING A BUG IT ALREADY FIXED.
@@ -454,11 +454,11 @@ function actionTable({
     // by `js/maintain/update.mjs`.
     update: [[NODE(), CLI(), 'upgrade']],
     export: [[NODE(), CLI(), 'diff', '--out']],
-    // Local-machine maintenance, surfaced in the web Settings. uninstall keeps memory (never
-    // deleted) and runs non-interactively with --yes.
+    // Local-machine maintenance, surfaced in the web Settings. No `uninstall` row: it took no
+    // target, so it always fell back to the OpenCode global. The per-install remove is
+    // `installUninstall` in `js/web/actions.mjs`, bound to the (host, path) the panel shows.
     link: [[NODE(), CLI(), 'link']],
     unlink: [[NODE(), CLI(), 'unlink']],
-    uninstall: [[NODE(), CLI(), 'uninstall', '--yes']],
   };
 }
 

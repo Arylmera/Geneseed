@@ -15,10 +15,25 @@ import { useConfirm } from '../hooks/useConfirm.jsx'
 
 const EMPTY_FORM = { title: '', body: '', scope: 'project', trial_until: '' }
 
+// The scopes the rule skill documents. A hand-written other one (`global`) is offered as
+// its own option: without it the controlled <select> shows "project" over a rule that is not.
+const SCOPES = ['project', 'user']
+
+// The server's rule too (`isRuleEdge`, user-files.mjs): a body line starting `## ` would end
+// this rule's block in user-rules.md and could forge another rule. Checked here so the user
+// sees why before anything is sent.
+// Same line breaks as the server's `splitLines` (js/lib/udiff.mjs); the server stays the authority.
+// eslint-disable-next-line no-control-regex
+const LINE_BREAK = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/
+const isRuleEdge = (l) => l.startsWith('## ') || /^##\s+R\d+\s*[—–-]+\s*\S/.test(l)
+
 function RuleForm({ initial, onCancel, onSave, busy }) {
   const [f, setF] = useState(initial)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
-  const valid = f.title.trim() && f.body.trim()
+  const bodyError = f.body.trim().split(LINE_BREAK).some(isRuleEdge)
+    ? 'A line cannot start with “## ” — user-rules.md reads it as a new rule heading. Use ### or plain text.'
+    : ''
+  const valid = f.title.trim() && f.body.trim() && !bodyError
   return (
     <div className="rule-form">
       <input
@@ -36,11 +51,21 @@ function RuleForm({ initial, onCancel, onSave, busy }) {
         rows={4}
         placeholder="The rule, stated plainly and testably, in one short paragraph."
         aria-label="Rule body"
+        aria-invalid={bodyError ? true : undefined}
+        aria-describedby={bodyError ? 'rule-body-error' : undefined}
       />
+      {bodyError ? (
+        <p id="rule-body-error" className="sub rule-notice" role="alert">
+          {bodyError}
+        </p>
+      ) : null}
       <div className="row" style={{ flexWrap: 'wrap' }}>
         <select className="sel" value={f.scope} onChange={set('scope')} aria-label="Rule scope">
           <option value="project">scope: project (this repo, committable)</option>
           <option value="user">scope: user (personal)</option>
+          {SCOPES.includes(initial.scope) ? null : (
+            <option value={initial.scope}>scope: {initial.scope} (as written in the file)</option>
+          )}
         </select>
         <label className="rule-trial-label">
           trial until

@@ -27,7 +27,8 @@
  */
 import { spawn } from 'node:child_process';
 import {
-  accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync,
+  accessSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync,
+  renameSync, rmSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -36,7 +37,8 @@ import { emitGlobalInto } from '../build/driver.mjs';
 import {
   ROOT, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
 } from '../build/source.mjs';
-import { withStdoutSwallowed } from '../inspect/diff.mjs';
+import { diffCollect, drifted, withStdoutSwallowed } from '../inspect/diff.mjs';
+import { SESSION_FILES } from '../hosts/hooks-context.mjs';
 import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { installProfile, setupBuildArgs } from '../build/generate.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
@@ -504,12 +506,29 @@ export function globalEmitHostFor(emit) {
 }
 
 /**
+ * The session files' names and their top folders (`memory/`, `notebook/`, …): seed-once, the
+ * user's after the first build. Derived from `SESSION_FILES`, the one list of them.
+ */
+const SEED_FILES = new Set(SESSION_FILES.filter((r) => !r.includes('/')));
+const SEED_DIRS = new Set(SESSION_FILES.filter((r) => r.includes('/')).map((r) => r.split('/')[0]));
+const isSeedOnce = (rel) => SEED_FILES.has(rel) || SEED_DIRS.has(rel.split('/')[0]);
+
+/**
  * Restore selected drifted files from the SOURCE render.
  *
  * Source wins and local edits are discarded (the inverse, keeping them, is Export
- * improvements). Renders the expected copy exactly as `diffCollect` does, then per rel:
- * expected present -> overwrite/create the deployed copy; expected absent but deployed present
- * (an 'added' file) -> delete it; neither -> an error and nothing touched.
+ * improvements). Renders the expected copy exactly as `diffCollect` does, then per rel, BY ITS
+ * DIFF STATUS: edited/missing -> overwrite/create the deployed copy; added -> move it into
+ * `archived-restore/<stamp>/` inside the install; anything else -> an error and nothing touched.
+ *
+ * THE CLIENT'S LIST IS A SELECTION, NEVER AN AUTHORITY. Only a rel the drift list offers is
+ * acted on, and that list is `diffCollect` with the arguments `apiDiff` passes, so the panel and
+ * this verb cannot disagree. Trusting the POST made it a write-or-delete primitive over the whole
+ * install (audit SE-1, 2026-10): one request reset `user-rules.md` and the memory index to their
+ * stubs, a second unlinked a memory fact and an unrelated secret file. The seed-once files are
+ * refused even when a manifest claims them. An added file is ARCHIVED, never unlinked, in the
+ * `archived-<name>/<stamp>` shape `archiveStore` gives uninstall; nothing owns the archive, so
+ * the next diff does not list it.
  *
  * SYNCHRONOUS, AND NOT A JOB. One render, the same cost as a diff GET, and it returns a
  * structured result rather than a job id — which is why the dispatcher answers it before it
@@ -534,7 +553,11 @@ export function apiRestore(state, files) {
   const restored = [];
   const deleted = [];
   const errors = [];
+  let archive = null;
   const target = resolvePath(state.target);
+  const offered = new Map(drifted(diffCollect({
+    target: state.target, theme: state.theme, emit: state.emit }).files ?? [])
+    .map((f) => [f.rel, f.status]));
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-restore-'));
   try {
     const expected = resolvePath(path.join(tmp, 'expected'));
@@ -566,26 +589,48 @@ export function apiRestore(state, files) {
       const rel = stripWhitespace(formatValue(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
       const dst = resolvePath(path.join(target, rel));
       const src = resolvePath(path.join(expected, rel));
+      const status = offered.get(rel);
       if (!rel || !within(dst, target) || !within(src, expected)) {
         errors.push(`${rel}: outside the deployed tree`);
-      } else if (isFile(src)) {
-        mkdirSync(path.dirname(dst), { recursive: true });
-        // A BYTE copy, so the restored file keeps the render's own line endings rather than
-        // the platform's (the `writeText`/`copy2` rule, one file over).
-        copyFileSync(src, dst);
-        restored.push(rel);
-      } else if (isFile(dst)) {
-        unlinkSync(dst);
-        deleted.push(rel);
+      } else if (!status || isSeedOnce(rel)) {
+        errors.push(`${rel}: not a drifted file restore may touch`);
+      } else if (status !== 'added' && !isFile(src)) {
+        errors.push(`${rel}: not in the source render`);
+      } else if (status !== 'added') {
+        // Caught per file, so one EISDIR/EBUSY cannot lose the report of the files before it.
+        try {
+          mkdirSync(path.dirname(dst), { recursive: true });
+          // A BYTE copy, so the restored file keeps the render's own line endings rather than
+          // the platform's (the `writeText`/`copy2` rule, one file over).
+          copyFileSync(src, dst);
+          restored.push(rel);
+        } catch (e) {
+          errors.push(`${rel}: could not restore (${e.code || e.message})`);
+        }
       } else {
-        errors.push(`${rel}: not in the source render nor deployed`);
+        // `archiveStore`'s local `YYYYMMDD-HHMMSS` stamp, one per call; a taken name gets `-2`, …
+        archive ??= path.join(target, 'archived-restore', new Date().toLocaleString('sv-SE')
+          .replace(/\D/g, '').replace(/^(\d{8})/, '$1-'));
+        let dest = resolvePath(path.join(archive, rel));
+        for (let n = 2; existsSync(dest); n += 1) dest = resolvePath(path.join(archive, `${rel}-${n}`));
+        if (!within(dest, archive)) {
+          errors.push(`${rel}: outside the archive`);
+          continue;
+        }
+        try {
+          mkdirSync(path.dirname(dest), { recursive: true });
+          renameSync(dst, dest);
+          deleted.push(rel);
+        } catch (e) {
+          errors.push(`${rel}: could not archive (${e.code || e.message})`);
+        }
       }
     }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
   state.refresh();
-  return { restored, deleted, errors };
+  return { restored, deleted, errors, archive };
 }
 
 /** (host, scope) -> the emit name that installs it. */
