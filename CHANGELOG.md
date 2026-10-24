@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.17.2] — 2026-10-24
+
+Patch: the web console closes its security and data-loss holes from the 2026-10-24 audit.
+
 ### Security
 - **Restore acts only on what the diff offers.** `POST /api/actions/restore` trusted the client's file list: one call could reset `user-rules.md`, `PROFILE.md` or a memory file to its seed, or delete a file the diff never listed. It now restores only the paths `/api/diff` offers, computed on the server. It never touches the files written once and then left to you (`user-rules.md`, `PROFILE.md`, `memory/`, `notebook/`). An added file is moved to `archived-restore/<stamp>/` in the install instead of being deleted.
 - **The web console cannot be framed or driven from another site.** Every response carries a Content-Security-Policy with `frame-ancestors 'none'` and a per-response nonce on the token script, plus `X-Frame-Options: DENY`, `nosniff` and `Referrer-Policy: no-referrer`. One request guard checks the exact Host and port, refuses a cross-site `/api` request (`Sec-Fetch-Site`, foreign `Origin`), and compares the token in constant time. A repeated `GET /api/doctor?fresh=1` reuses a run less than 3 s old. The server sets request and header timeouts.
