@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.21.0] — 2026-10-25
+
+Minor: Activity "Today", per-install rebuild, usage in the Library, sync with source in Hosts, a command palette, and `user` as an alias of `global`.
+
 ### Added
 - **Activity "Today".** Runs per day over 14 days, gate asks per rule over 30 days and "Waiting on you", above a feed that mixes runs and gate asks by day, with filters — so the page answers what your agents did even with live tracking off.
 - **Rebuild one install.** Each Overview row rebuilds only its own install, and "Rebuild all behind (N)" rebuilds only the installs that need it; both ask first and show progress on the rows they touch. A per-install rebuild on a console running older code than the disk asks you to restart it first.
