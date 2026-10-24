@@ -126,6 +126,10 @@ describe('Docs layout', () => {
       '2',
     ])
     expect([...document.querySelectorAll('.docs-read-mark')].length).toBe(1)
+    // "read" is in the row's accessible name, with no visually hidden span: an absolute
+    // .sr-only escapes the list's overflow and stretches the document.
+    expect(screen.getByRole('link', { name: 'What a harness is, read' })).toBeTruthy()
+    expect(document.querySelector('.lib-rows .sr-only')).toBeNull()
     await waitFor(() =>
       expect(localStorage.getItem('geneseed-understand-seen')).toBe('["harness","machine"]'),
     )

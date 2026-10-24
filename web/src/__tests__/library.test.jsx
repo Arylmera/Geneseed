@@ -119,6 +119,35 @@ describe('Library', () => {
     await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a'))
   })
 
+  // A deep link to an entry that is gone (an old bookmark, a retired skill): the reader
+  // says so instead of "Loading…" forever, and invents no source path for it.
+  it('says an entry could not be read instead of loading forever', async () => {
+    api.item.mockRejectedValue(new Error('no such skill'))
+    render(<Library section="skills" selected="nope" overview={overview({})} />)
+    expect(await screen.findByText(/could\s+be read in this install/)).toBeTruthy()
+    expect(document.querySelector('.reader-title').textContent).toBe('nope')
+    expect(screen.queryByText('Loading…')).toBeNull()
+    expect(screen.queryByText('skills/nope.md')).toBeNull()
+  })
+
+  // Moving from a good entry to a missing one: the failed read must not wear the
+  // previous entry's title, lede or source.
+  it('shows nothing of the previous entry when the next read fails', async () => {
+    api.item.mockImplementation((type, name) =>
+      name === 'nope'
+        ? Promise.reject(new Error('no such skill'))
+        : Promise.resolve({ title: 'Brainstorm', desc: 'ideas', source: 'skills/b.md', body: 'b' }),
+    )
+    const { rerender } = render(
+      <Library section="skills" selected="brainstorm" overview={overview({})} />,
+    )
+    expect(await screen.findByText('skills/b.md')).toBeTruthy()
+    rerender(<Library section="skills" selected="nope" overview={overview({})} />)
+    expect(await screen.findByText(/could\s+be read in this install/)).toBeTruthy()
+    expect(document.querySelector('.reader-title').textContent).toBe('nope')
+    expect(screen.queryByText('skills/b.md')).toBeNull()
+  })
+
   it('says why a forget failed instead of swallowing it', async () => {
     api.memoryDelete.mockRejectedValueOnce(new Error('store is read-only'))
     render(<Library section="memory" selected="fact-a" overview={overview({})} />)

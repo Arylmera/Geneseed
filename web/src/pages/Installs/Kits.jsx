@@ -8,7 +8,8 @@ import { kitsLocked, useKitStaging } from '../../hooks/useKitStaging.js'
 import { Switch } from './controls.jsx'
 
 // Installs / Kits: one panel per install (the Hosts tab's panel + head) with a switch per
-// kit. The staging, confirm and rebuild live in hooks/useKitStaging.js, shared with the Kits page.
+// kit. The staging, confirm and rebuild live in hooks/useKitStaging.js (the staged sets in the
+// App-level store, hooks/useStaging.jsx), shared with the Kits page.
 export default function Kits({ onAction, dataRev }) {
   const { data, error } = useAsync(() => api.kits(), [dataRev])
   const stage = useKitStaging(data, onAction)
@@ -48,7 +49,7 @@ export default function Kits({ onAction, dataRev }) {
                   </div>
                   <Switch
                     on={set.has(k.name)}
-                    disabled={locked}
+                    disabled={locked || stage.running(row)}
                     label={`${k.name} for ${who}`}
                     onToggle={() => stage.toggle(row, k.name)}
                   />

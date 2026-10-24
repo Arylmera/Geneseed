@@ -55,23 +55,38 @@ export function useAsync(fn, deps = [], key = null, { revalidate = false } = {})
     ckRef.current = ck
   })
 
+  // Bumped by every reload and every cache hit: only the answer to the latest one may
+  // touch state, so a slow fetch for deps the caller has left (or an older reload of
+  // the same deps) lands on nothing instead of overwriting newer data. A key match
+  // alone would not do: unkeyed calls have no key, and a repeat reload shares one.
+  const genRef = useRef(0)
+
   // react-hooks/use-memo wants a literal dependency array; this hook's whole
   // contract is forwarding the caller's `deps`, so that rule cannot hold here.
   const reload = useCallback(() => {
+    const gen = ++genRef.current
+    const live = () => gen === genRef.current
     setLoading(true)
     setError('')
     // The key this fetch answers — not whatever the deps have moved on to by the time
     // it lands.
     const at = ckRef.current
+    // A failure sets `error` and leaves `data` alone: a failed refetch keeps the last
+    // good result on screen, a failed first load leaves it null beside the error.
     return Promise.resolve(fnRef.current())
       .then((d) => {
+        if (!live()) return
         setData(d)
         if (at === null) return
         CACHE.set(at, d)
         for (const set of SUBS.get(at) || []) set(d)
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+      .catch((e) => {
+        if (live()) setError(e.message)
+      })
+      .finally(() => {
+        if (live()) setLoading(false)
+      })
     // deps are the caller's refetch triggers; fnRef keeps the loader fresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
   }, deps)
@@ -86,6 +101,7 @@ export function useAsync(fn, deps = [], key = null, { revalidate = false } = {})
     }
     const unsubscribe = () => SUBS.get(at)?.delete(setData)
     if (at !== null && CACHE.has(at)) {
+      genRef.current++
       setData(CACHE.get(at))
       setError('')
       setLoading(false)

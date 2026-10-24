@@ -50,9 +50,10 @@ describe('Profile', () => {
 
   it('keeps the draft on screen when the save is refused by a newer version', async () => {
     // A refused save reloads to learn the new fingerprint. It used to also replace the
-    // textarea with the disk copy — the user's edit vanished without a word.
+    // textarea with the disk copy — the user's edit vanished without a word. The server
+    // refuses with a 409, which post() turns into a REJECTION (not a resolved {ok:false}).
     api.profileSave.mockImplementationOnce(() =>
-      Promise.resolve({ ok: false, detail: 'PROFILE.md changed on disk.' }),
+      Promise.reject(Object.assign(new Error('conflict'), { status: 409 })),
     )
     let calls = 0
     api.profile.mockImplementation(() =>
@@ -66,7 +67,7 @@ describe('Profile', () => {
     fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'my draft' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(api.profile).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.getByText(/Your edit is kept/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Your draft is kept/)).toBeTruthy())
     expect(screen.getByLabelText('Profile markdown').value).toBe('my draft')
     // …and the next save carries the NEW fingerprint.
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))

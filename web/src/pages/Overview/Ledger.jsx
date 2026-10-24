@@ -11,12 +11,14 @@ import {
   fleetVerdict,
   gateRows,
   ledgerNeeds,
+  neverFired,
 } from '../../lib/overview.js'
 
 // The Ledger: the Overview as a control panel over every INSTALLED harness on the machine.
 // Verdict, then the fleet, then what needs you, then cost, usage and gates. Hosts with nothing
 // installed are not listed; installing lives on the Installs page with its other settings.
-// Every read degrades to null (a soft fetch), and a part that has no data says so in words.
+// Every read but the fleet degrades to null (a soft fetch), and a part that has no data says so
+// in words. The fleet is the page's spine, so its failure is said out loud, with a Retry.
 
 const soft = (p) => p.catch(() => null)
 const pct = (n, of) => `${of ? Math.min(100, (n / of) * 100) : 0}%`
@@ -89,7 +91,20 @@ function VersionChip({ update, onAction }) {
   )
 }
 
-function Verdict({ fleet }) {
+function Verdict({ fleet, error }) {
+  if (!fleet) {
+    // A failed read is not a load in progress: no aria-busy, and no claim either way.
+    return error ? (
+      <div className="health" role="status">
+        <span className="health-dot" aria-hidden="true" />
+        <p className="verdict-facts">
+          <b>Status unknown</b>
+        </p>
+      </div>
+    ) : (
+      <div className="health" aria-busy="true" />
+    )
+  }
   const v = fleetVerdict(fleet)
   return (
     <div className={`health ${v.tone}`} role="status">
@@ -163,20 +178,31 @@ function FleetRow({ i, n, onAction, onOpen }) {
     )
   }
   const drift = driftTotal(i.drift)
+  // Unedited files the source has moved past: part of being behind, never a hand edit.
+  const stale = i.drift?.stale ?? 0
   const sync = {
     synced: <span className="pill good">in step</span>,
     behind: <span className="pill warn">behind source</span>,
     unknown: <span className="pill off">not checked</span>,
   }[i.verdict]
   const total = costTotal(i.cost)
-  const ceilPct = i.cost && Math.round((i.cost.carrier / i.cost.ceiling) * 100)
+  // A zero or absent ceiling has no percentage; dividing by it printed "Infinity%" or "NaN%".
+  const ceilPct = i.cost?.ceiling ? Math.round((i.cost.carrier / i.cost.ceiling) * 100) : null
+  const ceilText = ceilPct === null ? 'no ceiling' : `root file ${ceilPct}% of ceiling`
   return (
     <tr>
       {where}
       <td>
         {i.theme} <span className="dim">· {i.footprint}</span>
       </td>
-      <td>{sync}</td>
+      <td>
+        {sync}
+        {stale ? (
+          <div className="mono dim ldg-sub">
+            {stale} file{stale === 1 ? '' : 's'} behind
+          </div>
+        ) : null}
+      </td>
       <td>
         {!i.diffable ? (
           <span className="dim" title="Drift is only checked for global installs">
@@ -196,11 +222,18 @@ function FleetRow({ i, n, onAction, onOpen }) {
       </td>
       <td>
         {i.cost ? (
-          <div className="ldg-cost" title={`root file ${ceilPct}% of the ${i.footprint} ceiling`}>
+          <div
+            className="ldg-cost"
+            title={
+              ceilPct === null
+                ? 'no ceiling'
+                : `root file ${ceilPct}% of the ${i.footprint} ceiling`
+            }
+          >
             <CarrierRing cost={i.cost} i={n} />
             <span>
               <TokCount chars={total} />
-              <span className="dim ldg-sub">root file {ceilPct}% of ceiling</span>
+              <span className="dim ldg-sub">{ceilText}</span>
             </span>
           </div>
         ) : (
@@ -209,7 +242,7 @@ function FleetRow({ i, n, onAction, onOpen }) {
       </td>
       <td className="mono dim">{i.built_epoch ? `${relTime(i.built_epoch)} ago` : 'never'}</td>
       <td className="ldg-act">
-        {i.verdict === 'behind' || drift ? (
+        {i.verdict === 'behind' || drift || stale ? (
           <button type="button" className="btn sm" onClick={() => onAction('build-all')}>
             Rebuild
           </button>
@@ -291,14 +324,20 @@ function CostChart({ installs }) {
                   <span key={k} className={`cs-${k}`} style={{ width: pct(i.cost[k], max) }} />
                 ))}
               </span>
-              {i.cost.ceiling ? (
-                <span
-                  className="cost-ceil"
-                  style={{ left: pct(i.cost.ceiling, max) }}
-                  title="root file ceiling"
-                />
-              ) : null}
             </div>
+            {/* The ceiling bounds the root file alone, so it is drawn against the root file
+                alone: on the total stack it read as a cap on the whole session cost. */}
+            {i.cost.ceiling ? (
+              <div
+                className="cost-stack cost-lane"
+                title={`root file ${Math.round((i.cost.carrier / i.cost.ceiling) * 100)}% of ceiling`}
+              >
+                <span className="cost-segs" style={{ '--i': n }}>
+                  <span className="cs-carrier" style={{ width: pct(i.cost.carrier, max) }} />
+                </span>
+                <span className="cost-ceil" style={{ left: pct(i.cost.ceiling, max) }} />
+              </div>
+            ) : null}
           </div>
         ))
       ) : (
@@ -407,7 +446,7 @@ function UsageChart({ usage }) {
       {usage.never.length ? (
         <div className="ub-never">
           <span>
-            <b>{usage.never.filter((x) => x.kind === 'skill').length}</b> skills never fired
+            <b>{neverFired(usage).skills}</b> skills never fired
           </span>
           <a className="needs-verb" href="#/skills">
             Triage
@@ -465,7 +504,13 @@ function GatesChart({ gates, laws }) {
 }
 
 export default function Ledger({ overview, setup, onAction, onRetry, dataRev, banner }) {
-  const { data: fleet } = useAsync(() => soft(api.fleet()), [dataRev])
+  // Not soft: a failed fleet read must be told apart from an empty one. useAsync keeps the
+  // last good answer on a failed reload, so a blip shows the old table under an error line.
+  const {
+    data: fleet,
+    error: fleetError,
+    reload: reloadFleet,
+  } = useAsync(() => api.fleet(), [dataRev])
   const { data: usage } = useAsync(() => soft(api.usage()), [dataRev])
   const { data: gates } = useAsync(() => soft(api.gates()), [dataRev])
   // A failed re-poll (the daemon restarting under it) keeps the last answer rather than hiding
@@ -534,12 +579,20 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
       </div>
       {banner}
       <div className="ov-stack ldg">
-        {fleet ? <Verdict fleet={fleet} /> : <div className="health" aria-busy="true" />}
+        <Verdict fleet={fleet} error={fleetError} />
         <section className="panel" aria-labelledby="ldg-fleet">
           <div className="panel-head panel-head-rule">
             <h2 id="ldg-fleet">Installs</h2>
             {fleet?.source_fp ? <span className="mono dim">source {fleet.source_fp}</span> : null}
           </div>
+          {fleetError && fleet ? (
+            <p className="dim" role="status">
+              Could not refresh the installs — showing the last read.{' '}
+              <button type="button" className="btn ghost sm" onClick={reloadFleet}>
+                Retry
+              </button>
+            </p>
+          ) : null}
           <div className="ldg-scroll">
             <table className="ldg-fleet">
               <thead>
@@ -554,6 +607,18 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
                 </tr>
               </thead>
               <tbody>
+                {fleetError && !fleet ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <span className="dim" role="status">
+                        Could not read the installs
+                      </span>{' '}
+                      <button type="button" className="btn ghost sm" onClick={reloadFleet}>
+                        Retry
+                      </button>
+                    </td>
+                  </tr>
+                ) : null}
                 {installs.map((i, n) => (
                   <FleetRow key={i.id} i={i} n={n} onAction={onAction} onOpen={onOpen} />
                 ))}

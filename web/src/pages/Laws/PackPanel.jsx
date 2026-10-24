@@ -34,12 +34,16 @@ export default function PackPanel({ packs, sel, canApply, install, gateArmed }) 
                   <span style={{ width: `${(on / maxPack) * 100}%` }} />
                 </span>
                 <span className="mono pl-n">{on}</span>
+                {/* A tri-state checkbox, not a switch: ARIA's `switch` has no "mixed", and a
+                    pack with some of its rules on is neither on nor off. */}
                 {canApply ? (
                   <button
                     type="button"
-                    className={`sw-toggle${packOn(p) ? ' on' : ''}`}
-                    role="switch"
-                    aria-checked={packOn(p)}
+                    className={`sw-toggle${packOn(p) ? ' on' : ''}${on && on < p.rules.length ? ' mixed' : ''}`}
+                    role="checkbox"
+                    aria-checked={
+                      p.rules.length && on === p.rules.length ? 'true' : on ? 'mixed' : 'false'
+                    }
                     aria-label={`${p.title} pack`}
                     onClick={() => togglePack(p)}
                   />

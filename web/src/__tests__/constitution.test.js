@@ -1,11 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
-import {
-  GATE_SWITCH,
-  HOOK_GATED,
-  enforcedBy,
-  gateAddress,
-  parseRuleTitle,
-} from '../lib/constitution.js'
+import * as C from '../lib/constitution.js'
+const { GATE_SWITCH, HOOK_GATED, enforcedBy, gateAddress, parseRuleTitle } = C
 // The server's own tables, imported rather than regex-read out of their source. Their import
 // closure is relative and `node:` modules only (no bare specifier, so web's own `npm ci` is
 // enough) and loads cleanly under vitest's jsdom environment.
@@ -90,5 +87,33 @@ describe('HOOK_GATED', () => {
     )
     // A switch on a law no hook gates would toggle nothing.
     for (const law of Object.keys(GATE_SWITCH)) expect(HOOK_GATED.has(law)).toBe(true)
+  })
+})
+
+// The Constitution's tier strip ranks the tiers. The rank is not the page's to choose: it is the
+// Precedence table in src/AGENT.md.tmpl, which every install's AGENT.md carries. The page once
+// numbered Ethos first and your own rules last, the reverse of the table, and no test noticed.
+// So PRECEDENCE is checked against the REAL template, row by row, order and rule line included.
+describe('PRECEDENCE', () => {
+  // `process.cwd()` is web/ (agentGlyph.test.jsx does the same): under jsdom, import.meta.url
+  // is not a file: URL, so `new URL(..., import.meta.url)` cannot be read.
+  const tmpl = readFileSync(resolve(process.cwd(), '../src/AGENT.md.tmpl'), 'utf8')
+
+  // `key` is the page's own name for a tier, so the template cannot carry it: the gate compares
+  // what the table does say, the source of each rank and its rule against the rank above.
+  const authored = () => C.PRECEDENCE.map(({ source, against }) => ({ source, against }))
+
+  it('matches rows 1-4 of the Precedence table in src/AGENT.md.tmpl', () => {
+    expect(C.parsePrecedence(tmpl).slice(0, 4)).toEqual(authored())
+  })
+
+  // The gate must fail both ways: a table whose rows are swapped no longer equals the constant.
+  it('no longer matches a table with two rows swapped', () => {
+    const swapped = tmpl.replace(
+      /(\| 1 \|[^\n]*\n)(\| 2 \|[^\n]*\n)/,
+      (m, one, two) => two.replace('| 2 |', '| 1 |') + one.replace('| 1 |', '| 2 |'),
+    )
+    expect(swapped).not.toBe(tmpl)
+    expect(C.parsePrecedence(swapped).slice(0, 4)).not.toEqual(authored())
   })
 })

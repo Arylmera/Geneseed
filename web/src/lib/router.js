@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { TYPE_TO_SECTION } from './sections.js'
 
 // Every top-level page -> the name the breadcrumb and the sidebar print for it. This is
@@ -81,7 +81,15 @@ const tabOf = (page, t) => (TABS[page].includes(t) ? t : TABS[page][0])
 export function resolveRoute(hash) {
   const parts = (hash || '#/').slice(2).split('/').filter(Boolean) // drop "#/"
   const [head, a, b] = parts
-  const dec = (s) => decodeURIComponent(s || '')
+  // A hash is typed input: a malformed escape (`%E0%A4%A`) must not throw during render,
+  // so it falls back to the raw text.
+  const dec = (s) => {
+    try {
+      return decodeURIComponent(s || '')
+    } catch {
+      return s || ''
+    }
+  }
   if (head === 'section' || head === 'item') {
     const section = head === 'item' && own(TYPE_TO_SECTION, a) ? TYPE_TO_SECTION[a] : a
     const item = head === 'item' ? dec(b) : undefined
@@ -103,14 +111,66 @@ export function resolveRoute(hash) {
   return { page: own(PAGES, head) ? head : 'overview' }
 }
 
+// Navigation guards: the seam a page with unsaved work (an editor draft) uses to refuse an
+// in-app hash navigation. CONTRACT: a guard is SYNCHRONOUS, is called as `fn({ from, to })`
+// with the raw hashes, and returns `false` to refuse; the address bar is then put back and
+// the route does not move. An async confirm (the themed useConfirm) refuses first, asks,
+// and on "discard" unregisters (or lets its guard pass) and calls `go(to)` itself.
+// A guard must not throw: the error escapes the listener with the address bar already moved.
+// LIMITS: it sees in-app hash navigation only; a tab close or reload is `beforeunload`'s job.
+// A refusal REPLACES the current history entry, it does not undo the move: a refused link
+// click leaves a duplicate entry (the next Back seems to do nothing), a refused Back drops
+// the entry it left, and `go(to)` after a "discard" pushes a new entry instead of going back.
+const guards = new Set()
+export function registerNavigationGuard(fn) {
+  guards.add(fn)
+  return () => guards.delete(fn)
+}
+export function unregisterNavigationGuard(fn) {
+  guards.delete(fn)
+}
+
+// The shell's route. A change of PAGE moves focus to `#main` and scrolls it to the top, so a
+// keyboard or screen-reader user lands on the new page; an item or tab change inside a page
+// does not, or a user walking a list would lose their place. The first mount moves nothing.
 export function useRoute() {
   const read = () => resolveRoute(typeof window !== 'undefined' ? window.location.hash : '')
   const [route, setRoute] = useState(read)
   useEffect(() => {
-    const on = () => setRoute(read())
+    let prevHash = window.location.hash
+    const on = () => {
+      const to = window.location.hash
+      if (to === prevHash) return // an echo, or our own restore
+      for (const guard of guards) {
+        if (guard({ from: prevHash, to }) === false) {
+          // replaceState fires no hashchange; setting location.hash would re-enter the guard.
+          window.history.replaceState(window.history.state, '', prevHash || '#/')
+          return
+        }
+      }
+      prevHash = to
+      setRoute(read())
+    }
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
+  // The title on every page, first mount included (a deep link needs it too). Focus and
+  // scroll only on a later page change, AFTER the commit, so a screen reader reads the new
+  // page, never the old one.
+  const mounted = useRef(false)
+  useEffect(() => {
+    document.title = `${PAGES[route.page]} · Geneseed`
+    if (!mounted.current) {
+      mounted.current = true
+      return
+    }
+    const main = document.getElementById('main')
+    main?.focus()
+    // Docs' pattern: which element scrolls depends on the layout, so reset both.
+    for (const el of [main, document.scrollingElement || document.documentElement]) {
+      if (el) el.scrollTop = 0
+    }
+  }, [route.page])
   return route
 }
 

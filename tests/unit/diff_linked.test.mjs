@@ -16,7 +16,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { diffCollect, exportImprovements, improvementsMd } from '../../js/inspect/diff.mjs';
+import { cmdDiff, diffCollect, exportImprovements, improvementsMd } from '../../js/inspect/diff.mjs';
+import { fileHash, hashesOf } from '../../js/hosts/owned.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import { apiFleet } from '../../js/web/api.mjs';
 import { webState } from '../../js/web/state.mjs';
@@ -74,5 +75,111 @@ test('the fleet counts the hand edit and keeps the link out of the edited figure
   st.stampDoctor([]);
   const fleet = apiFleet(st);
   assert.deepEqual(fleet.installs.map((i) => i.drift),
-    [{ edited: 1, added: 0, missing: 0, linked: 1 }]);
+    [{ edited: 1, added: 0, missing: 0, linked: 1, stale: 0 }]);
+});
+
+// ---------------------------------------------------------------------------------------------
+// `stale`: a file unmodified since its emit that differs from the CURRENT source — the install is
+// behind, nobody edited it, and a rebuild updates it. The rule, stated once: when the manifest
+// records hashes, a differing file whose bytes still match its recorded hash is `stale`, one that
+// does not match is `edited`; a source file the deployed manifest never owned is `stale` (new in
+// source), one it owned and lost is `missing`. `.geneseed-version` is a build stamp, so a
+// different fingerprint in it is always `stale`. Stale is not drift: no improvements report and
+// no "edited" figure counts it. Appended last, because these tests reshape the shared install.
+const manifestPath = path.join(gcfg, '.geneseed-manifest.json');
+const readManifest = () => JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const writeManifest = (doc) => fs.writeFileSync(manifestPath, JSON.stringify(doc));
+
+test('the emit recorded hashes, so the cases below exercise the hashed path', () => {
+  assert.ok(Object.keys(hashesOf(readManifest())).length > 0, 'the emit wrote no hashes');
+});
+
+test('an unmodified-since-emit file behind the source is stale, an edit stays edited', () => {
+  const rel = 'skills/plan/SKILL.md';
+  const p = path.join(gcfg, rel);
+  assert.ok(fs.existsSync(p), `the emit wrote ${rel}`);
+  // What an older source rendered: the deployed bytes differ, and the manifest hash matches them.
+  fs.writeFileSync(p, `${fs.readFileSync(p, 'utf8')}\na line an older source had\n`);
+  const doc = readManifest();
+  doc.hashes[rel] = fileHash(p);
+  // A source file this install never owned (new since its emit), and one it owned and lost.
+  doc.owned = doc.owned.filter((x) => x !== 'skills/release/SKILL.md');
+  delete doc.hashes['skills/release/SKILL.md'];
+  writeManifest(doc);
+  fs.rmSync(path.join(gcfg, 'skills', 'release', 'SKILL.md'));
+  fs.rmSync(path.join(gcfg, 'skills', 'refactor', 'SKILL.md'));
+  // A build stamp from another source: never an edit, whatever its hash says.
+  fs.writeFileSync(path.join(gcfg, '.geneseed-version'), 'deadbeef1234 (built 2020-01-01)\n');
+  const { files } = diffCollect({ target: gcfg });
+  assert.deepEqual(statuses(files), [
+    'edited skills/commit/SKILL.md',
+    'linked skills/debug/SKILL.md',
+    'missing skills/refactor/SKILL.md',
+    'stale .geneseed-version',
+    'stale skills/plan/SKILL.md',
+    'stale skills/release/SKILL.md',
+  ]);
+  // The stale record keeps its hunk, so the console can show what a rebuild changes.
+  const plan = files.find((f) => f.rel === rel);
+  assert.ok(plan.diff.join('\n').includes('+a line an older source had'), plan.diff.join('\n'));
+});
+
+test('the improvements report and the fleet leave stale files out of the drift', () => {
+  const { target, theme, files } = diffCollect({ target: gcfg });
+  const md = improvementsMd(target, theme, files, 'now');
+  assert.match(md, /- 1 edited · 0 added in deployed · 1 missing from deployed/);
+  assert.doesNotMatch(md, /skills\/plan|skills\/release|\.geneseed-version/);
+  const st = webState();
+  st.stampDoctor([]);
+  assert.deepEqual(apiFleet(st).installs.map((i) => i.drift),
+    [{ edited: 1, added: 0, missing: 1, linked: 1, stale: 3 }]);
+});
+
+test('diff prints stale files apart and keeps them out of the edited summary', () => {
+  let out = '';
+  const real = process.stdout.write;
+  process.stdout.write = (s) => { out += s; return true; };
+  try { assert.equal(cmdDiff({ target: gcfg }), 0); } finally { process.stdout.write = real; }
+  assert.match(out, /\[diff\] 1 edited, 0 added-in-deployed, 1 missing-from-deployed\r?\n/);
+  assert.match(out, /\[diff\] 3 file\(s\) behind source — rebuild to update them\r?\n/);
+  assert.match(out, / {2}· skills\/plan\/SKILL\.md {3}\(behind source — a rebuild updates it\)\r?\n/);
+  assert.doesNotMatch(out, /~ skills\/plan/);
+});
+
+test('an install only behind its source exports no improvements file', () => {
+  // Turn the two remaining local changes into stale ones: the edit's bytes become the recorded
+  // hash, and the lost file leaves the manifest. What is left is behind, not edited.
+  const doc = readManifest();
+  doc.hashes['skills/commit/SKILL.md'] = fileHash(editedFile);
+  doc.owned = doc.owned.filter((x) => x !== 'skills/refactor/SKILL.md');
+  delete doc.hashes['skills/refactor/SKILL.md'];
+  writeManifest(doc);
+  const out = path.join(home, 'improvements-stale.md');
+  const [written, files] = exportImprovements(gcfg, null, out);
+  assert.equal(written, null);
+  assert.equal(fs.existsSync(out), false);
+  assert.deepEqual(statuses(files), [
+    'linked skills/debug/SKILL.md',
+    'stale .geneseed-version',
+    'stale skills/commit/SKILL.md',
+    'stale skills/plan/SKILL.md',
+    'stale skills/refactor/SKILL.md',
+    'stale skills/release/SKILL.md',
+  ]);
+});
+
+test('a manifest without hashes keeps the old reading, but the build stamp is still stale', () => {
+  // Without hashes nothing tells an untouched file from an edited one, so a differing file is
+  // `edited` and an absent one `missing`, as before; `.geneseed-version` needs no hash.
+  const doc = readManifest();
+  delete doc.hashes;
+  writeManifest(doc);
+  assert.deepEqual(statuses(diffCollect({ target: gcfg }).files), [
+    'edited skills/commit/SKILL.md',
+    'edited skills/plan/SKILL.md',
+    'linked skills/debug/SKILL.md',
+    'missing skills/refactor/SKILL.md',
+    'missing skills/release/SKILL.md',
+    'stale .geneseed-version',
+  ]);
 });

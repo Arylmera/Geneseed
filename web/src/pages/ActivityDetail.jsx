@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon.jsx'
 import { relTime } from '../lib/format.js'
 import { STATUS, ELLIPSIS, baseName, compact, Elapsed } from '../lib/activity.jsx'
 import Loading from '../components/Loading.jsx'
+import ErrorState from '../components/ErrorState.jsx'
 import { usePoll } from '../hooks/usePoll.js'
 
 // Timeline-row dot colour by record kind/outcome.
@@ -141,7 +142,8 @@ export default function ActivityDetail({ sid }) {
     return (
       <div className="narrow">
         {back}
-        <Loading label="Loading session…" />
+        {/* A first fetch that failed (daemon down, 500) says so instead of loading forever. */}
+        {error ? <ErrorState error={error} /> : <Loading label="Loading session…" />}
       </div>
     )
   }

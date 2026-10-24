@@ -1,13 +1,12 @@
 import React from 'react'
 import { Icon } from '../../components/Icon.jsx'
-import { editCount } from '../../lib/format.js'
-import { bucketJobsByDay } from '../../lib/jobBuckets.js'
+import { editCount, relTime } from '../../lib/format.js'
+import { bucketJobsByDay, jobSummary, newestJobs } from '../../lib/jobBuckets.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
+import VerdictBadge from './VerdictBadge.jsx'
 
-// RECENT // RUN LOG table: how many jobs to list, and how much of each job's first
-// output line to show as a preview.
+// RECENT // RUN LOG table: how many jobs to list.
 const MAX_RECENT_JOBS = 14
-const MAX_OUTPUT_PREVIEW = 120
 
 // One module panel — header tab + title + body. Operator HUD's basic container.
 function CMod({ title, right, children, span }) {
@@ -85,11 +84,12 @@ function runMix(jobs) {
 // Operator HUD Status lens — flat instrument panels, mono everywhere, real
 // data only (overview counts, doctor groups, job log). Modelled on the
 // design's flavourC dashboard but reshaped to the React app's data shapes.
-export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
+export default function OperatorHudView({ overview, jobs, lens, onAction }) {
   const c = overview.counts || {}
   const total = SECTION_ORDER.reduce((s, k) => s + (c[k] || 0), 0)
   const max = Math.max(...SECTION_ORDER.map((k) => c[k] || 0), 1)
-  const checks = doctor?.groups || []
+  const doctorState = lens?.doctor?.state || 'loading'
+  const checks = lens?.doctor?.data?.groups || []
   const pass = checks.filter((g) => g.problems.length === 0).length
   const series = bucketJobsByDay(jobs || [], 10, '0d')
   const runsTotal = series.reduce((s, d) => s + d.v, 0)
@@ -114,7 +114,11 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
     ['mode', overview.emit],
     [
       'doctor',
-      checks.length === 0 ? (
+      doctorState === 'failed' ? (
+        <span className="c-pill warn">NO ANSWER</span>
+      ) : doctorState !== 'ok' ? (
+        <span className="c-pill">…</span>
+      ) : checks.length === 0 ? (
         <span className="c-pill">—</span>
       ) : pass === checks.length ? (
         <span className="c-pill ok">CLEAN</span>
@@ -134,6 +138,7 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
         <div>
           <h1 className="c-h1">HARNESS // STATUS READOUT</h1>
           <div className="c-sub">{overview.target} · rendered from src/ · inherited everywhere</div>
+          <VerdictBadge verdict={lens?.verdict} />
         </div>
         <div className="row gap-8">
           <button className="btn" onClick={() => onAction('update')}>
@@ -230,7 +235,11 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
             </>
           ) : (
             <p className="c-dim mono" style={{ fontSize: 11 }}>
-              No doctor run loaded yet.
+              {doctorState === 'failed'
+                ? 'Doctor did not answer.'
+                : doctorState === 'ok'
+                  ? 'Doctor reported no checks.'
+                  : 'Checking…'}
             </p>
           )}
         </CMod>
@@ -278,23 +287,27 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
         <CMod title="RECENT // RUN LOG" span={3}>
           <table className="c-tbl">
             <tbody>
-              {(jobs || []).slice(0, MAX_RECENT_JOBS).map((j) => {
+              {newestJobs(jobs, MAX_RECENT_JOBS).map((j) => {
                 const ok = j.status === 'done'
                 const bad = j.status === 'failed'
                 const cls = bad ? 'bad' : ok ? 'ok' : 'acc'
-                const preview = j.output
-                  ? j.output.split('\n')[0].slice(0, MAX_OUTPUT_PREVIEW)
-                  : '—'
+                const s = jobSummary(j)
                 return (
                   <tr key={j.id}>
                     <td style={{ width: 96 }}>
                       <span className={`c-dotmark ${cls}`} />{' '}
                       <span className="c-dim">{j.action}</span>
                     </td>
-                    <td className="c-name" style={{ fontWeight: 400 }}>
-                      {preview}
+                    {/* The raw `$ …` line is the tooltip, never the text (lib/jobBuckets.js).
+                        No verb: the first column already names the action. */}
+                    <td
+                      className="c-name"
+                      style={{ fontWeight: 400 }}
+                      title={s.command || undefined}
+                    >
+                      {[s.scope, s.result, s.duration].filter(Boolean).join(' · ')}
                     </td>
-                    <td className="num c-dim">{j.duration ? `${j.duration}s` : j.status}</td>
+                    <td className="num c-dim">{j.started ? `${relTime(j.started)} ago` : '—'}</td>
                   </tr>
                 )
               })}

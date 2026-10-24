@@ -82,4 +82,12 @@ describe('ActivityDetail page', () => {
     render(<ActivityDetail sid="s" />)
     expect(await screen.findByText('Session ended')).toBeTruthy()
   })
+
+  // Any other failure before the first answer names the error, not "Loading session…" forever.
+  it('shows the error when the first fetch fails with a non-404', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(errResp(500)))
+    render(<ActivityDetail sid="s" />)
+    expect(await screen.findByText('not found')).toBeTruthy()
+    expect(screen.queryByText('Loading session…')).toBeNull()
+  })
 })

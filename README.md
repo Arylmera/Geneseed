@@ -334,7 +334,7 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 ./geneseed upgrade     # just the content refresh (remembers theme + emit mode)
 ```
 
-**Local edits survive.** The self-improvement loops write to notes under `notebook/`, which no rebuild touches. If you or the agent edited deployed agent/skill files in place anyway, an upgrade exports that drift to an `improvements/` file inside the install before overwriting. Details: [Upgrade](docs/guides/upgrade.md).
+**Local edits survive.** The self-improvement loops write to notes under `notebook/`, which no rebuild touches. If you or the agent edited deployed agent/skill files in place anyway, an upgrade exports those edits to an `improvements/` file inside the install; the rebuild then keeps each edited file instead of overwriting it. Details: [Upgrade](docs/guides/upgrade.md).
 
 ## 📚 Documentation
 

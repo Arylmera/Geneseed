@@ -3,13 +3,24 @@ import { SECTION_ORDER } from '../../lib/sections.js'
 import { maxCount, editCount } from '../../lib/format.js'
 import StrandRow from './StrandRow.jsx'
 import ActivityFeed from './ActivityFeed.jsx'
+import VerdictBadge from './VerdictBadge.jsx'
+
+// The setup verdict as a short badge label + tone. The server's sentence is the badge's
+// tooltip: it is long, and the "differs" one carries a backticked CLI hint that does not
+// belong in a badge. The badge used to print "in sync · <sentence>" whatever it said.
+function syncBadge(verdict) {
+  if (!verdict) return null
+  if (verdict.includes('up to date')) return { label: 'in sync', tone: 'ok' }
+  if (verdict.includes('no Geneseed install')) return { label: 'not installed', tone: '' }
+  return { label: 'behind source', tone: 'warn' }
+}
 
 // Direction B · Lineage — the source -> render -> deployed timeline and the
 // genome-by-volume strand chart.
-export default function LineageView({ overview, sigil, setup, jobs }) {
+export default function LineageView({ overview, sigil, setup, jobs, lens }) {
   const max = maxCount(overview.counts)
   const verdict = setup?.version_verdict || ''
-  const verdictOk = verdict.includes('up to date')
+  const sync = syncBadge(verdict)
   const edits = editCount(overview.diff)
 
   const steps = [
@@ -44,10 +55,13 @@ export default function LineageView({ overview, sigil, setup, jobs }) {
             </div>
           )}
           <div className="row wrap gap-10">
-            <span className={`badge ${verdictOk ? 'ok' : 'warn'}`}>
-              <span className="dot" />
-              in sync · {verdict}
-            </span>
+            <VerdictBadge verdict={lens?.verdict} />
+            {sync && (
+              <span className={`badge ${sync.tone}`} title={verdict}>
+                <span className="dot" />
+                {sync.label}
+              </span>
+            )}
             <span className="badge">
               <span className="dot" />
               {edits} local edits

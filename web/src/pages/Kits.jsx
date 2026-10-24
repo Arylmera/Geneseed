@@ -98,7 +98,7 @@ function KitDetail({ kit, installs, stage, listed }) {
                   <KitState row={row} />
                   <Switch
                     on={stage.setOf(row).has(kit.name)}
-                    disabled={locked}
+                    disabled={locked || stage.running(row)}
                     label={`${kit.name} for ${who}`}
                     onToggle={() => stage.toggle(row, kit.name)}
                   />

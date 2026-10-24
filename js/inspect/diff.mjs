@@ -54,7 +54,7 @@ import {
   trustOfDir,
   readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
-import { safeLeaf } from '../hosts/owned.mjs';
+import { hashesOf, ownedState, safeLeaf } from '../hosts/owned.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
@@ -86,8 +86,7 @@ export function cmpKey(rel, text) {
 }
 
 /** `_harness_diff._owned_set` — the files a global install claims, per its manifest. */
-function ownedSet(d) {
-  const data = readJsonMaybe(path.join(d, GLOBAL_MANIFEST));
+function ownedSet(d, data = readJsonMaybe(path.join(d, GLOBAL_MANIFEST))) {
   if (data === null || typeof data !== 'object') return new Set();
   const owned = data.owned;
   return new Set(Array.isArray(owned) ? owned : []);
@@ -275,8 +274,17 @@ export function diffCollect({
     ? memoExpected(memo, host, axes, deployedDir, sourceFp)
     : renderExpected(host, axes, deployedDir);
 
+  // The deployed manifest, read once: its `owned` and its `hashes` both classify below.
+  const manifest = readJsonMaybe(path.join(dir, GLOBAL_MANIFEST));
+  const deployedOwned = ownedSet(dir, manifest);
+  const hashes = hashesOf(manifest);
+  // STALE IS NOT AN EDIT. A file whose bytes still match the hash its emit recorded was never
+  // touched: it differs only because the source moved on, and the next rebuild overwrites it.
+  // Reporting it as "edited" told every install behind its source that it was hand-edited.
+  // Only a manifest with hashes can tell the two apart; a legacy one keeps the old reading.
+  const hashed = Object.keys(hashes).length > 0;
   const files = [];
-  const rels = [...new Set([...ownedSet(dir), ...exp.owned])].sort();
+  const rels = [...new Set([...deployedOwned, ...exp.owned])].sort();
   for (const rel of rels) {
     const a = path.join(dir, rel);
     const tb = exp.texts.get(posixRel(rel));
@@ -289,7 +297,11 @@ export function diffCollect({
         const diff = unifiedDiff(splitLines(tb), splitLines(ta), {
           fromfile: `source/${rel}`, tofile: `deployed/${rel}`, lineterm: '',
         });
-        rec = { rel, status: 'edited', diff };
+        // `.geneseed-version` is a build stamp: a different fingerprint in it is the install
+        // being behind, never an edit, with or without hashes.
+        const stale = rel === VERSION_MARKER
+          || (hashed && ownedState(dir, rel, hashes) === 'unmodified');
+        rec = { rel, status: stale ? 'stale' : 'edited', diff };
       }
     } else if (isFile(a)) {
       const body = splitLines(readText(a));
@@ -298,6 +310,9 @@ export function diffCollect({
         status: 'added',
         diff: ['(only in deployed — your addition)', '', ...body.map((ln) => `+${ln}`)],
       };
+    } else if (hashed && !deployedOwned.has(rel)) {
+      // In source and never in this install's manifest: new since its emit, not deleted.
+      rec = { rel, status: 'stale', diff: ['(new in source, not yet deployed — a rebuild adds it)'] };
     } else {
       rec = { rel, status: 'missing', diff: ['(in source, not deployed — re-emit to add)'] };
     }
@@ -318,8 +333,19 @@ export function diffCollect({
   return { target: dir, theme: themeName, files };
 }
 
-/** The records that are drift: everything but a `linked` path, which is the user's own. */
+/**
+ * The records that are drift: everything but a `linked` path, which is the user's own. A
+ * `stale` file stays in: `apiRestore` offers exactly this set, and restoring a stale file is
+ * the same as rebuilding it.
+ */
 export const drifted = (files) => files.filter((f) => f.status !== 'linked');
+
+/**
+ * The records that are LOCAL CHANGES: drift minus `stale`. A stale file has nothing to
+ * back-port (a rebuild updates it), so the improvements report and the export `setup` and
+ * `update` fire read this set, not `drifted`.
+ */
+export const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale');
 
 /** Where the self-improvement loops write, relative to an install's `notebook/`. */
 export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
@@ -354,7 +380,8 @@ export function collectNotes(dir) {
 /** `_harness_diff._improvements_md` — pure; `when` is the caller's timestamp. */
 export function improvementsMd(target, theme, allFiles, when, notes = []) {
   // A linked path is never a back-port item: the file is the user's, not a local edit of ours.
-  const files = drifted(allFiles);
+  // Nor is a stale one: the source already has what it lacks.
+  const files = localChanges(allFiles);
   const edited = files.filter((f) => f.status === 'edited');
   const added = files.filter((f) => f.status === 'added');
   const missing = files.filter((f) => f.status === 'missing');
@@ -458,7 +485,10 @@ export function exportImprovements(target = null, theme = null, outPath = null) 
   // Python's `if not files` — null AND the empty list both return, which is why the caller
   // gets `files` back rather than a bare path and can tell the two apart itself.
   // A linked path alone is not drift, or every update would export an empty report.
-  if (!collected.files || drifted(collected.files).length === 0) return [null, collected.files];
+  // Nor are stale files alone, or every update over an older install would export one.
+  if (!collected.files || localChanges(collected.files).length === 0) {
+    return [null, collected.files];
+  }
   return [writeImprovements(collected.target, collected.theme, collected.files, outPath),
     collected.files];
 }
@@ -515,20 +545,23 @@ export function cmdDiff(args) {
   const added = files.filter((f) => f.status === 'added');
   const missing = files.filter((f) => f.status === 'missing');
   const linked = files.filter((f) => f.status === 'linked');
+  const stale = files.filter((f) => f.status === 'stale');
   printOut(`[diff] deployed ${target}  vs  source (theme: ${theme})\n`);
   printOut(`[diff] ${edited.length} edited, ${added.length} added-in-deployed, `
     + `${missing.length} missing-from-deployed\n`);
   // Its own line, printed only when there is one, so the summary above is unchanged otherwise.
   if (linked.length) printOut(`[diff] ${linked.length} linked (yours, left alone)\n`);
+  if (stale.length) printOut(`[diff] ${stale.length} file(s) behind source — rebuild to update them\n`);
   const notes = collectNotes(target);
   if (notes.length) printOut(`[diff] ${notes.length} self-improvement note(s) to back-port\n`);
   for (const f of edited) printOut(`  ~ ${f.rel}   (edited in deployed — review to back-port)\n`);
   for (const f of added) printOut(`  + ${f.rel}   (only in deployed — your addition)\n`);
   for (const f of missing) printOut(`  - ${f.rel}   (in source, not deployed — re-emit to add)\n`);
   for (const f of linked) printOut(`  = ${f.rel}   (a link — yours, left alone)\n`);
+  for (const f of stale) printOut(`  · ${f.rel}   (behind source — a rebuild updates it)\n`);
   for (const n of notes) printOut(`  * ${n.rel}   (self-improvement note — review to back-port)\n`);
   if (args.out) {
-    if (drifted(files).length || notes.length) {
+    if (localChanges(files).length || notes.length) {
       // Bare `--out` is argparse's `nargs="?"` const: True, meaning "the default timestamped
       // path". `parse()` gives a flag `true` and an option a string, so the two arrive
       // distinguishable here without a third kind of entry in the VERBS table.

@@ -2,10 +2,11 @@ import React from 'react'
 import { SECTIONS, SECTION_ORDER } from '../../lib/sections.js'
 import { maxCount, editCount } from '../../lib/format.js'
 import ActivityFeed from './ActivityFeed.jsx'
+import VerdictBadge from './VerdictBadge.jsx'
 
 // Direction C · Operator — a dense, terminal-flavoured status strip and a
 // sortable-feeling sections table for operators who want numbers, not chrome.
-export default function OperatorView({ overview, setup, jobs }) {
+export default function OperatorView({ overview, setup, jobs, lens }) {
   const total = SECTION_ORDER.reduce((s, k) => s + (overview.counts?.[k] ?? 0), 0)
   const max = maxCount(overview.counts)
   const doctorOk = overview.doctor?.ok
@@ -24,6 +25,7 @@ export default function OperatorView({ overview, setup, jobs }) {
                   <span className="dot" />
                   {overview.deployed ? 'deployed' : 'not deployed'}
                 </span>
+                <VerdictBadge verdict={lens?.verdict} />
               </div>
             </div>
             <div>

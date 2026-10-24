@@ -1,5 +1,6 @@
 import React from 'react'
 import { relTime } from '../../lib/format.js'
+import { newestJobs } from '../../lib/jobBuckets.js'
 
 // The recent-activity / run-log list. Shows the eight most recent jobs, newest
 // first, with a status dot and a relative timestamp.
@@ -15,7 +16,7 @@ export default function ActivityFeed({ jobs }) {
     )
   }
   const kindMap = { done: 'ok', running: 'acc', failed: 'bad' }
-  const shown = [...jobs].sort((a, b) => b.started - a.started).slice(0, 8)
+  const shown = newestJobs(jobs, 8)
   return (
     <div className="feed">
       {shown.map((j) => (

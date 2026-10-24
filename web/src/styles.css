@@ -1494,6 +1494,9 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   gap: 20px; flex-wrap: wrap; margin-bottom: 18px;
 }
 .b-greet h1.b-h { font-size: 31px; letter-spacing: -.025em; margin: 4px 0 0; }
+/* The fleet verdict badge under the headline (VerdictBadge.jsx). */
+.b-greet .badge { margin-top: 8px; }
+.b-hero-retry { align-self: flex-start; }
 .b-hero-grid { grid-template-columns: 1.25fr 1fr; align-items: stretch; }
 .b-hero {
   display: flex; gap: 24px; align-items: center;
@@ -1643,6 +1646,8 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   display: flex; align-items: flex-end; justify-content: space-between;
   gap: 20px; flex-wrap: wrap; margin-bottom: 16px;
 }
+/* The fleet verdict badge under the readout's subtitle (VerdictBadge.jsx). */
+.c-titlebar .badge { margin-top: 8px; }
 .c-h1 {
   font-family: var(--font-mono);
   font-size: 17px; font-weight: 600; letter-spacing: .02em;
@@ -1687,7 +1692,9 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 .c-pill.bad { color: var(--bad); }
 
 .c-kpi-row {
-  display: grid; grid-template-columns: repeat(6, 1fr);
+  /* Seven cells (OperatorHudView: agents, skills, dictates, packs, memory, notebook,
+     edits): with six columns the seventh wrapped onto a row of its own. */
+  display: grid; grid-template-columns: repeat(7, 1fr);
   border: 1px solid var(--line); background: var(--surface);
   border-radius: var(--r-sm); margin-bottom: 14px;
 }
@@ -1973,6 +1980,8 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 
 /* ---- Dashboard · the Journal lens ---- */
 .jr-head { margin-bottom: 14px; }
+/* The fleet verdict badge under the journal's title (VerdictBadge.jsx). */
+.jr-head .badge { margin-top: 8px; }
 .jr-row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px; margin-bottom: 14px; }
 .jr-card { padding-top: 14px; padding-bottom: 14px; }
@@ -2100,9 +2109,16 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   display: flex;
   flex-direction: column;
 }
+/* The card's floor is an explicit height, NOT `min-height: 0` and NOT the automatic one.
+   `0` let the card shrink under its own map on a short window: the SVG kept its 240px
+   floor below and spilled out through the card's border. The automatic minimum is the
+   SVG's natural aspect-ratio height (566px at full width), which is the old overflow
+   that pushed the page 213px past the viewport. So the floor is the map's 240px plus
+   what surrounds it in the card: 44px of `.pad-lg` padding, a ~22px head line, its 16px
+   margin, and 2px of border. Under it, the page scrolls. */
 .pad:has(> .jr-head) .jr-map {
   flex: 1;
-  min-height: 0;
+  min-height: 324px;
   display: flex;
   flex-direction: column;
 }
@@ -2110,10 +2126,10 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 /* The SVG keeps its 940×330 viewBox and its default `xMidYMid meet`, so growing the box
    SCALES the drawing rather than stretching it — the composition is preserved and simply
    gets bigger. `min-height` keeps it legible when the window is short. */
-/* `min-height: 0` is what lets the SVG SHRINK below its natural aspect-ratio height —
-   without it a flex item never goes under its content size, which is exactly how the map
-   overflowed. The floor is a legibility limit for short windows; past it the page scrolls,
-   which is the right answer rather than an unreadable sliver. */
+/* Its own `min-height: 240px` replaces its automatic minimum (the natural aspect-ratio
+   height), and that is what lets the SVG SHRINK inside the card. The floor is a legibility
+   limit for short windows; the card's floor above keeps the card around it, and past
+   both the page scrolls, which is the right answer rather than an unreadable sliver. */
 .pad:has(> .jr-head) .cmap { flex: 1; min-height: 240px; height: auto; }
 .pad:has(> .jr-head) .jr-others { flex: none; }
 
@@ -2514,7 +2530,6 @@ a.tier .tier-bar > span { background: var(--line-3); }
   background: var(--bg-2); color: var(--text); border: 1px solid var(--line);
   border-radius: var(--r-sm); font: inherit; font-size: 13px; }
 .law-toolbar .law-filter:focus { outline: none; border-color: var(--accent-line); }
-.law-note { margin-left: auto; font-size: 13px; }
 .law-wrap { --law-5: 92px minmax(0, 1.4fr) minmax(0, 1fr) 96px 104px; --law-cols: var(--law-5); }
 .law-wrap.with-toggle { --law-cols: var(--law-5) 44px; }
 .law-rowhead, .law-row { display: grid; grid-template-columns: var(--law-cols); gap: 14px;
@@ -2827,7 +2842,6 @@ a.kit-name:hover { color: var(--accent-text); }
   .needs .tag { display: none; }
   .law-wrap { --law-5: 64px minmax(0, 1fr) 84px; }
   .law-enf, .law-rowhead > span:nth-child(5) { display: none; }
-  .law-note { display: none; }
   .library, .library.locked { grid-template-columns: minmax(0, 1fr); }
   .lib-kinds { border-right: 0; border-bottom: 1px solid var(--line); padding: 16px 12px; }
   /* The rail becomes a strip: the entries in one scrolling row, and the selected entry's
@@ -3005,3 +3019,17 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 .lr-sub.lr-warn { fill: var(--warn); }
 .lr-sub.lr-acc { fill: var(--accent); }
 .lr-title { font-size: 18px; font-weight: 700; fill: var(--text); }
+
+/* V2/V3 integration (2026-10-24) */
+/* Focus moves to <main> on every page change (route effects); the page itself needs no ring. */
+#main:focus { outline: none; }
+html { scrollbar-gutter: stable; }
+/* A pack with only some rules on: the knob sits mid-track. */
+.sw-toggle.on.mixed { background: var(--surface-3); border-color: var(--accent-line); }
+.sw-toggle.on.mixed::after { transform: translateX(8px); background: var(--accent); }
+.gate-top .off { font-size: 11px; color: var(--text-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.tier-rule { font-style: italic; }
+/* Wide markdown tables scroll inside their own box instead of being clipped. */
+.detail-doc .markdown .table-scroll { overflow-x: auto; max-width: 100%; margin: 0 0 14px; }
+/* The root-file lane under each fleet cost stack: the ceiling marker's own track. */
+.cost-lane { height: 4px; margin-top: 3px; }

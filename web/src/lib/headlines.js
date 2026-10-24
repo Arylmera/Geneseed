@@ -18,6 +18,14 @@ export const HEADLINES = {
   marvin: 'Online. Reluctantly.',
 }
 
-// The one branch both lenses wrote by hand around the lookup.
-export const headlineFor = (overview) =>
-  overview.deployed ? HEADLINES[overview.theme] || 'Loaded & ready' : 'Not deployed'
+// The one branch both lenses wrote by hand around the lookup. `tone` is useLensData's:
+// the fleet verdict's tone (lib/overview.js fleetVerdict), or 'failed' when /api/fleet
+// did not answer. Every voice line says "all is well", so it speaks only when the verdict
+// agrees or has not answered yet (undefined). Anything else gets the plain fact, and the
+// verdict head beside it (when there is one) says what is wrong.
+export const headlineFor = (overview, tone) =>
+  !overview.deployed
+    ? 'Not deployed'
+    : tone === undefined || tone === 'good'
+      ? HEADLINES[overview.theme] || 'Loaded & ready'
+      : 'Deployed'

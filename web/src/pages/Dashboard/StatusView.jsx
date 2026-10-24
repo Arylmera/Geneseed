@@ -7,10 +7,11 @@ import Ring from './Ring.jsx'
 import KpiStrip from './KpiStrip.jsx'
 import Genome from './Genome.jsx'
 import ActivityFeed from './ActivityFeed.jsx'
+import VerdictBadge from './VerdictBadge.jsx'
 
 // Direction A · Status — the hero readiness ring, KPIs, genome, and activity.
-export default function StatusView({ overview, sigil, setup, jobs, onAction }) {
-  const headline = headlineFor(overview)
+export default function StatusView({ overview, sigil, setup, jobs, lens, onAction }) {
+  const headline = headlineFor(overview, lens?.tone)
   const rv = readiness(overview, setup)
 
   return (
@@ -20,6 +21,7 @@ export default function StatusView({ overview, sigil, setup, jobs, onAction }) {
           <Ring value={rv} />
           <div className="hero-facts">
             <div className="ttl">{headline}</div>
+            <VerdictBadge verdict={lens?.verdict} />
             {sigil && (
               <div className="voice-readout" key={overview.theme}>
                 <span className="vr-cur">&#9621;</span>

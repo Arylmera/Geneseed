@@ -1,60 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react'
 import { go } from '../../lib/router.js'
-import { renderMarkdown } from '../../components/Markdown.jsx'
-
-// Slugify a heading title into a stable id we can also use as a CSS anchor.
-// Always returns a value that is safe inside `id="..."` AND inside a CSS
-// `#<id>` selector — never empty, never starting with a digit/dash. Headings
-// can be unicode-heavy ("## 中文") or formatting-heavy ("## **Bold**"), and a
-// fragile slug used to flow straight into querySelector — which is what threw
-// "The string did not match the expected pattern" in WebKit.
-function slug(s, fallbackIdx = 0) {
-  const cleaned = String(s)
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  if (cleaned && /^[a-z]/.test(cleaned)) return cleaned
-  return `h-${fallbackIdx}-${cleaned || 'section'}`
-}
-
-// A heading's source as the reader sees it: links and wikilinks down to their text, code
-// spans and bold/italic markers dropped. The outline used to print the raw source —
-// backticks, asterisks, whole URLs. Single underscores stay: they are snake_case far more
-// often than emphasis in these docs.
-export function plainTitle(src) {
-  return src
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[\[([^\]]+)\]\]/g, '$1')
-    .replace(/`([^`]*)`/g, '$1')
-    .replace(/\*\*|__/g, '')
-    .replace(/\*([^*\s][^*]*)\*/g, '$1')
-}
-
-// Pull the H2/H3 outline from the markdown source so the TOC can anchor-link
-// even before the HTML is parsed. We skip code blocks (``` fences) to avoid
-// catching hashes inside snippets. Each entry's `id` matches the id the
-// post-mount pass assigns to the rendered heading.
-export function extractToc(body) {
-  const out = []
-  let inFence = false
-  let idx = 0
-  for (const ln of (body || '').split('\n')) {
-    if (ln.startsWith('```')) {
-      inFence = !inFence
-      continue
-    }
-    if (inFence) continue
-    const m = ln.match(/^(##|###)\s+(.+?)\s*$/)
-    if (m) {
-      idx += 1
-      out.push({ level: m[1].length, title: plainTitle(m[2]), id: slug(m[2], idx) })
-    }
-  }
-  return out
-}
+import { renderDoc, slug } from './headings.js'
 
 // State-aware overlay. The install guide is a section of pages, one per host: the deployed
 // emit names its host's page and, where that page has one heading per scope, the heading.
@@ -78,25 +24,15 @@ const ANALOGY_LEAD = 'you already know this'
 
 export default function MarkdownPage({ page, overview, onAction }) {
   const ref = useRef(null)
-  const html = useMemo(() => renderMarkdown(page.body, page.links), [page.body, page.links])
+  // Heading ids, and the outline the margin prints, come from renderDoc (headings.js).
+  const html = useMemo(
+    () => renderDoc({ body: page.body, links: page.links }).html,
+    [page.body, page.links],
+  )
 
-  // After the markdown lands in the DOM, assign id="..." to each h1/h2/h3
-  // based on slug(textContent). One pass per render — matches the TOC's
-  // numbering by walking in the same order extractToc did. We deliberately
-  // don't override marked's renderer for headings — walking the DOM after
-  // mount keeps us off the renderer-API churn between marked minor versions,
-  // and means a weird heading can never poison the parser.
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    let idx = 0
-    el.querySelectorAll('h1, h2, h3').forEach((h) => {
-      if (h.tagName !== 'H1') idx += 1
-      if (!h.id) {
-        const id = slug(h.textContent || '', idx)
-        if (id) h.id = id
-      }
-    })
     el.querySelectorAll('blockquote').forEach((q) => {
       const lead = (q.querySelector('strong')?.textContent || '').toLowerCase()
       if (lead.startsWith(ANALOGY_LEAD)) q.classList.add('analogy')

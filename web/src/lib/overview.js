@@ -153,6 +153,16 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
 // ---- the Ledger: every installed harness at once (/api/fleet, /api/usage, /api/gates) ----
 
 const driftOf = (i) => driftTotal(i.drift)
+// Unedited files a rebuild updates: the install is behind, nobody edited them.
+const staleOf = (i) => i.drift?.stale ?? 0
+
+// Skills and agents never fired, each counted once: the usage ledger lists a never-fired row
+// per install, so one skill unused on two installs is two rows and still one skill.
+export function neverFired(usage) {
+  const distinct = (kind) =>
+    new Set((usage?.never || []).filter((x) => x.kind === kind).map((x) => x.name)).size
+  return { skills: distinct('skill'), agents: distinct('agent') }
+}
 
 // The verdict line. 'bad' when the doctor failed; 'warn' when an install is behind its source
 // or has hand edits; else 'good'. An install whose marker cannot be read ('unknown') does not
@@ -164,8 +174,9 @@ export function fleetVerdict(fleet) {
   const disabled = all.length - act.length
   const behind = act.filter((i) => i.verdict === 'behind').length
   const edited = act.reduce((n, i) => n + driftOf(i), 0)
+  const stale = act.reduce((n, i) => n + staleOf(i), 0)
   const d = fleet?.doctor
-  const tone = d && !d.ok ? 'bad' : behind || edited ? 'warn' : 'good'
+  const tone = d && !d.ok ? 'bad' : behind || edited || stale ? 'warn' : 'good'
   const head = {
     good: 'Harness healthy.',
     warn: 'Harness needs a look.',
@@ -181,6 +192,8 @@ export function fleetVerdict(fleet) {
     behind ? `${plural(behind, 'install')} behind source` : 'all in step with source',
     edited ? `${plural(edited, 'file')} hand-edited` : 'no hand edits',
   ]
+  // Its own fact, only when there is one, so a fleet with nothing stale reads as before.
+  if (stale) facts.push(`${plural(stale, 'file')} behind source`)
   return { tone, head, facts }
 }
 
@@ -218,12 +231,14 @@ export function ledgerNeeds({ fleet, usage, ...rest }) {
   }
   for (const i of (fleet?.installs || []).filter((x) => x.state === 'active')) {
     if (i.verdict === 'behind') {
+      const built = i.built_epoch ? `built ${relTime(i.built_epoch)} ago` : 'never built'
+      const stale = staleOf(i)
       out.push({
         id: `behind:${i.id}`,
         tag: 'Behind',
         tone: 'warn',
         title: `${installLabel(i)} is behind its source`,
-        detail: i.built_epoch ? `built ${relTime(i.built_epoch)} ago` : 'never built',
+        detail: stale ? `${built} · ${plural(stale, 'file')} behind` : built,
         where: i.host,
         verb: 'Rebuild',
         act: 'build-all',
@@ -244,14 +259,14 @@ export function ledgerNeeds({ fleet, usage, ...rest }) {
     }
   }
   if (usage && usage.days_counted >= 30 && usage.never?.length) {
-    const skills = usage.never.filter((x) => x.kind === 'skill').length
+    const { skills, agents } = neverFired(usage)
     out.push({
       id: 'usage',
       tag: 'Usage',
       tone: '',
       sugg: true,
       title: `${plural(skills, 'skill')} never fired in 30 days`,
-      detail: `${plural(usage.never.length - skills, 'agent')} too`,
+      detail: `${plural(agents, 'agent')} too`,
       where: 'library/skills',
       verb: 'Triage',
       href: '#/skills',
